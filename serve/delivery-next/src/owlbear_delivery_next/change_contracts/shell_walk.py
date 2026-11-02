@@ -130,7 +130,15 @@ class Walk:
                 state.home_moved = state.home_moved or "HOME" in assigned
             assigned = {k: v for k, v in assigned.items() if k in git_reading.SWITCHES}
             # one that may not run, as in ( ) or if, leaves a switch that skips hooks in place
-            keep = {k for k in assigned if not top_level and git_reading.turns_off(k, state.switches.get(k, ""))}
+            old = state.switches
+            keep = {  # unless it turns them off too: HUSKY=0 is a variant, HUSKY="$OFF" doubtful
+                k
+                for k, v in assigned.items()
+                if not top_level
+                and not git_reading.turns_off(k, v)
+                and k in old
+                and (git_reading.turns_off(k, old[k]) or getattr(old[k], "expanded", False))
+            }
             state.switches |= {k: v for k, v in assigned.items() if k not in keep}
         if first in {"unset", *_DECLARE} and any(w.partition("=")[0] == "HOME" for w in words[i + 1 :]):
             state.home_moved = True
@@ -167,9 +175,12 @@ class Walk:
 
     def _aliases(self, command: Command, state: State) -> str | None:
         """A git alias the command defines whose body skips hooks or signing: a git command, or ! and shell text."""
+        gits = [r for r in shell_programs.runs(command.words) if shell_programs.name(r.words[0]) == "git"]
         for alias, body in git_reading.aliases(command.words):
+            # the run that calls it passes its variables on; one only defined runs later, with the shell's
+            run = next((r for r in gits if (git_reading.subcommand(r.words) or "").lower() == alias.lower()), None)
+            child = _run_child(state, run, plain=state.plain()) if run else state.child(plain=state.plain())
             if body.startswith("!"):
-                child = state.child(plain=state.plain())
                 child.at = None  # git runs it in the top folder of the repository it finds
                 if reason := self._text(body[1:], child):
                     return f"`{self.name}` defines git alias {alias}: {reason}"
@@ -178,7 +189,7 @@ class Walk:
                 words = [Word("git"), *map(Word, shlex.split(body))]
             except ValueError:  # git can't split it either, and runs nothing
                 continue
-            if flag := git_reading.bypass(words):
+            if flag := git_reading.bypass(words) or git_reading.switch(words, child.switches):
                 return f"`{self.name}` defines git alias {alias} as `{body}`, which uses {flag}, {BYPASS}"
         return None
 
@@ -189,8 +200,7 @@ class Walk:
         if found := git_reading.switch(run.words, switches(state, run)):
             return f"`{self.name}` uses {found}, {BYPASS}"
         for text, after_write in git_reading.scripts(run.words):
-            child = state.child(plain=state.plain())
-            child.switches = switches(state, run)  # HUSKY=0 git submodule foreach '...': its children see it
+            child = _run_child(state, run, plain=state.plain())  # HUSKY=0 git submodule foreach '...': they see it
             child.at = None  # rebase runs it in the top folder, foreach in each submodule's
             if after_write:  # a file it runs may be one the rebase just wrote
                 child.effects = Effects(wrote=True)
@@ -206,8 +216,7 @@ class Walk:
             return f"`{self.name}` uses {found}, built at run time: it may be a flag or setting {BYPASS}"
         for words in guard_readers.commands(guard_readers.code(command, run.words) or ""):
             if flag := git_reading.bypass(words):
-                shown = " ".join(words)
-                return f"`{self.name}` runs code that holds `{shown}`, which uses {flag}, {BYPASS}"
+                return f"`{self.name}` runs code that holds `{' '.join(words)}`, which uses {flag}, {BYPASS}"
         return None
 
     def _by_path(self, command: Command, run: Run, word: Word, state: State, *, wrote: bool) -> str | None:
@@ -269,13 +278,7 @@ class Walk:
 
     def _shell_reads(self, command: Command, run: Run, state: State, args: shell_programs.ShellArgs) -> str | None:
         plain = state.plain() and not command.opaque_stdin and not run.from_input
-        child = state.child(plain=plain and command.stdin() is None)
-        child.home_moved = child.home_moved or "HOME" in run.env or bool(run.removed & {"HOME", "*"})
-        child.switches = switches(state, run)
-        child.startup = {
-            **{k: v for k, v in child.startup.items() if "*" not in run.removed and k not in run.removed},
-            **{k: run.env[k] for k in _STARTUP if k in run.env},
-        }
+        child = _run_child(state, run, plain=plain and command.stdin() is None)
         if run.chdir:  # env -C, find -execdir: it starts in another folder
             child.at = None
         for file in [*(v for k, v in child.startup.items() if k in args.reads), *args.startup]:
@@ -449,6 +452,18 @@ def _unset(state: State, keys: list[str], *, top_level: bool) -> None:
 
 def _operands(run: Run) -> list[Word]:
     return run.words[2 if run.words[1:2] == ["--"] else 1 :]
+
+
+def _run_child(state: State, run: Run, *, plain: bool) -> State:
+    """The state a program a run starts begins with: the run's variables over the shell's, less those env removed."""
+    child = state.child(plain=plain)
+    child.home_moved = child.home_moved or "HOME" in run.env or bool(run.removed & {"HOME", "*"})
+    child.switches = switches(state, run)
+    child.startup = {
+        **{k: v for k, v in child.startup.items() if "*" not in run.removed and k not in run.removed},
+        **{k: run.env[k] for k in _STARTUP if k in run.env},
+    }
+    return child
 
 
 def switches(state: State, run: Run) -> dict[str, Word]:

@@ -147,6 +147,8 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("git config remote.origin.mirror true", "core"),  # its push may come in the next command
         ("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.mirror GIT_CONFIG_VALUE_0=true git push", "core"),
         ("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.mirror GIT_CONFIG_VALUE_0=true bash -c 'git push'", "core"),
+        ("git -c remote.origin.mirror=true rebase -x 'git push' main", "core"),
+        ("git -c remote.origin.mirror=true -c alias.p='!git push' p", "core"),
         ("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.o.mirror GIT_CONFIG_VALUE_0=1 git rebase -x 'git push' m", "core"),
         ("export GIT_CONFIG_PARAMETERS=\"'remote.origin.mirror'='true'\"; git push", "core"),
         ("git remote add --mirror=push o u", "core"),
@@ -172,6 +174,10 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("GIT_CONFIG_PARAMETERS=\"'alias.c'='commit -n'\" git c -m x", "variant"),
         ("git -c alias.st=status st", None),
         ("git -c alias.lg='!git log --oneline' lg", None),
+        ("HUSKY=0 git -c alias.c='!git commit -m x' c", "variant"),  # the run that calls it passes HUSKY on
+        ("HUSKY=0 git -c alias.c='commit -m x' c", "variant"),
+        ("export HUSKY=0; env -u HUSKY git -c alias.c='!git commit -m x' c", None),
+        ("HUSKY=0 git config alias.c '!git commit -m x'", None),  # it runs later, with the shell's variables
         ("git c -m x", None),  # an alias already in config: a documented limit
         ("git --config-env=alias.ci=UNKNOWN ci", None),
     ],
@@ -188,6 +194,8 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("git submodule --quiet foreach --recursive 'git push --force'", "variant"),
         ("git submodule foreach bash -c 'git commit --no-verify -m x'", "variant"),  # sh -c '<first> "$@"' <the rest>
         ("git submodule foreach git status --short", None),
+        ("BASH_ENV=/w/start.sh git rebase -x 'bash -c \"git status\"' main", "variant"),  # its bash reads it
+        ("export BASH_ENV=/w/start.sh; env -u BASH_ENV git submodule foreach 'bash -c \"git status\"'", None),
         ("git submodule foreach bash -c -- 'git commit --no-verify -m x'", "variant"),  # its -- is bash's
         ("git submodule foreach git commit -q -n -m x", "variant"),
         ("git bisect run 'git commit -n'", None),  # a documented limit
@@ -205,6 +213,7 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("HUSKY=1 eval 'unset HUSKY'; git commit -m x", None),  # nothing to restore
         ("export HUSKY=0; (export HUSKY=1); git commit -m x", "variant"),
         ("export HUSKY=0; if false; then export HUSKY=1; fi; git commit -m x", "variant"),
+        ('export HUSKY="$OFF"; (export HUSKY=1); git commit -m x', "doubtful"),
         ("export HUSKY=1; if x; then export HUSKY=0; fi; git commit -m x", "variant"),
         ("HUSKY=0 git submodule foreach 'git commit -m x'", "variant"),
         ("export HUSKY=0; env -u HUSKY git submodule foreach 'git commit -m x'", None),

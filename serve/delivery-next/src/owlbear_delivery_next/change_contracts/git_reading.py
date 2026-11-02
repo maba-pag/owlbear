@@ -251,17 +251,10 @@ def _env_settings(env: dict[str, str]) -> list[str]:
 def env_setting(env: dict[str, str], words: Sequence[str]) -> str | None:
     """A setting that git configuration passed by environment to the command *words* uses to skip hooks or signing.
 
-    A mirror setting counts when the command may push, or exports it so that it outlives the command: git push,
-    git text that runs other commands, or another program, which may run git push in its turn.
+    A mirror setting counts when the command may push (see _may_push), or exports it so that it outlives the command.
     """
     i = shell_programs.builtin(words)
-    lasting = (i < len(words) and words[i] == "export") or any(
-        shell_programs.name(r.words[0]) != "git"
-        or _parse_git(r.words[1:]).sub == "push"
-        or scripts(r.words)
-        or aliases(r.words)
-        for r in shell_programs.runs(words)
-    )
+    lasting = (i < len(words) and words[i] == "export") or any(_may_push(r.words) for r in shell_programs.runs(words))
     return next((s for s in _env_settings(env) if _disables(s) or (lasting and _mirrors(s))), None)
 
 
@@ -273,14 +266,25 @@ def bypass(words: Sequence[str]) -> str | None:
         if setting := env_setting(run.env, run.words):  # those an env -S split sets too
             return f"environment setting {setting}"
         env = {**_environment(words), **run.env}  # what --config-env reads; another variable's value is unknown
-        if shell_programs.name(run.words[0]) == "git" and (found := _git_bypass(_parse_git(run.words[1:]), env)):
+        if shell_programs.name(run.words[0]) != "git":
+            continue
+        if found := _git_bypass(_parse_git(run.words[1:]), env, push=_may_push(run.words)):
             return found
     return None
 
 
-def _git_bypass(call: _GitCall, env: dict[str, str]) -> str | None:
-    """One git call's setting, option or refspec that skips hooks or signing or forces a push; *env* its variables."""
-    push = call.sub == "push"
+def _may_push(words: Sequence[str]) -> bool:
+    """Whether a run may push: git push, git text that runs other commands, or another program, which may run git."""
+    if shell_programs.name(words[0]) != "git":
+        return True
+    return _parse_git(words[1:]).sub == "push" or bool(scripts(words) or aliases(words))
+
+
+def _git_bypass(call: _GitCall, env: dict[str, str], *, push: bool) -> str | None:
+    """One git call's setting, option or refspec that skips hooks or signing or forces a push; *env* its variables.
+
+    *push*: the call may push, so a mirror setting counts.
+    """
     if setting := next((s for s in call.config if _disables(s) or (push and _mirrors(s))), None):
         return f"-c {setting}"
     if push and (key := next((f"{k}={v}" for k, v in call.from_env if _mirrors(f"{k}={env.get(v, '0')}")), "")):
@@ -335,6 +339,11 @@ def aliases(words: Sequence[str]) -> list[tuple[str, str]]:
             settings.append("=".join(written))
     found = (s.partition("=") for s in settings)
     return [(m[1], body) for key, _, body in found if body and (m := _ALIAS.fullmatch(key))]
+
+
+def subcommand(words: Sequence[str]) -> str | None:
+    """The subcommand, or alias, the git command *words* runs."""
+    return _parse_git(words[1:]).sub
 
 
 def scripts(words: Sequence[str]) -> list[tuple[str, bool]]:
@@ -408,7 +417,7 @@ def expanded(words: Sequence[str], run: shell_programs.Run, switches: dict[str, 
         return f"subcommand `{call.sub}`"
     if not mutation(run.words):
         return None
-    if found := _built_setting(call, {**_environment(words), **run.env}):
+    if found := _built_setting(call, {**_environment(words), **run.env}, push=_may_push(run.words)):
         return found
     if call.sub not in _HOOKED:
         return None
@@ -420,7 +429,7 @@ def _built(word: str | None) -> bool:
     return bool(word) and getattr(word, "expanded", False) and "$" in word
 
 
-def _built_setting(call: _GitCall, env: dict[str, str]) -> str | None:
+def _built_setting(call: _GitCall, env: dict[str, str], *, push: bool) -> str | None:
     """A -c, environment or config-write setting whose key, or a guarded key's value, is built at run time."""
     settings = [_halves(c) for c in call.config]
     settings += [
@@ -428,7 +437,6 @@ def _built_setting(call: _GitCall, env: dict[str, str]) -> str | None:
     ]
     settings += [(Word("GIT_CONFIG_PARAMETERS"), env.get("GIT_CONFIG_PARAMETERS", ""))]
     settings += [(key, env.get(var, var)) for key, var in call.from_env]  # a variable named at run time is built
-    push = call.sub == "push"
     if call.sub == "config" and (written := _config_set(call.arguments)):
         settings.append(written)
         push = True  # a mirror key written to the configuration mirrors later pushes
