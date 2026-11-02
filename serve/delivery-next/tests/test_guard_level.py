@@ -134,6 +134,8 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("case $x in\n (a*|b?) echo;;\n *) ls;;\nesac", None),
         ('for f in *.py; do case "$f" in t*) echo;; *) ls;; esac; done', None),  # a case after a reserved word
         ("{ case $x in a) echo;; *) ls;; esac; }", None),
+        ('function f { case "$1" in a) echo;; *) ls;; esac; }; f x', None),
+        ("function f case $x in a) echo;; esac; sh", None),  # its esac ends the function: sh reads the step's input
         ("if true; then case $x in a) echo;; esac; g?t status; fi", "core"),
         ("curl 'https://x/?a=1'", None),
         ("curl https://x/?a=1", None),
@@ -268,6 +270,14 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ('git commit "${args[@]}"', "doubtful"),
         ("git commit -m $MSG", "doubtful"),  # split, so it may be several words
         ('git push origin "$REFSPEC"', "doubtful"),
+        ('git -c alias.ci=commit ci "$FLAG" -m x', "doubtful"),  # the alias's git command gets the word
+        ('git -c alias.p=push p origin "$REFSPEC"', "doubtful"),
+        ('git -c alias.ci=commit ci -m "$MSG"', None),
+        ('git -c alias.ci="commit $FLAG" ci -m x', "doubtful"),  # the shell fills the body in
+        ('git -c alias.ci="commit -m $MSG" ci', "doubtful"),  # and git splits it
+        ("git submodule foreach git commit -m $MSG", "doubtful"),  # forwarded, it still splits
+        ("git -c alias.ci='!git commit' ci -m $MSG", "doubtful"),
+        ('git submodule foreach git commit -m "$MSG"', None),
         ('git -c "$K"=x commit -m x', "doubtful"),
         ('git -c commit.gpgsign="$V" commit -m x', "doubtful"),
         ('GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0="$V" git commit -m x', "doubtful"),

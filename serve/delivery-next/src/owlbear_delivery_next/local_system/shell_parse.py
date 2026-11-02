@@ -94,7 +94,8 @@ class _Level:
             unquoted = "\0" not in self.plain
             if self.lead and unquoted and word == "case":
                 self.case = len(self.words)
-            self.lead = self.lead and unquoted and word in _LEADS
+            # `function f { case …`: the name after function leads to its body
+            self.lead = self.lead and unquoted and (word in _LEADS or "function" in (word, *self.words[-1:]))
             self.words.append(word)
             # its arms follow
             self.pattern = self.pattern or (self.case is not None and self.words[self.case + 2 :] == ["in"])
@@ -121,10 +122,9 @@ class _Lexer:
         self.text = text
         self.commands: list[Command] = []
         self.pending: list[tuple[Input, str, bool, bool]] = []  # here-documents whose body starts at the next line
-        self.blocks: list[tuple[int, bool]] = []  # open compound commands: first command and whether input is opaque
+        self.blocks: list[tuple[int, bool, bool]] = []  # open compound commands: first command, opaque input, a case
         self.group: tuple[int, int] | None = None  # the commands of the subshell that just closed
         self.defined = False  # an empty () just closed: a function's body may follow
-        self.cases: set[int] = set()  # the commands that start a case: their block's ;; starts the next arm
 
     def level(  # noqa: PLR0913 - where to read, and what the text read is
         self, i: int, close: str = "", depth: int = 0, *, opaque: bool = False, arith: bool = False, words: bool = False
@@ -157,11 +157,11 @@ class _Lexer:
     def _keep(self, s: _Level, i: int) -> None:
         first = s.words[0] if s.words else ""
         body = first == "function" or (first == "{" and self.defined)  # its input is its caller's, unknown here
-        opaque = s.opaque or s.piped or body or any(o for _, o in self.blocks)
+        opaque = s.opaque or s.piped or body or any(b[1] for b in self.blocks)
         top = s.depth == 0 and not self.blocks and not s.piped and not s.conditional
         command = Command(s.words, self.text[s.start or 0 : i], s.inputs, opaque, top)
         if first in _CLOSERS and self.blocks:
-            start, _ = self.blocks.pop()
+            start, *_ = self.blocks.pop()
             if command.stdin():  # `done < f`: the loop's commands read it
                 self._opaque(start)
         elif not s.words and command.stdin() and self.group:  # `(sh) < f`
@@ -169,11 +169,9 @@ class _Lexer:
         self.commands.append(command)
         self.group, self.defined = None, False
         if first in _OPENERS:
-            self.blocks.append((len(self.commands) - 1, opaque))
-        if s.case is not None:
-            self.cases.add(len(self.commands) - 1)
-            if s.case:  # `then case …`, `{ case …`: the case is a block of its own
-                self.blocks.append((len(self.commands) - 1, opaque))
+            self.blocks.append((len(self.commands) - 1, opaque, s.case is not None))
+        if s.case and s.words[s.case - 1] in _LEADS:  # `then case …`, `{ case …`: the case is a block of its own
+            self.blocks.append((len(self.commands) - 1, opaque, True))
 
     def _opaque(self, start: int, end: int | None = None) -> None:
         for command in self.commands[start:end]:
@@ -234,7 +232,7 @@ class _Lexer:
         s.add("$")
         s.expanded = True
         s.split = s.split or not s.quote
-        opaque = s.opaque or s.piped or any(o for _, o in self.blocks)
+        opaque = s.opaque or s.piped or any(b[1] for b in self.blocks)
         if self.text[i] == "`":
             return self.level(i + 1, "`", s.depth + 1, opaque=opaque)
         return self.level(i + 2, ")", s.depth + 1, opaque=opaque)
@@ -332,7 +330,7 @@ class _Lexer:
             return i + 1
         kept = self.close(s, i)
         if self.text.startswith((";;", ";&"), i) and self.blocks:
-            s.pattern = self.blocks[-1][0] in self.cases  # the next arm's patterns
+            s.pattern = self.blocks[-1][2]  # the next arm's patterns
 
         if self.text.startswith("&&", i):
             s.conditional = True
@@ -363,7 +361,7 @@ class _Lexer:
             return i + 1
         body = self.defined and not s.words  # f() (...): a function's body, whose input is its caller's
         array = _ARRAY.fullmatch(s.word or "") is not None
-        opaque = s.opaque or s.piped or body or any(o for _, o in self.blocks)
+        opaque = s.opaque or s.piped or body or any(b[1] for b in self.blocks)
         self.close(s, i)
         s.piped = False
         start = len(self.commands)
@@ -375,7 +373,7 @@ class _Lexer:
 
     def _process(self, s: _Level, i: int) -> int:
         """A process substitution: its commands are lexed, and the word standing for it is built at run time."""
-        inherited = s.opaque or s.piped or any(o for _, o in self.blocks)  # <(sh) reads its command's input
+        inherited = s.opaque or s.piped or any(b[1] for b in self.blocks)  # <(sh) reads its command's input
         end = self.level(i + 2, ")", s.depth + 1, opaque=inherited or self.text[i] == ">")  # >(sh) reads the output
         s.add("<(…)")
         s.expanded = True

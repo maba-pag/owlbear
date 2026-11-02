@@ -374,14 +374,15 @@ def scripts(words: Sequence[str]) -> list[tuple[str, bool]]:
     while given[:1] in (["-q"], ["--quiet"], ["--recursive"]):  # its only options; its command's are its own
         given.pop(0)
     # git runs sh -c '<first> "$@"' <the rest>; a word the shell built stays an expansion there
-    rest = [forwarded(w) for w in given[1:]]
-    return [(" ".join([given[0], *rest]).strip(), False)] if given else []
+    return [(" ".join([given[0], *map(forwarded, given[1:])]).strip(), False)] if given else []
 
 
 def forwarded(word: str) -> str:
     """*word* as shell text that gives the same word, or an expansion if the calling shell built it."""
     if not getattr(word, "expanded", False):
         return shlex.quote(word)
+    if getattr(word, "split", False):  # unquoted, it may still be several words there
+        return word if re.fullmatch(r"\$(\w+|\{\w+\}|@)", word) else "$FORWARDED"
     return f'"{word}"' if not set(word) & {'"', "\\", "`"} else '"$FORWARDED"'
 
 

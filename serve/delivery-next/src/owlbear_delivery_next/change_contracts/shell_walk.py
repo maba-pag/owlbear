@@ -13,7 +13,6 @@ import os
 import shlex
 import stat
 from dataclasses import dataclass, field, replace
-from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -180,8 +179,7 @@ class Walk:
         for alias, body in git_reading.aliases(command.words):
             # the run that calls it passes its variables on; one only defined runs later, with the shell's
             run = next((r for r in gits if (git_reading.subcommand(r.words) or "").lower() == alias.lower()), None)
-            made = partial(_run_child, state, run) if run else state.child
-            child = made(plain=state.plain())
+            child = _run_child(state, run, plain=state.plain()) if run else state.child(plain=state.plain())
             given = git_reading.alias_arguments(run.words) if run else ()  # git hands them to the alias's command
             if body.startswith("!"):
                 child.at = None  # git runs it in the top folder of the repository it finds
@@ -190,12 +188,19 @@ class Walk:
                     return f"`{self.name}` defines git alias {alias}: {reason}"
                 continue
             try:
-                words = [Word("git"), *map(Word, shlex.split(body)), *given]
+                words = [Word("git"), *map(_filled, shlex.split(body)), *given]
             except ValueError:  # git can't split it either, and runs nothing
                 continue
             if flag := git_reading.bypass(words) or git_reading.switch(words, child.switches):
                 return f"`{self.name}` defines git alias {alias} as `{body}`, which uses {flag}, {BYPASS}"
-            if reason := self._scripts(words, partial(made, plain=state.plain())):
+            if (
+                run
+                and self._reads(DOUBTFUL)
+                and (found := git_reading.expanded(command.words, replace(run, words=words), child.switches))
+            ):
+                use = f"git alias {alias} with {found}"
+                return f"`{self.name}` calls {use}, built at run time: it may be a flag or setting {BYPASS}"
+            if reason := self._scripts(words, child):
                 return f"`{self.name}` defines git alias {alias} as `{body}`, which {reason}"
         return None
 
@@ -206,14 +211,14 @@ class Walk:
         if found := git_reading.switch(run.words, switches(state, run)):
             return f"`{self.name}` uses {found}, {BYPASS}"
         # HUSKY=0 git submodule foreach '...': they see it
-        if reason := self._scripts(run.words, lambda: _run_child(state, run, plain=state.plain())):
+        if reason := self._scripts(run.words, _run_child(state, run, plain=state.plain())):
             return f"`{self.name}` {reason}"
         return None
 
-    def _scripts(self, words: Sequence[str], made: Callable[[], State]) -> str | None:
-        """What a shell text the git command *words* runs does; *made* gives the state each text starts in."""
+    def _scripts(self, words: Sequence[str], state: State) -> str | None:
+        """What a shell text the git command *words* runs does; each starts in a copy of *state*."""
         for text, after_write in git_reading.scripts(words):
-            child = made()
+            child = state.child(plain=state.plain())
             child.at = None  # rebase runs it in the top folder, foreach in each submodule's
             if after_write:  # a file it runs may be one the rebase just wrote
                 child.effects = Effects(wrote=True)
@@ -461,6 +466,13 @@ def _unset(state: State, keys: list[str], *, top_level: bool) -> None:
             state.startup[key] = None
         elif state.startup.get(key, "") is not None:
             state.startup.pop(key, None)
+
+
+def _filled(word: str) -> Word:
+    """A word of a plain git alias's body: a $ in it the calling shell may have filled in, and git splits the result."""
+    found = Word(word, expanded="$" in word)
+    found.split = found.expanded
+    return found
 
 
 def _operands(run: Run) -> list[Word]:
