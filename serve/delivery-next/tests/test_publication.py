@@ -2125,6 +2125,23 @@ def test_reopen_reopens_the_pr_when_permitted_else_asks_the_owner(tmp_path, clon
         assert result.reason.startswith("Reopen PR #7 in GitHub")
 
 
+def test_a_refused_reopen_is_logged_with_its_whole_error(tmp_path, clone, whole_error):
+    """#895: GitHub's whole refusal reaches the reopen event, the owner then asked to reopen it."""
+    head, entries = ci_head(clone, "test")
+
+    class Refusing(FakeGh):
+        def reopen_pull_request(self, _repo, _number):
+            raise ProviderError(FailureCode.CONFLICT, "reopen_pull_request", whole_error, retry_safe=True)
+
+    gh = Refusing(pr(head=head, state="closed"))
+    c, _ = loop.schedule(change(StepKind.FOLLOW, worktree=str(clone)), [], NOW, "closed")
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question="q1", option="reopen")], NOW, "closed")
+    on = ctx(tmp_path, gh, prof(**entries, **{profile.PUSH: ProfileEntry(state="known", value="yes")}))
+    c, result = follow.run(on, c)
+    (event,) = [e for e in on.store.events("c1") if e.get("event") == "reopen"]
+    assert (result.exit, event["error"]) == (Exit.ASK, f"ProviderError: reopen_pull_request: {whole_error}")
+
+
 def test_a_silent_rejecting_pre_push_hook_becomes_a_builder_fix_after_readback(clone):
     hook = clone / ".git" / "hooks" / "pre-push"
     hook.write_text("#!/bin/sh\nexit 1\n")

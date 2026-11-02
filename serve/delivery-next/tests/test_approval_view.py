@@ -593,7 +593,7 @@ def test_a_refused_approval_shows_its_whole_reason(page_url, pds, monkeypatch, w
 
     monkeypatch.setattr(decision_publication.decision_archive, "lasting", unavailable)
     store, base = page_url
-    reason = f"{decision_publication.REFUSED}: {whole_error}"
+    reason = f"{decision_publication.REFUSED}: DecisionsUnavailable: {whole_error}"
     with opened(base, "flip", pds) as page:
         page.get_by_role("button", name="Approve brief v2").click()
         with replied(page, "/approve-brief") as reply:

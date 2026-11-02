@@ -314,7 +314,7 @@ def reopen(ctx: Ctx, c: Change, pr: PullRequest) -> tuple[Change, PullRequest, S
         try:
             ctx.gh.reopen_pull_request(ctx.repository, pr.number)
         except ProviderError as exc:  # GitHub refuses, e.g. a deleted branch: the owner gets the action
-            ctx.log(c.slug, "reopen", pr=pr.number, error=str(exc)[:200])
+            ctx.log(c.slug, "reopen", pr=pr.number, error=f"{type(exc).__name__}: {exc}")
         pr = ctx.gh.read_pull_request(ctx.repository, pr.number)
     if pr.state == "open":
         return (budgets.effect_observed(c, q.id, ctx.now) if q else c), pr, None

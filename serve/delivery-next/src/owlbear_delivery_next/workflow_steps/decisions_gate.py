@@ -14,6 +14,7 @@ Changes holds a baseline: Changes from before this gate have no rules to compare
 from __future__ import annotations
 
 import hashlib
+import logging
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.decision_store import DataView
     from owlbear_delivery_next.state_store.store import Lock, Store
 
+_log = logging.getLogger(__name__)
 UNGATED = frozenset({StepKind.SHAPE, StepKind.CLEANUP})  # shaping waits for chat; an ending Change always cleans up
 IRREVERSIBLE = frozenset({StepKind.PUBLISH, StepKind.MERGE})  # never on decisions another checkout may have changed
 OPTIONS = [
@@ -316,7 +318,9 @@ def unworded(view: DataView | None, c: Change) -> str:
     """Why an approval may not pin *c*'s decisions yet: an in-force full wording cannot be read; "" otherwise."""
     if view is None or not (faults := _faulty_wording(view, c)):
         return ""
-    return f"the full decision wording is unresolved: {'; '.join(faults)}"[:600]
+    why = f"the full decision wording is unresolved: {'; '.join(faults)}"
+    _log.warning("brief approval refused: %s", why)
+    return why
 
 
 def wording_stop(store: Store, c: Change, now: datetime) -> StepResult | None:

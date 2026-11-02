@@ -52,7 +52,7 @@ def approve(store: Store, lock: Lock, c: Change, approval: BriefApproval) -> str
     try:
         items = _items(store, after)
     except (decision_store.DecisionsUnavailable, DecisionError, OSError) as exc:
-        return _refused(store, lock, c, f"{REFUSED}: {exc}")
+        return _refused(store, lock, c, f"{REFUSED}: {type(exc).__name__}: {exc}")
     if items:
         planned = [_record(d, None, approval.at) for d, _ in items]
         after = loop.fold(c, [approval.model_copy(update={"published": planned})], approval.at)
