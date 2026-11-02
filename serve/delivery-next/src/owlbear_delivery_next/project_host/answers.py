@@ -4,13 +4,14 @@ A worker's question takes its relayer's class: an event, a clarification or a br
 carries the statement the owner confirmed when it was read back to him; without that confirmation nothing is stored.
 A visual round's decision names what the page showed (TD-79), a final retry its tasks (TD-217). The console answers
 with the same checks and binds to what ``show`` printed (#676). The page shows a question with what an earlier
-answer to it left unsaid: allowing what the Spotter stopped is held, and the question asked again says so (#717).
+answer to it left unsaid: allowing what the Spotter stopped is held, and the question asked again says so (#717);
+an answer the fold did not apply stays beside its question with why.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -80,13 +81,15 @@ def router(store: Store, read: Callable[[str], Change], put: Callable[[str, Inbo
     return routes
 
 
-def shown(c: Change, q: Question) -> dict[str, object]:
+def shown(c: Change, q: Question, events: list[dict[str, Any]]) -> dict[str, object]:
     """What the Changes page shows with the open *q* besides its text and options.
 
     Whether chat may answer it, and when the owner allowed what the Spotter stopped on the questions *q* asks again
-    (#717): that answer is held, so without it the page would show the same question as if he had not answered.
+    (#717): that answer is held, so without it the page would show the same question as if he had not answered. The
+    last answer to *q* the fold did not apply, from *events*, stays beside it until an answer to it applies (#791).
     """
-    return {"ordinary": loop.ordinary(q), "held": answer_kinds.kept(c, q)}
+    dropped = [e for e in events if e.get("event") == "answer-not-applied" and e.get("question") == q.id]
+    return {"ordinary": loop.ordinary(q), "held": answer_kinds.kept(c, q), "dropped": dropped[-1] if dropped else None}
 
 
 def answer_item(store: Store, c: Change, body: AnswerBody) -> AnswerItem | tuple[int, str]:

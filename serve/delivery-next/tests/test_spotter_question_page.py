@@ -121,3 +121,16 @@ def test_an_answer_without_an_option_is_refused_beside_the_question_at_once(page
         expect(form.locator(".refused")).to_contain_text("choose one of")
     with store.db.read() as db:
         assert db.execute("SELECT count(*) FROM inbox").fetchone() == (0,)
+
+
+@pytest.mark.browser
+def test_an_answer_the_fold_did_not_apply_is_shown_with_its_reason_on_the_question(page_url, pds) -> None:
+    """#791's activity line, beside the question it was meant for while that question stays open."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    why = "question q1 is settled only by one of its options, a reconsideration by a note"
+    store.log(Lock(SLUG), SLUG, {"event": "answer-not-applied", "at": NOW.isoformat(), "question": "q1", "reason": why})
+    with opened(base, pds) as page:
+        form = page.locator("section.act", has_text="Question q1")
+        expect(form.locator(".refused")).to_contain_text(f"was not applied: {why}")

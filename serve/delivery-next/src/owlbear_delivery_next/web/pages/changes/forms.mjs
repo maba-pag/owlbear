@@ -1,6 +1,8 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { DIALOG, REVERT, state, show, draft, notify, send, starts } from "./state.mjs";
-import { button, external, field, choice, tick, hd, text, list, row, panel, info, notice } from "./widgets.mjs";
+import {
+  button, external, field, choice, tick, hd, text, list, row, panel, info, notice, refusal,
+} from "./widgets.mjs";
 import { taskRounds } from "./progress.mjs";
 
 // A worker's question (TD-461): the owner says how his answer bears on the approved brief; a clarification is his
@@ -31,6 +33,12 @@ function heldLine(q) {
     + "the step stays stopped and the question is asked again.", { size: "sm" });
 }
 
+// #791: an answer that reached Delivery but settled nothing stays beside its question, with why, until one applies.
+function droppedLine(q) {
+  const e = q.dropped;
+  return e ? refusal(`Your answer at ${new Date(e.at).toLocaleTimeString()} was not applied: ${e.reason}`) : nothing;
+}
+
 export function questionForm(q, d) {
   const key = `${d.key}:question:${q.id}`, mine = draft(key, () => ({}));
   if (mine.option !== undefined && !q.options.some((o) => o.id === mine.option)) delete mine.option;  // withdrawn
@@ -44,7 +52,7 @@ export function questionForm(q, d) {
   };
   const clarifying = q.ordinary && mine.kind === "clarification";
   const confirm = (on) => { mine.confirmed = on; show(); };
-  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }), heldLine(q),
+  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }), heldLine(q), droppedLine(q),
     q.options.length ? choice(key, "option", "Choose an option", q.options) : nothing,
     field(key, "text", "Your answer in words"),
     q.ordinary ? choice(key, "kind", "How your answer bears on the brief", CLASSES) : nothing,
