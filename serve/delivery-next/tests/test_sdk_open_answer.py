@@ -217,6 +217,7 @@ def test_the_real_scope_keeps_the_owners_files_only_with_his_switch_on_before_th
     script, client = _opened(tmp_path, monkeypatch, _Listing(order, sources), resume=resume, on=on, events=events)
 
     assert client.opts["memory"] == {"enabled": not on}  # the owner's switch, never the runtime's default
+    assert client.opts["hooks"]["on_pre_tool_use"].__qualname__ == "_Step.pre_tool"  # #864: the guard's warnings
 
     off = ["plugin"] if on else ["linked", "root", "plugin"]
     assert [step[0] for step in order] == ["off", "shell", "send", "delivered"]

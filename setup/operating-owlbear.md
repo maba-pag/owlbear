@@ -262,6 +262,16 @@ an Impeccable update or automatic memory curation ends without starting one; the
 them. Right after the first install of a version that adds one, choose the Global layer, set it (off
 for Copilot Memory, as recommended), and save.
 
+**Shell guard level**, in **Settings → Shell guard**, sets what Delivery does with a step's shell commands that would
+skip Git hooks or signing, or force-push. **strict** refuses the ways the guard knows and their new variants, such as
+a git alias or a `rebase --exec` text, and warns on weak signs such as inline Python or a git word built at run time;
+**standard** refuses only the known ways and warns on the variants and weak signs; **lenient** warns on all of them
+and refuses none; **off** checks none of them. A warning reaches the agent and shows in the step's journal. At every
+level a read-only step's writes stay refused, and so do the step's folder, tool and file rules. A step takes the level
+when it starts. Like those three, it has no default and the Spotter does not need it: while it is unset, the project's
+work waits, and an Impeccable update or automatic memory curation ends without starting one. Set it on the Global layer
+right after the first install of the version that adds it.
+
 The machine settings in **Settings → This machine** (versions, updating itself, curation per
 trigger, sessions at once) work the same way: each machine follows the global ones, which you
 edit there with the Global layer chosen, unless it sets its own, which you set with the This

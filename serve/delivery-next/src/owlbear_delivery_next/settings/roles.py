@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, get_args
+from typing import TYPE_CHECKING, cast, get_args
 
 from pydantic import ValidationError
 
@@ -11,6 +11,7 @@ from owlbear_delivery_next.change_contracts.profile_record import RoleModel
 from owlbear_delivery_next.change_contracts.user_config import UserConfig
 
 if TYPE_CHECKING:
+    from owlbear_delivery_next.change_contracts.permissions import Level
     from owlbear_delivery_next.settings.config import Settings
 
 ROLES: tuple[Role, ...] = get_args(Role.__value__)  # their values come from the settings layers, none from code
@@ -43,17 +44,18 @@ SESSIONS: dict[str, Role] = {
 }
 
 
-USER_CONFIG = (  # D-01M5YE4P5317N1HWD0QN6N05E0, D-01M69EBRBBW97001KZ43C0BJM1: every step's session
+USER_CONFIG = (  # D-01M5YE4P5317N1HWD0QN6N05E0, D-01M69EBRBBW97001KZ43C0BJM1, D-01M6DX04FRP680Z4GGHK5B9VRC
     "load_user_instructions",
     "load_user_skills",
     "load_user_memory",
+    "guard_level",
 )
 
 
 def chosen(settings: Settings, session: str) -> RoleModel:
     """The model, effort and context tier a session kind or reviewer label runs with, from the resolved settings.
 
-    A step's session also needs all three user-config switches set (D-01M5YE4P5317N1HWD0QN6N05E0): unset refuses here,
+    A step's session also needs all four user-config settings set (D-01M5YE4P5317N1HWD0QN6N05E0): unset refuses here,
     before any session opens. The shaper's chat and the Spotter read ``Settings.agent`` and do not need them.
     """
     settings.need(*USER_CONFIG)
@@ -68,6 +70,7 @@ def user_config(settings: Settings) -> UserConfig:
         instructions=bool(settings.load_user_instructions),
         skills=bool(settings.load_user_skills),
         memory=bool(settings.load_user_memory),
+        guard=cast("Level", settings.guard_level),  # need() refused it unset
     )
 
 

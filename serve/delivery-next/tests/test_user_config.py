@@ -1,6 +1,6 @@
-"""The user-config switches: layered like any setting, no code default, unset missing.
+"""The user-config settings: layered like any setting, no code default, unset missing.
 
-D-01M5YE4P5317N1HWD0QN6N05E0, D-01M69EBRBBW97001KZ43C0BJM1.
+D-01M5YE4P5317N1HWD0QN6N05E0, D-01M69EBRBBW97001KZ43C0BJM1, D-01M6DX04FRP680Z4GGHK5B9VRC.
 """
 
 import json
@@ -81,5 +81,26 @@ def test_a_format_17_or_18_layer_keeps_its_switches_leaves_memory_unset_and_refu
         assert layer.format == config.CONFIG_FORMAT
         assert [getattr(layer, key) for key in KEYS] == [True, False, None]
     path.write_text(json.dumps({"format": version, "load_user_skills": "yes"}))
+    with pytest.raises(StoreError):
+        read_layer(path, Layer)
+
+
+@pytest.mark.usefixtures("no_base")
+def test_the_guard_level_is_unset_until_a_layer_sets_it_and_the_project_wins():
+    got = resolve(None, Layer())
+    assert ("guard_level" in got.missing, got.page()["guard_level"]) == (True, None)
+    got = resolve(GlobalLayer(guard_level="standard"), Layer(), MachineLayer(guard_level="off"))
+    assert (got.guard_level, got.sources["guard_level"]) == ("off", "machine")
+    got = resolve(GlobalLayer(guard_level="standard"), Layer(guard_level="lenient"), MachineLayer(guard_level="off"))
+    assert (got.guard_level, got.sources["guard_level"], got.page()["guard_level"]) == ("lenient", "project", "lenient")
+
+
+def test_a_format_19_layer_loads_with_the_guard_level_unset_and_refuses_an_unknown_level(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"format": 19, "load_user_memory": True}))
+    for model in (Layer, MachineLayer, GlobalLayer):
+        layer = read_layer(path, model)
+        assert (layer.format, layer.load_user_memory, layer.guard_level) == (config.CONFIG_FORMAT, True, None)
+    path.write_text(json.dumps({"format": 20, "guard_level": "loose"}))
     with pytest.raises(StoreError):
         read_layer(path, Layer)

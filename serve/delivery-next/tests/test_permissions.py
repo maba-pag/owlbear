@@ -81,6 +81,8 @@ def test_a_read_only_step_refuses_every_command_that_writes(text: str, how: str)
         "ls 2>/dev/null",
         "grep -rn x src > /dev/null",
         "cat .git/HEAD",
+        "git check-ignore -v -- probes/cleanup-717.log",
+        "git --no-pager check-ignore -v probes/cleanup-717.log",
     ],
 )
 def test_a_read_only_step_runs_any_command_that_only_reads(text: str) -> None:
@@ -191,8 +193,11 @@ def test_a_write_step_writes_outside_the_worktree() -> None:
     ],
 )
 def test_every_step_refuses_hook_or_signing_bypass_and_force_push(text: str, flag: str) -> None:
-    for policy in (READ, WRITE):
-        assert decide(policy, shell(text)) == f"`{text}` uses {flag}, {BYPASS}"
+    assert decide(WRITE, shell(text)) == f"`{text}` uses {flag}, {BYPASS}"
+    read = decide(READ, shell(text))  # refused as a write at any level, and still counted as a bypass
+    assert read is not None
+    assert read.startswith(f"`{text}` uses Git command '")
+    assert read.endswith(f", which writes in a read-only step; it also uses {flag}, {BYPASS}")
 
 
 @pytest.mark.parametrize(

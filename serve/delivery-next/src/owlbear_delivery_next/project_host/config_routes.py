@@ -68,6 +68,7 @@ APPLIED = [
     "load_user_instructions",  # D-01M5YE4P5317N1HWD0QN6N05E0
     "load_user_skills",
     "load_user_memory",  # D-01M69EBRBBW97001KZ43C0BJM1
+    "guard_level",  # D-01M6DX04FRP680Z4GGHK5B9VRC
     "prefs.merge_method",
     "prefs.delete_remote_branch",
     "prefs.ci_poll_seconds",

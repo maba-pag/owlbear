@@ -9,119 +9,42 @@ its -c script, script file, startup files, here-document or here-string, a sourc
 script run by path. What the guard can't read is refused: a shell reading input from another program, a command or
 script built at run time, a script or program run after an earlier write in the same command, and a relative path
 once the folder can't be followed.
+
+How a shell bypass is met depends on the owner's guard level (``Level``) and on the class of the reader that found
+it. Core findings are today's readers, everything the guard can't read in a write step, globbed command names and
+mirror pushes; variant findings are git aliases a command writes, commands git runs (rebase --exec, submodule
+foreach) and hook-tool switches; doubtful findings are bypasses in interpreters' inline code and expanded git
+arguments. strict refuses core and variant and warns doubtful; standard refuses core and warns the rest; lenient
+warns all; off checks no shell bypass. Outside the ladder, at every level: a read-only step's writes, a confined
+step's rules, file, MCP, memory and custom-tool requests.
+
+Documented limits, which no class reads: task runners (make, npm run, just), programs found by bare name on PATH,
+shell aliases, arithmetic subscripts, later loop iterations, startup variables set through builtins, startup-file input
+redirects, quoted descriptor words, swapped config files (GIT_CONFIG_GLOBAL, a fake HOME), git aliases already in
+config, ``git bisect run``, script files an interpreter runs, edits to hook files (left to the Spotter) and a step
+lowering ``guard_level`` for later steps. Changing ``core.hooksPath`` stays refused.
 """
 
 from __future__ import annotations
 
 import functools
 import re
-import shlex
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, NamedTuple
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Any, Literal
 
-from owlbear_delivery_next.change_contracts import shell_walk, tools
+from owlbear_delivery_next.change_contracts import git_reading, shell_walk, tools
+from owlbear_delivery_next.change_contracts.shell_walk import BYPASS, CORE, DOUBTFUL, VARIANT
 from owlbear_delivery_next.local_system import shell_parse, shell_programs
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-BYPASS = "which skips hooks or signing or forces history"  # the end of every bypass denial's reason
+Level = Literal["strict", "standard", "lenient", "off"]
+_REFUSED = {"strict": DOUBTFUL, "standard": VARIANT, "lenient": CORE}  # classes below it are refused
 _HARMLESS = re.compile(r"\d*>>?\s*/dev/null(?![^\s;&|)])|\d*>&\d+")  # discarded output or a descriptor copy
 _LOOKUP = re.compile(  # command -v cp: names the program, runs nothing
     r"(?<![^\s;&|(])command(?:[ \t]+-p)*[ \t]+-[pV]*[vV][pvV]*(?:[ \t]+-[pvV]+)*(?:[ \t]+--)?(?:[ \t]+[\w./+-]+)+"
-)
-_CONFIG_VALUES = frozenset({"-f", "--file", "--blob", "--type", "--default", "--comment"})
-_CONFIG_QUERIES = frozenset(
-    {"--get", "--get-all", "--get-regexp", "--get-urlmatch", "--get-color", "--get-colorbool", "--list", "-l",
-     "get", "list"}
-)  # fmt: skip
-_CONFIG_READS = _CONFIG_QUERIES | {  # git config operations that set no value
-    "--unset", "--unset-all", "--remove-section", "--rename-section", "--edit", "-e", "unset", "remove-section",
-    "rename-section", "edit",
-}  # fmt: skip
-_CONFIG_KEY = re.compile(r"GIT_CONFIG_KEY_(\d+)")
-_READ_ONLY_GIT = frozenset(
-    {
-        "cat-file",
-        "describe",
-        "diff",
-        "diff-tree",
-        "for-each-ref",
-        "grep",
-        "log",
-        "ls-files",
-        "ls-tree",
-        "merge-base",
-        "name-rev",
-        "rev-list",
-        "rev-parse",
-        "show",
-        "show-ref",
-        "status",
-    }
-)
-_GIT_GLOBAL_FLAGS = frozenset(
-    {
-        "--bare",
-        "--exec-path",
-        "--glob-pathspecs",
-        "--help",
-        "--html-path",
-        "--icase-pathspecs",
-        "--info-path",
-        "--literal-pathspecs",
-        "--man-path",
-        "--no-advice",
-        "--no-lazy-fetch",
-        "--no-optional-locks",
-        "--no-pager",
-        "--no-replace-objects",
-        "--noglob-pathspecs",
-        "--paginate",
-        "--version",
-        "-P",
-        "-h",
-        "-p",
-        "-v",
-    }
-)
-_GIT_GLOBAL_OPTIONS = frozenset(
-    {"-C", "-c", "--attr-source", "--config-env", "--git-dir", "--namespace", "--work-tree"}
-)
-_GIT_GLOBAL_ATTACHED = _GIT_GLOBAL_OPTIONS | {"--exec-path", "--list-cmds", "--super-prefix"}  # as --option=value
-_GIT_VALUES = {  # short options taking the next word or only an attached value, and long ones taking a value
-    "commit": (
-        "mFCct",
-        "Su",
-        frozenset(
-            {
-                "--author",
-                "--cleanup",
-                "--date",
-                "--file",
-                "--fixup",
-                "--message",
-                "--pathspec-from-file",
-                "--reedit-message",
-                "--reuse-message",
-                "--squash",
-                "--template",
-                "--trailer",
-            }
-        ),
-    ),
-    "push": ("o", "", frozenset({"--exec", "--push-option", "--receive-pack", "--recurse-submodules", "--repo"})),
-}
-_NO_VALUES: tuple[str, str, frozenset[str]] = ("", "", frozenset())
-_GIT_FALSE = frozenset({"", "0", "false", "no", "off"})
-_GIT_WRITE_OPTIONS = frozenset(
-    {
-        "--output",
-        "--output-indicator-context",
-        "--output-indicator-new",
-        "--output-indicator-old",
-    }
 )
 _REDIRECT = re.compile(r"(?:^|[^>])(?:&>|>>?|\d+>>?)(?![>&])")
 _SHELL_MUTATION = re.compile(
@@ -166,149 +89,45 @@ def identities(req: Request) -> set[str]:
     return programs or {(req.tool or req.kind).lower()}
 
 
-class _GitCall(NamedTuple):
-    config: tuple[str, ...]  # the -c settings, and the keys --config-env sets
-    sub: str | None
-    arguments: tuple[str, ...]  # the subcommand's, or the unparsed rest without one
+@dataclass(frozen=True)
+class Verdict:
+    """What the guard found in one request, and whether the step's level refuses it or only warns."""
+
+    reason: str
+    refuse: bool = True
 
 
-def _parse_git(words: Sequence[str]) -> _GitCall:
-    """Parse the words after git: its global options, then the subcommand and its arguments."""
-    config: list[str] = []
-    i = 0
-    while i < len(words):
-        w = words[i]
-        if w in _GIT_GLOBAL_OPTIONS:
-            value = words[i + 1 : i + 2]
-            config += value if w == "-c" else [v.partition("=")[0] + "=" for v in value] if w == "--config-env" else []
-            i += 2
-        elif w.startswith("--config-env="):
-            config.append(w.removeprefix("--config-env=").partition("=")[0] + "=")  # its value is unknown here
-            i += 1
-        elif w in _GIT_GLOBAL_FLAGS or ("=" in w and w.partition("=")[0] in _GIT_GLOBAL_ATTACHED):
-            i += 1
-        else:
-            break
-    rest = tuple(words[i:])
-    if rest and not rest[0].startswith("-"):
-        return _GitCall(tuple(config), rest[0], rest[1:])
-    return _GitCall(tuple(config), None, rest)
-
-
-def _disables(setting: str) -> bool:
-    """Whether a git setting replaces the hooks or turns commit or tag signing off; a bare key's value is unknown."""
-    key, eq, value = setting.partition("=")
-    key = key.lower()
-    return key == "core.hookspath" or (
-        key in {"commit.gpgsign", "tag.gpgsign"} and bool(eq) and value.lower() in _GIT_FALSE
-    )
-
-
-def _config_write(arguments: Sequence[str]) -> str | None:
-    """The setting a git config command writes when it replaces the hooks or turns signing off."""
-    if any(a in _CONFIG_READS for a in arguments):
+def judge(
+    policy: Policy,
+    req: Request,
+    offered: frozenset[str] = frozenset(),
+    *,
+    memory: bool = False,
+    level: Level = "strict",
+) -> Verdict | None:
+    """Judge one request at the owner's guard level: None allows it, a Verdict refuses it or warns about it."""
+    if req.kind != "shell" or policy.confined:
+        reason = _fixed(policy, req, offered, memory=memory)
+        return Verdict(reason) if reason else None
+    if not policy.write and (reason := _shell(policy, req, None)):  # a read-only step's writes: refused at any level
+        found = _shell(replace(policy, write=True), req, VARIANT)
+        return Verdict(_marked(reason, found) if found and bypass(found) else reason)
+    if level == "off":
         return None
-    plain: list[str] = []
-    i = 0
-    while i < len(arguments):
-        w = arguments[i]
-        i += 2 if w in _CONFIG_VALUES else 1
-        if not w.startswith("-") and w not in _CONFIG_VALUES:
-            plain.append(w)
-    if plain[:1] == ["set"]:
-        plain = plain[1:]
-    if len(plain) >= 2 and _disables(f"{plain[0]}={plain[1]}"):  # noqa: PLR2004 - a key and its value
-        return f"{plain[0]} {plain[1]}"
+    for reading in (CORE, VARIANT, DOUBTFUL):
+        if reason := _shell(policy, req, reading):
+            return Verdict(reason, refuse=reading < _REFUSED[level])
     return None
 
 
-def _short(cluster: str, required: str, optional: str) -> tuple[str, bool]:
-    """The flags of a short-option cluster before an option taking a value, and whether that value is the next word."""
-    for j, ch in enumerate(cluster):
-        if ch in required or ch in optional:
-            return cluster[:j], ch in required and j == len(cluster) - 1
-    return cluster, False
-
-
-def _sub_bypass(sub: str | None, arguments: Sequence[str]) -> str | None:
-    """Return the option or refspec of a git subcommand that skips hooks or signing or forces a push."""
-    required, optional, long_values = _GIT_VALUES.get(sub or "", _NO_VALUES)
-    forbidden = {"commit": "n", "push": "f"}.get(sub or "", "")
-    i = 0
-    while i < len(arguments) and (w := arguments[i]) != "--":
-        name, eq, _ = w.partition("=")
-        flags, takes = _short(w[1:], required, optional) if re.fullmatch(r"-[^-].*", w) else ("", False)
-        if w in {"--no-verify", "--no-gpg-sign"} or set(flags) & set(forbidden):
-            return w
-        if sub == "push" and w.startswith(("--force", "+")):
-            return w
-        i += 2 if takes or (name in long_values and not eq) else 1
-    if sub == "push":  # after --, a refspec still forces with a leading +
-        return next((w for w in arguments[i + 1 :] if w.startswith("+")), None)
-    return None
-
-
-def _environment(words: Sequence[str]) -> dict[str, str]:
-    """The variables one command sets for what it runs: leading assignments, env's, and export's."""
-    i = shell_programs.builtin(words)  # then export ..., command export ...
-    if i < len(words) and shell_programs.name(words[i]) == "env":
-        i = shell_programs.operand(words, i)
-    elif i < len(words) and words[i] == "export":
-        i = len(words)
-    return shell_programs.assignments(words[:i])
-
-
-def _env_setting(env: dict[str, str]) -> str | None:
-    """A setting that git configuration passed by environment uses to replace the hooks or turn signing off."""
-    try:
-        settings = shlex.split(env.get("GIT_CONFIG_PARAMETERS", ""))
-    except ValueError:
-        settings = [env["GIT_CONFIG_PARAMETERS"]]
-    for name, key in env.items():
-        if m := _CONFIG_KEY.fullmatch(name):
-            value = env.get(f"GIT_CONFIG_VALUE_{m[1]}")
-            settings.append(key if value is None else f"{key}={value}")
-    return next((s for s in settings if _disables(s)), None)
-
-
-def _bypass(words: Sequence[str]) -> str | None:
-    """Return the setting, option or refspec of a git command that skips hooks or signing, or forces a push."""
-    if setting := _env_setting(_environment(words)):  # leading assignments, env's and export's
-        return f"environment setting {setting}"
-    for run in shell_programs.runs(words):
-        if setting := _env_setting(run.env):  # those an env -S split sets too
-            return f"environment setting {setting}"
-        if shell_programs.name(run.words[0]) != "git":
-            continue
-        call = _parse_git(run.words[1:])
-        if setting := next((s for s in call.config if _disables(s)), None):
-            return f"-c {setting}"
-        if call.sub == "config" and (setting := _config_write(call.arguments)):
-            return f"config {setting}"
-        if found := _sub_bypass(call.sub, call.arguments):
-            return found
-    return None
-
-
-def _is_read_only_branch(arguments: Sequence[str]) -> bool:
-    if list(arguments) in ([], ["--show-current"]):
-        return True
-    return arguments[0] == "--list" and not any(a.startswith("-") for a in arguments[1:])  # else it creates one
-
-
-def _git_mutation(words: Sequence[str]) -> str | None:
-    """How a git command one command's words run would write."""
-    for prog in (r.words for r in shell_programs.runs(words) if shell_programs.name(r.words[0]) == "git"):
-        call = _parse_git(prog[1:])
-        if option := next((a for a in call.arguments if a.partition("=")[0] in _GIT_WRITE_OPTIONS), None):
-            return f"Git output option {option}"
-        if call.sub == "branch" and _is_read_only_branch(call.arguments):
-            continue
-        if call.sub == "config" and any(a in _CONFIG_QUERIES for a in call.arguments):
-            continue
-        if call.sub not in _READ_ONLY_GIT and (call.sub or call.arguments):
-            return f"Git command '{call.sub or ' '.join(prog)}'"
-    return None
+def _marked(reason: str, found: str) -> str:
+    """A read-only refusal that also names the bypass, so it counts as one, not as a wrong choice of tool."""
+    name = reason.partition(" uses ")[0]
+    return (
+        f"{reason}; it also {found.removeprefix(f'{name} ')}"
+        if found.startswith(f"{name} uses ")
+        else f"{reason}; {found}"
+    )
 
 
 def _mutation(text: str, commands: Sequence[Sequence[str]]) -> str | None:
@@ -316,7 +135,7 @@ def _mutation(text: str, commands: Sequence[Sequence[str]]) -> str | None:
 
     Discarded output, a lookup (command -v cp) and an arithmetic comparison ($((1 > 0))) write nothing.
     """
-    if found := next(filter(None, map(_git_mutation, commands)), None):
+    if found := next(filter(None, map(git_reading.mutation, commands)), None):
         return found
     for run in (r for words in commands for r in shell_programs.runs(words)):  # env -S hides it, /bin/cp names it
         if match := _SHELL_MUTATION.match(" ".join([shell_programs.name(run.words[0]), *run.words[1:]])):
@@ -329,13 +148,16 @@ def _mutation(text: str, commands: Sequence[Sequence[str]]) -> str | None:
     return None
 
 
-def _shell(policy: Policy, req: Request) -> str | None:
+def _shell(policy: Policy, req: Request, reading: int | None) -> str | None:
+    """One pass over a shell request: *reading* None reads no bypass, else the readers up to that class."""
     for text in (req.text,) if req.text else req.commands or ("",):
-        if reason := _check(policy, text):
+        if reason := _check(policy, text, reading=reading):
             return reason
+    if reading is None:
+        return None
     for text in req.commands if req.text else ():  # the runtime's own reading too, should the text be misread
         try:
-            flag = next(filter(None, (_bypass(c.words) for c in shell_parse.parse(text))), None)
+            flag = next(filter(None, (git_reading.bypass(c.words) for c in shell_parse.parse(text))), None)
         except ValueError:  # the whole text was judged already
             continue
         if flag:
@@ -348,8 +170,14 @@ def bypass(reason: str) -> bool:
     return reason.endswith(BYPASS)
 
 
-def _check(
-    policy: Policy, text: str, depth: int = 0, state: shell_walk.State | None = None, label: str = ""
+def _check(  # noqa: PLR0913 - the walk calls it back with the text's place; the pass stays fixed
+    policy: Policy,
+    text: str,
+    depth: int = 0,
+    state: shell_walk.State | None = None,
+    label: str = "",
+    *,
+    reading: int | None,
 ) -> str | None:
     """Judge one shell text, and each script it runs, the same way; *label* names a script file in reasons."""
     name = label or text
@@ -360,12 +188,14 @@ def _check(
     if not commands:
         return "the shell request names no command" if depth == 0 else None  # an empty script does nothing
     try:
-        if flag := next(filter(None, (_bypass(c.words) for c in commands)), None):
+        found = (git_reading.bypass(c.words) for c in commands) if reading is not None else ()
+        if flag := next(filter(None, found), None):
             return f"`{name}` uses {flag}, {BYPASS}"
         if not policy.write and (found := _mutation(text, [c.words for c in commands])):
             return f"`{name}` uses {found}, which writes in a read-only step"
         mutation = functools.partial(_run_mutation, policy)
-        walk = shell_walk.Walk(name, depth, functools.partial(_check, policy), _writes, _run_bypass, mutation)
+        nested = functools.partial(_check, policy, reading=reading)
+        walk = shell_walk.Walk(name, depth, nested, _writes, _run_bypass, mutation, reading)
         return walk.commands(commands, state or shell_walk.State(policy.root))
     except shell_programs.UnreadableError as error:
         return f"`{name}` {error}"
@@ -373,9 +203,9 @@ def _check(
 
 def _run_bypass(name: str, run: shell_programs.Run) -> str | None:
     """The refusal of a #! line's program that skips hooks or signing or forces history, as env -S runs it."""
-    if setting := _env_setting(run.env):
+    if setting := git_reading.env_setting(run.env, run.words):
         return f"`{name}` uses environment setting {setting}, {BYPASS}"
-    return f"`{name}` uses {flag}, {BYPASS}" if (flag := _bypass(run.words)) else None
+    return f"`{name}` uses {flag}, {BYPASS}" if (flag := git_reading.bypass(run.words)) else None
 
 
 def _run_mutation(policy: Policy, name: str, run: shell_programs.Run) -> str | None:
@@ -411,8 +241,21 @@ def _without_arithmetic(text: str) -> str:
     return "".join(out)
 
 
-def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset(), *, memory: bool = False) -> str | None:
-    """Return None to allow, or the denial reason the agent and the activity log see.
+def decide(
+    policy: Policy,
+    req: Request,
+    offered: frozenset[str] = frozenset(),
+    *,
+    memory: bool = False,
+    level: Level = "strict",
+) -> str | None:
+    """Return None to allow, or the denial reason the agent and the activity log see; a warning allows."""
+    verdict = judge(policy, req, offered, memory=memory, level=level)
+    return verdict.reason if verdict and verdict.refuse else None
+
+
+def _fixed(policy: Policy, req: Request, offered: frozenset[str], *, memory: bool) -> str | None:
+    """The rules outside the guard level: None to allow, or the denial reason.
 
     *offered* are the MCP tools the role's agent file names as server/tool, such as saving a memory (TD-70); the
     runtime names a request's tool server-tool. *memory* is the owner's Copilot Memory switch: with it on, a role
@@ -431,7 +274,7 @@ def decide(policy: Policy, req: Request, offered: frozenset[str] = frozenset(), 
     if req.kind == "url":
         return None
     if req.kind == "shell":
-        return "this step runs no shell commands" if policy.confined else _shell(policy, req)
+        return "this step runs no shell commands"
     return f"{req.kind} requests are not allowed in this step"
 
 

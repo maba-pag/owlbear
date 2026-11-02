@@ -47,15 +47,18 @@ def test_plan_challenge_is_the_challenger_not_the_planner():
 
 
 @pytest.mark.parametrize(
-    ("instructions", "skills", "memory"),
-    [(False, False, False), (True, False, True), (False, True, True), (True, True, False)],
-)
-def test_the_user_config_switches_reach_a_step_as_set_the_project_over_global(instructions, skills, memory):
-    expected = roles.UserConfig(instructions=instructions, skills=skills, memory=memory)
+    ("instructions", "skills", "memory", "guard"),
+    [(False, False, False, "strict"), (True, False, True, "standard"), (False, True, True, "lenient"),
+     (True, True, False, "off")],
+)  # fmt: skip
+def test_the_user_config_reaches_a_step_as_set_the_project_over_global(instructions, skills, memory, guard):
+    expected = roles.UserConfig(instructions=instructions, skills=skills, memory=memory, guard=guard)
     switches = {"load_user_instructions": instructions, "load_user_skills": skills, "load_user_memory": memory}
-    assert roles.user_config(resolve(GlobalLayer(**switches), Layer())) == expected
-    flipped = GlobalLayer(**{key: not value for key, value in switches.items()})
-    assert roles.user_config(resolve(flipped, Layer(**switches))) == expected
+    chosen = switches | {"guard_level": guard}
+    assert roles.user_config(resolve(GlobalLayer(**chosen), Layer())) == expected
+    other = "off" if guard == "strict" else "strict"
+    flipped = GlobalLayer(**{key: not value for key, value in switches.items()}, guard_level=other)
+    assert roles.user_config(resolve(flipped, Layer(**chosen))) == expected
 
 
 def test_a_project_override_wins_and_is_marked_in_the_table():

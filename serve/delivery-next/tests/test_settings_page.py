@@ -1192,6 +1192,52 @@ def test_the_user_config_switches_save_in_each_layer_reload_and_clear_back_to_in
     )
 
 
+GUARD = "Shell guard level"
+
+
+@pytest.mark.browser
+def test_the_guard_level_saves_in_each_layer_as_a_level_and_clears_back_to_inherit(store, pds, monkeypatch) -> None:
+    """D-01M6DX04FRP680Z4GGHK5B9VRC: no default, unset until a layer sets it; the project wins."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+    from owlbear_delivery_next.state_store.store import read_layer  # noqa: PLC0415
+
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"guard_level": None}))
+    with settings_page(store, pds) as page:
+        row = page.locator("#set-guard_level")
+        pds.group(page, "overview")
+        expect(page.locator("#unset")).to_contain_text("guard_level")
+        pds.group(page, "agents")
+        expect(row.locator("p-text[color='error']")).to_have_count(1)
+        pds.pick(page, "Layer", "global")
+        box = pds.select(page, GUARD).bounding_box()
+        assert min(box["width"], box["height"]) >= 24  # WCAG 2.5.8 target size
+        pds.pick(page, GUARD, "strict")
+        _saved_by_keyboard(page, pds, "Save global defaults", "the global")
+        pds.pick(page, "Layer", "machine")
+        expect(row).to_contain_text("inherit (strict)")
+        pds.pick(page, GUARD, "standard")
+        _saved(page, pds, "Save this machine's preferences", "this machine's")
+        pds.pick(page, "Layer", "project")
+        pds.pick(page, GUARD, "lenient")
+        _saved(page, pds, "Save project settings", "this project's")
+        pds.group(page, "overview")
+        expect(page.locator("#unset-none")).to_be_visible()
+
+        page.reload()
+        opened(page, pds)
+        expect(pds.select(page, GUARD)).to_have_js_property("value", "lenient")
+        expect(row).to_contain_text("in use: lenient, from this project")
+        pds.pick(page, GUARD, "inherit")
+        _saved(page, pds, "Save project settings", "this project's")
+        expect(row).to_contain_text("in use: standard, from this machine")
+    layers = (store.read_config(), read_layer(store.machine_path, config.MachineLayer),
+              read_layer(store.global_path, config.GlobalLayer))  # fmt: skip
+    assert [layer.guard_level for layer in layers] == [None, "standard", "strict"]
+    assert (store.settings().guard_level, store.settings().sources["guard_level"]) == ("standard", "machine")
+
+
 CATEGORY_LABELS = {
     "hand_off_fitness": "Hand-off fitness",
     "course_and_constraints": "Course and constraints",

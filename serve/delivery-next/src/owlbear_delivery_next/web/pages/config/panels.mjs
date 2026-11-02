@@ -7,6 +7,7 @@ import { ROUNDS, LOOPS, back, state } from "./state.mjs";
 import {
   cell, row, setting, table, numberCell, designFailures, widths, sessionsAtOnce, prLabels, prMarker, subagentsCell,
   curatorThreshold, spotterCell, prefRows, USER_KEYS, userConfig, userConfigLabel, contextCell, ratesCell, editable,
+  guardLevel,
 } from "./cells.mjs";
 
 const SPOTTER = [
@@ -102,6 +103,17 @@ export function agentsGroup() {
         set, a step asks you to set them instead of starting its session.</p-text>
       ${table("Your instructions, skills and memory: they apply to the next session", ["Setting", "Value"],
         "user-config", USER_KEYS.map((key) => setting(`set-${key}`, userConfigLabel(key), [key], userConfig(key))))}
+    </section>
+    <section class="panel" aria-labelledby="guard-title">
+      <p-heading size="lg"><h2 id="guard-title" tabindex="-1">Shell guard</h2></p-heading>
+      <p-text>Delivery reads each shell command a step runs for ways around Git hooks or signing, and for
+        force-pushes. Strict refuses the ways it knows and their new variants and warns on weak signs; standard
+        refuses only the ways it knew before and warns on the rest; lenient warns on all of them and refuses none; off
+        checks none of them. A warning reaches the agent and the step's journal. At every level a read-only step's
+        writes stay refused, and so do the step's folder, tool and file rules. It has no default: until it is set, a
+        step asks you to set it instead of starting its session.</p-text>
+      ${table("Shell guard: it applies to the next step", ["Setting", "Value"], "guard",
+        [setting("set-guard_level", "Shell guard level", ["guard_level"], guardLevel())])}
     </section>`;
 }
 
