@@ -9,9 +9,18 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Self
+
+from owlbear_delivery_next.local_system.shell_words import (
+    Word,
+    ansi_c_end,
+    arithmetic_end,
+    continued,
+    globbed,
+    single_end,
+)
 
 _REDIRECTION = re.compile(r"&?[<>]+[&|]?")
+_ARRAY = re.compile(r"[A-Za-z_]\w*\+?=")  # a=( or a+=(: an array's elements follow
 _OPENERS = frozenset(
     {"{", "case", "for", "function", "if", "select", "until", "while"}
 )  # words that start a compound command
@@ -19,19 +28,6 @@ _CLOSERS = frozenset({"}", "done", "esac", "fi"})
 _SPECIAL = frozenset("@*#?$!-0123456789")  # $@, $1, ...: parameters without a name
 _BLANK = " \t\n;&|<>()"  # what ends a here-document's delimiter word
 _BODY_ESCAPE = re.compile(r"\\([$`\\\n])")  # escapes an unquoted here-document's body loses
-
-
-class Word(str):  # noqa: SLOT000 - a str subclass can hold attributes only in a __dict__
-    """One shell word after quote removal, and what the shell does to it before running it."""
-
-    expanded: bool  # it holds an expansion the shell fills in at run time: $x, ${x}, $(...), `...`
-    tilde: bool  # it starts with an unquoted ~, which the shell turns into the home folder
-
-    def __new__(cls, value: str = "", *, expanded: bool = False, tilde: bool = False) -> Self:
-        """A word with *value* as its text."""
-        word = super().__new__(cls, value)
-        word.expanded, word.tilde = expanded, tilde
-        return word
 
 
 @dataclass
@@ -66,9 +62,11 @@ class _Level:
     depth: int
     opaque: bool  # its commands read input from outside the text: a pipe or an output process substitution
     arith: bool = False  # inside (( )): < and > are operators, never redirections
+    pattern: bool = False  # its words are no command: a case arm's patterns, an array's elements
     words: list[Word] = field(default_factory=list)
     inputs: list[Input] = field(default_factory=list)
     word: str | None = None
+    plain: str = ""  # the word with its quoted and escaped characters blanked out
     expanded: bool = False
     tilde: bool = False
     quote: str = ""
@@ -78,26 +76,29 @@ class _Level:
     piped: bool = False  # the next command reads the previous one's output
     conditional: bool = False  # the next commands run only as && or || decides
 
-    def add(self, chars: str) -> None:
+    def add(self, chars: str, *, plain: bool = False) -> None:
         self.word = (self.word or "") + chars
+        self.plain += chars if plain else "\0" * len(chars)
 
     def end_word(self) -> None:
         if self.word is None:
             return
-        word = Word(self.word, expanded=self.expanded, tilde=self.tilde)
+        word = Word(self.word, expanded=self.expanded, tilde=self.tilde, pattern=globbed(self.plain))
         if self.redirect is None:
+            self.pattern = self.pattern and (bool(self.words) or word != "esac")  # esac ends the arms
             self.words.append(word)
+            self.pattern = self.pattern or (self.words[:1] == ["case"] and self.words[2:] == ["in"])  # arms follow
         else:
             fd, kind = self.redirect
             if kind != "out":
                 self.inputs.append(Input(fd, kind, word))
             self.redirect = None
-        self.word, self.expanded, self.tilde = None, False, False
+        self.word, self.plain, self.expanded, self.tilde = None, "", False, False
 
     def descriptor(self, default: int) -> int:
         """The descriptor written right before a redirection operator, which it consumes, else *default*."""
         if self.word is not None and self.word.isdigit():
-            fd, self.word = int(self.word), None
+            fd, self.word, self.plain = int(self.word), None, ""
             return fd
         self.end_word()
         return default
@@ -114,13 +115,17 @@ class _Lexer:
         self.group: tuple[int, int] | None = None  # the commands of the subshell that just closed
         self.defined = False  # an empty () just closed: a function's body may follow
 
-    def level(self, i: int, close: str = "", depth: int = 0, *, opaque: bool = False, arith: bool = False) -> int:
+    def level(  # noqa: PLR0913 - where to read, and what the text read is
+        self, i: int, close: str = "", depth: int = 0, *, opaque: bool = False, arith: bool = False, words: bool = False
+    ) -> int:
         """Read text[i:] up to the unquoted *close*, or to the end without one; return the index after it.
+
+        *words*: the text is an array's elements, no command; their substitutions are.
 
         Raises:
             ValueError: A quote, subshell or substitution is not closed.
         """
-        s = _Level(depth, opaque, arith)
+        s = _Level(depth, opaque, arith, pattern=words)
         while i < len(self.text) and (s.quote or self.text[i] != close):
             i = self._step(s, i)
         if s.quote or (close and i >= len(self.text)):
@@ -131,7 +136,7 @@ class _Lexer:
     def close(self, s: _Level, i: int) -> bool:
         """End the command being read at index *i*, keeping it when it has words or input; return whether it did."""
         s.end_word()
-        kept = bool(s.words or s.inputs or s.out)
+        kept = bool(s.words or s.inputs or s.out) and (not s.pattern or s.words[:1] == ["case"])
         if kept:
             self._keep(s, i)
             s.piped = False
@@ -196,9 +201,10 @@ class _Lexer:
         if text[i] == "`" or text.startswith("$(", i):
             return self._substitution(s, i)
         nxt = text[i + 1 : i + 2]
-        if nxt == "'" and not s.quote:  # $'...': its backslashes escape, \' too; the shell decodes it
-            end = ansi_c_end(text, i + 2)
-            s.add("$" + text[i + 2 : end - 1])
+        ansi = nxt == "'" and not s.quote  # $'...': its backslashes escape, \' too; the shell decodes it
+        if ansi or (nxt and nxt in "@*#?$!-"):  # $?, $*: a parameter, never a glob
+            end = ansi_c_end(text, i + 2) if ansi else i + 2
+            s.add("$" + text[i + 2 : end - 1] if ansi else text[i:end])
             s.expanded = True
             return end
         named = bool(nxt) and (nxt in "{_" or nxt.isalnum() or nxt in _SPECIAL)
@@ -251,7 +257,7 @@ class _Lexer:
             elif text.startswith("$((", j) and arithmetic_end(text, j + 3) is not None:
                 j = self._arithmetic(_Level(s.depth, s.opaque, piped=s.piped), j + 3)
             elif text[j] == "'" or (text.startswith("$'", j) and not outer and not quoted):
-                j = _single_end(text, j) if not outer and not quoted else j + 1  # in "${x:-'...'}" ' is a character
+                j = single_end(text, j) if not outer and not quoted else j + 1  # in "${x:-'...'}" ' is a character
             elif text[j] == '"':  # a quote inside ${...}: a } in it doesn't close the expansion
                 quoted, j = not quoted, j + 1
             elif text.startswith("$(", j) or text[j] == "`":
@@ -296,12 +302,19 @@ class _Lexer:
         else:
             if ch == "~" and s.word is None:
                 s.tilde = True
-            s.add(ch)
+            s.add(ch, plain=not s.arith)
         return i + 1
 
     def _separator(self, s: _Level, i: int) -> int:
         """End a command at ;, &, &&, a newline or an unmatched ), reading here-document bodies after a newline."""
+        if self.text[i] == ")" and s.pattern:  # a case arm's patterns end; its commands follow
+            self.close(s, i)
+            s.pattern = False
+            return i + 1
         kept = self.close(s, i)
+        if self.text.startswith((";;", ";&"), i) and self.blocks:
+            s.pattern = self.commands[self.blocks[-1][0]].words[:1] == ["case"]  # the next arm's patterns
+
         if self.text.startswith("&&", i):
             s.conditional = True
             return i + 2
@@ -313,6 +326,9 @@ class _Lexer:
         return i + 1
 
     def _pipe(self, s: _Level, i: int) -> int:
+        if s.pattern:  # a | between a case arm's patterns
+            s.end_word()
+            return i + 1
         kept = self.close(s, i)
         if self.text.startswith("||", i):
             s.conditional = True
@@ -323,15 +339,19 @@ class _Lexer:
         return i + 2 if self.text.startswith("|&", i) else i + 1
 
     def _subshell(self, s: _Level, i: int) -> int:
+        if s.pattern:  # the ( before a case arm's patterns
+            s.end_word()
+            return i + 1
         body = self.defined and not s.words  # f() (...): a function's body, whose input is its caller's
+        array = _ARRAY.fullmatch(s.word or "") is not None
         opaque = s.opaque or s.piped or body or any(o for _, o in self.blocks)
         self.close(s, i)
         s.piped = False
         start = len(self.commands)
         arith = s.arith or self.text.startswith("((", i)  # an arithmetic command, also in for ((...))
-        end = self.level(i + 1, ")", s.depth + 1, opaque=opaque, arith=arith)
+        end = self.level(i + 1, ")", s.depth + 1, opaque=opaque, arith=arith, words=array)
         self.group = (start, len(self.commands))
-        self.defined = start == len(self.commands)
+        self.defined = start == len(self.commands) and not array
         return end
 
     def _process(self, s: _Level, i: int) -> int:
@@ -396,7 +416,7 @@ class _Lexer:
             while i < len(self.text):
                 stop = self.text.find("\n", i)
                 stop = len(self.text) if stop < 0 else stop
-                while not literal and _continued(self.text[i:stop]) and stop < len(self.text):  # EO\ + F is EOF
+                while not literal and continued(self.text[i:stop]) and stop < len(self.text):  # EO\ + F is EOF
                     nxt = self.text.find("\n", stop + 1)
                     stop = len(self.text) if nxt < 0 else nxt
                 line = self.text[i:stop].replace("\\\n", "") if not literal else self.text[i:stop]
@@ -433,11 +453,6 @@ class _Lexer:
         return found
 
 
-def _continued(line: str) -> bool:
-    """Whether a line ends in an unescaped backslash, which joins it to the next."""
-    return (len(line) - len(line.rstrip("\\"))) % 2 == 1
-
-
 def parse(text: str) -> list[Command]:
     """Each command in *text*, including those of subshells, substitutions and process substitutions.
 
@@ -449,39 +464,3 @@ def parse(text: str) -> list[Command]:
     if lexer.pending:
         lexer._bodies(len(text))  # noqa: SLF001 - here-documents the text ends inside
     return lexer.commands
-
-
-def arithmetic_end(text: str, i: int) -> int | None:
-    """The index after the )) closing the $(( before *i*, or None: then it is $( ( ... ) ...), as bash reads it."""
-    depth = 0
-    while i < len(text):
-        if text[i] == "(":
-            depth += 1
-        elif text[i] == ")":
-            if depth == 0:
-                return i + 2 if text.startswith("))", i) else None
-            depth -= 1
-        i += 1
-    return None
-
-
-def _single_end(text: str, i: int) -> int:
-    """The index after the '...' or $'...' at *i*."""
-    if text[i] == "$":
-        return ansi_c_end(text, i + 2)
-    if (end := text.find("'", i + 1)) < 0:
-        raise ValueError
-    return end + 1
-
-
-def ansi_c_end(text: str, i: int) -> int:
-    """The index after the quote closing the $'...' whose text starts at *i*; a backslash escapes the next character.
-
-    Raises:
-        ValueError: It is not closed.
-    """
-    while i < len(text) and text[i] != "'":
-        i += 2 if text[i] == "\\" else 1
-    if i >= len(text):
-        raise ValueError
-    return i + 1

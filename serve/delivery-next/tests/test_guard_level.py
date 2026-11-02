@@ -113,3 +113,59 @@ def test_decide_returns_only_refusals() -> None:
     text = "git commit --no-verify -m x"
     assert permissions.decide(WRITE, shell(text)) == f"`{text}` uses --no-verify, {BYPASS}"
     assert permissions.decide(WRITE, shell(text), level="lenient") is None
+
+
+ROUTES = {  # #864's routes: each case's command and the class it is found in, or None when allowed
+    8: [  # a program named by a glob or brace is picked from file names at run time
+        ("/usr/bin/gi? commit --no-verify -m x", "core"),
+        ("g?t commit --no-verify -m x", "core"),
+        ("gi[t] commit -m x", "core"),
+        ("{git,commit} --no-verify", "core"),
+        ('case "$x" in a*) git commit --no-verify;; esac', "core"),  # an arm's commands are still read
+        ("'g?t' status", None),
+        (r"g\?t status", None),
+        ("case $x in a*) echo;; esac", None),
+        ("case $x in\n (a*|b?) echo;;\n *) ls;;\nesac", None),
+        ("curl 'https://x/?a=1'", None),
+        ("curl https://x/?a=1", None),
+        ("echo *.py", None),
+        ("[ -f x ]", None),
+        ("[[ x ]]", None),
+        ("{ echo; }", None),
+        ('files=(*.py); echo "${files[@]}"', None),
+        ("echo $? $*", None),
+    ],
+    13: [  # a mirror push force-updates and deletes every remote ref
+        ("git push --mirror", "core"),
+        ("git -c remote.origin.mirror=yes push", "core"),
+        ("git config remote.origin.mirror true && git push", "core"),
+        ("git config remote.origin.mirror true", "core"),  # its push may come in the next command
+        ("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.mirror GIT_CONFIG_VALUE_0=true git push", "core"),
+        ("export GIT_CONFIG_PARAMETERS=\"'remote.origin.mirror'='true'\"; git push", "core"),
+        ("git remote add --mirror=push o u", "core"),
+        ("git remote add --mirror o u", "core"),
+        ("MIRROR=true git --config-env=remote.origin.mirror=MIRROR push", "core"),
+        ("MIRROR=false git --config-env=remote.origin.mirror=MIRROR push", None),
+        ("git -c remote.origin.mirror=yes fetch", None),
+        ("git remote add --mirror=fetch o u", None),
+        ("git clone --mirror u d", None),
+        *((f"git -c remote.origin.mirror{v} push", "core") for v in ("=true", "=YES", "=on", "=1", "=-3", "")),
+        *((f"git -c remote.origin.mirror={v} push", None) for v in ("false", "no", "off", "0", "")),
+    ],
+}
+SEEN = {"refuse": "refused", "warn": "warned", "allow": "allowed"}
+
+
+@pytest.mark.parametrize("level", ["strict", "standard"])
+@pytest.mark.parametrize(
+    ("text", "found"),
+    [pytest.param(t, f, id=f"route{r}-{t}") for r, cases in ROUTES.items() for t, f in cases],
+)
+def test_each_routes_cases_through_the_guard_and_a_steps_session(
+    through_step, text: str, found: str | None, level: str
+):
+    expected = "allow" if found is None else OUTCOMES[level][["core", "variant", "doubtful"].index(found)]
+    assert outcome(judge(WRITE, shell(text), level=level)) == expected
+    got = through_step(text, level)
+    assert got.outcome == SEEN[expected]
+    assert [e["event"] for e in got.events] == {"refuse": ["denied"], "warn": ["warned"], "allow": []}[expected]

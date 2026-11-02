@@ -102,6 +102,7 @@ _GIT_VALUES = {  # short options taking the next word or only an attached value,
 }
 _NO_VALUES: tuple[str, str, frozenset[str]] = ("", "", frozenset())
 _GIT_FALSE = frozenset({"", "0", "false", "no", "off"})
+_MIRROR_KEY = re.compile(r"remote\..+\.mirror", re.IGNORECASE)  # the remote's name keeps its case
 _GIT_WRITE_OPTIONS = frozenset(
     {
         "--output",
@@ -116,29 +117,32 @@ class _GitCall(NamedTuple):
     config: tuple[str, ...]  # the -c settings, and the keys --config-env sets
     sub: str | None
     arguments: tuple[str, ...]  # the subcommand's, or the unparsed rest without one
+    from_env: tuple[tuple[str, str], ...] = ()  # --config-env's keys and the variables holding their values
 
 
 def _parse_git(words: Sequence[str]) -> _GitCall:
     """Parse the words after git: its global options, then the subcommand and its arguments."""
     config: list[str] = []
+    from_env: list[tuple[str, str]] = []
     i = 0
     while i < len(words):
         w = words[i]
-        if w in _GIT_GLOBAL_OPTIONS:
-            value = words[i + 1 : i + 2]
-            config += value if w == "-c" else [v.partition("=")[0] + "=" for v in value] if w == "--config-env" else []
-            i += 2
-        elif w.startswith("--config-env="):
-            config.append(w.removeprefix("--config-env=").partition("=")[0] + "=")  # its value is unknown here
-            i += 1
+        joined = w.startswith("--config-env=")
+        if w in _GIT_GLOBAL_OPTIONS or joined:
+            value = [w.removeprefix("--config-env=")] if joined else words[i + 1 : i + 2]
+            config += value if w == "-c" else []
+            for key, _, var in (v.partition("=") for v in value if joined or w == "--config-env"):
+                config.append(f"{key}=")  # its value is the variable's, unknown here
+                from_env.append((key, var))
+            i += 1 if joined else 2
         elif w in _GIT_GLOBAL_FLAGS or ("=" in w and w.partition("=")[0] in _GIT_GLOBAL_ATTACHED):
             i += 1
         else:
             break
     rest = tuple(words[i:])
     if rest and not rest[0].startswith("-"):
-        return _GitCall(tuple(config), rest[0], rest[1:])
-    return _GitCall(tuple(config), None, rest)
+        return _GitCall(tuple(config), rest[0], rest[1:], tuple(from_env))
+    return _GitCall(tuple(config), None, rest, tuple(from_env))
 
 
 def _disables(setting: str) -> bool:
@@ -150,8 +154,16 @@ def _disables(setting: str) -> bool:
     )
 
 
+def _mirrors(setting: str) -> bool:
+    """Whether a git setting makes every push to a remote a mirror push: remote.<name>.mirror, true or a bare key."""
+    key, eq, value = setting.partition("=")
+    if not _MIRROR_KEY.fullmatch(key):
+        return False
+    return not eq or value.lower() in {"true", "yes", "on"} or bool(re.fullmatch(r"[-+]?\d+", value) and int(value))
+
+
 def _config_write(arguments: Sequence[str]) -> str | None:
-    """The setting a git config command writes when it replaces the hooks or turns signing off."""
+    """The setting a git config command writes when it replaces the hooks, turns signing off or mirrors pushes."""
     if any(a in _CONFIG_READS for a in arguments):
         return None
     plain: list[str] = []
@@ -163,7 +175,8 @@ def _config_write(arguments: Sequence[str]) -> str | None:
             plain.append(w)
     if plain[:1] == ["set"]:
         plain = plain[1:]
-    if len(plain) >= 2 and _disables(f"{plain[0]}={plain[1]}"):  # noqa: PLR2004 - a key and its value
+    setting = f"{plain[0]}={plain[1]}" if len(plain) >= 2 else ""  # noqa: PLR2004 - a key and its value
+    if _disables(setting) or _mirrors(setting):
         return f"{plain[0]} {plain[1]}"
     return None
 
@@ -186,7 +199,7 @@ def _sub_bypass(sub: str | None, arguments: Sequence[str]) -> str | None:
         flags, takes = _short(w[1:], required, optional) if re.fullmatch(r"-[^-].*", w) else ("", False)
         if w in {"--no-verify", "--no-gpg-sign"} or set(flags) & set(forbidden):
             return w
-        if sub == "push" and w.startswith(("--force", "+")):
+        if sub == "push" and (w.startswith(("--force", "+")) or w == "--mirror"):
             return w
         i += 2 if takes or (name in long_values and not eq) else 1
     if sub == "push":  # after --, a refspec still forces with a leading +
@@ -214,7 +227,7 @@ def env_setting(env: dict[str, str]) -> str | None:
         if m := _CONFIG_KEY.fullmatch(name):
             value = env.get(f"GIT_CONFIG_VALUE_{m[1]}")
             settings.append(key if value is None else f"{key}={value}")
-    return next((s for s in settings if _disables(s)), None)
+    return next((s for s in settings if _disables(s) or _mirrors(s)), None)  # exported, it outlives the command
 
 
 def bypass(words: Sequence[str]) -> str | None:
@@ -224,16 +237,29 @@ def bypass(words: Sequence[str]) -> str | None:
     for run in shell_programs.runs(words):
         if setting := env_setting(run.env):  # those an env -S split sets too
             return f"environment setting {setting}"
-        if shell_programs.name(run.words[0]) != "git":
-            continue
-        call = _parse_git(run.words[1:])
-        if setting := next((s for s in call.config if _disables(s)), None):
-            return f"-c {setting}"
-        if call.sub == "config" and (setting := _config_write(call.arguments)):
-            return f"config {setting}"
-        if found := _sub_bypass(call.sub, call.arguments):
+        env = {**_environment(words), **run.env}  # what --config-env reads; another variable's value is unknown
+        if shell_programs.name(run.words[0]) == "git" and (found := _git_bypass(_parse_git(run.words[1:]), env)):
             return found
     return None
+
+
+def _git_bypass(call: _GitCall, env: dict[str, str]) -> str | None:
+    """One git call's setting, option or refspec that skips hooks or signing or forces a push; *env* its variables."""
+    push = call.sub == "push"
+    if setting := next((s for s in call.config if _disables(s) or (push and _mirrors(s))), None):
+        return f"-c {setting}"
+    if push and (key := next((f"{k}={v}" for k, v in call.from_env if _mirrors(f"{k}={env.get(v, '0')}")), "")):
+        return f"--config-env {key}"
+    if call.sub == "config" and (setting := _config_write(call.arguments)):
+        return f"config {setting}"
+    mirror = {"--mirror", "--mirror=push"}  # git remote add sets remote.<name>.mirror; =fetch only fetches
+    if (
+        call.sub == "remote"
+        and call.arguments[:1] == ("add",)
+        and (flag := next(filter(mirror.__contains__, call.arguments), None))
+    ):
+        return f"remote add {flag}"
+    return _sub_bypass(call.sub, call.arguments)
 
 
 def _is_read_only_branch(arguments: Sequence[str]) -> bool:

@@ -129,7 +129,7 @@ class Walk:
 
     def _run(self, command: Command, run: Run, state: State) -> str | None:
         program = run.words[0]
-        if _built(run, program):
+        if _built(run, program) or program.pattern:  # g?t, {git,x}: the shell picks the program from file names
             return f"`{self.name}` builds a command at run time (`{program}`); write the program and its script out"
         match shell_programs.name(program):
             case name if name in _FOLDER:
