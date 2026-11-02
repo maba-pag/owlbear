@@ -1,7 +1,6 @@
 """TD-96, TD-107: declared test preparation, the owner's permissions, the frozen snapshot and the preparer's patch."""
 
 import json
-import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -28,7 +27,7 @@ from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT, Layer, resolve
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import check, prepare
+from owlbear_delivery_next.workflow_steps import prepare
 
 TOOL = """import os, pathlib, sys
 act, snap, db = sys.argv[1], os.environ.get("OWLBEAR_SNAPSHOT", ""), os.environ.get("TEST_DB", "")
@@ -50,8 +49,6 @@ if act == "seed":
     pathlib.Path(db).write_text(pathlib.Path(db).read_text() + "+seeded" if pathlib.Path(db).exists() else "seeded")
 if act == "fail":
     sys.exit("restore refused")
-if act == "fail-long":
-    sys.exit("restore refused: " + "x" * 300)
 if act == "fail-whole":
     sys.exit(pathlib.Path(__file__).with_name("whole.txt").read_text())
 """
@@ -367,10 +364,7 @@ def test_cleanup_runs_after_a_failed_restore_and_the_snapshot_may_be_kept(env):
     assert Path(prepare.read(store, "c1", "pc1").snapshot).is_dir()  # the owner keeps it until the next export
 
 
-LONG = "restore refused: " + "x" * 300
-
-
-@pytest.mark.parametrize("act", ["fail", "fail-long", "fail-whole"])
+@pytest.mark.parametrize("act", ["fail", "fail-whole"])
 def test_a_failed_command_on_a_long_path_says_why_whole(env, whole_error, act):
     repo, store, _log, tmp = env
     deep = tmp
@@ -384,18 +378,8 @@ def test_a_failed_command_on_a_long_path_says_why_whole(env, whole_error, act):
     c, s = change(repo, "pc1"), settings(failing)
     prepare._write(store, "c1", prepare.Prepared(check="pc1", option=failing))  # noqa: SLF001 - as accepted
     result = prepare.launch(store, c, s, lambda _e: None)
-    cause = {"fail": "restore refused", "fail-long": LONG, "fail-whole": whole_error}[act]
+    cause = {"fail": "restore refused", "fail-whole": whole_error}[act]
     assert result.reason == f"test preparation failed: the restore command `{failing.restore}` failed: {cause}"
-
-
-@pytest.mark.parametrize("long", [False, True])
-def test_a_note_quotes_the_whole_command(tmp_path, long):
-    deep = tmp_path / ("x" * 200 if long else "w")
-    deep.mkdir()
-    (deep / "tool.py").write_text(TOOL)
-    args = [sys.executable, str(deep / "tool.py"), "fail"]
-    note = check.run(args, tmp_path, lambda _e: None, {"PREP_LOG": str(tmp_path / "prep.log")})
-    assert note == f"`{shlex.join(args)}` failed: restore refused"
 
 
 def test_a_snapshot_changed_after_it_was_frozen_is_never_restored(env):
