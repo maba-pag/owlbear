@@ -4,21 +4,30 @@
 ``Gate``; a helper answers off the loop and the turn goes on. The submit call is shown to the step's Spotter before
 Delivery accepts it, and Delivery's answer after; the accepting runs in a worker thread so lints never hold the loop
 (TD-87) and a cancelled handler still keeps the answer.
+
+When the Spotter's look at the hand-off could answer it (``acts.could_act``), the submit waits for that look, at most
+``WAIT`` seconds: a note it answers with refuses the hand-off, as a failed call tallied ``spotter`` (never ``rejected``,
+never an invalid result), and the agent goes on; the next submission is looked at again. A look that gives none, fails
+or outlasts the wait leaves the hand-off to Delivery as before; the look's act says why.
 """
 
 from __future__ import annotations
 
+import asyncio
 from functools import partial
 from typing import TYPE_CHECKING
 
 from copilot.tools import Tool, ToolInvocation, ToolResult
 
 from owlbear_delivery_next.change_contracts import tool_schema, tools
+from owlbear_delivery_next.improvement import acts, spotter
 from owlbear_delivery_next.runtimes import tool_workers, watch_feed
 from owlbear_delivery_next.runtimes.results import ENDED, Gate
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.runtimes.sdk_adapter import Session
+
+WAIT = spotter.LOOK + spotter.TEARDOWN  # seconds a submit waits for the look at its hand-off
 
 
 class StepTools:
@@ -38,8 +47,27 @@ class StepTools:
         return ToolResult(text_result_for_llm=(await self.workers.call(lambda: self.gate.call(spec, inv.arguments)))[0])
 
     async def _submitted(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # lints off the loop (TD-87)
-        watch_feed.spotted(self.feed, lambda s: s.handed_off(inv.tool_call_id, inv.arguments))  # before Gate accepts
+        if note := await self._looked(inv):
+            with self.gate._lock:  # noqa: SLF001 - the gate's own tally, under its lock
+                self.gate._tally(spec.name, "spotter")  # noqa: SLF001
+            self.gate.log(event="tool", tool=spec.name, accepted=False, errors=["the Spotter refused the hand-off"])
+            watch_feed.spotted(self.feed, lambda s: s.answered(inv.tool_call_id, "spotter"))
+            return ToolResult(text_result_for_llm=note, result_type="failure")
         return await self.workers.call(lambda: self._answered(spec, inv))
+
+    async def _looked(self, inv: ToolInvocation) -> str | None:
+        """The Spotter's look at this hand-off, before Gate accepts it; the note it refuses it with, if it waits."""
+        spot = self.feed.spotter if self.feed is not None else None
+        held = spot is not None and acts.could_act(spot.ctx)
+        waiter: list[asyncio.Future[str | None] | None] = []
+        watch_feed.spotted(self.feed, lambda s: waiter.append(s.handed_off(inv.tool_call_id, inv.arguments, held=held)))
+        if not waiter or waiter[0] is None:
+            return None
+        try:
+            return await asyncio.wait_for(asyncio.shield(waiter[0]), WAIT)
+        except TimeoutError:
+            waiter[0].cancel()  # the look goes on; a note it gives later is expired
+            return None
 
     def _answered(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # in its thread: kept if cancelled
         result = self._handle(spec, inv)

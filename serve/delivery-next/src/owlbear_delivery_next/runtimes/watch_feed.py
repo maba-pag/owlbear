@@ -11,6 +11,11 @@ for a call under no parent (the step's own agent, as the model check counts it),
 Watched: every Change-owned session, each in its own folder: the runner's steps, the brief and plan rounds,
 reconsideration, the amendment challenge, the visual and design judges and a test review's shares. Not watched: the
 decision picker and lookups (read-only, no Change worktree), memory curation and Impeccable runs (machine sessions).
+
+The Spotter takes every event in. When ``state-change`` is among its looks, a call the feed saw start that completes
+with an effect outside the session's own folder is looked at as a state change instead of being sampled. The Spotter
+classifies it by a rule of its own: Delivery's own state and the exempt roots count as outside, while the reports keep
+leaving both out.
 """
 
 from __future__ import annotations
@@ -36,6 +41,7 @@ if TYPE_CHECKING:
 
 NOW_LIMIT = 80  # characters of the now line's summary, and of a report's command
 START, ASKED, LAUNCHED = "tool.execution_start", "permission.requested", "subagent.started"
+DONE = "tool.execution_complete"
 
 
 def summary(tool: str, arguments: Any) -> str:  # noqa: ANN401 - the SDK's JSON tool arguments
@@ -78,6 +84,7 @@ class Feed:
         """*own* is the session's folder; *session* gives its current id; *agents* the subagents it started."""
         self.watching, self.session, self.agents = watching, session, agents
         self.places = watching.places.resolved()
+        self.spotting = replace(self.places, mine=(), exempt=())  # the Spotter's rule: only the own folder is inside
         self.own = watch_policy.canonical(str(own), own, self.places)
         self.calls: dict[tuple[str, str], _Seen] = {}
         self.launched: dict[str, str] = {}  # launcher call id to the subagent it started, as this feed saw it
@@ -94,7 +101,7 @@ class Feed:
         """Observe one event; a start or a permission request updates its call's report; the Spotter takes it in."""
         if self.spotter is not None and self.open:
             try:
-                self.spotter.seen(ev)
+                self._spotted(self.spotter, kind, ev)
             except Exception as exc:  # noqa: BLE001 - a look never ends the step
                 sys.stderr.write(f"spotter {self.watching.slug}: {type(exc).__name__}: {exc}\n")
         if kind == LAUNCHED:
@@ -110,6 +117,28 @@ class Feed:
             self._judged(key, seen)
         except Exception as exc:  # noqa: BLE001 - an observation never ends the step
             self.writer.lost(f"{type(exc).__name__}: {exc}"[:200])
+
+    def _spotted(self, spot: spotter.Spotter, kind: str, ev: Any) -> None:  # noqa: ANN401 - an SDK session event
+        """*spot* takes *ev* in; a completed call with an effect outside is a state change, never a sample."""
+        moment = self._changed(ev) if kind == DONE and "state-change" in spot.ctx.looks else None
+        if moment is None:
+            spot.seen(ev)
+        elif spot.take(ev):
+            spot.look("state-change", 1.0, moment)
+
+    def _changed(self, ev: Any) -> dict[str, Any] | None:  # noqa: ANN401 - an SDK session event
+        """The state-change moment of a completed call this feed saw start, or None when its effect stays inside."""
+        cid = getattr(ev.data, "tool_call_id", "") or ""
+        seen = self.calls.get((self.session(), cid))
+        if seen is None or not seen.started:
+            return None
+        outcome = watch_policy.judge(seen.call, self.own, self.spotting)
+        if outcome.inside:
+            return None
+        at = getattr(ev, "timestamp", None) or datetime.now(UTC)
+        return {"at": at.astimezone(UTC).isoformat(timespec="milliseconds"), "kind": "a state change", "call": cid,
+                "tool": seen.call.tool, "command": seen.command, "targets": list(outcome.targets[:20]),
+                "what": outcome.verdict}  # fmt: skip
 
     def close(self) -> None:
         """Close the intake, then drain and stop the writer; no report is queued after this."""

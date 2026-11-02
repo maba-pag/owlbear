@@ -29,6 +29,7 @@ from owlbear_delivery_next.runtimes import (
     lessons,
     sdk_spend,
     sdk_teardown,
+    spotter_act,
     step_budget,
     step_decisions,
     step_input,
@@ -142,6 +143,9 @@ class Session:
 
 
 class _Step(StepTools):
+    actor: spotter_act.StepActor | None = None  # its Spotter's actuator, once the session is open
+    aborted = False  # the Spotter aborted the turn: its idle is no wrong choice (``step_budget.idled``)
+
     def __init__(self, cfg: Session, loop: asyncio.AbstractEventLoop) -> None:
         self.cfg, self.loop, self.run, self.proc = cfg, loop, Run(cfg.session_id), None
         self.client: CopilotClient | None = None
@@ -182,6 +186,8 @@ class _Step(StepTools):
         kind = getattr(ev.type, "value", str(ev.type))
         if self.feed is not None:
             self.feed.seen(kind, ev)
+        if self.actor is not None:
+            self.actor.seen(kind, ev)  # a Spotter note the runtime took
         if kind == "assistant.turn_start":
             self.turn = True
             self.preload_checked()
@@ -388,6 +394,7 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
         st.session, st.created = session, True
         message, exposure = lessons.opening(role_of(cfg), cfg.memory, pds_skill.noted(message, st.pds), st.log)
     await session_options(session, cfg.worktree, cfg.user, st.log)  # D-01M5YE55W7P4A6PS8YZV8K7J6A
+    spotter_act.bind(st, session)
     st.log(event="session", id=sid, resumed=resumed, resent=resent, runtime=st.run.runtime_pid)
     st.billed = await usage_read(session, cfg.model) if resumed else {}
     await sdk_spend.meter(client, st, sid, role_of(cfg))

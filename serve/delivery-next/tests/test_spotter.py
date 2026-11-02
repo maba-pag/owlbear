@@ -20,14 +20,14 @@ from copilot.tools import ToolInvocation
 from owlbear_delivery_next.change_contracts.models import Change, Plan, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
-from owlbear_delivery_next.improvement import acts, card, cases, chatlogs, credit_meter, events, spotter
+from owlbear_delivery_next.improvement import acts, card, cases, chatlogs, credit_meter, events, retro_units, spotter
 from owlbear_delivery_next.improvement.events import Kept
 from owlbear_delivery_next.runtimes import sdk_adapter, spend_reconcile, spotter_look, step_decisions
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
 from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter
 from owlbear_delivery_next.state_store import spend_ledger, spend_shares, spotter_arms
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import watched
+from owlbear_delivery_next.workflow_steps import lookup, watched
 
 REAL_LOOK = spotter_look.judged  # taken before the suite's fixture replaces it
 
@@ -311,9 +311,9 @@ def test_the_submit_tool_starts_the_look_before_delivery_handles_it_and_keeps_it
     order: list[str] = []
 
     class Seen(spotter.Spotter):
-        def handed_off(self, call_id: str, arguments: Any) -> None:
+        def handed_off(self, call_id: str, arguments: Any, **kw: Any) -> Any:
             order.append(f"look {call_id} {arguments}")
-            super().handed_off(call_id, arguments)
+            return super().handed_off(call_id, arguments, **kw)
 
     async def main() -> Any:
         cfg = sdk_adapter.Session(
@@ -1315,3 +1315,141 @@ def test_a_state_change_finding_asks_the_conflict_check_after_acting_and_its_ans
     [act] = acts.acts(spotter.root()).values()
     assert json.loads(act.conflict) == {"decisions": [{"id": "D-1", "conflict": "none"}]}
     assert act.harm
+
+
+class Transport:
+    """The SDK session below the step's actuator: nothing is sent at a hand-off; its answer is the submit's."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    async def send(self, prompt: str, **_kw: Any) -> str:
+        self.calls.append(prompt)
+        return "m-1"
+
+    async def abort(self) -> None:
+        self.calls.append("abort")
+
+
+def handing_off(tmp_path: Path, spot: spotter.Spotter) -> sdk_adapter._Step:
+    """A real step and gate whose Spotter acts through its ``StepActor``, as the adapter binds it."""
+    from owlbear_delivery_next.runtimes import spotter_act  # noqa: PLC0415 - #717's actuator, bound as the adapter does
+
+    cfg = sdk_adapter.Session(
+        StepKind.BUILD, tmp_path, "s1", "m", resume=False, policy=Policy(tmp_path),
+        observe=lambda: Worktree("a" * 40, "b" * 40), checks=(), model="gpt-6-luna",
+    )  # fmt: skip
+    st = sdk_adapter._Step(cfg, asyncio.get_running_loop())  # noqa: SLF001
+    st.feed = SimpleNamespace(spotter=spot, watching=SimpleNamespace(slug="c1"), seen=lambda _k, ev: spot.seen(ev))
+    spotter_act.bind(st, Transport())
+    return st
+
+
+async def submitted(st: sdk_adapter._Step, call: str) -> Any:
+    (tool,) = [t for t in st.tools() if t.name == st.cfg.submit.name]
+    payload = {"summary": "Added the farewell", "checks": []}
+    result = await tool.handler(ToolInvocation(session_id="s1", tool_call_id=call, tool_name=tool.name,
+                                               arguments=payload))  # fmt: skip
+    st.on_event(done(call, result.text_result_for_llm, ok=result.result_type == "success"))  # the runtime logs it
+    return result
+
+
+def test_a_hand_off_waits_for_its_look_whose_steer_or_refusal_answers_it_and_the_next_one_is_looked_at_again(
+    tmp_path,
+) -> None:
+    queue = [finding("hand-off-fitness"), finding("course-and-constraints"), '{"category": "none"}']
+    release = asyncio.Event()
+
+    async def held(the_card: dict[str, Any], c: spotter.Context, spend: credit_meter.Meter) -> str:
+        await release.wait()
+        return await answers(queue)(the_card, c, spend)
+
+    async def main() -> tuple[sdk_adapter._Step, list[Any]]:
+        spot = spotter.Spotter(ctx(actions=STEERED, arm="steered", cap=2), lambda: "s1", held)
+        st = handing_off(tmp_path, spot)
+        first = asyncio.ensure_future(submitted(st, "call-1"))
+        await asyncio.sleep(0.1)
+        waited = not first.done()  # the hand-off is held while its look runs
+        release.set()
+        said = [waited, await first]
+        said += [await submitted(st, "call-2"), await submitted(st, "call-3")]
+        await spot.drain()
+        return st, said
+
+    st, (waited, refused, steered, accepted) = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    assert waited
+    assert [(r.result_type, r.text_result_for_llm.split("] ", 1)[1]) for r in (refused, steered)] == [
+        ("failure", "About hand-off-fitness."), ("failure", "About course-and-constraints.")]  # fmt: skip
+    assert (accepted.result_type, st.run.ending, st.run.invalid) == ("success", "result", 0)
+    assert st.run.tool_calls[st.cfg.submit.name] == {"calls": 3, "spotter": 2}  # never rejected
+    done_ = acts.acts(spotter.root())
+    by_call = {r["call"]: done_[r["id"]] for r in records() if r["id"] in done_}
+    assert [(by_call[c].act, by_call[c].delivery) for c in ("call-1", "call-2")] == [
+        ("refuse-hand-off", "delivered"), ("steer", "delivered")]  # fmt: skip
+    assert "call-3" not in by_call  # a silent look acts on nothing
+    assert st.actor.session.calls == []  # a hand-off's note is the submit's answer, never a message
+
+
+def test_a_hand_off_whose_look_times_out_is_accepted_and_its_act_says_why(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(spotter, "LOOK", 0.05)
+
+    async def main() -> Any:
+        spot = spotter.Spotter(ctx(actions=STEERED, arm="steered", cap=2), lambda: "s1", judge(wait=5))
+        st = handing_off(tmp_path, spot)
+        result = await submitted(st, "call-1")
+        await spot.drain()
+        return result
+
+    assert asyncio.run(main()).result_type == "success"
+    assert spotter.WORK.settled(5)
+    [act] = acts.acts(spotter.root()).values()
+    assert (act.act, act.why) == ("none", "the hand-off was accepted: time: the look took over 0 seconds")
+
+
+@pytest.mark.parametrize("busy", [False, True], ids=["answered", "busy"])
+def test_a_state_change_is_checked_by_the_steps_own_lookup_through_the_runners_context(tmp_path, monkeypatch, busy):
+    """#717: the runner's ``watched.spot`` context asks its step's ``lookup.Asked``; only the picker is faked."""
+    store = Store(tmp_path / "proj")
+    store.db.check()
+    store.write(Lock("c1"), Change(slug="c1"))
+    picked, ran, logged, questions = {"decisions": [{"id": "D-1", "title": "No force-push"}]}, object(), [], []
+
+    def worker(_store: Store, _lock: Lock, _change: Any, question: str) -> tuple[dict[str, Any], Any]:
+        questions.append(question)
+        return picked, ran
+
+    monkeypatch.setattr(lookup, "worker", worker)
+    monkeypatch.setattr(
+        lookup.sessions, "logged", lambda _s, _l, change, done, fields: logged.append((change, done, fields))
+    )
+    asked = lookup.Asked(store, Lock("c1"), lambda: "the held Change")
+    settings = resolve(None, Layer())
+    got = watched.spot(store, Lock("c1"), "build", settings, watched.needed(settings), asked)
+    assert got.arm == spotter_arms.arm("chg:proj/c1", 100) == "silent"  # drawn at the conftest's share 0, kept
+
+    async def dispatch(_record: spotter.Record, _act: acts.Act) -> None:
+        raise AssertionError  # every category records: nothing is sent
+
+    answer = json.dumps({"category": "outside-state-changes", "note": "Pushed to main.", "evidence": ["e1"],
+                         "state_change": "git push origin main"})  # fmt: skip
+
+    async def main() -> None:
+        spot = spotter.Spotter(dataclasses.replace(got, act=dispatch), lambda: "s1", judge(answer))
+        asked.admitted = int(busy)  # the worker's own lookup is running
+        spot.handed_off("call-1", {})
+        await spot.drain()
+        asked.admitted = 0
+
+    asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    asked.settled(lambda: None)  # the step settles: the lookup's run is counted on the Change the runner holds
+    [act] = acts.acts(spotter.root()).values()
+    [record] = retro_units.records()
+    if busy:
+        assert (json.loads(act.conflict), questions, logged) == ({"failed": lookup.BUSY}, [], [])
+    else:
+        assert json.loads(act.conflict) == picked
+        assert "git push origin main" in questions[0]
+        assert logged == [("the held Change", ran, {"kind": lookup.LABEL, "exit": "ok"})]
+    assert retro_units.grade(record, "rev", "useful")["preliminary"] is busy

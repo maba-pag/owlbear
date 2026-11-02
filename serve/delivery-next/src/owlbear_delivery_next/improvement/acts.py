@@ -104,6 +104,24 @@ def decide(record: Record, look: str, ctx: Context, sent: int, unresolved: Mappi
                delivery="" if act in UNSENT else "pending")  # fmt: skip
 
 
+def could_act(ctx: Context) -> bool:
+    """Whether a hand-off look could answer the hand-off itself, so its submit waits for the look.
+
+    It could in the steered arm when hand-off fitness steers or refuses, and in either arm when irreversible harm stops.
+    """
+    if ctx.act is None or "hand-off" not in ctx.looks:
+        return False
+    fitness = ctx.actions.get("hand-off-fitness") in {"steer", "refuse-hand-off"} and ctx.arm == "steered"
+    return fitness or ctx.actions.get(HARM, "record") not in {*UNSENT, "record"}
+
+
+def held_back(record: Record, ctx: Context, why: str) -> Act:
+    """The act of a look that could have acted and found nothing to act on, a failed or timed-out one: *why*."""
+    return Act(record=record.id, at=datetime.now(UTC).isoformat(timespec="seconds"), unit=unit(record, ctx),
+               arm=str(ctx.arm), session=record.session, scope=scope(record, ctx), look=record.look,
+               category=record.category, act="none", why=why)  # fmt: skip
+
+
 def write(folder: Path, act: Act) -> None:
     """*act*'s first line, in *folder*'s outcomes of the day."""
     _append(folder, "outcomes", {"kind": "act", **asdict(act)})

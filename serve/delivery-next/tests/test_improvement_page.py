@@ -17,15 +17,18 @@ import pytest
 import uvicorn
 
 from owlbear_delivery_next.change_contracts import models as m
+from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.improvement import case_edits, case_replay, cases, followups, improvement_view, spotter
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.machine_host import app, cases_job, improvement_routes, project, retro_job
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import Host, HostRecord
+from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.state_store import registry, watch_reports
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.state_store.watch_reports import Report
@@ -40,7 +43,8 @@ NOW = datetime(2026, 10, 1, 10, tzinfo=UTC)
 SLUG = "alpha-1"
 DONE = "alpha-2"  # a finished Change: Retro may run on it
 TEXT = {"title": "Check the export's week column", "body": "The builder said done before the week held ISO weeks."}
-STOPPED = "the Spotter stopped the step: it would force-push over main"
+STOPPED = "The Spotter stopped this step for irreversible harm: it would force-push over main"
+ALLOW = "Allow it: needs a brief amendment"  # the Spotter's question's first option
 PREFILL = "t hand-off-fitness\n\nbash make"
 
 
@@ -76,10 +80,10 @@ def _clone(path: Path) -> registry.Project:
     (path / ".github" / "agents").mkdir(parents=True)
     (path / ".github" / "agents" / "exporter.agent.md").write_text("# exporter\n")  # the project's own agent
     st = Store.open(path)
-    stop = m.Stop(kind=m.ErrorKind.POLICY, reason=STOPPED, action="Check the step's plan", resume="You say so", at=NOW)
+    stopped = session_result.Run("s", ending="spotter-ask", detail=STOPPED, termination=Termination(confirmed=True))
+    asked = session_result.to_result(stopped, m.StepKind.BUILD, NOW)  # the Spotter stopped its step to ask
     with st.lock(SLUG) as lock:
-        st.write(lock, m.Change(slug=SLUG, step=m.Step(kind=m.StepKind.BUILD), stop=stop,
-                                outcome=m.Outcome(exit=m.Exit.STOP, reason=STOPPED, at=NOW)))  # fmt: skip
+        st.write(lock, loop.apply(m.Change(slug=SLUG, step=m.Step(kind=m.StepKind.BUILD)), asked, NOW))
     with st.lock(DONE) as lock:
         st.write(lock, m.Change(slug=DONE, step=m.Step(kind=m.StepKind.BUILD), finished_at=NOW))
     return registry.register(path.resolve())
@@ -535,6 +539,10 @@ def test_a_changes_detail_shows_behind_the_menu_switch(tmp_path, monkeypatch, pd
         page = w.page
         page.goto(f"{w.base}/?project={w.pid}&change={w.pid}%2F{SLUG}#token=t")
         expect(page.get_by_text(STOPPED).first).to_be_visible()  # the stop says why, switch or not
+        expect(page.get_by_text(ALLOW).first).to_be_visible()  # and asks the owner
+        expect(page.locator("#improvement-detail")).to_have_count(0)
+        page.reload()
+        expect(page.get_by_text(STOPPED).first).to_be_visible()  # the switch still off: the reason still shows
         expect(page.locator("#improvement-detail")).to_have_count(0)
 
         page.get_by_role("button", name="Menu").click()

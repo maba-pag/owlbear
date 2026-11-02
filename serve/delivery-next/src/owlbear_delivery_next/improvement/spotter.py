@@ -1,9 +1,10 @@
 """The Spotter (design §4): it records what it would say and the action its finding's category is set to, and acts.
 
-It looks at a Delivery step's hand-offs and a sample of its actions, never delaying the step or changing its outcome;
-the machine host's chats follower (``machine_host.chats``) gives an enrolled chat's hand-offs, plans, state changes and
-samples to one ``Spotter`` per chat, whose ``room`` admits at most one chat look at a time and none while paused. Each
-look keeps the settings in force when it was admitted, and its record the turn (requester message) it belongs to.
+It looks at a Delivery step's hand-offs, its state changes and a sample of its actions; it delays the step only where
+its finding could answer a hand-off (below). The machine host's chats follower (``machine_host.chats``) gives an
+enrolled chat's hand-offs, plans, state changes and samples to one ``Spotter`` per chat, whose ``room`` admits at most
+one chat look at a time and none while paused. Each look keeps the settings in force when it was admitted, and its
+record the turn (requester message) it belongs to.
 
 A look runs as a task on the step's own event loop when the hand-off (the submit tool's call) or a sampled completion
 happens, over a frozen snapshot of the step's intake: the same moment and inputs a live look will have. The loop only
@@ -30,6 +31,12 @@ rebuilt Spotter keeps its counts), its line written, then, unless nothing is sen
 own loop; one that raises leaves the act ``failed`` with its whole error. Its return is not delivery: the actuator
 confirms that from the runtime's own log. A finding naming a state change then asks ``Context.conflicts`` on a thread
 of its own, and its answer is added to the act. Without an actuator nothing acts and no act line is written.
+
+In a Delivery step the actuator is the step's own (``runtimes.spotter_act``), bound once its session opens: it steers
+the running turn, stops it and resumes with a note, or stops it to ask the owner. When a hand-off look could answer the
+hand-off (``acts.could_act``), the submit waits for it (``handed_off(held=True)``): the note the actuator gives back
+refuses the hand-off, and a look that ends without one lets Delivery answer as before; one that failed or timed out
+writes an act saying so.
 
 While the steered-versus-silent test runs (``state_store.spotter_test``), every look admitted, Delivery's and a chat's,
 whenever its Spotter was built, gets the model, effort, context and prompt the test froze at its start, and its record
@@ -231,6 +238,7 @@ class Spotter:
         self.crowded: dict[str, int] = {}  # sampled looks skipped, by why, recorded once at the end
         self.closing = False  # the step ended: no look starts any more
         self.deciding = asyncio.Lock()  # one act decided and written at a time: each reads the lines of the last
+        self.hand_offs: dict[str, asyncio.Future[str | None]] = {}  # a waiting submit's call id: the look's note
 
     def seen(self, ev: Any) -> None:  # noqa: ANN401 - an SDK event, on the step's loop
         """Take one event in; a completed action of the session's own agent may be sampled for a look."""
@@ -263,13 +271,32 @@ class Spotter:
         for ev in events:
             self.kept.add(ev)
 
-    def handed_off(self, call_id: str, arguments: Any) -> None:  # noqa: ANN401 - the submit tool's JSON arguments
-        """A look at the step's hand-off (its submit call, before Delivery accepts it), if hand-offs are looked at."""
-        if "hand-off" in self.ctx.looks:
-            at = datetime.now(UTC).isoformat(timespec="seconds")
-            self._look(
-                "hand-off", 1.0, {"at": at, "kind": "hand-off", "call": call_id, "result": kept_text(arguments, 3000)}
-            )
+    def handed_off(
+        self,
+        call_id: str,
+        arguments: Any,  # noqa: ANN401 - the submit tool's JSON arguments
+        *,
+        held: bool = False,
+    ) -> asyncio.Future[str | None] | None:
+        """A look at the step's hand-off (its submit call, before Delivery accepts it), if hand-offs are looked at.
+
+        *held*: the submit waits for the look; the future gives the note it answers with, None once the look ended
+        without one (or none started).
+        """
+        if "hand-off" not in self.ctx.looks:
+            return None
+        at = datetime.now(UTC).isoformat(timespec="seconds")
+        moment = {"at": at, "kind": "hand-off", "call": call_id, "result": kept_text(arguments, 3000)}
+        task = self._look("hand-off", 1.0, moment)
+        if not held:
+            return None
+        waiter: asyncio.Future[str | None] = asyncio.get_running_loop().create_future()
+        self.hand_offs[call_id] = waiter
+        if task is None:
+            waiter.set_result(None)
+        else:
+            task.add_done_callback(lambda _t: waiter.done() or waiter.set_result(None))
+        return waiter
 
     def answered(self, call_id: str, outcome: str) -> None:
         """How Delivery answered the hand-off *call_id* (accepted, rejected or failed), kept beside its look.
@@ -294,21 +321,23 @@ class Spotter:
                       probability=probability, turn=str(moment.get("turn") or ""), model=ctx.model,
                       effort=ctx.effort, test=ctx.test, **fields)  # fmt: skip
 
-    def _look(self, look: str, probability: float, moment: dict[str, Any]) -> None:
+    def _look(self, look: str, probability: float, moment: dict[str, Any]) -> asyncio.Future[Any] | None:
         """Freeze the intake and the settings now (a running test's own inputs among them); the rest runs in a task."""
         if self.closing:
-            return
+            return None
         if why := ("capacity: looks already running" if self.running >= RUNNING else self.room()):
             if look == "sample":  # a burst of samples is one count, not a write each
                 self.crowded[why] = self.crowded.get(why, 0) + 1
             else:
                 self.skip(look, probability, moment, why)
-            return
+            return None
         snapshot = self.kept.snapshot()
         moment = {"turn": snapshot["turn"], **moment, "cutoff": snapshot["n"]}
         self.running += 1
         task = self._run(look, probability, snapshot, moment, frozen(self.ctx))  # the test's inputs, while it runs
-        self._track(asyncio.ensure_future(task)).add_done_callback(self._ended)
+        looked = self._track(asyncio.ensure_future(task))
+        looked.add_done_callback(self._ended)
+        return looked
 
     def _ended(self, _task: asyncio.Future[Any]) -> None:
         self.running -= 1
@@ -362,6 +391,9 @@ class Spotter:
             await asyncio.wait({writing}, timeout=2 * LOCK)  # it goes on if this wait ends
         if acting:
             await self._act(record, ctx)
+        elif look == "hand-off" and record.call in self.hand_offs and (record.skipped or record.category == "failed"):
+            why = f"the hand-off was accepted: {record.skipped or 'the look gave an unusable answer'}"
+            await offload(acts.write, self.folder, acts.held_back(record, ctx, why))
 
     async def _act(self, record: Record, ctx: Context) -> None:
         """Decide *record*'s act, write it and dispatch it unless nothing is sent; then check its state change."""

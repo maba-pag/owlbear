@@ -472,3 +472,26 @@ def test_a_turn_ended_without_a_result_counts_when_the_step_is_stopped_during_th
         return step.run
 
     assert asyncio.run(scenario()).wrong == {"no_result": 1}
+
+
+def test_a_turn_the_spotter_aborted_sends_no_reminder_and_counts_no_wrong_choice(tmp_path, clock):
+    """#717: the Spotter's own stop is no turn ended without a result; its note or question decides what follows."""
+
+    async def scenario():
+        step = STEP(configured(tmp_path), asyncio.get_running_loop())
+        step.aborted = True  # as ``spotter_act`` marks it before aborting the turn
+        ended_turn(step)
+        listed = []
+
+        async def listing():
+            listed.append(1)
+            if len(listed) == 3:
+                clock.now += 1  # the step's own deadline ends the test
+            return SimpleNamespace(tasks=[])
+
+        session = Session(listing)
+        await asyncio.wait_for(step.wait(session), 1)
+        return step, session
+
+    step, session = asyncio.run(scenario())
+    assert (session.sent, step.run.wrong, step.run.ending, step.aborted) == ([], {}, "deadline", False)

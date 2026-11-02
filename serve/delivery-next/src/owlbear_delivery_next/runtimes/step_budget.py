@@ -67,7 +67,14 @@ class Budget:
 
 
 def idled(st: _Step) -> None:
-    """A turn ended without a result: a wrong choice, counted as it ends so no later stop can lose it (C-28)."""
+    """A turn ended without a result: a wrong choice, counted as it ends so no later stop can lose it (C-28).
+
+    A turn the Spotter aborted is neither counted nor reminded: its note starts the next turn, or its question ends
+    the step.
+    """
+    if st.aborted:
+        st.aborted = False
+        return
     if not (st.done or st.gate.stopped):
         st.run.count("no_result")
     st.idle = True
