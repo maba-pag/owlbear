@@ -311,3 +311,16 @@ def test_a_real_scan_of_a_builders_page(tmp_path, monkeypatch, machine_home) -> 
     reply = design.builder_scan(tmp_path, scan_args(paths=["index.html"]))
     assert "design detector findings" in reply, reply
     assert "at index.html" in reply  # relative to the worktree, never the absolute path
+
+
+def test_a_refused_state_with_steps_keeps_and_logs_its_whole_reason(monkeypatch, tmp_path, capsys, whole_error):
+    """#895 K4: design :110 keeps the page's whole refusal, and E9 puts it on the runner's output."""
+
+    def refused(*_a):
+        raise detector.DetectorError(whole_error)
+
+    monkeypatch.setattr(detector, "scan_page", refused)
+    scan = design.rendered(object(), PACK, FORM, width=1280, url="http://127.0.0.1:1/f", browser="", cwd=tmp_path)
+    reason = f"not scanned: {whole_error}; a state with steps is reached only in Delivery's page"
+    assert (scan.scanned, scan.reason) == (False, reason)
+    assert capsys.readouterr().out == f"design detector: form at 1280: {reason}\n"

@@ -108,7 +108,7 @@ def again(kept: VisualRound | None) -> StepResult:
     )
     which = "; ".join(missing) or "its judges"
     reason = f"visual review round {kept.number if kept else '-'} has no verified verdict from {which}"
-    return StepResult(exit=Exit.RETRY, cause=AGAIN, reason=reason[:500])
+    return StepResult(exit=Exit.RETRY, cause=AGAIN, reason=reason)
 
 
 def ask(head: str, kept: VisualRound) -> StepResult:

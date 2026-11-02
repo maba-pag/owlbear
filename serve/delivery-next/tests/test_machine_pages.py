@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -15,6 +17,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -24,34 +27,45 @@ from copilot.generated import rpc
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.models import (
+    VISUAL,
     Brief,
     Change,
+    Environment,
     Exit,
     Names,
     Plan,
     Step,
     StepKind,
     Task,
+    VisualState,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_flow import round_flow
+from owlbear_delivery_next.change_contracts.visual_records import (
+    DetectorFinding,
+    DetectorScan,
+    JudgeVerdict,
+    VisualResult,
+    VisualRound,
+)
+from owlbear_delivery_next.change_flow import loop, round_flow
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import pack_files
-from owlbear_delivery_next.local_system import codebase, data_repo, local_home
+from owlbear_delivery_next.local_system import codebase, data_repo, local_home, processes
 from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.runtimes import model_choices
+from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.runtimes.settings_seen import NAME as SEEN
-from owlbear_delivery_next.settings import config, profile
+from owlbear_delivery_next.settings import carried, config, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
 from owlbear_delivery_next.state_store import decision_store, registry
 from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store
-from owlbear_delivery_next.workflow_steps import pick, publish, retry
+from owlbear_delivery_next.workflow_steps import decision, design, judges, pick, publish, retry
 from owlbear_delivery_next.workflow_steps.engine import Ctx
 
 if TYPE_CHECKING:
@@ -2565,4 +2579,122 @@ def test_a_failed_pick_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, w
         shown = follows.locator("p-text")
         expect(shown).to_have_count(1)
         assert shown.text_content() == f"The pick failed: {whole_error}. The shaping chat can ask for it again."
+        assert said == []
+
+
+def _git(cwd: Path, *args: str) -> str:
+    who = ["-c", "user.name=t", "-c", "user.email=t@t"]
+    done = subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
+    return done.stdout.strip()
+
+
+def ui_change(tmp_path: Path, install: str) -> tuple[Store, Change, str]:
+    """A Change on owlbear/c1 whose page says "before" at main and "after" at its head, whose install fails."""
+    origin, work = tmp_path / "origin.git", tmp_path / "work"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(work))
+    (work / "site").mkdir()
+    for said in ("before", "after"):
+        (work / "site" / "index.html").write_text(said)
+        _git(work, "add", "site/index.html")
+        _git(work, "commit", "-q", "-m", said)
+        if said == "before":
+            _git(work, "push", "-q", "origin", "HEAD:refs/heads/main")
+            _git(work, "switch", "-q", "-c", "owlbear/c1")
+    alpha = registry.register(clone(tmp_path / "alpha", "c1"))
+    store = Store.open(Path(alpha.path))
+    store.write_profile(Profile(entries={"install:.": ProfileEntry(state="known", value=install)}))
+    home = VisualState(name="home", path="/", expect="The greeting is centred")
+    c = Change(
+        slug="c1", brief=Brief(version=1, ui=True, visual=[home]),
+        plan=Plan(tasks=[Task(id="t1", title="g", scope=["site"])]),
+        names=Names(branch="owlbear/c1", target="main", worktree=str(work)),
+        env=Environment(check=VISUAL, command="true", directory="site", ready_url="http://127.0.0.1:9/"),
+        step=Step(kind=StepKind.CHECK, task=VISUAL),
+    )  # fmt: skip
+    return store, c, alpha.id
+
+
+def shown_texts(page: Page, base: str, of: str, section: str) -> list[str]:
+    """The texts of the Changes page's *section*, once it shows."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    opened(page, base, of, "c1")
+    found = page.locator("section", has_text=section).last
+    expect(found).to_be_visible()
+    return found.locator("p-text").all_text_contents()
+
+
+def refusing_pack(tmp_path: Path, text: str) -> tuple[Path, SimpleNamespace]:
+    """A file holding *text*, and an Impeccable pack whose engine fails with it as its stderr."""
+    said, engine = tmp_path / "said.txt", tmp_path / "engine"
+    said.write_text(text)
+    engine.write_text(f"#!/bin/sh\ncat {shlex.quote(str(said))} >&2\nexit 1\n")
+    engine.chmod(0o755)
+    return said, SimpleNamespace(bundle="", verified_engine=lambda: engine)
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)  # git, the before capture and a real browser over three renders
+def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, capsys, whole_error: str) -> None:
+    """#895 K4: a judge's whole error, the detector's whole refusals and the before capture's whole finding."""
+    said, pack = refusing_pack(tmp_path, whole_error)
+    monkeypatch.setattr(design, "pack", lambda: pack)
+    install = shlex.join(
+        [sys.executable, "-c", f"import sys; sys.stdout.write(open({str(said)!r}).read()); sys.exit(3)"]
+    )
+    store, c, of = ui_change(tmp_path, install)
+    with store.lock("c1") as lock:
+        store.write(lock, c)
+        runner._before(store, lock, c, Path(c.names.worktree))  # noqa: SLF001
+    failed = f"the design detector failed (1): {whole_error}"
+    note = f"`{shlex.join(shlex.split(install))}` failed: {whole_error}"
+    b = store.read("c1").before
+    assert (b.findings, [(s.kind, s.reason) for s in b.design]) == ([note], [("source", failed)])
+
+    def refused(**_k: object) -> None:
+        raise RuntimeError(whole_error)
+
+    page = SimpleNamespace(evaluate=lambda *_a: None, add_script_tag=refused)
+    after = design.rendered(
+        page, pack, c.brief.visual[0], width=1280, url="http://127.0.0.1:9/", browser="", cwd=tmp_path
+    )
+    why = f"not scanned: the page refused the design detector: RuntimeError: {whole_error}; "
+    why += f"the engine's own browser: {failed}"
+    assert (after.scanned, after.reason) == (False, why)
+    told = (
+        f"design detector: sources: {failed}\nbefore: 0 screenshots at {b.head[:7]}; {note}\n"
+        f"design detector: home at 1280: {why}\n"
+    )
+    assert told in capsys.readouterr().out  # an earlier test's machine may still say it stopped
+    head, now = _git(Path(c.names.worktree), "rev-parse", "HEAD"), datetime.now(UTC)
+    failing = Run("s", ending="error", detail=whole_error, termination=processes.Termination(confirmed=True))
+    correct = judges.correctness([failing], carried.MODELS["reviewer"], now)
+    looked = JudgeVerdict(lens="design", verdict="pass", usage_verified=True)
+    unexplained = DetectorScan(state="home", width=1920, kind="page", scanned=False)
+    finding = DetectorFinding(rule="side-tab", category="quality", advisory=False, where=".card")
+    clean = DetectorScan(state="home", width=2400, kind="page", scanned=True, findings=[finding])
+    kept = VisualRound(
+        number=1, head=head, tree="t", widths=[1280, 1920, 2400], verdicts=[correct, looked],
+        detector=[after, unexplained, clean], outcome="ask", at=now,
+    )  # fmt: skip
+    items = [f"home at 1280px: {why}", "home at 1920px: no reason given", f"before, changed sources: {failed}"]
+    line = f"The design detector could not scan: {'; '.join(items)}"
+    with store.lock("c1") as lock:
+        c = store.read("c1")
+        c.visual, c.visual_rounds = VisualResult(head=head, tree="t", at=now), [kept]
+        store.write(lock, loop.apply(c, decision.ask(head, kept), now))
+    with browsing(monkeypatch, pds) as (page, url):
+        said = errors(page)
+        assert {whole_error, line, f"Before: {note}"} <= set(shown_texts(page, url, of, "Decide visual round 1"))
+        assert page.get_by_text("What the design detector found (evidence for the judges)").count() == 1  # both
+        with store.lock("c1") as lock:
+            c = store.read("c1")
+            c.questions, c.visual_rounds = [], [kept.model_copy(update={"outcome": "merge"})]
+            store.write(lock, c)
+        assert line in shown_texts(page, url, of, "Before and after")
+        with store.lock("c1") as lock:
+            store.write(lock, store.read("c1").model_copy(update={"visual": None, "visual_rounds": []}))
+        before_only = {f"Not available: {note}", f"The design detector could not scan: changed sources: {failed}"}
+        assert before_only <= set(shown_texts(page, url, of, "Before and after"))
         assert said == []

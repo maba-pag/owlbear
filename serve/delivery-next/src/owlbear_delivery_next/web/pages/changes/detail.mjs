@@ -59,7 +59,8 @@ export function detailView(d) {
     : nothing;
   const behind = d.pullback?.state === "behind";
   const r = d.visual_round, deciding = r && r.outcome === "ask" && d.question?.options.some((o) => o.id === "fail");
-  const pictures = d.visual ? visualSection(d.key, d.visual, d.before, d.visual_existing_errors, deciding)
+  const scans = r && d.visual && r.head === d.visual.head ? r.detector : [];
+  const pictures = d.visual ? visualSection(d.key, d.visual, d.before, d.visual_existing_errors, deciding, scans)
     : d.before ? beforeSection(d.key, d.before) : null;
   const approvingNow = d.step === "shape" && d.brief.approved !== d.brief.version;
   let question = nothing;

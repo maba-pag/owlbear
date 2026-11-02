@@ -19,6 +19,7 @@ import psutil
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.visual_records import DetectorFinding, DetectorScan
 from owlbear_delivery_next.impeccable import detector, pack_files
+from owlbear_delivery_next.workflow_steps import sessions
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -98,7 +99,7 @@ def rendered(  # noqa: PLR0913 - one rendered state and where else to reach it
 ) -> DetectorScan:
     """Scan one state Delivery rendered, after its screenshot; a refused state without steps by the engine."""
     if pack is None:
-        return DetectorScan(state=state.name, width=width, kind="page", scanned=False, reason=NO_PACK)
+        return _refused(DetectorScan(state=state.name, width=width, kind="page", scanned=False, reason=NO_PACK))
     try:
         found = _in_page(page, pack)
     except detector.DetectorError as exc:
@@ -107,13 +108,20 @@ def rendered(  # noqa: PLR0913 - one rendered state and where else to reach it
         return DetectorScan(state=state.name, width=width, kind="page", scanned=True, findings=_kept(found))
     if state.steps:
         reason = f"not scanned: {refused}; a state with steps is reached only in Delivery's page"
-        return DetectorScan(state=state.name, width=width, kind="page", scanned=False, reason=reason[:DETAIL])
+        return _refused(DetectorScan(state=state.name, width=width, kind="page", scanned=False, reason=reason))
     try:
         found = detector.scan_url(pack, url, width, browser, cwd)
     except detector.DetectorError as exc:
         reason = f"not scanned: {refused}; the engine's own browser: {exc}"
-        return DetectorScan(state=state.name, width=width, kind="url", scanned=False, reason=reason[:DETAIL])
+        return _refused(DetectorScan(state=state.name, width=width, kind="url", scanned=False, reason=reason))
     return DetectorScan(state=state.name, width=width, kind="url", scanned=True, findings=_kept(found))
+
+
+def _refused(scan: DetectorScan) -> DetectorScan:
+    """A scan the detector could not make, told on the runner's output with its whole reason."""
+    where = f"{scan.state} at {scan.width}" if scan.width else scan.state
+    sessions.out(f"design detector: {where}: {scan.reason}")
+    return scan
 
 
 def _in_page(page: Any, pack: Installed) -> list[detector.Finding]:  # noqa: ANN401 - a Playwright page
@@ -146,12 +154,12 @@ def sources(root: Path, paths: Sequence[str], pack: Installed | None) -> Detecto
     if not asked:
         return None
     if pack is None:
-        return DetectorScan(state=SOURCE_STATE, kind="source", scanned=False, reason=NO_PACK)
+        return _refused(DetectorScan(state=SOURCE_STATE, kind="source", scanned=False, reason=NO_PACK))
     try:
         files = [root / p for p in asked if (root / p).is_file()]
         found = detector.scan_source(pack, files, root) if files else []
     except (detector.DetectorError, OSError) as exc:
-        return DetectorScan(state=SOURCE_STATE, kind="source", scanned=False, reason=str(exc)[:DETAIL])
+        return _refused(DetectorScan(state=SOURCE_STATE, kind="source", scanned=False, reason=str(exc)))
     return DetectorScan(state=SOURCE_STATE, kind="source", scanned=True, covered=asked, findings=_kept(found, root))
 
 

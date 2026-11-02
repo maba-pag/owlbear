@@ -219,8 +219,23 @@ function side(label, child) {
   return html`<div class="side"><span>${label}</span>${child}</div>`;
 }
 
+function refusedScan(s) {
+  const reason = s.reason || "no reason given";
+  return s.kind === "source" ? `changed sources: ${reason}` : `${s.state} at ${s.width}px: ${reason}`;
+}
+
+// The scans the design detector could not make, each with its whole reason; they never fail a round.
+function refusedLine(items) {
+  return items.length ? text(`The design detector could not scan: ${items.join("; ")}`, { size: "xs" }) : nothing;
+}
+
+function refused(scans, prefix = "") {
+  return (scans ?? []).filter((s) => !s.scanned).map((s) => `${prefix}${refusedScan(s)}`);
+}
+
 // The screenshots of a visual check and what was found: its lines, and the gallery with its count.
-export function visualSection(slug, v, b, existing, deciding) {
+// *scans* are the visual round's detector scans when the round judged this capture.
+export function visualSection(slug, v, b, existing, deciding, scans) {
   const open = deciding || v.doubts.length;
   const [said, variant] = v.passed ? ["Passed", "success"] : open ? ["Undecided", "warning"] : ["Failed", "error"];
   const gallery = [], pairs = v.files.map((name) => {
@@ -241,7 +256,8 @@ export function visualSection(slug, v, b, existing, deciding) {
     ${existing.length ? text(`Errors already there before the Change: ${existing.join("; ")}`, { size: "xs" })
       : nothing}
     ${b && b.findings.length ? text(`Before: ${b.findings.join("; ")}`, { size: "xs", color: "contrast-medium" })
-      : nothing}`;
+      : nothing}
+    ${refusedLine([...refused(scans), ...refused(b?.design, "before, ")])}`;
   return { lines, shots: html`<div class="gallery"><div class="shots">${pairs}</div></div>`, count: gallery.length };
 }
 
@@ -254,6 +270,7 @@ export function beforeSection(slug, b) {
   const seen = b.errors.map((e) => `${e.state} at ${e.width}px, ${e.kind} error: ${e.text}`);
   const lines = html`${text(`Before the Change${b.head ? `, at ${b.head.slice(0, 7)}` : ""}`, { weight: "semibold" })}
     ${b.findings.length ? text(`Not available: ${b.findings.join("; ")}`, { color: "contrast-medium" }) : nothing}
-    ${b.errors.length ? text(`Errors before the Change: ${seen.join("; ")}`, { size: "xs" }) : nothing}`;
+    ${b.errors.length ? text(`Errors before the Change: ${seen.join("; ")}`, { size: "xs" }) : nothing}
+    ${refusedLine(refused(b.design))}`;
   return { lines, shots: html`<div class="shots">${cells}</div>`, count: gallery.length };
 }
