@@ -193,7 +193,7 @@ def test_batch_rejects_physical_deletion_of_live_reviewed_entry(tmp_path: Path) 
     assert f"?? {untracked_relative}" in status
 
 
-def test_retiring_last_audience_commits_tombstone_then_purge(tmp_path: Path) -> None:
+def test_soft_delete_commits_tombstone_then_purge(tmp_path: Path) -> None:
     memory_dir = _init_memory_repository(tmp_path)
     engine = MemoryEngine(memory_dir)
     orphaned = _save_approved_entry(engine, title="Orphaned", scope_agents=["retired"])
@@ -220,29 +220,21 @@ def test_retiring_last_audience_commits_tombstone_then_purge(tmp_path: Path) -> 
     _git(tmp_path, "add", "--", "notes.txt")
 
     with patch.object(engine, "_now_iso", return_value="2000-01-01T00:00:00+00:00"):
-        result = engine.delete_agent("retired")
+        engine.delete(orphaned.id, orphaned.updated_at)
+        engine.delete(pending.id, pending.updated_at)
 
-    assert result == {"entries_deleted": 2, "scopes_updated": 1}
     assert orphaned_path.exists()
     assert not pending_path.exists()
-    orphaned_after_retirement = engine.get_entry(orphaned.id)
-    assert orphaned_after_retirement.state == MemoryState.DELETED
-    assert orphaned_after_retirement.scope_agents == []
-    shared_after_retirement = engine.get_entry(shared.id)
-    assert shared_after_retirement.state == MemoryState.APPROVED
-    assert shared_after_retirement.scope_agents == ["builder"]
+    assert engine.get_entry(orphaned.id).state == MemoryState.DELETED
+    assert engine.get_entry(shared.id).state == MemoryState.APPROVED
     assert _git(tmp_path, "diff", "--cached", "--name-only") == "notes.txt"
 
     tombstone_sha = commit_batch(memory_dir, session_type="curation").commit_sha
 
     assert tombstone_sha == _git(tmp_path, "rev-parse", "HEAD")
     assert _git(tmp_path, "diff", "--cached", "--name-only") == "notes.txt"
-    committed_orphaned = _read_head_entry(tmp_path, orphaned_relative)
-    assert committed_orphaned.state == MemoryState.DELETED
-    assert committed_orphaned.scope_agents == []
-    committed_shared = _read_head_entry(tmp_path, shared_relative)
-    assert committed_shared.state == MemoryState.APPROVED
-    assert committed_shared.scope_agents == ["builder"]
+    assert _read_head_entry(tmp_path, orphaned_relative).state == MemoryState.DELETED
+    assert _read_head_entry(tmp_path, shared_relative).state == MemoryState.APPROVED
 
     purge_result = engine.purge(min_age_days=0)
 
@@ -266,8 +258,8 @@ def test_purge_before_tombstone_checkpoint_is_rejected_without_staging(tmp_path:
     commit_batch(memory_dir, session_type="curation")
 
     with patch.object(engine, "_now_iso", return_value="2000-01-01T00:00:00+00:00"):
-        engine.delete_agent("retired")
-    assert engine.get_entry(shared.id).state == MemoryState.APPROVED
+        engine.delete(orphaned.id, orphaned.updated_at)
+    engine.edit(shared.id, {"scope_agents": ["builder"]}, expected_revision=shared.revision)
     assert engine.purge(min_age_days=0).purged == 1
 
     with pytest.raises(ValueError, match="physical deletion is only allowed") as raised:

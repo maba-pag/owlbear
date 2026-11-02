@@ -13,7 +13,6 @@ from uuid import uuid4
 
 import pytest
 from owlbear_memory import ConcurrencyError, MemoryBusyError, MemoryEngine, MemoryState, storage, writer_lock
-from owlbear_memory.errors import LifecycleRecoveryError
 from owlbear_memory.models import MemoryEntry
 
 
@@ -110,36 +109,6 @@ def _record_after_barrier(engine: MemoryEngine, entry_id: str, barrier: Barrier)
     ).entry.outstanding_count
 
 
-def _pause_during_delete_agent_rollback(
-    memory_dir: str,
-    rollback_started: Any,
-    finish_rollback: Any,
-    results: Any,
-) -> None:
-    engine = MemoryEngine(memory_dir)
-    original_write = storage.write_entry
-    write_count = 0
-
-    def fail_during_update(path: Path, entry: MemoryEntry, *, memory_dir: Path) -> None:
-        nonlocal write_count
-        write_count += 1
-        if write_count == 2:
-            raise OSError
-        if write_count == 3:
-            rollback_started.set()
-            if not finish_rollback.wait(timeout=15):
-                raise TimeoutError
-        original_write(path, entry, memory_dir=memory_dir)
-
-    with patch("owlbear_memory.engine.storage.write_entry", side_effect=fail_during_update):
-        try:
-            engine.delete_agent("retired-agent")
-        except LifecycleRecoveryError as error:
-            results.put(error.recovery_status)
-        else:
-            raise AssertionError
-
-
 def _directory_snapshot(memory_dir: Path) -> tuple[tuple[str, bytes], ...]:
     return tuple((path.name, path.read_bytes()) for path in sorted(memory_dir.iterdir()))
 
@@ -162,8 +131,6 @@ def _mutating_calls(engine: MemoryEngine, entry: MemoryEntry) -> list[Callable[[
         lambda: engine.record_assessment(entry.id, "outstanding", task_id="task-1", expected_revision=entry.revision),
         lambda: engine.record_factually_wrong(entry.id, "task-1", expected_revision=entry.revision),
         lambda: engine.try_stale_transition(entry),
-        lambda: engine.rename_agent("test-agent", "renamed-agent"),
-        lambda: engine.delete_agent("test-agent"),
     ]
 
 
@@ -519,76 +486,3 @@ def test_revision_refuses_a_stale_write_even_when_every_stamp_is_identical(tmp_p
 
     assert _directory_snapshot(tmp_path) == before_stale_writes
     assert MemoryEngine(tmp_path).get_entry(entry.id) == won
-
-
-def test_delete_agent_rollback_holds_lock_until_restored_entries_are_reloaded(tmp_path: Path) -> None:
-    """A blocked writer observes restored entries after a failed lifecycle rollback."""
-    context = multiprocessing.get_context("spawn")
-    engine = MemoryEngine(tmp_path)
-    entries = [
-        engine.save(
-            title=f"Entry {index}",
-            content=f"Original content {index}",
-            categories=["domain-knowledge"],
-            confidence=0.9,
-            source_agent="test-agent",
-            scope_agents=["retired-agent", "surviving-agent"],
-        )
-        for index in range(2)
-    ]
-    target_entry = min(entries, key=lambda item: item.id)
-    rollback_started = context.Event()
-    finish_rollback = context.Event()
-    recovery_results = context.Queue()
-    lifecycle_worker = context.Process(
-        target=_pause_during_delete_agent_rollback,
-        args=(str(tmp_path), rollback_started, finish_rollback, recovery_results),
-    )
-    started = context.Event()
-    finished = context.Event()
-    contender_results = context.Queue()
-    contender = context.Process(
-        target=_attempt_edit,
-        args=(
-            str(tmp_path),
-            (target_entry.id, target_entry.updated_at, "Contender content"),
-            started,
-            finished,
-            contender_results,
-        ),
-    )
-    running: list[multiprocessing.Process] = []
-    initial_snapshot = _directory_snapshot(tmp_path)
-
-    try:
-        try:
-            lifecycle_worker.start()
-            running.append(lifecycle_worker)
-            assert rollback_started.wait(timeout=5)
-            during_rollback = _directory_snapshot(tmp_path)
-            assert during_rollback != initial_snapshot
-
-            contender.start()
-            running.append(contender)
-            assert started.wait(timeout=5)
-            assert not finished.wait(timeout=0.15)
-            assert _directory_snapshot(tmp_path) == during_rollback
-        finally:
-            finish_rollback.set()
-            _join_processes(running)
-        recovery_status = recovery_results.get(timeout=5)
-        outcome = contender_results.get(timeout=5)
-    finally:
-        recovery_results.close()
-        recovery_results.join_thread()
-        contender_results.close()
-        contender_results.join_thread()
-
-    assert recovery_status == "complete"
-    assert outcome == ("success", "Contender content", target_entry.scope_agents)
-    fresh_engine = MemoryEngine(tmp_path)
-    assert fresh_engine.get_entry(target_entry.id).content == "Contender content"
-    for entry in entries:
-        restored = fresh_engine.get_entry(entry.id)
-        assert restored.scope_agents == ["retired-agent", "surviving-agent"]
-    assert all(path.suffix == ".md" for path in tmp_path.iterdir())

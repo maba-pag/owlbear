@@ -156,8 +156,6 @@ def test_reads_and_health_do_not_write_before_an_unrelated_mutation_repairs_iden
         "record_assessment",
         "record_factually_wrong",
         "try_stale_transition",
-        "rename_agent",
-        "delete_agent",
     ],
 )
 def test_every_mutator_repairs_duplicates_before_its_own_change(tmp_path: Path, operation: str) -> None:
@@ -179,7 +177,6 @@ def test_every_mutator_repairs_duplicates_before_its_own_change(tmp_path: Path, 
         "record_assessment": MemoryState.APPROVED,
         "record_factually_wrong": MemoryState.APPROVED,
         "try_stale_transition": MemoryState.CURATED,
-        "delete_agent": MemoryState.APPROVED,
     }
     target_updated_at = "2020-01-01T00:00:00+00:00" if operation == "purge" else "2026-01-02T00:00:00+00:00"
     target_created_at = "2020-01-01T00:00:00+00:00" if operation == "purge" else "2026-01-01T00:00:00+00:00"
@@ -221,25 +218,13 @@ def test_every_mutator_repairs_duplicates_before_its_own_change(tmp_path: Path, 
             engine.record_factually_wrong, _TARGET_ID, "task-1", expected_revision=target.revision
         ),
         "try_stale_transition": partial(engine.try_stale_transition, target),
-        "rename_agent": partial(engine.rename_agent, "test-agent", "renamed-agent"),
-        "delete_agent": partial(engine.delete_agent, "test-agent"),
     }
     operations[operation]()
 
     assert engine.health().duplicate_paths == {}
-    if operation == "delete_agent":
-        canonical = storage.read_entry(tmp_path / f"{_DUPLICATE_ID}.md")
-        assert canonical is not None
-        assert canonical.state == MemoryState.DELETED
-        assert canonical.scope_agents == []
-        assert not any(
-            entry is not None and _DUPLICATE_ID in entry.title
-            for path in tmp_path.glob("*.md")
-            if (entry := storage.read_entry(path)) is not None
-        )
 
 
-def test_equal_timestamps_prefer_id_filename_and_rename_applies_after_repair(tmp_path: Path) -> None:
+def test_equal_timestamps_prefer_id_filename_and_edit_applies_after_repair(tmp_path: Path) -> None:
     older = _entry(
         title="Older path entry",
         content="older path content",
@@ -256,17 +241,16 @@ def test_equal_timestamps_prefer_id_filename_and_rename_applies_after_repair(tmp
     storage.write_entry(tmp_path / f"{_DUPLICATE_ID}.md", named, memory_dir=tmp_path)
     engine = MemoryEngine(tmp_path)
 
-    result = engine.rename_agent("test-agent", "renamed-agent")
+    edited = engine.edit(_DUPLICATE_ID, {"title": "Edited ID path entry"}, named.updated_at)
 
     entries = [entry for path in tmp_path.glob("*.md") if (entry := storage.read_entry(path)) is not None]
     canonical = next(entry for entry in entries if entry.id == _DUPLICATE_ID)
     repaired = next(entry for entry in entries if entry.id != _DUPLICATE_ID)
-    assert result["entries_updated"] == 2
+    assert edited.title == "Edited ID path entry"
+    assert canonical.title == "Edited ID path entry"
     assert canonical.content == "ID path content"
-    assert canonical.source_agent == "renamed-agent"
     assert repaired.content == "older path content"
     assert repaired.state == MemoryState.PENDING
-    assert repaired.source_agent == "renamed-agent"
 
 
 def test_equal_timestamps_without_id_filename_choose_lexicographically_first_path(tmp_path: Path) -> None:
@@ -568,13 +552,6 @@ def test_repair_does_not_reuse_pending_copy_with_different_scope(tmp_path: Path)
     assert next(entry for entry in repaired if entry.id == _REUSE_ID).scope_agents == ["other-agent"]
     new_copy = next(entry for entry in repaired if entry.id != _REUSE_ID)
     assert new_copy.scope_agents == ["source-agent"]
-
-    engine.delete_agent("other-agent")
-
-    assert storage.read_entry(tmp_path / f"{_REUSE_ID}.md") is None
-    remaining_copy = storage.read_entry(tmp_path / f"{new_copy.id}.md")
-    assert remaining_copy is not None
-    assert remaining_copy.scope_agents == ["source-agent"]
 
 
 def test_repair_does_not_reuse_pending_copy_with_a_different_recommendation(tmp_path: Path) -> None:

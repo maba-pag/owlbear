@@ -128,12 +128,6 @@ async def test_mutation_tools_translate_busy_errors_from_another_process(tmp_pat
     curate_entry = _create_entry(engine, title="Curate entry")
     delete_entry = _create_entry(engine, title="Delete entry")
     approve_entry = _create_approved_entry(engine, title="Approve entry")
-    _create_entry(
-        engine,
-        title="Agent reference",
-        source_agent="old-agent",
-        scope_agents=["old-agent"],
-    )
     before = _directory_snapshot(tmp_path)
     holder, release = _start_lock_holder(process_context, tmp_path)
     expected_message = _busy_message(tmp_path)
@@ -154,8 +148,6 @@ async def test_mutation_tools_translate_busy_errors_from_another_process(tmp_pat
             ),
             lambda: tools.delete_memory(ctx, entry_id=delete_entry.id, revision=delete_entry.revision),
             lambda: tools.approve_memory(ctx, entry_id=approve_entry.id, revision=approve_entry.revision),
-            lambda: tools.rename_agent_memories(ctx, old_name="old-agent", new_name="new-agent"),
-            lambda: tools.delete_agent_memories(ctx, agent="old-agent"),
         )
         for operation in operations:
             with pytest.raises(ToolError) as raised:
