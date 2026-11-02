@@ -360,7 +360,7 @@ def _pushed(job: Job, ctx: Context, src: pack_git.Source) -> Outcome:
     except pack_files.PackError as exc:
         r.phase = ""
         job.keep(ctx)
-        return Outcome("failed", f"the agent's repair {r.commit[:12]} was not pushed: {exc}"[:2000])
+        return Outcome("failed", f"the agent's repair {r.commit[:12]} was not pushed: {exc}")
     r.protected |= blobs
     shown = f"{r.shown}\n{diff}".strip()
     r.shown, r.shown_binary = shown[:SHOWN], r.shown_binary or binary

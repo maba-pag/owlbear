@@ -18,6 +18,7 @@ import pytest
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.audit_tools import AuditResult
+from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.impeccable_runs import machine_lock, pack_job, pack_repair
 from owlbear_delivery_next.impeccable_runs.pack_state import MACHINE_LOCK
 from owlbear_delivery_next.local_system import local_home
@@ -742,17 +743,26 @@ def test_a_failed_reconsideration_keeps_and_logs_its_whole_error(tmp_path, check
     assert logged[-3:] == ["challenger: running", f"challenger: failed: {reason}", reason]
 
 
-@pytest.mark.parametrize("cause", ["repair-session", "repair-check"])
+@pytest.mark.parametrize("cause", ["repair-session", "repair-check", "repair-push"])
 def test_a_failed_ci_repair_keeps_and_logs_its_whole_error(tmp_path, checkout, whole_error, cause):
-    """An agent's CI repair, or the audit of its repair, fails: its whole words reach the run's reason, the stage, the
-    invocation and the log (#895)."""
-    edits = {f"{REPO}{PAGE}": FIXED + "export const u = 1;\n"} if cause == "repair-check" else {}
+    """An agent's CI repair, the audit of its repair or its push fails: its whole words reach the run's reason, the
+    stage, the invocation and the log (#895)."""
+    edits = {f"{REPO}{PAGE}": FIXED + "export const u = 1;\n"} if cause != "repair-session" else {}
     fakes, job, _state, _heads = ci_failed(tmp_path, checkout, edits)
     before, real, ended = pr_head(checkout, fakes), fakes.session, replace(ENDED, detail=whole_error)
     failing = (lambda cfg: cfg.submit is pack_repair.SUBMIT) if cause == "repair-session" else (
         lambda cfg: cfg.job == sessions.AUDIT
     )  # fmt: skip
     job.live.session = lambda store, cfg: ended if failing(cfg) else real(store, cfg)
+    if cause == "repair-push":
+        job.live.session, git_run = real, job.live.git
+
+        def refused(at, argv):
+            if argv[0] == "push" and any(i["operation"] == pack_repair.REPAIR for i in job.state["invocations"]):
+                raise pack_files.PackError(whole_error)
+            return git_run(at, argv)
+
+        job.live.git = refused
     state = PACK.answered(job, "repair")
 
     logged = [line.split(" ", 1)[1] for line in state["log"]]
@@ -765,6 +775,12 @@ def test_a_failed_ci_repair_keeps_and_logs_its_whole_error(tmp_path, checkout, w
             pack_repair.REPAIR,
             f"CI failed at {before[:12]} of {url}: CI; {detail}. Fix it and try again, {again}",
         )
+    elif cause == "repair-push":
+        made = re.search(r"the agent's repair (\w{12}) ", state["reason"])[1]
+        detail = f"the agent's repair {made} was not pushed: {whole_error}"
+        url = next(i["detail"] for i in state["invocations"] if i["operation"] == "pull-request")
+        stage, op = "merge", pack_repair.REPAIR
+        reason = f"CI failed at {before[:12]} of {url}: CI; {detail}. Fix it and try again, {again}"
     else:
         checking = next(i["detail"] for i in state["invocations"] if i["result"] == "checking")
         made = re.match(r"the agent's repair (\w{12}) ", checking)[1]
