@@ -702,10 +702,6 @@ def test_a_journal_failure_inside_a_record_save_is_a_notice_and_keeps_the_journa
     assert decision_batch.journal_path(store.shared).exists()
 
 
-class _NoPr:
-    """A cleanup's GitHub with no pull request to read."""
-
-
 @pytest.mark.parametrize("refusal", ["unsettled", "planning"])
 def test_a_change_record_failure_is_logged_whole(  # noqa: PLR0913, PLR0917 - its fixtures
     store, shared_repo, tmp_path, monkeypatch, whole_error, refusal
@@ -733,7 +729,7 @@ def test_a_change_record_failure_is_logged_whole(  # noqa: PLR0913, PLR0917 - it
     local.root.mkdir(parents=True)
     c = finished()
     c.step = Step(kind=StepKind.CLEANUP, mode="abandon")
-    _, result = cleanup.run(engine.Ctx(local, Lock(c.slug), tmp_path, Profile(version=1, entries={}), _NoPr(), AT), c)
+    _, result = cleanup.run(engine.Ctx(local, Lock(c.slug), tmp_path, Profile(version=1, entries={}), object(), AT), c)
     assert result.exit == Exit.DONE, result.reason
     assert [e["notice"] for e in local.events(c.slug) if e["event"] == "change-record"] == [expected]
 

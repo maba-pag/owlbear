@@ -506,22 +506,8 @@ def test_a_lock_that_cannot_be_opened_makes_refresh_unavailable_not_a_crash(shar
         refresh(set_up(shared))
 
 
-def failing_git(monkeypatch, message: str, fails) -> None:
-    """Git as the data repository runs it, except the commands *fails* picks, which fail with *message* as stderr."""
-    from owlbear_delivery_next.local_system import data_repo  # noqa: PLC0415
-
-    real = data_repo._git  # noqa: SLF001 - the repository's own Git calls are the boundary
-
-    def git(cwd, *args, until=None):
-        if fails(args, until):
-            return subprocess.CompletedProcess(["git", *args], 128, "", message + "\n")
-        return real(cwd, *args, until=until)
-
-    monkeypatch.setattr(data_repo, "_git", git)
-
-
 @pytest.mark.parametrize("site", ["head", "rebase-probe", "commit", "fetch", "push-unflagged", "push-gone"])
-def test_each_git_failure_of_a_save_is_said_whole(shared, monkeypatch, whole_error, site) -> None:
+def test_each_git_failure_of_a_save_is_said_whole(shared, monkeypatch, whole_error, failing_git, site) -> None:
     """The stderr Git gave, whole, in what a save raises or in its receipt's notice."""
     root = shared.root
     pushed = f"saved and committed in {root}, but the push failed: {whole_error}"
@@ -531,7 +517,7 @@ def test_each_git_failure_of_a_save_is_said_whole(shared, monkeypatch, whole_err
         "commit": lambda args, _: "commit" in args[:3],
         "fetch": lambda args, _: args[:1] == ("fetch",),
     }
-    failing_git(monkeypatch, whole_error, picks.get(site, lambda args, _: args[:1] == ("push",)))
+    failing_git(whole_error, picks.get(site, lambda args, _: args[:1] == ("push",)))
     if site == "push-unflagged":  # the flags' round could not run: only the save's own notice is left
         monkeypatch.setattr(decision_store, "_reconcile", lambda *_args: None)
     elif site == "push-gone":  # the rebase removed the file just written

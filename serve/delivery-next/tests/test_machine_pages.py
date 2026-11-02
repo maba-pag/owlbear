@@ -45,6 +45,7 @@ from owlbear_delivery_next.change_contracts.visual_records import (
     DetectorFinding,
     DetectorScan,
     JudgeVerdict,
+    OwnerDecision,
     VisualResult,
     VisualRound,
 )
@@ -2711,12 +2712,6 @@ def test_a_failed_calibration_shows_in_recent_activity(tmp_path: Path, monkeypat
     # imported here, so this test only appends to the file
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    from owlbear_delivery_next.change_contracts.visual_records import (  # noqa: PLC0415
-        JudgeVerdict,
-        OwnerDecision,
-        VisualResult,
-        VisualRound,
-    )
     from owlbear_delivery_next.impeccable import calibration  # noqa: PLC0415
     from owlbear_delivery_next.impeccable_runs import visual_settled  # noqa: PLC0415
 

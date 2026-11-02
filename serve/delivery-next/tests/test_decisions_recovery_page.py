@@ -289,31 +289,17 @@ def test_a_recovery_request_refused_by_validation_never_echoes_what_was_sent(pic
     ).json()["done"]
 
 
-def failing_git(monkeypatch, message: str, fails) -> None:
-    """Git as the data repository runs it, except the commands *fails* picks, which fail with *message* as stderr."""
-    from owlbear_delivery_next.local_system import data_repo  # noqa: PLC0415
-
-    real = data_repo._git  # noqa: SLF001 - the repository's own Git calls are the boundary
-
-    def git(cwd, *args, until=None):
-        if fails(args):
-            return subprocess.CompletedProcess(["git", *args], 1, "", message + "\n")
-        return real(cwd, *args, until=until)
-
-    monkeypatch.setattr(data_repo, "_git", git)
-
-
 def logged(caplog) -> list[str]:
     return [r.getMessage() for r in caplog.records if r.name.startswith("owlbear_delivery_next.project_host.")]
 
 
 @pytest.mark.browser
-def test_a_recovery_notice_shows_whole(picking, tmp_path, pds, monkeypatch, whole_error, caplog):  # noqa: PLR0913, PLR0917 - its fixtures
+def test_a_recovery_notice_shows_whole(picking, tmp_path, pds, monkeypatch, whole_error, failing_git, caplog):  # noqa: PLR0913, PLR0917 - its fixtures
     """A finish whose push fails says so whole, and an unreadable journal's diagnosis shows whole; both logged."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     _, generation = _interrupt(picking)
-    failing_git(monkeypatch, whole_error, lambda args: args[:1] == ("push",))
+    failing_git(whole_error, lambda args, _: args[:1] == ("push",))
     with decisions_page(_store(picking, tmp_path), pds) as page:
         said: list[str] = []
         page.on("console", lambda m: said.append(f"{m.text} {m.location['url']}") if m.type == "error" else None)
@@ -426,14 +412,14 @@ def test_an_older_recovery_read_answered_last_never_hides_a_newer_interruption(p
 
 
 @pytest.mark.parametrize("site", ["not-published", "unreadable", "invalid", "abandon"])
-def test_each_recovery_refusal_names_its_whole_error(picking, monkeypatch, whole_error, site):
+def test_each_recovery_refusal_names_its_whole_error(picking, monkeypatch, whole_error, failing_git, site):
     """What finish or abandon says when the batch cannot be published, read, validated or put back, whole."""
     from owlbear_decisions.validate import Finding  # noqa: PLC0415
 
     generation = _interrupted_here(picking)
     shared = picking.shared
     if site == "not-published":
-        failing_git(monkeypatch, whole_error, lambda args: "commit" in args[:3])
+        failing_git(whole_error, lambda args, _: "commit" in args[:3])
         said = decision_recovery.finish(shared, generation)
         assert (said.done, said.notice) == (
             False,

@@ -526,33 +526,19 @@ def test_the_owner_checks_a_replacements_impact_and_schedules_its_fixes(store, p
     assert "- [ ] Change c1: Exports (https://github.com/acme/shop-site/pull/7)" in issue["body"]
 
 
-def failing_git(monkeypatch, message: str, fails) -> None:
-    """Git as the data repository runs it, except the commands *fails* picks, which fail with *message* as stderr."""
-    from owlbear_delivery_next.local_system import data_repo  # noqa: PLC0415
-
-    real = data_repo._git  # noqa: SLF001 - the repository's own Git calls are the boundary
-
-    def git(cwd, *args, until=None):
-        if fails(args):
-            return subprocess.CompletedProcess(["git", *args], 1, "", message + "\n")
-        return real(cwd, *args, until=until)
-
-    monkeypatch.setattr(data_repo, "_git", git)
-
-
 def logged(caplog) -> list[str]:
     return [r.getMessage() for r in caplog.records if r.name.startswith("owlbear_delivery_next.project_host.")]
 
 
 @pytest.mark.browser
-def test_a_refused_save_shows_its_whole_notice(store, pds, monkeypatch, whole_error, caplog):
+def test_a_refused_save_shows_its_whole_notice(store, pds, whole_error, failing_git, caplog):
     """The receipt's notice, as `said()` words it with ids named by title (none in the message), and its log line."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     rule = make(title="Exports are CSV", statement="Exports are CSV.", read_back="pending",
                 read_back_why="Asked again.", read_back_kind="uncertain")  # fmt: skip
     write(rule, store.shared.root / PROJECT)
-    failing_git(monkeypatch, whole_error, lambda args: args[:1] == ("push",))
+    failing_git(whole_error, lambda args, _: args[:1] == ("push",))
     with decisions_page(store, pds) as page:
         said: list[str] = []
         page.on("console", lambda m: said.append(f"{m.text} {m.location['url']}") if m.type == "error" else None)
@@ -590,14 +576,14 @@ def replaced(store: Store) -> Decision:
     ("failure", "route"),
     [("held", "read-back"), ("held", "accept-existing"), ("unavailable", "read-back"), ("unavailable", "impact")],
 )
-def test_a_refused_save_answers_its_whole_notice(store, monkeypatch, whole_error, caplog, failure, route):  # noqa: PLR0913, PLR0917 - its fixtures
+def test_a_refused_save_answers_its_whole_notice(store, monkeypatch, whole_error, failing_git, caplog, failure, route):  # noqa: PLR0913, PLR0917 - its fixtures
     """The receipts `said()` words on the page (as above), or the 409 it shows, and the host log's line, each whole."""
     from owlbear_delivery_next.local_system import publication_hold  # noqa: PLC0415
     from owlbear_delivery_next.state_store import decision_batch  # noqa: PLC0415
 
     new = replaced(store)
     if failure == "held":  # the held publication's probe fails before the push and again before the rebase
-        failing_git(monkeypatch, whole_error, lambda args: args == ("rev-parse", "--git-path", publication_hold.RECORD))
+        failing_git(whole_error, lambda args, _: args == ("rev-parse", "--git-path", publication_hold.RECORD))
     else:
 
         def unreadable(_shared):
