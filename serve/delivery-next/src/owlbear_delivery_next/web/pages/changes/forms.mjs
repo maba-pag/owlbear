@@ -22,6 +22,15 @@ function classed(q, mine) {
   return { kind: mine.kind, statement, confirmed: true };
 }
 
+// #717: allowing what the Spotter stopped is held and the question asked again; it says when he chose it and why.
+function heldLine(q) {
+  const n = q.held?.length ?? 0;
+  if (!n) return nothing;
+  const at = new Date(q.held[n - 1]).toLocaleTimeString(), times = n > 1 ? ` (${n} times so far)` : "";
+  return text(`You chose Allow it at ${at}${times}: it needs a brief amendment, which isn't built yet (item 16), so `
+    + "the step stays stopped and the question is asked again.", { size: "sm" });
+}
+
 export function questionForm(q, d) {
   const key = `${d.key}:question:${q.id}`, mine = draft(key, () => ({}));
   if (mine.option !== undefined && !q.options.some((o) => o.id === mine.option)) delete mine.option;  // withdrawn
@@ -35,7 +44,7 @@ export function questionForm(q, d) {
   };
   const clarifying = q.ordinary && mine.kind === "clarification";
   const confirm = (on) => { mine.confirmed = on; show(); };
-  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }),
+  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }), heldLine(q),
     q.options.length ? choice(key, "option", "Choose an option", q.options) : nothing,
     field(key, "text", "Your answer in words"),
     q.ordinary ? choice(key, "kind", "How your answer bears on the brief", CLASSES) : nothing,

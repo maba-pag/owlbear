@@ -3,7 +3,8 @@
 A worker's question takes its relayer's class: an event, a clarification or a brief change (TD-461). A clarification
 carries the statement the owner confirmed when it was read back to him; without that confirmation nothing is stored.
 A visual round's decision names what the page showed (TD-79), a final retry its tasks (TD-217). The console answers
-with the same checks and binds to what ``show`` printed (#676).
+with the same checks and binds to what ``show`` printed (#676). The page shows a question with what an earlier
+answer to it left unsaid: allowing what the Spotter stopped is held, and the question asked again says so (#717).
 """
 
 from __future__ import annotations
@@ -77,6 +78,15 @@ def router(store: Store, read: Callable[[str], Change], put: Callable[[str, Inbo
         return put(slug, got)
 
     return routes
+
+
+def shown(c: Change, q: Question) -> dict[str, object]:
+    """What the Changes page shows with the open *q* besides its text and options.
+
+    Whether chat may answer it, and when the owner allowed what the Spotter stopped on the questions *q* asks again
+    (#717): that answer is held, so without it the page would show the same question as if he had not answered.
+    """
+    return {"ordinary": loop.ordinary(q), "held": answer_kinds.kept(c, q)}
 
 
 def answer_item(store: Store, c: Change, body: AnswerBody) -> AnswerItem | tuple[int, str]:
