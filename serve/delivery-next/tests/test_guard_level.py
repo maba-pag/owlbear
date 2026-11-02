@@ -273,6 +273,8 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ('git -c alias.ci=commit ci "$FLAG" -m x', "doubtful"),  # the alias's git command gets the word
         ('git -c alias.p=push p origin "$REFSPEC"', "doubtful"),
         ('git -c alias.ci=commit ci -m "$MSG"', None),
+        ('git -c alias.ci="commit $FLAG" ci -m x', "doubtful"),  # the shell fills the body in
+        ('git -c alias.ci="commit -m $MSG" ci', "doubtful"),  # and git splits it
         ("git submodule foreach git commit -m $MSG", "doubtful"),  # forwarded, it still splits
         ("git -c alias.ci='!git commit' ci -m $MSG", "doubtful"),
         ('git submodule foreach git commit -m "$MSG"', None),

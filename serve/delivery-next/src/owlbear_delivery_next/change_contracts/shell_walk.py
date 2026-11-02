@@ -188,7 +188,7 @@ class Walk:
                     return f"`{self.name}` defines git alias {alias}: {reason}"
                 continue
             try:
-                words = [Word("git"), *map(Word, shlex.split(body)), *given]
+                words = [Word("git"), *map(_filled, shlex.split(body)), *given]
             except ValueError:  # git can't split it either, and runs nothing
                 continue
             if flag := git_reading.bypass(words) or git_reading.switch(words, child.switches):
@@ -466,6 +466,13 @@ def _unset(state: State, keys: list[str], *, top_level: bool) -> None:
             state.startup[key] = None
         elif state.startup.get(key, "") is not None:
             state.startup.pop(key, None)
+
+
+def _filled(word: str) -> Word:
+    """A word of a plain git alias's body: a $ in it the calling shell may have filled in, and git splits the result."""
+    found = Word(word, expanded="$" in word)
+    found.split = found.expanded
+    return found
 
 
 def _operands(run: Run) -> list[Word]:
