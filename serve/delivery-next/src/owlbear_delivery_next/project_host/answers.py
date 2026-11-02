@@ -124,7 +124,8 @@ def _checked(store: Store, c: Change, q: Question, body: AnswerBody) -> tuple[in
     if q.repair and ((now_open := loop.open_question(c)) is None or now_open.id != q.id):
         return 409, "the Change moved on since this round gate asked; reload"
     anyway = bool(q.options) and all(o.next == "retry" for o in q.options)  # the fold reruns the step on any answer
-    chosen = (not anyway and bool({o.next for o in q.options} & loop.DECISIONS or q.repair)) or answer_kinds.owned(q)
+    # Delivery's own questions are settled by an option; a worker's question also takes the owner's own words
+    chosen = (not anyway and bool((q.cause and q.options) or q.repair)) or answer_kinds.owned(q)
     if body.option is None and chosen:
         return 422, f"choose one of {[o.label for o in q.options]}"
     if any(o.id == body.option and o.next == "reconsider" for o in q.options) and not body.text.strip():

@@ -312,6 +312,8 @@ def test_chat_refuses_recovery_decisions(repo, chat_replied):
     c = client(store)
     body = {"question": "q2", "option": "abandon", "channel": "chat"}
     assert c.post("/api/next/changes/greet/answers", json=body).status_code == 403
+    unchosen = c.post("/api/next/changes/greet/answers", json=body | {"option": None, "channel": "status-view"})
+    assert (unchosen.status_code, "choose one of" in unchosen.json()["detail"]) == (422, True)
     assert c.post("/api/next/changes/greet/answers", json=body | {"channel": "status-view"}).status_code == 200
 
 
