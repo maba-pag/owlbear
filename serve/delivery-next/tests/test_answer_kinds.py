@@ -579,3 +579,5 @@ def test_allowing_what_the_spotter_stopped_keeps_the_answer_and_asks_again_until
     c = run.step()
 
     assert (len(run.held), c.step.kind, loop.open_question(c)) == (1, kind, None)
+    delivered = run.held[0][1]
+    assert delivered is None or delivered.answer.option == then  # the worker never receives the allow answer

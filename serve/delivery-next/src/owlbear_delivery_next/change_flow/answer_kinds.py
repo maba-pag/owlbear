@@ -121,5 +121,6 @@ def held(c: Change, item: AnswerItem, now: datetime) -> bool:
     if q is None or item.option != ALLOW or o is None or o.question != q.id or not (q.cause or "").endswith(SPOTTER):
         return False
     q.answer = Answer(option=item.option, text=item.text, channel=item.channel, at=item.at)
-    ask(c, q.model_copy(update={"id": "", "answer": None}), now)
+    q.effect_observed_at = item.at  # kept for the record, never delivered to a worker as its answer
+    ask(c, q.model_copy(update={"id": "", "answer": None, "effect_observed_at": None}), now)
     return True
