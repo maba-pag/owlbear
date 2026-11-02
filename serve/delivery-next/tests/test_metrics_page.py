@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import socket
 import threading
@@ -17,6 +18,7 @@ from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import spend_reconcile
 from owlbear_delivery_next.state_store import spend_ledger
+from owlbear_delivery_next.state_store.store import Store
 
 
 def run(rid: str, at: datetime, usage: dict, place: dict, **end: object) -> list[dict]:
@@ -455,3 +457,19 @@ def test_all_projects_chosen_on_a_clones_page_stays_chosen_after_a_reload(pds) -
     finally:
         server.should_exit = True
         machine.stop_all()
+
+
+def test_a_reconcile_error_keeps_its_whole_text(tmp_path, monkeypatch, caplog, whole_error) -> None:
+    """#895: a project's records and a source that fail are said on Metrics and logged with their whole error."""
+
+    def fails(*_args: object) -> None:
+        raise RuntimeError(whole_error)
+
+    monkeypatch.setattr(spend_reconcile, "_changes", fails)
+    monkeypatch.setattr(spend_reconcile, "_looks", fails)
+    store = Store(tmp_path / "projects" / "0123456789abcdef", None, "shop")
+    with caplog.at_level(logging.WARNING, spend_reconcile.__name__):
+        spend_reconcile.run([(store, None)])
+    errors = spend_reconcile.status()["errors"]
+    assert errors == [f"shop: RuntimeError: {whole_error}", f"spotter: RuntimeError: {whole_error}"]
+    assert [r.getMessage() for r in caplog.records] == [f"spend reconcile: {e}" for e in errors]

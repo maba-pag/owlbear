@@ -27,6 +27,7 @@ from __future__ import annotations
 import contextlib
 import fcntl
 import json
+import logging
 import os
 import threading
 from datetime import UTC, datetime, timedelta
@@ -55,6 +56,7 @@ if TYPE_CHECKING:
 AGAIN = timedelta(minutes=10)  # a page read starts another pass at most this often
 ESTIMATE = 0.5  # what a legacy Spotter look booked when its spend was not reported
 EPS = 1e-6
+_log = logging.getLogger(__name__)
 _running = threading.Lock()
 
 
@@ -184,7 +186,8 @@ def _pass(projects: list[tuple[Store, Path | None]]) -> dict[str, Any]:
         try:
             commit("changes", _changes(store, repo, high, live))
         except Exception as exc:  # noqa: BLE001 - one project's records never stop the others'
-            said["errors"].append(f"{store.name or store.root.name}: {type(exc).__name__}: {exc}"[:300])
+            said["errors"].append(f"{store.name or store.root.name}: {type(exc).__name__}: {exc}")
+            _log.warning("spend reconcile: %s", said["errors"][-1])
             said["done"] += 1
     for source, read in (
         ("spotter", lambda: _looks(known, places)),
@@ -193,7 +196,8 @@ def _pass(projects: list[tuple[Store, Path | None]]) -> dict[str, Any]:
         try:
             commit(source, read())
         except Exception as exc:  # noqa: BLE001 - a source that cannot be read is said, never fatal
-            said["errors"].append(f"{source}: {type(exc).__name__}: {exc}"[:300])
+            said["errors"].append(f"{source}: {type(exc).__name__}: {exc}")
+            _log.warning("spend reconcile: %s", said["errors"][-1])
             said["done"] += 1
     said |= {"state": "done", "finished": _now().isoformat(timespec="seconds")}
     _save(said)

@@ -15,13 +15,15 @@ from typing import TYPE_CHECKING, Any
 import pytest
 import uvicorn
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.local_system import data_repo
+from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api, config_routes
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import model_choices
+from owlbear_delivery_next.runtimes import model_choices, settings_seen
+from owlbear_delivery_next.runtimes.settings_seen import STATE
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
 from owlbear_delivery_next.settings.improvement import ALLOWED, CATEGORIES
 from owlbear_delivery_next.state_store.store import Store
@@ -1491,3 +1493,23 @@ def test_cost_arrows_rank_every_rate_and_leave_models_efforts_and_rates_unmarked
         "equal": [0, 0], "single": [[0, 1]] * 3, "three": [1, 2, 0], "repeated": [0, 0, 1], "unknown": [0, 0, 1],
         "crossing": [1, 1], "arrows": ["", "\u00a0\u2191", "\u00a0\u2191\u2191"],
     }  # fmt: skip
+
+
+def test_an_unreadable_seen_state_keeps_its_whole_error(store, whole_error) -> None:
+    """#895: a read state that fails validation is said and shown with its whole error, the same words in both."""
+    said: list[str] = []
+    host = Host()
+    host.say = said.append
+    path = local_home.root() / settings_seen.NAME
+    text = json.dumps({whole_error: 1})
+    path.write_text(text)
+    with pytest.raises(ValidationError) as invalid:
+        settings_seen.Seen.model_validate_json(text)
+    expected = f"ValidationError: {invalid.value}"  # pydantic's whole message, the unknown key the test's text
+    c = TestClient(api.create_app(store, "t", host), base_url="http://127.0.0.1",
+                   headers={"authorization": "Bearer t"})  # fmt: skip
+    [failure] = [f for f in c.post("/api/next/config/read").json()["reads"]["failures"] if f["source"] == STATE]
+    assert failure["error"] == expected
+    assert [s for s in said if s.startswith(f"settings read: {STATE}")] == [
+        f"settings read: {STATE} failed at {path}: {expected}; it is rebuilt"
+    ]
