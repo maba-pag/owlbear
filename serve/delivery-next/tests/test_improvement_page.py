@@ -825,7 +825,7 @@ def test_a_failed_chats_pass_shows_its_whole_error_until_a_pass_succeeds(
         failed = page.locator("#not-followed #follower-failed")
         expect(failed).to_be_visible()
         said = f"All enrolled chats: the last pass failed, and the next one tries again: RuntimeError: {error}"
-        assert failed.evaluate("e => e.textContent") == said
+        assert failed.evaluate("e => e.innerText") == said  # as shown, its lines kept
         assert failed.evaluate("e => e.scrollWidth <= e.clientWidth")  # wrapped, not cut off at the page's edge
 
         ctx = spotter.Context(project="", change="", step="chat", looks=("hand-off",), sample_rate=0, verbose=False,
