@@ -17,7 +17,8 @@ import pytest
 import uvicorn
 
 from owlbear_delivery_next.change_contracts import models as m
-from owlbear_delivery_next.change_flow import answer_kinds
+from owlbear_delivery_next.change_contracts.round_records import FINAL, RoundFinding, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_flow import answer_kinds, round_flow
 from owlbear_delivery_next.change_flow.moves import ask
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -133,4 +134,25 @@ def test_an_answer_the_fold_did_not_apply_is_shown_with_its_reason_on_the_questi
     store.log(Lock(SLUG), SLUG, {"event": "answer-not-applied", "at": NOW.isoformat(), "question": "q1", "reason": why})
     with opened(base, pds) as page:
         form = page.locator("section.act", has_text="Question q1")
+        expect(form.locator(".refused")).to_contain_text(f"was not applied: {why}")
+
+
+@pytest.mark.browser
+def test_an_answer_the_fold_did_not_apply_is_shown_on_the_final_reviews_question_too(page_url, pds) -> None:
+    """The final review's last-round question has its own form; a stale Rebuild the fold refused shows on it too."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    t1 = m.Task(id="t1", title="one", scope=["x.txt"])
+    finding = RoundFinding(id="F1", text="x.txt:1: p - fix: f", raised=1, tasks=["t1"])
+    lp = RoundLoop(subject=FINAL, policy=RoundPolicy(max_rounds=1), round=1, found=1, last=True, findings=[finding])
+    lp.head = "a" * 40
+    c = m.Change(slug=SLUG, plan=m.Plan(tasks=[t1]), step=m.Step(kind=m.StepKind.BUILD, task="t1"), loops={FINAL: lp})
+    ask(c, round_flow.question(lp, t1), NOW)
+    store.write(Lock(SLUG), c)
+    why = "question q1: the page showed an earlier attempt or head; reload"
+    store.log(Lock(SLUG), SLUG, {"event": "answer-not-applied", "at": NOW.isoformat(), "question": "q1", "reason": why})
+    with opened(base, pds) as page:
+        form = page.locator("section.act", has_text="Question q1")
+        expect(form).to_contain_text("Plan tasks to rebuild")
         expect(form.locator(".refused")).to_contain_text(f"was not applied: {why}")

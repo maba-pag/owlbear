@@ -33,8 +33,9 @@ function heldLine(q) {
     + "the step stays stopped and the question is asked again.", { size: "sm" });
 }
 
-// #791: an answer that reached Delivery but settled nothing stays beside its question, with why, until one applies.
-function droppedLine(q) {
+// #791: an answer that reached Delivery but settled nothing stays beside its question, with why, until one applies;
+// every form that asks a question shows it.
+export function droppedLine(q) {
   const e = q.dropped;
   return e ? refusal(`Your answer at ${new Date(e.at).toLocaleTimeString()} was not applied: ${e.reason}`) : nothing;
 }
@@ -121,7 +122,8 @@ export function retryForm(q, r, d) {
       instead: "The question stays open.",
     })) send("/answers", { question: q.id, option }, d, key);
   };
-  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }), hd(4, "Plan tasks to rebuild", "sm"),
+  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }), droppedLine(q),
+    hd(4, "Plan tasks to rebuild", "sm"),
     r.tasks.map((t) => html`${tick(`${t.id}: ${t.title}`, mine.ticked.includes(t.id), flip(t.id))}
       ${taskRounds(t.id, d, " (rebuild list)")}
       ${text(said.find((s) => s.startsWith(`${t.id} `)) ?? "", { size: "xs" })}`),
