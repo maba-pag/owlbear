@@ -149,8 +149,9 @@ class StepActor:
         """Abort the turn, its idle marked as the step's own stop: no wrong choice, no reminder (``step_budget``).
 
         The mark stays until that idle or the step's end, even when the abort fails: a timed-out one may still land.
+        With no turn running no idle answers the abort, so nothing is marked and the next turn's idle still counts.
         """
-        self.step.aborted = True
+        self.step.aborted = self.step.turn
         await self._called(record, self.session.abort(), ABORT)
 
     async def _called[T](self, record: spotter.Record, request: Coroutine[Any, Any, T], what: str) -> T:

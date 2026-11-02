@@ -185,6 +185,25 @@ def test_stop_and_resume_aborts_then_sends_and_its_idle_is_neither_counted_nor_r
     assert (st.run.wrong, st.idle, st.done, st.aborted, act_of(st).delivery) == ({}, False, False, False, "delivered")
 
 
+def test_a_stop_and_resume_between_turns_leaves_the_next_idle_counted_and_reminded(tmp_path) -> None:
+    """No turn ran, so no idle answers the abort: the note's own turn that ends without a result is a wrong choice."""
+
+    async def main() -> sdk_adapter._Step:
+        session = Session()
+        st = stepped(tmp_path, session, "irreversible-harm", **{"irreversible-harm": "stop-and-resume"})
+        sampled(st)  # no turn running
+        await until(lambda: len(session.calls) == 2)
+        st.on_event(message("m-1"))
+        await st.feed.spotter.drain()
+        st.on_event(event("assistant.turn_start", {"turnId": "t1"}))  # the note's turn
+        st.on_event(event("session.idle", {}))  # ends without a result
+        return st
+
+    st = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    assert (st.run.wrong, st.idle, st.aborted, act_of(st).delivery) == ({"no_result": 1}, True, False, "delivered")
+
+
 @pytest.mark.parametrize(("category", "said", "acted"), [
     ("irreversible-harm", "The Spotter stopped this step for irreversible harm: Deletes the backups.", "stopped"),
     ("course-and-constraints", "The Spotter stopped this step: Deletes the backups.", "stop-and-ask"),
@@ -292,6 +311,7 @@ def test_an_abort_held_past_the_call_bound_fails_the_act_and_its_stop_to_ask_sti
 
     async def main() -> sdk_adapter._Step:
         st = stepped(tmp_path, Held("abort"), "course-and-constraints", **{"course-and-constraints": "stop-and-ask"})
+        st.on_event(event("assistant.turn_start", {"turnId": "t1"}))  # the turn the abort is for
         st.feed.spotter.look("plan", 1.0, {"kind": "plan", "call": "c-1"})
         await st.feed.spotter.drain()
         return st
