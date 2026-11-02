@@ -1489,7 +1489,7 @@ def test_a_stop_to_ask_at_a_hand_off_whose_abort_outlasts_the_submits_wait_still
 ) -> None:
     from owlbear_delivery_next.runtimes import spotter_act, step_tools  # noqa: PLC0415 - #717's actuator and submit
 
-    monkeypatch.setattr(step_tools, "WAIT", 0.1)
+    monkeypatch.setattr(step_tools, "wait", lambda: 0.1)
     monkeypatch.setattr(spotter_act, "CALL", 0.5)  # the abort answers only after the submit stopped waiting
     asking = dict.fromkeys(CATEGORIES, "record") | {"course-and-constraints": "stop-and-ask"}
 
@@ -1619,3 +1619,29 @@ def test_a_hand_off_look_at_full_capacity_takes_a_state_change_looks_slot_and_ho
     got = sorted((r["look"], r["skipped"]) for r in records())
     assert got[0] == ("hand-off", "")
     assert got.count(("state-change", spotter.GAVE)) == 1
+
+
+def test_a_submit_waits_for_a_hand_off_look_that_first_waited_for_a_slot_and_takes_its_refusal(
+    tmp_path, monkeypatch
+) -> None:
+    """One budget holds the submit: the look's wait for a slot, its answer and a teardown stage (#919)."""
+    monkeypatch.setattr(spotter, "LOOK", 0.5)
+    monkeypatch.setattr(spotter, "TEARDOWN", 0.05)
+
+    async def look(the_card: dict[str, Any], _ctx: spotter.Context, spend: credit_meter.Meter) -> str:
+        await asyncio.sleep(0.35)  # the running looks free their slots after this; the hand-off's then answers after it
+        spend.part().ended(None, confirmed=True)
+        return finding("hand-off-fitness") if the_card["moment"]["call"] == "call-1" else '{"category": "none"}'
+
+    async def main() -> Any:
+        spot = spotter.Spotter(ctx(actions=STEERED, arm="steered", cap=2), lambda: "s1", look)
+        st = handing_off(tmp_path, spot)
+        for i in range(2):
+            spot.look("plan", 1.0, {"kind": "a running look", "call": f"p{i}"})  # neither gives its slot
+        result = await submitted(st, "call-1")
+        await spot.drain()
+        return result
+
+    result = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    assert (result.result_type, result.text_result_for_llm.endswith("] About hand-off-fitness.")) == ("failure", True)

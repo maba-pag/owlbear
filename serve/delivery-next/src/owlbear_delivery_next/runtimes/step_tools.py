@@ -6,10 +6,11 @@ Delivery accepts it, and Delivery's answer after; the accepting runs in a worker
 (TD-87) and a cancelled handler still keeps the answer.
 
 When the Spotter's look at the hand-off could act (``acts.could_act``), the submit waits for that look, at most
-``WAIT`` seconds: a note it answers with refuses the hand-off, as a failed call tallied ``spotter`` (never ``rejected``,
-never an invalid result), and the agent goes on; the next submission is looked at again. A stop to ask ends the step
-first, so Delivery never accepts the hand-off. A look that gives none, fails or outlasts the wait leaves the hand-off
-to Delivery as before; the look's act says why.
+``wait()`` seconds, one budget for the look's whole course, a wait for a slot included: a note it answers with refuses
+the hand-off, as a failed call tallied ``spotter`` (never ``rejected``, never an invalid result), and the agent goes
+on; the next submission is looked at again. A stop to ask ends the step first, so Delivery never accepts the
+hand-off. A look that gives none, fails or outlasts the wait leaves the hand-off to Delivery as before; the look's act
+says why.
 """
 
 from __future__ import annotations
@@ -28,7 +29,13 @@ from owlbear_delivery_next.runtimes.results import ENDED, Gate
 if TYPE_CHECKING:
     from owlbear_delivery_next.runtimes.sdk_adapter import Session
 
-WAIT = spotter.LOOK + spotter.TEARDOWN  # seconds a submit waits for the look at its hand-off
+
+def wait() -> float:
+    """Seconds a submit waits for the look at its hand-off: a slot and an answer, each within LOOK, and a teardown.
+
+    Read when the submit comes, so it is always the sum of the bounds the look keeps (``spotter``).
+    """
+    return 2 * spotter.LOOK + spotter.TEARDOWN
 
 
 class StepTools:
@@ -65,7 +72,7 @@ class StepTools:
         if not waiter or waiter[0] is None:
             return None
         try:
-            return await asyncio.wait_for(asyncio.shield(waiter[0]), WAIT)
+            return await asyncio.wait_for(asyncio.shield(waiter[0]), wait())
         except TimeoutError:
             waiter[0].cancel()  # the look goes on; a note it gives later is expired
             return None
