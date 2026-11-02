@@ -381,6 +381,8 @@ def forwarded(word: str) -> str:
     """*word* as shell text that gives the same word, or an expansion if the calling shell built it."""
     if not getattr(word, "expanded", False):
         return shlex.quote(word)
+    if getattr(word, "split", False):  # unquoted, it may still be several words there
+        return word if re.fullmatch(r"\$(\w+|\{\w+\}|@)", word) else "$FORWARDED"
     return f'"{word}"' if not set(word) & {'"', "\\", "`"} else '"$FORWARDED"'
 
 

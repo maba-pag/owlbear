@@ -269,6 +269,9 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ('git commit "${args[@]}"', "doubtful"),
         ("git commit -m $MSG", "doubtful"),  # split, so it may be several words
         ('git push origin "$REFSPEC"', "doubtful"),
+        ("git submodule foreach git commit -m $MSG", "doubtful"),  # forwarded, it still splits
+        ("git -c alias.ci='!git commit' ci -m $MSG", "doubtful"),
+        ('git submodule foreach git commit -m "$MSG"', None),
         ('git -c "$K"=x commit -m x', "doubtful"),
         ('git -c commit.gpgsign="$V" commit -m x', "doubtful"),
         ('GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0="$V" git commit -m x', "doubtful"),
