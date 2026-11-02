@@ -93,14 +93,15 @@ export function formsOf(d) {
 }
 
 // One action of the owner on the shown Change. A refusal goes beside the form that was used (*form*), so it is seen
-// where he is looking; the poll keeps it until the forms change. True once the host took it.
+// where he is looking; the poll keeps it until the forms change, then a definite one moves to the top of its Change
+// and stays there until he acts, or opens another (#914). True once the host took it.
 export async function send(path, body, d, form = "") {
   try {
     await call(`/changes/${d.slug}${path}`, body, d.project);
   } catch (e) {
     if (e instanceof HostDown || e instanceof Restarted || state.selected !== d.key) return failed(e) && false;
     const unsure = e instanceof Slow;
-    state.refused = { forms: formsOf(d), form, text: unsure ? e.reread : e.message, unsure };
+    state.refused = { key: d.key, forms: formsOf(d), form, text: unsure ? e.reread : e.message, unsure };
     show();
     document.querySelector("#detail .refused")?.scrollIntoView({ block: "nearest" });
     if (unsure) await refresh();  // it may have been done: what Delivery says now shows which
