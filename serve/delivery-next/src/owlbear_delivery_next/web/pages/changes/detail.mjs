@@ -1,6 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { state, show, several, formsOf, send, starts } from "./state.mjs";
-import { toggle, button, hd, text, row, info, notice, refusal } from "./widgets.mjs";
+import { toggle, button, hd, text, info, notice, refusal } from "./widgets.mjs";
 import {
   questionForm, retryForm, criteriaPanel, checkForm, mergeForm, restartButton, pullbackNote, stopNotice,
 } from "./forms.mjs";
@@ -68,7 +68,7 @@ export function detailView(d) {
       : d.retry ? retryForm(d.question, d.retry, d) : questionForm(d.question, d);
   }
   return html`${detailHead(d)}
-    ${row(html`<p-tag variant=${variant} compact="true">${label}</p-tag>`, text(said(d.line, label)))}
+    <div class="row status"><p-tag variant=${variant} compact="true">${label}</p-tag>${text(said(d.line, label))}</div>
     ${d.now && label !== "Done" ? text(d.now, { size: "sm", color: "contrast-medium" }) : nothing}
     ${refusedTop}
     ${d.settings_fault ? notice("error", "Settings could not be read", d.settings_fault,

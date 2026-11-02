@@ -817,6 +817,8 @@ def test_a_failed_sessions_retry_shows_its_last_try_whole_on_the_changes_page(wo
             line = page.locator("#detail p-text", has_text="not running: starting builder")
             line.wait_for()
             assert line.first.text_content().endswith(f"not running: starting builder{tail}")
+            tag, said = line.first.locator("xpath=..").locator("p-tag").bounding_box(), line.first.bounding_box()
+            assert abs(tag["y"] - said["y"]) < tag["height"]  # beside the first line, however long
         assert errors == []
         browser.close()
     server.should_exit = True
