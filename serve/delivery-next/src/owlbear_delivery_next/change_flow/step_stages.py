@@ -77,13 +77,12 @@ def of(c: Change, events: Sequence[dict[str, Any]], own: str) -> str | None:  # 
             return f"reviewing tests: {len(running)} running"
         done = sum(1 for r in runs if not r.open and _judge(c, r.role))
         return f"judging: {done} done, {len(running)} running"
-    live = [r for r in runs if r.open]
-    worker = next((r for r in reversed(live) if r.role != "picker"), None)
+    worker = next((r for r in reversed(runs) if r.open and r.role != "picker"), None)
     if worker and worker.result is False:
         return "fixing its refused result" if worker.role == "builder" else "correcting its refused result"
     if worker and worker.result:
         return _HANDING.get(worker.role, "handing in its result")
-    if any(r.role == "picker" for r in live):
+    if any(r.open and r.role == "picker" for r in runs):
         return "checking decisions"
     if worker is None:
         return "recording the result"
