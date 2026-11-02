@@ -352,7 +352,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         merge = offer(c, events)
         q = loop.open_question(c) if not merge else None
         q = q.model_copy(update={"options": held.offered(store, c, q)}) if q else None
-        shown = q and q.model_dump(mode="json", include={"id", "text", "options"}) | {"ordinary": loop.ordinary(q)}
+        shown = q and q.model_dump(mode="json", include={"id", "text", "options"}) | answers.shown(c, q, events)
         waiting = o and o.exit == Exit.PENDING and o.waiting == Waiting.PERSON_CHECK and o.who == "you"
         checks = [person_check(c, p, inputs=evidence.check_inputs(c, p, check.fingerprints(c, p)), waiting=bool(
             waiting and c.step.task == p.id)) for p in c.checks]  # fmt: skip

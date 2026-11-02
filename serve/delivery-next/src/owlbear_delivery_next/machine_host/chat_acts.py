@@ -138,16 +138,19 @@ def channel(conn: Transport, owner: str, chat: str) -> str:
     """The channel the host lists now for the store's *chat* of session *owner*.
 
     The store keeps ``ahp-chat://<id>/<session>`` and ``ahp-chat://default/<session>``; the host lists a chat as
-    ``ahp-chat:/<id>``, and a default chat under the session's own URI, which may differ from the store's (traced
-    2026-11-02).
+    ``ahp-chat:/<id>``, and a default chat either as ``ahp-chat://default/…`` under the session's own URI, which may
+    differ from the store's, or by its own id as the listed session's ``defaultChat`` (both traced 2026-11-02).
     """
     sid = owner.split(":/", 1)[-1]
     head = chat.removeprefix("ahp-chat://").split("/", 1)[0]
     items = conn.request("listSessions", {"channel": ahp.ROOT}).get("items") or []
-    listed = [c.get("resource", "") for s in items if s.get("resource", "").split(":/", 1)[-1] == sid
-              for c in s.get("chats") or []]  # fmt: skip
-    found = [c for c in listed if (c.startswith("ahp-chat://default/") if head == "default" else
-                                   c in {chat, f"ahp-chat:/{head}"})]  # fmt: skip
+    sessions = [s for s in items if s.get("resource", "").split(":/", 1)[-1] == sid]
+    listed = [c.get("resource", "") for s in sessions for c in s.get("chats") or []]
+    if head == "default":
+        found = [c for c in listed if c.startswith("ahp-chat://default/")] or [
+            d for s in sessions if (d := s.get("defaultChat")) and d in listed]  # fmt: skip
+    else:
+        found = [c for c in listed if c in {chat, f"ahp-chat:/{head}"}]
     if len(found) != 1:
         msg = f"the agent host lists {len(found)} chats for {chat} of session {owner}, not one"
         raise ChatError(msg)

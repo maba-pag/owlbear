@@ -1,6 +1,8 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { DIALOG, REVERT, state, show, draft, notify, send, starts } from "./state.mjs";
-import { button, external, field, choice, tick, hd, text, list, row, panel, info, notice } from "./widgets.mjs";
+import {
+  button, external, field, choice, tick, hd, text, list, row, panel, info, notice, refusal,
+} from "./widgets.mjs";
 import { taskRounds } from "./progress.mjs";
 
 // A worker's question (TD-461): the owner says how his answer bears on the approved brief; a clarification is his
@@ -22,6 +24,22 @@ function classed(q, mine) {
   return { kind: mine.kind, statement, confirmed: true };
 }
 
+// #717: allowing what the Spotter stopped is held and the question asked again; it says when he chose it and why.
+function heldLine(q) {
+  const n = q.held?.length ?? 0;
+  if (!n) return nothing;
+  const at = new Date(q.held[n - 1]).toLocaleTimeString(), times = n > 1 ? ` (${n} times so far)` : "";
+  return text(`You chose Allow it at ${at}${times}: it needs a brief amendment, which isn't built yet (item 16), so `
+    + "the step stays stopped and the question is asked again.", { size: "sm" });
+}
+
+// #791: an answer that reached Delivery but settled nothing stays beside its question, with why, until one applies;
+// every form that asks a question shows it.
+export function droppedLine(q) {
+  const e = q.dropped;
+  return e ? refusal(`Your answer at ${new Date(e.at).toLocaleTimeString()} was not applied: ${e.reason}`) : nothing;
+}
+
 export function questionForm(q, d) {
   const key = `${d.key}:question:${q.id}`, mine = draft(key, () => ({}));
   if (mine.option !== undefined && !q.options.some((o) => o.id === mine.option)) delete mine.option;  // withdrawn
@@ -35,7 +53,7 @@ export function questionForm(q, d) {
   };
   const clarifying = q.ordinary && mine.kind === "clarification";
   const confirm = (on) => { mine.confirmed = on; show(); };
-  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }),
+  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }), heldLine(q), droppedLine(q),
     q.options.length ? choice(key, "option", "Choose an option", q.options) : nothing,
     field(key, "text", "Your answer in words"),
     q.ordinary ? choice(key, "kind", "How your answer bears on the brief", CLASSES) : nothing,
@@ -104,7 +122,8 @@ export function retryForm(q, r, d) {
       instead: "The question stays open.",
     })) send("/answers", { question: q.id, option }, d, key);
   };
-  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }), hd(4, "Plan tasks to rebuild", "sm"),
+  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }), droppedLine(q),
+    hd(4, "Plan tasks to rebuild", "sm"),
     r.tasks.map((t) => html`${tick(`${t.id}: ${t.title}`, mine.ticked.includes(t.id), flip(t.id))}
       ${taskRounds(t.id, d, " (rebuild list)")}
       ${text(said.find((s) => s.startsWith(`${t.id} `)) ?? "", { size: "xs" })}`),
