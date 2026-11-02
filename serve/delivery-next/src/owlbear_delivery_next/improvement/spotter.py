@@ -106,11 +106,6 @@ class Context:
     conflicts: Callable[[str], str] | None = None  # the decision-conflict check of a state change, its answer as text
     test: str = ""  # the running test whose frozen inputs a look admitted with (``frozen``); "": none
 
-    def __post_init__(self) -> None:
-        if self.act is not None and (self.arm is None or self.cap is None):
-            msg = f"a Spotter that acts needs its arm and cap: arm {self.arm!r}, cap {self.cap!r} ({self.step})"
-            raise ValueError(msg)
-
 
 @dataclass
 class Record:

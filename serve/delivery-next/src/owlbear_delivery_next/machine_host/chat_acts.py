@@ -154,8 +154,6 @@ def opened() -> Transport:
         raise ahp.HostError(GONE)
     try:
         return ahp.connect(entry, f"owlbear-spotter-{uuid.uuid4().hex[:8]}")
-    except ahp.HostRefusedError:
-        raise
     except OSError as exc:  # an endpoint left behind by a VS Code that quit
         msg = f"{GONE}: its published endpoint failed: {type(exc).__name__}: {exc}"
         raise ahp.HostError(msg) from exc
@@ -232,13 +230,9 @@ class ChatActor:
 
     def _on_host[T](self, work: Callable[..., T], *args: Any) -> T:  # noqa: ANN401 - the work's arguments
         stored = chat_of(self.session, self.db) if not self.chat else ("", "")  # the store before any connection
-        conn = (self.connect or opened)()
-        try:
+        with contextlib.closing((self.connect or opened)()) as conn:
             self.chat = self.chat or channel(conn, *stored)
             return work(conn, *args)
-        finally:
-            if close := getattr(conn, "close", None):
-                close()
 
     def _state(self, conn: Transport) -> Json:
         return conn.request("subscribe", {"channel": self.chat})["snapshot"]["state"]

@@ -102,14 +102,6 @@ def test_show_owner_is_never_sent_to_the_agent() -> None:
     assert (act.act, act.delivery, act.error) == ("show-owner", "", "")  # ``_never`` was not awaited
 
 
-def test_an_acting_context_without_its_arm_or_cap_is_refused() -> None:
-    with pytest.raises(ValueError, match="arm"):
-        ctx(arm=None)
-    with pytest.raises(ValueError, match="cap"):
-        ctx(cap=None)
-    ctx(act=None, arm=None, cap=None)  # not acting: neither is read
-
-
 def test_an_arm_is_drawn_once_and_kept_when_a_fresh_interpreter_reopens_it_with_another_share() -> None:
     assert spotter_arms.arm("chg:p/never", 0) == "silent"
     assert spotter_arms.arm("chg:p/always", 100) == "steered"

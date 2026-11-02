@@ -24,7 +24,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 FILE, LOCK = "test.json", "test.lock"
-FROZEN = ("model", "effort", "context", "prompt", "prompt_hash", "cases")  # what ``start`` keeps, each a plain value
 
 
 class Refused(Exception):  # noqa: N818 - says what happened
@@ -83,15 +82,11 @@ def declare(outcome: str, start_threshold: str, promote_threshold: str) -> dict[
 
 
 def start(frozen: Mapping[str, Any]) -> dict[str, Any]:
-    """Start the declared test with *frozen* (each of ``FROZEN``) kept for every look while it runs; the record.
+    """Start the declared test with *frozen* kept for every look while it runs; the record.
 
     Raises:
         Refused: No test is declared, or the declared one has started already.
-        ValueError: *frozen* lacks one of ``FROZEN`` or names another.
     """
-    if sorted(frozen) != sorted(FROZEN):
-        msg = f"a test freezes exactly {', '.join(FROZEN)}; given {', '.join(sorted(frozen))}"
-        raise ValueError(msg)
 
     def change(test: dict[str, Any] | None) -> dict[str, Any]:
         if test is None or test.get("ended_at"):
