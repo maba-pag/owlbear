@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import contextlib
-import logging
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException
@@ -17,8 +16,6 @@ if TYPE_CHECKING:
     from contextlib import AbstractContextManager
 
     from owlbear_delivery_next.pds_runs.job import Job
-
-_log = logging.getLogger(__name__)
 
 
 def router(
@@ -35,10 +32,7 @@ def router(
 
     @routes.get("/pds/audit")
     def audit_state() -> dict[str, Any]:
-        state = hand.read()
-        if state["state"] == "failed":
-            _log.warning("PDS hand audit failed: %s", state["reason"])
-        return state
+        return hand.read()
 
     @routes.post("/pds/audit")
     def audit() -> dict[str, Any]:

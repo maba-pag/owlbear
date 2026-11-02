@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
 import os
 import subprocess
 import threading
@@ -36,6 +37,8 @@ if TYPE_CHECKING:
 
 STATE = "pds-audit.json"
 INTERRUPTED = "OwlBear stopped while the audit ran; start it again"
+
+_log = logging.getLogger(__name__)
 
 
 class Busy(Exception):  # noqa: N818 - says what happened
@@ -74,9 +77,11 @@ class Hand:
         except FileNotFoundError:
             return {"state": "none"}
         except ValueError as exc:
-            return {"state": "failed", "reason": f"the saved audit cannot be read: {type(exc).__name__}: {exc}"}
+            return _failed(
+                {"state": "failed", "reason": f"the saved audit cannot be read: {type(exc).__name__}: {exc}"}
+            )
         if kept.get("state") == "running" and not self.busy():
-            return {**kept, "state": "failed", "reason": INTERRUPTED}
+            return _failed({**kept, "state": "failed", "reason": INTERRUPTED})
         return kept
 
     def start(self) -> dict[str, Any]:
@@ -128,6 +133,8 @@ class Hand:
         finally:
             os.close(held)
         self._save({**saved, "ended_at": datetime.now(UTC).isoformat()})
+        if saved["state"] == "failed":
+            _failed(saved)
 
     def _audit(self) -> dict[str, Any]:
         package = pin.package()
@@ -164,3 +171,9 @@ def _commit(package: Path) -> str:
         check=False,
     )
     return found.stdout.strip() if found.returncode == 0 and found.stdout.strip() else "not a git checkout"
+
+
+def _failed(state: dict[str, Any]) -> dict[str, Any]:
+    """Log a failed audit's whole reason to the host's log when it is known, whether or not a page reads it."""
+    _log.warning("PDS hand audit failed: %s", state["reason"])
+    return state

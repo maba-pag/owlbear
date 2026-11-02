@@ -475,10 +475,11 @@ def test_a_failed_hand_audit_shows_its_whole_reason(tmp_path, monkeypatch, caplo
 
     monkeypatch.setattr(hand_audit.Hand, "_audit", failing)
     h, _http, _seen = hand(tmp_path)
+    caplog.set_level(logging.WARNING, logger=hand_audit.__name__)
     h.start()
     reason = f"RuntimeError: {whole_error}"
     assert settled(h)["reason"] == reason
-    caplog.set_level(logging.WARNING, logger=pds_routes.__name__)
+    assert [r.getMessage() for r in caplog.records] == [f"PDS hand audit failed: {reason}"]  # with no page reading
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     server = uvicorn.Server(uvicorn.Config(api.create_app(Store(h.store.root), "tok", Host()), log_level="warning"))
@@ -502,7 +503,6 @@ def test_a_failed_hand_audit_shows_its_whole_reason(tmp_path, monkeypatch, caplo
             browser.close()
     finally:
         server.should_exit = True
-    assert f"PDS hand audit failed: {reason}" in [r.getMessage() for r in caplog.records]
 
 
 def test_an_unreadable_saved_audit_answers_and_logs_its_whole_reason(tmp_path, caplog, whole_error):
@@ -513,9 +513,9 @@ def test_an_unreadable_saved_audit_answers_and_logs_its_whole_reason(tmp_path, c
         json.loads(whole_error)
     except ValueError as exc:
         reason = f"the saved audit cannot be read: {type(exc).__name__}: {exc}"
-    caplog.set_level(logging.WARNING, logger=pds_routes.__name__)
+    caplog.set_level(logging.WARNING, logger=hand_audit.__name__)
 
     assert http.get("/pds/audit").json() == {"state": "failed", "reason": reason}
-    assert [r.getMessage() for r in caplog.records if r.name == pds_routes.__name__] == [
+    assert [r.getMessage() for r in caplog.records if r.name == hand_audit.__name__] == [
         f"PDS hand audit failed: {reason}"
     ]
