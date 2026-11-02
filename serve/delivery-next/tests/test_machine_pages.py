@@ -2436,7 +2436,8 @@ def test_dismiss_one_in_settings_and_all_from_changes(tmp_path: Path, monkeypatc
         expect(banner).to_contain_text(f"{n - 1} Global settings changed elsewhere", timeout=READS_TIME * 1000)
         banner.get_by_role("link", name="Show in Settings").click()
         expect(page).to_have_url(f"{base}/config?project={a.id}#overview")
-        expect(page.locator("#reads-changed")).to_be_focused(timeout=READS_TIME * 1000)
+        expect(page.locator("#groups")).to_be_visible(timeout=READS_TIME * 1000)  # the list outlives the layers' load
+        expect(page.locator("#reads-changed")).to_be_focused()
         expect(entries).to_have_count(n - 1)
         page.go_back()
         dismiss = banner.get_by_role("button", name="Dismiss")

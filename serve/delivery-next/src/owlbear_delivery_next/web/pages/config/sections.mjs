@@ -160,7 +160,7 @@ function groupNav() {
 }
 
 const GROUP_VIEWS = {
-  overview: () => html`${readsView()}${unsetSection()}${acrossSection()}`,
+  overview: () => html`${unsetSection()}${acrossSection()}`,
   agents: agentsGroup,
   runs: runsGroup,
   checks: checksGroup,
@@ -218,10 +218,14 @@ export function route(initial = false) {
 export function view() {
   const loaded = state.loaded;
   if (loaded && !loaded.global_location && state.layer === "global") state.layer = "project";
+  // The outside reads keep one place before and after the layers load, so their list keeps its nodes and the focus an
+  // address gave it; a layer that does not read keeps Read again and why.
+  const reads = (loaded ? state.group === "overview" : state.reads) ? readsView() : nothing;
   return html`
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
     </p-inline-notification>
     <p-text id="status" role="status" aria-live="polite">${state.status}</p-text>
-    ${loaded ? html`${scopeSection()}${groupNav()}${GROUP_VIEWS[state.group]()}${saveBar()}`
-      : state.reads ? readsView() : nothing}`;  // a layer that does not read: Read again and why stay
+    ${loaded ? html`${scopeSection()}${groupNav()}` : nothing}
+    ${reads}
+    ${loaded ? html`${GROUP_VIEWS[state.group]()}${saveBar()}` : nothing}`;
 }
