@@ -213,13 +213,18 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
 
     *made* builds the judges' sessions in that worktree. *settings* is the round's snapshot, so what is recorded is what
     ran. A judge left running stops the Change ahead of another's unread usage; otherwise an unread run is gated and
-    nothing is processed (TD-54), unless *hold* keeps it for the round's own decision (TD-94).
+    nothing is processed (TD-54), unless *hold* keeps it for the round's own decision (TD-94). Each judge's Spotter
+    checks a state change through the round's own lookup, settled with the runs before their cleanup, its picker
+    counted on the Change (#925).
     """
+    from owlbear_delivery_next.workflow_steps import lookup  # noqa: PLC0415 - lookup imports this module
+
     settings = settings or store.settings()
     look_limit = watched.needed(
         settings
     )  # each judge is watched: an unset Spotter setting asks before any judge starts
     labels: list[str] = []
+    asked = lookup.Asked(store, lock, lambda: change)
 
     def fresh(at: Path) -> list[sdk_adapter.Session]:
         cfgs = []
@@ -235,7 +240,7 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
                     limit=roles.limit(settings, label), subagents=roles.subagents(settings, label),
                     user=roles.user_config(settings), previous={}, journal=journal, worktree=at,
                     policy=Policy(at, write=False), judging=label in tools.VERDICTS, job=label,
-                    watch=watched.watching(store, lock, label, settings, at, out, look_limit),
+                    watch=watched.watching(store, lock, label, settings, at, out, look_limit, asked),
                 )
             )  # fmt: skip
         return cfgs
@@ -245,7 +250,7 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
             return [run(store, cfgs[0], hold=hold)]
         return _waves(cfgs, lambda left: store.log(lock, change.slug, {"event": "wave", "at": _at(), "left": left}))
 
-    runs = isolated(store, lock, change, source, fresh, ran, keep=keep)
+    runs = isolated(store, lock, change, source, fresh, lambda cfgs: asked.settled(lambda: ran(cfgs)), keep=keep)
     judged = []
     for label, done in zip(labels, runs, strict=True):  # state writes one at a time, under the lock
         verdict = session_result.to_result(done, StepKind.REVIEW, datetime.now(UTC), change.step.kind)

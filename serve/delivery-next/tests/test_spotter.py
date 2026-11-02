@@ -8,26 +8,37 @@ import gzip
 import json
 import random
 import stat
+import threading
+import time
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import pytest
 from copilot.generated.session_events import SessionEvent
 from copilot.tools import ToolInvocation
 
-from owlbear_delivery_next.change_contracts.models import Change, Plan, StepKind, Task
+from owlbear_delivery_next.change_contracts import pick_tools
+from owlbear_delivery_next.change_contracts.models import Brief, Change, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
-from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.change_contracts.tools import ReviewResult, Worktree
+from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.improvement import acts, card, cases, chatlogs, credit_meter, events, retro_units, spotter
 from owlbear_delivery_next.improvement.events import Kept
+from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import sdk_adapter, spend_reconcile, spotter_look, step_decisions
+from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
 from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter
 from owlbear_delivery_next.state_store import spend_ledger, spend_shares, spotter_arms
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import lookup, watched
+from owlbear_delivery_next.workflow_steps import lookup, pending_child, sessions, watched
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from owlbear_delivery_next.state_store.spend_ledger import Where
 
 REAL_LOOK = spotter_look.judged  # taken before the suite's fixture replaces it
 
@@ -1645,3 +1656,122 @@ def test_a_submit_waits_for_a_hand_off_look_that_first_waited_for_a_slot_and_tak
     result = asyncio.run(main())
     assert spotter.WORK.settled(5)
     assert (result.result_type, result.text_result_for_llm.endswith("] About hand-off-fitness.")) == ("failure", True)
+
+
+class _Round:
+    """#925: a judges round's real ``lookup.Asked`` with the picker faked below it, and a judge whose Spotter finds a
+    state change. The fake picker waits until the round settles, so its answer lands after the judge has returned."""
+
+    PUSH = json.dumps({"category": "outside-state-changes", "note": "Pushed to main.", "evidence": ["e1"],
+                       "state_change": "git push origin main"})  # fmt: skip
+    USAGE: ClassVar[dict[str, Any]] = {"credits": 6.0, "models": {"gpt-6.1-sol": {"credits": 6.0, "tokens": 900}}}
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch, said: dict[str, Any], judged: Run) -> None:
+        self.owners: list[lookup.Asked] = []
+        self.entered, self.seen = threading.Event(), []
+        self.said, self.judged = said, judged
+        owners = self.owners
+
+        class Recorded(lookup.Asked):
+            def __init__(self, *a: Any) -> None:
+                super().__init__(*a)
+                owners.append(self)
+
+        monkeypatch.setattr(lookup, "Asked", Recorded)
+        monkeypatch.setattr(lookup, "worker", self.worker)
+        monkeypatch.setattr(sessions.sdk_adapter, "run", self.run)
+        monkeypatch.setattr(spotter, "DRAIN", 0.2)
+
+    def worker(self, _store: Store, _lock: Lock, _c: Change, question: str) -> tuple[dict[str, Any], Run]:
+        self.seen.append((question, spend_ledger.where(), threading.current_thread().name))
+        self.entered.set()
+        deadline = time.monotonic() + 5
+        while self.owners[0].open and time.monotonic() < deadline:  # admitted; answers once the round settles
+            time.sleep(0.01)
+        done = Termination(confirmed=True)
+        return self.said, Run("c1-decision-lookup-1", "result", usage=self.USAGE, termination=done)
+
+    async def run(self, cfg: sdk_adapter.Session) -> Run:
+        assert all(spec.name != pick_tools.LOOKUP.name for spec, _ in cfg.helpers)  # a judge gets no lookup tool
+
+        async def recorded(_record: spotter.Record, _act: acts.Act) -> None:
+            raise AssertionError  # every category records: nothing is sent
+
+        ctx = dataclasses.replace(cfg.watch.spot, act=recorded)
+        spot = spotter.Spotter(ctx, lambda: cfg.session_id, judge(self.PUSH))
+        spot.handed_off("call-1", {})
+        assert await asyncio.to_thread(self.entered.wait, 5), "the judge's state change got no decision-conflict check"
+        await spot.drain()
+        return dataclasses.replace(self.judged, session_id=cfg.session_id)
+
+    def finding(self) -> tuple[acts.Act, dict[str, Any]]:
+        assert acts.CHECKS.settled(5)  # the round's settlement precedes the act's answer
+        assert spotter.WORK.settled(5)
+        [act] = acts.acts(spotter.root()).values()
+        [record] = [r for r in retro_units.records() if r.get("state_change")]
+        return act, record
+
+
+def _judged(store: Store) -> tuple[Change, Callable[[Path], sdk_adapter.Session], Where]:
+    change = Change(slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.PLAN))
+    store.write(Lock("c1"), change)
+
+    def made(at: Path) -> sdk_adapter.Session:
+        return sdk_adapter.Session(
+            kind=StepKind.REVIEW, worktree=at, session_id="", message="challenge the plan", resume=False,
+            policy=Policy(at, write=False), observe=Worktree, checks=(),
+        )  # fmt: skip
+
+    return change, made, spend_ledger.Where.of(store, change="c1", step="plan")
+
+
+def test_a_judges_state_change_is_checked_by_its_rounds_lookup_and_counted_beside_an_unread_gate(
+    tmp_path, change_repo, monkeypatch
+):
+    store = Store(tmp_path / "store")
+    change, made, place = _judged(store)
+    picked = {"decisions": [{"id": "D-1", "title": "No force-push"}]}
+    unread = Run("", "result", ReviewResult(verdict="pass"), usage_unread="the usage could not be read (RuntimeError)",
+                 termination=Termination(confirmed=True))  # fmt: skip
+    fake = _Round(monkeypatch, picked, unread)
+
+    def start(keep: sessions.Keep) -> pending_child.Judged:
+        return sessions.review_run(store, Lock("c1"), change, change_repo, made, "plan-challenge", keep=keep)
+
+    with spend_ledger.at(place), pytest.raises(sessions.UsageUnreadError):
+        pending_child.child(store, Lock("c1"), change, ("plan-challenge", "1"), start)
+
+    act, record = fake.finding()
+    assert json.loads(act.conflict) == picked
+    assert retro_units.grade(record, "rev", "useful")["preliminary"] is False
+    [(question, where, thread)] = fake.seen
+    assert "git push origin main" in question
+    assert (where, thread.startswith("spotter-")) == (place, True)  # the Change's place, on the Spotter's thread
+    looked = [e for e in store.events("c1") if e.get("kind") == lookup.LABEL]
+    assert [e["exit"] for e in looked] == ["ok"]
+    c = store.read("c1")
+    assert [o.id for o in loop.open_question(c).options] == ["retry"]  # the judge's own unread gate stays
+    assert [s.split("-", 2)[:2] for s in c.spend.unread] == [["c1", "plan"]]
+    assert c.spend.credits == pytest.approx(6.0)  # the picker's, counted with the gate
+
+
+def test_a_judges_failed_conflict_lookup_stays_a_recorded_failure_and_its_spend_counts(
+    tmp_path, change_repo, monkeypatch
+):
+    store = Store(tmp_path / "store")
+    change, made, place = _judged(store)
+    failed = {"failed": "its session ended error: the model call failed"}
+    known = Run("", "result", ReviewResult(verdict="pass"), usage={"credits": 2.0, "models": {"m": {"credits": 2.0}}},
+                termination=Termination(confirmed=True))  # fmt: skip
+    fake = _Round(monkeypatch, failed, known)
+
+    with spend_ledger.at(place):
+        sessions.review_run(store, Lock("c1"), change, change_repo, made, "plan-challenge")
+
+    act, record = fake.finding()
+    assert json.loads(act.conflict) == failed  # never an empty answer
+    assert retro_units.grade(record, "rev", "useful")["preliminary"] is True
+    events_ = store.events("c1")
+    assert [e["reason"] for e in events_ if e.get("event") == "lookup-failed"] == [failed["failed"]]
+    assert [e["exit"] for e in events_ if e.get("kind") == lookup.LABEL] == ["failed"]
+    assert store.read("c1").spend.credits == pytest.approx(2.0 + 6.0)  # the judge's and the failed picker's
