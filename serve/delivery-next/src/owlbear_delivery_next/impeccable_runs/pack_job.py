@@ -315,7 +315,7 @@ class Job(Steps):
         ctx.next = "wait"
         stage = next((s for s in self.state["stages"] if s["result"] in {"running", "failed"}), None)
         if stage is not None:
-            stage["result"], stage["detail"] = "waiting", reason[:4000]
+            stage["result"], stage["detail"] = "waiting", reason
         if self.state.get("invocations") is not None:
             pack_progress.stopped(self.state["invocations"], reason)
             pack_progress.asked(self.state["invocations"], stage["name"] if stage else "merge", [question])
@@ -436,7 +436,7 @@ class Job(Steps):
             self.log(exc.reason)
             self._end("up-to-date" if exc.current else "failed", exc.reason)
         except Exception as exc:  # noqa: BLE001 - the page must learn how the run ended
-            reason = f"{type(exc).__name__}: {exc}"[:600]
+            reason = f"{type(exc).__name__}: {exc}"
             self.log(reason)
             self._end("failed", reason)
         else:

@@ -123,7 +123,7 @@ def closed(
     invocations: list[dict[str, Any]], inv: dict[str, Any], result: str, detail: str = "", identity: str = ""
 ) -> None:
     """End *inv* with its result; an identity learned now supersedes evidence about an earlier candidate."""
-    inv |= {"result": result, "detail": detail[:4000], "ended_at": now()}
+    inv |= {"result": result, "detail": detail, "ended_at": now()}
     if identity:
         identified(invocations, inv, identity)
 
@@ -160,7 +160,7 @@ def stopped(invocations: list[dict[str, Any]], reason: str) -> None:
     """A run held for the owner: whatever was still running stopped with it."""
     for i in invocations:
         if i["result"] == "running":
-            i |= {"result": "stopped", "detail": reason[:4000], "ended_at": now()}
+            i |= {"result": "stopped", "detail": reason, "ended_at": now()}
 
 
 def words(op: str, result: str) -> str:

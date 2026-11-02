@@ -39,6 +39,7 @@ from owlbear_delivery_next.impeccable_runs import (
     machine_lock,
     pack_gates,
     pack_job,
+    pack_progress,
     pack_publish,
     pack_repair,
     pack_repair_content,
@@ -1511,6 +1512,70 @@ def test_a_missing_tool_the_updater_reports_stops_with_its_words(tmp_path, check
     assert (state["state"], results(state)["update"]) == ("failed", "failed")
     assert "the updater lacks shell: run git diff (" in state["reason"]
     assert state["reason"].endswith(" no shell tool)")
+
+
+@pytest.mark.parametrize("cause", ["git", "updater", "challenger", "reconsideration", "outside-a-stage"])
+def test_a_failed_pack_stage_keeps_and_logs_its_whole_error(  # noqa: PLR0913, PLR0917 - its fixtures
+    tmp_path, checkout, clone, monkeypatch, whole_error, cause
+):
+    """A stage's error reaches the run's reason, its stage, its invocation and its log whole (#895)."""
+    fakes, real = Fakes(clone), subprocess.run
+
+    def ended(_store: Store, cfg) -> Run:  # a session that ends without a result
+        return Run(cfg.session_id, "error", detail=whole_error, termination=Termination(confirmed=True))
+
+    if cause == "outside-a-stage":  # the run's own code fails between stages: the run ends with its words
+
+        def failing(*_args: object, **_kwargs: object) -> None:
+            raise RuntimeError(whole_error)
+
+        monkeypatch.setattr(pack_run, "begin", failing)
+        state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+        reason = f"RuntimeError: {whole_error}"
+        assert (state["state"], state["reason"], state["log"][-1].split(" ", 1)[1]) == ("failed", reason, reason)
+        return
+    if cause == "git":  # the checkout's own git refuses, in git's words
+
+        def refusing(args, *rest, **kw):
+            if args[:3] == ["git", "rev-parse", "--show-toplevel"]:
+                raise subprocess.CalledProcessError(128, args, output="", stderr=f"{whole_error}\n")
+            return real(args, *rest, **kw)
+
+        monkeypatch.setattr(pack_git.subprocess, "run", refusing)
+        stage = "candidate"
+        said = (
+            f"PackError: the package at {checkout.resolve()} is not a git checkout, so an update cannot be committed: "
+            f"git rev-parse failed: {whole_error}"
+        )
+    elif cause == "updater":  # its session ends without a result
+        fakes.update = ended
+        stage, said = "update", f"PackError: the updater ended with error: {whole_error}"
+    else:  # the challenger's, judging the candidate or reconsidering the owner's findings
+        stage, said = "challenger", f"PackError: the challenger ended with error: {whole_error}"
+        fakes.challenge = ended if cause == "challenger" else fakes.challenge
+
+    if cause == "reconsideration":
+        job, _fakes, _state = upheld(tmp_path, checkout, clone)
+        job.live.challenge = ended
+        state = answered(job, "reconsider", "the halo is upstream's own example")
+    else:
+        state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+
+    reason = f"{stage}: {said}"
+    assert (state["state"], state["reason"]) == ("failed", reason)
+    assert next(s for s in state["stages"] if s["name"] == stage)["detail"] == reason
+    assert state["invocations"][-1]["detail"] == reason
+    logged = [line.split(" ", 1)[1] for line in state["log"]]
+    assert logged[-3:] == [f"{stage}: running", f"{stage}: failed: {reason}", reason]
+
+
+def test_a_hold_stops_a_running_invocation_with_its_whole_reason(whole_error) -> None:
+    """What still ran when a publication was held stops with the hold's whole reason (#895)."""
+    invocations = [{"operation": "update", "stage": "update", "result": "running", "detail": ""}]
+
+    pack_progress.stopped(invocations, f"git push failed: {whole_error}")
+
+    assert (invocations[0]["result"], invocations[0]["detail"]) == ("stopped", f"git push failed: {whole_error}")
 
 
 @pytest.mark.parametrize(

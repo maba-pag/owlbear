@@ -4,13 +4,19 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import shutil
+import socket
 import threading
+import time
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
+import jsonschema
 import pytest
+import uvicorn
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -19,14 +25,17 @@ from owlbear_delivery_next.change_contracts.audit_tools import AuditResult
 from owlbear_delivery_next.impeccable_runs import machine_lock
 from owlbear_delivery_next.impeccable_runs.pack_state import MACHINE_LOCK
 from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.pds_runs import audit, hand_audit, pin, sessions
-from owlbear_delivery_next.project_host import pds_routes
+from owlbear_delivery_next.project_host import api, pds_routes
+from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.results import ACCEPTED, Gate
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import carried, config, roles
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
+from owlbear_delivery_next.state_store.store import Store
 
 VERSION = pin.read().version
 SCHEMA = json.loads((pin.package() / pin.TREE / audit.SCHEMA).read_text(encoding="utf-8"))
@@ -411,3 +420,102 @@ def test_a_running_audit_the_host_lost_reads_as_failed(tmp_path):
     assert http.get("/pds/audit").json()["reason"] == hand_audit.INTERRUPTED
     assert http.post("/pds/audit").json()["state"] == "running"
     assert settled(h)["state"] == "done"
+
+
+@pytest.mark.parametrize("cause", ["text", "ended", "usage", "schema", "gaps", "left-out"])
+def test_a_stopped_audit_keeps_its_whole_reason(sources, whole_error, cause):
+    """The gate's stop carries the auditor's or the schema's whole words (#895)."""
+    body: object = report()
+    run: dict[str, object] = {}
+    if cause == "text":
+        body = whole_error
+        try:
+            json.loads(whole_error)
+        except ValueError as exc:
+            why = f"the audit report is not JSON: {type(exc).__name__}: {exc}"
+    elif cause == "ended":
+        run = {"ending": "error", "payload": None, "detail": whole_error}
+        why = f"the auditor submitted no report: ended error; {whole_error}"
+    elif cause == "usage":
+        run = {"usage_unread": whole_error}
+        why = f"the auditor's model is unknown: {whole_error}"
+    elif cause == "gaps":
+        body = report(skipped=["web/a.mjs"], limitations=[whole_error])
+        why = f"the audit disclosed gaps: web/a.mjs skipped (unreadable); {whole_error}"
+    elif cause == "left-out":
+        body = report()
+        body["scope"]["excludedPaths"].append({"path": "web", "reason": whole_error})
+        why = f"the audit left out web ({whole_error})"
+    else:
+        body = {**report(), "summary": {"result": whole_error}}
+        [error] = jsonschema.Draft202012Validator(SCHEMA).iter_errors(body)
+        why = f"the audit report breaks its schema at summary/result: {error.message}"
+        assert len(why) > 300  # longer than the cut it had
+    verdict = audited(sources, body, **run).verdict
+    assert (verdict.outcome, verdict.reason) == ("stop", why)
+
+
+class Host:
+    maintenance = None
+    wake = type("W", (), {"set": staticmethod(lambda: None)})()
+    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
+    paused = staticmethod(lambda: False)
+    draining = staticmethod(lambda: False)
+    closed = staticmethod(lambda: False)
+    updating = staticmethod(lambda: "")
+    launching = threading.Lock()
+
+
+@pytest.mark.browser
+def test_a_failed_hand_audit_shows_its_whole_reason(tmp_path, monkeypatch, caplog, pds, whole_error):
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    def failing(_self):
+        raise RuntimeError(whole_error)
+
+    monkeypatch.setattr(hand_audit.Hand, "_audit", failing)
+    h, _http, _seen = hand(tmp_path)
+    h.start()
+    reason = f"RuntimeError: {whole_error}"
+    assert settled(h)["reason"] == reason
+    caplog.set_level(logging.WARNING, logger=pds_routes.__name__)
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    server = uvicorn.Server(uvicorn.Config(api.create_app(Store(h.store.root), "tok", Host()), log_level="warning"))
+    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
+    while not server.started:
+        time.sleep(0.05)
+    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.add_init_script("sessionStorage.setItem('token', 'tok');")
+            page.goto(f"{base}/updates/pds")
+            shown = page.locator("#audit-reason")
+            expect(shown).to_be_visible()
+            assert shown.text_content() == f"{reason[0].upper()}{reason[1:]}."
+            browser.close()
+    finally:
+        server.should_exit = True
+    assert f"PDS hand audit failed: {reason}" in [r.getMessage() for r in caplog.records]
+
+
+def test_an_unreadable_saved_audit_answers_and_logs_its_whole_reason(tmp_path, caplog, whole_error):
+    h, http, _seen = hand(tmp_path)
+    h.path.parent.mkdir(parents=True)
+    h.path.write_text(whole_error, encoding="utf-8")
+    try:
+        json.loads(whole_error)
+    except ValueError as exc:
+        reason = f"the saved audit cannot be read: {type(exc).__name__}: {exc}"
+    caplog.set_level(logging.WARNING, logger=pds_routes.__name__)
+
+    assert http.get("/pds/audit").json() == {"state": "failed", "reason": reason}
+    assert [r.getMessage() for r in caplog.records if r.name == pds_routes.__name__] == [
+        f"PDS hand audit failed: {reason}"
+    ]

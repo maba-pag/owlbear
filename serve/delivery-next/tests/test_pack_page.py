@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import contextlib
+import importlib.util
 import os
 import re
 import socket
+import subprocess
 import threading
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
 import uvicorn
 
 from owlbear_delivery_next.change_contracts.round_records import PACK, RoundFinding, RoundLoop, RoundPolicy
+from owlbear_delivery_next.impeccable import pack_git
 from owlbear_delivery_next.impeccable_runs import (
     machine_lock,
     pack_gates,
@@ -31,9 +35,23 @@ from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
-    from pathlib import Path
+    from types import ModuleType
 
 NOW = datetime(2026, 10, 17, 2, tzinfo=UTC)
+
+
+def _sibling(name: str) -> ModuleType:
+    """A sibling test module, loaded for its fakes: the tests are no package, so they cannot import each other."""
+    spec = importlib.util.spec_from_file_location(f"pack_page_{name}", Path(__file__).with_name(f"{name}.py"))
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+JOB = _sibling("test_pack_job")  # a whole run's fakes
+checkout, clone = JOB.checkout, JOB.clone
 
 
 class Host:
@@ -70,11 +88,11 @@ def waiting(store: Store, lp: RoundLoop | None = None) -> pack_job.Job:
 
 
 @pytest.fixture
-def served(tmp_path: Path) -> Iterator[Callable[[RoundLoop | None], tuple[pack_job.Job, str]]]:
+def served(tmp_path: Path) -> Iterator[Callable[..., tuple[pack_job.Job, str]]]:
     servers = []
 
-    def serve(lp: RoundLoop | None = None) -> tuple[pack_job.Job, str]:
-        job = waiting(Store(tmp_path), lp)
+    def serve(lp: RoundLoop | None = None, job: pack_job.Job | None = None) -> tuple[pack_job.Job, str]:
+        job = job or waiting(Store(tmp_path), lp)
         sock = socket.socket()
         sock.bind(("127.0.0.1", 0))
         server = uvicorn.Server(uvicorn.Config(api.create_app(job.store, "tok", Host(), pack=job), log_level="warning"))
@@ -366,6 +384,38 @@ def test_a_ci_failed_publish_stop_fits_a_phone_and_says_no_calibration_evidence_
             .filter((b) => b.offsetParent).map((b) => b.getBoundingClientRect()).filter((r) => r.height < 24
               || r.width < 24).length""")
         assert small == 0  # every target at least 24px
+
+
+@pytest.mark.browser
+def test_a_failed_pack_stage_shows_and_logs_its_whole_error(  # noqa: PLR0913, PLR0917 - its fixtures
+    served, pds, tmp_path, checkout, clone, monkeypatch, whole_error
+) -> None:
+    """A refused push holds the publication: git's whole words are its reason, its stage's and its log's (#895)."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    real = subprocess.run
+
+    def refusing(args, *rest, **kw):
+        if args[:2] == ["git", "push"]:
+            raise subprocess.CalledProcessError(1, args, output="", stderr=f"{whole_error}\n")
+        return real(args, *rest, **kw)
+
+    monkeypatch.setattr(pack_git.subprocess, "run", refusing)
+    job = pack_job.Job(Store(tmp_path / "store"), JOB.Fakes(clone).live(checkout))
+    state = JOB.run(job)
+
+    said = f"git push failed: {whole_error}"
+    assert (state["state"], state["reason"]) == ("waiting", said)
+    assert next(s for s in state["stages"] if s["name"] == "push")["detail"] == said
+    assert [i["detail"] for i in state["invocations"] if i["operation"] == "push"] == [said]
+    logged = [line.split(" ", 1)[1] for line in state["log"]]
+    assert logged[-3:] == ["push: running", f"push: failed: {said}", f"waiting for you: {said}"]
+    _job, base = served(job=job)
+    with opened(base, pds) as page:
+        reason = page.locator("#pack-reason")
+        expect(reason).to_be_visible()
+        assert reason.text_content() == said
+        assert page.locator("#pack-log").text_content() == "\n".join(state["log"])
 
 
 @pytest.mark.browser

@@ -343,7 +343,7 @@ def _verdict(run: Run) -> tuple[list[str], dict[str, tuple[bool, str]], list[pac
     if run.ending == "premise" and isinstance(p, tools.WrongPremise):
         return [" ".join(f"premise: {p.reason} ({'; '.join(p.evidence)})".split())], {}, []
     msg = f"the challenger ended with {run.ending}: {run.detail or 'no verdict'}"
-    raise pack_files.PackError(msg[:600])
+    raise pack_files.PackError(msg)
 
 
 def _asked(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -> tuple[list[dict[str, Any]], str]:
@@ -410,7 +410,7 @@ def _reconsider(job: Job, c: pack_candidate.Candidate, lp: RoundLoop) -> Action:
             return dict.fromkeys(keys, ("unsure", f"premise: {p.reason}"))
         if run.ending != "result" or not isinstance(p, dispute_tools.ReconsiderResult):
             msg = f"the challenger ended with {run.ending}: {run.detail or 'no verdict'}"
-            raise pack_files.PackError(msg[:600])
+            raise pack_files.PackError(msg)
         return {r.finding: (r.verdict, r.text if r.verdict == "clarified" else r.reason) for r in p.reconsidered}
 
     said = job.do(

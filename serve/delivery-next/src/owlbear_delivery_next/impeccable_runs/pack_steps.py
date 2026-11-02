@@ -46,10 +46,10 @@ class Steps:
             if inv is not None:
                 pack_progress.closed(self.state["invocations"], inv, result, detail, identity)
             stage = next(s for s in self.state["stages"] if s["name"] == name)
-            stage["result"], stage["detail"] = result, detail[:4000]
+            stage["result"], stage["detail"] = result, detail
             self.state["stage"] = name if result == "running" else self.state["stage"]
             self._save()
-        self.log(f"{name}: {result}{f': {detail.splitlines()[0][:300]}' if detail else ''}")
+        self.log(f"{name}: {result}{f': {detail}' if detail else ''}")
 
     def _begin(self, name: str, op: str, round_: int | None, identity: str) -> dict[str, Any] | None:
         """A new invocation of *op*, running in stage *name*; None for a legacy run, which invents no history."""
@@ -75,7 +75,7 @@ class Steps:
             invocations = self.state.get("invocations")
             if invocations is not None:
                 inv = pack_progress.opened(invocations, name, op, at=at, identity=identity, result=result)
-                inv["detail"] = detail[:4000]
+                inv["detail"] = detail
                 self._save()
         self.log(f"{name}: {pack_progress.words(op, result)}")
 
@@ -116,7 +116,7 @@ class Steps:
             if hold is not None and isinstance(exc, hold):
                 self._step(inv, name, getattr(exc, "result", "failed"), str(exc))  # held for the owner, or failed
                 raise
-            reason = f"{name}: {type(exc).__name__}: {exc}"[:2000]  # any failure stops the run, its stage named
+            reason = f"{name}: {type(exc).__name__}: {exc}"  # any failure stops the run, its stage named
             self._step(inv, name, "failed", reason)
             raise Stopped(reason) from exc
         made = identity(out) if callable(identity) else ""

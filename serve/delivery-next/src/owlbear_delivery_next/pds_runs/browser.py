@@ -107,8 +107,7 @@ def run(at: Path, ids: tuple[str, ...] = (), *, runner: Runner = subprocess.run)
         raise Unrunnable(msg) from exc
     output = f"{done.stdout or ''}\n{done.stderr or ''}"
     if CDN in output:
-        line = next(x for x in output.splitlines() if CDN in x)
-        msg = f"the PDS CDN did not answer, so the browser tests prove nothing: {line.strip()[:300]}"
+        msg = f"the PDS CDN did not answer, so the browser tests prove nothing: {output.strip()}"
         raise Unrunnable(msg)
     return _read(report, done.returncode, output)
 
@@ -117,9 +116,8 @@ def _read(report: Path, code: int, output: str) -> Result:
     try:
         root = ET.parse(report).getroot()  # noqa: S314 - the run's own report
     except (OSError, ET.ParseError) as exc:
-        tail = output.strip()[-600:]
-        msg = f"the browser tests left no report (exit {code}): {exc}; {tail}"
-        raise Unrunnable(msg[:1200]) from exc
+        msg = f"the browser tests left no report (exit {code}): {exc}; {output.strip()}"
+        raise Unrunnable(msg) from exc
     suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
     count = {k: sum(int(s.get(k, "0")) for s in suites) for k in ("tests", "failures", "errors", "skipped")}
     failed = tuple(dict.fromkeys(SUMMARY.findall(output)))

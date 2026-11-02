@@ -74,7 +74,7 @@ class Hand:
         except FileNotFoundError:
             return {"state": "none"}
         except ValueError as exc:
-            return {"state": "failed", "reason": f"the saved audit cannot be read: {exc}"[:300]}
+            return {"state": "failed", "reason": f"the saved audit cannot be read: {type(exc).__name__}: {exc}"}
         if kept.get("state") == "running" and not self.busy():
             return {**kept, "state": "failed", "reason": INTERRUPTED}
         return kept
@@ -124,7 +124,7 @@ class Hand:
             with spend_ledger.at(spend_ledger.Where.of(self.store, job="PDS audit")):
                 saved = {**state, **self._audit()}
         except Exception as exc:  # noqa: BLE001 - the page must learn how the audit ended
-            saved = {**state, "state": "failed", "reason": f"{type(exc).__name__}: {exc}"[:600]}
+            saved = {**state, "state": "failed", "reason": f"{type(exc).__name__}: {exc}"}
         finally:
             os.close(held)
         self._save({**saved, "ended_at": datetime.now(UTC).isoformat()})
