@@ -2671,10 +2671,12 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
         f"the engine's own browser: {failed}"
     )
     told = (
-        f"design detector: sources: {failed}\nbefore: 0 screenshots at {b.head[:7]}; {note}\n"
-        f"design detector: home at 1280: {why}\n"
+        f"design detector: sources: {failed}\n",
+        f"before: 0 screenshots at {b.head[:7]}; {note}\n",
+        f"design detector: home at 1280: {why}\n",
     )
-    assert told in capsys.readouterr().out  # an earlier test's machine may still say it stopped
+    out = capsys.readouterr().out  # an earlier test's machine may still say it stopped, between these lines too
+    assert all(message in out for message in told), out
     head, now = _git(Path(c.names.worktree), "rev-parse", "HEAD"), datetime.now(UTC)
     failing = Run("s", ending="error", detail=whole_error, termination=processes.Termination(confirmed=True))
     correct = judges.correctness([failing], carried.MODELS["reviewer"], now)
