@@ -2708,6 +2708,11 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
         assert f"The design detector could not scan round 1 at {head[:7]}: {'; '.join(items[:2])}" in shown_texts(
             page, url, of, "Before and after"
         )  # beside the before capture's
+        updated(store, visual=VisualResult(head=head, tree="t", at=now, design=[unexplained, clean]))  # a rerun
+        assert {
+            f"The design detector could not scan round 1 at {head[:7]}: {items[0]}",
+            f"The design detector could not scan: {'; '.join(items[1:])}",
+        } <= set(shown_texts(page, url, of, "Before and after"))  # the rerun lacks one
         assert said == []
 
 

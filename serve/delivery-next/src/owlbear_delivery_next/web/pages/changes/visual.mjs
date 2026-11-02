@@ -262,8 +262,9 @@ export function visualSection(slug, v, b, existing, deciding) {
 
 // A round's refused scans while no judged capture of its commit shows them, as when a judge failed.
 export function roundRefused(r, v) {
-  if (!r || r.head === v?.head) return nothing;
-  const items = refused(r.detector);
+  if (!r) return nothing;
+  const shown = new Set(r.head === v?.head ? refused(v.design) : []);  // a judged capture shows its own scans
+  const items = refused(r.detector).filter((line) => !shown.has(line));
   return items.length ? text(`The design detector could not scan round ${r.number} at ${r.head.slice(0, 7)}: ${
     items.join("; ")}`, { size: "xs" }) : nothing;
 }
