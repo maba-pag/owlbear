@@ -671,12 +671,6 @@ def _cases_job(monkeypatch, **seams: Any) -> cases_job.CasesJob:
     return cases_job.CasesJob(slots, shared=lambda: None, **seams)
 
 
-def _spent(meter, cost: float) -> None:
-    share = meter.part()
-    share.call(cost)
-    share.ended(cost, confirmed=True)
-
-
 def _run_line(page: Page, kind: str, rid: str):
     return page.locator("#cases ol.meta > li", has_text=f"{kind} {rid}:")
 
@@ -758,7 +752,9 @@ def test_a_failed_replay_look_shows_its_whole_note(tmp_path, monkeypatch, pds, w
             said = answers.pop(0)
             if isinstance(said, Exception):
                 raise said
-            _spent(meter, 0.1)
+            share = meter.part()
+            share.call(0.1)
+            share.ended(0.1, confirmed=True)
             return said
 
         job = _cases_job(monkeypatch, looked=looked)

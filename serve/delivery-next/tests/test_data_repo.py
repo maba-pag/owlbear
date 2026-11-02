@@ -726,12 +726,11 @@ def test_a_rename_waits_for_steps_of_every_clone_sharing_the_folder_and_renames_
 
 
 @pytest.mark.parametrize("step", ["git-folder", "tracked", "add", "staged", "commit", "rebase-probe", "rebase"])
-def test_each_failed_git_step_says_its_whole_stderr(shared, monkeypatch, whole_error, step) -> None:
+def test_each_failed_git_step_says_its_whole_stderr(shared, failing_git, whole_error, step) -> None:
     """What the shared repository says when one Git step fails: Git's whole stderr, after its own context."""
     root = shared[0]
     data = data_repo.DataRepo(root)
     (root / "notes.md").write_text("notes\n")
-    real = data_repo._git  # noqa: SLF001 - the repository's own Git calls are the boundary
     picks = {
         "git-folder": lambda args, until: args == ("rev-parse", "--absolute-git-dir") and until is None,
         "tracked": lambda args, _: args[:1] == ("ls-files",),
@@ -741,13 +740,7 @@ def test_each_failed_git_step_says_its_whole_stderr(shared, monkeypatch, whole_e
         "rebase-probe": lambda args, until: args == ("rev-parse", "--absolute-git-dir") and until is not None,
         "rebase": lambda args, _: "rebase" in args[:3],
     }
-
-    def git(cwd, *args, until=None):
-        if picks[step](args, until):
-            return subprocess.CompletedProcess(["git", *args], 128, "", whole_error + "\n")
-        return real(cwd, *args, until=until)
-
-    monkeypatch.setattr(data_repo, "_git", git)
+    failing_git(whole_error, picks[step])
     if step == "git-folder":
         with pytest.raises(data_repo.DataRepoError) as refused, data.locked():
             pass

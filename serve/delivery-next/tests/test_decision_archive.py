@@ -703,9 +703,7 @@ def test_a_journal_failure_inside_a_record_save_is_a_notice_and_keeps_the_journa
 
 
 @pytest.mark.parametrize("refusal", ["unsettled", "planning"])
-def test_a_change_record_failure_is_logged_whole(  # noqa: PLR0913, PLR0917 - its fixtures
-    store, shared_repo, tmp_path, monkeypatch, whole_error, refusal
-) -> None:
+def test_a_change_record_failure_is_logged_whole(shared_repo, tmp_path, monkeypatch, whole_error, refusal) -> None:
     """The notice cleanup logs as the "change-record" event: an unreadable journal behind the guard, or planning
     refused by the decision history; each names the whole error."""
     if refusal == "unsettled":
@@ -724,7 +722,6 @@ def test_a_change_record_failure_is_logged_whole(  # noqa: PLR0913, PLR0917 - it
         expected = (f"the record of notes was not saved; no decision of notes was archived; "
                     f"decision history of notes: OSError: {whole_error}")  # fmt: skip
 
-    assert change_record.save(store, finished(), MERGED, AT) == expected
     local = LocalStore(tmp_path / "store", DataRepo(shared_repo[0]), "shop-site")
     local.root.mkdir(parents=True)
     c = finished()

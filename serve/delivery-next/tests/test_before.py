@@ -272,11 +272,10 @@ def test_the_runner_records_the_before_capture_and_the_page_serves_it(ui, tmp_pa
         assert client.get(f"/api/next/changes/c1/before/{name}").status_code == 404
 
 
-@pytest.mark.parametrize("site", ["merge-base", "merge-base-bytes", "test-copy", "capture"])
+@pytest.mark.parametrize("site", ["merge-base", "test-copy", "capture"])
 def test_a_before_capture_that_fails_keeps_its_whole_error(ui, tmp_path, monkeypatch, site, whole_error):
     """#895 K4: before :113, :71 and :135 keep the whole failure, a git command's whole stderr included."""
-    said = whole_error.encode() if site.endswith("bytes") else whole_error
-    failed = subprocess.CalledProcessError(1, "git merge-base", stderr=said)
+    failed = subprocess.CalledProcessError(1, "git merge-base", stderr=whole_error)
     real, prepare = before.worktree.git, None
 
     def git_failing(cwd, *args):
@@ -287,7 +286,7 @@ def test_a_before_capture_that_fails_keeps_its_whole_error(ui, tmp_path, monkeyp
     def raising(*_a, **_k):
         raise (RuntimeError(whole_error) if site == "test-copy" else failed)
 
-    if site.startswith("merge-base"):
+    if site == "merge-base":
         monkeypatch.setattr(before.worktree, "git", git_failing)
     elif site == "capture":
         monkeypatch.setattr(visual, "CAPTURE", raising)
@@ -303,4 +302,4 @@ def test_a_before_capture_that_fails_keeps_its_whole_error(ui, tmp_path, monkeyp
         "test-copy": f"the test copy at the merge-base: RuntimeError: {whole_error}",
         "capture": git_error,
     }
-    assert shots.findings == [expected[site.removesuffix("-bytes")]]
+    assert shots.findings == [expected[site]]

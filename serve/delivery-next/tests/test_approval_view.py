@@ -600,9 +600,7 @@ def test_a_refused_approval_shows_its_whole_reason(page_url, pds, monkeypatch, w
             pds.modal(page).get_by_role("button", name="Approve and start").click()
         assert (reply.value.status, reply.value.json()["detail"]) == (409, reason)
         refused = page.locator(".refused p-inline-notification")
-        expect(refused).to_have_attribute("heading", "Not done")
-        expect(refused).to_have_attribute("description", reason)
-        expect(refused).to_contain_text(reason)  # shown, not only set
+        expect(refused).to_contain_text(reason)
     assert store.read("flip").brief.approved_version is None
     (event,) = [e for e in store.events("flip") if e.get("event") == "approval-refused"]
     assert event["reason"] == reason

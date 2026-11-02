@@ -97,9 +97,7 @@ class Stuck:
         msg = "the runtime does not answer"
         raise RuntimeError(msg)
 
-    async def force_stop(self) -> None:
-        msg = "the runtime cannot be killed"
-        raise RuntimeError(msg)
+    force_stop = stop
 
 
 @pytest.mark.browser

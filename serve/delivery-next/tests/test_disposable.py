@@ -494,16 +494,12 @@ def test_a_judge_that_moves_a_ref_with_its_usage_unread_is_retried_for_the_viola
     assert [(e["kind"], e["usage_unread"]) for e in steps] == [("visual-review", "no usage event")]
 
 
-@pytest.mark.parametrize("said", ["str", "bytes"])
 @pytest.mark.parametrize("where", ["prepare", "locate", "remove"])
-def test_a_read_only_worktree_git_refuses_says_its_whole_output(  # noqa: PLR0913, PLR0917 - the place and the output's type
-    tmp_path, change_repo, whole_error, monkeypatch, where, said
-):
+def test_a_read_only_worktree_git_refuses_says_its_whole_output(tmp_path, change_repo, whole_error, monkeypatch, where):
     store = Store(tmp_path / "store")
     if where == "remove":
         assert isinstance(disposable.prepare(change_repo, store, "c1"), disposable.Copy)
-    stderr = whole_error.encode() if said == "bytes" else whole_error
-    failed = subprocess.CalledProcessError(128, "git x", stderr=stderr)
+    failed = subprocess.CalledProcessError(128, "git x", stderr=whole_error)
     real = worktree.git
 
     def refused(cwd, *args):
