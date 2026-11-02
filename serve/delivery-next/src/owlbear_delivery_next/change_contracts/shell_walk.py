@@ -81,7 +81,7 @@ class Walk:
     writes: Callable[[Command], bool]
     bypass: Callable[[str, Run], str | None]  # the refusal of a run's environment that turns hooks or signing off
     mutation: Callable[[str, Run], str | None]  # the refusal of a write by a run, in a read-only step
-    reading: int | None = None  # the pass's reader class; None reads no bypass
+    reading: int | None  # the pass's reader class; None reads no bypass
 
     def _reads(self, found: int) -> bool:
         return self.reading is not None and self.reading >= found
@@ -188,6 +188,7 @@ class Walk:
             return f"`{self.name}` uses {found}, {BYPASS}"
         for text, after_write in git_reading.scripts(run.words):
             child = state.child(plain=state.plain())
+            child.switches = switches(state, run)  # HUSKY=0 git submodule foreach '...': its children see it
             child.at = None  # rebase runs it in the top folder, foreach in each submodule's
             if after_write:  # a file it runs may be one the rebase just wrote
                 child.effects = Effects(wrote=True)
@@ -318,9 +319,8 @@ class Walk:
             state.current -= 1
             state.unsure -= not command.top_level
             state.stdin_plain = saved
-            for k, v in bound.items():  # what the text set itself stays
-                if state.switches.get(k) is v:
-                    state.switches.pop(k) if k not in kept else state.switches.update({k: kept[k]})
+            for k in bound:  # bash restores them after eval or source, whatever the text set
+                state.switches.pop(k) if k not in kept else state.switches.update({k: kept[k]})
             if any(k in run.env for k in _STARTUP):  # only for that text; what the text set itself is unknown
                 state.startup = startup | {k: None for k in _STARTUP if state.startup.get(k) != startup.get(k)}
 

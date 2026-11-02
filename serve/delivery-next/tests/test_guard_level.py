@@ -154,6 +154,10 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("git -c remote.origin.mirror=yes fetch", None),
         ("git remote add --mirror=fetch o u", None),
         ("git clone --mirror u d", None),
+        ("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.mirror GIT_CONFIG_VALUE_0=true git status", None),
+        ("env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.mirror GIT_CONFIG_VALUE_0=true git fetch", None),
+        # an export outlives its command, so its push may come later
+        ("export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.mirror GIT_CONFIG_VALUE_0=true", "core"),
         *((f"git -c remote.origin.mirror{v} push", "core") for v in ("=true", "=YES", "=on", "=1", "=-3", "")),
         *((f"git -c remote.origin.mirror={v} push", None) for v in ("false", "no", "off", "0", "")),
     ],
@@ -180,6 +184,8 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("git submodule foreach './fix'", "variant"),  # from each submodule's folder, which the guard can't follow
         ("git submodule foreach 'git push --force'", "variant"),
         ("git submodule --quiet foreach --recursive 'git push --force'", "variant"),
+        ("git submodule foreach bash -c 'git commit --no-verify -m x'", "variant"),  # sh -c '<first> "$@"' <the rest>
+        ("git submodule foreach git status --short", None),
         ("git bisect run 'git commit -n'", None),  # a documented limit
     ],
     10: [  # hook tools' switches
@@ -190,6 +196,10 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("export HUSKY=0; bash -c 'git commit -m x'", "variant"),
         ("HUSKY=0 eval 'git commit -m x'", "variant"),
         ("HUSKY=0 eval 'git status'; git commit -m x", None),  # only for that text
+        ("export HUSKY=0; HUSKY=1 eval 'unset HUSKY'; git commit -m x", "variant"),  # bash restores HUSKY=0
+        ("HUSKY=1 eval 'export HUSKY=0'; git commit -m x", None),
+        ("HUSKY=0 git submodule foreach 'git commit -m x'", "variant"),
+        ("export HUSKY=0; env -u HUSKY git submodule foreach 'git commit -m x'", None),
         ('HUSKY=0 git commit "$FLAGS" -m x', "variant"),
         ("HUSKY=0 git commit --no-verify -m x", "core"),  # the core reason comes first
         ("HUSKY=2 git commit -m x", None),
@@ -229,6 +239,9 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ('GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0="$V" git commit -m x', "doubtful"),
         ('git config commit.gpgsign "$V"', "doubtful"),
         ('MIRROR="$V" git --config-env=remote.origin.mirror=MIRROR push', "doubtful"),
+        ('VALUE=false git --config-env="$K"=VALUE commit -m x', "doubtful"),
+        ('git --config-env=remote.origin.mirror="$VARNAME" push', "doubtful"),
+        ('git -c remote.origin.mirror="$M" fetch', None),
         ('git -c core.hooksPath="$P" commit -m x', "core"),  # the key alone skips hooks
         ('HUSKY="$OFF" git commit -m x', "doubtful"),
         ('export HUSKY="$OFF"; unset HUSKY; git commit -m x', None),

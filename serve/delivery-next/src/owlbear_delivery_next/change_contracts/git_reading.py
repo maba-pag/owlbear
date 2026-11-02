@@ -142,10 +142,11 @@ def _parse_git(words: Sequence[str]) -> _GitCall:
         w = words[i]
         joined = w.startswith("--config-env=")
         if w in _GIT_GLOBAL_OPTIONS or joined:
-            value = [w.removeprefix("--config-env=")] if joined else words[i + 1 : i + 2]
+            flag = getattr(w, "expanded", False)
+            value = [Word(w.removeprefix("--config-env="), expanded=flag)] if joined else words[i + 1 : i + 2]
             config += value if w == "-c" else []
-            for key, _, var in (v.partition("=") for v in value if joined or w == "--config-env"):
-                config.append(f"{key}=")  # its value is the variable's, unknown here
+            for key, var in (_halves(v) for v in value if joined or w == "--config-env"):
+                config.append(Word(f"{key}=", expanded=key.expanded))  # its value is the variable's, unknown here
                 from_env.append((key, var))
             i += 1 if joined else 2
         elif w in _GIT_GLOBAL_FLAGS or ("=" in w and w.partition("=")[0] in _GIT_GLOBAL_ATTACHED):
@@ -247,17 +248,25 @@ def _env_settings(env: dict[str, str]) -> list[str]:
     return settings
 
 
-def env_setting(env: dict[str, str]) -> str | None:
-    """A setting that git configuration passed by environment uses to replace the hooks or turn signing off."""
-    return next((s for s in _env_settings(env) if _disables(s) or _mirrors(s)), None)  # exported, it outlives it
+def env_setting(env: dict[str, str], words: Sequence[str]) -> str | None:
+    """A setting that git configuration passed by environment to the command *words* uses to skip hooks or signing.
+
+    A mirror setting counts when the command pushes, or exports it so that it outlives the command.
+    """
+    i = shell_programs.builtin(words)
+    lasting = (i < len(words) and words[i] == "export") or any(
+        shell_programs.name(r.words[0]) == "git" and _parse_git(r.words[1:]).sub == "push"
+        for r in shell_programs.runs(words)
+    )
+    return next((s for s in _env_settings(env) if _disables(s) or (lasting and _mirrors(s))), None)
 
 
 def bypass(words: Sequence[str]) -> str | None:
     """Return the setting, option or refspec of a git command that skips hooks or signing, or forces a push."""
-    if setting := env_setting(_environment(words)):  # leading assignments, env's and export's
+    if setting := env_setting(_environment(words), words):  # leading assignments, env's and export's
         return f"environment setting {setting}"
     for run in shell_programs.runs(words):
-        if setting := env_setting(run.env):  # those an env -S split sets too
+        if setting := env_setting(run.env, run.words):  # those an env -S split sets too
             return f"environment setting {setting}"
         env = {**_environment(words), **run.env}  # what --config-env reads; another variable's value is unknown
         if shell_programs.name(run.words[0]) == "git" and (found := _git_bypass(_parse_git(run.words[1:]), env)):
@@ -335,8 +344,8 @@ def scripts(words: Sequence[str]) -> list[tuple[str, bool]]:
         return [(text, True) for text in _rebase_exec(arguments)]
     rest = [a for a in arguments if a not in {"-q", "--quiet"}]
     if call.sub == "submodule" and rest[:1] == ["foreach"]:
-        text = " ".join(rest[2:] if rest[1:2] == ["--recursive"] else rest[1:])
-        return [(text, False)] if text else []
+        given = rest[2:] if rest[1:2] == ["--recursive"] else rest[1:]  # git runs sh -c '<first> "$@"' <the rest>
+        return [(" ".join([given[0], shlex.join(given[1:])]).strip(), False)] if given else []
     return []
 
 
@@ -350,7 +359,7 @@ def _rebase_exec(arguments: Sequence[str]) -> list[str]:
         elif w.startswith("--exec="):
             found.append(w.removeprefix("--exec="))
         elif re.fullmatch(r"-[^-].*", w):
-            flags, _ = _short(w[1:], "sXCx", "S")
+            flags, _ = _short(w[1:], *_GIT_VALUES["rebase"][:2])
             if w[len(flags) + 1 : len(flags) + 2] == "x":
                 found.append(w[len(flags) + 2 :] or following)
     return [text for text in found if text]
@@ -407,23 +416,27 @@ def _built_setting(call: _GitCall, env: dict[str, str]) -> str | None:
     settings += [
         (Word("GIT_CONFIG_PARAMETERS"), v) for n, v in env.items() if n == "GIT_CONFIG_PARAMETERS" and _built(v)
     ]
-    settings += [(Word(key), env[var]) for key, var in call.from_env if var in env]
+    settings += [(key, env.get(var, var)) for key, var in call.from_env]  # a variable named at run time is built
+    push = call.sub == "push"
     if call.sub == "config" and (written := _config_set(call.arguments)):
         settings.append(written)
-    return next((f"setting `{k}={v}`" for k, v in settings if _built(k) or (_guarded(k) and _built(v))), None)
+        push = True  # a mirror key written to the configuration mirrors later pushes
+    return next(
+        (f"setting `{k}={v}`" for k, v in settings if _built(k) or (_guarded(k, push=push) and _built(v))), None
+    )
 
 
-def _halves(setting: str) -> tuple[str, str]:
-    """A -c setting's key and value, each built at run time when its own text holds the expansion."""
+def _halves(setting: str) -> tuple[Word, Word]:
+    """A -c or --config-env setting's two halves, each built at run time when its own text holds the expansion."""
     key, _, value = setting.partition("=")
     flag = getattr(setting, "expanded", False)
     return Word(key, expanded=flag), Word(value, expanded=flag)
 
 
-def _guarded(key: str) -> bool:
-    """Whether a git key replaces the hooks, signs or mirrors pushes, whatever its value."""
-    return key.lower() in {"core.hookspath", "commit.gpgsign", "tag.gpgsign", "git_config_parameters"} or bool(
-        _MIRROR_KEY.fullmatch(key)
+def _guarded(key: str, *, push: bool) -> bool:
+    """Whether a git key replaces the hooks or signs, whatever its value; or, in a push, mirrors it."""
+    return key.lower() in {"core.hookspath", "commit.gpgsign", "tag.gpgsign", "git_config_parameters"} or (
+        push and bool(_MIRROR_KEY.fullmatch(key))
     )
 
 

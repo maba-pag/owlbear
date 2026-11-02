@@ -26,7 +26,6 @@ _OPENERS = frozenset(
     {"{", "case", "for", "function", "if", "select", "until", "while"}
 )  # words that start a compound command
 _CLOSERS = frozenset({"}", "done", "esac", "fi"})
-_SPECIAL = frozenset("@*#?$!-0123456789")  # $@, $1, ...: parameters without a name
 _BLANK = " \t\n;&|<>()"  # what ends a here-document's delimiter word
 _BODY_ESCAPE = re.compile(r"\\([$`\\\n])")  # escapes an unquoted here-document's body loses
 
@@ -211,7 +210,7 @@ class _Lexer:
             s.expanded = True
             s.split = s.split or not (ansi or s.quote) or nxt == "@"  # "$@" gives each argument
             return end
-        named = bool(nxt) and (nxt in "{_" or nxt.isalnum() or nxt in _SPECIAL)
+        named = bool(nxt) and (nxt in "{_" or nxt.isalnum())
         if named or (nxt and nxt in "'\"" and not s.quote):  # $'...' and $"...": decoded or translated by the shell
             s.expanded = True
             s.split = s.split or (named and not s.quote)

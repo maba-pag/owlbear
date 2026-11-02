@@ -203,7 +203,7 @@ def _check(  # noqa: PLR0913 - the walk calls it back with the text's place; the
 
 def _run_bypass(name: str, run: shell_programs.Run) -> str | None:
     """The refusal of a #! line's program that skips hooks or signing or forces history, as env -S runs it."""
-    if setting := git_reading.env_setting(run.env):
+    if setting := git_reading.env_setting(run.env, run.words):
         return f"`{name}` uses environment setting {setting}, {BYPASS}"
     return f"`{name}` uses {flag}, {BYPASS}" if (flag := git_reading.bypass(run.words)) else None
 
