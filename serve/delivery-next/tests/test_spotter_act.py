@@ -230,6 +230,41 @@ def test_a_send_that_raises_leaves_the_act_failed_with_its_whole_error(tmp_path)
     assert (act.act, act.delivery, act.error) == ("stop-and-resume", "failed", f"ConnectionError: {error}")
 
 
+UNRESUMED = "The Spotter could not stop and resume this step: ConnectionError: refused"
+
+
+@pytest.mark.parametrize(("category", "fails", "said"), [
+    ("irreversible-harm", "abort", f"{spotter_act.HARM.format(note='Deletes the backups.')} {UNRESUMED}"),
+    ("outside-state-changes", "send", UNRESUMED),
+])  # fmt: skip
+def test_a_failed_stop_and_resume_ends_the_step_with_a_question_naming_the_failure(
+    tmp_path, category, fails, said
+) -> None:
+    class Failing(Session):
+        refused = "refused"
+
+        async def send(self, prompt: str, **kw: Any) -> str:
+            self.fails = self.refused if fails == "send" else ""
+            return await super().send(prompt, **kw)
+
+        async def abort(self) -> None:
+            await super().abort()
+            if fails == "abort":
+                raise ConnectionError(self.refused)
+
+    async def main() -> sdk_adapter._Step:
+        st = stepped(tmp_path, Failing(), category, **{category: "stop-and-resume"})
+        st.feed.spotter.look("plan", 1.0, {"kind": "plan", "call": "c-1"})
+        await st.feed.spotter.drain()
+        return st
+
+    st = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    act = act_of(st)
+    assert (act.act, act.delivery, act.error) == ("stop-and-resume", "failed", "ConnectionError: refused")
+    assert (st.run.ending, st.run.detail, st.done) == ("spotter-ask", said, True)
+
+
 class Held(Session):
     """A transport whose *held* call never answers."""
 

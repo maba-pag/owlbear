@@ -5,6 +5,8 @@ with its token (``acts.TOKEN``) and is sent with the Spotter's own agent source,
 
 - ``steer``: the note goes into the running turn (``mode="immediate"``);
 - ``stop-and-resume``: the step marks the abort as its own, aborts the turn, then sends the note, which starts the next;
+  an abort or send that fails ends the step ``spotter-ask``, "The Spotter could not stop and resume this step:
+  <error>", after the harm wording when harm stopped it;
 - ``stop-and-ask`` (and ``ask``, a repeat's escalation): marked, aborted, then the step ends ``spotter-ask`` with the
   owner's question, "The Spotter stopped this step for irreversible harm: <note>" when harm stopped it;
 - at a hand-off the submit waits for (``acts.could_act``), any other note is the submit's answer instead: the hand-off
@@ -44,6 +46,7 @@ SOURCE = AgentMessageSource("owlbear-spotter")
 ASKS = frozenset({"stop-and-ask", "ask"})
 HARM = "The Spotter stopped this step for irreversible harm: {note}"
 STOPPED = "The Spotter stopped this step: {note}"
+UNRESUMED = "The Spotter could not stop and resume this step: {error}"
 NOTE, ABORT = "the Spotter's note", "the Spotter's abort"  # the SDK requests, as a bound or cancellation names them
 
 
@@ -77,7 +80,7 @@ class StepActor:
             waiter.set_result(note)
             await self._confirmed(record, record.call)
         elif act.act == "stop-and-resume":
-            await self.stop_resume(record, note)
+            await self.stop_resume(record, act, note)
         else:
             await self.steer(record, note)
 
@@ -86,10 +89,20 @@ class StepActor:
         sending = self.session.send(note, mode="immediate", source=SOURCE)
         await self._confirmed(record, await self._called(record, sending, NOTE))
 
-    async def stop_resume(self, record: spotter.Record, note: str) -> None:
-        """Abort the turn as the step's own stop, then send the note, which starts the next turn."""
-        await self._abort(record)
-        await self._confirmed(record, await self._called(record, self.session.send(note, source=SOURCE), NOTE))
+    async def stop_resume(self, record: spotter.Record, act: acts.Act, note: str) -> None:
+        """Abort the turn as the step's own stop, then send the note, which starts the next turn.
+
+        An abort or send that fails ends the step with the owner's question naming the failure, so its teardown stops
+        the runtime the Spotter could not stop; the act says what failed.
+        """
+        try:
+            await self._abort(record)
+            sent = await self._called(record, self.session.send(note, source=SOURCE), NOTE)
+        except Exception as exc:
+            failed = UNRESUMED.format(error=f"{type(exc).__name__}: {exc}")
+            self.step.gate.finish("spotter-ask", None, f"{HARM.format(note=act.note)} {failed}" if act.harm else failed)
+            raise
+        await self._confirmed(record, sent)
 
     async def stop_ask(self, record: spotter.Record, act: acts.Act) -> None:
         """Abort the turn as the step's own stop and end the step with the owner's question.
