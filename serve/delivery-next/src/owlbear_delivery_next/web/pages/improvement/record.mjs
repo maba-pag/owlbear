@@ -39,7 +39,8 @@ function acted(r) {
     ${r.conflict ? html`<p class="meta">Decision check: ${checked(r.conflict)}</p>` : nothing}`;
 }
 
-// The decision-conflict check's answer, kept as the lookup's JSON or as text saying why there is none.
+// The decision-conflict check's answer, kept as the lookup's JSON or as text saying why there is none: each decision
+// it returned by id and title, with the picker's note on why it governs.
 function checked(text) {
   let said;
   try {
@@ -50,7 +51,7 @@ function checked(text) {
   if (said?.failed) return `failed: ${said.failed}`;
   const found = said?.decisions ?? [];
   if (!found.length) return said?.note || "no decision governs it";
-  return found.map((d) => [d.id, d.title].filter(Boolean).join(" ")).join("; ");
+  return found.map((d) => [d.id, d.title, d.note && `(${d.note})`].filter(Boolean).join(" ")).join("; ");
 }
 
 // One look: its moment, what it found and why, what it spent, what it did, how it ended and how Retro graded it;

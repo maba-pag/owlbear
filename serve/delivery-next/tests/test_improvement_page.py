@@ -443,7 +443,8 @@ def _acted(pid: str) -> None:
     acts.update(folder, "r-harm", delivery="delivered")
     acts.write(folder, acts.Act(record="r-wait", arm="steered", category="outside-state-changes", act="steer",
                                 delivery="pending", **first))  # fmt: skip
-    acts.update(folder, "r-wait", conflict=json.dumps({"decisions": [{"id": "D-7", "title": "CI stays shared"}]}))
+    checked = {"decisions": [{"id": "D-7", "title": "CI stays shared", "note": "It governs edits to the CI file."}]}
+    acts.update(folder, "r-wait", conflict=json.dumps(checked))
 
 
 @pytest.mark.browser
@@ -472,7 +473,7 @@ def test_each_records_act_the_spotter_test_and_the_chats_not_followed_show(tmp_p
         expect(harm).to_contain_text("Its question to you: A force-push over main.")
         waiting = page.locator("#look-r-wait")
         expect(waiting).to_contain_text("Its act: steer, steered arm, pending")
-        expect(waiting).to_contain_text("Decision check: D-7 CI stays shared")
+        expect(waiting).to_contain_text("Decision check: D-7 CI stays shared (It governs edits to the CI file.)")
         expect(waiting).not_to_contain_text("Its error")
         quiet = page.locator("#look-r-quiet")  # no act: nothing about one
         expect(quiet).to_contain_text("Nothing found")
