@@ -62,6 +62,10 @@ class Stale(CaseError):  # noqa: N818 - says what happened
     """The cases changed since the change was asked for."""
 
 
+class Frozen(CaseError):  # noqa: N818 - says what happened
+    """The change would change the examples a running Spotter test froze."""
+
+
 def place() -> Path:
     """Where the cases are kept; nothing is created."""
     return local_home.root() / "spotter" / "cases"
@@ -310,8 +314,8 @@ def commit(parent: int, edits: Mapping[str, Entry | None], by: str, reason: str,
 
     Raises:
         Stale: The newest version is no longer *parent*.
-        CaseError: The change breaks a rule, or changes the examples while the Spotter's test runs or without its
-            passed run.
+        Frozen: The change changes the examples while the Spotter's test runs.
+        CaseError: The change breaks a rule, or changes the examples without its passed run.
     """
     with locked():
         cur = current()
@@ -322,7 +326,7 @@ def commit(parent: int, edits: Mapping[str, Entry | None], by: str, reason: str,
         if shown(cases) != shown(cur["cases"]) and (test := spotter_test.active()) is not None:
             msg = (f"{spotter_test.name(test)} runs since {test['started_at']}: the Spotter's examples stay as it "
                    f"froze them (cases version {test['frozen']['cases']}) until it ends")  # fmt: skip
-            raise CaseError(msg)
+            raise Frozen(msg)
         if found := problems(cases):
             raise CaseError("; ".join(found))
         if shown(cases) != shown(cur["cases"]) and not passed(run, parent, edits):
