@@ -7,8 +7,6 @@ from owlbear_memory.engine import MemoryEngine, check_slot_efficiency, compute_s
 from owlbear_memory.errors import (
     ConcurrencyError,
     DuplicateEntryError,
-    LifecycleRecoveryError,
-    LifecycleRollbackFailure,
     MemoryBusyError,
     NotFoundError,
     TransitionError,
@@ -31,8 +29,6 @@ __all__ = [
     "AssessmentResult",
     "ConcurrencyError",
     "DuplicateEntryError",
-    "LifecycleRecoveryError",
-    "LifecycleRollbackFailure",
     "MemoryBusyError",
     "MemoryCategory",
     "MemoryEngine",

@@ -92,20 +92,14 @@ def _tool_context(engine: MemoryEngine, memory_dir: Path) -> SimpleNamespace:
     )
 
 
-def _create_entry(
-    engine: MemoryEngine,
-    *,
-    title: str,
-    source_agent: str = "test-agent",
-    scope_agents: list[str] | None = None,
-) -> MemoryEntry:
+def _create_entry(engine: MemoryEngine, *, title: str) -> MemoryEntry:
     return engine.save(
         title=title,
         content="Original content.",
         categories=["domain-knowledge"],
         confidence=0.9,
-        source_agent=source_agent,
-        scope_agents=scope_agents or [],
+        source_agent="test-agent",
+        scope_agents=[],
     )
 
 
@@ -126,8 +120,6 @@ def _create_approved_entry(engine: MemoryEngine, *, title: str) -> MemoryEntry:
         ("curate_memory", "edit"),
         ("delete_memory", "delete"),
         ("approve_memory", "approve"),
-        ("rename_agent_memories", "rename_agent"),
-        ("delete_agent_memories", "delete_agent"),
     ],
 )
 @pytest.mark.asyncio
@@ -144,7 +136,6 @@ async def test_mutation_tools_translate_duplicate_errors_to_tool_errors(
         {"scope_agents": ["test-agent"]},
         expected_updated_at=pending.updated_at,
     )
-    _create_entry(engine, title="Agent reference", source_agent="old-agent", scope_agents=["old-agent"])
     ctx = _tool_context(engine, tmp_path)
     error_paths = tuple(sorted((f"{_DUPLICATE_ID}.md", "duplicate-copy.md")))
     duplicate_error = DuplicateEntryError(_DUPLICATE_ID, error_paths)
@@ -172,12 +163,6 @@ async def test_mutation_tools_translate_duplicate_errors_to_tool_errors(
         ),
         "delete_memory": lambda: tools.delete_memory(ctx, entry_id=pending.id, revision=pending.revision),
         "approve_memory": lambda: tools.approve_memory(ctx, entry_id=curated.id, revision=curated.revision),
-        "rename_agent_memories": lambda: tools.rename_agent_memories(
-            ctx,
-            old_name="old-agent",
-            new_name="new-agent",
-        ),
-        "delete_agent_memories": lambda: tools.delete_agent_memories(ctx, agent="old-agent"),
     }
 
     with pytest.raises(ToolError) as raised:

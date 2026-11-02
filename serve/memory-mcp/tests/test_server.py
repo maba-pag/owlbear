@@ -647,52 +647,6 @@ async def test_live_assessment_capacity_refusal_preserves_entry(
 
 
 @pytest.mark.asyncio
-async def test_live_agent_lifecycle_writes_drop_obsolete_receipts(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """Registered rename and delete tools discard receipts when their scope changes revision."""
-    memory_dir = tmp_path / ".owlbear/memory"
-    entry = _create_entry(memory_dir, title="Lifecycle receipts", state=MemoryState.APPROVED)
-    monkeypatch.chdir(tmp_path)
-
-    async with mcp.Client(memory_mcp) as client:
-        first = await client.call_tool(
-            "assess_memories",
-            {
-                "assessments": [{"entry_id": entry.id, "revision": entry.revision, "bucket": "outstanding"}],
-                "task_id": "before-rename",
-            },
-        )
-        renamed = await client.call_tool(
-            "rename_agent_memories",
-            {"old_name": "test-agent", "new_name": "renamed-agent"},
-        )
-        renamed_entry = MemoryEngine(memory_dir).get_entry(entry.id)
-        second = await client.call_tool(
-            "assess_memories",
-            {
-                "assessments": [{"entry_id": entry.id, "revision": renamed_entry.revision, "bucket": "outstanding"}],
-                "task_id": "after-rename",
-            },
-        )
-        deleted = await client.call_tool("delete_agent_memories", {"agent": "renamed-agent"})
-
-    assert not first.is_error
-    assert not renamed.is_error
-    assert not second.is_error
-    assert not deleted.is_error
-    assert json.loads(_text(first))["results"][0]["success"] is True
-    assert renamed_entry.scope_agents == ["renamed-agent"]
-    assert renamed_entry.assessment_receipts == []
-    assert json.loads(_text(second))["results"][0]["success"] is True
-    deleted_entry = MemoryEngine(memory_dir).get_entry(entry.id)
-    assert deleted_entry.state == MemoryState.DELETED
-    assert deleted_entry.scope_agents == []
-    assert deleted_entry.assessment_receipts == []
-
-
-@pytest.mark.asyncio
 async def test_live_server_accepts_optional_recall_and_open_provenance(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

@@ -14,7 +14,6 @@ from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_memory import (
     ConcurrencyError,
     DuplicateEntryError,
-    LifecycleRecoveryError,
     MemoryBusyError,
     MemoryCategory,
     MemoryEngine,
@@ -47,13 +46,11 @@ __all__ = [
     "commit_memory_batch",
     "curate_memory",
     "curation_threshold",
-    "delete_agent_memories",
     "delete_memory",
     "list_memories",
     "make_global",
     "read_memory",
     "recall_memory",
-    "rename_agent_memories",
     "save_memory",
 ]
 
@@ -697,38 +694,6 @@ async def delete_memory(ctx: Context, *, entry_id: str, revision: str, folder: s
     else:
         hint = "Soft-delete applied: entry retained for audit history."
     return _with_hint(deleted, hint)
-
-
-async def rename_agent_memories(ctx: Context, *, old_name: str, new_name: str) -> dict[str, int]:
-    """Rewrite all memory references after an agent definition is renamed."""
-    if not old_name.strip() or not new_name.strip() or "*" in {old_name, new_name}:
-        msg = "old_name and new_name must be distinct non-empty non-wildcard agent names"
-        raise ToolError(msg)
-    engine = _engine_from_ctx(ctx)
-    try:
-        result = engine.rename_agent(old_name, new_name)
-    except (ConcurrencyError, DuplicateEntryError, LifecycleRecoveryError, ValidationError) as exc:
-        raise ToolError(str(exc)) from exc
-    if result["entries_updated"] == 0:
-        msg = f"No memory references found for agent {old_name!r}."
-        raise ToolError(msg)
-    return dict(result)
-
-
-async def delete_agent_memories(ctx: Context, *, agent: str) -> dict[str, int]:
-    """Remove a deleted agent from scopes while preserving source provenance."""
-    if not agent.strip() or agent == "*":
-        msg = "agent must be a non-empty non-wildcard name"
-        raise ToolError(msg)
-    engine = _engine_from_ctx(ctx)
-    try:
-        result = engine.delete_agent(agent)
-    except (ConcurrencyError, DuplicateEntryError, LifecycleRecoveryError, ValidationError) as exc:
-        raise ToolError(str(exc)) from exc
-    if result["entries_deleted"] == 0 and result["scopes_updated"] == 0:
-        msg = f"No memory references found for agent {agent!r}."
-        raise ToolError(msg)
-    return dict(result)
 
 
 async def _approve_entry(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]:

@@ -70,8 +70,6 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | `delete_memory` | Requires `revision`; hard-deletes pending entries and soft-deletes curated/approved/contested/disputed/stale entries |
 | `make_global` | Curator: moves a curated or approved entry into Global memory, records its project as `origin`, and commits both paths |
 | `curation_threshold` | Curator: the confidence threshold in percent from the shared repository's global settings, else 95 |
-| `rename_agent_memories` | Rewrite every matching `source_agent` and `scope_agents` reference after an agent rename |
-| `delete_agent_memories` | Preserve historical provenance and remove the retired role from scopes; hard-delete pending orphans and tombstone reviewed orphans for the normal commit/purge flow |
 | `approve_memory` | Requires `revision` to promote `curated→approved`; user-initiated only (not exposed to any agent) |
 | `assess_memories` | Process revision-bound batch assessments, applying counters or the factually-wrong confirmation cycle; each result includes `success`, `already_applied`, and `recorded_bucket` (plus `state` and `challenges` for a challenged entry), or `success=False` with `error`. Bound to the shared repository, it commits the receipts it wrote to entry files committed before the batch, locally and never pushed; Delivery's next publication pushes them |
 | `commit_memory_batch` | Commit non-pending memory entries for one explicit `curation` or `review` session; return the commit SHA or a no-op result, and any deferred duplicate deletions |
@@ -124,7 +122,7 @@ remove receipts for the previous revision.
 | `unremarkable_count` | int | Default `0`; incremented by assessment tool when entry was unremarkable |
 | `didnt_use_count` | int | Default `0`; incremented by assessment tool when entry was skipped |
 | `score` | float | Default `0.0`; initialized to `confidence` on creation |
-| `source_agent` | str | Non-blank provenance label required at creation; immutable historical provenance except through an explicit lifecycle rename |
+| `source_agent` | str | Non-blank provenance label required at creation; immutable historical provenance |
 | `scope_agents` | list[str] | Curator-assigned relevance scope; new pending entries default to `[]`; supplied members must be nonblank strings; `*` means all agents |
 | `created_at` | str | UTC timestamp |
 | `updated_at` | str | UTC timestamp |
@@ -144,11 +142,8 @@ checked, also when the call leaves the scope as it is; an edit of a curated or a
 it adds. Provenance never vouches, and neither does the entry itself or a pending, contested, disputed, stale or
 deleted entry; `*` always passes. An agent outside the known list therefore needs such a reviewed entry first.
 
-Rename memory references with `rename_agent_memories`. When deleting an agent,
-`delete_agent_memories` preserves immutable source provenance, removes the retired identity from
-relevance scopes. Pending entries left without an audience are hard-deleted; reviewed entries become
-`deleted` tombstones that must be committed before they are purged. No aliases or retired role names
-remain in active relevance scope.
+Renaming or deleting an agent edits only its agent file; no tool retags its lessons. Memory keeps the old name in
+`source_agent` and `scope_agents`, so a lesson scoped to that name no longer reaches a renamed agent.
 
 ## Configuration
 

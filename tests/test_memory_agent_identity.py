@@ -1,21 +1,19 @@
-"""Behavioral tests for memory-derived agent identity and lifecycle validation."""
+"""Behavioral tests for memory-derived agent identity."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
-from owlbear_memory import LifecycleRecoveryError, LifecycleRollbackFailure, MemoryCategory, MemoryEngine, MemoryState
+from owlbear_memory import MemoryCategory, MemoryEngine
 
 from owlbear_memory_mcp.tools import (
     _recognized_agent_names,
     curate_memory,
-    delete_agent_memories,
     read_memory,
-    rename_agent_memories,
     save_memory,
 )
 
@@ -81,91 +79,6 @@ async def test_save_accepts_nonblank_provenance_and_defaults_to_unscoped(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_rename_agent_rewrites_sources_and_scopes(tmp_path: Path) -> None:
-    engine = MemoryEngine(tmp_path / ".owlbear/memory")
-    _save(engine, source="verifier", scope=["verifier", "builder"])
-    _save(engine, source="builder", scope=["verifier"])
-
-    result = await rename_agent_memories(
-        _make_ctx(engine),
-        old_name="verifier",
-        new_name="build-reviewer",
-    )
-
-    assert result == {"entries_updated": 2, "sources_updated": 1, "scopes_updated": 2}
-    entries = engine.get_entries()
-    assert {entry.source_agent for entry in entries} == {"build-reviewer", "builder"}
-    assert all("verifier" not in entry.scope_agents for entry in entries)
-
-
-@pytest.mark.asyncio
-async def test_delete_agent_preserves_sourced_memories_with_surviving_audiences(tmp_path: Path) -> None:
-    engine = MemoryEngine(tmp_path / ".owlbear/memory")
-    sourced_id = _save(engine, source="verifier", scope=["builder"])
-    universal_id = _save(engine, source="verifier", scope=["*"])
-    orphaned_id = _save(engine, source="builder", scope=["verifier"])
-    retained_id = _save(engine, source="builder", scope=["builder", "verifier"])
-
-    result = await delete_agent_memories(
-        _make_ctx(engine),
-        agent="verifier",
-    )
-
-    assert result == {"entries_deleted": 1, "scopes_updated": 1}
-    entries = {entry.id: entry for entry in engine.get_entries()}
-    assert entries[sourced_id].source_agent == "verifier"
-    assert entries[universal_id].scope_agents == ["*"]
-    assert orphaned_id not in entries
-    assert entries[retained_id].scope_agents == ["builder"]
-
-
-@pytest.mark.parametrize("state", [MemoryState.CURATED, MemoryState.APPROVED, MemoryState.CONTESTED])
-def test_delete_agent_soft_deletes_reviewed_entries_left_without_audience(
-    tmp_path: Path,
-    state: MemoryState,
-) -> None:
-    memory_dir = tmp_path / ".owlbear/memory"
-    engine = MemoryEngine(memory_dir)
-    reviewed_id = _save(engine, source="builder", scope=["retired"])
-    reviewed = engine.get_entry(reviewed_id)
-    reviewed = engine.edit(reviewed_id, {"scope_agents": ["retired"]}, reviewed.updated_at)
-    if state == MemoryState.APPROVED:
-        reviewed = engine.approve(reviewed_id, reviewed.updated_at)
-    elif state == MemoryState.CONTESTED:
-        reviewed = engine.record_factually_wrong(
-            reviewed_id,
-            "task-1",
-            expected_revision=reviewed.revision,
-        ).entry
-
-    pending_id = _save(engine, source="builder", scope=["retired"])
-    tombstone_id = _save(engine, source="builder", scope=["retired"])
-    tombstone = engine.get_entry(tombstone_id)
-    tombstone = engine.edit(tombstone_id, {"scope_agents": ["retired"]}, tombstone.updated_at)
-    tombstone = engine.delete(tombstone_id, tombstone.updated_at)
-    tombstone_updated_at = tombstone.updated_at
-    reviewed_path = memory_dir / f"{reviewed_id}.md"
-    pending_path = memory_dir / f"{pending_id}.md"
-    tombstone_path = memory_dir / f"{tombstone_id}.md"
-
-    with patch.object(engine, "_now_iso", return_value="2000-01-01T00:00:00+00:00"):
-        result = engine.delete_agent("retired")
-
-    assert result == {"entries_deleted": 2, "scopes_updated": 1}
-    assert reviewed_path.exists()
-    assert not pending_path.exists()
-    assert tombstone_path.exists()
-    reviewed_after = engine.get_entry(reviewed_id)
-    assert reviewed_after.state == MemoryState.DELETED
-    assert reviewed_after.scope_agents == []
-    assert pending_id not in {entry.id for entry in engine.get_entries()}
-    tombstone_after = engine.get_entry(tombstone_id)
-    assert tombstone_after.state == MemoryState.DELETED
-    assert tombstone_after.scope_agents == []
-    assert tombstone_after.updated_at != tombstone_updated_at
-
-
-@pytest.mark.asyncio
 async def test_scope_syntax_accepts_mixed_values_and_rejects_blank_members(tmp_path: Path) -> None:
     engine = MemoryEngine(tmp_path / ".owlbear/memory")
     entry_id = _save(engine, source="writer", scope=[])
@@ -184,42 +97,3 @@ async def test_scope_syntax_accepts_mixed_values_and_rejects_blank_members(tmp_p
     revision = (await read_memory(ctx, entry_id=entry_id))["revision"]
     with pytest.raises(ToolError, match="non-empty strings"):
         await curate_memory(ctx, entry_id=entry_id, revision=revision, scope_agents=[""])
-
-
-@pytest.mark.asyncio
-async def test_rename_and_delete_reject_wildcard_names(tmp_path: Path) -> None:
-    engine = MemoryEngine(tmp_path / ".owlbear/memory")
-    ctx = _make_ctx(engine)
-
-    with pytest.raises(ToolError, match="non-wildcard"):
-        await rename_agent_memories(ctx, old_name="*", new_name="builder")
-    with pytest.raises(ToolError, match="non-wildcard"):
-        await delete_agent_memories(ctx, agent="*")
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("operation", ["rename_agent", "delete_agent"])
-async def test_lifecycle_recovery_diagnostics_are_exposed_as_tool_errors(
-    tmp_path: Path,
-    operation: str,
-) -> None:
-    engine = MemoryEngine(tmp_path / ".owlbear/memory")
-    rollback_error = OSError("rollback write failed")
-    diagnostic = LifecycleRecoveryError(
-        OSError("initial write failed"),
-        (LifecycleRollbackFailure("entry-id", tmp_path / "entry.md", rollback_error),),
-        None,
-        "partial",
-    )
-    ctx = _make_ctx(engine)
-    operation_call = (
-        rename_agent_memories(ctx, old_name="verifier", new_name="builder")
-        if operation == "rename_agent"
-        else delete_agent_memories(ctx, agent="verifier")
-    )
-
-    with patch.object(engine, operation, side_effect=diagnostic), pytest.raises(ToolError) as exc_info:
-        await operation_call
-
-    assert str(exc_info.value) == str(diagnostic)
-    assert str(tmp_path) not in str(exc_info.value)

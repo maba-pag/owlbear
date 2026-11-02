@@ -16,8 +16,6 @@ from owlbear_memory import storage
 from owlbear_memory.errors import (
     ConcurrencyError,
     DuplicateEntryError,
-    LifecycleRecoveryError,
-    LifecycleRollbackFailure,
     NotFoundError,
     TransitionError,
     ValidationError,
@@ -295,21 +293,6 @@ class EditPayload(TypedDict, total=False):
     categories: list[MemoryCategory]
     confidence: float
     scope_agents: list[str]
-
-
-class AgentRenameResult(TypedDict):
-    """Counts from rewriting one agent identity."""
-
-    entries_updated: int
-    sources_updated: int
-    scopes_updated: int
-
-
-class AgentDeleteResult(TypedDict):
-    """Counts from deleting one agent's memory references."""
-
-    entries_deleted: int
-    scopes_updated: int
 
 
 class _StatSignatureCache:
@@ -626,97 +609,6 @@ class MemoryEngine:
             )
             return self._write_updated_entry(updated)
 
-    def rename_agent(self, old_name: str, new_name: str) -> AgentRenameResult:
-        """Rewrite an agent identity in provenance and relevance scopes."""
-        if not old_name.strip() or not new_name.strip() or old_name == new_name:
-            msg = "old_name and new_name must be distinct non-empty agent names"
-            raise ValidationError(msg)
-
-        with self._writer():
-            originals = self.get_entries()
-            updated_entries: list[MemoryEntry] = []
-            sources_updated = 0
-            scopes_updated = 0
-            for entry in originals:
-                source_agent = new_name if entry.source_agent == old_name else entry.source_agent
-                scope_agents = list(
-                    dict.fromkeys(new_name if name == old_name else name for name in entry.scope_agents)
-                )
-                if source_agent == entry.source_agent and scope_agents == entry.scope_agents:
-                    continue
-                sources_updated += source_agent != entry.source_agent
-                scopes_updated += scope_agents != entry.scope_agents
-                updated_entries.append(
-                    MemoryEntry.model_validate(
-                        {
-                            **entry.model_dump(),
-                            "source_agent": source_agent,
-                            "scope_agents": scope_agents,
-                            "updated_at": self._now_iso(entry.updated_at),
-                        }
-                    )
-                )
-
-            self._write_agent_lifecycle_changes(originals, updated_entries, [])
-            return AgentRenameResult(
-                entries_updated=len(updated_entries),
-                sources_updated=sources_updated,
-                scopes_updated=scopes_updated,
-            )
-
-    def delete_agent(self, agent: str) -> AgentDeleteResult:
-        """Remove an agent from scopes, preserving reviewed orphans as tombstones."""
-        if not agent.strip():
-            msg = "agent must not be empty"
-            raise ValidationError(msg)
-
-        with self._writer():
-            originals = self.get_entries()
-            updated_entries: list[MemoryEntry] = []
-            deleted_entries: list[MemoryEntry] = []
-            soft_deleted = 0
-            scopes_updated = 0
-            for entry in originals:
-                if agent not in entry.scope_agents:
-                    continue
-                scope_agents = [name for name in entry.scope_agents if name != agent]
-                if not scope_agents:
-                    if entry.state == MemoryState.PENDING:
-                        deleted_entries.append(entry)
-                        continue
-
-                    if entry.state == MemoryState.DELETED:
-                        scopes_updated += 1
-                    else:
-                        soft_deleted += 1
-                    updated_entries.append(
-                        MemoryEntry.model_validate(
-                            {
-                                **entry.model_dump(),
-                                "state": MemoryState.DELETED,
-                                "scope_agents": scope_agents,
-                                "updated_at": self._now_iso(entry.updated_at),
-                            }
-                        )
-                    )
-                    continue
-                updated_entries.append(
-                    MemoryEntry.model_validate(
-                        {
-                            **entry.model_dump(),
-                            "scope_agents": scope_agents,
-                            "updated_at": self._now_iso(entry.updated_at),
-                        }
-                    )
-                )
-                scopes_updated += 1
-
-            self._write_agent_lifecycle_changes(originals, updated_entries, deleted_entries)
-            return AgentDeleteResult(
-                entries_deleted=len(deleted_entries) + soft_deleted,
-                scopes_updated=scopes_updated,
-            )
-
     def record_factually_wrong(
         self,
         entry_id: str,
@@ -994,119 +886,6 @@ class MemoryEngine:
         self._id_to_path[entry.id] = path
         self._upsert_cache(entry)
         return entry
-
-    def _write_agent_lifecycle_changes(
-        self,
-        originals: list[MemoryEntry],
-        updated_entries: list[MemoryEntry],
-        deleted_entries: list[MemoryEntry],
-    ) -> None:
-        """Apply a multi-entry lifecycle change and report incomplete recovery."""
-        original_paths = {entry.id: self._id_to_path[entry.id] for entry in originals}
-        affected_ids = {entry.id for entry in (*updated_entries, *deleted_entries)}
-        affected_entries = [entry for entry in originals if entry.id in affected_ids]
-        prepared_entries = [self._prepare_entry_for_write(entry) for entry in updated_entries]
-        try:
-            for entry in prepared_entries:
-                storage.write_entry(original_paths[entry.id], entry, memory_dir=self._memory_dir)
-            for entry in deleted_entries:
-                storage.delete_entry(original_paths[entry.id], memory_dir=self._memory_dir)
-        except Exception as operation_error:
-            rollback_errors: list[LifecycleRollbackFailure] = []
-            for entry in affected_entries:
-                try:
-                    storage.write_entry(original_paths[entry.id], entry, memory_dir=self._memory_dir)
-                except Exception as rollback_error:  # noqa: BLE001 - preserve every recovery failure.
-                    rollback_errors.append(
-                        LifecycleRollbackFailure(
-                            entry_id=entry.id,
-                            path=original_paths[entry.id],
-                            error=rollback_error,
-                        )
-                    )
-
-            cache_error: Exception | None = None
-            recovery_status = "uncertain"
-            try:
-                reloaded_entries = self._load()
-                recovery_status = self._lifecycle_recovery_status(
-                    affected_entries,
-                    reloaded_entries,
-                    original_paths,
-                )
-            except Exception as reload_error:  # noqa: BLE001 - cache state is part of recovery diagnostics.
-                cache_error = reload_error
-                self._entries = []
-                self._id_to_path = {}
-                self._cache.invalidate()
-
-            if rollback_errors or cache_error is not None or recovery_status != "complete":
-                raise LifecycleRecoveryError(
-                    operation_error,
-                    tuple(rollback_errors),
-                    cache_error,
-                    recovery_status,
-                ) from operation_error
-            raise LifecycleRecoveryError(
-                operation_error,
-                (),
-                None,
-                recovery_status,
-            ) from operation_error
-        try:
-            self._entries = self._load()
-        except Exception:
-            self._cache.invalidate()
-            raise
-
-    @staticmethod
-    def _lifecycle_recovery_status(
-        originals: list[MemoryEntry],
-        reloaded_entries: list[MemoryEntry],
-        original_paths: dict[str, Path],
-    ) -> str:
-        """Classify recovery from the reloaded entries and strict path verification."""
-        try:
-            reloaded_by_id = {entry.id: entry for entry in reloaded_entries}
-            statuses = [
-                MemoryEngine._lifecycle_recovery_entry_status(
-                    original,
-                    reloaded_by_id.get(original.id),
-                    original_paths[original.id],
-                )
-                for original in originals
-            ]
-            if "uncertain" in statuses:
-                return "uncertain"
-            if "partial" in statuses:
-                return "partial"
-        except Exception:  # noqa: BLE001 - failed verification cannot establish disk state.
-            return "uncertain"
-        return "complete"
-
-    @staticmethod
-    def _lifecycle_recovery_entry_status(
-        original: MemoryEntry,
-        reloaded: MemoryEntry | None,
-        path: Path,
-    ) -> str:
-        """Verify one affected entry and classify its recovered disk state."""
-        try:
-            verified = storage.read_entry_strict(path)
-        except Exception:  # noqa: BLE001 - failed verification cannot establish disk state.
-            try:
-                if path.is_symlink():
-                    return "uncertain"
-                path.stat()
-            except FileNotFoundError:
-                return "partial"
-            except OSError:
-                return "uncertain"
-            return "uncertain"
-
-        if reloaded is None or reloaded != original or verified != original:
-            return "partial"
-        return "complete"
 
     def _upsert_cache(self, entry: MemoryEntry) -> None:
         for index, current in enumerate(self._entries):

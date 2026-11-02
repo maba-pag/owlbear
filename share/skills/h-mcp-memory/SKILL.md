@@ -42,8 +42,6 @@ task-owning parent.
 | `commit_memory_batch` | Commit reviewed non-pending entries for one `curation` or `review` session |
 | `make_global` | Move a curated or approved entry into Global memory, record its project as `origin` (TD-292), and commit both paths |
 | `curation_threshold` | The confidence in percent at or above which the curator acts alone (TD-400); `null` with an `error` when the global settings hold none, and then it acts on nothing alone |
-| `rename_agent_memories` | Rewrite provenance and scopes after an agent rename |
-| `delete_agent_memories` | Remove a retired agent from scopes; hard-delete pending orphans, tombstone reviewed ones |
 
 ### Curator folders
 
@@ -319,21 +317,9 @@ approved`, refuses any other state with a `ToolError`, and sets `approved_at`.
 
 ### Agent lifecycle
 
-Agent files and memory references change together; no compatibility aliases are kept. `*` is anonymous provenance;
-`curate_memory` checks a named scope as Lifecycle says.
-
-- After renaming an agent definition, call `rename_agent_memories(old_name="old", new_name="new")`. It rewrites
-  provenance and every matching scope in the server's own folder only; Global memory and other project folders keep
-  the old name. The server doesn't check the new name, so first check that an agent file with that name exists:
-  renamed scopes on curated or approved entries then vouch for it in `curate_memory` (see Lifecycle), a misspelling
-  included.
-- When deleting an agent, call `delete_agent_memories(agent="name")`. Historical `source_agent` stays. The retired
-  name leaves every scope; pending entries left without an audience are hard-deleted, reviewed ones become
-  `deleted` tombstones that must be committed before purge.
-- Both return mutation counts and fail when no matching references exist. If a multi-file write fails they try to
-  restore the original entries, but recovery can be `complete`, `partial`, or `uncertain`: read the
-  `LifecycleRecoveryError` diagnostics. A process interruption during the operation or its recovery leaves the state
-  uncertain and needs a health check before retrying.
+Renaming or deleting an agent edits only its agent file; no tool retags its lessons. Memory keeps the old name in
+`source_agent` and `scope_agents`, so a lesson scoped to that name no longer reaches a renamed agent. `*` is anonymous
+provenance; `curate_memory` checks a named scope as Lifecycle says.
 
 ## Categories
 

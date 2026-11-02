@@ -84,20 +84,14 @@ def _tool_context(engine: MemoryEngine, memory_dir: Path) -> SimpleNamespace:
     )
 
 
-def _create_entry(
-    engine: MemoryEngine,
-    *,
-    title: str,
-    source_agent: str = "test-agent",
-    scope_agents: list[str] | None = None,
-) -> MemoryEntry:
+def _create_entry(engine: MemoryEngine, *, title: str) -> MemoryEntry:
     return engine.save(
         title=title,
         content="Original content.",
         categories=["domain-knowledge"],
         confidence=0.9,
-        source_agent=source_agent,
-        scope_agents=scope_agents or [],
+        source_agent="test-agent",
+        scope_agents=[],
     )
 
 
@@ -128,12 +122,6 @@ async def test_mutation_tools_translate_busy_errors_from_another_process(tmp_pat
     curate_entry = _create_entry(engine, title="Curate entry")
     delete_entry = _create_entry(engine, title="Delete entry")
     approve_entry = _create_approved_entry(engine, title="Approve entry")
-    _create_entry(
-        engine,
-        title="Agent reference",
-        source_agent="old-agent",
-        scope_agents=["old-agent"],
-    )
     before = _directory_snapshot(tmp_path)
     holder, release = _start_lock_holder(process_context, tmp_path)
     expected_message = _busy_message(tmp_path)
@@ -154,8 +142,6 @@ async def test_mutation_tools_translate_busy_errors_from_another_process(tmp_pat
             ),
             lambda: tools.delete_memory(ctx, entry_id=delete_entry.id, revision=delete_entry.revision),
             lambda: tools.approve_memory(ctx, entry_id=approve_entry.id, revision=approve_entry.revision),
-            lambda: tools.rename_agent_memories(ctx, old_name="old-agent", new_name="new-agent"),
-            lambda: tools.delete_agent_memories(ctx, agent="old-agent"),
         )
         for operation in operations:
             with pytest.raises(ToolError) as raised:
