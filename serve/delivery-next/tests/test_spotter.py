@@ -1360,7 +1360,7 @@ class Transport:
         self.calls.append("abort")
 
 
-def handing_off(tmp_path: Path, spot: spotter.Spotter) -> sdk_adapter._Step:
+def handing_off(tmp_path: Path, spot: spotter.Spotter, transport: Transport | None = None) -> sdk_adapter._Step:
     """A real step and gate whose Spotter acts through its ``StepActor``, as the adapter binds it."""
     from owlbear_delivery_next.runtimes import spotter_act  # noqa: PLC0415 - #717's actuator, bound as the adapter does
 
@@ -1370,7 +1370,7 @@ def handing_off(tmp_path: Path, spot: spotter.Spotter) -> sdk_adapter._Step:
     )  # fmt: skip
     st = sdk_adapter._Step(cfg, asyncio.get_running_loop())  # noqa: SLF001
     st.feed = SimpleNamespace(spotter=spot, watching=SimpleNamespace(slug="c1"), seen=lambda _k, ev: spot.seen(ev))
-    spotter_act.bind(st, Transport())
+    spotter_act.bind(st, transport or Transport())
     return st
 
 
@@ -1445,6 +1445,36 @@ def test_a_hand_off_waits_for_a_look_that_could_stop_to_ask_and_the_step_ends_wi
     assert result.result_type != "success"
     assert st.run.ending == "spotter-ask"
     assert st.run.detail == "The Spotter stopped this step: About course-and-constraints."
+
+
+def test_a_stop_to_ask_at_a_hand_off_whose_abort_outlasts_the_submits_wait_still_ends_the_step_with_its_question(
+    tmp_path, monkeypatch
+) -> None:
+    from owlbear_delivery_next.runtimes import spotter_act, step_tools  # noqa: PLC0415 - #717's actuator and submit
+
+    monkeypatch.setattr(step_tools, "WAIT", 0.1)
+    monkeypatch.setattr(spotter_act, "CALL", 0.5)  # the abort answers only after the submit stopped waiting
+    asking = dict.fromkeys(CATEGORIES, "record") | {"course-and-constraints": "stop-and-ask"}
+
+    class Held(Transport):
+        async def abort(self) -> None:
+            await super().abort()
+            await asyncio.Event().wait()
+
+    async def main() -> tuple[sdk_adapter._Step, Any]:
+        spot = spotter.Spotter(ctx(actions=asking, arm="silent", cap=2), lambda: "s1",
+                               answers([finding("course-and-constraints")]))  # fmt: skip
+        st = handing_off(tmp_path, spot, Held())
+        result = await submitted(st, "call-1")
+        await spot.drain()
+        return st, result
+
+    st, result = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    assert (result.result_type, st.run.ending, st.done) == ("rejected", "spotter-ask", True)
+    assert st.run.detail == "The Spotter stopped this step: About course-and-constraints."
+    [act] = acts.acts(spotter.root()).values()
+    assert (act.act, act.delivery) == ("stop-and-ask", "failed")
 
 
 def test_a_hand_off_whose_look_times_out_is_accepted_and_its_act_says_why(tmp_path, monkeypatch) -> None:

@@ -7,8 +7,8 @@ with its token (``acts.TOKEN``) and is sent with the Spotter's own agent source,
 - ``stop-and-resume``: the step marks the abort as its own, aborts the turn, then sends the note, which starts the next;
   an abort or send that fails ends the step ``spotter-ask``, "The Spotter could not stop and resume this step:
   <error>", after the harm wording when harm stopped it;
-- ``stop-and-ask`` (and ``ask``, a repeat's escalation): marked, aborted, then the step ends ``spotter-ask`` with the
-  owner's question, "The Spotter stopped this step for irreversible harm: <note>" when harm stopped it;
+- ``stop-and-ask`` (and ``ask``, a repeat's escalation): the step ends ``spotter-ask`` with the owner's question, "The
+  Spotter stopped this step for irreversible harm: <note>" when harm stopped it, then its turn is marked and aborted;
 - at a hand-off the submit waits for (``acts.could_act``), any other note is the submit's answer instead: the hand-off
   is refused with it and the agent goes on. A hand-off the submit no longer waits for was answered already: its note
   is ``expired``.
@@ -18,8 +18,9 @@ An act's dispatch is no delivery: a note is ``delivered`` once the session's own
 ``BOUND`` seconds. A stop to ask is delivered when it ends the step; one that comes after the step ended is ``expired``.
 What raises goes to the Spotter, which keeps it on the act as ``failed``. Each SDK request (``send``, ``abort``) is
 bounded as the step's own (``sdk_teardown.CALL``) and never retried: one that outlasts the bound raises too. A stop to
-ask whose abort failed still ends the step, so the step's teardown stops the runtime. An act cancelled during a request
-is ``failed`` with "cancelled: <the request>", and one cancelled while it waits for its confirmation ``unconfirmed``.
+ask has ended the step before its abort, so the step's teardown stops the runtime if the abort fails. An act cancelled
+during a request is ``failed`` with "cancelled: <the request>", and one cancelled while it waits for its confirmation
+``unconfirmed``.
 """
 
 from __future__ import annotations
@@ -105,17 +106,13 @@ class StepActor:
         await self._confirmed(record, sent)
 
     async def stop_ask(self, record: spotter.Record, act: acts.Act) -> None:
-        """Abort the turn as the step's own stop and end the step with the owner's question.
+        """End the step with the owner's question, then abort the turn as the step's own stop.
 
-        An abort that fails still ends the step, so its teardown stops the runtime; the act says the abort failed.
+        The step ends first, so no submit accepted while the abort is pending can take its place, and an abort that
+        fails leaves the step's teardown to stop the runtime; the act says the abort failed.
         """
-        question = (HARM if act.harm else STOPPED).format(note=act.note)
-        try:
-            await self._abort(record)
-        except Exception:
-            self.step.gate.finish("spotter-ask", None, question)
-            raise
-        was = self.step.gate.finish("spotter-ask", None, question)
+        was = self.step.gate.finish("spotter-ask", None, (HARM if act.harm else STOPPED).format(note=act.note))
+        await self._abort(record)
         await self._update(record, **({"delivery": "expired", "error": "the step had ended"} if was else
                                       {"delivery": "delivered"}))  # fmt: skip
 
