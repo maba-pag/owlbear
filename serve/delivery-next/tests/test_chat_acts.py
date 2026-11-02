@@ -270,6 +270,19 @@ def test_a_note_whose_turn_was_superseded_or_ended_expires_unsent(tmp_path) -> N
     assert (host.actions, act.delivery, act.error) == ([], "expired", "the turn had ended before the note was sent")
 
 
+def test_a_discretionary_stop_and_resume_whose_turn_ended_expires_and_never_starts_a_turn(tmp_path) -> None:
+    async def main() -> tuple[Host, acts.Act]:
+        host = Host(Clock(), active="")  # the chat's turn ended before the slow look's act
+        actor = chat(tmp_path, host, category="outside-state-changes")
+        *_, sending = await acted(actor, "plan", "outside-state-changes")
+        await asyncio.wait_for(sending, 1)
+        return host, act_of(actor)
+
+    host, act = asyncio.run(main())
+    assert (host.actions, act.act, act.delivery) == ([], "stop-and-resume", "expired")
+    assert act.error == "the turn had ended before the note was sent"
+
+
 def test_an_expired_note_does_not_count_toward_the_cap(tmp_path) -> None:
     async def main() -> chat_acts.ChatActor:
         actor = chat(tmp_path, Host(Clock(), active=""))  # the turn ended before the note went

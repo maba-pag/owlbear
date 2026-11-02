@@ -9,7 +9,8 @@ Spotter acts through a ``ChatActor``:
   another form of its URI);
 - ``steer``: a ``steering`` pending message, which the host injects into the running turn;
 - ``stop-and-resume``: the turn running at that moment is cancelled (a steer the host took shows as a new turn, so
-  never the turn the finding saw) and, once the host no longer runs it, the note is ``queued``: it starts the next;
+  never the turn the finding saw) and, once the host no longer runs it, the note is ``queued``: it starts the next; a
+  discretionary one whose turn had already ended expires, as an idle steer does, so no look restarts a finished chat;
 - ``stop-and-ask`` (and ``ask``, a repeat's escalation): that turn is cancelled; the act line carries the question
   for the Improvement page;
 - at a hand-off the turn has ended, so any other note is ``queued``.
@@ -204,7 +205,7 @@ class ChatActor:
         elif record.look == "hand-off":
             outcome = await self._host(self._send, note, "queued")
         elif act.act == "stop-and-resume":
-            outcome = await self._host(self._stop, note)
+            outcome = await self._host(functools.partial(self._stop, idle=not discretionary), note)
         else:
             outcome = await self._host(functools.partial(self._send, idle=not discretionary), note, "steering")
         if isinstance(outcome, dict):
@@ -254,12 +255,17 @@ class ChatActor:
         conn.dispatch(self.chat, {"type": "chat/pendingMessageSet", "kind": kind, "id": mid, "message": message})
         return kind, mid
 
-    def _stop(self, conn: Transport, note: str = "") -> tuple[str, str] | dict[str, str]:
-        """Cancel the turn running now; once the host no longer runs it, queue *note* if there is one."""
+    def _stop(self, conn: Transport, note: str = "", *, idle: bool = False) -> tuple[str, str] | dict[str, str]:
+        """Cancel the turn running now; once the host no longer runs it, queue *note* if there is one.
+
+        With no turn running, *note* is queued only when *idle* allows it (harm's); else it expires, as a steer does.
+        """
         turn = str((self._state(conn).get("activeTurn") or {}).get("id") or "")
         if not turn:
-            if note:
+            if note and idle:
                 return self._send(conn, note, "queued")
+            if note:
+                return {"delivery": "expired", "error": "the turn had ended before the note was sent"}
             return {"delivery": "expired", "error": "no turn was running to stop"}
         conn.dispatch(self.chat, {"type": "chat/turnCancelled", "turnId": turn, "duration": 0})
         deadline = self.clock() + ACK
