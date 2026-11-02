@@ -199,6 +199,8 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("export BASH_ENV=/w/start.sh; env -u BASH_ENV git submodule foreach 'bash -c \"git status\"'", None),
         ("git submodule foreach bash -c -- 'git commit --no-verify -m x'", "variant"),  # its -- is bash's
         ("git submodule foreach git commit -q -n -m x", "variant"),
+        ('FLAG=-n; git submodule foreach git commit "$FLAG" -m x', "doubtful"),  # git hands it -n
+        ("git submodule foreach -- 'git push --force'", None),  # git refuses foreach --, running nothing
         ("git bisect run 'git commit -n'", None),  # a documented limit
     ],
     10: [  # hook tools' switches

@@ -368,8 +368,16 @@ def scripts(words: Sequence[str]) -> list[tuple[str, bool]]:
     given = arguments[1:]
     while given[:1] in (["-q"], ["--quiet"], ["--recursive"]):  # its only options; its command's are its own
         given.pop(0)
-    # git runs sh -c '<first> "$@"' <the rest>
-    return [(" ".join([given[0], shlex.join(given[1:])]).strip(), False)] if given else []
+    # git runs sh -c '<first> "$@"' <the rest>; a word the shell built stays an expansion there
+    rest = [_forwarded(w) for w in given[1:]]
+    return [(" ".join([given[0], *rest]).strip(), False)] if given else []
+
+
+def _forwarded(word: str) -> str:
+    """*word* as shell text that gives the same word, or an expansion if the calling shell built it."""
+    if not getattr(word, "expanded", False):
+        return shlex.quote(word)
+    return f'"{word}"' if not set(word) & {'"', "\\", "`"} else '"$FORWARDED"'
 
 
 def _rebase_exec(arguments: Sequence[str]) -> list[str]:
