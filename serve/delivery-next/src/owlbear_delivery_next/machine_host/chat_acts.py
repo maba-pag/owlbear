@@ -19,7 +19,9 @@ Every note starts with its act's token (``acts.TOKEN``), so no reader takes it f
 (``acts.DISCRETIONARY``) whose requester turn a newer requester message superseded, or whose turn has ended (a
 hand-off's note excepted), is not sent: ``expired``. A sent note is ``delivered`` once the follower reads its
 ``user.message`` in the chat's log (``seen``); one the log does not show within ``BOUND`` seconds is withdrawn while
-the host still holds it, and recorded ``unconfirmed``, saying whether the host's state shows it gone. A stop is
+the host still holds it, and recorded ``unconfirmed``, saying whether the host's state shows it gone. A newer requester
+message read while a discretionary or hand-off note waits supersedes it the same way: withdrawn, it is ``expired``,
+never delivered into the new turn; one the host had taken or still holds stays ``unconfirmed``. A stop is
 delivered once the host no longer runs the cancelled turn, else ``unconfirmed``. What raises (no exact chat, no
 agent host) goes to the Spotter, which keeps it on the act as ``failed``.
 
@@ -42,7 +44,7 @@ from urllib.parse import quote
 
 from owlbear_delivery_next.commands import chat_client
 from owlbear_delivery_next.improvement import acts, chatlogs, spotter
-from owlbear_delivery_next.improvement.events import NOTE
+from owlbear_delivery_next.improvement.events import NOTE, main_agent, requester
 from owlbear_delivery_next.runtimes import ahp
 from owlbear_delivery_next.workflow_steps.watched import CONFLICT
 
@@ -57,6 +59,7 @@ BOUND = 60.0  # seconds a note may take to show in the chat's log
 ACK = 10.0  # seconds the host may take to show a cancel or a withdrawal
 GONE = "VS Code's agent host is not running"
 ASKS = frozenset({"stop-and-ask", "ask"})
+SUPERSEDED = "a newer requester message superseded its turn"
 CHATS = "SELECT owner_session_uri, chat_uri, provider_data FROM chats_v2 WHERE tombstoned = 0 AND provider_data LIKE ?"
 
 
@@ -190,7 +193,8 @@ class ChatActor:
         self.session, self.spot, self.db, self.connect = session, spot, db, connect
         self.clock, self.sleep = clock, sleep
         self.chat = ""  # the chat's channel, once resolved
-        self.waiting: dict[str, asyncio.Future[None]] = {}  # a note's token: its confirmation
+        self.waiting: dict[str, asyncio.Future[str]] = {}  # a note's token: ``seen``, or ``superseded``
+        self.yielding: set[str] = set()  # waiting tokens a newer requester message withdraws
         self.logged: set[str] = set()  # tokens the log showed before their sender waited
 
     async def __call__(self, record: spotter.Record, act: acts.Act) -> None:
@@ -211,10 +215,15 @@ class ChatActor:
         if isinstance(outcome, dict):
             await self._update(record, **outcome)
         else:
-            await self._confirmed(record, act.token, *outcome)
+            await self._confirmed(record, act.token, *outcome, yields=discretionary or record.look == "hand-off")
 
     def seen(self, d: dict[str, Any]) -> None:
-        """An event the follower read live: a note's ``user.message`` confirms it."""
+        """An event the follower read live: a note's ``user.message`` confirms it; a requester's supersedes some."""
+        if requester(d) and main_agent(d):
+            for token in self.yielding:
+                if not (waiter := self.waiting[token]).done():
+                    waiter.set_result("superseded")
+            return
         content = str((d.get("data") or {}).get("content") or "")
         if d.get("type") != "user.message" or not content.startswith(NOTE) or "]" not in content:
             return
@@ -223,7 +232,7 @@ class ChatActor:
         if waiter is None:
             self.logged.add(token)
         elif not waiter.done():
-            waiter.set_result(None)
+            waiter.set_result("seen")
 
     async def _host[T](self, work: Callable[..., T], *args: Any) -> T:  # noqa: ANN401 - the work's arguments
         """*work* on a connection of its own to the host, the chat resolved, on a worker thread."""
@@ -277,22 +286,24 @@ class ChatActor:
         return self._send(conn, note, "queued") if note else {"delivery": "delivered"}
 
     def _withdraw(self, conn: Transport, kind: str, mid: str) -> str:
-        """Remove the pending message *mid* if the host still holds it; what its state shows then."""
+        """Remove the pending message *mid* if the host still holds it: ``taken``, ``withdrawn`` or ``held`` then."""
         if mid not in _pending(self._state(conn)):
-            return f"the host took it, but the chat's log did not show it within {BOUND:.0f} s"
+            return "taken"
         conn.dispatch(self.chat, {"type": "chat/pendingMessageRemoved", "kind": kind, "id": mid})
         deadline = self.clock() + ACK
         while mid in _pending(self._state(conn)):
             if self.clock() >= deadline:
-                return f"not taken within {BOUND:.0f} s; its withdrawal is not confirmed: the host still holds it"
+                return "held"
             conn.next_event(0.2)
-        return f"not taken within {BOUND:.0f} s; withdrawn: the host no longer holds it"
+        return "withdrawn"
 
-    async def _confirmed(self, record: spotter.Record, token: str, kind: str, mid: str) -> None:
+    async def _confirmed(self, record: spotter.Record, token: str, kind: str, mid: str, *, yields: bool) -> None:
         waiter = self.waiting.setdefault(token, asyncio.get_running_loop().create_future())
         if token in self.logged:
             self.logged.discard(token)
-            waiter.set_result(None)
+            waiter.set_result("seen")
+        if yields:
+            self.yielding.add(token)
         bound = asyncio.ensure_future(self.sleep(BOUND))
         try:
             await asyncio.wait({waiter, bound}, return_when=asyncio.FIRST_COMPLETED)
@@ -304,14 +315,26 @@ class ChatActor:
         finally:
             bound.cancel()
             self.waiting.pop(token, None)
-        if waiter.done():
+            self.yielding.discard(token)
+        if waiter.done() and waiter.result() == "seen":
             await self._update(record, delivery="delivered")
             return
+        superseded = waiter.done()
+        head = SUPERSEDED if superseded else f"not taken within {BOUND:.0f} s"
         try:
-            why = await self._host(self._withdraw, kind, mid)
+            gone = await self._host(self._withdraw, kind, mid)
         except (ahp.HostError, OSError) as exc:
-            why = f"not taken within {BOUND:.0f} s; its withdrawal failed: {type(exc).__name__}: {exc}"
-        await self._update(record, delivery="unconfirmed", error=why)
+            await self._update(record, delivery="unconfirmed",
+                               error=f"{head}; its withdrawal failed: {type(exc).__name__}: {exc}")  # fmt: skip
+            return
+        why = {
+            "taken": f"{SUPERSEDED}, but the host had taken it already" if superseded else
+                     f"the host took it, but the chat's log did not show it within {BOUND:.0f} s",
+            "withdrawn": f"{head}; withdrawn: the host no longer holds it",
+            "held": f"{head}; its withdrawal is not confirmed: the host still holds it",
+        }[gone]  # fmt: skip
+        expired = superseded and gone == "withdrawn"
+        await self._update(record, delivery="expired" if expired else "unconfirmed", error=why)
 
     async def _update(self, record: spotter.Record, **fields: str) -> None:
         await spotter.offload(functools.partial(acts.update, self.spot.folder, record.id, **fields))

@@ -93,6 +93,7 @@ class Host:
             self.chat.setdefault("queuedMessages", []).append({"id": action["id"], "message": action["message"]})
         elif kind == "chat/pendingMessageRemoved" and not self.holds:
             self.chat.pop("steeringMessage", None)
+            self.chat["queuedMessages"] = [m for m in self.chat.get("queuedMessages", []) if m["id"] != action["id"]]
         return len(self.actions)
 
     def next_event(self, timeout: float) -> None:
@@ -281,6 +282,30 @@ def test_a_discretionary_stop_and_resume_whose_turn_ended_expires_and_never_star
     host, act = asyncio.run(main())
     assert (host.actions, act.act, act.delivery) == ([], "stop-and-resume", "expired")
     assert act.error == "the turn had ended before the note was sent"
+
+
+@pytest.mark.parametrize(("look", "category", "active", "kind"), [
+    ("plan", "course-and-constraints", "t-2", "steering"),
+    ("hand-off", "hand-off-fitness", "", "queued"),
+])  # fmt: skip
+def test_a_pending_note_a_newer_requester_message_supersedes_is_withdrawn_and_expires(
+    tmp_path, look, category, active, kind
+) -> None:
+    async def main() -> tuple[Host, acts.Act]:
+        host = Host(Clock(), active=active)
+        actor = chat(tmp_path, host, category=category)
+        *_, sending = await acted(actor, look, category)
+        await until(lambda: actor.waiting)  # sent; the log has not shown it
+        actor.spot.take(asked("u-2"))  # the owner wrote again, as the follower reads it
+        actor.seen(asked("u-2"))
+        await asyncio.wait_for(sending, 1)
+        return host, act_of(actor)
+
+    host, act = asyncio.run(main())
+    sent, withdrawn = host.actions
+    assert withdrawn == {"type": "chat/pendingMessageRemoved", "kind": kind, "id": sent["id"]}
+    assert (act.delivery, act.error) == (
+        "expired", "a newer requester message superseded its turn; withdrawn: the host no longer holds it")  # fmt: skip
 
 
 def test_an_expired_note_does_not_count_toward_the_cap(tmp_path) -> None:
