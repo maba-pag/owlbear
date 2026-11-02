@@ -17,6 +17,12 @@ foreach) and hook-tool switches; doubtful findings are bypasses in interpreters'
 arguments. strict refuses core and variant and warns doubtful; standard refuses core and warns the rest; lenient
 warns all; off checks no shell bypass. Outside the ladder, at every level: a read-only step's writes, a confined
 step's rules, file, MCP, memory and custom-tool requests.
+
+Documented limits, which no class reads: task runners (make, npm run, just), programs found by bare name on PATH,
+shell aliases, arithmetic subscripts, later loop iterations, startup variables set through builtins, startup-file input
+redirects, quoted descriptor words, swapped config files (GIT_CONFIG_GLOBAL, a fake HOME), git aliases already in
+config, ``git bisect run``, script files an interpreter runs, edits to hook files (left to the Spotter) and a step
+lowering ``guard_level`` for later steps. Changing ``core.hooksPath`` stays refused.
 """
 
 from __future__ import annotations
