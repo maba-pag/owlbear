@@ -200,7 +200,7 @@ def test_a_chat_looks_with_the_frozen_inputs_in_its_turn_a_new_turn_and_after_a_
     def written(events: list[dict[str, Any]]) -> None:
         folder = state / "c"
         folder.mkdir(exist_ok=True)
-        (folder / "workspace.yaml").write_text(f"cwd: {work}\n")
+        (folder / "workspace.yaml").write_text(f"cwd: {work}\nclient_name: vscode-agent-host\n")
         with (folder / "events.jsonl").open("a") as out:
             out.writelines(json.dumps(d) + "\n" for d in events)
 

@@ -28,6 +28,7 @@ class Plan:
 
     ctx: spotter.Context
     folders: tuple[str, ...]
+    share: int = 0  # the steer share: each chat's arm is drawn with it once (``state_store.spotter_arms``)
 
 
 def settings_now() -> Plan | str:
@@ -53,4 +54,5 @@ def settings_now() -> Plan | str:
         verbose=s.verbose_on(datetime.now(UTC).date()), model=role.model or "", effort=role.effort or "",
         limit=limit, context=role.context or "", actions=s.actions(), gaps=(CHAT,), cap=s.intervention_cap,
     )  # fmt: skip
-    return Plan(ctx, tuple(folders))  # no prompt: each chat takes its own at each turn's start (``Follower._snapped``)
+    # no prompt: each chat takes its own at each turn's start (``Follower._snapped``)
+    return Plan(ctx, tuple(folders), s.steer_share or 0)

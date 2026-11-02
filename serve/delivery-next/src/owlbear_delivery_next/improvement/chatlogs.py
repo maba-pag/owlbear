@@ -435,13 +435,18 @@ def enrolled(cwd: str, folders: Iterable[str]) -> bool:
     return any(here.is_relative_to(Path(f).resolve()) for f in folders if f)
 
 
-def workspace(folder: Path) -> str:
-    """A session's workspace folder, from ``workspace.yaml``: the only file read before enrolment is checked."""
+def metadata(folder: Path) -> dict[str, Any]:
+    """A session's ``workspace.yaml``: the only file read before enrolment is checked; {} when unreadable or invalid."""
     with suppress(OSError, ValueError, yaml.YAMLError):  # unreadable or invalid metadata: no folder, never enrolled
         data = yaml.safe_load((folder / "workspace.yaml").read_text())
-        if isinstance(data, dict) and isinstance(cwd := data.get("cwd"), str):
-            return cwd
-    return ""
+        if isinstance(data, dict):
+            return data
+    return {}
+
+
+def workspace(folder: Path) -> str:
+    """A session's workspace folder, from its ``workspace.yaml``."""
+    return cwd if isinstance(cwd := metadata(folder).get("cwd"), str) else ""
 
 
 def finished_chats(folders: list[str], now: datetime, records: Path | None = None) -> Iterator[str]:

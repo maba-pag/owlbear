@@ -1,4 +1,4 @@
-"""The chats follower (Improvement design §4, "Where: Chats"): the Spotter's looks at enrolled chats, recording only.
+"""The chats follower (Improvement design §4, "Where: Chats"): the Spotter's looks at enrolled chats, and its acts.
 
 One follower runs in the machine host, on its own thread with its own event loop, and holds
 ``~/.owlbear/spotter/chats.lock`` from before its first read until its thread ends, after its looks drained and its
@@ -12,7 +12,8 @@ Every ``POLL`` seconds, one pass:
 2. The manifest of OwlBear's own sessions; unreadable, no chat is read this pass (provenance fails closed).
 3. The chats: each session folder of the runtime the manifest does not name whose ``workspace.yaml`` (the only file
    read before enrolment is checked; read again whenever it or its metadata changes, never kept when unreadable) names
-   a folder in an enrolled one and outside OwlBear's own. Only then is its ``events.jsonl`` opened.
+   a folder in an enrolled one and outside OwlBear's own, and whose client is VS Code's agent host; any other (a
+   terminal ``copilot`` session) is listed as not followed (``not_followed``). Only then is its ``events.jsonl`` opened.
 4. Each chat's new bytes, at most ``PASS`` fetched a pass in all and ``CHUNK`` (``HISTORY`` for context) a read, the
    chats' order turning each pass. Each byte is fetched once: an event not yet complete is kept and continued at the
    next read; one over ``LINE`` bytes is left out and said in the chat's cards from then on.
@@ -29,15 +30,18 @@ Admission (``room``, ``chat_looks.Gate``): one chat look at a time across all ch
 while the machine is paused (D-01M5XCE8ZC030KT2FZ7D6SZCJN), once the follower closes, once an update's fence or a stop
 holds the machine's stop barrier (one admitted before is counted as running work), or while a look's runtime may
 still run (its lease held); the chats are read all the same. No turn settles while an event is still being written.
-The state-change moment of a completed call is looked at
-instead of a sample of it. A moment whose rule (a marked assumption, ``runtimes.chat_moments``) a reset retired is
-recorded as skipped and never looked at; the chat is read, and its other moments and samples go on (a retired
-state-change rule leaves its call's sample to be taken); a look admitted before the reset runs on. Before any
-moment is settled or admitted, a chat's Spotter gets the settings in force (its
-``look_credit_limit`` among them) and every gap known by then; its prompt and cases' snapshot
+The state-change moment of a completed call is looked at instead of a sample of it. A moment whose rule (a marked
+assumption, ``runtimes.chat_moments``) a reset retired is recorded as skipped and never looked at; the chat is read,
+and its other moments and samples go on (a retired state-change rule leaves its call's sample to be taken); a look
+admitted before the reset runs on. Before any moment is settled or admitted, a chat's Spotter gets the settings in
+force (its ``look_credit_limit`` among them) and every gap known by then; its prompt and cases' snapshot
 (``cases.snapshot``) is taken when a turn starts (a turn begun before following, at its first live event) and serves
 every look of that turn. An admitted look keeps both, whatever changes before it runs, and its record keeps the turn,
 the case version and prompt hash, and its meter's spend and stop.
+
+A chat's Spotter acts in it through a ``chat_acts.ChatActor`` (whose notes the follower confirms from the log), in the
+chat's arm (``chat:<session>``, drawn once with the steer share), and checks a state change against the decisions
+through the running host's lookup for the chat's folder (``chat_acts.conflicts``).
 """
 
 from __future__ import annotations
@@ -55,10 +59,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.improvement import cases, chatlogs, spotter
-from owlbear_delivery_next.machine_host import chat_looks, chat_offsets
+from owlbear_delivery_next.machine_host import chat_acts, chat_looks, chat_offsets
 from owlbear_delivery_next.machine_host.chat_settings import Plan, settings_now
 from owlbear_delivery_next.runtimes import spotter_look
 from owlbear_delivery_next.runtimes.chat_moments import Moments
+from owlbear_delivery_next.state_store import spotter_arms
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -86,6 +91,8 @@ class Chat:
     skipping: bool = False  # inside an event over ``LINE`` bytes
     partial: bytes = b""  # the bytes after *offset* already read: an event not yet complete
     spot: spotter.Spotter | None = None
+    actor: chat_acts.ChatActor | None = None  # how its Spotter acts in it, bound with the Spotter
+    arm: str = ""  # its arm of the steered-versus-silent test, once drawn
     moments: Moments | None = None
     gaps: list[str] = field(default_factory=list)
     base: spotter.Context | None = None  # the settings of the latest pass
@@ -128,7 +135,9 @@ class Follower:
         self.folders: tuple[str, ...] = ()
         self.last: dict[str, Any] = {}  # the last run's offsets, until its chats were found again
         self.restarted = True  # the first time following begins compares with the last run's offsets
-        self.metadata: dict[str, tuple[tuple[int, ...], str]] = {}  # a session's workspace.yaml: its stamp, folder
+        self.metadata = chat_acts.Metadata()
+        self.unfollowed: dict[str, dict[str, str]] = {}  # enrolled chats not VS Code's: their folder and why
+        self.share = 0  # the steer share of the latest pass
         self.turns = 0
         self.said = ""
         self.saved: dict[str, Any] = {}
@@ -156,6 +165,10 @@ class Follower:
             return "paused: the machine is paused"
         self.leaving = [s for s in self.leaving if s.running]
         return self.gate.admit()
+
+    def not_followed(self) -> list[dict[str, str]]:
+        """The enrolled chats not followed, for the Improvement page: a terminal ``copilot`` session among them."""
+        return sorted(self.unfollowed.values(), key=lambda u: u["session"])
 
     def working(self) -> list[str]:
         """What a stop when idle and an update wait for: an admitted look, or a look's runtime that may still run."""
@@ -247,6 +260,7 @@ class Follower:
             self._tell("chats follower: the manifest of OwlBear's own sessions cannot be read; no chat is read")
             return
         self._tell("")
+        self.share = plan.share
         found = self._found(listed, ours, plan.folders)
         ids = sorted(found)
         self.turns += 1
@@ -281,30 +295,19 @@ class Follower:
         Only folders listed before *ours* was read: a session OwlBear starts later is listed at the next pass, by when
         the manifest names it.
         """
-        found = {}
+        found, unfollowed = {}, {}
         for folder in listed:
-            if cwd := chatlogs.chat(folder, folders, ours, self._workspace):
+            if not (cwd := chatlogs.chat(folder, folders, ours, self.metadata.workspace)):
+                continue
+            if (client := self.metadata.client(folder.name)) == chat_acts.VSCODE:
                 found[folder.name] = cwd
+            else:
+                unfollowed[folder.name] = {"session": folder.name, "workspace": cwd, "why": chat_acts.why_not(client)}
+        self.unfollowed = unfollowed  # replaced whole: the page's thread reads it
         for cid in list(self.chats):
             if cid not in found:
                 self._forget(cid)
         return found
-
-    def _workspace(self, folder: Path) -> str:
-        """``chatlogs.workspace``, read again whenever the file or its metadata changes; never kept when unreadable."""
-        try:
-            st = (folder / "workspace.yaml").stat()
-        except OSError:
-            self.metadata.pop(folder.name, None)
-            return ""
-        stamp = (st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)  # ctime: its permissions changed too
-        if (kept := self.metadata.get(folder.name)) is not None and kept[0] == stamp:
-            return kept[1]
-        if cwd := chatlogs.workspace(folder):
-            self.metadata[folder.name] = (stamp, cwd)
-        else:
-            self.metadata.pop(folder.name, None)
-        return cwd
 
     def _forget(self, cid: str) -> None:
         """Stop following *cid*; found again, it starts at its end then, what it held before being context only."""
@@ -314,17 +317,9 @@ class Follower:
 
     def _new(self, cid: str, cwd: str, size: int, file: tuple[int, int]) -> Chat:
         start = size if self.baseline is not None and cid in self.baseline else 0
-        c = Chat(cid, cwd, offset=start, history=start, file=file, grew=time.time())
         if (old := self.last.get(cid)) is not None:
-            was = (int(old.get("offset") or 0), tuple(old.get("file") or (0, 0)))
-            if was[1] != file:
-                chat_offsets.gap(
-                    cid, "the chat's log was replaced while OwlBear was not following it; read as context only"
-                )
-            elif was[0] < start:
-                missed = f"bytes {was[0]}..{start} of the chat's log were read as context, never looked at"
-                chat_offsets.gap(cid, f"OwlBear was not following: {missed}")
-        return c
+            chat_offsets.missed(cid, old, start, file)
+        return Chat(cid, cwd, offset=start, history=start, file=file, grew=time.time())
 
     def _intake(self, c: Chat, ctx: spotter.Context) -> None:
         """The chat grew: its Spotter and moments, rebuilt from its beginning, what came before its start as context."""
@@ -332,6 +327,8 @@ class Follower:
         if self.owned is not None:
             judge = functools.partial(self.owned.judged, judge)
         c.spot = spotter.Spotter(self._ctx(c, ctx), lambda cid=c.id: cid, judge, room=self.room, left=self.gate.left)
+        c.actor = chat_acts.ChatActor(c.id, c.spot)
+        c.spot.ctx = self._ctx(c, ctx)
         c.moments = Moments(c.workspace, Path.home(), Path(os.environ["TMPDIR"]) if os.environ.get("TMPDIR") else None)
         c.history, c.offset, c.skipping, c.partial = max(c.history, c.offset), 0, False, b""
 
@@ -367,7 +364,9 @@ class Follower:
     def _ctx(self, c: Chat, ctx: spotter.Context) -> spotter.Context:
         """*ctx* (this pass's settings) for chat *c*: its gaps, and its turn's prompt snapshot once taken."""
         c.base = ctx
-        made = dataclasses.replace(ctx, gaps=(*ctx.gaps, *c.gaps, *self._forgotten(c)))
+        c.arm = c.arm or spotter_arms.arm(f"chat:{c.id}", self.share)
+        made = dataclasses.replace(ctx, gaps=(*ctx.gaps, *c.gaps, *self._forgotten(c)), arm=c.arm, act=c.actor,
+                                   conflicts=functools.partial(chat_acts.conflicts, c.workspace))  # fmt: skip
         return dataclasses.replace(made, prompt=c.prompt, verbose=c.verbose) if c.prompt is not None else made
 
     def _snapped(self, c: Chat) -> None:
@@ -397,7 +396,7 @@ class Follower:
             task = asyncio.ensure_future(c.spot.drain())
             self.tasks.add(task)
             task.add_done_callback(self.tasks.discard)
-        c.spot, c.moments = None, None
+        c.spot, c.actor, c.moments = None, None, None
         c.history = max(c.history, c.offset)  # an event not yet complete is read again, as context
         c.offset, c.partial = c.history, b""
 
@@ -465,6 +464,8 @@ class Follower:
         completed = c.spot.take(d)
         if not live:
             return
+        if c.actor is not None:
+            c.actor.seen(d)  # the Spotter's note in the log: delivered
         self._snapped(c)  # a requester message starts a turn: its snapshot, before any look of it
         changed = False
         for m in after:
