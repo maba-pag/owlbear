@@ -15,7 +15,9 @@ with its token (``acts.TOKEN``) and is sent with the Spotter's own agent source,
 
 An act's dispatch is no delivery: a note is ``delivered`` once the session's own event feed shows the runtime took it
 (its ``user.message`` with the id ``send`` returned, or the refused submit's completion), else ``unconfirmed`` after
-``BOUND`` seconds. A stop to ask is delivered when it ends the step; one that comes after the step ended is ``expired``.
+``BOUND`` seconds. A stop to ask is delivered when it ends the step. An act that comes after the step ended (its gate
+closed by an accepted result or another ending, or its teardown begun) is ``expired``: nothing is aborted or sent; so is
+a stop and resume whose step ended during its abort, its note unsent.
 What raises goes to the Spotter, which keeps it on the act as ``failed``. Each SDK request (``send``, ``abort``) is
 bounded as the step's own (``sdk_teardown.CALL``) and never retried: one that outlasts the bound raises too. A stop to
 ask has ended the step before its abort, so the step's teardown stops the runtime if the abort fails. An act cancelled
@@ -69,6 +71,9 @@ class StepActor:
 
     async def __call__(self, record: spotter.Record, act: acts.Act) -> None:
         """Dispatch *act*, the finding of *record*, and wait for the runtime to confirm it (bounded)."""
+        if self._ended():
+            await self._update(record, delivery="expired", error="the step had ended")
+            return
         note = f"{act.token} {act.note}"
         if act.act in ASKS:
             await self.stop_ask(record, act)
@@ -98,6 +103,9 @@ class StepActor:
         """
         try:
             await self._abort(record)
+            if self._ended():
+                await self._update(record, delivery="expired", error="the step ended during its abort")
+                return
             sent = await self._called(record, self.session.send(note, source=SOURCE), NOTE)
         except Exception as exc:
             failed = UNRESUMED.format(error=f"{type(exc).__name__}: {exc}")
@@ -111,10 +119,11 @@ class StepActor:
         The step ends first, so no submit accepted while the abort is pending can take its place, and an abort that
         fails leaves the step's teardown to stop the runtime; the act says the abort failed.
         """
-        was = self.step.gate.finish("spotter-ask", None, (HARM if act.harm else STOPPED).format(note=act.note))
+        if self.step.gate.finish("spotter-ask", None, (HARM if act.harm else STOPPED).format(note=act.note)):
+            await self._update(record, delivery="expired", error="the step had ended")
+            return
         await self._abort(record)
-        await self._update(record, **({"delivery": "expired", "error": "the step had ended"} if was else
-                                      {"delivery": "delivered"}))  # fmt: skip
+        await self._update(record, delivery="delivered")
 
     def seen(self, kind: str, ev: Any) -> None:  # noqa: ANN401 - an SDK session event, on the step's loop
         """A message the runtime logged, or a call it completed: the note it carries is delivered."""
@@ -131,6 +140,10 @@ class StepActor:
             self.logged.add(key)
         elif not waiter.done():
             waiter.set_result(None)
+
+    def _ended(self) -> bool:
+        """Whether the step's gate is closed (an accepted result or another ending) or its teardown began."""
+        return self.step.done or self.step.gate.stopped
 
     async def _abort(self, record: spotter.Record) -> None:
         """Abort the turn, its idle marked as the step's own stop: no wrong choice, no reminder (``step_budget``).

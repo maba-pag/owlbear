@@ -355,3 +355,44 @@ def test_a_spotter_stop_to_ask_keeps_the_owners_question_when_the_quota_also_ran
                              quota=True)  # fmt: skip
     result = session_result.to_result(run, StepKind.BUILD, datetime.now(UTC))
     assert (result.exit, result.question.text) == (Exit.ASK, said)
+
+
+@pytest.mark.parametrize("category", ["course-and-constraints", "outside-state-changes", "irreversible-harm"])
+def test_an_act_after_the_step_ended_expires_and_neither_aborts_nor_sends(tmp_path, category) -> None:
+    async def main() -> tuple[sdk_adapter._Step, Session]:
+        session = Session()
+        st = stepped(tmp_path, session, category, Clock())
+        spot = st.feed.spotter
+        record = spot._record("plan", 1.0, {"call": "c-1"}, category=category, note="n")  # noqa: SLF001
+        act = acts.decide(record, "plan", spot.ctx, 0, {})
+        acts.write(spot.folder, act)
+        st.gate.finish("result", None, "accepted")  # the gate accepted a submit while the look ran
+        await asyncio.wait_for(st.actor(record, act), 1)
+        return st, session
+
+    st, session = asyncio.run(main())
+    act = act_of(st)
+    assert (session.calls, st.run.ending, act.delivery, act.error) == ([], "result", "expired", "the step had ended")
+
+
+def test_a_stop_and_resume_whose_step_ends_during_its_abort_sends_no_note(tmp_path) -> None:
+    class Closing(Session):
+        async def abort(self) -> None:
+            await super().abort()
+            st.gate.finish("result", None, "accepted")  # another ending closed the gate meanwhile
+
+    async def main() -> sdk_adapter._Step:
+        nonlocal st
+        st = stepped(tmp_path, Closing(), "outside-state-changes", Clock())
+        spot = st.feed.spotter
+        record = spot._record("plan", 1.0, {"call": "c-1"}, category="outside-state-changes")  # noqa: SLF001
+        act = acts.decide(record, "plan", spot.ctx, 0, {})
+        acts.write(spot.folder, act)
+        await asyncio.wait_for(st.actor(record, act), 1)
+        return st
+
+    st: Any = None
+    st = asyncio.run(main())
+    act = act_of(st)
+    assert (st.actor.session.calls, act.delivery) == ([("abort",)], "expired")
+    assert act.error == "the step ended during its abort"
