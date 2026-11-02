@@ -705,6 +705,78 @@ def test_a_failed_pds_stage_keeps_and_logs_its_whole_error(tmp_path, checkout, w
     assert logged[-3:] == ["merge: findings", f"merge: failed: {reason}", f"waiting for you: {reason}"]
 
 
+ENDED = Run("ended", "error", detail="", termination=Termination(confirmed=True))
+
+
+def test_a_failed_reconsideration_keeps_and_logs_its_whole_error(tmp_path, checkout, whole_error):
+    """The challenger reconsidering the findings the owner sent back fails: its whole words reach the run's reason, the
+    stage, the invocation and the log (#895)."""
+    fakes = Fakes(checkout)
+    fakes.verdicts, real = ["fix"], fakes.session
+
+    def session(store: Store, cfg) -> Run:
+        if cfg.role == "challenger" and cfg.rechecks:
+            if cfg.submit is not tools.REVIEW:  # the owner sent the finding back: reconsidering it fails
+                return replace(ENDED, detail=whole_error)
+            fakes.calls.append("challenger")  # the updater's rejection checked: the finding holds
+            upheld = [tools.Recheck(finding=k, upheld=True, reason="r") for k in cfg.rechecks]
+            return Run(cfg.session_id, "result", payload=tools.ReviewResult(verdict="pass", rechecked=upheld),
+                       termination=Termination(confirmed=True))  # fmt: skip
+        done = real(store, cfg)
+        if cfg.role == "updater" and fakes.calls.count("challenger") == 1:  # it rejects the challenger's finding
+            rejected = [tools.Rejection(finding="F1", reason="it already holds")]
+            done = replace(done, payload=sessions.UpdateResult(summary=done.payload.summary, rejected=rejected))
+        return done
+
+    fakes.session = session
+    job = pds_job.Job(store(tmp_path), fakes.live(checkout))
+    state = run(job)
+    assert [q["kind"] for q in state["questions"]] == ["dispute"], state["reason"]
+    state = PACK.answered(job, "reconsider", "the size is the release's own example")
+
+    reason = f"challenger: PackError: the challenger ended with error: {whole_error}"
+    assert (state["state"], state["reason"]) == ("failed", reason)
+    assert next(s for s in state["stages"] if s["name"] == "challenger")["detail"] == reason
+    assert state["invocations"][-1]["detail"] == reason
+    logged = [line.split(" ", 1)[1] for line in state["log"]]
+    assert logged[-3:] == ["challenger: running", f"challenger: failed: {reason}", reason]
+
+
+@pytest.mark.parametrize("cause", ["repair-session", "repair-check"])
+def test_a_failed_ci_repair_keeps_and_logs_its_whole_error(tmp_path, checkout, whole_error, cause):
+    """An agent's CI repair, or the audit of its repair, fails: its whole words reach the run's reason, the stage, the
+    invocation and the log (#895)."""
+    edits = {f"{REPO}{PAGE}": FIXED + "export const u = 1;\n"} if cause == "repair-check" else {}
+    fakes, job, _state, _heads = ci_failed(tmp_path, checkout, edits)
+    before, real, ended = pr_head(checkout, fakes), fakes.session, replace(ENDED, detail=whole_error)
+    failing = (lambda cfg: cfg.submit is pack_repair.SUBMIT) if cause == "repair-session" else (
+        lambda cfg: cfg.job == sessions.AUDIT
+    )  # fmt: skip
+    job.live.session = lambda store, cfg: ended if failing(cfg) else real(store, cfg)
+    state = PACK.answered(job, "repair")
+
+    logged = [line.split(" ", 1)[1] for line in state["log"]]
+    again = "have an agent try again, or discard"
+    if cause == "repair-session":
+        detail = f"the agent's repair did not finish: the agent ended with error: {whole_error}"
+        url = next(i["detail"] for i in state["invocations"] if i["operation"] == "pull-request")
+        stage, op, reason = (
+            "merge",
+            pack_repair.REPAIR,
+            f"CI failed at {before[:12]} of {url}: CI; {detail}. Fix it and try again, {again}",
+        )
+    else:
+        checking = next(i["detail"] for i in state["invocations"] if i["result"] == "checking")
+        made = re.match(r"the agent's repair (\w{12}) ", checking)[1]
+        detail = f"audit: the auditor submitted no report: ended error; {whole_error}"
+        said = f"the agent's repair {made} failed its check and was not pushed: {detail}"
+        stage, op, reason = "audit", "audit", f"CI failed at {before[:12]}: CI; {said}. Try again, {again}"
+    assert (state["state"], state["reason"]) == ("waiting", reason)
+    assert next(s for s in state["stages"] if s["name"] == stage)["detail"] == reason
+    assert [i["detail"] for i in state["invocations"] if i["operation"] == op][-1] == detail
+    assert logged[-2:] == [f"{stage}: failed: {detail}", f"waiting for you: {reason}"]
+
+
 FLAKY = "tests/test_visual.py::test_a_real_capture_of_a_local_page"
 
 

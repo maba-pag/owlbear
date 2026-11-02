@@ -222,7 +222,7 @@ def _dropped(ctx: Context, why: str) -> str:
     r.phase, r.commit, r.laid = "", "", ""
     stop = f"CI failed at {r.stop.head[:12]}: {', '.join(c['name'] for c in r.stop.failed)}; " if r.stop else ""
     more = "have an agent try again, " if pack_repair.offered(ctx) else ""
-    said = f"the agent's repair {made} failed its check and was not pushed: {why[:1500]}"
+    said = f"the agent's repair {made} failed its check and was not pushed: {why}"
     return f"{stop}{said}. Try again, {more}or discard"
 
 
@@ -362,7 +362,7 @@ def _reconsider(job: Job, ctx: Context, lp: RoundLoop) -> Action:
             return dict.fromkeys(keys, ("unsure", f"premise: {p.reason}"))
         if run.ending != "result" or not isinstance(p, dispute_tools.ReconsiderResult):
             msg = f"the challenger ended with {run.ending}: {run.detail or 'no verdict'}"
-            raise pack_files.PackError(msg[:600])
+            raise pack_files.PackError(msg)
         return {r.finding: (r.verdict, r.text if r.verdict == "clarified" else r.reason) for r in p.reconsidered}
 
     said = job.do("challenger", reconsider, lambda v: f"reconsidered {', '.join(v)}", op="reconsideration",
