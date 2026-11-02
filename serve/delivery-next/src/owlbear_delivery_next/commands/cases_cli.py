@@ -40,7 +40,8 @@ if TYPE_CHECKING:
     import argparse
 
 BY = "owner (command)"
-REFUSED = (CaseError, retro.RetroError, registry.RegistryError, StoreError, spotter_test.Refused, SettingsUnset)
+REFUSED = (CaseError, retro.RetroError, registry.RegistryError, StoreError, spotter_test.Refused, SettingsUnset,
+           data_repo.DataRepoError)  # fmt: skip
 QUEUED = "queued {}: the machine host runs it once OwlBear runs; `owlbear cases runs` shows its result"
 
 

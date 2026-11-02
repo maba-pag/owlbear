@@ -20,7 +20,7 @@ from copilot.generated.session_events import SessionEvent
 from owlbear_delivery_next.change_contracts.models import Change
 from owlbear_delivery_next.commands import cases_cli
 from owlbear_delivery_next.improvement import cases, spotter, spotter_test_run
-from owlbear_delivery_next.local_system import data_repo
+from owlbear_delivery_next.local_system import data_place, data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import chats
 from owlbear_delivery_next.runtimes import spotter_look
@@ -267,3 +267,18 @@ def test_the_command_declares_starts_shows_and_ends_the_test(layers, capsys) -> 
     assert json.loads(run("show")[1]) == shown
     code, out = run("end")
     assert (code, json.loads(out)["state"]) == (0, "ended")
+
+
+def test_the_command_refuses_to_start_while_the_shared_repository_is_not_ready(layers, monkeypatch, capsys) -> None:
+    layers.set("gpt-6-luna", "medium", "long", "Judge the card.")
+    test = argparse.Namespace(command="improvement", action="test", test="declare", outcome="fewer reworked hand-offs",
+                              start_threshold="B", promote_threshold="10% fewer")  # fmt: skip
+    assert cases_cli.main(test) == 0
+    monkeypatch.delenv(data_repo.VIEW)
+    data_place.pointer().parent.mkdir(parents=True, exist_ok=True)
+    data_place.pointer().write_text(json.dumps({"remote": "https://github.com/o/owlbear-data"}))  # a clone not done
+    capsys.readouterr()
+
+    code = cases_cli.main(argparse.Namespace(command="improvement", action="test", test="start"))
+
+    assert (code, capsys.readouterr().out.startswith("refused: ")) == (1, True)
