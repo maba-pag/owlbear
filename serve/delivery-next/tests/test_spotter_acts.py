@@ -115,3 +115,16 @@ def test_an_arm_is_drawn_once_and_kept_when_a_fresh_interpreter_reopens_it_with_
     kept = json.loads(path.read_text())
     assert {u: a["arm"] for u, a in kept.items()} == {"chg:p/never": "silent", "chg:p/always": "steered",
                                                        "chat:s-1": "steered"}  # fmt: skip
+
+
+@pytest.mark.parametrize("delivery", ["failed", "expired"])
+def test_an_escalation_that_never_reached_the_agent_leaves_the_next_finding_free_to_act(tmp_path, delivery) -> None:
+    def act(record: str, kind: str, state: str) -> acts.Act:
+        return acts.Act(record=record, at="2026-11-02T00:00:00+00:00", unit="chat:s-1", arm="silent", session="s-1",
+                        scope="turn-1", look="plan", category="irreversible-harm", act=kind, why="setting",
+                        harm=True, delivery=state)  # fmt: skip
+
+    acts.write(tmp_path, act("r1", "stop-and-resume", "delivered"))
+    acts.write(tmp_path, act("r2", "ask", delivery))  # its cancel failed, or its turn had ended
+    _, unresolved = acts.counts(tmp_path, "s-1", "turn-1")
+    assert decided("irreversible-harm", "plan", unresolved=unresolved) == ("ask", "repeat")

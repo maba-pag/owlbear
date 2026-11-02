@@ -159,14 +159,17 @@ def acts(folder: Path) -> dict[str, Act]:
 
 
 def counts(folder: Path, session: str, scope_: str) -> tuple[int, dict[tuple[str, str], str]]:
-    """The steering notes in *session*'s *scope_*, but failed or expired ones, and its unresolved findings: its acts."""
+    """The steering notes in *session*'s *scope_* and its unresolved findings, from its acts.
+
+    A failed or expired note or escalation counts for neither: it never reached the agent.
+    """
     sent, unresolved = 0, {}
     for a in acts(folder).values():
         if (a.session, a.scope) != (session, scope_):
             continue
         sent += a.act in NOTES and not a.harm and a.delivery not in {"failed", "expired"}
         key = (a.category, a.look)
-        if a.act == "ask":
+        if a.act == "ask" and a.delivery not in {"failed", "expired"}:  # one that never reached the agent may again
             unresolved[key] = "asked"
         elif a.delivery == "delivered" and unresolved.get(key) != "asked":
             unresolved[key] = "delivered"
