@@ -72,7 +72,7 @@ def test_the_projects_memory_folder_and_global_memory_are_given_to_the_memory_se
     mine = tmp_path / "shop-site" / "memory"
     server = options(memory=mine)["mcp_servers"][preload.MEMORY]
     agents = set(server["env"].pop(preload.MEMORY_AGENTS).split(","))
-    assert server["args"] == ["-m", preload.MEMORY_MODULE]
+    assert server["args"] == ["-m", "owlbear_delivery_next", "serve", "memory"]
     assert server["env"] == {preload.MEMORY_DIR: str(mine), preload.MEMORY_GLOBAL: str(tmp_path / "memory")}
     assert {
         "builder",
