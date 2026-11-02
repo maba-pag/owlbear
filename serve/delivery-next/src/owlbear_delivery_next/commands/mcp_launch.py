@@ -12,7 +12,6 @@ which is the fallback the Copilot CLI sends after its ``server/discover`` (#906)
 
 from __future__ import annotations
 
-import importlib
 import importlib.util
 import sys
 from typing import TYPE_CHECKING
@@ -56,6 +55,6 @@ def serve_stdio(server: MCPServer) -> None:
 
     async def run() -> None:
         async with stdio_server() as (read, write), low.lifespan(low) as state:
-            await serve_loop(low, read, write, lifespan_state=state, init_options=low.create_initialization_options())
+            await serve_loop(low, read, write, lifespan_state=state)
 
     anyio.run(run)
