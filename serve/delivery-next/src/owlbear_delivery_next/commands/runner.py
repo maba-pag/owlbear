@@ -268,7 +268,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     except visual.BrowserMissingError as exc:
         result = visual.missing_browser(str(exc))
     except Exception as exc:  # noqa: BLE001 - a capture error is never a pass
-        result = visual.broken(f"{type(exc).__name__}: {exc}")
+        result = visual.broken(worktree.failure(exc))
     else:
         result, judgement, kept = None, None, None
         if shots and all(s.file for s in shots):  # a failed shot is a finding without a reviewer

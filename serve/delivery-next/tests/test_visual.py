@@ -1314,3 +1314,11 @@ def test_a_capture_error_keeps_its_whole_text(flow, whole_error):
     flow.mp.setattr(visual, "CAPTURE", crash)
     runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
     assert flow.store.read("c1").outcome.reason == f"capture failed: RuntimeError: {whole_error}"
+    failed = subprocess.CalledProcessError(128, ["git", "rev-parse", "HEAD"], stderr=whole_error)
+
+    def git_failed(_path):
+        raise failed
+
+    flow.mp.setattr(runner.worktree, "head", git_failed)
+    runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
+    assert flow.store.read("c1").outcome.reason == f"capture failed: CalledProcessError: {failed}\n{whole_error}"
