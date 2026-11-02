@@ -109,7 +109,7 @@ class Queue(Checks):
         """Take the pull request out of its queue; a PR that is not queued raises, and the caller reads back."""
         result = self._graphql("dequeue", _DEQUEUE, {"id": pr.node_id}, write=True)
         if not isinstance(result, dict) or result.get("errors"):
-            raise ProviderError(FailureCode.CONFLICT, "dequeue", str(result)[:200], retry_safe=True)
+            raise ProviderError(FailureCode.CONFLICT, "dequeue", str(result), retry_safe=True)
 
     def group_runs(self, repository: str, group_sha: str) -> tuple[GroupRun, ...]:
         """Actions runs on ``merge_group`` at the group's commit (a removal's ``before``), newest first."""

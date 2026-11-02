@@ -1053,6 +1053,22 @@ def test_gh_replies_in_threads_by_graphql_and_quotes_other_items_in_an_issue_com
     assert calls[-1][1] == {"body": "> https://github.com/o/r/pull/7#c1\n\nok"}
 
 
+@pytest.mark.parametrize("op", ["mark_ready", "post_reply", "resolve_thread", "dequeue"])
+def test_an_unexpected_github_answer_is_raised_whole(tmp_path, whole_error, op):
+    """#895: GitHub's whole answer reaches the step's retry reason through the engine."""
+    said = {"errors": [{"message": whole_error}]}
+    gh = GhProvider(tmp_path, runner=lambda *_a: done(said))
+    calls = {
+        "mark_ready": lambda: gh.mark_ready(pr()),
+        "post_reply": lambda: gh.post_reply("o/r", 7, thread("t1", ("h1", "o", "q")), "ok"),
+        "resolve_thread": lambda: gh.resolve_thread("t1"),
+        "dequeue": lambda: gh.dequeue(pr()),
+    }
+    with pytest.raises(ProviderError) as raised:
+        calls[op]()
+    assert str(raised.value) == f"{op}: {said}"
+
+
 class Host:
     maintenance = None
     wake = type("W", (), {"set": lambda _self: None})()
