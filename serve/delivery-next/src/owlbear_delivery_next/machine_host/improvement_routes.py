@@ -149,9 +149,7 @@ def router(machine: Machine, shared: Callable[[], DataRepo | None]) -> APIRouter
 def _reads(routes: APIRouter, m: _Machine) -> None:
     @routes.get("")
     def overview() -> dict[str, Any]:
-        """The Spotter (with the enrolled chats it does not follow and the chats follower's failed pass), Retro, the
-        Spotter cases and the proposals.
-        """
+        """The Spotter (with chats not followed and the follower's failed pass), Retro, Spotter cases and proposals."""
         loaded = m.projects()
         spotted = improvement_view.spotter(loaded, units.records(), datetime.now(UTC))
         return {
