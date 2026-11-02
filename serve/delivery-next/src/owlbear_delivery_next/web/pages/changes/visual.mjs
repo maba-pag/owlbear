@@ -234,8 +234,7 @@ function refused(scans, prefix = "") {
 }
 
 // The screenshots of a visual check and what was found: its lines, and the gallery with its count.
-// *scans* are the visual round's detector scans when the round judged this capture.
-export function visualSection(slug, v, b, existing, deciding, scans) {
+export function visualSection(slug, v, b, existing, deciding) {
   const open = deciding || v.doubts.length;
   const [said, variant] = v.passed ? ["Passed", "success"] : open ? ["Undecided", "warning"] : ["Failed", "error"];
   const gallery = [], pairs = v.files.map((name) => {
@@ -257,7 +256,7 @@ export function visualSection(slug, v, b, existing, deciding, scans) {
       : nothing}
     ${b && b.findings.length ? text(`Before: ${b.findings.join("; ")}`, { size: "xs", color: "contrast-medium" })
       : nothing}
-    ${refusedLine([...refused(scans), ...refused(b?.design, "before, ")])}`;
+    ${refusedLine([...refused(v.design), ...refused(b?.design, "before, ")])}`;
   return { lines, shots: html`<div class="gallery"><div class="shots">${pairs}</div></div>`, count: gallery.length };
 }
 

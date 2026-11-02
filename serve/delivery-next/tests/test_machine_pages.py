@@ -2635,6 +2635,12 @@ def refusing_pack(tmp_path: Path, text: str) -> tuple[Path, SimpleNamespace]:
     return said, SimpleNamespace(bundle="", verified_engine=lambda: engine)
 
 
+def updated(store: Store, **update: object) -> None:
+    """Change c1 by *update*."""
+    with store.lock("c1") as lock:
+        store.write(lock, store.read("c1").model_copy(update=update))
+
+
 @pytest.mark.browser
 @pytest.mark.timeout(90)  # git, the before capture and a real browser over three renders
 def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, capsys, whole_error: str) -> None:
@@ -2683,19 +2689,18 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
     line = f"The design detector could not scan: {'; '.join(items)}"
     with store.lock("c1") as lock:
         c = store.read("c1")
-        c.visual, c.visual_rounds = VisualResult(head=head, tree="t", at=now), [kept]
+        c.visual = VisualResult(head=head, tree="t", at=now, design=[after, unexplained, clean])
+        c.visual_rounds = [kept]
         store.write(lock, loop.apply(c, decision.ask(head, kept), now))
     with browsing(monkeypatch, pds) as (page, url):
         said = errors(page)
         assert {whole_error, line, f"Before: {note}"} <= set(shown_texts(page, url, of, "Decide visual round 1"))
         assert page.get_by_text("What the design detector found (evidence for the judges)").count() == 1  # both
-        with store.lock("c1") as lock:
-            c = store.read("c1")
-            c.questions, c.visual_rounds = [], [kept.model_copy(update={"outcome": "merge"})]
-            store.write(lock, c)
+        updated(store, questions=[], visual_rounds=[kept.model_copy(update={"outcome": "merge"})])
         assert line in shown_texts(page, url, of, "Before and after")
-        with store.lock("c1") as lock:
-            store.write(lock, store.read("c1").model_copy(update={"visual": None, "visual_rounds": []}))
+        updated(store, visual_rounds=[])  # a failed shot is judged without a round: the capture keeps its scans
+        assert line in shown_texts(page, url, of, "Before and after")
+        updated(store, visual=None)
         before_only = {f"Not available: {note}", f"The design detector could not scan: changed sources: {failed}"}
         assert before_only <= set(shown_texts(page, url, of, "Before and after"))
         assert said == []
