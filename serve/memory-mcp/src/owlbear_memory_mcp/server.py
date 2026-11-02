@@ -35,9 +35,6 @@ from owlbear_memory_mcp.tools import (
     curation_threshold as curation_threshold_impl,
 )
 from owlbear_memory_mcp.tools import (
-    delete_agent_memories as delete_agent_memories_impl,
-)
-from owlbear_memory_mcp.tools import (
     delete_memory as delete_memory_impl,
 )
 from owlbear_memory_mcp.tools import (
@@ -51,9 +48,6 @@ from owlbear_memory_mcp.tools import (
 )
 from owlbear_memory_mcp.tools import (
     recall_memory as recall_memory_impl,
-)
-from owlbear_memory_mcp.tools import (
-    rename_agent_memories as rename_agent_memories_impl,
 )
 from owlbear_memory_mcp.tools import (
     save_memory as save_memory_impl,
@@ -70,7 +64,6 @@ __all__ = [
     "commit_memory_batch",
     "curate_memory",
     "curation_threshold",
-    "delete_agent_memories",
     "delete_memory",
     "list_memories",
     "make_global",
@@ -78,7 +71,6 @@ __all__ = [
     "memory_dir",
     "read_memory",
     "recall_memory",
-    "rename_agent_memories",
     "save_memory",
 ]
 
@@ -289,23 +281,6 @@ async def make_global(
 async def curation_threshold(ctx: Context) -> dict[str, Any]:  # pragma: no cover
     """The curator's confidence threshold in percent: at or above it the curator acts alone (TD-400)."""
     return await curation_threshold_impl(ctx)
-
-
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))
-async def rename_agent_memories(
-    ctx: Context,
-    *,
-    old_name: _Agent,
-    new_name: _Agent,
-) -> dict[str, int]:  # pragma: no cover
-    """Rewrite memory provenance and scopes after an agent rename."""
-    return await rename_agent_memories_impl(ctx, old_name=old_name, new_name=new_name)
-
-
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))
-async def delete_agent_memories(ctx: Context, *, agent: _Agent) -> dict[str, int]:  # pragma: no cover
-    """Remove a retired agent from scopes while preserving provenance."""
-    return await delete_agent_memories_impl(ctx, agent=agent)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
