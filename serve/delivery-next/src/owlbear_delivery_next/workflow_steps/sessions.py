@@ -157,6 +157,7 @@ def account(change: Change, done: session_result.Run, fields: dict[str, object])
     """Add one session's usage and tool calls to the Change in memory and return its step event; nothing is written."""
     step = {"event": "step", "at": datetime.now(UTC).isoformat(timespec="seconds"), "session": done.session_id}
     step |= fields | {"ending": done.ending, "head": done.head, "usage": done.usage, "model": done.model_check}
+    step |= {"detail": done.detail} if done.ending != "result" and done.detail else {}  # #894: the whole error
     step |= {"usage_unread": done.usage_unread} if done.usage_unread else {}
     step |= {"subagents": done.subagents} if done.subagents else {}  # within the usage, never added to the spend
     step["termination"] = dataclasses.asdict(done.termination) if done.termination else None

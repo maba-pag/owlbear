@@ -822,3 +822,15 @@ def _bind(package: Path, root: Path, monkeypatch) -> legacy_family.Binding:
     binding = legacy_family.Binding(launcher, Path(sys.executable), package)
     monkeypatch.setattr(legacy_family, "live_binding", lambda: binding)
     return binding
+
+
+@pytest.fixture(scope="session")
+def whole_error() -> str:
+    """A long error with a distinct beginning, middle and end, for #895's whole-error checks.
+
+    Non-repeating numbered words over several lines, about 4500 characters, with characters a page must escape and
+    no path or decision id; a check compares the complete text, never only its start or tail.
+    """
+    words = [f"w{i:04d}" for i in range(700)]
+    lines = [" ".join(words[i : i + 20]) for i in range(0, 700, 20)]
+    return "\n".join(['BEGIN <a & "b">', *lines[:17], "MIDDLE", *lines[17:], "END"])

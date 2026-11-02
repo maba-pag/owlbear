@@ -25,6 +25,8 @@ from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, sdk_spend, s
 from owlbear_delivery_next.runtimes.session_result import to_result
 from owlbear_delivery_next.state_store import spend_ledger
 from owlbear_delivery_next.state_store.database import StoreError
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import sessions
 
 ROOT, CHILD = 4242, 4243
 NOW = datetime(2026, 10, 24, tzinfo=UTC)
@@ -735,6 +737,24 @@ def test_a_session_failure_keeps_its_whole_error_in_the_run(world, monkeypatch):
     monkeypatch.setattr(sdk_adapter, "_open", broken)
     run = asyncio.run(sdk_adapter.run(world.cfg))
     assert (run.ending, run.detail) == ("error", f"RuntimeError: {said}")
+
+
+def test_a_session_failure_keeps_its_whole_error_in_the_journal_and_status(world, monkeypatch, tmp_path, whole_error):
+    """#894/#895: the step event of a failed session keeps its whole error, and its retry carries it as the reason."""
+
+    async def broken(*_args, **_kw):
+        raise RuntimeError(whole_error)
+
+    monkeypatch.setattr(sdk_adapter, "_open", broken)
+    run = asyncio.run(sdk_adapter.run(world.cfg))
+    store, change = Store(tmp_path / "store"), Change(slug="c1", brief=Brief(version=1))
+    store.write(Lock("c1"), change)
+    sessions.logged(store, Lock("c1"), change, run, {"kind": StepKind.BUILD, "exit": "retry"})
+    (step,) = [e for e in store.events("c1") if e.get("event") == "step"]
+    assert (step["ending"], step["detail"]) == ("error", f"RuntimeError: {whole_error}")
+    result = to_result(run, StepKind.BUILD, NOW)
+    assert (result.exit, result.cause, result.wake_at) == (Exit.RETRY, "tooling:build:sdk", None)
+    assert result.reason == f"RuntimeError: {whole_error}"
 
 
 def test_a_session_that_cannot_be_noted_as_ours_is_never_created(world, monkeypatch):
