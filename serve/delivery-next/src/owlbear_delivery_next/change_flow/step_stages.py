@@ -65,6 +65,16 @@ def _judge(c: Change, role: str) -> bool:
     return role in {"design-judge", "test-reviewer"} or (role == "reviewer" and c.step.kind == StepKind.CHECK)
 
 
+def _judging(c: Change, runs: list[_Run]) -> str | None:
+    """Parallel judges or test-review shares: how many ended and how many still run, while any runs."""
+    running = sum(1 for r in runs if r.open and _judge(c, r.role))
+    if not running:
+        return None
+    if c.step.kind == StepKind.TESTS:
+        return f"reviewing tests: {running} running"
+    return f"judging: {sum(1 for r in runs if not r.open and _judge(c, r.role))} done, {running} running"
+
+
 def of(c: Change, events: Sequence[dict[str, Any]], own: str) -> str | None:  # noqa: PLR0911 - one rule per stage
     """The stage of *c*'s running step; None where the caller's words for its *own* role's work stand."""
     if c.step.kind in _ENGINE or c.step.started_at is None:
@@ -72,11 +82,8 @@ def of(c: Change, events: Sequence[dict[str, Any]], own: str) -> str | None:  # 
     runs = _runs(events, c.step.started_at.replace(microsecond=0))
     if not runs:
         return "starting"
-    if running := [r for r in runs if r.open and _judge(c, r.role)]:
-        if c.step.kind == StepKind.TESTS:
-            return f"reviewing tests: {len(running)} running"
-        done = sum(1 for r in runs if not r.open and _judge(c, r.role))
-        return f"judging: {done} done, {len(running)} running"
+    if judging := _judging(c, runs):
+        return judging
     worker = next((r for r in reversed(runs) if r.open and r.role != "picker"), None)
     if worker and worker.result is False:
         return "fixing its refused result" if worker.role == "builder" else "correcting its refused result"

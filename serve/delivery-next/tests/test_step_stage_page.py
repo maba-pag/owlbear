@@ -41,13 +41,8 @@ def logged(store: Store, lock: Lock, sid: str, role: str, event: str, **more: ob
     store.log(lock, "c1", {"at": at, "session": sid, "role": role, "event": event, **more})
 
 
-@pytest.mark.browser
-def test_the_shown_stage_follows_a_builders_and_a_reviewers_events(tmp_path, pds) -> None:
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
-    store = Store(tmp_path)
-    store.write(Lock("c1"), Change(slug="c1", plan=PLAN, step=Step(kind=StepKind.BUILD, task="t1",
-                                                                  started_at=datetime.now(UTC))))  # fmt: skip
+def served(store: Store) -> tuple[uvicorn.Server, str]:
+    """The project host's pages and API over *store*, on a free port."""
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host(store)), log_level="warning",
@@ -55,7 +50,17 @@ def test_the_shown_stage_follows_a_builders_and_a_reviewers_events(tmp_path, pds
     threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
     while not server.started:
         time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    return server, f"http://127.0.0.1:{sock.getsockname()[1]}"
+
+
+@pytest.mark.browser
+def test_the_shown_stage_follows_a_builders_and_a_reviewers_events(tmp_path, pds) -> None:
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    store = Store(tmp_path)
+    store.write(Lock("c1"), Change(slug="c1", plan=PLAN, step=Step(kind=StepKind.BUILD, task="t1",
+                                                                  started_at=datetime.now(UTC))))  # fmt: skip
+    server, base = served(store)
     machine_list = f"{base}/api/next/projects"  # served by the machine host, which this project host runs without
     errors: list[str] = []
     with sync_playwright() as pw, store.lock("c1") as lock:  # the runner holds the Change: its step runs

@@ -142,9 +142,14 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
         problems.append("runtime PID unknown")
     elif processes.alive(rt, st.run.pids.get(rt)) is not False:
         await force(st, "runtime still present after stop", problems)
+    return await _last(st, problems)
+
+
+async def _last(st: _Step, problems: list[str]) -> Termination:
+    """Settle the run's requests and workers, log its end once it opened a session (#718), then observe its PIDs."""
     pending = await _requests(st, problems)
     await _workers(st, problems)
-    if st.session is not None:  # the session's run is over: its stage no longer counts it (#718)
+    if st.session is not None:  # the session's run is over: its stage no longer counts it
         _guard(problems, "ended log", st.log, event="ended", ending=st.run.ending)
     observed = await settle(dict(st.run.pids), problems)
     return replace(observed, confirmed=False) if pending else observed
