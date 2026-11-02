@@ -21,7 +21,9 @@ hand-off's note excepted), is not sent: ``expired``. A sent note is ``delivered`
 ``user.message`` in the chat's log (``seen``); one the log does not show within ``BOUND`` seconds is withdrawn while
 the host still holds it, and recorded ``unconfirmed``, saying whether the host's state shows it gone. A newer requester
 message read while a discretionary or hand-off note waits supersedes it the same way: withdrawn, it is ``expired``,
-never delivered into the new turn; one the host had taken or still holds stays ``unconfirmed``. A stop is
+never delivered into the new turn; one the host had taken or still holds stays ``unconfirmed``. A note whose wait the
+follower stops (it ends, or stops following the chat) is ``unconfirmed``: its withdrawal goes to the Spotter's own
+threads, and nothing waits to say whether it took. A stop is
 delivered once the host no longer runs the cancelled turn, else ``unconfirmed``. What raises (no exact chat, no
 agent host) goes to the Spotter, which keeps it on the act as ``failed``.
 
@@ -308,7 +310,8 @@ class ChatActor:
         try:
             await asyncio.wait({waiter, bound}, return_when=asyncio.FIRST_COMPLETED)
         except asyncio.CancelledError:  # the follower ends, or stops following the chat: never left pending
-            why = "the follower stopped reading the chat before its log showed it"
+            spotter.WORK.submit(self._on_host, self._withdraw, kind, mid)  # never awaited: the cancellation goes on
+            why = "the follower stopped reading the chat before its log showed it; its withdrawal was requested"
             unseen = functools.partial(acts.update, delivery="unconfirmed", error=why)
             spotter.WORK.submit(unseen, self.spot.folder, record.id)
             raise
