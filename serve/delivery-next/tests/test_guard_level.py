@@ -231,6 +231,7 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("""python3 -c 'import subprocess; subprocess.run(["git", "commit", "--no-verify", "-m", "x"])'""", "doubtful"),
         ("""node -e "require('child_process').execSync('git push --force')\"""", "doubtful"),
         ("perl -e 'system(\"git push --force\")'", "doubtful"),
+        ("perl -e '1;' -e 'system(\"git push --force\")'", "doubtful"),  # perl runs every -e
         ("python3 -Bc 'import os; os.system(\"git push -f\")'", "doubtful"),
         ("python3 -Bc'import os; os.system(\"git push -f\")'", "doubtful"),
         ("python3 -W ignore -c 'import os; os.system(\"git push -f\")'", "doubtful"),

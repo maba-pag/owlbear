@@ -41,11 +41,18 @@ def code(command: Command, words: Sequence[str]) -> str | None:
     if not m:
         return None
     language = next(filter(None, m.groups()))
-    i = 1
+    i, fragments = 1, []  # perl runs every -e and -E, one line each
     while i < len(words) and words[i].startswith("-") and words[i] not in {"-", "--"}:
         if given := _CODE[language].fullmatch(words[i]):
-            return given[1] or (words[i + 1] if i + 1 < len(words) else None)
+            value = given[1] or (words[i + 1] if i + 1 < len(words) else None)
+            if language != "perl" or value is None:
+                return value
+            fragments.append(value)
+            i += 1 if given[1] else 2
+            continue
         i += 2 if words[i] in _VALUED[language] else 1
+    if fragments:
+        return "\n".join(fragments)
     i += i < len(words) and words[i] == "--"
     stdin = command.stdin()
     if (i < len(words) and words[i] != "-") or stdin is None or stdin.kind not in {"here", "string"}:
