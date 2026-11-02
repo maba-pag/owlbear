@@ -796,6 +796,42 @@ def test_a_hand_off_skipped_for_capacity_keeps_the_events_seen_as_its_cutoff() -
     assert sorted((r["skipped"][:8], r["cutoff"]) for r in records()) == [("", 3), ("", 3), ("capacity", 3)]
 
 
+def test_a_hand_off_look_waiting_for_a_slot_judges_its_own_turn_though_the_next_one_is_taken_in_meanwhile() -> None:
+    release, judged, cards = asyncio.Event(), asyncio.Event(), []
+
+    async def look(the_card: dict[str, Any], _ctx: spotter.Context, spend: credit_meter.Meter) -> str:
+        cards.append(the_card)
+        if the_card["moment"]["call"] == "h":
+            judged.set()
+        await release.wait()
+        spend.part().ended(None, confirmed=True)
+        return '{"category": "none"}'
+
+    async def main() -> str:
+        spot = spotter.Spotter(ctx(), lambda: "s-1", look)
+        for ev in (asked("Build it."), said("Plan."), said("Done.")):
+            spot.seen(ev)
+        turn = spot.kept.turn
+        for i in range(2):
+            spot.look("plan", 1.0, {"kind": "a running look", "call": f"p{i}"})
+        spot.handed_off("h", {})  # it waits: neither running look gives its slot
+        for ev in (asked("Now the farewell."), said("Next plan.")):
+            spot.seen(ev)
+        await asyncio.sleep(0.1)
+        release.set()
+        await asyncio.wait_for(judged.wait(), 3)  # the slot frees and the hand-off's look begins
+        await spot.drain()
+        return turn
+
+    turn = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    handed = cards[-1]["moment"]
+    assert (handed["call"], handed["turn"], handed["cutoff"], cards[-1]["intent"]["later_requests"]) == (
+        "h", turn, 3, [])  # fmt: skip
+    [record] = [r for r in records() if r["call"] == "h"]
+    assert (record["turn"], record["cutoff"], record["skipped"]) == (turn, 3, "")
+
+
 def usage(nano: float | None, second: int = 0) -> SessionEvent:
     """One billed call as the runtime reports it; None: without its cost."""
     data: dict[str, Any] = {"model": "gpt-6-luna"}

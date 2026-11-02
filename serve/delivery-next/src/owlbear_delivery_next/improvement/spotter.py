@@ -275,7 +275,7 @@ class Spotter:
 
     def skip(self, look: str, probability: float, moment: dict[str, Any], why: str) -> None:
         """No look of kind *look* at *moment*, for *why*: recorded as skipped, with the intake's turn and count now."""
-        moment = {"turn": self.kept.turn, **moment, "cutoff": self.kept.n}
+        moment = {"turn": self.kept.turn, "cutoff": self.kept.n, **moment}  # a waited hand-off's own, frozen
         skipped = self._record(look, probability, moment, skipped=why)
         self._track(offload(store, self.folder, skipped, None))
 
@@ -340,22 +340,27 @@ class Spotter:
             return None
         ctx = frozen(self.ctx)  # the test's inputs, while it runs; read before admission, so a raise leaks none
         if why := self._admitted():
-            if look == "hand-off" and why.startswith("capacity"):
-                return self._track(asyncio.ensure_future(self._waited(probability, moment, ctx)))
+            if look == "hand-off" and why.startswith("capacity"):  # it judges this moment, whatever comes in meanwhile
+                return self._track(asyncio.ensure_future(self._waited(probability, *self._frozen(moment), ctx)))
             if look == "sample":  # a burst of samples is one count, not a write each
                 self.crowded[why] = self.crowded.get(why, 0) + 1
             else:
                 self.skip(look, probability, moment, why)
             return None
-        return self._start(look, probability, moment, ctx)
+        return self._start(look, probability, *self._frozen(moment), ctx)
+
+    def _frozen(self, moment: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+        """The intake's snapshot now, and *moment* with its turn and cutoff."""
+        snapshot = self.kept.snapshot()
+        return snapshot, {"turn": snapshot["turn"], **moment, "cutoff": snapshot["n"]}
 
     def _admitted(self) -> str:
         """Admit one look now (""), or say why none may start."""
         return "capacity: looks already running" if self.running >= RUNNING else self.room()
 
-    def _start(self, look: str, probability: float, moment: dict[str, Any], ctx: Context) -> asyncio.Future[Any]:
-        snapshot = self.kept.snapshot()
-        moment = {"turn": snapshot["turn"], **moment, "cutoff": snapshot["n"]}
+    def _start(
+        self, look: str, probability: float, snapshot: dict[str, Any], moment: dict[str, Any], ctx: Context
+    ) -> asyncio.Future[Any]:
         self.running += 1
         task = self._run(look, probability, snapshot, moment, ctx)
         looked = self._track(asyncio.ensure_future(task))
@@ -364,8 +369,8 @@ class Spotter:
             self.yielding[looked] = look
         return looked
 
-    async def _waited(self, probability: float, moment: dict[str, Any], ctx: Context) -> None:
-        """A hand-off look that met full capacity: it takes a record-only look's slot, or waits for one, within LOOK."""
+    async def _waited(self, probability: float, snapshot: dict[str, Any], moment: dict[str, Any], ctx: Context) -> None:
+        """A hand-off look at full capacity, on its intake frozen then: it takes a slot or waits, within LOOK."""
         deadline, why = time.monotonic() + LOOK, "capacity: looks already running"
         while not self.closing and time.monotonic() < deadline:
             self._give()
@@ -373,7 +378,7 @@ class Spotter:
             if self.closing:
                 break
             if not (why := self._admitted()):
-                await self._start("hand-off", probability, moment, ctx)
+                await self._start("hand-off", probability, snapshot, moment, ctx)
                 return
             if not why.startswith("capacity"):
                 break
