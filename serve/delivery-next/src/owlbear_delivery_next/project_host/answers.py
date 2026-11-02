@@ -120,7 +120,8 @@ def _checked(store: Store, c: Change, q: Question, body: AnswerBody) -> tuple[in
         return 422, f"option {body.option} is not one of {[o.id for o in q.options]}"
     if q.repair and ((now_open := loop.open_question(c)) is None or now_open.id != q.id):
         return 409, "the Change moved on since this round gate asked; reload"
-    chosen = {o.next for o in q.options} & loop.DECISIONS - {"retry"} or q.repair or answer_kinds.owned(q)
+    anyway = bool(q.options) and all(o.next == "retry" for o in q.options)  # the fold reruns the step on any answer
+    chosen = (not anyway and bool({o.next for o in q.options} & loop.DECISIONS or q.repair)) or answer_kinds.owned(q)
     if body.option is None and chosen:
         return 422, f"choose one of {[o.label for o in q.options]}"
     if any(o.id == body.option and o.next == "reconsider" for o in q.options) and not body.text.strip():

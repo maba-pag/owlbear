@@ -107,3 +107,17 @@ def test_allowing_what_the_spotter_stopped_shows_on_the_question_asked_again(pag
         expect(again).to_contain_text("You chose Allow it at ", timeout=10_000)
         expect(again).to_contain_text("it needs a brief amendment, which isn't built yet (item 16), so the step "
                                       "stays stopped and the question is asked again")  # fmt: skip
+
+
+@pytest.mark.browser
+def test_an_answer_without_an_option_is_refused_beside_the_question_at_once(page_url, pds) -> None:
+    """Answer clicked on the question asked again, its options cleared: refused at once, never queued for the fold."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    with opened(base, pds) as page:
+        form = page.locator("section.act", has_text="Question q1")
+        assert answer(page, form).status == 422
+        expect(form.locator(".refused")).to_contain_text("choose one of")
+    with store.db.read() as db:
+        assert db.execute("SELECT count(*) FROM inbox").fetchone() == (0,)
