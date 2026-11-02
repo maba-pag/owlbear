@@ -354,16 +354,16 @@ class Spotter:
             text = await asyncio.wait_for(self.judge(the_card, ctx, meter), LOOK)
             if not text and meter.stopped:
                 record.skipped = f"credit limit: {meter.stopped} ({meter.stopped_by}) before an answer"
-                return
-            said = parse(text)
-            record.skipped, record.category = "", said["category"]
-            record.action = ctx.actions.get(record.category, "")
-            record.note = clip(said.get("note") or "", 1200)
-            record.evidence = [clip(e, 300) for e in said.get("evidence") or [] if isinstance(e, str)][:8]
-            record.state_change = clip(said.get("state_change") or "", 400)
-            record.rationale = clip(said.get("rationale") or "", 1500)
-            record.preliminary = bool(record.state_change)
-            acting = ctx.act is not None and record.category in CATEGORIES
+            else:
+                said = parse(text)
+                record.skipped, record.category = "", said["category"]
+                record.action = ctx.actions.get(record.category, "")
+                record.note = clip(said.get("note") or "", 1200)
+                record.evidence = [clip(e, 300) for e in said.get("evidence") or [] if isinstance(e, str)][:8]
+                record.state_change = clip(said.get("state_change") or "", 400)
+                record.rationale = clip(said.get("rationale") or "", 1500)
+                record.preliminary = bool(record.state_change)
+                acting = ctx.act is not None and record.category in CATEGORIES
         except TimeoutError:
             record.skipped = f"time: the look took over {LOOK:.0f} seconds"
         except Exception as exc:  # noqa: BLE001 - a look never reaches the step

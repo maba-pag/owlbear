@@ -1493,6 +1493,20 @@ def test_a_hand_off_whose_look_times_out_is_accepted_and_its_act_says_why(tmp_pa
     assert (act.act, act.why) == ("none", "the hand-off was accepted: time: the look took over 0 seconds")
 
 
+def test_a_hand_off_whose_look_hits_its_credit_limit_is_accepted_and_its_act_says_why(tmp_path) -> None:
+    async def main() -> Any:
+        spot = spotter.Spotter(ctx(actions=STEERED, arm="steered", cap=2), lambda: "s1", judge("", cost=0.9))
+        st = handing_off(tmp_path, spot)
+        result = await submitted(st, "call-1")
+        await spot.drain()
+        return result
+
+    assert asyncio.run(main()).result_type == "success"
+    assert spotter.WORK.settled(5)
+    [act] = acts.acts(spotter.root()).values()
+    assert (act.act, act.why) == ("none", "the hand-off was accepted: credit limit: reached (look) before an answer")
+
+
 @pytest.mark.parametrize("busy", [False, True], ids=["answered", "busy"])
 def test_a_state_change_is_checked_by_the_steps_own_lookup_through_the_runners_context(tmp_path, monkeypatch, busy):
     """#717: the runner's ``watched.spot`` context asks its step's ``lookup.Asked``; only the picker is faked."""
