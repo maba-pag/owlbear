@@ -84,20 +84,14 @@ def _tool_context(engine: MemoryEngine, memory_dir: Path) -> SimpleNamespace:
     )
 
 
-def _create_entry(
-    engine: MemoryEngine,
-    *,
-    title: str,
-    source_agent: str = "test-agent",
-    scope_agents: list[str] | None = None,
-) -> MemoryEntry:
+def _create_entry(engine: MemoryEngine, *, title: str) -> MemoryEntry:
     return engine.save(
         title=title,
         content="Original content.",
         categories=["domain-knowledge"],
         confidence=0.9,
-        source_agent=source_agent,
-        scope_agents=scope_agents or [],
+        source_agent="test-agent",
+        scope_agents=[],
     )
 
 
