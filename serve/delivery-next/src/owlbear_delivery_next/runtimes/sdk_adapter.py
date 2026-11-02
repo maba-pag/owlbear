@@ -1,4 +1,8 @@
-"""One bounded worker session on the installed Copilot CLI; it ends at a result-tool call or deadline (D4 §3.2, P4)."""
+"""One bounded worker session on the installed Copilot CLI; it ends at a result-tool call or deadline (D4 §3.2, P4).
+
+This module keeps the session's lifecycle: opening or resuming it, its events, permissions, deadline and teardown.
+The handlers of its Delivery tools are in ``runtimes.step_tools``, which the step inherits.
+"""
 
 from __future__ import annotations
 
@@ -7,15 +11,13 @@ import contextlib
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from functools import partial
 from typing import TYPE_CHECKING, Any
 
 import psutil
 from copilot import CopilotClient, RuntimeConnection
 from copilot.rpc import PermissionDecisionApproveOnce, PermissionDecisionReject
-from copilot.tools import Tool, ToolInvocation, ToolResult
 
-from owlbear_delivery_next.change_contracts import tool_schema, tools, user_config
+from owlbear_delivery_next.change_contracts import tools, user_config
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import decide, identities, view
 from owlbear_delivery_next.improvement import chatlogs
@@ -37,11 +39,12 @@ from owlbear_delivery_next.runtimes import (
 from owlbear_delivery_next.runtimes.command_marks import opened as session_options
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
 from owlbear_delivery_next.runtimes.model_choices import takes_effort
-from owlbear_delivery_next.runtimes.results import ENDED, Gate
+from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.sdk_teardown import CALL
 from owlbear_delivery_next.runtimes.sdk_teardown import call as _call
 from owlbear_delivery_next.runtimes.sdk_usage import USAGE_PAUSE, unexpected_models, unproven, unread, usage_read
 from owlbear_delivery_next.runtimes.session_result import PROVEN, Run, limit_reached, note_quota
+from owlbear_delivery_next.runtimes.step_tools import StepTools
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -138,7 +141,7 @@ class Session:
     watch: watch_feed.Watching | None = None  # a Change-owned session's watcher; None when the master switch is off
 
 
-class _Step:
+class _Step(StepTools):
     def __init__(self, cfg: Session, loop: asyncio.AbstractEventLoop) -> None:
         self.cfg, self.loop, self.run, self.proc = cfg, loop, Run(cfg.session_id), None
         self.client: CopilotClient | None = None
@@ -277,36 +280,6 @@ class _Step:
         request = [redact(t) for t in req.commands] or [redact(str(p)) for p in req.paths]
         self.log(event="denied", kind=req.kind, request=request, reason=reason)
         return PermissionDecisionReject(feedback=f"Denied: {reason}")
-
-    def _handle(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:
-        text, ok = self.gate.call(spec, inv.arguments)
-        kind = "success" if ok else "rejected" if text == ENDED else "failure"
-        return ToolResult(text_result_for_llm=text, result_type=kind)
-
-    async def _helped(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # off the loop: deadlines hold
-        return ToolResult(text_result_for_llm=(await self.workers.call(lambda: self.gate.call(spec, inv.arguments)))[0])
-
-    async def _submitted(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # lints off the loop (TD-87)
-        watch_feed.spotted(self.feed, lambda s: s.handed_off(inv.tool_call_id, inv.arguments))  # before Gate accepts
-        return await self.workers.call(lambda: self._answered(spec, inv))
-
-    def _answered(self, spec: tools.Spec, inv: ToolInvocation) -> ToolResult:  # in its thread: kept if cancelled
-        result = self._handle(spec, inv)
-        watch_feed.spotted(self.feed, lambda s: s.answered(inv.tool_call_id, str(result.result_type)))
-        return result
-
-    def tools(self) -> list[Tool]:
-        helped = {spec for spec, _ in self.cfg.helpers}  # these answer, and the turn goes on; so does a first look
-        made = partial(Tool, skip_permission=True)
-        handlers = {
-            s: self._helped if s in helped else self._submitted if s is self.cfg.submit else self._handle
-            for s in self.gate.specs
-        }
-        return [
-            made(s.name, s.description, partial(handlers[s], s), tool_schema.schema(s),
-                 is_terminal=s not in helped and s is not self.cfg.first_look)
-            for s in self.gate.specs
-        ]  # fmt: skip
 
     def record(self, *pids: int | None, keep: bool = False) -> None:
         """Keep each new PID with its start time, None when unreadable, and persist it at once (F4)."""
