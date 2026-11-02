@@ -18,18 +18,18 @@ import uvicorn
 
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_flow import loop
-from owlbear_delivery_next.improvement import case_edits, case_replay, cases, followups, improvement_view, spotter
+from owlbear_delivery_next.improvement import acts, case_edits, case_replay, cases, followups, improvement_view, spotter
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.machine_host import app, cases_job, improvement_routes, project, retro_job
+from owlbear_delivery_next.machine_host import app, cases_job, chat_acts, improvement_routes, project, retro_job
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.runtimes import session_result
-from owlbear_delivery_next.state_store import registry, watch_reports
+from owlbear_delivery_next.state_store import registry, spotter_test, watch_reports
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.state_store.watch_reports import Report
 
@@ -46,6 +46,7 @@ TEXT = {"title": "Check the export's week column", "body": "The builder said don
 STOPPED = "The Spotter stopped this step for irreversible harm: it would force-push over main"
 ALLOW = "Allow it: needs a brief amendment"  # the Spotter's question's first option
 PREFILL = "t hand-off-fitness\n\nbash make"
+FAILED = "HostError: VS Code's agent host is not running: its published endpoint failed: ConnectionRefusedError"
 
 
 class Backlog:
@@ -191,7 +192,8 @@ def machine_page(tmp_path: Path, monkeypatch, pds, *, seed: bool = True) -> Iter
             errors: list[str] = []
             page.on("pageerror", lambda e: errors.append(str(e)))
             pds.only(page, base)
-            yield SimpleNamespace(page=page, base=base, pid=registered.id, ids=ids, backlog=backlog, errors=errors)
+            yield SimpleNamespace(page=page, base=base, pid=registered.id, ids=ids, backlog=backlog, errors=errors,
+                                  machine=machine)  # fmt: skip
             assert errors == []
             browser.close()
     finally:
@@ -423,6 +425,67 @@ def test_looks_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -
         expect(case.get_by_role("button", name="Move")).to_be_disabled()  # moves wait for the queued run
 
 
+def _acted(pid: str) -> None:
+    """Act lines for two of the seeded records, as the Spotter writes them, and a third record still pending."""
+    folder = spotter.place()
+    with (folder / "records-2026-10-01.jsonl").open("a") as out:
+        out.write(json.dumps({"id": "r-wait", "at": "2026-10-01T12:00:00+00:00", "project": pid, "change": SLUG,
+                              "step": "build", "session": "s", "look": "handoff", "call": "c",
+                              "category": "outside-state-changes", "action": "steer",
+                              "note": "It edited the shared CI file."}) + "\n")  # fmt: skip
+    first = {"at": "2026-10-01T10:00:00+00:00", "unit": f"chg:{pid}/{SLUG}", "session": "s", "scope": "build",
+             "look": "handoff", "why": "setting"}  # fmt: skip
+    acts.write(folder, acts.Act(record="r-note", arm="steered", category="hand-off-fitness", act="refuse-hand-off",
+                                delivery="pending", **first))  # fmt: skip
+    acts.update(folder, "r-note", delivery="failed", error=FAILED)
+    acts.write(folder, acts.Act(record="r-harm", arm="silent", category="irreversible-harm", act="stop-and-ask",
+                                harm=True, note="A force-push over main.", delivery="pending", **first))  # fmt: skip
+    acts.update(folder, "r-harm", delivery="delivered")
+    acts.write(folder, acts.Act(record="r-wait", arm="steered", category="outside-state-changes", act="steer",
+                                delivery="pending", **first))  # fmt: skip
+    acts.update(folder, "r-wait", conflict=json.dumps({"decisions": [{"id": "D-7", "title": "CI stays shared"}]}))
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)
+def test_each_records_act_the_spotter_test_and_the_chats_not_followed_show(tmp_path, monkeypatch, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with machine_page(tmp_path, monkeypatch, pds) as w:
+        _acted(w.pid)
+        spotter_test.declare("fewer re-runs", "B", "A")
+        spotter_test.start({"model": "gpt-5.6-sol", "effort": "high", "context": "", "prompt": "p",
+                            "prompt_hash": "ab12cd34", "cases": 7})  # fmt: skip
+        work, sessions = tmp_path / "work", tmp_path / "sessions"
+        for sid, client in (("term", "github/cli"), ("vs", chat_acts.VSCODE)):
+            (sessions / sid).mkdir(parents=True)
+            (sessions / sid / "workspace.yaml").write_text(f"cwd: {work}\nclient_name: {client}\n")
+        w.machine.chats._found(sorted(sessions.iterdir()), set(), (str(work),))  # noqa: SLF001 - one pass's listing
+        page = improvement(w, pds)
+
+        failed = page.locator("#look-r-note")
+        expect(failed).to_contain_text("Its act: refuse-hand-off, steered arm, failed")
+        expect(failed).to_contain_text(f"Its error: {FAILED}")
+        harm = page.locator("#look-r-harm")
+        expect(harm).to_contain_text("Stopped the step: irreversible harm")
+        expect(harm).to_contain_text("Its act: stop-and-ask, silent arm, delivered")
+        expect(harm).to_contain_text("Its question to you: A force-push over main.")
+        waiting = page.locator("#look-r-wait")
+        expect(waiting).to_contain_text("Its act: steer, steered arm, pending")
+        expect(waiting).to_contain_text("Decision check: D-7 CI stays shared")
+        expect(waiting).not_to_contain_text("Its error")
+        quiet = page.locator("#look-r-quiet")  # no act: nothing about one
+        expect(quiet).to_contain_text("Nothing found")
+        expect(quiet).not_to_contain_text("Its act")
+
+        spotted = page.locator("#spotter")
+        expect(spotted).to_contain_text("fewer re-runs")
+        frozen = "model gpt-5.6-sol, high effort, default context, prompt ab12cd34, cases version 7"
+        expect(spotted).to_contain_text(f"Frozen for its looks: {frozen}")
+        expect(spotted.locator("#not-followed")).to_contain_text(f"{work}: not followed: terminal chat (session term)")
+        expect(spotted.locator("#not-followed")).not_to_contain_text("session vs")
+
+
 @pytest.mark.browser
 @pytest.mark.timeout(90)
 def test_a_reviewed_reserve_case_is_never_offered_as_an_example(tmp_path, monkeypatch, pds) -> None:
@@ -521,6 +584,8 @@ def test_an_empty_machine_says_so_and_an_unread_one_says_why(tmp_path, monkeypat
         expect(page.locator("#proposals")).to_contain_text("Retro has proposed nothing yet.")
         expect(page.locator("#looks")).to_contain_text("No look yet here")
         expect(page.locator("#looks")).to_contain_text("No outside write observed here.")
+        expect(page.locator("#spotter")).to_contain_text("No Spotter test is declared.")
+        expect(page.locator("#not-followed")).to_have_count(0)
         expect(page.locator("#retro")).to_contain_text("No Retro run yet.")
         expect(page.locator("#cases")).to_contain_text("No candidates.")
         page.route(re.compile(r"/api/next/improvement$"), lambda route: route.fulfill(status=500, body="boom"))

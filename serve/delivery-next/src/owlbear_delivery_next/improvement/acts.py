@@ -195,9 +195,13 @@ def answered(conflict: object) -> bool:
 
 
 def joined(act: Act) -> dict[str, Any]:
-    """What a record shows of its act; ``acted`` is the act once delivered, ``stopped`` for a harm stop to ask."""
+    """What a record shows of its act; ``acted`` is the act once delivered, ``stopped`` for a harm stop to ask.
+
+    ``question`` is a stop to ask's note, the owner's question as the act line keeps it.
+    """
     acted = act.act if act.delivery == "delivered" else ""
     if acted == "stop-and-ask" and act.harm:
         acted = "stopped"
-    return {"act": act.act, "arm": act.arm, "delivery": act.delivery, "error": act.error, "conflict": act.conflict,
-            "acted": acted}  # fmt: skip
+    return {"act": act.act, "why": act.why, "arm": act.arm, "delivery": act.delivery, "error": act.error,
+            "conflict": act.conflict, "acted": acted,
+            "question": act.note if act.act in {"stop-and-ask", "ask"} else ""}  # fmt: skip

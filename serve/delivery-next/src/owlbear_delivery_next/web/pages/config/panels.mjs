@@ -73,9 +73,13 @@ export function agentsGroup() {
     <section class="panel" aria-labelledby="spotter-title">
       <p-heading size="lg"><h2 id="spotter-title" tabindex="-1">Spotter</h2></p-heading>
       <p-text>The Spotter looks at an agent's work beside it: at hand-offs, plans, state changes and a sample of
-        actions. It files each finding under one of four categories, each set to an action its category allows; so
-        far every look only records its finding with that action, and Retro grades those records. Steering,
-        refusing and stopping come with live delivery, discretionary ones only after a steered-versus-silent test.
+        actions. It files each finding under one of four categories and acts as that category's setting says, in
+        Delivery's steps and in the VS Code chats of the enrolled folders (a terminal chat is not followed): it
+        records it, steers the agent, refuses its hand-off, stops and resumes it with a note, stops it to ask you, or
+        shows it to you on the Improvement page. Irreversible harm acts from any look, in every Change and chat.
+        Otherwise sampled and state-change looks only record, and steering, refusing and stopping to resume act only
+        in a Change or chat drawn into the steered share; steering notes stop at the set number per step or chat
+        turn. Retro grades every record.
         Its model, effort and context are the spotter row under Agents; the enrolled chats are a machine setting.
         Each look stops at its own credit limit, also when replayed: once the spend the runtime reports reaches it, the
         look is stopped and its record says so; a call already under way still finishes, so a look may pass its limit
