@@ -35,7 +35,7 @@ from owlbear_delivery_next.workflow_steps import (
     watched,
 )
 
-SWITCHES = dict.fromkeys(roles.USER_CONFIG, False)  # set by the owner, never carried
+SWITCHES = dict.fromkeys(roles.USER_CONFIG, False) | {"guard_level": "strict"}  # set by the owner, never carried
 
 
 @pytest.fixture
@@ -175,7 +175,7 @@ def test_curation_never_starts_with_its_threshold_or_role_unset(shared_repo):
     shared = DataRepo(shared_repo[0])
     settings_carry.carry(shared)
     glob = read_layer(shared.global_path, GlobalLayer)
-    switches = "load_user_instructions, load_user_skills, load_user_memory"
+    switches = "load_user_instructions, load_user_skills, load_user_memory, guard_level"
     assert switches in curation_block.unset(lookup.machine(shared))
     glob = glob.model_copy(update=SWITCHES)
     shared.global_path.write_text(glob.model_dump_json())

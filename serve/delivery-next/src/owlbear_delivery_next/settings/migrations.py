@@ -282,6 +282,14 @@ def user_memory_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def guard_level_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 19 to 20: the shell guard's level (D-01M6DX04FRP680Z4GGHK5B9VRC).
+
+    It starts unset in every layer; older runtimes refuse format 20.
+    """
+    return data
+
+
 def credit_limits_written(data: dict[str, Any]) -> dict[str, Any]:
     """Global's format 15 to 16: the credit limits are written into Global once (D-01M5XCD49YHHR1NQKKY8TQD0C3).
 
@@ -353,5 +361,6 @@ CONFIG: Migrations = {
     16: user_config_added,
     17: update_checks_added,
     18: user_memory_added,
+    19: guard_level_added,
 }
 GLOBAL: Migrations = CONFIG | {15: credit_limits_written}  # the Global layer's: only it is written the limits

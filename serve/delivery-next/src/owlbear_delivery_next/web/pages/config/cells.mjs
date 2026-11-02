@@ -248,6 +248,18 @@ export function userConfig(key) {
     (v) => edit(key, v), { key, disabled: state.saving }), source(key, state.loaded.settings[key], true, onOff));
 }
 
+// D-01M6DX04FRP680Z4GGHK5B9VRC: what the shell guard refuses or only warns about in a step's shell commands that
+// skip Git hooks or signing or force-push; layered, with no default: steps refuse while it is unset.
+const GUARD = [["strict", "strict: refuse what it finds, warn on weak signs"],
+  ["standard", "standard: refuse the known ways, warn on new variants"], ["lenient", "lenient: only warn"],
+  ["off", "off: check none of them"]];
+
+export function guardLevel() {
+  const key = "guard_level", below = inherited()[key];
+  return cell(choose("Shell guard level", [[INHERIT, clear(below)], ...GUARD], own(key) || INHERIT,
+    (v) => edit(key, v), { key, disabled: state.saving }), source(key, state.loaded.settings[key]));
+}
+
 function tokens(n) {
   return n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : `${Math.round(n / 1000)}k`;
 }

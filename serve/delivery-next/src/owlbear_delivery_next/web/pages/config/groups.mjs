@@ -8,7 +8,7 @@ export const GROUPS = [["overview", "Overview"], ["agents", "Agents"], ["runs", 
 // (set-spotter-switch) or a control's (global-machine-channel). An old address names one of them.
 const PARTS = {
   overview: ["scope", "unset", "across", "reads"],
-  agents: ["agents", "models", "shaper", "subagents", "spotter", "user-config", "load_user"],
+  agents: ["agents", "models", "shaper", "subagents", "spotter", "user-config", "load_user", "guard"],
   runs: ["rounds", "limits", "at-once", "sessions", "curation", "curator_threshold"],
   checks: ["general", "widths", "design_failures", "agreement", "impeccable", "merge", "prefs", "pr"],
   project: ["folder", "rename"],
@@ -37,7 +37,8 @@ export function rowOf(key) {
 export function draftGroup(key) {
   const [head, field] = key.split(".");
   if (head === "machine") return "this-machine";
-  if (head === "spot" || head.startsWith("load_user_") || ["model", "effort", "context", "subagents"].includes(field)) {
+  if (head === "spot" || head.startsWith("load_user_") || head === "guard_level"
+    || ["model", "effort", "context", "subagents"].includes(field)) {
     return "agents";
   }
   return ["widths", "design_failures", "prefs", "pr_labels", "pr_marker"].includes(head) ? "checks" : "runs";

@@ -238,7 +238,7 @@ def test_a_session_that_did_not_end_cleanly_stops_whatever_it_reported(sources, 
 def auditor_settings(**auditor: object) -> config.Settings:
     base = carried.layer()
     agents = base.agents | {"auditor": base.agents["curator"].model_copy(update=auditor)} if auditor else base.agents
-    switches = dict.fromkeys(roles.USER_CONFIG, False)
+    switches = dict.fromkeys(roles.USER_CONFIG, False) | {"guard_level": "strict"}
     return resolve(base.model_copy(update={"agents": agents, **switches}), Layer())
 
 
