@@ -26,6 +26,7 @@ _OPENERS = frozenset(
     {"{", "case", "for", "function", "if", "select", "until", "while"}
 )  # words that start a compound command
 _CLOSERS = frozenset({"}", "done", "esac", "fi"})
+_LEADS = frozenset({"!", "{", "do", "elif", "else", "if", "then", "time", "until", "while"})  # a command may follow
 _BLANK = " \t\n;&|<>()"  # what ends a here-document's delimiter word
 _BODY_ESCAPE = re.compile(r"\\([$`\\\n])")  # escapes an unquoted here-document's body loses
 
@@ -63,7 +64,8 @@ class _Level:
     opaque: bool  # its commands read input from outside the text: a pipe or an output process substitution
     arith: bool = False  # inside (( )): < and > are operators, never redirections
     pattern: bool = False  # its words are no command: a case arm's patterns, an array's elements
-    case: bool = False  # its first word is the keyword case, unquoted; 'case' runs a program
+    case: int | None = None  # where the keyword case is: first, or after leading words; a quoted 'case' runs a program
+    lead: bool = True  # its words so far are reserved words a command may follow, unquoted
     words: list[Word] = field(default_factory=list)
     inputs: list[Input] = field(default_factory=list)
     word: str | None = None
@@ -89,10 +91,13 @@ class _Level:
         word.split = self.split
         if self.redirect is None:
             self.pattern = self.pattern and (bool(self.words) or word != "esac")  # esac ends the arms
-            if not self.words:
-                self.case = word == "case" and "\0" not in self.plain
+            unquoted = "\0" not in self.plain
+            if self.lead and unquoted and word == "case":
+                self.case = len(self.words)
+            self.lead = self.lead and unquoted and word in _LEADS
             self.words.append(word)
-            self.pattern = self.pattern or (self.case and self.words[2:] == ["in"])  # arms follow
+            # its arms follow
+            self.pattern = self.pattern or (self.case is not None and self.words[self.case + 2 :] == ["in"])
         else:
             fd, kind = self.redirect
             if kind != "out":
@@ -119,6 +124,7 @@ class _Lexer:
         self.blocks: list[tuple[int, bool]] = []  # open compound commands: first command and whether input is opaque
         self.group: tuple[int, int] | None = None  # the commands of the subshell that just closed
         self.defined = False  # an empty () just closed: a function's body may follow
+        self.cases: set[int] = set()  # the commands that start a case: their block's ;; starts the next arm
 
     def level(  # noqa: PLR0913 - where to read, and what the text read is
         self, i: int, close: str = "", depth: int = 0, *, opaque: bool = False, arith: bool = False, words: bool = False
@@ -141,11 +147,11 @@ class _Lexer:
     def close(self, s: _Level, i: int) -> bool:
         """End the command being read at index *i*, keeping it when it has words or input; return whether it did."""
         s.end_word()
-        kept = bool(s.words or s.inputs or s.out) and (not s.pattern or s.case)
+        kept = bool(s.words or s.inputs or s.out) and (not s.pattern or s.case is not None)
         if kept:
             self._keep(s, i)
             s.piped = False
-        s.words, s.inputs, s.redirect, s.start, s.out, s.case = [], [], None, None, False, False
+        s.words, s.inputs, s.redirect, s.start, s.out, s.case, s.lead = [], [], None, None, False, None, True
         return kept
 
     def _keep(self, s: _Level, i: int) -> None:
@@ -164,6 +170,10 @@ class _Lexer:
         self.group, self.defined = None, False
         if first in _OPENERS:
             self.blocks.append((len(self.commands) - 1, opaque))
+        if s.case is not None:
+            self.cases.add(len(self.commands) - 1)
+            if s.case:  # `then case …`, `{ case …`: the case is a block of its own
+                self.blocks.append((len(self.commands) - 1, opaque))
 
     def _opaque(self, start: int, end: int | None = None) -> None:
         for command in self.commands[start:end]:
@@ -322,7 +332,7 @@ class _Lexer:
             return i + 1
         kept = self.close(s, i)
         if self.text.startswith((";;", ";&"), i) and self.blocks:
-            s.pattern = self.commands[self.blocks[-1][0]].words[:1] == ["case"]  # the next arm's patterns
+            s.pattern = self.blocks[-1][0] in self.cases  # the next arm's patterns
 
         if self.text.startswith("&&", i):
             s.conditional = True

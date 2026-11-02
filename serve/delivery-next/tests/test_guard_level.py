@@ -132,6 +132,9 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         (r"g\?t status", None),
         ("case $x in a*) echo;; esac", None),
         ("case $x in\n (a*|b?) echo;;\n *) ls;;\nesac", None),
+        ('for f in *.py; do case "$f" in t*) echo;; *) ls;; esac; done', None),  # a case after a reserved word
+        ("{ case $x in a) echo;; *) ls;; esac; }", None),
+        ("if true; then case $x in a) echo;; esac; g?t status; fi", "core"),
         ("curl 'https://x/?a=1'", None),
         ("curl https://x/?a=1", None),
         ("echo *.py", None),
