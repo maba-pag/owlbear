@@ -94,7 +94,8 @@ class _Level:
             unquoted = "\0" not in self.plain
             if self.lead and unquoted and word == "case":
                 self.case = len(self.words)
-            self.lead = self.lead and unquoted and word in _LEADS
+            # `function f { case …`: the name after function leads to its body
+            self.lead = self.lead and unquoted and (word in _LEADS or "function" in (word, *self.words[-1:]))
             self.words.append(word)
             # its arms follow
             self.pattern = self.pattern or (self.case is not None and self.words[self.case + 2 :] == ["in"])
