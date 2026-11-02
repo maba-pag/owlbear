@@ -233,7 +233,7 @@ class Follower:
         spots = [c.spot for c in self.chats.values() if c.spot] + self.leaving
         if spots:
             await asyncio.wait({asyncio.ensure_future(s.drain()) for s in spots}, timeout=CLOSE - spotter.GRACE - 2)
-        self._save()
+        self.saved = chat_offsets.save(self.chats.values(), self.saved)  # for the next run's gap record
 
     def _tell(self, text: str) -> None:
         if text and text != self.said:
@@ -272,7 +272,7 @@ class Follower:
                 break
             left -= await self._tail(cid, found[cid], plan.ctx, left)
         self.last = {}  # what the last run left counts only for the chats found when following began
-        self._save()
+        self.saved = chat_offsets.save(self.chats.values(), self.saved)  # for the next run's gap record
 
     def _off(self, why: str) -> None:
         self._tell(why)
@@ -492,9 +492,3 @@ class Follower:
             return False
         c.spot.look(look, 1.0, moment)
         return look == "state-change"
-
-    def _save(self) -> None:
-        """Keep each followed chat's offset for the next run's gap record (``chat_offsets``)."""
-        now = {c.id: {"offset": max(c.offset, c.history), "file": list(c.file)} for c in self.chats.values()}
-        if now != self.saved and chat_offsets.save(now):
-            self.saved = now

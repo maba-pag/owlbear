@@ -13,9 +13,14 @@ import tempfile
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.improvement import spotter
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from owlbear_delivery_next.machine_host.chats import Chat
 
 STATE = "chats.json"
 
@@ -29,8 +34,14 @@ def load() -> dict[str, Any]:
     return {}
 
 
-def save(now: dict[str, Any]) -> bool:
-    """Replace the offsets with *now*; whether they were written. A failure loses only the next gap record's bounds."""
+def save(chats: Iterable[Chat], saved: dict[str, Any]) -> dict[str, Any]:
+    """Keep each of *chats*' offset, unless *saved* holds them already; what is kept now.
+
+    A failure loses only the next gap record's bounds: what was kept before stays *saved*.
+    """
+    now = {c.id: {"offset": max(c.offset, c.history), "file": list(c.file)} for c in chats}
+    if now == saved:
+        return saved
     with contextlib.suppress(OSError):
         folder = spotter.root()
         fd, tmp = tempfile.mkstemp(dir=folder, prefix=".chats-")
@@ -41,8 +52,8 @@ def save(now: dict[str, Any]) -> bool:
         except BaseException:
             Path(tmp).unlink(missing_ok=True)
             raise
-        return True
-    return False
+        return now
+    return saved
 
 
 def missed(cid: str, old: dict[str, Any], start: int, file: tuple[int, int]) -> None:
