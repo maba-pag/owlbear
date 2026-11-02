@@ -1,6 +1,7 @@
 """Retro's job in the machine host (#715): leases per paid call, recovery, triggers, eligibility and pruning."""
 
 import asyncio
+import dataclasses
 import gzip
 import json
 import os
@@ -550,6 +551,25 @@ def test_an_unconfirmed_runtime_end_keeps_its_lease_and_ends_the_run_stopped(uni
     retro_store.request("owner", synthetic="verify-b")
     job.tick(1.0)
     assert (len(_runs()), len(retro_store.queued())) == (1, 1)  # no Retro call starts until Maintenance recovers it
+
+
+@pytest.mark.parametrize("site", ["a role cannot be read", "a runtime's end is not confirmed"])
+@pytest.mark.usefixtures("said")
+def test_a_retro_run_keeps_its_whole_reason(monkeypatch, whole_error, site):
+    names, told = whole_error.splitlines(), []
+    if site == "a role cannot be read":
+        monkeypatch.setattr(retro_job, "session", lambda _agent: (_ for _ in ()).throw(ValueError(whole_error)))
+    job = _job(Asker(during=lambda _n: spotter_look.UNENDED.get().extend(names)))
+    job.seams = dataclasses.replace(job.seams, say=told.append)
+    retro_store.request("owner", synthetic="verify-a")
+    job.tick(0.0)
+    [run] = _runs()
+    if site == "a role cannot be read":
+        assert (run["result"], told) == (f"refused: ValueError: {whole_error}", [])
+        return
+    reason = f"the end of Retro sessions was not confirmed: {', '.join(names)}"
+    [lease] = job.maintenance.read()["sessions"]
+    assert (lease["reason"], told) == (reason, [f"Retro: {reason}; no Retro call starts until Maintenance recovers it"])
 
 
 def test_the_machine_waits_for_retros_running_run():

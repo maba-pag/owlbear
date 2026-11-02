@@ -414,7 +414,7 @@ def test_a_pr_head_someone_else_pushed_goes_back_to_publish_without_reading_it_l
     assert gh.merges == []
 
 
-def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_merging(tmp_path, clone):
+def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_merging(tmp_path, clone, whole_error):
     head, entries = ci_head(clone, "${{ inputs.n }}")
     gh = FakeGh(pr(head=head))
     gh.checks = ()
@@ -430,13 +430,12 @@ def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_m
     saving = cx.store.write_profile
 
     def locked(_profile) -> None:
-        msg = "the shared settings are locked"
-        raise SharedError(msg)
+        raise SharedError(whole_error)
 
     cx.store.write_profile = locked
     assert follow.declared(cx, c, gh.pr, StepKind.MERGE) == ((), None)  # the answer holds though unsaved
     assert [e["reason"] for e in cx.store.events(c.slug) if e.get("event") == "profile-not-saved"] == [
-        "the shared settings are locked"
+        f"SharedError: {whole_error}"
     ]
     cx.store.write_profile, cx.profile = saving, p
     names, held = follow.declared(cx, c, gh.pr, StepKind.MERGE)
@@ -1052,6 +1051,22 @@ def test_gh_replies_in_threads_by_graphql_and_quotes_other_items_in_an_issue_com
     assert gh.post_reply("o/r", 7, comment("c1", "q"), "ok") == "IC1"
     assert "repos/o/r/issues/7/comments" in calls[-1][0]
     assert calls[-1][1] == {"body": "> https://github.com/o/r/pull/7#c1\n\nok"}
+
+
+@pytest.mark.parametrize("op", ["mark_ready", "post_reply", "resolve_thread", "dequeue"])
+def test_an_unexpected_github_answer_is_raised_whole(tmp_path, whole_error, op):
+    """#895: GitHub's whole answer reaches the step's retry reason through the engine."""
+    said = {"errors": [{"message": whole_error}]}
+    gh = GhProvider(tmp_path, runner=lambda *_a: done(said))
+    calls = {
+        "mark_ready": lambda: gh.mark_ready(pr()),
+        "post_reply": lambda: gh.post_reply("o/r", 7, thread("t1", ("h1", "o", "q")), "ok"),
+        "resolve_thread": lambda: gh.resolve_thread("t1"),
+        "dequeue": lambda: gh.dequeue(pr()),
+    }
+    with pytest.raises(ProviderError) as raised:
+        calls[op]()
+    assert str(raised.value) == f"{op}: {said}"
 
 
 class Host:
@@ -2126,6 +2141,23 @@ def test_reopen_reopens_the_pr_when_permitted_else_asks_the_owner(tmp_path, clon
         assert result.reason.startswith("Reopen PR #7 in GitHub")
 
 
+def test_a_refused_reopen_is_logged_with_its_whole_error(tmp_path, clone, whole_error):
+    """#895: GitHub's whole refusal reaches the reopen event, the owner then asked to reopen it."""
+    head, entries = ci_head(clone, "test")
+
+    class Refusing(FakeGh):
+        def reopen_pull_request(self, _repo, _number):
+            raise ProviderError(FailureCode.CONFLICT, "reopen_pull_request", whole_error, retry_safe=True)
+
+    gh = Refusing(pr(head=head, state="closed"))
+    c, _ = loop.schedule(change(StepKind.FOLLOW, worktree=str(clone)), [], NOW, "closed")
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question="q1", option="reopen")], NOW, "closed")
+    on = ctx(tmp_path, gh, prof(**entries, **{profile.PUSH: ProfileEntry(state="known", value="yes")}))
+    c, result = follow.run(on, c)
+    (event,) = [e for e in on.store.events("c1") if e.get("event") == "reopen"]
+    assert (result.exit, event["error"]) == (Exit.ASK, f"ProviderError: reopen_pull_request: {whole_error}")
+
+
 def test_a_silent_rejecting_pre_push_hook_becomes_a_builder_fix_after_readback(clone):
     hook = clone / ".git" / "hooks" / "pre-push"
     hook.write_text("#!/bin/sh\nexit 1\n")
@@ -3003,3 +3035,15 @@ def test_a_dequeue_not_read_back_as_removed_keeps_the_barrier_and_asks_nothing(t
         True,
         True,
     )
+
+
+def test_a_failed_fetch_keeps_gits_whole_output(clone, whole_error, monkeypatch):
+    c = change(StepKind.BUILD, worktree=str(clone))
+    c.step.task = "t1"
+
+    def refused(_path, argv, **_k):
+        return subprocess.CompletedProcess(argv, 1, b"", f"{whole_error}\n".encode())
+
+    monkeypatch.setattr(engine, "run_remote_git", refused)
+    result = engine.needs_target(c, clone, "greet() exists only on main", NOW)
+    assert (result.exit, result.reason) == (Exit.RETRY, f"RemoteGitFailed: fetch of main failed: {whole_error}")

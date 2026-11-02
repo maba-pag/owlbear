@@ -4,6 +4,7 @@ import asyncio
 import dataclasses
 import os
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -13,18 +14,25 @@ from types import SimpleNamespace
 
 import psutil
 import pytest
+import uvicorn
 from copilot._jsonrpc import JsonRpcError
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import BuildResult, Worktree
 from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.improvement import chatlogs
 from owlbear_delivery_next.local_system import processes
+from owlbear_delivery_next.local_system.codebase import CURRENT
+from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, sdk_spend, sdk_teardown
 from owlbear_delivery_next.runtimes.session_result import to_result
 from owlbear_delivery_next.state_store import spend_ledger
 from owlbear_delivery_next.state_store.database import StoreError
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import sessions
 
 ROOT, CHILD = 4242, 4243
 NOW = datetime(2026, 10, 24, tzinfo=UTC)
@@ -735,6 +743,85 @@ def test_a_session_failure_keeps_its_whole_error_in_the_run(world, monkeypatch):
     monkeypatch.setattr(sdk_adapter, "_open", broken)
     run = asyncio.run(sdk_adapter.run(world.cfg))
     assert (run.ending, run.detail) == ("error", f"RuntimeError: {said}")
+
+
+def test_a_session_failure_keeps_its_whole_error_in_the_journal_and_status(world, monkeypatch, tmp_path, whole_error):
+    """#894/#895: the step event of a failed session keeps its whole error, and its retry carries it as the reason."""
+
+    async def broken(*_args, **_kw):
+        raise RuntimeError(whole_error)
+
+    monkeypatch.setattr(sdk_adapter, "_open", broken)
+    run = asyncio.run(sdk_adapter.run(world.cfg))
+    store, change = Store(tmp_path / "store"), Change(slug="c1", brief=Brief(version=1))
+    store.write(Lock("c1"), change)
+    sessions.logged(store, Lock("c1"), change, run, {"kind": StepKind.BUILD, "exit": "retry"})
+    (step,) = [e for e in store.events("c1") if e.get("event") == "step"]
+    assert (step["ending"], step["detail"]) == ("error", f"RuntimeError: {whole_error}")
+    result = to_result(run, StepKind.BUILD, NOW)
+    assert (result.exit, result.cause, result.wake_at) == (Exit.RETRY, "tooling:build:sdk", None)
+    assert result.reason == f"RuntimeError: {whole_error}"
+
+
+class Host:
+    maintenance = None
+    wake = SimpleNamespace(set=lambda: None)
+    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
+
+    def activity(self, _slug: str) -> Activity:
+        return Activity(host_up=True)
+
+
+@pytest.mark.browser
+def test_a_failed_sessions_retry_shows_its_last_try_whole_on_the_changes_page(world, monkeypatch, tmp_path, pds,
+                                                                             whole_error):  # fmt: skip
+    """#895 P3: the status line of a step waiting to start again ends with its last failed try, whole; a retry
+    without a reason adds nothing."""
+    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    async def broken(*_args, **_kw):
+        raise RuntimeError(whole_error)
+
+    monkeypatch.setattr(sdk_adapter, "_open", broken)
+    result = to_result(asyncio.run(sdk_adapter.run(world.cfg)), StepKind.BUILD, NOW)
+    store = Store(tmp_path / "store")
+
+    def retrying(why: str) -> None:
+        c = Change(slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.BUILD))
+        store.write(Lock("c1"), loop.apply(c, result.model_copy(update={"reason": why}), NOW))
+
+    retrying(result.reason)
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    app = api.create_app(store, "tok", Host())
+    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_keep_alive=60))
+    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
+    while not server.started:
+        time.sleep(0.05)
+    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    machine_list = f"{base}/api/next/projects"  # served by the machine host, which this project host runs without
+    errors: list[str] = []
+    with sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        page = browser.new_page()
+        page.on("console", lambda m: m.type == "error" and m.location["url"] != machine_list and errors.append(m.text))
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        pds.only(page, base)
+        page.add_init_script("sessionStorage.setItem('token', 'tok');")
+        for why, tail in [(result.reason, f" · last try failed: RuntimeError: {whole_error}"), ("", "")]:
+            retrying(why)
+            page.goto(f"{base}/?change=c1")
+            line = page.locator("#detail p-text", has_text="not running: starting builder")
+            line.wait_for()
+            assert line.first.text_content().endswith(f"not running: starting builder{tail}")
+            tag, said = line.first.locator("xpath=..").locator("p-tag").bounding_box(), line.first.bounding_box()
+            assert abs(tag["y"] - said["y"]) < tag["height"]  # beside the first line, however long
+        assert errors == []
+        browser.close()
+    server.should_exit = True
 
 
 def test_a_session_that_cannot_be_noted_as_ours_is_never_created(world, monkeypatch):

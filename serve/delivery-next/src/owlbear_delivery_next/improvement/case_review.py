@@ -85,7 +85,7 @@ async def check(request: dict[str, Any], ask: Ask, meter: Meter, halt: Callable[
     except asyncio.CancelledError:  # the host ended: the session's teardown and spend are done, the result is kept
         why = "stopped: OwlBear stopped during a review"
     except Exception as exc:  # noqa: BLE001 - a failed review ends the run; its result is kept, never rerun
-        why = f"failed: {type(exc).__name__}: {exc}"[:300]
+        why = f"failed: {type(exc).__name__}: {exc}"
     out |= {"result": why or "checked", "credits": meter.report(), "ended": cases.now()}
     with cases.locked():
         cases.append("runs.jsonl", out)

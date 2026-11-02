@@ -597,3 +597,31 @@ def test_a_lead_chats_lookup_spends_for_its_project_as_a_chat_lookup(picking, mo
     [(project, place)] = places
     assert (place.project, place.job, place.change) == (project, "chat lookup", "")
     assert spend_ledger.where() == spend_ledger.Where()  # the route's thread keeps no place afterwards
+
+
+def _raises(exc: Exception):
+    def fail(*_a, **_k):
+        raise exc
+
+    return fail
+
+
+@pytest.mark.parametrize("fails", ["load", "run"])
+def test_a_failed_lookup_answers_and_logs_whole(picking, monkeypatch, caplog, whole_error, fails):
+    building(picking, picking.put(make()))
+    if fails == "load":
+        monkeypatch.setattr(lookup.decision_store, "load", _raises(decision_store.DecisionsUnavailable(whole_error)))
+        failed = f"DecisionsUnavailable: {whole_error}"
+    else:
+        monkeypatch.setattr(lookup, "_ran", _raises(RuntimeError(whole_error)))
+        failed = f"RuntimeError: {whole_error}"
+    asked = lookup.Asked(picking.store, Lock(picking.slug), picking.change)
+
+    with caplog.at_level("WARNING", logger=lookup.__name__):
+        said = json.loads(asked(pick_tools.Question(question=QUESTION)))
+        chatted, _ = lookup.chat(picking.shared, PROJECT, QUESTION, picking.store.settings)
+
+    assert said == chatted == {"failed": failed}
+    (event,) = [e for e in picking.store.events(picking.slug) if e.get("event") == "lookup-failed"]
+    assert event["reason"] == failed
+    assert [r.getMessage() for r in caplog.records] == [f"decision lookup failed: {failed}"]

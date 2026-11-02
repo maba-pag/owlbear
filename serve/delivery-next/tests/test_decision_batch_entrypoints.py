@@ -769,6 +769,22 @@ def test_a_known_refusal_after_an_owner_commit_keeps_the_transaction_batch(picki
     assert decision_batch.pending(shared) is not None
 
 
+def test_an_unknown_publication_keeps_its_whole_notice(picking, whole_error):
+    """A batch that stays interrupted says the publication's whole notice before naming the batch."""
+    shared = picking.shared
+    record = shared.root / PROJECT / "changes" / "record.json"
+    record.parent.mkdir(parents=True)
+    head = shared.git("rev-parse", "HEAD").stdout.strip()
+
+    notice = decision_transaction.transaction(
+        shared, PROJECT, "changes: unknown", [(record, b"{}")],
+        lambda _head, _fence: decision_transaction.Step(whole_error, unknown=True), head,
+    )  # fmt: skip
+
+    generation = decision_batch.pending(shared).generation
+    assert notice == f"{whole_error}; interrupted batch {generation}: finish or abandon it in Decisions"
+
+
 @pytest.mark.parametrize(
     "rel",
     [

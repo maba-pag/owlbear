@@ -36,7 +36,7 @@ def git(cwd: Path, args: list[str]) -> str:
             cwd=cwd, env=quiet, stdin=subprocess.DEVNULL, capture_output=True, text=True, check=True, timeout=120,
         )  # fmt: skip
     except subprocess.CalledProcessError as exc:
-        msg = f"git {args[0]} failed: {(exc.stderr or exc.stdout).strip()[:300] or f'exit {exc.returncode}'}"
+        msg = f"git {args[0]} failed: {(exc.stderr or exc.stdout).strip() or f'exit {exc.returncode}'}"
         raise pack_files.PackError(msg) from exc
     except (OSError, subprocess.TimeoutExpired) as exc:
         msg = f"git {args[0]} did not run: {exc}"

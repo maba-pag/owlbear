@@ -616,3 +616,48 @@ def test_unavailable_authority_is_not_proof_that_malformed_history_was_never_pub
 
     assert why
     assert picking.store.read(picking.slug).brief.approved_version == 1
+
+
+def _unavailable(reason: str):
+    def fail(*_args, **_kwargs):
+        raise decision_store.DecisionsUnavailable(reason)
+
+    return fail
+
+
+def test_a_save_that_fails_refuses_the_approval_with_its_whole_reason(picking, monkeypatch, whole_error):
+    shape(picking, 1, LASTING)
+    monkeypatch.setattr(decision_store, "save_all", _unavailable(whole_error))
+
+    said = picking.approve(1)
+
+    reason = f"{decision_publication.REFUSED}: {whole_error}"
+    assert (said.status_code, said.json()["detail"]) == (409, reason)
+    (event,) = [e for e in picking.store.events(picking.slug) if e.get("event") == "approval-refused"]
+    assert event["reason"] == reason
+
+
+@pytest.mark.parametrize("fails", ["save", "items"])
+def test_a_recovery_that_fails_waits_with_its_whole_reason(picking, monkeypatch, whole_error, fails):
+    shape(picking, 1, LASTING)
+
+    def crashed(*_args, **_kwargs):
+        raise Crash
+
+    monkeypatch.setattr(decision_store, "save_all", crashed)
+    with pytest.raises(Crash):
+        picking.approve(1)
+    if fails == "save":
+        monkeypatch.setattr(decision_store, "save_all", _unavailable(whole_error))
+        why = whole_error
+    else:
+        monkeypatch.setattr(decision_publication.decision_archive, "lasting", _unavailable(whole_error))
+        why = f"DecisionsUnavailable: {whole_error}"
+    monkeypatch.setattr(runner, "_run", lambda *_a: pytest.fail("no step works before the saves"))
+
+    waiting = stepped(picking, picking.slug)
+
+    reason = f"{decision_publication.UNSAVED}: {why}"
+    assert waiting.outcome.reason == reason
+    (event,) = [e for e in picking.store.events(picking.slug) if e.get("event") == "decisions-unsaved"]
+    assert event["reason"] == reason

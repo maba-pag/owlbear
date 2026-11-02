@@ -61,7 +61,7 @@ def undone(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
     try:
         why = _undo(path, change, task, lp, _start(store, lock, change, lp, path))
     except (OSError, subprocess.SubprocessError) as exc:
-        why = _failure(exc)
+        why = worktree.failure(exc)
     lp.undo = ""
     now = datetime.now(UTC)
     event = {"event": "undo", "at": now.isoformat(timespec="seconds"), "task": task.id, "attempt": lp.attempt}
@@ -73,10 +73,6 @@ def undone(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
         go(change, StepKind.BUILD, task.id)
     store.write(lock, change)
     return True
-
-
-def _failure(exc: OSError | subprocess.SubprocessError) -> str:
-    return " ".join(str(getattr(exc, "stderr", "") or exc).split())[:300]
 
 
 def _start(store: Store, lock: Lock, change: Change, lp: RoundLoop, path: Path) -> str:
@@ -205,7 +201,7 @@ def _final(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
             start = _start(store, lock, change, lp, path)
             why = _cleaned(path, change, lp, start) if clean else _taken(path, change, lp, undo, start)
     except (OSError, subprocess.SubprocessError) as exc:
-        why = _failure(exc)
+        why = worktree.failure(exc)
     lp.undo = ""
     now = datetime.now(UTC)
     event = {"event": "undo", "at": now.isoformat(timespec="seconds"), "task": FINAL, "attempt": lp.attempt}

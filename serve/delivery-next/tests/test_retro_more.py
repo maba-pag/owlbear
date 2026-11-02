@@ -19,6 +19,7 @@ from owlbear_delivery_next.machine_host import cases_job, retro_job
 from owlbear_delivery_next.machine_host.retro_inputs import where
 from owlbear_delivery_next.machine_host.retro_job import RetroJob, Seams
 from owlbear_delivery_next.state_store import machine_settings
+from owlbear_delivery_next.state_store.backlog import BacklogError
 
 SECRET = "ghp_" + "c" * 36
 TEXT = {"title": "Check the week column", "body": "The builder said done before the week column held ISO weeks."}
@@ -351,6 +352,19 @@ def test_a_follow_up_cut_at_its_limit_saves_nothing_and_a_synthetic_one_goes_onl
     assert world.entries[0].title.startswith("[synthetic] ")  # never the same title as a real entry
     with pytest.raises(store.RetroError, match="only to the sandbox"):
         followups.subject("rf-s", {"p1": world.places["p1"]})
+
+
+@pytest.mark.usefixtures("said")
+def test_a_follow_up_whose_backlog_cannot_be_reached_keeps_its_whole_reason(world, monkeypatch, whole_error):
+    def unreachable(*_args, **_kwargs):
+        raise BacklogError(502, whole_error)
+
+    monkeypatch.setattr(FakeBacklog, "add", unreachable)
+    followups.request("rf-2", "owner", world.places, followups.backlog)
+    _job(Model(TEXT), world.projects).tick(0.0)
+    [run] = _runs()
+    assert (run["result"], world.entries) == (
+        f"stopped: the backlog could not be reached (BacklogError: {whole_error})", [])  # fmt: skip
 
 
 def test_a_follow_ups_spend_counts_for_its_change_and_an_unscoped_ones_machine_wide(world):

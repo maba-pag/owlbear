@@ -18,10 +18,12 @@ from owlbear_delivery_next.change_contracts.models import Change, ErrorKind, Exi
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.runtimes import step_decisions, step_input
+from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock
-from owlbear_delivery_next.workflow_steps import pick, plan_round, reconsider, sessions
+from owlbear_delivery_next.workflow_steps import decisions_gate, pick, plan_round, reconsider, sessions
 
 AT = datetime(2026, 10, 21, 9, tzinfo=UTC)
 PROJECT = "shop-site"
@@ -262,3 +264,36 @@ def test_plan_and_code_reconsiderations_read_the_complete_list(which):
         said = plan_round.prompt(c, Path()) if which == "plan" else reconsider.prompt(c, task, Path())
 
     assert said.index(line(rule)) < said.index(step_decisions.COMPLETE) < said.index(line(other))
+
+
+def _session_said(ending: str, payload: pick_tools.PickResult | None = None, **fields):
+    async def run(cfg):
+        return Run(cfg.session_id, ending, payload, termination=Termination(confirmed=True), **fields)
+
+    return run
+
+
+@pytest.mark.parametrize(
+    ("said", "why"),
+    [
+        ("corrections", "OSError: {e}"),
+        ("detail", "its session ended error: {e}"),
+        ("usage_unread", "its pick cannot be trusted: {e}"),
+    ],
+)
+def test_a_failed_pick_at_a_boundary_keeps_its_whole_reason(picking, monkeypatch, whole_error, said, why):
+    run = Running(picking, monkeypatch, picking.put(make()))
+    picking.put(make(title="Farewells are polite", statement="Farewells say thank you."))
+    if said == "corrections":
+        monkeypatch.setattr(pick, "corrections", lambda *_a: (_ for _ in ()).throw(OSError(whole_error)))
+    elif said == "detail":
+        monkeypatch.setattr(runner.sdk_adapter, "run", _session_said("error", detail=whole_error))
+    else:
+        monkeypatch.setattr(runner.sdk_adapter, "run", _session_said("result", picked(), usage_unread=whole_error))
+
+    c = run.step()
+
+    reason = f"{decisions_gate.REPICK}: {why.format(e=whole_error)}"
+    assert c.outcome.reason == reason
+    (event,) = [e for e in picking.store.events(picking.slug) if e.get("kind") == StepKind.BUILD]
+    assert event["reason"] == reason

@@ -65,7 +65,7 @@ class _UnknownError(Exception):
 def _run(repo: DataRepo, until: float | None, *args: str) -> str:
     said = repo.git(*args, until=until)
     if said.returncode:
-        raise _UnknownError(said.stderr.strip()[:200] or f"git {args[0]} failed")
+        raise _UnknownError(said.stderr.strip() or f"git {args[0]} failed")
     return said.stdout
 
 
@@ -210,7 +210,7 @@ def _lapsed(repo: DataRepo, held: Mapping[str, object], until: float | None) -> 
         return False
     staged = repo.git("diff", "--cached", "--quiet", "HEAD", "--", watch, until=until)
     if staged.returncode not in (0, 1):
-        raise _UnknownError(staged.stderr.strip()[:200] or "git could not compare the index")
+        raise _UnknownError(staged.stderr.strip() or "git could not compare the index")
     return staged.returncode == 0 and _blob(repo, watch, until) == _blob_at(repo, "HEAD", watch, until)
 
 
@@ -224,7 +224,7 @@ def _unmet(repo: DataRepo, held: Mapping[str, object], until: float | None) -> s
     watch, rel, since = str(held["watch"]), held["file"], str(held["since"])
     kept = repo.git("merge-base", "--is-ancestor", since, UPSTREAM, until=until)
     if kept.returncode not in (0, 1):
-        raise _UnknownError(kept.stderr.strip()[:200] or "git could not compare the remote's history")
+        raise _UnknownError(kept.stderr.strip() or "git could not compare the remote's history")
     if kept.returncode:
         return f"the shared remote's history no longer holds {since[:12]}, where the change was prepared"
     # every commit since, merges included: a file that changed and changed back still changed (no bytes-only proof)

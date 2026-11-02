@@ -52,7 +52,7 @@ def approve(store: Store, lock: Lock, c: Change, approval: BriefApproval) -> str
     try:
         items = _items(store, after)
     except (decision_store.DecisionsUnavailable, DecisionError, OSError) as exc:
-        return f"{REFUSED}: {exc}"[:600]
+        return _refused(store, lock, c, f"{REFUSED}: {type(exc).__name__}: {exc}")
     if items:
         planned = [_record(d, None, approval.at) for d, _ in items]
         after = loop.fold(c, [approval.model_copy(update={"published": planned})], approval.at)
@@ -61,7 +61,12 @@ def approve(store: Store, lock: Lock, c: Change, approval: BriefApproval) -> str
         return ""
     done, why = _published(store, after, items)
     store.write(lock, c if why else done)
-    return f"{REFUSED}: {why}"[:600] if why else ""
+    return _refused(store, lock, c, f"{REFUSED}: {why}") if why else ""
+
+
+def _refused(store: Store, lock: Lock, c: Change, reason: str) -> str:
+    store.log(lock, c.slug, {"event": "approval-refused", "at": datetime.now(UTC).isoformat(), "reason": reason})
+    return reason
 
 
 def resume(store: Store, lock: Lock, c: Change, now: datetime) -> Change | None:
@@ -75,13 +80,14 @@ def resume(store: Store, lock: Lock, c: Change, now: datetime) -> Change | None:
     try:
         done, why = _published(store, c, _items(store, c))
     except (decision_store.DecisionsUnavailable, DecisionError, OSError) as exc:
-        done, why = c, str(exc)
+        done, why = c, f"{type(exc).__name__}: {exc}"
     if not why:
         store.write(lock, done)
         return done
-    reason = f"{UNSAVED}: {why}"[:300]
+    reason = f"{UNSAVED}: {why}"
     cause = cause_key(ErrorKind.NETWORK, c.step.kind, "decisions")
     retry = StepResult(exit=Exit.RETRY, cause=cause, reason=reason, wake_at=now + timedelta(minutes=1))
+    store.log(lock, c.slug, {"event": "decisions-unsaved", "at": now.isoformat(), "reason": reason})
     store.write(lock, loop.apply(c, retry, now))
     return None
 

@@ -96,7 +96,7 @@ class Ledger:
         except FileNotFoundError:
             return Seen(), ""
         except (OSError, ValidationError) as exc:
-            return Seen(), f"{type(exc).__name__}: {exc}"[:300]
+            return Seen(), f"{type(exc).__name__}: {exc}"
 
     def _write(self, seen: Seen) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)

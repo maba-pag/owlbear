@@ -143,7 +143,9 @@ def run(store: Store, lock: Lock, c: Change) -> Change:
         found = listed(view.snapshot, c)
         said = message(c, found, log)
     except (decision_store.DecisionsUnavailable, OSError, ValueError) as exc:
-        c.brief.picked = base.model_copy(update={"status": "failed", "reason": _one(str(exc))[:300]})
+        why = f"{type(exc).__name__}: {exc}"
+        c.brief.picked = base.model_copy(update={"status": "failed", "reason": why})
+        store.log(lock, c.slug, {"event": "pick-failed", "at": now.isoformat(), "reason": why})
         store.write(lock, c)
         return c
     base = base.model_copy(update={"commit": view.commit, "listed": digest(found, moved(view.snapshot, c))})
@@ -168,7 +170,7 @@ def reassessed(store: Store, lock: Lock, c: Change, found: list[Decision], root:
         log = corrections(root, store.name)
         message_text = message(c, found, log, LATER)
     except (OSError, ValueError) as exc:
-        return [], _one(str(exc))[:300]
+        return [], f"{type(exc).__name__}: {exc}"
     held = c.decisions_baseline
     done = _session(store, lock, c, message_text, held)
     said = judged(done, found, Pick(version=c.brief.version))
@@ -234,11 +236,11 @@ def _new_id(c: Change) -> str:
 def judged(done: Run, found: list[Decision], base: Pick) -> Pick:
     """The session's pick: its known ids with their revisions as listed, unknown ones dropped; else a failure."""
     if done.ending != "result" or not isinstance(done.payload, pick_tools.PickResult):
-        why = _one(done.detail) or "no pick was submitted"
-        return base.model_copy(update={"status": "failed", "reason": f"its session ended {done.ending}: {why}"[:300]})
+        why = done.detail or "no pick was submitted"
+        return base.model_copy(update={"status": "failed", "reason": f"its session ended {done.ending}: {why}"})
     if done.usage_unread or not (done.termination and done.termination.confirmed):
         why = done.usage_unread or "its processes were not confirmed gone"
-        return base.model_copy(update={"status": "failed", "reason": f"its pick cannot be trusted: {why}"[:300]})
+        return base.model_copy(update={"status": "failed", "reason": f"its pick cannot be trusted: {why}"})
     by_id, notes = {d.id: d for d in found}, {p.id: p.note for p in done.payload.picked}
     kept = [by_id[i] for i in notes if i in by_id]
     dropped = [i for i in notes if i not in by_id]

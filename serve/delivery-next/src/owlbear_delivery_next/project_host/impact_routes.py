@@ -8,6 +8,7 @@ lists the pinning Changes of every loaded project. A chat's call to the owner's 
 
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
     from owlbear_delivery_next.state_store.decision_impact import Place, Report
 
+_log = logging.getLogger(__name__)
 NO_SHARED = "No shared repository is set up, so there are no decisions; set one with `owlbear-next data PATH`"
 Revision = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 Folder = Annotated[str, Query(pattern=FOLDER_PATTERN)]  # the data folder whose view holds the decision
@@ -70,6 +72,7 @@ def _answer[T](work: Callable[[], T]) -> T:
     except Refused as exc:
         raise HTTPException(exc.status, str(exc)) from exc
     except decision_store.DecisionsUnavailable as exc:
+        _log.warning("decisions unavailable: %s (%s)", exc, exc.action)
         raise HTTPException(409, f"{exc} ({exc.action})") from exc
     except BacklogError as exc:
         raise HTTPException(exc.status, exc.text) from exc
@@ -111,6 +114,8 @@ def router(shared: Callable[[], DataRepo | None], places: Callable[[], Sequence[
         def work() -> dict[str, Any]:
             repo, found = read(folder, decision_id)
             done = decision_fixes.accept(repo, found, body.project, body.revision, body.reason)
+            if done.notice:
+                _log.warning("decision %s %s: %s", done.id, "saved" if done.saved else "not saved", done.notice)
             return {"receipts": [asdict(done)], "saved": done.saved}
 
         return _answer(work)

@@ -942,3 +942,19 @@ def test_a_run_record_with_an_unknown_field_is_refused_on_restart_and_never_rewr
         restart(tmp_path, change_repo)
     assert stored(Store(tmp_path / "store")) == raw  # kept byte for byte: nothing read it lossily or rewrote it
     assert len(paid.children) == (1 if where == "pending_child" else 0)
+
+
+def test_a_kept_child_that_no_longer_loads_retries_with_its_whole_reason(
+    tmp_path, change_repo, monkeypatch, whole_error
+):
+    paid = settlement_fails(tmp_path, change_repo, monkeypatch, "plan")
+    paid.verdicts.append(passing("plan"))
+
+    def unloadable(_data):
+        raise ValueError(whole_error)
+
+    monkeypatch.setattr(pending_child.held, "restored", unloadable)
+    store = restart(tmp_path, change_repo)
+    expected = f"its kept result no longer loads: ValueError: {whole_error}"
+    assert (store.read("c1").outcome.exit, store.read("c1").outcome.reason) == (Exit.RETRY, expected)
+    assert [e["detail"] for e in store.events("c1") if e.get("kind") == "plan-challenge"][-1] == expected

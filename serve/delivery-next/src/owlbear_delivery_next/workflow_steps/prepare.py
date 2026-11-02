@@ -37,8 +37,9 @@ from owlbear_delivery_next.change_contracts.models import (
     Stop,
     Waiting,
 )
-from owlbear_delivery_next.change_contracts.preparation import LIVE, SNAPSHOT, Preparation
+from owlbear_delivery_next.change_contracts.preparation import LIVE, SNAPSHOT, Preparation, Preparing
 from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.change_flow.worktree import failure
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.workflow_steps import before, check, engine, preparer
 
@@ -183,7 +184,7 @@ def stray(store: Store, slug: str, log: Log) -> None:
 
 
 def chosen(  # noqa: PLR0913, PLR0917 - the session's end, its worktree and what it started from
-    store: Store, c: Change, root: Path, payload: tools.Args | None, ctx: preparation.Preparing, result: loop.StepResult
+    store: Store, lock: Lock, c: Change, root: Path, payload: tools.Args | None, ctx: Preparing, result: loop.StepResult
 ) -> loop.StepResult:
     """End a preparer session: keep an accepted recipe's option and setup edits as its patch, then discard every edit.
 
@@ -207,7 +208,8 @@ def chosen(  # noqa: PLR0913, PLR0917 - the session's end, its worktree and what
                 for suffix in (".json", ".patch"):
                     _file(store, c.slug, c.step.task or "", suffix).unlink(missing_ok=True)
     except (OSError, subprocess.SubprocessError) as exc:
-        result = check.failed(f"the preparer's setup edits could not be kept: {exc}"[:300])
+        result = check.failed(why := f"the preparer's setup edits could not be kept: {failure(exc)}")
+        store.log(lock, c.slug, {"event": "setup-edits-not-kept", "at": datetime.now(UTC).isoformat(), "reason": why})
     finally:
         discard(root, made)
         marker.unlink(missing_ok=True)
@@ -391,7 +393,7 @@ def _into(  # noqa: PLR0913 - the run, its two worktrees and the permissions in 
         try:  # before restore and seed, so setup scripts the preparer repaired are the ones they run
             _git(root, "apply", "--binary", str(patch))
         except subprocess.CalledProcessError as exc:
-            return f"the setup patch did not apply: {exc.stderr.decode(errors='replace').strip()[:200]}"
+            return f"the setup patch did not apply: {exc.stderr.decode(errors='replace').strip()}"
     env = isolated(rec)
     return _command(rec, "restore", root, log, env) or _command(rec, "seed", root, log, env)
 
@@ -418,9 +420,9 @@ def launch(store: Store, c: Change, settings: Settings, log: Log) -> loop.StepRe
     try:
         note = _into(store, c, rec, Path(c.names.worktree), settings=settings, log=log, keep=True)
     except (PrepareError, OSError, subprocess.SubprocessError) as exc:
-        return exc.result if isinstance(exc, PrepareError) else check.failed(f"test preparation failed: {exc}"[:300])
+        return exc.result if isinstance(exc, PrepareError) else check.failed(f"test preparation failed: {failure(exc)}")
     if note:
-        return check.failed(f"test preparation failed: {note}"[:300])
+        return check.failed(f"test preparation failed: {note}")
     _write(store, c.slug, rec.model_copy(update={"ready": True}))
     reason = f"test copy {rec.option.id} prepared; starting the check"
     return loop.StepResult(exit=Exit.PENDING, waiting=Waiting.CHECK_START, reason=reason)
@@ -468,10 +470,10 @@ def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> lo
                 try:
                     discard(Path(rec.applied), rec.paths)
                 except (OSError, subprocess.SubprocessError) as exc:
-                    stuck = f"the check's setup edits ({', '.join(rec.paths[:5])}) could not be discarded: {exc}"[:300]
+                    stuck = f"the check's setup edits ({', '.join(rec.paths)}) could not be discarded: {failure(exc)}"
         at = datetime.now(UTC)
         log({"event": "prepared-end", "at": at.isoformat(), "check": rec.check, "cleanup": note or "ok"}
-            | ({"outstanding": True} if note else {}))  # fmt: skip
+            | ({"outstanding": True} if note else {}) | ({"stuck": stuck} if stuck else {}))  # fmt: skip
         if stuck:
             stop = Stop(kind=ErrorKind.STATE, reason=stuck, action=f"Discard those edits in {rec.applied}",
                         resume="The worktree holds none of them", at=at)  # fmt: skip
@@ -490,8 +492,9 @@ def ran(store: Store, lock: Lock, c: Change, repo: Path, *, runnable: bool) -> b
         return True
     if not runnable or before.due(c) or not due(store, c):  # the "before" capture exports and restores first
         return False
-    result = launch(store, c, store.settings(), log)
-    if result.exit != Exit.PENDING:
+    result, at = launch(store, c, store.settings(), log), datetime.now(UTC)
+    if result.exit != Exit.PENDING:  # every such result says why
         c.env = c.recipe = None
-    store.write(lock, loop.apply(c, result, datetime.now(UTC)))
+        log({"event": "step", "at": at.isoformat(), "kind": c.step.kind, "exit": result.exit, "reason": result.reason})
+    store.write(lock, loop.apply(c, result, at))
     return True

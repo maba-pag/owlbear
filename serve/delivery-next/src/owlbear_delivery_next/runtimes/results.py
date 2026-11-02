@@ -193,7 +193,7 @@ class Gate:
         if errors:
             self.run.invalid += not linted  # lint has its own limit (TD-87)
             if self.run.invalid >= tools.INVALID_LIMIT:
-                self._finish("invalid", None, "; ".join(errors)[:300])
+                self._finish("invalid", None, "; ".join(errors))
             lines = "\n".join(f"- {e}" for e in errors)
             return f"Rejected. Fix each field, then call again:\n{lines}", False
         if spec is self.cfg.first_look:  # recorded, and the turn goes on with what it releases

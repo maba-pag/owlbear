@@ -1,5 +1,6 @@
 """Item 7 (TD-36, TD-63): the missing-tool report, its five cases in order, and how each one moves the Change."""
 
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,6 +15,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Criterion,
     Exit,
     ItemRef,
+    Names,
     Plan,
     Step,
     StepKind,
@@ -29,6 +31,7 @@ from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import missing, sdk_adapter, step_input
 from owlbear_delivery_next.runtimes.session_result import Run, to_result
+from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import brief_round, conversation, plan_round
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -326,3 +329,48 @@ def test_a_failed_shelve_asks_the_owner_before_any_planner_runs(tmp_path) -> Non
 def test_prompts_name_the_report() -> None:
     assert "report_missing_tool" in step_input.FINISH
     assert "report_missing_tool" in step_input.reminder("builder")
+
+
+@pytest.mark.parametrize("how", ["refused", "left"])
+def test_a_shelve_failure_is_asked_and_logged_whole(repo, tmp_path, whole_error, monkeypatch, how) -> None:
+    store = Store(tmp_path / "store")
+    c = change(K.PLAN).model_copy(update={"names": Names(branch="owlbear/c1", target="main")})
+    store.write(Lock("c1"), c)
+    left = [f"new-{i:02d}-{'x' * 12}.txt" for i in range(30)]
+    for name in left:
+        (repo / name).write_text("new\n")
+    real = worktree.git
+
+    def stash(cwd, *args):
+        if args[0] != "stash":
+            return real(cwd, *args)
+        if how == "refused":
+            raise subprocess.CalledProcessError(1, "git stash push", stderr=whole_error)
+        return ""  # Git reported success yet kept the files
+
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)
+    monkeypatch.setattr(worktree, "git", stash)
+    runner._step(store, Lock("c1"), store.read("c1"), Step(kind=K.PLAN), repo)  # noqa: SLF001
+    why = (
+        f"git stash failed in {repo}: CalledProcessError: Command 'git stash push' returned non-zero exit status 1.\n"
+        f"{whole_error}"
+        if how == "refused"
+        else f"files stay uncommitted in {repo} after git stash: " + "\n".join(f"?? {n}" for n in left)
+    )
+    q = loop.open_question(store.read("c1"))
+    assert q.text == (
+        f"Delivery could not set aside the uncommitted edits before planning ({why}). Commit, stash or discard them."
+    )
+    assert [e["reason"] for e in store.events("c1") if e["event"] == "not-shelved"] == [f"ShelveError: {why}"]
+
+
+@pytest.mark.parametrize("where", ["report", "session"])
+def test_a_denial_keeps_its_whole_text(whole_error, where) -> None:
+    if where == "report":
+        r = to_result(run(report("docker"), denied={"docker": whole_error}), K.BUILD, NOW)
+        reason = f"docker was denied by Delivery's guard, which grants nothing: {whole_error}"
+        assert (r.reason, r.denial) == (reason, whole_error)
+    else:
+        failed = Run("s1", ending="error", detail="stopped", termination=Termination(confirmed=True))
+        failed.denials = [f"earlier: {whole_error}"]
+        assert to_result(failed, K.BUILD, NOW).denial == f"earlier: {whole_error}"

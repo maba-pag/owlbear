@@ -68,7 +68,7 @@ def _serve(  # noqa: PLR0913 - the widths come from the settings, the test copy 
     try:
         env = prepare(root) if prepare else None  # TD-96: the same frozen snapshot the "after" capture restores
     except Exception as exc:  # noqa: BLE001 - the "before" capture never gates the Change (B25)
-        notes.append(f"the test copy at the merge-base: {exc}"[:300])
+        notes.append(f"the test copy at the merge-base: {worktree.failure(exc)}")
         return []
     proc = check.start(e, root, out / "preview.log", env)
     if proc is None:
@@ -110,7 +110,9 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
         base = worktree.git(path, "merge-base", "HEAD", worktree.tracking(path, c.names.target)).strip()
         tree = visual.tree(path, base)
     except (subprocess.SubprocessError, OSError) as exc:
-        return VisualResult(head="", tree="", findings=[f"the merge-base could not be read: {exc}"[:300]], at=now)
+        return VisualResult(
+            head="", tree="", findings=[f"the merge-base could not be read: {worktree.failure(exc)}"], at=now
+        )
     shots: list[visual.Shot] = []
     notes: list[str] = []
     sources: list[DetectorScan] = []
@@ -132,7 +134,7 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
         if scan := design.sources(tmp, visual.ui_paths(c, worktree.head(path)), design.pack()):
             sources.append(scan)  # the Change's UI paths in the merge-base's whole tree, after the screenshots
     except Exception as exc:  # noqa: BLE001 - the "before" capture never gates the Change (B25)
-        notes.append(f"{type(exc).__name__}: {exc}"[:300])
+        notes.append(worktree.failure(exc))
     finally:
         if tmp is not None:
             _remove(repo, tmp)

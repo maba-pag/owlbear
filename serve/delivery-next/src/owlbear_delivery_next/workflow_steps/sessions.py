@@ -157,6 +157,7 @@ def account(change: Change, done: session_result.Run, fields: dict[str, object])
     """Add one session's usage and tool calls to the Change in memory and return its step event; nothing is written."""
     step = {"event": "step", "at": datetime.now(UTC).isoformat(timespec="seconds"), "session": done.session_id}
     step |= fields | {"ending": done.ending, "head": done.head, "usage": done.usage, "model": done.model_check}
+    step |= {"detail": done.detail} if done.ending != "result" and done.detail else {}  # #894: the whole error
     step |= {"usage_unread": done.usage_unread} if done.usage_unread else {}
     step |= {"subagents": done.subagents} if done.subagents else {}  # within the usage, never added to the spend
     step["termination"] = dataclasses.asdict(done.termination) if done.termination else None
@@ -337,7 +338,7 @@ def _closed(  # noqa: PLR0913, PLR0917 - the copy its runs ran in, and who keeps
         reason = f"a read-only step changed shared Git settings: {'; '.join(changes)}"
         events.append({"event": "read-only-tampered", "at": at, "changes": changes, "sessions": ids})
         for r in runs:
-            r.ending, r.payload, r.first, r.head, r.detail = "shared-git-changed", None, None, None, reason[:300]
+            r.ending, r.payload, r.first, r.head, r.detail = "shared-git-changed", None, None, None, reason
     elif moved := disposable.changed(copy):
         reason = f"a read-only step changed the repository: {', '.join(moved)}"
         events.append({"event": "read-only-violation", "at": at, "refs": moved, "sessions": ids})

@@ -492,3 +492,40 @@ def test_a_judge_that_moves_a_ref_with_its_usage_unread_is_retried_for_the_viola
     assert [(r.exit, r.cause) for r, _ in ran] == [(Exit.RETRY, "policy:check:read-only-write")]
     steps = [e for e in store.events("c1") if e.get("event") == "step"]
     assert [(e["kind"], e["usage_unread"]) for e in steps] == [("visual-review", "no usage event")]
+
+
+@pytest.mark.parametrize("where", ["prepare", "locate", "remove"])
+def test_a_read_only_worktree_git_refuses_says_its_whole_output(tmp_path, change_repo, whole_error, monkeypatch, where):
+    store = Store(tmp_path / "store")
+    if where == "remove":
+        assert isinstance(disposable.prepare(change_repo, store, "c1"), disposable.Copy)
+    failed = subprocess.CalledProcessError(128, "git x", stderr=whole_error)
+    real = worktree.git
+
+    def refused(cwd, *args):
+        if args[:2] == ("worktree", "add" if where == "prepare" else "remove"):
+            raise failed
+        return real(cwd, *args)
+
+    def unlocated(_cwd):
+        raise failed
+
+    monkeypatch.setattr(disposable.worktree, "git", refused)
+    monkeypatch.setattr(disposable, "git_common_dir", unlocated if where == "locate" else git_common_dir)
+    act = disposable.prepare if where == "prepare" else disposable.remove
+    told = act(change_repo, store, "c1")
+    cause = f"CalledProcessError: Command 'git x' returned non-zero exit status 128.\n{whole_error}"
+    expected = {
+        "prepare": f"the read-only worktree could not be prepared: {cause}",
+        "locate": f"the read-only worktree of {change_repo} could not be located: {cause}",
+        "remove": f"git worktree remove failed: {cause}",
+    }
+    assert told == expected[where]
+
+
+def test_a_long_shared_git_change_stops_with_its_whole_reason(store, change_repo, monkeypatch, whole_error):
+    value = " ".join(whole_error.split())
+    reviewer(monkeypatch, lambda cfg: git(cfg.worktree, "config", "owlbear.note", value))
+    c = reviewed(store, change_repo)
+    expected = f"a read-only step changed shared Git settings: added config owlbear.note={value}"
+    assert (c.outcome.exit, c.stop.reason) == (Exit.STOP, expected)

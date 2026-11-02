@@ -18,6 +18,7 @@ import pytest
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.audit_tools import AuditResult
+from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.impeccable_runs import machine_lock, pack_job, pack_repair
 from owlbear_delivery_next.impeccable_runs.pack_state import MACHINE_LOCK
 from owlbear_delivery_next.local_system import local_home
@@ -657,6 +658,141 @@ def test_the_merge_gate_judges_the_pull_requests_head_again_when_its_pages_chang
         assert {"audit", "browser", "pds-challenge"} <= {op for op, _ in notes}
 
 
+@pytest.mark.parametrize("cause", ["updater", "merge-audit", "merge-challenger"])
+def test_a_failed_pds_stage_keeps_and_logs_its_whole_error(tmp_path, checkout, whole_error, cause):
+    """The updater's error, or the merge gate's audit stop or challenger finding, reaches the reason, stage, invocation
+    and log whole."""
+    fakes, audits, challengers = Fakes(checkout), [], []
+    real = fakes.session
+    problems = [whole_error[i : i + 500] for i in range(0, len(whole_error), 500)]  # a finding holds at most 500
+
+    def ending(store: Store, cfg) -> Run:
+        audits.extend([cfg] if cfg.job == sessions.AUDIT else [])
+        challengers.extend([cfg] if cfg.role == "challenger" else [])
+        done = Termination(confirmed=True)
+        if (cause == "updater" and cfg.role == "updater") or (cause == "merge-audit" and len(audits) == 3):
+            return Run(cfg.session_id, "error", detail=whole_error, termination=done)
+        if cause == "merge-challenger" and len(challengers) == 2:  # the merge gate's challenger
+            found = [tools.Finding(place=f"{PAGE}:2", problem=p, fix="s") for p in problems]
+            return Run(cfg.session_id, "result", payload=tools.ReviewResult(verdict="fix", findings=found),
+                       termination=done)  # fmt: skip
+        return real(store, cfg)
+
+    fakes.session = ending
+    pushed = DEMO if cause != "merge-challenger" else DEMO.replace(PLANT, 'size="xs"') + "export const u = 1;\n"
+    fakes.github.push = {f"{REPO}{PAGE}": pushed}  # the head's pages changed: the merge gate judges them again
+    state = run(pds_job.Job(store(tmp_path), fakes.live(checkout)))
+
+    logged = [line.split(" ", 1)[1] for line in state["log"]]
+    if cause == "updater":
+        reason = f"update: PackError: the updater ended with error: {whole_error}"
+        assert (state["state"], state["reason"]) == ("failed", reason)
+        assert next(s for s in state["stages"] if s["name"] == "update")["detail"] == reason
+        assert [i["detail"] for i in state["invocations"] if i["operation"] == "pds-update"][-1] == reason
+        assert logged[-3:] == ["update: running", f"update: failed: {reason}", reason]
+        return
+    if cause == "merge-audit":
+        said, gate, op = f"the auditor submitted no report: ended error; {whole_error}", "deprecation audit", "audit"
+    else:  # a finding's whitespace collapses into one line (pack_run._verdict)
+        said = "; ".join(" ".join(f"{PAGE}:2: {p} - fix: s".split()) for p in problems)
+        gate, op = "challenger", "pds-challenge"
+    head = pr_head(checkout, fakes)[:12]
+    reason = f"the pull request's head {head} changed pages, and the {gate} found: {said}"
+    assert (state["state"], state["reason"]) == ("waiting", reason)
+    [note] = [i for i in state["invocations"] if i.get("stage") == "merge" and i["operation"] == op]
+    assert note["detail"] == said
+    assert next(s for s in state["stages"] if s["name"] == "merge")["detail"] == reason
+    assert [i["detail"] for i in state["invocations"] if i["operation"] == "merge"][-1] == reason
+    assert logged[-3:] == ["merge: findings", f"merge: failed: {reason}", f"waiting for you: {reason}"]
+
+
+ENDED = Run("ended", "error", detail="", termination=Termination(confirmed=True))
+
+
+def test_a_failed_reconsideration_keeps_and_logs_its_whole_error(tmp_path, checkout, whole_error):
+    """The challenger reconsidering the findings the owner sent back fails: its whole words reach the run's reason, the
+    stage, the invocation and the log (#895)."""
+    fakes = Fakes(checkout)
+    fakes.verdicts, real = ["fix"], fakes.session
+
+    def session(store: Store, cfg) -> Run:
+        if cfg.role == "challenger" and cfg.rechecks:
+            if cfg.submit is not tools.REVIEW:  # the owner sent the finding back: reconsidering it fails
+                return replace(ENDED, detail=whole_error)
+            fakes.calls.append("challenger")  # the updater's rejection checked: the finding holds
+            upheld = [tools.Recheck(finding=k, upheld=True, reason="r") for k in cfg.rechecks]
+            return Run(cfg.session_id, "result", payload=tools.ReviewResult(verdict="pass", rechecked=upheld),
+                       termination=Termination(confirmed=True))  # fmt: skip
+        done = real(store, cfg)
+        if cfg.role == "updater" and fakes.calls.count("challenger") == 1:  # it rejects the challenger's finding
+            rejected = [tools.Rejection(finding="F1", reason="it already holds")]
+            done = replace(done, payload=sessions.UpdateResult(summary=done.payload.summary, rejected=rejected))
+        return done
+
+    fakes.session = session
+    job = pds_job.Job(store(tmp_path), fakes.live(checkout))
+    state = run(job)
+    assert [q["kind"] for q in state["questions"]] == ["dispute"], state["reason"]
+    state = PACK.answered(job, "reconsider", "the size is the release's own example")
+
+    reason = f"challenger: PackError: the challenger ended with error: {whole_error}"
+    assert (state["state"], state["reason"]) == ("failed", reason)
+    assert next(s for s in state["stages"] if s["name"] == "challenger")["detail"] == reason
+    assert state["invocations"][-1]["detail"] == reason
+    logged = [line.split(" ", 1)[1] for line in state["log"]]
+    assert logged[-3:] == ["challenger: running", f"challenger: failed: {reason}", reason]
+
+
+@pytest.mark.parametrize("cause", ["repair-session", "repair-check", "repair-push"])
+def test_a_failed_ci_repair_keeps_and_logs_its_whole_error(tmp_path, checkout, whole_error, cause):
+    """An agent's CI repair, the audit of its repair or its push fails: its whole words reach the run's reason, the
+    stage, the invocation and the log (#895)."""
+    edits = {f"{REPO}{PAGE}": FIXED + "export const u = 1;\n"} if cause != "repair-session" else {}
+    fakes, job, _state, _heads = ci_failed(tmp_path, checkout, edits)
+    before, real, ended = pr_head(checkout, fakes), fakes.session, replace(ENDED, detail=whole_error)
+    failing = (lambda cfg: cfg.submit is pack_repair.SUBMIT) if cause == "repair-session" else (
+        lambda cfg: cfg.job == sessions.AUDIT
+    )  # fmt: skip
+    job.live.session = lambda store, cfg: ended if failing(cfg) else real(store, cfg)
+    if cause == "repair-push":
+        job.live.session, git_run = real, job.live.git
+
+        def refused(at, argv):
+            if argv[0] == "push" and any(i["operation"] == pack_repair.REPAIR for i in job.state["invocations"]):
+                raise pack_files.PackError(whole_error)
+            return git_run(at, argv)
+
+        job.live.git = refused
+    state = PACK.answered(job, "repair")
+
+    logged = [line.split(" ", 1)[1] for line in state["log"]]
+    again = "have an agent try again, or discard"
+    if cause == "repair-session":
+        detail = f"the agent's repair did not finish: PackError: the agent ended with error: {whole_error}"
+        url = next(i["detail"] for i in state["invocations"] if i["operation"] == "pull-request")
+        stage, op, reason = (
+            "merge",
+            pack_repair.REPAIR,
+            f"CI failed at {before[:12]} of {url}: CI; {detail}. Fix it and try again, {again}",
+        )
+    elif cause == "repair-push":
+        made = re.search(r"the agent's repair (\w{12}) ", state["reason"])[1]
+        detail = f"the agent's repair {made} was not pushed: {whole_error}"
+        url = next(i["detail"] for i in state["invocations"] if i["operation"] == "pull-request")
+        stage, op = "merge", pack_repair.REPAIR
+        reason = f"CI failed at {before[:12]} of {url}: CI; {detail}. Fix it and try again, {again}"
+    else:
+        checking = next(i["detail"] for i in state["invocations"] if i["result"] == "checking")
+        made = re.match(r"the agent's repair (\w{12}) ", checking)[1]
+        detail = f"audit: the auditor submitted no report: ended error; {whole_error}"
+        said = f"the agent's repair {made} failed its check and was not pushed: {detail}"
+        stage, op, reason = "audit", "audit", f"CI failed at {before[:12]}: CI; {said}. Try again, {again}"
+    assert (state["state"], state["reason"]) == ("waiting", reason)
+    assert next(s for s in state["stages"] if s["name"] == stage)["detail"] == reason
+    assert [i["detail"] for i in state["invocations"] if i["operation"] == op][-1] == detail
+    assert logged[-2:] == [f"{stage}: failed: {detail}", f"waiting for you: {reason}"]
+
+
 FLAKY = "tests/test_visual.py::test_a_real_capture_of_a_local_page"
 
 
@@ -759,6 +895,22 @@ def test_a_failing_browser_run_tells_what_its_report_says_not_the_output_tail(tm
 def test_a_browser_run_that_proves_nothing_cannot_judge(tmp_path, browsers, runner, said):  # noqa: ARG001
     with pytest.raises(browser.Unrunnable, match=re.escape(said)):
         browser.run(tmp_path, runner=runner)
+
+
+@pytest.mark.parametrize("cause", ["cdn", "no-report"])
+def test_an_unrunnable_browser_run_is_told_with_its_whole_output(tmp_path, browsers, whole_error, cause):  # noqa: ARG001
+    """The PDS CDN's silence, or a run that left no report, is told with the run's whole output (#895)."""
+    if cause == "cdn":
+        output = f"E   {browser.CDN} https://cdn.ui.porsche.com/x failed\n{whole_error}"
+        with pytest.raises(browser.Unrunnable) as raised:
+            browser.run(tmp_path, runner=Runner(suite(4), 1, output))
+        assert str(raised.value) == f"the PDS CDN did not answer, so the browser tests prove nothing: {output}"
+        return
+    with pytest.raises(browser.Unrunnable) as raised:
+        browser.run(tmp_path, runner=Runner(None, 2, whole_error))
+    report = tmp_path / ".pds" / browser.REPORT
+    exc = f"[Errno 2] No such file or directory: '{report}'"
+    assert str(raised.value) == f"the browser tests left no report (exit 2): {exc}; {whole_error}"
 
 
 def test_without_playwrights_browsers_the_tests_cannot_run(tmp_path, monkeypatch):

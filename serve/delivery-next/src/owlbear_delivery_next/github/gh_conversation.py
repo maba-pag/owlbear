@@ -135,7 +135,7 @@ class Conversation(GhClient):
             try:
                 return str(result["data"]["addPullRequestReviewThreadReply"]["comment"]["id"])
             except (KeyError, TypeError) as exc:
-                raise ProviderError(FailureCode.RESPONSE_UNKNOWN, op, str(result)[:200], retry_safe=False) from exc
+                raise ProviderError(FailureCode.RESPONSE_UNKNOWN, op, str(result), retry_safe=False) from exc
         endpoint = f"{repo(repository)}/issues/{number}/comments"
         posted = self._api(op, "POST", endpoint, body={"body": f"> {item.url}\n\n{body}"}, write=True)
         try:
@@ -147,7 +147,7 @@ class Conversation(GhClient):
         """Resolve one review thread; True only when GitHub acknowledges it resolved."""
         result = self._graphql("resolve_thread", _RESOLVE, {"id": thread_id}, write=True)
         if not isinstance(result, dict) or result.get("errors"):
-            raise ProviderError(FailureCode.RESPONSE_UNKNOWN, "resolve_thread", str(result)[:200], retry_safe=False)
+            raise ProviderError(FailureCode.RESPONSE_UNKNOWN, "resolve_thread", str(result), retry_safe=False)
         try:
             return result["data"]["resolveReviewThread"]["thread"]["isResolved"] is True
         except KeyError, TypeError:

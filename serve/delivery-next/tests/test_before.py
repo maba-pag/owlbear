@@ -233,7 +233,7 @@ def test_an_install_over_time_is_stopped_with_its_whole_group(ui, tmp_path, monk
     monkeypatch.setattr(before.worktree, "installs", lambda _p, _scope: [(".", slow)])
     events = []
     shots = run(ui, tmp_path, events)
-    assert shots.findings == [f"`{before.check.shown(shlex.split(slow))}` took over 2 s"]
+    assert shots.findings == [f"`{shlex.join(shlex.split(slow))}` took over 2 s"]
     installer = int(next(iter(events[0]["pids"])))
     assert gone(installer)
     assert gone(int(child.read_text()))
@@ -270,3 +270,36 @@ def test_the_runner_records_the_before_capture_and_the_page_serves_it(ui, tmp_pa
     assert client.get("/api/next/changes/c1").json()["before"]["head"] == c.before.head
     for name in ("other-1280.png", "..%2Fhome-1280.png"):
         assert client.get(f"/api/next/changes/c1/before/{name}").status_code == 404
+
+
+@pytest.mark.parametrize("site", ["merge-base", "test-copy", "capture"])
+def test_a_before_capture_that_fails_keeps_its_whole_error(ui, tmp_path, monkeypatch, site, whole_error):
+    """#895 K4: before :113, :71 and :135 keep the whole failure, a git command's whole stderr included."""
+    failed = subprocess.CalledProcessError(1, "git merge-base", stderr=whole_error)
+    real, prepare = before.worktree.git, None
+
+    def git_failing(cwd, *args):
+        if args[0] == "merge-base":
+            raise failed
+        return real(cwd, *args)
+
+    def raising(*_a, **_k):
+        raise (RuntimeError(whole_error) if site == "test-copy" else failed)
+
+    if site == "merge-base":
+        monkeypatch.setattr(before.worktree, "git", git_failing)
+    elif site == "capture":
+        monkeypatch.setattr(visual, "CAPTURE", raising)
+    else:
+        prepare = raising
+    shots = before.capture(
+        ui, Path(ui.names.worktree), lambda b: tmp_path / "out" / b[:7], Profile(), [].append, widths=(1280,),
+        prepare=prepare,
+    )  # fmt: skip
+    git_error = f"CalledProcessError: Command 'git merge-base' returned non-zero exit status 1.\n{whole_error}"
+    expected = {
+        "merge-base": f"the merge-base could not be read: {git_error}",
+        "test-copy": f"the test copy at the merge-base: RuntimeError: {whole_error}",
+        "capture": git_error,
+    }
+    assert shots.findings == [expected[site]]

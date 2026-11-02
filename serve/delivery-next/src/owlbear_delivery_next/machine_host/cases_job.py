@@ -230,7 +230,7 @@ class CasesJob:
     def _released(self, lease: str) -> None:
         """End the run's lease: released when every runtime's end was confirmed, else held with its slot."""
         left = list(self.unended)
-        problems = (f"the end of Spotter cases sessions was not confirmed: {', '.join(left)}"[:300],) if left else ()
+        problems = (f"the end of Spotter cases sessions was not confirmed: {', '.join(left)}",) if left else ()
         self.maintenance.finished(lease, _Ended(processes.Termination(not left, problems=problems)))
         if left:
             self.say(f"Spotter cases: {problems[0]}; the job waits until Maintenance recovers it")
@@ -306,7 +306,7 @@ class CasesJob:
         except asyncio.CancelledError:  # the host ended before the run kept its own result
             self._ended(request, "stopped: OwlBear stopped", meter)
         except Exception as exc:  # noqa: BLE001 - a failed run is kept as failed with its spend, never rerun
-            self._ended(request, f"failed: {type(exc).__name__}: {exc}"[:300], meter)
+            self._ended(request, f"failed: {type(exc).__name__}: {exc}", meter)
         finally:
             with self.lock:
                 self.meter = None
@@ -332,7 +332,7 @@ class CasesJob:
         except asyncio.CancelledError:  # the host ended before the sync said what it did
             done = {"result": "stopped: OwlBear stopped"}
         except Exception as exc:  # noqa: BLE001 - kept as failed with its spend; the next sync takes what is due
-            done = {"result": f"failed: {type(exc).__name__}: {exc}"[:300]}
+            done = {"result": f"failed: {type(exc).__name__}: {exc}"}
         finally:
             with self.lock:
                 self.meter = None

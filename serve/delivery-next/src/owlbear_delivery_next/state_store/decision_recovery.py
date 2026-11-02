@@ -36,7 +36,7 @@ def _current(shared: DataRepo, generation: str) -> decision_batch.Batch:
     try:
         batch = decision_batch.pending(shared)
     except decision_batch.JournalError as exc:
-        raise DecisionsUnavailable(str(exc)[:600], RECOVER) from exc
+        raise DecisionsUnavailable(str(exc), RECOVER) from exc
     if batch is None or batch.generation != generation:
         msg = f"no interrupted decision batch has generation {generation}; it may be finished or changed"
         raise DecisionsUnavailable(msg, RECOVER)
@@ -174,7 +174,7 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
             sent = decision_sync.publish(root, paths, batch.message, time.monotonic() + SAVE_SECONDS, batch.head)
             landed = decision_transaction.landed(root, batch.head, batch.files)
             if sent.uncommitted or sent.stale or sent.ambiguous or not landed:
-                why = sent.notice[:300] or "Git does not hold the batch as written"
+                why = sent.notice or "Git does not hold the batch as written"
                 return Recovery(generation=generation, done=False, notice=f"not published, so it stays: {why}")
             _written(root, batch)
             if not decision_transaction.landed(root, batch.head, batch.files):  # the last proof, before completion
@@ -183,10 +183,10 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
             decision_batch.complete(root, generation)
             said = "finished: the batch is published as one commit"
             if sent.notice:  # committed and proved here, but its push did not go through: the owner still needs to know
-                said = f"finished here, but not yet on the remote: {sent.notice}"[:300]
+                said = f"finished here, but not yet on the remote: {sent.notice}"
             return Recovery(generation=generation, done=True, notice=said)
     except (DataRepoError, OSError) as exc:
-        raise DecisionsUnavailable(str(exc)[:600], RECOVER) from exc
+        raise DecisionsUnavailable(str(exc), RECOVER) from exc
 
 
 def _validate(root: DataRepo, batch: decision_batch.Batch) -> None:
@@ -195,8 +195,8 @@ def _validate(root: DataRepo, batch: decision_batch.Batch) -> None:
     by_id, findings = decision_store.whole(root)
     involved = [f for f in findings if set(f.involves) & set(batch.ids)]
     if involved and not _rivals_flagged(by_id, findings, batch.ids):
-        named = "; ".join(f"{f.path}: {f.message}" for f in involved[:3])
-        msg = f"the interrupted batch {batch.generation} does not validate, so it is not published: {named}"[:600]
+        named = "; ".join(f"{f.path}: {f.message}" for f in involved)
+        msg = f"the interrupted batch {batch.generation} does not validate, so it is not published: {named}"
         raise DecisionsUnavailable(msg, RECOVER)
 
 
@@ -243,4 +243,4 @@ def abandon(shared: DataRepo, generation: str) -> Recovery:
             notice = "abandoned: the files are as they were; Git is unchanged"
             return Recovery(generation=generation, done=True, notice=notice)
     except (DataRepoError, OSError) as exc:
-        raise DecisionsUnavailable(str(exc)[:600], RECOVER) from exc
+        raise DecisionsUnavailable(str(exc), RECOVER) from exc

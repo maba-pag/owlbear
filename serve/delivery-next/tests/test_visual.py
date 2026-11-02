@@ -592,6 +592,35 @@ def test_a_judge_without_a_verified_verdict_runs_again_with_the_capture(flow):
     assert (again.visual.passed, again.outcome.exit, again.outcome.cause) == (False, Exit.RETRY, decision.AGAIN)
 
 
+def test_a_judge_that_fails_keeps_its_whole_error_in_its_verdict_and_journal(flow, whole_error):
+    """#895 K4: the correctness judge's session error is its verdict's reason and its step's detail, whole."""
+    done = processes.Termination(confirmed=True)
+
+    async def failing(cfg):
+        if cfg.role == "design-judge":
+            return await flow.review(cfg)
+        return Run(cfg.session_id, ending="error", detail=whole_error, termination=done)
+
+    flow.mp.setattr(runner.sdk_adapter, "run", failing)
+    runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
+    [kept] = flow.store.read("c1").visual_rounds
+    assert (kept.verdicts[0].lens, kept.verdicts[0].reason) == ("correctness", whole_error)
+    step = next(e for e in flow.store.events("c1") if e.get("event") == "step" and e.get("kind") == "visual-review")
+    assert step["detail"] == whole_error
+
+
+@pytest.mark.parametrize("lens", ["correctness", "design"])
+def test_a_judge_without_a_verdict_is_run_again_with_its_whole_reason(lens, whole_error):
+    """#895 K4: judges :297/:330 keep the session's whole detail, and decision.again repeats it whole."""
+    failed = Run("s", ending="error", detail=whole_error, termination=processes.Termination(confirmed=True))
+    role = carried.MODELS["design-judge" if lens == "design" else "reviewer"]
+    verdict = judges.design([failed], [], role, NOW) if lens == "design" else judges.correctness([failed], role, NOW)
+    assert verdict.reason == whole_error
+    kept = VisualRound(number=2, head="a" * 40, tree="b" * 40, verdicts=[verdict], at=NOW)
+    reason = f"visual review round 2 has no verified verdict from {lens}: {whole_error}"
+    assert decision.again(kept).reason == reason
+
+
 @pytest.mark.parametrize(
     ("correct", "setting", "step", "sent"),
     [
@@ -1276,3 +1305,20 @@ def test_a_real_capture_records_console_and_page_errors_and_only_new_ones_fail(t
     assert [(e.kind, e.text) for e in old] == [("console", "old warning")]
     assert [e.kind for e in new] == ["page"]
     assert "undefined_call" in new[0].text
+
+
+def test_a_capture_error_keeps_its_whole_text(flow, whole_error):
+    def crash(*_a, **_k):
+        raise RuntimeError(whole_error)
+
+    flow.mp.setattr(visual, "CAPTURE", crash)
+    runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
+    assert flow.store.read("c1").outcome.reason == f"capture failed: RuntimeError: {whole_error}"
+    failed = subprocess.CalledProcessError(128, ["git", "rev-parse", "HEAD"], stderr=whole_error)
+
+    def git_failed(_path):
+        raise failed
+
+    flow.mp.setattr(runner.worktree, "head", git_failed)
+    runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
+    assert flow.store.read("c1").outcome.reason == f"capture failed: CalledProcessError: {failed}\n{whole_error}"

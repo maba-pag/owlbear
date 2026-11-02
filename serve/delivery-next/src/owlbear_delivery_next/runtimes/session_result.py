@@ -168,7 +168,7 @@ def to_result(run: Run, kind: StepKind, now: datetime, enclosing: StepKind | Non
     *enclosing* is the step a reviewer session ran for; a missing-tool report is that step's to handle.
     """
     result = _exit(run, kind, now, enclosing or kind)
-    return result.model_copy(update={"denial": run.denials[-1][:300]}) if run.denials and not result.denial else result
+    return result.model_copy(update={"denial": run.denials[-1]}) if run.denials and not result.denial else result
 
 
 def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending

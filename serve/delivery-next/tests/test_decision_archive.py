@@ -11,9 +11,21 @@ from pathlib import Path
 import pytest
 
 from owlbear_decisions import Decision as Rule
-from owlbear_decisions import Link, LinkType, Origin, Scope, State, new_id, read, storage, validate_repo, write
+from owlbear_decisions import (
+    DecisionError,
+    Link,
+    LinkType,
+    Origin,
+    Scope,
+    State,
+    new_id,
+    read,
+    storage,
+    validate_repo,
+    write,
+)
 from owlbear_delivery_next.change_contracts.curation_records import TestReview
-from owlbear_delivery_next.change_contracts.models import Brief, BriefDecision, Change, Decision
+from owlbear_delivery_next.change_contracts.models import Brief, BriefDecision, Change, Decision, Exit, Step, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import brief_tools
 from owlbear_delivery_next.github.provider import PullRequest
@@ -29,6 +41,7 @@ from owlbear_delivery_next.state_store import (
 )
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.state_store.store import Store as LocalStore
+from owlbear_delivery_next.workflow_steps import cleanup, engine
 
 AT = datetime(2026, 10, 15, 9, tzinfo=UTC)
 STEM = "20261015-090000-notes"
@@ -687,3 +700,83 @@ def test_a_journal_failure_inside_a_record_save_is_a_notice_and_keeps_the_journa
     assert said.startswith("the record of notes was not saved")
     assert "batch lock" in said
     assert decision_batch.journal_path(store.shared).exists()
+
+
+@pytest.mark.parametrize("refusal", ["unsettled", "planning"])
+def test_a_change_record_failure_is_logged_whole(shared_repo, tmp_path, monkeypatch, whole_error, refusal) -> None:
+    """The notice cleanup logs as the "change-record" event: an unreadable journal behind the guard, or planning
+    refused by the decision history; each names the whole error."""
+    if refusal == "unsettled":
+
+        def unreadable(_shared):
+            raise decision_batch.JournalError(whole_error)
+
+        monkeypatch.setattr(decision_batch, "pending", unreadable)
+        expected = f"the record of notes was not saved: Unsettled: {whole_error}"
+    else:
+
+        def unreadable_history(*_args):
+            raise OSError(whole_error)
+
+        monkeypatch.setattr(decision_archive, "_history", unreadable_history)
+        expected = (f"the record of notes was not saved; no decision of notes was archived; "
+                    f"decision history of notes: OSError: {whole_error}")  # fmt: skip
+
+    local = LocalStore(tmp_path / "store", DataRepo(shared_repo[0]), "shop-site")
+    local.root.mkdir(parents=True)
+    c = finished()
+    c.step = Step(kind=StepKind.CLEANUP, mode="abandon")
+    _, result = cleanup.run(engine.Ctx(local, Lock(c.slug), tmp_path, Profile(version=1, entries={}), object(), AT), c)
+    assert result.exit == Exit.DONE, result.reason
+    assert [e["notice"] for e in local.events(c.slug) if e["event"] == "change-record"] == [expected]
+
+
+@pytest.mark.parametrize("site", ["published", "planned", "unreadable-repo", "graph"])
+def test_each_archive_refusal_names_its_whole_error(store, monkeypatch, whole_error, site) -> None:
+    """Each reason a decision is refused, from the brief's validation to the repository's graph, as said whole."""
+    from pydantic import ValidationError  # noqa: PLC0415
+
+    from owlbear_decisions.validate import Finding  # noqa: PLC0415
+
+    c = finished()
+    ui = c.decisions[0].id
+    refusal = "the record of notes was not saved; no decision of notes was archived"
+    if site == "published":
+        invalid = ValidationError.from_exception_data(
+            "Decision",
+            [{"type": "value_error", "loc": ("statement",), "input": "", "ctx": {"error": ValueError(whole_error)}}],
+        )
+
+        def unpublishable(*_args):
+            raise invalid
+
+        monkeypatch.setattr(decision_archive, "_as_decision", unpublishable)
+        lasting = c.brief.approved[0].decisions[1].id
+        with pytest.raises(DecisionError) as refused:
+            decision_archive.lasting("shop-site", c, STEM)
+        assert str(refused.value) == f"decision {lasting} of notes cannot be published: ValidationError: {invalid}"
+        return
+    if site == "planned":
+        real = decision_archive.check_write
+
+        def refusing(current, decision, expected):
+            if decision.id == ui:
+                raise DecisionError(whole_error)
+            return real(current, decision, expected)
+
+        monkeypatch.setattr(decision_archive, "check_write", refusing)
+        expected = f"{refusal}; decision {ui} of notes: DecisionError: {whole_error}"
+    elif site == "unreadable-repo":
+
+        def unreadable(*_args):
+            raise OSError(whole_error)
+
+        monkeypatch.setattr(decision_archive, "read_repo", unreadable)
+        expected = (
+            f"{refusal}; the decisions of notes cannot be checked against {store.shared.root}: OSError: {whole_error}"
+        )
+    else:
+        monkeypatch.setattr(decision_archive, "check", lambda _entries: [Finding("x.md", "rule", whole_error, (ui,))])
+        expected = f"{refusal}; decision {ui} of notes: rule: {whole_error}"
+
+    assert change_record.save(store, c, MERGED, AT) == expected

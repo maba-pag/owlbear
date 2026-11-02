@@ -126,7 +126,7 @@ def catch_up(shared: DataRepo, until: float, guard: Callable[[], str] | None = N
     """Fetch, and when the checkout is behind its remote and clean, rebase on it; why it did not, else nothing."""
     fetched = shared.git("fetch", "-q", until=until)
     if fetched.returncode:
-        return fetched.stderr.strip()[:200] or "git fetch failed"
+        return fetched.stderr.strip() or "git fetch failed"
     behind = shared.git("rev-list", "--count", f"HEAD..{UPSTREAM}", until=until)
     if behind.returncode:
         return "the checkout's branch follows no remote branch"
@@ -380,7 +380,7 @@ def _rejected(shared: DataRepo, rels: set[str], why: str, until: float, *, own: 
     """The outcome of a refused push that cannot be rebased over; None when the remote can be rebased on."""
     where = f"saved and committed in {shared.root}"
     if shared.git("fetch", "-q", until=until).returncode or (sides := _diverged(shared, until)) is None:
-        return Sent(notice=f"{where}, but the push failed: {why.strip()[:200]}")
+        return Sent(notice=f"{where}, but the push failed: {why.strip()}")
     ours, theirs = sides
     if stale := theirs & rels:
         ids = ", ".join(sorted(Path(r).stem for r in stale))

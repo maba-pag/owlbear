@@ -29,9 +29,7 @@ if TYPE_CHECKING:
 READY_WITHIN = 60.0
 GRACE = 5.0
 WITHIN = 600.0  # seconds per install or preparation command
-SHOWN = 80  # characters of a command a note quotes, so a long path never pushes out why it failed
 PIDFILE = "env.pid"  # the launched recipe's pid, written by its wrapper before the recipe runs
-CAUSE = 160  # characters of its last output line; a whole note then fits a caller's 300 behind a 45-character prefix
 type Action = Literal["launch", "keep", "dispose", "settle"]
 type Pids = dict[int, float | None]
 type Found = dict[int, str]
@@ -43,19 +41,13 @@ def journal(log: Callable[[dict[str, Any]], None], pids: Pids) -> None:
     log({"event": "pids", "at": datetime.now(UTC).isoformat(), "pids": {str(p): t for p, t in pids.items()}})
 
 
-def shown(argv: list[str]) -> str:
-    """The command as a note quotes it: its start and its end, which name the program, script and arguments."""
-    text = shlex.join(argv)
-    return text if len(text) <= SHOWN else f"{text[: SHOWN // 3]}…{text[-(SHOWN - SHOWN // 3 - 1) :]}"
-
-
 def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: Mapping[str, str] | None = None) -> str:
     """Run one command the owner made known in its own group, within ``WITHIN``; a note if it failed, else empty.
 
     Its leader waits on its stdin until the journal holds it; a runner that dies first closes the pipe, and the command
     never runs.
     """
-    within, cmd = WITHIN, shown(argv)
+    within, cmd = WITHIN, shlex.join(argv)
     try:
         proc = subprocess.Popen(  # noqa: S603 - argument vector of a command the owner made known
             ("/bin/sh", "-c", 'read -r _ && exec "$@" </dev/null', "sh", *argv), cwd=cwd, stdin=subprocess.PIPE,
@@ -73,8 +65,7 @@ def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: 
     finally:  # timed out, interrupted or done: nothing of its group outlives the command
         _end(proc, born)
     if proc.returncode:
-        last = next((x for x in reversed(out.decode(errors="replace").splitlines()) if x.strip()), "")
-        return f"`{cmd}` failed: {last.strip()[:CAUSE]}"
+        return f"`{cmd}` failed: {out.decode(errors='replace').strip()}"
     return ""
 
 

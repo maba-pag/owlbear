@@ -243,7 +243,7 @@ class GhProvider(Queue, Conversation):
             "mark_ready", ("api", "--hostname", self.host, "graphql", "--input", "-"), body=body, write=True
         )
         if not isinstance(result, dict) or result.get("errors"):
-            raise ProviderError(FailureCode.RESPONSE_UNKNOWN, "mark_ready", str(result)[:200], retry_safe=False)
+            raise ProviderError(FailureCode.RESPONSE_UNKNOWN, "mark_ready", str(result), retry_safe=False)
 
     def add_labels(self, repository: str, number: int, labels: list[str]) -> None:
         """Add labels to one pull request, keeping those it has."""

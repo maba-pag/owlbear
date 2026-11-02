@@ -98,7 +98,7 @@ def _engine(
         raise DetectorError(msg) from exc
     code, out, err = _run([str(engine), "detect", "--json", "--no-config", *args], cwd, env)
     if code not in {0, 2}:  # 2 means findings; anything else, a target was not scanned
-        msg = f"the design detector failed ({code}): {err.strip()[-300:]}"
+        msg = f"the design detector failed ({code}): {err.strip()}"
         raise DetectorError(msg)
     try:
         raw = json.loads(out)
@@ -137,7 +137,7 @@ def scan_page(page: Any, pack: Installed) -> list[Finding]:  # noqa: ANN401 - a 
         page.add_script_tag(content=pack.bundle)  # the verified text, not a path that could change
         groups = page.evaluate(PAGE, PAGE_MS)
     except Exception as exc:  # Playwright's own errors: the page refused the detector
-        msg = f"the page refused the design detector: {str(exc)[:300]}"
+        msg = f"the page refused the design detector: {type(exc).__name__}: {exc}"
         raise DetectorError(msg) from exc
     shaped = isinstance(groups, list) and all(
         isinstance(g, dict)

@@ -131,7 +131,9 @@ def _reloaded(data: HeldRun) -> Run:
     try:
         return held.restored(data)
     except (ValueError, ValidationError, TypeError) as exc:
-        return replace(held.accounted(data), ending="error", detail=f"its kept result no longer loads: {exc}"[:300])
+        return replace(
+            held.accounted(data), ending="error", detail=f"its kept result no longer loads: {type(exc).__name__}: {exc}"
+        )
 
 
 def _kept(store: Store, lock: Lock, change: Change, pending: PendingChild) -> None:

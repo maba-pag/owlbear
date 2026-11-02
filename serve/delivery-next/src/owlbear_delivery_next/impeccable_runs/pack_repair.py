@@ -320,7 +320,7 @@ def _made(job: Job, ctx: Context, src: pack_git.Source, gh: Provider) -> Outcome
         run(at, ["commit", "--quiet", "-m", message])
         r.commit = run(at, ["rev-parse", "HEAD"])
     except (pack_files.PackError, ProviderError, OSError) as exc:
-        return Outcome("failed", f"the agent's repair did not finish: {exc}"[:2000])
+        return Outcome("failed", f"the agent's repair did not finish: {type(exc).__name__}: {exc}")
     finally:
         if not job.keeps(at):
             _quiet(run, src.root, ["worktree", "remove", "--force", str(at)])
@@ -360,7 +360,7 @@ def _pushed(job: Job, ctx: Context, src: pack_git.Source) -> Outcome:
     except pack_files.PackError as exc:
         r.phase = ""
         job.keep(ctx)
-        return Outcome("failed", f"the agent's repair {r.commit[:12]} was not pushed: {exc}"[:2000])
+        return Outcome("failed", f"the agent's repair {r.commit[:12]} was not pushed: {exc}")
     r.protected |= blobs
     shown = f"{r.shown}\n{diff}".strip()
     r.shown, r.shown_binary = shown[:SHOWN], r.shown_binary or binary
@@ -429,7 +429,7 @@ def _ended(done: Run) -> str:
     if done.ending != "result" or not isinstance(p, RepairResult):
         said = p.reason if isinstance(p, tools.WrongPremise) else done.detail or "no result"
         msg = f"the agent ended with {done.ending}: {said}"
-        raise pack_files.PackError(msg[:2000])
+        raise pack_files.PackError(msg)
     return p.summary
 
 

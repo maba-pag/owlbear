@@ -279,6 +279,20 @@ def test_an_approval_refuses_an_unreadable_selected_rule_before_its_baseline_rea
     assert "unresolved" in message
 
 
+def test_an_approval_refused_for_an_unreadable_rule_says_and_logs_its_whole_fault(
+    picking, monkeypatch, caplog, whole_error
+):
+    """#895: the wording fault the gate stops on whole reaches the approval's refusal and host.log whole too."""
+    picking.put(legacy_ambiguous())
+    monkeypatch.setattr(decisions_gate, "problem", lambda _d: whole_error)
+    message = decisions_gate.unworded(decisions_gate.loaded(picking.store), Change(slug="notes"))
+    expected = f"the full decision wording is unresolved: {whole_error}"
+    assert message == expected
+    assert [r.getMessage() for r in caplog.records if r.name == decisions_gate.__name__] == [
+        f"brief approval refused: {expected}"
+    ]
+
+
 def test_the_pinned_wording_saved_with_an_approval_is_the_whole_answer():
     rule = archived()
     pin = DecisionBaseline(commit="c", at=AT, revisions={rule.id: rule.rule_revision}, said={}, picked=False)

@@ -75,7 +75,7 @@ def transaction(  # noqa: PLR0913, PLR0917 - the head the caller proved travels 
     if outcome.refused and not outcome.unknown and settle(shared, images, head, generation):
         return outcome.notice
     text = f"interrupted batch {generation}: finish or abandon it in Decisions"
-    return store._join(outcome.notice, text)[:300]  # noqa: SLF001
+    return store._join(outcome.notice, text)  # noqa: SLF001
 
 
 def planned(shared: DataRepo, paths: Sequence[Path]) -> None:

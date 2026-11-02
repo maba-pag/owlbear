@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -15,26 +17,57 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
 import uvicorn
 from copilot.generated import rpc
+from fastapi.testclient import TestClient
 
-from owlbear_delivery_next.change_contracts.models import Brief, Change, Step, StepKind
+from owlbear_delivery_next.change_contracts.models import (
+    VISUAL,
+    Brief,
+    Change,
+    Environment,
+    Exit,
+    Names,
+    Plan,
+    Step,
+    StepKind,
+    Task,
+    VisualState,
+)
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_contracts.visual_records import (
+    DetectorFinding,
+    DetectorScan,
+    JudgeVerdict,
+    OwnerDecision,
+    VisualResult,
+    VisualRound,
+)
+from owlbear_delivery_next.change_flow import loop, round_flow
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.github.gh import GhProvider
+from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import pack_files
-from owlbear_delivery_next.local_system import codebase, data_repo, local_home
+from owlbear_delivery_next.local_system import codebase, data_repo, local_home, processes
 from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.runtimes import model_choices
+from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.runtimes.settings_seen import NAME as SEEN
-from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.settings import carried, config, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
-from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.state_store import decision_store, registry
 from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store
+from owlbear_delivery_next.workflow_steps import decision, design, judges, pick, publish, retry
+from owlbear_delivery_next.workflow_steps.engine import Ctx
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
@@ -2416,3 +2449,300 @@ def test_dismiss_one_in_settings_and_all_from_changes(tmp_path: Path, monkeypatc
         expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
         expect(entries).to_have_count(0)
         assert said == []
+
+
+def test_a_long_step_error_shows_whole_on_the_status_line(tmp_path: Path, monkeypatch, whole_error: str) -> None:
+    """#895 K1: gh's whole multiline stderr reaches the engine step's event and outcome."""
+    store = Store(tmp_path / "store")
+    store.write_profile(Profile(entries={profile.REPO: ProfileEntry(state="known", value="o/r")}))
+
+    def refused(argv, _body, _timeout, _cwd):
+        return subprocess.CompletedProcess(argv, 1, b"", f"gh: {whole_error}\n".encode())
+
+    monkeypatch.setattr(runner.profile, "provider", lambda _p, r: GhProvider(r, runner=refused))
+    with store.lock("c1") as lock:
+        c = Change(slug="c1", step=Step(kind=StepKind.FOLLOW), names=Names(pr=7))
+        store.write(lock, c)
+        runner._engine(store, lock, c, tmp_path)  # noqa: SLF001
+    reason = f"ProviderError: read_pull_request: {whole_error}"
+    step = next(e for e in store.events("c1") if e.get("event") == "step")
+    assert (step["exit"], step["reason"], store.read("c1").outcome.reason) == (Exit.RETRY, reason, reason)
+    page = TestClient(api.create_app(store, "tok", Host(store, tmp_path)), base_url="http://127.0.0.1",
+                      headers={"authorization": "Bearer tok"})  # fmt: skip
+    o = store.read("c1").outcome
+    episode = f"network failing for \\d+ s, attempt 1, next try at {o.wake_at:%H:%M}"
+    line = f"Publish · retrying: {re.escape(reason)} · {episode}"
+    assert re.fullmatch(line, page.get("/api/next/changes/c1").json()["line"])
+
+
+@pytest.mark.browser
+def test_a_long_undo_failure_is_asked_whole(tmp_path: Path, monkeypatch, pds, whole_error: str) -> None:
+    """#895 K5: the undo's failure, git's whole output, is asked on the Changes page and logged whole."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "c1"))
+    work = clone(tmp_path / "work")
+    base = runner.worktree.git(work, "rev-parse", "HEAD").strip()
+    (work / "a.txt").write_text("b\n")
+    for args in (["add", "a.txt"], ["commit", "-qm", "build b"]):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "-C", str(work), *args], check=True)  # noqa: S603, S607
+    head = runner.worktree.git(work, "rev-parse", "HEAD").strip()
+    real = runner.worktree.git
+
+    def refused(cwd, *args):
+        if args[0] == "revert":
+            raise subprocess.CalledProcessError(1, "git revert", stderr=whole_error.encode())
+        return real(cwd, *args)
+
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: work)
+    monkeypatch.setattr(runner.worktree, "git", refused)
+    store = Store.open(Path(alpha.path))
+    with store.lock("c1") as lock:
+        task = Task(id="t1", title="one", scope=["a.txt"], base=base, spans=[f"{base}..{head}"])
+        c = Change(
+            slug="c1",
+            brief=Brief(version=1),
+            plan=Plan(tasks=[task]),
+            names=Names(branch="owlbear/c1", target="main"),
+            step=Step(kind=StepKind.BUILD, task="t1", mode=round_flow.RETRY),
+            loops={"t1": RoundLoop(subject="t1", policy=RoundPolicy())},
+        )
+        store.write(lock, c)
+        assert retry.undone(store, lock, c, work)
+    why = f"CalledProcessError: Command 'git revert' returned non-zero exit status 1.\n{whole_error}"
+    asked = (
+        f"Delivery could not undo attempt 1 of task t1 for its fresh build: {why}. Nothing was undone. Another round "
+        "reviews the last repair of the kept work; a pause lets you fix the branch first."
+    )
+    assert [e.get("error") for e in store.events("c1") if e["event"] == "undo"] == [why]
+    q = store.read("c1").questions[-1]
+    with browsing(monkeypatch, pds) as (page, url):
+        said = errors(page)
+        opened(page, url, alpha.id, "c1")
+        form = page.locator("section.act", has_text=f"Question {q.id}")
+        expect(form).to_be_visible()
+        assert form.locator("p-text").first.text_content() == asked
+        assert said == []
+
+
+@pytest.mark.browser
+def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monkeypatch, pds, whole_error: str) -> None:
+    """#895 K2: a labelling failure, gh's whole multiline stderr, reads whole in the Change's recent activity."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "c1"))
+    store = Store.open(Path(alpha.path))
+
+    def refused(argv, _body, _timeout, _cwd):
+        return subprocess.CompletedProcess(argv, 1, b"", f"gh: {whole_error}\n".encode())
+
+    pr = PullRequest(
+        repository="o/r", number=7, node_id="n", url="https://x/pull/7", head_branch="owlbear/c1", head_sha="a" * 40,
+        base_branch="main", draft=True, state="open", merged=False, merge_commit_sha=None,
+    )  # fmt: skip
+    entries = {profile.REPO: ProfileEntry(state="known", value="o/r")}
+    with store.lock("c1") as lock:
+        ctx = Ctx(store, lock, tmp_path, Profile(entries=entries), GhProvider("o/r", runner=refused), datetime.now(UTC))
+        publish.labelled(ctx, store.read("c1"), pr, ["owlbear"])
+    (event,) = [e for e in store.events("c1") if e["event"] == "labels-failed"]
+    reason = f"ProviderError: add_labels: {whole_error}"
+    assert event["reason"] == reason
+    with browsing(monkeypatch, pds) as (page, url):
+        said = errors(page)
+        opened(page, url, alpha.id, "c1")
+        line = page.locator("ol.log > li", has_text="Could not label PR #7").locator(":scope > span")
+        expect(line).to_have_text(" ".join(f"Could not label PR #7 with owlbear: {reason}".split()))
+        assert said == []
+
+
+@pytest.mark.browser
+def test_a_failed_pick_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, whole_error: str) -> None:
+    """#895 K3: a pick that cannot read the decisions shows why whole in the brief, and logs it."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    def unavailable(*_args, **_kwargs):
+        raise decision_store.DecisionsUnavailable(whole_error)
+
+    alpha = registry.register(clone(tmp_path / "alpha", "c1"))
+    store = Store.open(Path(alpha.path))
+    monkeypatch.setattr(pick.decision_store, "load", unavailable)
+    with store.lock("c1") as lock:
+        c = Change(slug="c1", brief=Brief(version=1, title="Notes"), step=Step(kind=StepKind.SHAPE))
+        store.write(lock, c)
+        pick.run(store, lock, c)
+    failed = f"DecisionsUnavailable: {whole_error}"
+    (event,) = [e for e in store.events("c1") if e["event"] == "pick-failed"]
+    assert event["reason"] == failed
+    with browsing(monkeypatch, pds) as (page, url):
+        said = errors(page)
+        opened(page, url, alpha.id, "c1")
+        follows = page.locator(".brief section", has_text="Decisions this work follows")
+        shown = follows.locator("p-text")
+        expect(shown).to_have_count(1)
+        assert shown.text_content() == f"The pick failed: {failed}. The shaping chat can ask for it again."
+        assert said == []
+
+
+def _git(cwd: Path, *args: str) -> str:
+    who = ["-c", "user.name=t", "-c", "user.email=t@t"]
+    done = subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
+    return done.stdout.strip()
+
+
+def ui_change(tmp_path: Path, install: str) -> tuple[Store, Change, str]:
+    """A Change on owlbear/c1 whose page says "before" at main and "after" at its head, whose install fails."""
+    origin, work = tmp_path / "origin.git", tmp_path / "work"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(work))
+    (work / "site").mkdir()
+    for said in ("before", "after"):
+        (work / "site" / "index.html").write_text(said)
+        _git(work, "add", "site/index.html")
+        _git(work, "commit", "-q", "-m", said)
+        if said == "before":
+            _git(work, "push", "-q", "origin", "HEAD:refs/heads/main")
+            _git(work, "switch", "-q", "-c", "owlbear/c1")
+    alpha = registry.register(clone(tmp_path / "alpha", "c1"))
+    store = Store.open(Path(alpha.path))
+    store.write_profile(Profile(entries={"install:.": ProfileEntry(state="known", value=install)}))
+    home = VisualState(name="home", path="/", expect="The greeting is centred")
+    c = Change(
+        slug="c1", brief=Brief(version=1, ui=True, visual=[home]),
+        plan=Plan(tasks=[Task(id="t1", title="g", scope=["site"])]),
+        names=Names(branch="owlbear/c1", target="main", worktree=str(work)),
+        env=Environment(check=VISUAL, command="true", directory="site", ready_url="http://127.0.0.1:9/"),
+        step=Step(kind=StepKind.CHECK, task=VISUAL),
+    )  # fmt: skip
+    return store, c, alpha.id
+
+
+def shown_texts(page: Page, base: str, of: str, section: str) -> list[str]:
+    """The texts of the Changes page's *section*, once it shows."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    opened(page, base, of, "c1")
+    found = page.locator("section", has_text=section).last
+    expect(found).to_be_visible()
+    return found.locator("p-text").all_text_contents()
+
+
+def refusing_pack(tmp_path: Path, text: str) -> tuple[Path, SimpleNamespace]:
+    """A file holding *text*, and an Impeccable pack whose engine fails with it as its stderr."""
+    said, engine = tmp_path / "said.txt", tmp_path / "engine"
+    said.write_text(text)
+    engine.write_text(f"#!/bin/sh\ncat {shlex.quote(str(said))} >&2\nexit 1\n")
+    engine.chmod(0o755)
+    return said, SimpleNamespace(bundle="", verified_engine=lambda: engine)
+
+
+def updated(store: Store, **update: object) -> None:
+    """Change c1 by *update*."""
+    with store.lock("c1") as lock:
+        store.write(lock, store.read("c1").model_copy(update=update))
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)  # git, the before capture and a real browser over three renders
+def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, capsys, whole_error: str) -> None:
+    """#895 K4: a judge's whole error, the detector's whole refusals and the before capture's whole finding."""
+    said, pack = refusing_pack(tmp_path, whole_error)
+    monkeypatch.setattr(design, "pack", lambda: pack)
+    install = shlex.join(
+        [sys.executable, "-c", f"import sys; sys.stdout.write(open({str(said)!r}).read()); sys.exit(3)"]
+    )
+    store, c, of = ui_change(tmp_path, install)
+    with store.lock("c1") as lock:
+        store.write(lock, c)
+        runner._before(store, lock, c, Path(c.names.worktree))  # noqa: SLF001
+    failed = f"the design detector failed (1): {whole_error}"
+    note = f"`{shlex.join(shlex.split(install))}` failed: {whole_error}"
+    b = store.read("c1").before
+
+    def refused(**_k: object) -> None:
+        raise RuntimeError(whole_error)
+
+    page = SimpleNamespace(evaluate=lambda *_a: None, add_script_tag=refused)
+    after = design.rendered(
+        page, pack, c.brief.visual[0], width=1280, url="http://127.0.0.1:9/", browser="", cwd=tmp_path
+    )
+    why = (
+        f"not scanned: the page refused the design detector: RuntimeError: {whole_error}; "
+        f"the engine's own browser: {failed}"
+    )
+    told = (
+        f"design detector: sources: {failed}\nbefore: 0 screenshots at {b.head[:7]}; {note}\n"
+        f"design detector: home at 1280: {why}\n"
+    )
+    assert told in capsys.readouterr().out  # an earlier test's machine may still say it stopped
+    head, now = _git(Path(c.names.worktree), "rev-parse", "HEAD"), datetime.now(UTC)
+    failing = Run("s", ending="error", detail=whole_error, termination=processes.Termination(confirmed=True))
+    correct = judges.correctness([failing], carried.MODELS["reviewer"], now)
+    looked = JudgeVerdict(lens="design", verdict="pass", usage_verified=True)
+    unexplained = DetectorScan(state="home", width=1920, kind="page", scanned=False)
+    finding = DetectorFinding(rule="side-tab", category="quality", advisory=False, where=".card")
+    clean = DetectorScan(state="home", width=2400, kind="page", scanned=True, findings=[finding])
+    kept = VisualRound(
+        number=1, head=head, tree="t", widths=[1280, 1920, 2400], verdicts=[correct, looked],
+        detector=[after, unexplained, clean], outcome="ask", at=now,
+    )  # fmt: skip
+    items = [f"home at 1280px: {why}", "home at 1920px: no reason given", f"before, changed sources: {failed}"]
+    line = f"The design detector could not scan: {'; '.join(items)}"
+    with store.lock("c1") as lock:
+        c = store.read("c1")
+        c.visual = VisualResult(head=head, tree="t", at=now, design=[after, unexplained, clean])
+        c.visual_rounds = [kept]
+        store.write(lock, loop.apply(c, decision.ask(head, kept), now))
+    with browsing(monkeypatch, pds) as (page, url):
+        said = errors(page)
+        assert {whole_error, line, f"Before: {note}"} <= set(shown_texts(page, url, of, "Decide visual round 1"))
+        assert page.get_by_text("What the design detector found (evidence for the judges)").count() == 1  # both
+        updated(store, questions=[], visual_rounds=[kept.model_copy(update={"outcome": "merge"})])
+        shown = shown_texts(page, url, of, "Before and after")
+        assert [s for s in shown if "could not scan" in s] == [line]  # once: the judged capture shows the round's
+        updated(store, visual_rounds=[])  # a failed shot is judged without a round: the capture keeps its scans
+        assert line in shown_texts(page, url, of, "Before and after")
+        updated(store, visual=None)
+        before_only = {f"Not available: {note}", f"The design detector could not scan: changed sources: {failed}"}
+        assert before_only <= set(shown_texts(page, url, of, "Before and after"))
+        updated(store, visual_rounds=[kept.model_copy(update={"outcome": None})])  # a judge failed: no judged capture
+        assert f"The design detector could not scan round 1 at {head[:7]}: {'; '.join(items[:2])}" in shown_texts(
+            page, url, of, "Before and after"
+        )  # beside the before capture's
+        updated(store, visual=VisualResult(head=head, tree="t", at=now, design=[unexplained, clean]))  # a rerun
+        assert {
+            f"The design detector could not scan round 1 at {head[:7]}: {items[0]}",
+            f"The design detector could not scan: {'; '.join(items[1:])}",
+        } <= set(shown_texts(page, url, of, "Before and after"))  # the rerun lacks one
+        assert said == []
+
+
+@pytest.mark.browser
+def test_a_failed_calibration_shows_in_recent_activity(tmp_path: Path, monkeypatch, pds, capsys, whole_error) -> None:
+    # imported here, so this test only appends to the file
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.impeccable import calibration  # noqa: PLC0415
+    from owlbear_delivery_next.impeccable_runs import visual_settled  # noqa: PLC0415
+
+    def unkept(*_args: object) -> str:
+        raise RuntimeError(whole_error)
+
+    monkeypatch.setattr(calibration, "keep", unkept)
+    alpha = registry.register(clone(tmp_path / "alpha", "same"))
+    head, tree, now = "a" * 40, "b" * 40, datetime.now(UTC)
+    verdicts = [JudgeVerdict(lens=lens, verdict="pass", usage_verified=True) for lens in ("correctness", "design")]
+    asked = VisualRound(number=1, head=head, tree=tree, states={}, widths=[1280], pack="p", verdicts=verdicts,
+                        decision=OwnerDecision(outcome="pass", at=now), outcome="ask", at=now)  # fmt: skip
+    store = Store(Store.open(Path(alpha.path)).root, data_repo.DataRepo(tmp_path / "shared"), "alpha")
+    with store.lock("same") as lock:
+        change = store.read("same").model_copy(update={"step": Step(kind=StepKind.CHECK), "visual_rounds": [asked]})
+        change.visual = VisualResult(head=head, tree="t", files=[], at=now)
+        assert visual_settled.settled(store, lock, change, (head, tree, [1280]), tmp_path / "out")
+    reason = f"RuntimeError: {whole_error}"
+    assert f"calibration: {reason}\n" in capsys.readouterr().out
+    [kept] = [e for e in store.events("same") if e["event"] == "calibration-not-kept"]
+    assert kept["reason"] == reason
+    with browsing(monkeypatch, pds) as (page, base):
+        opened(page, base, alpha.id)
+        line = page.locator("#detail ol.log > li > span", has_text="Calibration not kept")
+        expect(line).to_have_text(f"Calibration not kept: RuntimeError: {' '.join(whole_error.split())}")

@@ -40,7 +40,7 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api, environment
 from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes import sdk_adapter, step_answers, step_decisions, step_input
-from owlbear_delivery_next.state_store import decision_archive, read_backs
+from owlbear_delivery_next.state_store import decision_archive, decision_store, read_backs
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import check, curation, decisions_gate, prepare
 
@@ -505,3 +505,43 @@ def test_a_test_reviewer_receives_the_decisions_in_force(tmp_path, shared, chang
     assert len(seen) == 1
     assert step_decisions.HEAD in seen[0]
     assert f"{rule.id} (project, approved): {rule.title}: {rule.statement}" in seen[0]
+
+
+def gate_event(store: Store, kind: StepKind) -> dict:
+    (event,) = [e for e in store.events("c1") if e.get("event") == "step" and e.get("kind") == kind]
+    return event
+
+
+def test_an_unreadable_decision_set_stops_with_its_whole_error(tmp_path, shared, ran, monkeypatch, whole_error):
+    store = stored(tmp_path, shared, change())
+
+    def unsettled(_shared) -> None:
+        raise decision_store.Unsettled(whole_error, decision_store.RECOVER)
+
+    monkeypatch.setattr(decision_store, "_interrupted", unsettled)
+
+    c = step(store, tmp_path)
+
+    assert (ran, c.stop.reason) == ([], whole_error)
+    assert gate_event(store, K.BUILD)["reason"] == whole_error
+
+
+def test_a_refresh_git_cannot_read_stops_an_irreversible_step_with_its_whole_error(
+    tmp_path, shared, ran, monkeypatch, whole_error
+):
+    store = stored(tmp_path, shared, change(K.PUBLISH))
+    git = DataRepo.git
+
+    def status_fails(repo: DataRepo, *args: str, **kw) -> subprocess.CompletedProcess:
+        if args[0] == "status":
+            return subprocess.CompletedProcess(["git", *args], 128, "", f"{whole_error}\n")
+        return git(repo, *args, **kw)
+
+    monkeypatch.setattr(DataRepo, "git", status_fails)
+
+    c = step(store, tmp_path)
+
+    said = f"not refreshed: Git cannot read the shared data repository {shared.root}: {whole_error}"
+    reason = f"the decisions were not refreshed before {K.PUBLISH}, which cannot be undone: {said}"
+    assert (ran, c.stop.reason) == ([], reason)
+    assert gate_event(store, K.PUBLISH)["reason"] == reason

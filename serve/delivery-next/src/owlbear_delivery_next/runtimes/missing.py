@@ -91,7 +91,7 @@ def classify(run: Run, p: MissingTool, enclosing: StepKind, now: datetime) -> St
     if denied := next((run.denied[n] for n in names(tool) if n in run.denied), None):
         reason = f"{tool} was denied by Delivery's guard, which grants nothing: {denied}"
         cause = cause_key(ErrorKind.POLICY, enclosing, subject)
-        return StepResult(exit=Exit.RETRY, cause=cause, reason=reason[:300], denial=denied[:300], operational=True)
+        return StepResult(exit=Exit.RETRY, cause=cause, reason=reason, denial=denied, operational=True)
     if absent(tool, p.error):
         text = f"Set up {tool} on this machine (install or start it), then run the step again. The step needs {said}"
         options = [Option(id="done", label="Done, run the step again", next="retry"), PAUSE]

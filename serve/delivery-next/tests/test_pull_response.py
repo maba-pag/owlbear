@@ -6,6 +6,7 @@ import subprocess
 import pytest
 
 from owlbear_delivery_next.github.gh import GhProvider
+from owlbear_delivery_next.github.gh_client import Missing
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 
 
@@ -73,3 +74,18 @@ def test_unproven_response_repository_is_not_relabelled_as_the_requested_one(tmp
     with pytest.raises(ProviderError) as failed:
         request(tmp_path, payload, action)
     assert failed.value.code is FailureCode.INVALID_RESPONSE
+
+
+def test_a_gh_failure_keeps_its_whole_stderr_and_an_expected_status_its_last_line(tmp_path, whole_error):
+    def failing(argv, _body, _timeout, _cwd):
+        return subprocess.CompletedProcess(argv, 1, b"", f"gh: {whole_error}\n".encode())
+
+    def forbidden(argv, _body, _timeout, _cwd):
+        stderr = f"{whole_error}\ngh: Resource not accessible (HTTP 403)\n"
+        return subprocess.CompletedProcess(argv, 1, b"", stderr.encode())
+
+    with pytest.raises(ProviderError) as failed:
+        GhProvider(tmp_path, runner=failing).read_pull_request("o/r", 7)
+    assert (failed.value.code, str(failed.value)) == (FailureCode.UNAVAILABLE, f"read_pull_request: {whole_error}")
+    found = GhProvider(tmp_path, runner=forbidden)._gh("read_protection", ("api", "x"), absent={403})  # noqa: SLF001
+    assert found == Missing(403, "Resource not accessible (HTTP 403)")  # an expected status keeps gh's last line

@@ -433,7 +433,8 @@ def fixes(ctx: Ctx, c: Change, pr: PullRequest | None) -> None:
         clone = project_home.clone_id(project_home.clone_dir(ctx.repo))
         decision_fixes.verified(Backlog.of(ctx.store), c.slug, clone, files, pr.url if pr and sha else "")
     except (BacklogError, DataRepoError, RemoteGitError, StoreError, OSError, subprocess.SubprocessError) as exc:
-        ctx.log(c.slug, "decision-fixes", notice=f"the decision fixes of {c.slug} were not updated: {exc}"[:300])
+        notice = f"the decision fixes of {c.slug} were not updated: {worktree.failure(exc)}"
+        ctx.log(c.slug, "decision-fixes", notice=notice)
 
 
 def _workspace(ctx: Ctx, c: Change, path: Path, pr: PullRequest | None) -> tuple[list[Path], bool, StepResult | None]:

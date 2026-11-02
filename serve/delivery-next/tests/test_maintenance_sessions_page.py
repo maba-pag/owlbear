@@ -10,7 +10,11 @@ from typing import TYPE_CHECKING
 import pytest
 import uvicorn
 
+from owlbear_delivery_next.improvement import case_edits, cases
+from owlbear_delivery_next.local_system.slots import Slots
+from owlbear_delivery_next.machine_host import cases_job
 from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.runtimes import spotter_look
 from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
@@ -81,6 +85,66 @@ def test_a_held_session_is_released_only_after_a_confirmed_reboot_by_its_capture
             assert url.endswith("/maintenance/sessions/s-1/recover")
             assert body is not None
             assert '"rebooted":true' in body.replace(" ", "")
+            browser.close()
+    finally:
+        server.should_exit = True
+
+
+class Stuck:
+    """A session's runtime that neither stops nor can be forced to."""
+
+    async def stop(self) -> None:
+        msg = "the runtime does not answer"
+        raise RuntimeError(msg)
+
+    force_stop = stop
+
+
+@pytest.mark.browser
+def test_a_held_session_shows_its_whole_reason(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    names = whole_error.splitlines()  # the sessions whose end was not confirmed: far over 300 characters together
+
+    async def asked(_text: str, _meter: object, _role: object) -> str:
+        for name in names:
+            await spotter_look.teardown(Stuck(), None, name)
+        return "{}"
+
+    monkeypatch.setattr(cases_job, "limits", lambda: {"replay": 10.0, "retro": 5.0, "look": 1.0})
+    monkeypatch.setattr(cases_job, "role", lambda _name: cases_job.RoleModel(model="m", effort="medium"))
+    said: list[str] = []
+    slots = Slots(lambda: 1)
+    slots.open()
+    job = cases_job.CasesJob(slots, asked=asked, shared=lambda: None, say=said.append)
+    cid = cases.freeze({"intent": {"task": "t"}}, {"source": "pilot", "family": "f"})
+    entry = {"stage": "candidate", "call": "none", "why": "why", "example": "", "review": None}
+    cases.commit(cases.current()["n"], {cid: entry}, "t", "add")
+    case_edits.check_request([cid], "t")
+    job.tick(0.0)
+    reason = f"the end of Spotter cases sessions was not confirmed: {', '.join(names)}"
+    assert said == [f"Spotter cases: {reason}; the job waits until Maintenance recovers it"]
+
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    server = uvicorn.Server(uvicorn.Config(api.create_app(Store(tmp_path), "tok", None), log_level="warning"))
+    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
+    while not server.started:
+        time.sleep(0.05)
+    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.route("**/maintenance/sessions**", lambda route: route.fulfill(json=job.maintenance.read()))
+            page.goto(f"{base}/maintenance#token=tok")
+            shown = page.locator("#sessions > li p-text", has_text="The end of Spotter cases")
+            shown.wait_for()
+            assert shown.evaluate("e => e.textContent") == f"T{reason[1:]}."
             browser.close()
     finally:
         server.should_exit = True

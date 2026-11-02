@@ -194,5 +194,5 @@ def run(w: Work, fid: str, places: Mapping[str, targets.Place], backlogs: Backlo
         msg = f"refused: {exc}"
         raise StoppedError(msg) from exc
     except (BacklogError, ProviderError, OSError) as exc:  # the answer is kept: the next run saves it unpaid
-        msg = f"stopped: the backlog could not be reached ({type(exc).__name__}: {exc})"[:300]
+        msg = f"stopped: the backlog could not be reached ({type(exc).__name__}: {exc})"
         raise StoppedError(msg) from exc

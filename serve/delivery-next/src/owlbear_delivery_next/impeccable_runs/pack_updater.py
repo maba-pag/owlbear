@@ -187,8 +187,8 @@ def ended(done: Run) -> UpdateResult:
         raise pack_files.PackError(msg[:2000])
     if done.ending == "missing-tool" and isinstance(p, tools.MissingTool):
         msg = f"the updater lacks {p.tool}: {p.need} ({p.error})"
-        raise pack_files.PackError(msg[:2000])
+        raise pack_files.PackError(msg)
     if done.ending != "result" or not isinstance(p, UpdateResult):
         msg = f"the updater ended with {done.ending}: {done.detail or 'no result'}"
-        raise pack_files.PackError(msg[:600])
+        raise pack_files.PackError(msg)
     return p

@@ -25,7 +25,7 @@ from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.impeccable import pack_files
-from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
@@ -95,6 +95,23 @@ def page_source() -> Callable[[TestClient, str], str]:
         return "\n".join(texts)
 
     return read
+
+
+@pytest.fixture
+def failing_git(monkeypatch) -> Callable[[str, Callable[[tuple[str, ...], float | None], bool]], None]:
+    """Makes Git as the data repository runs it fail the commands a picker chooses (their args and deadline), with
+    a message as stderr."""
+    real = data_repo._git  # noqa: SLF001 - the repository's own Git calls are the boundary
+
+    def fail(message: str, fails: Callable[[tuple[str, ...], float | None], bool]) -> None:
+        def git(cwd, *args, until=None):
+            if fails(args, until):
+                return subprocess.CompletedProcess(["git", *args], 128, "", message + "\n")
+            return real(cwd, *args, until=until)
+
+        monkeypatch.setattr(data_repo, "_git", git)
+
+    return fail
 
 
 @pytest.fixture(autouse=True)
@@ -822,3 +839,15 @@ def _bind(package: Path, root: Path, monkeypatch) -> legacy_family.Binding:
     binding = legacy_family.Binding(launcher, Path(sys.executable), package)
     monkeypatch.setattr(legacy_family, "live_binding", lambda: binding)
     return binding
+
+
+@pytest.fixture(scope="session")
+def whole_error() -> str:
+    """A long error with a distinct beginning, middle and end, for #895's whole-error checks.
+
+    Non-repeating numbered words over several lines, about 4500 characters, with characters a page must escape and
+    no path or decision id; a check compares the complete text, never only its start or tail.
+    """
+    words = [f"w{i:04d}" for i in range(700)]
+    lines = [" ".join(words[i : i + 20]) for i in range(0, 700, 20)]
+    return "\n".join(['BEGIN <a & "b">', *lines[:17], "MIDDLE", *lines[17:], "END"])

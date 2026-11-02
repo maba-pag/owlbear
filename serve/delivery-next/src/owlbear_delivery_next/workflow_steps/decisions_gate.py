@@ -14,6 +14,7 @@ Changes holds a baseline: Changes from before this gate have no rules to compare
 from __future__ import annotations
 
 import hashlib
+import logging
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.decision_store import DataView
     from owlbear_delivery_next.state_store.store import Lock, Store
 
+_log = logging.getLogger(__name__)
 UNGATED = frozenset({StepKind.SHAPE, StepKind.CLEANUP})  # shaping waits for chat; an ending Change always cleans up
 IRREVERSIBLE = frozenset({StepKind.PUBLISH, StepKind.MERGE})  # never on decisions another checkout may have changed
 OPTIONS = [
@@ -193,7 +195,7 @@ def _faulty(seen: Snapshot, c: Change, keys: Iterable[str]) -> list[str]:
 
 
 def _stopped(kind: ErrorKind, reason: str, action: str, resume: str, now: datetime) -> StepResult:
-    stop = Stop(kind=kind, reason=reason[:600], action=action, resume=resume, at=now)
+    stop = Stop(kind=kind, reason=reason, action=action, resume=resume, at=now)
     return StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
 
 
@@ -288,7 +290,7 @@ def check_step(store: Store, c: Change, now: datetime, lock: Lock | None = None)
     try:
         view = decision_store.load(store.shared, store.name)
     except decision_store.DecisionsUnavailable as exc:
-        return Gate(c, StepResult(exit=Exit.STOP, reason=str(exc)[:600], stop=exc.stop(now)))
+        return Gate(c, StepResult(exit=Exit.STOP, reason=str(exc), stop=exc.stop(now)))
     return _wording_faults(view, c, now) or _judged(view, c, now, store, lock)
 
 
@@ -316,7 +318,9 @@ def unworded(view: DataView | None, c: Change) -> str:
     """Why an approval may not pin *c*'s decisions yet: an in-force full wording cannot be read; "" otherwise."""
     if view is None or not (faults := _faulty_wording(view, c)):
         return ""
-    return f"the full decision wording is unresolved: {'; '.join(faults)}"[:600]
+    why = f"the full decision wording is unresolved: {'; '.join(faults)}"
+    _log.warning("brief approval refused: %s", why)
+    return why
 
 
 def wording_stop(store: Store, c: Change, now: datetime) -> StepResult | None:
@@ -385,7 +389,7 @@ def _reassessed(
     now = datetime.now(UTC)
     if why:
         cause = cause_key(ErrorKind.NETWORK, c.step.kind, pick.LABEL)
-        reason = f"{REPICK}: {why}"[:300]
+        reason = f"{REPICK}: {why}"
         return c, StepResult(exit=Exit.RETRY, cause=cause, reason=reason, wake_at=now + wait)
     pin = c.decisions_baseline
     pin.revisions |= {d.id: d.rule_revision for d in later}
@@ -415,7 +419,7 @@ def gated(store: Store, lock: Lock, c: Change, step: Step | None) -> Iterator[Ch
     gate = check_step(store, c, now, lock)
     if gate.result is not None:
         event = {"event": "step", "at": now.isoformat(timespec="seconds"), "kind": step.kind}
-        store.log(lock, c.slug, event | {"exit": gate.result.exit, "reason": gate.result.reason[:300]})
+        store.log(lock, c.slug, event | {"exit": gate.result.exit, "reason": gate.result.reason})
         store.write(lock, loop.apply(gate.change, gate.result, now))
         yield None
         return

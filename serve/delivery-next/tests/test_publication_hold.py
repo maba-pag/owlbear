@@ -1502,3 +1502,18 @@ def test_a_repoint_during_the_shared_checkouts_own_push_probes_sends_nothing_to_
     else:
         assert remote_head(remote) == git(other, "rev-parse", "HEAD")  # only the other clone's commit
     assert owner_state(root) == owner[0]  # nothing moved after the actor's repoint
+
+
+@pytest.mark.parametrize("probe", ["index", "history"])
+def test_a_failed_hold_probe_names_git_s_whole_stderr(held, monkeypatch, failing_git, whole_error, probe):
+    """The index and remote-history probes of a held change: Git's whole stderr when either fails."""
+    winner, _ = held
+    shared = winner.shared
+    if probe == "index":  # with no unpushed change of the watched file, its staged copy is compared next
+        monkeypatch.setattr(publication_hold, "_changes", lambda *_args: [])
+    picked = ("diff", "--cached", "--quiet", "HEAD") if probe == "index" else ("merge-base", "--is-ancestor")
+    failing_git(whole_error, lambda args, _until: args[: len(picked)] == picked)
+    expected = (
+        f"nothing was pushed or rebased in {shared.root}: a held automatic change cannot be checked: {whole_error}"
+    )
+    assert shared.rebase() == expected

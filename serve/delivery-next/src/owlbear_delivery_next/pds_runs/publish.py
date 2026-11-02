@@ -167,8 +167,8 @@ def _judged(job: Job, ctx: Context, lp: RoundLoop, at: Path, head: str) -> None:
     unseen = [checks.follow_up(f) for f in v.follow_ups if f.key not in ctx.followed]
     if v.outcome == "stop" or v.findings or unseen:
         said = v.reason if v.outcome == "stop" else "; ".join([*map(checks.finding, v.findings), *unseen])
-        _noted(job, "audit", "findings", said[:600])
-        msg = f"the pull request's head {head[:12]} changed pages, and the deprecation audit found: {said[:1500]}"
+        _noted(job, "audit", "findings", said)
+        msg = f"the pull request's head {head[:12]} changed pages, and the deprecation audit found: {said}"
         raise pack_publish.Held(msg)
     _noted(job, "audit", "passed", f"the head {head[:12]}'s pages")
     r = checks.browsed(job, ctx, at)
@@ -177,7 +177,7 @@ def _judged(job: Job, ctx: Context, lp: RoundLoop, at: Path, head: str) -> None:
         msg = f"the pull request's head {head[:12]} changed pages, and the browser tests found: {r.said()}"
         raise pack_publish.Held(msg)
     found, _judged, _changes = pack_run._verdict(checks.challenged(job, ctx, at, lp))  # noqa: SLF001
-    _noted(job, "pds-challenge", "findings" if found else "passed", "; ".join(found)[:600] or "no findings")
+    _noted(job, "pds-challenge", "findings" if found else "passed", "; ".join(found) or "no findings")
     if found:
         msg = f"the pull request's head {head[:12]} changed pages, and the challenger found: {'; '.join(found)}"
-        raise pack_publish.Held(msg[:2000])
+        raise pack_publish.Held(msg)

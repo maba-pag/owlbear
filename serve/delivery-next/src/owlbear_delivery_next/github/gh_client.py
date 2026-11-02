@@ -75,7 +75,8 @@ def fail(operation: str, stderr: bytes, *, write: bool) -> NoReturn:
         code, safe = FailureCode.RESPONSE_UNKNOWN, False
     else:
         code, safe = FailureCode.UNAVAILABLE, True
-    raise ProviderError(code, operation, message(stderr), retry_safe=safe)
+    whole = stderr.decode(errors="replace").strip().removeprefix("gh: ") or "no message"
+    raise ProviderError(code, operation, whole, retry_safe=safe)
 
 
 def invalid(operation: str, detail: str, cause: Exception | None = None) -> NoReturn:

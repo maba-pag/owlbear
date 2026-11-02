@@ -38,7 +38,7 @@ def check(args: AuditResult, root: Path) -> list[str]:
     try:
         report = json.loads(args.report)
     except ValueError as exc:
-        return [f"report: not JSON ({exc})"[:300]]
+        return [f"report: not JSON ({exc})"]
     schema = json.loads((root / PACKAGE / SCHEMA).read_text(encoding="utf-8"))
     found = sorted(jsonschema.Draft202012Validator(schema).iter_errors(report), key=lambda e: list(e.absolute_path))
-    return [f"report: {'/'.join(map(str, e.absolute_path)) or 'the report'}: {e.message}"[:300] for e in found[:5]]
+    return [f"report: {'/'.join(map(str, e.absolute_path)) or 'the report'}: {e.message}" for e in found[:5]]

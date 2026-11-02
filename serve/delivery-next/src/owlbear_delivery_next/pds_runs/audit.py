@@ -150,7 +150,11 @@ def audit(
     try:
         report = json.loads(result.report)
     except ValueError as exc:
-        return Audit(Verdict("stop", f"the audit report is not JSON: {exc}"[:300]), ident, markdown=result.markdown)
+        return Audit(
+            Verdict("stop", f"the audit report is not JSON: {type(exc).__name__}: {exc}"),
+            ident,
+            markdown=result.markdown,
+        )
     verdict = judge(report, schema=schema, version=version, at=at)
     kept = report if isinstance(report, dict) else None
     return Audit(verdict, ident, kept, result.report if kept is not None else "", result.markdown)
@@ -159,11 +163,11 @@ def audit(
 def _unended(done: Run, result: audit_tools.AuditResult | None) -> str:
     t = done.termination
     if done.ending != "result" or result is None:
-        return " ".join(f"the auditor submitted no report: ended {done.ending}; {done.detail}".split())[:300]
+        return f"the auditor submitted no report: ended {done.ending}; {done.detail}"
     if t is None or not t.confirmed:
         return "the auditor's processes are not proven ended; recover the session on the Maintenance page"
     if done.usage_unread:
-        return " ".join(f"the auditor's model is unknown: {done.usage_unread}".split())[:300]
+        return f"the auditor's model is unknown: {done.usage_unread}"
     return ""
 
 
@@ -172,7 +176,7 @@ def judge(report: object, *, schema: dict[str, Any], version: str, at: Path | No
     errors = sorted(jsonschema.Draft202012Validator(schema).iter_errors(report), key=lambda e: list(e.absolute_path))
     if errors:
         where = "/".join(str(p) for p in errors[0].absolute_path) or "the report"
-        return Verdict("stop", f"the audit report breaks its schema at {where}: {errors[0].message}"[:300])
+        return Verdict("stop", f"the audit report breaks its schema at {where}: {errors[0].message}")
     assert isinstance(report, dict)  # noqa: S101 - the schema requires an object
     if (result := report["summary"]["result"]) != "completed":
         return Verdict("stop", f"the audit ended {result}: {_gaps(report)}")
@@ -198,7 +202,7 @@ def _mismatch(audit: dict[str, Any], version: str) -> str:
 def _gaps(report: dict[str, Any]) -> str:
     coverage = report.get("coverage") or {}
     skipped = [f"{s['path']} skipped ({s['reason']})" for s in coverage.get("skippedFiles") or ()]
-    return "; ".join([*skipped, *coverage.get("limitations", ())])[:600]
+    return "; ".join([*skipped, *coverage.get("limitations", ())])
 
 
 def _scope(scope: dict[str, Any], at: Path | None) -> str:
@@ -206,7 +210,7 @@ def _scope(scope: dict[str, Any], at: Path | None) -> str:
         return f"the audit did not include the project root: {', '.join(scope['includedPaths']) or 'nothing'}"
     out = [e for e in scope["excludedPaths"] if not f"{_relative(e['path'], at)}/".startswith(EXCLUDABLE)]
     if out:
-        return "the audit left out " + "; ".join(f"{e['path']} ({e['reason']})" for e in out)[:600]
+        return "the audit left out " + "; ".join(f"{e['path']} ({e['reason']})" for e in out)
     return ""
 
 

@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
@@ -22,11 +23,15 @@ from owlbear_delivery_next.change_contracts.round_records import FINAL, RoundLoo
 from owlbear_delivery_next.change_flow import loop, round_flow
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.change_flow.status import Activity, card
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import overlap, plan_round
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 K = StepKind
+C1 = Lock("c1")  # the integrating Change's writer lock
 
 
 def git(cwd, *args, check=True):
@@ -188,14 +193,14 @@ def test_an_unfinished_update_on_another_changes_scope_asks_once_and_the_answer_
         store.write(lock, other)
     said = StepResult(exit=Exit.ASK, question=Question(step=K.INTEGRATE, text="checks fail after the update"))
     c = integrating()
-    asked = overlap.integrated(store, c, repo, (start, "ask"), said)
+    asked = overlap.integrated(store, C1, c, repo, (start, "ask"), said)
     assert "The Builder said: checks fail after the update" in asked.question.text
-    assert overlap.integrated(store, c, repo, (start, "timeout"), said) is said
+    assert overlap.integrated(store, C1, c, repo, (start, "timeout"), said) is said
     c = loop.apply(c, asked, NOW)
     q = loop.open_question(c)
     keep, step = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option="keep")], NOW)
     assert step.kind == K.INTEGRATE
-    assert overlap.integrated(store, keep, repo, (start, "ask"), said) is said  # answered: not asked again
+    assert overlap.integrated(store, C1, keep, repo, (start, "ask"), said) is said  # answered: not asked again
     paused, step = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option="pause")], NOW)
     assert (step, paused.intent.paused_at) == (None, NOW)
 
@@ -205,7 +210,9 @@ def test_an_integration_build_whose_update_collides_asks_on_its_own_step(conflic
     (repo / "src/app.ts").write_text("both")
     (repo / "uv.lock").write_text("both")
     git(repo, "commit", "-qam", "merge main")
-    asked = overlap.integrated(shared_store(tmp_path), building(), repo, (start, "result"), StepResult(exit=Exit.DONE))
+    asked = overlap.integrated(
+        shared_store(tmp_path), C1, building(), repo, (start, "result"), StepResult(exit=Exit.DONE)
+    )
     q = asked.question
     assert (asked.exit, q.step) == (Exit.ASK, K.BUILD)
     assert [(o.id, o.next) for o in q.options] == [("keep", K.BUILD), ("adopt", K.BUILD), ("pause", "pause")]
@@ -216,18 +223,18 @@ def test_a_plain_overlap_that_merges_cleanly_is_recorded_not_asked(merged_cleanl
     repo, start = merged_cleanly
     done = StepResult(exit=Exit.DONE)
     assert overlap.collided(repo, start, resolved=True) == []
-    assert overlap.integrated(shared_store(tmp_path), building(), repo, (start, "result"), done) is done
+    assert overlap.integrated(shared_store(tmp_path), C1, building(), repo, (start, "result"), done) is done
 
 
 def test_an_integration_build_without_its_start_head_stops_instead_of_passing(tmp_path):
-    stopped = overlap.integrated(shared_store(tmp_path), building(), tmp_path, (None, "result"),
+    stopped = overlap.integrated(shared_store(tmp_path), C1, building(), tmp_path, (None, "result"),
                                  StepResult(exit=Exit.DONE))  # fmt: skip
     assert (stopped.exit, stopped.stop.kind) == (Exit.STOP, ErrorKind.STATE)
 
 
 def test_a_build_that_is_not_an_integration_is_not_checked_for_collisions(tmp_path):
     done = StepResult(exit=Exit.DONE)
-    assert overlap.integrated(shared_store(tmp_path), building("plan"), tmp_path, (None, "result"), done) is done
+    assert overlap.integrated(shared_store(tmp_path), C1, building("plan"), tmp_path, (None, "result"), done) is done
 
 
 def test_a_new_integration_task_does_not_reuse_an_earlier_collision_answer():
@@ -289,7 +296,7 @@ def test_new_target_collision_in_the_same_task_needs_fresh_consent(conflicted, t
     repo, start = conflicted
     store, c = shared_store(tmp_path), building()
     worker_ask = StepResult(exit=Exit.ASK, question=Question(step=K.BUILD, text="resolve the update"))
-    first = overlap.integrated(store, c, repo, (start, "ask"), worker_ask)
+    first = overlap.integrated(store, C1, c, repo, (start, "ask"), worker_ask)
     c = loop.apply(c, first, NOW)
     question = loop.open_question(c)
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="keep")], NOW)
@@ -300,14 +307,14 @@ def test_new_target_collision_in_the_same_task_needs_fresh_consent(conflicted, t
     (repo / "uv.lock").write_text("mine")
     git(repo, "commit", "-qam", "resolve the first update")
     done = StepResult(exit=Exit.DONE)
-    assert overlap.integrated(store, c, repo, (start, "result"), done) is done
+    assert overlap.integrated(store, C1, c, repo, (start, "result"), done) is done
     git(repo, "switch", "-q", "main")
     (repo / "src/app.ts").write_text("a newer target behaviour")
     git(repo, "commit", "-qam", "advance target again")
     git(repo, "switch", "-q", "change")
     git(repo, "merge", "-q", "main", check=False)
 
-    asked = overlap.integrated(store, c, repo, (start, "ask"), worker_ask)
+    asked = overlap.integrated(store, C1, c, repo, (start, "ask"), worker_ask)
 
     assert asked is not worker_ask
     assert asked.exit == Exit.ASK
@@ -346,7 +353,7 @@ def test_resolving_a_pending_merge_keeps_consent_when_shared_clean_paths_drop_ou
     git(repo, "merge", "-q", "main", check=False)
     store, c = shared_store(tmp_path, "src"), building()
     worker = StepResult(exit=Exit.ASK, question=Question(step=K.BUILD, text="resolve"))
-    first = overlap.integrated(store, c, repo, (start, "ask"), worker)
+    first = overlap.integrated(store, C1, c, repo, (start, "ask"), worker)
     assert "src/app.ts" in first.question.text
     assert "src/conflict.ts" in first.question.text
     c = loop.apply(c, first, NOW)
@@ -357,7 +364,7 @@ def test_resolving_a_pending_merge_keeps_consent_when_shared_clean_paths_drop_ou
     git(repo, "commit", "-qm", "finish the approved update")
     done = StepResult(exit=Exit.DONE)
 
-    assert overlap.integrated(store, c, repo, (start, "result"), done) is done
+    assert overlap.integrated(store, C1, c, repo, (start, "result"), done) is done
 
 
 def test_a_later_clean_merge_cannot_hide_an_earlier_unconsented_collision_after_restart(conflicted, tmp_path):
@@ -379,7 +386,7 @@ def test_a_later_clean_merge_cannot_hide_an_earlier_unconsented_collision_after_
     c = store.read(c.slug)
     done = StepResult(exit=Exit.DONE)
 
-    asked = overlap.integrated(store, c, repo, (start, "result"), done)
+    asked = overlap.integrated(store, C1, c, repo, (start, "result"), done)
 
     assert asked is not done
     assert asked.exit == Exit.ASK
@@ -387,7 +394,7 @@ def test_a_later_clean_merge_cannot_hide_an_earlier_unconsented_collision_after_
     c = loop.apply(c, asked, NOW)
     question = loop.open_question(c)
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="keep")], NOW)
-    assert overlap.integrated(store, c, repo, (start, "result"), done) is done
+    assert overlap.integrated(store, C1, c, repo, (start, "result"), done) is done
 
 
 def test_pending_consent_does_not_cover_a_different_resolved_path():
@@ -408,7 +415,7 @@ def test_pending_consent_does_not_cover_a_different_resolved_path():
 def test_a_completed_result_with_an_unfinished_merge_stays_stopped(conflicted, tmp_path):
     repo, start = conflicted
     stopped = overlap.integrated(
-        shared_store(tmp_path), building(), repo, (start, "result"), StepResult(exit=Exit.DONE)
+        shared_store(tmp_path), C1, building(), repo, (start, "result"), StepResult(exit=Exit.DONE)
     )
     assert stopped.exit == Exit.STOP
     assert stopped.stop.kind == ErrorKind.STATE
@@ -445,7 +452,7 @@ def test_unverified_integration_termination_keeps_its_stop_and_recovery(conflict
     )  # fmt: skip
     stopped = StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
 
-    observed = overlap.integrated(shared_store(tmp_path), building(), repo, (start, ending), stopped)
+    observed = overlap.integrated(shared_store(tmp_path), C1, building(), repo, (start, ending), stopped)
 
     assert observed is stopped
     assert observed.stop == stop
@@ -458,7 +465,7 @@ def test_a_failed_git_collision_probe_stops_instead_of_passing(tmp_path, monkeyp
         return subprocess.CompletedProcess(argv, 128, "", "object database unreadable")
 
     monkeypatch.setattr(overlap.subprocess, "run", failed)
-    stopped = overlap.integrated(store, building(), tmp_path, ("a" * 40, "result"), StepResult(exit=Exit.DONE))
+    stopped = overlap.integrated(store, C1, building(), tmp_path, ("a" * 40, "result"), StepResult(exit=Exit.DONE))
     assert (stopped.exit, stopped.stop.kind) == (Exit.STOP, ErrorKind.STATE)
     assert "collision" in stopped.reason.lower()
 
@@ -486,3 +493,33 @@ def test_neighbours_are_other_open_or_recently_merged_changes(tmp_path):
             store.write(lock, Change(slug=slug, plan=plan(f"{slug}/x"), finished_at=finished))
     near = overlap.neighbours(store, "c1", NOW)
     assert [(n.handle, n.scope, n.merged) for n in near] == [("c2", ["c2/x"], False), ("c3", ["c3/x"], True)]
+
+
+def test_a_collision_check_that_fails_stops_and_logs_its_whole_reason(
+    merged_cleanly, tmp_path, monkeypatch, whole_error
+):
+    repo, start = merged_cleanly
+    store = shared_store(tmp_path)
+    c = building()
+    c.plan.tasks[1].base, c.names.worktree = start, str(repo)
+    store.write(C1, c)
+    probe = ["git", "rev-list", "--first-parent"]
+
+    def unreadable(*_a):
+        raise subprocess.CalledProcessError(128, probe, stderr=whole_error)
+
+    async def built(cfg):
+        head = git(repo, "rev-parse", "HEAD")
+        return Run(cfg.session_id, "result", tools.BuildResult(summary="merged", checks=[]), head=head,
+                   termination=Termination(confirmed=True))  # fmt: skip
+
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)
+    monkeypatch.setattr(runner.sdk_adapter, "run", built)
+    monkeypatch.setattr(overlap, "_merges", unreadable)
+    runner._agent(store, C1, store.read("c1"), repo)  # noqa: SLF001
+    expected = (
+        "Integration collisions could not be checked: CalledProcessError: "
+        f"Command '{probe}' returned non-zero exit status 128.\n{whole_error}"
+    )
+    assert store.read("c1").outcome.reason == expected
+    assert [e["reason"] for e in store.events("c1") if e.get("event") == "collisions-unchecked"] == [expected]

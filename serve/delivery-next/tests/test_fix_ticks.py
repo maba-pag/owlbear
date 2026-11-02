@@ -256,3 +256,19 @@ def test_a_failure_leaves_the_fixes_as_they_were_and_cleanup_finishes_with_a_not
     assert (github.issues[int(fix)]["body"], now(shared, fix).status) == (before, "in-change")
     [event] = cx.events("c1", "decision-fixes")
     assert event["notice"].startswith("the decision fixes of c1 were not updated: ")
+
+
+def test_a_failed_merge_read_leaves_its_whole_error_in_the_notice(tmp_path, shared, merged, monkeypatch, whole_error):
+    repo, sha = merged
+    diff = ["git", "diff", "--name-only", f"{sha}^1", sha]
+
+    def unreadable(*_a):
+        raise subprocess.CalledProcessError(128, diff, stderr=whole_error.encode())
+
+    monkeypatch.setattr(cleanup, "_bytes", unreadable)
+    cx = finish(tmp_path, shared, repo, Gh(pr(sha)))
+    [event] = cx.events("c1", "decision-fixes")
+    assert event["notice"] == (
+        "the decision fixes of c1 were not updated: CalledProcessError: "
+        f"Command '{diff}' returned non-zero exit status 128.\n{whole_error}"
+    )

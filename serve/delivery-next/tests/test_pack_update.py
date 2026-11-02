@@ -22,7 +22,7 @@ from owlbear_delivery_next.change_contracts.visual_records import DesignInput, J
 from owlbear_delivery_next.commands import cli, replay_client
 from owlbear_delivery_next.commands.chat_client import NOT_RUNNING, NOT_SERVED
 from owlbear_delivery_next.impeccable import calibration, design_tools, detector, pack_files, pack_update
-from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_replay
+from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_job, pack_replay, pack_run
 from owlbear_delivery_next.local_system import local_home, preload
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import config_routes
@@ -488,6 +488,23 @@ def test_a_replay_judge_left_running_stops_the_replay_before_another_starts(repo
     with pytest.raises(pack_replay.ReplayError, match="may still be running"):
         pack_replay.replay(store, run=run)
     assert len(started) == 1
+
+
+def test_a_replay_worktree_git_refuses_stops_the_replay_stage_with_gits_whole_words(repo, monkeypatch, whole_error):
+    store, real = Store.open(repo), subprocess.run
+
+    def refusing(argv, *rest, **kw):
+        if argv == ["git", "init", "-q"]:
+            return subprocess.CompletedProcess(argv, 128, "", whole_error)
+        return real(argv, *rest, **kw)
+
+    monkeypatch.setattr(pack_replay.git_files.subprocess, "run", refusing)
+    job = pack_job.Job(store, pack_job.Live())
+    job.state = job._blank() | {"state": "running", "run": "r1", "invocations": []}  # noqa: SLF001 - a running run
+    with pytest.raises(pack_run.Stopped) as stopped:
+        job.do("replay", lambda: pack_replay.replay(store, run=lambda _cfg: None))
+    said = f"the replay's worktree could not be made a git repository: {whole_error}"
+    assert stopped.value.reason == f"replay: PackError: {said}"
 
 
 def candidate(folder: Path | None = None, **pins) -> pack_candidate.Candidate:

@@ -21,7 +21,7 @@ def settled(store: Store, lock: Lock, change: Change, capture: tuple[str, str, l
     head, tree, widths = capture
     if owned := decision.decided(change, head, tree):
         store.write(lock, loop.apply(owned[0], owned[1], datetime.now(UTC)))
-        calibrated(store, owned[0], out)  # after the decision is saved: it never waits on the shared repository
+        calibrated(store, lock, owned[0], out)  # after the decision is saved: it never waits on the shared repository
         return True
     if taken := decision.waived(change, head, tree, widths):
         store.write(lock, loop.apply(taken[0], taken[1], datetime.now(UTC)))
@@ -29,7 +29,7 @@ def settled(store: Store, lock: Lock, change: Change, capture: tuple[str, str, l
     return False
 
 
-def calibrated(store: Store, change: Change, out: Path) -> None:
+def calibrated(store: Store, lock: Lock, change: Change, out: Path) -> None:
     """Keep a decided round for calibration in the shared repository; the decision never waits on it."""
     v, b = change.visual, change.before
     if store.shared is None or v is None or not change.visual_rounds:
@@ -41,4 +41,7 @@ def calibrated(store: Store, change: Change, out: Path) -> None:
         if notice := calibration.keep(store.shared, store.name, change.slug, change.visual_rounds[-1], images):
             sessions.out(f"calibration: {notice}")
     except Exception as exc:  # noqa: BLE001 - calibration is evidence; the decision stands without it
-        sessions.out(f"calibration: {type(exc).__name__}: {exc}"[:300])
+        reason = f"{type(exc).__name__}: {exc}"
+        sessions.out(f"calibration: {reason}")
+        at = datetime.now(UTC).isoformat(timespec="seconds")
+        store.log(lock, change.slug, {"event": "calibration-not-kept", "at": at, "reason": reason})

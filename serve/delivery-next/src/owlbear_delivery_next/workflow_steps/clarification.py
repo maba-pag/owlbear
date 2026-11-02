@@ -89,7 +89,7 @@ def checked(store: Store, lock: Lock, c: Change) -> Change | None:
     now = datetime.now(UTC)
     if verdict is None:
         cause = cause_key(ErrorKind.NETWORK, c.step.kind, LABEL)
-        retry = StepResult(exit=Exit.RETRY, cause=cause, reason=f"{FAILED}: {why}"[:300], wake_at=now + wait)
+        retry = StepResult(exit=Exit.RETRY, cause=cause, reason=f"{FAILED}: {why}", wake_at=now + wait)
         store.write(lock, loop.apply(c, retry, now))
         return None
     if verdict.changes_brief:  # treated as a brief change from here on: never delivered, never a decision
@@ -110,7 +110,7 @@ def checked(store: Store, lock: Lock, c: Change) -> Change | None:
 def judged(done: Run) -> tuple[pick_tools.ClarificationResult | None, str]:
     """The session's verdict, or why there is none to trust."""
     if done.ending != "result" or not isinstance(done.payload, pick_tools.ClarificationResult):
-        return None, f"its session ended {done.ending}: {_one(done.detail) or 'no verdict was submitted'}"
+        return None, f"its session ended {done.ending}: {done.detail or 'no verdict was submitted'}"
     if done.usage_unread or not (done.termination and done.termination.confirmed):
         return None, f"its verdict cannot be trusted: {done.usage_unread or 'its processes were not confirmed gone'}"
     return done.payload, ""

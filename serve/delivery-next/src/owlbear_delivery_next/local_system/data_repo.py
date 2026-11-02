@@ -132,7 +132,7 @@ class DataRepo:
         found = _git(self.root, "rev-parse", "--absolute-git-dir")
         admin = Path(found.stdout.strip())
         if found.returncode or not admin.is_dir():
-            msg = f"the git folder of {self.root} cannot be found: {found.stderr.strip()[:200]}"
+            msg = f"the git folder of {self.root} cannot be found: {found.stderr.strip()}"
             raise DataRepoError(msg)
         return admin / LOCK
 
@@ -275,7 +275,7 @@ class DataRepo:
             return Committed(why)  # failed, or nothing changed: no commit was made
         made = _git(self.root, "-c", "core.abbrev=no", "commit", "-m", message, "--", *rels, until=until)
         if made.returncode:
-            return Committed(f"saved, but not committed: {made.stderr.strip()[:200]}")
+            return Committed(f"saved, but not committed: {made.stderr.strip()}")
         named = _MADE.match(made.stdout.partition("\n")[0])
         oid = named.group(1) if named else ""
         known = _git(self.root, "rev-parse", "--verify", "-q", f"{oid}^{{commit}}", until=until) if oid else None
@@ -290,10 +290,10 @@ class DataRepo:
         if not rels:
             return "", []  # removed before it was ever committed: nothing to commit
         if (added := _git(self.root, "add", "--", *rels, until=until)).returncode:
-            return f"saved, but not committed: {added.stderr.strip()[:200]}", []
+            return f"saved, but not committed: {added.stderr.strip()}", []
         staged = _git(self.root, "diff", "--cached", "--quiet", "--", *rels, until=until)
         if staged.returncode not in (0, 1):
-            why = staged.stderr.strip()[:200] or "git could not read staged changes"
+            why = staged.stderr.strip() or "git could not read staged changes"
             return f"saved, but not committed: {why}", []
         return "", rels if staged.returncode == 1 else []
 
@@ -301,7 +301,7 @@ class DataRepo:
         """Whether the index holds ``rel``; a failed probe cannot establish absence."""
         probe = _git(self.root, "ls-files", "-z", "--", rel, until=until)
         if probe.returncode:
-            msg = f"git cannot tell whether {rel} is tracked: {probe.stderr.strip()[:200] or 'tracking probe failed'}"
+            msg = f"git cannot tell whether {rel} is tracked: {probe.stderr.strip() or 'tracking probe failed'}"
             raise DataRepoError(msg)
         return bool(probe.stdout)
 
@@ -398,7 +398,7 @@ class DataRepo:
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         probe = _git(self.root, "rev-parse", "--absolute-git-dir", until=until)
         if probe.returncode or not probe.stdout.strip():
-            why = probe.stderr.strip()[:200] or "git named no git directory"
+            why = probe.stderr.strip() or "git named no git directory"
             msg = f"cannot tell whether a rebase is in progress in {self.root}: {why}"
             raise DataRepoError(msg)
         admin = Path(probe.stdout.strip())
@@ -408,7 +408,7 @@ class DataRepo:
         """Report a failed rebase and leave it exactly as Git stopped it: no abort, no index or worktree change."""
         if done.returncode == 0:
             return ""
-        why = done.stderr.strip()[:200] or failed
+        why = done.stderr.strip() or failed
         try:
             rebasing = self.rebasing(until)
         except DataRepoError as exc:
