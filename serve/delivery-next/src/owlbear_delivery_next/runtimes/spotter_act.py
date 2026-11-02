@@ -14,7 +14,10 @@ with its token (``acts.TOKEN``) and is sent with the Spotter's own agent source,
 An act's dispatch is no delivery: a note is ``delivered`` once the session's own event feed shows the runtime took it
 (its ``user.message`` with the id ``send`` returned, or the refused submit's completion), else ``unconfirmed`` after
 ``BOUND`` seconds. A stop to ask is delivered when it ends the step; one that comes after the step ended is ``expired``.
-What raises goes to the Spotter, which keeps it on the act as ``failed``.
+What raises goes to the Spotter, which keeps it on the act as ``failed``. Each SDK request (``send``, ``abort``) is
+bounded as the step's own (``sdk_teardown.CALL``) and never retried: one that outlasts the bound raises too. A stop to
+ask whose abort failed still ends the step, so the step's teardown stops the runtime. An act cancelled during a request
+is ``failed`` with "cancelled: <the request>", and one cancelled while it waits for its confirmation ``unconfirmed``.
 """
 
 from __future__ import annotations
@@ -27,9 +30,10 @@ from typing import TYPE_CHECKING, Any
 from copilot.session import AgentMessageSource
 
 from owlbear_delivery_next.improvement import acts, spotter
+from owlbear_delivery_next.runtimes.sdk_teardown import CALL, call
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Coroutine
 
     from copilot.session import CopilotSession
 
@@ -40,6 +44,7 @@ SOURCE = AgentMessageSource("owlbear-spotter")
 ASKS = frozenset({"stop-and-ask", "ask"})
 HARM = "The Spotter stopped this step for irreversible harm: {note}"
 STOPPED = "The Spotter stopped this step: {note}"
+NOTE, ABORT = "the Spotter's note", "the Spotter's abort"  # the SDK requests, as a bound or cancellation names them
 
 
 class StepActor:
@@ -51,11 +56,10 @@ class StepActor:
         step: _Step,
         spot: spotter.Spotter,
         *,
-        bound: float = BOUND,
         sleep: Callable[[float], Awaitable[Any]] = asyncio.sleep,
     ) -> None:
         """Bind the step's open *session*, the step, its Spotter (where acts are written); *sleep* waits the bound."""
-        self.session, self.step, self.spot, self.bound, self.sleep = session, step, spot, bound, sleep
+        self.session, self.step, self.spot, self.sleep = session, step, spot, sleep
         self.waiting: dict[str, asyncio.Future[None]] = {}  # a message or call id: its confirmation
         self.logged: set[str] = set()  # ids the runtime logged before their sender knew them
 
@@ -79,17 +83,25 @@ class StepActor:
 
     async def steer(self, record: spotter.Record, note: str) -> None:
         """The note into the running turn."""
-        await self._confirmed(record, await self.session.send(note, mode="immediate", source=SOURCE))
+        sending = self.session.send(note, mode="immediate", source=SOURCE)
+        await self._confirmed(record, await self._called(record, sending, NOTE))
 
     async def stop_resume(self, record: spotter.Record, note: str) -> None:
         """Abort the turn as the step's own stop, then send the note, which starts the next turn."""
-        await self._abort()
-        await self._confirmed(record, await self.session.send(note, source=SOURCE))
+        await self._abort(record)
+        await self._confirmed(record, await self._called(record, self.session.send(note, source=SOURCE), NOTE))
 
     async def stop_ask(self, record: spotter.Record, act: acts.Act) -> None:
-        """Abort the turn as the step's own stop and end the step with the owner's question."""
-        await self._abort()
+        """Abort the turn as the step's own stop and end the step with the owner's question.
+
+        An abort that fails still ends the step, so its teardown stops the runtime; the act says the abort failed.
+        """
         question = (HARM if act.harm else STOPPED).format(note=act.note)
+        try:
+            await self._abort(record)
+        except Exception:
+            self.step.gate.finish("spotter-ask", None, question)
+            raise
         was = self.step.gate.finish("spotter-ask", None, question)
         await self._update(record, **({"delivery": "expired", "error": "the step had ended"} if was else
                                       {"delivery": "delivered"}))  # fmt: skip
@@ -110,25 +122,34 @@ class StepActor:
         elif not waiter.done():
             waiter.set_result(None)
 
-    async def _abort(self) -> None:
-        """Abort the turn, its idle marked as the step's own stop: no wrong choice, no reminder (``step_budget``)."""
+    async def _abort(self, record: spotter.Record) -> None:
+        """Abort the turn, its idle marked as the step's own stop: no wrong choice, no reminder (``step_budget``).
+
+        The mark stays until that idle or the step's end, even when the abort fails: a timed-out one may still land.
+        """
         self.step.aborted = True
+        await self._called(record, self.session.abort(), ABORT)
+
+    async def _called[T](self, record: spotter.Record, request: Coroutine[Any, Any, T], what: str) -> T:
+        """One SDK request, bounded as the step's own (``sdk_teardown.CALL``); a cancelled one leaves the act failed."""
         try:
-            await self.session.abort()
-        except BaseException:
-            self.step.aborted = False  # no turn was stopped: the next idle is the agent's own
+            return await call(request, what, CALL)
+        except asyncio.CancelledError:
+            failed = functools.partial(acts.update, delivery="failed", error=f"cancelled: {what}")
+            spotter.WORK.submit(failed, self.spot.folder, record.id)
             raise
 
     async def _confirmed(self, record: spotter.Record, key: str) -> None:
         waiter = self.waiting.setdefault(key, asyncio.get_running_loop().create_future())
         if key in self.logged:
             waiter.set_result(None)
-        bound = asyncio.ensure_future(self.sleep(self.bound))
+        bound = asyncio.ensure_future(self.sleep(BOUND))
         try:
             await asyncio.wait({waiter, bound}, return_when=asyncio.FIRST_COMPLETED)
         except asyncio.CancelledError:  # the step's end stopped the wait: never left pending
-            spotter.WORK.submit(acts.update, self.spot.folder, record.id, delivery="unconfirmed",
-                                error="the step ended before the runtime showed it")  # fmt: skip
+            unseen = functools.partial(acts.update, delivery="unconfirmed",
+                                       error="the step ended before the runtime showed it")  # fmt: skip
+            spotter.WORK.submit(unseen, self.spot.folder, record.id)
             raise
         finally:
             bound.cancel()

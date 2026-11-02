@@ -228,3 +228,87 @@ def test_a_send_that_raises_leaves_the_act_failed_with_its_whole_error(tmp_path)
     assert spotter.WORK.settled(5)
     act = act_of(st)
     assert (act.act, act.delivery, act.error) == ("stop-and-resume", "failed", f"ConnectionError: {error}")
+
+
+class Held(Session):
+    """A transport whose *held* call never answers."""
+
+    def __init__(self, held: str) -> None:
+        super().__init__()
+        self.held = held
+
+    async def send(self, prompt: str, **kw: Any) -> str:
+        mid = await super().send(prompt, **kw)
+        if self.held == "send":
+            await asyncio.Event().wait()
+        return mid
+
+    async def abort(self) -> None:
+        await super().abort()
+        if self.held == "abort":
+            await asyncio.Event().wait()
+
+
+def test_an_abort_held_past_the_call_bound_fails_the_act_and_its_stop_to_ask_still_ends_the_step(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(spotter_act, "CALL", 0.05)
+    monkeypatch.setattr(spotter, "DRAIN", 1.0)
+
+    async def main() -> sdk_adapter._Step:
+        st = stepped(tmp_path, Held("abort"), "course-and-constraints", **{"course-and-constraints": "stop-and-ask"})
+        st.feed.spotter.look("plan", 1.0, {"kind": "plan", "call": "c-1"})
+        await st.feed.spotter.drain()
+        return st
+
+    st = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    act = act_of(st)
+    assert (act.delivery, act.error) == ("failed", "TimeoutError: the Spotter's abort did not answer within 0 s")
+    assert (st.run.ending, st.done, st.aborted) == ("spotter-ask", True, True)  # the mark stays: the abort may land
+
+
+def test_a_steer_held_past_the_call_bound_fails_the_act(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(spotter_act, "CALL", 0.05)
+    monkeypatch.setattr(spotter, "DRAIN", 1.0)
+
+    async def main() -> sdk_adapter._Step:
+        st = stepped(tmp_path, Held("send"), "course-and-constraints")
+        st.feed.spotter.look("plan", 1.0, {"kind": "plan", "call": "c-1"})
+        await st.feed.spotter.drain()
+        return st
+
+    st = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    act = act_of(st)
+    assert (act.act, act.delivery) == ("steer", "failed")
+    assert act.error == "TimeoutError: the Spotter's note did not answer within 0 s"
+    assert not st.done
+
+
+@pytest.mark.parametrize(("held", "calls", "delivery", "error"), [
+    ("abort", 1, "failed", "cancelled: the Spotter's abort"),
+    ("", 2, "unconfirmed", "the step ended before the runtime showed it"),
+])  # fmt: skip
+def test_an_act_cancelled_while_its_abort_or_its_confirmation_is_held_is_never_left_pending(
+    tmp_path, held, calls, delivery, error
+) -> None:
+    async def main() -> sdk_adapter._Step:
+        session = Held(held)
+        st = stepped(tmp_path, session, "outside-state-changes", Clock())
+        spot = st.feed.spotter
+        record = spot._record("plan", 1.0, {"call": "c-1"}, category="outside-state-changes")  # noqa: SLF001
+        act = acts.decide(record, "plan", spot.ctx, 0, {})
+        acts.write(spot.folder, act)
+        acting = asyncio.ensure_future(st.actor(record, act))
+        await until(lambda: len(session.calls) == calls)
+        await asyncio.sleep(0.01)
+        acting.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await acting
+        return st
+
+    st = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    act = act_of(st)
+    assert (act.act, act.delivery, act.error) == ("stop-and-resume", delivery, error)
