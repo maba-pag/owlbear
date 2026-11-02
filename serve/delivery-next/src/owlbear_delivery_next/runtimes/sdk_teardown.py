@@ -144,6 +144,8 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
         await force(st, "runtime still present after stop", problems)
     pending = await _requests(st, problems)
     await _workers(st, problems)
+    if st.session is not None:  # the session's run is over: its stage no longer counts it (#718)
+        _guard(problems, "ended log", st.log, event="ended", ending=st.run.ending)
     observed = await settle(dict(st.run.pids), problems)
     return replace(observed, confirmed=False) if pending else observed
 
