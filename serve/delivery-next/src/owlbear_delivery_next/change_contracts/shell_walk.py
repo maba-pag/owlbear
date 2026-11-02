@@ -182,13 +182,15 @@ class Walk:
             run = next((r for r in gits if (git_reading.subcommand(r.words) or "").lower() == alias.lower()), None)
             made = partial(_run_child, state, run) if run else state.child
             child = made(plain=state.plain())
+            given = git_reading.alias_arguments(run.words) if run else ()  # git hands them to the alias's command
             if body.startswith("!"):
                 child.at = None  # git runs it in the top folder of the repository it finds
-                if reason := self._text(body[1:], child):
+                # as sh -c '<body> "$@"' <given>
+                if reason := self._text(" ".join([body[1:], *map(git_reading.forwarded, given)]), child):
                     return f"`{self.name}` defines git alias {alias}: {reason}"
                 continue
             try:
-                words = [Word("git"), *map(Word, shlex.split(body))]
+                words = [Word("git"), *map(Word, shlex.split(body)), *given]
             except ValueError:  # git can't split it either, and runs nothing
                 continue
             if flag := git_reading.bypass(words) or git_reading.switch(words, child.switches):

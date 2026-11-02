@@ -158,6 +158,7 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("MIRROR=true git --config-env=remote.origin.mirror=MIRROR push", "core"),
         ("MIRROR=false git --config-env=remote.origin.mirror=MIRROR push", None),
         ("git -c remote.origin.mirror=yes fetch", None),
+        ("git -cremote.origin.mirror=true push", None),  # git refuses an attached -c value, running nothing
         ("git remote add --mirror=fetch o u", None),
         ("git clone --mirror u d", None),
         ("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.mirror GIT_CONFIG_VALUE_0=true git status", None),
@@ -172,6 +173,8 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
         ("git -c alias.rb=\"rebase -x 'git push --force'\" rb main", "variant"),  # the text it has git run
         ("git -c alias.rb=\"rebase -x 'make test'\" rb main", None),
         ("git -c alias.ci='!git commit --no-verify' ci", "variant"),
+        ("git -c alias.ci=commit ci -n -m x", "variant"),  # git hands the alias the words after its name
+        ("git -c alias.ci='!git commit' ci -n -m x", "variant"),  # as sh -c '<body> "$@"'
         ("CI='commit -n' git --config-env=alias.ci=CI ci", "variant"),
         ("GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.ci GIT_CONFIG_VALUE_0='push --force' git ci", "variant"),
         ("git config alias.c 'commit --no-verify' && git c -m x", "variant"),

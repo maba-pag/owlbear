@@ -349,6 +349,11 @@ def subcommand(words: Sequence[str]) -> str | None:
     return _parse_git(words[1:]).sub
 
 
+def alias_arguments(words: Sequence[str]) -> tuple[str, ...]:
+    """The words the git command *words* passes the subcommand or alias it runs."""
+    return _parse_git(words[1:]).arguments
+
+
 def scripts(words: Sequence[str]) -> list[tuple[str, bool]]:
     """The shell texts a git command runs, each with whether it runs after the command wrote.
 
@@ -369,11 +374,11 @@ def scripts(words: Sequence[str]) -> list[tuple[str, bool]]:
     while given[:1] in (["-q"], ["--quiet"], ["--recursive"]):  # its only options; its command's are its own
         given.pop(0)
     # git runs sh -c '<first> "$@"' <the rest>; a word the shell built stays an expansion there
-    rest = [_forwarded(w) for w in given[1:]]
+    rest = [forwarded(w) for w in given[1:]]
     return [(" ".join([given[0], *rest]).strip(), False)] if given else []
 
 
-def _forwarded(word: str) -> str:
+def forwarded(word: str) -> str:
     """*word* as shell text that gives the same word, or an expansion if the calling shell built it."""
     if not getattr(word, "expanded", False):
         return shlex.quote(word)
