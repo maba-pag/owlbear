@@ -86,10 +86,12 @@ def shown(c: Change, q: Question, events: list[dict[str, Any]]) -> dict[str, obj
 
     Whether chat may answer it, and when the owner allowed what the Spotter stopped on the questions *q* asks again
     (#717): that answer is held, so without it the page would show the same question as if he had not answered. The
-    last answer to *q* the fold did not apply, from *events*, stays beside it until an answer to it applies (#791).
+    last answer to *q* the fold did not apply, from *events*, stays beside it until an answer to it applies (#791): a
+    question opened again after that never shows it.
     """
-    dropped = [e for e in events if e.get("event") == "answer-not-applied" and e.get("question") == q.id]
-    return {"ordinary": loop.ordinary(q), "held": answer_kinds.kept(c, q), "dropped": dropped[-1] if dropped else None}
+    said = [e for e in events if e.get("event") in {"answer", "answer-not-applied"} and e.get("question") == q.id]
+    dropped = said[-1] if said and said[-1]["event"] == "answer-not-applied" else None
+    return {"ordinary": loop.ordinary(q), "held": answer_kinds.kept(c, q), "dropped": dropped}
 
 
 def answer_item(store: Store, c: Change, body: AnswerBody) -> AnswerItem | tuple[int, str]:

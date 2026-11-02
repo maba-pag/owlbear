@@ -230,6 +230,21 @@ def test_a_brief_change_stops_the_work_and_answering_within_the_brief_reopens_th
     assert delivered.answer.text == "English"
 
 
+def test_a_reopened_question_does_not_show_an_answer_dropped_before_a_later_one_applied(picking, monkeypatch):
+    """#791's notice stays beside a question only until an answer to it applies, even when it opens again."""
+    run = Asking(picking, monkeypatch)
+    dropped = {"event": "answer-not-applied", "at": AT.isoformat(), "question": run.qid, "reason": "it was settled"}
+    picking.store.log(Lock(picking.slug), picking.slug, dropped)
+    assert run.answer(kind="brief_change", text=WORDS).status_code == 200
+    c = run.step()
+    assert run.answer(loop.open_question(c).id, option="within").status_code == 200
+
+    run.fold()
+
+    detail = picking.http.get(f"/api/next/changes/{picking.slug}").json()
+    assert (detail["question"]["id"], detail["question"]["dropped"]) == (run.qid, None)
+
+
 def test_stopping_the_change_over_a_brief_change_abandons_it(picking, monkeypatch):
     run = Asking(picking, monkeypatch)
     assert run.answer(kind="brief_change", text=WORDS).status_code == 200
