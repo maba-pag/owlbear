@@ -18,6 +18,9 @@ Every ``POLL`` seconds, one pass:
    chats' order turning each pass. Each byte is fetched once: an event not yet complete is kept and continued at the
    next read; one over ``LINE`` bytes is left out and said in the chat's cards from then on.
 
+A pass that fails is told in host.log, and its whole error (``failed``) is shown on the Improvement page until a pass
+does not fail.
+
 Where a chat starts: one whose folder existed when the follower started following (at its start, when switched on and
 when the enrolled folders change: the baseline, by folder names alone) starts at its end then; one found later starts
 at its beginning. What came before the start is read as context once the chat grows, never looked at; so is a
@@ -141,6 +144,7 @@ class Follower:
         self.share = 0  # the steer share of the latest pass
         self.turns = 0
         self.said = ""
+        self.failed = ""  # the whole error of the last pass, if it failed
         self.saved: dict[str, Any] = {}
 
     def start(self) -> None:
@@ -218,8 +222,10 @@ class Follower:
         while not self.closed.is_set():
             try:
                 await self._pass()
+                self.failed = ""
             except Exception as exc:  # noqa: BLE001 - the follower outlives one failed pass
-                self._tell(f"chats follower: a pass failed: {type(exc).__name__}: {exc}")
+                self.failed = f"{type(exc).__name__}: {exc}"  # the Improvement page's thread reads it
+                self._tell(f"chats follower: a pass failed: {self.failed}")
             await self._nap()
         await self._quit()
 

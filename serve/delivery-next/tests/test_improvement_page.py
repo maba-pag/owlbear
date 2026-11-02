@@ -37,7 +37,15 @@ from owlbear_delivery_next.local_system import codebase, maintenance
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import app, cases_job, chat_acts, improvement_routes, project, retro_job
+from owlbear_delivery_next.machine_host import (
+    app,
+    cases_job,
+    chat_acts,
+    chat_settings,
+    improvement_routes,
+    project,
+    retro_job,
+)
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.runtimes import session_result
@@ -794,3 +802,46 @@ def test_a_failed_spotter_look_shows_its_whole_error(tmp_path, monkeypatch, pds,
         page = improvement(w, pds)
         tag = page.locator(f"#look-{record['id']} p-tag").first
         assert tag.evaluate("e => e.textContent") == f"Skipped: {expected}"
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)
+def test_a_failed_chats_pass_shows_its_whole_error_until_a_pass_succeeds(
+    tmp_path, monkeypatch, pds, whole_error
+) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    error = f"{whole_error}\n/{'x' * 3000}"  # and an unbroken path component, wider than the page
+    plans: list[chat_settings.Plan] = []
+
+    def read() -> chat_settings.Plan:
+        if not plans:
+            raise RuntimeError(error)
+        return plans[0]
+
+    with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
+        follower, told = w.machine.chats, []
+        follower.say, follower.read, follower.poll = told.append, read, 0.01
+        follower.start()
+        _until(lambda: told)
+        page = improvement(w, pds)
+        failed = page.locator("#not-followed #follower-failed")
+        expect(failed).to_be_visible()
+        said = f"All enrolled chats: the last pass failed, and the next one tries again: RuntimeError: {error}"
+        assert failed.evaluate("e => e.textContent") == said
+        assert failed.evaluate("e => e.scrollWidth <= e.clientWidth")  # wrapped, not cut off at the page's edge
+
+        ctx = spotter.Context(project="", change="", step="chat", looks=("hand-off",), sample_rate=0, verbose=False,
+                              model="m", effort="medium", limit=0.75, actions={})  # fmt: skip
+        plans.append(chat_settings.Plan(ctx, ()))  # a pass that reads no chat, and does not fail
+        _until(lambda: not follower.failed)
+        page.reload()
+        page.locator("#proposals").wait_for()
+        expect(page.locator("#not-followed")).to_have_count(0)
+
+
+def _until(done: Callable[[], object]) -> None:
+    deadline = time.monotonic() + 10
+    while not done():
+        assert time.monotonic() < deadline, "not reached in 10 s"
+        time.sleep(0.02)

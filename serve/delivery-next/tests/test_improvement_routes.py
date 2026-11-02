@@ -52,7 +52,7 @@ def world(tmp_path, monkeypatch):
     machine = SimpleNamespace(
         retro=SimpleNamespace(seams=SimpleNamespace(projects=lambda: projects)),
         cases=SimpleNamespace(running=""),
-        chats=SimpleNamespace(not_followed=list),
+        chats=SimpleNamespace(not_followed=list, failed=""),
         projects=dict.fromkeys(projects),
         updating="",
         stopping=threading.Event(),
