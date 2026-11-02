@@ -1,7 +1,9 @@
 """The Spotter (design §4): it records what it would say and the action its finding's category is set to, and acts.
 
-It looks at a Delivery step's hand-offs, its state changes and a sample of its actions; it delays the step only where
-its finding could answer a hand-off (below). The machine host's chats follower (``machine_host.chats``) gives an
+It looks at a Delivery step's plan, its hand-offs, its state changes and a sample of its actions; it delays the step
+only where its finding could answer a hand-off (below). The step's plan is its agent's first reply after the step's
+own message (or a resumed session's answer), looked at once as it arrives (``Spotter.seen``), so a finding can steer
+the turn that follows it. The machine host's chats follower (``machine_host.chats``) gives an
 enrolled chat's hand-offs, plans, state changes and samples to one ``Spotter`` per chat, whose ``room`` admits at most
 one chat look at a time and none while paused. Each look keeps the settings in force when it was admitted, and its
 record the turn (requester message) it belongs to.
@@ -231,12 +233,20 @@ class Spotter:
         self.closing = False  # the step ended: no look starts any more
         self.deciding = asyncio.Lock()  # one act decided and written at a time: each reads the lines of the last
         self.hand_offs: dict[str, asyncio.Future[str | None]] = {}  # a waiting submit's call id: the look's note
+        self.planned = False  # the step's plan was seen live: ``seen`` looks at it once
 
     def seen(self, ev: Any) -> None:  # noqa: ANN401 - an SDK event, on the step's loop
-        """Take one event in; a completed action of the session's own agent may be sampled for a look."""
+        """Take one event in: its own agent's completed action may be sampled, its first reply is its plan."""
         d = as_dict(ev)
+        unanswered = self.kept.first_reply is None
         if self.take(d):
             self.sample(d)
+        elif unanswered and self.kept.first_reply and self.kept.turn and not self.planned:
+            self.planned = True
+            if "plan" in self.ctx.looks:  # the card shows the reply as the plan
+                moment = {"at": d.get("timestamp"), "kind": "the agent's first reply after the requester's message",
+                          "call": str(d.get("id") or "")}  # fmt: skip
+                self._look("plan", 1.0, moment)
 
     def take(self, ev: Any) -> bool:  # noqa: ANN401 - an SDK event or a logged one
         """Take one event in without a look; whether it completed a call of the session's own agent."""

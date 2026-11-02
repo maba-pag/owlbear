@@ -18,12 +18,12 @@ import pytest
 from copilot.generated.session_events import SessionEvent
 from copilot.session import AgentMessageSource
 
-from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts import tools, watch_policy
 from owlbear_delivery_next.change_contracts.models import Exit, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.improvement import acts, credit_meter, spotter
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import sdk_adapter, session_result, spotter_act
+from owlbear_delivery_next.runtimes import sdk_adapter, session_result, spotter_act, watch_feed
 
 STEERED = {"hand-off-fitness": "refuse-hand-off", "course-and-constraints": "steer",
            "outside-state-changes": "stop-and-resume", "irreversible-harm": "stop-and-ask"}  # fmt: skip
@@ -416,3 +416,48 @@ def test_a_stop_and_resume_whose_step_ends_during_its_abort_sends_no_note(tmp_pa
     act = act_of(st)
     assert (st.actor.session.calls, act.delivery) == ([("abort",)], "expired")
     assert act.error == "the step ended during its abort"
+
+
+@pytest.mark.parametrize("looks", [("plan", "hand-off"), ("hand-off",)])
+def test_a_steps_first_reply_is_its_plan_look_and_a_course_finding_steers_the_running_turn(tmp_path, looks) -> None:
+    """#717: the step's first message is its requester's; the agent's first reply after it is looked at once."""
+    places = watch_policy.Places((tmp_path,), (), (), tmp_path / "home", None)
+    reports = SimpleNamespace(put=lambda _r: None, late=lambda: None, lost=lambda _w: None, close=lambda _s: None)
+    ctx = spotter.Context(project="p", change="c1", step="build", looks=looks, sample_rate=0, verbose=False,
+                          model="m", effort="medium", limit=0.75, actions=STEERED, arm="steered", cap=2)  # fmt: skip
+    watching = watch_feed.Watching("c1", "build", places, lambda: reports, spot=ctx)
+
+    async def main() -> tuple[sdk_adapter._Step, Session, list[int]]:
+        session = Session()
+        cfg = sdk_adapter.Session(
+            StepKind.BUILD, tmp_path, "s-1", "m", resume=False, policy=Policy(tmp_path),
+            observe=lambda: tools.Worktree("a", "a"), checks=(), model="gpt-6-luna", watch=watching,
+        )  # fmt: skip
+        st = sdk_adapter._Step(cfg, asyncio.get_running_loop())  # noqa: SLF001 - the real step, its feed and Spotter
+        st.feed = watch_feed.opened(cfg.watch, cfg.worktree, lambda: st.run.session_id, st.watch)
+        spot = st.feed.spotter
+        spot.judge = answering("course-and-constraints")
+        spotter_act.bind(st, session)
+        st.on_event(event("user.message", {"content": "Build the greeting."}))  # the step's own message
+        st.on_event(event("assistant.message", {"messageId": "a-1", "content": "I will edit greet.py first."}))
+        looked = [len(spot.tasks)]
+        if looks[0] == "plan":
+            await until(lambda: session.calls)
+            st.on_event(message("m-1"))  # the runtime took the note
+        await spot.drain()
+        st.on_event(event("assistant.message", {"messageId": "a-2", "content": "Done editing."}))
+        looked.append(len(spot.tasks))
+        await spot.drain()
+        return st, session, looked
+
+    st, session, looked = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    records = [json.loads(x) for f in spotter.root().glob("records-*.jsonl") for x in f.read_text().splitlines()]
+    if looks[0] != "plan":
+        assert (looked, records, session.calls) == ([0, 0], [], [])
+        return
+    act = act_of(st)
+    assert (looked, [r["look"] for r in records]) == ([1, 0], ["plan"])
+    assert (act.act, act.delivery) == ("steer", "delivered")
+    assert session.calls == [("send", f"{act.token} Deletes the backups.",
+                              {"mode": "immediate", "source": AgentMessageSource("owlbear-spotter")})]  # fmt: skip
