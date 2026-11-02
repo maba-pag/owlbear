@@ -596,6 +596,9 @@ def test_a_check_that_fails_waits_with_its_whole_reason(picking, monkeypatch, wh
 
     c = run.step()
 
-    one = " ".join(whole_error.split())  # the session's detail is collapsed onto one line
-    why = f"its session ended error: {one}" if field == "detail" else f"its verdict cannot be trusted: {whole_error}"
+    why = (
+        f"its session ended error: {whole_error}"
+        if field == "detail"
+        else f"its verdict cannot be trusted: {whole_error}"
+    )
     assert (c.outcome.exit, c.outcome.reason) == (Exit.PENDING, f"{clarification.FAILED}: {why}")
