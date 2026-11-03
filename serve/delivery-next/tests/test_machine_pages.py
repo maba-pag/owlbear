@@ -55,7 +55,8 @@ from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home, processes
-from owlbear_delivery_next.machine_host import app, project
+from owlbear_delivery_next.machine_host import app, project, versions
+from owlbear_delivery_next.machine_host import impeccable as machine_impeccable
 from owlbear_delivery_next.machine_host import serve as host_start
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
@@ -612,6 +613,67 @@ def test_updates_impeccable_with_no_project_answers_a_loaded_projects_run_with_i
     finally:
         server.should_exit = True
         machine.stop_all()
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("fails", ["write", "removal"])
+def test_updates_impeccable_says_an_install_failure_it_could_not_keep_whole(
+    monkeypatch, capsys, pds, whole_error, fails
+) -> None:
+    """#951: a failed install's record that could not be written, or an ended one that could not be removed, says why
+    whole on Updates and in the host's log."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    path = local_home.root() / pack_files.PACKS / machine_impeccable.FAILED
+    broken, write, unlink = [], Path.write_text, Path.unlink
+
+    def writing(self, *args, **kwargs):
+        if fails == "write" and self.name == f".{machine_impeccable.FAILED}.tmp":
+            broken.append(self)
+            raise OSError(whole_error)
+        return write(self, *args, **kwargs)
+
+    def unlinking(self, *args, **kwargs):
+        if fails == "removal" and self == path:
+            broken.append(self)
+            raise OSError(whole_error)
+        return unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    machine, server, base = serve()
+    running = versions.running()  # its pack is not installed here, so its failure applies
+    machine.impeccable.failed(running, "cannot download")
+    monkeypatch.setattr(Path, "write_text", writing)
+    monkeypatch.setattr(Path, "unlink", unlinking)
+    if fails == "write":
+        machine.impeccable.failed(running, "cannot download again")
+    else:
+        machine.impeccable.ready(running)
+    monkeypatch.setattr(Path, "write_text", write)
+    monkeypatch.setattr(Path, "unlink", unlink)
+    assert broken == [path.with_name(f".{machine_impeccable.FAILED}.tmp") if fails == "write" else path]
+    unkept = f"the failure could not be {'kept in' if fails == 'write' else 'removed from'} {path}: OSError: "
+    unkept += whole_error
+    logged = capsys.readouterr().out
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.goto(f"{base}/updates/impeccable#token=t")
+            expect(page.locator("#pack-install-state")).to_be_visible()
+            shown = page.locator("#pack-unkept")
+            expect(shown).to_be_visible()
+            assert shown.text_content() == f"{unkept[0].upper()}{unkept[1:]}."
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    line = r"^\d\d:\d\d:\d\dZ Impeccable: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"  # up to the host log's next line
+    assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [unkept]
 
 
 def targets(scope) -> list[str]:
