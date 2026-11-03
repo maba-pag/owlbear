@@ -321,6 +321,8 @@ def _unsettled(c: Change, q: Question, own: tuple[str, str], item: AnswerItem) -
         return "it is settled only by one of its options"
     if item.option in {WITHIN.id, "reshape"} and not item.text.strip():
         return "say why: the work, or the shaper, goes on from your reason"
+    if c.intent.abandoned_at or (c.intent.hold and c.step.kind != StepKind.MERGE):  # folded first: schedule ends it
+        return "the amendment it asks about has ended"
     if own[1] == "objection":
         return "another amendment runs; answer after it ends" if c.amending else ""
     return "" if c.amending and c.amending.id == own[0] else "the amendment it asks about has ended"

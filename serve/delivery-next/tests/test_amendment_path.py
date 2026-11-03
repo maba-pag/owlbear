@@ -743,3 +743,16 @@ def test_reshaping_an_amendment_at_the_merge_step_leaves_it_so_the_pr_never_merg
     c, _ = loop.schedule(c, [AnswerItem(question=q.id, option="reshape", text="greet in French", at=NOW)], NOW)
 
     assert (c.step.kind, c.intent.hold, queue.leaving(before, c)) == (K.SHAPE, False, True)
+
+
+@pytest.mark.parametrize("intent", ["change", "abandon"])
+def test_a_yes_folded_after_reshaping_or_stopping_in_the_same_batch_approves_nothing(intent):
+    c = change()
+    through(c, said=verdict("weaker", qualifies=False))
+    q, dropped = loop.open_question(c), []
+    items = [IntentItem(at=NOW, intent=intent, text="greet in French"), AnswerItem(question=q.id, option="yes", at=NOW)]
+
+    c, _ = loop.schedule(c, items, NOW, dropped=dropped)
+
+    assert [why for _, why in dropped] == [f"question {q.id}: the amendment it asks about has ended"]
+    assert (c.amendments[0].state, c.amending, c.brief.version) == ("declined", None, 3)
