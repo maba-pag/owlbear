@@ -113,7 +113,6 @@ def test_a_memory_batch_during_a_publications_rebase_waits_and_its_commit_reache
     assert holder == {"said": ""}
     assert "error" not in batch, batch
     sha = batch["sha"]
-    assert isinstance(sha, str)
     assert subprocess.run(["git", "merge-base", "--is-ancestor", sha, "main"], cwd=root, check=False).returncode == 0  # noqa: S603, S607
     assert git(root, "status", "--porcelain", "--", "shop/memory") == ""
     with shared.locked():

@@ -583,7 +583,7 @@ def stopped(repo: Path, remote: Path, at: Path) -> SimpleNamespace:
     assert curation_apply.read(DataRepo(repo)) is not None
     assert ((repo / first).read_bytes(), curation_tree._read(repo / second)) == (target[first], seed.get(second))  # noqa: SLF001
     assert [e for e in (c, d) if (repo / rel(e, "owlbear")).exists()] == []  # removed first, as the apply does
-    start = bare(remote, "rev-parse", "main").stdout.decode().strip()
+    start = remote_main(remote)
     return SimpleNamespace(first=first, second=second, c=c, d=d, p=p, seed=seed, target=target, start=start)
 
 
@@ -668,11 +668,7 @@ def test_a_file_changed_after_the_stop_is_kept_and_published_with_the_rest(repo,
 
 
 def _made_global(entry):
-    def curate(root: Path) -> None:
-        (root / "memory").mkdir(exist_ok=True)
-        git(root, "mv", rel(entry), f"memory/{entry.id}.md")
-
-    return curate
+    return lambda root: git(root, "mv", rel(entry), f"memory/{entry.id}.md")
 
 
 @pytest.mark.parametrize("during", ["accept", "recovery"])
