@@ -21,6 +21,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import chat_contract, pick_tools
+from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_flow.status import APPROVE
 from owlbear_delivery_next.local_system import codebase, data_repo, local_home
 from owlbear_delivery_next.project_host import answers, api, host
 from owlbear_delivery_next.state_store import project_home
@@ -61,12 +63,24 @@ LOST = 0  # a write the host may have done: its outcome is unknown, never "not d
 CUT = (OSError, ValueError, http.client.HTTPException)  # no answer, or one cut short or not JSON
 
 
+def _told(version: int, code: int, now: dict[str, Any]) -> dict[str, Any]:
+    """A challenge read as the chat tools tell it: *now* when it is *version*'s, else why not."""
+    if code != OK:
+        return {"error": now.get("error") or now.get("detail"), "next": UNKNOWN_OUTCOME}
+    if now.get("version") != version:
+        return {"error": f"brief v{version} was replaced: the host's current draft is v{now.get('version')}"}
+    return now
+
+
 def done(code: int) -> bool | None:
     """Whether a write was done: None when its answer was lost, so it may have been."""
     return None if code == LOST else code == OK
 
 
-WAIT, POLL = 600.0, 5.0  # seconds a brief challenge request waits for the verdict, and between its reads
+# Seconds a challenge wait lasts, counted from its tool's entry, and between its reads. The Copilot client cuts an MCP
+# tool call at 180 s; after the wait come at most the last read with a contract re-check (30), a pause (5), the row
+# read (30) and the outcome read (30), each request at its 15 s allowance: 165 s.
+WAIT, POLL = 70.0, 5.0
 # Seconds a decision write waits for its answer: the lock's 20, a save's two 45 s phases of Git commands capped at 10 s
 # each, and a replacement's impact report; a margin, not a bound
 WRITE = 180.0
@@ -75,6 +89,8 @@ ADMIT_BY = "X-OwlBear-Admit-By"  # the propose's deadline, on the host's clock (
 _now = functools.partial(time.clock_gettime, time.CLOCK_MONOTONIC)  # the clock the host's fence reads
 PAGE_ONLY = ("progress", "spend", "tool_use", "pullback")  # off the list of all Changes: 16 rows were 77 KB with them
 PAUSED = "paused: ask the owner to press Resume on the Changes page; the challenge runs then - call show_status"
+STILL = "the challenge still runs: call await_challenge with the handle and the version"
+UNKNOWN_OUTCOME = "the challenge's outcome is unknown: call await_challenge again"
 _pause = time.sleep  # the poll's own pause
 FOUND = 20  # decisions a find returns; the rest are counted
 SHORT = ("id", "title", "statement", "scope", "origin", "state", "conflict", "read_back", "revision")
@@ -209,27 +225,66 @@ class Chat:
         self, change: str, version: int, rejected: list[dict[str, str]], *, retry_pick: bool = False
     ) -> dict[str, Any]:
         """Ask for the version's challenge or its pick again, then wait a while for the outcome; findings by ID."""
+        start = time.monotonic()
         body = {"change": change, "version": version, "rejected": rejected, "retry_pick": retry_pick}
         code, out = self.call("POST", "/briefs/challenge", body)
         if code != OK:
             return {"requested": done(code), **out}
         if out.get("paused"):  # TD-283: recorded now, judged once the owner resumes Delivery
             return {"requested": True, "running": False, "next": PAUSED}
-        slug, attempt = urllib.parse.quote(out.get("slug", "")), out.get("attempt", 0)
-        deadline, why = time.monotonic() + WAIT, {}
-        while slug and time.monotonic() < deadline:  # the request is never sent again; only its outcome is read
-            code, now = self.call("GET", f"/chat/challenge/{slug}?version={version}&attempt={attempt}")
+        code, now = self._wait(out["slug"], version, out["attempt"], start + WAIT)  # only its outcome is read
+        if code == OK and not now.get("running"):
+            return {"requested": True, **{k: v for k, v in now.items() if k != "running"}}
+        why = {} if code in {OK, 503} else {"error": now.get("error") or now.get("detail")}
+        return {"requested": True, "running": True, "next": STILL} | why
+
+    def await_challenge(self, change: str, version: int) -> dict[str, Any]:
+        """Wait for the version's challenge, which is only read: its findings by ID, who must act, or that it runs."""
+        start = time.monotonic()
+        read = self.show_status(change)
+        row, brief = next(iter(read.get("changes", [])), None), read.get("brief")
+        if row is None or brief is None:
+            return {"error": read.get("error") or read.get("message")}
+        if version != (current := brief["challenge"]["version"]):
+            return {"error": f"brief v{version} is not the current draft v{current}"}
+        slug, attempt = row["slug"], brief["challenge"]["attempt"]
+        code, now = self._wait(slug, version, attempt, start + WAIT)
+        if code == OK and now.get("running"):
+            return self._unfinished(slug, version, attempt)
+        return _told(version, code, now)
+
+    def _unfinished(self, slug: str, version: int, attempt: int) -> dict[str, Any]:
+        """The challenge still runs at the deadline: say whether someone must act, a verdict first.
+
+        The Change's row is read before the outcome, so a verdict that lands between the two reads is told as the
+        verdict, not as an owner action (the Change then waits for the shaping chat, which its row shows as an action).
+        """
+        code, rows = self.call("GET", "/changes")
+        if code != OK:
+            return _told(version, code, rows)
+        row = next((r for r in rows if r.get("slug") == slug), {})
+        code, now = self._read(slug, version, attempt)
+        if code != OK or not now.get("running"):
+            return _told(version, code, now)
+        line = row.get("line")
+        if row.get("step") != StepKind.SHAPE:  # abandoned or finished: no challenge will end
+            return {"running": False, "line": line, "next": "the Change is no longer being shaped"}
+        if row.get("actor") != "delivery" and row.get("action") != APPROVE:
+            return {"running": False, "owner_action": row.get("action"), "line": line}
+        return {"running": True, "line": line, "next": STILL}
+
+    def _read(self, slug: str, version: int, attempt: int) -> tuple[int, dict[str, Any]]:
+        return self.call("GET", f"/chat/challenge/{urllib.parse.quote(slug)}?version={version}&attempt={attempt}")
+
+    def _wait(self, slug: str, version: int, attempt: int, deadline: float) -> tuple[int, dict[str, Any]]:
+        """Read the version's challenge until it is not running, a read fails, or *deadline*; the last read."""
+        while True:
+            code, now = self._read(slug, version, attempt)
             if code == OK and not now.get("running"):
-                return {"requested": True, **{k: v for k, v in now.items() if k != "running"}}
-            if code not in {OK, 503}:  # 503: the host is handing over, so read again; anything else ends the wait
-                why = {"error": now.get("error") or now.get("detail")}
-                break
+                return code, now
+            if code not in {OK, 503} or time.monotonic() >= deadline:  # 503: the host is handing over, read again
+                return code, now
             _pause(POLL)
-        return {
-            "requested": True,
-            "running": True,
-            "next": "the challenge still runs; call show_status with the handle",
-        } | why
 
     def answer_question(self, question: str, option: str, text: str, said: dict[str, Any]) -> dict[str, Any]:
         """Answer one worker question with its class (*said*); recovery decisions are refused with the page (T6)."""
@@ -381,7 +436,7 @@ class OwlBear(Chat):
         """No Change tool works here."""
         return {"error": NO_CHANGES}
 
-    challenge_brief = show_status = answer_question = save_brief
+    challenge_brief = await_challenge = show_status = answer_question = save_brief
 
 
 class Closed:

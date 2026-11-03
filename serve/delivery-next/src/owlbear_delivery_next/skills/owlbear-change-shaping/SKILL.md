@@ -55,8 +55,11 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    `save_visual_check` with that handle, `ui`, the states and their steps. If either returns
    errors, each names a field: fix those and call again. Never invent a handle.
 8. Once the draft is ready, call `challenge_brief` with the handle and the saved version. A challenger
-   judges that version; the tool waits for its verdict and returns the findings by ID (if it says the
-   challenge still runs, call `show_status` with the handle later: its brief's `challenge` shows them).
+   judges that version; the tool waits about 70 s for its verdict and returns the findings by ID. A challenge
+   takes minutes: while a reply says `running`, call `await_challenge` with the handle and the version at once,
+   again and again; it only reads, it asks for nothing. A verdict, an `owner_action` (tell the owner what to do,
+   from its `line`), a Change no longer being shaped or an error ends the wait: act on it or tell the owner. Never
+   end your turn to wait for a challenge, and do not poll with `show_status`.
    Judge each finding critically: take the ones that hold and revise the brief with the owner where the
    choice is his (`save_brief`, Read-Back for changed choices); a finding you judge wrong you reject, by
    its ID, with your evidence, in the next `challenge_brief` call. A finding marked as the owner's is never

@@ -76,7 +76,8 @@ _WHO = {
     Waiting.OWNER_ACTION: "your action in GitHub",
     Waiting.GITHUB: "GitHub",
 }
-_ACTION = {Waiting.PERSON_CHECK: "Report result", Waiting.OWNER_ACTION: "Act in GitHub", Waiting.CHAT: "Approve brief"}
+APPROVE = "Approve brief"  # the action of a Change that waits for its shaping chat, which the chat tools read
+_ACTION = {Waiting.PERSON_CHECK: "Report result", Waiting.OWNER_ACTION: "Act in GitHub", Waiting.CHAT: APPROVE}
 RESUME = "Resume Delivery"
 _WORK = {
     StepKind.SHAPE: ("Shape", "shaping", "reviewer"),
