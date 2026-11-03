@@ -200,6 +200,8 @@ def schedule(  # noqa: PLR0913 - the PR observation, the profile's consent setti
         if moved and waiting_consent(c):
             c.outcome = None  # the merge step runs again: it routes the comment or offers the moved head
         if pr_state == "merged" or c.intent.abandoned_at:
+            if pr_state != "merged":
+                amending.left(c, "the Change stopped before it ended")
             go(c, StepKind.CLEANUP, mode=None if pr_state == "merged" else "abandon")
             c.outcome = None
         elif pr_state == "closed" and not any(q.cause == PR_CLOSED and not q.effect_observed_at for q in c.questions):
@@ -211,6 +213,7 @@ def schedule(  # noqa: PLR0913 - the PR observation, the profile's consent setti
             ]
             ask(c, Question(step=StepKind.MERGE, text="The PR was closed", options=options, cause=PR_CLOSED), now)
         elif c.intent.hold and c.step.kind != StepKind.MERGE:
+            amending.left(c, "the brief is reshaped")  # its question no longer approves anything
             go(c, StepKind.SHAPE)
             c.intent.hold = False
             c.outcome = None

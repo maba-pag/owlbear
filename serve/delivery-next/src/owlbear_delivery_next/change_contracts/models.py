@@ -23,7 +23,7 @@ from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullba
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_contracts.spend import Spend
 from owlbear_delivery_next.change_contracts.tool_use import ToolUse
-from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion, VisualResult, VisualRound
+from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion, VisualResult, VisualRound, VisualStep
 
 FORMAT = 8
 DETAIL = 60000  # one review batch: up to 20 new and 20 owner-decided findings of about 1,300 characters
@@ -115,14 +115,6 @@ class Criterion(Record):
 
 
 VISUAL = "visual"  # the reserved check-step task id of the engine's visual check
-
-
-class VisualStep(Record):
-    """One owner-authored action before a state's screenshot (TD-49), on a prepared test copy only (TD-96)."""
-
-    do: Literal["click", "type"]
-    target: str  # the control's accessible name: a button or link to click, a field's label to type into
-    text: str = ""  # what to type
 
 
 class VisualState(Record):

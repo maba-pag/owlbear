@@ -17,8 +17,9 @@ from owlbear_delivery_next.change_contracts.amend_tools import (
 )
 from owlbear_delivery_next.change_contracts.decision_records import BriefDecision, DecisionBaseline
 from owlbear_delivery_next.change_contracts.evidence import next_check, review_valid, visual_valid
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem, BriefApproval, ObjectionItem
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, BriefApproval, IntentItem, ObjectionItem
 from owlbear_delivery_next.change_contracts.models import (
+    VISUAL,
     Answer,
     Brief,
     Change,
@@ -168,7 +169,7 @@ def test_a_sum_of_equivalent_amendments_is_judged_together_and_the_second_asks()
         f"- A1 (v4, autonomous): criterion:AC-1 '{AC1}' -> 'greet() trims spaces'" in told
     )  # the challenger judges A2 together with A1
     amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge-2", NOW)
-    assert (a2.reference, c.brief.version, options(c)) == (3, 4, ASKS)
+    assert (amend_apply.reference(c), c.brief.version, options(c)) == (3, 4, ASKS)
 
 
 @pytest.mark.parametrize("said", ["weaker", "unsure"])
@@ -678,3 +679,36 @@ def test_the_kept_version_holds_its_checks_without_a_criterion_it_removed():
     answer(c, "yes")
 
     assert [p.criteria for p in c.brief.approved[-1].checks] == [["AC-1"], []]
+
+
+@pytest.mark.parametrize("intent", ["change", "abandon"])
+def test_reshaping_or_stopping_ends_a_waiting_amendment_and_a_late_yes_approves_nothing(intent):
+    c = change()
+    through(c, said=verdict("weaker", qualifies=False))
+    q = loop.open_question(c)
+    c, _ = loop.schedule(c, [IntentItem(at=NOW, intent=intent, text="greet in French")], NOW)
+    c.brief.version = 4  # the shaper's next draft
+    dropped: list = []
+    c, _ = loop.schedule(c, [AnswerItem(question=q.id, option="yes", at=NOW)], NOW, dropped=dropped)
+
+    assert [why for _, why in dropped] == [f"question {q.id}: the amendment it asks about has ended"]
+    assert (c.amendments[0].state, c.amending, c.brief.approved_version) == ("declined", None, 3)
+
+
+def test_removing_every_visual_state_while_the_visual_check_stopped_goes_on_to_the_next_check():
+    c = change(K.CHECK, VISUAL)
+    gone = [item("visual", s.name, "", remove=True) for s in c.brief.visual]
+    through(c, item("ui", "", "false"), *gone, said=verdict("weaker", qualifies=False))
+    answer(c, "yes")
+
+    assert (c.brief.visual, c.step.kind) == ([], K.FOLLOW)
+
+
+@pytest.mark.parametrize("path", ["/etc", "../app", "~/app"])
+def test_a_scope_amendment_stays_inside_the_repository(path):
+    c = change()
+    outside = CandidateResult(items=[item("scope", "packages/app", path)])
+
+    assert amendments.check(outside, amendments.amendable(c)) == [
+        f'items: scope {path} is not repository-relative - e.g. "packages/app"'
+    ]

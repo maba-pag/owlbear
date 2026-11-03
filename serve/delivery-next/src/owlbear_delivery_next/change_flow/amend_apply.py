@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from datetime import datetime
 
-    from owlbear_delivery_next.change_contracts.amendment_records import Action, Amendment, Level
+    from owlbear_delivery_next.change_contracts.amendment_records import Amendment, Level
     from owlbear_delivery_next.change_contracts.models import Brief, Change
 
 STALE = 0  # a visual state version no brief has: its recorded result no longer holds
@@ -77,7 +77,7 @@ def _ref(line: str) -> str:
     return {"criterion": key, "visual": f"screen:{key}", "check": f"check:{key}"}.get(field, "")
 
 
-def _actions(steps: Sequence[VisualStep | Action]) -> str:
+def _actions(steps: Sequence[VisualStep]) -> str:
     return "; ".join(f'type "{x.text}" into "{x.target}"' if x.do == "type" else f'click "{x.target}"' for x in steps)
 
 
@@ -212,7 +212,7 @@ def _criterion(c: Change, i: AmendedItem) -> None:
 
 
 def _visual(b: Brief, i: AmendedItem, v: int) -> None:
-    steps = None if i.actions is None else [VisualStep(**x.model_dump()) for x in i.actions]
+    steps = None if i.actions is None else [x.model_copy() for x in i.actions]
     if i.remove:
         b.visual = [s for s in b.visual if s.name != i.key]
     elif any(s.name == i.key for s in b.visual):
@@ -330,8 +330,8 @@ def resume(c: Change, a: Amendment, level: Level, now: datetime) -> None:
         c.outcome = Outcome(exit=Exit.BACK, cause=cause, reason=r.reason, at=now)
         budgets.back(c, r, now)
         return
-    if s.kind == StepKind.CHECK and s.task != VISUAL and all(p.id != s.task for p in c.checks):
-        go(c, StepKind.FOLLOW)  # its person check is gone: the next one is chosen as after any follow
+    if s.kind == StepKind.CHECK and (not c.brief.visual if s.task == VISUAL else all(p.id != s.task for p in c.checks)):
+        go(c, StepKind.FOLLOW)  # its check is gone: the next one is chosen as after any follow
     else:
         go(c, s.kind, s.task, s.mode)
     c.outcome = None

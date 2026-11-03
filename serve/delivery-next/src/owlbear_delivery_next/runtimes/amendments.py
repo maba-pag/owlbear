@@ -67,6 +67,8 @@ def _errors(items: Sequence[tools.Amend | amend_tools.CandidateItem], allowed: t
             errors.append(f"{name}: remove needs the key of the {a.field} to remove")
         if not a.remove and not a.text.strip():
             errors.append(f"{name}: {ref} needs text - say what it should say, or set remove")
+        elif a.field == "scope" and not a.remove and not tools.relative(a.text):
+            errors.append(f'{name}: scope {a.text} is not repository-relative - e.g. "packages/app"')
         if isinstance(a, amend_tools.CandidateItem):
             errors += _shaped(a, allowed, gone, name)
     return errors

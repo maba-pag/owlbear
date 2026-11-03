@@ -136,7 +136,7 @@ def judged(c: Change, r: VerdictResult, session: str, now: datetime) -> None:
     lp.verdict(found, upheld, f"r{am.revision}", f"r{am.revision}", recheck=recheck)
     a.challenger = session
     if not recheck:
-        a.verdict, a.judged, a.reference = r.verdict, " ".join(r.reasons.split()), amend_apply.reference(c)
+        a.verdict, a.judged = r.verdict, " ".join(r.reasons.split())
         a.qualifies, a.build_only, a.tightening, a.widens = r.qualifies, r.build_only, r.tightening, r.widens
         a.affected = [x.item for x in r.affected]
         a.beyond, a.doubts = r.beyond, r.doubts
