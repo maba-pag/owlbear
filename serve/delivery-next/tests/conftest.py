@@ -431,7 +431,8 @@ env = os.environ.get
 if args[:2] == ["auth", "git-credential"]:
     asked = dict(line.split("=", 1) for line in sys.stdin.read().splitlines() if "=" in line)
     host = asked.get("host", "")
-    token = env("GH_TOKEN") if host == "github.com" else env("GH_ENTERPRISE_TOKEN")
+    cloud = host == "github.com" or host.endswith(".ghe.com")  # gh's rule; other hosts are GitHub Enterprise Server
+    token = env("GH_TOKEN") if cloud else env("GH_ENTERPRISE_TOKEN")
     if args[2] == "get":
         print(f"protocol=https\\nhost={host}\\nusername=x-access-token\\npassword={token or 'tok-' + active[host]}")
     sys.exit(0)

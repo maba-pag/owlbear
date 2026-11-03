@@ -51,7 +51,8 @@ class Access:
             return environment
         for name in TOKENS:
             environment.pop(name, None)
-        environment["GH_TOKEN" if self.host == "github.com" else "GH_ENTERPRISE_TOKEN"] = self.token
+        cloud = self.host == "github.com" or self.host.endswith(".ghe.com")  # gh's rule: others are Enterprise Server
+        environment["GH_TOKEN" if cloud else "GH_ENTERPRISE_TOKEN"] = self.token
         return environment
 
     def options(self) -> tuple[str, ...]:

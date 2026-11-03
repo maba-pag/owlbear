@@ -159,7 +159,10 @@ def test_an_expired_deadline_starts_no_gh_call(fake_gh):
     assert fake_gh.calls() == []
 
 
-@pytest.mark.parametrize(("host", "name"), [("github.com", "GH_TOKEN"), ("ghe.acme.test", "GH_ENTERPRISE_TOKEN")])
+@pytest.mark.parametrize(
+    ("host", "name"),
+    [("github.com", "GH_TOKEN"), ("acme.ghe.com", "GH_TOKEN"), ("ghe.acme.test", "GH_ENTERPRISE_TOKEN")],
+)
 def test_the_token_is_the_childs_only_github_token_and_the_parent_keeps_its_own(host, name, monkeypatch):
     for each in access_module.TOKENS:
         monkeypatch.setenv(each, "tok-inherited")
@@ -180,7 +183,7 @@ def _fill(repo, options, environment, host="github.com"):
     return dict(line.split("=", 1) for line in done.stdout.splitlines())["password"]
 
 
-@pytest.mark.parametrize("host", ["github.com", "ghe.acme.test"])
+@pytest.mark.parametrize("host", ["github.com", "acme.ghe.com", "ghe.acme.test"])
 def test_git_asks_only_gh_and_gets_the_chosen_token_not_the_configured_helpers(fake_gh, repo, host):
     fake_gh.set({host: {"maba-pag": "success", "boecht": "success"}}, {host: "maba-pag"})
     got = resolve("boecht", Origin(host, "acme", "tools"))
