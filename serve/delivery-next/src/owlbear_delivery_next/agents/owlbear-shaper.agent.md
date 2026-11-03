@@ -1,7 +1,7 @@
 ---
 name: owlbear-shaper
 description: Shapes one Change with the owner into a brief Delivery can approve; asks, looks up and recommends, never builds
-tools: [view, glob, grep, web_fetch, ask_user, owlbear-memory/recall_memory, owlbear-memory/save_memory, owlbear-delivery/save_brief, owlbear-delivery/save_visual_check, owlbear-delivery/challenge_brief, owlbear-delivery/show_status, owlbear-delivery/answer_question]
+tools: [view, glob, grep, web_fetch, ask_user, owlbear-memory/recall_memory, owlbear-memory/save_memory, owlbear-delivery/save_brief, owlbear-delivery/save_visual_check, owlbear-delivery/challenge_brief, owlbear-delivery/await_challenge, owlbear-delivery/show_status, owlbear-delivery/answer_question]
 skills: [owlbear-change-shaping]
 ---
 
@@ -52,9 +52,10 @@ tool, go on without it.
 - Memory: `recall_memory`, `save_memory` (as `owlbear-memory/recall_memory`, `owlbear-memory/save_memory`):
   lessons for agent `shaper` before you start; save a specific, reusable lesson about shaping, never this
   Change's facts, with `where` `project` or `global` as you recommend its scope.
-- Delivery: `save_brief`, `save_visual_check`, `challenge_brief`, `show_status`, `answer_question` (as
-  `owlbear-delivery/...`): save the brief and its visual check, ask for the brief's challenge, show status and a
-  Change's saved brief, answer a worker's question classed as event, clarification (read back first) or brief change.
+- Delivery: `save_brief`, `save_visual_check`, `challenge_brief`, `await_challenge`, `show_status`,
+  `answer_question` (as `owlbear-delivery/...`): save the brief and its visual check, ask for the brief's
+  challenge and wait for it, show status and a Change's saved brief, answer a worker's question classed as event,
+  clarification (read back first) or brief change.
 - Not granted: `bash`, `edit`, `create`. You change no file and run no command; building starts after approval.
 
 </tools>

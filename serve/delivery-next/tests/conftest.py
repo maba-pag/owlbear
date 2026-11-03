@@ -20,7 +20,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_decisions import Decision, Scope, write
-from owlbear_delivery_next.change_contracts import pick_tools, tools
+from owlbear_delivery_next.change_contracts import chat_contract, pick_tools, tools
 from owlbear_delivery_next.change_contracts.models import Change
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.status import Activity
@@ -38,7 +38,10 @@ from owlbear_delivery_next.state_store import backlog, backlog_issues, decision_
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 MACHINE_HOME = Path.home()  # read before any test replaces HOME
-CHAT_REPLIES = json.loads((Path(__file__).parent / "fixtures" / "chat_contract_1.json").read_text())["replies"]
+CHAT_REPLIES = {  # what a chat of each contract this host serves reads from its answers
+    n: json.loads((Path(__file__).parent / "fixtures" / f"chat_contract_{n}.json").read_text())["replies"]
+    for n in sorted(chat_contract.SUPPORTED)
+}
 
 
 def pytest_configure() -> None:
@@ -61,15 +64,16 @@ def has(out: object, field: str) -> bool:
 
 def _chat_replied(method: str, url: str, out: object) -> None:
     path = re.sub(r"^.*/api/next(/owlbear)?", "", url).split("?")[0]
-    for route, fields in CHAT_REPLIES.items():
-        verb, template = route.split(" ")
-        if verb == method and re.fullmatch(re.sub(r"\{[^/]+\}", "[^/]+", template), path):
-            assert [f for f in fields if not has(out, f)] == [], f"{route} lost what chat contract 1 reads"
+    for n, replies in CHAT_REPLIES.items():
+        for route, fields in replies.items():
+            verb, template = route.split(" ")
+            if verb == method and re.fullmatch(re.sub(r"\{[^/]+\}", "[^/]+", template), path):
+                assert [f for f in fields if not has(out, f)] == [], f"{route} lost what chat contract {n} reads"
 
 
 @pytest.fixture
 def chat_replied() -> Callable[[str, str, object], None]:
-    """Asserts a host's answer to a chat keeps every field a chat of contract 1 reads from it."""
+    """Asserts a host's answer to a chat keeps every field a chat of a contract the host serves reads from it."""
     return _chat_replied
 
 
