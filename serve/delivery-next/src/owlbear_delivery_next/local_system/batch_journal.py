@@ -66,7 +66,8 @@ def admin(shared: DataRepo, until: float | None = None) -> Path:
     found = shared.git("rev-parse", "--absolute-git-dir", until=until)
     folder = found.stdout.strip()
     if found.returncode and until is not None and time.monotonic() >= until:
-        msg = f"this save's deadline passed before the git folder of {shared.root} was found, so try again"
+        late = f"this save's deadline passed before the git folder of {shared.root} was found, so try again"
+        msg = f"{late}: {command_failure.failed(found)}"
         raise JournalBusyError(msg)
     if found.returncode or not Path(folder).is_absolute():  # an empty answer is no folder: never the working directory
         why = command_failure.failed(found) if found.returncode else "Git named none"

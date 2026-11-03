@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import subprocess
 import time
@@ -816,19 +817,29 @@ def test_each_failed_pending_probe_says_git_whole_and_logs_it(repo, git_says, wh
     assert set(logged(caplog)) == {notice}
 
 
-@pytest.mark.parametrize("step", ["second-push", "journal"])
+@pytest.mark.parametrize("step", ["second-push", "journal", "journal-deadline"])
 def test_each_failed_publication_step_says_git_whole_and_logs_it(shared, git_says, whole_error, caplog, step) -> None:
-    """#921: a failed push or decision-journal probe says the command and both streams whole, and logs it once."""
+    """#921: a failed push or decision-journal probe says the command and both streams whole, and logs it once.
+
+    A probe that fails once the save's deadline has passed is "not known yet", still with Git's whole answer.
+    """
     root = shared[0]
     (root / "notes.md").write_text("notes\n")
-    ran = git_says(whole_error, PICKS[step])
+    ran = git_says(whole_error, PICKS[step.removesuffix("-deadline")])
     caplog.set_level("WARNING", data_repo.__name__)
 
-    said = data_repo.DataRepo(root).publish(root / "notes.md", "notes")
+    with pytest.MonkeyPatch.context() as late:
+        if step == "journal-deadline":
+            late.setattr(data_repo.batch_journal, "time", SimpleNamespace(monotonic=lambda: math.inf))
+        said = data_repo.DataRepo(root).publish(root / "notes.md", "notes")
 
     whole = git_whole(ran[-1], whole_error)
     if step == "second-push":
         assert said == f"saved and committed in {root}, but the push failed: {whole}"
+    elif step == "journal-deadline":
+        busy = f"this save's deadline passed before the git folder of {root} was found, so try again: {whole}"
+        unknown = f"whether a decision batch is interrupted is not known yet: {busy}"
+        assert said == f"saved and committed in {root}, but not pushed: {unknown}"
     else:
         journal = f"JournalError: the git folder of {root} cannot be found: {whole}"
         unread = f"the decision batch journal cannot be read ({journal}); repair it in Decisions"
