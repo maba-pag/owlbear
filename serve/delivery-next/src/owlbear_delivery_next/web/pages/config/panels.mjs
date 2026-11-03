@@ -54,7 +54,7 @@ export function agentsGroup() {
       ${table("Agents: they apply to the next session",
         ["Agent", "Model", "Effort", "Context", "Subagents", "Minutes per session"],
         "agents-rows", Object.keys(state.loaded.settings.agents).map((role) => {
-          const timed = !["shaper", "spotter"].includes(role);
+          const timed = role !== "spotter";  // the shaper's apply to its amendment sessions (TD-185)
           return setting(`set-agents-${role}`, html`${role === "shaper" ? "shaper (a recommendation)"
             : role}${toMetrics(role)}`,
           ["model", "effort", "context", ...(timed ? ["subagents", "minutes"] : [])].map((f) => `agents.${role}.${f}`),
@@ -67,8 +67,8 @@ export function agentsGroup() {
         + "questions. They work under the step's own permissions, and Delivery records each one; Maintenance shows "
         + "their use per agent.",
         "Minutes per session, 1 to 480: a session ends after this many minutes in total; its step then counts as a "
-        + "failed attempt and runs again. The shaper's chat and the Spotter's looks are no sessions of their own, so "
-        + "they show n/a.",
+        + "failed attempt and runs again. The shaper's apply to its brief amendment sessions, not to the shaping "
+        + "chat. The Spotter's looks are no sessions of their own, so it shows n/a.",
         "The credits under a model are its rates at the row's context tier.")}
       <p-text id="shaper-note" size="xs" color="contrast-medium">The shaper's model and effort are a recommendation
         (TD-328): Delivery's own turns in the shaping chat use them; what you type there runs on the chat's model

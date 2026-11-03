@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
 from owlbear_delivery_next.github.provider import MergeMethod
 from owlbear_delivery_next.settings.carried import LOOK_CREDIT_LIMIT, REPLAY_RUN_CREDIT_LIMIT
-from owlbear_delivery_next.settings.config import LOOPED, Agent, GlobalLayer, MachineValues, Prefs, used
+from owlbear_delivery_next.settings.config import LOOPED, Agent, GlobalLayer, MachineValues, Prefs, settable
 from owlbear_delivery_next.settings.improvement import Spotter
 
 if TYPE_CHECKING:
@@ -45,8 +45,8 @@ def page() -> dict[str, object]:
             model=model,
             effort=effort,
             context="long" if role in ("design-judge", "shaper") else "default",  # the owner chose the long tier
-            minutes=minutes if "minutes" in used(role) else None,
-            subagents=True if "subagents" in used(role) else None,
+            minutes=minutes if "minutes" in settable(role) else None,
+            subagents=True if "subagents" in settable(role) else None,
             **(rounds if role in LOOPED else {}),
         )
         for role, (model, effort, minutes) in AGENTS.items()

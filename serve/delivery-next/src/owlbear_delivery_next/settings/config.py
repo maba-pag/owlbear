@@ -237,12 +237,21 @@ class Effective(Record):
 
 LOOPED: tuple[Role, ...] = ("shaper", "planner", "builder", "updater")  # whose work runs a challenge loop (TD-209)
 UNTIMED: tuple[Role, ...] = ("shaper", "spotter")  # the shaping chat has no session limit; a Spotter look is no session
+TIMED = ("minutes", "subagents")
 
 
 def used(role: Role) -> tuple[str, ...]:
     """The fields *role*'s work reads and needs set."""
-    timed = () if role in UNTIMED else ("minutes", "subagents")
+    timed = () if role in UNTIMED else TIMED
     return ("model", "effort", "context", *timed, *(tuple(RoundPolicy.model_fields) if role in LOOPED else ()))
+
+
+def settable(role: Role) -> tuple[str, ...]:
+    """The fields the owner sets for *role*: the used ones, and the shaper's for its hosted amendment sessions.
+
+    The shaping chat runs without them; an amendment session refuses while they are unset (TD-185).
+    """
+    return (*used(role), *TIMED) if role == "shaper" else used(role)
 
 
 class SettingsUnset(Exception):  # noqa: N818 - says what happened

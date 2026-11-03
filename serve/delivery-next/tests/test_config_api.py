@@ -115,6 +115,8 @@ def test_recommendations_cover_current_required_settings_without_filling_any_lay
     assert machine_settings.resolve(config.MachineValues(), suggested.machine).missing == []
     assert suggested.spotter.verbose_until is None  # optional, not an invented expiry date
     assert {name for name, agent in suggested.agents.items() if agent.context == "long"} == {"design-judge", "shaper"}
+    shaper, spotter = suggested.agents["shaper"], suggested.agents["spotter"]
+    assert ((shaper.minutes, shaper.subagents), (spotter.minutes, spotter.subagents)) == ((40, True), (None, None))
     assert suggested.machine.retro_run_credit_limit == 61.0  # not the old carry's 20
     assert suggested.preparations is None
     assert suggested.data is None  # no project-specific permissions invented

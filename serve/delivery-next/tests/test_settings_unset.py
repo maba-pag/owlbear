@@ -147,6 +147,9 @@ def test_a_role_needs_only_the_fields_its_work_reads():
     assert (some.agent("spotter").model, some.agent("spotter").minutes) == (carried.MODELS["spotter"].model, None)
     assert some.agent("shaper").max_rounds is not None
     assert not [k for k in some.missing if k.startswith(("agents.spotter.", "agents.shaper."))]
+    for limit, key in ((roles.limit, "minutes"), (roles.subagents, "subagents")):  # its amendment sessions (TD-185)
+        with pytest.raises(SettingsUnset, match=rf"agents\.shaper\.{key}"):
+            limit(some, "amendment-prepare")
     picker = carried.layer().agents["picker"].model_dump(include=set(fields))
     with pytest.raises(SettingsUnset, match=r"agents\.picker\.minutes"):  # a picker session has a time limit
         resolve(GlobalLayer(agents={"picker": config.Agent.model_validate(picker)}), Layer()).agent("picker")

@@ -88,7 +88,11 @@ def limit(settings: Settings, session: str) -> float:
 
 def subagents(settings: Settings, session: str) -> bool:
     """Whether a session of this kind or reviewer label may start built-in subagents (TD-374, TD-376)."""
-    return settings.agent(SESSIONS[session]).subagents
+    role = SESSIONS[session]
+    allowed = settings.agent(role).subagents
+    if allowed is None:  # as for its minutes
+        raise SettingsUnset([f"agents.{role}.subagents"])
+    return allowed
 
 
 def parse(text: str) -> tuple[Role, RoleModel]:
