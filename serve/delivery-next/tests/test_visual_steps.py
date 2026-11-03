@@ -170,6 +170,15 @@ def test_a_field_named_like_a_button_takes_the_typing_and_a_step_never_reaches_o
     assert shot.error == f"state search left the preview ({live})"  # typed into the field, the POST stopped
 
 
+@pytest.mark.browser
+def test_a_step_that_blanks_the_page_after_it_opened_has_left_the_preview(site, tmp_path):
+    root, url = site
+    (root / "index.html").write_text('<!doctype html><title>t</title><a href="about:blank">Leave</a>')
+    steps = [VisualStep(do="click", target="Leave")]
+    (shot,) = capture(url, tmp_path / "out", VisualState(name="blank", path="/", expect="x", steps=steps))
+    assert (shot.file, shot.error) == ("", "state blank left the preview (about://)")
+
+
 def test_a_stepped_shot_stops_off_origin_sockets_and_a_framed_less_popup():
     from playwright.sync_api import Error  # noqa: PLC0415 - the optional browser runtime's error
 
