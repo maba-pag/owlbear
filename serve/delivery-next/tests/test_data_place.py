@@ -371,10 +371,9 @@ def reason(tmp_path: Path, monkeypatch) -> str:
     """The reason the machine's project list (the Projects page's API) gives for a project that cannot load."""
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     path = tmp_path / "shop"
-    if not path.exists():
-        git(tmp_path, "init", "-q", str(path))
-        git(path, "commit", "-q", "--allow-empty", "-m", "i")
-        registry.register(path.resolve())
+    git(tmp_path, "init", "-q", str(path))
+    git(path, "commit", "-q", "--allow-empty", "-m", "i")
+    registry.register(path.resolve())
     at = datetime.now(UTC)
     machine = Machine(HostRecord(url="http://127.0.0.1:9/", token="t", pid=1, started_at=at, code=codebase.CURRENT))  # noqa: S106
     try:
@@ -413,22 +412,16 @@ def test_a_failed_clone_says_git_whole_in_the_projects_reason_and_the_host_log(
     )
 
 
-def moved_to_the_default_place(tmp_path: Path, url: str) -> tuple[Path, Path]:
-    """A move that stopped after its rename: only the destination, ``~/.owlbear/data``, is left."""
-    source, dest = tmp_path / "old-data", data_place.default()
+def test_a_failed_worktree_repair_says_git_whole_at_owlbear_data_host_start_and_the_projects_reason(
+    tmp_path: Path, url: str, monkeypatch, whole_error, capsys
+) -> None:
+    """#921: relinking after a move says the failed `git worktree repair` whole, and the pointer keeps it until done."""
+    source, dest = tmp_path / "old-data", data_place.default()  # a move that stopped after its rename
     git(tmp_path, "clone", "-q", url, str(source))
     git(source, "worktree", "add", "-q", str(tmp_path / "linked"))
     home().mkdir(parents=True, exist_ok=True)
     data_place.pointer().write_text(json.dumps({"remote": url, "moving_from": str(source), "moving_to": str(dest)}))
     source.rename(dest)
-    return source, dest
-
-
-def test_a_failed_worktree_repair_says_git_whole_at_owlbear_data_host_start_and_the_projects_reason(
-    tmp_path: Path, url: str, monkeypatch, whole_error, capsys
-) -> None:
-    """#921: relinking after a move says the failed `git worktree repair` whole, and the pointer keeps it until done."""
-    source, dest = moved_to_the_default_place(tmp_path, url)
     real = data_place._git  # noqa: SLF001
     ran = git_fails(monkeypatch, whole_error, lambda args: args == ("worktree", "repair"))
     why = git_whole(("worktree", "repair"), whole_error)

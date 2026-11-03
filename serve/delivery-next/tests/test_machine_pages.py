@@ -667,8 +667,6 @@ def test_settings_say_a_failed_read_of_the_shared_repository_whole(
     """#921: Settings' notice shows the shared repository's failed Git read whole: the command, both streams, a path."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    from owlbear_delivery_next.local_system import data_place, data_repo  # noqa: PLC0415
-
     shared = shared_repo[0]
     monkeypatch.setenv(data_place.VIEW, str(shared))
     a = registry.register(clone(tmp_path / "alpha"))

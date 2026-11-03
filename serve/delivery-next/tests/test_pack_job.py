@@ -2062,7 +2062,9 @@ def test_the_final_merge_readback_after_a_lost_last_round_answer_carries_the_mer
     checkout,
     clone,
     monkeypatch,
+    whole_error,
 ):
+    """#921 too: each lost answer's whole message is logged before it is read back."""
     fakes = Fakes(clone)
     job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
     original, calls = fakes.github.request_merge, []
@@ -2071,34 +2073,19 @@ def test_the_final_merge_readback_after_a_lost_last_round_answer_carries_the_mer
         calls.append(request)
         if len(calls) == pack_publish.ROUNDS:
             original(request)
-        return MergeResult(status=MergeStatus.UNKNOWN)
+        return MergeResult(status=MergeStatus.UNKNOWN).model_copy(update={"message": whole_error})
 
     monkeypatch.setattr(fakes.github, "request_merge", uncertain)
     state = run(job)
     assert state["state"] == "passed", state["reason"]
     assert len(calls) == pack_publish.ROUNDS
+    url = fakes.github.read_pull_request("maba-pag/owlbear", 1).url
+    said = f"the merge of {url} did not land (unknown): {whole_error}; reading it back"
+    assert said in [line.split(" ", 1)[1] for line in state["log"]]
     assert state["published"]["merged"] == fakes.github.prs[1]["sha"]
     branch = state["published"]["branch"]
     assert git(fakes.github.remote, "for-each-ref", "--format=%(objectname)", f"refs/heads/{branch}") == ""
     assert "delete" in fakes.github.calls
-
-
-def test_a_merge_that_did_not_land_logs_what_github_said_whole(tmp_path, checkout, clone, monkeypatch, whole_error):
-    """#921: the run log keeps the whole message of a merge whose result is unknown, before it is read back."""
-    fakes = Fakes(clone)
-    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
-    original = fakes.github.request_merge
-
-    def uncertain(request):
-        original(request)
-        return MergeResult(status=MergeStatus.UNKNOWN).model_copy(update={"message": whole_error})
-
-    monkeypatch.setattr(fakes.github, "request_merge", uncertain)
-    state = run(job)
-    url = fakes.github.read_pull_request("maba-pag/owlbear", 1).url
-    assert state["state"] == "passed", state["reason"]
-    said = f"the merge of {url} did not land (unknown): {whole_error}; reading it back"
-    assert said in [line.split(" ", 1)[1] for line in state["log"]]
 
 
 @pytest.mark.parametrize(
