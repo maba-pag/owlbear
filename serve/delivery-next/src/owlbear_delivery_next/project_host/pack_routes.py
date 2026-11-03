@@ -278,7 +278,7 @@ def _replay(
             _log.warning("calibration replay refused: %s", exc)  # the host's log, beside the answer the CLI prints
             raise HTTPException(409, str(exc)) from exc
         except REPLAY_FAILURES as exc:
-            _log.warning("calibration replay failed: %s", said := failure(exc))
+            _log.warning("calibration replay failed: %s", said := failure(exc), exc_info=True)
             raise HTTPException(422, said) from exc
         return {"ok": r.ok, "report": f"calibration replay: {pack_candidate.said_replay(r)}"}
 

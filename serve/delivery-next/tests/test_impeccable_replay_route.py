@@ -117,8 +117,8 @@ def test_a_replay_that_fails_answers_and_logs_its_whole_error(caplog, whole_erro
     http, _job = client(replay)
     answer = http.post("/impeccable/replay")
     assert (answer.status_code, answer.json()) == (422, {"detail": said})
-    logged = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == pack_routes.__name__]
-    assert logged == [("WARNING", f"calibration replay failed: {said}")]
+    logged = [(r.levelname, r.getMessage(), bool(r.exc_info)) for r in caplog.records if r.name == pack_routes.__name__]
+    assert logged == [("WARNING", f"calibration replay failed: {said}", True)]
 
 
 def legacy_host(tmp_path, state, *, updater_dir):
