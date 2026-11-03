@@ -338,9 +338,12 @@ def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(store, p
             expect(page).to_have_url(f"{url}#{group}")
             expect(page.locator(f"#groups a[href='#{group}']")).to_have_attribute("aria-current", "page")
             expect(focused).to_be_focused()
+        page.goto(f"{url}#machine-title")
+        expect(page.locator("#machine-title")).to_be_focused()  # the focus is elsewhere
         page.goto(f"{url}#runs")  # the group that was: its address opens Agents and runs
         expect(page).to_have_url(f"{url}#agents")
         expect(page.locator("#groups a[href='#agents']")).to_have_attribute("aria-current", "page")
+        expect(page.locator("#agents-title")).to_be_focused()
         for bad in ("%", "%E0%A4%A"):  # Sol R1-1: an address that doesn't decode opens the overview, loaded or not
             page.goto(f"{url}#agents")
             page.goto(f"{url}#{bad}")

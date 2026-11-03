@@ -24,11 +24,11 @@ export function groupOf(id) {
 }
 
 // What an older address named that is no longer in the page, as what shows it now: the per-role subagents and session
-// time rows became cells of the agent's row, and their sections went into the Agents panel.
+// time rows became cells of the agent's row, and their sections and the Runs group went into Agents and runs.
 export function renamed(id) {
   const row = id.match(/^set-(limits|subagents)-(.+)$/);
   if (row) return `set-agents-${row[2]}-${row[1] === "limits" ? "minutes" : "subagents"}`;
-  return ["limits", "limits-title", "subagents", "subagents-title"].includes(id) ? "agents-title" : id;
+  return ["runs", "limits", "limits-title", "subagents", "subagents-title"].includes(id) ? "agents-title" : id;
 }
 
 // The row that sets an unset key, as the server and This machine name it (agents.builder.model, machine.channel).
