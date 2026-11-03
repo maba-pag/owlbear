@@ -40,11 +40,16 @@ class _Run:
     role: str
     at: datetime
     open: bool = True
+    opened: bool = False  # its opening is retained
     result: bool | None = None  # its latest result call since it opened: accepted, refused or none
 
 
-def _runs(events: Sequence[dict[str, Any]], since: datetime) -> list[_Run]:
-    """Each session's latest run that opened in or after *since*, in the order they opened."""
+def _runs(events: Sequence[dict[str, Any]], since: datetime | None) -> list[_Run]:
+    """Each session's latest run that opened in or after *since*, in the order they opened.
+
+    Without *since* (a step whose start is not recorded yet) only runs whose opening is retained and that have not
+    ended count: every run of an earlier step has ended.
+    """
     found: dict[str, _Run] = {}
     for e in events:
         sid, role, at = e.get("session"), e.get("role"), e.get("at")
@@ -52,12 +57,14 @@ def _runs(events: Sequence[dict[str, Any]], since: datetime) -> list[_Run]:
             continue  # a startup mark or Delivery's own event: no session of the step
         if e.get("event") == "session" or sid not in found:  # a new run, or one whose opening the store trimmed
             found.pop(sid, None)
-            found[sid] = _Run(str(role), datetime.fromisoformat(at))
+            found[sid] = _Run(str(role), datetime.fromisoformat(at), opened=e.get("event") == "session")
         run = found[sid]
         if e.get("event") == "ended":
             run.open = False
         elif e.get("event") == "tool" and e.get("tool") in RESULT_TOOLS and run.result is not True:
             run.result = e.get("accepted", True) is not False  # an accepted one ends the run: later calls are late
+    if since is None:
+        return [r for r in found.values() if r.opened and r.open]
     return [r for r in found.values() if r.at >= since]
 
 
@@ -79,8 +86,8 @@ def of(c: Change, events: Sequence[dict[str, Any]], own: str) -> str | None:  # 
     """The stage of *c*'s running step; None where the caller's words for its *own* role's work stand."""
     if c.step.kind in _ENGINE:
         return None
-    since = c.step.started_at  # None while the runner prepares the step: no session of it has opened
-    runs = _runs(events, since.replace(microsecond=0)) if since else []
+    since = c.step.started_at  # None while the runner prepares the step, or before a brief's first decision pick
+    runs = _runs(events, since.replace(microsecond=0) if since else None)
     if not runs:
         return "starting"
     if judging := _judging(c, runs):

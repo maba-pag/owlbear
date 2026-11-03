@@ -82,7 +82,12 @@ CHALLENGED = Outcome(exit=Exit.RETRY, reason="plan challenge: …", challenged=T
          "preparer", "judging: 1 done, 1 running"),
         (step(StepKind.TESTS), [opened(1, "s1", "test-reviewer"), opened(1, "s2", "test-reviewer"),
                                 ended(30, "s1", "test-reviewer")], "test reviewer", "reviewing tests: 1 running"),
-        (step(StepKind.BUILD, started=None), [opened(1)], "builder", "starting"),  # seen live: not yet "implementing"
+        (step(StepKind.BUILD, started=None), [*PREVIOUS], "builder", "starting"),  # seen live: not yet "implementing"
+        (step(StepKind.SHAPE, None, started=None), [*PREVIOUS, opened(1, "p1", "picker")], "reviewer",
+         "checking decisions"),  # a brief's first decision pick runs before the step's start is recorded
+        (step(StepKind.PLAN, None, started=None), [opened(1, "ch", "challenger")], "planner", "challenging the plan"),
+        (step(StepKind.BUILD, started=None), [ev(2, "tool", sid="c2", role="challenger", tool="lookup_decisions",
+                                                 accepted=True)], "builder", "starting"),  # no retained opening
         (step(StepKind.FOLLOW, None), [opened(1)], "delivery", None),
     ],
 )  # fmt: skip
