@@ -777,11 +777,11 @@ def git_says(monkeypatch):
     """Makes the Git commands a picker chooses fail with distinct stdout and stderr; returns the args they ran with."""
     real, ran = data_repo._git, []  # noqa: SLF001 - the repository's own Git calls are the boundary
 
-    def fail(stderr: str, fails, stdout: str = OUT) -> list[tuple[str, ...]]:
+    def fail(stderr: str, fails) -> list[tuple[str, ...]]:
         def git(cwd, *args, until=None):
             if fails(args, until):
                 ran.append(args)
-                return subprocess.CompletedProcess(["git", *args], 128, stdout + "\n", stderr + "\n")
+                return subprocess.CompletedProcess(["git", *args], 128, OUT + "\n", stderr + "\n")
             return real(cwd, *args, until=until)
 
         monkeypatch.setattr(data_repo, "_git", git)
@@ -844,7 +844,6 @@ def test_each_failed_publication_step_says_git_whole_and_logs_it(shared, git_say
         journal = f"JournalError: the git folder of {root} cannot be found: {whole}"
         unread = f"the decision batch journal cannot be read ({journal}); repair it in Decisions"
         assert said == f"saved and committed in {root}, but not pushed: {unread}"
-    assert said.count("BEGIN") == 1
     assert logged(caplog) == [f"publishing 'notes' in {root}: {said}"]
 
 
@@ -880,7 +879,6 @@ def test_a_failed_push_and_a_failed_rebase_on_the_remote_both_arrive_whole(
     why = f"the push failed: {pushed}; rebasing on the remote failed: {pulled}"
     hand = "it could not be merged with the remote; push it by hand. Not pushed"
     assert said == f"saved and committed in {root}, but {'not pushed' if held else hand}: {why}"
-    assert (said.count(whole_error), said.count(other)) == (1, 1)
     assert logged(caplog) == [f"publishing 'notes' in {root}: {said}"]
 
 

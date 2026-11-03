@@ -1502,40 +1502,24 @@ def answered(code, stdout=b"", stderr=b""):
     return lambda argv, *_a: subprocess.CompletedProcess(argv, code, stdout, stderr)
 
 
-def timed_out(whole_error, sent):
-    def runner(argv, *_a):
-        sent.append(argv)
-        raise subprocess.TimeoutExpired(argv, 30, output=GH_SAID.encode(), stderr=whole_error.encode())
-
-    return runner
-
-
 def gh_cases(whole_error, sent):
     """What ``gh`` answers on each way a write can fail, and the whole text that must be kept of it."""
     unreadable = "JSONDecodeError: Expecting value: line 1 column 1 (char 0)\nstdout:\n" + whole_error
+
+    def timing_out(argv, *_a):
+        sent.append(argv)
+        raise subprocess.TimeoutExpired(argv, 30, output=GH_SAID.encode(), stderr=whole_error.encode())
 
     def timeout():
         head = f"TimeoutExpired: Command '{sent[0]}' timed out after 30 seconds"
         return f"{head}\nstderr:\n{whole_error}\nstdout:\n{GH_SAID}"
 
     return {
-        "timeout": (timed_out(whole_error, sent), timeout),
+        "timeout": (timing_out, timeout),
         "stderr": (answered(1, stderr=whole_error.encode()), lambda: whole_error),
         "unreadable": (answered(1, whole_error.encode(), GH_SAID.encode()), lambda: f"{unreadable}\n{GH_SAID}"),
         "unreadable, exit 0": (answered(0, whole_error.encode()), lambda: unreadable),
     }
-
-
-class GhMerge(FakeGh):
-    """The provider fake whose merge is the real ``gh`` merge over *runner*."""
-
-    def __init__(self, current, tmp_path, runner):
-        super().__init__(current)
-        self.real = GhProvider(tmp_path, runner=runner)
-
-    def request_merge(self, request):
-        self.merges.append(request)
-        return self.real.request_merge(request)
 
 
 @pytest.mark.parametrize("case", ["timeout", "stderr", "unreadable", "unreadable, exit 0", "message"])
@@ -1545,7 +1529,9 @@ def test_a_merge_without_a_known_result_keeps_what_gh_said_whole(tmp_path, clone
     message = answered(1, json.dumps({"message": whole_error}).encode(), server.encode())
     cases = gh_cases(whole_error, sent) | {"message": (message, lambda: f"{whole_error}\n{server}")}
     runner, said = cases[case]
-    cx = ctx(tmp_path, GhMerge(pr(head=A), tmp_path, runner))
+    gh = FakeGh(pr(head=A))
+    gh.request_merge = GhProvider(tmp_path, runner=runner).request_merge
+    cx = ctx(tmp_path, gh)
     _, result = merge.run(cx, change(worktree=str(clone)))
     (event,) = cx.events("c1", "merge-request")
     assert (event["status"], event["message"]) == (MergeStatus.UNKNOWN, said())
@@ -1555,7 +1541,9 @@ def test_a_merge_without_a_known_result_keeps_what_gh_said_whole(tmp_path, clone
 def test_a_merge_refusal_without_a_message_keeps_gh_s_whole_error(tmp_path, clone, whole_error):
     """#921: a refusal whose answer has no message keeps all of gh's error output, in its event and its reason."""
     said = f"{whole_error}\ngh: HTTP 405"
-    cx = ctx(tmp_path, GhMerge(pr(head=A), tmp_path, answered(1, stderr=said.encode())))
+    gh = FakeGh(pr(head=A))
+    gh.request_merge = GhProvider(tmp_path, runner=answered(1, stderr=said.encode())).request_merge
+    cx = ctx(tmp_path, gh)
     _, result = merge.run(cx, change(worktree=str(clone)))
     (event,) = cx.events("c1", "merge-request")
     assert (event["status"], event["message"]) == (MergeStatus.REFUSED, said)
@@ -2337,18 +2325,6 @@ def test_an_already_queued_refusal_settles_and_a_stale_head_retries(tmp_path, cl
     assert (result.exit, result.cause, c.queue) == (Exit.RETRY, "conflict:merge:head", None)
 
 
-class GhEnqueue(QueueGh):
-    """The queue fake whose enqueue is the real ``gh`` mutation over *runner*."""
-
-    def __init__(self, current, tmp_path, runner):
-        super().__init__(current)
-        self.real = GhProvider(tmp_path, runner=runner)
-
-    def enqueue(self, pull, head):
-        self.enqueued.append(head)
-        return self.real.enqueue(pull, head)
-
-
 @pytest.mark.parametrize("case", ["timeout", "stderr", "unreadable", "unreadable, exit 0", "refused"])
 def test_an_enqueue_without_a_known_result_keeps_what_github_said_whole(tmp_path, clone, whole_error, case):
     """#921: a lost, unreadable or refused enqueue reaches its event whole, and a refusal the owner's question."""
@@ -2357,7 +2333,9 @@ def test_an_enqueue_without_a_known_result_keeps_what_github_said_whole(tmp_path
         "refused": (answered(0, json.dumps({"errors": [{"message": whole_error}]}).encode()), lambda: whole_error),
     }
     runner, said = cases[case]
-    _, result = queue_step(tmp_path, GhEnqueue(pr(head=A), tmp_path, runner), change(worktree=str(clone)))
+    gh = QueueGh(pr(head=A))
+    gh.enqueue = GhProvider(tmp_path, runner=runner).enqueue
+    _, result = queue_step(tmp_path, gh, change(worktree=str(clone)))
     (event,) = [e for e in Store(tmp_path / "store").events("c1") if e.get("event") == "merge-enqueue"]
     status = EnqueueStatus.REFUSED if case == "refused" else EnqueueStatus.UNKNOWN
     assert (event["status"], event["message"]) == (status, said())
