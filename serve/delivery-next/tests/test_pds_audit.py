@@ -370,6 +370,21 @@ def test_a_session_that_changed_its_copy_stops_even_with_a_clean_report(sources,
     assert done.report is None
 
 
+@pytest.mark.usefixtures("no_render")
+def test_a_changed_copy_whose_session_is_not_proven_ended_says_both_whole(sources, whole_error):
+    end = Termination(confirmed=False, survivors=(4242,), problems=(whole_error,))
+
+    def edit(at) -> None:
+        (at / "web/pages/demo.mjs").write_text(PAGE.replace("x-small", "xs"))
+
+    done = audited(sources, report(), edit=edit, termination=end)
+    moved = "web/pages/demo.mjs"
+    assert (done.verdict.outcome, done.verdict.reason) == (
+        "stop",
+        f"the auditor changed its copy: {moved}; termination unverified: processes 4242 still present; {whole_error}",
+    )
+
+
 UNENDED = "the auditor's processes are not proven ended; recover the session on the Maintenance page; "
 UNENDED += "termination unverified: "
 

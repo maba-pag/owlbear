@@ -148,7 +148,7 @@ def audit(
     before = digests(at)
     done = session(at, skills, message(version, ident))
     if moved := changed(before, digests(at)):  # first: a changed copy voids whatever the report says
-        return Audit(Verdict("stop", f"the auditor changed its copy: {', '.join(moved[:5])}"), ident)
+        return Audit(Verdict("stop", f"the auditor changed its copy: {', '.join(moved[:5])}{_gone(done)}"), ident)
     result = done.payload if isinstance(done.payload, audit_tools.AuditResult) else None
     if why := _unended(done, result):
         return Audit(Verdict("stop", why), ident)
@@ -167,9 +167,14 @@ def audit(
     return Audit(verdict, ident, report, result.report, audit_markdown.render(report, template))
 
 
-def _unended(done: Run, result: audit_tools.AuditResult | None) -> str:
+def _gone(done: Run) -> str:
+    """Nothing when the session's processes are proven ended, else why not, after a '; '."""
     t = done.termination
-    gone = "" if t is not None and t.confirmed else f"; {session_result.unverified(t)}"
+    return "" if t is not None and t.confirmed else f"; {session_result.unverified(t)}"
+
+
+def _unended(done: Run, result: audit_tools.AuditResult | None) -> str:
+    gone = _gone(done)
     if done.ending != "result" or result is None:
         return f"the auditor submitted no report: ended {done.ending}; {done.detail}{gone}"
     if gone:
