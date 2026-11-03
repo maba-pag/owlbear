@@ -506,8 +506,12 @@ KEY = "shop:" + "0" * 32
 CUT = "was cut short while its files were copied in"
 
 
-def _accept_until_stopped(tree: curation_tree.Tree, copied: str, watched: tuple[str, ...]) -> None:
-    """A host accepting a run, stopped for good once the first of *watched* is copied in, or once its apply's record is
+def _accepting(tree: curation_tree.Tree):
+    return functools.partial(tree.accept, "shop", KEY, None)
+
+
+def _until_stopped(act, copied: str, watched: tuple[str, ...]) -> None:
+    """A host doing *act*, stopped for good once the first of *watched* is copied in, or once an apply's record is
     written when *watched* is empty: the parent kills it."""
 
     def stop(name: str) -> None:
@@ -527,15 +531,14 @@ def _accept_until_stopped(tree: curation_tree.Tree, copied: str, watched: tuple[
             stop("")
 
     curation_tree.atomic_write, curation_apply.write = write, kept
-    tree.accept("shop", KEY, None)
+    act()
 
 
-def _stop(tree: curation_tree.Tree, at: Path, watched: tuple[str, ...] = ()) -> str:
-    """Accept *tree*'s run in a child the parent kills where `_accept_until_stopped` stops; the file it copied last."""
+def _stop(act, at: Path, watched: tuple[str, ...] = ()) -> str:
+    """Do *act* in a child the parent kills where `_until_stopped` stops; the file it copied last."""
     copied = at / "copied"
-    child = multiprocessing.get_context("spawn").Process(
-        target=_accept_until_stopped, args=(tree, str(copied), watched)
-    )
+    copied.unlink(missing_ok=True)
+    child = multiprocessing.get_context("spawn").Process(target=_until_stopped, args=(act, str(copied), watched))
     child.start()
     end = time.monotonic() + 30
     while not copied.exists():
@@ -575,7 +578,7 @@ def stopped(repo: Path, remote: Path, at: Path) -> SimpleNamespace:
     git(tree.root, "rm", "-q", "--", rel(c, "owlbear"))
     git(tree.root, "commit", "-qm", CURATOR)
     target = {rel(e): (tree.root / rel(e)).read_bytes() for e in (a, b, p)}
-    first = f"shop/memory/{_stop(tree, at, (f'{a.id}.md', f'{b.id}.md'))}"
+    first = f"shop/memory/{_stop(_accepting(tree), at, (f'{a.id}.md', f'{b.id}.md'))}"
     second = ({rel(a), rel(b)} - {first}).pop()
     assert curation_apply.read(DataRepo(repo)) is not None
     assert ((repo / first).read_bytes(), curation_tree._read(repo / second)) == (target[first], seed.get(second))  # noqa: SLF001
@@ -652,7 +655,7 @@ def test_a_file_changed_after_the_stop_is_kept_and_published_with_the_rest(repo,
 
     tree = _run(repo, tmp_path, curate)
     target = (tree.root / rel(y)).read_bytes()
-    _stop(tree, tmp_path)
+    _stop(_accepting(tree), tmp_path)
     changed = reword(shop, x.id, "Saved later: a hand chat's version")
 
     resumed = curation_tree.resume(DataRepo(repo))
@@ -672,13 +675,22 @@ def _made_global(entry):
     return curate
 
 
-def test_a_stop_while_an_entry_is_made_global_never_leaves_it_in_both_folders(repo, tmp_path) -> None:
+@pytest.mark.parametrize("during", ["accept", "recovery"])
+def test_a_stop_while_an_entry_is_made_global_never_leaves_it_in_both_folders(repo, remote, tmp_path, during) -> None:
     g = curated(repo / "shop" / "memory", "Shared")
     pushed(repo, "a curated entry")
+    moved = f"memory/{g.id}.md"
+    accepting = _accepting(_run(repo, tmp_path, _made_global(g)))
 
-    _stop(_run(repo, tmp_path, _made_global(g)), tmp_path, (f"{g.id}.md",))
+    if during == "accept":
+        _stop(accepting, tmp_path, (f"{g.id}.md",))
+    else:
+        _stop(accepting, tmp_path)
+        _stop(functools.partial(curation_tree.resume, DataRepo(repo)), tmp_path, (f"{g.id}.md",))
 
-    assert ((repo / rel(g)).exists(), (repo / "memory" / f"{g.id}.md").exists()) == (False, True)
+    assert ((repo / rel(g)).exists(), (repo / moved).exists()) == (False, True)
+    assert curation_tree.resume(DataRepo(repo)).done
+    assert (remote_bytes(remote, rel(g)), remote_bytes(remote, moved)) == (None, (repo / moved).read_bytes())
 
 
 def test_an_entry_changed_after_a_stop_before_its_move_stays_where_it_was(repo, remote, tmp_path) -> None:
@@ -686,7 +698,7 @@ def test_an_entry_changed_after_a_stop_before_its_move_stays_where_it_was(repo, 
     shop = repo / "shop" / "memory"
     g = curated(shop, "Shared")
     pushed(repo, "a curated entry")
-    _stop(_run(repo, tmp_path, _made_global(g)), tmp_path)
+    _stop(_accepting(_run(repo, tmp_path, _made_global(g))), tmp_path)
     challenged = MemoryEngine(shop).get_entry(g.id)
     MemoryEngine(shop).record_factually_wrong(g.id, task_id="task-1", expected_revision=challenged.revision)
 

@@ -230,7 +230,9 @@ def resume(shared: DataRepo) -> Resumed | None:
     """
     if (record := curation_apply.read(shared)) is None:
         return None
-    message, steps = MESSAGE.format(folder=record.folder), sorted(record.steps.items())
+    message = MESSAGE.format(folder=record.folder)
+    # removals first, as an accept does: a stop in here never leaves a moved entry in two folders either
+    steps = sorted(record.steps.items(), key=lambda item: (item[1].target is not None, item[0]))
     try:
         with shared.locked(), contextlib.ExitStack() as locks:
             for d in sorted({r.rpartition("/")[0] for r, _ in steps}):
