@@ -60,7 +60,7 @@ from owlbear_delivery_next.machine_host import serve as host_start
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.runtimes import model_choices
+from owlbear_delivery_next.runtimes import copilot_cli, model_choices
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.runtimes.settings_seen import NAME as SEEN
 from owlbear_delivery_next.settings import carried, config, profile
@@ -891,6 +891,46 @@ def test_projects_says_why_a_move_of_the_shared_repository_stopped_whole(
         expect(said).to_have_count(1)
         assert said.text_content() == f"its Delivery state cannot be opened: {unfinished}; `owlbear data` finishes it"
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
+        assert broke == []
+
+
+@pytest.mark.browser
+def test_projects_lists_a_host_s_failed_readiness_checks_whole_under_its_reason(
+    tmp_path: Path, monkeypatch, pds, whole_error
+) -> None:
+    """#921: a project whose host failed readiness checks lists each whole, its lines kept, as running text; no list
+    shows with no host, while the host checks, or when every check passed."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    out = "OUT begins\nwhat gh printed on stdout, in the middle\nOUT ends"
+    failed = [
+        f"github sign-in: {whole_error} · fix: Run `gh auth login --hostname github.com`",
+        f"copilot cli: copilot: {out} · fix: {copilot_cli.FIX}",
+    ]
+    ready = {"checking": None, "passed": [], "failing": failed}  # "unhosted" has no host, so no ready
+    for name in ["unhosted", *ready]:
+        registry.register(clone(tmp_path / name))
+
+    def hosted(route) -> None:
+        body = route.fetch().json()
+        for p in body["projects"]:
+            p.pop("ready", None)
+            if p["name"] in ready:
+                p["ready"] = ready[p["name"]]
+        route.fulfill(json=body)
+
+    with browsing(monkeypatch, pds) as (page, base):
+        broke = errors(page)
+        page.route(f"{base}/api/next/projects", lambda r: hosted(r) if r.request.method == "GET" else r.fallback())
+        page.goto(f"{base}/projects#token=t")
+        expect(page.get_by_role("listitem", name="failing")).to_be_visible()
+        for name in ["unhosted", *ready]:
+            expect(page.get_by_role("listitem", name=name).get_by_role("list")).to_have_count(int(name == "failing"))
+        items = page.get_by_role("list", name="Failed readiness checks").get_by_role("listitem")
+        assert items.all_text_contents() == failed
+        assert items.evaluate_all("l => l.map(e => getComputedStyle(e).maxInlineSize)").count("none") == 0
+        page.set_viewport_size({"width": 375, "height": 800})
+        assert page.evaluate("document.documentElement.scrollWidth") <= 375
         assert broke == []
 
 
