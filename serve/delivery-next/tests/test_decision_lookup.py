@@ -16,9 +16,9 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, write
+from owlbear_decisions import Decision, Link, LinkType, Origin, ReadBackKind, Scope, State, new_id, write
 from owlbear_decisions.models import STATEMENT_LIMIT
-from owlbear_delivery_next.change_contracts import pick_tools, tools
+from owlbear_delivery_next.change_contracts import chat_contract, decision_wording, pick_tools, tools
 from owlbear_delivery_next.change_contracts.decision_records import Decision as ChangeDecision
 from owlbear_delivery_next.change_contracts.decision_records import Pick
 from owlbear_delivery_next.change_contracts.models import Plan, Step, StepKind, Task
@@ -282,10 +282,11 @@ class Loopback:
     """The chat server's opener, answered in-process by a host; it keeps each request's timeout."""
 
     def __init__(self, http: TestClient) -> None:
-        self.http, self.waited = http, []
+        self.http, self.waited, self.sent = http, [], []
 
     def open(self, request, timeout):
         self.waited.append(timeout)
+        self.sent.append(request)
         url = urllib.parse.urlsplit(request.full_url)
         r = self.http.request(request.get_method(), f"{url.path}?{url.query}", content=request.data,
                               headers=dict(request.header_items()))  # fmt: skip
@@ -320,6 +321,111 @@ def test_a_lead_chats_lookup_through_the_project_host_waits_past_fifteen_seconds
     message = picking.pickers()[0].message
     assert all(x in message for x in (QUESTION, rule.id, general.id))
     assert "## The work" not in message  # no Change: no brief
+
+
+@pytest.fixture
+def finite_instruction(shared_repo):
+    shared = DataRepo(shared_repo[0])
+    folder = shared.root / "owlbear"
+    folder.mkdir()
+    condition = "This one-off instruction is fulfilled once the acceptance report is published."
+    binding = "For this delivery only, prepare and verify the specified acceptance evidence. " * 5 + condition
+    explanation = "This explanatory deadline is not a binding completion condition."
+    other = make(project="owlbear")
+    rule = make(
+        project="owlbear",
+        title="Publish one acceptance report",
+        aliases=("TD-999",),
+        origin=Origin.DECIDED,
+        actor="owner",
+        source=decision_wording.PROMOTED,
+        statement=decision_wording.short(binding),
+        rationale=decision_wording.rationale(binding, explanation, force=True),
+        consequences="Keep this delivery's acceptance evidence in its history.",
+        links=(Link(type=LinkType.RELATED_TO, target=other.id),),
+        read_back=AT.date().isoformat(),
+        read_back_why="The original wording was clarified.",
+        read_back_kind=ReadBackKind.IMPROVEMENT,
+        read_back_settled=("Original wording confirmed.",),
+    )
+    assert condition not in rule.statement
+    for d in (rule, other):
+        write(d, folder)
+    for git_args in (
+        ("add", "--", "owlbear/decisions"),
+        ("commit", "-qm", "seed"),
+        ("push", "-q", "origin", "HEAD:refs/heads/main"),
+    ):
+        done = shared.git(*git_args)
+        assert done.returncode == 0, done.stderr
+    return shared, rule, other, condition, explanation, binding
+
+
+def test_a_lead_completes_a_finite_owlbear_instruction_with_its_whole_binding_and_history(
+    tmp_path, finite_instruction, monkeypatch
+):
+    shared, rule, other, condition, explanation, binding = finite_instruction
+    head = shared.git("rev-parse", "HEAD").stdout.strip()
+    before = rule.content()
+    monkeypatch.setenv("OWLBEAR_DATA", str(shared.root))
+    machine = Machine(RECORD)
+    try:
+        opener = Loopback(TestClient(app.create(machine), base_url="http://127.0.0.1"))
+        monkeypatch.setattr(chat_client.OwlBear, "record", lambda _self: RECORD)
+        monkeypatch.setattr(chat_client, "_LOCAL", opener)
+        chat = chat_client.OwlBear(tmp_path)
+        monkeypatch.setitem(mcp_server._STATE, "chat", chat)  # noqa: SLF001 - exercise the real chat transport
+        args = {
+            "decision": rule.id,
+            "revision": rule.revision,
+            "condition": condition,
+            "evidence": "The fixture's acceptance report was published and its delivery checks passed.",
+        }
+        refused = chat_tool("complete_decision", **(args | {"condition": explanation}))
+        assert refused["saved"] is False
+        assert "condition" in refused["error"]
+        assert shared.git("rev-parse", "HEAD").stdout.strip() == head
+
+        machine.updating = "An update is in progress"
+        fenced = chat_tool("complete_decision", **args)
+        assert fenced["saved"] is False
+        assert "An update is in progress" in fenced["error"]
+        assert shared.git("rev-parse", "HEAD").stdout.strip() == head
+        machine.updating = ""
+
+        completed = chat_tool("complete_decision", **args)
+        assert completed["saved"] is True
+        (receipt,) = completed["receipts"]
+        assert (receipt["committed"], receipt["published"], receipt["active"], receipt["conflict"]) == (
+            True,
+            True,
+            False,
+            False,
+        )
+        code, persisted = chat.call("GET", f"/decisions/{rule.id}")
+        assert code == 200
+        assert persisted["state"] == "spent"
+        assert persisted["history"][0]["action"] == "complete"
+        assert rule.id not in {d["id"] for d in chat_tool("find_decisions")["decisions"]}
+        assert rule.id in {d["id"] for d in chat_tool("find_decisions", include_retired=True)["decisions"]}
+    finally:
+        machine.stop_all()
+
+    kept = decision_store.load(shared, "owlbear").snapshot.get(rule.id).decision
+    assert kept.state is State.SPENT
+    assert decision_wording.whole(kept) == binding
+    assert {k: v for k, v in kept.content().items() if k not in {"state", "rationale"}} == {
+        k: v for k, v in before.items() if k not in {"state", "rationale"}
+    }
+    assert args["evidence"] in kept.rationale
+    assert explanation in kept.rationale
+    assert decision_store.load(shared, "owlbear").snapshot.active(other.id)
+    requests = [r for r in opener.sent if r.full_url.endswith(f"/decisions/{rule.id}/complete")]
+    assert requests
+    assert all("/api/next/owlbear/decisions/" in r.full_url for r in requests)
+    assert all(r.get_header(chat_contract.HEADER.capitalize()) == str(chat_contract.CHAT) for r in requests)
+    assert all(r.get_header("X-owlbear-use") == "chat" for r in requests)
+    assert shared.git("log", "-1", "--format=%s").stdout.strip() == f"decisions: complete {rule.id}"
 
 
 def test_a_lead_chats_lookup_in_owlbears_workspace_goes_through_the_machine_hosts_mount(

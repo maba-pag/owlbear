@@ -93,6 +93,12 @@ def store(tmp_path, shared) -> Store:
     return Store(tmp_path / "store", shared, PROJECT)
 
 
+@pytest.fixture
+def owlbear_shared(shared) -> DataRepo:
+    shared.claim("owlbear", "github.com/maba-pag/owlbear")
+    return shared
+
+
 def client(store: Store, headers=AUTH) -> TestClient:
     return TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers=headers)
 
@@ -699,6 +705,99 @@ def test_retire_decision_needs_the_owners_confirmation_and_a_decided_one_his_re_
     assert (retired["impact"]["old"]["id"], retired["impact"]["effect"]) == (rule.id, "withdrawn")
     assert retire(held, confirmed=True, redecide=True)["saved"] is True
     assert (now(shared, rule.id).state, now(shared, held.id).state) == (State.WITHDRAWN, State.WITHDRAWN)
+
+
+@pytest.mark.parametrize("scope", ["consumer", "global", "change"])
+def test_completion_delegation_does_not_extend_to_other_scopes(owner, owlbear_shared, scope):
+    fields = {
+        "consumer": {"project": PROJECT},
+        "global": {"scope": Scope.GLOBAL, "project": ""},
+        "change": {"scope": Scope.CHANGE, "project": "owlbear", "change": "one-task"},
+    }
+    rule = decided(statement="Finish this one-off task after its report is published.", **fields[scope])
+    seed(owlbear_shared, rule)
+    path = next(owlbear_shared.root.rglob(f"{rule.id}.md"))
+    before, head = path.read_bytes(), git(owlbear_shared.root, "rev-parse", "HEAD")
+    query = {} if scope == "consumer" else {"where": "owlbear"}
+
+    got = owner.post(
+        f"/api/next/decisions/{rule.id}/complete",
+        params=query,
+        json={"revision": rule.revision, "condition": rule.statement, "evidence": "The fixture report exists."},
+    )
+
+    assert got.status_code == 422
+    assert "OwlBear" in got.json()["detail"]
+    assert path.read_bytes() == before
+    assert git(owlbear_shared.root, "rev-parse", "HEAD") == head
+
+
+@pytest.mark.parametrize("problem", ["conflict", "pending", "finding", "wording", "draft"])
+def test_completion_does_not_hide_unresolved_or_inactive_authority(owner, owlbear_shared, problem):
+    fields = {
+        "conflict": {"conflict": True},
+        "pending": {
+            "read_back": "pending",
+            "read_back_why": "The remaining intent needs clarification.",
+            "read_back_kind": ReadBackKind.UNCERTAIN,
+        },
+        "finding": {"statement": "Finish the single task. " * 20},
+        "wording": {
+            "statement": "Finish the task\u2026",
+            "source": "the Decisions page: promoted",
+            "rationale": "Whole wording: ambiguous legacy explanation.",
+        },
+        "draft": {"state": State.DRAFT},
+    }
+    rule = make(project="owlbear", **fields[problem])
+    seed(owlbear_shared, rule)
+    path = next(owlbear_shared.root.rglob(f"{rule.id}.md"))
+    before, head = path.read_bytes(), git(owlbear_shared.root, "rev-parse", "HEAD")
+
+    got = owner.post(
+        f"/api/next/decisions/{rule.id}/complete",
+        params={"where": "owlbear"},
+        json={"revision": rule.revision, "condition": rule.statement, "evidence": "The fixture report exists."},
+    )
+
+    assert got.status_code == 409
+    assert path.read_bytes() == before
+    assert git(owlbear_shared.root, "rev-parse", "HEAD") == head
+
+
+@pytest.mark.parametrize("field", ["condition", "evidence"])
+def test_completion_names_missing_or_blank_proof_without_writing(owner, owlbear_shared, field):
+    rule = decided(project="owlbear", statement="This instruction ends when the report is published.")
+    seed(owlbear_shared, rule)
+    head = git(owlbear_shared.root, "rev-parse", "HEAD")
+    body = {"revision": rule.revision, "condition": rule.statement, "evidence": "The fixture report exists."}
+    for replacement in ({k: v for k, v in body.items() if k != field}, body | {field: "  "}):
+        got = owner.post(
+            f"/api/next/decisions/{rule.id}/complete",
+            params={"where": "owlbear"},
+            json=replacement,
+        )
+        assert got.status_code == 422
+        assert any(error["loc"][-1] == field for error in got.json()["detail"])
+        assert git(owlbear_shared.root, "rev-parse", "HEAD") == head
+
+
+def test_completion_refuses_stale_revisions_and_owner_flags_without_writing(owner, owlbear_shared):
+    rule = decided(project="owlbear", statement="This instruction ends when the report is published.")
+    seed(owlbear_shared, rule)
+    path = next(owlbear_shared.root.rglob(f"{rule.id}.md"))
+    before, head = path.read_bytes(), git(owlbear_shared.root, "rev-parse", "HEAD")
+    body = {"revision": rule.revision, "condition": rule.statement, "evidence": "The fixture report exists."}
+    endpoint = f"/api/next/decisions/{rule.id}/complete"
+
+    stale = owner.post(endpoint, params={"where": "owlbear"}, json=body | {"revision": "0" * 64})
+    assert stale.status_code == 200
+    assert stale.json()["saved"] is False
+    assert "changed since" in stale.json()["receipts"][0]["notice"]
+    flags = owner.post(endpoint, params={"where": "owlbear"}, json=body | {"confirmed": True, "redecide": True})
+    assert flags.status_code == 422
+    assert path.read_bytes() == before
+    assert git(owlbear_shared.root, "rev-parse", "HEAD") == head
 
 
 def test_an_origin_is_corrected_only_downward_on_the_owners_confirmed_statement(store, shared):

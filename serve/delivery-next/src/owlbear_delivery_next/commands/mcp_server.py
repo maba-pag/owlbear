@@ -14,6 +14,7 @@ from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from owlbear_decisions.models import ID_PATTERN
 from owlbear_delivery_next.change_contracts import tools  # noqa: TC001 - MCP resolves the tools' annotations at runtime
 from owlbear_delivery_next.change_flow import brief_tools
 from owlbear_delivery_next.commands.chat_client import Chat, Closed, workspace
@@ -33,7 +34,8 @@ def _d(name: str, model: type[tools.Args] = brief_tools.BriefDraft) -> Any:  # n
 mcp = MCPServer(
     "owlbear-delivery",
     instructions="Shape a Change with the owner, save its brief and visual check, show Delivery status, answer a "
-    "worker's question, find decisions, record one the owner confirmed or propose one, retire one, queue a "
+    "worker's question, find decisions, record one the owner confirmed or propose one, complete a finite "
+    "OwlBear instruction, retire a rule, queue a "
     "read-back and record one.",
 )
 
@@ -210,6 +212,52 @@ def retire_decision(
     path = f"/decisions/{urllib.parse.quote(decision, safe='')}/retire"
     body = {"revision": revision, "reason": reason, "redecide": redecide, "confirmed": confirmed}
     return _STATE["chat"].write(path, body)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))
+def complete_decision(
+    *,
+    decision: Annotated[
+        str,
+        Field(
+            description="ID of the in-force OwlBear project instruction: D- and its 26-character ULID",
+            pattern=ID_PATTERN,
+            examples=["D-00000000000000000000000000"],
+        ),
+    ],
+    revision: Annotated[
+        str,
+        Field(description="Its current revision from find_decisions", pattern=r"^[0-9a-f]{64}$", examples=["0" * 64]),
+    ],
+    condition: Annotated[
+        str,
+        Field(
+            description="Exact quote of its explicit finite end condition from the whole binding, not its rationale",
+            min_length=1,
+            max_length=4000,
+            examples=["Once the acceptance report is published"],
+        ),
+    ],
+    evidence: Annotated[
+        str,
+        Field(
+            description="Proof that the end condition and every binding clause are fulfilled; no continuing intent "
+            "may be lost. Give references, not credentials or the owner's words",
+            min_length=1,
+            max_length=4000,
+            examples=["PR 123 and its acceptance report establish every required check"],
+        ),
+    ],
+) -> dict[str, Any]:
+    """Mark a wholly finite OwlBear project instruction spent under the lead's standing delegation.
+
+    The lead judges finiteness and verifies the evidence; a quote match is not that judgement. Investigate uncertain
+    facts and leave unclear, mixed or continuing rules in force. This is completion, not changed owner intent:
+    no new confirmation or re-decision flags are needed. Retain history, verify publication and report afterward.
+    Global, consumer-project and Change-owned decisions use their existing authority paths.
+    """
+    path = f"/decisions/{urllib.parse.quote(decision, safe='')}/complete"
+    return _STATE["chat"].write(path, {"revision": revision, "condition": condition, "evidence": evidence})
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))

@@ -38,6 +38,7 @@ ROUTES = [  # what chat_client calls, under a project and (the decisions) under 
     ("get", "/chat/contract"),
     *(("post", f"/decisions/{{decision_id}}/{w}") for w in ("retire", "read-back", "correct-origin")),
     ("post", "/decisions/{decision_id}/queue-read-back"),
+    ("post", "/decisions/{decision_id}/complete"),
 ]  # fmt: skip
 
 
@@ -97,6 +98,11 @@ def covers(old: object, new: object, *, names: bool = False) -> bool:
 def test_the_tools_a_chat_server_offers_are_those_of_its_contract():
     """A change a server of this contract could notice raises ``chat_contract.CHAT``, with its own fixture."""
     assert tools() == frozen(chat_contract.CHAT)["tools"]
+    advertised = next(t for t in asyncio.run(mcp_server.mcp.list_tools()) if t.name == "complete_decision")
+    assert set(advertised.input_schema["properties"]) == {"decision", "revision", "condition", "evidence"}
+    assert advertised.annotations is not None
+    assert advertised.annotations.read_only_hint is False
+    assert advertised.annotations.destructive_hint is True
 
 
 @pytest.mark.parametrize("n", sorted(chat_contract.SUPPORTED))
@@ -308,7 +314,7 @@ def http(monkeypatch):
     m.stop_all()
 
 
-@pytest.mark.parametrize("sent", ["3", "", "01", "²", "1" * 5000])
+@pytest.mark.parametrize("sent", ["4", "", "01", "²", "1" * 5000])
 def test_a_host_refuses_a_contract_it_does_not_serve_before_any_route_runs(tmp_path, http, shared_repo, monkeypatch,
                                                                            sent):  # fmt: skip
     monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
@@ -331,7 +337,7 @@ def test_a_host_refuses_a_contract_it_does_not_serve_before_any_route_runs(tmp_p
                            capture_output=True, text=True, check=True).stdout  # fmt: skip
     assert after == head
     served = http.get("/api/next/chat/contract", headers={chat_contract.HEADER: "1"}).json()
-    assert served == {"supported": [1, 2], "admit_by": True}
+    assert served == {"supported": [1, 2, 3], "admit_by": True}
 
 
 def test_a_host_reply_without_what_a_chat_reads_breaks_the_contract(chat_replied):
