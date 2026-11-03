@@ -425,7 +425,7 @@ class Landing(Answering):
 
     def __call__(self, *args, **kwargs):
         out = super().__call__(*args, **kwargs)
-        if [p for _, p, _ in self.got].count("/changes") == 2:  # noqa: PLR2004
+        if [p for _, p, _ in self.got].count("/changes") == 2:
             self.answers["GET /chat/challenge/c1-shop"] = FOUND
         return out
 
@@ -442,7 +442,7 @@ class Cutting(Answering):
 
     def __call__(self, *args, **kwargs):
         out = super().__call__(*args, **kwargs)
-        second = [p for _, p, _ in self.got].count("/changes") == 2  # noqa: PLR2004
+        second = [p for _, p, _ in self.got].count("/changes") == 2
         return (503, {"error": "the host is handing over"}) if second else out
 
 
@@ -455,4 +455,4 @@ def test_a_read_that_fails_keeps_its_error_text_and_says_the_outcome_is_unknown(
     out = slow.chat.await_challenge("c1", 2)
     assert out == {"error": "the host is handing over", "next": chat_client.UNKNOWN_OUTCOME}
     if host is Cutting:
-        assert [p for _, p, _ in slow.host.got].count("/changes") == 2  # noqa: PLR2004 - the one that failed was asked
+        assert [p for _, p, _ in slow.host.got].count("/changes") == 2

@@ -387,7 +387,8 @@ def test_the_wait_for_a_challenge_asked_for_earlier_returns_its_findings_and_ask
     out = chat.await_challenge("c1", 1)
     assert (out["running"], out["version"], [f["id"] for f in out["findings"]]) == (False, 1, ["F1"])
     assert {method for method, _path in sent} == {"GET"}
-    assert (shaping.change().loops[BRIEF].round, shaping.change().brief.challenged) == (1, None)  # a verdict with findings
+    challenged = shaping.change().brief.challenged  # a verdict with findings does not end the loop
+    assert (shaping.change().loops[BRIEF].round, challenged) == (1, None)
 
 
 def test_the_wait_says_it_is_no_longer_shaped_or_that_the_owner_must_resume_instead_of_running_on(
