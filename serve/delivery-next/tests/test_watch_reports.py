@@ -188,8 +188,9 @@ def test_a_migration_fence_held_through_the_deadline_stops_the_writer_and_the_lo
         assert time.monotonic() - started < 2
         assert not w.thread.is_alive()
         assert not threads()
-    assert len(notes) == 1  # the one in progress at the deadline is failed or not written, whichever saw it first
-    assert (notes[0].startswith("watcher c1: "), lost(notes[0])) == (True, 3)
+    *told, said = notes  # the one in progress at the deadline is failed, told at once too, or not written
+    assert told in ([], ["watcher c1: a report was not recorded: BusyError: the Delivery database is being migrated"])
+    assert (said.startswith("watcher c1: "), lost(said)) == (True, 3)
     assert watch_reports.reports(store.db, "c1") == []  # nothing written after the deadline, the summary neither
 
 
@@ -209,21 +210,37 @@ def test_a_bounded_write_gives_up_as_busy_and_needs_an_open_database(store, tmp_
 
 
 def test_a_storage_failure_is_counted_and_told_in_the_runners_log_when_its_summary_cannot_be_written(
-    store, monkeypatch
+    store, monkeypatch, whole_error
 ) -> None:
     notes: list[str] = []
+    failed = f"the Delivery database failed: disk I/O error\n{whole_error}"
 
     def broken(*_a, **_k):
-        msg = "the Delivery database failed: disk I/O error"
-        raise database.StoreError(msg)
+        raise database.StoreError(failed)
 
     monkeypatch.setattr(store.db, "write", broken)
     w = writer(store, notes)
-    w.lost("ValueError: bad event")  # a report that could not be made
+    w.lost(f"ValueError: {whole_error}")  # a report that could not be made
     w.put(watch_reports.put("c1", report(0)))
     w.close(summary)
     assert not w.thread.is_alive()
-    assert notes == ["watcher c1: 2 failed (the Delivery database failed: disk I/O error)"]
+    said = [f"ValueError: {whole_error}", f"StoreError: {failed}"]
+    told = [f"watcher c1: a report was not recorded: {e}" for e in said]  # each as it happened
+    assert notes == [*told, f"watcher c1: 2 failed ({'; '.join(said)})"]
+
+
+def test_each_distinct_failure_is_told_at_once_and_the_committed_summary_row_says_them_all(store, whole_error) -> None:
+    notes: list[str] = []
+    w = writer(store, notes)
+    said = [f"ValueError: {whole_error}", f"KeyError: {whole_error}\nanother"]
+    for error in (*said, said[0]):
+        w.lost(error)
+    told = [f"watcher c1: a report was not recorded: {e}" for e in said]
+    assert notes == told  # before the close, each distinct one once
+    w.close(summary)
+    assert notes == told  # the committed summary row tells the rest
+    rows = watch_reports.reports(store.db, "c1")
+    assert [r["verdict"] for r in rows] == [f"not recorded: 3 failed ({'; '.join(said)})"]
 
 
 def test_a_write_that_gets_the_database_only_after_the_deadline_does_not_run(store, monkeypatch) -> None:
