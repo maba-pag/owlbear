@@ -32,6 +32,7 @@ from owlbear_delivery_next.github.provider import (
 )
 
 _FORBIDDEN, _NOT_FOUND, _CONFLICT = 403, 404, 409
+PLAN_LIMIT = "Upgrade to GitHub Pro or make this repository public"  # GitHub's 403 where no branch rule can exist
 _MERGE_REFUSALS = {
     400: Refusal.CLOSED_OR_DRAFT,
     403: Refusal.FORBIDDEN,
@@ -133,13 +134,18 @@ class GhProvider(Queue, Conversation):
             invalid("read_repository", "gh returned an invalid repository", exc)
 
     def read_rules(self, repository: str, branch: str) -> Rules:
-        """Read rulesets and classic protection; any HTTP 403 makes the rules unknown with GitHub's message."""
+        """Read rulesets and classic protection; an HTTP 403 makes the rules unknown with GitHub's message.
+
+        GitHub's plan-limit 403 is the exception: the repository's plan allows no rulesets or protection, so none apply.
+        """
         op, b = "read_rules", quote(branch, safe="")
         rules = self._api(op, "GET", f"{repo(repository)}/rules/branches/{b}?per_page=100", absent={_FORBIDDEN})
         classic = self._api(op, "GET", f"{repo(repository)}/branches/{b}/protection", absent={_FORBIDDEN, _NOT_FOUND})
-        for found in (rules, classic):
-            if isinstance(found, Missing) and found.status == _FORBIDDEN:
-                return Rules(state="unknown", evidence=f"HTTP 403: {found.message}")
+        denied = [f for f in (rules, classic) if isinstance(f, Missing) and f.status == _FORBIDDEN]
+        if other := next((f for f in denied if not f.message.startswith(PLAN_LIMIT)), None):
+            return Rules(state="unknown", evidence=f"HTTP 403: {other.message}")
+        if isinstance(rules, Missing):
+            rules = []  # the plan allows no rulesets
         try:
             types = tuple(sorted({r["type"] for r in rules}))
             params = [r.get("parameters") or {} for r in rules if r["type"] == "required_status_checks"]
@@ -164,6 +170,8 @@ class GhProvider(Queue, Conversation):
             invalid(op, "GitHub returned invalid branch rules", exc)
         protection = "none" if isinstance(classic, Missing) else "set"
         evidence = f"rules {', '.join(types) or 'none'}; classic protection {protection}"
+        if denied:
+            evidence = f"GitHub's plan allows no branch rules here: {denied[0].message}"
         return Rules(
             state="known",
             evidence=evidence,
