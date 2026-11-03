@@ -5,7 +5,8 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, NamedTuple
 
-from owlbear_delivery_next.local_system import storage_io
+from owlbear_decisions import DecisionError, Scope, State, check_write, decision_path, read
+from owlbear_delivery_next.local_system import publication_hold, storage_io
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch
 from owlbear_delivery_next.state_store import decision_store as store
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from pathlib import Path
 
+    from owlbear_decisions import Decision
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
     type Fence = Callable[[], None]  # a writer's last proof before its rename; it raises when the write must not land
@@ -29,6 +31,48 @@ class Step(NamedTuple):
     notice: str
     unknown: bool = False
     refused: bool = False
+
+
+def refusals(
+    shared: DataRepo,
+    items: Sequence[tuple[Decision, Path, str | None]],
+    until: float,
+) -> dict[str, str]:
+    """Check synchronized revisions/authority, then durably hold project completions before their journal."""
+    found, spending = {}, []
+    for decision, folder, expected in items:
+        path = decision_path(decision, folder)
+        try:
+            before = read(path) if path.exists() else None
+            check_write(before, decision, expected)
+        except DecisionError as exc:
+            found[decision.id] = str(exc)
+        else:
+            if (
+                before is not None
+                and before.state is State.IN_FORCE
+                and decision.state is State.SPENT
+                and before.scope is Scope.PROJECT
+                and decision.scope is Scope.PROJECT
+            ):
+                seen = store.files(shared, before.project)
+                store.usable(seen, before.project)
+                if not seen.active(before.id) or before.read_back == "pending":
+                    found[before.id] = f"{before.id}: completion authority is no longer active or clear"
+                else:
+                    spending.append((before.id, path))
+    if not found:
+        for decision_id, path in spending:
+            publication_hold.hold(
+                shared,
+                path,
+                publication_hold.Requires(
+                    f"active authority of {decision_id}",
+                    decision_active=True,
+                ),
+                until,
+            )
+    return found
 
 
 def guard(shared: DataRepo) -> None:

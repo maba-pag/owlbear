@@ -16,11 +16,18 @@ from owlbear_decisions import Decision, Link, LinkType, Origin, ReadBackKind, Sc
 from owlbear_decisions.validate import validate_repo
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.commands import chat_client, mcp_server
+from owlbear_delivery_next.local_system import publication_hold
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import decision_actions, decision_store
+from owlbear_delivery_next.state_store import (
+    decision_actions,
+    decision_batch,
+    decision_recovery,
+    decision_store,
+    decision_sync,
+)
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import decisions_gate
 
@@ -798,6 +805,197 @@ def test_completion_refuses_stale_revisions_and_owner_flags_without_writing(owne
     assert flags.status_code == 422
     assert path.read_bytes() == before
     assert git(owlbear_shared.root, "rev-parse", "HEAD") == head
+
+
+@pytest.fixture
+def completion_competition(shared_repo, tmp_path, shared):
+    shared.claim("owlbear", "github.com/maba-pag/owlbear")
+    predecessor = decided(project="owlbear", state=State.REPLACED)
+    chosen = after(predecessor, project="owlbear", statement="This instruction ends when the report is published.")
+    competing = after(predecessor, project="owlbear", statement="Publish the other acceptance report.")
+    seed(shared, predecessor, chosen)
+    other_path = tmp_path / "other"
+    git(tmp_path, "clone", "-q", str(shared_repo[1]), str(other_path))
+    git(other_path, "config", "user.name", "fixture")
+    git(other_path, "config", "user.email", "fixture@example.invalid")
+    other = DataRepo(other_path)
+    return shared, chosen, competing, other
+
+
+def competition_during_save(completion_competition, monkeypatch, stage):
+    owlbear_shared, _chosen, competing, other = completion_competition
+    prepare, publish, arrived = decision_sync.prepare, decision_sync.publish, []
+
+    def publish_competitor():
+        arrived.append(competing.id)
+        with monkeypatch.context() as delayed_flags:
+            delayed_flags.setattr(decision_store, "_reconcile", lambda root, *_: decision_store.load(root, "owlbear"))
+            receipt = decision_store.save(other, competing, expected_revision=None, message="decisions: competitor")
+            assert receipt.published
+
+    def synchronize(repo, until, *continuation):
+        if stage == "synchronization" and repo.root == owlbear_shared.root and not arrived:
+            publish_competitor()
+        return prepare(repo, until, *continuation)
+
+    def publishing(repo, paths, message, until, head, *continuation):
+        if stage != "synchronization" and repo.root == owlbear_shared.root and not arrived:
+            publish_competitor()
+        sent = publish(repo, paths, message, until, head, *continuation)
+        if (
+            stage == "later-publication"
+            and repo.root == owlbear_shared.root
+            and message.startswith("decisions: complete")
+        ):
+            msg = "test host stopped after the local completion commit"
+            raise OSError(msg)
+        return sent
+
+    monkeypatch.setattr(decision_sync, "prepare", synchronize)
+    monkeypatch.setattr(decision_sync, "publish", publishing)
+    return arrived
+
+
+@pytest.mark.parametrize("stage", ["synchronization", "publication", "later-publication"])
+def test_completion_keeps_a_competing_successor_that_arrives_during_its_save_unresolved(
+    owner, completion_competition, monkeypatch, stage
+):
+    owlbear_shared, chosen, competing, other = completion_competition
+    arrived = competition_during_save(completion_competition, monkeypatch, stage)
+    got = owner.post(
+        f"/api/next/decisions/{chosen.id}/complete",
+        params={"where": "owlbear"},
+        json={"revision": chosen.revision, "condition": chosen.statement, "evidence": "The fixture report exists."},
+    )
+
+    assert arrived == [competing.id]
+    if stage == "later-publication":
+        assert got.status_code == 409
+        assert "test host stopped" in got.json()["detail"]
+    else:
+        assert got.status_code == 200
+        receipt = got.json()["receipts"][0]
+        assert receipt["published"] is False
+        if stage == "synchronization":
+            assert got.json()["saved"] is False
+        else:
+            assert got.json()["saved"] is True
+            assert receipt["committed"] is True
+    if stage != "synchronization":
+        assert publication_hold.recorded(owlbear_shared, None)
+        assert chosen.id in publication_hold.refusal(owlbear_shared, None)
+    if stage == "later-publication":
+        batch = decision_batch.pending(owlbear_shared)
+        assert batch is not None
+        assert decision_recovery.finish(owlbear_shared, batch.generation).done
+        later = decision_store.save(
+            owlbear_shared,
+            make(project="owlbear"),
+            expected_revision=None,
+            message="decisions: unrelated",
+        )
+        assert not later.published
+        attempted = owlbear_shared.git("push", "origin", "HEAD:refs/heads/main")
+        assert attempted.returncode
+        assert chosen.id in attempted.stderr
+    git(other.root, "pull", "-q", "--ff-only")
+    seen = decision_store.load(other, "owlbear").snapshot
+    assert seen.get(chosen.id).decision.state is State.IN_FORCE
+    assert seen.get(chosen.id).decision.revision == chosen.revision
+    assert seen.get(competing.id).decision.state is State.IN_FORCE
+    assert not seen.active(chosen.id)
+    assert not seen.active(competing.id)
+    if stage == "synchronization":
+        assert git(owlbear_shared.root, "rev-parse", "HEAD") == git(other.root, "rev-parse", "HEAD")
+
+
+@pytest.mark.parametrize("recovery", ["finish-with-rival", "abandon"])
+def test_a_journal_before_the_first_completion_write_keeps_its_condition_during_head_proof(
+    completion_competition, monkeypatch, recovery
+):
+    shared, chosen, competing, other = completion_competition
+    git(shared.root, "commit", "-q", "--allow-empty", "-m", "unpublished unrelated change")
+    unproved = git(shared.root, "rev-parse", "HEAD")
+
+    def stop_before_write(*_):
+        msg = "test host stopped before the first completion write"
+        raise SystemExit(msg)
+
+    with monkeypatch.context() as stopped:
+        stopped.setattr(decision_sync, "proved", lambda *_a, **_k: False)
+        stopped.setattr(decision_store, "write_batch", stop_before_write)
+        with pytest.raises(SystemExit, match="before the first completion write"):
+            decision_store.save(
+                shared,
+                chosen.model_copy(update={"state": State.SPENT}),
+                expected_revision=chosen.revision,
+                message=f"decisions: complete {chosen.id}",
+            )
+    batch = decision_batch.pending(shared)
+    assert batch is not None
+    assert decision_store.files(shared, "owlbear").get(chosen.id).decision.state is State.IN_FORCE
+    if recovery == "abandon":
+        assert decision_recovery.abandon(shared, batch.generation).done
+        assert publication_hold.check(shared, None, fetch=False) == ""
+        assert not publication_hold.recorded(shared, None)
+        return
+    prove, arrived = decision_sync.proved, []
+
+    def prove_then_compete(repo, head, until, *continuation):
+        result = prove(repo, head, until, *continuation)
+        if repo.root == shared.root and result and not arrived:
+            assert publication_hold.recorded(shared, None)
+            arrived.append(competing.id)
+            with monkeypatch.context() as delayed_flags:
+                delayed_flags.setattr(
+                    decision_store, "_reconcile", lambda root, *_: decision_store.load(root, "owlbear")
+                )
+                assert decision_store.save(
+                    other, competing, expected_revision=None, message="decisions: rival"
+                ).published
+        return result
+
+    monkeypatch.setattr(decision_sync, "proved", prove_then_compete)
+    finished = decision_recovery.finish(shared, batch.generation)
+    assert arrived == [competing.id]
+    assert "not yet on the remote" in finished.notice
+    assert publication_hold.recorded(shared, None)
+    assert chosen.id in publication_hold.refusal(shared, None)
+    git(other.root, "pull", "-q", "--ff-only")
+    git(other.root, "merge-base", "--is-ancestor", unproved, "HEAD")
+    seen = decision_store.load(other, "owlbear").snapshot
+    assert seen.get(chosen.id).decision.state is State.IN_FORCE
+    assert not seen.active(chosen.id)
+
+
+def test_completion_can_publish_over_an_unrelated_remote_decision_change(owner, completion_competition, monkeypatch):
+    shared, chosen, _competing, other = completion_competition
+    unrelated = make(project="owlbear")
+    publish, arrived = decision_sync.publish, []
+
+    def publishing(repo, paths, message, until, head, *continuation):
+        if repo.root == shared.root and not arrived:
+            arrived.append(unrelated.id)
+            assert decision_store.save(
+                other, unrelated, expected_revision=None, message="decisions: unrelated"
+            ).published
+        return publish(repo, paths, message, until, head, *continuation)
+
+    monkeypatch.setattr(decision_sync, "publish", publishing)
+    got = owner.post(
+        f"/api/next/decisions/{chosen.id}/complete",
+        params={"where": "owlbear"},
+        json={"revision": chosen.revision, "condition": chosen.statement, "evidence": "The fixture report exists."},
+    )
+
+    assert arrived == [unrelated.id]
+    assert got.status_code == 200
+    assert got.json()["receipts"][0]["published"] is True
+    assert not publication_hold.recorded(shared, None)
+    git(other.root, "pull", "-q", "--ff-only")
+    seen = decision_store.load(other, "owlbear").snapshot
+    assert seen.get(chosen.id).decision.state is State.SPENT
+    assert seen.active(unrelated.id)
 
 
 def test_an_origin_is_corrected_only_downward_on_the_owners_confirmed_statement(store, shared):

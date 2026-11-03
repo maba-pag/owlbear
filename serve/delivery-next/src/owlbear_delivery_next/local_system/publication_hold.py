@@ -13,6 +13,9 @@ pushed or rebased, the refusal is kept in the record and reported, and nothing i
 once the checkout itself holds no change of the file the remote lacks: no unpushed commit touches it and its copies are
 the committed one. A record that cannot be read, is malformed or is not a regular file is kept as it is and holds:
 a dangling link is a damaged record, never an absent one.
+
+A project completion also requires its watched decision to remain active in the pinned remote rule graph.
+Its pending journal keeps that condition alive before the first file write; journal recovery never drops it.
 """
 
 from __future__ import annotations
@@ -22,7 +25,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system import curation_apply
+from owlbear_delivery_next.local_system import batch_journal, curation_apply, decision_authority
 from owlbear_delivery_next.local_system.storage_io import atomic_write, read_regular
 
 if TYPE_CHECKING:
@@ -45,12 +48,14 @@ class Requires:
     """What the shared remote must still hold, described for the owner as *what*.
 
     The changed file's own remote blob is always bound. *path* and *fields*, both or neither, add the fields the
-    remote's copy of another file must keep, such as a claim.
+    remote's copy of another file must keep, such as a claim. *decision_active* binds a watched project instruction's
+    active authority, including competitors whose arrival need not change its own revision.
     """
 
     what: str
     path: Path | None = None
     fields: Mapping[str, str | None] | None = None
+    decision_active: bool = False
 
     def __post_init__(self) -> None:
         """A file and its fields are named together, and the fields are never empty."""
@@ -96,7 +101,7 @@ def _safe(rel: object) -> bool:
 
 def _malformed(data: object) -> str:
     """What makes *data* no record this module writes; nothing when it is one."""
-    if not isinstance(data, dict) or set(data) != _RECORD_KEYS:
+    if not isinstance(data, dict) or set(data) not in (_RECORD_KEYS, _RECORD_KEYS | {"decision_active"}):
         return f"its keys are not exactly {', '.join(sorted(_RECORD_KEYS))}"
     bound = not (data["file"] is None and data["fields"] is None)  # a file and its fields, or neither
     if not _safe(data["watch"]) or (bound and not _safe(data["file"])):
@@ -114,7 +119,12 @@ def _malformed(data: object) -> str:
     ):
         return "its fields are not a non-empty map of text"
     texts = isinstance(data["what"], str) and data["what"] and isinstance(data["refused"], str)
-    return "" if texts else "its description or refusal is not text"
+    text_error = "" if texts else "its description or refusal is not text"
+    return (
+        "its decision-active condition is not a boolean"
+        if ("decision_active" in data and type(data["decision_active"]) is not bool)
+        else text_error
+    )
 
 
 def _load(path: Path) -> dict[str, object] | None:
@@ -186,13 +196,15 @@ def hold(repo: DataRepo, watch: Path, requires: Requires, until: float | None) -
             "fields": None if requires.fields is None else dict(requires.fields),
             "what": requires.what,
         }
+        if requires.decision_active:
+            want["decision_active"] = True
         held = _load(path)
     except _UnknownError as exc:
         msg = f"the automatic change was not written: {exc}"
         raise DataRepoError(msg) from exc
     if held is None:
         atomic_write(path, json.dumps({**want, "refused": ""}))
-    elif {key: held[key] for key in _KEYS} != want:
+    elif {key: held.get(key) for key in want} != want or held.get("decision_active", False) != requires.decision_active:
         why = held["refused"] or "it is not pushed yet"
         msg = f"an earlier automatic change of {held['watch']} in {repo.root} is still held: {why}"
         raise DataRepoError(msg)
@@ -207,6 +219,14 @@ def _lapsed(repo: DataRepo, held: Mapping[str, object], until: float | None) -> 
     change could still be pushed after the remote changed the file again.
     """
     watch = str(held["watch"])
+    if held.get("decision_active", False):
+        try:
+            batch = batch_journal.pending(repo, until)
+        except batch_journal.JournalError as exc:
+            msg = f"the completion's pending journal cannot be checked: {exc}"
+            raise _UnknownError(msg) from exc
+        if batch is not None and any(rel == watch and before != after for rel, before, after in batch.files):
+            return False
     if _changes(repo, watch, until):
         return False
     staged = repo.git("diff", "--cached", "--quiet", "HEAD", "--", watch, until=until)
@@ -233,6 +253,14 @@ def _unmet(repo: DataRepo, held: Mapping[str, object], until: float | None) -> s
         return f"{watch} changed on the shared remote after the change was prepared"
     if _blob_at(repo, UPSTREAM, watch, until) != held["base"]:
         return f"{watch} changed on the shared remote after the change was prepared"
+    if held.get("decision_active", False):
+        try:
+            inactive = decision_authority.inactive(repo, UPSTREAM, watch, until)
+        except (OSError, ValueError) as exc:
+            msg = f"the held decision's active authority cannot be checked: {exc}"
+            raise _UnknownError(msg) from exc
+        if inactive:
+            return inactive
     return _kept(repo, rel, held["fields"], str(held["what"]), until) if isinstance(rel, str) else ""
 
 
