@@ -70,16 +70,16 @@ class Origin:
         return cls(host.lower(), found.group(1), found.group(2))
 
     @classmethod
-    def of(cls, repository: Path, remote: str = "origin") -> Origin:
+    def of(cls, repository: Path, remote: str = "origin", *, timeout: float = TIMEOUT) -> Origin:
         """The repository *remote*'s configured URL names, as written: a URL the tests rewrite still names GitHub."""
         environment = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")}
         command = (resolve_git_executable(), "-C", str(repository), "config", "--get", f"remote.{remote}.url")
         try:
             done = subprocess.run(  # noqa: S603 - fixed Git executable and code-owned argument vector
-                command, capture_output=True, env=environment, timeout=TIMEOUT, check=False
+                command, capture_output=True, env=environment, timeout=timeout, check=False
             )
         except subprocess.TimeoutExpired as exc:
-            msg = f"the URL of {repository}'s remote {remote} could not be read in {TIMEOUT:g} s"
+            msg = f"the URL of {repository}'s remote {remote} could not be read in {timeout:g} s"
             raise AccountMissing(msg) from exc
         if done.returncode:
             said = done.stderr.decode(errors="replace").strip() or "it is not set"

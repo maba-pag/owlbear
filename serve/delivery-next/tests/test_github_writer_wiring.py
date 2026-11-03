@@ -18,7 +18,9 @@ from owlbear_delivery_next.commands import cli, runner, setup
 from owlbear_delivery_next.github import gh_client
 from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
 from owlbear_delivery_next.github.provider import ProviderError
+from owlbear_delivery_next.impeccable import pack_git
 from owlbear_delivery_next.impeccable_runs import pack_live
+from owlbear_delivery_next.local_system import data_place, data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.pds_runs import job
 from owlbear_delivery_next.project_host import host
@@ -260,3 +262,55 @@ def test_an_ssh_push_or_a_missing_account_asks_the_owner_and_pushes_nothing(  # 
     assert (result.exit, result.cause) == (Exit.ASK, cause)
     assert says in result.question.text
     assert "push" not in git_launches.verbs()
+
+
+def _mirrored(tmp_path: Path, name: str, url: str) -> Path:
+    """A checkout whose origin is *url* on GitHub and whose Git traffic reaches a local bare copy holding ``main``."""
+    bare, root = tmp_path / f"{name}.git", tmp_path / name
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(bare))
+    _clone(root, url)
+    _git(root, "config", f"url.{bare}.insteadOf", url)  # outranks the offline rule
+    for key, value in (("user.name", "t"), ("user.email", "t@t")):
+        _git(root, "config", key, value)
+    _git(root, "commit", "-q", "--allow-empty", "-m", "i")
+    _git(root, "push", "-q", "-u", "origin", "main")
+    return root
+
+
+def _data_push(tmp_path):
+    shared = DataRepo(_mirrored(tmp_path, "owlbear-data", "https://github.com/maba-pag/owlbear-data.git"))
+    (shared.root / "note.md").write_text("n\n")
+    with shared.locked():
+        assert shared.publish(shared.root / "note.md", "a note") == ""
+
+
+def _data_clone(_tmp_path):
+    with pytest.raises(data_repo.DataRepoError, match="cloning"):  # the tests' offline rewrite leaves nothing to clone
+        data_place.provision("https://github.com/maba-pag/owlbear-data.git")
+
+
+def _pack_push(tmp_path):
+    root = _mirrored(tmp_path, "owlbear", "https://github.com/maba-pag/owlbear.git")
+    made = _git(root, "commit-tree", "-m", "update", "HEAD^{tree}", "-p", "HEAD").strip()
+    pack_git.push(pack_git.Source(root, "maba-pag/owlbear", made), made, "owlbear/pack-update")
+
+
+NOT_A_PROJECTS = {  # each reaches its own repository's account by TD-402's rule, never the project's or the active one
+    "a data push": (_data_push, {"push"}),
+    "the data clone": (_data_clone, {"clone"}),
+    "a pack push": (_pack_push, {"ls-remote", "push"}),
+}
+
+
+@pytest.mark.parametrize("case", NOT_A_PROJECTS)
+def test_each_write_that_is_not_a_projects_runs_as_its_own_repositorys_account(
+    case, fake_gh, git_runs, tmp_path, monkeypatch
+):
+    (entry, verbs), owner = NOT_A_PROJECTS[case], "maba-pag"  # owns the data and pack repositories
+    fake_gh.set(ACCOUNTS, {"github.com": "boecht"})
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"github_account": "octo-writer"}))
+    entry(tmp_path)
+    assert verbs <= set(git_runs.verbs())
+    for argv, environment, _ in git_runs.seen:
+        assert argv[1:3] == ("-c", "credential.helper=")
+        assert environment["GH_TOKEN"] == f"tok-{owner}"

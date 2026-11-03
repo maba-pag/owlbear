@@ -26,6 +26,7 @@ from owlbear_delivery_next.github.provider import (
     ProviderError,
     PullRequest,
 )
+from owlbear_delivery_next.local_system import git_run
 
 BOTH = {"github.com": {"maba-pag": "success", "boecht": "success"}}
 
@@ -343,3 +344,93 @@ def test_an_account_gh_lacks_launches_no_gh_write(fake_gh):
         WRITES["labels"](gh)
     assert "octo-writer" in str(raised.value)
     assert all(c["argv"][0] == "auth" for c in fake_gh.calls())
+
+
+class _Clock:
+    """``time.monotonic`` for git_run and the resolver: each launch takes two seconds; each launch's timeout is kept."""
+
+    def __init__(self, monkeypatch) -> None:
+        self.now, self.seen, real = 1000.0, [], subprocess.run
+
+        def run(argv, **kw):
+            self.seen.append((Path(argv[0]).name, kw["timeout"]))
+            self.now += 2
+            return real(argv, **kw)
+
+        monkeypatch.setattr(time, "monotonic", lambda: self.now)
+        monkeypatch.setattr(subprocess, "run", run)
+
+
+DEADLINES = {  # cap, until after now, the origin's owner: each launch's timeout, or None for a failed run
+    "the cap bounds a later until": (10, 45, "boecht", [("git", 10), ("gh", 8), ("git", 6)]),
+    "an until earlier than the cap": (10, 5, "boecht", [("git", 5), ("gh", 3), ("git", 1)]),
+    "the cap alone": (10, None, "boecht", [("git", 10), ("gh", 8), ("git", 6)]),
+    "resolution uses it all": (10, 4, "acme", [("git", 4), ("gh", 2)]),
+}
+
+
+@pytest.mark.parametrize("case", DEADLINES)
+def test_one_deadline_bounds_choosing_the_account_and_git_gets_only_what_is_left(case, fake_gh, repo, monkeypatch):
+    """The fetch reads its remote's URL (git), the account's token (gh), then runs; each gets what remains."""
+    cap, after, owner, launches = DEADLINES[case]
+    fake_gh.set(BOTH, {"github.com": "maba-pag"})
+    _git(repo, "remote", "add", "origin", f"https://github.com/{owner}/data.git")
+    clock = _Clock(monkeypatch)
+    done = git_run.run(repo, "fetch", "-q", "origin", until=None if after is None else clock.now + after, cap=cap)
+    assert clock.seen == launches
+    if case == "resolution uses it all":  # no listing, no maba-pag token and no fetch once nothing is left
+        assert (done.returncode, done.stdout) == (128, "")
+        assert "no time was left" in done.stderr
+
+
+def test_a_command_that_reaches_no_remote_keeps_its_whole_cap_and_resolves_nothing(fake_gh, repo, monkeypatch):
+    clock = _Clock(monkeypatch)
+    assert git_run.run(repo, "status", "--short", until=None, cap=10).returncode == 0
+    assert clock.seen == [("git", 10)]
+    assert fake_gh.calls() == []
+
+
+def _authority(tmp_path):
+    """A data checkout whose remote ``authority`` names boecht/data and reaches a local bare copy; ``origin`` names
+    acme/other, whose account would be maba-pag's."""
+    bare, root = tmp_path / "data.git", tmp_path / "data"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(bare))
+    _git(tmp_path, "clone", "-q", str(bare), str(root))
+    _git(root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i")
+    _git(root, "push", "-q", "origin", "HEAD:refs/heads/main")
+    _git(root, "remote", "rename", "origin", "authority")
+    _git(root, "remote", "set-url", "authority", "https://github.com/boecht/data.git")
+    _git(root, "config", f"url.{bare}.insteadOf", "https://github.com/boecht/data.git")  # outranks the offline rule
+    _git(root, "remote", "add", "origin", "https://github.com/acme/other.git")
+    _git(root, "config", "branch.main.pushRemote", "authority")
+    _git(root, "config", "push.default", "current")
+    return root
+
+
+@pytest.mark.parametrize("args", [("push", "-q", "authority", "HEAD:refs/heads/main"), ("push", "-q"), ("fetch", "-q")])
+def test_the_remote_git_uses_chooses_the_account(args, fake_gh, git_runs, tmp_path):
+    fake_gh.set(BOTH, {"github.com": "maba-pag"})
+    root = _authority(tmp_path)
+    done = git_run.run(root, *args, until=None, cap=30)
+    assert done.returncode == 0, done.stderr
+    ((argv, environment, _),) = git_runs.seen
+    assert argv[1:3] == ("-c", "credential.helper=")
+    assert _fill(root, _options(argv), environment) == "tok-boecht"
+
+
+def _options(argv):
+    """The account's ``-c credential…`` options between ``git`` and the command's own arguments."""
+    end = 1
+    while argv[end] == "-c" and argv[end + 1].startswith("credential"):
+        end += 2
+    return argv[1:end]
+
+
+def test_a_push_over_ssh_through_git_run_is_a_failed_run_and_starts_no_push(fake_gh, git_runs, tmp_path):
+    root = _authority(tmp_path)
+    _git(root, "remote", "set-url", "--push", "authority", "git@github.com:boecht/data.git")
+    done = git_run.run(root, "push", "-q", until=None, cap=30)
+    assert done.returncode == 128
+    assert "over SSH" in done.stderr
+    assert git_runs.seen == []
+    assert fake_gh.calls()

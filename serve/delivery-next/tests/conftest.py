@@ -29,7 +29,7 @@ from owlbear_delivery_next.git import remote_git
 from owlbear_delivery_next.git.access import Access
 from owlbear_delivery_next.github import account
 from owlbear_delivery_next.impeccable import pack_files
-from owlbear_delivery_next.local_system import data_repo, local_home
+from owlbear_delivery_next.local_system import data_repo, git_run, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
@@ -505,6 +505,33 @@ def git_launches(monkeypatch) -> GitLaunches:
     """The remote Git launches the test starts."""
     recording = GitLaunches()
     monkeypatch.setattr(remote_git, "subprocess", recording)
+    return recording
+
+
+class GitRuns:
+    """``git_run``'s ``subprocess``: each Git run that reaches a remote is recorded with its environment and timeout."""
+
+    def __init__(self) -> None:
+        self.seen: list[tuple[tuple[str, ...], dict[str, str], float]] = []
+        self.run = self._run
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(subprocess, name)
+
+    def _run(self, command: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if git_run._remote(tuple(command[1:])):  # noqa: SLF001 - the verb as git_run reads it
+            self.seen.append((tuple(command), dict(kwargs["env"]), kwargs["timeout"]))
+        return subprocess.run(command, **kwargs)  # noqa: S603, PLW1510 - the run under test, unchanged
+
+    def verbs(self) -> list[str]:
+        return [git_run._remote(argv[1:]) for argv, _, _ in self.seen]  # noqa: SLF001
+
+
+@pytest.fixture
+def git_runs(monkeypatch) -> GitRuns:
+    """The Git runs through ``git_run`` that reach a remote."""
+    recording = GitRuns()
+    monkeypatch.setattr(git_run, "subprocess", recording)
     return recording
 
 

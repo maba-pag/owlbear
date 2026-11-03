@@ -8,15 +8,14 @@ pushed to its own branch, never forced. A pull request takes it to ``main`` (``p
 
 from __future__ import annotations
 
-import os
 import re
 import shutil
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.impeccable import pack_files
+from owlbear_delivery_next.local_system import git_run
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -28,19 +27,11 @@ _SLUG = re.compile(r"(?:https://github\.com/|git@github\.com:|ssh://git@github\.
 
 
 def git(cwd: Path, args: list[str]) -> str:
-    """One git command in *cwd*; its output, or a PackError with git's own words."""
-    quiet = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}  # a host thread never waits on a credential prompt
-    try:
-        done = subprocess.run(  # noqa: S603
-            ["git", *args],  # noqa: S607
-            cwd=cwd, env=quiet, stdin=subprocess.DEVNULL, capture_output=True, text=True, check=True, timeout=120,
-        )  # fmt: skip
-    except subprocess.CalledProcessError as exc:
-        msg = f"git {args[0]} failed: {(exc.stderr or exc.stdout).strip() or f'exit {exc.returncode}'}"
-        raise pack_files.PackError(msg) from exc
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        msg = f"git {args[0]} did not run: {exc}"
-        raise pack_files.PackError(msg) from exc
+    """One git command in *cwd*: its output, or a PackError with git's own words; TD-402's account reaches remotes."""
+    done = git_run.run(cwd, *args, until=None, cap=120)  # never prompts, so a host thread never waits on one
+    if done.returncode:
+        msg = f"git {args[0]} failed: {(done.stderr or done.stdout).strip() or f'exit {done.returncode}'}"
+        raise pack_files.PackError(msg)
     return done.stdout.strip()
 
 
