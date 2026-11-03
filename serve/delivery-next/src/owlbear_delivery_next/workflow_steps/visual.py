@@ -20,7 +20,8 @@ from owlbear_delivery_next.change_contracts.models import VISUAL, Decision, Erro
 from owlbear_delivery_next.change_contracts.visual_records import PageError, VisualResult
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
-from owlbear_delivery_next.workflow_steps import browse, check, decision, design, engine
+from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.workflow_steps import browse, check, decision, design, engine, sessions
 from owlbear_delivery_next.workflow_steps.browse import root
 
 if TYPE_CHECKING:
@@ -46,6 +47,7 @@ SETTLE_MS = 15_000
 INSTALL = "uv run playwright install chromium"
 CHANNELS = ("chrome", "msedge", None)  # the installed browser first; None is Playwright's own Chromium
 MISSING = ("playwright install", "Executable doesn't exist", "is not found at")  # Playwright's launch errors
+UNOPENED = ("about:blank", "chrome-error:")  # where a page stays whose navigation failed: it went nowhere else
 FILE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}-\d{3,4}\.png$")
 NOT_UI = "not-ui"
 _SHOWN = 5
@@ -109,7 +111,8 @@ def capture(  # noqa: C901, PLR0913 - one finding per failure of the nested shot
             seen: list[PageError] = []
 
             def away() -> Shot | None:
-                gone = left[0] if left else root(page.url) if root(page.url) != origin else ""
+                here = page.url.startswith(UNOPENED) or root(page.url) == origin
+                gone = left[0] if left else "" if here else root(page.url)
                 return Shot(s.name, width, error=f"state {s.name} left the preview ({gone})") if gone else None
 
             def rendered() -> Shot:
@@ -130,8 +133,7 @@ def capture(  # noqa: C901, PLR0913 - one finding per failure of the nested shot
                     name, clip = f"{s.name}-{width}.png", {"x": 0, "y": 0, "width": width, "height": max(tall, height)}
                     page.screenshot(path=str(out / name), full_page=True, clip=clip, timeout=timeout_ms)
                 except Error as exc:
-                    first = str(exc).splitlines()[0][:200]
-                    return away() or Shot(s.name, width, error=f"{s.path} did not answer: {first}")
+                    return away() or Shot(s.name, width, error=f"{s.path} did not answer: {failure(exc)}")
                 return away() or Shot(s.name, width, file=name)
 
             browse.listen(page, s, width, seen)  # before navigation, so load-time errors count
@@ -278,6 +280,16 @@ def broken(reason: str) -> StepResult:
     )
 
 
+def _failed(shots: Sequence[Shot]) -> list[str]:
+    """Each failed shot, whole, told in the runner's log as well."""
+    failed = [f"{s.state} at {s.width}px: {s.error}" for s in shots if s.error or not s.file]
+    if not shots:
+        failed.append("no screenshot was captured")
+    for line in failed:
+        sessions.out(f"visual check: {line}")
+    return failed
+
+
 def judged(  # noqa: PLR0913 - one result from every visual input
     c: Change,
     head: str,
@@ -294,9 +306,7 @@ def judged(  # noqa: PLR0913 - one result from every visual input
     A failed shot, a new browser error or a correctness fail always goes back (R8). The detector's scans are recorded
     as evidence only (TD-77).
     """
-    failed = [f"{s.state} at {s.width}px: {s.error}" for s in shots if s.error or not s.file]
-    if not shots:
-        failed.append("no screenshot was captured")
+    failed = _failed(shots)
     errors = [e for s in shots for e in s.errors]
     new, _old = classify(errors, c.before)
     raised = [f"{e.state} at {e.width}px: new {e.kind} error: {e.text[:300]}" for e in new]
@@ -328,4 +338,4 @@ def judged(  # noqa: PLR0913 - one result from every visual input
     shot = next((s for s in shots if s.error), None) or next((s for s in shots if s.file), None)
     named = f" (see {shot.file or f'{shot.state} at {shot.width}px'})" if shot else ""
     lines = sent or found or ["the screenshots were not judged"]
-    return c, decision.repair(c, f"Fix: the visual check of {head[:7]} failed: {lines[0][:200]}{named}", lines)
+    return c, decision.repair(c, f"Fix: the visual check of {head[:7]} failed: {lines[0]}{named}", lines)

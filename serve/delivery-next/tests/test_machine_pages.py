@@ -65,9 +65,9 @@ from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.runtimes.settings_seen import NAME as SEEN
 from owlbear_delivery_next.settings import carried, config, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
-from owlbear_delivery_next.state_store import decision_store, registry
+from owlbear_delivery_next.state_store import decision_store, registry, watch_reports
 from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store
-from owlbear_delivery_next.workflow_steps import decision, design, judges, pick, publish, retry
+from owlbear_delivery_next.workflow_steps import decision, design, judges, pick, publish, retry, visual
 from owlbear_delivery_next.workflow_steps.engine import Ctx
 
 if TYPE_CHECKING:
@@ -2848,6 +2848,44 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
             f"The design detector could not scan round 1 at {head[:7]}: {items[0]}",
             f"The design detector could not scan: {'; '.join(items[1:])}",
         } <= set(shown_texts(page, url, of, "Before and after"))  # the rerun lacks one
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)  # git, a real capture and a real browser
+def test_a_failed_shot_and_the_watchers_failures_show_whole_on_the_changes_page(
+    tmp_path: Path, monkeypatch, pds, failed_shots, whole_error: str
+) -> None:
+    """#921 C: Playwright's whole error in "Before and after", the repair task and the status line; the watcher's."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, c, of = ui_change(tmp_path, "true")
+    head, now = _git(Path(c.names.worktree), "rev-parse", "HEAD"), datetime.now(UTC)
+    c, result = visual.judged(c, head, "t", failed_shots, verdict=None, now=now)
+    found = [f"gone at 1280px: /gone did not answer: Error: {whole_error}",
+             f"go at 1280px: state go step 1 (click 'Go'): Error: {whole_error}"]  # fmt: skip
+    lost = [f"RuntimeError: {whole_error}", f"StoreError: {whole_error}\nanother"]
+    verdict = f"not recorded: 2 failed ({'; '.join(lost)})"
+    with store.lock("c1") as lock:
+        store.write(lock, loop.apply(c, result, now))
+    with store.db.write() as connection:
+        watch_reports.put("c1", watch_reports.summary_row("s1", "build", verdict.removeprefix("not recorded: ")))(
+            connection
+        )
+    reason = f"Fix: the visual check of {head[:7]} failed: {found[0]} (see gone at 1280px)"
+    with browsing(monkeypatch, pds) as (page, url):
+        said = errors(page)
+        opened(page, url, of, "c1")
+        pictures = page.locator("section", has_text="Before and after").last
+        expect(pictures).to_be_visible()
+        assert pictures.locator("li").all_text_contents() == found
+        assert page.locator("ol.plan > li").last.text_content() == f"to do{reason} from review"
+        watcher = page.locator("section.info").filter(has=page.get_by_role("heading", name="Watcher"))
+        assert watcher.locator("p-text", has_text="not recorded").text_content() == verdict
+        with store.lock("c1") as lock:  # a capture that fails before any shot is retried, its reason on the status line
+            store.write(lock, loop.apply(c, visual.broken(f"Error: {whole_error}"), now))
+        page.locator("#machine").get_by_role("button", name="Resume").click()
+        expect(page.locator("#detail .row.status")).to_contain_text(f"capture failed: Error: {whole_error}")
         assert said == []
 
 

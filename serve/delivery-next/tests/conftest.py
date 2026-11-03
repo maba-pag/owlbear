@@ -906,3 +906,46 @@ def whole_error() -> str:
     words = [f"w{i:04d}" for i in range(700)]
     lines = [" ".join(words[i : i + 20]) for i in range(0, 700, 20)]
     return "\n".join(['BEGIN <a & "b">', *lines[:17], "MIDDLE", *lines[17:], "END"])
+
+
+@pytest.fixture
+def failed_shots(tmp_path: Path, whole_error: str) -> list:
+    """The package's own capture of two states Playwright fails with *whole_error*: one that does not open, and one
+    whose click step fails. Only Playwright's ``goto`` of ``/gone`` and its clicks raise, while the capture runs."""
+    import functools  # noqa: PLC0415 - only this fixture serves a page
+    import http.server  # noqa: PLC0415
+
+    from playwright.sync_api import Error, Locator, Page  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.change_contracts.models import VisualState, VisualStep  # noqa: PLC0415
+    from owlbear_delivery_next.workflow_steps import visual  # noqa: PLC0415
+
+    site = tmp_path / "failing-site"
+    site.mkdir()
+    (site / "index.html").write_text("<!doctype html><title>t</title><button>Go</button>")
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(site))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    goto = Page.goto
+
+    def opened(page: Page, url: str, **kwargs: Any) -> Any:
+        if url.endswith("/gone"):
+            raise Error(whole_error)
+        return goto(page, url, **kwargs)
+
+    def refused(*_args: Any, **_kwargs: Any) -> None:
+        raise Error(whole_error)
+
+    states = [
+        VisualState(name="gone", path="/gone", expect="x"),
+        VisualState(name="go", path="/", expect="x", steps=[VisualStep(do="click", target="Go")]),
+    ]
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(Page, "goto", opened)
+        mp.setattr(Locator, "click", refused)
+        try:
+            return visual.capture(f"http://127.0.0.1:{server.server_port}", states, tmp_path / "shots", (1280,))
+        except visual.BrowserMissingError as exc:
+            pytest.skip(f"no Chrome, Edge or Playwright Chromium: {exc}")
+        finally:
+            server.shutdown()
