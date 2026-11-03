@@ -26,17 +26,11 @@ DETAIL = 4000  # a task's details: review findings, CI log tail or review thread
 READ_ONLY = "Read files and run any read-only command; nothing you run may write files or change Git state."
 CD = "; one that starts with `cd` runs from the repository root, as written"  # a kept task's check (TD-246)
 FINISH = """\
-1. Implement the task in the worktree, run every check, then `git add` and `git commit` your work.
-2. Read your final diff and make sure it holds only this task's work.
-3. Call `submit_result` once with the summary and checks; Delivery reads your commit from the worktree HEAD,
-   records the files it changes and lints them with the project's linters. If it is rejected, fix what each
-   error names, commit, and call it again.
+Call `submit_result` once with the summary and checks; Delivery reads your commit from the worktree HEAD,
+records the files it changes and lints them with the project's linters. If it is rejected, fix what each
+error names, commit, and call it again.
 
-- If a decision belongs to the owner, call `ask_question` instead of guessing, then stop.
-- If a tool, command or capability you need is missing or keeps failing, call `report_missing_tool` with the
-  exact error, then stop.
-- If the brief or plan is wrong, call `report_wrong_premise` with evidence, then stop. If the task needs a
-  commit or API that is on the target branch but not here yet, report it with stage `target`.
+Follow the builder's output format for `ask_question`, `report_missing_tool` and `report_wrong_premise`.
 - Never push, change Git configuration, skip hooks or signing, or use `gh`.
   Leave no process running when you finish."""
 NO_ACTION = "- `no-action`: this bot notice needs nothing; `text` is the reason. Nothing is posted.\n"
