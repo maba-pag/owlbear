@@ -257,9 +257,18 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
     with settings_page(store, pds) as page:
         c = TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1",
                        headers={"authorization": "Bearer t"})  # fmt: skip
-        got = c.get("/api/next/config").json()
-        newer = got["project"] | {"widths": [1600]}
-        assert c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": newer}).status_code == 200
+
+        def intervene(route) -> None:
+            assert route.request.method == "PUT"
+            got = c.get("/api/next/config").json()
+            assert route.request.post_data_json["rev"] == got["project_rev"]
+            newer = got["project"] | {"widths": [1600]}
+            changed = c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": newer})
+            assert changed.status_code == 200
+            assert changed.json()["project_rev"] != got["project_rev"]
+            route.continue_()
+
+        page.route("**/api/next/config/project", intervene, times=1)
         pds.group(page, "agents")
         page.get_by_label("Minutes per session, reviewer").fill("25")
         page.get_by_label("Minutes per session, builder").fill("35")
@@ -273,14 +282,18 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
         expect(page.locator("#groups a[href='#agents'] p-tag")).to_have_text("3 unsaved")
         save = page.get_by_role("region", name="Save settings").get_by_role("button", name="Save project settings")
         save.click()
-        pds.answer(page, "Save project settings")
+        with page.expect_response("**/api/next/config/project") as refused:
+            pds.answer(page, "Save project settings")
+        assert refused.value.status == 409
         expect(page.locator("#error")).to_contain_text("kept your unsaved edits; check them and save again.")
         expect(unsaved).to_have_text(["3 unsaved", "1 unsaved", "1 unsaved"])
         expect(pds.select(page, "Merge method")).to_have_js_property("value", "squash")
         pds.group(page, "agents")
         expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("25")
         save.click()  # the answered confirmation may still be fading out with its own button of this name
-        pds.answer(page, "Save project settings")
+        with page.expect_response("**/api/next/config/project") as accepted:
+            pds.answer(page, "Save project settings")
+        assert accepted.value.status == 200
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         expect(unsaved).to_have_count(0)
     saved = json.loads(store.config_path.read_text())
@@ -1504,6 +1517,67 @@ def test_the_guard_level_saves_in_each_layer_as_a_level_and_clears_back_to_inher
               read_layer(store.global_path, config.GlobalLayer))  # fmt: skip
     assert [layer.guard_level for layer in layers] == [None, "standard", "strict"]
     assert (store.settings().guard_level, store.settings().sources["guard_level"]) == ("standard", "machine")
+
+
+ACCOUNT = "GitHub account: a login, or repository-owner"
+FALLBACK = "maba-pag (gh has no account for the owner acme)"
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)  # one walk through both layers, a reload and the error state takes about 40 s
+def test_the_github_account_shows_the_account_it_resolves_to_in_each_layer(
+    store, pds, monkeypatch, fake_gh, tmp_path
+) -> None:
+    """TD-402: unset until a layer sets it; repository-owner shows the account TD-402's rule gives on the origin."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+    from owlbear_delivery_next.state_store.store import read_layer  # noqa: PLC0415
+
+    clone = tmp_path / "tools"
+    origin = "https://github.com/acme/tools.git"
+    subprocess.run(("git", "init", "-q", str(clone)), check=True)  # noqa: S603, S607
+    subprocess.run(("git", "-C", str(clone), "remote", "add", "origin", origin), check=True)  # noqa: S603, S607
+    monkeypatch.setattr(Host, "repo", clone)
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"github_account": None}))
+    with settings_page(store, pds) as page:
+        url, row = page.url.split("#")[0], page.locator("#set-github_account")
+        pds.group(page, "overview")
+        page.locator("#unset").get_by_role("link", name="github_account", exact=True).click()
+        expect(page).to_have_url(f"{url}#checks")
+        field = page.get_by_label(ACCOUNT)
+        expect(field).to_be_focused()
+        expect(row.locator("p-text[color='error']")).to_have_text("GitHub account")
+        pds.pick(page, "Layer", "global")
+        box = field.bounding_box()
+        assert min(box["width"], box["height"]) >= 24  # WCAG 2.5.8 target size
+        field.fill("repository-owner")
+        expect(_in_use(page, "set-github_account")).to_have_text(f"in use: {FALLBACK}, from global")
+        expect(page.locator("#pending")).to_have_text("Unsaved: github account: unset → repository-owner.")
+        _saved_by_keyboard(page, pds, "Save global defaults", "the global")
+        pds.pick(page, "Layer", "project")
+        expect(field).to_have_attribute("placeholder", "inherit (repository-owner)")
+        field.fill("octo-writer")
+        expect(_in_use(page, "set-github_account")).to_have_text("in use: octo-writer, from this project")
+        _saved(page, pds, "Save project settings", "this project's")
+
+        page.reload()
+        opened(page, pds, "checks")
+        expect(field).to_have_value("octo-writer")
+        expect(_in_use(page, "set-github_account")).to_have_text("in use: octo-writer, from this project")
+        field.fill("")
+        expect(_in_use(page, "set-github_account")).to_have_text(f"in use: {FALLBACK}, from global")
+        _saved(page, pds, "Save project settings", "this project's")
+        expect(_in_use(page, "set-github_account")).to_have_text(f"in use: {FALLBACK}, from global")
+
+        fake_gh.set({"github.com": {"boecht": "success"}}, {"github.com": "boecht"})
+        page.reload()
+        opened(page, pds, "checks")
+        expect(_in_use(page, "set-github_account")).to_contain_text(
+            "in use: repository-owner: github account: gh holds no account acme or maba-pag on github.com"
+        )
+    layers = (store.read_config(), read_layer(store.global_path, config.GlobalLayer))
+    assert [layer.github_account for layer in layers] == [None, "repository-owner"]
 
 
 CATEGORY_LABELS = {

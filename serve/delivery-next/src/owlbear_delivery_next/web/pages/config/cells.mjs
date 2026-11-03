@@ -253,10 +253,12 @@ export function prMarker() {
 // TD-402: the account a project's GitHub writes are made by; repository-owner shows the account TD-402's rule gives on
 // this project's origin now, whatever layer holds it (D-01M6G9XSXY0G5N65PBJ3RKKPK7).
 export function githubAccount() {
-  const key = "github_account";
+  const key = "github_account", rule = state.loaded.github_rule ?? {};
+  const named = (v) => v !== "repository-owner" ? v
+    : rule.error ? `repository-owner: ${rule.error}` : `${rule.login || "no account"} (${rule.why})`;
   return cell(typed("GitHub account: a login, or repository-owner", own(key), (v) => edit(key, v, true),
     { key, placeholder: clear(inherited()[key]), disabled: state.saving }),
-  source(key, state.loaded.settings[key], true));
+  source(key, state.loaded.settings[key], true, named));
 }
 
 // D-01M5YE4P5317N1HWD0QN6N05E0: whether a Delivery step loads the owner's own instruction files or is offered his own

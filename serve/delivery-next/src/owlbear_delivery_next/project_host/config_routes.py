@@ -19,6 +19,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ValidationError
 
 from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
+from owlbear_delivery_next.github import account
 from owlbear_delivery_next.impeccable import calibration, pack_update
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
@@ -83,6 +84,7 @@ APPLIED = [
     "sessions",  # TD-336
 ]  # the settings Delivery uses today
 STARTING = 5.0  # seconds a folder rename waits for a runner launch or the host's folder check to end
+RULE_SECONDS = 5.0  # the GitHub account row waits this long for gh; past it, the row shows why
 
 
 class Save(BaseModel):
@@ -157,6 +159,17 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         "agreement": _agreement(store),
         "impeccable": pack_update.said(pack_update.notice(refresh=False)),  # never online; setup refreshes it
     }
+
+
+def _github_rule(repo: Path) -> dict[str, str]:
+    """What ``repository-owner`` resolves to on the project's origin now: the account and why, never a token."""
+    try:
+        chosen = account.resolve(
+            account.REPOSITORY_OWNER, account.Origin.of(repo), until=time.monotonic() + RULE_SECONDS
+        )
+    except account.AccountMissing as exc:
+        return {"error": str(exc)}
+    return {"login": chosen.login, "why": chosen.why}
 
 
 def resolved(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | None, misfit: list[str]) -> Settings:
@@ -409,9 +422,12 @@ def router(store: Store, host: Host) -> APIRouter:
     routes, reads = APIRouter(), _reader(store, host)
     _read_routes(routes, reads)
 
+    def state(notice: str = "") -> dict[str, Any]:
+        return _state(store, notice) | {"github_rule": _github_rule(host.repo)}
+
     @routes.get("/config")
     def read() -> dict[str, Any]:
-        return _state(store)
+        return state()
 
     @routes.put("/config/project")
     def put_project(body: Save) -> dict[str, Any]:
@@ -419,7 +435,7 @@ def router(store: Store, host: Host) -> APIRouter:
         notice = _project_notice(store, host, body)
         if not notice:  # a publication notice leaves the import pending for a retry
             _settle_prefs_import(store, reviewed=body.prefs_reviewed)
-        return _state(store, notice) | {"unpublished": notice}  # the page keeps its review intent until this is empty
+        return state(notice) | {"unpublished": notice}  # the page keeps its review intent until this is empty
 
     @routes.put("/config/global")
     def put_global(body: Save) -> dict[str, Any]:
@@ -427,14 +443,14 @@ def router(store: Store, host: Host) -> APIRouter:
             raise HTTPException(409, "no shared settings location is set up; run `owlbear-next data PATH`")
         what = "global: from the settings page"
         # this machine's change of Global is never noticed as one from elsewhere
-        return _state(store, _save(store, store.global_path, GlobalLayer, body, what, host, written=reads().ledger.own))
+        return state(_save(store, store.global_path, GlobalLayer, body, what, host, written=reads().ledger.own))
 
     @routes.put("/config/machine")
     def put_machine(body: Save) -> dict[str, Any]:
-        return _state(store, _save(store, store.machine_path, MachineLayer, body, "this machine", host))
+        return state(_save(store, store.machine_path, MachineLayer, body, "this machine", host))
 
     @routes.put("/config/folder")
     def put_folder(body: Folder) -> dict[str, Any]:
-        return _state(store, "" if body.name == store.name else _rename(store, host, body.name))
+        return state("" if body.name == store.name else _rename(store, host, body.name))
 
     return routes

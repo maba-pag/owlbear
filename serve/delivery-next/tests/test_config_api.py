@@ -24,6 +24,7 @@ AUTH = {"authorization": "Bearer t"}
 
 
 class Host:
+    repo = None  # no clone
     maintenance = None
     wake = SimpleNamespace(set=lambda: None)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
@@ -125,6 +126,27 @@ def test_recommendations_cover_current_required_settings_without_filling_any_lay
     assert got["settings"]["sources"].get("agents.builder.model") is None
     assert not store.config_path.exists()
     assert not store.machine_path.exists()
+
+
+def test_the_settings_say_which_account_td_402_s_rule_gives_on_the_project_s_origin(
+    store, monkeypatch, fake_gh, tmp_path
+):
+    clone = tmp_path / "tools"
+    origin = "https://github.com/acme/tools.git"
+    subprocess.run(("git", "init", "-q", str(clone)), check=True)  # noqa: S603, S607
+    subprocess.run(("git", "-C", str(clone), "remote", "add", "origin", origin), check=True)  # noqa: S603, S607
+    assert client(store, headers=AUTH).get("/api/next/config").json()["github_rule"]["error"]  # no clone to read
+
+    monkeypatch.setattr(Host, "repo", clone)
+    rule = client(store, headers=AUTH).get("/api/next/config").json()["github_rule"]
+    assert rule == {"login": "maba-pag", "why": "gh has no account for the owner acme"}
+
+    fake_gh.set({"github.com": {"maba-pag": "success", "acme": "success"}}, {"github.com": "maba-pag"})
+    assert client(store, headers=AUTH).get("/api/next/config").json()["github_rule"]["login"] == "acme"
+
+    fake_gh.set({"github.com": {"boecht": "success"}}, {"github.com": "boecht"})
+    error = client(store, headers=AUTH).get("/api/next/config").json()["github_rule"]["error"]
+    assert "gh holds no account acme or maba-pag on github.com" in error
 
 
 def test_the_challenge_round_values_are_saved_per_loop(store):
