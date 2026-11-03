@@ -10,7 +10,8 @@ import { taskRounds } from "./progress.mjs";
 const CLASSES = [
   { id: "event", label: "It only settles how the work goes on" },
   { id: "clarification", label: "It clarifies what the brief means: it becomes a decision of this Change" },
-  { id: "brief_change", label: "It changes the approved brief: the work stops and asks you" },
+  { id: "brief_change", label: "It changes the approved brief: Delivery amends it and asks you only about more "
+    + "than your answer says" },
 ];
 
 function classed(q, mine) {
@@ -22,15 +23,6 @@ function classed(q, mine) {
     return notify("Write your intent in at most two lines and confirm it.");
   }
   return { kind: mine.kind, statement, confirmed: true };
-}
-
-// #717: allowing what the Spotter stopped is held and the question asked again; it says when he chose it and why.
-function heldLine(q) {
-  const n = q.held?.length ?? 0;
-  if (!n) return nothing;
-  const at = new Date(q.held[n - 1]).toLocaleTimeString(), times = n > 1 ? ` (${n} times so far)` : "";
-  return text(`You chose Allow it at ${at}${times}: it needs a brief amendment, which isn't built yet (item 16), so `
-    + "the step stays stopped and the question is asked again.", { size: "sm" });
 }
 
 // #791: an answer that reached Delivery but settled nothing stays beside its question, with why, until one applies;
@@ -47,13 +39,13 @@ export function questionForm(q, d) {
     const picked = q.options.some((o) => o.id === mine.option) ? mine.option : null, words = mine.text ?? "";
     const said = classed(q, mine);
     if (!said) return;
-    const chosen = q.options.find((o) => o.id === picked), told = chosen && consequence(chosen, d);
+    const chosen = q.options.find((o) => o.id === picked), told = chosen && consequence(chosen, d, q);
     if (told && !(await ask(told))) return;
     send("/answers", { question: q.id, option: picked, text: words, ...said }, d, key);
   };
   const clarifying = q.ordinary && mine.kind === "clarification";
   const confirm = (on) => { mine.confirmed = on; show(); };
-  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }), heldLine(q), droppedLine(q),
+  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }), droppedLine(q),
     q.options.length ? choice(key, "option", "Choose an option", q.options) : nothing,
     field(key, "text", "Your answer in words"),
     q.ordinary ? choice(key, "kind", "How your answer bears on the brief", CLASSES) : nothing,
@@ -139,9 +131,31 @@ export function retryForm(q, r, d) {
     button("Plan again from the brief", replan, { variant: "secondary", aria: DIALOG, ...starts(d) }));
 }
 
+// TD-185: what an answer to a brief amendment's question sets off; reshaping and stopping say it as below.
+const APPLIED = "Evidence it touches no longer counts: the stopped work resumes on the new version (an approved change "
+  + "replans its task with the whole plan in view), and the final review and the checks it affects run again before "
+  + "merge. This uses AI credits.";
+const AMENDING = {
+  yes: { now: "The amendment applies as a new brief version, as approved by you; earlier versions stay unchanged.",
+    then: APPLIED, after: "You can object to it later on the Brief panel; a revert makes another new version." },
+  "accept-unreviewed": { now: "The wording no challenge round reviewed applies as a new brief version, as approved "
+    + "by you; earlier versions stay unchanged.", then: APPLIED,
+  after: "You can object to it later on the Brief panel; a revert makes another new version." },
+  within: { now: "The amendment is declined and stays listed with your reason, your answer in words.",
+    then: "The stopped work goes on within the approved brief, with your reason.", after: "The brief is unchanged." },
+  revert: { now: "Delivery prepares a new brief version that undoes the amendment exactly, and a challenger "
+    + "judges it.",
+    then: "It applies as approved by you, unless it says more than undoing the amendment: then you are asked about "
+      + "that part. The paused work resumes on it.",
+  after: "The amendment stays in the record; merged or published work can't be undone." },
+  keep: { now: "The amendment stays applied.", then: "The paused work goes on.",
+    after: "You can object to it again on the Brief panel." },
+};
+
 // What an answer sets off when it is more than going on: ending the Change, passing over a finding, going back.
-function consequence(o, d) {
+function consequence(o, d, q) {
   const choices = { yes: o.label, no: "Back to the options", instead: "Choose another option." };
+  if (q?.amendment && AMENDING[o.id]) return { ...choices, title: `${o.label}?`, ...AMENDING[o.id] };
   if (o.next === "abandon") {
     return { title: "Abandon this Change?", yes: "Abandon", no: "Keep the Change", destructive: true,
       now: "The Change ends here and is marked abandoned. There is no restore.",

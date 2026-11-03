@@ -33,6 +33,7 @@ from owlbear_delivery_next.change_flow.progress import progress
 from owlbear_delivery_next.change_flow.status import card, status, unloadable
 from owlbear_delivery_next.impeccable_runs import pack_job
 from owlbear_delivery_next.project_host import (
+    amendment_routes,
     answers,
     backlog_routes,
     brief_routes,
@@ -352,7 +353,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         merge = offer(c, events)
         q = loop.open_question(c) if not merge else None
         q = q.model_copy(update={"options": held.offered(store, c, q)}) if q else None
-        shown = q and q.model_dump(mode="json", include={"id", "text", "options"}) | answers.shown(c, q, events)
+        shown = q and q.model_dump(mode="json", include={"id", "text", "options"}) | answers.shown(q, events)
         waiting = o and o.exit == Exit.PENDING and o.waiting == Waiting.PERSON_CHECK and o.who == "you"
         checks = [person_check(c, p, inputs=evidence.check_inputs(c, p, check.fingerprints(c, p)), waiting=bool(
             waiting and c.step.task == p.id)) for p in c.checks]  # fmt: skip
@@ -399,17 +400,14 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                 "consent": c.consent.model_dump(mode="json") if c.consent else None,
                 "fixes": [f"fix Change {e['fix']} drafted" for e in events if e.get("event") == "fix-drafted"],
                 "visual": c.visual.model_dump(mode="json") if c.visual else None,
-                "visual_existing_errors": [
-                    f"{e.state} at {e.width}px, {e.kind} error: {e.text}"
-                    for e in visual.classify(c.visual.errors if c.visual else [], c.before)[1]
-                ],
+                "visual_existing_errors": visual.existing(c),
                 "before": c.before.model_dump(mode="json") if c.before else None,
                 "visual_round": c.visual_rounds[-1].model_dump(mode="json")
                 | {"proposed": decision.proposed(c.visual_rounds[-1])}
                 if c.visual_rounds
                 else None,
                 "owner_criteria": [k.model_dump(mode="json") for k in c.owner_criteria if k.withdrawn_at is None],
-                "amendments": [a.model_dump(mode="json") for a in c.amendments],  # TD-179: proposed, never applied here
+                "amendments": amendment_routes.shown(c),  # TD-185
                 "restartable": not round_flow.restartable(c),
                 "recovery": stop_routes.shown(c, store),  # #754: the stop the owner may clear, or None
                 "activity": events[-20:],
@@ -482,6 +480,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
 
     router.include_router(config_routes.router(store, host))
     router.include_router(answers.router(store, read, put))
+    router.include_router(amendment_routes.router(read, put))
     router.include_router(chat_routes.router(read))
     wake, ending = lambda: host.wake.set(), lambda: host.draining()  # noqa: PLW0108 - read late
     router.include_router(brief_routes.router(store, read, wake, ending))

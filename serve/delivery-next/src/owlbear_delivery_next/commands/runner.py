@@ -13,7 +13,7 @@ from owlbear_delivery_next.change_contracts import permissions, tools
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import VISUAL, Environment, ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import budgets, disputes, loop, plan_rounds, repairs, worktree
+from owlbear_delivery_next.change_flow import amending, budgets, disputes, loop, plan_rounds, repairs, worktree
 from owlbear_delivery_next.change_flow.curation_flow import CURATE
 from owlbear_delivery_next.commands.cli import describe
 from owlbear_delivery_next.git.command_failure import failure
@@ -37,7 +37,7 @@ from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import github_writer, project_home, spend_ledger
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 from owlbear_delivery_next.workflow_steps import (
-    amend,
+    amendment,
     before,
     brief_round,
     check,
@@ -118,7 +118,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     look_limit = watched.needed(
         settings
     )  # before anything is recorded: an unset Spotter setting asks, leaving no open span
-    review.started(change, task, path, settings)  # one snapshot, checked before anything is taken (TD-208, TD-179)
+    review.started(change, task, path, settings)  # one snapshot, checked before anything is taken (TD-208)
     answer, accepted, repair, resume = session_choice.opening(store, lock, change, task)  # unset settings take nothing
     s.started_at = now
     since = task.base if task and s.kind in {StepKind.BUILD, StepKind.REVIEW} else None
@@ -190,7 +190,6 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     post = held_writes.Deferred(store, slug) if accepted else store  # an accepted hold's writes wait for its receipt
     result = review.recorded(change, task, run, path, session_result.to_result(run, s.kind, end))
     result = disputes.processed(change, task, run.session_id, run.payload, result, run.changed)
-    proposal = amend.proposed(change, run, result)  # TD-179: judged once this step's own result is durable
     result = conversation.disputed(task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
     change = budgets.effect_observed(change, answer.id, end) if answer and session_result.effect_seen(run) else change
@@ -210,10 +209,10 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
         result = prepare.chosen(post, lock, change, path, run.payload, ctx, result)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
-    if proposal is not None:  # its challenger's stop, else this result, is written with the verdict and its spend
-        amend.challenge(post, lock, change, path, proposal, route=result, settings=settings)
-        return
-    held_writes.write_result(store, lock, change, accepted, loop.apply(change, result, end), post)
+    if isinstance(p := run.payload, tools.WrongPremise) and p.stage == "brief" and result.exit == Exit.BACK:
+        amending.premised(change, p, run.session_id, end)  # TD-185: run before this step goes on; a stop wins
+    final = change if change.amending is not None else loop.apply(change, result, end)
+    held_writes.write_result(store, lock, change, accepted, final, post)
     sessions.announce_all(store, lock, slug, events)  # logged once the result that counts their round is durable
 
 
@@ -239,9 +238,10 @@ def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list
 
 
 def _captured(change: Change, path: Path, head: str, out: Path, widths: list[int]) -> tuple[list[Any], list[Any]]:
-    """The brief's states captured at *widths* from the ready environment, and the design scans they and the UI hold."""
+    """The states to redo captured at *widths* from the ready environment, and the design scans they and the UI hold."""
     pack, url = design.pack(), change.env.ready_url if change.env else ""
-    shots = visual.oversize(out, visual.CAPTURE(visual.root(url), change.brief.visual, out, widths, pack=pack))
+    redo = visual.redone(change, head, visual.tree(path, head))
+    shots = visual.oversize(out, visual.CAPTURE(visual.root(url), redo, out, widths, pack=pack))
     states = {s.name: s.version for s in change.brief.visual}
     source = design.sources(path, visual.ui_paths(change, head), pack)
     found = [s.design for s in shots if s.design] + ([source] if source else [])
@@ -468,10 +468,10 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
             _before(store, lock, change, repo)
         elif step is None or change.env is not None:
             _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
-        elif step.kind == StepKind.TESTS:  # a test review's reviewers (TD-373)
-            curation.run(store, lock, change, repo)
-        elif step.kind in AGENT:  # a step whose amendment challenge did not settle goes on from it (TD-179)
-            agent = amend.resumed(store, lock, change, repo) or _reused(store, lock, change)
+        elif step.kind == StepKind.TESTS or change.amending is not None:
+            (curation.run if step.kind == StepKind.TESTS else amendment.run)(store, lock, change, repo)
+        elif step.kind in AGENT:
+            agent = _reused(store, lock, change)
             agent = agent or prepare.refused(store, lock, change) or review.completed(store, lock, change, repo)
             agent = agent or plan_round.continued(store, lock, change, repo)
             agent or _agent(store, lock, change, repo)

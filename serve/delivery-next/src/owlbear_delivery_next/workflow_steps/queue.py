@@ -281,12 +281,16 @@ def run(ctx: Ctx, c: Change, pr: PullRequest, rules: Rules, gate: Gate) -> tuple
 
 
 def leaving(before: Change, after: Change) -> bool:
-    """Whether folding the inbox moves a Change off its merge step, pauses it or abandons it."""
+    """Whether folding the inbox moves a Change off its merge step, pauses it, abandons it or amends its brief."""
     if before.step.kind != M:
         return False
     paused = after.intent.paused_at is not None and before.intent.paused_at is None
     abandoned = after.intent.abandoned_at is not None and before.intent.abandoned_at is None
-    return after.step.kind != M or paused or abandoned
+    amended = after.amending is not None and before.amending is None  # TD-185: never merged while it runs
+    objected = {(a.id, a.objected_at) for a in after.amendments if a.objected_at} - {
+        (a.id, a.objected_at) for a in before.amendments if a.objected_at
+    }  # a later objection to the same amendment too
+    return after.step.kind != M or paused or abandoned or amended or bool(objected)
 
 
 def _resolved(before: Change, after: Change) -> bool:

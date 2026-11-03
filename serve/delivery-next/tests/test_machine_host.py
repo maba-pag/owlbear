@@ -18,6 +18,7 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.change_contracts import chat_contract
 from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline
 from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
@@ -105,14 +106,15 @@ def test_the_chat_server_calls_its_projects_api_on_the_machine_host(tmp_path, ht
         def open(self, request, **_kw):
             sent.append((request.full_url, request.headers.get("X-owlbear-chat")))
             if request.full_url.endswith("/chat/contract"):
-                return Answer(b'{"supported": [1, 2, 3]}')
+                return Answer(f'{{"supported": [{chat_contract.CHAT}]}}'.encode())
             raise OSError
 
     monkeypatch.setattr(chat_client, "_LOCAL", Opener())
     chat = chat_client.workspace(Path(p["path"]))
     chat.call("GET", "/changes")
-    assert sent == [("http://127.0.0.1:9/api/next/chat/contract", "3"),
-                    (f"http://127.0.0.1:9/p/{p['id']}/api/next/changes", "3")]  # fmt: skip
+    spoken = str(chat_contract.CHAT)
+    assert sent == [("http://127.0.0.1:9/api/next/chat/contract", spoken),
+                    (f"http://127.0.0.1:9/p/{p['id']}/api/next/changes", spoken)]  # fmt: skip
 
 
 class Answer(io.BytesIO):
@@ -228,7 +230,8 @@ def test_a_folder_that_is_no_owlbear_project_gets_every_tool_refused_and_nothing
         assert "new Copilot-runtime chat" in message
         assert "MCP: List Servers → owlbear-delivery → Stop Server, then Start Server" in message
         assert "Restart Local Agent Host" not in message
-    unsupported = "OwlBear does not serve this chat's owlbear-delivery server (chat contract 0; it serves 1, 2, 3)"
+    served = ", ".join(map(str, sorted(chat_contract.SUPPORTED)))
+    unsupported = f"OwlBear does not serve this chat's owlbear-delivery server (chat contract 0; it serves {served})"
     assert stale.startswith(unsupported)  # the chat asks the host's contracts first
     chat = mcp_server._STATE["chat"]  # noqa: SLF001
     chat.checked = (machine.record.pid, machine.record.started_at.isoformat())  # past the contract check

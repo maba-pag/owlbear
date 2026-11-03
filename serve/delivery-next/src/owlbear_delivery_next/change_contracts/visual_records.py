@@ -22,6 +22,14 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class VisualStep(_Strict):
+    """One owner-authored action before a state's screenshot (TD-49), on a prepared test copy only (TD-96)."""
+
+    do: Literal["click", "type"]
+    target: str  # the control's accessible name: a button or link to click, a field's label to type into
+    text: str = ""  # what to type
+
+
 class JudgeFinding(_Strict):
     """One finding of a judge, with the rule it cites, so the owner can tick it and a fix task can carry it."""
 

@@ -1,7 +1,7 @@
 """The Changes page on a question the Spotter stopped a step to ask (#717), driven in a real browser.
 
-Allowing what the Spotter stopped is held: the answer is kept and the same question is asked again. The page says so
-on the question asked again, and shows an answer the host refused beside the question.
+Allowing what the Spotter stopped starts a brief amendment (TD-185): the Brief panel lists it as from his Allow it and
+the question is not asked again. The page shows an answer the host refused beside the question.
 """
 
 from __future__ import annotations
@@ -45,7 +45,9 @@ class Host:
 
 def stopped() -> m.Change:
     """A Change whose plan the Spotter stopped to ask the owner."""
-    c = m.Change(slug=SLUG, step=m.Step(kind=m.StepKind.PLAN))
+    brief = m.Brief(version=1, approved_version=1, challenged=1, outcome="The shop lists its products")
+    brief.approved = [brief.model_copy(deep=True)]
+    c = m.Change(slug=SLUG, brief=brief, step=m.Step(kind=m.StepKind.PLAN))
     ask(c, answer_kinds.spotter(m.StepKind.PLAN, STOPPED), NOW)
     return c
 
@@ -93,21 +95,22 @@ def answer(page: Any, form: Any) -> Any:
 
 
 @pytest.mark.browser
-def test_allowing_what_the_spotter_stopped_shows_on_the_question_asked_again(page_url, pds) -> None:
-    """The answer is held, so the question comes back; it says when he allowed it and why it is asked again."""
+def test_allowing_what_the_spotter_stopped_starts_an_amendment_instead_of_asking_again(page_url, pds) -> None:
+    """The answer reaches the amendment path (design §8 item 7): listed from his Allow it, no question comes back."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
     with opened(base, pds) as page:
         first = page.locator("section.act", has_text="Question q1")
-        expect(first).not_to_contain_text("You chose Allow it")
         first.get_by_label("Allow it", exact=False).check()
         assert answer(page, first).status == 200
         store.fold(Lock(SLUG), SLUG, NOW)
-        again = page.locator("section.act", has_text="Question q2")
-        expect(again).to_contain_text("You chose Allow it at ", timeout=10_000)
-        expect(again).to_contain_text("it needs a brief amendment, which isn't built yet (item 16), so the step "
-                                      "stays stopped and the question is asked again")  # fmt: skip
+        listed = page.locator(".brief .amendment", has_text="A1, proposed at the plan step")
+        expect(listed).to_contain_text("the owner allowed it. (from your Allow it)", timeout=10_000)
+        expect(listed).to_contain_text("in progress")
+        expect(page.locator("section.act", has_text="Question")).to_have_count(0)
+    c = store.read(SLUG)
+    assert (c.amending.id, c.amendments[0].source, c.questions[0].answer.option) == ("A1", "allow", "allow")
 
 
 @pytest.mark.browser

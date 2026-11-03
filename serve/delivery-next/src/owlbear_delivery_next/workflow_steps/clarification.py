@@ -3,8 +3,8 @@
 A worker's question answered as a clarification carries the owner's intent as he confirmed it when it was read back.
 Before the answer reaches the worker, one session on the picker's role reads the approved brief, the question and
 that statement, and says whether following it changes the brief. Within the brief, the statement becomes a decision
-of this Change, in force from the step it reaches; a change to the brief stops the work with the owner's question
-(`answer_kinds`), the answer undelivered and no decision added. A check without a trusted verdict waits and runs
+of this Change, in force from the step it reaches; a change to the brief starts the brief's amendment (TD-185), the
+answer undelivered and no decision added. A check without a trusted verdict waits and runs
 again; it is never taken for a pass. Its spend counts like any session's.
 """
 
@@ -20,7 +20,7 @@ from owlbear_delivery_next.change_contracts import pick_tools
 from owlbear_delivery_next.change_contracts.decision_records import Decision
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit
-from owlbear_delivery_next.change_flow import answer_kinds, loop
+from owlbear_delivery_next.change_flow import amending, answer_kinds, loop
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, session_result, step_decisions
 from owlbear_delivery_next.workflow_steps import pick, sessions
@@ -94,9 +94,8 @@ def checked(store: Store, lock: Lock, c: Change) -> Change | None:
         return None
     if verdict.changes_brief:  # treated as a brief change from here on: never delivered, never a decision
         q.answer.kind = "brief_change"
-        asked = answer_kinds.question(c, q, verdict.why)
-        stop = StepResult(exit=Exit.ASK, cause=asked.cause, reason=asked.text, question=asked, who="you")
-        store.write(lock, loop.apply(c, stop, now))
+        amending.start(c, "answer", reason=f"{_statement(q)} ({verdict.why})", now=now, question=q.id)
+        store.write(lock, c)
         return None
     at = q.answer.at if q.answer else now  # confirmed when the owner answered: its read-back date
     said = Decision(

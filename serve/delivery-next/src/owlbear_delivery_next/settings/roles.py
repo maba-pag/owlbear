@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from owlbear_delivery_next.change_contracts.models import Effort, Role, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import RoleModel
 from owlbear_delivery_next.change_contracts.user_config import UserConfig
+from owlbear_delivery_next.settings.config import SettingsUnset
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.permissions import Level
@@ -26,7 +27,10 @@ SESSIONS: dict[str, Role] = {
     "design-review": "design-judge",
     "plan-challenge": "challenger",
     "brief-challenge": "challenger",
-    "amendment-challenge": "challenger",  # a worker's proposed brief wording (TD-179)
+    "amendment-prepare": "shaper",  # a brief amendment's exact candidate (TD-185)
+    "amendment-revise": "shaper",  # that candidate revised for its challenge's findings
+    "amendment-challenge": "challenger",  # its independent verdict (TD-185)
+    "amendment-reconsider": "challenger",  # an amendment finding the owner sent back with a note (TD-193)
     "dispute-reconsider": "reviewer",  # a finding the owner sent back with a note (TD-193)
     "plan-reconsider": "challenger",  # a plan finding the owner sent back with a note (TD-190)
     "brief-reconsider": "challenger",  # a brief finding the owner sent back with a note (TD-221)
@@ -76,12 +80,20 @@ def user_config(settings: Settings) -> UserConfig:
 
 def limit(settings: Settings, session: str) -> float:
     """Seconds one session of this kind or reviewer label may run in total, from the resolved settings (TD-286)."""
-    return settings.agent(SESSIONS[session]).minutes * 60.0
+    role = SESSIONS[session]
+    minutes = settings.agent(role).minutes
+    if minutes is None:  # an untimed chat role's hosted session (the shaper's amendment candidate) needs it set
+        raise SettingsUnset([f"agents.{role}.minutes"])
+    return minutes * 60.0
 
 
 def subagents(settings: Settings, session: str) -> bool:
     """Whether a session of this kind or reviewer label may start built-in subagents (TD-374, TD-376)."""
-    return settings.agent(SESSIONS[session]).subagents
+    role = SESSIONS[session]
+    allowed = settings.agent(role).subagents
+    if allowed is None:  # as for its minutes
+        raise SettingsUnset([f"agents.{role}.subagents"])
+    return allowed
 
 
 def parse(text: str) -> tuple[Role, RoleModel]:

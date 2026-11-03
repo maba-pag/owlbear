@@ -149,7 +149,7 @@ class Gate:
         if args is None:
             return None, errors, None, "invalid"
         errors, tree = tools.check_question(args) if isinstance(args, tools.AskQuestion) else [], None
-        errors += amendments.check(args, self.cfg.amendable)  # a premise's proposed wording (TD-179)
+        errors += amendments.check(args, self.cfg.amendable)  # a premise's brief items (TD-185)
         order: list[str] = []
         if spec is self.cfg.submit or spec is self.cfg.first_look:
             order = self._order(spec)

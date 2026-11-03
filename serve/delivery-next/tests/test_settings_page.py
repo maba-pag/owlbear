@@ -166,11 +166,11 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with settings_page(store, pds) as page:
-        rows = page.locator("#agents-rows")  # TD-286: a worker role's minutes; the shaper's chat and a look have none
+        rows = page.locator("#agents-rows")  # TD-286: a worker role's minutes; a look has none
         expect(rows.locator("#set-agents-builder-minutes")).to_be_visible()
-        for role in ("shaper", "spotter"):
-            expect(rows.locator(f"#set-agents-{role}-minutes")).to_have_count(0)
-            expect(rows.locator(f"#set-agents-{role}")).to_contain_text("n/a")
+        expect(rows.locator("#set-agents-shaper-minutes")).to_be_visible()  # its amendment sessions' (TD-185)
+        expect(rows.locator("#set-agents-spotter-minutes")).to_have_count(0)
+        expect(rows.locator("#set-agents-spotter")).to_contain_text("n/a")
         minutes = rows.get_by_label("Minutes per session, builder")
         expect(minutes).to_have_attribute("placeholder", "inherit (40)")
         pds.pick(page, "Model for builder", "tiny")
