@@ -56,8 +56,8 @@ def _runs(events: Sequence[dict[str, Any]], since: datetime) -> list[_Run]:
         run = found[sid]
         if e.get("event") == "ended":
             run.open = False
-        elif e.get("event") == "tool" and e.get("tool") in RESULT_TOOLS:
-            run.result = e.get("accepted", True) is not False
+        elif e.get("event") == "tool" and e.get("tool") in RESULT_TOOLS and run.result is not True:
+            run.result = e.get("accepted", True) is not False  # an accepted one ends the run: later calls are late
     return [r for r in found.values() if r.at >= since]
 
 

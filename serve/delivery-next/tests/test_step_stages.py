@@ -54,6 +54,9 @@ CHALLENGED = Outcome(exit=Exit.RETRY, reason="plan challenge: …", challenged=T
         (BUILD, [opened(1), result(20, ok=True), ended(25)], "builder", "recording the result"),
         (BUILD, [opened(1), *PICKED], "builder", "checking decisions"),
         (BUILD, [opened(1), *PICKED, ended(10, "p1", "picker")], "builder", None),
+        (BUILD, [opened(1), result(20, ok=True), ev(21, "tool", tool="submit_result", accepted=False,
+                                                    errors=["the step has already ended"])], "builder",
+         "handing in its result"),  # a late call after the accepted one
         (BUILD, [opened(1), ev(2, "tool", tool="ask_question", accepted=True), ended(3)], "builder",
          "recording the result"),
         (step(StepKind.REVIEW), [opened(1, "r1", "reviewer"), result(9, ok=True, sid="r1", role="reviewer")],
