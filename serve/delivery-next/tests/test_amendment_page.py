@@ -140,17 +140,19 @@ def test_the_brief_panel_lists_each_amendment_and_takes_an_objection_to_an_appli
         expect(part).to_contain_text("Current version v3; reference version v3, from which the challenger judges")
         expect(part).to_contain_text("None.")  # none yet: the part says so instead of an empty list
 
-        store.write(Lock(SLUG), applied_and_declined())
+        c = applied_and_declined()
+        c.amendments[1].unreviewed = True  # its final wording was revised after its last round
+        store.write(Lock(SLUG), c)
         page.reload()
         expect(part).to_contain_text("Current version v4; reference version v3")
         expect(part).to_contain_text("Earlier versions, kept unchanged: v3")
         first = part.locator(".amendment", has_text="A1, proposed at the build step")
         for said in ["criterion AC-1", "greet() trims the name → greet() trims spaces",
-                     "AC-1 is over-specific (from a worker)", "equivalent: AC-3 covers it",
+                     "AC-1 is over-specific (from a worker)", "session ch: equivalent: AC-3 covers it",
                      "applied, made v4, applied by Delivery alone"]:  # fmt: skip
             expect(first).to_contain_text(said)
         second = part.locator(".amendment", has_text="A2, proposed at the build step")
-        for said in ["greet() trims spaces → greet() trims spaces and tabs", "weaker: drops the trim of newlines",
+        for said in ["greet() trims spaces → greet() trims spaces and tabs", "weaker (on an earlier wording): drops the trim",
                      "declined", "Your reason", DECLINED]:  # fmt: skip
             expect(second).to_contain_text(said)
         expect(second.get_by_role("button", name="Object")).to_have_count(0)  # only an applied one takes it

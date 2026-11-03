@@ -225,8 +225,9 @@ function itemRow(i) {
 
 function amendment(a, d) {
   const verdict = a.verdict || (a.state === "recorded" ? "not judged" : "unsure");
+  const judged = `${verdict}${a.unreviewed && a.verdict ? " (on an earlier wording)" : ""}`;
   const rows = [...a.items.map(itemRow), ["Reason", `${a.reason || "none given"} (from ${SOURCES[a.source]})`],
-    ["Challenger", `${verdict}${a.judged ? `: ${a.judged}` : ""}`],
+    ["Challenger", `${a.challenger ? `session ${a.challenger}: ` : ""}${judged}${a.judged ? `: ${a.judged}` : ""}`],
     ["State", `${STATES[a.state]}${a.version ? `, made v${a.version}` : ""}${a.level ? `, ${LEVELS[a.level]}` : ""}`]];
   if (a.unreviewed) rows.push(["Note", "its final wording was revised after the last challenge round"]);
   if (a.declined) rows.push(["Your reason", a.declined]);
