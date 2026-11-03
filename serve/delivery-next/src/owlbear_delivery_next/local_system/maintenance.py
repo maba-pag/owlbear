@@ -356,12 +356,12 @@ class Maintenance:
             if not self.retained(str(root)):
                 shutil.rmtree(root)
 
-    def failed(self, ident: str, error: BaseException) -> None:
-        """An exception without a returned Run proves neither absence nor complete process coverage."""
+    def failed(self, ident: str, error: str) -> None:
+        """An exception (*error*, its whole text) without a returned Run proves neither absence nor full coverage."""
         with self.locked() as ledger:
             lease = self._lease(ledger, ident)
             lease.state, lease.complete = "held", False
-            lease.reason = f"session ended without termination proof ({type(error).__name__})"
+            lease.reason = f"session ended without termination proof: {error}"
             self._save(ledger)
 
     def finished(self, ident: str, run: Outcome) -> None:

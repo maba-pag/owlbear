@@ -33,6 +33,7 @@ from owlbear_delivery_next.impeccable_runs import (
 )
 from owlbear_delivery_next.impeccable_runs.pack_gates import GOLDEN
 from owlbear_delivery_next.local_system import preload
+from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.settings import rounds
 
 if TYPE_CHECKING:
@@ -335,6 +336,7 @@ def _verdict(run: Run) -> tuple[list[str], dict[str, tuple[bool, str]], list[pac
     p = run.payload
     if not (run.termination and run.termination.confirmed):
         msg = f"the challenger {run.session_id} may still be running; stop it before updating again"
+        msg += f"; {session_result.unverified(run.termination)}"
         raise pack_files.PackError(msg)
     if run.ending == "result" and isinstance(p, tools.ReviewResult):
         found = [" ".join(f"{f.place}: {f.problem} - fix: {f.fix}".split()) for f in p.findings]
@@ -405,6 +407,7 @@ def _reconsider(job: Job, c: pack_candidate.Candidate, lp: RoundLoop) -> Action:
         p = run.payload
         if not (run.termination and run.termination.confirmed):
             msg = f"the challenger {run.session_id} may still be running; stop it before updating again"
+            msg += f"; {session_result.unverified(run.termination)}"
             raise pack_files.PackError(msg)
         if run.ending == "premise" and isinstance(p, tools.WrongPremise):
             return dict.fromkeys(keys, ("unsure", f"premise: {p.reason}"))

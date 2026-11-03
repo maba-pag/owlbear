@@ -514,7 +514,7 @@ def test_a_hung_runtime_stop_is_bounded_and_falls_back_to_signals(monkeypatch) -
     st = step()
     t = asyncio.run(sdk_teardown.teardown(client, None, st))
     assert (t.confirmed, t.problems, calls) == (False, ("runtime PID unknown",), ["term", "kill"])
-    assert st.events[-1]["reason"] == "runtime stop failed (TimeoutError)"
+    assert st.events[-1]["reason"] == "runtime stop failed: TimeoutError: runtime stop did not answer within 0.05 s"
 
 
 def test_deadline_retries_unless_termination_is_unverified_and_carries_the_last_denial() -> None:
@@ -529,9 +529,9 @@ def test_deadline_retries_unless_termination_is_unverified_and_carries_the_last_
         "send did not answer within 30 s",
         "`git commit --no-verify` uses --no-verify",
     )
-    run.termination = Termination(confirmed=False, unknown=(9,), problems=("disconnect failed (OSError)",))
+    run.termination = Termination(confirmed=False, unknown=(9,), problems=("disconnect failed: OSError: gone",))
     assert to_result(run, StepKind.BUILD, NOW).stop.reason == (
-        "termination unverified: processes 9 still present; disconnect failed (OSError)"
+        "termination unverified: processes 9 still present; disconnect failed: OSError: gone"
     )
 
 

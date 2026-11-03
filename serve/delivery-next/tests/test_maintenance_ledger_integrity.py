@@ -36,7 +36,7 @@ def held_ledger(tmp_path: Path) -> maintenance.Maintenance:
     """A ledger with one uncertain pack session holding its slot, written whole."""
     owner = maintenance.Maintenance(Slots(lambda: 2), boot=lambda: 10.0, observe=lambda *_a: False)
     assert owner.slots.take("p", "pack:one", 1, 1) == 1
-    owner.failed(owner.begin("p", "pack:one", "pack", str(tmp_path), now=AT), RuntimeError("no Run returned"))
+    owner.failed(owner.begin("p", "pack:one", "pack", str(tmp_path), now=AT), "RuntimeError: no Run returned")
     return owner
 
 

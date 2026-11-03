@@ -24,11 +24,12 @@ from owlbear_memory import MemoryEngine, MemoryState
 from owlbear_delivery_next.change_contracts import memory_curation_tools, tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import data_repo, local_home, maintenance
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import curation_block, curation_resume, curation_snapshots, curation_tree
 from owlbear_delivery_next.machine_host.curation_block import LABEL
-from owlbear_delivery_next.runtimes import loop_owner, maintained, sdk_adapter
+from owlbear_delivery_next.runtimes import loop_owner, maintained, sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.state_store import machine_settings, registry, spend_ledger, work_block
 from owlbear_delivery_next.state_store.curation_runs import STATE, FolderRun, Runs
@@ -329,7 +330,7 @@ class Curation:
                 refused = self._one(folder, started, key)
             except Exception as exc:  # noqa: BLE001 - one folder's failure never strands the others
                 _log.exception("memory curation of %s failed (%s)", folder, key)
-                why = f"{type(exc).__name__}: {exc}"
+                why = failure(exc)
                 failed = FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why, key=key)
                 self._save(folder, failed)  # its session, if one began, is the ledger's lease under this key
             with self.lock:  # a follow-up joins before the run leaves, so the queue never looks empty between
@@ -456,7 +457,7 @@ class Curation:
             why = " ".join((done.detail or "no report was submitted").split())
             if done.usage_unread and done.ending == "result" and report is not None:  # TD-94: its model is unproven
                 why = " ".join(f"the model is unknown: {done.usage_unread}".split())
-            why = f"{UNKNOWN}; {why}" if unknown else why
+            why = f"{UNKNOWN}; {session_result.unverified(t)}; {why}" if unknown else why
             ran = f"ended {done.ending}: {why}"
             reason = f"{ran}; {curation_tree.held(tree, folder, key, ran)}"
             _log.error("memory curation of %s failed (%s): %s", folder, key, reason)
