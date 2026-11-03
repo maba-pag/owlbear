@@ -19,7 +19,8 @@ function source(key, inUse, needed = true, format = (v) => v) {
 // D-01M61SEXPFT9MXZGQHYVYFQ77C: what an unset Global value leaves to the layers below, while Global's own is unset.
 function unsetWarning(key) {
   if (state.layer !== "global" || layerValue("global", key) !== null || !required(key)) return nothing;
-  const text = key === "curator_threshold" ? "Unset: no machine or project can set it, so it stays unset"
+  const text = key === "curator_threshold" || key.startsWith("memory.")
+    ? "Unset: no machine or project can set it, so it stays unset"
     : key.startsWith("final_review.") ? "Unset: it then takes the builder's value"
       : "Unset: every machine or project must then set its own";
   return html`<p-text size="sm" color="warning">${text}</p-text>`;
@@ -191,19 +192,27 @@ export function sessionsAtOnce() {
   source(key, state.loaded.settings[key]));
 }
 
-// TD-400: the curator decides alone at or above this confidence; one value for every machine and project, so
-// another layer shows it read-only with where it is set (#809).
-export function curatorThreshold() {
-  const key = "curator_threshold", label = "Curator's confidence threshold in percent (50 to 100)";
+// A setting only Global holds, for every project and machine: another layer shows it read-only with where it is set
+// (#809). *key* is the draft's and the resolved settings' path alike.
+function globalOnly(key, label, inUse, inputmode) {
   if (state.layer !== "global") {
-    const inUse = state.loaded.settings[key];
-    return cell(typed(label, String(inUse ?? ""), () => undefined,
-      { placeholder: "unset", inputmode: "numeric", disabled: true }), source(key, inUse),
-    html`<p-text size="sm" color="contrast-medium">set on Global</p-text>`);
+    return cell(typed(label, String(inUse ?? ""), () => undefined, { placeholder: "unset", inputmode, disabled: true }),
+      source(key, inUse), html`<p-text size="sm" color="contrast-medium">set on Global</p-text>`);
   }
   return cell(typed(label, own(key), (v) => edit(key, v),
-    { key, placeholder: clear(inherited()[key]), inputmode: "numeric", disabled: state.saving }),
-  source(key, state.loaded.settings[key]));
+    { key, placeholder: clear(at(inherited(), key)), inputmode, disabled: state.saving }), source(key, inUse));
+}
+
+// TD-400: the curator decides alone at or above this confidence; one value for every machine and project.
+export function curatorThreshold() {
+  const key = "curator_threshold", label = "Curator's confidence threshold in percent (50 to 100)";
+  return globalOnly(key, label, state.loaded.settings[key], "numeric");
+}
+
+// The memory values: what a rating is worth, when an entry goes stale, how much recall returns, when deleted files go.
+// Each is Global's alone, with no code default: unset, it holds the projects' work and the memory tools refuse.
+export function memoryValue(field, label, inputmode = "numeric") {
+  return globalOnly(`memory.${field}`, label, state.loaded.settings.memory?.[field], inputmode);
 }
 
 // Improvement's Spotter (design §4): each setting layered field by field; a project may set its own (2026-10-25).

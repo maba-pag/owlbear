@@ -332,6 +332,7 @@ class TestResolve:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("todays_memory_values")
 class TestRecallFiltering:
     """AC3: recall_memory includes contested; excludes disputed and stale.
 

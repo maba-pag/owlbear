@@ -3,7 +3,14 @@
 from __future__ import annotations
 
 from owlbear_memory import selection
-from owlbear_memory.engine import MemoryEngine, check_slot_efficiency, compute_score, repair_duplicate_ids
+from owlbear_memory.engine import (
+    MemoryEngine,
+    Points,
+    check_slot_efficiency,
+    compute_score,
+    entry_score,
+    repair_duplicate_ids,
+)
 from owlbear_memory.errors import (
     ConcurrencyError,
     DuplicateEntryError,
@@ -36,11 +43,13 @@ __all__ = [
     "MemoryHealth",
     "MemoryState",
     "NotFoundError",
+    "Points",
     "TransitionError",
     "ValidationError",
     "Where",
     "check_slot_efficiency",
     "compute_score",
+    "entry_score",
     "repair_duplicate_ids",
     "selection",
     "validate_scope_agents",

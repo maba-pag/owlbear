@@ -135,6 +135,7 @@ def test_a_carried_global_resolves_every_setting(shared_repo):
     later |= {f"agents.{r}.{f}" for r in ("retro", "retro-review", "auditor")
               for f in ("model", "effort", "context", "minutes", "subagents")}  # fmt: skip
     later |= set(roles.USER_CONFIG)  # the owner sets them; never carried (2026-10-27)
+    later |= {f"memory.{name}" for name in config.MemoryValues.model_fields}  # the owner's numbers: saved once by him
     later.add("github_account")  # TD-402: set through "Use recommended" or by hand, never carried
     assert set(resolve(read_layer(shared.global_path, GlobalLayer), Layer()).missing) == prefs | later
 

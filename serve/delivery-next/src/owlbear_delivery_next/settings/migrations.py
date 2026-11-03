@@ -290,10 +290,18 @@ def guard_level_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-def github_account_added(data: dict[str, Any]) -> dict[str, Any]:
-    """Settings format 20 to 21: the account a project's GitHub writes are made by (TD-402).
+def memory_values_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 20 to 21: the memory values Global holds.
 
-    It starts unset in every layer; older runtimes refuse format 21.
+    They start unset in every layer, so nothing in a stored file changes; older runtimes refuse format 21.
+    """
+    return data
+
+
+def github_account_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 21 to 22: the account a project's GitHub writes are made by (TD-402).
+
+    It starts unset in every layer; older runtimes refuse format 22.
     """
     return data
 
@@ -370,6 +378,7 @@ CONFIG: Migrations = {
     17: update_checks_added,
     18: user_memory_added,
     19: guard_level_added,
-    20: github_account_added,
+    20: memory_values_added,
+    21: github_account_added,
 }
 GLOBAL: Migrations = CONFIG | {15: credit_limits_written}  # the Global layer's: only it is written the limits

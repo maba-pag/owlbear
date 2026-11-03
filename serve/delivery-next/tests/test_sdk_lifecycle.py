@@ -302,12 +302,12 @@ def test_cleanup_cancellation_inside_a_callers_except_handler_still_propagates(w
     assert world.steps[0].run.termination.confirmed
 
 
-def test_tasks_journal_failure_still_disconnects_and_stops_without_confirming(world):
-    world.fail_event = "tasks"
+def test_tasks_journal_failure_still_disconnects_and_stops_without_confirming(world, whole_error):
+    world.fail_event, world.journal_error = "tasks", OSError(whole_error)
     run = asyncio.run(sdk_adapter.run(world.cfg))
     assert (world.disconnects, world.stop_calls) == (1, 1)
     assert not run.termination.confirmed
-    assert "tasks log failed (OSError)" in run.termination.problems
+    assert f"tasks log failed: OSError: {whole_error}" in run.termination.problems
 
 
 @pytest.mark.parametrize("phase", ["usage", "proof"])
@@ -349,12 +349,61 @@ def test_a_known_orphan_remains_a_stop_and_cannot_start_the_successor(world):
     assert loop.next_step(stopped, NOW) is None
 
 
-def test_forced_cleanup_never_signals_a_reused_pid(world):
-    world.reuse, world.stop_error = True, RuntimeError("synthetic stop failure")
-    run = asyncio.run(sdk_adapter.run(world.cfg))
+def test_forced_cleanup_never_signals_a_reused_pid(world, caplog, whole_error):
+    """A failed runtime stop is forced, its whole error in the journal and the host's log (#951)."""
+    world.reuse, world.stop_error = True, RuntimeError(whole_error)
+    with caplog.at_level("WARNING", logger=sdk_teardown.__name__):
+        run = asyncio.run(sdk_adapter.run(world.cfg))
     assert world.live[ROOT] == 222.0
     assert all(not targets for _, targets in world.signals)
     assert run.termination.confirmed
+    why = f"runtime stop failed: RuntimeError: {whole_error}"
+    assert [e["reason"] for e in world.events if e["event"] == "force-stop"] == [why]
+    assert [r.getMessage() for r in caplog.records if r.name == sdk_teardown.__name__] == [
+        f"SDK runtime force-stopped: {why}"
+    ]
+
+
+@pytest.mark.parametrize("stage", ["tasks list", "tasks cancel", "disconnect", "force fallback", "observation"])
+def test_each_teardown_failure_keeps_its_whole_error(world, monkeypatch, whole_error, stage):
+    """Each teardown stage that fails says so with its whole error, type included, in the termination (#951)."""
+
+    async def failing(*_args, **_kwargs):
+        raise RuntimeError(whole_error)
+
+    said = f"RuntimeError: {whole_error}"
+    if stage == "tasks list":
+        world.session.rpc.tasks.list = failing
+        problem = f"tasks.list failed: {said}"
+    elif stage == "tasks cancel":
+        world.child, world.session.rpc.tasks.cancel = True, failing
+        problem = f"tasks.cancel child failed: {said}"
+    elif stage == "disconnect":
+        world.session.disconnect = failing
+        problem = f"disconnect failed: {said}"
+    else:
+
+        async def escaped(*_args):
+            msg = "synthetic teardown failure"
+            raise RuntimeError(msg)
+
+        monkeypatch.setattr(sdk_teardown, "teardown", escaped)
+        if stage == "force fallback":
+            monkeypatch.setattr(sdk_teardown, "force", failing)
+            problem = f"force fallback failed: {said}"
+        else:
+            settle = sdk_teardown.settle
+
+            async def observing(recorded, problems, limit=None):
+                if problems:  # the observation after the fallback, not the fallback's own grace wait
+                    raise RuntimeError(whole_error)
+                return await settle(recorded, problems, limit)
+
+            monkeypatch.setattr(sdk_teardown, "settle", observing)
+            problem = f"termination observation failed: {said}"
+    run = asyncio.run(sdk_adapter.run(world.cfg))
+    assert not run.termination.confirmed
+    assert problem in run.termination.problems
 
 
 def test_a_clean_lifecycle_confirms_without_signals(world):
@@ -460,16 +509,19 @@ def test_unknown_runtime_identity_cannot_be_reported_confirmed(world):
     assert "runtime PID unknown" in run.termination.problems
 
 
-@pytest.mark.parametrize("error", [RuntimeError("synthetic teardown failure"), asyncio.CancelledError()])
-def test_escaped_teardown_failure_still_forces_and_observes_unconfirmed(world, monkeypatch, error):
+@pytest.mark.parametrize("error", ["error", "cancelled"])
+def test_escaped_teardown_failure_still_forces_and_observes_unconfirmed(world, monkeypatch, whole_error, error):
     async def failed(*_args):
-        raise error
+        raise RuntimeError(whole_error) if error == "error" else asyncio.CancelledError
 
     monkeypatch.setattr(sdk_teardown, "teardown", failed)
     run = asyncio.run(sdk_adapter.run(world.cfg))
     assert not run.termination.confirmed
     assert world.proc_effects == ["terminate", "kill"]
     assert ROOT not in world.live
+    why = f"teardown failed: {f'RuntimeError: {whole_error}' if error == 'error' else 'cancelled'}"
+    assert run.termination.problems == (why,)
+    assert [e["reason"] for e in world.events if e["event"] == "force-stop"] == [why]
 
 
 def _metered(world, monkeypatch, *, hold=False):

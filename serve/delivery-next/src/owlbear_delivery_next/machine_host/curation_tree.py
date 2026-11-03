@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_memory import MemoryBusyError, MemoryState, storage, writer_lock
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import curation_apply
 from owlbear_delivery_next.local_system.data_place import HELD
 from owlbear_delivery_next.local_system.data_repo import CONFIG, MEMORY, DataRepoError
@@ -301,7 +302,7 @@ def forgetting(shared: DataRepo) -> Iterator[None]:
         yield
     except Exception as exc:
         if pruned := prune(shared):
-            msg = f"{pruned}; {type(exc).__name__}: {exc}"
+            msg = f"{pruned}; {failure(exc)}"
             raise RuntimeError(msg) from exc
         raise
 
@@ -311,7 +312,7 @@ def held(tree: Tree, folder: str, key: str, ran: str) -> str:
     try:
         return tree.hold(folder, key)
     except (OSError, DataRepoError) as failed:
-        msg = f"{ran}; its edits are not held in a curation ref: {type(failed).__name__}: {failed}"
+        msg = f"{ran}; its edits are not held in a curation ref: {failure(failed)}"
         raise RuntimeError(msg) from failed
 
 
@@ -321,8 +322,8 @@ def holding(tree: Tree, folder: str, key: str) -> Iterator[None]:
     try:
         yield
     except Exception as exc:
-        where = held(tree, folder, key, f"{type(exc).__name__}: {exc}")
+        where = held(tree, folder, key, failure(exc))
         if where == NO_EDITS:
             raise
-        msg = f"{where}; {type(exc).__name__}: {exc}"
+        msg = f"{where}; {failure(exc)}"
         raise RuntimeError(msg) from exc

@@ -69,6 +69,7 @@ _SAID: dict[str, Callable[[dict[str, Any]], str]] = {
     "wave": lambda _e: "started judges",
     "answer": lambda e: f"answered {e.get('question')}: {str(e.get('class')).replace('_', ' ')}",  # TD-461
     "ended": lambda _e: "session ended",
+    "runner-failed": lambda _e: "the runner failed",
 }
 _WHO = {
     Waiting.CI: "CI",
@@ -76,7 +77,8 @@ _WHO = {
     Waiting.OWNER_ACTION: "your action in GitHub",
     Waiting.GITHUB: "GitHub",
 }
-_ACTION = {Waiting.PERSON_CHECK: "Report result", Waiting.OWNER_ACTION: "Act in GitHub", Waiting.CHAT: "Approve brief"}
+APPROVE = "Approve brief"  # the action of a Change that waits for its shaping chat, which the chat tools read
+_ACTION = {Waiting.PERSON_CHECK: "Report result", Waiting.OWNER_ACTION: "Act in GitHub", Waiting.CHAT: APPROVE}
 RESUME = "Resume Delivery"
 _WORK = {
     StepKind.SHAPE: ("Shape", "shaping", "reviewer"),

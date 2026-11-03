@@ -47,8 +47,9 @@ export function settingsLink(label = "Settings → This machine") {
 function often(u) {
   const by = u.hours ? `every ${u.hours} hour${u.hours === 1 ? "" : "s"}` : "only when OwlBear starts and when you "
     + "search";
+  const lost = checks.all?.unrestored ? ` Earlier check results were lost: ${checks.all.unrestored}.` : "";
   return html`<p-text id="check-settings" size="sm">It looks ${by}${u.next_at ? `; next ${when(u.next_at)}` : ""}.
-    How often is set in ${settingsLink()}.</p-text>`;
+    How often is set in ${settingsLink()}.${lost}</p-text>`;
 }
 
 // The state the page shows: once two failed checks are shown, the check could not answer, so it is never current

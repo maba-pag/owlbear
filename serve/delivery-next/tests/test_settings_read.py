@@ -228,6 +228,17 @@ def test_each_change_of_one_key_keeps_its_own_entry(world):
     assert [n.id for n in again.notices] == [got.notices[i].id for i in (0, 2, 3)]
 
 
+def test_a_memory_value_changed_elsewhere_is_noticed_under_its_own_key(world):
+    world.push(**builder("A"))
+    reader = world.reader()
+    assert reader.read().notices == []
+    world.push(**builder("A"), memory={"purge_days": 14, "stale_factor": 50})
+    assert [(n.key, n.old, n.new) for n in reader.read().notices] == [
+        ("memory.purge_days", None, "14"),
+        ("memory.stale_factor", None, "50"),
+    ]
+
+
 def test_a_pass_cut_short_by_a_stop_records_nothing(world, monkeypatch):
     reader = world.reader()
     reader.read()

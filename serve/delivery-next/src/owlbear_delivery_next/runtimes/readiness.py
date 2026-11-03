@@ -104,7 +104,15 @@ def _ssh(key: str, probe: Probe) -> Check:
         return Check(
             "commit signing", ok=False, detail=f"ssh key {pub_path or key[:40]}: not a public key", fix=setting
         )
-    ok = words[1] in probe(["ssh-add", "-L"])[1]
+    code, said = probe(["ssh-add", "-L"])
+    if code not in {0, 1}:  # 1: the agent holds no identities
+        return Check(
+            "commit signing",
+            ok=False,
+            detail=f"ssh-agent not reachable: {said}",
+            fix="Start ssh-agent and point SSH_AUTH_SOCK at it, then run `ssh-add <key>`",
+        )
+    ok = words[1] in said
     private = pub_path.with_suffix("") if pub_path else "<your private key>"
     return Check(
         "commit signing", ok=ok, detail=f"ssh key {'in' if ok else 'not in'} the agent", fix=f"Run `ssh-add {private}`"
@@ -156,9 +164,10 @@ def _signed(probe: Probe) -> Check:
         "/dev/null",
         "/dev/null",
     ]
-    ok = probe(sign)[0] == 0
+    code, said = probe(sign)
     fix = "Unlock your GPG key (`echo test | gpg --clearsign`), then run setup again"
-    return Check("commit signing", ok=ok, detail=f"gpg key {key} {'unlocked' if ok else 'locked or missing'}", fix=fix)
+    detail = f"gpg key {key} unlocked" if code == 0 else f"gpg key {key} locked or missing: {said}"
+    return Check("commit signing", ok=code == 0, detail=detail, fix=fix)
 
 
 def publishing(host: str, probe: Probe, network: str | None, writer: Writer) -> list[Check]:

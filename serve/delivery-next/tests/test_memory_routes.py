@@ -139,6 +139,70 @@ def test_purge_removes_only_old_deleted_entries_and_publishes_their_removal(shar
     assert c.post("/api/next/memory/purge", json={"min_age_days": -1}).status_code == 422
 
 
+def deleted_days_ago(folder: Path, title: str, days: int, *, category: MemoryCategory | None = None) -> str:
+    """An entry the owner deleted *days* ago: its file's updated_at is when it was deleted."""
+    engine = MemoryEngine(folder)
+    entry = seed(folder, title, curated=True)
+    if category is not None:
+        entry = engine.edit(entry.id, {"categories": [category]}, expected_revision=entry.revision)
+    gone = engine.delete(entry.id, engine.approve(entry.id, entry.updated_at).updated_at)
+    stamp = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+    storage.write_entry(folder / f"{gone.id}.md", gone.model_copy(update={"updated_at": stamp}), memory_dir=folder)
+    return gone.id
+
+
+def owner_holds(root: Path, **values: object) -> None:
+    """The owner's memory values in the shared repository's global settings."""
+    (root / "config.json").write_text(json.dumps({"format": 21, "memory": values}))
+
+
+def test_purge_applies_the_owners_age_unless_one_is_sent_and_the_page_is_told_it(shared):
+    root, _, repo = shared
+    store = Store.open(repo)
+    folder = root / store.name / "memory"
+    old, recent = deleted_days_ago(folder, "Old lesson", 21), deleted_days_ago(folder, "Recent lesson", 7)
+    owner_holds(root, purge_days=14)
+    c = client(store)
+
+    assert c.get("/api/next/memory").json()["purge_days"] == 14
+    first = c.post("/api/next/memory/purge", json={}).json()  # the server applies the setting: no age is sent
+    assert (first["purged"], first["skipped"]) == (1, 1)
+    assert [p.stem for p in folder.glob("*.md")] == [recent]
+    assert old not in {p.stem for p in folder.glob("*.md")}
+
+    second = c.post("/api/next/memory/purge", json={"min_age_days": 0}).json()  # an age sent overrides it
+    assert (second["purged"], second["skipped"]) == (1, 0)
+
+
+def test_purge_without_an_age_and_without_the_setting_is_refused_and_the_page_is_told_why(shared, monkeypatch):
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+
+    monkeypatch.setattr(config, "BASE", None)  # production: no layer under the owner's own
+    root, _, repo = shared
+    store = Store.open(repo)
+    folder = root / store.name / "memory"
+    deleted_days_ago(folder, "Old lesson", 400)
+    c = client(store)
+
+    listed = c.get("/api/next/memory").json()
+    assert (listed["purge_days"], "purge age is unset" in listed["purge_why"]) == (None, True)
+    refused = c.post("/api/next/memory/purge", json={})
+    assert (refused.status_code, "purge age is unset" in refused.json()["detail"]) == (409, True)
+    assert len(list(folder.glob("*.md"))) == 1  # nothing was removed
+    assert c.post("/api/next/memory/purge", json={"min_age_days": 0}).json()["purged"] == 1  # an age sent still works
+
+
+def test_an_entry_shown_to_the_page_carries_no_stored_score(shared):
+    root, _, repo = shared
+    store = Store.open(repo)
+    seed(root / store.name / "memory", "A lesson", curated=True)
+
+    entries = client(store).get("/api/next/memory").json()["entries"]
+    assert len(entries) == 1
+    assert "score" not in entries[0]
+    assert "assessment_receipts" not in entries[0]
+
+
 def curated(name: str, state: str, at: datetime) -> None:
     run = curation.FolderRun(
         state=state, started_at=at - timedelta(minutes=1), ended_at=at if state == "done" else None
@@ -409,7 +473,7 @@ def attempt(engine: MemoryEngine, entry) -> type[Exception] | None:
 
 
 @contextlib.contextmanager
-def memory_page(store: Store, pds: Any) -> Iterator[Any]:
+def memory_page(store: Store, pds: Any, query: str = "") -> Iterator[Any]:
     """The Memory page in a real browser: only the test host and the PDS CDN answer."""
     import socket  # noqa: PLC0415
     import time  # noqa: PLC0415
@@ -432,7 +496,7 @@ def memory_page(store: Store, pds: Any) -> Iterator[Any]:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
             pds.only(page, base)
-            page.goto(f"{base}/memory#token=tok")
+            page.goto(f"{base}/memory{query}#token=tok")
             yield page
             browser.close()
     finally:
@@ -471,35 +535,64 @@ def test_a_memory_edit_survives_the_entries_before_it_disappearing_and_is_saved(
 
 
 @pytest.mark.browser
-def test_the_deleted_section_removes_entries_deleted_long_ago(shared, pds):
-    """TD-416: the Memory page's purge; only entries deleted 30 days ago or earlier go."""
+def test_the_deleted_section_removes_entries_deleted_before_the_owners_purge_age(shared, pds):
+    """TD-416: the Memory page's purge; only entries deleted as long ago as the owner's age, here 14 days, go."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     root, _, repo = shared
     store = Store.open(repo)
     folder = root / store.name / "memory"
-    engine = MemoryEngine(folder)
-    for title in ("Old lesson", "Old process", "Recent lesson"):
-        entry = seed(folder, title, curated=True)
-        if title == "Old process":  # hidden by the category filter below, but removed all the same
-            entry = engine.edit(entry.id, {"categories": [MemoryCategory.PROCESS]}, expected_revision=entry.revision)
-        approved = engine.approve(entry.id, entry.updated_at)
-        engine.delete(entry.id, approved.updated_at)
-    for title in ("Old lesson", "Old process"):
-        old = next(p for p in folder.glob("*.md") if f"title: {title}" in p.read_text())
-        stamp = next(e.updated_at for e in MemoryEngine(folder).get_entries() if e.title == title)
-        old.write_text(old.read_text().replace(stamp, "2020-01-01T00:00:00+00:00"))
+    owner_holds(root, purge_days=14)
+    deleted_days_ago(folder, "Old lesson", 21)
+    deleted_days_ago(folder, "Old process", 21, category=MemoryCategory.PROCESS)  # hidden by the filter below
+    deleted_days_ago(folder, "Recent lesson", 7)  # 7 days: kept under 14, though under today's 30 as well
     with memory_page(store, pds) as page:
         pds.pick(page, "State", "any")
         pds.pick(page, "Category", "pitfall")
         deleted = page.locator("section", has_text="Deleted (history kept)")
         expect(deleted.locator(".entry")).to_have_count(2)
-        deleted.get_by_role("button", name=f"Remove 2 deleted entries older than 30 days from {store.name}").click()
+        deleted.get_by_role("button", name=f"Remove 2 deleted entries older than 14 days from {store.name}").click()
         expect(pds.modal(page).locator('p-button[variant="primary"]')).to_have_text(["Keep them"])  # never removing
+        expect(pds.modal(page)).to_contain_text("deleted 14 days ago or earlier")
+        owner_holds(root, purge_days=0)  # the owner changes the age while the dialog is open: it removes what it said
         pds.answer(page, "Remove them")
         expect(page.locator("#status")).to_contain_text(f"Removed 2 deleted entries from {store.name}.")
         expect(deleted.locator(".entry")).to_have_count(1)
     assert [e.title for e in MemoryEngine(folder).get_entries()] == ["Recent lesson"]
+
+
+@pytest.mark.browser
+def test_an_unset_purge_age_disables_the_removal_and_says_why_with_a_link_to_the_setting(shared, pds, monkeypatch):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+
+    monkeypatch.setattr(config, "BASE", None)  # production: no layer under the owner's own
+    root, _, repo = shared
+    store = Store.open(repo)
+    deleted_days_ago(root / store.name / "memory", "Old lesson", 400)
+    with memory_page(store, pds) as page:
+        pds.pick(page, "State", "any")
+        deleted = page.locator("section", has_text="Deleted (history kept)")
+        expect(deleted.locator(".entry")).to_have_count(1)
+        button = deleted.get_by_role("button", name=f"Remove old deleted entries from {store.name}")
+        expect(button).to_be_disabled()
+        expect(deleted).to_contain_text("purge age is unset")
+        expect(deleted.get_by_role("link", name="Set the purge age")).to_have_attribute(
+            "href", "/config?layer=global#memory"
+        )
+
+
+@pytest.mark.browser
+def test_the_page_links_to_the_memory_settings_keeping_the_selected_project(shared, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    root, _, repo = shared
+    store = Store.open(repo)
+    seed(root / store.name / "memory", "A lesson", curated=True)
+    with memory_page(store, pds, query="?project=shop") as page:
+        link = page.get_by_role("link", name="Memory settings")
+        expect(link).to_have_attribute("href", "/config?project=shop&layer=global#memory")
 
 
 @pytest.mark.browser

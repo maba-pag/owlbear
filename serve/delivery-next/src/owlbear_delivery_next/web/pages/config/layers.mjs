@@ -1,6 +1,6 @@
 import { call } from "/assets/ui.mjs";
-import { CREDITS, INHERIT, LAYERS, NUMBERS, WRITE, state, drafts, page, show, showIdle, notify, typedNumber, turns }
-  from "./state.mjs";
+import { CREDITS, INHERIT, LAYERS, NUMBERS, POINTS, WRITE, state, drafts, page, show, showIdle, notify, typedNumber,
+  turns } from "./state.mjs";
 import { USER_KEYS, mismatch, tierMismatch } from "./cells.mjs";
 import { draftGroup } from "./groups.mjs";
 import { readAcross } from "./machine.mjs";
@@ -20,6 +20,9 @@ function saved(layer, key) {
   if (key.startsWith("spot.")) {  // the Spotter's settings (design §4)
     const v = loaded[layer]?.spotter?.[key.slice(5)];
     return v === null || v === undefined ? "" : Array.isArray(v) ? v.join(", ") : String(v);
+  }
+  if (key.startsWith("memory.")) {  // the memory values, Global's only
+    return String(loaded[layer]?.memory?.[key.slice(7)] ?? "");
   }
   if (key === "pr_labels" || key === "pr_marker" || USER_KEYS.includes(key)) {
     const v = loaded[layer]?.[key];
@@ -63,7 +66,8 @@ function keepEdit(key, raw, literal = false) {
   const field = key.split(".")[1] ?? key;
   // even a no-op clear is a review
 if (state.layer === "project" && key.startsWith("prefs.")) state.prefsReview = true;
-  const value = !literal && !NUMBERS.includes(field) && !CREDITS.includes(field) && raw === INHERIT ? "" : raw;
+  const value = !literal && !NUMBERS.includes(field) && !CREDITS.includes(field) && !POINTS.includes(field)
+    && raw === INHERIT ? "" : raw;
   if (LISTS.includes(key)) typing[state.layer][key] = value;  // shown as typed: a comma, a space
   if (canonical(key, value) === saved(state.layer, key)) delete drafts[state.layer][key];
   else drafts[state.layer][key] = value;
@@ -190,6 +194,12 @@ function edited(layer) {
     }
     if (key === "pr_labels") {
       next[key] = !value ? null : value === "none" ? [] : value.split(",").map((l) => l.trim()).filter(Boolean);
+      continue;
+    }
+    if (key.startsWith("memory.")) {  // the memory values: whole numbers, and decimals for what a rating is worth
+      const field = key.slice(7), mine = { ...(next.memory ?? {}) };
+      mine[field] = value === "" ? null : typedNumber(field, value);
+      next.memory = Object.values(mine).some((v) => v !== null) ? mine : null;
       continue;
     }
     if (key.startsWith("spot.")) {

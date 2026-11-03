@@ -81,7 +81,7 @@ def test_an_unknown_pack_workspace_outlives_its_job_until_its_processes_are_prov
     job.workspace.mkdir(parents=True)
 
     ident = host.maintenance.begin(session_slots.project(host), "pack:one", "pack", str(job.workspace))
-    host.maintenance.failed(ident, RuntimeError("the session ended without a result"))
+    host.maintenance.failed(ident, "RuntimeError: the session ended without a result")
     job._finish("failed", "the update ended")  # noqa: SLF001 - the update's own end, as the run calls it
     assert job.workspace.is_dir()
 
@@ -133,7 +133,7 @@ def test_the_machine_pack_lock_stays_blocked_while_a_pack_lease_is_unproven(tmp_
     job = pack_job.Job(store, pack_job.Live())
     session_slots.packed(host, job)
     ident = host.maintenance.begin(session_slots.project(host), "pack:three", "pack", str(tmp_path / "w"))
-    host.maintenance.failed(ident, RuntimeError("the session ended without a result"))
+    host.maintenance.failed(ident, "RuntimeError: the session ended without a result")
 
     with pytest.raises(pack_job.Busy):
         job._claim(job._alone)  # noqa: SLF001 - the claim a starting run takes

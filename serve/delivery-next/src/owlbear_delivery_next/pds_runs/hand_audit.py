@@ -16,6 +16,7 @@ import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable_runs import machine_lock
 from owlbear_delivery_next.impeccable_runs.pack_state import MACHINE_LOCK
 from owlbear_delivery_next.local_system import local_home
@@ -129,7 +130,7 @@ class Hand:
             with spend_ledger.at(spend_ledger.Where.of(self.store, job="PDS audit")):
                 saved = {**state, **self._audit()}
         except Exception as exc:  # noqa: BLE001 - the page must learn how the audit ended
-            saved = {**state, "state": "failed", "reason": f"{type(exc).__name__}: {exc}"}
+            saved = {**state, "state": "failed", "reason": failure(exc)}
         finally:
             os.close(held)
         self._save({**saved, "ended_at": datetime.now(UTC).isoformat()})
