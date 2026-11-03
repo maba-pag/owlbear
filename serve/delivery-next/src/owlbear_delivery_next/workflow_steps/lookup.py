@@ -5,7 +5,8 @@ Change's own for its worker), the correction logs, the Change's brief and the qu
 govern the answer; the reply lists each whole. Decisions that do not load, or any other ending, give
 ``{"failed": reason}``, never an empty answer. A lookup answers and attaches nothing: the Change's pinned set changes
 only at a step boundary. A worker's lookup counts its spend on the Change like a pick, once its step has settled;
-a lead chat's has no Change. A step runs one lookup at a time and a host one lead chat's (TD-336).
+a lead chat's has no Change. A step, or a judges round, runs one lookup at a time and a host one lead chat's
+(TD-336).
 
 Any scoped in-force rule that is conflicted or semantically invalid fails the whole lookup, with unresolved ids
 and reasons and no governing answer, before a picker runs. Valid rules beside it do not make a partial success.
@@ -246,15 +247,17 @@ def _one(text: str) -> str:
 
 
 class Asked:
-    """A step's ``lookup_decisions``, one at a time within the worker's turn; a second at once is refused as busy.
+    """A step's or a judges round's lookup, one at a time; a second at once is refused as busy.
 
     A lookup reads the Change the runner holds and never writes it: its run waits until `settled` closes admission,
-    waits for every lookup admitted and counts their spend on the Change the runner holds then.
+    waits for every lookup admitted and counts their spend on the Change the runner holds then. Its picker spends in
+    the place it was made in, whichever thread asks, the Spotter's conflict checks included.
     """
 
     def __init__(self, store: Store, lock: Lock, current: Callable[[], Change]) -> None:
         """Bind the step's store and lock, and how to read the Change the runner holds now."""
         self.store, self.lock, self.current = store, lock, current
+        self.place = spend_ledger.where()
         self.turn, self.state = threading.Lock(), threading.Condition()  # one picker beside the step's own session
         self.open, self.admitted = True, 0
         self.runs: list[tuple[Run, str]] = []
@@ -281,7 +284,8 @@ class Asked:
             if not self.open:  # the step settled while this call waited its turn
                 return {"failed": ENDED}
         try:
-            said, done = worker(self.store, self.lock, self.current(), question)
+            with spend_ledger.at(self.place):
+                said, done = worker(self.store, self.lock, self.current(), question)
         except Exception as exc:  # noqa: BLE001 - a lookup that cannot run is failed, never "none apply"
             said, done = {"failed": f"{type(exc).__name__}: {exc}"}, None
         if "failed" in said:

@@ -61,7 +61,7 @@ def watching(  # noqa: PLR0913, PLR0917 - the session's Change, step, settings a
 
     *note* writes a line to the runner's log, where what the database could not take is told. *limit* is what
     ``needed`` returned before the step recorded anything (None: switched off), so nothing is read again here.
-    *asked* is the step's lookup, which checks a state change against the decisions.
+    *asked* is the lookup of the step or the judges round, which checks a state change against the decisions.
     """
     if limit is None:
         return None
@@ -102,7 +102,8 @@ def spot(  # noqa: PLR0913, PLR0917 - the session's Change, step, settings, look
 ) -> spotter.Context:
     """What the Spotter's looks at a session of *lock*'s Change get; it is on and ``needed`` gave the look *limit*.
 
-    *asked*, the step's lookup, answers the decision-conflict check of a state change, as JSON text.
+    *asked*, the lookup of the step or the judges round, answers the decision-conflict check of a state change, as
+    JSON text.
     """
     s, role, gaps = settings.spotter, settings.agent("spotter"), []
     try:
