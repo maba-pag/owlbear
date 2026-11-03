@@ -65,14 +65,24 @@ def test_pinned_authority_reads_multiple_decisions_in_one_content_launch(authori
 
     monkeypatch.setattr(DataRepo, "git", observe)
     assert decision_authority.inactive(repo, "HEAD", path.relative_to(repo.root).as_posix(), None) == ""
-    assert calls.count("grep") == 1
-    assert "show" not in calls
+    assert calls.count("show") == 1
+    assert "grep" not in calls
 
 
 @pytest.mark.parametrize("where", ["own", "global", "foreign"])
 @pytest.mark.parametrize(
     "damage",
-    ["empty", "malformed", "symlink", "non-markdown", "wrong-name", "directory", "invalid-utf8", "carriage-return"],
+    [
+        "empty",
+        "malformed",
+        "symlink",
+        "non-markdown",
+        "wrong-name",
+        "directory",
+        "invalid-utf8",
+        "carriage-return",
+        "missing-final-newline",
+    ],
 )
 def test_pinned_unreadable_authority_matches_snapshot_scope(authority, where, damage):
     repo, rule, path = authority
@@ -82,15 +92,16 @@ def test_pinned_unreadable_authority_matches_snapshot_scope(authority, where, da
     if damage == "non-markdown":
         broken = broken.with_suffix(".txt")
         broken.write_text("an unfinished entry\n")
-    elif damage == "wrong-name":
+    elif damage in {"wrong-name", "missing-final-newline"}:
         candidate = rule.model_copy(
             update={
-                "id": new_id(),
+                "id": broken.stem if damage == "missing-final-newline" else new_id(),
                 "scope": Scope.GLOBAL if where == "global" else Scope.PROJECT,
                 "project": "" if where == "global" else folders[where].name,
             }
         )
-        broken.write_text(serialize(candidate))
+        content = serialize(candidate)
+        broken.write_text(content.removesuffix("\n") if damage == "missing-final-newline" else content)
     elif damage == "directory":
         broken.mkdir()
         (broken / "unfinished.txt").write_text("not a decision\n")

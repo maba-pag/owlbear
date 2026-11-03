@@ -15,9 +15,9 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 
-def _run(repo: DataRepo, until: float | None, *args: str, empty: bool = False, lossless: bool = False) -> str:
+def _run(repo: DataRepo, until: float | None, *args: str, lossless: bool = False) -> str:
     said = repo.git(*args, until=until, lossless=True) if lossless else repo.git(*args, until=until)
-    if said.returncode and not (empty and said.returncode == 1):
+    if said.returncode:
         msg = f"the held decision's Git authority could not be read in {repo.root}: {failed(said)}"
         raise OSError(msg)
     return said.stdout
@@ -51,44 +51,47 @@ def _layer(root: Path, rel: str, mode: str) -> Layer | None:
     return layer
 
 
-def _contents(text: str, commit: str) -> dict[str, str]:
-    """Git's NUL-separated path/line headers permit paths with whitespace and content with NULs."""
-    found: dict[str, list[str]] = {}
+def _contents(repo: DataRepo, commit: str, blobs: dict[str, int], until: float | None) -> dict[str, bytes]:
+    """Read pinned blobs together, separating their exact bytes by Git's object sizes."""
+    if not blobs:
+        return {}
+    text = _run(repo, until, "show", "--no-color", "--no-ext-diff", "--no-textconv", *blobs, lossless=True)
+    data = text.encode("utf-8", "surrogateescape")
+    expected = sum(blobs.values())
+    if len(data) != expected:
+        msg = f"Git returned {len(data)} decision bytes at {commit} in {repo.root}; expected {expected}"
+        raise OSError(msg)
+    found = {}
     offset = 0
-    while offset < len(text):
-        path_end = text.find("\0", offset)
-        number_end = text.find("\0", path_end + 1)
-        line_end = text.find("\n", number_end + 1)
-        if min(path_end, number_end, line_end) < 0:
-            msg = f"Git returned incomplete decision lines at {commit}"
-            raise OSError(msg)
-        named = text[offset:path_end]
-        if not named.startswith(f"{commit}:"):
-            msg = f"Git returned a decision line outside pinned commit {commit}"
-            raise OSError(msg)
-        rel = named.removeprefix(f"{commit}:")
-        found.setdefault(rel, []).append(text[number_end + 1 : line_end] + "\n")
-        offset = line_end + 1
-    return {rel: "".join(lines) for rel, lines in found.items()}
+    for oid, size in blobs.items():
+        found[oid] = data[offset : offset + size]
+        offset += size
+    return found
 
 
 def _entries(repo: DataRepo, commit: str, until: float | None) -> tuple[list[Entry], list[tuple[Layer, str]]]:
-    tree = _run(repo, until, "ls-tree", "-r", "-t", "-z", commit, lossless=True)
-    text = _run(repo, until, "grep", "--no-color", "--no-column", "-G", "-z", "-n", "-a", "-e", "^", commit, "--",
-                ":(glob)**/decisions/*.md", empty=True, lossless=True)  # fmt: skip
-    contents, entries, unreadable = _contents(text, commit), [], []
+    tree = _run(repo, until, "ls-tree", "-r", "-t", "-l", "-z", commit, lossless=True)
+    entries, unreadable = [], []
+    wanted: dict[Path, tuple[Layer, str, int]] = {}
     for row in filter(None, tree.split("\0")):
         info, rel = row.split("\t", 1)
-        mode = info.split(" ", 1)[0]
+        mode, kind, oid, size = info.split()
         layer = _layer(repo.root, rel, mode)
         if layer is None:
             continue
         path = repo.root / rel
-        if path.suffix != ".md" or mode not in {"100644", "100755"}:
+        if path.suffix != ".md" or mode not in {"100644", "100755"} or kind != "blob":
             unreadable.append((layer, f"{path} at {commit} is not a regular decision file"))
             continue
         try:
-            text = contents.get(rel, "").encode("utf-8", "surrogateescape").decode("utf-8")
+            wanted[path] = (layer, oid, int(size))
+        except ValueError as exc:
+            msg = f"Git returned an unreadable object size {size!r} for {path} at {commit}"
+            raise OSError(msg) from exc
+    contents = _contents(repo, commit, {oid: size for _layer, oid, size in wanted.values()}, until)
+    for path, (layer, oid, _size) in wanted.items():
+        try:
+            text = contents[oid].decode("utf-8")
             decision = parse_named(StringIO(text, newline=None).read(), path.name)
         except (DecisionError, UnicodeDecodeError) as exc:
             unreadable.append((layer, f"{path} at {commit}: {exc}"))
