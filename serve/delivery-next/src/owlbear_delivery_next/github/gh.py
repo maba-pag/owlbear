@@ -3,13 +3,13 @@
 
 from __future__ import annotations
 
-import json
 import re
 import subprocess
 from urllib.parse import quote, urlencode
 
 from pydantic import ValidationError
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github import gh_client
 from owlbear_delivery_next.github.gh_client import API_VERSION, Json, Missing, invalid, repo
 from owlbear_delivery_next.github.gh_conversation import Conversation
@@ -286,27 +286,19 @@ class GhProvider(Queue, Conversation):
                 ("gh", *args, endpoint, "--input", "-"), merge_request_body(request), self.timeout, self.cwd
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
-            return MergeResult(status=MergeStatus.UNKNOWN, message=bounded(type(exc).__name__))
-        try:
-            payload = json.loads(done.stdout) if done.stdout.strip() else {}
-        except UnicodeDecodeError, json.JSONDecodeError:
-            payload = {}
-        message = bounded(payload.get("message") if isinstance(payload, dict) else None)
+            return MergeResult(status=MergeStatus.UNKNOWN, message=failure(exc))
+        payload, unread = gh_client.answer(done.stdout)
+        said = payload.get("message") if isinstance(payload, dict) else None
+        message = str(said).strip() or None if said is not None else None
         if done.returncode != 0:
-            status = gh_client.status(done.stderr)
-            reason = _MERGE_REFUSALS.get(status or 0)
+            reason = _MERGE_REFUSALS.get(gh_client.status(done.stderr) or 0)
             if reason is None:
-                return MergeResult(status=MergeStatus.UNKNOWN, message=message or gh_client.message(done.stderr))
-            return MergeResult(status=MergeStatus.REFUSED, refusal=reason, message=message)
-        return self._merged(payload, message)
-
-    @staticmethod
-    def _merged(payload: Json, message: str | None) -> MergeResult:
-        if not isinstance(payload, dict):
-            return MergeResult(status=MergeStatus.UNKNOWN, message="no merge response")
-        if payload.get("merged") is True and isinstance(payload.get("sha"), str):
+                return MergeResult(status=MergeStatus.UNKNOWN, message=gh_client.unfinished(done, message, unread))
+            return MergeResult(status=MergeStatus.REFUSED, refusal=reason,
+                               message=message or gh_client.unfinished(done, unread))  # fmt: skip
+        if isinstance(payload, dict) and payload.get("merged") is True and isinstance(payload.get("sha"), str):
             return MergeResult(status=MergeStatus.MERGED, sha=payload["sha"], message=message)
-        return MergeResult(status=MergeStatus.UNKNOWN, message=message)
+        return MergeResult(status=MergeStatus.UNKNOWN, message=gh_client.unfinished(done, message, unread))
 
     def delete_branch(self, repository: str, branch: str, expected_head: str) -> BranchDelete:
         """Atomically delete only the merged head; reconcile a lost response without deleting a newer head."""

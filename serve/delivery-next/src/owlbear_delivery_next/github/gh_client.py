@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, NoReturn
 from urllib.parse import quote
 
+from owlbear_delivery_next.git import command_failure
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError, bounded
 
 if TYPE_CHECKING:
@@ -52,6 +53,26 @@ def message(stderr: bytes) -> str:
     """Return gh's bounded last error line."""
     text = stderr.decode(errors="replace").strip().splitlines()
     return bounded(text[-1].removeprefix("gh: ") if text else "") or "no message"
+
+
+def answer(stdout: bytes) -> tuple[Json, str | None]:
+    """The JSON ``gh`` printed (``{}`` for none), or ``{}`` and why it could not be read, followed by what it was."""
+    if not stdout.strip():
+        return {}, None
+    try:
+        return json.loads(stdout), None
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return {}, f"{command_failure.failure(exc)}\nstdout:\n{stdout.decode(errors='replace').strip()}"
+
+
+def unfinished(done: subprocess.CompletedProcess[bytes], *said: str | None) -> str:
+    """Why a write ``gh`` answered did not finish: *said*, then its whole stderr; else the failed command or answer."""
+    text = "\n".join(x for x in (*said, done.stderr.decode(errors="replace").strip()) if x)
+    if text:
+        return text
+    if done.returncode:
+        return command_failure.failed(done)
+    return f"GitHub answered: {done.stdout.decode(errors='replace').strip() or 'nothing'}"
 
 
 def repo(repository: str) -> str:
