@@ -234,6 +234,13 @@ def _row(d: Decision, note: str) -> dict[str, str]:
     return row | ({"note": note} if note else {})
 
 
+def agent_reply(answer: dict[str, Any]) -> dict[str, Any]:
+    """Omit advisory notes only from the agent-facing copy; conflict records keep their explanations."""
+    if "decisions" not in answer:
+        return answer
+    return answer | {"decisions": [{k: v for k, v in d.items() if k != "note"} for d in answer["decisions"]]}
+
+
 def _ran(settings: Settings, prefix: str, said: str, journal: sdk_adapter.Journal) -> Run:
     """One picker session in an empty folder, no longer than a caller waits for it."""
     sessions.granted(LABEL)
@@ -298,8 +305,8 @@ class Asked:
         return said
 
     def helper(self) -> tuple[tools.Spec, Callable[[tools.Args], str]]:
-        """The step's tool and its answer."""
-        return pick_tools.LOOKUP, self
+        """The step's tool and its compact agent-facing answer."""
+        return pick_tools.LOOKUP, lambda args: json.dumps(agent_reply(json.loads(self(args))))
 
     def settled[T](self, step: Callable[[], T]) -> T:
         """*step*'s run; then no lookup starts, those admitted end and their spend is on the Change the runner holds."""

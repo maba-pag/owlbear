@@ -1561,7 +1561,8 @@ def test_a_state_change_is_checked_by_the_steps_own_lookup_through_the_runners_c
     store = Store(tmp_path / "proj")
     store.db.check()
     store.write(Lock("c1"), Change(slug="c1"))
-    picked, ran, logged, questions = {"decisions": [{"id": "D-1", "title": "No force-push"}]}, object(), [], []
+    picked = {"decisions": [{"id": "D-1", "title": "No force-push", "note": "It governs this push."}]}
+    ran, logged, questions = object(), [], []
 
     def worker(_store: Store, _lock: Lock, _change: Any, question: str) -> tuple[dict[str, Any], Any]:
         questions.append(question)

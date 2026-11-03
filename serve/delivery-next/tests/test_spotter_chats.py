@@ -1234,8 +1234,13 @@ def test_a_terminal_session_is_not_followed_but_listed_while_a_vs_code_one_in_th
     assert {r["session"] for r in records()} == {"vs"}
 
 
-@pytest.mark.parametrize("answer", [{"decisions": [{"id": "D-1", "title": "Never push from a chat"}]},
-                                    {"failed": "a lookup is already running in this folder"}])  # fmt: skip
+@pytest.mark.parametrize(
+    "answer",
+    [
+        {"decisions": [{"id": "D-1", "title": "Never push from a chat", "note": "It governs this push."}]},
+        {"failed": "a lookup is already running in this folder"},
+    ],
+)
 def test_a_chats_state_change_is_checked_through_the_hosts_lookup_and_a_failed_one_stays_preliminary(
     world, monkeypatch, answer
 ):
