@@ -65,11 +65,14 @@ class CandidateItem(tools.Args):
     why: str = tools.bounded(500, "Why the approved wording is wrong and what the new one keeps", "Tabs are not names")
 
 
+ITEMS = 10  # the most items a candidate holds
+
+
 class CandidateResult(tools.Args):
     """``submit_result`` for the shaper's candidate: its items, or why it needs reshaping, and rejected findings."""
 
     items: list[CandidateItem] = Field(
-        default_factory=list, max_length=10, description="The exact candidate; empty only with refuse"
+        default_factory=list, max_length=ITEMS, description="The exact candidate; empty only with refuse"
     )
     refuse: str = Field(
         default="",

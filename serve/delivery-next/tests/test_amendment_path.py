@@ -929,9 +929,8 @@ def test_a_new_check_covers_just_the_criterion_its_candidate_adds():
     a = amending.start(c, "worker", reason="French needs its own check", now=NOW)
     french = item("criterion", "", "Says Bonjour")
     one, two = (item("check", "", "it says bonjour", steps=["open /fr"], covers=[k]) for k in ("AC-3", "AC-4"))
-    assert "Criteria the candidate adds take, in the order listed, the ids AC-3, AC-4, AC-5" in amendments.prepare(
-        c, a, Path()
-    )
+    ids = ", ".join(f"AC-{n}" for n in range(3, 13))
+    assert f"Criteria the candidate adds take, in the order listed, the ids {ids}" in amendments.prepare(c, a, Path())
     assert amendments.check(CandidateResult(items=[two, french]), amendments.amendable(c)) == [
         "items: covers AC-4 - not criteria the brief keeps or the candidate adds"
     ]  # it adds one criterion
@@ -966,3 +965,10 @@ def test_two_new_decisions_with_the_same_answer_keep_their_own_ids():
     answer(c, "yes")
 
     assert len({d.id for d in c.brief.decisions}) == 3
+
+
+def test_a_new_check_may_cover_any_criterion_a_full_candidate_adds():
+    adds = [item("criterion", "", f"Says hello in language {n}") for n in range(1, 10)]
+    last = item("check", "", "it greets", steps=["open /"], covers=["AC-11"])
+
+    assert amendments.check(CandidateResult(items=[*adds, last]), amendments.amendable(change())) == []

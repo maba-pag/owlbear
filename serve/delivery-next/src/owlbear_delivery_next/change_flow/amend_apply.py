@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from owlbear_decisions import new_id
+from owlbear_delivery_next.change_contracts.amend_tools import ITEMS
 from owlbear_delivery_next.change_contracts.amendment_records import AmendedItem
 from owlbear_delivery_next.change_contracts.decision_records import BriefDecision
 from owlbear_delivery_next.change_contracts.evidence import coverage, criteria
@@ -308,7 +309,7 @@ def _decision(c: Change, i: AmendedItem, level: Level, now: datetime) -> None:
     i.key = made.id
 
 
-def fresh(c: Change, n: int = 3) -> list[str]:
+def fresh(c: Change, n: int = ITEMS) -> list[str]:
     """The ids the first *n* criteria a candidate adds take, in its order, as ``_criterion`` gives them."""
     taken = [k.id for x in (c.brief, *c.brief.approved) for k in x.criteria]
     for _ in range(n):
