@@ -411,3 +411,19 @@ def test_a_read_never_takes_an_own_save_for_one_from_elsewhere_before_its_hook_r
 
     assert got[0].notices == []
     assert reader.read().notices == []
+
+
+def test_a_source_s_whole_error_is_said_and_shown(world, tmp_path, monkeypatch, whole_error):
+    """#921 D1: a source's unexpected failure, type included, uncut in the read state and the host's log."""
+
+    def broken(**_kwargs: object) -> dict[str, object]:
+        raise RuntimeError(whole_error)
+
+    monkeypatch.setattr(settings_read.pack_update, "notice", broken)
+    c = client(Store(tmp_path / "shop"), world.reader())
+    expected = f"RuntimeError: {whole_error}"
+
+    [failure] = c.post("/api/next/config/read").json()["reads"]["failures"]
+
+    assert (failure["source"], failure["error"]) == (settings_read.IMPECCABLE, expected)
+    assert f"settings read: {settings_read.IMPECCABLE} failed: {expected}" in world.said

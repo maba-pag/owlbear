@@ -62,7 +62,7 @@ class Reader:
                 for place, detail in missed:
                     self.say(f"settings read: {source} failed{f' at {place}' if place else ''}: {detail}")
                     error = f"{place}: {detail}" if place else detail
-                    failures.append(Failure(source=source, at=datetime.now().astimezone(), error=error[:500]))
+                    failures.append(Failure(source=source, at=datetime.now().astimezone(), error=error))
             return self.ledger.finish(glob, failures, unshared=unshared, at=datetime.now().astimezone())
 
     def loop(self, stopping: threading.Event) -> None:
