@@ -53,6 +53,13 @@ def failed(table: dict[str, tuple[int, str]]) -> list[tuple[str, str]]:
             {"gh repo view --json nameWithOwner,viewerPermission": (1, "{W}")}, "repository", "{W}", id="repository"
         ),
         pytest.param({"copilot --version": (1, "{W}")}, "copilot cli", "copilot: {W}", id="copilot-cli"),
+        pytest.param({"git config user.name": (128, "{W}")}, "git identity", "{W}", id="identity-unread"),
+        pytest.param(
+            {"git config --bool commit.gpgsign": (0, "true"), "git config user.signingkey": (128, "{W}")},
+            "commit signing",
+            "{W}",
+            id="signing-key-unread",
+        ),
     ],
 )
 def test_a_failed_command_s_whole_output_is_its_check_s_detail(table, name, detail, whole_error):
