@@ -119,6 +119,13 @@ function dirty(layer) {
   return Object.entries(drafts[layer]).filter(([key, value]) => canonical(key, value) !== saved(layer, key));
 }
 
+// Whether the edited layer has an unsaved edit of the setting at *path* ("agents.builder.model"), as the pending line
+// counts it: the page keeps a draft under "builder.model" and the Spotter's under "spot.".
+export function drafted(path) {
+  const key = path.replace(/^agents\./, "").replace(/^spotter\./, "spot.");
+  return dirty(state.layer).some(([draft]) => draft === key);
+}
+
 // Each unsaved edit of *layer* as "field: saved → new"; a blank value inherits, on Global it is unset.
 function changes(layer) {
   const blank = layer === "global" ? "unset" : "inherited";
@@ -150,7 +157,7 @@ export function anyEdits() {
   return Object.keys(drafts).some((layer) => dirty(layer).length);
 }
 
-// A group's unsaved edits (D-01M63C8QQMANY46N8GMNNKH1V9): the edited layer's, This machine's own and a folder name
+// A group's unsaved edits: the edited layer's, This machine's own and a folder name
 // typed.
 export function pendingIn(group) {
   let n = dirty(state.layer).filter(([key]) => draftGroup(key) === group).length;
@@ -319,6 +326,7 @@ async function saveLayer(review) {
     answers.shown();
     if (layer === "project" && !state.loaded.unpublished) state.prefsReview = false;  // kept until published
     for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
+    state.kept.clear();  // what was saved is no longer an unsaved edit for the filter
     error = state.loaded.notice ?? "";
     const whose = { global: "the global", machine: "this machine's" }[layer]
       ?? (named() ? `${named()}'s` : "this project's");

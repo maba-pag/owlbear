@@ -14,6 +14,7 @@
   p-text:empty { display: none !important; }
   .row { align-items: end; gap: var(--p-spacing-static-md); }
   #scope { min-width: 16rem; }
+  #filter p-select { min-width: 12rem; }
   #pending { flex: 1 1 20rem; min-inline-size: 0; max-block-size: 6lh; overflow: auto; }
   p-table-cell p-input-text, p-table-cell p-select { min-width: 11rem; }
   /* A number needs a number's width, not the column's or the panel's. */
@@ -21,9 +22,14 @@
   :is([id^="machine-"], [id^="global-machine-"]):is(p-input-text, p-select):not([id$="enrolled_chats"]) {
     max-inline-size: 32rem;
   }
+  details.more > p-text { margin-block-start: var(--p-spacing-static-sm); }
+  /* The Show filter hides non-matching rows with [hidden]; a panel left with none goes, and the message shows then. */
+  section.panel:has(p-table-row[data-setting]):not(:has(p-table-row[data-setting]:not([hidden]))) { display: none; }
+  #filter-none { display: none; }
+  #page:not(:has(p-table-row[data-setting]:not([hidden]))) #filter-none { display: block; }
   details.panel > summary { font-size: var(--p-typescale-md); }
   details.panel[open] { gap: var(--p-spacing-static-md); }
-  /* The groups (D-01M63C8QQMANY46N8GMNNKH1V9), like the top row's pages: the one shown underlined. */
+  /* The groups, like the top row's pages: the one shown underlined. */
   #groups { display: flex; flex-wrap: wrap; gap: 0 var(--p-spacing-static-lg); }
   #groups a {
     display: inline-flex; align-items: center; gap: var(--p-spacing-static-sm); min-block-size: 2.5rem;

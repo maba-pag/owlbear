@@ -1,8 +1,9 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { EFFORTS, INHERIT, SOURCES, state, shown } from "./state.mjs";
-import { own, inherited, edit, layerValue, preview } from "./layers.mjs";
+import { own, inherited, edit, layerValue, preview, drafted } from "./layers.mjs";
 import { levels, arrows } from "./cost.mjs";
+import { at } from "./sections.mjs";
 
 // Code ships no defaults (2026-10-23): a value no layer sets is unset; its row's name says so in red (GW8RT6). While
 // the edited layer has an unsaved edit of it, the line says what the save would give (#809).
@@ -51,6 +52,11 @@ export function cell(...parts) {
   return html`<p-table-cell multiline="true">${parts}</p-table-cell>`;
 }
 
+// A cell an unset-list link can name by its *id* and focus its control.
+export function cellWith(id, ...parts) {
+  return html`<p-table-cell id=${id} tabindex="-1" multiline="true">${parts}</p-table-cell>`;
+}
+
 export function row(...cells) {
   return html`<p-table-row>${cells}</p-table-row>`;
 }
@@ -58,8 +64,19 @@ export function row(...cells) {
 // GW8RT6: a setting's row, which the unset list links to by its *id*; its name is red while a key it sets is unset.
 export function setting(id, name, keys, ...cells) {
   const missing = state.loaded.settings.missing ?? [], unset = keys.some((k) => missing.includes(k));
-  return html`<p-table-row id=${id} tabindex="-1">${cell(html`<p-text color=${unset ? "error" : nothing}>${name}
-    </p-text>`)}${cells}</p-table-row>`;
+  // The Show filter: set on the edited layer as saved, or with an unsaved edit.
+  const matches = {
+    all: () => true,
+    unset: () => unset,
+    set: () => keys.some((k) => at(state.loaded[state.layer], k) != null),
+    unsaved: () => {
+      const edited = keys.some((k) => drafted(k) || preview(k)), pin = `${state.layer}:${id}`;  // or follows an edit
+      if (edited) state.kept.add(pin);  // undoing an edit by typing must not take the row from under the cursor
+      return state.kept.has(pin);
+    },
+  }[state.filter]();
+  return html`<p-table-row id=${id} tabindex="-1" data-setting ?hidden=${!matches}>${cell(html`<p-text
+    color=${unset ? "error" : nothing}>${name}</p-text>`)}${cells}</p-table-row>`;
 }
 
 export function table(caption, heads, body, rows, { id, hidden = false } = {}) {
@@ -100,13 +117,19 @@ export function button(label, onclick, { id, icon, variant, busy = false, disabl
     variant=${variant ?? nothing} .loading=${busy} ?disabled=${disabled} @click=${onclick}>${label}</p-button>`;
 }
 
+// A panel's longer explanation, behind a disclosure that starts closed, so its controls come first.
+export function more(title, ...paragraphs) {
+  return html`<details class="more"><summary>${title}</summary>${paragraphs.map((p) => html`<p-text>${p}</p-text>`)}
+    </details>`;
+}
+
 // TD-209: one loop's round value, or a role's minutes (TD-286); blank inherits (the final review, the builder's).
-export function numberCell(owner, field, label) {
+export function numberCell(owner, field, label, id) {
   const key = `${owner}.${field}`, final = owner === "final_review";
   const below = final ? finalBelow(field) : inherited().agents[owner][field];
   const inUse = final ? state.loaded.settings.final_review?.[field] : state.loaded.settings.agents[owner][field];
-  return cell(typed(`${label}, ${owner.replace("_", " ")}`, own(key), (v) => edit(key, v),
-    { key, placeholder: clear(below), inputmode: "numeric", disabled: state.saving }),
+  return (id ? (...parts) => cellWith(id, ...parts) : cell)(typed(`${label}, ${owner.replace("_", " ")}`, own(key),
+    (v) => edit(key, v), { key, placeholder: clear(below), inputmode: "numeric", disabled: state.saving }),
   source(final ? key : `agents.${key}`, inUse));
 }
 
@@ -267,7 +290,7 @@ function tokens(n) {
 // TD-376: whether a role's sessions may start the runtime's built-in subagents; on unless a layer says off.
 export function subagentsCell(role) {
   const key = `${role}.subagents`, below = onOff(inherited().agents[role].subagents);
-  return cell(choose(`Built-in subagents, ${role}`, [[INHERIT, clear(below)],
+  return cellWith(`set-agents-${role}-subagents`, choose(`Built-in subagents, ${role}`, [[INHERIT, clear(below)],
     ["true", "on: may start them"], ["false", "off: none"]], own(key) || INHERIT, (v) => edit(key, v),
     { key, disabled: state.saving }),
   source(`agents.${key}`, state.loaded.settings.agents[role].subagents));
@@ -331,16 +354,18 @@ function amount(n) {
   return n.toLocaleString("en", { maximumFractionDigits: 2 });
 }
 
-export function ratesCell(role) {
+// The chosen model's rates at the row's context tier, shown under its select, with the effort in use: the runtime
+// prices no effort, so the rates are the same at every one.
+function ratesNote(role) {
   const model = offeredModel(role), long = tierOf(role) === "long" && model?.long;
   const rates = long ? model.long.rates : model?.rates;
-  if (!rates) return cell(html`<p-text>\u2014</p-text><p-text size="xs" color="contrast-medium">not known</p-text>`);
+  if (!rates) return html`<p-text size="xs" color="contrast-medium">AI credits per 1M tokens: not known</p-text>`;
   const write = rates.cache_write ? ` \u00b7 cache\u00a0write\u00a0${amount(rates.cache_write)}` : "";
   const flow = `in\u00a0${amount(rates.input)} \u00b7 out\u00a0${amount(rates.output)}`;
   const line = `${flow} \u00b7 cache\u00a0${rates.cache == null ? "not known" : amount(rates.cache)}${write}`;
-  const effort = own(`${role}.effort`) || inherited().agents[role].effort;  // the runtime prices no effort
-  return cell(html`<p-text>${line}</p-text><p-text color="contrast-medium">${model.id}, ${long ? "long"
-    : "default"} context \u00b7 effort\u00a0${said(effort)}; same rates at every effort</p-text>`);
+  const effort = own(`${role}.effort`) || inherited().agents[role].effort;
+  return html`<p-text size="xs">AI credits per 1M tokens: ${line}</p-text><p-text size="xs"
+    color="contrast-medium">effort\u00a0${said(effort)}: same rates at every effort</p-text>`;
 }
 
 export function editable(role, field) {
@@ -371,5 +396,6 @@ export function editable(role, field) {
   } else {
     control = typed(label, value, set, { ...common, placeholder: clear(below) });
   }
-  return cell(control, note, source(`agents.${key}`, state.loaded.settings.agents[role][field]));
+  return cell(control, note, source(`agents.${key}`, state.loaded.settings.agents[role][field]),
+    field === "model" ? ratesNote(role) : nothing);
 }

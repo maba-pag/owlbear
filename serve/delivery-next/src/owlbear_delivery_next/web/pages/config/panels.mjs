@@ -1,13 +1,13 @@
-// The layered groups' panels (D-01M63C8QQMANY46N8GMNNKH1V9): Agents, Runs, and Checks and merge. Each setting's row
-// carries the id the unset list links to (GW8RT6).
+// The layered groups' panels: Agents and runs, Guardrails, and Checks and merge. Each setting's row carries the id the
+// unset list links to (GW8RT6).
 
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { held, here, project } from "/assets/ui.mjs";
 import { ROUNDS, LOOPS, back, state } from "./state.mjs";
 import {
   cell, row, setting, table, numberCell, designFailures, widths, sessionsAtOnce, prLabels, prMarker, subagentsCell,
-  curatorThreshold, spotterCell, prefRows, USER_KEYS, userConfig, userConfigLabel, contextCell, ratesCell, editable,
-  guardLevel,
+  curatorThreshold, spotterCell, prefRows, USER_KEYS, userConfig, userConfigLabel, contextCell, editable,
+  guardLevel, more,
 } from "./cells.mjs";
 
 const SPOTTER = [
@@ -27,8 +27,6 @@ const SPOTTER = [
   ["look_credit_limit", "Credit limit per look (credits)", "Credit limit per look"],
 ];
 
-const roles = () => Object.keys(state.loaded.settings.agents);
-
 // The way to the role's compaction on Metrics: back to the filters a compaction row's link came from, else the
 // role's on this project, or on every project from This machine or Global; unsaved edits keep the page.
 function toMetrics(role) {
@@ -45,82 +43,38 @@ function toMetrics(role) {
   };
   return html`<br><a class="compaction-link" href=${href} @click=${leave}>Compaction on Metrics</a>`;
 }
-const workers = () => roles().filter((role) => !["shaper", "spotter"].includes(role));
+const none = () => cell(html`<p-text color="contrast-medium">n/a</p-text>`);  // the shaper's chat and a Spotter look
 
 export function agentsGroup() {
+  const loop = (owner) => ROUNDS.map(([f]) =>
+    (owner === "final_review" ? `final_review.${f}` : `agents.${owner}.${f}`));
   return html`
     <section class="panel" aria-labelledby="agents-title">
       <p-heading size="lg"><h2 id="agents-title" tabindex="-1">Agents</h2></p-heading>
-      ${table("Agents: model, effort and context apply to the next session",
-        ["Agent", "Model", "Effort", "Context", "AI credits per 1M tokens"], "agents-rows",
-        roles().map((role) => setting(`set-agents-${role}`, html`${role === "shaper" ? "shaper (a recommendation)"
-          : role}${toMetrics(role)}`,
-          ["model", "effort", "context"].map((f) => `agents.${role}.${f}`), editable(role, "model"),
-          editable(role, "effort"), contextCell(role), ratesCell(role))))}
+      ${table("Agents: they apply to the next session",
+        ["Agent", "Model", "Effort", "Context", "Subagents", "Minutes per session"],
+        "agents-rows", Object.keys(state.loaded.settings.agents).map((role) => {
+          const timed = !["shaper", "spotter"].includes(role);
+          return setting(`set-agents-${role}`, html`${role === "shaper" ? "shaper (a recommendation)"
+            : role}${toMetrics(role)}`,
+          ["model", "effort", "context", ...(timed ? ["subagents", "minutes"] : [])].map((f) => `agents.${role}.${f}`),
+          editable(role, "model"), editable(role, "effort"), contextCell(role),
+          timed ? subagentsCell(role) : none(),
+          timed ? numberCell(role, "minutes", "Minutes per session", `set-agents-${role}-minutes`) : none());
+        }))}
+      ${more("What the columns mean",
+        "Subagents: an agent may start the runtime's built-in subagents, such as explore or code-review, for side "
+        + "questions. They work under the step's own permissions, and Delivery records each one; Maintenance shows "
+        + "their use per agent.",
+        "Minutes per session, 1 to 480: a session ends after this many minutes in total; its step then counts as a "
+        + "failed attempt and runs again. The shaper's chat and the Spotter's looks are no sessions of their own, so "
+        + "they show n/a.",
+        "The credits under a model are its rates at the row's context tier.")}
       <p-text id="shaper-note" size="xs" color="contrast-medium">The shaper's model and effort are a recommendation
         (TD-328): Delivery's own turns in the shaping chat use them; what you type there runs on the chat's model
         picker, which the chat reminds you of once.</p-text>
       <p-text id="models-note" size="xs" color="contrast-medium" aria-live="polite">${state.modelsNote}</p-text>
     </section>
-    <section class="panel" aria-labelledby="subagents-title">
-      <p-heading size="lg"><h2 id="subagents-title" tabindex="-1">Subagents</h2></p-heading>
-      <p-text>An agent may start the runtime's built-in subagents, such as explore or code-review, for side
-        questions. They work under the step's own permissions, and Delivery records each one; Maintenance shows their
-        use per agent.</p-text>
-      ${table("Subagents: they apply to the next session", ["Agent", "Built-in subagents"], "subagents",
-        workers().map((role) => setting(`set-subagents-${role}`, role, [`agents.${role}.subagents`],
-          subagentsCell(role))))}
-    </section>
-    <section class="panel" aria-labelledby="spotter-title">
-      <p-heading size="lg"><h2 id="spotter-title" tabindex="-1">Spotter</h2></p-heading>
-      <p-text>The Spotter looks at an agent's work beside it: at hand-offs, plans, state changes and a sample of
-        actions. It files each finding under one of four categories and acts as that category's setting says, in
-        Delivery's steps and in the VS Code chats of the enrolled folders (a terminal chat is not followed): it
-        records it, steers the agent, refuses its hand-off, stops and resumes it with a note, stops it to ask you, or
-        shows it to you on the Improvement page. Irreversible harm acts from any look, in every Change and chat.
-        Otherwise sampled and state-change looks only record, and steering, refusing and stopping to resume act only
-        in a Change or chat drawn into the steered share; steering notes stop at the set number per step or chat
-        turn. Retro grades every record.
-        Its model, effort and context are the spotter row under Agents; the enrolled chats are a machine setting.
-        Each look stops at its own credit limit, also when replayed: once the spend the runtime reports reaches it, the
-        look is stopped and its record says so; a call already under way still finishes, so a look may pass its limit
-        a little. There is no daily budget. Off stops its looks and the recording of new outside writes for each
-        Change's page; the reports already recorded stay, and steps no longer need its other settings.</p-text>
-      ${table("Spotter: it applies to the next look", ["Setting", "Value"], "spotter", SPOTTER.map(([field, name,
-        label]) => setting(`set-spotter-${field}`, name, [`spotter.${field}`], spotterCell(field, label))))}
-    </section>
-    <section class="panel" aria-labelledby="user-config-title">
-      <p-heading size="lg">
-        <h2 id="user-config-title" tabindex="-1">Your instructions, skills and memory</h2>
-      </p-heading>
-      <p-text>A Delivery step reads its repository's instructions and Delivery's own skills. Switched on, it also
-        reads your own instruction files in your Copilot folder (instructions/ and copilot-instructions.md, links
-        followed), and is offered your own skills there (skills/), never one named as Delivery's. A plugin's files and
-        your agents stay off either way. Copilot Memory on lets every Delivery session recall the memories Copilot
-        keeps for this repository, and the planner, preparer, builder, updater and test curator may save or vote on
-        them; the Spotter and Retro never use it. A memory saved this way skips OwlBear's memory curation and reaches
-        your later hand-run chats in this repository, so off is recommended. None has a default: until all three are
-        set, a step asks you to set them instead of starting its session.</p-text>
-      ${table("Your instructions, skills and memory: they apply to the next session", ["Setting", "Value"],
-        "user-config", USER_KEYS.map((key) => setting(`set-${key}`, userConfigLabel(key), [key], userConfig(key))))}
-    </section>
-    <section class="panel" aria-labelledby="guard-title">
-      <p-heading size="lg"><h2 id="guard-title" tabindex="-1">Shell guard</h2></p-heading>
-      <p-text>Delivery reads each shell command a step runs for ways around Git hooks or signing, and for
-        force-pushes. Strict refuses the ways it knows and their new variants and warns on weak signs; standard
-        refuses only the ways it knew before and warns on the rest; lenient warns on all of them and refuses none; off
-        checks none of them. A warning reaches the agent and the step's journal. At every level a read-only step's
-        writes stay refused, and so do the step's folder, tool and file rules. It has no default: until it is set, a
-        step asks you to set it instead of starting its session.</p-text>
-      ${table("Shell guard: it applies to the next step", ["Setting", "Value"], "guard",
-        [setting("set-guard_level", "Shell guard level", ["guard_level"], guardLevel())])}
-    </section>`;
-}
-
-export function runsGroup() {
-  const loop = (owner) => ROUNDS.map(([f]) =>
-    (owner === "final_review" ? `final_review.${f}` : `agents.${owner}.${f}`));
-  return html`
     <section class="panel" aria-labelledby="rounds-title">
       <p-heading size="lg"><h2 id="rounds-title" tabindex="-1">Challenge rounds</h2></p-heading>
       <p-text>A reviewer and the worker go back and forth in rounds. A round with few new findings is the last; after
@@ -132,15 +86,6 @@ export function runsGroup() {
         than "ask you at or above", which may not exceed the findings per round. The final review inherits the
         builder's values.</p-text>
     </section>
-    <section class="panel" aria-labelledby="limits-title">
-      <p-heading size="lg"><h2 id="limits-title" tabindex="-1">Session time limits</h2></p-heading>
-      <p-text>An agent session ends after this many minutes in total; its step then counts as a failed attempt and
-        runs again. The shaper's chat has no limit.</p-text>
-      ${table("Session time limits: they apply to the next session", ["Agent", "Minutes per session"], "limits",
-        workers().map((role) => setting(`set-limits-${role}`, role, [`agents.${role}.minutes`],
-          numberCell(role, "minutes", "Minutes per session"))))}
-      <p-text size="xs" color="contrast-medium">1 to 480 minutes.</p-text>
-    </section>
     <section class="panel" aria-labelledby="at-once-title">
       <p-heading size="lg"><h2 id="at-once-title" tabindex="-1">Sessions at once</h2></p-heading>
       <p-text>A step waits for a free slot before it starts. A visual check runs its judges in waves of the slots it
@@ -148,6 +93,48 @@ export function runsGroup() {
       ${table("Sessions at once: they apply to the next step that starts", ["Setting", "Value"], "at-once",
         [setting("set-sessions", "Agent sessions at once in one project", ["sessions"], sessionsAtOnce())])}
       <p-text size="xs" color="contrast-medium">At least 1. Steps running now keep their sessions.</p-text>
+    </section>`;
+}
+
+export function guardrailsGroup() {
+  return html`
+    <section class="panel" aria-labelledby="spotter-title">
+      <p-heading size="lg"><h2 id="spotter-title" tabindex="-1">Spotter</h2></p-heading>
+      <p-text>The Spotter looks at an agent's work beside it: at hand-offs, plans, state changes and a sample of
+        actions. Its model, effort and context are the spotter row in Agents and runs.</p-text>
+      ${more("How the Spotter acts and stops",
+        "It files each finding under one of four categories and acts as that category's setting says, in Delivery's "
+        + "steps and in the VS Code chats of the enrolled folders (a terminal chat is not followed): it records it, "
+        + "steers the agent, refuses its hand-off, stops and resumes it with a note, stops it to ask you, or shows it "
+        + "to you on the Improvement page. Irreversible harm acts from any look, in every Change and chat. Otherwise "
+        + "sampled and state-change looks only record, and steering, refusing and stopping to resume act only in a "
+        + "Change or chat drawn into the steered share; steering notes stop at the set number per step or chat turn. "
+        + "Retro grades every record. The enrolled chats are a machine setting.",
+        "Each look stops at its own credit limit, also when replayed: once the spend the runtime reports reaches it, "
+        + "the look is stopped and its record says so; a call already under way still finishes, so a look may pass "
+        + "its limit a little. There is no daily budget.",
+        "Off stops its looks and the recording of new outside writes for each Change's page; the reports already "
+        + "recorded stay, and steps no longer need its other settings.")}
+      ${table("Spotter: it applies to the next look", ["Setting", "Value"], "spotter", SPOTTER.map(([field, name,
+        label]) => setting(`set-spotter-${field}`, name, [`spotter.${field}`], spotterCell(field, label))))}
+    </section>
+    <section class="panel" aria-labelledby="user-config-title">
+      <p-heading size="lg">
+        <h2 id="user-config-title" tabindex="-1">Your instructions, skills and memory</h2>
+      </p-heading>
+      <p-text>Whether a Delivery step reads your own Copilot instructions, skills and memory. None has a default:
+        until all three are set, a step asks you to set them instead of starting its session.</p-text>
+      ${more("What each setting does",
+        "A Delivery step reads its repository's instructions and Delivery's own skills. Switched on, it also reads "
+        + "your own instruction files in your Copilot folder (instructions/ and copilot-instructions.md, links "
+        + "followed), and is offered your own skills there (skills/), never one named as Delivery's. A plugin's files "
+        + "and your agents stay off either way.",
+        "Copilot Memory on lets every Delivery session recall the memories Copilot keeps for this repository, and "
+        + "the planner, preparer, builder, updater and test curator may save or vote on them; the Spotter and Retro "
+        + "never use it. A memory saved this way skips OwlBear's memory curation and reaches your later hand-run "
+        + "chats in this repository, so off is recommended.")}
+      ${table("Your instructions, skills and memory: they apply to the next session", ["Setting", "Value"],
+        "user-config", USER_KEYS.map((key) => setting(`set-${key}`, userConfigLabel(key), [key], userConfig(key))))}
     </section>
     <section class="panel" aria-labelledby="curation-title">
       <p-heading size="lg"><h2 id="curation-title" tabindex="-1">Memory curation</h2></p-heading>
@@ -158,6 +145,20 @@ export function runsGroup() {
         [setting("set-curator_threshold", "Curator's confidence threshold (%)", ["curator_threshold"],
           curatorThreshold())])}
       <p-text size="xs" color="contrast-medium">50 to 100; one value for every project and machine.</p-text>
+    </section>
+    <section class="panel" aria-labelledby="guard-title">
+      <p-heading size="lg"><h2 id="guard-title" tabindex="-1">Shell guard</h2></p-heading>
+      <p-text>Delivery reads each shell command a step runs for ways around Git hooks or signing, and for
+        force-pushes. It has no default: until it is set, a step asks you to set it instead of starting its
+        session.</p-text>
+      ${more("What each level does",
+        "Strict refuses the ways it knows and their new variants and warns on weak signs; standard refuses only the "
+        + "ways it knew before and warns on the rest; lenient warns on all of them and refuses none; off checks none "
+        + "of them.",
+        "A warning reaches the agent and the step's journal. At every level a read-only step's writes stay refused, "
+        + "and so do the step's folder, tool and file rules.")}
+      ${table("Shell guard: it applies to the next step", ["Setting", "Value"], "guard",
+        [setting("set-guard_level", "Shell guard level", ["guard_level"], guardLevel())])}
     </section>`;
 }
 
@@ -183,9 +184,11 @@ export function checksGroup() {
     </section>
     <section class="panel" aria-labelledby="merge-title">
       <p-heading size="lg"><h2 id="merge-title" tabindex="-1">Merge and cleanup</h2></p-heading>
-      <p-text>How OwlBear merges a pull request, cleans up its branch and waits for CI. Each setting is set in this
-        project, on this machine or globally; the project's value wins, then this machine's, then the global one. None
-        has a built-in default: a step that needs one asks you until it is set.</p-text>
+      <p-text>How OwlBear merges a pull request, cleans up its branch and waits for CI.</p-text>
+      ${more("Where these are set",
+        "Each setting is set in this project, on this machine or globally; the project's value wins, then this "
+        + "machine's, then the global one. None has a built-in default: a step that needs one asks you until it is "
+        + "set.")}
       ${table("Merge and cleanup: they apply to the next merge", ["Setting", "Value"], "prefs", prefRows())}
       <p-text size="xs" color="contrast-medium">Seconds are whole numbers; blank inherits.</p-text>
     </section>
