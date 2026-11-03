@@ -312,17 +312,8 @@ def test_a_lead_chats_lookup_through_the_project_host_waits_past_fifteen_seconds
 
     found, failed = chat_tool("lookup_decisions", question=QUESTION), chat_tool("lookup_decisions", question=QUESTION)
 
-    assert found == {
-        "decisions": [
-            {
-                "id": general.id,
-                "title": general.title,
-                "statement": general.statement,
-                "scope": "global",
-                "origin": "approved",
-            },
-        ],
-    }
+    whole = {"id": general.id, "title": general.title, "statement": general.statement, "scope": "global"}
+    assert found == {"decisions": [whole | {"origin": "approved"}]}
     assert failed["failed"].startswith("its session ended error")
     assert opener.waited == [15.0, pick_tools.WAIT, pick_tools.WAIT]  # the host's chat contract is asked once first
     assert pick_tools.WAIT > 15  # the chat's other calls wait 15 seconds
