@@ -722,8 +722,10 @@ def test_a_failed_lookup_answers_and_logs_whole(picking, monkeypatch, caplog, wh
         monkeypatch.setattr(lookup.decision_store, "load", _raises(decision_store.DecisionsUnavailable(whole_error)))
         failed = f"DecisionsUnavailable: {whole_error}"
     else:
-        monkeypatch.setattr(lookup, "_ran", _raises(RuntimeError(whole_error)))
-        failed = f"RuntimeError: {whole_error}"
+        broke = RuntimeError(whole_error)
+        broke.add_note(f"the session's teardown also failed: OSError: {whole_error}")  # as loop_owner.run adds it
+        monkeypatch.setattr(lookup, "_ran", _raises(broke))
+        failed = f"RuntimeError: {whole_error}\nthe session's teardown also failed: OSError: {whole_error}"
     asked = lookup.Asked(picking.store, Lock(picking.slug), picking.change)
 
     with caplog.at_level("WARNING", logger=lookup.__name__):

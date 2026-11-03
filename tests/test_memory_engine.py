@@ -119,6 +119,7 @@ def test_engine_revision_survives_reads_approval_and_assessment(tmp_path: Path) 
             "outstanding",
             task_id="engine-assessment",
             expected_revision=approved.revision,
+            stale_factor=50,
         ).entry
 
     assert curated.state == MemoryState.CURATED
@@ -309,6 +310,7 @@ def test_assessment_receipt_window_keeps_only_the_twenty_most_recent(tmp_path: P
             "outstanding",
             task_id=f"task-{index}",
             expected_revision=entry.revision,
+            stale_factor=50,
         )
 
     persisted = MemoryEngine(tmp_path).get_entry(entry.id)
@@ -336,6 +338,7 @@ def test_standard_entry_fits_twenty_maximum_length_receipts(tmp_path: Path) -> N
             "outstanding",
             task_id=f"{index:03d}" + "x" * 125,
             expected_revision=entry.revision,
+            stale_factor=50,
         )
 
     persisted = MemoryEngine(tmp_path).get_entry(entry.id)
@@ -372,6 +375,7 @@ def test_assessment_receipts_are_evicted_oldest_first_to_fit_file_limit(tmp_path
         "outstanding",
         task_id="019" + "x" * 125,
         expected_revision=entry.revision,
+        stale_factor=50,
     )
 
     persisted = MemoryEngine(tmp_path).get_entry(entry.id)
@@ -437,7 +441,7 @@ def test_revision_preserving_single_entry_writes_keep_receipts(
     elif operation == "delete":
         updated = engine.delete(entry.id, expected_revision=entry.revision)
     else:
-        updated = engine.try_stale_transition(engine.get_entry(entry.id))
+        updated = engine.try_stale_transition(engine.get_entry(entry.id), 50)
 
     assert updated.revision == entry.revision
     assert updated.assessment_receipts == [receipt]

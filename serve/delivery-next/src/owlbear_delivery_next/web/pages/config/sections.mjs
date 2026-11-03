@@ -5,7 +5,7 @@ import { SOURCES, state, drafts, page, show, notify, shown } from "./state.mjs";
 import { cell, row, table, button, more } from "./cells.mjs";
 import { pendingLine, save, rename, reviewPrefs, hasEdits, anyEdits, pendingIn, useRecommended } from "./layers.mjs";
 import { machineSection } from "./machine.mjs";
-import { agentsGroup, guardrailsGroup, checksGroup } from "./panels.mjs";
+import { agentsGroup, guardrailsGroup, memoryGroup, checksGroup } from "./panels.mjs";
 import { GROUPS, groupOf, renamed, rowOf } from "./groups.mjs";
 import { readsView } from "./reads.mjs";
 
@@ -178,7 +178,8 @@ const FILTERS = [["all", "All settings"], ["unset", "Unset"], ["set", "Set on th
 const NONE = { unset: "No setting in this group is unset.", set: "This layer sets nothing in this group.",
   unsaved: "No unsaved edits in this group." };
 
-const LAYERED = ["agents", "guardrails", "checks"];  // the groups of settings a layer holds, saved by one Save
+// The groups of settings a layer holds, saved by one Save.
+const LAYERED = ["agents", "guardrails", "memory", "checks"];
 
 function filterBar() {
   if (!LAYERED.includes(state.group)) return nothing;
@@ -198,6 +199,7 @@ const GROUP_VIEWS = {
   overview: () => html`${unsetSection()}${acrossSection()}`,
   agents: agentsGroup,
   guardrails: guardrailsGroup,
+  memory: memoryGroup,
   checks: checksGroup,
   project: folderSection,
   "this-machine": machineSection,

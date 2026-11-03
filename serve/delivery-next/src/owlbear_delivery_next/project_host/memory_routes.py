@@ -33,6 +33,7 @@ from owlbear_memory import ValidationError as MemoryValidationError
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from owlbear_delivery_next.local_system import curation_apply, data_repo
+from owlbear_delivery_next.state_store.database import StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -64,15 +65,30 @@ class EditBody(Shown):
 
 
 class PurgeBody(BaseModel):
-    """Remove the files of entries deleted at least this many days ago; Git history keeps them."""
+    """Remove the files of entries deleted at least this many days ago; Git history keeps them.
+
+    Without an age the owner's purge age from the global settings applies; an age sent overrides it.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    min_age_days: int = Field(default=30, ge=0, le=3650)
+    min_age_days: int | None = Field(default=None, ge=0, le=3650)
 
 
 def _shown(entry: MemoryEntry) -> dict[str, Any]:
-    return entry.model_dump(mode="json", exclude={"assessment_receipts"})
+    return entry.model_dump(mode="json", exclude={"assessment_receipts", "score"})  # the stored score ranks nothing
+
+
+UNSET_PURGE = "the purge age is unset; set it in the Memory group of the Settings page"
+
+
+def _purge_age(store: Store) -> tuple[int | None, str]:
+    """The owner's purge age in days from the global settings, and why not when there is none."""
+    try:
+        days = store.settings().memory.purge_days
+    except StoreError as exc:
+        return None, f"the settings can't be read: {exc}"
+    return days, "" if days is not None else UNSET_PURGE
 
 
 REFUSED: tuple[tuple[type[Exception], int, str], ...] = (  # the first match answers; "" says the error's own text
@@ -224,8 +240,11 @@ def reorigin(shared: data_repo.DataRepo, old: str, new: str, until: float) -> st
     return shared.publish(changed, f"memory global: {old} is now {new}", until) if changed else ""
 
 
-def _purge(store: Store, days: int, where: Where) -> dict[str, Any]:
-    """Remove the files of entries deleted ``days`` ago or earlier and publish their removal."""
+def _purge(store: Store, age: int | None, where: Where) -> dict[str, Any]:
+    """Remove the files of entries deleted ``age`` days ago or earlier, else the owner's purge age, and publish it."""
+    days, why = (age, "") if age is not None else _purge_age(store)
+    if days is None:
+        raise HTTPException(409, why)
     folder = folder_of(store, where)
     if not folder.is_dir():
         return {"purged": 0, "skipped": 0, "failed": 0, "notice": ""}
@@ -253,6 +272,7 @@ def router(store: Store) -> APIRouter:
             return {"available": False, "reason": NO_SHARED, "entries": []}
         folder = folder_of(store, where)
         engine = MemoryEngine(folder)
+        days, why = _purge_age(store)
         return {
             "available": True,
             "folder": str(folder),
@@ -262,6 +282,8 @@ def router(store: Store) -> APIRouter:
             "parse_errors": engine.parse_errors,
             "states": [s.value for s in MemoryState],
             "categories": [c.value for c in MemoryCategory],
+            "purge_days": days,
+            "purge_why": why,
         }
 
     @routes.post("/memory/{entry_id}/approve")

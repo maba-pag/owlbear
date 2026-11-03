@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import json
 import os
 import re
@@ -55,10 +56,13 @@ from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home, processes
-from owlbear_delivery_next.machine_host import app, project
+from owlbear_delivery_next.machine_host import app, project, update_checks, versions
+from owlbear_delivery_next.machine_host import impeccable as machine_impeccable
 from owlbear_delivery_next.machine_host import serve as host_start
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import host as host_module
+from owlbear_delivery_next.project_host import leftovers as host_leftovers
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.runtimes import copilot_cli, model_choices
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -217,6 +221,9 @@ def test_changes_of_all_projects_or_one_the_top_row_switches_and_resumes_and_pro
             page.locator("p-drilldown").get_by_role("button", name="Settings").click()
             page.locator("p-drilldown").get_by_role("link", name="Overview").click()
             expect(page).to_have_url(f"{base}/config?project={a.id}#overview")  # a project page opens the first project
+            page.goto(f"{base}/memory")  # under All, the link to the Memory settings keeps the Global layer it names
+            page.get_by_role("link", name="Memory settings").click()
+            expect(page).to_have_url(f"{base}/config?project={a.id}&layer=global#memory")
             browser.close()
     finally:
         server.should_exit = True
@@ -612,6 +619,103 @@ def test_updates_impeccable_with_no_project_answers_a_loaded_projects_run_with_i
         machine.stop_all()
 
 
+@pytest.mark.browser
+@pytest.mark.parametrize("fails", ["write", "removal"])
+def test_updates_impeccable_says_an_install_failure_it_could_not_keep_whole(
+    monkeypatch, capsys, pds, whole_error, fails
+) -> None:
+    """#951: a failed install's record that could not be written, or an ended one that could not be removed, says why
+    whole on Updates and in the host's log."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    path = local_home.root() / pack_files.PACKS / machine_impeccable.FAILED
+    broken, write, unlink = [], Path.write_text, Path.unlink
+
+    def writing(self, *args, **kwargs):
+        if fails == "write" and self.name == f".{machine_impeccable.FAILED}.tmp":
+            broken.append(self)
+            raise OSError(whole_error)
+        return write(self, *args, **kwargs)
+
+    def unlinking(self, *args, **kwargs):
+        if fails == "removal" and self == path:
+            broken.append(self)
+            raise OSError(whole_error)
+        return unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    machine, server, base = serve()
+    running = versions.running()  # its pack is not installed here, so its failure applies
+    machine.impeccable.failed(running, "cannot download")
+    monkeypatch.setattr(Path, "write_text", writing)
+    monkeypatch.setattr(Path, "unlink", unlinking)
+    if fails == "write":
+        machine.impeccable.failed(running, "cannot download again")
+    else:
+        machine.impeccable.ready(running)
+    monkeypatch.setattr(Path, "write_text", write)
+    monkeypatch.setattr(Path, "unlink", unlink)
+    assert broken == [path.with_name(f".{machine_impeccable.FAILED}.tmp") if fails == "write" else path]
+    unkept = f"the failure could not be {'kept in' if fails == 'write' else 'removed from'} {path}: OSError: "
+    unkept += whole_error
+    logged = capsys.readouterr().out
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            said = errors(page)
+            pds.only(page, base)
+            page.goto(f"{base}/updates/impeccable#token=t")
+            expect(page.locator("#pack-install-state")).to_be_visible()
+            shown = page.locator("#pack-unkept")
+            expect(shown).to_be_visible()
+            assert shown.text_content() == f"{unkept[0].upper()}{unkept[1:]}."
+            assert said == []
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    line = r"^\d\d:\d\d:\d\dZ Impeccable: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"  # up to the host log's next line
+    assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [unkept]
+
+
+@pytest.mark.browser
+def test_updates_say_update_checks_that_started_afresh_whole(monkeypatch, capsys, pds, whole_error) -> None:
+    """#951: update checks whose earlier results could not be read at the start say why whole on Updates and in the
+    host's log."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    path = local_home.root() / update_checks.STATE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{}", encoding="utf-8")
+    broken, read = [], Path.read_text
+
+    def reading(self, *args, **kwargs):
+        if self == path:
+            broken.append(self)
+            raise OSError(whole_error)
+        return read(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", reading)
+    unrestored = f"{path} is unreadable, so they start afresh: OSError: {whole_error}"
+    with browsing(monkeypatch, pds) as (page, base):
+        monkeypatch.setattr(Path, "read_text", read)
+        assert broken == [path]
+        logged = capsys.readouterr().out
+        said = errors(page)
+        page.goto(f"{base}/updates/owlbear#token=t")
+        shown = page.locator("#check-settings")
+        expect(shown).to_be_visible()
+        told = r"It looks [^\n]*\.\s+How often is set in Settings → This machine\. Earlier check results were lost: "
+        assert re.fullmatch(told + re.escape(f"{unrestored}."), shown.text_content())
+        assert said == []
+    line = r"^\d\d:\d\d:\d\dZ update checks: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"  # up to the host log's next line
+    assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [unrestored]
+
+
 def targets(scope) -> list[str]:
     """WCAG 2.5.8: each shown control in *scope* still smaller than 24 by 24 pixels once the design system has laid it
     out (under load that takes a moment), by its text."""
@@ -726,7 +830,9 @@ def test_settings_show_a_failed_source_the_models_and_global_s_machine_settings_
         models = page.locator("#models-note")
         expect(models).to_have_text(f"Could not read the offered models ({failed}); type a model name.")
         expect(models).to_be_visible()
-        assert models.text_content() == f"Could not read the offered models ({failed}); type a model name."
+        expect(models).to_have_js_property(
+            "textContent", f"Could not read the offered models ({failed}); type a model name."
+        )
         pds.group(page, "this-machine")
         notice = page.locator("#machine-notice")
         expect(notice).to_be_visible()
@@ -826,7 +932,7 @@ def test_the_menu_reaches_every_page_moves_focus_into_each_level_and_back_to_the
         expect(overview).to_have_attribute("aria-current", "page")
         served = ["/", "/backlog", "/memory", "/decisions", "/metrics", "/improvement", "/projects", "/maintenance"]
         served += ["/updates/owlbear", "/updates/pds", "/updates/impeccable"]
-        groups = ["overview", "agents", "guardrails", "checks", "project", "this-machine"]
+        groups = ["overview", "agents", "guardrails", "memory", "checks", "project", "this-machine"]
         hrefs = menu.locator("a").evaluate_all("as => as.map(a => a.getAttribute('href'))")
         assert sorted(hrefs) == sorted([f"{path}?project={a.id}" for path in served]
                                        + [f"/config?project={a.id}#{group}" for group in groups])  # fmt: skip
@@ -975,6 +1081,99 @@ def test_projects_lists_a_host_s_failed_readiness_checks_whole_under_its_reason(
         page.set_viewport_size({"width": 375, "height": 800})
         assert page.evaluate("document.documentElement.scrollWidth") <= 375
         assert broke == []
+
+
+@pytest.mark.browser
+def test_a_long_unverified_session_end_shows_whole_on_changes(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """#951: a step whose session's end is unproven says why whole in Recent activity, the forced stop and the step's
+    own line; the step's line keeps it once the host found the processes gone and cleared the stop."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "flip"))
+    path = Path(alpha.path)
+    store = Store.open(path)
+    names = Names(branch="owlbear/flip", target="main", worktree=str(path))
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
+    c = Change(slug="flip", brief=Brief(version=1), plan=plan, step=Step(kind=StepKind.BUILD, task="t1"), names=names)
+    stopped = f"runtime stop failed: RuntimeError: {whole_error}"
+    left = processes.Termination(
+        confirmed=False, unknown=(9,), problems=(f"disconnect failed: RuntimeError: {whole_error}",)
+    )
+
+    async def ended(cfg):
+        at = datetime.now(UTC).isoformat(timespec="seconds")
+        cfg.journal.event({"at": at, "event": "force-stop", "reason": stopped, "runtime_pid": 9})
+        return Run(cfg.session_id, "error", None, detail="the session failed", termination=left)
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", ended)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: path)
+    with store.lock("flip") as lock:
+        store.write(lock, c)
+        runner._step(store, lock, c, c.step, path)  # noqa: SLF001
+    why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
+    said = [
+        " ".join(f"Building stopped: {why}".split()),
+        " ".join(f"Tried to force the session to stop: {stopped}".split()),
+    ]
+    present = [True]  # the host finds process 9 until the owner ends it
+    monkeypatch.setattr(host_leftovers, "survivors", lambda *_a: {9: ""} if present[0] else {})
+    monkeypatch.setattr(host_module, "TICK", 0.5)  # the host looks again soon after the owner ended them
+    with browsing(monkeypatch, pds) as (page, base):
+        broke = errors(page)
+        opened(page, base, alpha.id, "flip")
+        lines = page.locator("#detail .log li > span")
+        expect(page.locator("#detail")).to_contain_text("stopped: processes still present: 9")
+        expect(lines).to_have_count(2)
+        assert lines.all_text_contents() == said  # Recent activity collapses whitespace
+        assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+        present[0] = False
+        expect(page.locator("#detail").get_by_text("Stopped", exact=True)).to_have_count(0, timeout=15000)
+        assert lines.all_text_contents() == said  # the step's line keeps why once the host cleared the stop
+        page.set_viewport_size({"width": 390, "height": 800})
+        assert page.evaluate("document.documentElement.scrollWidth") <= 390
+        assert broke == []
+
+
+@pytest.mark.browser
+def test_a_crashed_runner_s_whole_error_shows_in_recent_activity(
+    tmp_path: Path, monkeypatch, capsys, pds, whole_error
+) -> None:
+    """D-01M6GCGED6NRBVEB2XGKRPCKX0: a Change runner that crashes says its whole error, notes included, in Recent
+    activity and on its output, runner.log; the exception still ends the runner, whose traceback follows there."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "flip"))
+    path = Path(alpha.path)
+    store = Store.open(path)
+    names = Names(branch="owlbear/flip", target="main", worktree=str(path))
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
+    c = Change(slug="flip", brief=Brief(version=1), plan=plan, step=Step(kind=StepKind.BUILD, task="t1"), names=names)
+    note = f"the session's teardown also failed: OSError: {whole_error}"
+
+    async def crashing(_cfg):
+        broke = RuntimeError(whole_error)
+        broke.add_note(note)  # as loop_owner.run adds it
+        raise broke
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", crashing)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: path)
+    with store.lock("flip") as lock:
+        store.write(lock, c)
+    with pytest.raises(RuntimeError) as crashed:
+        contextvars.copy_context().run(runner.main, ["flip", "--repo", str(path)])  # it sets the process's spend place
+    assert (str(crashed.value), crashed.value.__notes__) == (whole_error, [note])
+    reason = f"RuntimeError: {whole_error}\n{note}"
+    printed = [json.loads(line) for line in capsys.readouterr().out.splitlines() if '"runner-failed"' in line]
+    assert [e["reason"] for e in printed] == [reason]
+    with browsing(monkeypatch, pds) as (page, base):
+        broke = errors(page)
+        opened(page, base, alpha.id, "flip")
+        expect(page.locator("#detail")).to_contain_text("Recent activity")
+        expect(page.locator("#detail")).to_contain_text("Build 1/1 · the runner failed")
+        lines = page.locator("#detail .log li > span")
+        assert lines.all_text_contents() == [" ".join(f"Runner failed: {reason}".split())]  # whitespace collapsed
+        assert broke == []
+    assert [e["reason"] for e in store.events("flip") if e.get("event") == "runner-failed"] == [reason]
 
 
 @pytest.mark.browser

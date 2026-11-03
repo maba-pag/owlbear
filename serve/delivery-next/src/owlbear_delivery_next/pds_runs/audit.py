@@ -19,7 +19,8 @@ from typing import TYPE_CHECKING, Any, Literal
 import jsonschema
 
 from owlbear_delivery_next.change_contracts import audit_tools
-from owlbear_delivery_next.pds_runs import pin
+from owlbear_delivery_next.pds_runs import audit_markdown, pin
+from owlbear_delivery_next.runtimes import session_result
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -123,7 +124,8 @@ def message(version: str, ident: str) -> str:
     return (
         f"Audit this project for deprecated Porsche Design System use with the `{SKILL}` skill: PDS {version}, "
         f"{pin.NAME} under node_modules/. The project root is your working folder and `.` is its one package. "
-        f"Use runId {ident}. Submit both reports with submit_result; write no file."
+        f"Use runId {ident}. Submit only the JSON report with submit_result; Delivery renders its Markdown; "
+        "write no file."
     )
 
 
@@ -139,10 +141,14 @@ def audit(
     ident = run_id()
     skills = lay_out(at, web, tree, version)
     schema = json.loads((tree / SCHEMA).read_text(encoding="utf-8"))
+    try:
+        template = audit_markdown.template(tree, schema)
+    except ValueError as exc:
+        return Audit(Verdict("stop", str(exc)), ident)
     before = digests(at)
     done = session(at, skills, message(version, ident))
     if moved := changed(before, digests(at)):  # first: a changed copy voids whatever the report says
-        return Audit(Verdict("stop", f"the auditor changed its copy: {', '.join(moved[:5])}"), ident)
+        return Audit(Verdict("stop", f"the auditor changed its copy: {', '.join(moved[:5])}{_gone(done)}"), ident)
     result = done.payload if isinstance(done.payload, audit_tools.AuditResult) else None
     if why := _unended(done, result):
         return Audit(Verdict("stop", why), ident)
@@ -153,38 +159,54 @@ def audit(
         return Audit(
             Verdict("stop", f"the audit report is not JSON: {type(exc).__name__}: {exc}"),
             ident,
-            markdown=result.markdown,
         )
-    verdict = judge(report, schema=schema, version=version, at=at)
     kept = report if isinstance(report, dict) else None
-    return Audit(verdict, ident, kept, result.report if kept is not None else "", result.markdown)
+    if why := _schema_error(report, schema):
+        return Audit(Verdict("stop", why), ident, kept, result.report if kept is not None else "")
+    verdict = _judge(report, version=version, at=at)
+    return Audit(verdict, ident, report, result.report, audit_markdown.render(report, template))
+
+
+def _gone(done: Run) -> str:
+    """Nothing when the session's processes are proven ended, else why not, after a '; '."""
+    t = done.termination
+    return "" if t is not None and t.confirmed else f"; {session_result.unverified(t)}"
 
 
 def _unended(done: Run, result: audit_tools.AuditResult | None) -> str:
-    t = done.termination
+    gone = _gone(done)
     if done.ending != "result" or result is None:
-        return f"the auditor submitted no report: ended {done.ending}; {done.detail}"
-    if t is None or not t.confirmed:
-        return "the auditor's processes are not proven ended; recover the session on the Maintenance page"
+        return f"the auditor submitted no report: ended {done.ending}; {done.detail}{gone}"
+    if gone:
+        return f"the auditor's processes are not proven ended; recover the session on the Maintenance page{gone}"
     if done.usage_unread:
         return f"the auditor's model is unknown: {done.usage_unread}"
     return ""
 
 
-def judge(report: object, *, schema: dict[str, Any], version: str, at: Path | None = None) -> Verdict:  # noqa: PLR0911
+def judge(report: object, *, schema: dict[str, Any], version: str, at: Path | None = None) -> Verdict:
     """The gate's verdict on *report* from the copy at *at*: every stop first, then findings, follow-ups, a pass."""
+    if why := _schema_error(report, schema):
+        return Verdict("stop", why)
+    assert isinstance(report, dict)  # noqa: S101 - the schema requires an object
+    return _judge(report, version=version, at=at)
+
+
+def _schema_error(report: object, schema: dict[str, Any]) -> str:
     errors = sorted(jsonschema.Draft202012Validator(schema).iter_errors(report), key=lambda e: list(e.absolute_path))
     if errors:
         where = "/".join(str(p) for p in errors[0].absolute_path) or "the report"
-        return Verdict("stop", f"the audit report breaks its schema at {where}: {errors[0].message}")
-    assert isinstance(report, dict)  # noqa: S101 - the schema requires an object
+        return f"the audit report breaks its schema at {where}: {errors[0].message}"
+    return ""
+
+
+def _judge(report: dict[str, Any], *, version: str, at: Path | None) -> Verdict:
     if (result := report["summary"]["result"]) != "completed":
         return Verdict("stop", f"the audit ended {result}: {_gaps(report)}")
     if why := _mismatch(report["audit"], version):
         return Verdict("stop", why)
-    if gaps := _gaps(report):
-        return Verdict("stop", f"the audit disclosed gaps: {gaps}")
-    if why := _scope(report["scope"], at):
+    gaps = _gaps(report)
+    if why := f"the audit disclosed gaps: {gaps}" if gaps else _scope(report["scope"], at):
         return Verdict("stop", why)
     if report["findings"]:
         return Verdict("findings", findings=[f for item in report["findings"] for f in mapped(item, at)])
@@ -255,4 +277,5 @@ def write(out: Path, done: Audit) -> None:
     folder = out / REPORTS / done.run_id
     folder.mkdir(parents=True, exist_ok=True)
     (folder / f"{SKILL}.json").write_text(done.raw, encoding="utf-8")
-    (folder / f"{SKILL}.md").write_text(done.markdown, encoding="utf-8")
+    if done.markdown:
+        (folder / f"{SKILL}.md").write_text(done.markdown, encoding="utf-8")

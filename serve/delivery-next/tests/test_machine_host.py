@@ -105,14 +105,14 @@ def test_the_chat_server_calls_its_projects_api_on_the_machine_host(tmp_path, ht
         def open(self, request, **_kw):
             sent.append((request.full_url, request.headers.get("X-owlbear-chat")))
             if request.full_url.endswith("/chat/contract"):
-                return Answer(b'{"supported": [1, 2, 3]}')
+                return Answer(b'{"supported": [1, 2, 3, 4]}')
             raise OSError
 
     monkeypatch.setattr(chat_client, "_LOCAL", Opener())
     chat = chat_client.workspace(Path(p["path"]))
     chat.call("GET", "/changes")
-    assert sent == [("http://127.0.0.1:9/api/next/chat/contract", "3"),
-                    (f"http://127.0.0.1:9/p/{p['id']}/api/next/changes", "3")]  # fmt: skip
+    assert sent == [("http://127.0.0.1:9/api/next/chat/contract", "4"),
+                    (f"http://127.0.0.1:9/p/{p['id']}/api/next/changes", "4")]  # fmt: skip
 
 
 class Answer(io.BytesIO):
@@ -228,7 +228,7 @@ def test_a_folder_that_is_no_owlbear_project_gets_every_tool_refused_and_nothing
         assert "new Copilot-runtime chat" in message
         assert "MCP: List Servers → owlbear-delivery → Stop Server, then Start Server" in message
         assert "Restart Local Agent Host" not in message
-    unsupported = "OwlBear does not serve this chat's owlbear-delivery server (chat contract 0; it serves 1, 2, 3)"
+    unsupported = "OwlBear does not serve this chat's owlbear-delivery server (chat contract 0; it serves 1, 2, 3, 4)"
     assert stale.startswith(unsupported)  # the chat asks the host's contracts first
     chat = mcp_server._STATE["chat"]  # noqa: SLF001
     chat.checked = (machine.record.pid, machine.record.started_at.isoformat())  # past the contract check
@@ -527,7 +527,7 @@ def test_a_recovered_legacy_pack_generation_is_not_resurrected_by_an_empty_recei
 def test_an_unconfirmed_pack_run_keeps_the_machine_busy_and_not_left_until_its_reboot_recovery(machine):
     """The pack ledger holds at machine scope even with no loaded project, so an update or stop waits for it."""
     ident = machine.maintenance.begin("unloaded", "pack:unloaded", "pack", "", now=datetime.now(UTC))
-    machine.maintenance.failed(ident, RuntimeError("synthetic unconfirmed run"))
+    machine.maintenance.failed(ident, "RuntimeError: synthetic unconfirmed run")
     assert (bool(machine.busy()), bool(machine.left())) == (True, True)
     booted = machine.maintenance.boot
     machine.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the unconfirmed run

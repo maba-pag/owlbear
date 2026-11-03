@@ -257,10 +257,10 @@ Machine preferences and this machine's own settings are always **this Mac only**
 The latter keep their separate **Save machine settings** button and confirmation.
 The per-project session limit and the machine-wide limit across all projects remain separate.
 
-The **Agents and runs**, **Guardrails** and **Checks and merge** groups have a **Show** menu: all settings, only the
-**unset** ones, only those the chosen layer **sets** (as saved), or only those with **unsaved** edits. It hides the
-other rows and any panel left without one, and stays across those groups and layers until you follow a link to a
-setting. A group's long explanations sit behind disclosures, closed until opened.
+The **Agents and runs**, **Guardrails**, **Memory** and **Checks and merge** groups have a **Show** menu: all
+settings, only the **unset** ones, only those the chosen layer **sets** (as saved), or only those with **unsaved**
+edits. It hides the other rows and any panel left without one, and stays across those groups and layers until you
+follow a link to a setting. A group's long explanations sit behind disclosures, closed until opened.
 
 Three of them, in **Settings → Your instructions, skills and memory**, decide whether Delivery's agent steps
 also use your own Copilot files from `~/.copilot` (or `$COPILOT_HOME`) and Copilot Memory. **Your instructions in
@@ -291,6 +291,26 @@ level a read-only step's writes stay refused, and so do the step's folder, tool 
 when it starts. Like those three, it has no default and the Spotter does not need it: while it is unset, the project's
 work waits, and an Impeccable update or automatic memory curation ends without starting one. Set it on the Global layer
 right after the first install of the version that adds it.
+
+**Memory**, in **Settings → Memory**, holds the numbers memory management uses. Each is Global's alone, one value for
+every project and machine, and shows read-only on the other layers. An agent's rating of a memory entry moves its
+**score**: its confidence, plus the **points an outstanding rating adds** for each outstanding rating, minus the
+**points an unremarkable rating takes off** for each unremarkable one. Recall ranks by that score as it works it out
+when it ranks, so a changed value reorders the next recall and rewrites no entry. An entry goes stale at a rating when
+its skipped ratings exceed the **skipped ratings per other rating before an entry is stale** times its outstanding and
+unremarkable ratings together (counted as 1 when there are none); stale entries wait for your review on the Memory
+page, raising the factor revives none, and nothing is deleted by score. The other values are the **lessons a step
+starts with** (their count and their characters), the **entries the recall tool returns** when an agent gives it no
+limit, its **recall slots** for the least-rated and the least-outstanding entries, and the **days a deleted entry
+waits** before the Memory page's **Remove** button may delete its file. The curator's confidence threshold sits in this
+group too, moved from Guardrails.
+
+None of the nine values has a default: while one is unset, the project's work waits as described above, the memory
+tools refuse the ratings and recalls that need it, naming it, and a step's starting lessons say so instead of listing
+any. They start unset after the update that adds them, so choose the Global layer, set each once and save. The values
+the code held before were 0.1, 0.01, 50, 30 days, 5 lessons, 2000 characters, 20 entries and 2 and 2 slots; enter
+them to keep memory as it was. The Memory page links to this group, and its **Remove** button, which now takes the
+purge age from here, stays disabled with the reason while it is unset.
 
 The machine settings in **Settings → This machine** (versions, updating itself, curation per
 trigger, sessions at once) work the same way: each machine follows the global ones, which you
@@ -331,6 +351,10 @@ one, checks it, and switches only while nothing runs; it never moves to an older
   server over the same memory and knowledge stores, so a version that changes how they store data
   must read and write what the versions still running write, with tests that an older server's
   writes survive.
+- A memory server reads the memory values from the global settings at each request, but its code is the version it
+  started with: one started before the update that added them keeps ranking by each entry's stored score and its
+  built-in numbers until its chat ends or you stop and start it (**MCP: List Servers** → `owlbear-memory` → **Stop
+  Server**, then **Start Server**), so restart it after you set the values.
 
 ---
 

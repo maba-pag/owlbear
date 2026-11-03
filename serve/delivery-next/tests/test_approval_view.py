@@ -468,11 +468,12 @@ def test_a_change_reads_by_its_title_and_its_slug_stands_in_while_it_has_none(pa
 
 
 @pytest.mark.browser
-def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_counted(page_url, pds) -> None:
-    """C4: the display only; the activity file keeps every event as recorded."""
+def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_counted(page_url, pds, whole_error) -> None:
+    """C4: the display only; the activity file keeps every event as recorded. A force-stop reason shows whole (#951)."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
+    stopped = f"runtime stop failed: RuntimeError: {whole_error}"
     events = [
         {"event": "step", "kind": "cleanup", "exit": "done", "at": "2026-10-16T00:59:00+00:00",
          "reason": "workspace kept: large ignored files (/Users/Jane Doe/.owlbear/wt/flip)"},
@@ -498,14 +499,15 @@ def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_coun
         {"event": "lint", "ran": [{"tool": "ruff", "files": ["a.py"], "state": "passed"},
                                   {"tool": "mypy", "files": ["a.py"], "state": "broken"}],
          "skipped": [], "passed": True, "at": "2026-10-16T01:06:10+00:00"},  # a repeat break no longer blocks
-        {"event": "force-stop", "reason": "stop timed out", "runtime_pid": 41, "at": "2026-10-16T01:06:20+00:00"},
+        {"event": "force-stop", "reason": stopped, "runtime_pid": 41, "at": "2026-10-16T01:06:20+00:00"},
     ]  # fmt: skip
     for e in events:
         store.log(Lock("flip"), "flip", e)
     with opened(base, "flip", pds) as page:
         lines = page.locator("#detail .log li")
         expect(lines).to_have_count(11)
-        expect(lines.nth(0)).to_contain_text("Tried to force the session to stop: stop timed out")
+        said = lines.nth(0).locator(":scope > span")
+        assert said.text_content() == " ".join(f"Tried to force the session to stop: {stopped}".split())  # one line
         expect(lines.nth(1)).to_contain_text("Lint incomplete (ruff, mypy could not run)")
         expect(lines.nth(2)).to_contain_text("Clean-up waiting: waiting for checks")
         expect(lines.nth(3)).to_have_text(re.compile(r"Undid task t1, attempt 2$"))  # not counted with the failure

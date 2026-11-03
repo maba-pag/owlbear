@@ -56,6 +56,7 @@ function stands() {
           pin.identity}. ${plain(pin.status)}.</dd>` : nothing}
         ${install ? html`<dd id="pack-install-state">${installed(install)} on this machine${install.detail
           ? `: ${install.detail}` : ""}.</dd>` : nothing}</div>` : nothing}
+      ${fact("Install record", bar?.pack?.unkept ? `${sentence(bar.pack.unkept)}.` : "", "pack-unkept")}
       ${fact("Released", released(bar), "pack-release")}
       ${own.runs ? fact("Published", published(run), "pack-published") : nothing}
       ${own.runs ? fact("Candidate", candidate(run), "pack-candidate") : nothing}

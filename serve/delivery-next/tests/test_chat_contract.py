@@ -3,6 +3,7 @@
 import asyncio
 import fcntl
 import io
+import itertools
 import json
 import os
 import subprocess
@@ -314,7 +315,7 @@ def http(monkeypatch):
     m.stop_all()
 
 
-@pytest.mark.parametrize("sent", ["4", "", "01", "²", "1" * 5000])
+@pytest.mark.parametrize("sent", ["5", "", "01", "²", "1" * 5000])
 def test_a_host_refuses_a_contract_it_does_not_serve_before_any_route_runs(tmp_path, http, shared_repo, monkeypatch,
                                                                            sent):  # fmt: skip
     monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
@@ -337,7 +338,7 @@ def test_a_host_refuses_a_contract_it_does_not_serve_before_any_route_runs(tmp_p
                            capture_output=True, text=True, check=True).stdout  # fmt: skip
     assert after == head
     served = http.get("/api/next/chat/contract", headers={chat_contract.HEADER: "1"}).json()
-    assert served == {"supported": [1, 2, 3], "admit_by": True}
+    assert served == {"supported": [1, 2, 3, 4], "admit_by": True}
 
 
 def test_a_host_reply_without_what_a_chat_reads_breaks_the_contract(chat_replied):
@@ -360,3 +361,135 @@ def test_a_brief_the_host_could_not_give_is_told_not_left_out(monkeypatch):
     }, record())  # fmt: skip
     status = chat.show_status("c1")
     assert ("brief" in status, status["error"]) == (False, "brief: handing over; call show_status again")
+
+
+ROW = {"handle": "c1", "slug": "c1-shop", "step": "shape", "line": "Shape · the challenger runs", "action": None,
+       "actor": "delivery"}  # fmt: skip
+RUNNING = {"running": True, "version": 2}
+FOUND = {"running": False, "version": 2, "findings": [{"id": "F1", "state": "open"}], "approvable": False}
+WAITING = {  # a challenge that never ends, asked for at v2, as the host answers it
+    "GET /chat/contract": SERVES, "POST /briefs/challenge": {"slug": "c1-shop", "attempt": 1},
+    "GET /changes": [ROW], "GET /chat/brief/c1-shop": {"challenge": {"version": 2, "attempt": 1}},
+    "GET /chat/challenge/c1-shop": RUNNING,
+}  # fmt: skip
+
+
+class Slow:
+    """A virtual clock for a chat's waits: every request takes its whole 15 s allowance, a pause its own length."""
+
+    def __init__(self, monkeypatch, answers: dict[str, object], host=Answering) -> None:
+        self.now = 0.0
+        self.chat, self.host = chat_client.Chat(Path("shop"), Path("home")), host(dict(answers))
+        pids = itertools.count(100)  # a host that restarts at every request: each one asks its contract again
+        monkeypatch.setattr(self.chat, "record", lambda: record().model_copy(update={"pid": next(pids)}))
+        monkeypatch.setattr(self.chat, "send", self.send)
+        monkeypatch.setattr(chat_client, "time", SimpleNamespace(monotonic=lambda: self.now))
+        monkeypatch.setattr(chat_client, "_pause", self.pause)
+
+    def send(self, *args, **kwargs):
+        self.now += 15
+        return self.host(*args, **kwargs)
+
+    def pause(self, seconds: float) -> None:
+        self.now += seconds
+
+
+def test_a_challenge_wait_ends_under_the_clients_limit_with_every_request_taking_its_whole_allowance(monkeypatch):
+    slow = Slow(monkeypatch, WAITING)
+    took = []
+    for ask in (lambda: slow.chat.challenge_brief("c1", 2, []), lambda: slow.chat.await_challenge("c1", 2)):
+        slow.now = 0.0
+        assert ask()["running"] is True
+        took.append(slow.now)
+    assert max(took) < 170  # the Copilot client cuts an MCP tool call at 180 s: the old wait took 645
+
+
+def test_a_wait_for_a_version_that_is_not_the_draft_any_more_gets_the_error_not_the_findings_of_the_draft(monkeypatch):
+    slow = Slow(monkeypatch, WAITING | {"GET /chat/challenge/c1-shop": FOUND | {"version": 3}})
+    assert slow.chat.await_challenge("c1", 2) == {"error": "brief v2 was replaced: the host's current draft is v3"}
+    assert slow.chat.await_challenge("c1", 1) == {"error": "brief v1 is not the current draft v2"}
+    assert [p for _, p, _ in slow.host.got if p.startswith("/chat/challenge")] == [
+        "/chat/challenge/c1-shop?version=2&attempt=1"
+    ]  # the second asked nothing of the challenge
+
+
+@pytest.mark.parametrize(("row", "told"), [
+    ({"actor": "you", "action": "Resume"}, {"running": False, "owner_action": "Resume"}),
+    ({"actor": "you", "action": "Approve brief"}, {"running": True}),  # the shaper's own wait is no owner action
+    ({"actor": "delivery", "step": "cleanup"}, {"running": False, "next": "the Change is no longer being shaped"}),
+    ({}, {"running": True, "next": chat_client.STILL}),
+])  # fmt: skip
+def test_a_wait_that_ends_still_running_says_who_must_act(monkeypatch, row, told):
+    slow = Slow(monkeypatch, WAITING | {"GET /changes": [ROW | row]})
+    out = slow.chat.await_challenge("c1", 2)
+    assert told.items() <= out.items()
+    assert out["line"] == ROW["line"]
+
+
+class Landing(Answering):
+    """A host whose challenge changes right after its second answer about the Changes (the end-of-wait row read)."""
+
+    then: dict[str, object] = FOUND  # what the challenge answers from then on
+
+    def __call__(self, *args, **kwargs):
+        out = super().__call__(*args, **kwargs)
+        if [p for _, p, _ in self.got].count("/changes") == 2:
+            self.answers["GET /chat/challenge/c1-shop"] = self.then
+        return out
+
+
+class Replacing(Landing):
+    """The same, but what lands is the next draft, which still runs (its decisions are being picked)."""
+
+    then = RUNNING | {"version": 3}
+
+
+def test_a_verdict_that_lands_after_the_last_running_read_is_told_as_the_verdict_not_as_an_owner_action(monkeypatch):
+    slow = Slow(monkeypatch, WAITING | {"GET /changes": [ROW | {"actor": "you", "action": "Resume"}]}, Landing)
+    out = slow.chat.await_challenge("c1", 2)
+    assert (out["running"], [f["id"] for f in out["findings"]]) == (False, ["F1"])
+    assert "owner_action" not in out
+
+
+def test_a_draft_that_replaces_the_awaited_one_is_told_as_replaced_whether_its_challenge_runs_or_not(monkeypatch):
+    slow = Slow(monkeypatch, WAITING | {"GET /chat/challenge/c1-shop": RUNNING | {"version": 3}})
+    replaced = {"error": "brief v2 was replaced: the host's current draft is v3"}
+    assert slow.chat.await_challenge("c1", 2) == replaced  # at its first read: the next draft's pick runs
+    assert [p for _, p, _ in slow.host.got].count("/changes") == 1  # the wait ended there, with no owner-action read
+    slow = Slow(monkeypatch, WAITING | {"GET /changes": [ROW | {"actor": "you", "action": "Resume"}]}, Replacing)
+    assert slow.chat.await_challenge("c1", 2) == replaced  # at its last read, after the Change's row
+
+
+class Cutting(Answering):
+    """A host that cannot answer about the Changes the second time: the row read at the end of a wait."""
+
+    def __call__(self, *args, **kwargs):
+        out = super().__call__(*args, **kwargs)
+        second = [p for _, p, _ in self.got].count("/changes") == 2
+        return (503, {"error": "the host is handing over"}) if second else out
+
+
+@pytest.mark.parametrize(("host", "answers"), [
+    (Answering, {"GET /chat/challenge/c1-shop": (503, {"error": "the host is handing over"})}),  # from the first read
+    (Cutting, {}),  # only the row read at the end of the wait
+])  # fmt: skip
+def test_a_read_that_fails_keeps_its_error_text_and_says_the_outcome_is_unknown(monkeypatch, host, answers):
+    slow = Slow(monkeypatch, WAITING | answers, host)
+    out = slow.chat.await_challenge("c1", 2)
+    assert out == {"error": "the host is handing over", "next": chat_client.UNKNOWN_OUTCOME}
+    if host is Cutting:
+        assert [p for _, p, _ in slow.host.got].count("/changes") == 2
+
+
+@pytest.mark.parametrize(("failing", "error"), [
+    ("GET /changes", "the host is handing over"),
+    ("GET /chat/brief/c1-shop", "brief: the host is handing over; call show_status again"),
+])  # fmt: skip
+def test_a_wait_whose_first_reads_fail_says_the_outcome_is_unknown_but_an_unknown_handle_is_only_unknown(
+    monkeypatch, failing, error
+):
+    slow = Slow(monkeypatch, WAITING | {failing: (503, {"error": "the host is handing over"})})
+    assert slow.chat.await_challenge("c1", 2) == {"error": error, "next": chat_client.UNKNOWN_OUTCOME}
+    slow = Slow(monkeypatch, WAITING)
+    out = slow.chat.await_challenge("c9", 2)
+    assert ("c9 is not a Change here" in out["error"], "next" in out) == (True, False)

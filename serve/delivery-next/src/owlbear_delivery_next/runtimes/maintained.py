@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import maintenance
 from owlbear_delivery_next.runtimes import session_result
 
@@ -46,13 +47,13 @@ def run_owned(  # noqa: PLR0913 - owner, session and work are the inputs; the ad
         try:
             owner.finished(ident, returned.run)
         except BaseException as cleanup:  # noqa: BLE001 - recorded for any exit, then re-raised
-            returned.add_note(f"maintenance ownership also failed to persist ({type(cleanup).__name__})")
+            returned.add_note(f"maintenance ownership also failed to persist: {failure(cleanup)}")
         raise
     except BaseException as primary:
         try:
-            owner.failed(ident, primary)
+            owner.failed(ident, failure(primary))
         except BaseException as cleanup:  # noqa: BLE001 - recorded for any exit, then re-raised
-            primary.add_note(f"maintenance ownership also failed to persist ({type(cleanup).__name__})")
+            primary.add_note(f"maintenance ownership also failed to persist: {failure(cleanup)}")
         raise
     owner.finished(ident, done)
     return done

@@ -26,6 +26,8 @@ from owlbear_delivery_next.runtimes.session_result import Run
 REPORT = MemoryCurationResult(summary="curated", entries=[])
 CURATOR = "chore: memory curation batch (memory-mcp, memory-curator)"
 HELD = re.compile(r"refs/owlbear/curation/[0-9a-f]{32}")
+WHOLE = "the session broke at its start\n" + "and then in its middle\n" * 30 + "and at its end"
+NOTE = "a note added on the way up"
 FULL = "[Errno 28] No space left on device"
 
 
@@ -239,18 +241,21 @@ def test_a_failed_run_that_cannot_be_held_shows_both_failures_in_full_in_its_row
         reword(cfg.memory, entry.id, "Lesson: the curator's version")
         if ends == "returned":  # an SDK failure comes back as the run's result
             return Run(cfg.session_id, ending="error", detail=broke, termination=Termination(confirmed=True))
-        raise RuntimeError(broke)
+        exc = RuntimeError(WHOLE)
+        exc.add_note(NOTE)
+        raise exc
 
     monkeypatch.setattr(curation_tree.subprocess, "run", run_)
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
     job.start("shop")
     row = drained(job)
 
-    ran = f"RuntimeError: {broke}" if ends == "raised" else f"ended error: {broke}"
+    ran = f"RuntimeError: {WHOLE}\n{NOTE}" if ends == "raised" else f"ended error: {broke}"
+    failed = f"DataRepoError: git update-ref failed: {said.strip()}"
     assert row.state == "failed"
-    assert f"{ran}; its edits are not held in a curation ref: DataRepoError: git update-ref failed: {said.strip()}" in (
-        row.reason
-    )
+    assert f"{ran}; its edits are not held in a curation ref: {failed}" in row.reason
+    if ends == "raised":
+        assert row.reason == f"RuntimeError: {ran}; its edits are not held in a curation ref: {failed}"
     (logged,) = [r for r in caplog.records if r.name == curation.__name__]
     assert (ran in caplog.text, said.strip() in caplog.text, logged.exc_info is not None) == (True, True, True)
 
@@ -340,7 +345,9 @@ def test_an_accepted_run_publishes_its_edits_once_and_leaves_pending_and_receipt
     pushed(repo, "curated entries")
     p1, p2 = pending(shop, "To curate"), pending(shop, "Left pending")
     c = MemoryEngine(shop).get_entry(c.id)
-    MemoryEngine(shop).record_assessment(c.id, "outstanding", task_id="task-1", expected_revision=c.revision)
+    MemoryEngine(shop).record_assessment(
+        c.id, "outstanding", task_id="task-1", expected_revision=c.revision, stale_factor=50
+    )
     seed = {p1.id: (repo / rel(p1)).read_bytes(), c.id: (repo / rel(c)).read_bytes()}
     start = bare(remote, "rev-parse", "main").stdout.strip().decode()
     made = {}
@@ -443,8 +450,9 @@ def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(rep
         failing.append(True)  # the seed's own prune ran
         reword(cfg.memory, entry.id, "Lesson: the curator's version")
         if raises:
-            msg = "the session broke: " + "x" * 400  # longer than a row's reason keeps
-            raise RuntimeError(msg)
+            exc = RuntimeError(WHOLE)
+            exc.add_note(NOTE)
+            raise exc
         return Run(cfg.session_id, termination=Termination(confirmed=True), **REFUSALS["unread"])
 
     monkeypatch.setattr(curation_tree, "_git", git_)
@@ -453,6 +461,10 @@ def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(rep
 
     row = drained(job)
     assert (row.state, curation_tree.LISTED in row.reason, bool(HELD.search(row.reason))) == ("failed", True, True)
+    if raises:  # each wrapper on the way up keeps the whole failure, note included
+        where = f"its edits are held, never published, in {HELD.search(row.reason).group()}"
+        ran = f"RuntimeError: {WHOLE}\n{NOTE}"
+        assert row.reason == f"RuntimeError: {curation_tree.LISTED}; RuntimeError: {where}; {ran}"
     assert [r.getMessage() for r in caplog.records if r.name == curation_tree.__name__] == [
         f"{repo} still lists a finished curation run's worktree: {LOCKED}"
     ]
@@ -822,6 +834,16 @@ def test_an_apply_whose_folder_another_process_holds_stays_cut_short(repo, monke
 
     assert (resumed.done, resumed.said.startswith("MemoryBusyError: "), CUT in resumed.said) == (False, True, True)
     assert ((repo / rel(entry)).read_bytes(), curation_apply.read(shared) is not None) == (seed, True)
+
+
+def test_a_curation_run_is_seeded_with_the_global_settings_whole_memory_values_included(repo, tmp_path) -> None:
+    """The curator's memory server reads the settings beside its worktree: one copy of Global's file, byte for byte."""
+    text = '{"format": 21, "curator_threshold": 90, "memory": {"stale_factor": 50, "purge_days": 14}}'
+    (repo / "config.json").write_text(text)
+
+    tree = curation_tree.seed(DataRepo(repo), tmp_path / "run", ["shop"])
+
+    assert (tree.root / "config.json").read_text() == text
 
 
 def test_an_apply_finished_first_leads_the_refusal_of_a_run_whose_file_changed_meanwhile(repo, tmp_path) -> None:

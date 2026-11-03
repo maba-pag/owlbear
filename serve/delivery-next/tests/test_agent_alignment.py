@@ -42,6 +42,7 @@ CURATOR_TOOLS = {  # the memory curator's (item 5 slice 3)
     "commit_memory_batch",
 }  # fmt: skip
 CHAT_TOOLS = {"save_brief", "save_visual_check", "challenge_brief", "show_status", "answer_question"}  # owner chat
+CHAT_TOOLS |= {"await_challenge"}  # the wait for a brief challenge that outlasts the client's tool limit (contract 3)
 CHAT_TOOLS |= {"find_decisions", "record_decision", "read_back_decision"}  # TD-419 slice 5a, not granted to the shaper
 CHAT_TOOLS |= {"queue_read_back"}  # TD-427: the read-back queue, not granted to the shaper
 CHAT_TOOLS |= {"retire_decision"}  # TD-450: decisions changed in a lead chat, not granted to the shaper
@@ -54,8 +55,8 @@ VOCABULARY |= {tools.FIRST_LOOK, tools.SCAN_DESIGN, tools.LOOKUP} | COPILOT_MEMO
 ALIASES = (f"{preload.MEMORY}/", f"{setup.SERVER}/")  # a server's tool is named bare or as <server>/<tool>
 SHAPER_TOOLS = [  # the names a window chat's agent file grants, each verified live (TD-109)
     *("view", "glob", "grep", "web_fetch", "ask_user", "owlbear-memory/recall_memory", "owlbear-memory/save_memory"),
-    *(f"{setup.SERVER}/{name}" for name in ("save_brief", "save_visual_check", "challenge_brief", "show_status")),
-    f"{setup.SERVER}/answer_question",
+    *(f"{setup.SERVER}/{name}" for name in ("save_brief", "save_visual_check", "challenge_brief", "await_challenge")),
+    *(f"{setup.SERVER}/{name}" for name in ("show_status", "answer_question")),
 ]
 VERBS = "submit|report|ask|recall|save|assess|scan|read|list|write|stop"
 LOOKALIKE = re.compile(rf"(?:{VERBS})_[a-z_]+|[a-z_]+_(?:bash|agents?|memory|memories)")  # unknown: a tool typo

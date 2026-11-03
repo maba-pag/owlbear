@@ -92,9 +92,24 @@ def challenge_brief(
         ),
     ] = False,
 ) -> dict[str, Any]:
-    """Ask for the brief version's challenge once the draft is ready; waits for its verdict, gives findings by ID."""
+    """Ask for the brief version's challenge once the draft is ready; waits about 70 s for its verdict.
+
+    Gives findings by ID, or says it still runs: then call await_challenge.
+    """
     found = [r.model_dump() for r in rejected or []]
     return _STATE["chat"].challenge_brief(change, version, found, retry_pick=retry_pick)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
+def await_challenge(
+    change: Annotated[str, Field(description="Handle of the Change", examples=["c1"])],
+    version: Annotated[int, Field(description="The brief version whose challenge you wait for", examples=[2])],
+) -> dict[str, Any]:
+    """Wait about 70 s for a requested challenge; it asks for nothing. Gives findings by ID, who must act, or running.
+
+    While it says running, call it again at once.
+    """
+    return _STATE["chat"].await_challenge(change, version)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))

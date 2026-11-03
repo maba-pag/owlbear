@@ -1,5 +1,6 @@
 """Impeccable update tooling (design skill research §3.5): notice, rule diff, golden pages, calibration replay."""
 
+import contextlib
 import dataclasses
 import hashlib
 import json
@@ -12,10 +13,13 @@ from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from pathlib import Path
+from types import SimpleNamespace
 from typing import ClassVar
 from urllib.error import HTTPError
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.visual_records import DesignInput, JudgeVerdict, OwnerDecision, VisualRound
@@ -25,7 +29,7 @@ from owlbear_delivery_next.impeccable import calibration, design_tools, detector
 from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_job, pack_replay, pack_run
 from owlbear_delivery_next.local_system import local_home, preload
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.project_host import config_routes
+from owlbear_delivery_next.project_host import config_routes, pack_routes
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Store
@@ -488,6 +492,34 @@ def test_a_replay_judge_left_running_stops_the_replay_before_another_starts(repo
     with pytest.raises(pack_replay.ReplayError, match="may still be running"):
         pack_replay.replay(store, run=run)
     assert len(started) == 1
+
+
+def test_an_unverified_session_end_says_its_problems_whole(caplog, repo, tmp_path, whole_error) -> None:
+    store = Store.open(repo)
+    (shot := tmp_path / "s.png").write_bytes(b"png")
+    shots = {"after-home-1280.png": shot, "before-home-1280.png": shot}
+    calibration.keep(store.shared, store.name, "c1", kept_round(1, "pass", "pass"), shots)
+    started = []
+    left = Termination(confirmed=False, unknown=(9,), problems=(f"disconnect failed: RuntimeError: {whole_error}",))
+
+    def run(cfg):
+        started.append(cfg.session_id)
+        return Run(cfg.session_id, ending="result", termination=left)
+
+    job = SimpleNamespace(
+        exclusive=contextlib.nullcontext,
+        keeps=lambda _path: False,
+        live=SimpleNamespace(replay=lambda s, _c, **_k: pack_replay.replay(s, run=run)),
+        count_replay=lambda _n: None,
+    )
+    app = FastAPI()
+    app.include_router(pack_routes.router(store, job))
+    answer = TestClient(app, base_url="http://127.0.0.1").post("/impeccable/replay")
+    why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
+    said = f"the replay judge {started[0]} may still be running; stop it before replaying again; {why}"
+    assert (answer.status_code, answer.json()) == (409, {"detail": said})
+    logged = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == pack_routes.__name__]
+    assert logged == [("WARNING", f"calibration replay refused: {said}")]
 
 
 def test_a_replay_worktree_git_refuses_stops_the_replay_stage_with_gits_whole_words(repo, monkeypatch, whole_error):

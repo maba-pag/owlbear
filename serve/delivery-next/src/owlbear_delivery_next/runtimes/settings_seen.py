@@ -70,7 +70,8 @@ def flatten(layer: Layer | None) -> dict[str, str]:
             continue
         if key == "agents":
             out |= {f"agents.{role}.{field}": _text(v) for role, agent in value.items() for field, v in agent.items()}
-        elif key in {"prefs", "final_review", "spotter", "machine"}:  # one key per field, as Settings names them
+        # one key per field, as Settings names them
+        elif key in {"prefs", "final_review", "spotter", "machine", "memory"}:
             out |= {f"{key}.{field}": _text(v) for field, v in value.items()}
         else:
             out[key] = _text(value)

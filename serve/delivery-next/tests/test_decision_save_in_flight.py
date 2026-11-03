@@ -556,9 +556,8 @@ def test_a_decision_like_a_new_one_in_a_change_is_never_taken_for_it(shared, wir
     assert (out["saved"], out["error"]) == (False, chat_client.NOT_SAVED)
 
 
-def test_a_host_without_the_fence_never_has_a_lost_save_called_not_saved(wire, monkeypatch):
-    monkeypatch.setattr(chat_contract, "CHAT", 2)  # the pinned legacy chat still speaks its host's unfenced contract
-    chat, _ = wire(served={"supported": [2]})
+def test_a_host_without_the_fence_never_has_a_lost_save_called_not_saved(wire):
+    chat, _ = wire(served={"supported": [chat_contract.CHAT]})
     out = chat.propose(REFUSED)
     assert (out["saved"], out["error"]) == (None, chat_client.UNCLEAR.format(why=chat_client.UNFENCED))
     assert chat.fenced is False

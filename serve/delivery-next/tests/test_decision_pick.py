@@ -10,7 +10,10 @@ from owlbear_delivery_next.change_contracts import pick_tools, tools
 from owlbear_delivery_next.change_contracts.models import Exit, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.workflow_steps import pick
 
@@ -253,3 +256,34 @@ def test_a_brief_records_its_steps_start_before_its_decision_pick_runs(picking, 
     monkeypatch.setattr(sdk_adapter, "run", run)
     picking.step()
     assert seen == [("picker", True), ("challenger", True)]
+
+
+@pytest.mark.parametrize("case", ["ending", "usage"])
+def test_an_unverified_session_end_says_its_problems_whole(picking, monkeypatch, whole_error, case):
+    left = Termination(confirmed=False, unknown=(9,), problems=(f"disconnect failed: RuntimeError: {whole_error}",))
+    picking.put(make())
+    picking.save()
+    picking.ask(1)
+    picking.verdicts.append(verdict())
+    real = picking.run
+
+    async def run(cfg):
+        if cfg.role != tools.PICKER:
+            return await real(cfg)
+        picking.told.append(cfg)
+        if case == "ending":
+            return Run(cfg.session_id, "error", None, detail="the runtime did not start", termination=left)
+        return Run(cfg.session_id, "result", picked(), usage_unread="the usage was not read", termination=left)
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", run)
+    c = picking.step()
+    why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
+    said = (
+        f"its session ended error: the runtime did not start; {why}"
+        if case == "ending"
+        else f"its pick cannot be trusted: the usage was not read; {why}"
+    )
+    assert (c.brief.picked.status, c.brief.picked.reason) == ("failed", said)
+    steps = [e for e in picking.store.events(picking.slug) if e.get("session") == picking.pickers()[0].session_id]
+    ended = {"confirmed": False, "survivors": [], "unknown": [9], "problems": list(left.problems)}
+    assert [(e["termination"], e["reason"]) for e in steps] == [(ended, why)]

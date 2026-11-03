@@ -28,6 +28,8 @@ import pytest
 from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, storage
 from owlbear_memory.models import ChallengeRecord
 
+pytestmark = pytest.mark.usefixtures("todays_memory_values")
+
 
 async def _recall(*args: object, **kwargs: object) -> str:
     """Proxy that imports recall_memory at call time — fails until implemented.

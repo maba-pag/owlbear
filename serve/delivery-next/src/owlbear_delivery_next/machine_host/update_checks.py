@@ -183,6 +183,7 @@ class Checks:
         self.checking: set[str] = set()
         self.workers: list[threading.Thread] = []  # the threads ``drain`` waits for
         self.path = local_home.root() / STATE  # a check ending after the home moved (a test's teardown) keeps it here
+        self.unrestored = ""  # why the last checks' results could not be read at the start; said while the host runs
         self.kept: dict[str, dict[str, Any]] = self._restored()
 
     def _restored(self) -> dict[str, dict[str, Any]]:
@@ -191,7 +192,8 @@ class Checks:
         except FileNotFoundError:
             return {}
         except (OSError, ValueError) as exc:
-            self.machine.say(f"update checks: {self.path} is unreadable, so they start afresh: {exc}")
+            self.unrestored = f"{self.path} is unreadable, so they start afresh: {command_failure.failure(exc)}"
+            self.machine.say(f"update checks: {self.unrestored}")
             return {}
         return {n: kept[n] for n in CHECKS if isinstance(kept, dict) and isinstance(kept.get(n), dict)}
 
@@ -292,7 +294,10 @@ class Checks:
                 self.machine.say(f"update checks failed: {type(exc).__name__}: {exc}")
 
     def read(self) -> dict[str, Any]:
-        """Each update's state and when it is next checked; ``available`` counts each runnable newer one once."""
+        """Each update's state and when it is next checked; ``available`` counts each runnable newer one once.
+
+        ``unrestored`` says why the results kept before the host started were lost, if they were.
+        """
         (hours, channel), installed = self._settings(), {n: _installed(n) for n in CHECKS}
         try:
             taken = _pds_runs()
@@ -305,7 +310,7 @@ class Checks:
             if u["name"] == "pds" and u["available"] and (state := taken.get(u["latest"])):
                 u.update({"state": state, "available": False} | ({"detail": MERGED} if state == "merged" else {}))
         available = sum(1 for u in shown if u["available"])
-        return {"updates": shown, "available": available}
+        return {"updates": shown, "available": available, "unrestored": self.unrestored}
 
     def _shown(self, name: str, hours: int | None, installed: str, channel: str | None) -> dict[str, Any]:
         kept = self.kept.get(name, {})
