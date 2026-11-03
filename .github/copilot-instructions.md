@@ -69,7 +69,9 @@ plan or implementation challenge a chat runs by hand in this repository states t
   touches or breaks.
 - Before a later round, the chat asks again when a round changed the work materially or a governing decision changed.
 - Without the tool, the chat asks the host through the installed runtime: `~/.owlbear/runtime/.venv/bin/python`
-  calling `owlbear_delivery_next.commands.chat_client.workspace(Path("<this checkout>")).lookup_decisions(question)`.
+  calling `agent_reply(workspace(Path("<this checkout>")).lookup_decisions(question))`, with `workspace` from
+  `owlbear_delivery_next.commands.chat_client` and `agent_reply` from `owlbear_delivery_next.workflow_steps.lookup`.
+  The lead and challengers use this returned agent-facing reply whole; the raw host reply stays unchanged.
   If that fails too, or the answer says `failed`, the challenge says the decisions are unavailable and why, never that
   none apply.
 - The list stays in the chat: none of it goes into a commit, pull request or comment on this repository.
