@@ -83,9 +83,7 @@ def _git(
     lossless: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     """One git command, ended by ``until`` (monotonic) at the latest; never started once it passed (`git_run.run`)."""
-    if lossless:
-        return git_run.run(cwd, *args, until=until, cap=GIT_SECONDS, lossless=True)
-    return git_run.run(cwd, *args, until=until, cap=GIT_SECONDS)
+    return git_run.run(cwd, *args, until=until, cap=GIT_SECONDS, lossless=lossless)
 
 
 def _top(root: Path) -> Path | None:

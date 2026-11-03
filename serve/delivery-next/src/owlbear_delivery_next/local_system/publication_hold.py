@@ -37,8 +37,7 @@ if TYPE_CHECKING:
 RECORD = "owlbear-held-publication.json"
 ABSENT = "absent"
 UPSTREAM = "@{upstream}"
-_KEYS = ("watch", "base", "since", "file", "fields", "what")
-_RECORD_KEYS = frozenset((*_KEYS, "refused"))
+_RECORD_KEYS = frozenset(("watch", "base", "since", "file", "fields", "what", "refused"))
 _EXPLICIT = 2  # an explicit push: one remote and one source:destination
 _BLOB = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 

@@ -55,8 +55,7 @@ def refusals(
                 and before.scope is Scope.PROJECT
                 and decision.scope is Scope.PROJECT
             ):
-                seen = store.files(shared, before.project)
-                store.usable(seen, before.project)
+                seen = store.usable(store.files(shared, before.project), before.project)
                 if not seen.active(before.id) or before.read_back == "pending":
                     found[before.id] = f"{before.id}: completion authority is no longer active or clear"
                 else:
