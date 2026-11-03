@@ -48,9 +48,13 @@ export function inherited() {
   return state.loaded.inherited[state.layer];
 }
 
+// Global settings the owner edited himself: Use recommended leaves them alone, even once the edit is undone.
+const touched = new Set();
+
 // One edit of the edited layer; a value equal to the saved one is no edit, an inherit choice clears the value.
 // A *literal* value is typed text, where "inherit" is just a word (a label may be named so).
 export function edit(key, raw, literal = false) {
+  if (state.layer === "global") touched.add(key);
   keepEdit(key, raw, literal);
   show();
 }
@@ -80,7 +84,7 @@ export function useRecommended() {
   }
   let count = 0;
   for (const [key, value] of Object.entries(values)) {
-    if (key in drafts.global || own(key).trim() !== "") continue;
+    if (touched.has(key) || own(key).trim() !== "") continue;
     const switchWord = key.startsWith("prefs.") || key === "pr_marker" || USER_KEYS.includes(key);
     const text = Array.isArray(value) ? value.join(", ") || "none"
       : typeof value === "boolean" && switchWord ? value ? "on" : "off" : String(value);

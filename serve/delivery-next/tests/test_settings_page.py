@@ -886,6 +886,23 @@ def test_recommended_drafts_fit_a_phone_and_their_unsaved_list_scrolls_by_keyboa
 
 
 @pytest.mark.browser
+def test_a_recommended_value_cleared_again_is_not_filled_by_the_next_click(store, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415
+
+    with settings_page(store, pds) as page:
+        pds.pick(page, "Layer", "global")
+        pds.group(page, "runs")
+        sessions = page.get_by_label("Agent sessions at once in one project")
+        recommended = page.get_by_role("button", name="Use recommended", exact=True)
+        recommended.click()
+        expect(sessions).to_have_value("2")
+        sessions.fill("")  # the owner rejects this one suggestion: its draft equals the saved blank and goes
+        recommended.click()
+        expect(page.locator("#status")).to_contain_text("No unset settings in Global to fill")
+        expect(sessions).to_have_value("")
+
+
+@pytest.mark.browser
 def test_storage_labels_distinguish_shared_layers_from_local_only_without_a_shared_repository(store, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415
 
