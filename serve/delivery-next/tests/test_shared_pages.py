@@ -590,7 +590,8 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
             machine_settings_are_saved_and_a_stale_save_is_refused(page, pds, DataRepo(shared_repo[0]))
             scope = pds.select(page, "Layer")
             expect(scope.locator("p-select-option")).to_have_text(
-                ["Project docs-site", "This machine (its projects)", "Global (every project)", "Project shop-site (/s)",
+                ["Project docs-site (synced to shared repository)", "This machine (its projects; this Mac only)",
+                 "Global (every project; synced to shared repository)", "Project shop-site (/s)",
                  "Project shop-site (/s2)"]
             )  # fmt: skip
             pds.group(page, "runs")
