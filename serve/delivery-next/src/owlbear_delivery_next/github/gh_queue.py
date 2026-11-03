@@ -8,8 +8,9 @@ from urllib.parse import urlencode
 
 from pydantic import ValidationError
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.gh_checks import Checks
-from owlbear_delivery_next.github.gh_client import Json, invalid, repo
+from owlbear_delivery_next.github.gh_client import Json, answer, invalid, repo, unfinished
 from owlbear_delivery_next.github.provider import (
     EnqueueResult,
     EnqueueStatus,
@@ -90,20 +91,17 @@ class Queue(Checks):
         try:
             done = self.runner(argv, data, self.timeout, self.cwd)
         except (OSError, subprocess.TimeoutExpired) as exc:
-            return EnqueueResult(status=EnqueueStatus.UNKNOWN, message=bounded(type(exc).__name__))
-        try:
-            payload = json.loads(done.stdout) if done.stdout.strip() else {}
-        except UnicodeDecodeError, json.JSONDecodeError:
-            payload = {}
+            return EnqueueResult(status=EnqueueStatus.UNKNOWN, message=failure(exc))
+        payload, unread = answer(done.stdout)
         errors = payload.get("errors") if isinstance(payload, dict) else None
         if errors:  # GitHub answered and changed nothing
             text = "; ".join(str(e.get("message", e)) for e in errors if isinstance(e, dict)) or str(errors)
-            return EnqueueResult(status=EnqueueStatus.REFUSED, message=bounded(text))
+            return EnqueueResult(status=EnqueueStatus.REFUSED, message=text)
         entry = ((payload.get("data") or {}).get("enqueuePullRequest") or {}).get("mergeQueueEntry")
         if done.returncode == 0 and entry:
             state, at = bounded(entry.get("state")), entry.get("enqueuedAt")
             return EnqueueResult(status=EnqueueStatus.ENQUEUED, queued_at=at, message=state)
-        return EnqueueResult(status=EnqueueStatus.UNKNOWN, message=bounded(done.stderr.decode(errors="replace")))
+        return EnqueueResult(status=EnqueueStatus.UNKNOWN, message=unfinished(done, unread))
 
     def dequeue(self, pr: PullRequest) -> None:
         """Take the pull request out of its queue; a PR that is not queued raises, and the caller reads back."""

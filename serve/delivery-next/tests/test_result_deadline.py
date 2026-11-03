@@ -289,7 +289,11 @@ def test_normal_reminder_rpc_cap_still_reports_a_named_timeout(tmp_path, clock):
     asyncio.run(scenario())
 
 
-def test_a_request_failure_after_cutoff_is_logged_without_replacing_the_deadline(tmp_path, clock, monkeypatch):
+def test_a_request_failure_after_cutoff_is_logged_whole_without_replacing_the_deadline(
+    tmp_path, clock, monkeypatch, whole_error
+):
+    """#921: the late request's failure is recorded whole, its type and message, for Recent activity."""
+
     async def scenario():
         step = STEP(configured(tmp_path), asyncio.get_running_loop())
         events = []
@@ -297,12 +301,11 @@ def test_a_request_failure_after_cutoff_is_logged_without_replacing_the_deadline
 
         async def listing():
             clock.now += 1
-            msg = "synthetic late RPC failure"
-            raise RuntimeError(msg)
+            raise RuntimeError(whole_error)
 
         await asyncio.wait_for(step.wait(Session(listing)), 1)
         assert step.run.ending == "deadline"
-        assert {"event": "request-failed", "operation": "tasks.list", "error": "RuntimeError"} in events
+        assert {"event": "request-failed", "operation": "tasks.list", "error": f"RuntimeError: {whole_error}"} in events
 
     asyncio.run(scenario())
 

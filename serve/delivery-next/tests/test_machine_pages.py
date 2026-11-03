@@ -54,8 +54,9 @@ from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import pack_files
-from owlbear_delivery_next.local_system import codebase, data_repo, local_home, processes
+from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home, processes
 from owlbear_delivery_next.machine_host import app, project
+from owlbear_delivery_next.machine_host import serve as host_start
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host, HostRecord
@@ -659,6 +660,37 @@ def test_settings_say_this_machine_s_settings_could_not_be_read_and_read_them_ag
         a_read_failing_after_a_save_during_it_leaves_the_save_s_answer_unwarned(page, pds)
 
 
+@pytest.mark.browser
+def test_settings_say_a_failed_read_of_the_shared_repository_whole(
+    tmp_path: Path, monkeypatch, pds, shared_repo, whole_error
+) -> None:
+    """#921: Settings' notice shows the shared repository's failed Git read whole: the command, both streams, a path."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    shared = shared_repo[0]
+    monkeypatch.setenv(data_place.VIEW, str(shared))
+    a = registry.register(clone(tmp_path / "alpha"))
+    stderr, stdout = f"fatal: {shared / '.git' / 'index'} cannot be read\n{whole_error}", "OUT begins\nOUT ends"
+    real = data_repo._git  # noqa: SLF001 - the repository's own Git calls are the boundary
+    read = ("status", "--porcelain", "--", ".", f":(exclude)*/{data_repo.MEMORY}/*")
+
+    def git(cwd, *args, until=None):
+        if args[:1] != ("status",):
+            return real(cwd, *args, until=until)
+        return subprocess.CompletedProcess(["git", *args], 128, f"{stdout}\n", f"{stderr}\n")
+
+    monkeypatch.setattr(data_repo, "_git", git)
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        notice = page.locator("#error")
+        expect(notice).to_be_visible()
+        failed = f"CalledProcessError: Command '{['git', *read]}' returned non-zero exit status 128."
+        why = f"{failed}\nstderr:\n{stderr}\nstdout:\n{stdout}"
+        assert notice.text_content().strip() == f"The shared settings repository {shared} cannot be read: {why}"
+        assert said == []
+
+
 def machine_saved(page, pds, channel: str) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -815,6 +847,51 @@ def test_projects_shows_each_clone_s_state_and_setup_and_adopting_the_shown_one_
         adopted = next(p for p in registry.load().projects if p.path == old.path and p.id != old.id)
         expect(page).to_have_url(f"{base}/projects?project={adopted.id}")
         expect(page.get_by_role("listitem", name="delta").locator("p-tag")).to_have_text("shown now")
+
+
+@pytest.mark.browser
+def test_projects_says_why_a_move_of_the_shared_repository_stopped_whole(
+    tmp_path: Path, monkeypatch, pds, whole_error
+) -> None:
+    """#921: a move whose `git worktree repair` failed at host start shows that failure whole in the project's reason,
+    its paths kept, at 390 pixels."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    registry.register(clone(tmp_path / "shop"))
+    remote, source, dest = tmp_path / "data.git", tmp_path / "old-data", data_place.default()
+    for args in (["init", "-q", "--bare", str(remote)], ["clone", "-q", str(remote), str(source)],
+                 ["-C", str(source), "commit", "-q", "--allow-empty", "-m", "i"],
+                 ["-C", str(source), "worktree", "add", "-q", str(tmp_path / "linked")]):  # fmt: skip
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
+    local_home.root().mkdir(parents=True, exist_ok=True)
+    data_place.pointer().write_text(json.dumps({"moving_from": str(source), "moving_to": str(dest)}))
+    source.rename(dest)
+    real = data_place._git  # noqa: SLF001 - the checkout's own Git calls are the boundary
+    stderr = f"error: {tmp_path / 'linked' / '.git'} is not a worktree\n{whole_error}"
+
+    def git(cwd, *args, until=None):
+        if args == ("worktree", "repair"):
+            return subprocess.CompletedProcess(["git", *args], 1, "OUT begins\nOUT ends\n", stderr)
+        return real(cwd, *args, until=until)
+
+    monkeypatch.setattr(data_place, "_git", git)
+    unshared = SimpleNamespace(shared=lambda: None)  # no cut-short curation apply to finish
+    host_start._provisioned(SimpleNamespace(say=lambda _line: None, curation=unshared))  # noqa: SLF001
+    failed = (
+        "CalledProcessError: Command '['git', 'worktree', 'repair']' returned non-zero exit status 1."
+        f"\nstderr:\n{stderr}\nstdout:\nOUT begins\nOUT ends"
+    )
+    unfinished = f"moving the shared repository from {source} to {dest} is not finished: {failed}"
+    with browsing(monkeypatch, pds, width=390) as (page, base):
+        broke = errors(page)
+        page.goto(f"{base}/projects#token=t")
+        shop = page.get_by_role("listitem", name="shop")
+        expect(shop.locator("p-tag")).to_have_text("failed")
+        said = shop.locator("p-text").filter(has_text="is not finished")
+        expect(said).to_have_count(1)
+        assert said.text_content() == f"its Delivery state cannot be opened: {unfinished}; `owlbear data` finishes it"
+        assert page.evaluate("document.documentElement.scrollWidth") <= 390
+        assert broke == []
 
 
 @pytest.mark.browser
@@ -2553,6 +2630,59 @@ def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monk
         opened(page, url, alpha.id, "c1")
         line = page.locator("ol.log > li", has_text="Could not label PR #7").locator(":scope > span")
         expect(line).to_have_text(" ".join(f"Could not label PR #7 with owlbear: {reason}".split()))
+        assert said == []
+
+
+@pytest.mark.browser
+def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """#921: a recorded reason, message, cleanup, error or notice shows whole with its paths; the log's own wording
+    names a file."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "c1"))
+    store = Store.open(Path(alpha.path))
+    kept = f"{whole_error}\nkept /Users/o/app/big/data.bin beside big/cache.db"
+    message = f"{whole_error}\nsee /Users/o/app/.github/workflows/ci.yml and .github/workflows/ci.yml"
+    cleanup = "git clean failed:\n/Users/o/app/web/node_modules/x.lock and web/dist/app.js are busy"
+    notice = "read /Users/o/app/conf/a.toml\nthen conf/b.toml"
+    hook = f'Traceback (most recent call last):\n  File "/Users/o/app/guard/judge.py", line 9\n{whole_error}'
+    draft = ["title: too long in /Users/o/app/briefs/fix.md", whole_error]
+    refused = ["changed: /Users/o/app/src/main.py is outside the task", whole_error]
+    lint = ["lint: ruff found problems in /Users/o/app/src/main.py", "lint: biome broke on web/app.json"]
+    failed = f"RuntimeError: {whole_error}"
+    events = [
+        {"event": "tool", "tool": "view", "summary": "Read /Users/o/app/src/main.py"},
+        {"event": "workspace-kept", "path": "/Users/o/.owlbear/worktrees/app-c1", "reason": kept},
+        {"event": "merge-enqueue", "pr": 7, "status": "unknown", "message": message},
+        {"event": "prepared-end", "check": "web", "cleanup": cleanup},
+        {"event": "mystery-thing", "notice": notice},
+        {"event": "hook-failed", "hook": "preToolUse", "error": hook},
+        {"event": "fix-draft-failed", "key": "main:ci:abc", "errors": draft},
+        {"event": "tool", "tool": "submit_result", "accepted": False, "errors": refused},
+        {"event": "lint-unresolved", "errors": lint},
+        {"event": "request-failed", "operation": "tasks.list", "error": failed},
+    ]
+    with store.lock("c1") as lock:
+        for e in events:
+            store.log(lock, "c1", {**e, "at": datetime.now(UTC).isoformat()})
+    lines = {
+        "Read main.py": "Read main.py",
+        "Workspace app-c1 kept": f"Workspace app-c1 kept: {kept}",
+        "Merge queue for PR #7": f"Merge queue for PR #7: {message}",
+        "Check web ended": f"Check web ended; cleanup incomplete: {cleanup}",
+        "Mystery thing": f"Mystery thing: {notice}",
+        "The shell guard": f"The shell guard's warning hook failed; the step stopped: {hook}",
+        "Could not draft": f"Could not draft a fix Change: {'; '.join(draft)}",
+        "Submitted its result": f"Submitted its result (refused): {'; '.join(refused)}",
+        "Lint problems": f"Lint problems left unresolved: {'; '.join(lint)}",
+        "Request tasks.list": f"Request tasks.list failed ({failed})",
+    }
+    with browsing(monkeypatch, pds) as (page, url):
+        said = errors(page)
+        opened(page, url, alpha.id, "c1")
+        for start, line in lines.items():
+            shown = page.locator("ol.log > li", has_text=start).locator(":scope > span")
+            expect(shown).to_have_text(" ".join(line.split()))
         assert said == []
 
 

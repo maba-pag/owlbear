@@ -6,9 +6,10 @@ export function split(line) {  // the stage, then what is happening in it
   return at < 0 ? ["", line] : [line.slice(0, at), line.slice(at + 3)];
 }
 
-// A card and the activity log name a file by its name; the current activity in the detail keeps the whole path. A
-// tool's one target, or a path quoted or in parentheses, may hold spaces; elsewhere a path ends at one, and a relative
-// one counts only with an extension, so counters, "CI/CD" and URLs stay as they are.
+// A card and the activity log's own wording name a file by its name; a recorded reason, message or error and the
+// current activity in the detail keep the whole path. A tool's one target, or a path quoted or in parentheses, may
+// hold spaces; elsewhere a path ends at one, and a relative one counts only with an extension, so counters, "CI/CD"
+// and URLs stay as they are.
 const LAST = String.raw`([^\s,/\u00b7'"]+)`;
 const PART = String.raw`[^/()'",\u00b7\n]`;
 export const short = (said) => said
@@ -66,14 +67,15 @@ function linted(e) {
 // Each recorded event in plain words; an event this page does not know reads as its name, with its reason if any.
 const SAID = {
   step: (e) => `${STEPS[e.kind] ?? words(e.kind ?? "step")} ${EXITS[e.exit] ?? "ended"}${why(e.reason)}`,
-  tool: (e) => (e.summary && e.summary !== e.tool ? e.summary
-    : `${TOOLS[e.tool] ?? `Called ${e.tool}`}${e.accepted === false ? " (refused)" : ""}`),
+  tool: (e) => `${e.summary && e.summary !== e.tool ? short(e.summary)
+    : `${TOOLS[e.tool] ?? `Called ${e.tool}`}${e.accepted === false ? " (refused)" : ""}`}${
+    why((e.errors || []).join("; "))}`,
   session: (e) => (e.resumed ? "Session resumed" : `Session started${e.role ? ` (${e.role})` : ""}`),
   started: () => "Session started",
   ended: (e) => `Session ended${e.ending ? ` (${e.ending})` : ""}`,
   denied: (e) => `Denied: ${e.reason || e.kind}`,
   warned: (e) => `Warned: ${e.reason}`,
-  "hook-failed": () => "The shell guard's warning hook failed; the step stopped",
+  "hook-failed": (e) => `The shell guard's warning hook failed; the step stopped${why(e.error)}`,
   publish: (e) => `Published PR #${e.pr}`,
   labels: (e) => `Labelled PR #${e.pr}: ${e.labels.join(", ")}`,
   "labels-failed": (e) => `Could not label PR #${e.pr} with ${e.labels.join(", ")}: ${e.reason}`,
@@ -92,12 +94,12 @@ const SAID = {
     : `Local target branch ${e.state === "behind" ? "left behind" : "not updated"}${why(e.reason)}`),
   "branch-retired": (e) => `Branch ${e.branch} ${e.result || "retired"}`,
   "branch-kept": (e) => `Branch ${e.branch} kept: it moved after the merge`,
-  "workspace-kept": (e) => `Workspace ${e.path} kept${why(e.reason)}`,
+  "workspace-kept": (e) => `${short(`Workspace ${e.path} kept`)}${why(e.reason)}`,
   "read-only-kept": (e) => `Read-only copy kept${why(e.why)}`,
   "target-checks-unfinished": (e) => `Checks on ${sha(e.sha)} unfinished: ${(e.missing || []).join(", ")}`,
-  "ro-install": (e) => `${e.command} in ${e.package}${e.ok ? "" : " failed"}`,
+  "ro-install": (e) => `${short(`${e.command} in ${e.package}`)}${e.ok ? "" : " failed"}`,
   "fix-drafted": (e) => `Drafted fix Change ${e.fix}`,
-  "fix-draft-failed": () => "Could not draft a fix Change",
+  "fix-draft-failed": (e) => `Could not draft a fix Change${why((e.errors || []).join("; "))}`,
   brief: (e) => `Brief v${e.version} saved`,
   answer: (e) => `Answered ${e.question} as ${CLASSES[e.class] ?? e.class}`,
   reply: () => "Replied on the pull request",
@@ -112,7 +114,7 @@ const SAID = {
   "prepared-stray": () => "Stray files from preparing discarded",
   lint: linted,
   "lint-skipped": (e) => `Lint ${e.tool} skipped${why(e.reason)}`,
-  "lint-unresolved": () => "Lint problems left unresolved",
+  "lint-unresolved": (e) => `Lint problems left unresolved${why((e.errors || []).join("; "))}`,
   "subagent-started": (e) => `Subagent ${e.agent || ""} started${e.allowed === false ? " (not allowed)" : ""}`,
   subagent: (e) => `Subagent ${e.name || e.agent || ""} ${e.outcome || "ended"}`,
   "force-stop": (e) => `Tried to force the session to stop${why(e.reason)}`,
@@ -125,7 +127,7 @@ const SAID = {
   "request-failed": (e) => `Request ${e.operation} failed (${e.error})`,
 };
 
-const said = (e) => short((SAID[e.event] ?? ((x) => `${words(x.event)}${why(x.reason || x.notice || x.why)}`))(e))
+const said = (e) => (SAID[e.event] ?? ((x) => `${words(x.event)}${why(x.reason || x.notice || x.why)}`))(e)
   .replaceAll(/\s+/g, " ").trim();
 
 // A merge is recorded three times (its request, the merge, the merge step); it reads once, as the merge.

@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn
 
+from owlbear_delivery_next.git import command_failure
 from owlbear_delivery_next.local_system import git_run, local_home, publication_hold
 from owlbear_delivery_next.local_system.data_repo import VIEW, DataRepo, DataRepoError, _git, _top, remote_identity
 from owlbear_delivery_next.local_system.storage_io import atomic_write, fsync_dir, open_lock
@@ -45,8 +46,8 @@ def pointer() -> Path:
     """Where the machine records the shared repository: ``data.json`` in OwlBear's folder.
 
     It holds ``repository`` (the checkout in use) and ``remote`` (where it is cloned from). A clone not done yet names
-    only ``remote`` (and ``failed``, why the last try did not work); a move under way names ``moving_from`` and
-    ``moving_to`` and no ``repository``, so no reader, old or new, writes either copy meanwhile; a finished move keeps
+    only ``remote``; a move under way names ``moving_from`` and ``moving_to`` and no ``repository``, so no reader, old
+    or new, writes either copy meanwhile. Either names ``failed``, why its last try failed; a finished move keeps
     ``moved_from``. Every write is atomic and holds `pointer_lock`; readers never lock.
     """
     return local_home.root() / POINTER
@@ -227,13 +228,13 @@ def _configured() -> DataRepo | None:
 
 def _unready(path: Path, record: dict[str, str]) -> str:
     """Why a pointer without ``repository`` names no checkout yet."""
+    failed = f": {record['failed']}" if record.get("failed") else ""
     if record.get("moving_to"):
         return (
-            f"moving the shared repository from {record.get('moving_from')} to {record['moving_to']} is not finished; "
-            "`owlbear data` finishes it"
+            f"moving the shared repository from {record.get('moving_from')} to {record['moving_to']} is not finished"
+            f"{failed}; `owlbear data` finishes it"
         )
     if remote := record.get("remote"):
-        failed = f": {record['failed']}" if record.get("failed") else ""
         return f"the shared repository {remote} is not cloned yet{failed}"
     return f"{path} names no repository"
 
@@ -348,7 +349,7 @@ def _clone(url: str, place: Path, *, show: bool) -> tuple[DataRepo, str]:
     done = git_run.run(
         home, "clone", *([] if show else ["--quiet"]), "--", url, str(temp), until=None, cap=CLONE_SECONDS, show=show
     )
-    why = "" if done.returncode == 0 else (done.stderr or "").strip()[-300:] or f"git exited {done.returncode}"
+    why = "" if done.returncode == 0 else command_failure.failed(done)
     if not why and (place.exists() or _parse(pointer()) != {"remote": url}):
         why = f"{place} or {pointer()} changed while cloning; this clone was discarded"
     if not why:
@@ -385,7 +386,7 @@ def recover() -> str:
     """Finish or undo a move the pointer says is under way; the caller holds `pointer_lock`. What it did, else ''.
 
     Only the source left: the move never happened, so the pointer names it again. Only the destination: its linked
-    worktrees are repaired and checked, then the pointer names it. Both or neither: refused, for the owner to look.
+    worktrees are repaired and checked, then the pointer names it, else it says what failed. Both or neither: refused.
     """
     record = _parse(pointer())
     if not record or not record.get("moving_to"):
@@ -398,6 +399,7 @@ def recover() -> str:
         return f"the unfinished move to {target} was undone; {source} is used"
     if here and not there:
         if why := relink(target):
+            _write({**record, "failed": why})
             msg = f"the shared repository was moved to {target}, but {why}; fix it, then run `owlbear data` again"
             raise DataRepoError(msg)
         _write({"repository": str(target), **kept, "moved_from": str(source)})
@@ -415,7 +417,7 @@ def recover() -> str:
 def relink(root: Path) -> str:
     """Point the linked worktrees of the checkout at *root* back to it after a move; what failed, else ''."""
     if (done := _git(root, "worktree", "repair")).returncode:
-        return f"`git worktree repair` failed: {done.stderr.strip()[:200]}"
+        return command_failure.failed(done)
     common = _git(root, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()
     for linked in worktrees(root):
         if not linked.exists():
@@ -444,7 +446,7 @@ def inventory(shared: DataRepo) -> list[str]:
     stashes = _git(root, "stash", "list", until=until)
     curated = _git(root, "for-each-ref", "--format=%(refname)", HELD, until=until)
     if failed := next((d for d in (status, ahead, stashes, curated) if d.returncode), None):
-        return [f"{root} cannot be read: {failed.stderr.strip()[:200]}"]
+        return [f"{root} cannot be read: {command_failure.failed(failed)}"]
     lines = []
     if files := status.stdout.splitlines():
         untracked = sum(f.startswith("??") for f in files)
