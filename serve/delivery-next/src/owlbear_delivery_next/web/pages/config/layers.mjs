@@ -51,6 +51,11 @@ export function inherited() {
 // One edit of the edited layer; a value equal to the saved one is no edit, an inherit choice clears the value.
 // A *literal* value is typed text, where "inherit" is just a word (a label may be named so).
 export function edit(key, raw, literal = false) {
+  keepEdit(key, raw, literal);
+  show();
+}
+
+function keepEdit(key, raw, literal = false) {
   const field = key.split(".")[1] ?? key;
   // even a no-op clear is a review
 if (state.layer === "project" && key.startsWith("prefs.")) state.prefsReview = true;
@@ -58,6 +63,33 @@ if (state.layer === "project" && key.startsWith("prefs.")) state.prefsReview = t
   if (LISTS.includes(key)) typing[state.layer][key] = value;  // shown as typed: a comma, a space
   if (canonical(key, value) === saved(state.layer, key)) delete drafts[state.layer][key];
   else drafts[state.layer][key] = value;
+}
+
+// Fill Global's blank fields; even a deliberate unsaved clear stays the owner's edit.
+export function useRecommended() {
+  if (state.saving) return;
+  const values = {};
+  for (const [key, value] of Object.entries(state.loaded.recommendations)) {
+    if (key === "agents") {
+      for (const [role, fields] of Object.entries(value)) {
+        for (const [field, v] of Object.entries(fields)) values[`${role}.${field}`] = v;
+      }
+    } else if (["prefs", "spotter", "machine"].includes(key)) {
+      for (const [field, v] of Object.entries(value)) values[`${key === "spotter" ? "spot" : key}.${field}`] = v;
+    } else values[key] = value;
+  }
+  let count = 0;
+  for (const [key, value] of Object.entries(values)) {
+    if (key in drafts.global || own(key).trim() !== "") continue;
+    const switchWord = key.startsWith("prefs.") || key === "pr_marker" || USER_KEYS.includes(key);
+    const text = Array.isArray(value) ? value.join(", ") || "none"
+      : typeof value === "boolean" && switchWord ? value ? "on" : "off" : String(value);
+    keepEdit(key, text, true);
+    count++;
+  }
+  state.status = count ? `Filled ${count} unset settings with recommended values as unsaved drafts. Review them `
+    + "and use Save; nothing has been saved."
+    : "No unset settings in Global to fill; your saved values and drafts are unchanged.";
   show();
 }
 
@@ -262,7 +294,8 @@ async function saveLayer(review) {
   const project = named() || "this project";
   if (layer === "project" && !(await ask({
     title: `Change ${project}'s settings?`, yes: "Save project settings", no: "Keep editing",
-    now: `These apply to ${project} only, on every machine:`, items: changes(layer),
+    now: `These apply to ${project} only, ${state.loaded.global_location ? "on every machine"
+      : "on this Mac only (no shared repository is set up)"}:`, items: changes(layer),
     then: "Its next session uses them; sessions running now keep theirs.",
     after: "Change them back here at any time.",
     instead: "Your edits stay unsaved on this page.",
