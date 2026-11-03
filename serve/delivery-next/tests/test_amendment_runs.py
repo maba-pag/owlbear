@@ -319,7 +319,7 @@ def test_a_submitted_merge_is_observed_before_the_amendment_goes_on(picking, mon
     c.step, c.names.pr, c.names.target = Step(kind=K.MERGE), 7, "main"
     c.names.branch = BRANCH
     picking.store.write(Lock(picking.slug), c)
-    monkeypatch.setattr(amendment.profile, "provider", lambda *_a: GitHub(merged=merged))
+    monkeypatch.setattr(amendment.profile, "provider", lambda _prof, _repo, _writer: GitHub(merged=merged))
     repo = {profile.REPO: ProfileEntry(state="known", value="acme/shop-site")}
     monkeypatch.setattr(picking.store, "read_profile", lambda: Profile(version=1, entries=repo))
     told = len(picking.told)

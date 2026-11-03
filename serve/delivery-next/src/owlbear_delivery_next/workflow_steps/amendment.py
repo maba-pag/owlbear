@@ -20,7 +20,7 @@ from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import amendments, sdk_adapter
 from owlbear_delivery_next.settings import profile, rounds
-from owlbear_delivery_next.state_store import identities
+from owlbear_delivery_next.state_store import github_writer, identities
 from owlbear_delivery_next.state_store.briefs import new_slug
 from owlbear_delivery_next.workflow_steps import engine, pending_child, sessions
 
@@ -159,8 +159,8 @@ def _merged(store: Store, lock: Lock, c: Change, repo: Path, now: datetime) -> b
     """At the merge step, a submitted merge's outcome first: merged, the step ends and the amendment leaves with it."""
     if c.step.kind != StepKind.MERGE or not c.names.pr:
         return False
-    prof = store.read_profile() or Profile()
-    ctx = engine.Ctx(store, lock, repo, prof, profile.provider(prof, repo), now)
+    prof, writer = store.read_profile() or Profile(), github_writer.of(store, repo)
+    ctx = engine.Ctx(store, lock, repo, prof, profile.provider(prof, repo, writer), now, writer)
     try:
         pr = ctx.gh.read_pull_request(ctx.repository, c.names.pr)
     except ProviderError as exc:  # unread: the merge step's own exit for it, and the amendment waits
