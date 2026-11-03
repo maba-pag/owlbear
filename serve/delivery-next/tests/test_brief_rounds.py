@@ -355,3 +355,61 @@ def test_the_brief_challenger_never_sees_the_owners_brief_decisions():
     q.answer = Answer(option="fix", text="do it", at=NOW)
     c.questions.append(q)
     assert "secret finding" not in step_input.brief_challenge(c, Path("/w"))
+
+
+def chat_of(shaping, chat_replied) -> tuple[chat_client.Chat, list[tuple[str, str]]]:
+    """A chat whose host is *shaping*'s API, checked for what a chat reads of it; and each request it sends."""
+    chat, sent = chat_client.Chat.__new__(chat_client.Chat), []
+    chat.repo, chat.home = Path(), shaping.store.root
+
+    def call(method, path, body=None):
+        sent.append((method, path))
+        r = shaping.http.request(method, f"/api/next{path}", json=body)
+        if r.status_code == 200:
+            chat_replied(method, path, r.json())
+        return r.status_code, r.json()
+
+    chat.call = call
+    return chat, sent
+
+
+@pytest.mark.parametrize("landed_first", [True, False])
+def test_the_wait_for_a_challenge_asked_for_earlier_returns_its_findings_and_asks_for_nothing(
+    shaping, monkeypatch, chat_replied, landed_first
+):
+    shaping.save()
+    shaping.verdicts += [verdict("AC-1")]
+    chat, sent = chat_of(shaping, chat_replied)
+    assert shaping.ask_challenge(1).status_code == 200  # what challenge_brief sent, when its wait was cut short
+    if landed_first:
+        shaping.step()
+    monkeypatch.setattr(chat_client, "POLL", 0)
+    monkeypatch.setattr(chat_client, "_pause", lambda _s: shaping.step())  # the host runs meanwhile
+    out = chat.await_challenge("c1", 1)
+    assert (out["running"], out["version"], [f["id"] for f in out["findings"]]) == (False, 1, ["F1"])
+    assert {method for method, _path in sent} == {"GET"}
+    assert (shaping.change().loops[BRIEF].round, shaping.change().brief.challenged) == (1, None)  # a verdict with findings
+
+
+def test_the_wait_says_it_is_no_longer_shaped_or_that_the_owner_must_resume_instead_of_running_on(
+    shaping, monkeypatch, chat_replied
+):
+    shaping.save()
+    shaping.ask_challenge(1)
+    chat, _ = chat_of(shaping, chat_replied)
+    monkeypatch.setattr(chat_client, "WAIT", 0)  # the deadline is the first read
+    assert chat.await_challenge("c1", 1)["running"] is True
+
+    def owner(intent: str) -> None:
+        assert shaping.http.post(f"/api/next/changes/{shaping.slug}/intent", json={"intent": intent}).status_code == 200
+        shaping.store.fold(Lock(shaping.slug), shaping.slug, datetime.now(UTC))
+
+    owner("pause")
+    paused = chat.await_challenge("c1", 1)
+    assert (paused["running"], paused["owner_action"]) == (False, "Resume")
+    owner("resume")
+    owner("abandon")
+    shaping.step()
+    gone = chat.await_challenge("c1", 1)
+    assert (gone["running"], gone["next"]) == (False, "the Change is no longer being shaped")
+    assert "Abandoned" in gone["line"]
