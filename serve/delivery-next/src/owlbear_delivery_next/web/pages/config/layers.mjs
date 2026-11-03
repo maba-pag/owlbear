@@ -119,6 +119,13 @@ function dirty(layer) {
   return Object.entries(drafts[layer]).filter(([key, value]) => canonical(key, value) !== saved(layer, key));
 }
 
+// Whether the edited layer has an unsaved edit of the setting at *path* ("agents.builder.model"), as the pending line
+// counts it: the page keeps a draft under "builder.model" and the Spotter's under "spot.".
+export function drafted(path) {
+  const key = path.replace(/^agents\./, "").replace(/^spotter\./, "spot.");
+  return dirty(state.layer).some(([draft]) => draft === key);
+}
+
 // Each unsaved edit of *layer* as "field: saved → new"; a blank value inherits, on Global it is unset.
 function changes(layer) {
   const blank = layer === "global" ? "unset" : "inherited";

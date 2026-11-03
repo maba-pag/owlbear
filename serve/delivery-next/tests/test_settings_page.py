@@ -407,6 +407,26 @@ def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row
 
 
 @pytest.mark.browser
+def test_the_unsaved_filter_shows_a_row_whose_draft_is_only_spelled_differently(store, pds, monkeypatch) -> None:
+    """The pending line counts "02" over a saved 2 as an unsaved edit, so the filter shows its row too."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"sessions": None}))
+    with settings_page(store, pds) as page:
+        sessions = page.get_by_label("Agent sessions at once in one project")
+        sessions.fill("2")
+        page.get_by_role("button", name="Save project settings").click()
+        pds.answer(page, "Save project settings")
+        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        sessions.fill("02")
+        expect(page.locator("#pending")).to_contain_text("sessions: 2 \u2192 02")
+        pds.pick(page, "Show", "unsaved")
+        expect(page.locator("#set-sessions")).to_be_visible()
+
+
+@pytest.mark.browser
 def test_the_overview_counts_each_group_s_unset_names_its_first_three_and_opens_the_group_for_more(
     store, pds, monkeypatch
 ) -> None:

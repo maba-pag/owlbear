@@ -1,7 +1,7 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { EFFORTS, INHERIT, SOURCES, state, shown } from "./state.mjs";
-import { own, inherited, edit, layerValue, preview } from "./layers.mjs";
+import { own, inherited, edit, layerValue, preview, drafted } from "./layers.mjs";
 import { levels, arrows } from "./cost.mjs";
 import { at } from "./sections.mjs";
 
@@ -69,7 +69,7 @@ export function setting(id, name, keys, ...cells) {
     all: () => true,
     unset: () => unset,
     set: () => keys.some((k) => at(state.loaded[state.layer], k) != null),
-    unsaved: () => keys.some((k) => preview(k)),
+    unsaved: () => keys.some((k) => drafted(k) || preview(k)),  // a row that only follows an edited one counts too
   }[state.filter]();
   return html`<p-table-row id=${id} tabindex="-1" data-setting ?hidden=${!matches}>${cell(html`<p-text
     color=${unset ? "error" : nothing}>${name}</p-text>`)}${cells}</p-table-row>`;
