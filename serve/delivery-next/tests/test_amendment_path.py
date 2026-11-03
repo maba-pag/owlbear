@@ -398,6 +398,33 @@ def test_an_objection_pauses_dependent_work_and_a_revert_is_a_new_version():
     assert [b.criteria[0].text for b in c.brief.approved] == [AC1, "greet() trims spaces", AC1]
 
 
+def test_a_revert_brings_back_what_was_removed_or_changed_as_it_was():
+    c = change()
+    shape = lambda b, checks: (  # noqa: E731
+        sorted((k.id, k.text) for k in b.criteria), sorted((s.name, s.path, s.expect) for s in b.visual),
+        sorted((p.id, tuple(p.criteria), tuple(p.steps), p.expect) for p in checks),
+    )  # fmt: skip
+    was = shape(c.brief, c.checks)
+    exact = amend_apply.exact
+    a1 = amending.start(c, "revert", reason="the owner's wording", now=NOW, items=[
+        exact(c, "visual", "home", "shows Hi", path="/hi"), exact(c, "check", "check-1", "it says hi", steps=["open /hi"]),
+        exact(c, "check", "check-2", "", remove=True), exact(c, "visual", "about", "", remove=True),
+        exact(c, "criterion", "AC-2", "", remove=True),
+    ])  # fmt: skip
+    amending.opened(c, a1, RoundPolicy())
+    amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge", NOW)
+    assert (a1.state, shape(c.brief, c.checks) != was) == ("applied", True)
+
+    amending.objected(c, ObjectionItem(amendment=a1.id, at=NOW), NOW)
+    answer(c, "revert")
+    amending.opened(c, amending.current(c), RoundPolicy())
+    amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge-2", NOW)
+
+    assert shape(c.brief, c.checks) == was
+    assert [(k.id, k.version) for k in c.brief.criteria] == [("AC-1", 1), ("AC-2", 3)]  # its evidence is stale
+    assert [(p.id, p.procedure, p.answer) for p in c.checks] == [("check-1", 3, None), ("check-2", 2, None)]
+
+
 @pytest.mark.parametrize(("how", "then"), [("keep", (None, False)), ("reshape", ("AC-1 needs reshaping", True))])
 def test_keeping_or_reshaping_after_an_objection_leads_where_it_says(how, then):
     c = change()

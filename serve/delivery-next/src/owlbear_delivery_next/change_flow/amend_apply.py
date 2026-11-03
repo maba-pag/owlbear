@@ -104,26 +104,39 @@ def exact(c: Change, field: str, key: str, text: str, **more: object) -> Amended
 
 
 def reverted(c: Change, a: Amendment) -> list[AmendedItem]:
-    """The exact items that undo applied amendment *a*: each one back to its wording before it."""
-    out = []
+    """The exact items that undo applied amendment *a*: each one back to its wording and shape before it.
+
+    A removed item comes back under its own key; a scope line and a decision are known by their new key.
+    """
+    out, before = [], max((x for x in c.brief.approved if x.version < (a.version or 0)), key=lambda x: x.version)
     for i in a.items:
         why = f"reverts {a.id}"
         if i.field == "ui":
             out.append(exact(c, "ui", "", i.old, why=why))
-        elif i.remove:  # brought back as a new item
-            out.append(exact(c, i.field, "", i.old, why=why, question=i.question, path=i.path, steps=i.steps))
         elif not i.old:  # added: removed again
             out.append(exact(c, i.field, i.key, "", remove=True, why=why))
-        else:  # a scope line and a decision are known by their new key after a change
-            out.append(exact(c, i.field, i.key, i.old, why=why))
+        else:
+            out.append(exact(c, i.field, i.key, i.old, why=why, **_shape(before, i)))
     return out
+
+
+def _shape(before: Brief, i: AmendedItem) -> dict[str, object]:
+    """What an item had besides its wording before amendment *i* came from changed or removed it."""
+    match i.field:
+        case "visual":
+            return {"path": next((s.path for s in before.visual if s.name == i.key), "")}
+        case "check":
+            return {"steps": next((p.steps for p in before.checks if p.id == i.key), [])}
+        case "decision":
+            return {"question": next((d.question for d in before.decisions if d.id == i.key), i.question)}
+    return {}
 
 
 def apply(c: Change, a: Amendment, level: Level, now: datetime) -> None:
     """Apply *a* as the next brief version at *level*, void its evidence, then resume the stopped step."""
     b, v = c.brief, c.brief.version + 1
     changed, removed = set(), set()
-    for i in a.items:
+    for i in sorted(a.items, key=lambda i: i.field != "criterion"):  # a check covers the criteria it brings
         _item(c, i, v, level, now)
         if i.field == "criterion":
             (removed if i.remove else changed).add(i.key)
@@ -157,39 +170,48 @@ def _item(c: Change, i: AmendedItem, v: int, level: Level, now: datetime) -> Non
         case "criterion":
             if i.remove:
                 b.criteria = [k for k in b.criteria if k.id != i.key]
-            elif i.key:
+            elif any(k.id == i.key for k in b.criteria):
                 b.criteria = [k.model_copy(update={"text": i.new, "version": k.version + 1}) if k.id == i.key else k
                               for k in b.criteria]  # fmt: skip
-            else:
-                i.key = _free("AC-", [k.id for k in b.criteria])
-                b.criteria.append(Criterion(id=i.key, text=i.new))
+            else:  # new, or a removed one brought back above every version its evidence was recorded at
+                was = max((k.version for x in b.approved for k in x.criteria if k.id == i.key), default=0)
+                i.key = i.key or _free("AC-", [k.id for k in b.criteria])
+                b.criteria.append(Criterion(id=i.key, text=i.new, version=was + 1))
         case "visual":
             if i.remove:
                 b.visual = [s for s in b.visual if s.name != i.key]
-            elif i.key:
+            elif any(s.name == i.key for s in b.visual):
                 b.visual = [s.model_copy(update={"expect": i.new, "path": i.path or s.path, "version": v})
                             if s.name == i.key else s for s in b.visual]  # fmt: skip
             else:
-                i.key = _free("amended-", [s.name for s in b.visual])
+                i.key = i.key or _free("amended-", [s.name for s in b.visual])
                 b.visual.append(VisualState(name=i.key, path=i.path or "/", expect=i.new, version=v))
         case "check":
-            if i.remove:
-                c.checks = [p for p in c.checks if p.id != i.key]
-            elif i.key:
-                for p in c.checks:
-                    if p.id == i.key:
-                        p.expect, p.steps = i.new, i.steps or p.steps
-                        p.procedure, p.answer = p.procedure + 1, None
-            else:
-                i.key = _free("check-", [p.id for p in c.checks])
-                ids = [k.id for k in b.criteria]
-                c.checks.append(PersonCheck(id=i.key, criteria=ids, steps=i.steps, expect=i.new, paths=coverage(c)))
+            _check(c, i)
         case "scope":
             kept = [s for s in b.scope if s != i.key] if i.key else list(b.scope)
             b.scope = kept if i.remove else [*kept, i.new]
             i.key = "" if i.remove else i.new
         case "decision":
             _decision(c, i, level, now)
+
+
+def _check(c: Change, i: AmendedItem) -> None:
+    """A person check changed, removed, added, or brought back as it was with a new procedure."""
+    if i.remove:
+        c.checks = [p for p in c.checks if p.id != i.key]
+        return
+    for p in c.checks:
+        if p.id == i.key:
+            p.expect, p.steps = i.new, i.steps or p.steps
+            p.procedure, p.answer = p.procedure + 1, None
+            return
+    ids = [k.id for k in c.brief.criteria]
+    was = [p for x in c.brief.approved for p in x.checks if p.id == i.key]
+    covers, procedure = ([k for k in was[-1].criteria if k in ids], was[-1].procedure + 1) if was else (ids, 1)
+    i.key = i.key or _free("check-", [p.id for p in c.checks])
+    c.checks.append(PersonCheck(id=i.key, criteria=covers, steps=i.steps, expect=i.new, paths=coverage(c),
+                                procedure=procedure))  # fmt: skip
 
 
 def _decision(c: Change, i: AmendedItem, level: Level, now: datetime) -> None:
