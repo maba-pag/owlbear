@@ -223,7 +223,7 @@ async function purge(old) {
   show();
   try {
     const r = await call(`/memory/purge${place.where === "global" ? "?where=global" : ""}`,
-      { body: {}, timeout: 60000, of: place.of });  // the host applies the owner's purge age as it is now
+      { body: { min_age_days: place.purge_days }, timeout: 60000, of: place.of });  // the age the dialog confirmed
     state.error = r.failed ? `${many(r.failed)} could not be removed; try again.` : "";
     state.status = `Removed ${many(r.purged)} from ${place.label}.${r.notice ? ` ${r.notice}` : ""}`;
     state.pending = null;
@@ -246,7 +246,7 @@ function purges() {
       busy: state.pending === `${old[0].place.key}:purge` }))}
     ${unset.map((place) => html`<p-button type="button" compact="true" variant="secondary" icon="delete"
       disabled="true">Remove old deleted entries from ${place.label}</p-button>
-      <div><p-text size="xs" color="contrast-medium">${place.purge_why.charAt(0).toUpperCase()}${
+      <div><p-text color="contrast-medium">${place.purge_why.charAt(0).toUpperCase()}${
         place.purge_why.slice(1)}.</p-text><p-link-pure icon="arrow-right"><a href=${here({ layer: "global" },
         "/config#memory")}>Set the purge age</a></p-link-pure></div>`)}
     </div>` : nothing;

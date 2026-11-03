@@ -554,6 +554,7 @@ def test_the_deleted_section_removes_entries_deleted_before_the_owners_purge_age
         deleted.get_by_role("button", name=f"Remove 2 deleted entries older than 14 days from {store.name}").click()
         expect(pds.modal(page).locator('p-button[variant="primary"]')).to_have_text(["Keep them"])  # never removing
         expect(pds.modal(page)).to_contain_text("deleted 14 days ago or earlier")
+        owner_holds(root, purge_days=0)  # the owner changes the age while the dialog is open: it removes what it said
         pds.answer(page, "Remove them")
         expect(page.locator("#status")).to_contain_text(f"Removed 2 deleted entries from {store.name}.")
         expect(deleted.locator(".entry")).to_have_count(1)
