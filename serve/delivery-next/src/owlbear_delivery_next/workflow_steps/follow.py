@@ -297,6 +297,14 @@ def conversation(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[
     return c, None if opened is None else _open(c, opened, step)
 
 
+def can_push(ctx: Ctx) -> bool:
+    """Whether the project's account can push: a detected yes holds, a no is asked again of that account.
+
+    The setting may name another account than the one detection ran as (TD-402).
+    """
+    return profile.value(ctx.profile, profile.PUSH) == "yes" or ctx.gh.read_repository().can_push
+
+
 def _reopening(c: Change) -> Question | None:
     return next(
         (
@@ -309,9 +317,9 @@ def _reopening(c: Change) -> Question | None:
 
 
 def reopen(ctx: Ctx, c: Change, pr: PullRequest) -> tuple[Change, PullRequest, StepResult | None]:
-    """M4 reopen: reopen the closed PR when the profile can push, else ask the owner; continue once it is open."""
+    """M4 reopen: reopen the closed PR when the project's account can push, else ask the owner; go on once it's open."""
     q = _reopening(c)
-    if q and pr.state != "open" and not pr.merged and profile.value(ctx.profile, profile.PUSH) == "yes":
+    if q and pr.state != "open" and not pr.merged and can_push(ctx):
         try:
             ctx.gh.reopen_pull_request(ctx.repository, pr.number)
         except ProviderError as exc:  # GitHub refuses, e.g. a deleted branch: the owner gets the action

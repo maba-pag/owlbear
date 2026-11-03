@@ -141,6 +141,13 @@ class FakeGh:
         self.pr, self.merges, self.result = current, [], MergeResult(status=MergeStatus.UNKNOWN)
         self.checks = (Check(name="test", status="completed", conclusion="success"),)
         self.after, self.reopened, self.commit_checks, self.review = None, [], (), (None, ())
+        self.can_push = False  # what the project's account reads when the detected permission is no
+
+    def read_repository(self):
+        return Repository(
+            repository="o/r", url="https://github.com/o/r", default_branch="main", methods=(MergeMethod.SQUASH,),
+            can_push=self.can_push, delete_branch_on_merge=False,
+        )  # fmt: skip
 
     def observe_commit_checks(self, _repo, _sha):
         return self.commit_checks
@@ -1468,6 +1475,20 @@ def test_without_ask_before_merge_a_gated_head_merges_without_consent(tmp_path, 
     assert (result.exit, result.cause) == (Exit.ASK, loop.CONSENT)
 
 
+@pytest.mark.parametrize(("detected", "account"), [("yes", False), ("no", True), ("no", False)])
+def test_merge_asks_the_projects_account_again_when_detection_found_no_push_permission(
+    tmp_path, clone, detected, account
+):
+    """The setting may name another account than detection ran as (TD-402): a detected no doesn't block it."""
+    gh = FakeGh(pr(head=A))
+    gh.can_push = account
+    merged(gh)
+    on = ctx(tmp_path, gh, prof(**{profile.PUSH: ProfileEntry(state="known", value=detected)}))
+    _, result = merge.run(on, change(worktree=str(clone)))
+    permitted = detected == "yes" or account
+    assert (result.exit, len(gh.merges)) == ((Exit.DONE, 1) if permitted else (Exit.PENDING, 0))
+
+
 def test_a_head_without_a_valid_final_review_goes_back_to_publish(tmp_path, clone):
     gh = FakeGh(pr(head=B))
     _, result = merge.run(ctx(tmp_path, gh), change(worktree=str(clone), head=A))
@@ -2189,15 +2210,17 @@ def test_a_repaired_task_resolves_only_after_every_part_and_the_parts_run_before
 # Reopen and the pre-push hook
 
 
-@pytest.mark.parametrize("push", ["yes", "no"])
-def test_reopen_reopens_the_pr_when_permitted_else_asks_the_owner(tmp_path, clone, push):
+@pytest.mark.parametrize(("push", "account"), [("yes", False), ("no", True), ("no", False)])
+def test_reopen_reopens_the_pr_when_permitted_else_asks_the_owner(tmp_path, clone, push, account):
+    """A detected no is asked again of the project's account, which the setting may have changed (TD-402)."""
     head, entries = ci_head(clone, "test")
     gh = FakeGh(pr(head=head, state="closed"))
+    gh.can_push = account
     c, _ = loop.schedule(change(StepKind.FOLLOW, worktree=str(clone)), [], NOW, "closed")
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question="q1", option="reopen")], NOW, "closed")
     pushing = {profile.PUSH: ProfileEntry(state="known", value=push)}
     c, result = follow.run(ctx(tmp_path, gh, prof(**entries, **pushing)), c)
-    if push == "yes":
+    if push == "yes" or account:
         assert (result.exit, gh.reopened, bool(c.questions[0].effect_observed_at)) == (Exit.DONE, [7], True)
     else:
         assert (result.exit, gh.reopened, c.questions[0].effect_observed_at) == (Exit.ASK, [], None)

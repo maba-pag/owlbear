@@ -143,7 +143,7 @@ def gate(  # noqa: C901, PLR0911 - one exit per condition
         rules_confirmed=profile.known(ctx.profile, profile.RULES),
         method=pref(ctx.store.settings(), "merge_method"),
         methods=tuple(MergeMethod(m.strip()) for m in profile.names(ctx.profile, profile.METHODS)),
-        can_push=profile.value(ctx.profile, profile.PUSH) == "yes",
+        can_push=follow.can_push(ctx),
     )
     if decision.block in {None, Block.PROTECTION} and (held := _review(ctx, pr)) is not None:
         return c, held
