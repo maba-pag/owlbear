@@ -99,6 +99,14 @@ class RestartItem(_Item):
     kind: Literal["restart-review"] = "restart-review"
 
 
+class ObjectionItem(_Item):
+    """Object to one applied amendment (TD-185): work that depends on it waits for the owner's choice."""
+
+    kind: Literal["amendment-objection"] = "amendment-objection"
+    amendment: str
+    text: str = ""
+
+
 type InboxItem = Annotated[
     BriefApproval
     | AnswerItem
@@ -108,7 +116,8 @@ type InboxItem = Annotated[
     | IntentItem
     | PullItem
     | RestartItem
-    | WithdrawItem,
+    | WithdrawItem
+    | ObjectionItem,
     Field(discriminator="kind"),
 ]
 _ITEM: TypeAdapter[InboxItem] = TypeAdapter(InboxItem)

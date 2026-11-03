@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from owlbear_decisions.models import STATEMENT_LIMIT
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import AnswerKind
-from owlbear_delivery_next.change_flow import answer_kinds, loop, rebuilds
+from owlbear_delivery_next.change_flow import amending, answer_kinds, loop, rebuilds
 from owlbear_delivery_next.workflow_steps import decision, held
 
 if TYPE_CHECKING:
@@ -82,17 +82,16 @@ def router(store: Store, read: Callable[[str], Change], put: Callable[[str, Inbo
     return routes
 
 
-def shown(c: Change, q: Question, events: list[dict[str, Any]]) -> dict[str, object]:
+def shown(q: Question, events: list[dict[str, Any]]) -> dict[str, object]:
     """What the Changes page shows with the open *q* besides its text and options.
 
-    Whether chat may answer it, and when the owner allowed what the Spotter stopped on the questions *q* asks again
-    (#717): that answer is held, so without it the page would show the same question as if he had not answered. The
-    last answer to *q* the fold did not apply, from *events*, stays beside it until an answer to it applies (#791): a
-    question opened again after that never shows it.
+    Whether chat may answer it, and whether a brief amendment asks it. The last answer to *q* the fold did not apply,
+    from *events*, stays beside it until an answer to it applies (#791): a question opened again after that never
+    shows it.
     """
     said = [e for e in events if e.get("event") in {"answer", "answer-not-applied"} and e.get("question") == q.id]
     dropped = said[-1] if said and said[-1]["event"] == "answer-not-applied" else None
-    return {"ordinary": loop.ordinary(q), "held": answer_kinds.kept(c, q), "dropped": dropped}
+    return {"ordinary": loop.ordinary(q), "dropped": dropped, "amendment": bool(amending.owned(q))}
 
 
 def answer_item(store: Store, c: Change, body: AnswerBody) -> AnswerItem | tuple[int, str]:
@@ -133,6 +132,8 @@ def _checked(store: Store, c: Change, q: Question, body: AnswerBody) -> tuple[in
         return 422, f"choose one of {[o.label for o in q.options]}"
     if any(o.id == body.option and o.next == "reconsider" for o in q.options) and not body.text.strip():
         return 422, "a reconsideration needs your note: what the reviewer should weigh"
+    if amending.owned(q) and body.option in {amending.WITHIN.id, amending.RESHAPE.id} and not body.text.strip():
+        return 422, "say why: the work, or the shaper, goes on from your reason"
     return None
 
 

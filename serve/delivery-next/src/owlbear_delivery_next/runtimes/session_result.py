@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 
-from owlbear_delivery_next.change_contracts import curation_tools, dispute_tools, permissions, tools
+from owlbear_delivery_next.change_contracts import amend_tools, curation_tools, dispute_tools, permissions, tools
 from owlbear_delivery_next.change_contracts.failures import (
     QUOTA,
     READ_ONLY,
@@ -228,6 +228,8 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
         case "result" if isinstance(p, design_tools.DesignResult):  # the round's verdict matrix decides what follows
             found = "; ".join(f"{f.image}: {f.problem}" for f in p.findings)[:1500]
             return StepResult(exit=Exit.DONE, reason=f"design {p.verdict}: {found or p.doubt or 'no findings'}")
+        case "result" if isinstance(p, amend_tools.CandidateResult | amend_tools.VerdictResult):  # the path records it
+            return StepResult(exit=Exit.DONE, reason=getattr(p, "verdict", "amendment candidate"))
         case "result" if isinstance(p, dispute_tools.ReconsiderResult):  # the disputes record each verdict
             return StepResult(exit=Exit.DONE, reason=f"{len(p.reconsidered)} finding(s) reconsidered")
         case "result" if isinstance(p, curation_tools.TestReviewResult):  # the share records its verdicts

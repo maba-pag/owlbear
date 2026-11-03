@@ -103,11 +103,16 @@ class AskQuestion(Args):
 
 
 class Amend(Args):
-    """New wording for one generated acceptance criterion (TD-179); the owner decides whether to adopt it."""
+    """A change you need to one brief item (TD-185): the shaper words it, a challenger and the owner judge it."""
 
-    criterion: str = _f(10, "The criterion id", "AC-2")
-    text: str = _f(1000, "The whole new wording", "greet() trims surrounding spaces from the name")
-    why: str = _f(500, "Why the approved wording is wrong and the new one keeps its intent", "Tabs are not names")
+    field: Literal["criterion", "ui", "visual", "check", "scope", "decision"] = Field(examples=["criterion"],
+        description="The brief field: a criterion, the UI flag, a visual state, a person check, a scope line "
+        "(constraint) or a brief decision (assumption)")  # fmt: skip
+    key: str = Field(default="", max_length=300, examples=["AC-2"], description="The item as the brief names it: a "
+        "criterion id, a state's name, a check's id, a scope line, a decision id; empty to add; for ui")  # fmt: skip
+    text: str = Field(default="", max_length=1000, description="What it should say; empty with remove", examples=["x"])
+    remove: bool = Field(default=False, description="true to remove the item")
+    why: str = _f(500, "Why the approved wording is wrong and what the change keeps", "Tabs are not names")
 
 
 class WrongPremise(Args):
@@ -120,12 +125,8 @@ class WrongPremise(Args):
     )
     reason: str = _f(1000, "What is wrong", "greet() already exists with another signature.")
     evidence: list[str] = _f(10, "Paths, lines or command output that show it", ["src/greet.ts:3 exports greet(a, b)"])
-    amendment: list[Amend] = Field(
-        default_factory=list,
-        max_length=5,
-        description="Only for stage brief, optional: replacement wording for generated criteria; a challenger "
-        "judges it and the owner decides",
-    )
+    amendment: list[Amend] = Field(default_factory=list, max_length=5, description="Only for stage brief, optional: "
+        "the brief items to change; the shaper words them, a challenger judges, the owner decides most")  # fmt: skip
 
 
 class MissingTool(Args):
@@ -338,9 +339,10 @@ PICKER = "picker"  # an SDK-only session whose one tool is its result (TD-459)
 CURATOR = "curator"  # automatic memory curation: its memory tools, then its report as its result (item 5 slice 4)
 AUDITOR = "auditor"  # the PDS deprecation audit: read tools, then its report as its result (#777)
 # Sessions that judge with a verdict whatever their role, such as the reviewer's screenshot judgement (TD-108)
-VERDICTS = frozenset(
-    {"visual-review", "design-review", "plan-challenge", "brief-challenge", "amendment-challenge", "dispute-reconsider"}
-)
+VERDICTS = frozenset({
+    "visual-review", "design-review", "plan-challenge", "brief-challenge", "amendment-challenge", "dispute-reconsider",
+    "amendment-prepare", "amendment-revise",  # the shaper's candidate: never asks, the owner is asked after it
+})  # fmt: skip
 
 
 def asks(role: str, *, judging: bool = False) -> bool:

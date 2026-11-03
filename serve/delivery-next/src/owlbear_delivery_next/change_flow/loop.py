@@ -15,6 +15,7 @@ from owlbear_delivery_next.change_contracts.inbox import (
     CheckResult,
     ConsentItem,
     IntentItem,
+    ObjectionItem,
     PullItem,
     Recovery,
     RestartItem,
@@ -41,6 +42,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.visual_records import OwnerDecision
 from owlbear_delivery_next.change_flow import (
+    amending,
     answer_kinds,
     brief_rounds,
     budgets,
@@ -228,13 +230,15 @@ def fold(  # noqa: C901, PLR0912 - per item kind
                 c.brief.picked = item.picked or c.brief.picked  # what the approval validated, not a later retry
                 held = {p.id: p for p in c.decisions_published} | {p.id: p for p in item.published}
                 c.decisions_published = list(held.values())
-                if all(b.version != version for b in c.brief.approved):
-                    c.brief.approved.append(c.brief.model_copy(deep=True, update={"approved": []}))
+                if all(b.version != version for b in c.brief.approved):  # with its person checks (TD-185)
+                    c.brief.approved.append(c.brief.model_copy(deep=True, update={"approved": [], "checks": c.checks}))
                 if c.step.kind == StepKind.SHAPE:
                     _done(c, None, now)
                     c.outcome = None
-            case AnswerItem() if answer_kinds.held(c, item, now):  # #717: the Spotter's question, kept, asked again
-                pass
+            case AnswerItem() if answer_kinds.held(c, item, now) or amending.answered(c, item, now, dropped):
+                pass  # #717: the Spotter's question, kept; an amendment's, recorded or dropped by its path (TD-185)
+            case ObjectionItem():
+                amending.objected(c, item, now)
             case AnswerItem():  # one that settles nothing goes to *dropped* with why, for the activity (#791)
                 if (why := _answer(c, item, now)) and dropped is not None:
                     dropped.append((item, why))
@@ -317,8 +321,8 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> str:
         return f"question {q.id} is settled only by one of its options, a reconsideration by a note"
     if gate and (target != "pause" or c.step.kind != StepKind.CLEANUP):
         c.outcome = None
-    if kind == "brief_change":  # never delivered: the work stops and asks while amendments are not built
-        ask(c, answer_kinds.question(c, q), now)
+    if kind == "brief_change":  # never delivered: the brief's amendment runs first (TD-185)
+        amending.start(c, "answer", reason=item.text, now=now, question=q.id)
         return ""
     if q.cause and kind_of(q.cause) in ENVIRONMENT | DEFECT and target != "pause":
         c.budgets.causes.pop(q.cause, None)  # "Done, continue" starts a new episode or streak
@@ -405,17 +409,9 @@ def apply(change: Change, result: StepResult, now: datetime) -> Change:
     if result.exit not in EXITS[kind]:
         msg = f"{kind} has no {result.exit} exit"
         raise ValueError(msg)
-    c.outcome = Outcome(
-        exit=result.exit,
-        cause=result.cause,
-        reason=result.reason,
-        who=result.who,
-        waiting=result.waiting,
-        wake_at=result.wake_at,
-        denial=result.denial,
-        challenged=result.challenged,
-        at=now,
-    )
+    c.outcome = Outcome(exit=result.exit, cause=result.cause, reason=result.reason, who=result.who,
+                        waiting=result.waiting, wake_at=result.wake_at, denial=result.denial,
+                        challenged=result.challenged, at=now)  # fmt: skip
     budgets.streaks(c, result)
     match result.exit:
         case Exit.DONE:

@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next.change_contracts.amendment_records import Amendment
+from owlbear_delivery_next.change_contracts.amendment_records import Amending, Amendment
 from owlbear_delivery_next.change_contracts.curation_records import TestReview
 from owlbear_delivery_next.change_contracts.decision_records import (
     BriefDecision,
@@ -17,6 +17,7 @@ from owlbear_delivery_next.change_contracts.decision_records import (
     Pick,
     Published,
 )
+from owlbear_delivery_next.change_contracts.env_records import Environment, Recipe
 from owlbear_delivery_next.change_contracts.held_records import HeldRecord, PendingChild
 from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
@@ -153,6 +154,8 @@ class Brief(Record):
     visual: list[VisualState] = Field(default_factory=list)
     specified: list[str] = Field(default_factory=list)  # criteria, states and checks the owner stated (TD-179)
     approved: list[Brief] = Field(default_factory=list)
+    checks: list[PersonCheck] = Field(default_factory=list)  # an approved version's person checks (TD-185)
+    reference: int | None = None  # the version weakening is judged from; None: the first approved one (TD-185)
 
 
 class Intent(Record):
@@ -320,6 +323,7 @@ class Review(Record):
     round: int = 1
     tree: str | None = None  # the reviewed tree; ``inputs.paths`` hold the engine-computed covered blobs
     findings: list[str] = Field(default_factory=list)  # every accepted finding, complete
+    brief: int | None = None  # the brief version it judged; a final review stands for that version only (TD-185)
 
 
 class Step(Record):
@@ -402,29 +406,6 @@ class Stop(Record):
     at: datetime
 
 
-class Environment(Record):
-    """A person-only check's environment: the Builder's launch recipe and the PIDs the host started from it."""
-
-    check: str
-    command: str
-    directory: str
-    ready_url: str
-    pids: dict[int, float | None] = Field(default_factory=dict)
-    pgid: int | None = None
-    launched_at: datetime | None = None  # set before spawning; without ``pgid`` the launch is uncertain
-    ready_at: datetime | None = None
-
-
-class Recipe(Record):
-    """The launch recipe one check last started from; reused while its directory's own files are unchanged."""
-
-    check: str
-    command: str
-    directory: str
-    ready_url: str
-    inputs: str | None = None  # digest of the directory's own files at launch; unknown is never reused
-
-
 class Names(Record):
     """Names only; heads always come from git."""
 
@@ -480,7 +461,8 @@ class Change(Record):
     visual_rounds: list[VisualRound] = Field(default_factory=list)  # TD-78: two judges per round
     owner_criteria: list[OwnerCriterion] = Field(default_factory=list)  # TD-79: checked by every later round
     waived: dict[str, str] = Field(default_factory=dict)  # TD-341: criteria the owner accepted unmet, by their text
-    amendments: list[Amendment] = Field(default_factory=list)  # TD-179: proposed brief wording, challenged
+    amendments: list[Amendment] = Field(default_factory=list)  # TD-185: every amendment and how it ended
+    amending: Amending | None = None  # the amendment running before the stopped step
     loops: dict[str, RoundLoop] = Field(default_factory=dict)  # TD-208: each subject's challenge loop
     names: Names = Field(default_factory=Names)
     spend: Spend = Field(default_factory=Spend)
