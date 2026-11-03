@@ -926,7 +926,7 @@ def test_the_menu_reaches_every_page_moves_focus_into_each_level_and_back_to_the
         expect(overview).to_have_attribute("aria-current", "page")
         served = ["/", "/backlog", "/memory", "/decisions", "/metrics", "/improvement", "/projects", "/maintenance"]
         served += ["/updates/owlbear", "/updates/pds", "/updates/impeccable"]
-        groups = ["overview", "agents", "guardrails", "checks", "project", "this-machine"]
+        groups = ["overview", "agents", "guardrails", "memory", "checks", "project", "this-machine"]
         hrefs = menu.locator("a").evaluate_all("as => as.map(a => a.getAttribute('href'))")
         assert sorted(hrefs) == sorted([f"{path}?project={a.id}" for path in served]
                                        + [f"/config?project={a.id}#{group}" for group in groups])  # fmt: skip

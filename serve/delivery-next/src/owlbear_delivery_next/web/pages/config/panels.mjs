@@ -1,12 +1,12 @@
-// The layered groups' panels: Agents and runs, Guardrails, and Checks and merge. Each setting's row carries the id the
-// unset list links to (GW8RT6).
+// The layered groups' panels: Agents and runs, Guardrails, Memory, and Checks and merge. Each setting's row carries
+// the id the unset list links to (GW8RT6).
 
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { held, here, project } from "/assets/ui.mjs";
 import { ROUNDS, LOOPS, back, state } from "./state.mjs";
 import {
   cell, row, setting, table, numberCell, designFailures, widths, sessionsAtOnce, prLabels, prMarker, subagentsCell,
-  curatorThreshold, spotterCell, prefRows, USER_KEYS, userConfig, userConfigLabel, contextCell, editable,
+  curatorThreshold, memoryValue, spotterCell, prefRows, USER_KEYS, userConfig, userConfigLabel, contextCell, editable,
   guardLevel, more,
 } from "./cells.mjs";
 
@@ -136,16 +136,6 @@ export function guardrailsGroup() {
       ${table("Your instructions, skills and memory: they apply to the next session", ["Setting", "Value"],
         "user-config", USER_KEYS.map((key) => setting(`set-${key}`, userConfigLabel(key), [key], userConfig(key))))}
     </section>
-    <section class="panel" aria-labelledby="curation-title">
-      <p-heading size="lg"><h2 id="curation-title" tabindex="-1">Memory curation</h2></p-heading>
-      <p-text>The memory curator states its confidence in everything it would do to an entry. At or above this
-        threshold it acts alone, Make global included; below it, it asks you in an interactive session and leaves the
-        entry as it is in an automatic run.</p-text>
-      ${table("Memory curation: it applies to the next curation", ["Setting", "Value"], "curation",
-        [setting("set-curator_threshold", "Curator's confidence threshold (%)", ["curator_threshold"],
-          curatorThreshold())])}
-      <p-text size="xs" color="contrast-medium">50 to 100; one value for every project and machine.</p-text>
-    </section>
     <section class="panel" aria-labelledby="guard-title">
       <p-heading size="lg"><h2 id="guard-title" tabindex="-1">Shell guard</h2></p-heading>
       <p-text>Delivery reads each shell command a step runs for ways around Git hooks or signing, and for
@@ -159,6 +149,78 @@ export function guardrailsGroup() {
         + "and so do the step's folder, tool and file rules.")}
       ${table("Shell guard: it applies to the next step", ["Setting", "Value"], "guard",
         [setting("set-guard_level", "Shell guard level", ["guard_level"], guardLevel())])}
+    </section>`;
+}
+
+// Memory: every value memory management uses, Global's alone (each unset until saved; the projects' work waits).
+const RATINGS = [
+  ["outstanding_boost", "Points an outstanding rating adds", "Points an outstanding rating adds to an entry's score",
+    "decimal"],
+  ["unremarkable_penalty", "Points an unremarkable rating takes off",
+    "Points an unremarkable rating takes off an entry's score", "decimal"],
+  ["stale_factor", "Skipped ratings per other rating before an entry is stale",
+    "Skipped ratings per other rating before an entry is stale"],
+];
+const RECALLS = [
+  ["preflight_cap", "Lessons a step starts with, at most", "Lessons a step is told at its start, at most"],
+  ["preflight_budget", "Characters of lessons a step starts with, at most",
+    "Character budget for a step's starting lessons"],
+  ["recall_limit", "Entries the recall tool returns when it is given no limit",
+    "Entries the recall tool returns when it is given no limit"],
+  ["explore_slots", "Recall slots for the least-rated entries", "Recall slots for the least-rated entries"],
+  ["challenge_slots", "Recall slots for the least-outstanding entries",
+    "Recall slots for the least-outstanding entries"],
+];
+
+export function memoryGroup() {
+  const rows = (list) => list.map(([field, name, label, inputmode]) =>
+    setting(`set-memory-${field}`, name, [`memory.${field}`], memoryValue(field, label, inputmode)));
+  return html`
+    <section class="panel" aria-labelledby="memory-title">
+      <p-heading size="lg"><h2 id="memory-title" tabindex="-1">Ratings and stale entries</h2></p-heading>
+      <p-text>Agents rate the memory they were given. An entry's score is its confidence, plus the boost for each
+        outstanding rating, minus the penalty for each unremarkable one. None of these has a default: until all are set,
+        the memory tools refuse the ratings that need them and a project's work waits.</p-text>
+      ${more("How the values act",
+        "Recall ranks by the score as it works it out when it ranks, so a changed value reorders the next recall at "
+        + "once and rewrites no entry.",
+        "An entry goes stale at a rating when its skipped ratings exceed the factor times its outstanding and "
+        + "unremarkable ratings together (counted as 1 when there are none). Stale entries wait for your review on "
+        + "the Memory page; nothing is deleted by score, and raising the factor does not revive a stale entry.")}
+      ${table("Ratings and stale entries: they apply to the next rating", ["Setting", "Value"], "memory-ratings",
+        rows(RATINGS))}
+      <p-text size="xs" color="contrast-medium">Points are 0 or more, a fraction allowed; the factor is a whole number
+        of at least 1. One value for every project and machine.</p-text>
+    </section>
+    <section class="panel" aria-labelledby="memory-recall-title">
+      <p-heading size="lg"><h2 id="memory-recall-title" tabindex="-1">Recall</h2></p-heading>
+      <p-text>What agents are told from memory: a step's lessons at its start, and what the recall tool returns.</p-text>
+      ${more("How recall fills its slots",
+        "A step's lessons are the best-ranked entries for its role that fit both the count and the characters; an "
+        + "entry never goes in cut short. The recall tool fills its explore slots with the entries rated least, its "
+        + "challenge slots with those rated outstanding least, and the rest of its limit with the best-ranked ones.")}
+      ${table("Recall: it applies to the next recall", ["Setting", "Value"], "memory-recall", rows(RECALLS))}
+      <p-text size="xs" color="contrast-medium">Whole numbers: at least 1 for the counts and the characters, 0 or more
+        for the slots. One value for every project and machine.</p-text>
+    </section>
+    <section class="panel" aria-labelledby="memory-purge-title">
+      <p-heading size="lg"><h2 id="memory-purge-title" tabindex="-1">Deleted entries</h2></p-heading>
+      <p-text>A deleted entry's file stays until you remove it on the Memory page, and then only once it was deleted at
+        least this many days ago. The shared repository's history keeps it either way.</p-text>
+      ${table("Deleted entries: it applies to the next removal", ["Setting", "Value"], "memory-purge",
+        rows([["purge_days", "Days a deleted entry waits before its file can be removed",
+          "Days a deleted entry waits before its file can be removed"]]))}
+      <p-text size="xs" color="contrast-medium">0 to 3650; one value for every project and machine.</p-text>
+    </section>
+    <section class="panel" aria-labelledby="curation-title">
+      <p-heading size="lg"><h2 id="curation-title" tabindex="-1">Memory curation</h2></p-heading>
+      <p-text>The memory curator states its confidence in everything it would do to an entry. At or above this
+        threshold it acts alone, Make global included; below it, it asks you in an interactive session and leaves the
+        entry as it is in an automatic run.</p-text>
+      ${table("Memory curation: it applies to the next curation", ["Setting", "Value"], "curation",
+        [setting("set-curator_threshold", "Curator's confidence threshold (%)", ["curator_threshold"],
+          curatorThreshold())])}
+      <p-text size="xs" color="contrast-medium">50 to 100; one value for every project and machine.</p-text>
     </section>`;
 }
 

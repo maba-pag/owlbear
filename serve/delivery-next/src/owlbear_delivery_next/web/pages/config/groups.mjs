@@ -2,14 +2,15 @@
 // page's menu reads this list.
 
 export const GROUPS = [["overview", "Overview"], ["agents", "Agents and runs"], ["guardrails", "Guardrails"],
-  ["checks", "Checks and merge"], ["project", "Project"], ["this-machine", "This machine"]];
+  ["memory", "Memory"], ["checks", "Checks and merge"], ["project", "Project"], ["this-machine", "This machine"]];
 
 // Each group's sections and rows by the names their ids start with: a heading's (agents-title), a table's, a row's
 // (set-spotter-switch) or a control's (global-machine-channel). An old address names one of them; "runs" was a group.
 const PARTS = {
   overview: ["scope", "unset", "across", "reads"],
   agents: ["agents", "models", "shaper", "subagents", "limits", "runs", "rounds", "at-once", "sessions"],
-  guardrails: ["spotter", "user-config", "load_user", "guard", "curation", "curator_threshold"],
+  guardrails: ["spotter", "user-config", "load_user", "guard"],
+  memory: ["memory", "curation", "curator_threshold"],  // the curation section and its threshold moved here
   checks: ["general", "widths", "design_failures", "agreement", "impeccable", "merge", "prefs", "pr"],
   project: ["folder", "rename"],
   "this-machine": ["machine", "global-machine"],
@@ -44,8 +45,7 @@ export function rowOf(key) {
 export function draftGroup(key) {
   const [head] = key.split(".");
   if (head === "machine") return "this-machine";
-  if (head === "spot" || head.startsWith("load_user_") || ["guard_level", "curator_threshold"].includes(head)) {
-    return "guardrails";
-  }
+  if (head === "mem" || head === "curator_threshold") return "memory";
+  if (head === "spot" || head.startsWith("load_user_") || head === "guard_level") return "guardrails";
   return ["widths", "design_failures", "prefs", "pr_labels", "pr_marker"].includes(head) ? "checks" : "agents";
 }

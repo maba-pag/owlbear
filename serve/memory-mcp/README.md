@@ -69,9 +69,9 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | `curate_memory` | Requires `revision`; mutates fields, promotes `pending→curated` when scope is provided, or downgrades `approved→curated`; raises `TransitionError` for contested/disputed/stale; refuses a named scope agent nothing vouches for (see Agent Identity) |
 | `delete_memory` | Requires `revision`; hard-deletes pending entries and soft-deletes curated/approved/contested/disputed/stale entries |
 | `make_global` | Curator: moves a curated or approved entry into Global memory, records its project as `origin`, and commits both paths |
-| `curation_threshold` | Curator: the confidence threshold in percent from the shared repository's global settings, else 95 |
+| `curation_threshold` | Curator: the confidence threshold in percent from the shared repository's global settings; unset (the curator acts alone on nothing) when they hold none |
 | `approve_memory` | Requires `revision` to promote `curated→approved`; user-initiated only (not exposed to any agent) |
-| `assess_memories` | Process revision-bound batch assessments, applying counters or the factually-wrong confirmation cycle; each result includes `success`, `already_applied`, and `recorded_bucket` (plus `state` and `challenges` for a challenged entry), or `success=False` with `error`. Bound to the shared repository, it commits the receipts it wrote to entry files committed before the batch, locally and never pushed; Delivery's next publication pushes them |
+| `assess_memories` | Process revision-bound batch assessments, applying counters or the factually-wrong confirmation cycle; each result includes `success`, `already_applied`, and `recorded_bucket` (plus `state` and `challenges` for a challenged entry), or `success=False` with `error`. A batch with a counting rating needs the owner's `stale_factor` from the global settings and is refused, naming it, while it is unset. Bound to the shared repository, it commits the receipts it wrote to entry files committed before the batch, locally and never pushed; Delivery's next publication pushes them |
 | `commit_memory_batch` | Commit non-pending memory entries for one explicit `curation` or `review` session; return the commit SHA or a no-op result, and any deferred duplicate deletions |
 
 All mutating tools return a `hint` field describing the transition or action taken.
