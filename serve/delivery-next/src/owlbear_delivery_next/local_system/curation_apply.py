@@ -80,5 +80,5 @@ def cut_short(repo: DataRepo, until: float | None = None) -> str:
         return ""
     return (
         f"the memory curation of {apply.folder} was cut short while its files were copied in; OwlBear finishes it at "
-        f"its next start, or before its next curation run (record: {where(repo)})"
+        f"its next start, or before its next curation run (record: {where(repo, until)})"
     )
