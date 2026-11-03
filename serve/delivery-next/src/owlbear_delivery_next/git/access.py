@@ -60,6 +60,33 @@ class Access:
             return ()
         return ("-c", "credential.helper=", "-c", f"credential.helper=!{shlex.quote(self.gh)} auth git-credential")
 
+    def destinations(self, repository: Path, remote: str, timeout: float) -> list[str]:
+        """Every URL a push to *remote* goes to; one that is neither HTTPS nor local raises ``PushRefused``."""
+        environment = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")}
+        command = (resolve_git_executable(), "-C", str(repository), "remote", "get-url", "--push", "--all", remote)
+        try:
+            done = subprocess.run(  # noqa: S603 - fixed Git executable and code-owned argument vector
+                command, capture_output=True, env=environment, timeout=timeout, check=False
+            )
+        except subprocess.TimeoutExpired as exc:
+            msg = f"the push URLs of {remote} in {repository} could not be read in {timeout:g} s"
+            raise RemoteGitError(msg, retry_safe=True) from exc
+        if done.returncode:
+            said = done.stderr.decode(errors="replace").strip() or f"exit {done.returncode}"
+            msg = f"the push URLs of {remote} in {repository} could not be read: {said}"
+            raise RemoteGitError(msg, retry_safe=False)
+        urls = done.stdout.decode(errors="replace").split()
+        for url in urls:
+            if not url.lower().startswith("https://") and not is_local(url):
+                who = f"instead of {self.login}" if self.login else "instead of the account the setting names"
+                msg = (
+                    f"{repository}'s remote {remote} pushes to {url}, over SSH, where the SSH key's account would push "
+                    f"{who}. Give it an HTTPS push URL: git -C {repository} remote set-url --push {remote} "
+                    "https://<host>/<owner>/<name>.git"
+                )
+                raise PushRefused(msg)
+        return urls
+
 
 Access.LOCAL = Access("", "a local remote", "", "", "")
 
@@ -69,31 +96,3 @@ class PushRefused(RemoteGitError):  # noqa: N818 - named for the owner's questio
 
     def __init__(self, detail: str) -> None:
         super().__init__(detail, retry_safe=False)
-
-
-def destinations(repository: Path, remote: str, access: Access, timeout: float) -> list[str]:
-    """Every URL a push to *remote* goes to; one that is neither HTTPS nor local raises ``PushRefused``."""
-    environment = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")}
-    command = (resolve_git_executable(), "-C", str(repository), "remote", "get-url", "--push", "--all", remote)
-    try:
-        done = subprocess.run(  # noqa: S603 - fixed Git executable and code-owned argument vector
-            command, capture_output=True, env=environment, timeout=timeout, check=False
-        )
-    except subprocess.TimeoutExpired as exc:
-        msg = f"the push URLs of {remote} in {repository} could not be read in {timeout:g} s"
-        raise RemoteGitError(msg, retry_safe=True) from exc
-    if done.returncode:
-        said = done.stderr.decode(errors="replace").strip() or f"exit {done.returncode}"
-        msg = f"the push URLs of {remote} in {repository} could not be read: {said}"
-        raise RemoteGitError(msg, retry_safe=False)
-    urls = done.stdout.decode(errors="replace").split()
-    for url in urls:
-        if not url.lower().startswith("https://") and not is_local(url):
-            who = f"instead of {access.login}" if access.login else "instead of the account the setting names"
-            msg = (
-                f"{repository}'s remote {remote} pushes to {url}, over SSH, where the SSH key's account would push "
-                f"{who}. Give it an HTTPS push URL: git -C {repository} remote set-url --push {remote} "
-                "https://<host>/<owner>/<name>.git"
-            )
-            raise PushRefused(msg)
-    return urls

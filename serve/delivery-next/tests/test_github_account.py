@@ -13,7 +13,9 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.git import access as access_module
-from owlbear_delivery_next.git.access import Access, PushRefused, destinations
+from owlbear_delivery_next.git import remote_git
+from owlbear_delivery_next.git.access import Access, PushRefused
+from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown
 from owlbear_delivery_next.github import account
 from owlbear_delivery_next.github.account import AccountMissing, Origin, Writer, resolve
 from owlbear_delivery_next.github.gh import GhProvider
@@ -217,7 +219,7 @@ def test_a_push_that_would_leave_over_ssh_is_refused_naming_the_fix(repo, setup)
     _git(repo, *setup)  # longer than the tests' offline rewrite of https://github.com/, so it wins
     chosen = Access("boecht", "the setting names it", "github.com", "tok-boecht", "/usr/bin/gh")
     with pytest.raises(PushRefused) as raised:
-        destinations(repo, "origin", chosen, 10)
+        chosen.destinations(repo, "origin", 10)
     said = str(raised.value)
     assert "over SSH" in said
     assert "instead of boecht" in said
@@ -228,8 +230,55 @@ def test_https_and_local_push_destinations_pass(repo, tmp_path):
     _git(repo, "remote", "add", "origin", "https://github.com/boecht/sandbox.git")
     _git(repo, "remote", "add", "data", str(tmp_path / "data.git"))
     chosen = Access("boecht", "the setting names it", "github.com", "tok-boecht", "/usr/bin/gh")
-    assert destinations(repo, "data", chosen, 10) == [str(tmp_path / "data.git")]
-    assert destinations(repo, "origin", chosen, 10) == ["/nonexistent/offline-in-tests/boecht/sandbox.git"]
+    assert chosen.destinations(repo, "data", 10) == [str(tmp_path / "data.git")]
+    assert chosen.destinations(repo, "origin", 10) == ["/nonexistent/offline-in-tests/boecht/sandbox.git"]
+
+
+GIT_CASES = {  # the setting, the origin's owner, the active account, whose token Git gets
+    "the setting names boecht": ("boecht", "acme", "maba-pag", "boecht"),
+    "the repository owner's account": (account.REPOSITORY_OWNER, "boecht", "maba-pag", "boecht"),
+    "maba-pag for an owner gh lacks": (account.REPOSITORY_OWNER, "acme", "boecht", "maba-pag"),
+}
+
+
+@pytest.mark.parametrize("case", GIT_CASES)
+def test_each_remote_git_launch_answers_git_with_the_chosen_accounts_token(case, fake_gh, git_launches, repo):
+    setting, owner, active, login = GIT_CASES[case]
+    fake_gh.set(BOTH, {"github.com": active})
+    _git(repo, "remote", "add", "origin", f"https://github.com/{owner}/sandbox.git")
+    chosen = Writer(setting, repo).access()
+    remote_git.run_remote_git(repo, ("fetch", "--quiet", "origin", "main"), kind="read", access=chosen)
+    with pytest.raises(RemoteGitWriteUnknown):  # the tests' offline rewrite of github.com leaves nowhere to push
+        remote_git.run_remote_git(repo, ("push", "--quiet", "origin", "HEAD:refs/heads/x"), kind="write", access=chosen)
+    assert git_launches.verbs() == ["fetch", "push"]
+    for argv, environment in git_launches.seen:
+        options = git_launches.options(argv)
+        assert options[:2] == ("-c", "credential.helper=")  # HOME's helper, answering tok-active, is reset
+        assert _fill(repo, options, environment) == f"tok-{login}"
+    assert not [c for c in fake_gh.calls() if c["argv"][:2] == ["auth", "switch"]]
+
+
+def test_a_push_over_ssh_is_refused_before_git_starts(fake_gh, git_launches, repo):
+    _git(repo, "remote", "add", "origin", "https://github.com/boecht/sandbox.git")
+    _git(repo, "remote", "set-url", "--push", "origin", "https://github.com/boecht/sandbox.git")
+    _git(repo, "remote", "set-url", "--add", "--push", "origin", "git@github.com:boecht/sandbox.git")
+    chosen = Writer("boecht", repo).access()
+    with pytest.raises(PushRefused):
+        remote_git.run_remote_git(repo, ("push", "--quiet", "origin", "HEAD:refs/heads/x"), kind="write", access=chosen)
+    assert git_launches.seen == []
+    assert fake_gh.calls()  # the account was resolved; only the push was refused
+
+
+def test_a_local_origin_launches_git_unchanged_and_asks_gh_nothing(fake_gh, git_launches, repo, tmp_path):
+    bare = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", str(bare))
+    _git(repo, "remote", "add", "origin", str(bare))
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i")
+    push = ("push", "--quiet", "origin", "HEAD:refs/heads/main")
+    remote_git.run_remote_git(repo, push, kind="write", access=Writer.rule(repo).access())
+    ((argv, _environment),) = git_launches.seen
+    assert argv[1:] == ("-C", str(repo), *push)
+    assert fake_gh.calls() == []
 
 
 HEAD = "a" * 40

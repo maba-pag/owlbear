@@ -40,9 +40,11 @@ from owlbear_delivery_next.change_contracts.round_records import RoundLoop, Roun
 from owlbear_delivery_next.change_flow import budgets, delivery_target, loop, round_flow, worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git.access import Access
 from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify_write_readback, read_remote_ref
-from owlbear_delivery_next.github import gh_queue, merge_offer
+from owlbear_delivery_next.github import account, gh_queue, merge_offer
 from owlbear_delivery_next.github import provider as provider_contract
+from owlbear_delivery_next.github.account import Writer
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import (
     Check,
@@ -200,7 +202,8 @@ def set_prefs(monkeypatch, **values):
 
 
 def ctx(tmp_path, gh, p=None, repo=None):
-    return engine.Ctx(Store(tmp_path / "store"), Lock("c1"), repo or tmp_path, p or prof(), gh, NOW)
+    local = Writer.rule(account.Origin.LOCAL)  # the step's own Git runs on fakes or a local origin
+    return engine.Ctx(Store(tmp_path / "store"), Lock("c1"), repo or tmp_path, p or prof(), gh, NOW, local)
 
 
 def change(kind=StepKind.MERGE, worktree="", head=A, **fields):
@@ -1303,10 +1306,10 @@ def test_a_pr_head_lagging_the_push_is_observed_again_shortly_without_budget(clo
 def test_a_pr_head_lag_with_a_moved_branch_republishes_instead_of_waiting(clone, tmp_path, monkeypatch):
     head = git(clone, "rev-parse", "HEAD")
     c, gh = change(StepKind.PUBLISH, worktree=str(clone)), FakeGh(pr(head=A))
-    monkeypatch.setattr(publish, "read_remote_ref", lambda *_a: B)
+    monkeypatch.setattr(publish, "read_remote_ref", lambda *_a, **_k: B)
     pushed = []
     monkeypatch.setattr(
-        publish, "push", lambda _p, _c, h: pushed.append(h) or engine.integrate(c, StepKind.PUBLISH, "x")
+        publish, "push", lambda _p, _c, h, _access: pushed.append(h) or engine.integrate(c, StepKind.PUBLISH, "x")
     )
     result = publish.lagging(ctx(tmp_path, gh), c, gh.pr, head)
     assert (result.exit, pushed, c.lag) == (Exit.BACK, [head], None)
@@ -1414,21 +1417,24 @@ def test_write_readback_replays_only_on_confirmed_absence():
 def test_an_unknown_push_is_read_back_and_replayed_only_when_absent(clone, monkeypatch, applied, pushes):
     real, calls = publish.run_remote_git, []
 
-    def flaky(path, args, *, kind):
+    def flaky(path, args, *, kind, access):
         calls.append(args)
         if len(calls) == 1:
             if applied:
-                real(path, args, kind=kind)
+                real(path, args, kind=kind, access=access)
             raise RemoteGitWriteUnknown(TIMED_OUT, timed_out=True)
-        return real(path, args, kind=kind)
+        return real(path, args, kind=kind, access=access)
 
     monkeypatch.setattr(publish, "run_remote_git", flaky)
     (clone / "b.txt").write_text("b\n")
     git(clone, "add", "b.txt")
     git(clone, "commit", "-q", "-m", "b")
     head = git(clone, "rev-parse", "HEAD")
-    assert publish.push(clone, change(StepKind.PUBLISH), head) is None
-    assert (len(calls), read_remote_ref(clone, "origin", "refs/heads/owlbear/c1")) == (pushes, head)
+    assert publish.push(clone, change(StepKind.PUBLISH), head, Access.LOCAL) is None
+    assert (len(calls), read_remote_ref(clone, "origin", "refs/heads/owlbear/c1", access=Access.LOCAL)) == (
+        pushes,
+        head,
+    )
 
 
 @pytest.mark.parametrize(("after", "exit_"), [("merged", Exit.DONE), ("open", Exit.RETRY)])
@@ -1968,7 +1974,7 @@ def test_a_moved_target_integrates_before_merging_whatever_github_reports(tmp_pa
 def test_a_builder_needing_target_work_integrates_then_resumes_its_task(clone):
     c = change(StepKind.BUILD, worktree=str(clone))
     c.step.task = "t1"
-    c = loop.apply(c, engine.needs_target(c, clone, "greet() exists only on main", NOW), NOW)
+    c = loop.apply(c, engine.needs_target(c, clone, "greet() exists only on main", NOW, Writer.rule(clone)), NOW)
     assert (c.step.task, c.plan.tasks[-1].origin) == ("t2", "integration")
     assert "greet() exists only on main" in c.plan.tasks[-1].detail
     c = loop.apply(c, loop.StepResult(exit=Exit.DONE), NOW)  # its build; the task's next round reviews the merge
@@ -2219,9 +2225,9 @@ def test_a_silent_rejecting_pre_push_hook_becomes_a_builder_fix_after_readback(c
     hook = clone / ".git" / "hooks" / "pre-push"
     hook.write_text("#!/bin/sh\nexit 1\n")
     hook.chmod(0o755)
-    result = publish.push(clone, change(StepKind.PUBLISH), git(clone, "rev-parse", "HEAD"))
+    result = publish.push(clone, change(StepKind.PUBLISH), git(clone, "rev-parse", "HEAD"), Access.LOCAL)
     assert (result.back_to, result.cause) == (StepKind.BUILD, "commit-policy:publish:pre-push")
-    assert read_remote_ref(clone, "origin", "refs/heads/owlbear/c1") is None
+    assert read_remote_ref(clone, "origin", "refs/heads/owlbear/c1", access=Access.LOCAL) is None
     assert not publish.hook_rejected(128, b"fatal: Could not read from remote repository.", hook=True)
     assert not publish.hook_rejected(1, b" ! [remote rejected] main (protected branch)", hook=True)
 
@@ -3033,9 +3039,9 @@ def test_an_unknown_withdrawal_keeps_the_barrier_and_asks_nothing(tmp_path):
 
 @pytest.fixture
 def both_prefs_unset(tmp_path, monkeypatch):
-    """A real Store with a queued merge, no settings layer, and the synthetic queue provider through the runner."""
+    """A real Store with a queued merge, no settings layer but the GitHub account, and the synthetic queue provider."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    monkeypatch.setattr(config, "BASE", None)
+    monkeypatch.setattr(config, "BASE", config.GlobalLayer(github_account=account.REPOSITORY_OWNER))
     for args in (
         ["init", "-q"],
         ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"],
@@ -3071,7 +3077,7 @@ def both_prefs_unset(tmp_path, monkeypatch):
 
 def run_merge_step(store, capsys):
     with store.lock("c1") as lock:
-        runner._step(store, lock, store.read("c1"), Step(kind=StepKind.MERGE), store.root)  # noqa: SLF001
+        runner._step(store, lock, c := store.read("c1"), Step(kind=StepKind.MERGE), Path(c.names.worktree))  # noqa: SLF001
     return json.loads(capsys.readouterr().out.strip().splitlines()[-1])
 
 
@@ -3093,7 +3099,7 @@ def test_an_uncertain_withdrawal_with_both_prefs_unset_waits_and_a_later_confirm
     gh.__dict__.pop("dequeue", None)  # the next pass reaches GitHub normally and reads back the removal
     gh.dequeue_fails = False
     with store.lock("c1") as lock:
-        runner._step(store, lock, store.read("c1"), Step(kind=StepKind.MERGE), store.root)  # noqa: SLF001
+        runner._step(store, lock, c := store.read("c1"), Step(kind=StepKind.MERGE), Path(c.names.worktree))  # noqa: SLF001
     after = store.read("c1")
     assert (after.queue, gh.state.entry) == (None, None)
     assert len(after.questions) == 1
@@ -3121,7 +3127,7 @@ def test_a_failed_fetch_keeps_gits_whole_output(clone, whole_error, monkeypatch)
         return subprocess.CompletedProcess(argv, 1, b"", f"{whole_error}\n".encode())
 
     monkeypatch.setattr(engine, "run_remote_git", refused)
-    result = engine.needs_target(c, clone, "greet() exists only on main", NOW)
+    result = engine.needs_target(c, clone, "greet() exists only on main", NOW, Writer.rule(clone))
     assert (result.exit, result.reason) == (Exit.RETRY, f"RemoteGitFailed: fetch of main failed: {whole_error}")
 
 

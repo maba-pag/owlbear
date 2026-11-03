@@ -6,11 +6,13 @@ The project names ``octo-writer``, which is neither the active account nor the r
 
 import contextlib
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next.change_contracts.models import Change, Names, Step, StepKind
+from owlbear_delivery_next.change_contracts.models import Change, Exit, Names, Step, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.commands import cli, runner, setup
 from owlbear_delivery_next.github import gh_client
@@ -19,17 +21,18 @@ from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.impeccable_runs import pack_live
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.pds_runs import job
+from owlbear_delivery_next.project_host import host
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
-from owlbear_delivery_next.state_store import backlog_issues, profile_share
+from owlbear_delivery_next.state_store import backlog_issues, github_writer, profile_share
 from owlbear_delivery_next.state_store.store import Store
-from owlbear_delivery_next.workflow_steps import engine, queue
+from owlbear_delivery_next.workflow_steps import cleanup, engine, publish, queue
 
 ACCOUNTS = {"github.com": {"maba-pag": "success", "boecht": "success", "octo-writer": "success"}}
 
 
-def _git(cwd, *args):
-    subprocess.run(("git", "-C", str(cwd), *args), capture_output=True, check=True)  # noqa: S603, S607
+def _git(cwd, *args) -> str:
+    return subprocess.run(("git", "-C", str(cwd), *args), capture_output=True, text=True, check=True).stdout  # noqa: S603, S607
 
 
 def _clone(path: Path, origin: str) -> Path:
@@ -171,3 +174,89 @@ def test_an_unset_setting_observes_nothing_and_asks_the_owner_at_the_step(fake_g
     (question,) = store.read("c1").questions
     assert "github_account" in question.text
     assert fake_gh.calls() == []
+
+
+NOW = datetime(2026, 11, 1, tzinfo=UTC)
+
+
+def _hosted(tmp_path: Path) -> tuple[Store, Path, str]:
+    """The project's clone: its origin names acme/tools on GitHub, and its Git traffic reaches a local bare copy."""
+    store, repo = _project(tmp_path)
+    bare = tmp_path / "tools.git"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(bare))
+    _git(repo, "config", f"url.{bare}.insteadOf", "https://github.com/acme/tools.git")  # outranks the offline rule
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i")
+    _git(repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+    head = _git(repo, "rev-parse", "HEAD").strip()
+    return store, repo, head
+
+
+def _change(repo: Path, kind: StepKind = StepKind.PUBLISH, **fields) -> Change:
+    names = Names(branch="owlbear/c1", target="main", worktree=str(repo), pr=7)
+    return Change(slug="c1", step=Step(kind=kind), names=names, **fields)
+
+
+def _publish_push(store, repo, head, lock):
+    hook = repo / ".git" / "hooks" / "pre-push"
+    hook.write_text("#!/bin/sh\nexit 1\n")  # the refused push is read back: both ls-remotes run
+    hook.chmod(0o755)
+    ctx = engine.Ctx(store, lock, repo, store.read_profile(), None, NOW)
+    assert publish.push(repo, _change(repo), head, ctx.writer.access()).exit == Exit.BACK
+
+
+def _cleanup_fetch(store, repo, _head, lock):
+    ctx = engine.Ctx(store, lock, repo, store.read_profile(), None, NOW)
+    assert cleanup._keep(ctx, repo, _change(repo, StepKind.CLEANUP), None) == ["origin/main"]  # noqa: SLF001
+
+
+def _needs_target(store, repo, _head, _lock):
+    c = _change(repo, StepKind.BUILD)
+    assert engine.needs_target(c, repo, "the API", NOW, github_writer.of(store, repo)).exit == Exit.BACK
+
+
+def _owners_pull(store, repo, _head, lock):
+    said: list[str] = []
+    found = SimpleNamespace(store=store, repo=repo, say=said.append)
+    c = host.Host._pull(found, lock, _change(repo, StepKind.CLEANUP, pull_requested=NOW), NOW)  # noqa: SLF001
+    assert c.pullback is not None, said
+
+
+GIT_CASES = {
+    "the publish push and both reads of its ref": (_publish_push, ["ls-remote", "push", "ls-remote"]),
+    "a cleanup fetch": (_cleanup_fetch, ["fetch"]),
+    "a Builder task that needs the target": (_needs_target, ["fetch"]),
+    "the owner's Pull": (_owners_pull, ["fetch"]),
+}
+
+
+@pytest.mark.parametrize("case", GIT_CASES)
+def test_each_project_git_launch_carries_the_projects_account(case, fake_gh, git_launches, tmp_path, monkeypatch):
+    (entry, verbs), login = GIT_CASES[case], "octo-writer"
+    fake_gh.set(ACCOUNTS, {"github.com": "maba-pag"})
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"github_account": login}))
+    store, repo, head = _hosted(tmp_path)
+    with store.lock("c1") as lock:
+        entry(store, repo, head, lock)
+    assert git_launches.verbs() == verbs
+    for argv, environment in git_launches.seen:
+        assert git_launches.options(argv)[:2] == ("-c", "credential.helper=")
+        assert environment["GH_TOKEN"] == f"tok-{login}"
+
+
+@pytest.mark.parametrize(
+    ("setting", "cause", "says"),
+    [("octo-writer", "gate:publish:ssh", "over SSH"), ("nobody", "auth:publish:gh", "nobody")],
+)
+def test_an_ssh_push_or_a_missing_account_asks_the_owner_and_pushes_nothing(  # noqa: PLR0913, PLR0917 - one case
+    setting, cause, says, fake_gh, git_launches, tmp_path, monkeypatch
+):
+    fake_gh.set(ACCOUNTS, {"github.com": "maba-pag"})
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"github_account": setting}))
+    store, repo, head = _hosted(tmp_path)
+    _git(repo, "remote", "set-url", "--push", "origin", "git@github.com:acme/tools.git")
+    with store.lock("c1") as lock:
+        ctx = engine.Ctx(store, lock, repo, store.read_profile(), None, NOW)
+        _, result = engine.run(lambda x, c: (c, publish.push(repo, c, head, x.writer.access())), ctx, _change(repo))
+    assert (result.exit, result.cause) == (Exit.ASK, cause)
+    assert says in result.question.text
+    assert "push" not in git_launches.verbs()

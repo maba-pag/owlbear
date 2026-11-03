@@ -202,7 +202,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
         end = datetime.now(UTC)
     result = overlap.integrated(post, lock, change, path, (start, run.ending), result)
     if isinstance(p := run.payload, tools.WrongPremise) and (p.stage, s.kind, result.exit) == TARGET:
-        result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end)
+        writer = github_writer.of(store, repo)
+        result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end, writer)
     if ctx is not None:
         result = prepare.chosen(post, lock, change, path, run.payload, ctx, result)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
@@ -341,7 +342,8 @@ def _ready(prof: Profile, path: Path, now: datetime) -> Result | None:
 def _engine(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     now, kind = datetime.now(UTC), change.step.kind
     prof = store.read_profile() or Profile()
-    ctx = engine.Ctx(store, lock, repo, prof, profile.provider(prof, repo, github_writer.of(store, repo)), now)
+    writer = github_writer.of(store, repo)
+    ctx = engine.Ctx(store, lock, repo, prof, profile.provider(prof, repo, writer), now, writer)
     if kind in {StepKind.PUBLISH, StepKind.FOLLOW, StepKind.MERGE} and change.names.branch:
         path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
         change.names.worktree = str(path)

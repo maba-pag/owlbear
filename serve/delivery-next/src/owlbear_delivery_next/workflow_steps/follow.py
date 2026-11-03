@@ -31,6 +31,7 @@ from owlbear_delivery_next.workflow_steps import conversation as conv
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change, Question, Task
+    from owlbear_delivery_next.github.account import Writer
     from owlbear_delivery_next.github.provider import Check, CiState, ConversationItem, Provider, PullRequest
     from owlbear_delivery_next.workflow_steps.engine import Ctx
 
@@ -45,14 +46,14 @@ def ci(ctx: Ctx, pr: PullRequest, declared: tuple[str, ...]) -> CiState:
     return classify_checks(checks, declared, profile.names(ctx.profile, profile.REQUIRED))
 
 
-def _flows_at(c: Change, pr: PullRequest) -> dict[str, str] | None:
+def _flows_at(c: Change, pr: PullRequest, writer: Writer) -> dict[str, str] | None:
     """The PR head's workflow files, fetching its branch once when the head is not here; None when unreadable."""
     if not c.names.worktree:
         return None
     path = Path(c.names.worktree)
     if not engine.git_ok(path, "cat-file", "-e", f"{pr.head_sha}^{{commit}}"):
         try:
-            engine.fetch(path, pr.head_branch)
+            engine.fetch(path, pr.head_branch, writer.access())
         except RemoteGitError:
             return None
     return profile.workflow_texts_at(path, pr.head_sha)
@@ -64,7 +65,7 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
     The profile's entry holds while its workflow evidence matches the head; else they are detected from the head.
     """
     entry = ctx.profile.entries.get(profile.DECLARED)
-    texts = _flows_at(c, pr)
+    texts = _flows_at(c, pr, ctx.writer)
     if texts is None:  # never trust the profile for a head whose workflows were not read
         return (), engine.pending(Waiting.NETWORK, f"reading the workflow files at {pr.head_sha[:7]}", ctx.poll())
     bound, digest = profile.digest_of(entry), profile.flows_digest(texts)
@@ -154,7 +155,7 @@ def missing(ctx: Ctx, c: Change, pr: PullRequest, state: CiState, step: StepKind
     return c, StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
 
 
-def _published(c: Change, pr: PullRequest) -> conv.Published:
+def _published(c: Change, pr: PullRequest, writer: Writer) -> conv.Published:
     """Whether a fix commit is an ancestor of the PR head; the head branch is fetched at most once."""
     path, fetched = Path(c.names.worktree), []
 
@@ -162,7 +163,7 @@ def _published(c: Change, pr: PullRequest) -> conv.Published:
         if commit == pr.head_sha:
             return True
         if not fetched:
-            engine.fetch(path, pr.head_branch)
+            engine.fetch(path, pr.head_branch, writer.access())
             fetched.append(pr.head_branch)
         return engine.contains(path, commit, pr.head_sha)
 
@@ -195,7 +196,7 @@ def _reply(  # noqa: PLR0913 - one reply needs the PR, the task, its response an
     item = next((i for i in items if i.id == ref.id), None)
     if item is None or r.how == "no-action":
         return conv.record(c, task, r, ctx.now), None
-    if r.how == "fixed" and r.commit and not _published(c, pr)(r.commit):
+    if r.how == "fixed" and r.commit and not _published(c, pr, ctx.writer)(r.commit):
         if not engine.contains(Path(c.names.worktree), r.commit):
             return conv.record(c, task, r, ctx.now), None  # the fix is gone: the item opens again with a new task
         cause = failures.cause_key(ErrorKind.GATE, step, "unpublished")
@@ -277,7 +278,7 @@ def conversation(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[
         if held is not None:
             return c, held
         items = ctx.gh.read_conversation(ctx.repository, pr.number)
-    published = _published(c, pr)
+    published = _published(c, pr, ctx.writer)
     found = conv.states(c, items, ctx.gh.viewer, published)
     missing = [s for s in found if conv.reply_missing(s, items)]
     for s in missing:

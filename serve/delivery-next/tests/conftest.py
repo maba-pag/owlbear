@@ -8,7 +8,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,6 +25,7 @@ from owlbear_delivery_next.change_contracts.models import Change
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git import remote_git
 from owlbear_delivery_next.git.access import Access
 from owlbear_delivery_next.github import account
 from owlbear_delivery_next.impeccable import pack_files
@@ -470,6 +471,41 @@ def fake_gh(tmp_path, monkeypatch) -> FakeGh:
     gitconfig.write_text(gitconfig.read_text() + helper)
     monkeypatch.setattr(account, "resolve", _RESOLVE)  # the real resolution, asking this fake
     return FakeGh(folder)
+
+
+class GitLaunches:
+    """``remote_git``'s ``subprocess``: each Git launch's argv and environment is recorded, and the real Git runs."""
+
+    def __init__(self) -> None:
+        self.seen: list[tuple[tuple[str, ...], dict[str, str]]] = []
+        self.Popen = self._launch
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(subprocess, name)
+
+    def _launch(self, command: Sequence[str], **kwargs: Any) -> subprocess.Popen[bytes]:
+        self.seen.append((tuple(command), dict(kwargs["env"])))
+        return subprocess.Popen(command, **kwargs)  # noqa: S603 - the launch under test, unchanged
+
+    def verbs(self) -> list[str]:
+        return [argv[argv.index("-C") + 2 + len(self.options(argv))] for argv, _ in self.seen]
+
+    @staticmethod
+    def options(argv: tuple[str, ...]) -> tuple[str, ...]:
+        """The ``-c`` options straight after ``git -C <repository>``."""
+        start = argv.index("-C") + 2
+        end = start
+        while end < len(argv) and argv[end] == "-c":
+            end += 2
+        return argv[start:end]
+
+
+@pytest.fixture
+def git_launches(monkeypatch) -> GitLaunches:
+    """The remote Git launches the test starts."""
+    recording = GitLaunches()
+    monkeypatch.setattr(remote_git, "subprocess", recording)
+    return recording
 
 
 class Warmth:

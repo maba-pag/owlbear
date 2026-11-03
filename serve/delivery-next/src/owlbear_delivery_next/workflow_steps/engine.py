@@ -21,7 +21,9 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import delivery_target, loop, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
+from owlbear_delivery_next.git.access import PushRefused
 from owlbear_delivery_next.git.remote_git import RemoteGitError, RemoteGitFailed, RemoteGitTimeout, run_remote_git
+from owlbear_delivery_next.github.account import AccountMissing
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import SettingsUnset, pref
@@ -34,6 +36,8 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.change_contracts.models import Actor, Change
     from owlbear_delivery_next.change_flow.loop import PrState, Seen
+    from owlbear_delivery_next.git.access import Access
+    from owlbear_delivery_next.github.account import Writer
     from owlbear_delivery_next.github.provider import Provider, PullRequest, Rules
     from owlbear_delivery_next.state_store.store import Lock, Store
 
@@ -43,7 +47,10 @@ type Origin = Literal["review", "ci", "pr-feedback", "integration"]
 
 @dataclass
 class Ctx:
-    """What an engine step reads and writes besides the Change: store, repository, profile and provider."""
+    """What an engine step reads and writes besides the Change: store, repository, profile, provider and writer.
+
+    ``writer`` is the account the project's GitHub writes are made by (TD-402); unset, it is the project's setting.
+    """
 
     store: Store
     lock: Lock
@@ -51,6 +58,11 @@ class Ctx:
     profile: Profile
     gh: Provider
     now: datetime
+    writer: Writer | None = None
+
+    def __post_init__(self) -> None:
+        if self.writer is None:
+            self.writer = github_writer.of(self.store, self.repo)
 
     @property
     def repository(self) -> str:
@@ -86,14 +98,14 @@ def head(path: Path) -> str:
     return worktree.git(path, "rev-parse", "HEAD").strip()
 
 
-def fetch(path: Path, branch: str) -> None:
+def fetch(path: Path, branch: str, access: Access) -> None:
     """Update ``origin/<branch>`` with a bounded remote read.
 
     Raises:
         RemoteGitFailed: The fetch did not succeed.
     """
     spec = f"+refs/heads/{branch}:refs/remotes/origin/{branch}"
-    done = run_remote_git(path, ("fetch", "--quiet", "--no-tags", "origin", spec), kind="read")
+    done = run_remote_git(path, ("fetch", "--quiet", "--no-tags", "origin", spec), kind="read", access=access)
     if done.returncode != 0:
         msg = f"fetch of {branch} failed: {done.stderr.decode(errors='replace').strip()}"
         raise RemoteGitFailed(msg, retry_safe=True, result=done)
@@ -125,11 +137,11 @@ def integrate(c: Change, step: StepKind, ref: str, detail: str = "") -> StepResu
     return back(ErrorKind.CONFLICT, step, ref, f"updating with {ref}", task(c, title, "integration", detail))
 
 
-def needs_target(c: Change, path: Path, reason: str, now: datetime) -> StepResult:
+def needs_target(c: Change, path: Path, reason: str, now: datetime, writer: Writer) -> StepResult:
     """I6: the task needs a target commit or API this branch lacks; integrate during build, then resume the task."""
     try:
-        fetch(path, c.names.target)
-    except RemoteGitError as exc:
+        fetch(path, c.names.target, writer.access())
+    except (RemoteGitError, ProviderError) as exc:
         return failed(c, exc, now)
     return integrate(c, StepKind.BUILD, f"origin/{c.names.target}", f"The Builder of {c.step.task} needs: {reason}")
 
@@ -163,6 +175,9 @@ def rules_changed(ctx: Ctx, c: Change) -> tuple[StepResult | None, Rules]:
 def failed(c: Change, exc: Exception, now: datetime) -> StepResult:
     """Map provider and remote Git failures: sign-in asks with the command; the rest retry as classified."""
     kind = c.step.kind
+    if isinstance(exc, AccountMissing | PushRefused):  # its text names the account, the cause and the fix (TD-402)
+        error, subject = (ErrorKind.AUTH, "gh") if isinstance(exc, AccountMissing) else (ErrorKind.GATE, "ssh")
+        return ask(kind, f"{exc}; then continue", failures.cause_key(error, kind, subject), continue_or_pause(kind))
     if isinstance(exc, ProviderError) and exc.code == FailureCode.AUTHENTICATION_REQUIRED:
         text = f"GitHub refused the credential ({exc}): run `gh auth login` (or `gh auth refresh`), then continue"
         return ask(kind, text, failures.cause_key(ErrorKind.AUTH, kind, "gh"), continue_or_pause(kind))

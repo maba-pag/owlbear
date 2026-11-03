@@ -34,6 +34,7 @@ from owlbear_delivery_next.project_host.runner_end import block as _block
 from owlbear_delivery_next.project_host.runner_end import unverified as _unverified
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.state_store import github_writer
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 from owlbear_delivery_next.workflow_steps import before, check, disposable, engine, prepare, pullback, queue
 
@@ -361,7 +362,8 @@ class Host:
         """Run pull-back again when the owner asked to Pull, and record its result."""
         if not c.pull_requested:
             return c
-        c.pullback, c.pull_requested = pullback.run(self.repo, c.names.target, now), None
+        writer = github_writer.of(self.store, self.repo)
+        c.pullback, c.pull_requested = pullback.run(self.repo, c.names.target, now, writer), None
         self.store.log(lock, c.slug, {"event": "pullback", "at": now.isoformat(), **c.pullback.model_dump(mode="json")})
         self.say(f"{c.slug}: pull-back {c.pullback.state} {c.pullback.reason}".rstrip())
         return c
