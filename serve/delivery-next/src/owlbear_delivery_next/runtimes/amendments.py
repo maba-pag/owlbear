@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import amend_tools, tools
 from owlbear_delivery_next.change_flow import amend_apply
+from owlbear_delivery_next.change_flow.brief_tools import BriefDraft
 from owlbear_delivery_next.runtimes import step_decisions
 
 if TYPE_CHECKING:
@@ -75,6 +76,23 @@ def _errors(items: Sequence[tools.Amend | amend_tools.CandidateItem], allowed: t
             errors.append(f'{name}: scope {a.text} is not repository-relative - e.g. "packages/app"')
         if isinstance(a, amend_tools.CandidateItem):
             errors += _shaped(a, allowed, gone, name, added)
+    return errors + _sized(items, allowed, name)
+
+
+_SIZED = {"criterion": "criteria", "scope": "scope", "visual": "visual", "check": "person_checks"}
+
+
+def _sized(items: Sequence[tools.Amend | amend_tools.CandidateItem], allowed: tuple[str, ...], name: str) -> list[str]:
+    """The amended brief stays within a shaped brief's limits, so every worker reads all of it; one over may shrink."""
+    errors = []
+    for field, draft in _SIZED.items():
+        held = sum(r.startswith(f"{field}:") for r in allowed)
+        grows = sum(a.field == field and not a.key and not a.remove for a in items)
+        shrinks = sum(a.field == field and bool(a.key) and a.remove for a in items)
+        most = next(m.max_length for m in BriefDraft.model_fields[draft].metadata if hasattr(m, "max_length"))
+        if (now := held + grows - shrinks) > most and grows > shrinks:
+            errors.append(f"{name}: the brief would hold {now} {draft.replace('_', ' ')}, more than {most} - merge "
+                          "or remove some")  # fmt: skip
     return errors
 
 

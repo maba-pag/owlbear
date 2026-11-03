@@ -968,7 +968,17 @@ def test_two_new_decisions_with_the_same_answer_keep_their_own_ids():
 
 
 def test_a_new_check_may_cover_any_criterion_a_full_candidate_adds():
-    adds = [item("criterion", "", f"Says hello in language {n}") for n in range(1, 10)]
-    last = item("check", "", "it greets", steps=["open /"], covers=["AC-11"])
+    adds = [item("criterion", "", f"Says hello in language {n}") for n in range(1, 9)]
+    last = item("check", "", "it greets", steps=["open /"], covers=["AC-10"])
 
     assert amendments.check(CandidateResult(items=[*adds, last]), amendments.amendable(change())) == []
+
+
+def test_a_candidate_may_not_grow_the_brief_past_a_shaped_briefs_limits():
+    adds = [item("criterion", "", f"Says hello in language {n}") for n in range(1, 10)]
+    allowed = amendments.amendable(change())
+
+    assert amendments.check(CandidateResult(items=adds), allowed) == [
+        "items: the brief would hold 11 criteria, more than 10 - merge or remove some"
+    ]
+    assert amendments.check(CandidateResult(items=[*adds, item("criterion", "AC-1", "", remove=True)]), allowed) == []
