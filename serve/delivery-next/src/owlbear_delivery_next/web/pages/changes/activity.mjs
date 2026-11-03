@@ -67,8 +67,9 @@ function linted(e) {
 // Each recorded event in plain words; an event this page does not know reads as its name, with its reason if any.
 const SAID = {
   step: (e) => `${STEPS[e.kind] ?? words(e.kind ?? "step")} ${EXITS[e.exit] ?? "ended"}${why(e.reason)}`,
-  tool: (e) => (e.summary && e.summary !== e.tool ? short(e.summary)
-    : `${TOOLS[e.tool] ?? `Called ${e.tool}`}${e.accepted === false ? " (refused)" : ""}`),
+  tool: (e) => `${e.summary && e.summary !== e.tool ? short(e.summary)
+    : `${TOOLS[e.tool] ?? `Called ${e.tool}`}${e.accepted === false ? " (refused)" : ""}`}${
+    why((e.errors || []).join("; "))}`,
   session: (e) => (e.resumed ? "Session resumed" : `Session started${e.role ? ` (${e.role})` : ""}`),
   started: () => "Session started",
   ended: (e) => `Session ended${e.ending ? ` (${e.ending})` : ""}`,
@@ -113,7 +114,7 @@ const SAID = {
   "prepared-stray": () => "Stray files from preparing discarded",
   lint: linted,
   "lint-skipped": (e) => `Lint ${e.tool} skipped${why(e.reason)}`,
-  "lint-unresolved": () => "Lint problems left unresolved",
+  "lint-unresolved": (e) => `Lint problems left unresolved${why((e.errors || []).join("; "))}`,
   "subagent-started": (e) => `Subagent ${e.agent || ""} started${e.allowed === false ? " (not allowed)" : ""}`,
   subagent: (e) => `Subagent ${e.name || e.agent || ""} ${e.outcome || "ended"}`,
   "force-stop": (e) => `Tried to force the session to stop${why(e.reason)}`,

@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.runtimes.sdk_spend import failed
 from owlbear_delivery_next.runtimes.sdk_teardown import CALL
 from owlbear_delivery_next.runtimes.step_input import reminder
 
@@ -45,7 +46,7 @@ class Budget:
         def ended(task: asyncio.Task[None]) -> None:
             self.st.requests.discard(task)
             if not task.cancelled() and (error := task.exception()) is not None:
-                self.st.log(event="request-failed", operation=what, error=type(error).__name__)
+                self.st.log(event="request-failed", operation=what, error=failed(error))
 
         task = asyncio.create_task(request())
         self.st.requests.add(task)

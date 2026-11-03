@@ -2648,6 +2648,9 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
     notice = "read /Users/o/app/conf/a.toml\nthen conf/b.toml"
     hook = f'Traceback (most recent call last):\n  File "/Users/o/app/guard/judge.py", line 9\n{whole_error}'
     draft = ["title: too long in /Users/o/app/briefs/fix.md", whole_error]
+    refused = ["changed: /Users/o/app/src/main.py is outside the task", whole_error]
+    lint = ["lint: ruff found problems in /Users/o/app/src/main.py", "lint: biome broke on web/app.json"]
+    failed = f"RuntimeError: {whole_error}"
     events = [
         {"event": "tool", "tool": "view", "summary": "Read /Users/o/app/src/main.py"},
         {"event": "workspace-kept", "path": "/Users/o/.owlbear/worktrees/app-c1", "reason": kept},
@@ -2656,6 +2659,9 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
         {"event": "mystery-thing", "notice": notice},
         {"event": "hook-failed", "hook": "preToolUse", "error": hook},
         {"event": "fix-draft-failed", "key": "main:ci:abc", "errors": draft},
+        {"event": "tool", "tool": "submit_result", "accepted": False, "errors": refused},
+        {"event": "lint-unresolved", "errors": lint},
+        {"event": "request-failed", "operation": "tasks.list", "error": failed},
     ]
     with store.lock("c1") as lock:
         for e in events:
@@ -2668,6 +2674,9 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
         "Mystery thing": f"Mystery thing: {notice}",
         "The shell guard": f"The shell guard's warning hook failed; the step stopped: {hook}",
         "Could not draft": f"Could not draft a fix Change: {'; '.join(draft)}",
+        "Submitted its result": f"Submitted its result (refused): {'; '.join(refused)}",
+        "Lint problems": f"Lint problems left unresolved: {'; '.join(lint)}",
+        "Request tasks.list": f"Request tasks.list failed ({failed})",
     }
     with browsing(monkeypatch, pds) as (page, url):
         said = errors(page)

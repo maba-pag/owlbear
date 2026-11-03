@@ -22,6 +22,11 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.runtimes.session_result import Run
 
 
+def failed(exc: BaseException) -> str:
+    """An SDK request's failure whole: its type, its message and the data a JSON-RPC error carries beside it."""
+    return f"{type(exc).__name__}: {exc}" + (f" {data!r}" if (data := getattr(exc, "data", None)) else "")
+
+
 async def meter(client: CopilotClient, st: _Step, sid: str, agent: str) -> None:
     """The run's ``start`` line in the spend ledger, before its first send: from here it may spend credits.
 
@@ -34,7 +39,7 @@ async def meter(client: CopilotClient, st: _Step, sid: str, agent: str) -> None:
     try:
         cli = (await sdk_teardown.call(client.get_status(), "CLI status read", sdk_teardown.CALL)).version
     except Exception as exc:  # noqa: BLE001 - any failure of the read is shown and recorded; the step goes on
-        error = f"{type(exc).__name__}: {exc}" + (f" {data!r}" if (data := getattr(exc, "data", None)) else "")
+        error = failed(exc)
         st.log(event="request-failed", operation="CLI status read", error=error)
     st.metered = uuid.uuid4().hex
     before = None if "error" in st.billed else st.billed
