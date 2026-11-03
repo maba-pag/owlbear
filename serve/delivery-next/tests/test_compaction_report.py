@@ -476,9 +476,8 @@ def test_settings_keep_unsaved_edits_and_go_back_only_to_this_hosts_metrics(
         for away in ("https://evil.example/metrics", "/config", "https://["):
             page.goto(f"{base}/config?project={shop}&back={quote(away, safe='')}#agents")
             expect(setting_link(page, "builder")).to_have_attribute("href", fallback)
-        page.goto(f"{base}/config?project={shop}&back={quote('/metrics?in=&agent=builder#compaction', safe='')}#runs")
+        page.goto(f"{base}/config?project={shop}&back={quote('/metrics?in=&agent=builder#compaction', safe='')}#agents")
         page.get_by_label("Rounds at most, builder").fill("4")
-        pds.group(page, "agents")
         setting_link(page, "builder").click()
         expect(page.locator("#machine > [role=alert]")).to_have_text(
             "Save or discard your edits before you leave this page."

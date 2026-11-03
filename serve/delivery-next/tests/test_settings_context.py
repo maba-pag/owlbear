@@ -99,20 +99,22 @@ def settings_page(
 
 
 def cells(page, role: str):
-    """The role's row cells: agent, model, effort, context, rates."""
+    """The role's row cells: agent, model (with its rates), effort, context, subagents, minutes."""
     return page.locator(f"#set-agents-{role}").locator("p-table-cell")
 
 
-def caption(model: str, tier: str, effort: str) -> str:
-    return f"{model}, {tier} context \u00b7 effort {effort}; same rates at every effort"
+def caption(effort: str) -> str:
+    return f"effort {effort}: same rates at every effort"
 
 
 def shows(page, role: str, line: str, said: str) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    texts = cells(page, role).nth(4).locator("p-text")  # the rates line, then its caption
-    expect(texts.nth(1)).to_have_text(said)
-    expect(texts.nth(0)).to_have_text(line)
+    model = cells(page, role).nth(1)  # the rates and their caption sit under the model
+    expect(model.locator("p-text", has_text="AI credits per 1M tokens")).to_have_text(
+        f"AI credits per 1M tokens: {line}"
+    )
+    expect(model.locator("p-text", has_text="same rates at every effort")).to_have_text(said)
 
 
 def switch(page, role: str):
@@ -128,7 +130,7 @@ def test_a_one_size_model_shows_its_size_and_rates_with_no_switch_or_select(stor
         expect(context).to_contain_text("272k \u00b7 only tier")
         expect(context.locator("p-segmented-control")).to_have_count(0)
         expect(context.locator("p-select")).to_have_count(0)
-        shows(page, "reviewer", ONE, caption("gpt-6.1-sol", "default", "xhigh"))  # no efforts: the same caption
+        shows(page, "reviewer", ONE, caption("xhigh"))  # no efforts: the same caption
 
 
 @pytest.mark.browser
@@ -142,14 +144,14 @@ def test_a_two_size_model_switches_between_exactly_its_sizes_and_the_rates_follo
         assert [items.nth(i).get_attribute("value") for i in range(2)] == ["default", "long"]
         expect(items.nth(0).get_by_role("button")).to_have_accessible_name("200k, default context")
         expect(items.nth(1).get_by_role("button")).to_have_accessible_name("1M, long context, higher rates per token")
-        shows(page, "builder", DEFAULT, caption("claude-opus-5.5", "default", "medium"))
+        shows(page, "builder", DEFAULT, caption("medium"))
         items.nth(1).click()
-        shows(page, "builder", LONG, caption("claude-opus-5.5", "long", "medium"))
+        shows(page, "builder", LONG, caption("medium"))
         expect(page.locator("#pending")).to_contain_text("builder context: inherited \u2192 long")
         items.nth(0).click()
-        shows(page, "builder", DEFAULT, caption("claude-opus-5.5", "default", "medium"))
+        shows(page, "builder", DEFAULT, caption("medium"))
         expect(page.locator("#pending")).to_contain_text("builder context: inherited \u2192 default")
-        shows(page, "test-curator", LONG, caption("claude-opus-5.5", "long", "high"))  # inherits the long tier
+        shows(page, "test-curator", LONG, caption("high"))  # inherits the long tier
     assert not store.config_path.exists()
 
 
@@ -165,14 +167,14 @@ def test_an_unsaved_model_edit_turns_the_switch_into_the_new_models_display_and_
         expect(context).to_contain_text("272k \u00b7 only tier")
         wrong = "gpt-6.1-sol has no long context (inherited); choose its default"
         expect(context).to_contain_text(wrong)
-        shows(page, "test-curator", ONE, caption("gpt-6.1-sol", "default", "high"))
+        shows(page, "test-curator", ONE, caption("high"))
         context.get_by_role("button", name="Use the default tier").click()
         expect(context).not_to_contain_text(wrong)
-        shows(page, "test-curator", ONE, caption("gpt-6.1-sol", "default", "high"))
+        shows(page, "test-curator", ONE, caption("high"))
         expect(switch(page, "reviewer")).to_have_count(0)
         pds.pick(page, "Model for reviewer", "claude-opus-5.5")
         expect(switch(page, "reviewer").locator("p-segmented-control-item")).to_have_count(2)
-        shows(page, "reviewer", DEFAULT, caption("claude-opus-5.5", "default", "xhigh"))
+        shows(page, "reviewer", DEFAULT, caption("xhigh"))
 
 
 @pytest.mark.browser
@@ -187,15 +189,15 @@ def test_the_rates_caption_names_the_effort_in_use_and_the_rates_never_move_with
         config, "BASE", config.BASE.model_copy(update={"agents": {**config.BASE.agents, "design-judge": judge}})
     )
     with settings_page(store, pds) as page:
-        shows(page, "builder", DEFAULT, caption("claude-opus-5.5", "default", "high"))  # saved
+        shows(page, "builder", DEFAULT, caption("high"))  # saved
         pds.pick(page, "Effort for builder", "low")
-        shows(page, "builder", DEFAULT, caption("claude-opus-5.5", "default", "low"))  # drafted
+        shows(page, "builder", DEFAULT, caption("low"))  # drafted
         pds.pick(page, "Effort for builder", "inherit")
-        shows(page, "builder", DEFAULT, caption("claude-opus-5.5", "default", "medium"))  # cleared: inherited
+        shows(page, "builder", DEFAULT, caption("medium"))  # cleared: inherited
         expect(page.locator("#pending")).to_contain_text("builder effort: high \u2192 inherited")
         switch(page, "builder").locator("p-segmented-control-item[value=long]").click()
-        shows(page, "builder", LONG, caption("claude-opus-5.5", "long", "medium"))
-        shows(page, "design-judge", DEFAULT, caption("claude-opus-5.5", "default", "unset"))
+        shows(page, "builder", LONG, caption("medium"))
+        shows(page, "design-judge", DEFAULT, caption("unset"))
         pds.pick(page, "Effort for design-judge", "medium")
-        shows(page, "design-judge", DEFAULT, caption("claude-opus-5.5", "default", "medium"))
+        shows(page, "design-judge", DEFAULT, caption("medium"))
     assert store.read_config().agents["builder"].effort == "high"

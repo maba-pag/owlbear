@@ -2,11 +2,11 @@ import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { here, moved, loaded as clones, project as current } from "/assets/ui.mjs";
 import { SOURCES, state, drafts, page, show, notify, shown } from "./state.mjs";
-import { cell, row, table, button } from "./cells.mjs";
+import { cell, row, table, button, more } from "./cells.mjs";
 import { pendingLine, save, rename, reviewPrefs, hasEdits, anyEdits, pendingIn, useRecommended } from "./layers.mjs";
 import { machineSection } from "./machine.mjs";
-import { agentsGroup, runsGroup, checksGroup } from "./panels.mjs";
-import { GROUPS, groupOf, rowOf } from "./groups.mjs";
+import { agentsGroup, guardrailsGroup, checksGroup } from "./panels.mjs";
+import { GROUPS, groupOf, renamed, rowOf } from "./groups.mjs";
 import { readsView } from "./reads.mjs";
 
 // The project this page edits, by its name in the machine host's list; "This project" on a clone's own host.
@@ -46,17 +46,16 @@ function scopeSection() {
         + "machine's settings can be saved, locally."}</p-text></div>
     <p-text id="storage-note">${state.layer === "machine" ? "This Mac only: machine preferences and this machine's "
       + "own settings are local files, never pushed."
-      : loaded.global_location ? "Synced to the shared repository: Save commits and pushes this layer. A failed "
-        + "publish is shown on this page."
+      : loaded.global_location ? "Synced to the shared repository: Save commits and pushes this layer; a failed "
+        + "publish shows here."
         : "This Mac only: project settings stay local until a shared repository is set up."}</p-text>
     <p-text id="recommend-note">${state.layer === "global" ? "Use recommended fills Global's blank values, across "
       + "all groups, as unsaved drafts. Saved values and existing drafts stay unchanged. Review them before Save, "
       + "especially models, spending limits and automatic actions."
-      : "Use recommended is available on Global only: filling a project or this machine would turn the values it "
-        + "inherits from Global into its own overrides."}</p-text>
-    <p-text>A blank project value uses this machine's; a blank value on this machine uses the global one. OwlBear's
-      code has no defaults: a value no layer sets is unset, and the project's work waits until it is set; the Changes
-      page names each project that waits.</p-text>
+      : "Use recommended is available on Global only: here it would turn inherited values into overrides."}</p-text>
+    ${more("How the layers combine", "A blank project value uses this machine's; a blank value on this machine uses "
+      + "the global one. OwlBear's code has no defaults: a value no layer sets is unset, and the project's work waits "
+      + "until it is set; the Changes page names each project that waits.")}
   </section>`;
 }
 
@@ -173,10 +172,32 @@ function groupNav() {
   return html`<nav id="groups" aria-label="Settings groups">${GROUPS.map(link)}</nav>`;
 }
 
+// Which rows the layered groups show (config.html hides the others and a panel left without a row); it stays across
+// the groups and layers, and a link to a row shows every row again.
+const FILTERS = [["all", "All settings"], ["unset", "Unset"], ["set", "Set on this layer"], ["unsaved", "Unsaved"]];
+const NONE = { unset: "No setting in this group is unset.", set: "This layer sets nothing in this group.",
+  unsaved: "No unsaved edits in this group." };
+
+const LAYERED = ["agents", "guardrails", "checks"];  // the groups of settings a layer holds, saved by one Save
+
+function filterBar() {
+  if (!LAYERED.includes(state.group)) return nothing;
+  const pick = (e) => {
+    state.filter = e.target.value;
+    state.kept.clear();
+    show();
+  };
+  return html`<div id="filter" class="row">
+    <p-select label="Show" .value=${live(state.filter)} @change=${pick}>${FILTERS.map(([v, said]) =>
+      html`<p-select-option value=${v}>${said}</p-select-option>`)}</p-select>
+    <p-text id="filter-none" size="sm">${NONE[state.filter]}</p-text>
+  </div>`;
+}
+
 const GROUP_VIEWS = {
   overview: () => html`${unsetSection()}${acrossSection()}`,
   agents: agentsGroup,
-  runs: runsGroup,
+  guardrails: guardrailsGroup,
   checks: checksGroup,
   project: folderSection,
   "this-machine": machineSection,
@@ -185,7 +206,7 @@ const GROUP_VIEWS = {
 // One Save for the layered settings, whichever group holds them (D-01M63C92B83D61XFXTRXG8JAVB): shown with a group
 // of them, and anywhere while a layer has edits to save. This machine's own settings keep their own Save.
 function saveBar() {
-  const layered = ["agents", "runs", "checks"].includes(state.group)
+  const layered = LAYERED.includes(state.group)
     || (state.group === "this-machine" && state.layer === "global");
   if (!layered && !anyEdits()) return nothing;
   const edits = hasEdits();
@@ -216,7 +237,7 @@ function addressed() {
   }
 }
 
-// Show the group the address names (D-01M63C8QQMANY46N8GMNNKH1V9): a group's own, or an older one naming a section or
+// Show the group the address names: a group's own, or an older one naming a section or
 // a row (#machine-title, #set-prefs-merge_method), which then gets the focus. A switch from elsewhere than the groups'
 // links (the menu, the back button) puts the focus on the group's first heading; *initial* is the page's first view.
 export function route(initial = false) {
@@ -225,8 +246,13 @@ export function route(initial = false) {
   if (id && id !== group) history.replaceState(history.state, "", `${location.pathname}${location.search}#${group}`);
   const switched = group !== state.group, nav = document.activeElement?.closest?.("#groups");
   state.group = group;
-  if (id && id !== group) page.target = `#${CSS.escape(id)}`;
-  else if (switched && !initial && !nav) page.target = "#groups ~ section h2";
+  if (id && id !== group) {
+    page.target = `#${CSS.escape(renamed(id))}`;
+    state.filter = "all";  // the row it names may be one the filter hides
+  } else if (switched && !initial && !nav) {
+    // A filter may hide the first panel, so the focus goes to its Show menu, which always shows.
+    page.target = LAYERED.includes(group) && state.filter !== "all" ? "#filter" : "#groups ~ section h2";
+  }
   show();
 }
 
@@ -239,7 +265,7 @@ export function view() {
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
     </p-inline-notification>
     <p-text id="status" role="status" aria-live="polite">${state.status}</p-text>
-    ${loaded ? html`${scopeSection()}${groupNav()}` : nothing}
+    ${loaded ? html`${scopeSection()}${groupNav()}${filterBar()}` : nothing}
     ${(loaded ? state.group === "overview" : state.reads) ? readsView() : nothing}
     ${loaded ? html`${GROUP_VIEWS[state.group]()}${saveBar()}` : nothing}`;
 }

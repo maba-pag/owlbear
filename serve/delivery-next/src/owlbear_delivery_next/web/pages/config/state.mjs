@@ -51,10 +51,12 @@ const asked = new URLSearchParams(location.search);
 export const state = {
   loaded: null, saving: false, offered: null, modelsNote: "", error: "", status: "",
   layer: ["machine", "global"].includes(asked.get("layer")) ? asked.get("layer") : "project",  // as a link names it
-  group: "overview",  // the group shown (D-01M63C8QQMANY46N8GMNNKH1V9); drafts of every group stay meanwhile
+  group: "overview",  // the group shown; drafts of every group stay meanwhile
   folder: null,
   machine: null, others: [], unread: [],  // the machine's values and the other projects' settings (TD-243)
   everything: false,  // the overview shows every setting, not only those a project sets apart (TD-295)
+  filter: "all",  // the layered groups' rows shown: all, unset, set (on the edited layer) or unsaved
+  kept: new Set(),  // the Unsaved filter's rows once edited ("layer:id"), kept while the edit is undone
   machineDraft: null, machineSaving: false,  // the machine's settings as edited, before they are saved
   machineText: null,  // a list setting's text as typed, until a save
   machineUnread: "",  // why this machine's settings could not be read, until a read succeeds
@@ -91,8 +93,9 @@ export function show() {
 // until both have stayed a few frames, for at most a second, and never after the owner's next key, pointer press or
 // wheel, which moves them himself.
 async function reveal(target) {
-  const control = target.matches("p-table-row, div") ? target.querySelector(":is([data-key], [id^='machine-'], "
-    + "[id^='global-machine-'], p-select, p-input-text, p-segmented-control):not([disabled])")
+  const control = target.matches("p-table-row, p-table-cell, div")
+    ? target.querySelector(":is([data-key], [id^='machine-'], [id^='global-machine-'], p-select, p-input-text, "
+      + "p-segmented-control):not([disabled])")
     : null;  // a setting the shown layer cannot hold is read-only: its row takes the focus
   const into = control ?? target, block = control ? "center" : "start";
   into.scrollIntoView({ block });

@@ -1,8 +1,7 @@
 // The menu (D-01M63C8375KV9WA6NH8K2MB8PN): the top row's burger opens PDS's drilldown with every page. The work
 // pages have their own level and on phones are only here; ui.mjs's guard covers its links
 // (D-01M63C8DA1D95Z7M9ZYWVYYNF7). Updates have theirs too (D-01M63C5VGFWJ709X2GA0CE8Q5B), marked when one is
-// available, running or failed (D-01M63CDFXCN5SSCNNYWV2FVFVA). Settings' groups have theirs
-// (D-01M63C8QQMANY46N8GMNNKH1V9).
+// available, running or failed (D-01M63CDFXCN5SSCNNYWV2FVFVA). Settings' groups have theirs too.
 
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call, defined, here, machineState } from "/assets/ui.mjs";
