@@ -152,8 +152,9 @@ def test_the_brief_panel_lists_each_amendment_and_takes_an_objection_to_an_appli
                      "applied, made v4, applied by Delivery alone"]:  # fmt: skip
             expect(first).to_contain_text(said)
         second = part.locator(".amendment", has_text="A2, proposed at the build step")
-        for said in ["greet() trims spaces → greet() trims spaces and tabs", "weaker (on an earlier wording): drops the trim",
-                     "declined", "Your reason", DECLINED]:  # fmt: skip
+        for said in ["greet() trims spaces → greet() trims spaces and tabs",
+                     "weaker (on an earlier wording): drops the trim", "declined", "Your reason",
+                     DECLINED]:  # fmt: skip
             expect(second).to_contain_text(said)
         expect(second.get_by_role("button", name="Object")).to_have_count(0)  # only an applied one takes it
 

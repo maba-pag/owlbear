@@ -213,7 +213,8 @@ def test_what_the_owner_stated_himself_is_recorded_and_survives_a_visual_save_an
     assert read_back["specified"] == ["AC-2"]
     assert read_back["states"] == [{"name": "home", "owner": True}, {"name": "copy", "owner": False}]
     assert read_back["person_checks"] == [
-        {"name": "feel", "covers": ["AC-1", "AC-2"], "owner": True}, {"name": "copy", "covers": ["AC-2"], "owner": False}
+        {"name": "feel", "covers": ["AC-1", "AC-2"], "owner": True},
+        {"name": "copy", "covers": ["AC-2"], "owner": False},
     ]  # fmt: skip
     assert [p.procedure for p in store.read(slug).checks] == [1, 1]  # the visual check's resave kept what they cover
     unknown = c.post("/api/next/briefs", json={**body, "specified": ["AC-3"]}).json()["errors"]

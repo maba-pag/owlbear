@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_delivery_next.change_contracts import evidence
 from owlbear_delivery_next.change_contracts.amend_tools import Affected, CandidateItem, CandidateResult, VerdictResult
 from owlbear_delivery_next.change_contracts.decision_records import BriefDecision, DecisionBaseline
-from owlbear_delivery_next.change_contracts import evidence
 from owlbear_delivery_next.change_contracts.evidence import next_check, review_valid, visual_valid
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, ObjectionItem
 from owlbear_delivery_next.change_contracts.models import (
@@ -428,7 +428,8 @@ def test_a_revert_brings_back_what_was_removed_or_changed_as_it_was():
     was = shape(c.brief, c.checks)
     exact = amend_apply.exact
     a1 = amending.start(c, "revert", reason="the owner's wording", now=NOW, items=[
-        exact(c, "visual", "home", "shows Hi", path="/hi"), exact(c, "check", "check-1", "it says hi", steps=["open /hi"]),
+        exact(c, "visual", "home", "shows Hi", path="/hi"),
+        exact(c, "check", "check-1", "it says hi", steps=["open /hi"]),
         exact(c, "check", "check-2", "", remove=True), exact(c, "visual", "about", "", remove=True),
         exact(c, "criterion", "AC-2", "", remove=True),
     ])  # fmt: skip
