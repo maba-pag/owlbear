@@ -401,12 +401,16 @@ class Store:
             _queue(db, slug, item)
 
     def put_answer(self, slug: str, item: AnswerItem) -> str | None:
-        """Queue an answer while its question is open and has none waiting; otherwise why not, queueing nothing."""
+        """Queue an answer while its question is open, the Change waits on it and none is waiting; else why not."""
         self._dir(slug)
         with self.db.write() as db:
             # self.read uses the same connection, so it reads inside this write's transaction
-            if not any(q.id == item.question and q.answer is None for q in self.read(slug).questions):
+            change = self.read(slug)
+            q = next((q for q in change.questions if q.id == item.question and q.answer is None), None)
+            if q is None:
                 return f"question {item.question} is not open"
+            if why := answer_kinds.superseded(change, q):
+                return why
             waiting, _ = parse_rows(db.execute("SELECT id, item FROM inbox WHERE slug = ?", (slug,)).fetchall())
             if any(isinstance(i, AnswerItem) and i.question == item.question for i in waiting):
                 return f"question {item.question} already has an answer waiting to be applied; this one was not queued"

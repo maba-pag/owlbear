@@ -301,8 +301,8 @@ def _target(q: Question, option: str | None) -> str | None:
 def _answer(c: Change, item: AnswerItem, now: datetime) -> str:
     """Record the answer; why it settles nothing, naming its question, or "" once recorded."""
     q = next((q for q in c.questions if q.id == item.question and q.answer is None), None)
-    if q is None:
-        return f"question {item.question} is no longer open"
+    if q is None or (late := answer_kinds.superseded(c, q)):
+        return late if q else f"question {item.question} is no longer open"
     gate = bool(c.outcome and c.outcome.question == q.id)
     if (q.repair or plan_rounds.owned(q) or brief_rounds.owned(q)) and not gate:
         return f"the Change moved on since question {q.id} asked"  # so no session receives it

@@ -314,6 +314,54 @@ def test_a_second_answer_while_one_waits_is_refused_beside_the_form(page_url, pd
 
 
 @pytest.mark.browser
+def test_an_answer_the_change_no_longer_waits_on_is_refused_and_the_reason_stays(page_url, pds) -> None:
+    """#914: the page still showed the question when the Change moved on; the refusal outlives its form."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    store.write(Lock("greet"), asking())
+    stale: dict[str, str] = {}
+
+    def frozen(route) -> None:  # the detail as the page first read it, whatever the store says now
+        if route.request.method != "GET":
+            return route.fallback()
+        stale.setdefault("body", route.fetch().text())
+        return route.fulfill(content_type="application/json", body=stale["body"])
+
+    detail = re.compile(r".*/changes/greet(\?.*)?$")
+    reason = "question q1 no longer waits on an answer: its intent changed"
+    with opened(base, "greet", pds) as page:
+        page.route(detail, frozen)
+        form = page.locator("section.act", has_text="Question q1")
+        expect(form).to_contain_text("Which language?")
+        for _ in range(100):  # the page's next poll freezes the question's detail before the Change moves
+            if "body" in stale:
+                break
+            page.wait_for_timeout(100)
+        assert "Which language?" in stale["body"]
+        moved = asking().model_copy(update={"step": m.Step(kind=m.StepKind.SHAPE), "outcome": None})
+        store.write(Lock("greet"), moved)
+        form.get_by_label("English").check()
+        form.get_by_label("It only settles how the work goes on").check()
+        answer(page, form)
+        expect(form.locator(".refused")).to_contain_text(reason)
+        page.unroute(detail, frozen)
+        expect(form).to_have_count(0, timeout=10_000)
+        top = page.locator("#detail .refused")
+        expect(top).to_be_visible()
+        expect(top).to_contain_text(reason)
+        paused = moved.model_copy(update={"intent": m.Intent(paused_at=NOW, pause_reason="lunch")})
+        store.write(Lock("greet"), paused)  # a later change of the forms keeps it too
+        expect(page.locator("#detail .status p-tag")).to_have_text("Paused", timeout=10_000)
+        expect(top).to_contain_text(reason)
+        page.locator("#changes a[data-key='flip']").click()
+        expect(page.locator("#detail h2")).to_have_text("Flip the hero")
+        expect(page.locator("#detail .refused")).to_have_count(0)
+    with store.db.read() as db:
+        assert db.execute("SELECT count(*) FROM inbox").fetchone() == (0,)
+
+
+@pytest.mark.browser
 def test_choosing_another_change_and_going_back_keeps_the_address_and_the_list(page_url, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 

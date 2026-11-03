@@ -54,7 +54,11 @@ export function badge(c) {
 
 export function detailView(d) {
   const [variant, label] = badge(d), forms = formsOf(d);
-  if (state.refused && state.refused.forms !== forms) state.refused = null;
+  const was = state.refused;
+  if (was && was.forms !== forms) {  // #914: a refusal whose form went stays on top of its Change until he acts or goes
+    state.refused = was.key !== d.key ? null : was.kept ? was
+      : was.form && !was.unsure ? { ...was, form: "", kept: true } : null;
+  }
   const refusedTop = state.refused && !state.refused.form ? refusal(state.refused.text, state.refused.unsure)
     : nothing;
   const behind = d.pullback?.state === "behind";

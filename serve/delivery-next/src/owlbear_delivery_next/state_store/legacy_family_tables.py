@@ -48,5 +48,5 @@ CURRENT_MODULES = (
     ("state_store/project_home.py", "af3c86a96f9d438e61a01c0a265548ada6b05864a2ebd99f48d0545251d6580a"),
     ("state_store/project_move.py", "df85983badd83d2d857ec877865faf449ba9eb0d866321877ad1ae6d01a7f19e"),
     ("state_store/project_switch.py", "a33aa43982231c62d593202ba68dbcabc029829e324022d712a39b21777385e7"),
-    ("state_store/store.py", "cce9d14f102bd3350e3c274a0d7c7c03a9ab72bd7c9d49419620ede9a0c6eccc"),
+    ("state_store/store.py", "3b8f6dc370cc6797e355febf1f5642a2fccab195f175213100dd86f2856f43de"),
 )

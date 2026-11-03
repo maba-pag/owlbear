@@ -5,7 +5,8 @@ carries the statement the owner confirmed when it was read back to him; without 
 A visual round's decision names what the page showed (TD-79), a final retry its tasks (TD-217). The console answers
 with the same checks and binds to what ``show`` printed (#676). The page shows a question with what an earlier
 answer to it left unsaid: allowing what the Spotter stopped is held, and the question asked again says so (#717);
-an answer the fold did not apply stays beside its question with why.
+an answer the fold did not apply stays beside its question with why. An answer to a worker's question the Change no
+longer waits on (its intent changed, its PR closed or went elsewhere, it ended) is refused with why (#914).
 """
 
 from __future__ import annotations
