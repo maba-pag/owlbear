@@ -76,12 +76,7 @@ def _held(path: Path) -> str:
         return ""
 
 
-def _git(
-    cwd: Path,
-    *args: str,
-    until: float | None = None,
-    lossless: bool = False,
-) -> subprocess.CompletedProcess[str]:
+def _git(cwd: Path, *args: str, until: float | None = None, lossless: bool = False) -> subprocess.CompletedProcess[str]:
     """One git command, ended by ``until`` (monotonic) at the latest; never started once it passed (`git_run.run`)."""
     return git_run.run(cwd, *args, until=until, cap=GIT_SECONDS, lossless=lossless)
 
