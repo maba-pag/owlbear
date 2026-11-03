@@ -435,7 +435,9 @@ def test_metrics_shows_each_roles_compaction_and_its_setting_leads_back_with_the
         table.get_by_role("link", name="mill: project layer, builder's context setting").last.click()
         expect(page.locator("#set-agents-builder :focus")).not_to_have_count(0)  # its first control
         expect(pds.select(page, "Layer")).to_have_js_property("value", "project")
-        expect(pds.select(page, "Layer").locator('p-select-option[value="project"]')).to_have_text("Project mill")
+        expect(pds.select(page, "Layer").locator('p-select-option[value="project"]')).to_have_text(
+            "Project mill (synced to shared repository)"
+        )
         setting_link(page, "builder").click()
         returned(page, pds, left)
         table.locator("p-table-row").first.get_by_role("link", name="shop: Global, builder's context setting").click()

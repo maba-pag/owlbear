@@ -793,6 +793,138 @@ GLOBAL = {
 }
 
 
+def recommended_drafts_keep_saved_controls(page, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415
+
+    pds.group(page, "agents")
+    expect(pds.select(page, "Copilot Memory in Delivery sessions")).to_have_js_property("value", "off")
+    expect(page.get_by_label("Steered share", exact=True)).to_have_value("0")
+    expect(page.get_by_label("Verbose until", exact=True)).to_have_value("")
+    pds.group(page, "checks")
+    expect(page.get_by_label("Labels, comma-separated; none for no labels")).to_have_value("none")
+    expect(pds.select(page, "The line Opened by OwlBear Delivery")).to_have_js_property("value", "off")
+
+
+def lower_layers_cannot_use_recommended(page, pds) -> None:
+    """On This machine and a project the button is disabled and says why."""
+    from playwright.sync_api import expect  # noqa: PLC0415
+
+    recommended = page.get_by_role("button", name="Use recommended", exact=True)
+    for layer in ("project", "machine"):
+        pds.pick(page, "Layer", layer)
+        expect(recommended).to_be_disabled()
+        expect(page.locator("#recommend-note")).to_contain_text("available on Global only")
+        pds.group(page, "runs")
+        expect(page.get_by_label("Minutes per session, auditor")).to_have_value("")
+
+
+@pytest.mark.browser
+def test_recommendations_fill_only_globals_blanks_and_keep_saved_values_and_existing_drafts(
+    store, pds, monkeypatch
+) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415
+
+    saved = {
+        "sessions": 3, "pr_marker": False, "pr_labels": [], "load_user_memory": False,
+        "spotter": {"steer_share": 0}, "agents": {"builder": {"minutes": 55}},
+    }  # fmt: skip
+    _layered(store, monkeypatch, saved, {"sessions": 5}, {"sessions": 6})
+    paths = {"project": store.config_path, "machine": store.machine_path, "global": store.global_path}
+    before = {name: path.read_bytes() for name, path in paths.items()}
+    with settings_page(store, pds) as page:
+        pds.pick(page, "Layer", "global")
+        pds.group(page, "runs")
+        page.get_by_label("Minutes per session, builder").fill("66")
+        page.get_by_label("Agent sessions at once in one project").fill("")  # deliberate unsaved clear
+        recommended = page.get_by_role("button", name="Use recommended", exact=True)
+        expect(recommended).to_have_count(1)
+        recommended.click()
+        expect(recommended).to_be_focused()
+        box = recommended.bounding_box()
+        assert box is not None
+        assert box["width"] >= 24
+        assert box["height"] >= 24
+        expect(page.locator("#status")).to_contain_text("nothing has been saved")
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("66")
+        expect(page.get_by_label("Agent sessions at once in one project")).to_have_value("")
+        expect(page.get_by_label("Minutes per session, auditor")).to_have_value("40")
+        pending = page.locator("#pending").inner_text()
+        recommended.click()
+        expect(page.locator("#pending")).to_have_text(pending)
+        assert {name: path.read_bytes() for name, path in paths.items()} == before
+        recommended_drafts_keep_saved_controls(page, pds)
+        lower_layers_cannot_use_recommended(page, pds)
+        pds.pick(page, "Layer", "global")
+        page.locator("#save").click()
+        pds.answer(page, "Keep editing")
+        assert {name: path.read_bytes() for name, path in paths.items()} == before
+        _saved_by_keyboard(page, pds, "Save global defaults", "the global")
+    written = json.loads(paths["global"].read_text())
+    assert (written["agents"]["builder"]["minutes"], written["sessions"]) == (66, None)
+    assert (written["agents"]["auditor"]["minutes"], written["guard_level"]) == (40, "lenient")
+    assert (written["pr_marker"], written["pr_labels"], written["spotter"]["steer_share"]) == (False, [], 0)
+    assert "curator_threshold" in written
+    assert "machine" in written
+    assert all(paths[name].read_bytes() == before[name] for name in ("project", "machine"))
+
+
+@pytest.mark.browser
+def test_recommended_drafts_fit_a_phone_and_their_unsaved_list_scrolls_by_keyboard(store, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415
+
+    with settings_page(store, pds) as page:
+        page.set_viewport_size({"width": 390, "height": 800})
+        pds.pick(page, "Layer", "global")
+        page.get_by_role("button", name="Use recommended", exact=True).click()
+        expect(page.locator("#status")).to_contain_text("nothing has been saved")
+        assert page.evaluate("document.documentElement.scrollWidth") <= 390
+        assert page.locator(".bar").evaluate("e => e.getBoundingClientRect().height") < 400
+        pending = page.locator("#pending")
+        pending.focus()
+        pending.press("End")
+        page.wait_for_function("document.querySelector('#pending').scrollTop > 0")
+
+
+@pytest.mark.browser
+def test_a_recommended_value_cleared_again_is_not_filled_by_the_next_click(store, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415
+
+    with settings_page(store, pds) as page:
+        pds.pick(page, "Layer", "global")
+        pds.group(page, "runs")
+        sessions = page.get_by_label("Agent sessions at once in one project")
+        recommended = page.get_by_role("button", name="Use recommended", exact=True)
+        recommended.click()
+        expect(sessions).to_have_value("2")
+        sessions.fill("")  # the owner rejects this one suggestion: its draft equals the saved blank and goes
+        recommended.click()
+        expect(page.locator("#status")).to_contain_text("No unset settings in Global to fill")
+        expect(sessions).to_have_value("")
+
+
+@pytest.mark.browser
+def test_storage_labels_distinguish_shared_layers_from_local_only_without_a_shared_repository(store, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415
+
+    with settings_page(store, pds) as page:
+        options = pds.select(page, "Layer").locator("p-select-option")
+        expect(options.filter(has_text="synced to shared repository")).to_have_count(2)
+        expect(page.locator("#storage-note")).to_contain_text("Save commits and pushes")
+        pds.pick(page, "Layer", "machine")
+        expect(page.locator("#storage-note")).to_contain_text("local files, never pushed")
+    store.global_path = None
+    with settings_page(store, pds) as page:
+        expect(page.locator("#storage-note")).to_contain_text("This Mac only: project settings stay local")
+        expect(pds.select(page, "Layer").locator('p-select-option[value="project"]')).to_contain_text("this Mac only")
+        expect(pds.select(page, "Layer").locator('p-select-option[value="global"]')).to_have_attribute("disabled", "")
+        expect(page.locator("#scope-note")).to_contain_text("No shared settings location")
+        pds.group(page, "runs")
+        page.get_by_label("Agent sessions at once in one project").fill("3")
+        page.locator("#save").click()
+        expect(pds.modal(page)).to_contain_text("on this Mac only (no shared repository is set up)")
+        pds.answer(page, "Keep editing")
+
+
 def _option(page, pds, label: str) -> Any:
     """The option that clears the shown layer's value in the select labelled *label*."""
     return pds.select(page, label).locator('p-select-option[value="inherit"]')

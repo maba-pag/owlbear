@@ -47,7 +47,14 @@ what is wrong (TD-150). In OwlBear also:
 - Record each answer with `record_decision`: his confirmed intent, never his words (TD-449); a changed
   decision names the one it replaces. "Take your recommendation" records what the option showed as
   `approved` (`confirmed=true`, `origin="approved"`); details you add stay `autonomous` with their reason.
-- End the session with one check of everything you record (TD-448).
+- End the session with one check of everything you record (TD-448). At work completion, use that same check to
+  consider only decisions recorded or materially relied on in this work, not the whole inventory. Propose closeout
+  only for a finite instruction whose stated end condition demonstrably happened: show its ID, current revision,
+  completion evidence, continuing obligations and proposed withdrawal or replacement.
+  Earlier work or plan approval and a merged PR are not retirement consent. Use `retire_decision`, or a replacement
+  through `record_decision`, only after the owner's specific confirmation; a `decided` rule needs his re-decision.
+  Preserve continuing intent in any replacement; if a mixed rule's surviving intent is unclear, leave it unchanged.
+  Without approval, the record stays in force. If no candidate qualifies, add no closeout question or extra gate.
 
 ### Challenges Run by Hand
 
@@ -62,7 +69,9 @@ plan or implementation challenge a chat runs by hand in this repository states t
   touches or breaks.
 - Before a later round, the chat asks again when a round changed the work materially or a governing decision changed.
 - Without the tool, the chat asks the host through the installed runtime: `~/.owlbear/runtime/.venv/bin/python`
-  calling `owlbear_delivery_next.commands.chat_client.workspace(Path("<this checkout>")).lookup_decisions(question)`.
+  calling `agent_reply(workspace(Path("<this checkout>")).lookup_decisions(question))`, with `workspace` from
+  `owlbear_delivery_next.commands.chat_client` and `agent_reply` from `owlbear_delivery_next.workflow_steps.lookup`.
+  The lead and challengers use this returned agent-facing reply whole; the raw host reply stays unchanged.
   If that fails too, or the answer says `failed`, the challenge says the decisions are unavailable and why, never that
   none apply.
 - The list stays in the chat: none of it goes into a commit, pull request or comment on this repository.

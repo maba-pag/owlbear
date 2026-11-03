@@ -5,12 +5,14 @@ import json
 import subprocess
 import threading
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
 from owlbear_delivery_next.change_contracts.models import Change, Names, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_flow import brief_tools, worktree
+from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.merge_offer import Block, decide
 from owlbear_delivery_next.github.provider import CiState, MergeMethod, PullRequest, Repository, Rules
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
@@ -521,3 +523,28 @@ def test_reading_a_missing_unshared_profile_creates_no_private_store(tmp_path):
     root = tmp_path / "not-created"
     assert Store(root).read_profile() is None
     assert not root.exists()
+
+
+class PlanLimited(GitHub):
+    """A private repository whose GitHub plan allows no rules: both rule reads answer the plan-limit 403 (#936)."""
+
+    def read_rules(self, repository, target):
+        def limited(argv, _body, _timeout, _cwd):
+            said = b"gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)\n"
+            return subprocess.CompletedProcess(argv, 1, b"", said)
+
+        return GhProvider(Path(), runner=limited).read_rules(repository, target)
+
+
+def test_a_plan_limited_repository_redetects_its_unknown_rules_as_none_and_rereads_them_alike(tmp_path):
+    repo, keys = clone(tmp_path, "shop"), (profile.RULES, profile.REQUIRED, profile.QUEUE, profile.STRICT,
+                                           profile.RESOLUTION)  # fmt: skip
+    old = profile.detect(repo, GitHub(known=False), None)
+    assert {old.entries[k].state for k in keys} == {"unknown"}
+    assert profile.reread(old, PlanLimited(), "main")[0]  # an old profile differs once: its owner is asked to refresh
+    fresh = profile.detect(repo, PlanLimited(), old)
+    assert [(fresh.entries[k].state, fresh.entries[k].value) for k in keys] == [
+        ("known", "none"), ("known", "none"), ("known", "no"), ("known", "no"), ("known", "no")
+    ]  # fmt: skip
+    diffs, rules = profile.reread(fresh, PlanLimited(), "main")
+    assert (diffs, rules.state) == ([], "known")

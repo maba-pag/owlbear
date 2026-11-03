@@ -242,6 +242,21 @@ shared repository takes its global settings; one without starts with every setti
 lies under the global settings, so with the Global layer chosen the page names the choice that
 clears a value Unset and warns while a needed one is unset.
 
+**Use recommended** on Settings, with the Global layer chosen, fills Global's blank values, across all groups and
+including Global's machine settings, as unsaved drafts. It is disabled on This machine and on a project, where
+filling would turn values inherited from Global into overrides. The values are a copy of the OwlBear owner's own
+Global, kept in the code and offered only here; settings never resolve from them. The button never changes saved
+values or existing drafts, including a value you just cleared. Review the suggestions, especially model
+availability, spending limits and automatic actions, then use the normal **Save** and its layer confirmation; the
+button itself writes nothing. The optional Spotter end date and project-specific test preparation stay empty. Code
+still supplies no automatic defaults.
+
+The layer picker labels each layer's storage: Global and project settings are **synced to the shared repository**
+when one is set, with each Save committed and pushed; project settings are **this Mac only** without one.
+Machine preferences and this machine's own settings are always **this Mac only**, in separate local files.
+The latter keep their separate **Save machine settings** button and confirmation.
+The per-project session limit and the machine-wide limit across all projects remain separate.
+
 Three of them, in **Settings → Your instructions, skills and memory**, decide whether Delivery's agent steps
 also use your own Copilot files from `~/.copilot` (or `$COPILOT_HOME`) and Copilot Memory. **Your instructions in
 Delivery steps** keeps your instruction files there, each entry of `instructions/` and
