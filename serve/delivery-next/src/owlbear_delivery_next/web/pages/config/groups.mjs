@@ -45,7 +45,7 @@ export function rowOf(key) {
 export function draftGroup(key) {
   const [head] = key.split(".");
   if (head === "machine") return "this-machine";
-  if (head === "mem" || head === "curator_threshold") return "memory";
+  if (head === "memory" || head === "curator_threshold") return "memory";
   if (head === "spot" || head.startsWith("load_user_") || head === "guard_level") return "guardrails";
   return ["widths", "design_failures", "prefs", "pr_labels", "pr_marker"].includes(head) ? "checks" : "agents";
 }

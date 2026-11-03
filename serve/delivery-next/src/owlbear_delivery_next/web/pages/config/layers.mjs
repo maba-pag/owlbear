@@ -21,9 +21,8 @@ function saved(layer, key) {
     const v = loaded[layer]?.spotter?.[key.slice(5)];
     return v === null || v === undefined ? "" : Array.isArray(v) ? v.join(", ") : String(v);
   }
-  if (key.startsWith("mem.")) {  // the memory values, Global's only
-    const v = loaded[layer]?.memory?.[key.slice(4)];
-    return v === null || v === undefined ? "" : String(v);
+  if (key.startsWith("memory.")) {  // the memory values, Global's only
+    return String(loaded[layer]?.memory?.[key.slice(7)] ?? "");
   }
   if (key === "pr_labels" || key === "pr_marker" || USER_KEYS.includes(key)) {
     const v = loaded[layer]?.[key];
@@ -127,7 +126,7 @@ function dirty(layer) {
 // Whether the edited layer has an unsaved edit of the setting at *path* ("agents.builder.model"), as the pending line
 // counts it: the page keeps a draft under "builder.model" and the Spotter's under "spot.".
 export function drafted(path) {
-  const key = path.replace(/^agents\./, "").replace(/^spotter\./, "spot.").replace(/^memory\./, "mem.");
+  const key = path.replace(/^agents\./, "").replace(/^spotter\./, "spot.");
   return dirty(state.layer).some(([draft]) => draft === key);
 }
 
@@ -136,8 +135,7 @@ function changes(layer) {
   const blank = layer === "global" ? "unset" : "inherited";
   const said = (v) => (v === "" || v === null || v === undefined ? blank : v);
   return dirty(layer).map(([key, value]) =>
-    `${key.replace(/^mem\./, "memory.").replace(".", " ").replaceAll("_", " ")}: ${said(saved(layer, key))} → ${
-      said(value.trim())}`);
+    `${key.replace(".", " ").replaceAll("_", " ")}: ${said(saved(layer, key))} → ${said(value.trim())}`);
 }
 
 // Confirms a pending legacy import's Merge and cleanup preferences as reviewed, with no edit: the saved values stand.
@@ -198,8 +196,8 @@ function edited(layer) {
       next[key] = !value ? null : value === "none" ? [] : value.split(",").map((l) => l.trim()).filter(Boolean);
       continue;
     }
-    if (key.startsWith("mem.")) {  // the memory values: whole numbers, and decimals for what a rating is worth
-      const field = key.slice(4), mine = { ...(next.memory ?? {}) };
+    if (key.startsWith("memory.")) {  // the memory values: whole numbers, and decimals for what a rating is worth
+      const field = key.slice(7), mine = { ...(next.memory ?? {}) };
       mine[field] = value === "" ? null : typedNumber(field, value);
       next.memory = Object.values(mine).some((v) => v !== null) ? mine : null;
       continue;

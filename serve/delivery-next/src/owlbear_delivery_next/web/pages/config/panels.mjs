@@ -153,27 +153,25 @@ export function guardrailsGroup() {
 }
 
 // Memory: every value memory management uses, Global's alone (each unset until saved; the projects' work waits).
+// A row: its key, its name, its control's label when that differs from the name, and its input mode.
 const RATINGS = [
   ["outstanding_boost", "Points an outstanding rating adds", "Points an outstanding rating adds to an entry's score",
     "decimal"],
   ["unremarkable_penalty", "Points an unremarkable rating takes off",
     "Points an unremarkable rating takes off an entry's score", "decimal"],
-  ["stale_factor", "Skipped ratings per other rating before an entry is stale",
-    "Skipped ratings per other rating before an entry is stale"],
+  ["stale_factor", "Skipped ratings per other rating before an entry is stale"],
 ];
 const RECALLS = [
   ["preflight_cap", "Lessons a step starts with, at most", "Lessons a step is told at its start, at most"],
   ["preflight_budget", "Characters of lessons a step starts with, at most",
     "Character budget for a step's starting lessons"],
-  ["recall_limit", "Entries the recall tool returns when it is given no limit",
-    "Entries the recall tool returns when it is given no limit"],
-  ["explore_slots", "Recall slots for the least-rated entries", "Recall slots for the least-rated entries"],
-  ["challenge_slots", "Recall slots for the least-outstanding entries",
-    "Recall slots for the least-outstanding entries"],
+  ["recall_limit", "Entries the recall tool returns when it is given no limit"],
+  ["explore_slots", "Recall slots for the least-rated entries"],
+  ["challenge_slots", "Recall slots for the least-outstanding entries"],
 ];
 
 export function memoryGroup() {
-  const rows = (list) => list.map(([field, name, label, inputmode]) =>
+  const rows = (list) => list.map(([field, name, label = name, inputmode]) =>
     setting(`set-memory-${field}`, name, [`memory.${field}`], memoryValue(field, label, inputmode)));
   return html`
     <section class="panel" aria-labelledby="memory-title">
@@ -189,7 +187,7 @@ export function memoryGroup() {
         + "the Memory page; nothing is deleted by score, and raising the factor does not revive a stale entry.")}
       ${table("Ratings and stale entries: they apply to the next rating", ["Setting", "Value"], "memory-ratings",
         rows(RATINGS))}
-      <p-text size="xs" color="contrast-medium">Points are 0 or more, a fraction allowed; the factor is a whole number
+      <p-text color="contrast-medium">Points are 0 or more, a fraction allowed; the factor is a whole number
         of at least 1. One value for every project and machine.</p-text>
     </section>
     <section class="panel" aria-labelledby="memory-recall-title">
@@ -201,7 +199,7 @@ export function memoryGroup() {
         + "entry never goes in cut short. The recall tool fills its explore slots with the entries rated least, its "
         + "challenge slots with those rated outstanding least, and the rest of its limit with the best-ranked ones.")}
       ${table("Recall: it applies to the next recall", ["Setting", "Value"], "memory-recall", rows(RECALLS))}
-      <p-text size="xs" color="contrast-medium">Whole numbers: at least 1 for the counts and the characters, 0 or more
+      <p-text color="contrast-medium">Whole numbers: at least 1 for the counts and the characters, 0 or more
         for the slots. One value for every project and machine.</p-text>
     </section>
     <section class="panel" aria-labelledby="memory-purge-title">
@@ -209,9 +207,8 @@ export function memoryGroup() {
       <p-text>A deleted entry's file stays until you remove it on the Memory page, and then only once it was deleted at
         least this many days ago. The shared repository's history keeps it either way.</p-text>
       ${table("Deleted entries: it applies to the next removal", ["Setting", "Value"], "memory-purge",
-        rows([["purge_days", "Days a deleted entry waits before its file can be removed",
-          "Days a deleted entry waits before its file can be removed"]]))}
-      <p-text size="xs" color="contrast-medium">0 to 3650; one value for every project and machine.</p-text>
+        rows([["purge_days", "Days a deleted entry waits before its file can be removed"]]))}
+      <p-text color="contrast-medium">0 to 3650; one value for every project and machine.</p-text>
     </section>
     <section class="panel" aria-labelledby="curation-title">
       <p-heading size="lg"><h2 id="curation-title" tabindex="-1">Memory curation</h2></p-heading>
@@ -221,7 +218,7 @@ export function memoryGroup() {
       ${table("Memory curation: it applies to the next curation", ["Setting", "Value"], "curation",
         [setting("set-curator_threshold", "Curator's confidence threshold (%)", ["curator_threshold"],
           curatorThreshold())])}
-      <p-text size="xs" color="contrast-medium">50 to 100; one value for every project and machine.</p-text>
+      <p-text color="contrast-medium">50 to 100; one value for every project and machine.</p-text>
     </section>`;
 }
 

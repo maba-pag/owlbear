@@ -193,26 +193,26 @@ export function sessionsAtOnce() {
 }
 
 // A setting only Global holds, for every project and machine: another layer shows it read-only with where it is set
-// (#809). *key* is the draft's, *path* the resolved settings'.
-function globalOnly(key, path, label, inUse, inputmode) {
+// (#809). *key* is the draft's and the resolved settings' path alike.
+function globalOnly(key, label, inUse, inputmode) {
   if (state.layer !== "global") {
     return cell(typed(label, String(inUse ?? ""), () => undefined, { placeholder: "unset", inputmode, disabled: true }),
-      source(path, inUse), html`<p-text size="sm" color="contrast-medium">set on Global</p-text>`);
+      source(key, inUse), html`<p-text size="sm" color="contrast-medium">set on Global</p-text>`);
   }
   return cell(typed(label, own(key), (v) => edit(key, v),
-    { key, placeholder: clear(at(inherited(), path)), inputmode, disabled: state.saving }), source(path, inUse));
+    { key, placeholder: clear(at(inherited(), key)), inputmode, disabled: state.saving }), source(key, inUse));
 }
 
 // TD-400: the curator decides alone at or above this confidence; one value for every machine and project.
 export function curatorThreshold() {
   const key = "curator_threshold", label = "Curator's confidence threshold in percent (50 to 100)";
-  return globalOnly(key, key, label, state.loaded.settings[key], "numeric");
+  return globalOnly(key, label, state.loaded.settings[key], "numeric");
 }
 
 // The memory values: what a rating is worth, when an entry goes stale, how much recall returns, when deleted files go.
 // Each is Global's alone, with no code default: unset, it holds the projects' work and the memory tools refuse.
 export function memoryValue(field, label, inputmode = "numeric") {
-  return globalOnly(`mem.${field}`, `memory.${field}`, label, state.loaded.settings.memory?.[field], inputmode);
+  return globalOnly(`memory.${field}`, label, state.loaded.settings.memory?.[field], inputmode);
 }
 
 // Improvement's Spotter (design §4): each setting layered field by field; a project may set its own (2026-10-25).
