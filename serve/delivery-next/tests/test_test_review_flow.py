@@ -174,7 +174,7 @@ def test_a_moved_worktree_stops_the_review_before_any_share(review):
 def test_a_test_review_never_shapes_or_plans_and_its_status_counts_shares_and_the_owner_reruns_its_stopped_step(review):
     c = review.store.read(review.slug)
     line = status(c, Activity(host_up=True, runner_alive=True), NOW).line
-    assert "reviewing tests: Review the tests · 0 of 2 shares done" in line
+    assert "starting: Review the tests · 0 of 2 shares done" in line  # no share has started yet (#718)
     c = c.model_copy(update={"step": Step(kind=StepKind.BUILD, task="t1")})
     back = StepResult(exit=Exit.BACK, back_to=StepKind.PLAN, cause="scope:build:premise", reason="the plan is wrong")
     c = apply(c, back, NOW)
