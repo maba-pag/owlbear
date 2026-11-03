@@ -60,6 +60,7 @@ CONFIG = "config.json"  # the global settings, which hold the curator's threshol
 UNSET_THRESHOLD = "the curator's confidence threshold is unset; the owner sets it on the Settings page"
 UNSET_VALUES = "these memory values are unset in the global settings; the owner sets them on the Settings page: "
 _INTEGER_VALUES = frozenset({"stale_factor", "recall_limit", "explore_slots", "challenge_slots"})
+_LEAST = {"stale_factor": 1, "recall_limit": 1}  # the settings' own lower bounds; every other value may be 0
 _WITNESSES = frozenset({MemoryState.CURATED, MemoryState.APPROVED})  # entries whose scope vouches for a named agent
 AssessmentTaskId = Annotated[StrictStr, Field(pattern=r"^[\x21-\x7e]{1,128}$")]
 
@@ -143,7 +144,7 @@ def _memory_values(ctx: Context, *names: str) -> dict[str, float]:
     for name in names:
         value, whole = block.get(name), name in _INTEGER_VALUES
         number = isinstance(value, int) if whole else isinstance(value, (int, float))
-        if number and not isinstance(value, bool) and value >= (1 if name == "stale_factor" else 0):
+        if number and not isinstance(value, bool) and value >= _LEAST.get(name, 0):
             found[name] = value
     if unset := [name for name in names if name not in found]:
         raise ToolError(UNSET_VALUES + ", ".join(unset))

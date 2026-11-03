@@ -158,9 +158,10 @@ def intervals_unset(monkeypatch):
 
 def complete_layer():
     """The carried values plus test values for what came later: the Spotter's settings, the retro roles and the
-    user-config switches, off (D-01M5YE4P5317N1HWD0QN6N05E0), and the shell guard
-    at strict (D-01M6DX04FRP680Z4GGHK5B9VRC)."""
+    user-config switches, off (D-01M5YE4P5317N1HWD0QN6N05E0), the shell guard at strict (D-01M6DX04FRP680Z4GGHK5B9VRC)
+    and the memory values, as they once stood in code."""
     from owlbear_delivery_next.settings import carried  # noqa: PLC0415
+    from owlbear_delivery_next.settings.config import MemoryValues  # noqa: PLC0415
     from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter  # noqa: PLC0415
 
     base = carried.layer()
@@ -172,7 +173,11 @@ def complete_layer():
         role: base.agents["curator"].model_copy(update={"model": "gpt-6.1-sol", "effort": "medium"})
         for role in ("retro", "retro-review", "auditor")
     }
-    update = {"spotter": spotter, "agents": agents, "guard_level": "strict"} | dict.fromkeys(
+    memory = MemoryValues(
+        outstanding_boost=0.1, unremarkable_penalty=0.01, stale_factor=50, purge_days=30, preflight_cap=5,
+        preflight_budget=2000, recall_limit=20, explore_slots=2, challenge_slots=2,
+    )  # fmt: skip
+    update = {"spotter": spotter, "agents": agents, "guard_level": "strict", "memory": memory} | dict.fromkeys(
         ("load_user_instructions", "load_user_skills", "load_user_memory"), False
     )
     return base.model_copy(update=update)

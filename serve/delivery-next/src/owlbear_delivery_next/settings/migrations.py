@@ -290,6 +290,14 @@ def guard_level_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def memory_values_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 20 to 21: the memory values Global holds.
+
+    They start unset in every layer, so nothing in a stored file changes; older runtimes refuse format 21.
+    """
+    return data
+
+
 def credit_limits_written(data: dict[str, Any]) -> dict[str, Any]:
     """Global's format 15 to 16: the credit limits are written into Global once (D-01M5XCD49YHHR1NQKKY8TQD0C3).
 
@@ -362,5 +370,6 @@ CONFIG: Migrations = {
     17: update_checks_added,
     18: user_memory_added,
     19: guard_level_added,
+    20: memory_values_added,
 }
 GLOBAL: Migrations = CONFIG | {15: credit_limits_written}  # the Global layer's: only it is written the limits

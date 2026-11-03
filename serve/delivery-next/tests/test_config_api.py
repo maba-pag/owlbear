@@ -111,7 +111,9 @@ def test_recommendations_cover_current_required_settings_without_filling_any_lay
     suggested = config.GlobalLayer.model_validate(got["recommendations"])
 
     assert set(suggested.agents) == set(config.ROLES)
-    assert config.resolve(suggested, config.Layer()).missing == []
+    assert config.resolve(suggested, config.Layer()).missing == [
+        f"memory.{name}" for name in config.MemoryValues.model_fields
+    ]  # the owner's own numbers: no recommendation invents them, so each stays unset until he saves it
     assert machine_settings.resolve(config.MachineValues(), suggested.machine).missing == []
     assert suggested.spotter.verbose_until is None  # optional, not an invented expiry date
     assert {name for name, agent in suggested.agents.items() if agent.context == "long"} == {"design-judge", "shaper"}
@@ -254,7 +256,8 @@ def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tm
                                                          "pr_marker": None, "load_user_instructions": None,
                                                          "load_user_skills": None, "load_user_memory": None,
                                                          "guard_level": None, "sessions": None, "spotter": None,
-                                                         "curator_threshold": None, "machine": None,
+                                                         "curator_threshold": None, "memory": None,
+                                                         "machine": None,
                                                          "machine_moved": None},
                                                         True)  # fmt: skip
     data = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": {"format": F, "data": {}}})
