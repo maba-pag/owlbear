@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -88,7 +89,7 @@ def _entries(repo: DataRepo, commit: str, until: float | None) -> tuple[list[Ent
             continue
         try:
             text = contents.get(rel, "").encode("utf-8", "surrogateescape").decode("utf-8")
-            decision = parse_named(text, path.name)
+            decision = parse_named(StringIO(text, newline=None).read(), path.name)
         except (DecisionError, UnicodeDecodeError) as exc:
             unreadable.append((layer, f"{path} at {commit}: {exc}"))
         else:

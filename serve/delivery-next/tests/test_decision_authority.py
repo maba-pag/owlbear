@@ -71,7 +71,8 @@ def test_pinned_authority_reads_multiple_decisions_in_one_content_launch(authori
 
 @pytest.mark.parametrize("where", ["own", "global", "foreign"])
 @pytest.mark.parametrize(
-    "damage", ["empty", "malformed", "symlink", "non-markdown", "wrong-name", "directory", "invalid-utf8"]
+    "damage",
+    ["empty", "malformed", "symlink", "non-markdown", "wrong-name", "directory", "invalid-utf8", "carriage-return"],
 )
 def test_pinned_unreadable_authority_matches_snapshot_scope(authority, where, damage):
     repo, rule, path = authority
@@ -95,6 +96,8 @@ def test_pinned_unreadable_authority_matches_snapshot_scope(authority, where, da
         (broken / "unfinished.txt").write_text("not a decision\n")
     elif damage == "invalid-utf8":
         broken.write_bytes(b"unreadable \xff\n")
+    elif damage == "carriage-return":
+        broken.write_bytes(b"unreadable\rdecision\n")
     elif damage == "symlink":
         broken.symlink_to("missing")
     else:
@@ -109,6 +112,29 @@ def test_pinned_unreadable_authority_matches_snapshot_scope(authority, where, da
     refused = decision_authority.inactive(repo, commit, path.relative_to(repo.root).as_posix(), None)
     assert complete is (where == "foreign")
     assert bool(refused) is (not complete)
+
+
+@pytest.mark.parametrize("ending", ["\r\n", "\r"])
+def test_pinned_authority_normalizes_newlines_after_separating_records(authority, ending):
+    repo, rule, path = authority
+    path.write_bytes(serialize(rule).replace("\n", ending).encode())
+    rel = path.relative_to(repo.root).as_posix()
+    assert repo.git("add", "--", rel).returncode == 0
+    assert repo.git("commit", "-qm", "native newlines").returncode == 0
+    assert snapshot(repo.root, "owlbear").active(rule.id)
+    assert decision_authority.inactive(repo, "HEAD", rel, None) == ""
+
+
+def test_lossless_git_output_preserves_exact_bytes(authority):
+    repo, _rule, _path = authority
+    raw = b"first\rsecond\r\nthird\nnul\0\xff"
+    (repo.root / "raw.bin").write_bytes(raw)
+    blob = repo.git("hash-object", "-w", "raw.bin").stdout.strip()
+    with pytest.raises(UnicodeDecodeError):
+        repo.git("cat-file", "blob", blob)
+    said = repo.git("cat-file", "blob", blob, lossless=True)
+    assert said.returncode == 0
+    assert said.stdout.encode("utf-8", "surrogateescape") == raw
 
 
 @pytest.mark.parametrize("name", [".DS_Store", ".in-flight.tmp"])
