@@ -165,6 +165,24 @@ def test_pinned_authority_is_independent_of_git_presentation_settings(authority,
     assert decision_authority.inactive(repo, "HEAD", path.relative_to(repo.root).as_posix(), None) == ""
 
 
+@pytest.mark.parametrize("folder", ["unrelated", "other/decisions", "owlbear/decisions", "decisions"])
+def test_pinned_authority_classifies_non_utf8_filenames_by_layer(authority, folder):
+    repo, _rule, path = authority
+    rel = path.relative_to(repo.root).as_posix()
+    head = repo.git("rev-parse", "HEAD").stdout.strip()
+    blob = repo.git("rev-parse", f"HEAD:{rel}").stdout.strip()
+
+    # Real Git trees can hold names that macOS cannot materialize.
+    entry = f"100644,{blob},{folder}/unreadable-\udcff.md"
+    added = repo.git("update-index", "--add", "--cacheinfo", entry)
+    assert added.returncode == 0, added.stderr
+    tree = repo.git("write-tree").stdout.strip()
+    commit = repo.git("commit-tree", tree, "-p", head, "-m", "unreadable filename").stdout.strip()
+    complete = folder in {"unrelated", "other/decisions"}
+    refused = decision_authority.inactive(repo, commit, rel, None)
+    assert bool(refused) is (not complete)
+
+
 def test_pinned_pending_read_back_is_not_completion_authority(authority):
     repo, rule, path = authority
     pending = rule.model_copy(

@@ -72,7 +72,7 @@ def _contents(text: str, commit: str) -> dict[str, str]:
 
 
 def _entries(repo: DataRepo, commit: str, until: float | None) -> tuple[list[Entry], list[tuple[Layer, str]]]:
-    tree = _run(repo, until, "ls-tree", "-r", "-t", "-z", commit)
+    tree = _run(repo, until, "ls-tree", "-r", "-t", "-z", commit, lossless=True)
     text = _run(repo, until, "grep", "--no-color", "--no-column", "-z", "-n", "-a", "-e", "^", commit, "--",
                 ":(glob)**/decisions/*.md", empty=True, lossless=True)  # fmt: skip
     contents, entries, unreadable = _contents(text, commit), [], []
