@@ -875,7 +875,8 @@ def test_projects_says_why_a_move_of_the_shared_repository_stopped_whole(
         return real(cwd, *args, until=until)
 
     monkeypatch.setattr(data_place, "_git", git)
-    host_start._provisioned(SimpleNamespace(say=lambda _line: None))  # noqa: SLF001
+    unshared = SimpleNamespace(shared=lambda: None)  # no cut-short curation apply to finish
+    host_start._provisioned(SimpleNamespace(say=lambda _line: None, curation=unshared))  # noqa: SLF001
     failed = (
         "CalledProcessError: Command '['git', 'worktree', 'repair']' returned non-zero exit status 1."
         f"\nstderr:\n{stderr}\nstdout:\nOUT begins\nOUT ends"

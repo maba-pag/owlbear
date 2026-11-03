@@ -430,7 +430,8 @@ def test_a_failed_worktree_repair_says_git_whole_at_owlbear_data_host_start_and_
     assert cli.main(["data"]) == 1
     assert capsys.readouterr().out == f"Shared data: problem: {moved}\n"
     said = []
-    assert serve._provisioned(SimpleNamespace(say=said.append)) is False  # noqa: SLF001
+    unshared = SimpleNamespace(shared=lambda: None)  # no cut-short curation apply to finish
+    assert serve._provisioned(SimpleNamespace(say=said.append, curation=unshared)) is False  # noqa: SLF001
     assert said == [f"shared data: {moved}"]
     assert (len(ran), record()["failed"]) == (2, why)
     unfinished = f"moving the shared repository from {source} to {dest} is not finished: {why}"
