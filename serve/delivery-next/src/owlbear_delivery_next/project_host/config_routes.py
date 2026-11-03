@@ -84,7 +84,7 @@ APPLIED = [
     "sessions",  # TD-336
 ]  # the settings Delivery uses today
 STARTING = 5.0  # seconds a folder rename waits for a runner launch or the host's folder check to end
-RULE_SECONDS = 5.0  # the GitHub account row waits this long for gh; past it, the row shows why
+RULE_SECONDS = 3.0  # the GitHub account row waits this long for gh, inside the page's 5 s; past it, the row shows why
 
 
 class Save(BaseModel):
