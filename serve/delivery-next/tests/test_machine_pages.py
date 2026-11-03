@@ -1304,6 +1304,51 @@ def test_updates_owlbear_marks_the_menu_refuses_start_while_work_runs_and_the_ma
 
 
 @pytest.mark.browser
+def test_updates_owlbear_and_impeccable_show_a_failed_updates_and_installs_whole_error(
+    monkeypatch, pds, whole_error
+) -> None:
+    """#921: the update note, its state, its failed step and log line, the check's warning and the Impeccable banner
+    and state each show the whole error, as long as it is, with its type."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.machine_host import impeccable, update_checks  # noqa: PLC0415
+    from owlbear_delivery_next.machine_host.update import Updater  # noqa: PLC0415
+
+    line = f"CalledProcessError: Command '[python, selfcheck]' returned non-zero exit status 3.\n{whole_error}"
+    detail, reason = f"v0.3 failed its selfcheck: {line}", f"npm was not reached: PermissionError: {whole_error}"
+    packed = f"v0.3's Impeccable could not be installed: RuntimeError: {whole_error}"
+    state = {"phase": "failed", "detail": detail, "version": "v0.3", "at": None}
+    steps = [{"key": "selfcheck", "label": "Self-check", "state": "failed", "started_at": None, "ended_at": None,
+              "line": line}]  # fmt: skip
+    log = [{"at": None, "step": "selfcheck", "line": line}]
+    found = {"updates": [checked("owlbear", "failed", "v0.2", failures=2, reason=reason)], "available": 0}
+    failed = {"state": "failed", "version": "v0.3", "pack": "", "detail": packed, "at": None}
+    monkeypatch.setattr(update_checks.Checks, "read", lambda _self: found)
+    monkeypatch.setattr(Updater, "read", lambda _self: state)
+    monkeypatch.setattr(Updater, "report", lambda _self: state | {"steps": steps, "log": log, "startable": True,
+                                                                  "reason": ""})  # fmt: skip
+    monkeypatch.setattr(impeccable.Impeccable, "read", lambda _self: {"install": failed, "release": {"state": "none"}})
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/updates/owlbear#token=t")
+        expect(page.locator("#owlbear-state")).to_be_visible()
+        assert page.locator("#owlbear-state").text_content() == f"The update to v0.3 failed: {detail}"
+        assert f"Update to v0.3: failed · {detail} ·" in page.locator("#update-state").text_content()
+        assert page.locator("#owlbear-steps > li p-text").text_content() == line
+        page.locator("#owlbear-log-box summary").click()
+        expect(page.locator("#owlbear-log")).to_be_visible()
+        assert page.locator("#owlbear-log").text_content().endswith(f" · Self-check: {line}")
+        assert page.locator("#check-failure").text_content().endswith(f": {reason}.")
+        banner = f"Installing Impeccable for OwlBear v0.3 failed: {packed}"
+        assert banner in page.locator("#pack-install-banner").text_content()
+        page.goto(f"{base}/updates/impeccable#token=t")
+        expect(page.locator("#pack-install-state")).to_be_visible()
+        installed = f"Impeccable of OwlBear v0.3 failed to install on this machine: {packed}."
+        assert page.locator("#pack-install-state").text_content() == installed
+        assert said == []
+
+
+@pytest.mark.browser
 @pytest.mark.timeout(150)  # a real browser through five run states with the menu opened in each
 def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_waiting_failed_merged_and_current(
     tmp_path: Path, monkeypatch, pds
