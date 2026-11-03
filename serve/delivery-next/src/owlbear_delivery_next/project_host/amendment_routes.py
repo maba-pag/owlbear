@@ -31,7 +31,6 @@ def shown(c: Change) -> dict[str, Any]:
         "version": c.brief.version,
         "reference": amend_apply.reference(c),
         "versions": [b.version for b in c.brief.approved],
-        "running": c.amending.model_dump(mode="json") if c.amending else None,
         "list": [
             a.model_dump(mode="json") | ({"object": amending.objectable(c, a.id)} if a.state == "applied" else {})
             for a in c.amendments

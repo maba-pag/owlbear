@@ -220,7 +220,7 @@ def _decision(c: Change, i: AmendedItem, level: Level, now: datetime) -> None:
     b.decisions = [d for d in b.decisions if d.id != i.key] if i.key else b.decisions
     if i.remove:
         return
-    origin = "autonomous" if level == "autonomous" else level or "approved"
+    origin = level or "approved"
     made = BriefDecision(
         id=new_id(now, seed=f"{c.slug}\n{i.key}\n{i.new}\n{now.isoformat()}"),
         question=old.question if old else i.question,

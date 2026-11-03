@@ -57,11 +57,6 @@ def key(a: Amendment) -> str:
     return f"amendment:{a.id}"
 
 
-def running(c: Change) -> bool:
-    """Whether an amendment runs before the stopped step."""
-    return c.amending is not None
-
-
 def start(  # noqa: PLR0913 - what each source states
     c: Change,
     source: Source,

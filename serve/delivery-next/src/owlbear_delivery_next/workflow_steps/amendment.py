@@ -32,7 +32,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Question
     from owlbear_delivery_next.state_store.store import Lock, Store
 
-STOPPED = ("abandon",)
 LABELS = {
     "prepare": (amend_tools.PREPARE, amend_tools.CANDIDATE), "revise": (amend_tools.REVISE, amend_tools.CANDIDATE),
     "challenge": (amend_tools.CHALLENGE, amend_tools.VERDICT), "recheck": (amend_tools.CHALLENGE, amend_tools.VERDICT),
@@ -170,7 +169,7 @@ def _merged(store: Store, lock: Lock, c: Change, repo: Path, now: datetime) -> b
 def _left(store: Store, lock: Lock, c: Change, a: Amendment) -> bool:
     """Whether the Change left the stopped step's work: stopped, reshaped, or merged before it ended."""
     s = c.step
-    if c.intent.abandoned_at or (s.kind == StepKind.CLEANUP and s.mode in STOPPED):
+    if c.intent.abandoned_at or (s.kind == StepKind.CLEANUP and s.mode == "abandon"):
         amending.left(c, "the Change stopped before it ended")
     elif s.kind == StepKind.SHAPE:
         amending.left(c, "the brief is reshaped")

@@ -17,7 +17,6 @@ type Phase = Literal["prepare", "challenge", "recheck", "reconsider", "revise", 
 type Level = Literal["", "autonomous", "approved", "decided"]
 type Choice = Literal["yes", "within", "reshape", "stop"]
 type Objection = Literal["revert", "keep", "reshape"]
-FIELDS: tuple[AmendField, ...] = ("criterion", "ui", "visual", "check", "scope", "decision")
 
 
 class _Strict(BaseModel):
@@ -52,11 +51,6 @@ class AmendedItem(_Strict):
                 "key": data["criterion"],
             }
         return data
-
-    @property
-    def ref(self) -> str:
-        """``field:key``, as the owner-specified list and the challenger name the item."""
-        return f"{self.field}:{self.key}"
 
 
 class Amendment(_Strict):

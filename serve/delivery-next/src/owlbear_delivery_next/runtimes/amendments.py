@@ -126,7 +126,7 @@ def challenge(c: Change, a: Amendment, at: Path, *, recheck: bool) -> str:
         "## Applied since the reference", *(since or ["- none"]), "",
         "## The candidate", f"From {_FROM[a.source]}: {a.reason}", *(f"- evidence: {e}" for e in a.evidence),
         *_items(a), *owner, "", "## Judge", judge,
-        *(["", "## Rejections to judge", *pend] if pend else []), "", "## Finish", VERDICT_FINISH,
+        *(["", "## Rejections to judge", *pend] if pend else []), "", "## Finish", FINISH,
     ])  # fmt: skip
 
 
@@ -170,9 +170,6 @@ RECONSIDER_FINISH = (
     "error names and call it again."
 )
 FINISH = "Call `submit_result` once. If it is rejected, fix what each error names and call it again."
-VERDICT_FINISH = (
-    "Call `submit_result` once with your verdict. If it is rejected, fix what each error names and call it again."
-)
 _FROM = {"worker": "a worker's premise", "answer": "the owner's answer", "allow": "the owner's Allow it",
          "revert": "the owner's revert"}  # fmt: skip
 
