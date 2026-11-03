@@ -132,13 +132,21 @@ def _shared_root(ctx: Context) -> Path | None:
 def _memory_values(ctx: Context, *names: str) -> dict[str, float]:
     """The owner's memory values among *names*, read from the global settings now, not when the server started.
 
-    Code ships no value for them: a tool that needs one the settings do not hold refuses, naming it.
+    Code ships no value for them: a tool that needs one the settings do not hold refuses, naming it. Settings that
+    cannot be read refuse too, with the file and the reason.
     """
     root = _shared_root(ctx)
-    try:
-        block = json.loads((root / CONFIG).read_text(encoding="utf-8")).get("memory") if root else None
-    except OSError, ValueError, AttributeError:
-        block = None
+    data: object = {}
+    if root is not None:
+        path = root / CONFIG
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            pass  # no global settings yet: every value is unset
+        except (OSError, ValueError) as exc:
+            msg = f"the global settings {path} can't be read, so no memory value is known: {exc}"
+            raise ToolError(msg) from exc
+    block = data.get("memory") if isinstance(data, dict) else None
     block = block if isinstance(block, dict) else {}
     found: dict[str, float] = {}
     for name in names:
@@ -550,9 +558,7 @@ async def recall_memory(
     def _explore_metric(entry: MemoryEntry) -> int:
         return entry.outstanding_count + entry.unremarkable_count + entry.didnt_use_count
 
-    def _score(entry: MemoryEntry) -> float:
-        return entry_score(entry, points)  # worked out now, from the current points: the stored score ranks nothing
-
+    # the score is worked out now, from the current points: the stored score ranks nothing
     explore_pool = sorted(entries, key=lambda entry: (_explore_metric(entry), entry.id))[:explore_capacity]
     selected_ids = {entry.id for entry in explore_pool}
 
@@ -564,10 +570,12 @@ async def recall_memory(
     selected_ids.update(entry.id for entry in challenge_pool)
 
     regular_candidates = [entry for entry in entries if entry.id not in selected_ids]
-    regular_pool = sorted(regular_candidates, key=lambda entry: (-_score(entry), entry.id))[:regular_capacity]
+    regular_pool = sorted(regular_candidates, key=lambda entry: (-entry_score(entry, points), entry.id))[
+        :regular_capacity
+    ]
 
     selected_entries = explore_pool + challenge_pool + regular_pool
-    selected_entries.sort(key=lambda entry: (state_rank[entry.state], -_score(entry), entry.id))
+    selected_entries.sort(key=lambda entry: (state_rank[entry.state], -entry_score(entry, points), entry.id))
 
     blocks = "\n\n".join(_recall_block(entry) for entry in selected_entries)
     if recognized:

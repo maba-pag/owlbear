@@ -103,6 +103,20 @@ async def test_recall_refuses_naming_the_values_the_settings_do_not_hold(root: P
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("text", ["<<<<<<< ours\n{}\n=======\n{}\n>>>>>>> theirs", ""], ids=["conflict", "empty"])
+async def test_settings_that_cannot_be_read_are_refused_with_the_file_and_the_reason_not_as_unset(
+    root: Path, store: Path, text: str
+) -> None:
+    seed(store, 1, "one")
+    (root / "config.json").write_text(text)
+
+    with pytest.raises(ToolError, match="can't be read") as refused:
+        await tools.recall_memory(bound(root), agent="builder", limit=5)
+    assert str(root / "config.json") in str(refused.value)
+    assert "unset" not in str(refused.value)  # a broken file is not an unset value
+
+
+@pytest.mark.asyncio
 async def test_assessing_refuses_without_the_stale_factor_but_a_wrong_report_needs_none(
     root: Path, store: Path
 ) -> None:
@@ -123,8 +137,6 @@ async def test_assessing_refuses_without_the_stale_factor_but_a_wrong_report_nee
 async def test_a_changed_setting_applies_to_the_next_request_of_the_same_server(root: Path, store: Path) -> None:
     for n in (1, 2, 3):
         seed(store, n, f"entry {n}")
-    seed(store, 4, "skipped before", didnt_use_count=5)
-    seed(store, 5, "skipped after", didnt_use_count=5)
     ctx = bound(root)  # one lifespan: the server never restarts between the two settings
 
     hold(root, **_VALUES | {"recall_limit": 1, "explore_slots": 0, "challenge_slots": 0, "stale_factor": 100})
@@ -200,7 +212,13 @@ async def test_the_slots_come_from_the_settings(root: Path, store: Path) -> None
     ctx = bound(root)
 
     hold(root, **_VALUES | {"explore_slots": 0, "challenge_slots": 0})
-    assert len(titles(await tools.recall_memory(ctx, agent="builder", limit=3))) == 3
+    plain = titles(await tools.recall_memory(ctx, agent="builder", limit=3))
+    assert len(plain) == 3
+    assert "explore two" not in plain  # ranked by score alone, it is not among the best three
+    hold(root, **_VALUES | {"explore_slots": 0, "challenge_slots": 2})  # only the challenge slots changed
+    challenged = titles(await tools.recall_memory(ctx, agent="builder", limit=3))
+    assert len(challenged) == 3
+    assert {"explore one", "explore two"} <= set(challenged)  # the two entries rated outstanding least
     hold(root, **_VALUES | {"explore_slots": 4, "challenge_slots": 0})
     explored = titles(await tools.recall_memory(ctx, agent="builder", limit=4))
     assert {"explore one", "explore two"} <= set(explored)

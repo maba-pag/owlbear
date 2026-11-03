@@ -54,7 +54,7 @@ def _git(repository: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def _bound_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, **values: float) -> Path:
+def _bound_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """A project folder of a shared repository whose global settings hold the memory values, as the server runs."""
     root = tmp_path / "common"
     held = {
@@ -64,7 +64,7 @@ def _bound_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, **values: floa
         "recall_limit": 20,
         "explore_slots": 2,
         "challenge_slots": 2,
-    } | values
+    }
     root.mkdir(parents=True, exist_ok=True)
     _git(root, "init", "-q")
     (root / "config.json").write_text(json.dumps({"format": 21, "memory": held}), encoding="utf-8")
