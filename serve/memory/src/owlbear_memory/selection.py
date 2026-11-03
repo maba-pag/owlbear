@@ -6,14 +6,15 @@ of a project's memory folder and of Global memory, deduplicated by ID with the p
 
 1. scope specificity: entries scoped to the agent itself before those only for every agent (``*``); within each,
    the project's before Global memory's;
-2. score, higher first: the saver's confidence plus the assessments so far;
+2. score, higher first: the saver's confidence plus what the entry's assessments are worth under the owner's current
+   points, worked out when it is ranked (the stored ``score`` is not read);
 3. recency, the latest ``updated_at`` first;
 4. the entry ID, so equal entries always come in the same order.
 
-It keeps at most ``CAP`` whole entries. One that does not fit the space left is skipped, never cut, and a later,
-smaller one may still fit; nothing fills a quota. Every eligible entry left out is named with its reason, the cap
-or the budget. A read that skipped unreadable entry files is incomplete, and says so; only a folder that does not
-exist reads as complete and empty.
+It keeps at most the cap, the owner's setting, of whole entries. One that does not fit the space left is skipped,
+never cut, and a later, smaller one may still fit; nothing fills a quota. Every eligible entry left out is named
+with its reason, the cap or the budget. A read that skipped unreadable entry files is incomplete, and says so; only
+a folder that does not exist reads as complete and empty.
 
 Limits: the ranking knows nothing of the task, so a high-scoring lesson that does not apply can take a place a
 relevant one needed; a long entry is skipped whole; a new lesson ranks by its saver's confidence alone, since
@@ -28,16 +29,14 @@ from datetime import datetime
 from stat import S_ISDIR
 from typing import TYPE_CHECKING, Literal
 
-from owlbear_memory.engine import MemoryEngine
+from owlbear_memory.engine import MemoryEngine, Points, entry_score
 from owlbear_memory.models import MemoryEntry, MemoryState, Where
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
     from pathlib import Path
 
-VERSION = "preflight-1"
-CAP = 5  # entries at most
-BUDGET = 2000  # characters of the rendered lessons, wrappers included
+VERSION = "preflight-2"  # 2: the score is worked out from the current points when ranking, not read from the entry
 RECALLED = frozenset({MemoryState.APPROVED, MemoryState.CURATED, MemoryState.CONTESTED})
 EVERY = "*"  # the scope of a memory for every agent
 
@@ -117,8 +116,8 @@ def _updated(entry: MemoryEntry) -> float:
     return datetime.fromisoformat(entry.updated_at).timestamp()
 
 
-def ranked(entries: Iterable[tuple[MemoryEntry, Where]], agent: str) -> list[Candidate]:
-    """The entries *agent* may recall, most specific first, then by score, recency and ID."""
+def ranked(entries: Iterable[tuple[MemoryEntry, Where]], agent: str, points: Points) -> list[Candidate]:
+    """The entries *agent* may recall, most specific first, then by score under *points*, recency and ID."""
     found = [
         Candidate(entry, where, specific=agent in entry.scope_agents)
         for entry, where in entries
@@ -126,22 +125,24 @@ def ranked(entries: Iterable[tuple[MemoryEntry, Where]], agent: str) -> list[Can
     ]
     return sorted(
         found,
-        key=lambda c: (not c.specific, c.where != "project", -c.entry.score, -_updated(c.entry), c.entry.id),
+        key=lambda c: (
+            not c.specific,
+            c.where != "project",
+            -entry_score(c.entry, points),
+            -_updated(c.entry),
+            c.entry.id,
+        ),
     )
 
 
-def select(
-    entries: Iterable[tuple[MemoryEntry, Where]],
-    agent: str,
-    *,
-    cost: Callable[[Candidate], int],
-    room: int,
-    cap: int = CAP,
-) -> Selection:
-    """Up to *cap* ranked entries whose *cost*, the size of each as rendered, fits *room* in total; the rest skipped."""
+def select(candidates: Iterable[Candidate], *, cost: Callable[[Candidate], int], room: int, cap: int) -> Selection:
+    """Up to *cap* of the ranked *candidates* whose *cost*, the size of each as rendered, fits *room* in total.
+
+    The rest are skipped, each with its reason.
+    """
     chosen: list[Candidate] = []
     omitted: list[Skipped] = []
-    for candidate in ranked(entries, agent):
+    for candidate in candidates:
         if len(chosen) >= cap:
             omitted.append(Skipped(candidate, "cap"))
             continue

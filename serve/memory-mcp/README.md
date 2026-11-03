@@ -65,7 +65,7 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | `save_memory` | Create an unscoped `pending` entry from self-reported provenance and the saver's recommended scope (`where`: `project` or `global`); recognition is not authorization |
 | `list_memories` | List metadata sorted by curation priority, including each entry's `revision`; filters: `states`, `categories`, `scope_agents` |
 | `read_memory` | Read one full entry by `entry_id`, including its `revision`; errors on deleted entries |
-| `recall_memory` | Identity-bearing markdown blocks scoped to one agent (`## title`, `Entry ID`, `Revision` immediately after the ID, then optional contested state/challenge lines and body; contested entries add one `Challenge task:` line per record); three-pool slot allocation (explore, challenge, regular) with final sort by `(state_rank, -score, id)`; constants `SLOT_EXPLORE=2`, `SLOT_CHALLENGE=2`; default limit 20 |
+| `recall_memory` | Identity-bearing markdown blocks scoped to one agent (`## title`, `Entry ID`, `Revision` immediately after the ID, then optional contested state/challenge lines and body; contested entries add one `Challenge task:` line per record); three-pool slot allocation (explore, challenge, regular) with final sort by `(state_rank, -score, id)`, where the score is worked out per request from confidence, the ratings and the owner's current points; the explore and challenge slots and the default limit come from the `memory` block of the global settings, and the tool refuses, naming them, when one is unset |
 | `curate_memory` | Requires `revision`; mutates fields, promotes `pending→curated` when scope is provided, or downgrades `approved→curated`; raises `TransitionError` for contested/disputed/stale; refuses a named scope agent nothing vouches for (see Agent Identity) |
 | `delete_memory` | Requires `revision`; hard-deletes pending entries and soft-deletes curated/approved/contested/disputed/stale entries |
 | `make_global` | Curator: moves a curated or approved entry into Global memory, records its project as `origin`, and commits both paths |
@@ -121,7 +121,7 @@ remove receipts for the previous revision.
 | `outstanding_count` | int | Default `0`; incremented by assessment tool when entry was outstanding |
 | `unremarkable_count` | int | Default `0`; incremented by assessment tool when entry was unremarkable |
 | `didnt_use_count` | int | Default `0`; incremented by assessment tool when entry was skipped |
-| `score` | float | Default `0.0`; initialized to `confidence` on creation |
+| `score` | float | Default `0.0`; set to `confidence` on creation and never updated; nothing ranks by it |
 | `source_agent` | str | Non-blank provenance label required at creation; immutable historical provenance |
 | `scope_agents` | list[str] | Curator-assigned relevance scope; new pending entries default to `[]`; supplied members must be nonblank strings; `*` means all agents |
 | `created_at` | str | UTC timestamp |

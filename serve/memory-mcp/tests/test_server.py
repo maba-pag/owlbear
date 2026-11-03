@@ -54,6 +54,26 @@ def _git(repository: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+def _bound_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, **values: float) -> Path:
+    """A project folder of a shared repository whose global settings hold the memory values, as the server runs."""
+    root = tmp_path / "common"
+    held = {
+        "outstanding_boost": 0.1,
+        "unremarkable_penalty": 0.01,
+        "stale_factor": 50,
+        "recall_limit": 20,
+        "explore_slots": 2,
+        "challenge_slots": 2,
+    } | values
+    root.mkdir(parents=True, exist_ok=True)
+    _git(root, "init", "-q")
+    (root / "config.json").write_text(json.dumps({"format": 21, "memory": held}), encoding="utf-8")
+    store = root / "shop" / "memory"
+    monkeypatch.setenv("OWLBEAR_MEMORY_DIR", str(store))
+    monkeypatch.setenv("OWLBEAR_MEMORY_GLOBAL_DIR", str(root / "memory"))
+    return store
+
+
 def _create_entry(memory_dir: Path, *, title: str, state: MemoryState) -> MemoryEntry:
     engine = MemoryEngine(memory_dir)
     entry = engine.save(
@@ -275,7 +295,7 @@ async def test_live_assessments_reject_stale_revision_and_apply_sibling_item(
     tmp_path: Path,
 ) -> None:
     """A stale recalled item is byte-stable while a current sibling is applied."""
-    memory_dir = tmp_path / ".owlbear/memory"
+    memory_dir = _bound_store(monkeypatch, tmp_path)
     stale_entry = _create_entry(memory_dir, title="Stale assessment", state=MemoryState.APPROVED)
     current_entry = _create_entry(memory_dir, title="Current assessment", state=MemoryState.APPROVED)
     monkeypatch.chdir(tmp_path)
@@ -330,7 +350,7 @@ async def test_live_assessments_replay_first_bucket_and_allow_different_task(
     tmp_path: Path,
 ) -> None:
     """Same-task retries retain the first bucket; a different task is applied."""
-    memory_dir = tmp_path / ".owlbear/memory"
+    memory_dir = _bound_store(monkeypatch, tmp_path)
     entry = _create_entry(memory_dir, title="Receipt replay", state=MemoryState.APPROVED)
     monkeypatch.chdir(tmp_path)
 
@@ -554,7 +574,7 @@ async def test_live_assessment_replay_survives_transition_to_stale(
     tmp_path: Path,
 ) -> None:
     """An idempotent replay is returned before the now-stale state guard."""
-    memory_dir = tmp_path / ".owlbear/memory"
+    memory_dir = _bound_store(monkeypatch, tmp_path)
     entry = _create_entry(memory_dir, title="Stale replay", state=MemoryState.APPROVED)
     entry = entry.model_copy(update={"didnt_use_count": 50})
     path = memory_dir / f"{entry.id}.md"
@@ -598,7 +618,7 @@ async def test_live_assessment_capacity_refusal_preserves_entry(
     tmp_path: Path,
 ) -> None:
     """The registered tool reports an unstorable receipt without changing entry bytes or state."""
-    memory_dir = tmp_path / ".owlbear/memory"
+    memory_dir = _bound_store(monkeypatch, tmp_path)
     entry = MemoryEntry(
         id="550e8400-e29b-41d4-a716-446655440000",
         title="t" * 6700,
@@ -652,6 +672,7 @@ async def test_live_server_accepts_optional_recall_and_open_provenance(
     tmp_path: Path,
 ) -> None:
     """Registered tools accept guided recall and any nonblank string provenance."""
+    _bound_store(monkeypatch, tmp_path)
     (tmp_path / ".owlbear").mkdir()
     monkeypatch.chdir(tmp_path)
 
@@ -839,11 +860,10 @@ async def test_live_server_reads_global_memory_named_beside_its_store(
     tmp_path: Path,
 ) -> None:
     """``OWLBEAR_MEMORY_GLOBAL_DIR`` names Global memory, read beside the store (TD-241)."""
-    store, shared = tmp_path / "common" / "shop" / "memory", tmp_path / "common" / "memory"
+    shared = tmp_path / "common" / "memory"
+    _bound_store(monkeypatch, tmp_path)
     common = _create_entry(shared, title="Global habit", state=MemoryState.APPROVED)
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("OWLBEAR_MEMORY_DIR", str(store))
-    monkeypatch.setenv("OWLBEAR_MEMORY_GLOBAL_DIR", str(shared))
 
     async with mcp.Client(memory_mcp) as client:
         read = await client.call_tool("read_memory", {"entry_id": common.id})

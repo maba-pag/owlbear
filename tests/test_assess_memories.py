@@ -19,6 +19,8 @@ import pytest
 from owlbear_memory import AssessmentResult, MemoryEngine, MemoryEntry, MemoryState, storage
 from owlbear_memory.errors import ConcurrencyError, NotFoundError, TransitionError
 
+pytestmark = pytest.mark.usefixtures("todays_memory_values")
+
 # ---------------------------------------------------------------------------
 # Shared constants
 # ---------------------------------------------------------------------------
@@ -98,6 +100,7 @@ def _record_assessment(engine: MemoryEngine, entry_id: str, bucket: str) -> Memo
         bucket,
         task_id=f"assessment-test-{next(_TASK_IDS)}",
         expected_revision=entry.revision,
+        stale_factor=50,
     )
     return outcome.entry
 
@@ -380,35 +383,30 @@ class TestCounterIncrementPath:
         assert updated.unremarkable_count == 0
         assert updated.didnt_use_count == 0
 
-    def test_score_recomputed_after_outstanding_increment(self, tmp_path: Path) -> None:
-        """Score is recomputed via compute_score formula after outstanding increment."""
-        from owlbear_memory.engine import OUTSTANDING_BOOST, compute_score  # noqa: PLC0415
-
+    def test_assessment_leaves_the_stored_score_unchanged(self, tmp_path: Path) -> None:
+        """A rating writes its counter and no score: the stored score is legacy and ranks nothing."""
         engine = MemoryEngine(memory_dir=tmp_path)
-        confidence = 0.8
-        entry = _make_entry(_ID_APPROVED, "approved", confidence=confidence, outstanding_count=1)
+        entry = _make_entry(_ID_APPROVED, "approved", confidence=0.8, outstanding_count=1, score=0.123)
         _seed_entry(tmp_path, entry)
         engine.load()
 
         updated = _record_assessment(engine, _ID_APPROVED, "outstanding")
-        expected = compute_score(confidence, 2, 0)
-        assert updated.score == pytest.approx(expected)
-        assert updated.score == pytest.approx(confidence + 2 * OUTSTANDING_BOOST)
+        assert updated.outstanding_count == 2
+        assert updated.score == pytest.approx(0.123)
+        assert engine.get_entry(_ID_APPROVED).score == pytest.approx(0.123)
 
-    def test_score_recomputed_after_unremarkable_increment(self, tmp_path: Path) -> None:
-        """Score is recomputed via compute_score formula after unremarkable increment."""
-        from owlbear_memory.engine import UNREMARKABLE_PENALTY, compute_score  # noqa: PLC0415
+    def test_entry_score_follows_the_points_it_is_given(self, tmp_path: Path) -> None:
+        """The score is worked out from confidence, the ratings and the points handed in, never from a stored value."""
+        from owlbear_memory import Points, entry_score  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
-        confidence = 0.9
-        entry = _make_entry(_ID_APPROVED, "approved", confidence=confidence, unremarkable_count=2)
+        entry = _make_entry(_ID_APPROVED, "approved", confidence=0.8, outstanding_count=1, unremarkable_count=2)
         _seed_entry(tmp_path, entry)
         engine.load()
 
-        updated = _record_assessment(engine, _ID_APPROVED, "unremarkable")
-        expected = compute_score(confidence, 0, 3)
-        assert updated.score == pytest.approx(expected)
-        assert updated.score == pytest.approx(confidence - 3 * UNREMARKABLE_PENALTY)
+        updated = _record_assessment(engine, _ID_APPROVED, "outstanding")
+        assert entry_score(updated, Points(0.1, 0.01)) == pytest.approx(0.8 + 2 * 0.1 - 2 * 0.01)
+        assert entry_score(updated, Points(0.3, 0.05)) == pytest.approx(0.8 + 2 * 0.3 - 2 * 0.05)
 
     def test_approved_entry_is_voteable(self, tmp_path: Path) -> None:
         """approved state is a valid voteable state for counter-increment assessment."""
@@ -483,6 +481,7 @@ class TestCounterIncrementPath:
                 "outstanding",
                 task_id="assessment-conflict",
                 expected_revision="0" * 16,
+                stale_factor=50,
             )
 
     def test_occ_match_succeeds(self, tmp_path: Path) -> None:
@@ -496,23 +495,37 @@ class TestCounterIncrementPath:
         assert updated.outstanding_count == 1
 
     def test_slot_efficiency_exceeded_transitions_entry_to_stale(self, tmp_path: Path) -> None:
-        """When slot-efficiency threshold is exceeded after didnt_use increment, state→stale."""
-        from owlbear_memory.engine import STALE_THRESHOLD  # noqa: PLC0415
-
+        """Once didnt_use passes the stale factor times the ratings after a rating, state→stale."""
         engine = MemoryEngine(memory_dir=tmp_path)
-        # didnt_use_count = STALE_THRESHOLD: after +1 → STALE_THRESHOLD+1 > STALE_THRESHOLD*1 → stale
         entry = _make_entry(
             _ID_APPROVED,
             "approved",
             outstanding_count=0,
             unremarkable_count=0,
-            didnt_use_count=STALE_THRESHOLD,
+            didnt_use_count=50,
         )
         _seed_entry(tmp_path, entry)
         engine.load()
 
         updated = _record_assessment(engine, _ID_APPROVED, "didnt_use")
         assert updated.state == MemoryState.STALE
+
+    @pytest.mark.parametrize(("factor", "expected"), [(51, MemoryState.APPROVED), (50, MemoryState.STALE)])
+    def test_the_stale_factor_decides_at_the_boundary(self, tmp_path: Path, factor: int, expected: MemoryState) -> None:
+        """With 50 skips before, the 51st exceeds a factor of 50 and no longer exceeds a factor of 51."""
+        engine = MemoryEngine(memory_dir=tmp_path)
+        entry = _make_entry(_ID_APPROVED, "approved", didnt_use_count=50)
+        _seed_entry(tmp_path, entry)
+        engine.load()
+
+        outcome = engine.record_assessment(
+            _ID_APPROVED,
+            "didnt_use",
+            task_id="stale-boundary",
+            expected_revision=entry.revision,
+            stale_factor=factor,
+        )
+        assert outcome.entry.state == expected
 
     def test_slot_efficiency_not_exceeded_state_unchanged(self, tmp_path: Path) -> None:
         """When slot-efficiency is not exceeded, entry state remains approved after didnt_use."""
@@ -556,12 +569,14 @@ class TestCounterIncrementPath:
             "outstanding",
             task_id="task-1",
             expected_revision=entry.revision,
+            stale_factor=50,
         )
         second = engine.record_assessment(
             _ID_APPROVED,
             "unremarkable",
             task_id="task-1",
             expected_revision=entry.revision,
+            stale_factor=50,
         )
 
         fresh_engine = MemoryEngine(memory_dir=tmp_path)
@@ -570,6 +585,7 @@ class TestCounterIncrementPath:
             "unremarkable",
             task_id="task-1",
             expected_revision=entry.revision,
+            stale_factor=50,
         )
         persisted = fresh_engine.get_entry(_ID_APPROVED)
         assert first.already_applied is False
@@ -871,6 +887,7 @@ class TestBatchSemantics:
             *,
             task_id: str,
             expected_revision: str,
+            stale_factor: int,
         ) -> AssessmentResult:
             if entry_id == _ID_APPROVED:
                 msg = "simulated OCC conflict"
@@ -880,6 +897,7 @@ class TestBatchSemantics:
                 bucket,
                 task_id=task_id,
                 expected_revision=expected_revision,
+                stale_factor=stale_factor,
             )
 
         ctx = _make_ctx(engine)

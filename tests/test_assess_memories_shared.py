@@ -21,6 +21,8 @@ from owlbear_memory_mcp import git as git_helpers
 from owlbear_memory_mcp import tools
 from owlbear_memory_mcp.server import AppContext
 
+pytestmark = pytest.mark.usefixtures("todays_memory_values")
+
 _TS = "2026-10-01T10:00:00+00:00"
 _TASK = "retro-proof-build"
 _SUBJECT = f"chore: memory assessments ({_TASK}, memory-mcp)"

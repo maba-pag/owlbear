@@ -4,9 +4,9 @@ Behavioral coverage:
 - AC1: MemoryEntry has outstanding_count, unremarkable_count, didnt_use_count (int = 0),
     score (float = 0.0) in owlbear_memory;
        defaults enable backward-compatible deserialization of pre-existing entries;
-       OUTSTANDING_BOOST=0.1, UNREMARKABLE_PENALTY=0.01, STALE_THRESHOLD=50 in engine module.
-- AC2: compute_score(confidence, outstanding_count, unremarkable_count) -> float returns
-       confidence + (outstanding_count * OUTSTANDING_BOOST) - (unremarkable_count * UNREMARKABLE_PENALTY);
+       the outstanding boost and unremarkable penalty come from the owner's settings, not from code.
+- AC2: compute_score(confidence, outstanding_count, unremarkable_count, points) -> float returns
+       confidence + (outstanding_count * boost) - (unremarkable_count * penalty);
        exported from owlbear_memory.
 - AC3: MemoryEngine.save() initializes score=confidence, counters=0;
     storage round-trip (write+read) preserves counter and score values in owlbear_memory.
@@ -98,48 +98,27 @@ class TestModelFields:
         assert entry.didnt_use_count == 0
         assert entry.score == 0.0
 
-    # --- Named constants in engine module ---
+    # --- The points come from the owner's settings, never from code ---
 
-    def test_outstanding_boost_constant_value(self) -> None:
-        """OUTSTANDING_BOOST = 0.1 is defined in owlbear_memory engine module."""
-        from owlbear_memory import engine
+    def test_points_ship_no_default_values(self) -> None:
+        """Points has no defaults: a caller that holds no setting cannot rank or score by a value from code."""
+        from owlbear_memory import Points
 
-        assert engine.OUTSTANDING_BOOST == 0.1
-
-    def test_unremarkable_penalty_constant_value(self) -> None:
-        """UNREMARKABLE_PENALTY = 0.01 is defined in owlbear_memory engine module."""
-        from owlbear_memory import engine
-
-        assert engine.UNREMARKABLE_PENALTY == 0.01
-
-    def test_stale_threshold_constant_value(self) -> None:
-        """STALE_THRESHOLD = 50 is defined in owlbear_memory engine module."""
-        from owlbear_memory import engine
-
-        assert engine.STALE_THRESHOLD == 50
-
-    def test_outstanding_boost_is_float(self) -> None:
-        """OUTSTANDING_BOOST is a float."""
-        from owlbear_memory import engine
-
-        assert isinstance(engine.OUTSTANDING_BOOST, float)
-
-    def test_unremarkable_penalty_is_float(self) -> None:
-        """UNREMARKABLE_PENALTY is a float."""
-        from owlbear_memory import engine
-
-        assert isinstance(engine.UNREMARKABLE_PENALTY, float)
-
-    def test_stale_threshold_is_int(self) -> None:
-        """STALE_THRESHOLD is an int."""
-        from owlbear_memory import engine
-
-        assert isinstance(engine.STALE_THRESHOLD, int)
+        with pytest.raises(TypeError):
+            Points()  # type: ignore[call-arg]
+        with pytest.raises(TypeError):
+            Points(outstanding_boost=0.1)  # type: ignore[call-arg]
 
 
 # ---------------------------------------------------------------------------
 # AC2 — compute_score function
 # ---------------------------------------------------------------------------
+
+
+def _points() -> object:
+    from owlbear_memory import Points
+
+    return Points(outstanding_boost=0.1, unremarkable_penalty=0.01)
 
 
 class TestComputeScore:
@@ -152,68 +131,50 @@ class TestComputeScore:
         assert callable(compute_score)
 
     def test_compute_score_basic_formula(self) -> None:
-        """compute_score returns confidence + outstanding*BOOST - unremarkable*PENALTY."""
+        """compute_score returns confidence + outstanding*boost - unremarkable*penalty."""
         from owlbear_memory import compute_score
 
         # 0.8 + (2 * 0.1) - (3 * 0.01) = 0.8 + 0.2 - 0.03 = 0.97
-        result = compute_score(confidence=0.8, outstanding_count=2, unremarkable_count=3)
+        result = compute_score(confidence=0.8, outstanding_count=2, unremarkable_count=3, points=_points())
         assert result == pytest.approx(0.97)
 
     def test_compute_score_zero_counters_returns_confidence(self) -> None:
         """compute_score with all-zero counters returns confidence unchanged."""
         from owlbear_memory import compute_score
 
-        result = compute_score(confidence=0.9, outstanding_count=0, unremarkable_count=0)
+        result = compute_score(confidence=0.9, outstanding_count=0, unremarkable_count=0, points=_points())
         assert result == pytest.approx(0.9)
 
     def test_compute_score_outstanding_only(self) -> None:
-        """compute_score accumulates outstanding boosts: confidence + N*OUTSTANDING_BOOST."""
+        """compute_score accumulates outstanding boosts: confidence + N*boost."""
         from owlbear_memory import compute_score
 
         # 0.7 + (1 * 0.1) = 0.8
-        result = compute_score(confidence=0.7, outstanding_count=1, unremarkable_count=0)
+        result = compute_score(confidence=0.7, outstanding_count=1, unremarkable_count=0, points=_points())
         assert result == pytest.approx(0.8)
 
     def test_compute_score_unremarkable_only(self) -> None:
-        """compute_score deducts unremarkable penalties: confidence - N*UNREMARKABLE_PENALTY."""
+        """compute_score deducts unremarkable penalties: confidence - N*penalty."""
         from owlbear_memory import compute_score
 
         # 0.9 - (5 * 0.01) = 0.9 - 0.05 = 0.85
-        result = compute_score(confidence=0.9, outstanding_count=0, unremarkable_count=5)
+        result = compute_score(confidence=0.9, outstanding_count=0, unremarkable_count=5, points=_points())
         assert result == pytest.approx(0.85)
-
-    def test_compute_score_at_stale_threshold_boundary(self) -> None:
-        """compute_score with unremarkable_count == STALE_THRESHOLD."""
-        from owlbear_memory import compute_score, engine
-
-        # STALE_THRESHOLD=50: 0.7 + 0 - (50 * 0.01) = 0.7 - 0.5 = 0.2
-        result = compute_score(
-            confidence=0.7,
-            outstanding_count=0,
-            unremarkable_count=engine.STALE_THRESHOLD,
-        )
-        assert result == pytest.approx(0.2)
 
     def test_compute_score_return_type_is_float(self) -> None:
         """compute_score always returns float."""
         from owlbear_memory import compute_score
 
-        result = compute_score(confidence=0.8, outstanding_count=0, unremarkable_count=0)
+        result = compute_score(confidence=0.8, outstanding_count=0, unremarkable_count=0, points=_points())
         assert isinstance(result, float)
 
-    def test_compute_score_formula_matches_engine_constants(self) -> None:
-        """compute_score result is consistent with OUTSTANDING_BOOST and UNREMARKABLE_PENALTY constants."""
-        from owlbear_memory import compute_score, engine
+    def test_each_point_value_moves_the_score_on_its_own(self) -> None:
+        """Changing only the boost, or only the penalty, changes only its own term of the score."""
+        from owlbear_memory import Points, compute_score
 
-        confidence = 0.8
-        outstanding = 4
-        unremarkable = 7
-        expected = confidence + (outstanding * engine.OUTSTANDING_BOOST) - (unremarkable * engine.UNREMARKABLE_PENALTY)
-        assert compute_score(
-            confidence=confidence,
-            outstanding_count=outstanding,
-            unremarkable_count=unremarkable,
-        ) == pytest.approx(expected)
+        base = compute_score(0.8, 4, 7, Points(0.1, 0.01))
+        assert compute_score(0.8, 4, 7, Points(0.2, 0.01)) == pytest.approx(base + 4 * 0.1)
+        assert compute_score(0.8, 4, 7, Points(0.1, 0.02)) == pytest.approx(base - 7 * 0.01)
 
 
 # ---------------------------------------------------------------------------
