@@ -415,7 +415,10 @@ def test_a_failed_pack_stage_shows_and_logs_its_whole_error(  # noqa: PLR0913, P
         reason = page.locator("#pack-reason")
         expect(reason).to_be_visible()
         assert reason.text_content() == said
-        assert page.locator("#pack-log").text_content() == "\n".join(state["log"])
+        page.get_by_text("Log of the run").click()
+        log = page.locator("#pack-log")
+        expect(log).to_be_visible()
+        assert log.text_content() == "\n".join(state["log"])
 
 
 @pytest.mark.browser

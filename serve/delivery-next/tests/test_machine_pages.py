@@ -660,6 +660,39 @@ def test_settings_say_this_machine_s_settings_could_not_be_read_and_read_them_ag
         a_read_failing_after_a_save_during_it_leaves_the_save_s_answer_unwarned(page, pds)
 
 
+@pytest.mark.browser
+def test_settings_say_a_failed_read_of_the_shared_repository_whole(
+    tmp_path: Path, monkeypatch, pds, shared_repo, whole_error
+) -> None:
+    """#921: Settings' notice shows the shared repository's failed Git read whole: the command, both streams, a path."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.local_system import data_place, data_repo  # noqa: PLC0415
+
+    shared = shared_repo[0]
+    monkeypatch.setenv(data_place.VIEW, str(shared))
+    a = registry.register(clone(tmp_path / "alpha"))
+    stderr, stdout = f"fatal: {shared / '.git' / 'index'} cannot be read\n{whole_error}", "OUT begins\nOUT ends"
+    real = data_repo._git  # noqa: SLF001 - the repository's own Git calls are the boundary
+    read = ("status", "--porcelain", "--", ".", f":(exclude)*/{data_repo.MEMORY}/*")
+
+    def git(cwd, *args, until=None):
+        if args[:1] != ("status",):
+            return real(cwd, *args, until=until)
+        return subprocess.CompletedProcess(["git", *args], 128, f"{stdout}\n", f"{stderr}\n")
+
+    monkeypatch.setattr(data_repo, "_git", git)
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        notice = page.locator("#error")
+        expect(notice).to_be_visible()
+        failed = f"CalledProcessError: Command '{['git', *read]}' returned non-zero exit status 128."
+        why = f"{failed}\nstderr:\n{stderr}\nstdout:\n{stdout}"
+        assert notice.text_content().strip() == f"The shared settings repository {shared} cannot be read: {why}"
+        assert said == []
+
+
 def machine_saved(page, pds, channel: str) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -851,6 +884,7 @@ def test_projects_says_why_a_move_of_the_shared_repository_stopped_whole(
     )
     unfinished = f"moving the shared repository from {source} to {dest} is not finished: {failed}"
     with browsing(monkeypatch, pds, width=390) as (page, base):
+        broke = errors(page)
         page.goto(f"{base}/projects#token=t")
         shop = page.get_by_role("listitem", name="shop")
         expect(shop.locator("p-tag")).to_have_text("failed")
@@ -858,6 +892,7 @@ def test_projects_says_why_a_move_of_the_shared_repository_stopped_whole(
         expect(said).to_have_count(1)
         assert said.text_content() == f"its Delivery state cannot be opened: {unfinished}; `owlbear data` finishes it"
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
+        assert broke == []
 
 
 @pytest.mark.browser
