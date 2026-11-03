@@ -47,7 +47,6 @@ SETTLE_MS = 15_000
 INSTALL = "uv run playwright install chromium"
 CHANNELS = ("chrome", "msedge", None)  # the installed browser first; None is Playwright's own Chromium
 MISSING = ("playwright install", "Executable doesn't exist", "is not found at")  # Playwright's launch errors
-UNOPENED = ("about:blank", "chrome-error:")  # where a page stays whose navigation failed: it went nowhere else
 FILE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}-\d{3,4}\.png$")
 NOT_UI = "not-ui"
 _SHOWN = 5
@@ -111,7 +110,8 @@ def capture(  # noqa: C901, PLR0913 - one finding per failure of the nested shot
             seen: list[PageError] = []
 
             def away() -> Shot | None:
-                here = page.url.startswith(UNOPENED) or root(page.url) == origin
+                # a page whose navigation failed stays at about:blank or chrome-error: it went nowhere else
+                here = page.url.startswith(("about:blank", "chrome-error:")) or root(page.url) == origin
                 gone = left[0] if left else "" if here else root(page.url)
                 return Shot(s.name, width, error=f"state {s.name} left the preview ({gone})") if gone else None
 
@@ -280,16 +280,6 @@ def broken(reason: str) -> StepResult:
     )
 
 
-def _failed(shots: Sequence[Shot]) -> list[str]:
-    """Each failed shot, whole, told in the runner's log as well."""
-    failed = [f"{s.state} at {s.width}px: {s.error}" for s in shots if s.error or not s.file]
-    if not shots:
-        failed.append("no screenshot was captured")
-    for line in failed:
-        sessions.out(f"visual check: {line}")
-    return failed
-
-
 def judged(  # noqa: PLR0913 - one result from every visual input
     c: Change,
     head: str,
@@ -306,7 +296,13 @@ def judged(  # noqa: PLR0913 - one result from every visual input
     A failed shot, a new browser error or a correctness fail always goes back (R8). The detector's scans are recorded
     as evidence only (TD-77).
     """
-    failed = _failed(shots)
+    failed = (
+        [f"{s.state} at {s.width}px: {s.error}" for s in shots if s.error or not s.file]
+        if shots
+        else ["no screenshot was captured"]
+    )
+    for line in failed:  # each failed shot, whole, in the runner's log as well
+        sessions.out(f"visual check: {line}")
     errors = [e for s in shots for e in s.errors]
     new, _old = classify(errors, c.before)
     raised = [f"{e.state} at {e.width}px: new {e.kind} error: {e.text[:300]}" for e in new]

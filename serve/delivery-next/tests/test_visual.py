@@ -1322,21 +1322,3 @@ def test_a_capture_error_keeps_its_whole_text(flow, whole_error):
     flow.mp.setattr(runner.worktree, "head", git_failed)
     runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
     assert flow.store.read("c1").outcome.reason == f"capture failed: CalledProcessError: {failed}\n{whole_error}"
-
-
-@pytest.mark.browser
-def test_a_shot_playwright_fails_keeps_its_whole_error_in_the_findings_the_repair_and_the_log(
-    clone, failed_shots, capsys, whole_error
-):
-    gone, go = failed_shots
-    assert (gone.error, go.error) == (
-        f"/gone did not answer: Error: {whole_error}",
-        f"state go step 1 (click 'Go'): Error: {whole_error}",
-    )
-    head = commit(clone, "web/app.css")
-    c, result = visual.judged(change(clone), head, "t", failed_shots, verdict=None, now=NOW)
-    found = [f"gone at 1280px: {gone.error}", f"go at 1280px: {go.error}"]
-    assert c.visual.findings == found
-    assert result.reason == f"Fix: the visual check of {head[:7]} failed: {found[0]} (see gone at 1280px)"
-    out = capsys.readouterr().out
-    assert all(f"visual check: {f}\n" in out for f in found), out

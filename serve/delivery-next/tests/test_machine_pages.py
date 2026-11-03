@@ -2933,10 +2933,11 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
 
 @pytest.mark.browser
 @pytest.mark.timeout(90)  # git, a real capture and a real browser
-def test_a_failed_shot_and_the_watchers_failures_show_whole_on_the_changes_page(
-    tmp_path: Path, monkeypatch, pds, failed_shots, whole_error: str
+def test_a_failed_shot_and_the_watchers_failures_show_whole_on_the_changes_page(  # noqa: PLR0913, PLR0917 - its fixtures
+    tmp_path: Path, monkeypatch, pds, failed_shots, capsys, whole_error: str
 ) -> None:
-    """#921 C: Playwright's whole error in "Before and after", the repair task and the status line; the watcher's."""
+    """#921 C: Playwright's whole error in the log, "Before and after", the repair task and the status line; the
+    watcher's."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, c, of = ui_change(tmp_path, "true")
@@ -2952,6 +2953,8 @@ def test_a_failed_shot_and_the_watchers_failures_show_whole_on_the_changes_page(
         watch_reports.put("c1", watch_reports.summary_row("s1", "build", verdict.removeprefix("not recorded: ")))(
             connection
         )
+    out = capsys.readouterr().out
+    assert all(f"visual check: {f}\n" in out for f in found), out
     reason = f"Fix: the visual check of {head[:7]} failed: {found[0]} (see gone at 1280px)"
     with browsing(monkeypatch, pds) as (page, url):
         said = errors(page)
