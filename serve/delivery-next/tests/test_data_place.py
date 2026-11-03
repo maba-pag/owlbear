@@ -333,9 +333,9 @@ def test_the_host_clones_a_remote_only_pointer_in_the_background_then_loads_the_
 OUT = "OUT begins\nwhat git printed on stdout, in the middle\nOUT ends"
 
 
-def git_whole(args: tuple[str, ...], stderr: str, code: int = 128) -> str:
+def git_whole(args: tuple[str, ...], stderr: str) -> str:
     """A failed Git command as `CalledProcessError` words it, with both streams."""
-    head = f"CalledProcessError: Command '{['git', *args]}' returned non-zero exit status {code}."
+    head = f"CalledProcessError: Command '{['git', *args]}' returned non-zero exit status 128."
     return f"{head}\nstderr:\n{stderr}\nstdout:\n{OUT}"
 
 
@@ -359,7 +359,8 @@ def clone_fails_once(monkeypatch, stderr: str) -> list[tuple[str, ...]]:
     def run(cwd, *args, **kw):
         if args[:1] == ("clone",) and not ran:
             ran.append(args)
-            return subprocess.CompletedProcess(["git", *args], 128, OUT + "\n", stderr + "\n")
+            said = (None, None) if kw.get("show") else (OUT + "\n", stderr + "\n")  # shown: Git wrote to the terminal
+            return subprocess.CompletedProcess(["git", *args], 128, *said)
         return real(cwd, *args, **kw)
 
     monkeypatch.setattr(git_run, "run", run)
@@ -389,25 +390,27 @@ def reason(tmp_path: Path, monkeypatch) -> str:
 def test_a_failed_clone_says_git_whole_in_the_projects_reason_and_the_host_log(
     tmp_path: Path, url: str, monkeypatch, whole_error, capsys
 ) -> None:
-    """#921: a clone's failure, a path in it, arrives whole at `owlbear data`, the project's reason and the host log."""
+    """#921: the host's failed clone, a path in it, arrives whole in the project's reason and the host log.
+
+    `owlbear data` lets Git write to the terminal, so there the failure names the command and its exit.
+    """
     stderr = f"fatal: {tmp_path / 'owlbear-data.git' / 'objects'} cannot be read\n{whole_error}"
     ran = clone_fails_once(monkeypatch, stderr)
     assert cli.main(["data", url]) == 1
+    shown = f"CalledProcessError: Command '{['git', *ran[0]]}' returned non-zero exit status 128."
+    assert f"cloning {url} failed: {shown}" in capsys.readouterr().out
+    assert record() == {"remote": url, "failed": shown}
+
+    ran = clone_fails_once(monkeypatch, stderr)
+    said = []
+    stopping = SimpleNamespace(is_set=lambda: False, wait=lambda _seconds: True)
+    serve._cloning(SimpleNamespace(stopping=stopping, say=said.append))  # noqa: SLF001
     why = git_whole(ran[0], stderr)
-    assert f"cloning {url} failed: {why}" in capsys.readouterr().out
-    assert record() == {"remote": url, "failed": why}
+    every = serve.PROVISION_RETRY // 60
+    assert said == [f"shared data: cloning {url} failed: {why}; tried again every {every} minutes"]
     assert reason(tmp_path, monkeypatch) == (
         f"its Delivery state cannot be opened: the shared repository {url} is not cloned yet: {why}"
     )
-    ran = clone_fails_once(monkeypatch, stderr)
-    said = []
-    stopping = SimpleNamespace(is_set=lambda: False, wait=lambda _seconds: False)
-    serve._cloning(SimpleNamespace(stopping=stopping, say=said.append, carry=list, retry=list))  # noqa: SLF001
-    every = serve.PROVISION_RETRY // 60
-    assert said == [
-        f"shared data: cloning {url} failed: {git_whole(ran[0], stderr)}; tried again every {every} minutes",
-        f"shared data: cloned {url} into {data_place.default()}",
-    ]
 
 
 def moved_to_the_default_place(tmp_path: Path, url: str) -> tuple[Path, Path]:
