@@ -16,6 +16,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import budgets, disputes, loop, plan_rounds, repairs, worktree
 from owlbear_delivery_next.change_flow.curation_flow import CURATE
 from owlbear_delivery_next.commands.cli import describe
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import design_tools
 from owlbear_delivery_next.impeccable_runs import visual_settled
 from owlbear_delivery_next.local_system import git_files
@@ -406,7 +407,12 @@ def main(argv: list[str] | None = None) -> int:
             change, step = store.fold(lock, args.change, datetime.now(UTC), state, moved=moved, leave=leave)
             kind = step.kind.value if step is not None else ""
             spend_ledger.enter(spend_ledger.Where.of(store, repo, change=args.change, step=kind))  # every session's
-            _step(store, lock, change, step, repo)
+            try:
+                _step(store, lock, change, step, repo)
+            except Exception as exc:  # the owner reads it in Recent activity; the traceback stays in runner.log
+                at = datetime.now(UTC).isoformat()
+                store.log(lock, args.change, {"event": "runner-failed", "at": at, "reason": failure(exc)})
+                raise
             _out(describe(store.read(args.change)))
     except LockHeldError as exc:
         _out(f"{args.change}: {exc}; another runner holds it")

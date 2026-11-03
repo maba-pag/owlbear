@@ -1030,6 +1030,44 @@ def test_a_long_unverified_session_end_shows_whole_on_changes(tmp_path: Path, mo
 
 
 @pytest.mark.browser
+def test_a_crashed_runner_s_whole_error_shows_in_recent_activity(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """D-01M6GCGED6NRBVEB2XGKRPCKX0: a Change runner that crashes says its whole error, notes included, in Recent
+    activity; the exception still ends the runner, whose traceback goes to its log."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "flip"))
+    path = Path(alpha.path)
+    store = Store.open(path)
+    names = Names(branch="owlbear/flip", target="main", worktree=str(path))
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
+    c = Change(slug="flip", brief=Brief(version=1), plan=plan, step=Step(kind=StepKind.BUILD, task="t1"), names=names)
+    note = f"the session's teardown also failed: OSError: {whole_error}"
+
+    async def crashing(_cfg):
+        broke = RuntimeError(whole_error)
+        broke.add_note(note)  # as loop_owner.run adds it
+        raise broke
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", crashing)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: path)
+    with store.lock("flip") as lock:
+        store.write(lock, c)
+    with pytest.raises(RuntimeError) as crashed:
+        runner.main(["flip", "--repo", str(path)])
+    assert (str(crashed.value), crashed.value.__notes__) == (whole_error, [note])
+    reason = f"RuntimeError: {whole_error}\n{note}"
+    with browsing(monkeypatch, pds) as (page, base):
+        broke = errors(page)
+        opened(page, base, alpha.id, "flip")
+        expect(page.locator("#detail")).to_contain_text("Recent activity")
+        expect(page.locator("#detail")).to_contain_text("Build 1/1 · the runner failed")
+        lines = page.locator("#detail .log li > span")
+        assert lines.all_text_contents() == [" ".join(f"Runner failed: {reason}".split())]  # whitespace collapsed
+        assert broke == []
+    assert [e["reason"] for e in store.events("flip") if e.get("event") == "runner-failed"] == [reason]
+
+
+@pytest.mark.browser
 def test_projects_adopts_removes_and_adds_keeping_focus_and_the_next_folder(tmp_path: Path, monkeypatch, pds) -> None:
     """D-01M63C8DA1D95Z7M9ZYWVYYNF7: with no project shown each action stays on Projects, and focus stays on it; one
     action runs at a time; with no project left, the top row offers Add project."""
