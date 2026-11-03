@@ -19,6 +19,7 @@ import pytest
 import uvicorn
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from markdown_it import MarkdownIt
 
 from owlbear_delivery_next.change_contracts import audit_tools, tool_schema
 from owlbear_delivery_next.change_contracts.audit_tools import AuditResult
@@ -152,6 +153,7 @@ def test_an_unsupported_report_format_stops_before_the_auditor_starts(sources, c
 
 def test_rendering_preserves_fields_order_counts_and_markdown_sensitive_values(sources):
     first = finding()
+    first["title"] += " #"
     first["deprecationMessage"] = ""
     first["remediation"]["replacement"] = {"from": "size=`x-small`", "to": "size=`xs`"}
     first["evidence"][0]["snippet"] = "const size = `x-small`;\n```"
@@ -173,7 +175,7 @@ def test_rendering_preserves_fields_order_counts_and_markdown_sensitive_values(s
     )
     second["remediation"] = {"instruction": "Use the replacement."}
     second["evidence"][0].pop("valueResolution")
-    manual = follow_up("Unresolved value")
+    manual = follow_up("Unresolved value #")
     manual["ruleId"] = "dynamic/value"
     body = report(findings=[first, second], follow_ups=[manual])
     jsonschema.Draft202012Validator(SCHEMA).validate(body)
@@ -201,6 +203,14 @@ def test_rendering_preserves_fields_order_counts_and_markdown_sensitive_values(s
     assert "### 1. Unresolved value" in text
     assert "- **Reason:** dynamic value" in text
     assert "- **Evidence (1):**" in text
+    tokens = MarkdownIt("commonmark").parse(text)
+    headings = [
+        "".join(child.content for child in tokens[i + 1].children or [] if child.type in {"text", "code_inline"})
+        for i, token in enumerate(tokens)
+        if token.type == "heading_open" and token.tag == "h3"
+    ]
+    assert f"1. {first['title']}" in headings
+    assert f"1. {manual['subject']}" in headings
 
 
 def test_the_copy_holds_the_authored_pages_the_manifest_and_the_release_never_the_vendored_folders(sources):
