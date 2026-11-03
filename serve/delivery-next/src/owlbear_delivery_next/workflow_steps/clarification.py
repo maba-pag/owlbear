@@ -109,8 +109,7 @@ def checked(store: Store, lock: Lock, c: Change) -> Change | None:
 
 def judged(done: Run) -> tuple[pick_tools.ClarificationResult | None, str]:
     """The session's verdict, or why there is none to trust."""
-    gone = done.termination and done.termination.confirmed
-    unproven = [] if gone else [session_result.unverified(done.termination)]
+    unproven = [] if done.termination and done.termination.confirmed else [session_result.unverified(done.termination)]
     if done.ending != "result" or not isinstance(done.payload, pick_tools.ClarificationResult):
         said = "; ".join([done.detail or "no verdict was submitted", *unproven])
         return None, f"its session ended {done.ending}: {said}"

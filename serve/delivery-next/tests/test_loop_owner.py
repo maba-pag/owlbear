@@ -16,7 +16,6 @@ from owlbear_delivery_next.runtimes.session_result import Run
 CHILD = """
 import asyncio
 import dataclasses
-import asyncio
 import json
 import sys
 import threading

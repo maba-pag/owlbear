@@ -235,8 +235,7 @@ def _new_id(c: Change) -> str:
 
 def judged(done: Run, found: list[Decision], base: Pick) -> Pick:
     """The session's pick: its known ids with their revisions as listed, unknown ones dropped; else a failure."""
-    gone = done.termination and done.termination.confirmed
-    unproven = [] if gone else [session_result.unverified(done.termination)]
+    unproven = [] if done.termination and done.termination.confirmed else [session_result.unverified(done.termination)]
     if done.ending != "result" or not isinstance(done.payload, pick_tools.PickResult):
         why = "; ".join([done.detail or "no pick was submitted", *unproven])
         return base.model_copy(update={"status": "failed", "reason": f"its session ended {done.ending}: {why}"})

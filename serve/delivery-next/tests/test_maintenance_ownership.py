@@ -165,7 +165,7 @@ def test_a_maintenance_session_s_failure_keeps_its_whole_error(monkeypatch, whol
         assert owner.read()["sessions"][-1]["reason"] == reason
     else:
         notes.append(f"maintenance ownership also failed to persist: OSError: {whole_error}")
-    assert raised.value.__notes__ == notes if notes else not hasattr(raised.value, "__notes__")
+    assert raised.value.__notes__ == notes
 
 
 def test_a_recovered_generation_does_not_suppress_a_later_unknown_legacy_run(tmp_path):
