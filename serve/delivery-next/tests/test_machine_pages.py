@@ -60,14 +60,14 @@ from owlbear_delivery_next.machine_host import serve as host_start
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.runtimes import model_choices
+from owlbear_delivery_next.runtimes import copilot_cli, model_choices
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.runtimes.settings_seen import NAME as SEEN
 from owlbear_delivery_next.settings import carried, config, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
-from owlbear_delivery_next.state_store import decision_store, registry
+from owlbear_delivery_next.state_store import decision_store, registry, watch_reports
 from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store
-from owlbear_delivery_next.workflow_steps import decision, design, judges, pick, publish, retry
+from owlbear_delivery_next.workflow_steps import decision, design, judges, pick, publish, retry, visual
 from owlbear_delivery_next.workflow_steps.engine import Ctx
 
 if TYPE_CHECKING:
@@ -691,6 +691,46 @@ def test_settings_say_a_failed_read_of_the_shared_repository_whole(
         assert said == []
 
 
+@pytest.mark.browser
+def test_settings_show_a_failed_source_the_models_and_global_s_machine_settings_whole(
+    tmp_path: Path, monkeypatch, pds, whole_error
+) -> None:
+    """#921: a failed outside source, a failed read of the offered models and unreadable global machine settings each
+    show whole in their own Settings group."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    failed = f"RuntimeError: {whole_error}"
+    unreadable = f"the global settings are unreadable: {whole_error}"
+    at = datetime.now(UTC).isoformat()
+    reads = {"read_at": at, "succeeded_at": None, "notices": [],
+             "failures": [{"source": "Impeccable releases", "at": at, "error": failed}]}  # fmt: skip
+
+    def machine(route) -> None:
+        body = route.fetch().json()
+        body["resolved"]["notice"] = unreadable
+        route.fulfill(json=body)
+
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.route("**/api/next/config/read", lambda r: r.fulfill(json={"reads": reads}))
+        page.route("**/api/next/config/models", lambda r: r.fulfill(json={"models": [], "error": failed}))
+        page.route(f"{base}/api/next/machine", lambda r: machine(r) if r.request.method == "GET" else r.fallback())
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        source = page.locator(".reads-failure")
+        expect(source).to_be_visible()
+        assert source.text_content().split() == f"Could not read: Impeccable releases — {failed}".split()
+        pds.group(page, "agents")
+        models = page.locator("#models-note")
+        expect(models).to_be_visible()
+        assert models.text_content() == f"Could not read the offered models ({failed}); type a model name."
+        pds.group(page, "this-machine")
+        notice = page.locator("#machine-notice")
+        expect(notice).to_be_visible()
+        assert notice.text_content() == unreadable
+        assert said == []
+
+
 def machine_saved(page, pds, channel: str) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -891,6 +931,46 @@ def test_projects_says_why_a_move_of_the_shared_repository_stopped_whole(
         expect(said).to_have_count(1)
         assert said.text_content() == f"its Delivery state cannot be opened: {unfinished}; `owlbear data` finishes it"
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
+        assert broke == []
+
+
+@pytest.mark.browser
+def test_projects_lists_a_host_s_failed_readiness_checks_whole_under_its_reason(
+    tmp_path: Path, monkeypatch, pds, whole_error
+) -> None:
+    """#921: a project whose host failed readiness checks lists each whole, its lines kept, as running text; no list
+    shows with no host, while the host checks, or when every check passed."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    out = "OUT begins\nwhat gh printed on stdout, in the middle\nOUT ends"
+    failed = [
+        f"github sign-in: {whole_error} · fix: Run `gh auth login --hostname github.com`",
+        f"copilot cli: copilot: {out} · fix: {copilot_cli.FIX}",
+    ]
+    ready = {"checking": None, "passed": [], "failing": failed}  # "unhosted" has no host, so no ready
+    for name in ["unhosted", *ready]:
+        registry.register(clone(tmp_path / name))
+
+    def hosted(route) -> None:
+        body = route.fetch().json()
+        for p in body["projects"]:
+            p.pop("ready", None)
+            if p["name"] in ready:
+                p["ready"] = ready[p["name"]]
+        route.fulfill(json=body)
+
+    with browsing(monkeypatch, pds) as (page, base):
+        broke = errors(page)
+        page.route(f"{base}/api/next/projects", lambda r: hosted(r) if r.request.method == "GET" else r.fallback())
+        page.goto(f"{base}/projects#token=t")
+        expect(page.get_by_role("listitem", name="failing")).to_be_visible()
+        for name in ["unhosted", *ready]:
+            expect(page.get_by_role("listitem", name=name).get_by_role("list")).to_have_count(int(name == "failing"))
+        items = page.get_by_role("list", name="Failed readiness checks").get_by_role("listitem")
+        assert items.all_text_contents() == failed
+        assert items.evaluate_all("l => l.map(e => getComputedStyle(e).maxInlineSize)").count("none") == 0
+        page.set_viewport_size({"width": 375, "height": 800})
+        assert page.evaluate("document.documentElement.scrollWidth") <= 375
         assert broke == []
 
 
@@ -2848,6 +2928,47 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
             f"The design detector could not scan round 1 at {head[:7]}: {items[0]}",
             f"The design detector could not scan: {'; '.join(items[1:])}",
         } <= set(shown_texts(page, url, of, "Before and after"))  # the rerun lacks one
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)  # git, a real capture and a real browser
+def test_a_failed_shot_and_the_watchers_failures_show_whole_on_the_changes_page(  # noqa: PLR0913, PLR0917 - its fixtures
+    tmp_path: Path, monkeypatch, pds, failed_shots, capsys, whole_error: str
+) -> None:
+    """#921 C: Playwright's whole error in the log, "Before and after", the repair task and the status line; the
+    watcher's."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, c, of = ui_change(tmp_path, "true")
+    head, now = _git(Path(c.names.worktree), "rev-parse", "HEAD"), datetime.now(UTC)
+    c, result = visual.judged(c, head, "t", failed_shots, verdict=None, now=now)
+    found = [f"gone at 1280px: /gone did not answer: Error: {whole_error}",
+             f"go at 1280px: state go step 1 (click 'Go'): Error: {whole_error}"]  # fmt: skip
+    lost = [f"RuntimeError: {whole_error}", f"StoreError: {whole_error}\nanother"]
+    verdict = f"not recorded: 2 failed ({'; '.join(lost)})"
+    with store.lock("c1") as lock:
+        store.write(lock, loop.apply(c, result, now))
+    with store.db.write() as connection:
+        watch_reports.put("c1", watch_reports.summary_row("s1", "build", verdict.removeprefix("not recorded: ")))(
+            connection
+        )
+    out = capsys.readouterr().out
+    assert all(f"visual check: {f}\n" in out for f in found), out
+    reason = f"Fix: the visual check of {head[:7]} failed: {found[0]} (see gone at 1280px)"
+    with browsing(monkeypatch, pds) as (page, url):
+        said = errors(page)
+        opened(page, url, of, "c1")
+        pictures = page.locator("section", has_text="Before and after").last
+        expect(pictures).to_be_visible()
+        assert pictures.locator("li").all_text_contents() == found
+        assert page.locator("ol.plan > li").last.text_content() == f"to do{reason} from review"
+        watcher = page.locator("section.info").filter(has=page.get_by_role("heading", name="Watcher"))
+        assert watcher.locator("p-text", has_text="not recorded").text_content() == verdict
+        with store.lock("c1") as lock:  # a capture that fails before any shot is retried, its reason on the status line
+            store.write(lock, loop.apply(c, visual.broken(f"Error: {whole_error}"), now))
+        page.locator("#machine").get_by_role("button", name="Resume").click()
+        expect(page.locator("#detail .row.status")).to_contain_text(f"capture failed: Error: {whole_error}")
         assert said == []
 
 

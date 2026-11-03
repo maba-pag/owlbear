@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
 from owlbear_delivery_next.change_contracts.visual_records import PageError
+from owlbear_delivery_next.git.command_failure import failure
 
 if TYPE_CHECKING:
     from playwright.sync_api import ConsoleMessage, Page, Route, WebSocketRoute
@@ -96,7 +97,7 @@ def _act(page: Page, step: VisualStep, timeout_ms: int) -> str:
         page.wait_for_timeout(STEP_SETTLE_MS)
         page.wait_for_load_state("networkidle", timeout=timeout_ms)
     except Error as exc:
-        return str(exc).splitlines()[0][:200]
+        return failure(exc)
     return ""
 
 

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import threading
 import time
 from typing import TYPE_CHECKING, Any, get_args
@@ -16,6 +17,7 @@ from copilot.generated.rpc import ModelsListRequest
 
 from owlbear_delivery_next.change_contracts.models import Effort
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
+from owlbear_delivery_next.runtimes.sdk_spend import failed
 from owlbear_delivery_next.runtimes.sdk_teardown import call
 
 if TYPE_CHECKING:
@@ -25,6 +27,7 @@ FRESH = 3600.0  # seconds one successful read is reused
 WAIT = 30.0  # seconds one read may take, the runtime's start included
 AUTO = "auto"  # the runtime's own choice: Delivery pins each role's model and checks the usage names it
 EFFORTS = frozenset(get_args(Effort.__value__))
+_log = logging.getLogger(__name__)
 
 
 class Offered:
@@ -56,7 +59,8 @@ class Offered:
             ]
             self._kept, self._error = (time.monotonic(), models), ""
         except Exception as exc:  # noqa: BLE001 - without a new list the page keeps the last one, or a typed model
-            self._error = f"{type(exc).__name__}: {exc}"[:200]
+            self._error = failed(exc)
+            _log.warning("the offered models were not read: %s", self._error)
         return self._last()
 
 

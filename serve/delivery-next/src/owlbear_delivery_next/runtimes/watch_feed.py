@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import watch_policy
 from owlbear_delivery_next.change_contracts.permissions import view
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import spotter
 from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.runtimes import spotter_look
@@ -116,7 +117,7 @@ class Feed:
             key, seen = self._observed(kind, ev)
             self._judged(key, seen)
         except Exception as exc:  # noqa: BLE001 - an observation never ends the step
-            self.writer.lost(f"{type(exc).__name__}: {exc}"[:200])
+            self.writer.lost(failure(exc))
 
     def _spotted(self, spot: spotter.Spotter, kind: str, ev: Any) -> None:  # noqa: ANN401 - an SDK session event
         """*spot* takes *ev* in; a completed call with an effect outside is a state change, never a sample."""
@@ -180,7 +181,7 @@ class Feed:
                 if seen.reported and launcher in {seen.parent, seen.agent_id}:
                     self._judged(key, seen)
         except Exception as exc:  # noqa: BLE001 - an observation never ends the step
-            self.writer.lost(f"{type(exc).__name__}: {exc}"[:200])
+            self.writer.lost(failure(exc))
 
     def _judged(self, key: tuple[str, str], seen: _Seen) -> None:
         outcome = watch_policy.judge(seen.call, self.own, self.places)

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import truststore
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_update
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.git_files import probe_in
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
 
 SHAPER = "owlbear-shaper.agent.md"
 PUSH = frozenset({"WRITE", "MAINTAIN", "ADMIN"})
+CONFIG_FIX = "Repair the git configuration as git's error says, then run setup again"
 
 
 @dataclass(frozen=True)
@@ -48,7 +50,8 @@ def reach(host: str, timeout: float = 10) -> str | None:
     except urllib.error.HTTPError:
         return None
     except (urllib.error.URLError, OSError) as exc:
-        return str(getattr(exc, "reason", exc))
+        reason = getattr(exc, "reason", exc)  # a URLError's reason: the error itself, or its text
+        return failure(reason if isinstance(reason, BaseException) else exc)
     return None
 
 
@@ -58,25 +61,24 @@ def _network(host: str, error: str | None) -> Check:
     fix = "Connect to the network or set HTTPS_PROXY, then run setup again"
     if "certificate" in error.lower():
         fix = "A proxy intercepts TLS: set SSL_CERT_FILE to your company's CA bundle, then run setup again"
-    return Check("network", ok=False, detail=f"https://{host}: {error}"[:200], fix=fix)
+    return Check("network", ok=False, detail=f"https://{host}: {error}", fix=fix)
 
 
 def _sign_in_failure(host: str, text: str) -> Check:
-    """The failed account's lines of ``gh auth status``, not the last account it lists; a bad GH_TOKEN is named."""
+    """``gh auth status``'s whole failure; a bad GH_TOKEN in the failed account's lines, not another's, is named."""
     lines = [ln.strip() for ln in text.splitlines()]
     start = next((i for i, ln in enumerate(lines) if ln.startswith("X ")), len(lines))
     end = next((i for i in range(start, len(lines)) if not lines[i]), len(lines))
-    detail = " ".join(lines[start:end]) or " ".join(lines)[-160:]
     fix = f"Run `gh auth login --hostname {host}`"
-    if "GH_TOKEN" in detail:
+    if "GH_TOKEN" in "\n".join(lines[start:end] or lines):
         fix = f"Unset GH_TOKEN or set a valid token, then restart Delivery; or run `gh auth login --hostname {host}`"
-    return Check("github sign-in", ok=False, detail=detail[:200], fix=fix)
+    return Check("github sign-in", ok=False, detail=text.strip(), fix=fix)
 
 
 def _github(host: str, probe: Probe) -> list[Check]:
     code, text = probe(["gh", "--version"])
     if code:
-        return [Check("github cli", ok=False, detail=text[:120], fix="Install the GitHub CLI: https://cli.github.com")]
+        return [Check("github cli", ok=False, detail=text, fix="Install the GitHub CLI: https://cli.github.com")]
     out = [Check("github cli", ok=True, detail=text.splitlines()[0])]
     code, text = probe(["gh", "auth", "status", "--hostname", host])
     if code:
@@ -87,7 +89,7 @@ def _github(host: str, probe: Probe) -> list[Check]:
         repo = json.loads(text) if code == 0 else {}
     except ValueError:
         repo = {}
-    detail = f"{repo.get('nameWithOwner')}: {repo.get('viewerPermission')}" if repo else text[-160:]
+    detail = f"{repo.get('nameWithOwner')}: {repo.get('viewerPermission')}" if repo else text
     fix = "Point `origin` at a GitHub repository you can push to (check with `gh repo view`)"
     return [*out, Check("repository", ok=repo.get("viewerPermission") in PUSH, detail=detail, fix=fix)]
 
@@ -100,7 +102,7 @@ def _ssh(key: str, probe: Probe) -> Check:
     try:
         pub = pub_path.read_text() if pub_path else key.removeprefix("key::")
     except (OSError, UnicodeDecodeError) as exc:
-        return Check("commit signing", ok=False, detail=f"ssh key {pub_path}: {exc}"[:200], fix=setting)
+        return Check("commit signing", ok=False, detail=f"ssh key {pub_path}: {failure(exc)}", fix=setting)
     words = pub.split()
     if len(words) < 2 or not words[0].startswith(("ssh-", "ecdsa-", "sk-")):  # noqa: PLR2004 - type and key
         return Check(
@@ -113,11 +115,30 @@ def _ssh(key: str, probe: Probe) -> Check:
     )
 
 
+class _UnreadSettingError(Exception):
+    """Git could not read a setting; the message is its whole failure."""
+
+
+def _config(probe: Probe, *key: str) -> str:
+    """A git setting's value; an unset one, which git answers with exit 1, is empty; any other failure is raised."""
+    code, text = probe(["git", "config", *key])
+    if code not in {0, 1}:
+        raise _UnreadSettingError(text)
+    return "" if code else text.strip()
+
+
 def _signing(probe: Probe) -> Check:
-    if probe(["git", "config", "--bool", "commit.gpgsign"])[1].strip() != "true":
+    try:
+        return _signed(probe)
+    except _UnreadSettingError as exc:
+        return Check("commit signing", ok=False, detail=str(exc), fix=CONFIG_FIX)
+
+
+def _signed(probe: Probe) -> Check:
+    if _config(probe, "--bool", "commit.gpgsign") != "true":
         return Check("commit signing", ok=True, detail="not required")
-    fmt = probe(["git", "config", "gpg.format"])[1].strip() or "openpgp"
-    key = probe(["git", "config", "user.signingkey"])[1].strip()
+    fmt = _config(probe, "gpg.format") or "openpgp"
+    key = _config(probe, "user.signingkey")
     if not key:
         return Check(
             "commit signing", ok=False, detail=f"{fmt} required, no key", fix="Set `git config user.signingkey`"
@@ -153,14 +174,20 @@ def readiness(host: str, probe: Probe, network: str | None, copilot: str | None)
     """Every readiness fact, in the order a fix should be applied."""
     out = publishing(host, probe, network)
     code, text = probe([copilot, "--version"]) if copilot else (127, copilot_cli.missing())
-    line = text.splitlines()[0] if text else ""
-    detail = f"{copilot}: {line}" if copilot else line
+    said = text if code or not text else text.splitlines()[0]  # a failure whole; a version, its first line
+    detail = f"{copilot}: {said}" if copilot else said
     out.append(Check("copilot cli", ok=code == 0, detail=detail, fix=copilot_cli.FIX))
-    name, email = probe(["git", "config", "user.name"]), probe(["git", "config", "user.email"])
-    ok = name[0] == email[0] == 0 and bool(name[1] and email[1])
+    return [*out, _identity(probe), _signing(probe)]
+
+
+def _identity(probe: Probe) -> Check:
     fix = 'Run `git config --global user.name "Your Name"` and `git config --global user.email you@example.com`'
-    out.append(Check("git identity", ok=ok, detail=f"{name[1]} <{email[1]}>" if ok else "not set", fix=fix))
-    return [*out, _signing(probe)]
+    try:
+        name, email = _config(probe, "user.name"), _config(probe, "user.email")
+    except _UnreadSettingError as exc:
+        return Check("git identity", ok=False, detail=str(exc), fix=CONFIG_FIX)
+    ok = bool(name and email)
+    return Check("git identity", ok=ok, detail=f"{name} <{email}>" if ok else "not set", fix=fix)
 
 
 def ready(store: Store, repo: Path, *, carry: bool = False) -> list[Check]:
@@ -173,7 +200,7 @@ def ready(store: Store, repo: Path, *, carry: bool = False) -> list[Check]:
         prof = profile_share.checked(store, repo)
     except StoreError as exc:
         fix = "Restore the shared profile repository's write access, then restart Delivery"
-        failed = Check("profile detection", ok=False, detail=str(exc)[:200], fix=fix)
+        failed = Check("profile detection", ok=False, detail=failure(exc), fix=fix)
         return [failed, *_host_checks(store, repo)]
     carried = _carried(store) if carry else []
     return [*carried, *check(repo, prof)]
@@ -205,7 +232,7 @@ def _carried(store: Store) -> list[Check]:
         return [Check("legacy preferences", ok=False, detail=str(exc), fix=fix)]
     except (data_repo.DataRepoError, OSError) as exc:
         fix = "Restore the shared profile repository's access and local write access, then restart Delivery"
-        return [Check("legacy preferences", ok=False, detail=str(exc)[:200], fix=fix)]
+        return [Check("legacy preferences", ok=False, detail=failure(exc), fix=fix)]
     return []
 
 

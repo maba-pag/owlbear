@@ -89,7 +89,8 @@ async function adopt(p) {
   }
 }
 
-// One project: its name, folder and state; a replaced clone asks to be adopted, so Adopt is its one primary.
+// One project: its name, folder and state, and each readiness check its host failed, whole; a replaced clone asks to
+// be adopted, so Adopt is its one primary.
 function entry(p, all) {
   const twin = all.some((o) => o !== p && o.name === p.name);
   return html`<li class="project" aria-labelledby=${`p-${p.id}`}>
@@ -100,6 +101,8 @@ function entry(p, all) {
     </div>
     <p-text size="sm" class="path">${twin ? "This clone: " : ""}<code>${p.path}</code></p-text>
     ${p.reason ? html`<p-text size="sm">${p.reason}</p-text>` : nothing}
+    ${p.ready?.length ? html`<ul class="ready" aria-label="Failed readiness checks">
+      ${p.ready.map((failed) => html`<li>${failed}</li>`)}</ul>` : nothing}
     ${p.setup ? html`<p-inline-notification state="warning" dismiss-button="false" heading="Setup required"
       heading-tag="h3">The chats of ${p.name} cannot reach Delivery yet. Run
       <code>${p.setup}</code> in a terminal, then reload the project's VS Code window.</p-inline-notification>`

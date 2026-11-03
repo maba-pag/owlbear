@@ -24,6 +24,7 @@ from owlbear_delivery_next.change_contracts.round_records import MAX_FINDINGS
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.impeccable_runs.scratch import scratch
 from owlbear_delivery_next.local_system import git_files, preload
+from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import sdk_adapter, step_input
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import roles
@@ -243,7 +244,8 @@ def challenge(  # noqa: PLR0913 - the candidate, its upstream, the message, the 
         at = Path(tmp)
         code, said = git_files.probe_in(at)(["git", "init", "-q"])  # the window places its files only in a repository
         if code:
-            return Run(f"{label}-none", "error", detail=f"the challenger's worktree is no repository: {said[:200]}")
+            no_repo = f"the challenger's worktree is no repository: {said}"
+            return Run(f"{label}-none", "error", detail=no_repo, termination=Termination(confirmed=True))  # none ran
         upstream_skill(clone, c.pins["upstream"]["commit"], at / "upstream")
         cfg = sdk_adapter.Session(
             kind=StepKind.REVIEW, worktree=at, session_id=f"{label}-{uuid.uuid4().hex[:8]}", message=text,

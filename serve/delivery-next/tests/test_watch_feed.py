@@ -185,6 +185,25 @@ def test_events_after_the_intake_closed_are_counted_never_written(place) -> None
     assert (list(rows(place)), st.feed.writer.dropped) == (["c1"], 2)
 
 
+def test_an_observation_or_a_launch_that_fails_is_told_whole_at_once_and_in_the_summary_row(
+    place, monkeypatch, whole_error
+) -> None:
+    st = stepped(place, start("s1", parent="t1"), close=False)
+    failures = iter([RuntimeError(whole_error), ValueError(whole_error)])
+
+    def judge(*_a: Any) -> None:
+        raise next(failures)
+
+    monkeypatch.setattr(watch_feed.watch_policy, "judge", judge)
+    st.on_event(start("s2"))  # an observation
+    st.on_event(launched("t1", "explore"))  # the launch judges s1 again
+    said = [f"RuntimeError: {whole_error}", f"ValueError: {whole_error}"]
+    assert place.notes == [f"watcher c1: a report was not recorded: {e}" for e in said]  # before the close
+    st.feed.close()
+    summary = [r["verdict"] for r in rows(place).values() if r["source"] == "writer"]
+    assert summary == [f"not recorded: 2 failed ({'; '.join(said)})"]
+
+
 def test_with_the_master_switch_off_there_is_no_watcher_and_nothing_is_recorded(place, change_repo) -> None:
     st = stepped(place, start("c1"), write("c1", str(place.elsewhere / "x")), watch=False)
     assert (st.feed, rows(place), threads()) == (None, {}, [])

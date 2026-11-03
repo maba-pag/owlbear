@@ -4,7 +4,8 @@ Rows live in the database's ``watch`` table, never capped, one per Change, sessi
 the same call replaces its row, and one found inside after all removes it. Each session's reports go through its own
 writer thread in order, from a bounded queue the event callback never waits on. Closing it drains the queue for at
 most ``DRAIN`` seconds, then stops it; what was dropped or not written is one summary row, or a line in the runner's
-log when the database cannot take it in time. A report says a command was observed writing somewhere, never that the
+log when the database cannot take it in time. Each distinct error is told in the runner's log as it happens, whole, and
+the summary says them all. A report says a command was observed writing somewhere, never that the
 write happened.
 """
 
@@ -19,6 +20,7 @@ from dataclasses import astuple, dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.state_store.database import RETRY, BusyError, StoreError
 
 if TYPE_CHECKING:
@@ -114,7 +116,7 @@ class Writer:
         self.db, self.lock, self.note = db, lock, note
         self.queue: queue.Queue[Operation] = queue.Queue(maxsize=size)
         self.dropped = self.failed = 0  # operations refused (queue full or intake closed); writes that gave up
-        self.error = ""  # the last storage failure
+        self.errors: list[str] = []  # each distinct failure, in the order it first came
         self.open = True
         self._counted = threading.Lock()
         self._stopping = threading.Event()
@@ -141,9 +143,14 @@ class Writer:
             self.dropped += 1
 
     def lost(self, error: str) -> None:
-        """Count one report that could not be made or written."""
+        """Count one report that could not be made or written; a new error is told in the runner's log at once."""
         with self._counted:
-            self.failed, self.error = self.failed + 1, error
+            self.failed += 1
+            new = error not in self.errors
+            if new:
+                self.errors.append(error)
+        if new:
+            self.note(f"watcher {self.lock.slug}: a report was not recorded: {error}")
 
     def close(self, summary: Callable[[str], Report], deadline: float = DRAIN) -> None:
         """Close the intake, drain within *deadline*, stop the thread, then tell what was not recorded.
@@ -153,7 +160,7 @@ class Writer:
         self.open = False
         until = self._until = time.monotonic() + deadline
         drained = self._drained(until)
-        told, row, failed = "", None, self.failed
+        told, row, failed, errors = "", None, self.failed, list(self.errors)
         if drained and (said := self._said(0)):
             row = self._row = put(self.lock.slug, summary(said))
             self.queue.put_nowait(row)
@@ -164,14 +171,14 @@ class Writer:
         while not self.queue.empty():
             undrained += self.queue.get_nowait() is not row
         if row is not None:
-            self.failed = failed  # the summary row is no report: its own failure is not counted
+            self.failed, self.errors = failed, errors  # the summary row is no report: its own failure is not counted
         if (said := self._said(undrained)) and said != told:
             self.note(f"watcher {self.lock.slug}: {said}")
 
     def _said(self, undrained: int) -> str:
         parts = [f"{self.dropped} report{'s' if self.dropped != 1 else ''} dropped"] if self.dropped else []
         parts += [f"{undrained} not written by the deadline"] if undrained else []
-        parts += [f"{self.failed} failed ({self.error})"] if self.failed else []
+        parts += [f"{self.failed} failed ({'; '.join(self.errors)})"] if self.failed else []
         return "; ".join(parts)
 
     def _drained(self, until: float) -> bool:
@@ -218,9 +225,9 @@ class Writer:
             except BusyError as exc:
                 if not self._stopping.wait(RETRY):
                     continue
-                self.lost(str(exc))
+                self.lost(failure(exc))
             except (StoreError, RuntimeError, sqlite3.Error, OSError) as exc:
-                self.lost(str(exc) or type(exc).__name__)
+                self.lost(failure(exc))
             return
 
 

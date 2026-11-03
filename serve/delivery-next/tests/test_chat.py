@@ -381,17 +381,26 @@ def test_copilot_cli_skips_vscode_shim_and_names_it_when_alone(tmp_path, monkeyp
     assert check.detail == f"not found: only VS Code's shim {shim / 'copilot'}, which is not the CLI"
 
 
-def test_a_failed_sign_in_names_the_failed_account_not_the_last_one_listed():
-    status = (
-        "github.com\n  X Failed to log in to github.com using token (GH_TOKEN)\n  - Active account: true\n"
-        "  - The token in GH_TOKEN is invalid.\n\n  ✓ Logged in to github.com account ada (keyring)\n"
-        "  - Active account: false\n  - Token scopes: 'repo'"
-    )
+ENV_FAILED = "  X Failed to log in to github.com using token (GH_TOKEN)\n  - The token in GH_TOKEN is invalid.\n"
+SIGNED_IN = "  ✓ Logged in to github.com account ada (keyring)\n  - Token scopes: 'repo'\n"
+
+
+@pytest.mark.parametrize(
+    ("status", "fix"),
+    [
+        pytest.param(f"github.com\n{ENV_FAILED}\n{SIGNED_IN}", "Unset GH_TOKEN", id="token-failed"),
+        pytest.param(
+            f"github.com\n{SIGNED_IN.replace('keyring', 'GH_TOKEN')}\n{ENV_FAILED.replace('GH_TOKEN', 'keyring')}",
+            "Run `gh auth login",
+            id="keyring-failed",
+        ),
+    ],
+)
+def test_a_failed_sign_in_shows_every_account_and_fixes_the_failed_one(status, fix):
     probe = READY | {"gh auth status --hostname github.com": (1, status)}
     *_, sign_in = readiness.publishing("github.com", lambda argv: probe.get(" ".join(argv), (0, "")), None)
-    assert (sign_in.name, sign_in.ok) == ("github sign-in", False)
-    assert sign_in.detail.endswith("The token in GH_TOKEN is invalid.")
-    assert sign_in.fix.startswith("Unset GH_TOKEN")
+    assert (sign_in.name, sign_in.ok, sign_in.detail) == ("github sign-in", False, status.strip())
+    assert sign_in.fix.startswith(fix)
 
 
 def test_an_unusable_ssh_signing_key_is_a_failed_check_with_one_fix(tmp_path):

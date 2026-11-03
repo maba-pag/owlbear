@@ -20,7 +20,8 @@ from owlbear_delivery_next.change_contracts.models import VISUAL, Decision, Erro
 from owlbear_delivery_next.change_contracts.visual_records import PageError, VisualResult
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
-from owlbear_delivery_next.workflow_steps import browse, check, decision, design, engine
+from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.workflow_steps import browse, check, decision, design, engine, sessions
 from owlbear_delivery_next.workflow_steps.browse import root
 
 if TYPE_CHECKING:
@@ -108,8 +109,11 @@ def capture(  # noqa: C901, PLR0913 - one finding per failure of the nested shot
             page, origin, left = browser.new_page(viewport={"width": width, "height": height}), root(base), []
             seen: list[PageError] = []
 
-            def away() -> Shot | None:
-                gone = left[0] if left else root(page.url) if root(page.url) != origin else ""
+            def away(*, failing: bool = False) -> Shot | None:
+                # a page whose navigation failed stays at about:blank or chrome-error: it went nowhere else
+                stuck = failing and page.url.startswith(("about:blank", "chrome-error:"))
+                here = stuck or root(page.url) == origin
+                gone = left[0] if left else "" if here else root(page.url)
                 return Shot(s.name, width, error=f"state {s.name} left the preview ({gone})") if gone else None
 
             def rendered() -> Shot:
@@ -121,7 +125,7 @@ def capture(  # noqa: C901, PLR0913 - one finding per failure of the nested shot
                         answered = response.status if response else "nothing"
                         return Shot(s.name, width, error=f"{s.path} answered {answered}")
                     if why := browse.steps(page, s, timeout_ms):
-                        return away() or Shot(s.name, width, error=why)
+                        return away(failing=True) or Shot(s.name, width, error=why)
                     tall = page.evaluate("() => document.documentElement.scrollHeight")
                     if tall > MAX_HEIGHT:
                         return Shot(
@@ -130,8 +134,7 @@ def capture(  # noqa: C901, PLR0913 - one finding per failure of the nested shot
                     name, clip = f"{s.name}-{width}.png", {"x": 0, "y": 0, "width": width, "height": max(tall, height)}
                     page.screenshot(path=str(out / name), full_page=True, clip=clip, timeout=timeout_ms)
                 except Error as exc:
-                    first = str(exc).splitlines()[0][:200]
-                    return away() or Shot(s.name, width, error=f"{s.path} did not answer: {first}")
+                    return away(failing=True) or Shot(s.name, width, error=f"{s.path} did not answer: {failure(exc)}")
                 return away() or Shot(s.name, width, file=name)
 
             browse.listen(page, s, width, seen)  # before navigation, so load-time errors count
@@ -294,9 +297,13 @@ def judged(  # noqa: PLR0913 - one result from every visual input
     A failed shot, a new browser error or a correctness fail always goes back (R8). The detector's scans are recorded
     as evidence only (TD-77).
     """
-    failed = [f"{s.state} at {s.width}px: {s.error}" for s in shots if s.error or not s.file]
-    if not shots:
-        failed.append("no screenshot was captured")
+    failed = (
+        [f"{s.state} at {s.width}px: {s.error}" for s in shots if s.error or not s.file]
+        if shots
+        else ["no screenshot was captured"]
+    )
+    for line in failed:  # each failed shot, whole, in the runner's log as well
+        sessions.out(f"visual check: {line}")
     errors = [e for s in shots for e in s.errors]
     new, _old = classify(errors, c.before)
     raised = [f"{e.state} at {e.width}px: new {e.kind} error: {e.text[:300]}" for e in new]
@@ -328,4 +335,4 @@ def judged(  # noqa: PLR0913 - one result from every visual input
     shot = next((s for s in shots if s.error), None) or next((s for s in shots if s.file), None)
     named = f" (see {shot.file or f'{shot.state} at {shot.width}px'})" if shot else ""
     lines = sent or found or ["the screenshots were not judged"]
-    return c, decision.repair(c, f"Fix: the visual check of {head[:7]} failed: {lines[0][:200]}{named}", lines)
+    return c, decision.repair(c, f"Fix: the visual check of {head[:7]} failed: {lines[0]}{named}", lines)

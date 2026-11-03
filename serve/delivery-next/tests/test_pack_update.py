@@ -503,8 +503,34 @@ def test_a_replay_worktree_git_refuses_stops_the_replay_stage_with_gits_whole_wo
     job.state = job._blank() | {"state": "running", "run": "r1", "invocations": []}  # noqa: SLF001 - a running run
     with pytest.raises(pack_run.Stopped) as stopped:
         job.do("replay", lambda: pack_replay.replay(store, run=lambda _cfg: None))
-    said = f"the replay's worktree could not be made a git repository: {whole_error}"
+    refused = f"CalledProcessError: Command '['git', 'init', '-q']' returned non-zero exit status 128.\n{whole_error}"
+    said = f"the replay's worktree could not be made a git repository: {refused}"
     assert stopped.value.reason == f"replay: PackError: {said}"
+
+
+def test_a_challenger_worktree_git_refuses_stops_the_challenger_stage_with_gits_whole_words(
+    repo, monkeypatch, whole_error
+):
+    store, real = Store.open(repo), subprocess.run
+
+    def refusing(argv, *rest, **kw):
+        if argv == ["git", "init", "-q"]:
+            return subprocess.CompletedProcess(argv, 128, "", whole_error)
+        return real(argv, *rest, **kw)
+
+    monkeypatch.setattr(pack_candidate.git_files.subprocess, "run", refusing)
+    job = pack_job.Job(store, pack_job.Live())
+    job.state = job._blank() | {"state": "running", "run": "r1", "invocations": []}  # noqa: SLF001 - a running run
+    with pytest.raises(pack_run.Stopped) as stopped:
+        job.do(
+            "challenger",
+            lambda: pack_run._verdict(  # noqa: SLF001 - the challenger stage's own reading of its run
+                pack_candidate.challenge(store, candidate(), repo, "t", lambda *_a: pytest.fail("no session"))
+            ),
+        )
+    refused = f"CalledProcessError: Command '['git', 'init', '-q']' returned non-zero exit status 128.\n{whole_error}"
+    said = f"the challenger ended with error: the challenger's worktree is no repository: {refused}"
+    assert stopped.value.reason == f"challenger: PackError: {said}"
 
 
 def candidate(folder: Path | None = None, **pins) -> pack_candidate.Candidate:
