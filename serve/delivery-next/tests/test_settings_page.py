@@ -376,6 +376,11 @@ def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row
         expect(page.locator("#set-sessions")).to_be_visible()
         expect(panels).to_have_text(["Where you edit", "Sessions at once"])
         expect(none).to_be_hidden()
+        url = page.url.split("#")[0]
+        page.goto(f"{url}#project")
+        page.go_back()  # not by the groups' list: the focus goes to the Show menu, as the first panel is filtered away
+        expect(page).to_have_url(f"{url}#agents")
+        expect(pds.select(page, "Show").get_by_role("combobox")).to_be_focused()
         pds.group(page, "guardrails")  # the filter stays across the groups
         expect(rows).to_have_count(0)
         expect(none).to_have_text("No setting in this group is unset.")

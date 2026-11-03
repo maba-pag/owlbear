@@ -249,7 +249,10 @@ export function route(initial = false) {
   if (id && id !== group) {
     page.target = `#${CSS.escape(renamed(id))}`;
     state.filter = "all";  // the row it names may be one the filter hides
-  } else if (switched && !initial && !nav) page.target = "#groups ~ section h2";
+  } else if (switched && !initial && !nav) {
+    // A filter may hide the first panel, so the focus goes to its Show menu, which always shows.
+    page.target = LAYERED.includes(group) && state.filter !== "all" ? "#filter" : "#groups ~ section h2";
+  }
   show();
 }
 
