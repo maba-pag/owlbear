@@ -65,8 +65,9 @@ class Access:
     def destinations(self, repository: Path, remote: str, timeout: float) -> list[str]:
         """Every URL a push to *remote* goes to; one that would push as another account raises ``PushRefused``.
 
-        That is a URL that is neither HTTPS nor local (SSH, the key's account), an HTTPS one carrying its own password
-        or token, and any non-local one when no account was chosen because the remote's fetch URL is local.
+        That is a URL that is neither HTTPS nor local (SSH, the key's account), one carrying its own password or token,
+        an HTTPS one on another host than the account was chosen on, and any non-local one when no account was chosen
+        because the remote's fetch URL is local.
         """
         environment = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")}
         command = (resolve_git_executable(), "-C", str(repository), "remote", "get-url", "--push", "--all", remote)
@@ -87,16 +88,17 @@ class Access:
         for url in urls:
             if is_local(url):
                 continue
-            if not url.lower().startswith("https://"):
-                msg = (
-                    f"{repository}'s remote {remote} pushes to {url}, over SSH, where the SSH key's account would push "
-                    f"{who}. Give it an HTTPS push URL: {fix}"
-                )
-                raise PushRefused(msg)
-            if urlsplit(url).password is not None:  # the URL itself is never shown: it holds a secret
+            parts = urlsplit(url) if "://" in url else None
+            if parts is not None and parts.password is not None:  # the URL itself is never shown: it holds a secret
                 msg = (
                     f"{repository}'s remote {remote} has a push URL with a password or token in it, which Git would "
                     f"push with {who}. Give it one without: {fix}"
+                )
+                raise PushRefused(msg)
+            if parts is None or parts.scheme.lower() != "https":
+                msg = (
+                    f"{repository}'s remote {remote} pushes to {url}, over SSH, where the SSH key's account would push "
+                    f"{who}. Give it an HTTPS push URL: {fix}"
                 )
                 raise PushRefused(msg)
             if not self.login:
@@ -104,6 +106,12 @@ class Access:
                     f"{repository}'s remote {remote} pushes to {url} although its URL is local, so no account was "
                     f"chosen for it. Give it a local push URL, or an HTTPS URL to push as the setting's account: "
                     f"git -C {repository} remote set-url {remote} https://<host>/<owner>/<name>.git"
+                )
+                raise PushRefused(msg)
+            if parts.hostname != self.host:
+                msg = (
+                    f"{repository}'s remote {remote} pushes to {url}, on {parts.hostname}, not {self.host}, where "
+                    f"{self.login} was chosen from its URL. Give it a push URL on {self.host}: {fix}"
                 )
                 raise PushRefused(msg)
         return urls

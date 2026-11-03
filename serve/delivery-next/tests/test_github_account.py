@@ -219,6 +219,8 @@ def test_a_push_that_would_leave_over_ssh_is_refused_naming_the_fix(repo, setup)
     ("url", "login", "said"),
     [
         ("https://boecht:tok-old@github.com/boecht/sandbox.git", "boecht", "a password or token in it"),
+        ("ssh://boecht:tok-old@github.com/boecht/sandbox.git", "boecht", "a password or token in it"),
+        ("https://ghe.acme.test/boecht/sandbox.git", "boecht", "not github.com, where boecht was chosen"),
         ("https://example.com/boecht/sandbox.git", "", "no account was chosen for it"),
     ],
 )
