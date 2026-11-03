@@ -318,7 +318,8 @@ def test_a_fresh_sdk_session_starts_with_its_lessons_once(memory: Path) -> None:
     assert client.sends[0].startswith(f"{lessons.HEADING}\n{lessons.FRAME}")
     assert client.sends[0].endswith("\n\nm")
     ref = [{"id": entry(1).id, "revision": entry(1).revision}]
-    assert events == [selected(status="shown", lessons=ref), exposed("s1", entry(1).id)]
+    picked = selected(status="shown", lessons=ref) | {"session": "s1"}  # the opened session names its events (#718)
+    assert events == [picked, exposed("s1", entry(1).id)]
 
 
 def test_a_failed_first_send_logs_the_selection_and_no_exposure(memory: Path) -> None:

@@ -178,7 +178,9 @@ class _Step(StepTools):
         self.loop.call_soon_threadsafe(self.changed.set)
 
     def log(self, **event: Any) -> None:  # noqa: ANN401 - JSON values; the SDK calls handlers on this loop
-        self.cfg.journal.event({"at": datetime.now(UTC).isoformat(timespec="seconds"), **event})
+        """Journal *event*; once the session opened it names that session and its role, so its stage can be told."""
+        who = {"session": self.run.session_id, "role": role_of(self.cfg)} if self.session is not None else {}
+        self.cfg.journal.event({"at": datetime.now(UTC).isoformat(timespec="seconds"), **who, **event})
 
     def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "") -> None:
         self.gate.finish(ending, payload, detail)
