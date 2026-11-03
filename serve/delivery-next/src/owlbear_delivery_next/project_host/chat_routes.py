@@ -29,8 +29,8 @@ def brief(change: Change) -> dict[str, Any]:
     checks = [{"name": p.id, "covers": p.criteria, "owner": f"check:{p.id}" in owner} for p in change.checks]
     out |= {"specified": [k.id for k in b.criteria if k.id in owner], "states": states, "person_checks": checks}
     # a candidate the owner adopts in chat, such as a merged Change's follow-up; the rest went their path (TD-185)
-    shown = {"field", "key", "remove", "old", "new", "why"}
-    proposed = [i.model_dump(include=shown) | {"verdict": a.verdict or "not judged"}
+    shown = {"field", "key", "remove", "old", "new", "why", "path", "actions", "steps", "covers", "visual", "question"}
+    proposed = [i.model_dump(mode="json", include=shown) | {"verdict": a.verdict or "not judged"}
                 for a in change.amendments if a.state == "recorded" for i in a.items]  # fmt: skip
     out |= {"challenge": brief_rounds.status(change)}  # TD-221: the brief challenge's findings by ID
     return out | {"criteria": [k.text for k in b.criteria], "proposed_wording": proposed}

@@ -15,6 +15,7 @@ from owlbear_delivery_next.change_contracts.amend_tools import (
     CandidateResult,
     VerdictResult,
 )
+from owlbear_delivery_next.change_contracts.amendment_records import AmendedItem, Amendment
 from owlbear_delivery_next.change_contracts.decision_records import BriefDecision, DecisionBaseline
 from owlbear_delivery_next.change_contracts.evidence import next_check, review_valid, visual_valid
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, BriefApproval, IntentItem, ObjectionItem
@@ -784,3 +785,21 @@ def test_a_version_approved_before_checks_were_kept_with_it_still_reverts_a_chec
     amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge-2", NOW)
 
     assert [(p.id, p.steps, p.expect, p.criteria) for p in c.checks] == was
+
+
+def test_the_chat_reads_back_a_left_candidate_with_its_whole_shape():
+    c = change()
+    steps = [VisualStep(do="click", target="Team")]
+    c.amendments = [Amendment(id="A1", at=NOW, step="merge", source="worker", base=3, state="recorded", items=[
+        AmendedItem(field="visual", new="shows the team", path="/team", actions=steps),
+        AmendedItem(field="check", new="it greets", steps=["open /"], covers=["AC-1"], visual=True),
+        AmendedItem(field="decision", new="SQLite", question="Which store?"),
+    ])]  # fmt: skip
+
+    said = chat_routes.brief(c)["proposed_wording"]
+
+    assert [(x["path"], x["actions"], x["steps"], x["covers"], x["visual"], x["question"]) for x in said] == [
+        ("/team", [{"do": "click", "target": "Team", "text": ""}], [], [], None, ""),
+        ("", None, ["open /"], ["AC-1"], True, ""),
+        ("", None, [], [], None, "Which store?"),
+    ]
