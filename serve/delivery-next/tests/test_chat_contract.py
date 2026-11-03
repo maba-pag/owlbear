@@ -372,8 +372,8 @@ class Slow:
     """A virtual clock for a chat's waits: every request takes its whole 15 s allowance, a pause its own length."""
 
     def __init__(self, monkeypatch, answers: dict[str, object], host=Answering) -> None:
-        self.now, self.on_pause = 0.0, None
-        self.chat, self.host = chat_client.Chat(Path("shop"), Path("home")), host(answers)
+        self.now = 0.0
+        self.chat, self.host = chat_client.Chat(Path("shop"), Path("home")), host(dict(answers))
         pids = itertools.count(100)  # a host that restarts at every request: each one asks its contract again
         monkeypatch.setattr(self.chat, "record", lambda: record().model_copy(update={"pid": next(pids)}))
         monkeypatch.setattr(self.chat, "send", self.send)
@@ -386,8 +386,6 @@ class Slow:
 
     def pause(self, seconds: float) -> None:
         self.now += seconds
-        if self.on_pause:
-            self.on_pause(self.host.answers)
 
 
 def test_a_challenge_wait_ends_under_the_clients_limit_with_every_request_taking_its_whole_allowance(monkeypatch):
@@ -439,14 +437,22 @@ def test_a_verdict_that_lands_after_the_last_running_read_is_told_as_the_verdict
     assert "owner_action" not in out
 
 
-@pytest.mark.parametrize("failing", ["GET /chat/challenge/c1-shop", "GET /changes"])
-def test_a_read_that_fails_keeps_its_error_text_and_says_the_outcome_is_unknown(monkeypatch, failing):
-    slow = Slow(monkeypatch, WAITING)
-    handing_over = (503, {"error": "the host is handing over"})
-    if failing == "GET /changes":  # it fails only at the end of the wait: its first read, for the Change, succeeds
-        slow.on_pause = lambda answers: answers.update({failing: handing_over})
-    else:
-        slow.host.answers[failing] = handing_over
+class Cutting(Answering):
+    """A host that cannot answer about the Changes the second time: the row read at the end of a wait."""
+
+    def __call__(self, *args, **kwargs):
+        out = super().__call__(*args, **kwargs)
+        second = [p for _, p, _ in self.got].count("/changes") == 2  # noqa: PLR2004
+        return (503, {"error": "the host is handing over"}) if second else out
+
+
+@pytest.mark.parametrize(("host", "answers"), [
+    (Answering, {"GET /chat/challenge/c1-shop": (503, {"error": "the host is handing over"})}),  # from the first read
+    (Cutting, {}),  # only the row read at the end of the wait
+])  # fmt: skip
+def test_a_read_that_fails_keeps_its_error_text_and_says_the_outcome_is_unknown(monkeypatch, host, answers):
+    slow = Slow(monkeypatch, WAITING | answers, host)
     out = slow.chat.await_challenge("c1", 2)
-    assert out["error"] == "the host is handing over"
-    assert out["next"] == chat_client.UNKNOWN_OUTCOME
+    assert out == {"error": "the host is handing over", "next": chat_client.UNKNOWN_OUTCOME}
+    if host is Cutting:
+        assert [p for _, p, _ in slow.host.got].count("/changes") == 2  # noqa: PLR2004 - the one that failed was asked
