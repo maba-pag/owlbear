@@ -4,15 +4,20 @@ import json
 import os
 import subprocess
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.commands import cli
-from owlbear_delivery_next.local_system import data_place, data_repo, git_run, local_home
+from owlbear_delivery_next.local_system import codebase, data_place, data_repo, git_run, local_home
 from owlbear_delivery_next.local_system.storage_io import open_lock
-from owlbear_delivery_next.machine_host import serve
+from owlbear_delivery_next.machine_host import app, project, serve
+from owlbear_delivery_next.machine_host.machine import Machine
+from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.state_store import registry
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -323,3 +328,134 @@ def test_the_host_clones_a_remote_only_pointer_in_the_background_then_loads_the_
     assert said[2:] == [f"shared data: cloned {gone} into {data_place.default()}"]
     assert done == ["carry", "retry"]
     assert record() == {"repository": str(data_place.default().resolve()), "remote": gone}
+
+
+OUT = "OUT begins\nwhat git printed on stdout, in the middle\nOUT ends"
+
+
+def git_whole(args: tuple[str, ...], stderr: str, code: int = 128) -> str:
+    """A failed Git command as `CalledProcessError` words it, with both streams."""
+    head = f"CalledProcessError: Command '{['git', *args]}' returned non-zero exit status {code}."
+    return f"{head}\nstderr:\n{stderr}\nstdout:\n{OUT}"
+
+
+def git_fails(monkeypatch, stderr: str, fails) -> list[tuple[str, ...]]:
+    """Makes the checkout's Git commands a picker chooses fail with distinct stdout and stderr; the args they ran."""
+    real, ran = data_place._git, []  # noqa: SLF001 - the checkout's own Git calls are the boundary
+
+    def git(cwd, *args, until=None):
+        if fails(args):
+            ran.append(args)
+            return subprocess.CompletedProcess(["git", *args], 128, OUT + "\n", stderr + "\n")
+        return real(cwd, *args, until=until)
+
+    monkeypatch.setattr(data_place, "_git", git)
+    return ran
+
+
+def clone_fails_once(monkeypatch, stderr: str) -> list[tuple[str, ...]]:
+    real, ran = git_run.run, []
+
+    def run(cwd, *args, **kw):
+        if args[:1] == ("clone",) and not ran:
+            ran.append(args)
+            return subprocess.CompletedProcess(["git", *args], 128, OUT + "\n", stderr + "\n")
+        return real(cwd, *args, **kw)
+
+    monkeypatch.setattr(git_run, "run", run)
+    return ran
+
+
+def reason(tmp_path: Path, monkeypatch) -> str:
+    """The reason the machine's project list (the Projects page's API) gives for a project that cannot load."""
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    path = tmp_path / "shop"
+    if not path.exists():
+        git(tmp_path, "init", "-q", str(path))
+        git(path, "commit", "-q", "--allow-empty", "-m", "i")
+        registry.register(path.resolve())
+    at = datetime.now(UTC)
+    machine = Machine(HostRecord(url="http://127.0.0.1:9/", token="t", pid=1, started_at=at, code=codebase.CURRENT))  # noqa: S106
+    try:
+        machine.load_all()
+        http = TestClient(app.create(machine), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"})
+        (shown,) = http.get("/api/next/projects").json()["projects"]
+    finally:
+        machine.stop_all()
+    assert shown["state"] == "failed"
+    return shown["reason"]
+
+
+def test_a_failed_clone_says_git_whole_in_the_projects_reason_and_the_host_log(
+    tmp_path: Path, url: str, monkeypatch, whole_error, capsys
+) -> None:
+    """#921: a clone's failure, a path in it, arrives whole at `owlbear data`, the project's reason and the host log."""
+    stderr = f"fatal: {tmp_path / 'owlbear-data.git' / 'objects'} cannot be read\n{whole_error}"
+    ran = clone_fails_once(monkeypatch, stderr)
+    assert cli.main(["data", url]) == 1
+    why = git_whole(ran[0], stderr)
+    assert f"cloning {url} failed: {why}" in capsys.readouterr().out
+    assert record() == {"remote": url, "failed": why}
+    assert reason(tmp_path, monkeypatch) == (
+        f"its Delivery state cannot be opened: the shared repository {url} is not cloned yet: {why}"
+    )
+    ran = clone_fails_once(monkeypatch, stderr)
+    said = []
+    stopping = SimpleNamespace(is_set=lambda: False, wait=lambda _seconds: False)
+    serve._cloning(SimpleNamespace(stopping=stopping, say=said.append, carry=list, retry=list))  # noqa: SLF001
+    every = serve.PROVISION_RETRY // 60
+    assert said == [
+        f"shared data: cloning {url} failed: {git_whole(ran[0], stderr)}; tried again every {every} minutes",
+        f"shared data: cloned {url} into {data_place.default()}",
+    ]
+
+
+def moved_to_the_default_place(tmp_path: Path, url: str) -> tuple[Path, Path]:
+    """A move that stopped after its rename: only the destination, ``~/.owlbear/data``, is left."""
+    source, dest = tmp_path / "old-data", data_place.default()
+    git(tmp_path, "clone", "-q", url, str(source))
+    git(source, "worktree", "add", "-q", str(tmp_path / "linked"))
+    home().mkdir(parents=True, exist_ok=True)
+    data_place.pointer().write_text(json.dumps({"remote": url, "moving_from": str(source), "moving_to": str(dest)}))
+    source.rename(dest)
+    return source, dest
+
+
+def test_a_failed_worktree_repair_says_git_whole_at_owlbear_data_host_start_and_the_projects_reason(
+    tmp_path: Path, url: str, monkeypatch, whole_error, capsys
+) -> None:
+    """#921: relinking after a move says the failed `git worktree repair` whole, and the pointer keeps it until done."""
+    source, dest = moved_to_the_default_place(tmp_path, url)
+    real = data_place._git  # noqa: SLF001
+    ran = git_fails(monkeypatch, whole_error, lambda args: args == ("worktree", "repair"))
+    why = git_whole(("worktree", "repair"), whole_error)
+    moved = f"the shared repository was moved to {dest}, but {why}; fix it, then run `owlbear data` again"
+
+    assert cli.main(["data"]) == 1
+    assert capsys.readouterr().out == f"Shared data: problem: {moved}\n"
+    said = []
+    assert serve._provisioned(SimpleNamespace(say=said.append)) is False  # noqa: SLF001
+    assert said == [f"shared data: {moved}"]
+    assert (len(ran), record()["failed"]) == (2, why)
+    unfinished = f"moving the shared repository from {source} to {dest} is not finished: {why}"
+    unfinished += "; `owlbear data` finishes it"
+    assert reason(tmp_path, monkeypatch) == f"its Delivery state cannot be opened: {unfinished}"
+
+    monkeypatch.setattr(data_place, "_git", real)  # repaired: the next `owlbear data` finishes the move
+    assert cli.main(["data"]) == 0
+    assert record() == {"repository": str(dest), "remote": url, "moved_from": str(source)}
+
+
+def test_an_unreadable_checkout_says_git_whole_in_owlbear_data_s_inventory(
+    tmp_path: Path, url: str, monkeypatch, whole_error, capsys
+) -> None:
+    """#921: a failed inventory command arrives whole in what `owlbear data` prints."""
+    root = tmp_path / "data"
+    git(tmp_path, "clone", "-q", url, str(root))
+    assert data_place.point(root) == data_repo.DataRepo(root.resolve())
+    ran = git_fails(monkeypatch, whole_error, lambda args: args[:2] == ("status", "--porcelain=v1"))
+
+    cli.main(["data"])
+
+    assert len(ran) == 1
+    assert f"{root.resolve()} cannot be read: {git_whole(ran[0], whole_error)}" in capsys.readouterr().out

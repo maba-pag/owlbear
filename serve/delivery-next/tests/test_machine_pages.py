@@ -54,8 +54,9 @@ from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import pack_files
-from owlbear_delivery_next.local_system import codebase, data_repo, local_home, processes
+from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home, processes
 from owlbear_delivery_next.machine_host import app, project
+from owlbear_delivery_next.machine_host import serve as host_start
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host, HostRecord
@@ -815,6 +816,48 @@ def test_projects_shows_each_clone_s_state_and_setup_and_adopting_the_shown_one_
         adopted = next(p for p in registry.load().projects if p.path == old.path and p.id != old.id)
         expect(page).to_have_url(f"{base}/projects?project={adopted.id}")
         expect(page.get_by_role("listitem", name="delta").locator("p-tag")).to_have_text("shown now")
+
+
+@pytest.mark.browser
+def test_projects_says_why_a_move_of_the_shared_repository_stopped_whole(
+    tmp_path: Path, monkeypatch, pds, whole_error
+) -> None:
+    """#921: a move whose `git worktree repair` failed at host start shows that failure whole in the project's reason,
+    its paths kept, at 390 pixels."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    registry.register(clone(tmp_path / "shop"))
+    remote, source, dest = tmp_path / "data.git", tmp_path / "old-data", data_place.default()
+    for args in (["init", "-q", "--bare", str(remote)], ["clone", "-q", str(remote), str(source)],
+                 ["-C", str(source), "commit", "-q", "--allow-empty", "-m", "i"],
+                 ["-C", str(source), "worktree", "add", "-q", str(tmp_path / "linked")]):  # fmt: skip
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
+    local_home.root().mkdir(parents=True, exist_ok=True)
+    data_place.pointer().write_text(json.dumps({"moving_from": str(source), "moving_to": str(dest)}))
+    source.rename(dest)
+    real = data_place._git  # noqa: SLF001 - the checkout's own Git calls are the boundary
+    stderr = f"error: {tmp_path / 'linked' / '.git'} is not a worktree\n{whole_error}"
+
+    def git(cwd, *args, until=None):
+        if args == ("worktree", "repair"):
+            return subprocess.CompletedProcess(["git", *args], 1, "OUT begins\nOUT ends\n", stderr)
+        return real(cwd, *args, until=until)
+
+    monkeypatch.setattr(data_place, "_git", git)
+    host_start._provisioned(SimpleNamespace(say=lambda _line: None))  # noqa: SLF001
+    failed = (
+        "CalledProcessError: Command '['git', 'worktree', 'repair']' returned non-zero exit status 1."
+        f"\nstderr:\n{stderr}\nstdout:\nOUT begins\nOUT ends"
+    )
+    unfinished = f"moving the shared repository from {source} to {dest} is not finished: {failed}"
+    with browsing(monkeypatch, pds, width=390) as (page, base):
+        page.goto(f"{base}/projects#token=t")
+        shop = page.get_by_role("listitem", name="shop")
+        expect(shop.locator("p-tag")).to_have_text("failed")
+        said = shop.locator("p-text").filter(has_text="is not finished")
+        expect(said).to_have_count(1)
+        assert said.text_content() == f"its Delivery state cannot be opened: {unfinished}; `owlbear data` finishes it"
+        assert page.evaluate("document.documentElement.scrollWidth") <= 390
 
 
 @pytest.mark.browser
