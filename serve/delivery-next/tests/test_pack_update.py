@@ -524,6 +524,38 @@ def test_an_unverified_session_end_says_its_problems_whole(repo, tmp_path, whole
     assert (answer.status_code, answer.json()) == (409, {"detail": said})
 
 
+@pytest.mark.parametrize("fails", ["noted", "command"])
+def test_a_replay_that_fails_answers_its_whole_error(repo, whole_error, fails) -> None:
+    store = Store.open(repo)
+    if fails == "noted":
+        broke = OSError(whole_error)
+        broke.add_note(f"the session's teardown also failed: OSError: {whole_error}")  # as loop_owner.run adds it
+        said = f"OSError: {whole_error}\nthe session's teardown also failed: OSError: {whole_error}"
+    else:
+        broke = subprocess.CalledProcessError(1, ["git", "worktree", "add"], "", whole_error)
+        said = (
+            f"CalledProcessError: Command '['git', 'worktree', 'add']' returned non-zero exit status 1.\n{whole_error}"
+        )
+
+    def replay(_store, _change, **_kw):
+        raise broke
+
+    @contextlib.contextmanager
+    def exclusive():
+        yield
+
+    job = SimpleNamespace(
+        exclusive=exclusive,
+        keeps=lambda _path: False,
+        live=SimpleNamespace(replay=replay),
+        count_replay=lambda _n: None,
+    )
+    app = FastAPI()
+    app.include_router(pack_routes.router(store, job))
+    answer = TestClient(app, base_url="http://127.0.0.1").post("/impeccable/replay")
+    assert (answer.status_code, answer.json()) == (422, {"detail": said})
+
+
 def test_a_replay_worktree_git_refuses_stops_the_replay_stage_with_gits_whole_words(repo, monkeypatch, whole_error):
     store, real = Store.open(repo), subprocess.run
 

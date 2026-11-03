@@ -24,6 +24,7 @@ from owlbear_memory import MemoryEngine, MemoryState
 from owlbear_delivery_next.change_contracts import memory_curation_tools, tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import data_repo, local_home, maintenance
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import curation_block, curation_resume, curation_snapshots, curation_tree
@@ -329,7 +330,7 @@ class Curation:
                 refused = self._one(folder, started, key)
             except Exception as exc:  # noqa: BLE001 - one folder's failure never strands the others
                 _log.exception("memory curation of %s failed (%s)", folder, key)
-                why = f"{type(exc).__name__}: {exc}"
+                why = failure(exc)
                 failed = FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why, key=key)
                 self._save(folder, failed)  # its session, if one began, is the ledger's lease under this key
             with self.lock:  # a follow-up joins before the run leaves, so the queue never looks empty between

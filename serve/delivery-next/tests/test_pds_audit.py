@@ -655,13 +655,15 @@ def test_a_failed_hand_audit_shows_its_whole_reason(tmp_path, monkeypatch, caplo
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     def failing(_self):
-        raise RuntimeError(whole_error)
+        broke = RuntimeError(whole_error)
+        broke.add_note(f"the session's teardown also failed: OSError: {whole_error}")  # as loop_owner.run adds it
+        raise broke
 
     monkeypatch.setattr(hand_audit.Hand, "_audit", failing)
     h, _http, _seen = hand(tmp_path)
     caplog.set_level(logging.WARNING, logger=hand_audit.__name__)
     h.start()
-    reason = f"RuntimeError: {whole_error}"
+    reason = f"RuntimeError: {whole_error}\nthe session's teardown also failed: OSError: {whole_error}"
     assert settled(h)["reason"] == reason
     assert [r.getMessage() for r in caplog.records] == [f"PDS hand audit failed: {reason}"]  # with no page reading
     sock = socket.socket()

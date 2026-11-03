@@ -27,6 +27,7 @@ from owlbear_decisions import Decision, Scope, State, new_id
 from owlbear_delivery_next.change_contracts import pick_tools
 from owlbear_delivery_next.change_contracts.decision_records import Pick
 from owlbear_delivery_next.change_contracts.decision_wording import problem
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home, processes
 from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter
 from owlbear_delivery_next.settings import roles
@@ -157,7 +158,7 @@ def _chat(
             resolved, project or "global", pick.message(None, found, log, ASKED, question), sdk_adapter.Journal()
         )
     except Exception as exc:  # noqa: BLE001 - a lookup that cannot run is failed, never "none apply"
-        return {"failed": f"{type(exc).__name__}: {exc}"}, None
+        return {"failed": failure(exc)}, None
     return answered(done, found), done
 
 
@@ -295,7 +296,7 @@ class Asked:
             with spend_ledger.at(self.place):
                 said, done = worker(self.store, self.lock, self.current(), question)
         except Exception as exc:  # noqa: BLE001 - a lookup that cannot run is failed, never "none apply"
-            said, done = {"failed": f"{type(exc).__name__}: {exc}"}, None
+            said, done = {"failed": failure(exc)}, None
         if "failed" in said:
             at = datetime.now(UTC).isoformat()
             self.store.log(self.lock, self.lock.slug, {"event": "lookup-failed", "at": at, "reason": said["failed"]})

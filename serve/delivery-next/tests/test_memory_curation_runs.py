@@ -1,6 +1,7 @@
 """Item 5 slice 4: automatic memory curation runs one curator session per memory folder of the shared repository."""
 
 import json
+import logging
 import threading
 import time
 from datetime import UTC, datetime, timedelta
@@ -211,22 +212,32 @@ def test_an_entry_saved_during_a_run_stays_due_and_a_trigger_meanwhile_runs_the_
     assert (len(runs), job.due("shop")) == (2, False)  # the follow-up saw it
 
 
-def test_one_folder_that_fails_never_strands_the_next_and_a_restart_ends_interrupted_runs(repo) -> None:
+def test_one_folder_that_fails_never_strands_the_next_and_a_restart_ends_interrupted_runs(
+    repo, caplog, whole_error
+) -> None:
+    note = f"the session's teardown also failed: OSError: {whole_error}"
+
     def run(cfg) -> Run:
         if "owlbear" in cfg.session_id:
-            broke = "the runtime broke"
-            raise RuntimeError(broke)
+            broke = RuntimeError(whole_error)
+            broke.add_note(note)  # as loop_owner.run adds it
+            raise broke
         return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
                    termination=Termination(confirmed=True))  # fmt: skip
 
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
-    job.start("all")
-    drained(job)
+    with caplog.at_level("ERROR", logger=curation.__name__):
+        job.start("all")
+        drained(job)
     states = {f["folder"]: (f["state"], f["reason"]) for f in job.read()["folders"]}
     assert states == {
-        "owlbear": ("failed", "RuntimeError: the runtime broke"),
+        "owlbear": ("failed", f"RuntimeError: {whole_error}\n{note}"),
         "shop": ("failed", curation.LEFT),
     }
+    (logged,) = caplog.records
+    assert logged.getMessage() == f"memory curation of owlbear failed ({job.load().folders['owlbear'].key})"
+    traceback = logging.Formatter().formatException(logged.exc_info)
+    assert traceback.endswith(f"RuntimeError: {whole_error}\n{note}")  # the traceback says the note too
     assert job.slots.counts(curation.SLOT)[2] == 1
 
     job._save("shop", curation.FolderRun(state="running"))  # noqa: SLF001 - OwlBear stops while it runs

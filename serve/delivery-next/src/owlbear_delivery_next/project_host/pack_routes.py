@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.impeccable.detector import DetectorError
 from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_job, pack_replay
@@ -274,7 +275,7 @@ def _replay(
         except pack_replay.ReplayError as exc:
             raise HTTPException(409, str(exc)) from exc
         except REPLAY_FAILURES as exc:
-            raise HTTPException(422, str(exc)) from exc
+            raise HTTPException(422, failure(exc)) from exc
         return {"ok": r.ok, "report": f"calibration replay: {pack_candidate.said_replay(r)}"}
 
 
