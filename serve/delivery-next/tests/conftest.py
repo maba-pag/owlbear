@@ -509,22 +509,21 @@ def git_launches(monkeypatch) -> GitLaunches:
 
 
 class GitRuns:
-    """``git_run``'s ``subprocess``: each Git run that reaches a remote is recorded with its environment and timeout."""
+    """``git_run``'s ``subprocess``: each Git run that reaches a remote is recorded with its environment."""
 
     def __init__(self) -> None:
-        self.seen: list[tuple[tuple[str, ...], dict[str, str], float]] = []
-        self.run = self._run
+        self.seen: list[tuple[tuple[str, ...], dict[str, str]]] = []
 
     def __getattr__(self, name: str) -> Any:
         return getattr(subprocess, name)
 
-    def _run(self, command: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+    def run(self, command: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         if git_run._remote(tuple(command[1:])):  # noqa: SLF001 - the verb as git_run reads it
-            self.seen.append((tuple(command), dict(kwargs["env"]), kwargs["timeout"]))
+            self.seen.append((tuple(command), dict(kwargs["env"])))
         return subprocess.run(command, **kwargs)  # noqa: S603, PLW1510 - the run under test, unchanged
 
     def verbs(self) -> list[str]:
-        return [git_run._remote(argv[1:]) for argv, _, _ in self.seen]  # noqa: SLF001
+        return [git_run._remote(argv[1:]) for argv, _ in self.seen]  # noqa: SLF001
 
 
 @pytest.fixture

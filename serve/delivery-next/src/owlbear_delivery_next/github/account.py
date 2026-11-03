@@ -38,7 +38,6 @@ class AccountMissing(ProviderError):  # noqa: N818 - it names the owner's questi
 
     def __init__(self, detail: str) -> None:
         super().__init__(FailureCode.AUTHENTICATION_REQUIRED, "github account", detail, retry_safe=False)
-        self.detail = detail
 
 
 @dataclass(frozen=True)
@@ -102,25 +101,13 @@ def host_of(repository: Path) -> str:
         return "github.com"
 
 
-class _Clock:
-    """What remains of one resolution's deadline; none left raises ``AccountMissing`` before another call."""
-
-    def __init__(self, until: float | None) -> None:
-        self.until = until
-
-    def left(self, doing: str) -> float:
-        if self.until is None:
-            return TIMEOUT
-        left = self.until - time.monotonic()
-        if left <= 0:
-            msg = f"no time was left to {doing}"
-            raise AccountMissing(msg)
-        return min(left, TIMEOUT)
-
-
-def _gh(gh: str, args: tuple[str, ...], clock: _Clock, doing: str) -> subprocess.CompletedProcess[bytes]:
+def _gh(gh: str, args: tuple[str, ...], until: float | None, doing: str) -> subprocess.CompletedProcess[bytes]:
+    """One ``gh`` call with what remains of the resolution's deadline; none left raises before it starts."""
     environment = {k: v for k, v in os.environ.items() if k not in TOKENS}  # gh's stored accounts, not a token
-    timeout = clock.left(doing)
+    timeout = TIMEOUT if until is None else min(until - time.monotonic(), TIMEOUT)
+    if timeout <= 0:
+        msg = f"no time was left to {doing}"
+        raise AccountMissing(msg)
     try:
         return subprocess.run(  # noqa: S603 - the resolved gh executable and code-owned argument vectors
             (gh, *args), capture_output=True, env=environment, timeout=timeout, check=False, stdin=subprocess.DEVNULL
@@ -130,9 +117,9 @@ def _gh(gh: str, args: tuple[str, ...], clock: _Clock, doing: str) -> subprocess
         raise AccountMissing(msg) from exc
 
 
-def _token(gh: str, host: str, login: str, clock: _Clock) -> str | None:
+def _token(gh: str, host: str, login: str, until: float | None) -> str | None:
     """*login*'s token as ``gh`` stores it for *host*, or ``None`` when ``gh`` holds no such account."""
-    done = _gh(gh, ("auth", "token", "--hostname", host, "--user", login), clock, f"read {login}'s token on {host}")
+    done = _gh(gh, ("auth", "token", "--hostname", host, "--user", login), until, f"read {login}'s token on {host}")
     said = done.stderr.decode(errors="replace").strip()
     if done.returncode:
         if "no oauth token found" in said:
@@ -142,9 +129,9 @@ def _token(gh: str, host: str, login: str, clock: _Clock) -> str | None:
     return done.stdout.decode(errors="replace").strip() or None
 
 
-def _logins(gh: str, host: str, clock: _Clock) -> list[str]:
+def _logins(gh: str, host: str, until: float | None) -> list[str]:
     """Every login ``gh`` holds for *host*, whatever its validation state."""
-    done = _gh(gh, ("auth", "status", "--hostname", host, "--json", "hosts"), clock, f"list its accounts on {host}")
+    done = _gh(gh, ("auth", "status", "--hostname", host, "--json", "hosts"), until, f"list its accounts on {host}")
     try:
         hosts = json.loads(done.stdout)["hosts"]
         return [entry["login"] for entry in hosts.get(host, [])]
@@ -162,15 +149,15 @@ def resolve(setting: str, origin: Origin, *, until: float | None = None) -> Acce
     if gh is None:
         msg = f"gh is not installed, so no account can write to {origin}; install the GitHub CLI and sign in"
         raise AccountMissing(msg)
-    clock, listed = _Clock(until), []
+    listed: list[str] = []
 
     def find(login: str) -> tuple[str, str] | None:
-        if token := _token(gh, origin.host, login, clock):
+        if token := _token(gh, origin.host, login, until):
             return login, token
         if not listed:
-            listed.extend(_logins(gh, origin.host, clock) or [""])
+            listed.extend(_logins(gh, origin.host, until) or [""])
         spelled = next((x for x in listed if x and x.casefold() == login.casefold() and x != login), None)
-        if spelled and (token := _token(gh, origin.host, spelled, clock)):
+        if spelled and (token := _token(gh, origin.host, spelled, until)):
             return spelled, token
         return None
 

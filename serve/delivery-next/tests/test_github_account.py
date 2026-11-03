@@ -159,22 +159,6 @@ def test_an_expired_deadline_starts_no_gh_call(fake_gh):
     assert fake_gh.calls() == []
 
 
-@pytest.mark.usefixtures("fake_gh")
-def test_a_deadline_bounds_each_gh_call(monkeypatch):
-    seen = []
-    real = subprocess.run
-
-    def run(argv, **kw):
-        seen.append(kw["timeout"])
-        return real(argv, **kw)
-
-    monkeypatch.setattr(account.subprocess, "run", run)
-    resolve("repository-owner", Origin("github.com", "acme", "tools"), until=time.monotonic() + 7)
-    assert len(seen) == 3  # owner, listing, then maba-pag
-    assert all(0 < t <= 7 for t in seen)
-    assert seen == sorted(seen, reverse=True)
-
-
 @pytest.mark.parametrize(("host", "name"), [("github.com", "GH_TOKEN"), ("ghe.acme.test", "GH_ENTERPRISE_TOKEN")])
 def test_the_token_is_the_childs_only_github_token_and_the_parent_keeps_its_own(host, name, monkeypatch):
     for each in access_module.TOKENS:
@@ -378,6 +362,12 @@ DEADLINES = {  # cap, until after now, the origin's owner: each launch's timeout
     "an until earlier than the cap": (10, 5, "boecht", [("git", 5), ("gh", 3), ("git", 1)]),
     "the cap alone": (10, None, "boecht", [("git", 10), ("gh", 8), ("git", 6)]),
     "resolution uses it all": (10, 4, "acme", [("git", 4), ("gh", 2)]),
+    "each fallback call gets what is left": (
+        10,
+        None,
+        "acme",
+        [("git", 10), ("gh", 8), ("gh", 6), ("gh", 4), ("git", 2)],
+    ),
 }
 
 
@@ -425,7 +415,7 @@ def test_the_remote_git_uses_chooses_the_account(args, fake_gh, git_runs, tmp_pa
     root = _authority(tmp_path)
     done = git_run.run(root, *args, until=None, cap=30)
     assert done.returncode == 0, done.stderr
-    ((argv, environment, _),) = git_runs.seen
+    ((argv, environment),) = git_runs.seen
     assert argv[1:3] == ("-c", "credential.helper=")
     assert _fill(root, _options(argv), environment) == "tok-boecht"
 

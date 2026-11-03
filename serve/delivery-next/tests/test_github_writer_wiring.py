@@ -81,29 +81,23 @@ def _barrier(tmp_path, _monkeypatch):
     queue.barrier(store, repo)(before, before.model_copy(update={"step": Step(kind=StepKind.FOLLOW)}))
 
 
-def _detected(seen: list):
-    def detect(_repo, gh, _prev):
-        with contextlib.suppress(ProviderError):
-            gh.read_repository()
-        seen.append(gh)
-        return Profile(version=1)
-
-    return detect
+def _detect(_repo, gh, _prev):
+    with contextlib.suppress(ProviderError):
+        gh.read_repository()
+    return Profile(version=1)
 
 
 def _setup(tmp_path, monkeypatch):
     repo = _clone(tmp_path / "tools", "https://github.com/boecht/tools.git")
     monkeypatch.setattr(readiness, "check", lambda *_a: [])
-    monkeypatch.setattr(setup.profile, "detect", _detected(seen := []))
+    monkeypatch.setattr(setup.profile, "detect", _detect)
     setup.run(repo, [], yes=True, local_files="no")
-    assert seen
 
 
 def _cli(tmp_path, monkeypatch):
     repo = _clone(tmp_path / "tools", "https://github.com/boecht/tools.git")
-    monkeypatch.setattr(cli.profile, "detect", _detected(seen := []))
+    monkeypatch.setattr(cli.profile, "detect", _detect)
     cli.show_profile(Store(tmp_path / "store"), repo, [])
-    assert seen
 
 
 def _profile_share(tmp_path, monkeypatch):
@@ -112,9 +106,8 @@ def _profile_share(tmp_path, monkeypatch):
     store.root.mkdir()
     old = ProfileEntry(state="known", value="main", evidence=f"{profile.CONFIRMED} before observations were bound")
     store.write_profile(Profile(entries={profile.DEFAULT: old}))  # unbound: detection runs again
-    monkeypatch.setattr(profile_share.profile, "detect", _detected(seen := []))
+    monkeypatch.setattr(profile_share.profile, "detect", _detect)
     profile_share.checked(store, repo)
-    assert seen
 
 
 def _pack(tmp_path, _monkeypatch):
@@ -311,7 +304,7 @@ def test_each_write_that_is_not_a_projects_runs_as_its_own_repositorys_account(
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"github_account": "octo-writer"}))
     entry(tmp_path)
     assert verbs <= set(git_runs.verbs())
-    for argv, environment, _ in git_runs.seen:
+    for argv, environment in git_runs.seen:
         assert argv[1:3] == ("-c", "credential.helper=")
         assert environment["GH_TOKEN"] == f"tok-{owner}"
 

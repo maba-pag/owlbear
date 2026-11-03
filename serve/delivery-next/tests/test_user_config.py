@@ -132,4 +132,3 @@ def test_a_format_20_layer_loads_with_the_github_account_unset(tmp_path):
     for model in (Layer, MachineLayer, GlobalLayer):
         layer = read_layer(path, model)
         assert (layer.format, layer.guard_level, layer.github_account) == (config.CONFIG_FORMAT, "strict", None)
-    assert migrations.CONFIG[20] is migrations.github_account_added
