@@ -465,15 +465,8 @@ def _shared_routes(routes: APIRouter, shared: Shared, at: At, places: Places) ->
 
     @routes.post("/decisions/{decision_id}/complete")
     def complete(decision_id: str, body: CompletionBody, project: In) -> dict[str, Any]:
-        return _receipts(
-            lambda: decision_completion.complete(
-                shared(),
-                at(project),
-                decision_id,
-                body.revision,
-                decision_completion.Proof(body.condition, body.evidence),
-            )
-        )
+        proof = decision_completion.Proof(body.condition, body.evidence)
+        return _receipts(lambda: decision_completion.complete(shared(), at(project), decision_id, body.revision, proof))
 
     @routes.post("/decisions/{decision_id}/queue-read-back")
     def queue_read_back(decision_id: str, body: QueueBody, project: In) -> dict[str, Any]:

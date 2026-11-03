@@ -21,8 +21,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
     from owlbear_delivery_next.state_store.decision_store import Receipt
 
-COMPLETED = "Why it was spent: "
-
 
 @dataclass(frozen=True)
 class Proof:
@@ -58,6 +56,6 @@ def complete(
     if quoted not in decision_wording.whole(old):
         msg = "condition: quote the explicit end condition from the whole binding, not its explanation"
         raise Refused(msg, 422)
-    rationale = _because(decision_wording.framed(old), COMPLETED, f"{quoted}\nEvidence: {evidence}")
+    rationale = _because(decision_wording.framed(old), "Why it was spent: ", f"{quoted}\nEvidence: {evidence}")
     spent = old.model_copy(update={"state": State.SPENT, "rationale": rationale})
     return [decision_store.save(shared, spent, expected_revision=old.revision, message=f"decisions: complete {old.id}")]

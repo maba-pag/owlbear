@@ -414,9 +414,7 @@ def test_a_lead_completes_a_finite_owlbear_instruction_with_its_whole_binding_an
     kept = decision_store.load(shared, "owlbear").snapshot.get(rule.id).decision
     assert kept.state is State.SPENT
     assert decision_wording.whole(kept) == binding
-    assert {k: v for k, v in kept.content().items() if k not in {"state", "rationale"}} == {
-        k: v for k, v in before.items() if k not in {"state", "rationale"}
-    }
+    assert kept.content() == before | {"state": "spent", "rationale": kept.rationale}
     assert args["evidence"] in kept.rationale
     assert explanation in kept.rationale
     assert decision_store.load(shared, "owlbear").snapshot.active(other.id)
