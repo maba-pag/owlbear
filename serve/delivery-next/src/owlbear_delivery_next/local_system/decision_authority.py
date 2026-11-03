@@ -22,19 +22,32 @@ def _run(repo: DataRepo, until: float | None, *args: str, empty: bool = False, l
     return said.stdout
 
 
-def _layer(root: Path, rel: str) -> Layer | None:
+def _layer(root: Path, rel: str, mode: str) -> Layer | None:
     path = Path(rel)
-    if ignored_name(path.name):
+    if path.parent.name == "decisions" and ignored_name(path.name):
         return None
     match path.parts:
+        case ("decisions",) if mode != "040000":
+            layer = Layer(root, Scope.GLOBAL)
         case ("decisions", _):
-            return Layer(root, Scope.GLOBAL)
+            layer = Layer(root, Scope.GLOBAL)
+        case (project, "decisions" | "changes") if (
+            mode != "040000" and not project.startswith(".") and project != "decisions"
+        ):
+            layer = Layer(root / project, Scope.PROJECT, project)
+        case (project, "changes", _) if mode == "120000" and not project.startswith(".") and project != "decisions":
+            layer = Layer(root / project, Scope.PROJECT, project)
+        case (project, "changes", change, "decisions") if (
+            mode != "040000" and not project.startswith(".") and project != "decisions"
+        ):
+            layer = Layer(root / project / "changes" / change, Scope.CHANGE, project, change)
         case (project, "decisions", _) if not project.startswith(".") and project != "decisions":
-            return Layer(root / project, Scope.PROJECT, project)
+            layer = Layer(root / project, Scope.PROJECT, project)
         case (project, "changes", change, "decisions", _) if not project.startswith(".") and project != "decisions":
-            return Layer(root / project / "changes" / change, Scope.CHANGE, project, change)
+            layer = Layer(root / project / "changes" / change, Scope.CHANGE, project, change)
         case _:
             return None
+    return layer
 
 
 def _contents(text: str, commit: str) -> dict[str, str]:
@@ -65,11 +78,12 @@ def _entries(repo: DataRepo, commit: str, until: float | None) -> tuple[list[Ent
     contents, entries, unreadable = _contents(text, commit), [], []
     for row in filter(None, tree.split("\0")):
         info, rel = row.split("\t", 1)
-        layer = _layer(repo.root, rel)
+        mode = info.split(" ", 1)[0]
+        layer = _layer(repo.root, rel, mode)
         if layer is None:
             continue
         path = repo.root / rel
-        if path.suffix != ".md" or info.split(" ", 1)[0] not in {"100644", "100755"}:
+        if path.suffix != ".md" or mode not in {"100644", "100755"}:
             unreadable.append((layer, f"{path} at {commit} is not a regular decision file"))
             continue
         try:

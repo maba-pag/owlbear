@@ -122,6 +122,42 @@ def test_pinned_authority_uses_the_same_ignored_entry_rules(authority, name):
     assert decision_authority.inactive(repo, "HEAD", path.relative_to(repo.root).as_posix(), None) == ""
 
 
+@pytest.mark.parametrize(
+    ("rel", "damage"),
+    [
+        ("decisions", "file"),
+        ("decisions", "symlink"),
+        ("owlbear/changes", "file"),
+        ("owlbear/changes", "symlink"),
+        ("owlbear/changes/report", "symlink"),
+        ("owlbear/changes/report/decisions", "file"),
+        ("owlbear/changes/report/decisions", "symlink"),
+        ("other/changes", "file"),
+        ("other/changes", "symlink"),
+        ("other/changes/report", "symlink"),
+        ("other/changes/report/decisions", "file"),
+        ("other/changes/report/decisions", "symlink"),
+    ],
+)
+def test_pinned_authority_rejects_unreadable_layer_containers(authority, rel, damage):
+    repo, _rule, path = authority
+    broken = repo.root / rel
+    broken.parent.mkdir(parents=True, exist_ok=True)
+    if damage == "symlink":
+        broken.symlink_to("missing")
+    else:
+        broken.write_text("not a folder\n")
+    assert repo.git("add", "--", rel).returncode == 0
+    assert repo.git("commit", "-qm", "unreadable layer container").returncode == 0
+    if rel in {"owlbear/changes", "owlbear/changes/report"}:
+        with pytest.raises(NotADirectoryError):
+            snapshot(repo.root, "owlbear")
+    else:
+        assert snapshot(repo.root, "owlbear").complete is rel.startswith("other/")
+    refused = decision_authority.inactive(repo, "HEAD", path.relative_to(repo.root).as_posix(), None)
+    assert bool(refused) is (not rel.startswith("other/"))
+
+
 def test_pinned_pending_read_back_is_not_completion_authority(authority):
     repo, rule, path = authority
     pending = rule.model_copy(
