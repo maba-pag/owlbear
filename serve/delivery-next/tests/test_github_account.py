@@ -20,6 +20,7 @@ from owlbear_delivery_next.github import account
 from owlbear_delivery_next.github.account import AccountMissing, Origin, Writer, resolve
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import (
+    BranchState,
     ConversationItem,
     MergeMethod,
     MergeRequest,
@@ -287,6 +288,15 @@ PR = PullRequest(
     repository="acme/x", number=7, node_id="n", url="https://github.com/acme/x/pull/7", head_branch="owlbear/c1",
     head_sha=HEAD, base_branch="main", draft=False, state="open", merged=False,
 )  # fmt: skip
+RETIRED = {  # the ref read finds the merged head, and its deletion is acknowledged: both are GraphQL launches
+    "has": ["graphql"],
+    "out": {
+        "data": {
+            "repository": {"id": "R", "ref": {"target": {"oid": HEAD}}},
+            "updateRefs": {"__typename": "UpdateRefsPayload"},
+        }
+    },
+}
 THREAD = ConversationItem(kind="thread", id="t1", url="https://github.com/acme/x/pull/7#t1", author="a", body="b")
 WRITES = {
     "pull request": lambda gh: gh.create_pull_request("acme/x", "owlbear/c1", "main", "t", "b"),
@@ -314,12 +324,14 @@ def test_each_gh_write_is_launched_with_only_the_chosen_accounts_token(  # noqa:
 ):
     for each in access_module.TOKENS:
         monkeypatch.setenv(each, "tok-inherited")
-    fake_gh.set(BOTH, {"github.com": active})
+    fake_gh.set(BOTH, {"github.com": active}, [RETIRED] if write == "branch deletion" else None)
     gh = GhProvider(Path(), writer=Writer(setting, Origin("github.com", owner, "x")))
     with contextlib.suppress(ProviderError):  # the fake answers ``{}``; the launch is what is checked
-        WRITES[write](gh)
+        done = WRITES[write](gh)
     launches = [c for c in fake_gh.calls() if c["argv"][0] != "auth"]
     assert launches
+    if write == "branch deletion":  # D-01M6GFGACQEM915P1NT39GXQ79: the deletion itself launched, not only its read
+        assert (done.state, len(launches)) == (BranchState.DELETED, 2)
     assert {(c["GH_TOKEN"], c["GITHUB_TOKEN"], c["GH_ENTERPRISE_TOKEN"]) for c in launches} == {
         (f"tok-{login}", None, None)
     }
