@@ -92,7 +92,7 @@ def test_a_published_format_20_global_gains_nine_unset_values_and_keeps_every_ot
     glob = read_layer(path, GlobalLayer)
     eff = resolve(glob, Layer())
 
-    assert (glob.format, glob.memory, glob.curator_threshold, glob.sessions) == (21, None, 90, 2)
+    assert (glob.format, glob.memory, glob.curator_threshold, glob.sessions) == (22, None, 90, 2)
     assert (eff.curator_threshold, eff.sessions) == (90, 2)
     assert [k for k in eff.missing if k.startswith("memory.")] == [f"memory.{n}" for n in NAMES]
     assert json.loads(path.read_text()) == {"format": 20, "curator_threshold": 90, "sessions": 2}  # read, not written

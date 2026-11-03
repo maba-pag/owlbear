@@ -10,6 +10,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.git.access import Access
+from owlbear_delivery_next.github.account import AccountMissing
 from owlbear_delivery_next.local_system import codebase, git_files
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.machine_host import app, project
@@ -27,15 +29,27 @@ READY = {
     "git config user.name": (0, "Ada"),
     "git config user.email": (0, "ada@example.com"),
 }
-AUTH = "gh auth status --hostname github.com"
 OUT = "OUT begins\nwhat gh printed on stdout, in the middle\nOUT ends"
-SIGN_IN = "Run `gh auth login --hostname github.com`"
+SIGN_IN = readiness.SIGN_IN.format(host="github.com")
 GPG_FIX = "Unlock your GPG key (`echo test | gpg --clearsign`), then run setup again"
+SIGNED = SimpleNamespace(
+    access=lambda: Access("ada", "the setting names it", "github.com", "tok-ada", "gh"), unset=False
+)
 
 
-def failed(table: dict[str, tuple[int, str]]) -> list[tuple[str, str]]:
+def missing(reason: str, error: type[Exception] = AccountMissing) -> SimpleNamespace:
+    """A writer whose account can't be had: *reason* is *error*'s whole text."""
+
+    def access() -> Access:
+        raise error(reason)
+
+    return SimpleNamespace(access=access, unset=False)
+
+
+def failed(table: dict[str, tuple[int, str]], writer: SimpleNamespace = SIGNED) -> list[tuple[str, str]]:
     said = READY | table
-    checks = readiness.readiness("github.com", lambda argv: said.get(" ".join(argv), (0, "")), None, "copilot")
+    probe = lambda argv, _env=None: said.get(" ".join(argv), (0, ""))  # noqa: E731
+    checks = readiness.readiness("github.com", probe, None, "copilot", writer)
     return [(c.name, c.detail) for c in checks if not c.ok]
 
 
@@ -43,13 +57,6 @@ def failed(table: dict[str, tuple[int, str]]) -> list[tuple[str, str]]:
     ("table", "name", "detail"),
     [
         pytest.param({"gh --version": (127, "{W}")}, "github cli", "{W}", id="gh-cli"),
-        pytest.param(
-            {AUTH: (1, "github.com\n  X Failed to log in\n{W}\n\n  ✓ Logged in to github.com account ada")},
-            "github sign-in",
-            "github.com\n  X Failed to log in\n{W}\n\n  ✓ Logged in to github.com account ada",
-            id="sign-in-account",
-        ),
-        pytest.param({AUTH: (1, "{W}\n")}, "github sign-in", "{W}", id="sign-in-no-account"),
         pytest.param(
             {"gh repo view --json nameWithOwner,viewerPermission": (1, "{W}")}, "repository", "{W}", id="repository"
         ),
@@ -68,13 +75,18 @@ def test_a_failed_command_s_whole_output_is_its_check_s_detail(table, name, deta
     assert failed(filled) == [(name, detail.format(W=whole_error))]
 
 
+@pytest.mark.parametrize("error", [AccountMissing, StoreError])  # gh lacks it; the settings naming it can't be read
+def test_an_account_that_can_t_be_had_keeps_its_whole_reason_as_the_sign_in_detail(whole_error, error):
+    assert failed({}, missing(whole_error, error)) == [("github sign-in", str(error(whole_error)))]
+
+
 def test_an_unreached_host_s_whole_error_and_type_are_the_network_check_s_detail(monkeypatch, whole_error):
     def refused(*_args: object, **_kwargs: object) -> None:
         raise urllib.error.URLError(OSError(whole_error))
 
     monkeypatch.setattr(readiness.urllib.request, "build_opener", lambda *_a: SimpleNamespace(open=refused))
     [network] = readiness.publishing(
-        "github.com", lambda argv: READY.get(" ".join(argv), (0, "")), readiness.reach("github.com")
+        "github.com", lambda argv, _env=None: READY.get(" ".join(argv), (0, "")), readiness.reach("github.com"), SIGNED
     )[:1]
     assert (network.ok, network.detail) == (False, f"https://github.com: OSError: {whole_error}")
 
@@ -91,7 +103,7 @@ def test_a_timed_out_probe_keeps_both_streams_in_its_check_s_detail(tmp_path, mo
         raise subprocess.TimeoutExpired(argv, 30, output=OUT, stderr=whole_error)
 
     monkeypatch.setattr(git_files.subprocess, "run", timed_out)
-    [gh] = [c for c in readiness.publishing("github.com", git_files.probe_in(tmp_path), None) if not c.ok]
+    [gh] = [c for c in readiness.publishing("github.com", git_files.probe_in(tmp_path), None, SIGNED) if not c.ok]
     timeout = "TimeoutExpired: Command '['gh', '--version']' timed out after 30 seconds"
     said = f"{timeout}\nstderr:\n{whole_error}\nstdout:\n{OUT}"
     assert (gh.name, gh.detail) == ("github cli", said)
@@ -99,14 +111,14 @@ def test_a_timed_out_probe_keeps_both_streams_in_its_check_s_detail(tmp_path, mo
 
 def test_a_probe_that_exits_non_zero_names_its_command_status_and_both_streams(tmp_path, monkeypatch, whole_error):
     def refused(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess:
-        code = 1 if argv[:2] == ["gh", "auth"] else 0
+        code = 1 if argv[:2] == ["gh", "repo"] else 0
         return subprocess.CompletedProcess(argv, code, OUT, whole_error if code else "")
 
     monkeypatch.setattr(git_files.subprocess, "run", refused)
-    [sign_in] = [c for c in readiness.publishing("github.com", git_files.probe_in(tmp_path), None) if not c.ok]
-    command = f"CalledProcessError: Command '{['gh', 'auth', 'status', '--hostname', 'github.com']}'"
+    [repo] = [c for c in readiness.publishing("github.com", git_files.probe_in(tmp_path), None, SIGNED) if not c.ok]
+    command = f"CalledProcessError: Command '{['gh', 'repo', 'view', '--json', 'nameWithOwner,viewerPermission']}'"
     said = f"{command} returned non-zero exit status 1.\nstderr:\n{whole_error}\nstdout:\n{OUT}"
-    assert (sign_in.name, sign_in.detail) == ("github sign-in", said)
+    assert (repo.name, repo.detail) == ("repository", said)
 
 
 GPG = "gpg --batch --yes --pinentry-mode error -u K --clearsign -o /dev/null /dev/null"
@@ -140,7 +152,7 @@ def test_a_locked_gpg_key_or_an_unreachable_ssh_agent_keeps_the_probe_s_whole_fa
         return subprocess.CompletedProcess(argv, 0 if said.get(joined) else 1, said.get(joined, ""), "")
 
     monkeypatch.setattr(git_files.subprocess, "run", run)
-    [signing] = [c for c in readiness.readiness("github.com", git_files.probe_in(tmp_path), None, "copilot")
+    [signing] = [c for c in readiness.readiness("github.com", git_files.probe_in(tmp_path), None, "copilot", SIGNED)
                  if c.name == "commit signing"]  # fmt: skip
     command = f"CalledProcessError: Command '{failing.split()}' returned non-zero exit status {code}."
     whole = f"{command}\nstderr:\n{whole_error}\nstdout:\n{OUT}"
@@ -172,8 +184,10 @@ def test_a_project_s_failed_checks_show_whole_in_its_entry_and_the_host_s_log(
         "git config user.signingkey": (0, "K"),
         GPG: (2, whole_error),
     }
-    probe = READY | signing | {AUTH: (1, whole_error), "copilot --version": (1, OUT)}
-    produced = readiness.readiness("github.com", lambda argv: probe.get(" ".join(argv), (0, "")), None, "copilot")
+    probe = READY | signing | {"copilot --version": (1, OUT)}
+    produced = readiness.readiness(
+        "github.com", lambda argv, _env=None: probe.get(" ".join(argv), (0, "")), None, "copilot", missing(whole_error)
+    )
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: produced)
     monkeypatch.setattr(Host, "_spawn", lambda _self, slug: pytest.fail(f"no runner starts here ({slug})"))
     now = datetime.now(UTC)
@@ -192,7 +206,7 @@ def test_a_project_s_failed_checks_show_whole_in_its_entry_and_the_host_s_log(
     finally:
         machine.stop_all()
     expected = [
-        f"github sign-in: {whole_error} · fix: {SIGN_IN}",
+        f"github sign-in: {AccountMissing(whole_error)} · fix: {SIGN_IN}",
         f"copilot cli: copilot: {OUT} · fix: {copilot_cli.FIX}",
         f"commit signing: gpg key K locked or missing: {whole_error} · fix: {GPG_FIX}",
     ]

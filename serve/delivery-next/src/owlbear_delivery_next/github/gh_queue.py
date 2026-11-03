@@ -89,7 +89,7 @@ class Queue(Checks):
         data = json.dumps(body, separators=(",", ":")).encode()
         argv = ("gh", "api", "--hostname", self.host, "graphql", "--input", "-")
         try:
-            done = self.runner(argv, data, self.timeout, self.cwd)
+            done = self._launch(argv, data)
         except (OSError, subprocess.TimeoutExpired) as exc:
             return EnqueueResult(status=EnqueueStatus.UNKNOWN, message=failure(exc))
         payload, unread = answer(done.stdout)

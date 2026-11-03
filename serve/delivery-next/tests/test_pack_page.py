@@ -18,7 +18,6 @@ import pytest
 import uvicorn
 
 from owlbear_delivery_next.change_contracts.round_records import PACK, RoundFinding, RoundLoop, RoundPolicy
-from owlbear_delivery_next.impeccable import pack_git
 from owlbear_delivery_next.impeccable_runs import (
     machine_lock,
     pack_gates,
@@ -27,7 +26,7 @@ from owlbear_delivery_next.impeccable_runs import (
     pack_rounds,
     pack_state,
 )
-from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.local_system import git_run, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
@@ -396,11 +395,11 @@ def test_a_failed_pack_stage_shows_and_logs_its_whole_error(  # noqa: PLR0913, P
     real = subprocess.run
 
     def refusing(args, *rest, **kw):
-        if args[:2] == ["git", "push"]:
-            raise subprocess.CalledProcessError(1, args, output="", stderr=f"{whole_error}\n")
+        if "push" in args:  # after the account's -c options
+            return subprocess.CompletedProcess(args, 1, "", f"{whole_error}\n")
         return real(args, *rest, **kw)
 
-    monkeypatch.setattr(pack_git.subprocess, "run", refusing)
+    monkeypatch.setattr(git_run.subprocess, "run", refusing)
     job = pack_job.Job(Store(tmp_path / "store"), JOB.Fakes(clone).live(checkout))
     state = JOB.run(job)
 

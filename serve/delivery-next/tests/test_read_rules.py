@@ -15,7 +15,7 @@ DENIED = "Resource not accessible by integration"
 def answers(rulesets: object, protection: object):
     """A gh runner answering the rulesets read and the classic protection read: a JSON value, or ``(status, text)``."""
 
-    def server(argv, _body, _timeout, _cwd):
+    def server(argv, _body, _timeout, _cwd, _env):
         said = protection if any(a.endswith("/protection") for a in argv) else rulesets
         if isinstance(said, tuple):
             status, text = said
@@ -26,7 +26,7 @@ def answers(rulesets: object, protection: object):
 
 
 def read(tmp_path, rulesets, protection):
-    return GhProvider(tmp_path, runner=answers(rulesets, protection)).read_rules("boecht/sandbox", "main")
+    return GhProvider(tmp_path, writer=None, runner=answers(rulesets, protection)).read_rules("boecht/sandbox", "main")
 
 
 @pytest.mark.parametrize(

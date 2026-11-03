@@ -165,7 +165,7 @@ def test_two_clones_repeatedly_read_their_own_facts_after_both_first_detection_m
     first, second = clone(tmp_path, "shop-a"), clone(tmp_path, "shop-b")
     a, b = Store.open(first), Store.open(second)
     a.write_profile(Profile(version=1))
-    monkeypatch.setattr(profile, "provider", lambda _p, repo: GitHub(push=repo == first))
+    monkeypatch.setattr(profile, "provider", lambda _p, repo, _w: GitHub(push=repo == first))
     monkeypatch.setattr(
         profile,
         "package_entries",
@@ -529,11 +529,11 @@ class PlanLimited(GitHub):
     """A private repository whose GitHub plan allows no rules: both rule reads answer the plan-limit 403 (#936)."""
 
     def read_rules(self, repository, target):
-        def limited(argv, _body, _timeout, _cwd):
+        def limited(argv, _body, _timeout, _cwd, _env):
             said = b"gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)\n"
             return subprocess.CompletedProcess(argv, 1, b"", said)
 
-        return GhProvider(Path(), runner=limited).read_rules(repository, target)
+        return GhProvider(Path(), writer=None, runner=limited).read_rules(repository, target)
 
 
 def test_a_plan_limited_repository_redetects_its_unknown_rules_as_none_and_rereads_them_alike(tmp_path):

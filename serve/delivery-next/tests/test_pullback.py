@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next.change_contracts.models import Change, Names, Step, StepKind
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.git.remote_git import RemoteGitTimeout
+from owlbear_delivery_next.github.account import Writer
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.state_store.store import Lock, Store
@@ -60,9 +61,9 @@ def merged(other, name="b.txt"):
 def test_a_clean_checked_out_target_is_fast_forwarded(repos):
     repo, other = repos
     head = merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, result.worktree, git(repo, "rev-parse", "HEAD")) == ("updated", str(repo), head)
-    assert pullback.run(repo, "main", NOW).reason == "already up to date"
+    assert pullback.run(repo, "main", NOW, Writer.rule(repo)).reason == "already up to date"
 
 
 def test_a_target_not_checked_out_has_only_its_ref_fast_forwarded(repos):
@@ -70,7 +71,7 @@ def test_a_target_not_checked_out_has_only_its_ref_fast_forwarded(repos):
     git(repo, "switch", "-q", "-c", "work")
     (repo / "w.txt").write_text("mine\n")
     head = merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, result.worktree, git(repo, "rev-parse", "main")) == ("updated", "", head)
     assert (git(repo, "branch", "--show-current"), (repo / "w.txt").read_text()) == ("work", "mine\n")
 
@@ -80,7 +81,7 @@ def test_without_a_local_target_branch_only_the_remote_ref_is_updated(repos):
     git(repo, "switch", "-q", "-c", "work")
     git(repo, "branch", "-q", "-D", "main")
     head = merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, result.reason) == ("updated", "no local main branch; origin/main updated")
     assert git(repo, "rev-parse", "origin/main") == head
 
@@ -95,7 +96,7 @@ def test_unrelated_local_changes_survive_a_fast_forward(repos):
     (repo / ".gitignore").write_text("edited\n")
     (repo / "new.txt").write_text("untracked\n")
     head = merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, git(repo, "rev-parse", "HEAD"), (repo / "b.txt").exists()) == ("updated", head, True)
     assert ((repo / ".gitignore").read_text(), (repo / "new.txt").read_text()) == ("edited\n", "untracked\n")
     assert git(repo, "stash", "list") == ""
@@ -109,7 +110,7 @@ def test_local_changes_to_an_incoming_path_leave_the_target_behind_and_untouched
         git(repo, "add", "b.txt")
     before = state(repo)
     merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, result.reason) == (
         "behind",
         "local main is behind: your local changes to b.txt overlap the merged change",
@@ -135,7 +136,7 @@ def test_local_commits_are_replayed_and_unrelated_local_changes_kept(repos):
     (repo / ".gitignore").write_text("edited\n")
     (repo / "new.txt").write_text("untracked\n")
     head, wts = merged(other), worktrees(repo)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, result.reason) == ("updated", "replayed 1 local commits onto the merged change")
     assert git(repo, "rev-parse", "HEAD~1") == head
     assert git(repo, "log", "-1", "--format=%s|%an <%ae>") == "my message|Ann <ann@a>"
@@ -159,7 +160,7 @@ def test_a_partially_staged_file_keeps_its_index_entry_and_content(repos, diverg
     (repo / "part.txt").write_text("working\n")
     entry, cached = git(repo, "ls-files", "-s", "part.txt"), git(repo, "diff", "--cached")
     merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, result.reason) == ("updated", reason)
     assert (git(repo, "ls-files", "-s", "part.txt"), git(repo, "diff", "--cached")) == (entry, cached)
     assert (repo / "part.txt").read_text() == "working\n"
@@ -171,7 +172,7 @@ def test_a_conflicting_replay_leaves_the_local_copy_and_worktrees_as_before(repo
     (repo / ".gitignore").write_text("edited\n")
     before, wts = full(repo), worktrees(repo)
     merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, result.reason) == (
         "behind",
         "local main is behind: your local commits conflict with the merged change",
@@ -186,7 +187,7 @@ def test_a_failing_signature_leaves_the_local_copy_untouched(repos):
     git(repo, "config", "gpg.program", "false")
     before, wts = full(repo), worktrees(repo)
     merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert result.state == "behind"
     assert (full(repo), worktrees(repo)) == (before, wts)
 
@@ -200,7 +201,7 @@ def test_a_local_merge_commit_leaves_the_target_behind(repos):
     git(repo, "merge", "-q", "--no-ff", "-m", "merge side", "side")
     before = full(repo)
     merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, result.reason) == ("behind", "local main is behind: local merge commits; pull manually")
     assert full(repo) == before
 
@@ -216,7 +217,7 @@ def test_a_dirty_rename_target_refused_by_reset_keep_is_untouched(repos):
     before = full(repo)
     commit(other, "a.txt", "ONE\ntwo\nthree\nfour\n")
     git(other, "push", "-q", "origin", "main")
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert result.state == "behind"
     assert full(repo) == before
     assert "<<<<<<<" not in (repo / "b.txt").read_text()
@@ -232,7 +233,7 @@ def test_a_staged_rename_whose_source_the_merge_edits_is_a_collision(repos):
     before = full(repo)
     commit(other, "a.txt", "ONE\n")
     git(other, "push", "-q", "origin", "main")
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, "a.txt overlap" in result.reason) == ("behind", True)
     assert full(repo) == before
 
@@ -242,7 +243,7 @@ def test_two_worktrees_holding_the_target_leave_it_behind(repos, tmp_path):
     git(repo, "worktree", "add", "-q", "--force", str(tmp_path / "second"), "main")
     before = full(repo)
     merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, result.reason) == ("behind", "local main is behind: main is checked out in 2 worktrees")
     assert full(repo) == before
 
@@ -253,7 +254,7 @@ def test_a_case_only_untracked_collision_counts_when_git_ignores_case(repos):
     (repo / "B.TXT").write_text("mine\n")
     before = full(repo)
     merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert result.state == "behind"
     assert (full(repo), (repo / "B.TXT").read_text()) == (before, "mine\n")
 
@@ -265,7 +266,7 @@ def test_an_untracked_file_where_the_merge_needs_a_directory_is_a_collision(repo
     (other / "d").mkdir()
     commit(other, "d/f.txt")
     git(other, "push", "-q", "origin", "main")
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, "d/f.txt overlap" in result.reason) == ("behind", True)
     assert full(repo) == before
 
@@ -283,7 +284,7 @@ def test_a_target_mid_rebase_or_bisect_is_behind(repos, op):
         git(repo, "bisect", "start")
     detached = git(repo, "rev-parse", "HEAD")
     merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, result.reason, result.worktree) == ("behind", "local main is behind: in progress", str(repo))
     assert git(repo, "rev-parse", "HEAD") == detached
 
@@ -300,7 +301,7 @@ def test_an_ignored_file_the_merge_would_overwrite_is_kept_and_the_target_is_beh
     git(other, "add", "-f", "keep.log")
     git(other, "commit", "-q", "-m", "log")
     git(other, "push", "-q", "origin", "main")
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, "keep.log overlap" in result.reason) == ("behind", True)
     assert ((repo / "keep.log").read_text(), git(repo, "rev-parse", "HEAD")) == ("local log\n", before)
 
@@ -311,7 +312,7 @@ def test_a_gitlink_change_is_reported(repos):
     git(other, "update-index", "--add", "--cacheinfo", f"160000,{sha},sub")
     git(other, "commit", "-q", "-m", "submodule")
     git(other, "push", "-q", "origin", "main")
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert "submodules changed" in result.reason
 
 
@@ -360,7 +361,7 @@ def test_a_path_the_replay_moves_into_an_ignored_file_is_a_collision(repos):
     (repo / "new").mkdir()
     (repo / "new" / "local.log").write_text("mine\n")
     head = git(repo, "rev-parse", "HEAD")
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, "new/local.log overlap" in result.reason) == ("behind", True)
     assert ((repo / "new" / "local.log").read_text(), git(repo, "rev-parse", "HEAD")) == ("mine\n", head)
 
@@ -375,7 +376,7 @@ def test_a_branch_switch_before_the_update_leaves_both_branches_alone(repos, mon
 
     monkeypatch.setattr(pullback, "_guard", switch)
     merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, "HEAD moved" in result.reason) == ("behind", True)
     assert (git(repo, "rev-parse", "other"), git(repo, "rev-parse", "main")) == (head, head)
     assert not (repo / "b.txt").exists()
@@ -393,12 +394,12 @@ def test_a_failing_checkout_filter_restores_the_local_copy_and_a_retry_succeeds(
     commit(other, "z.x")
     git(other, "push", "-q", "origin", "main")
     head = git(other, "rev-parse", "HEAD")
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, "external filter 'false' failed" in result.reason) == ("behind", True)
     assert "partial update" not in result.reason
     assert full(repo) == before
     git(repo, "config", "filter.x.smudge", "cat")
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, git(repo, "rev-parse", "HEAD"), (repo / "z.x").read_text()) == ("updated", head, "x\n")
 
 
@@ -426,7 +427,7 @@ def test_a_timeout_anywhere_leaves_the_target_behind(repos, monkeypatch):
 
         with monkeypatch.context() as m:
             m.setattr(module, name, fail)
-            result = pullback.run(repo, "main", NOW)
+            result = pullback.run(repo, "main", NOW, Writer.rule(repo))
         assert (name, result.state, result.reason) == (name, "behind", f"local main is behind: {reason}")
         assert (name, full(repo)) == (name, before)
 
@@ -438,7 +439,7 @@ def test_empty_and_already_upstream_local_commits_are_replayed_as_empty_commits_
     git(repo, "commit", "-q", "-m", "same patch", "--author", "Ann <ann@a>")
     git(repo, "commit", "-q", "--allow-empty", "-m", "marker", "--author", "Ann <ann@a>")
     head = merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, git(repo, "rev-parse", "HEAD~2")) == ("updated", head)
     assert git(repo, "log", "-2", "--format=%s|%an <%ae>").splitlines() == [
         "marker|Ann <ann@a>",
@@ -461,7 +462,7 @@ def test_a_locked_temporary_worktree_is_removed_even_if_remove_times_out(repos, 
 
     monkeypatch.setattr(pullback.pullback_replay, "git", flaky)
     merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, worktrees(repo)) == ("updated", wts)
 
 
@@ -482,7 +483,7 @@ def test_work_written_while_the_tree_update_runs_is_never_rolled_back(repos, mon
 
     monkeypatch.setattr(pullback, "_guard", edit_after_guard)
     head = git(repo, "rev-parse", "HEAD")
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert result.state == "behind"
     assert "appeared during pull-back and were kept" in result.reason
     assert ((repo / "a.txt").read_text(), (repo / "b.txt").read_text()) == ("mine\n", "also mine\n")
@@ -504,7 +505,7 @@ def test_a_ref_that_fails_to_move_puts_the_local_copy_back(repos, monkeypatch, f
 
     monkeypatch.setattr(pullback.pullback_replay, "git", locked)
     merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, "the local copy was put back" in result.reason) == ("behind", True)
     assert full(repo) == before
 
@@ -520,7 +521,7 @@ def test_a_switch_to_a_branch_containing_the_merge_does_not_count_as_updated(rep
 
     monkeypatch.setattr(pullback, "holders", switch_after)
     merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, result.reason) == ("behind", f"local main is behind: main is no longer checked out in {repo}")
     assert git(repo, "rev-parse", "main") == head
 
@@ -540,7 +541,7 @@ def test_a_temporary_worktree_that_survives_cleanup_is_reported(repos, monkeypat
     monkeypatch.setattr(pullback.pullback_replay, "git", stuck)
     monkeypatch.setattr(pullback.pullback_replay.shutil, "rmtree", lambda *_a, **_k: None)
     merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     monkeypatch.undo()
     git(repo, "worktree", "remove", "--force", left[0])
     assert result.state == ("behind" if conflict else "updated")
@@ -565,7 +566,7 @@ def test_a_failed_tree_update_undoes_type_changes_directories_and_filtered_files
     for name in ("l", "d/f", "a.y", "z.x"):
         commit(other, name, (other / name).read_text() if name == "l" else "lower\n")
     git(other, "push", "-q", "origin", "main")
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, "external filter 'false' failed" in result.reason) == ("behind", True)
     assert ("kept" in result.reason, "partial update" in result.reason) == (False, False)
     assert (full(repo), (repo / "l").is_symlink(), (repo / "d").read_text()) == (before, True, "file\n")
@@ -582,7 +583,7 @@ def test_a_filesystem_error_leaves_the_target_behind(repos, monkeypatch):
 
     monkeypatch.setattr(pullback.pullback_replay.tempfile, "mkdtemp", full_disk)
     merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, "No space left" in result.reason) == ("behind", True)
     assert full(repo) == before
 
@@ -638,7 +639,7 @@ def test_attributes_the_update_changes_do_not_mislabel_the_files_it_wrote(repos)
     commit(other, "f", "a\nb\nc\n")
     commit(other, "z.x")
     git(other, "push", "-q", "origin", "main")
-    stopped_at_x(pullback.run(repo, "main", NOW))
+    stopped_at_x(pullback.run(repo, "main", NOW, Writer.rule(repo)))
     assert (full(repo), (repo / "f").read_bytes()) == (before, b"a\r\nb\r\n")
 
 
@@ -651,7 +652,7 @@ def test_an_exec_bit_the_update_set_is_undone(repos):
     git(other, "commit", "-q", "-am", "exec")
     commit(other, "z.x")
     git(other, "push", "-q", "origin", "main")
-    stopped_at_x(pullback.run(repo, "main", NOW))
+    stopped_at_x(pullback.run(repo, "main", NOW, Writer.rule(repo)))
     assert (full(repo), os.access(repo / "run.sh", os.X_OK)) == (before, False)
 
 
@@ -667,7 +668,7 @@ def test_a_fifo_left_at_an_incoming_path_is_kept_without_being_read(repos, monke
     monkeypatch.setattr(pullback, "_guard", fifo_after_guard)
     head = git(repo, "rev-parse", "HEAD")
     merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, "b.txt appeared during pull-back and were kept" in result.reason) == ("behind", True)
     assert (stat.S_ISFIFO((repo / "b.txt").lstat().st_mode), git(repo, "rev-parse", "HEAD")) == (True, head)
 
@@ -689,7 +690,7 @@ def test_a_timeout_during_or_after_the_replay_keeps_the_cleanup_note(repos, monk
     monkeypatch.setattr(pullback.pullback_replay, "git", stuck)
     monkeypatch.setattr(pullback.pullback_replay.shutil, "rmtree", lambda *_a, **_k: None)
     merged(other)
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     monkeypatch.undo()
     git(repo, "worktree", "remove", "--force", left[0])
     assert (result.state, "git timed out" in result.reason, "was not removed" in result.reason) == (
@@ -720,7 +721,7 @@ def test_a_failed_reverse_names_a_recovery_that_restores_the_local_copy(repos, m
 
     monkeypatch.setattr(pullback.pullback_replay, "git", stuck)
     merged(other, "item[1]")  # a name that is also a pattern matching item1
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, "manual check needed" in result.reason) == ("behind", True)
     assert full(repo) != before
     command = re.search(r"then run `([^`]+)`", result.reason)
@@ -749,7 +750,7 @@ def test_local_attribute_files_over_changed_paths_keep_the_target_behind(repos, 
     before = full(repo)
     (other / "sub").mkdir()
     merged(other, "sub/b.txt")
-    result = pullback.run(repo, "main", NOW)
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, f"{attrs} would change how files are written" in result.reason) == (
         ("behind", True) if behind else ("updated", False)
     )

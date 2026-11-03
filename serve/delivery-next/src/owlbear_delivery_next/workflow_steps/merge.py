@@ -127,7 +127,7 @@ def gate(  # noqa: C901, PLR0911 - one exit per condition
     c, held = follow.conversation(ctx, c, pr, M)  # open items, replies or resolutions hold the merge
     if held is not None:
         return c, held
-    engine.fetch(path, target)
+    engine.fetch(path, target, ctx.writer.access())
     if not engine.contains(path, f"origin/{target}", pr.head_sha):
         return c, engine.integrate(c, M, f"origin/{target}")  # whatever GitHub's mergeable state says
     names, held = follow.declared(ctx, c, pr, M)
@@ -143,7 +143,7 @@ def gate(  # noqa: C901, PLR0911 - one exit per condition
         rules_confirmed=profile.known(ctx.profile, profile.RULES),
         method=pref(ctx.store.settings(), "merge_method"),
         methods=tuple(MergeMethod(m.strip()) for m in profile.names(ctx.profile, profile.METHODS)),
-        can_push=profile.value(ctx.profile, profile.PUSH) == "yes",
+        can_push=follow.can_push(ctx),
     )
     if decision.block in {None, Block.PROTECTION} and (held := _review(ctx, pr)) is not None:
         return c, held

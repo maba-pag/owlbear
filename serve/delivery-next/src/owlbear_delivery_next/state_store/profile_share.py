@@ -19,15 +19,10 @@ from owlbear_delivery_next.impeccable.detector import DetectorError
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import migrations, profile
-from owlbear_delivery_next.state_store.pending_intents import (
-    pending_file as _pending_file,
-)
-from owlbear_delivery_next.state_store.pending_intents import (
-    pending_intents,
-)
-from owlbear_delivery_next.state_store.pending_intents import (
-    shared_pending as _shared_pending,
-)
+from owlbear_delivery_next.state_store import github_writer
+from owlbear_delivery_next.state_store.pending_intents import pending_file as _pending_file
+from owlbear_delivery_next.state_store.pending_intents import pending_intents
+from owlbear_delivery_next.state_store.pending_intents import shared_pending as _shared_pending
 from owlbear_delivery_next.state_store.profile_errors import (
     Basis,
     SharedSyncError,
@@ -464,7 +459,7 @@ def checked(store: Store, repo: Path) -> Profile | None:
     if shared is None and not profile.unbound(prof):
         return prof
     try:
-        fresh = profile.detect(repo, profile.provider(prof, repo), prof)
+        fresh = profile.detect(repo, profile.provider(prof, repo, github_writer.of(store, repo, detecting=True)), prof)
     except DetectorError, ProviderError:
         return prof
     try:

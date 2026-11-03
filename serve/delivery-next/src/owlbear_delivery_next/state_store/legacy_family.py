@@ -76,7 +76,7 @@ IMPORTS = (
     ("state_store/project_home.py", "c79464a6139fe571efd600903aa848dc67c9673f016d12c093d7d6b94b74a681"),
     ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
 )
-CURRENT_FAMILY_AGGREGATE = "49e20af0fc9f4f2555e359acd1edd5a8596c65bc3e4831f71b9a3c4b39d3a767"
+CURRENT_FAMILY_AGGREGATE = "1a2ec3e060b795051ee274915459be7347e9f96ffb05cfc584161da1f7f5d4b3"
 CURRENT_FUNCTIONS = (
     ("commands/chat_client.py:Chat.call", "a3dae79af4df3874c83c2466621b379fc3e9fc3e670045c20a8e8fca44113250"),
     ("commands/chat_client.py:workspace", "4e1bd94f29805ab94eff49182ba65966b93988ce4a8e3f395576601499a4855d"),
@@ -85,7 +85,7 @@ CURRENT_FUNCTIONS = (
     ("commands/dispatch.py:main", "8c4117358586bafde31333d442b1c03a1c628b77941bbe9e1f6e95f71a577729"),
     ("commands/mcp_server.py:main", "bdc71ecbecd215000ee24b98cdecb8f6e9a29a1c46ce5dbf940956c0d279585c"),
     ("commands/runner.py:main", "d363a73d59e7b22adee6f1eabf38059dc205877a174cc14e24ce8b0b2f0acf3b"),
-    ("commands/setup.py:run", "7c2d330c7d1e1a2f03b0df277bb3e9bad8971ce6380bfd1ff10d3f4dcd8f09d8"),
+    ("commands/setup.py:run", "ab25a720a255e247c4f259c6aa94b3c70fd874d286015bc1bc201d6d0aeffd5d"),
     ("machine_host/app.py:Dispatcher.__call__", "0a2ef7a9ebbb0903a08504ea2180d0457e837d04d385918c06855d7a93402851"),
     ("machine_host/command.py:forward", "5b6327596aa3036314e5e279f4b7a444152e7555a29059797bf2b6f0e82cca69"),
     ("machine_host/command.py:main", "027daaf564131a2bd0d995a35156f8bcf884ac1ce32d7fc6ab5a2dca81af9546"),
@@ -124,11 +124,11 @@ CURRENT_FUNCTIONS = (
 )
 CURRENT_IMPORTS = (
     ("commands/chat_client.py", "e89be202b2e06a4a1f34722c6e987f4a71aceba6e132ef3e632b9bd2dc86a96f"),
-    ("commands/cli.py", "134bb0c43eff2636e57d5afa6dcfdbc11791a0026771b87ce2bcd9812d3af1d8"),
+    ("commands/cli.py", "1060e182e094303ce4cf4d690367f4c8869ba7fd492a0024e95feb55caae347f"),
     ("commands/dispatch.py", "326c281057f28ebdb70e9ddfb43e62ad0693957ce5cf2305201d67e7d4cba0e4"),
     ("commands/mcp_server.py", "85ba91ac80b66eb24dbf6954a0405818ce3f91f1fee97445d0d50d73533f07fd"),
-    ("commands/runner.py", "4fe14482c4c1850bd643026638f15f8b534cbeeb073545983287695623c020e2"),
-    ("commands/setup.py", "96aa2c960a9bb502ba98a0abc4b363204a3cb01038438492c5327cdacc5b4bc4"),
+    ("commands/runner.py", "e058cdc0119114f89302af84ade4f6a9c1732bd5764c500f6c9913525ebf6e14"),
+    ("commands/setup.py", "aeddeb68e82b89c56ad0c8dbe512181429f7435b6854a025b9ff7402be396fbc"),
     ("machine_host/app.py", "64bc9611e22685d386174b92161d2a22b2966c01c3f13eadc4c350cb9d0a334b"),
     ("machine_host/command.py", "577ce56b1140fdf075a0e005468cb52ae5ccbab25c6519efa162e2bff05cb714"),
     ("machine_host/install.py", "c3f1613a7098ab70babc320644ed5965e173684f9da1c5fdd5f8653b7fb6d899"),
@@ -136,7 +136,7 @@ CURRENT_IMPORTS = (
     ("machine_host/project.py", "cb4c776f59ff08820caa015cb6144222665cb202349c24f2d6ee005a4f29160e"),
     ("state_store/registry.py", "31b8b0c0a1cb85b977952c0d28bf1e7cd8067ea7a057b999cf2a425fdc05b84a"),
     ("machine_host/selfcheck.py", "823b37b5af0226ab73dd5b535f6fe5dcf5661f453a59c666034c584a6ed51db2"),
-    ("project_host/host.py", "5e40e608ba2b44913892d3f3a9457c5302ef07c979e5c3c1a7b8c2a053a34955"),
+    ("project_host/host.py", "641ac9bed9f39e880789ca25971460f4873166e7d6b9b121122b93ab1b781d83"),
     ("state_store/project_home.py", "16a597223c63af3ad03bdd479d930d57050649c295c0f1d476f8113d42ede7d3"),
     ("state_store/store.py", "e7a34b523998cc7ab37a9380509d7ccb930847621e3692e54994d93c98f584e9"),
     ("state_store/switched_authority.py", "df2480a19ffe37e7e94c3da755795d757a6ff6184f865145831ea92064529c54"),

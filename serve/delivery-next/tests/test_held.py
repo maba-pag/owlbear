@@ -714,6 +714,8 @@ def test_an_owner_intent_queued_during_a_failed_count_survives_the_real_fold_and
     tmp_path, clone, monkeypatch, intent
 ):
     store = Store(tmp_path / "store")
+    git(tmp_path, "init", "-q", "--bare", "origin.git")  # a local origin: cleanup's fetch needs no GitHub account
+    git(clone, "remote", "add", "origin", str(tmp_path / "origin.git"))
     names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
     plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
     change = Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=K.BUILD, task="t1"), names=names)

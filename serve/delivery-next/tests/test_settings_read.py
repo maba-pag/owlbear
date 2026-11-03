@@ -85,7 +85,9 @@ class World:
 
 def client(store: Store, reads: Reader) -> TestClient:
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
-    host = SimpleNamespace(maintenance=None, wake=SimpleNamespace(set=lambda: None), record=record, reads=reads)
+    host = SimpleNamespace(
+        maintenance=None, wake=SimpleNamespace(set=lambda: None), record=record, reads=reads, repo=None
+    )
     app = api.create_app(store, "t", host)
     return TestClient(app, base_url="http://127.0.0.1", headers={"authorization": "Bearer t"})
 

@@ -32,6 +32,8 @@ from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import chat_client, setup
 from owlbear_delivery_next.commands.chat_client import NOT_RUNNING, NOT_SERVED, OWLBEAR_DOWN, Chat, OwlBear
+from owlbear_delivery_next.git.access import Access
+from owlbear_delivery_next.github.account import AccountMissing
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import answers, api, brief_routes, launches, pages
@@ -348,15 +350,26 @@ READY = {
 GPG = "gpg --batch --yes --pinentry-mode error -u ABC --clearsign -o /dev/null /dev/null"
 
 
-def failed(table, network=None):
-    checks = readiness.readiness("github.com", lambda argv: table.get(" ".join(argv), (0, "")), network, "copilot")
+SIGNED = SimpleNamespace(
+    access=lambda: Access("ada", "the setting names it", "github.com", "tok-ada", "gh"), unset=False
+)
+
+
+def _lacking() -> Access:
+    msg = "gh holds no account ada on github.com"
+    raise AccountMissing(msg)
+
+
+def failed(table, network=None, writer=SIGNED):
+    probe = lambda argv, _env=None: table.get(" ".join(argv), (0, ""))  # noqa: E731
+    checks = readiness.readiness("github.com", probe, network, "copilot", writer)
     return [(c.name, c.fix) for c in checks if not c.ok]
 
 
 def test_readiness_gives_one_concrete_fix_per_failure():
     assert failed(READY) == []
-    assert failed(READY | {"gh auth status --hostname github.com": (1, "not logged in")}) == [
-        ("github sign-in", "Run `gh auth login --hostname github.com`")
+    assert failed(READY, writer=SimpleNamespace(access=_lacking, unset=False)) == [
+        ("github sign-in", readiness.SIGN_IN.format(host="github.com"))
     ]
     tls = failed(READY, "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed")
     assert [n for n, _ in tls] == ["network"]
@@ -382,32 +395,12 @@ def test_copilot_cli_skips_vscode_shim_and_names_it_when_alone(tmp_path, monkeyp
     monkeypatch.setenv("PATH", str(shim))
     with pytest.raises(FileNotFoundError, match=r"only VS Code's shim .*brew install --cask copilot-cli"):
         copilot_cli.cli_path()
-    checks = readiness.readiness("github.com", lambda argv: READY.get(" ".join(argv), (0, "")), None, None)
+    checks = readiness.readiness(
+        "github.com", lambda argv, _env=None: READY.get(" ".join(argv), (0, "")), None, None, SIGNED
+    )
     [check] = [c for c in checks if c.name == "copilot cli"]
     assert not check.ok
     assert check.detail == f"not found: only VS Code's shim {shim / 'copilot'}, which is not the CLI"
-
-
-ENV_FAILED = "  X Failed to log in to github.com using token (GH_TOKEN)\n  - The token in GH_TOKEN is invalid.\n"
-SIGNED_IN = "  ✓ Logged in to github.com account ada (keyring)\n  - Token scopes: 'repo'\n"
-
-
-@pytest.mark.parametrize(
-    ("status", "fix"),
-    [
-        pytest.param(f"github.com\n{ENV_FAILED}\n{SIGNED_IN}", "Unset GH_TOKEN", id="token-failed"),
-        pytest.param(
-            f"github.com\n{SIGNED_IN.replace('keyring', 'GH_TOKEN')}\n{ENV_FAILED.replace('GH_TOKEN', 'keyring')}",
-            "Run `gh auth login",
-            id="keyring-failed",
-        ),
-    ],
-)
-def test_a_failed_sign_in_shows_every_account_and_fixes_the_failed_one(status, fix):
-    probe = READY | {"gh auth status --hostname github.com": (1, status)}
-    *_, sign_in = readiness.publishing("github.com", lambda argv: probe.get(" ".join(argv), (0, "")), None)
-    assert (sign_in.name, sign_in.ok, sign_in.detail) == ("github sign-in", False, status.strip())
-    assert sign_in.fix.startswith(fix)
 
 
 def test_an_unusable_ssh_signing_key_is_a_failed_check_with_one_fix(tmp_path):
