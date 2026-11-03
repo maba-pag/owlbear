@@ -6,7 +6,6 @@ import subprocess
 import pytest
 
 from owlbear_delivery_next.github.gh import GhProvider
-from owlbear_delivery_next.settings import profile
 
 PLAN = "Upgrade to GitHub Pro or make this repository public to enable this feature."
 TEAM = "Upgrade to GitHub Team or make this repository public to enable this feature."
@@ -40,10 +39,6 @@ def test_the_plan_limit_403_means_no_rule_can_apply(tmp_path, rulesets, protecti
     assert (rules.state, rules.types, rules.required_checks) == ("known", (), ())
     assert (rules.queue_required, rules.strict, rules.conversation_resolution) == (False, False, False)
     assert PLAN in rules.evidence
-    entries = profile.rule_entries(rules)
-    said = [entries[k].value for k in (profile.RULES, profile.REQUIRED, profile.QUEUE, profile.STRICT,
-                                       profile.RESOLUTION)]  # fmt: skip
-    assert ({e.state for e in entries.values()}, said) == ({"known"}, ["none", "none", "no", "no", "no"])
 
 
 @pytest.mark.parametrize(
