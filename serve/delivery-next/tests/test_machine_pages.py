@@ -2600,6 +2600,43 @@ def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monk
 
 
 @pytest.mark.browser
+def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """#921: a recorded reason, message, cleanup or notice keeps its paths; the log's own wording names a file."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "c1"))
+    store = Store.open(Path(alpha.path))
+    kept = f"{whole_error}\nkept /Users/o/app/big/data.bin beside big/cache.db"
+    message = f"{whole_error}\nsee /Users/o/app/.github/workflows/ci.yml and .github/workflows/ci.yml"
+    cleanup = "git clean failed:\n/Users/o/app/web/node_modules/x.lock and web/dist/app.js are busy"
+    notice = "read /Users/o/app/conf/a.toml\nthen conf/b.toml"
+    events = [
+        {"event": "tool", "tool": "view", "summary": "Read /Users/o/app/src/main.py"},
+        {"event": "workspace-kept", "path": "/Users/o/.owlbear/worktrees/app-c1", "reason": kept},
+        {"event": "merge-enqueue", "pr": 7, "status": "unknown", "message": message},
+        {"event": "prepared-end", "check": "web", "cleanup": cleanup},
+        {"event": "mystery-thing", "notice": notice},
+    ]
+    with store.lock("c1") as lock:
+        for e in events:
+            store.log(lock, "c1", {**e, "at": datetime.now(UTC).isoformat()})
+    lines = {
+        "Read main.py": "Read main.py",
+        "Workspace app-c1 kept": f"Workspace app-c1 kept: {kept}",
+        "Merge queue for PR #7": f"Merge queue for PR #7: {message}",
+        "Check web ended": f"Check web ended; cleanup incomplete: {cleanup}",
+        "Mystery thing": f"Mystery thing: {notice}",
+    }
+    with browsing(monkeypatch, pds) as (page, url):
+        said = errors(page)
+        opened(page, url, alpha.id, "c1")
+        for start, line in lines.items():
+            shown = page.locator("ol.log > li", has_text=start).locator(":scope > span")
+            expect(shown).to_have_text(" ".join(line.split()))
+        assert said == []
+
+
+@pytest.mark.browser
 def test_a_failed_pick_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, whole_error: str) -> None:
     """#895 K3: a pick that cannot read the decisions shows why whole in the brief, and logs it."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime

@@ -509,15 +509,15 @@ def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_coun
         expect(lines.nth(1)).to_contain_text("Lint incomplete (ruff, mypy could not run)")
         expect(lines.nth(2)).to_contain_text("Clean-up waiting: waiting for checks")
         expect(lines.nth(3)).to_have_text(re.compile(r"Undid task t1, attempt 2$"))  # not counted with the failure
-        expect(lines.nth(4)).to_contain_text("Could not undo task t1, attempt 2: conflict in 'hero.css'")
+        expect(lines.nth(4)).to_contain_text("Could not undo task t1, attempt 2: conflict in '/Users/me/repo/hero.css'")
         expect(lines.nth(5)).to_contain_text("Lint not run: ruff: no configuration for new.py")
         expect(lines.nth(6)).to_contain_text("Workspace flip kept: large ignored files")
         expect(lines.nth(7)).to_contain_text("Merged PR #20 as 77541c4 (squash)")
         expect(lines.nth(8)).to_have_text(re.compile(r"Check feel ended; its cleanup ran$"))
         expect(lines.nth(9)).to_have_text(re.compile(r"Submitted its result\s*\u00d73, 3 times$"))
-        kept = r"Clean-up finished: workspace kept: large ignored files \(flip\)$"  # a spaced path in parentheses
-        expect(lines.nth(10)).to_have_text(re.compile(kept))
-        expect(page.locator("#detail .log")).not_to_contain_text("/Users/")
+        kept = r"Clean-up finished: workspace kept: large ignored files \(/Users/Jane Doe/\.owlbear/wt/flip\)$"
+        expect(lines.nth(10)).to_have_text(re.compile(kept))  # a recorded reason shows as recorded, spaced path whole
+        expect(lines.nth(6)).not_to_contain_text("/Users/")  # the entry's own path is named by its folder
         exact = page.evaluate(
             "(at) => at.map((iso) => new Date(iso).toLocaleString())", [events[1]["at"], events[3]["at"]]
         )
