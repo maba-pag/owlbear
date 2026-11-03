@@ -24,6 +24,7 @@ from http.client import HTTPException
 from typing import TYPE_CHECKING, Any
 from urllib.error import HTTPError
 
+from owlbear_delivery_next.git import command_failure
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
@@ -98,13 +99,13 @@ def pds(fetch: Callable[[str, float], bytes] | None = None) -> dict[str, Any]:
         msg = f"npm answered {exc.code} {exc.reason}"
         raise Failed(msg) from exc
     except (OSError, HTTPException) as exc:
-        msg = f"npm was not reached: {exc}"
+        msg = f"npm was not reached: {command_failure.failure(exc)}"
         raise Failed(msg, offline=True) from exc
     except (ValueError, KeyError, TypeError) as exc:
-        msg = "npm's answer names no version"
+        msg = f"npm's answer names no version: {command_failure.failure(exc)}"
         raise Failed(msg) from exc
     if not isinstance(latest, str) or not VERSION.fullmatch(latest):
-        msg = f"npm's answer names no version: {str(latest)[:60]}"
+        msg = f"npm's answer names no version: {latest}"
         raise Failed(msg)
     newer = _number(latest) > _number(current)
     return {"newer": newer, "current": current, "latest": latest, "detail": ""}
@@ -237,14 +238,14 @@ class Checks:
         except Failed as exc:
             failure = exc
         except Exception as exc:  # noqa: BLE001 - a check that broke is one more failure, never the loop's end
-            failure = Failed(f"{type(exc).__name__}: {exc}")
+            failure = Failed(command_failure.failure(exc))
         with self.lock:
             kept = dict(self.kept.get(name, {}))
             kept["attempt_at"] = _iso(at)
             if failure is None:
                 kept |= {"success": {"at": _iso(at), **found}, "failures": 0, "reason": "", "offline": False}
             else:
-                kept |= {"failures": int(kept.get("failures", 0)) + 1, "reason": str(failure)[:400],
+                kept |= {"failures": int(kept.get("failures", 0)) + 1, "reason": str(failure),
                          "offline": failure.offline}  # fmt: skip
             self.kept[name] = kept
             self.checking.discard(name)

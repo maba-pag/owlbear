@@ -89,6 +89,7 @@ def test_pds_is_newer_unchanged_offline_or_refused_against_the_vendored_release(
     with pytest.raises(Failed, match="npm was not reached") as failed:
         update_checks.pds()
     assert failed.value.offline is True
+    assert str(failed.value) == f"npm was not reached: OSError: no route to {update_checks.PDS}"
 
 
 def test_impeccable_is_one_component_its_notice_kept_for_the_other_pages_and_offline_unknown(monkeypatch):
@@ -157,6 +158,30 @@ def test_a_failure_shows_after_two_in_a_row_and_offline_is_never_current(monkeyp
     assert (
         json.loads((local_home.root() / update_checks.STATE).read_text())["impeccable"]["success"]["latest"] == "2.0.0"
     )
+
+
+@pytest.mark.parametrize("answer", ["no JSON", "a long version", "unreachable", "a broken check"])
+def test_a_failing_check_says_why_whole_on_the_page_and_in_the_log(answer, whole_error, monkeypatch):
+    def raising(_url: str, _seconds: float) -> bytes:
+        raise PermissionError(whole_error)
+
+    def broken() -> dict:
+        raise RuntimeError(whole_error)
+
+    unparsed = "JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+    check, why = {
+        "no JSON": (lambda: update_checks.pds(answering(b"{not json")), f"npm's answer names no version: {unparsed}"),
+        "a long version": (lambda: update_checks.pds(answering(json.dumps({"version": whole_error}).encode())),
+                           f"npm's answer names no version: {whole_error}"),
+        "unreachable": (lambda: update_checks.pds(raising), f"npm was not reached: PermissionError: {whole_error}"),
+        "a broken check": (broken, f"RuntimeError: {whole_error}"),
+    }[answer]  # fmt: skip
+    monkeypatch.setitem(CHECKS, "pds", check)
+    said: list[str] = []
+    checks = Checks(SimpleNamespace(say=said.append, stopping=threading.Event()), Clock(), lambda work: work())
+
+    assert [s[1] for s in seen(checks, "pds", 2)] == ["", why]  # shown once two came in a row
+    assert said == [f"update check of Porsche Design System failed: {why}"] * 2
 
 
 def test_a_newer_version_stays_available_through_failures_until_withdrawn_or_applied(monkeypatch):
