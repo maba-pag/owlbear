@@ -1,21 +1,26 @@
 """#746: a refused curation run's edits never reach the remote, while every other writer's commits still do."""
 
+import functools
+import logging
+import multiprocessing
 import re
 import subprocess
 import threading
 import time
+from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from owlbear_memory import MemoryBusyError, MemoryCategory, MemoryEngine, MemoryState, storage, writer_lock
 
 from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryCurationResult
 from owlbear_delivery_next.change_flow.worktree import git
-from owlbear_delivery_next.local_system import data_place, preload
-from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.local_system import curation_apply, data_place, preload
+from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import curation, curation_tree
+from owlbear_delivery_next.machine_host import curation, curation_resume, curation_snapshots, curation_tree
 from owlbear_delivery_next.runtimes.session_result import Run
 
 REPORT = MemoryCurationResult(summary="curated", entries=[])
@@ -495,3 +500,338 @@ def test_the_checkout_lists_held_runs_as_its_own_and_no_finished_runs_worktree(r
     drained(job)
 
     assert data_place.inventory(DataRepo(repo)) == ["1 refused memory curation run(s) held under refs/owlbear/curation"]
+
+
+KEY = "shop:" + "0" * 32
+CUT = "was cut short while its files were copied in"
+
+
+def _accepting(tree: curation_tree.Tree):
+    return functools.partial(tree.accept, "shop", KEY, None)
+
+
+def _until_stopped(act, copied: str, watched: tuple[str, ...]) -> None:
+    """A host doing *act*, stopped for good once the first of *watched* is copied in, or once an apply's record is
+    written when *watched* is empty: the parent kills it."""
+
+    def stop(name: str) -> None:
+        Path(copied).write_text(name)
+        time.sleep(120)
+
+    real, record = curation_tree.atomic_write, curation_apply.write
+
+    def write(path, *args, **kw) -> None:
+        real(path, *args, **kw)
+        if Path(path).name in watched:
+            stop(Path(path).name)
+
+    def kept(*args) -> None:
+        record(*args)
+        if not watched:
+            stop("")
+
+    curation_tree.atomic_write, curation_apply.write = write, kept
+    act()
+
+
+def _stop(act, at: Path, watched: tuple[str, ...] = ()) -> str:
+    """Do *act* in a child the parent kills where `_until_stopped` stops; the file it copied last."""
+    copied = at / "copied"
+    copied.unlink(missing_ok=True)
+    child = multiprocessing.get_context("spawn").Process(target=_until_stopped, args=(act, str(copied), watched))
+    child.start()
+    end = time.monotonic() + 30
+    while not copied.exists():
+        assert child.is_alive(), "the host stopped before it copied a file in"
+        assert time.monotonic() < end, "the host copied nothing in"
+        time.sleep(0.05)
+    child.kill()
+    child.join()
+    return copied.read_text()
+
+
+def _run(repo: Path, at: Path, curate) -> curation_tree.Tree:
+    """A run seeded from the checkout, whose curator calls *curate* with its worktree and commits."""
+    tree = curation_tree.seed(DataRepo(repo), at / "run", ["owlbear", "shop"])
+    curate(tree.root)
+    git(tree.root, "add", "-A")
+    git(tree.root, "commit", "-qm", CURATOR)
+    return tree
+
+
+def stopped(repo: Path, remote: Path, at: Path) -> SimpleNamespace:
+    """An accepted run whose apply a stop cut short after the first of its two curated files was copied in.
+
+    Its run rewords A and adds B, curated in shop, and removes owlbear's curated C with its own commit; it rewords
+    pending P and deletes owlbear's D without a commit, as the memory server defers a deletion.
+    """
+    shop, owlbear = repo / "shop" / "memory", repo / "owlbear" / "memory"
+    a, c, d = curated(shop, "Reworded"), curated(owlbear, "Removed"), curated(owlbear, "Deferred")
+    pushed(repo, "curated entries")
+    p = pending(shop, "Pending")
+    seed = {rel(e, f): (repo / rel(e, f)).read_bytes() for e, f in ((a, "shop"), (c, "owlbear"), (d, "owlbear"))}
+    tree = curation_tree.seed(DataRepo(repo), at / "run", ["owlbear", "shop"])
+    reword(tree.root / "shop" / "memory", a.id, "Reworded: the curator's version")
+    b = curated(tree.root / "shop" / "memory", "Added")
+    reword(tree.root / "shop" / "memory", p.id, "Pending: reworded")
+    (tree.root / rel(d, "owlbear")).unlink()
+    git(tree.root, "rm", "-q", "--", rel(c, "owlbear"))
+    git(tree.root, "commit", "-qm", CURATOR)
+    target = {rel(e): (tree.root / rel(e)).read_bytes() for e in (a, b, p)}
+    first = f"shop/memory/{_stop(_accepting(tree), at, (f'{a.id}.md', f'{b.id}.md'))}"
+    second = ({rel(a), rel(b)} - {first}).pop()
+    assert curation_apply.read(DataRepo(repo)) is not None
+    assert ((repo / first).read_bytes(), curation_tree._read(repo / second)) == (target[first], seed.get(second))  # noqa: SLF001
+    assert [e for e in (c, d) if (repo / rel(e, "owlbear")).exists()] == []  # removed first, as the apply does
+    start = remote_main(remote)
+    return SimpleNamespace(first=first, second=second, c=c, d=d, p=p, seed=seed, target=target, start=start)
+
+
+def idle(repo: Path) -> curation.Curation:
+    return curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=lambda _cfg: pytest.fail("ran"))
+
+
+def remote_main(remote: Path) -> str:
+    return bare(remote, "rev-parse", "main").stdout.decode().strip()
+
+
+def test_a_stop_while_an_accepted_runs_files_are_copied_in_publishes_none_until_the_restart_finishes_them(
+    repo, remote, tmp_path, caplog
+) -> None:
+    """#875: a hand chat's batch commits a copied file, yet no push of the checkout runs until the set is whole."""
+    from owlbear_memory_mcp.git import commit_batch, cut_short  # noqa: PLC0415 - the browser job syncs only this package
+
+    left = stopped(repo, remote, tmp_path)
+    shared = DataRepo(repo)
+    sha = commit_batch(repo / "shop" / "memory", session_type="curation").commit_sha
+    assert git(repo, "show", "--name-only", "--format=", sha).split() == [left.first]
+
+    sent = shared.git("push", "origin", f"{sha}:refs/heads/main")
+    with shared.locked():
+        notice = shared.publish([], "a later writer")
+    assert (sent.returncode, CUT in sent.stderr, CUT in notice, CUT in cut_short(repo)) == (1, True, True, True)
+    assert remote_main(remote) == left.start
+
+    job = idle(repo)
+    with job.lock:
+        runs = job.load()
+        runs.folders["shop"] = curation.FolderRun(state="failed", reason=curation.INTERRUPTED)
+        job._write(runs)  # noqa: SLF001 - the row a restart leaves
+    with caplog.at_level(logging.WARNING):
+        resumed = curation_resume.recover(job)
+
+    assert (resumed.folder, resumed.done) == ("shop", True)
+    for path, did in (
+        (left.first, "as the run left it"), (left.second, "written now"),
+        (rel(left.c, "owlbear"), "as the run left it"), (rel(left.d, "owlbear"), "as the run left it"),
+    ):  # fmt: skip
+        assert f"{path}: {did}" in resumed.said
+    assert resumed.said.endswith("; published")
+    assert remote_has(remote, sha)
+    for path in (left.first, left.second):
+        assert remote_bytes(remote, path) == left.target[path] == (repo / path).read_bytes()
+    removed = rel(left.c, "owlbear")
+    assert (remote_bytes(remote, removed), (repo / removed).exists()) == (None, False)
+    deferred = rel(left.d, "owlbear")  # its deletion stays uncommitted, as the run's commits did not make it
+    assert (remote_bytes(remote, deferred), (repo / deferred).exists()) == (left.seed[deferred], False)
+    assert (remote_bytes(remote, rel(left.p)), (repo / rel(left.p)).read_bytes()) == (None, left.target[rel(left.p)])
+    assert git(repo, "status", "--porcelain").splitlines() == [f" D {deferred}", f"?? {rel(left.p)}"]
+    assert curation_apply.read(shared) is None
+    assert "memory curation of shop: finished the apply a stop cut short: " in caplog.text
+    assert job.load().folders["shop"].reason == (
+        f"{curation.INTERRUPTED}; its accepted edits were finished afterwards: {resumed.said}"
+    )
+    assert curation_tree.resume(shared) is None
+
+
+def test_a_file_changed_after_the_stop_is_kept_and_published_with_the_rest(repo, remote, tmp_path) -> None:
+    shop = repo / "shop" / "memory"
+    x, y = curated(shop, "Saved later"), curated(shop, "Untouched")
+    pushed(repo, "curated entries")
+
+    def curate(root: Path) -> None:
+        reword(root / "shop" / "memory", x.id, "Saved later: the curator's version")
+        reword(root / "shop" / "memory", y.id, "Untouched: the curator's version")
+
+    tree = _run(repo, tmp_path, curate)
+    target = (tree.root / rel(y)).read_bytes()
+    _stop(_accepting(tree), tmp_path)
+    changed = reword(shop, x.id, "Saved later: a hand chat's version")
+
+    resumed = curation_tree.resume(DataRepo(repo))
+
+    assert resumed.done
+    assert f"{rel(x)}: changed after the stop; that version is kept" in resumed.said
+    assert f"{rel(y)}: written now" in resumed.said
+    assert remote_bytes(remote, rel(x)) == (repo / rel(changed)).read_bytes()
+    assert remote_bytes(remote, rel(y)) == target
+
+
+def _made_global(entry):
+    return lambda root: git(root, "mv", rel(entry), f"memory/{entry.id}.md")
+
+
+@pytest.mark.parametrize("during", ["accept", "recovery"])
+def test_a_stop_while_an_entry_is_made_global_never_leaves_it_in_both_folders(repo, remote, tmp_path, during) -> None:
+    g = curated(repo / "shop" / "memory", "Shared")
+    pushed(repo, "a curated entry")
+    moved = f"memory/{g.id}.md"
+    accepting = _accepting(_run(repo, tmp_path, _made_global(g)))
+
+    if during == "accept":
+        _stop(accepting, tmp_path, (f"{g.id}.md",))
+    else:
+        _stop(accepting, tmp_path)
+        _stop(functools.partial(curation_tree.resume, DataRepo(repo)), tmp_path, (f"{g.id}.md",))
+
+    assert ((repo / rel(g)).exists(), (repo / moved).exists()) == (False, True)
+    assert curation_tree.resume(DataRepo(repo)).done
+    assert (remote_bytes(remote, rel(g)), remote_bytes(remote, moved)) == (None, (repo / moved).read_bytes())
+
+
+def test_an_entry_changed_after_a_stop_before_its_move_stays_where_it_was(repo, remote, tmp_path) -> None:
+    """A hand chat's challenge of an entry a stopped run made Global keeps it in its project; no Global copy remains."""
+    shop = repo / "shop" / "memory"
+    g = curated(shop, "Shared")
+    pushed(repo, "a curated entry")
+    _stop(_accepting(_run(repo, tmp_path, _made_global(g))), tmp_path)
+    challenged = MemoryEngine(shop).get_entry(g.id)
+    MemoryEngine(shop).record_factually_wrong(g.id, task_id="task-1", expected_revision=challenged.revision)
+
+    resumed = curation_tree.resume(DataRepo(repo))
+
+    moved = f"memory/{g.id}.md"
+    assert resumed.done
+    assert f"{moved}: left as it was, as {rel(g)} of its entry changed after the stop" in resumed.said
+    assert (remote_bytes(remote, rel(g)), remote_bytes(remote, moved)) == ((repo / rel(g)).read_bytes(), None)
+    assert MemoryEngine(shop).get_entry(g.id).state == MemoryState.CONTESTED
+    assert not (repo / moved).exists()
+
+
+@pytest.mark.parametrize(
+    "refusal",
+    [
+        "this automatic trigger is off in the machine settings; it waits until it is turned on",
+        f"{curation_snapshots.UNSET[0]}agents.curator.model{curation_snapshots.UNSET[1]}",
+    ],
+)
+def test_a_refusal_whose_folders_apply_stays_cut_short_is_still_one_with_one_note(repo, refusal) -> None:
+    entry = curated(repo / "shop" / "memory", "Lesson")
+    pushed(repo, "a curated entry")
+    shared = DataRepo(repo)
+    seed = (repo / rel(entry)).read_bytes()
+    step = curation_apply.Step(curation_apply.digest(seed), "the run's version", removed=False)
+    curation_apply.write(shared, curation_apply.Apply("shop", {rel(entry): step}))
+    (Path(git(repo, "rev-parse", "--absolute-git-dir").strip()) / "index.lock").write_text("")  # a lingering Git's
+    job, at = idle(repo), datetime.now(UTC)
+    with job.lock:
+        runs = job.load()
+        runs.folders["shop"] = curation.FolderRun(state="failed", started_at=at, ended_at=at, reason=refusal)
+        job._write(runs)  # noqa: SLF001 - a refusal main wrote before any session
+
+    curation_resume.recover(job)
+    resumed = curation_resume.recover(job)
+
+    row = job.load().folders["shop"]
+    assert (curation_snapshots.refused(row), curation.legacy_uncertain(row)) == (True, False)
+    assert row.reason == f"{refusal}; its accepted edits could not be finished yet: {resumed.said}"
+
+
+def test_an_apply_that_cannot_be_finished_keeps_its_hold_and_refuses_the_next_run(
+    repo, remote, tmp_path, caplog
+) -> None:
+    e = curated(repo / "owlbear" / "memory", "Elsewhere")
+    left = stopped(repo, remote, tmp_path)
+    shared = DataRepo(repo)
+    before = (repo / rel(e, "owlbear")).read_bytes()
+    record = curation_apply.where(shared).read_bytes()
+    lock = Path(git(repo, "rev-parse", "--absolute-git-dir").strip()) / "index.lock"
+    lock.write_text("")  # a lingering Git process's
+
+    job = idle(repo)
+    with caplog.at_level(logging.ERROR):
+        resumed = curation_resume.recover(job)
+    with shared.locked():
+        notice = shared.publish([], "a later writer")
+
+    assert (resumed.done, "not committed: " in resumed.said, CUT in resumed.said, CUT in notice) == (
+        False, True, True, True
+    )  # fmt: skip
+    assert "memory curation of shop: could not finish the apply a stop cut short: " in caplog.text
+    assert job.load().folders["shop"].reason == f"its accepted edits could not be finished yet: {resumed.said}"
+    assert (curation_apply.where(shared).read_bytes(), remote_main(remote)) == (record, left.start)
+
+    made = {}
+
+    def run(cfg) -> Run:
+        made["bytes"] = (
+            reword(cfg.memory, e.id, "Elsewhere: the curator's version") and (cfg.memory / f"{e.id}.md").read_bytes()
+        )
+        return Run(cfg.session_id, ending="result", payload=REPORT, termination=Termination(confirmed=True))
+
+    later = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
+    later.start("owlbear")
+    row = drained(later, "owlbear")
+
+    assert (row.state, row.reason.startswith("ended result: refused, "), CUT in row.reason) == ("failed", True, True)
+    assert held(repo, row.reason, rel(e, "owlbear")) == made["bytes"]
+    assert ((repo / rel(e, "owlbear")).read_bytes(), remote_bytes(remote, rel(e, "owlbear"))) == (before, before)
+    assert curation_apply.where(shared).read_bytes() == record
+
+    lock.unlink()
+    assert curation_tree.resume(shared).done
+    assert remote_bytes(remote, left.second) == left.target[left.second]
+
+
+def test_a_restart_that_cannot_open_the_shared_repository_logs_why_and_goes_on(caplog) -> None:
+    def shared() -> DataRepo:
+        msg = "the git folder of /data cannot be found: not a git repository"
+        raise DataRepoError(msg)
+
+    job = curation.Curation(Slots(lambda: 1), shared=shared, run=lambda _cfg: pytest.fail("ran"))
+    resumed = curation_resume.recover(job)
+
+    said = "DataRepoError: the git folder of /data cannot be found: not a git repository"
+    assert resumed == curation_tree.Resumed("", done=False, said=said)
+    assert "the apply a stop cut short could not be checked: " + said in caplog.text
+
+
+def _hold(memory: str, acquired, release) -> None:
+    with writer_lock(memory, timeout=5):
+        acquired.set()
+        release.wait(timeout=30)
+
+
+def test_an_apply_whose_folder_another_process_holds_stays_cut_short(repo, monkeypatch) -> None:
+    entry = curated(repo / "shop" / "memory", "Lesson")
+    pushed(repo, "a curated entry")
+    shared, seed = DataRepo(repo), (repo / rel(entry)).read_bytes()
+    step = curation_apply.Step(curation_apply.digest(seed), "the run's version", removed=False)
+    curation_apply.write(shared, curation_apply.Apply("shop", {rel(entry): step}))
+    monkeypatch.setattr(curation_tree, "writer_lock", functools.partial(writer_lock, timeout=0.1))
+    spawn = multiprocessing.get_context("spawn")
+    acquired, release = spawn.Event(), spawn.Event()
+    holder = spawn.Process(target=_hold, args=(str(repo / "shop" / "memory"), acquired, release))
+    holder.start()
+    try:
+        assert acquired.wait(timeout=30)
+        resumed = curation_tree.resume(shared)
+    finally:
+        release.set()
+        holder.join()
+
+    assert (resumed.done, resumed.said.startswith("MemoryBusyError: "), CUT in resumed.said) == (False, True, True)
+    assert ((repo / rel(entry)).read_bytes(), curation_apply.read(shared) is not None) == (seed, True)
+
+
+def test_an_apply_finished_first_leads_the_refusal_of_a_run_whose_file_changed_meanwhile(repo, tmp_path) -> None:
+    entry = curated(repo / "shop" / "memory", "Lesson")
+    pushed(repo, "a curated entry")
+    tree = curation_tree.seed(DataRepo(repo), tmp_path / "run", ["shop"])
+    reword(tree.root / "shop" / "memory", entry.id, "Lesson: the curator's version")
+    reword(repo / "shop" / "memory", entry.id, "Lesson: saved meanwhile")
+
+    refusal, notice = tree.accept("shop", KEY, curation_tree.Resumed("shop", done=True, said="x: written now"))
+
+    assert refusal.startswith("first finished the apply a stop cut short of shop: x: written now; refused, ")
+    assert (f"{rel(entry)} changed meanwhile" in refusal, notice) == (True, "")

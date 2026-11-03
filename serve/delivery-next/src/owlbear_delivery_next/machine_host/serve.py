@@ -27,7 +27,7 @@ import uvicorn
 
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
-from owlbear_delivery_next.machine_host import alias, app, environment, handover, versions
+from owlbear_delivery_next.machine_host import alias, app, curation_resume, environment, handover, versions
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.api import link
 from owlbear_delivery_next.project_host.decision_routes import OWLBEAR
@@ -189,7 +189,8 @@ def _fill(machine: Machine, *, cloning: bool) -> None:
 def _provisioned(machine: Machine) -> bool:
     """Finish or undo a move and adopt ``~/.owlbear/data``, never cloning; whether a clone is still to be done.
 
-    A failure is said and the projects load without the shared data, each saying why; never fatal.
+    A failure is said and the projects load without the shared data, each saying why; never fatal. Then an accepted
+    curation run's apply that a stop cut short is finished (`curation_resume`), unless the checkout is not cloned yet.
     """
     try:
         _, done = data_place.provision(clone=False)
@@ -201,7 +202,10 @@ def _provisioned(machine: Machine) -> bool:
         record = data_place.stored() or {}
     except data_repo.DataRepoError:
         return False
-    return bool(record.get("remote")) and not record.get("repository") and not record.get("moving_to")
+    cloning = bool(record.get("remote")) and not record.get("repository") and not record.get("moving_to")
+    if not cloning:  # a checkout still to be cloned holds no cut-short apply
+        curation_resume.recover(machine.curation)
+    return cloning
 
 
 def _cloning(machine: Machine) -> None:

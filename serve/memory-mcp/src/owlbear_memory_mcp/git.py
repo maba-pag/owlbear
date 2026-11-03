@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import fcntl
+import json
 import os
 import re
 import shlex
@@ -440,7 +441,10 @@ def _commit_batch_locked(memory_dir: Path, repo_dir: Path, *, session_type: str)
 
 
 def commit_batch(memory_dir: Path, *, session_type: str) -> BatchCommitResult:
-    """Commit validated non-pending memory changes and tracked deletions."""
+    """Commit validated non-pending memory changes and tracked deletions.
+
+    The shared repository's lock is taken first, then the folder's: a publication's rebase never sees the commit land.
+    """
     memory_dir = Path(memory_dir).resolve()
     if not memory_dir.exists():
         return BatchCommitResult(None)
@@ -451,7 +455,7 @@ def commit_batch(memory_dir: Path, *, session_type: str) -> BatchCommitResult:
 
     repo_dir = Path(_git(memory_dir, "rev-parse", "--show-toplevel"))
     try:
-        with writer_lock(memory_dir):
+        with repo_locked(repo_dir), writer_lock(memory_dir):
             repair_duplicate_ids(memory_dir)
             return _commit_batch_locked(memory_dir, repo_dir, session_type=session_type)
     except (DuplicateEntryError, MemoryBusyError) as exc:
@@ -477,6 +481,21 @@ def repo_locked(root: Path, wait: float = 30.0) -> Iterator[None]:
         yield
     finally:
         os.close(fd)
+
+
+def cut_short(root: Path) -> str:
+    """Why nothing may move in the shared repository: Delivery's apply of a curation run was cut short; else nothing.
+
+    The record names the run's files where they are, and Delivery finishes the apply from it.
+    """
+    path = Path(_git(root, "rev-parse", "--absolute-git-dir")) / "owlbear-curation-apply.json"  # beside the lock
+    if not path.exists():
+        return ""
+    folder = json.loads(path.read_text(encoding="utf-8"))["folder"]
+    return (
+        f"the memory curation of {folder} was cut short while its files were copied in; OwlBear finishes it at its "
+        f"next start, or before its next curation run (record: {path})"
+    )
 
 
 def _known(repo_dir: Path, rel: str) -> bool:
@@ -522,7 +541,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         detail = format_git_failure(exc)
         sys.stderr.write(f"error: {detail}\n")
         return exc.returncode or 1
-    except ValueError as exc:
+    except (ValueError, TimeoutError) as exc:
         sys.stderr.write(f"error: {exc}\n")
         return 1
 
