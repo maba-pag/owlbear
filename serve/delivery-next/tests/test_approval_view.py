@@ -334,6 +334,11 @@ def test_an_answer_the_change_no_longer_waits_on_is_refused_and_the_reason_stays
         page.route(detail, frozen)
         form = page.locator("section.act", has_text="Question q1")
         expect(form).to_contain_text("Which language?")
+        for _ in range(100):  # the page's next poll freezes the question's detail before the Change moves
+            if "body" in stale:
+                break
+            page.wait_for_timeout(100)
+        assert "Which language?" in stale["body"]
         moved = asking().model_copy(update={"step": m.Step(kind=m.StepKind.SHAPE), "outcome": None})
         store.write(Lock("greet"), moved)
         form.get_by_label("English").check()
