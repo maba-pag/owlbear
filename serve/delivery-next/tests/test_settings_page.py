@@ -257,9 +257,18 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
     with settings_page(store, pds) as page:
         c = TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1",
                        headers={"authorization": "Bearer t"})  # fmt: skip
-        got = c.get("/api/next/config").json()
-        newer = got["project"] | {"widths": [1600]}
-        assert c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": newer}).status_code == 200
+
+        def intervene(route) -> None:
+            assert route.request.method == "PUT"
+            got = c.get("/api/next/config").json()
+            assert route.request.post_data_json["rev"] == got["project_rev"]
+            newer = got["project"] | {"widths": [1600]}
+            changed = c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": newer})
+            assert changed.status_code == 200
+            assert changed.json()["project_rev"] != got["project_rev"]
+            route.continue_()
+
+        page.route("**/api/next/config/project", intervene, times=1)
         pds.group(page, "agents")
         page.get_by_label("Minutes per session, reviewer").fill("25")
         page.get_by_label("Minutes per session, builder").fill("35")
@@ -273,14 +282,18 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
         expect(page.locator("#groups a[href='#agents'] p-tag")).to_have_text("3 unsaved")
         save = page.get_by_role("region", name="Save settings").get_by_role("button", name="Save project settings")
         save.click()
-        pds.answer(page, "Save project settings")
+        with page.expect_response("**/api/next/config/project") as refused:
+            pds.answer(page, "Save project settings")
+        assert refused.value.status == 409
         expect(page.locator("#error")).to_contain_text("kept your unsaved edits; check them and save again.")
         expect(unsaved).to_have_text(["3 unsaved", "1 unsaved", "1 unsaved"])
         expect(pds.select(page, "Merge method")).to_have_js_property("value", "squash")
         pds.group(page, "agents")
         expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("25")
         save.click()  # the answered confirmation may still be fading out with its own button of this name
-        pds.answer(page, "Save project settings")
+        with page.expect_response("**/api/next/config/project") as accepted:
+            pds.answer(page, "Save project settings")
+        assert accepted.value.status == 200
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         expect(unsaved).to_have_count(0)
     saved = json.loads(store.config_path.read_text())

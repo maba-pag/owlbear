@@ -7,6 +7,7 @@ Nothing here writes or spends.
 from __future__ import annotations
 
 import contextlib
+import re
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -88,7 +89,8 @@ def _settings(st: Store) -> dict[str, Any]:
 def spotter(projects: units.Projects, records: list[dict[str, Any]], now: datetime) -> dict[str, Any]:
     """Each loaded project's Spotter settings, each project's spend over the last week and the Spotter's test.
 
-    A look skipped before it began (no SDK session, no credits) is counted apart: it neither ran nor spent.
+    A look skipped before it began (no SDK session, no credits) is counted apart: it neither ran nor spent. A summary
+    the Spotter wrote at a step's end counts the n sampled looks it stands for.
     """
     spend: dict[str, dict[str, Any]] = {}
     for r in records:
@@ -96,7 +98,8 @@ def spotter(projects: units.Projects, records: list[dict[str, Any]], now: dateti
             s = spend.setdefault(str(r.get("project") or ""),
                                  {"looks": 0, "credits": 0.0, "unknown": 0, "stopped": 0, "skipped": 0})  # fmt: skip
             if r.get("skipped") and not r.get("sdk_sessions") and not r.get("credits"):
-                s["skipped"] += 1
+                # spotter.drain's summary of n sampled looks: "...: <n> sampled looks skipped..."
+                s["skipped"] += int(m[1]) if (m := re.search(r"(\d+) sampled looks skipped", r["skipped"])) else 1
                 continue
             s["looks"] += 1
             s["credits"] += float(r.get("credits") or 0.0)
