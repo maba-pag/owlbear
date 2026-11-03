@@ -133,18 +133,33 @@ def exact(c: Change, field: str, key: str, text: str, **more: object) -> Amended
 def reverted(c: Change, a: Amendment) -> list[AmendedItem]:
     """The exact items that undo applied amendment *a*: each one back to its wording and shape before it.
 
-    A removed item comes back under its own key; a scope line and a decision are known by their new key.
+    A removed item comes back under its own key; a scope line is known by its new key, a decision by the one that
+    replaced it since, if any.
     """
     out, before = [], max((x for x in c.brief.approved if x.version < (a.version or 0)), key=lambda x: x.version)
     for i in a.items:
         why = f"reverts {a.id}"
-        if i.field == "ui":
+        if i.field == "decision" and i.key:
+            key, was = _successor(c, i.key)
+            out.append(exact(c, "decision", key, i.old, why=why, question=was) if i.old else
+                       exact(c, "decision", key, "", remove=True, why=why))  # fmt: skip
+        elif i.field == "ui":
             out.append(exact(c, "ui", "", i.old, why=why))
         elif not i.old:  # added: removed again
             out.append(exact(c, i.field, i.key, "", remove=True, why=why))
         else:
             out.append(exact(c, i.field, i.key, i.old, why=why, **_shape(before, i)))
     return out
+
+
+def _successor(c: Change, key: str) -> tuple[str, str]:
+    """The decision that replaced *key* since, if one is current ("" once removed), and *key*'s question."""
+    held = {d.id: d for x in (*c.brief.approved, c.brief) for d in x.decisions}
+    question = held[key].question if key in held else ""
+    after, current = {d.replaces: d.id for d in held.values() if d.replaces}, {d.id for d in c.brief.decisions}
+    while key and key not in current:
+        key = after.get(key, "")
+    return key, question
 
 
 def _shape(before: Brief, i: AmendedItem) -> dict[str, object]:
@@ -156,8 +171,6 @@ def _shape(before: Brief, i: AmendedItem) -> dict[str, object]:
         case "check":
             p = next((p for p in before.checks if p.id == i.key), None)
             return {"steps": p.steps, "covers": p.criteria, "visual": p.visual} if p else {}
-        case "decision":
-            return {"question": next((d.question for d in before.decisions if d.id == i.key), i.question)}
     return {}
 
 

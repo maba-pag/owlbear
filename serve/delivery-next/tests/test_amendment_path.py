@@ -942,3 +942,18 @@ def test_a_new_check_covers_just_the_criterion_its_candidate_adds():
 
     assert [(p.id, p.criteria) for p in c.checks][-1] == ("check-3", ["AC-3"])
     assert [k.id for k in c.brief.criteria] == ["AC-1", "AC-2", "AC-3"]
+
+
+def test_reverting_a_decision_amendment_another_amended_since_restores_the_decision_in_place():
+    c = change()
+    for words in ("SQLite and Postgres", "Postgres only"):
+        through(c, item("decision", c.brief.decisions[0].id, words), said=verdict("weaker", qualifies=False))
+        answer(c, "yes")
+    latest = c.brief.decisions[0].id
+
+    amending.objected(c, ObjectionItem(amendment="A1", at=NOW), NOW)
+    answer(c, "revert")
+    amending.opened(c, amending.current(c), RoundPolicy())
+    amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge-3", NOW)
+
+    assert [(d.question, d.answer, d.replaces) for d in c.brief.decisions] == [("Which store?", "SQLite only", latest)]
