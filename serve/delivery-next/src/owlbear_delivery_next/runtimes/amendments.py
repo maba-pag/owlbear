@@ -22,12 +22,14 @@ if TYPE_CHECKING:
 def amendable(c: Change) -> tuple[str, ...]:
     """The brief's items a proposal may name, as ``field:key``: the owner's own included; adding needs no key.
 
-    Constraints and assumptions are the Change's own brief decisions; a project decision is never amended here.
+    Constraints and assumptions are the Change's own brief decisions; a project decision is never amended here. The
+    ``new:`` entries are the ids the criteria a candidate adds take, for a check's ``covers``.
     """
     b = c.brief
     refs = [f"criterion:{k.id}" for k in b.criteria] + [f"visual:{s.name}" for s in b.visual]
     refs += [f"check:{p.id}" for p in c.checks] + [f"scope:{line}" for line in b.scope]
-    return (*refs, *(f"decision:{d.id}" for d in b.decisions if d.id and d.scope == "change"))
+    refs += [f"decision:{d.id}" for d in b.decisions if d.id and d.scope == "change"]
+    return (*refs, *(f"new:{k}" for k in amend_apply.fresh(c)))
 
 
 def check(args: tools.Args, allowed: tuple[str, ...]) -> list[str]:
@@ -52,6 +54,8 @@ def check(args: tools.Args, allowed: tuple[str, ...]) -> list[str]:
 def _errors(items: Sequence[tools.Amend | amend_tools.CandidateItem], allowed: tuple[str, ...], name: str) -> list[str]:
     errors, seen = [], set()
     gone = {f"criterion:{a.key}" for a in items if a.field == "criterion" and a.remove}
+    adds = sum(a.field == "criterion" and not a.key and not a.remove for a in items)
+    added = [r[4:] for r in allowed if r.startswith("new:")][:adds]
     for a in items:
         ref = f"{a.field}:{a.key}"
         if a.key and ref in seen:
@@ -70,16 +74,19 @@ def _errors(items: Sequence[tools.Amend | amend_tools.CandidateItem], allowed: t
         elif a.field == "scope" and not a.remove and not tools.relative(a.text):
             errors.append(f'{name}: scope {a.text} is not repository-relative - e.g. "packages/app"')
         if isinstance(a, amend_tools.CandidateItem):
-            errors += _shaped(a, allowed, gone, name)
+            errors += _shaped(a, allowed, gone, name, added)
     return errors
 
 
-def _shaped(a: amend_tools.CandidateItem, allowed: tuple[str, ...], gone: set[str], name: str) -> list[str]:
+def _shaped(
+    a: amend_tools.CandidateItem, allowed: tuple[str, ...], gone: set[str], name: str, added: list[str]
+) -> list[str]:
     """A candidate item's parts besides its wording go only with the field they belong to."""
-    wrong = [k for k in a.covers if f"criterion:{k}" not in allowed or f"criterion:{k}" in gone]
+    wrong = [k for k in a.covers if k not in added and (f"criterion:{k}" not in allowed or f"criterion:{k}" in gone)]
+    unkept = f"{name}: covers {', '.join(wrong)} - not criteria the brief keeps or the candidate adds"
     return [
         *([f"{name}: covers is only for a check"] if a.covers and a.field != "check" else []),
-        *([f"{name}: covers {', '.join(wrong)} - not criteria the brief keeps"] if wrong else []),
+        *([unkept] if wrong else []),
         *([f"{name}: actions are only for a visual state"] if a.actions is not None and a.field != "visual" else []),
         *([f"{name}: visual is only for a check"] if a.visual is not None and a.field != "check" else []),
     ]
@@ -110,8 +117,13 @@ def prepare(c: Change, a: Amendment, at: Path) -> str:
         f"From {_FROM[a.source]}: {a.reason}", *_asked(c, a), *(f"- evidence: {e}" for e in a.evidence),
         *(["What it proposed:", *proposed] if proposed else []), *_declined(c), "", *_current(c),
         *step_decisions.held(), "",
-        "## Candidate", CANDIDATE_RULES, "", "## Finish", FINISH,
+        "## Candidate", CANDIDATE_RULES, _added(c), "", "## Finish", FINISH,
     ])  # fmt: skip
+
+
+def _added(c: Change) -> str:
+    ids = ", ".join(amend_apply.fresh(c))
+    return f"Criteria the candidate adds take, in the order listed, the ids {ids}; a check's `covers` may name them."
 
 
 def _asked(c: Change, a: Amendment) -> list[str]:
@@ -135,8 +147,8 @@ def revise(c: Change, a: Amendment, at: Path) -> str:
         "## Candidate", *_items(a), "",
         "## Findings", *found, "",
         ("Submit the whole candidate again, changed to fix each finding you accept. List each finding you judge wrong "
-         "in `rejected` with your reason; one the owner sent back to you can't be rejected."), CANDIDATE_RULES, "",
-        "## Finish", FINISH,
+         "in `rejected` with your reason; one the owner sent back to you can't be rejected."), CANDIDATE_RULES,
+        _added(c), "", "## Finish", FINISH,
     ])  # fmt: skip
 
 

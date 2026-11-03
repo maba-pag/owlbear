@@ -572,7 +572,7 @@ def test_a_check_states_the_criteria_it_covers_and_every_shape_is_shown_where_it
     a = amending.start(c, "worker", reason="a check per criterion", now=NOW)
     wrong = CandidateResult(items=[item("check", "", "it says hi", covers=["AC-9"]), item(covers=["AC-2"])])
     assert amendments.check(wrong, amendments.amendable(c)) == [
-        "items: covers AC-9 - not criteria the brief keeps", "items: covers is only for a check"
+        "items: covers AC-9 - not criteria the brief keeps or the candidate adds", "items: covers is only for a check"
     ]  # fmt: skip
     new = item("check", "", "it says hi", steps=["open /hi"], covers=["AC-2"])
     amending.prepared(c, CandidateResult(items=[new]), RoundPolicy(), NOW)
@@ -664,7 +664,9 @@ def test_a_check_cannot_cover_a_criterion_the_same_candidate_removes():
         items=[item(text="", remove=True), item("check", "check-1", "it greets", covers=["AC-1"])]
     )
 
-    assert amendments.check(removes, amendments.amendable(c)) == ["items: covers AC-1 - not criteria the brief keeps"]
+    assert amendments.check(removes, amendments.amendable(c)) == [
+        "items: covers AC-1 - not criteria the brief keeps or the candidate adds"
+    ]
 
 
 def test_removing_the_person_check_that_stopped_goes_on_to_the_next_check():
@@ -920,3 +922,23 @@ def test_a_check_answer_never_settles_past_his_open_objection():
     amending.objected(c, ObjectionItem(amendment="A1", at=NOW), NOW)
 
     assert check.action(c, live=True, paths={}) == "dispose"  # his answer to the objection comes first
+
+
+def test_a_new_check_covers_just_the_criterion_its_candidate_adds():
+    c = change()
+    a = amending.start(c, "worker", reason="French needs its own check", now=NOW)
+    french = item("criterion", "", "Says Bonjour")
+    one, two = (item("check", "", "it says bonjour", steps=["open /fr"], covers=[k]) for k in ("AC-3", "AC-4"))
+    assert "Criteria the candidate adds take, in the order listed, the ids AC-3, AC-4, AC-5" in amendments.prepare(
+        c, a, Path()
+    )
+    assert amendments.check(CandidateResult(items=[two, french]), amendments.amendable(c)) == [
+        "items: covers AC-4 - not criteria the brief keeps or the candidate adds"
+    ]  # it adds one criterion
+
+    amending.prepared(c, CandidateResult(items=[one, french]), RoundPolicy(), NOW)
+    amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge", NOW)
+    answer(c, "yes")
+
+    assert [(p.id, p.criteria) for p in c.checks][-1] == ("check-3", ["AC-3"])
+    assert [k.id for k in c.brief.criteria] == ["AC-1", "AC-2", "AC-3"]

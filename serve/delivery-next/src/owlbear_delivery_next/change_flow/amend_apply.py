@@ -294,6 +294,14 @@ def _decision(c: Change, i: AmendedItem, level: Level, now: datetime) -> None:
     i.key = made.id
 
 
+def fresh(c: Change, n: int = 3) -> list[str]:
+    """The ids the first *n* criteria a candidate adds take, in its order, as ``_criterion`` gives them."""
+    taken = [k.id for x in (c.brief, *c.brief.approved) for k in x.criteria]
+    for _ in range(n):
+        taken.append(_free("AC-", taken))
+    return taken[-n:]
+
+
 def _free(prefix: str, taken: list[str]) -> str:
     """A new item's id: none any version held, so a revert of a removal never meets another item under it."""
     return next(f"{prefix}{n}" for n in range(1, 1000) if f"{prefix}{n}" not in taken)
