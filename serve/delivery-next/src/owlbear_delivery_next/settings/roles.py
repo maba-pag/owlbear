@@ -30,6 +30,7 @@ SESSIONS: dict[str, Role] = {
     "amendment-prepare": "shaper",  # a brief amendment's exact candidate (TD-185)
     "amendment-revise": "shaper",  # that candidate revised for its challenge's findings
     "amendment-challenge": "challenger",  # its independent verdict (TD-185)
+    "amendment-reconsider": "challenger",  # an amendment finding the owner sent back with a note (TD-193)
     "dispute-reconsider": "reviewer",  # a finding the owner sent back with a note (TD-193)
     "plan-reconsider": "challenger",  # a plan finding the owner sent back with a note (TD-190)
     "brief-reconsider": "challenger",  # a brief finding the owner sent back with a note (TD-221)

@@ -161,7 +161,7 @@ def _gone(a: Amendment) -> set[str]:
     }
 
 
-def _item(c: Change, i: AmendedItem, v: int, level: Level, now: datetime) -> None:  # noqa: C901, PLR0912 - per field
+def _item(c: Change, i: AmendedItem, v: int, level: Level, now: datetime) -> None:  # noqa: C901 - per field
     """Apply one item; a new item's key is recorded on it, so a revert can name it."""
     b = c.brief
     match i.field:

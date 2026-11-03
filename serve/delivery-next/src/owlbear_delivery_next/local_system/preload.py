@@ -40,7 +40,9 @@ REQUIRED: dict[str, tuple[str, ...]] = {
 UI: dict[str, tuple[str, ...]] = {"builder": ("owlbear-interface-design",)}  # added when the brief has a UI (TD-76)
 JUDGED = ("owlbear-acceptance-criteria", "owlbear-review-judgment")  # no code to judge: no module design (TD-166)
 JOBS: dict[str, tuple[str, ...]] = (
-    dict.fromkeys(("visual-review", "brief-challenge", "brief-reconsider", "amendment-challenge"), JUDGED)
+    dict.fromkeys(
+        ("visual-review", "brief-challenge", "brief-reconsider", "amendment-challenge", "amendment-reconsider"), JUDGED
+    )
     | {"pds-audit": ("pds-audit-deprecations-js",), "pds-update": ("pds-knowledge-js",)}  # a PDS candidate's (#777)
     | dict.fromkeys(("amendment-prepare", "amendment-revise"), ("owlbear-acceptance-criteria",))  # TD-185
 )

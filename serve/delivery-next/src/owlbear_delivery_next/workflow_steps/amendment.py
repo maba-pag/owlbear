@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts import amend_tools
+from owlbear_delivery_next.change_contracts import amend_tools, dispute_tools, tools
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import Change, ErrorKind, Exit, Names, Outcome, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.permissions import Policy
@@ -33,6 +33,11 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 STOPPED = ("abandon",)
+LABELS = {
+    "prepare": (amend_tools.PREPARE, amend_tools.CANDIDATE), "revise": (amend_tools.REVISE, amend_tools.CANDIDATE),
+    "challenge": (amend_tools.CHALLENGE, amend_tools.VERDICT), "recheck": (amend_tools.CHALLENGE, amend_tools.VERDICT),
+    "reconsider": (amend_tools.RECONSIDER, dispute_tools.SUBMIT),
+}  # fmt: skip
 
 
 def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -58,14 +63,13 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     change.names.worktree = str(path)
     store.write(lock, change)
     phase = am.phase
-    label = amend_tools.CHALLENGE if phase in {"challenge", "recheck"} else (
-        amend_tools.PREPARE if phase == "prepare" else amend_tools.REVISE
-    )  # fmt: skip
-    submit = amend_tools.VERDICT if label == amend_tools.CHALLENGE else amend_tools.CANDIDATE
+    label, submit = LABELS[phase]
     # the stopped step's decisions, which the runner's gate holds, and the complete list for the challenger
     verdict, done = sessions.review_run(store, lock, change, path, _made(store, lock, change, a), label, submit=submit)
     now, payload = datetime.now(UTC), done.payload
-    if verdict.cause is None and verdict.exit == Exit.DONE and isinstance(payload, amend_tools.VerdictResult):
+    if phase == "reconsider" and _reconsidered(change, verdict, payload, now):
+        pass
+    elif verdict.cause is None and verdict.exit == Exit.DONE and isinstance(payload, amend_tools.VerdictResult):
         amending.judged(change, payload, done.session_id, now)
     elif verdict.cause is None and verdict.exit == Exit.DONE and isinstance(payload, amend_tools.CandidateResult):
         if phase == "prepare":
@@ -81,11 +85,25 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     store.write(lock, change)
 
 
+def _reconsidered(change: Change, verdict: loop.StepResult, payload: object, now: datetime) -> bool:
+    """A reconsideration's verdicts, or each finding unsure on a wrong premise; False when it failed."""
+    due = [f.id for f in change.loops[amending.key(amending.current(change))].findings if f.reconsider == "due"]
+    if isinstance(payload, tools.WrongPremise) and verdict.exit == Exit.BACK and not verdict.operational:
+        said = dict.fromkeys(due, ("unsure", f"premise: {payload.reason}"))  # he decides each, as for unsure
+    elif verdict.cause is None and verdict.exit == Exit.DONE and isinstance(payload, dispute_tools.ReconsiderResult):
+        said = {r.finding: (r.verdict, r.text if r.verdict == "clarified" else r.reason) for r in payload.reconsidered}
+    else:
+        return False
+    amending.reconsidered(change, said, now)
+    return True
+
+
 def _made(store: Store, lock: Lock, change: Change, a: Amendment) -> Callable[[Path], sdk_adapter.Session]:
     am = change.amending
     phase = am.phase if am else "prepare"
     lp = change.loops.get(amending.key(a))
     keys = tuple(f.id for f in lp.findings if f.state == "rejected") if lp and phase in {"challenge", "recheck"} else ()
+    keys = tuple(f.id for f in lp.findings if f.reconsider == "due") if lp and phase == "reconsider" else keys
     shaper = phase in {"prepare", "revise"}
 
     def made(at: Path) -> sdk_adapter.Session:
@@ -93,6 +111,8 @@ def _made(store: Store, lock: Lock, change: Change, a: Amendment) -> Callable[[P
             message = amendments.prepare(change, a, at)
         elif phase == "revise":
             message = amendments.revise(change, a, at)
+        elif phase == "reconsider":
+            message = amendments.reconsider(change, a, at)
         else:
             message = amendments.challenge(change, a, at, recheck=phase == "recheck")
         return sdk_adapter.Session(
@@ -105,7 +125,7 @@ def _made(store: Store, lock: Lock, change: Change, a: Amendment) -> Callable[[P
             observe=lambda: worktree.observe(at, change.names.target),
             checks=(),
             rechecks=keys,
-            cap=0 if phase == "recheck" or lp is None else lp.policy.max_findings,
+            cap=0 if phase in {"recheck", "reconsider"} or lp is None else lp.policy.max_findings,
             rejectable=tuple(f.id for f in lp.findings if f.state == "open") if shaper and lp else (),
             amendable=amendments.amendable(change) if shaper else (),
             journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),

@@ -10,6 +10,7 @@ from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.amendment_records import AmendField  # noqa: TC001 - pydantic reads it
 
 PREPARE, REVISE, CHALLENGE = "amendment-prepare", "amendment-revise", "amendment-challenge"
+RECONSIDER = "amendment-reconsider"  # a finding the owner sent back with a note (TD-193)
 
 
 class CandidateItem(tools.Args):

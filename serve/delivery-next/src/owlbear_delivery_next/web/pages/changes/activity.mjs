@@ -35,7 +35,8 @@ const STEPS = {
   check: "Check preparation", merge: "Merge", cleanup: "Clean-up", "visual-review": "Visual review",
   "design-review": "Design review", "plan-challenge": "Plan challenge", "brief-challenge": "Brief challenge",
   "amendment-prepare": "Amendment preparation", "amendment-revise": "Amendment revision",
-  "amendment-challenge": "Amendment challenge", "dispute-reconsider": "Reconsideration",
+  "amendment-challenge": "Amendment challenge", "amendment-reconsider": "Amendment reconsideration",
+  "dispute-reconsider": "Reconsideration",
 };
 const EXITS = { done: "finished", retry: "will try again", ask: "asks you", back: "went back", stop: "stopped",
   pending: "waiting" };

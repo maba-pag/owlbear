@@ -18,7 +18,7 @@ from owlbear_delivery_next.change_flow import amend_apply
 from owlbear_delivery_next.change_flow.moves import ask, go
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
     from datetime import datetime
 
     from owlbear_delivery_next.change_contracts.amend_tools import CandidateItem, CandidateResult, VerdictResult
@@ -36,6 +36,7 @@ WITHIN = Option(id="within", label="No: work on within the approved brief (your 
 RESHAPE = Option(id="reshape", label="Reshape the brief with the shaper", next=StepKind.SHAPE)
 STOP = Option(id="stop", label="Stop the Change", next="abandon")
 FIX = Option(id="fix", label="The shaper revises the candidate for it")
+RECONSIDER = Option(id="reconsider", label="Ask the challenger to reconsider", next="reconsider")
 DROP = Option(id="drop", label="Drop the finding")
 ANOTHER = Option(id="another", label="Another round")
 NOW = Option(id="now", label="Decide on the candidate now")
@@ -152,9 +153,16 @@ def proceed(c: Change, now: datetime) -> None:
     if a is None or am is None:
         return
     lp = c.loops[key(a)]
-    if (f := next((f for f in lp.findings if f.state == "escalated"), None)) is not None:
+    if (f := next((f for f in lp.findings if f.state == "escalated" and f.reconsider != "due"), None)) is not None:
         text = f"The challenger upheld finding {f.id} of amendment {a.id} the shaper rejected: {f.text} Shaper: "
-        _ask(c, a, f"finding {f.id}", f"{text}{f.reason} Challenger: {f.judgement}", FIX, DROP, now=now)
+        text += f"{f.reason} Challenger: {f.judgement}"
+        if f.reconsider == "unsure":  # reconsidered once already (TD-193): only his fix or drop is left
+            said = f" Your note: {f.note} Reconsidering challenger, unsure: {f.clarified}"
+            _ask(c, a, f"finding {f.id}", f"{text}{said}", FIX, DROP, now=now)
+        else:
+            _ask(c, a, f"finding {f.id}", text, FIX, RECONSIDER, DROP, now=now)
+    elif any(f.reconsider == "due" for f in lp.findings):
+        am.phase = "reconsider"
     elif any(f.state in {"open", "owner-fix"} for f in lp.findings):
         am.phase = "revise"
     elif lp.last and lp.many():
@@ -165,6 +173,23 @@ def proceed(c: Change, now: datetime) -> None:
         lp.ended = lp.ending() if lp.unreviewed else "clean"
         a.unreviewed = bool(lp.unreviewed)
         decide(c, now)
+
+
+def reconsidered(c: Change, verdicts: Mapping[str, tuple[str, str]], now: datetime) -> None:
+    """Each finding he sent back: withdrawn settles it, clarified goes to the shaper, unsure back to him."""
+    a = current(c)
+    if a is None:
+        return
+    for f in (f for f in c.loops[key(a)].findings if f.reconsider == "due"):
+        verdict, said = verdicts.get(f.id, ("unsure", "no verdict was given"))
+        f.clarified = " ".join(said.split())[:1000]
+        if verdict == "withdrawn":
+            f.state, f.reconsider = "withdrawn", ""
+        elif verdict == "clarified":
+            f.state, f.reconsider = "owner-fix", ""
+        else:
+            f.reconsider = "unsure"
+    proceed(c, now)
 
 
 def revised(c: Change, r: CandidateResult, now: datetime) -> None:
@@ -283,7 +308,11 @@ def answered(c: Change, item: AnswerItem, now: datetime, dropped: list[tuple[Ans
         _round(c, a, now, another=item.option == ANOTHER.id)
     else:
         f = next(f for f in c.loops[key(a)].findings if f.id == own[1].removeprefix("finding "))
-        f.state, f.note = ("owner-fix" if item.option == FIX.id else "owner-drop"), item.text or item.option or ""
+        if item.option == RECONSIDER.id:
+            f.reconsider, f.note = "due", " ".join(item.text.split())[:2000]
+        else:
+            f.state, f.reconsider = ("owner-fix" if item.option == FIX.id else "owner-drop"), ""
+            f.note = item.text or item.option or ""
         proceed(c, now)
     return True
 

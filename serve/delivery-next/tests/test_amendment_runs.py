@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 import pytest
 
 from owlbear_decisions import Decision, Origin, Scope, State, new_id
-from owlbear_delivery_next.change_contracts import amend_tools, pick_tools, tool_schema, tools
+from owlbear_delivery_next.change_contracts import amend_tools, dispute_tools, pick_tools, tool_schema, tools
 from owlbear_delivery_next.change_contracts.amendment_records import Amendment
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Criterion, Exit, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
@@ -234,8 +234,48 @@ def test_the_last_rounds_rejection_is_rechecked_and_an_upheld_one_reaches_him(pi
     recheck = picking.told[-1]
     assert (recheck.role, recheck.rechecks, recheck.cap) == ("challenger", ("F1",), 0)  # rejections only
     q, (*_, a) = loop.open_question(c), c.amendments
-    assert (amending.owned(q), [o.id for o in q.options], c.brief.version) == ((a.id, "finding F1"), ["fix", "drop"], 1)
+    assert (amending.owned(q), [o.id for o in q.options], c.brief.version) == (
+        (a.id, "finding F1"),
+        ["fix", "reconsider", "drop"],
+        1,
+    )
     assert "there is no AC-2" in q.text
+
+
+@pytest.mark.parametrize(
+    ("said", "then"),
+    [
+        ("withdrawn", ("withdrawn", None, 2)),
+        ("clarified", ("owner-fix", "revise", 1)),
+        ("unsure", ("escalated", "ask", 1)),
+    ],
+)
+def test_an_upheld_finding_he_sends_back_with_a_note_is_reconsidered_once(picking, monkeypatch, said, then):
+    run = Amending(picking, monkeypatch)
+    run.premised(AC1)
+    rejected = candidate(rejected=[{"finding": "F1", "reason": "AC-2 keeps the plain case"}])
+    upheld = verdict(rechecked=[{"finding": "F1", "upheld": True, "reason": "there is no AC-2"}])
+    picking.verdicts += [candidate(), verdict(qualifies=True, findings=[finding()]), rejected, upheld]
+    for _ in range(4):
+        run.step()
+    q, url = loop.open_question(picking.change()), f"/api/next/changes/{picking.slug}/answers"
+    assert picking.http.post(url, json={"question": q.id, "option": "reconsider"}).status_code == 422  # no note
+    note = {"question": q.id, "option": "reconsider", "text": "AC-1 itself keeps 'Ada' alone"}
+    assert picking.http.post(url, json=note).status_code == 200
+    reconsidered = {"finding": "F1", "verdict": said, "reason": "AC-1 keeps it", "text": "only the plain case"}
+    picking.verdicts += [dispute_tools.ReconsiderResult(reconsidered=[reconsidered])]
+
+    assert picking.approved().amending.phase == "reconsider"  # the answers fold
+
+    c = run.step()
+
+    told, f = picking.told[-1], c.loops[amending.key(amending.current(c) or c.amendments[-1])].findings[0]
+    assert (told.role, told.rechecks, told.cap) == ("challenger", ("F1",), 0)
+    assert "AC-1 itself keeps 'Ada' alone" in told.message
+    assert (f.state, c.amending and c.amending.phase, c.brief.version) == then
+    q = loop.open_question(c)
+    assert ([o.id for o in q.options] if q else None) == (["fix", "drop"] if said == "unsure" else None)  # asked once
+    assert q is None or ("AC-1 itself keeps 'Ada' alone" in q.text and "only the plain case" not in q.text)
 
 
 @pytest.mark.parametrize(("role", "phase"), [("shaper", "prepare"), ("challenger", "challenge")])
@@ -296,7 +336,8 @@ def test_a_submitted_merge_is_observed_before_the_amendment_goes_on(picking, mon
 
         def dies(lock, change):
             if any(x.state == "moved" for x in change.amendments):
-                raise RuntimeError("killed")
+                killed = "killed"
+                raise RuntimeError(killed)
             write(lock, change)
 
         monkeypatch.setattr(picking.store, "write", dies)
