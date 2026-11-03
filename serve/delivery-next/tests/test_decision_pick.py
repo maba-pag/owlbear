@@ -10,6 +10,7 @@ from owlbear_delivery_next.change_contracts import pick_tools, tools
 from owlbear_delivery_next.change_contracts.models import Exit, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.workflow_steps import pick
@@ -235,3 +236,21 @@ def test_a_pick_has_no_size_limit_but_each_id_is_still_checked():
     assert "maxItems" not in pick_tools.PickResult.model_json_schema()["properties"]["picked"]
     with pytest.raises(ValueError, match="at most 40 characters"):
         pick_tools.PickResult.model_validate({"picked": [{"id": "D-" + "0" * 40}]})
+
+
+def test_a_brief_records_its_steps_start_before_its_decision_pick_runs(picking, monkeypatch):
+    """#718: the pick's session is the step's own, so its stage shows from the step's start, not as starting."""
+    rule = picking.put(make())
+    picking.save()
+    picking.ask(1)
+    picking.picks.append(picked(rule.id))
+    picking.verdicts.append(verdict())
+    seen, real = [], picking.run
+
+    async def run(cfg):
+        seen.append((cfg.role, picking.change().step.started_at is not None))
+        return await real(cfg)
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", run)
+    picking.step()
+    assert seen == [("picker", True), ("challenger", True)]
