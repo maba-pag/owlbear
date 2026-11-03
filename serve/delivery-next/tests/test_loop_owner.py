@@ -1,5 +1,6 @@
 """The actual synchronous SDK caller cannot wait forever for a cancellation-resistant asynchronous request."""
 
+import asyncio
 import json
 import os
 import subprocess
@@ -7,9 +8,15 @@ import sys
 
 import pytest
 
+from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import loop_owner
+from owlbear_delivery_next.runtimes.session_result import Run
+
 CHILD = """
 import asyncio
 import dataclasses
+import asyncio
 import json
 import sys
 import threading
@@ -138,3 +145,49 @@ def test_synchronous_sdk_boundary_stays_bounded_and_keeps_its_real_accounting(tm
         if mode == "wave":
             assert proof["not_run"]
             assert proof["confirmed"][1] is True
+
+
+@pytest.mark.parametrize("stage", ["task", "generators", "shutdown"])
+def test_an_asynchronous_shutdown_failure_keeps_its_whole_error(monkeypatch, caplog, whole_error, stage):
+    """A shutdown failure reaches the returned Run's problems and the host log, or the primary's notes, whole (#951)."""
+    monkeypatch.setattr(loop_owner, "SHUTDOWN", 1.0)
+
+    async def failing_on_cancel():
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            raise RuntimeError(whole_error) from None
+
+    async def main():
+        if stage == "task":
+            left = asyncio.create_task(failing_on_cancel())  # left running: the owner's shutdown cancels it
+            await asyncio.sleep(0)
+            assert not left.done()
+        if stage == "shutdown":
+            msg = "synthetic primary"
+            raise LookupError(msg)
+        return Run("synthetic", termination=Termination(confirmed=True))
+
+    said = f"RuntimeError: {whole_error}"
+    if stage == "shutdown":
+
+        def shutdown(_loop):
+            raise RuntimeError(whole_error)
+
+        monkeypatch.setattr(loop_owner, "_shutdown", shutdown)
+        with pytest.raises(LookupError) as raised:
+            loop_owner.run(main())
+        assert failure(raised.value) == f"LookupError: synthetic primary\nasynchronous shutdown failed: {said}"
+        return
+    if stage == "generators":
+
+        async def broken(_self):
+            raise RuntimeError(whole_error)
+
+        monkeypatch.setattr(asyncio.BaseEventLoop, "shutdown_asyncgens", broken)
+    problem = f"asynchronous shutdown {'task' if stage == 'task' else 'of generators'} failed: {said}"
+    with caplog.at_level("WARNING", logger=loop_owner.__name__):
+        run = loop_owner.run(main())
+    assert run.termination.problems == (problem,)
+    assert not run.termination.confirmed
+    assert [r.getMessage() for r in caplog.records if r.name == loop_owner.__name__] == [f"SDK {problem}"]

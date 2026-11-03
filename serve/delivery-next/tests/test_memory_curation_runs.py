@@ -766,7 +766,7 @@ def test_an_unkeyed_unknown_row_is_never_taken_for_a_lease_merely_because_it_beg
     lease = first.maintenance.begin(
         curation.SLOT, "curate:shop:2bf0000000000000", "curation", "", now=t0 + timedelta(seconds=1)
     )
-    first.maintenance.failed(lease, RuntimeError("synthetic unconfirmed runtime"))
+    first.maintenance.failed(lease, "RuntimeError: synthetic unconfirmed runtime")
     for _ in range(2):
         restarted = curation.Curation(
             Slots(lambda: 1, closed=True), shared=lambda: DataRepo(root), run=lambda _cfg: pytest.fail("it ran")
@@ -786,7 +786,7 @@ def test_an_unkeyed_unknown_row_is_held_anew_once_after_the_lease_within_its_tim
     lease = first.maintenance.begin(
         curation.SLOT, "curate:shop:2bf0000000000001", "curation", "", now=t0 + timedelta(seconds=1)
     )
-    first.maintenance.failed(lease, RuntimeError("synthetic unconfirmed runtime"))
+    first.maintenance.failed(lease, "RuntimeError: synthetic unconfirmed runtime")
     booted = first.maintenance.boot
     first.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the failed session
     first.maintenance.recover(lease, rebooted=True)
@@ -802,7 +802,7 @@ def test_an_unrelated_earlier_curation_generation_never_covers_a_later_unkeyed_2
     first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
     early = datetime(2026, 10, 25, 0, 0, 0, tzinfo=UTC)
     old = first.maintenance.begin(curation.SLOT, "curate:shop:2bf00000000000aa", "curation", "", now=early)
-    first.maintenance.failed(old, RuntimeError("synthetic unconfirmed runtime"))
+    first.maintenance.failed(old, "RuntimeError: synthetic unconfirmed runtime")
     if unrelated == "recovered":
         booted = first.maintenance.boot
         first.maintenance.boot = lambda: booted() + 1

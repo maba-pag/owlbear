@@ -9,7 +9,7 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.local_system import maintenance, processes
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.runtimes import maintained, sdk_adapter
+from owlbear_delivery_next.runtimes import maintained, sdk_adapter, session_result
 from owlbear_delivery_next.runtimes.session_result import Run
 
 AT = datetime(2026, 10, 25, tzinfo=UTC)
@@ -27,7 +27,7 @@ def begin(owner, root):
 def test_empty_identity_exception_retains_its_slot_across_restart_and_requires_a_real_reboot(tmp_path):
     owner = manager(Slots(lambda: 1))
     ident = begin(owner, tmp_path)
-    owner.failed(ident, RuntimeError("no Run returned"))
+    owner.failed(ident, "RuntimeError: no Run returned")
     restarted = manager(Slots(lambda: 1, closed=True))
     restarted.slots.open()
     assert restarted.slots.counts("p") == (1, 1, 1)
@@ -86,7 +86,7 @@ def test_restoring_maintenance_does_not_prune_ordinary_runner_reservations(tmp_p
     owner = manager(slots)
     assert slots.take("p", "pack:one", 1, 3) == 1
     ident = owner.begin("p", "pack:one", "pack", str(tmp_path), now=AT)
-    owner.failed(ident, RuntimeError("unknown termination"))
+    owner.failed(ident, "RuntimeError: unknown termination")
     manager(slots)
     assert slots.counts("p") == (2, 3, 2)
 
@@ -129,6 +129,43 @@ def test_admitted_sdk_entry_is_durable_and_unknown_work_keeps_its_workspace(fail
         assert len(events) == 2
     assert root.exists() is fails
     assert owner.slots.counts("p") == ((1, 1, 1) if fails else (0, 1, 0))
+
+
+@pytest.mark.parametrize(("ending", "persists"), [("raised", True), ("raised", False), ("returned", False)])
+def test_a_maintenance_session_s_failure_keeps_its_whole_error(monkeypatch, whole_error, ending, persists):
+    """The lease's reason holds a raised session's whole error; a failed persist adds its own whole note (#951)."""
+    owner = manager(Slots(lambda: 1))
+    with owner.workspace("synthetic-maintenance-") as root:
+        cfg = sdk_adapter.Session(
+            kind=StepKind.REVIEW, worktree=root, session_id="synthetic", message="Synthetic work", resume=False,
+            policy=Policy(root), observe=lambda: tools.Worktree("", ""), checks=(), model="synthetic-model",
+        )  # fmt: skip
+        if ending == "raised":
+            error = RuntimeError(whole_error)
+            error.add_note("teardown note")
+        else:
+            error = session_result.ReturnedRunError("synthetic returned run")
+            error.run = Run("synthetic", termination=processes.Termination(confirmed=True))
+
+        def execute(_bound):
+            raise error
+
+        if not persists:
+
+            def persisting(*_args):
+                raise OSError(whole_error)
+
+            monkeypatch.setattr(owner, "failed" if ending == "raised" else "finished", persisting)
+        assert owner.slots.take("p", "pack:one", 1, 1) == 1
+        with pytest.raises(type(error)) as raised:
+            maintained.run_owned(owner, cfg, execute, project="p", slot="pack:one", kind="pack")
+    notes = ["teardown note"] if ending == "raised" else []
+    if persists:
+        reason = f"session ended without termination proof: RuntimeError: {whole_error}\nteardown note"
+        assert owner.read()["sessions"][-1]["reason"] == reason
+    else:
+        notes.append(f"maintenance ownership also failed to persist: OSError: {whole_error}")
+    assert raised.value.__notes__ == notes if notes else not hasattr(raised.value, "__notes__")
 
 
 def test_a_recovered_generation_does_not_suppress_a_later_unknown_legacy_run(tmp_path):

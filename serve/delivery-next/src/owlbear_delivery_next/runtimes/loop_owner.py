@@ -7,6 +7,7 @@ import logging
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes.sdk_teardown import STOP_CALL
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -31,7 +32,7 @@ async def _stop(end: float, problems: list[str]) -> set[asyncio.Task[object]]:
             task.cancel()
         done, _ = await asyncio.wait(live, timeout=min(left, RETRY))
         problems.extend(
-            f"asynchronous shutdown task failed ({type(error).__name__})"
+            f"asynchronous shutdown task failed: {failure(error)}"
             for task in done
             if not task.cancelled() and (error := task.exception()) is not None
         )
@@ -47,7 +48,7 @@ async def _drain(seconds: float) -> tuple[str, ...]:
         closing = asyncio.create_task(loop.shutdown_asyncgens(), name="sdk-async-generator-shutdown")
         done, _ = await asyncio.wait({closing}, timeout=max(0.0, end - loop.time()))
         if closing in done and not closing.cancelled() and (error := closing.exception()) is not None:
-            problems.append(f"asynchronous shutdown of generators failed ({type(error).__name__})")
+            problems.append(f"asynchronous shutdown of generators failed: {failure(error)}")
         live = await _stop(end, problems)
     if live:
         names = ", ".join(sorted(task.get_name() for task in live))
@@ -85,7 +86,7 @@ def run[T: Run | list[Run]](main: Coroutine[object, object, T]) -> T:
             try:
                 problems = _shutdown(loop)
             except BaseException as cleanup:
-                primary.add_note(f"asynchronous shutdown failed ({type(cleanup).__name__})")
+                primary.add_note(f"asynchronous shutdown failed: {failure(cleanup)}")
                 raise primary from cleanup
             for problem in problems:
                 primary.add_note(problem)
