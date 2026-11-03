@@ -305,14 +305,14 @@ def void(c: Change, a: Amendment, removed: set[str]) -> None:
     The final review judged an earlier version: it is bound to its brief version (``Review.brief``), and the final
     loop's completion stands for that version only. A visual state or person check of a changed item, or one the
     challenger named, is redone; a person check covering a changed criterion no longer holds by its version, and a
-    removed criterion leaves the checks that covered it.
+    removed criterion leaves the checks that covered it. Every person check covers the amended scope.
     """
     if (lp := c.loops.get(FINAL)) is not None:
         lp.completion = None
     named = set(a.affected)
     checks = {i.key for i in a.items if i.field == "check"} | {n[6:] for n in named if n.startswith("check:")}
     for p in c.checks:
-        p.criteria = [k for k in p.criteria if k not in removed]
+        p.paths, p.criteria = coverage(c), [k for k in p.criteria if k not in removed]
         if p.id in checks:
             p.answer = None
             continue

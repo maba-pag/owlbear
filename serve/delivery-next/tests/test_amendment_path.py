@@ -890,3 +890,18 @@ def test_the_shaper_and_the_challenger_of_an_answers_amendment_read_the_question
 
     for told in (amendments.prepare(asked, a, Path()), amendments.challenge(asked, a, Path(), recheck=False)):
         assert "The question it answers: Which language?\nThe owner's answer: French too" in told
+
+
+def test_a_scope_amendment_binds_every_person_check_to_the_new_scope():
+    c = change(K.CHECK, None)
+    before = {"packages/app/greet.py": "f1"}
+    for p in c.checks:
+        p.paths = evidence.coverage(c)
+        p.answer.inputs.paths = before
+    assert next_check(c, before) is None
+
+    through(c, item("scope", "", "packages/web"), said=verdict("weaker", qualifies=False))
+    answer(c, "yes")
+
+    assert [p.paths for p in c.checks] == [["a.txt", "b.txt", "packages/app", "packages/web"]] * 2
+    assert next_check(c, before | {"packages/web/team.py": "f2"}).id == "check-1"  # a change there redoes them
