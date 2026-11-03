@@ -83,8 +83,11 @@ End the step with exactly one call:
   call again.
 - `ask_question`: an owner decision the plan depends on.
 - `report_wrong_premise`: the brief cannot be delivered as written, with the evidence. You may add
-  `amendment`: replacement wording for a generated criterion, with why it keeps the intent. A
-  challenger judges it and the owner decides; until then the approved wording holds.
+  `amendment`: each brief item to change (a criterion, the UI flag, a visual state, a person
+  check, a scope line or a brief decision; never the outcome or non-goals), what it should say and
+  why. The shaper words the exact change and a challenger judges it; the owner decides unless it
+  keeps the intent and replaces a redundant or over-specific generated check. Until then the
+  approved wording holds; the step then resumes on the new version, or as approved if declined.
 - `report_missing_tool`: a tool you need to plan is missing or keeps failing, with the exact error.
 
 Never end a turn without one of these calls.

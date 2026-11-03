@@ -110,7 +110,9 @@ an item he corrects as above, then save.
   then classify his answer and call `answer_question` with its id, the chosen option id, his words
   and `kind`: `event` when it only settles how the work goes on; `clarification` when it settles
   what the approved brief means; `brief_change` when it changes the brief's outcome, scope,
-  criteria or non-goals (the work stops and asks; amendments are not built). For a clarification,
+  criteria or non-goals (Delivery amends the brief from it: the shaper words the change, a
+  challenger judges it, and the owner is asked only about what goes beyond his answer; an outcome
+  or non-goal change goes back to reshaping). For a clarification,
   state his intent in at most two lines, read it back to him and pass that confirmed `statement`
   with `confirmed: true`, never his words; it becomes a decision of this Change once a check finds
   it within the brief. When unsure between clarification and brief change, ask him.
