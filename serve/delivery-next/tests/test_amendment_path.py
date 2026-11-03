@@ -30,6 +30,7 @@ from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
 from owlbear_delivery_next.change_contracts.visual_records import VisualResult
 from owlbear_delivery_next.change_flow import amend_apply, amending, loop
 from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.project_host import chat_routes
 from owlbear_delivery_next.runtimes import amendments
 from owlbear_delivery_next.state_store import change_record
 from owlbear_delivery_next.state_store.store import Lock, Store
@@ -396,6 +397,17 @@ def test_keeping_or_reshaping_after_an_objection_leads_where_it_says(how, then):
 
     assert (c.amendments[0].objection, c.amending, c.brief.version) == (how, None, 4)
     assert (c.intent.words or None, c.intent.hold) == then
+
+
+def test_the_chat_reads_back_only_a_candidate_left_for_him_to_adopt():
+    c = change()
+    through(c)  # applied: already in the brief
+    kept = c.amendments[0].model_copy(deep=True, update={"id": "A2", "state": "recorded"})  # a follow-up's candidate
+    c.amendments.append(kept)
+
+    (said,) = chat_routes.brief(c)["proposed_wording"]
+
+    assert (said["field"], said["key"], said["old"], said["new"]) == ("criterion", "AC-1", AC1, "greet() trims spaces")
 
 
 def test_an_objection_at_the_merge_step_takes_a_queued_merge_out():
