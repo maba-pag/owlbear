@@ -299,12 +299,9 @@ def test_an_unreadable_state_file_is_said_and_rebuilt(world):
 
 def test_unreached_impeccable_releases_are_said_whole_with_their_type(world, whole_error):
     world.releases(PermissionError(whole_error))
-    reader = world.reader()
     place = f"GitHub's releases of {pack_files.manifest()['pack']}"
     why = f"GitHub was not reached: PermissionError: {whole_error}"
-
-    assert reader._impeccable() == [(place, why)]  # noqa: SLF001 - the source's own failure, before the Failure
-    reader.read()
+    world.reader().read()
     assert f"settings read: {settings_read.IMPECCABLE} failed at {place}: {why}" in world.said
 
 
