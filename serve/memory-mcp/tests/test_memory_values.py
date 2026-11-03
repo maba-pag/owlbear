@@ -117,6 +117,20 @@ async def test_settings_that_cannot_be_read_are_refused_with_the_file_and_the_re
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("raw", ["1e309", "Infinity", "NaN", "-1"])
+async def test_a_point_value_that_is_not_a_finite_amount_is_unset(root: Path, store: Path, raw: str) -> None:
+    """The settings page refuses these; a hand-edited file must not turn the scores into NaN or inf."""
+    seed(store, 1, "one")
+    held = {k: v for k, v in _VALUES.items() if k != "outstanding_boost"}
+    (root / "config.json").write_text(
+        '{"format": 21, "memory": ' + json.dumps(held)[:-1] + f', "outstanding_boost": {raw}}}}}'
+    )
+
+    with pytest.raises(ToolError, match="outstanding_boost"):
+        await tools.recall_memory(bound(root), agent="builder", limit=5)
+
+
+@pytest.mark.asyncio
 async def test_assessing_refuses_without_the_stale_factor_but_a_wrong_report_needs_none(
     root: Path, store: Path
 ) -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import subprocess
 from pathlib import Path
@@ -152,7 +153,7 @@ def _memory_values(ctx: Context, *names: str) -> dict[str, float]:
     for name in names:
         value, whole = block.get(name), name in _INTEGER_VALUES
         number = isinstance(value, int) if whole else isinstance(value, (int, float))
-        if number and not isinstance(value, bool) and value >= _LEAST.get(name, 0):
+        if number and not isinstance(value, bool) and math.isfinite(value) and value >= _LEAST.get(name, 0):
             found[name] = value
     if unset := [name for name in names if name not in found]:
         raise ToolError(UNSET_VALUES + ", ".join(unset))
