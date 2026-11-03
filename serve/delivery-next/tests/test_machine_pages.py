@@ -55,7 +55,7 @@ from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home, processes
-from owlbear_delivery_next.machine_host import app, project, versions
+from owlbear_delivery_next.machine_host import app, project, update_checks, versions
 from owlbear_delivery_next.machine_host import impeccable as machine_impeccable
 from owlbear_delivery_next.machine_host import serve as host_start
 from owlbear_delivery_next.machine_host.machine import Machine
@@ -674,6 +674,38 @@ def test_updates_impeccable_says_an_install_failure_it_could_not_keep_whole(
         machine.stop_all()
     line = r"^\d\d:\d\d:\d\dZ Impeccable: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"  # up to the host log's next line
     assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [unkept]
+
+
+@pytest.mark.browser
+def test_updates_say_update_checks_that_started_afresh_whole(monkeypatch, capsys, pds, whole_error) -> None:
+    """#951: update checks whose earlier results could not be read at the start say why whole on Updates and in the
+    host's log."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    path = local_home.root() / update_checks.STATE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{}", encoding="utf-8")
+    broken, read = [], Path.read_text
+
+    def reading(self, *args, **kwargs):
+        if self == path:
+            broken.append(self)
+            raise OSError(whole_error)
+        return read(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", reading)
+    unrestored = f"{path} is unreadable, so they start afresh: OSError: {whole_error}"
+    with browsing(monkeypatch, pds) as (page, base):
+        monkeypatch.setattr(Path, "read_text", read)
+        assert broken == [path]
+        logged = capsys.readouterr().out
+        page.goto(f"{base}/updates/owlbear#token=t")
+        shown = page.locator("#check-settings")
+        expect(shown).to_be_visible()
+        said = r"It looks [^\n]*\.\s+How often is set in Settings → This machine\. Earlier check results were lost: "
+        assert re.fullmatch(said + re.escape(f"{unrestored}."), shown.text_content())
+    line = r"^\d\d:\d\d:\d\dZ update checks: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"  # up to the host log's next line
+    assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [unrestored]
 
 
 def targets(scope) -> list[str]:
