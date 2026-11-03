@@ -142,7 +142,8 @@ const AMENDING = {
   after: "You can object to it later on the Brief panel; a revert makes another new version." },
   within: { now: "The amendment is declined and stays listed with your reason, your answer in words.",
     then: "The stopped work goes on within the approved brief, with your reason.", after: "The brief is unchanged." },
-  revert: { now: "The shaper prepares a new brief version without the amendment and a challenger judges it.",
+  revert: { now: "Delivery prepares a new brief version that undoes the amendment exactly, and a challenger "
+    + "judges it.",
     then: "It applies as approved by you, unless it says more than undoing the amendment: then you are asked about "
       + "that part. The paused work resumes on it.",
   after: "The amendment stays in the record; merged or published work can't be undone." },
