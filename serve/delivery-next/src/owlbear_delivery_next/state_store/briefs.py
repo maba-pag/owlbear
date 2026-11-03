@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime
+from itertools import count
 from typing import TYPE_CHECKING, Any
 
 from owlbear_decisions import new_id
@@ -28,6 +29,7 @@ from owlbear_delivery_next.state_store import identities
 from owlbear_delivery_next.state_store.store import LockHeldError, StoreError
 
 if TYPE_CHECKING:
+    from owlbear_delivery_next.change_contracts.models import Brief
     from owlbear_delivery_next.state_store.store import Store
 
 SLUG = 40
@@ -37,11 +39,13 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
     """The Change with its new brief draft version, waiting for the owner's approval; criteria and checks versioned."""
     names = Names(branch=f"owlbear/{slug}", target=profile.value(prof, profile.DEFAULT, "main"))
     c = old or Change(slug=slug, handle=handle, profile_version=prof.version, names=names)
-    before = {k.id: k for k in c.brief.criteria}
-    criteria = []
-    for i, text in enumerate(d.criteria, 1):
-        prev = before.get(f"AC-{i}")
-        criteria.append(Criterion(id=f"AC-{i}", text=text, version=prev.version + (prev.text != text) if prev else 1))
+    before, criteria = c.brief.criteria, []
+    for i, text in enumerate(d.criteria, 1):  # the draft names the nth criterion AC-n, whatever its id (positions)
+        prev = before[i - 1] if i <= len(before) else None
+        taken = {k.id for k in (*before, *criteria)}
+        ident = prev.id if prev else next(f"AC-{n}" for n in count(i) if f"AC-{n}" not in taken)
+        criteria.append(Criterion(id=ident, text=text, version=prev.version + (prev.text != text) if prev else 1))
+    placed = {f"AC-{n}": k.id for n, k in enumerate(criteria, 1)}
     shown_states, v = {s.name: s for s in c.brief.visual}, c.brief.version + 1
     visual = []
     for s in d.visual:
@@ -53,7 +57,7 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
             VisualState(name=s.name, path=s.path, expect=s.expect, steps=steps, version=prev.version if same else v)
         )
     fields = {"version": v, "title": d.title, "outcome": d.outcome, "scope": d.scope, "criteria": criteria}
-    owner = [*d.specified, *(f"screen:{s.name}" for s in d.visual if s.owner)]
+    owner = [*(placed.get(k, k) for k in d.specified), *(f"screen:{s.name}" for s in d.visual if s.owner)]
     owner += [f"check:{p.name}" for p in d.person_checks if p.owner]
     fields |= {"ui": d.ui, "visual": visual, "non_goals": d.non_goals, "specified": list(dict.fromkeys(owner))}
     fields["decisions"] = _decisions(c, d)
@@ -64,7 +68,7 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
     c.checks = []
     for p in d.person_checks:
         prev = shown.get(p.name)
-        covers = p.covers or ids  # an amendment redoes only the checks of the criteria it changes (TD-185)
+        covers = [placed.get(k, k) for k in p.covers] or ids  # an amendment redoes only the checks it changes
         same = prev and (prev.steps, prev.expect, prev.visual, prev.criteria) == (p.steps, p.expect, p.visual, covers)
         procedure = prev.procedure + (not same) if prev else 1
         fields = {"id": p.name, "criteria": covers, "steps": p.steps, "expect": p.expect, "visual": p.visual}
@@ -74,6 +78,11 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
         at=datetime.now(UTC),
     )  # fmt: skip
     return c
+
+
+def positions(b: Brief) -> dict[str, str]:
+    """Each criterion's id as a draft names it: AC-n for the nth, whatever id an amendment left it (TD-185)."""
+    return {k.id: f"AC-{n}" for n, k in enumerate(b.criteria, 1)}
 
 
 def _decisions(c: Change, d: brief_tools.BriefDraft) -> list[BriefDecision]:
@@ -195,15 +204,15 @@ def save_visual(store: Store, body: object) -> tuple[int, dict[str, Any]]:
         c = store.read(slug)
     except StoreError as exc:
         return 409, {"errors": [f"change: {exc}"]}
-    owner = set(c.brief.specified)
-    checks = [{"name": p.id, "steps": p.steps, "expect": p.expect, "covers": p.criteria, "visual": p.visual,
-               "owner": f"check:{p.id}" in owner} for p in c.checks]  # fmt: skip
+    owner, placed = set(c.brief.specified), positions(c.brief)
+    checks = [{"name": p.id, "steps": p.steps, "expect": p.expect, "covers": [placed.get(k, k) for k in p.criteria],
+               "visual": p.visual, "owner": f"check:{p.id}" in owner} for p in c.checks]  # fmt: skip
     brief = {"change": draft.change, "title": c.brief.title, "outcome": c.brief.outcome, "scope": c.brief.scope}
     brief |= {"criteria": [k.text for k in c.brief.criteria], "person_checks": checks, "ui": draft.ui}
     brief |= {
         "non_goals": c.brief.non_goals,
         "decisions": [x.model_dump(exclude={"id", "replaces"}) for x in c.brief.decisions],
     }
-    brief |= {"specified": [k.id for k in c.brief.criteria if k.id in owner]}
+    brief |= {"specified": [placed[k.id] for k in c.brief.criteria if k.id in owner]}
     brief |= {"visual": [s.model_dump() for s in draft.states], "steps": [s.model_dump() for s in draft.steps]}
     return save_brief(store, brief)

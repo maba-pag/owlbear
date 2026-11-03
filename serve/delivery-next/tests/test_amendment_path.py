@@ -43,7 +43,7 @@ from owlbear_delivery_next.change_flow import amend_apply, amending, loop
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import chat_routes
 from owlbear_delivery_next.runtimes import amendments, step_input
-from owlbear_delivery_next.state_store import change_record
+from owlbear_delivery_next.state_store import briefs, change_record
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import queue
 
@@ -803,3 +803,33 @@ def test_the_chat_reads_back_a_left_candidate_with_its_whole_shape():
         ("", None, ["open /"], ["AC-1"], True, ""),
         ("", None, [], [], None, "Which store?"),
     ]
+
+
+def test_a_brief_an_amendment_removed_a_criterion_from_is_read_back_and_saved_again_by_place(tmp_path):
+    store = Store(tmp_path / "store")
+    first = {"title": "Greet", "outcome": "greet(name) greets the person", "scope": ["packages/app"],
+             "criteria": [AC1, AC2]}  # fmt: skip
+    code, out = briefs.save_brief(store, first | {"specified": ["AC-2"], "person_checks": [
+        {"name": "check-2", "steps": ["open /about"], "expect": "it shows the team", "covers": ["AC-2"]}]})  # fmt: skip
+    assert code == 200
+    with store.lock(out["slug"]) as lock:  # what removing AC-1 by an amendment, then reshaping, leaves
+        c = store.read(out["slug"])
+        c.brief.criteria = c.brief.criteria[1:]
+        store.write(lock, c)
+
+    code, _ = briefs.save_visual(store, {"change": out["change"], "ui": False})
+    read = chat_routes.brief(c := store.read(out["slug"]))
+    more = first | {"change": out["change"], "criteria": [AC2, "Says Hi in French"], "specified": read["specified"]}
+    code_more, _ = briefs.save_brief(store, more | {"person_checks": [
+        {"name": "check-2", "steps": ["open /about"], "expect": "it shows the team", "covers": p["covers"]}
+        for p in read["person_checks"]]})  # fmt: skip
+    after = store.read(out["slug"])
+
+    assert (code, read["specified"], [p["covers"] for p in read["person_checks"]]) == (200, ["AC-1"], [["AC-1"]])
+    assert [(k.id, k.version) for k in c.brief.criteria] == [("AC-2", 1)]
+    assert (code_more, [k.id for k in after.brief.criteria], after.checks[0].criteria) == (
+        200,
+        ["AC-2", "AC-3"],
+        ["AC-2"],
+    )
+    assert after.brief.specified == ["AC-2"]
