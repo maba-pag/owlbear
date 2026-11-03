@@ -1129,9 +1129,11 @@ def test_a_long_unverified_session_end_shows_whole_on_changes(tmp_path: Path, mo
 
 
 @pytest.mark.browser
-def test_a_crashed_runner_s_whole_error_shows_in_recent_activity(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+def test_a_crashed_runner_s_whole_error_shows_in_recent_activity(
+    tmp_path: Path, monkeypatch, capsys, pds, whole_error
+) -> None:
     """D-01M6GCGED6NRBVEB2XGKRPCKX0: a Change runner that crashes says its whole error, notes included, in Recent
-    activity; the exception still ends the runner, whose traceback goes to its log."""
+    activity and on its output, runner.log; the exception still ends the runner, whose traceback follows there."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     alpha = registry.register(clone(tmp_path / "alpha", "flip"))
@@ -1155,6 +1157,8 @@ def test_a_crashed_runner_s_whole_error_shows_in_recent_activity(tmp_path: Path,
         contextvars.copy_context().run(runner.main, ["flip", "--repo", str(path)])  # it sets the process's spend place
     assert (str(crashed.value), crashed.value.__notes__) == (whole_error, [note])
     reason = f"RuntimeError: {whole_error}\n{note}"
+    printed = [json.loads(line) for line in capsys.readouterr().out.splitlines() if '"runner-failed"' in line]
+    assert [e["reason"] for e in printed] == [reason]
     with browsing(monkeypatch, pds) as (page, base):
         broke = errors(page)
         opened(page, base, alpha.id, "flip")

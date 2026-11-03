@@ -409,9 +409,10 @@ def main(argv: list[str] | None = None) -> int:
             spend_ledger.enter(spend_ledger.Where.of(store, repo, change=args.change, step=kind))  # every session's
             try:
                 _step(store, lock, change, step, repo)
-            except Exception as exc:  # the owner reads it in Recent activity; the traceback stays in runner.log
+            except Exception as exc:  # the owner reads it in Recent activity; runner.log gets it and its traceback
                 at = datetime.now(UTC).isoformat()
-                store.log(lock, args.change, {"event": "runner-failed", "at": at, "reason": failure(exc)})
+                failed = {"event": "runner-failed", "at": at, "reason": failure(exc)}
+                sessions.announce(store, lock, args.change, failed)
                 raise
             _out(describe(store.read(args.change)))
     except LockHeldError as exc:
