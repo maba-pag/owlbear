@@ -2,12 +2,14 @@
 
 import json
 import logging
+import socket
 import threading
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+import uvicorn
 from owlbear_memory import MemoryCategory, MemoryEngine
 
 from owlbear_delivery_next.change_contracts import memory_curation_tools, tools
@@ -17,12 +19,13 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import curation, curation_snapshots, curation_tree
+from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import GlobalLayer
 from owlbear_delivery_next.state_store import layers, registry, settings_carry, spend_ledger
 from owlbear_delivery_next.state_store.curation_runs import Runs
-from owlbear_delivery_next.state_store.store import update_layer
+from owlbear_delivery_next.state_store.store import Store, update_layer
 
 
 def pending(folder: Path, title: str):
@@ -633,6 +636,50 @@ def test_an_unverified_session_end_says_its_problems_whole(root, whole_error, ca
     assert (shop["state"], shop["reason"]) == ("failed", reason)
     logged = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == curation.__name__]
     assert logged == [("ERROR", f"memory curation of shop failed ({shop['key']}): {reason}")]
+
+
+@pytest.mark.browser
+def test_a_failed_folder_s_whole_reason_shows_on_maintenance(root, tmp_path, pds, whole_error) -> None:
+    """#951: a folder's failed run, read as the host's route returns it, shows its whole reason in its Maintenance row;
+    every failed run's reason (raised, or ended unverified) goes through that one line."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    note = f"the session's teardown also failed: OSError: {whole_error}"
+
+    def run(_cfg) -> Run:
+        broke = RuntimeError(whole_error)
+        broke.add_note(note)  # as loop_owner.run adds it
+        raise broke
+
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    job.start("owlbear")
+    drained(job)
+    read, reason = job.read(), f"RuntimeError: {whole_error}\n{note}"
+    assert {f["folder"]: f["reason"] for f in read["folders"]}["owlbear"] == reason
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    app = api.create_app(Store(tmp_path, name="shop"), "tok", None)
+    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_keep_alive=60))
+    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
+    while not server.started:
+        time.sleep(0.05)
+    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.route("**/api/next/curation", lambda route: route.fulfill(json=read))
+            page.goto(f"{base}/maintenance#token=tok")
+            row = page.locator("#curation > li", has=page.get_by_role("heading", name="owlbear", exact=True))
+            expect(row).to_be_visible()
+            assert row.locator('p-text[size="xs"]:not(.blocked)').first.text_content() == reason
+            browser.close()
+    finally:
+        server.should_exit = True
 
 
 def test_a_run_waiting_for_a_slot_never_starts_once_an_update_or_a_stop_fences_it(root) -> None:
