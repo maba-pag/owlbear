@@ -61,11 +61,8 @@ def behind(root: Path, remote: Path, tmp_path: Path) -> None:
 
 def pausing(root: Path, tmp_path: Path) -> tuple[Path, Path]:
     """Install the hook in the checkout; the file it makes once paused, and the one that releases it."""
-    admin, signals = Path(git(root, "rev-parse", "--absolute-git-dir").strip()), tmp_path / "signals"
-    signals.mkdir()
-    paused, release = signals / "paused", signals / "release"
-    hooks = tmp_path / "hooks"
-    hooks.mkdir()
+    admin = Path(git(root, "rev-parse", "--absolute-git-dir").strip())
+    paused, release, hooks = tmp_path / "paused", tmp_path / "release", tmp_path
     (hooks / "reference-transaction").write_text(HOOK.format(admin=admin, paused=paused, release=release))
     (hooks / "reference-transaction").chmod(0o755)
     git(root, "config", "core.hooksPath", str(hooks))

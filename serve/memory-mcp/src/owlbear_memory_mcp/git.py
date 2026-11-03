@@ -483,15 +483,12 @@ def repo_locked(root: Path, wait: float = 30.0) -> Iterator[None]:
         os.close(fd)
 
 
-APPLY = "owlbear-curation-apply.json"  # Delivery's record of a curation run's apply, beside the repository lock
-
-
 def cut_short(root: Path) -> str:
     """Why nothing may move in the shared repository: Delivery's apply of a curation run was cut short; else nothing.
 
     The record names the run's files where they are, and Delivery finishes the apply from it.
     """
-    path = Path(_git(root, "rev-parse", "--absolute-git-dir")) / APPLY
+    path = Path(_git(root, "rev-parse", "--absolute-git-dir")) / "owlbear-curation-apply.json"  # beside the lock
     if not path.exists():
         return ""
     folder = json.loads(path.read_text(encoding="utf-8"))["folder"]

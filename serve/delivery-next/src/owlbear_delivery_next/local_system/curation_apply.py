@@ -20,8 +20,6 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
-NAME = "owlbear-curation-apply.json"
-
 
 def digest(raw: bytes | None) -> str | None:
     """The seed's identity in a record: the SHA-256 of its bytes; None for a path the seed did not hold."""
@@ -51,7 +49,7 @@ class Apply:
 
 def where(repo: DataRepo) -> Path:
     """The record's file, beside the repository lock; `DataRepoError` when Git names no Git folder for the checkout."""
-    return repo._lock_file().parent / NAME  # noqa: SLF001 - the lock's own folder, found as the lock finds it
+    return repo._lock_file().parent / "owlbear-curation-apply.json"  # noqa: SLF001 - found as the lock is
 
 
 def write(repo: DataRepo, apply: Apply) -> None:
