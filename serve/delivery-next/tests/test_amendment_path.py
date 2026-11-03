@@ -861,3 +861,20 @@ def test_a_check_the_amendment_changes_or_names_no_longer_covers_a_criterion_it_
     answer(c, "yes")
 
     assert [p.criteria for p in c.checks] == [p.criteria for p in c.brief.approved[-1].checks] == [["AC-1"], []]
+
+
+def test_a_criterion_added_after_an_amendment_removed_one_never_takes_an_id_an_approved_version_held(tmp_path):
+    store = Store(tmp_path / "store")
+    first = {"title": "Greet", "outcome": "greet(name) greets the person", "scope": ["packages/app"],
+             "criteria": [AC1, AC2]}  # fmt: skip
+    code, out = briefs.save_brief(store, first)
+    with store.lock(out["slug"]) as lock:  # what an approved amendment removing AC-2 leaves
+        c = store.read(out["slug"])
+        c.brief.approved = [c.brief.model_copy()]
+        c.brief.criteria = c.brief.criteria[:1]
+        store.write(lock, c)
+
+    code_more, _ = briefs.save_brief(store, first | {"change": out["change"], "criteria": [AC1, "Says Hi in French"]})
+
+    assert (code, code_more) == (200, 200)
+    assert [k.id for k in store.read(out["slug"]).brief.criteria] == ["AC-1", "AC-3"]  # a revert brings AC-2 back

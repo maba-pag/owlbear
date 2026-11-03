@@ -40,9 +40,10 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
     names = Names(branch=f"owlbear/{slug}", target=profile.value(prof, profile.DEFAULT, "main"))
     c = old or Change(slug=slug, handle=handle, profile_version=prof.version, names=names)
     before, criteria = c.brief.criteria, []
+    held = {k.id for v in c.brief.approved for k in v.criteria}  # a revert may bring any of them back
     for i, text in enumerate(d.criteria, 1):  # the draft names the nth criterion AC-n, whatever its id (positions)
         prev = before[i - 1] if i <= len(before) else None
-        taken = {k.id for k in (*before, *criteria)}
+        taken = held | {k.id for k in (*before, *criteria)}
         ident = prev.id if prev else next(f"AC-{n}" for n in count(i) if f"AC-{n}" not in taken)
         criteria.append(Criterion(id=ident, text=text, version=prev.version + (prev.text != text) if prev else 1))
     placed = {f"AC-{n}": k.id for n, k in enumerate(criteria, 1)}
