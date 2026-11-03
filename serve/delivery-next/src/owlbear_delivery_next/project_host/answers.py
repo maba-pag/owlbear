@@ -34,7 +34,7 @@ T6 = "This is a recovery decision; make it in the Changes page"
 KIND = (
     "How the owner's answer bears on the approved brief: event (it only settles how the work goes on), "
     "clarification (it settles intent within the brief; read it back first) or brief_change (it changes the "
-    "brief; the work stops and asks)"
+    "brief; Delivery amends it and asks the owner only about more than his answer says)"
 )
 STATEMENT = "For a clarification: the intent the owner confirmed when you read it back, at most two lines"
 CONFIRMED = "For a clarification: true only when the owner confirmed the statement as you read it back"

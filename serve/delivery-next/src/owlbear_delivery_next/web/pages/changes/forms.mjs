@@ -10,7 +10,8 @@ import { taskRounds } from "./progress.mjs";
 const CLASSES = [
   { id: "event", label: "It only settles how the work goes on" },
   { id: "clarification", label: "It clarifies what the brief means: it becomes a decision of this Change" },
-  { id: "brief_change", label: "It changes the approved brief: the work stops and asks you" },
+  { id: "brief_change", label: "It changes the approved brief: Delivery amends it and asks you only about more "
+    + "than your answer says" },
 ];
 
 function classed(q, mine) {
