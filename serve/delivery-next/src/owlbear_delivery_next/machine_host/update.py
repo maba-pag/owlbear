@@ -17,6 +17,7 @@ import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import alias, handover, update_steps, versions
 from owlbear_delivery_next.state_store import registry
@@ -118,7 +119,7 @@ class Updater:
         except Exception as exc:  # noqa: BLE001 - the page learns how it ended; the running version stays
             if self.machine.handover is None:  # after the rename nothing goes back to the older version
                 self.machine.unfence()
-            self._set("failed", f"{type(exc).__name__}: {exc}"[:600])
+            self._set("failed", failure(exc))
 
     def _update(self) -> None:
         self.steps.begin()

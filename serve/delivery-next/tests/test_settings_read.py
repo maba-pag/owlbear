@@ -297,6 +297,17 @@ def test_an_unreadable_state_file_is_said_and_rebuilt(world):
     assert [(n.key, n.old, n.new) for n in after.notices] == [("agents.builder.model", '"A"', '"B"')]
 
 
+def test_unreached_impeccable_releases_are_said_whole_with_their_type(world, whole_error):
+    world.releases(PermissionError(whole_error))
+    place = f"GitHub's releases of {pack_files.manifest()['pack']}"
+    why = f"GitHub was not reached: PermissionError: {whole_error}"
+    reader = world.reader()
+    reader.read()
+    assert f"settings read: {settings_read.IMPECCABLE} failed at {place}: {why}" in world.said
+    failed = {f["source"]: f["error"] for f in reader.shown()["failures"]}
+    assert failed[settings_read.IMPECCABLE] == f"{place}: {why}"
+
+
 def test_a_failed_model_read_keeps_the_last_list_and_says_why(world, tmp_path, monkeypatch):
     reader, calls = world.reader(), []
     c = client(Store(tmp_path / "shop"), reader)

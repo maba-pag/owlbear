@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import subprocess
 import tempfile
@@ -23,6 +24,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.error import HTTPError
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import detector, pack_files
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
@@ -45,6 +47,8 @@ SKILL = "skill"  # upstream's skill text
 SKILL_TEXT = "Skill text: "  # the diff report's last line, naming the command that shows the skill text
 ENTRY = re.compile(r"^ {4}Antipattern \{\n(?P<body>.*?)^ {4}\},?$", re.DOTALL | re.MULTILINE)  # rustfmt's layout
 FIELD = re.compile(r"^ {8}(?P<key>\w+): (?P<value>.*?),?\s*(?=^ {8}\w+: |\Z)", re.DOTALL | re.MULTILINE)
+
+_log = logging.getLogger(__name__)
 
 
 def _version(tag: str) -> tuple[int, ...]:
@@ -88,12 +92,12 @@ def releases(fetch: Callable[[str], bytes] | None = None) -> list[str]:
         msg = f"GitHub answered {exc.code} {exc.reason}"
         raise Unread(msg, offline=False) from exc
     except (OSError, HTTPException) as exc:
-        msg = f"GitHub was not reached: {exc}"
+        msg = f"GitHub was not reached: {failure(exc)}"
         raise Unread(msg, offline=True) from exc
     try:
         found = json.loads(raw)
     except ValueError as exc:
-        msg = "GitHub's answer is not JSON"
+        msg = f"GitHub's answer is not JSON: {failure(exc)}"
         raise Unread(msg, offline=False) from exc
     if not isinstance(found, list):
         msg = "GitHub's answer is no list of releases"
@@ -127,7 +131,8 @@ def notice(*, refresh: bool, force: bool = False, fetch: Callable[[str], bytes] 
                 found = releases(fetch)
                 kept = {"tag": tag, "behind": len(found), "latest": found[-1] if found else tag, "checked_at": now}
             except Unread as exc:
-                kept = kept | {"tag": tag, "failed_at": now, "failure": str(exc)[:400], "offline": exc.offline}
+                _log.warning("Impeccable: upstream's releases could not be read: %s", exc)
+                kept = kept | {"tag": tag, "failed_at": now, "failure": str(exc), "offline": exc.offline}
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 atomic_write(path, json.dumps(kept) + "\n")
