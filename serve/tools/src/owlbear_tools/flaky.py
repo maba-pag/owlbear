@@ -121,13 +121,9 @@ class _Reruns:
 
         The socket getter's reply follows those queued writes; a controller's direct read does not.
         """
-        failures = getattr(item.config, "failures_db", None)
-        if (
-            failures is not None
-            and hasattr(item.config, "workerinput")
-            and _ISSUE_PROPERTY in dict(item.user_properties)
-        ):
-            failures.get_test_reruns(item.nodeid)
+        db = getattr(item.config, "failures_db", None)
+        if db is not None and hasattr(item.config, "workerinput") and _ISSUE_PROPERTY in dict(item.user_properties):
+            db.get_test_reruns(item.nodeid)
 
     @pytest.hookimpl(optionalhook=True, tryfirst=True)
     def pytest_handlecrashitem(self, crashitem: str, report: pytest.TestReport, sched: object) -> None:  # noqa: ARG002

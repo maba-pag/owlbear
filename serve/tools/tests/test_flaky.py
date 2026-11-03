@@ -100,9 +100,8 @@ def queued(self, test, key, value):
 
 def acknowledged(self, test, key):
     if threading.current_thread() is not threading.main_thread():
-        for (node, field), value in list(pending.items()):
-            put(self, node, field, value)
-            del pending[node, field]
+        for entry in list(pending):
+            put(self, *entry, pending.pop(entry))
     return read(self, test, key)
 
 
