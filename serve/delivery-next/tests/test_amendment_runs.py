@@ -315,6 +315,8 @@ def test_an_unset_challenger_asks_for_its_settings_and_keeps_the_amendment_where
         ("plan", (), "amendment: only with stage brief"),
         ("brief", (AC1,), "amendment: criterion:AC-1 listed twice"),
         ("brief", ({"field": "criterion", "key": "AC-9", "text": "x", "why": "y"},), "criterion:AC-9 is not in"),
+        ("brief", ({"field": "ui", "text": "False", "why": "no page"},), ""),
+        ("brief", ({"field": "ui", "text": "no page", "why": "y"},), "ui takes text true or false"),
     ],
 )
 def test_a_premise_may_name_any_amendable_item_the_owners_own_included(tmp_path, stage, extra, error):

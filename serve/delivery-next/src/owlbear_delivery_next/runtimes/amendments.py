@@ -52,6 +52,8 @@ def _errors(items: Sequence[tools.Amend | amend_tools.CandidateItem], allowed: t
         seen.add(ref)
         if a.field == "ui":
             errors += [f"{name}: ui takes no key and no remove"] if a.key or a.remove else []
+            if a.text.strip().lower() not in {"true", "false", ""}:
+                errors.append(f"{name}: ui takes text true or false")
         elif a.key and ref not in allowed:
             errors.append(f"{name}: {ref} is not in the brief - name an item as the brief does, or leave key empty")
         elif a.remove and not a.key:
