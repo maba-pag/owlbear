@@ -249,7 +249,7 @@ class Chat:
             return {"error": f"brief v{version} is not the current draft v{current}"}
         slug, attempt = row["slug"], brief["challenge"]["attempt"]
         code, now = self._wait(slug, version, attempt, start + WAIT)
-        if code == OK and now.get("running"):
+        if code == OK and now.get("running") and now.get("version") == version:
             return self._unfinished(slug, version, attempt)
         return _told(version, code, now)
 
@@ -264,7 +264,7 @@ class Chat:
             return _told(version, code, rows)
         row = next((r for r in rows if r.get("slug") == slug), {})
         code, now = self._read(slug, version, attempt)
-        if code != OK or not now.get("running"):
+        if code != OK or not now.get("running") or now.get("version") != version:
             return _told(version, code, now)
         line = row.get("line")
         if row.get("step") != StepKind.SHAPE:  # abandoned or finished: no challenge will end
@@ -277,10 +277,10 @@ class Chat:
         return self.call("GET", f"/chat/challenge/{urllib.parse.quote(slug)}?version={version}&attempt={attempt}")
 
     def _wait(self, slug: str, version: int, attempt: int, deadline: float) -> tuple[int, dict[str, Any]]:
-        """Read the version's challenge until it is not running, a read fails, or *deadline*; the last read."""
+        """Read the version's challenge until it is over or another draft's, a read fails, or *deadline*."""
         while True:
             code, now = self._read(slug, version, attempt)
-            ended = code == OK and not now.get("running")
+            ended = code == OK and (not now.get("running") or now.get("version", version) != version)
             if ended or code not in {OK, 503} or time.monotonic() >= deadline:  # 503: the host is handing over
                 return code, now
             _pause(POLL)

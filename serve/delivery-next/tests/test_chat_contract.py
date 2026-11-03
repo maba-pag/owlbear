@@ -421,13 +421,21 @@ def test_a_wait_that_ends_still_running_says_who_must_act(monkeypatch, row, told
 
 
 class Landing(Answering):
-    """A host whose challenge ends right after its second answer about the Changes: after the end of a wait read it."""
+    """A host whose challenge changes right after its second answer about the Changes (the end-of-wait row read)."""
+
+    then: dict[str, object] = FOUND  # what the challenge answers from then on
 
     def __call__(self, *args, **kwargs):
         out = super().__call__(*args, **kwargs)
         if [p for _, p, _ in self.got].count("/changes") == 2:
-            self.answers["GET /chat/challenge/c1-shop"] = FOUND
+            self.answers["GET /chat/challenge/c1-shop"] = self.then
         return out
+
+
+class Replacing(Landing):
+    """The same, but what lands is the next draft, which still runs (its decisions are being picked)."""
+
+    then = RUNNING | {"version": 3}
 
 
 def test_a_verdict_that_lands_after_the_last_running_read_is_told_as_the_verdict_not_as_an_owner_action(monkeypatch):
@@ -435,6 +443,15 @@ def test_a_verdict_that_lands_after_the_last_running_read_is_told_as_the_verdict
     out = slow.chat.await_challenge("c1", 2)
     assert (out["running"], [f["id"] for f in out["findings"]]) == (False, ["F1"])
     assert "owner_action" not in out
+
+
+def test_a_draft_that_replaces_the_awaited_one_is_told_as_replaced_whether_its_challenge_runs_or_not(monkeypatch):
+    slow = Slow(monkeypatch, WAITING | {"GET /chat/challenge/c1-shop": RUNNING | {"version": 3}})
+    replaced = {"error": "brief v2 was replaced: the host's current draft is v3"}
+    assert slow.chat.await_challenge("c1", 2) == replaced  # at its first read: the next draft's pick runs
+    assert [p for _, p, _ in slow.host.got].count("/changes") == 1  # the wait ended there, with no owner-action read
+    slow = Slow(monkeypatch, WAITING | {"GET /changes": [ROW | {"actor": "you", "action": "Resume"}]}, Replacing)
+    assert slow.chat.await_challenge("c1", 2) == replaced  # at its last read, after the Change's row
 
 
 class Cutting(Answering):
