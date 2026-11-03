@@ -276,7 +276,9 @@ def resume(c: Change, a: Amendment, level: Level, now: datetime) -> None:
         from owlbear_delivery_next.change_flow.loop import StepResult  # noqa: PLC0415 - loop imports this module
 
         cause = cause_key(ErrorKind.SCOPE, s.kind, "amendment")
-        r = StepResult(exit=Exit.BACK, back_to=StepKind.PLAN, cause=cause, reason=f"brief v{a.version}: {a.id}")
+        done = ", ".join(f"{t.id} ({t.title})" for t in c.plan.tasks if t.done) or "none"
+        why = f"brief v{a.version} ({a.id}) stopped task {s.task}; done before it, their work on the branch: {done}"
+        r = StepResult(exit=Exit.BACK, back_to=StepKind.PLAN, cause=cause, reason=why)
         c.outcome = Outcome(exit=Exit.BACK, cause=cause, reason=r.reason, at=now)
         budgets.back(c, r, now)
         return

@@ -284,6 +284,15 @@ def test_the_stopped_step_resumes_on_the_new_version_by_its_level(level, kind, t
     assert (c.step.kind, c.step.task, c.outcome.exit if c.outcome else None, c.brief.version) == (*then, 4)
 
 
+def test_the_replan_is_told_which_task_stopped_and_what_is_done():
+    c = change(K.BUILD, "t2")
+    c.plan.tasks[0].done = True
+    through(c, said=verdict("weaker", qualifies=False))
+    answer(c, "yes")
+
+    assert c.outcome.reason == "brief v4 (A1) stopped task t2; done before it, their work on the branch: t1 (one)"
+
+
 def test_a_widening_amendment_has_unpicked_decisions_reassessed():
     c = change()
     said = {"D-p1": {"title": "Plain HTML", "statement": "No build"}}
