@@ -506,44 +506,35 @@ KEY = "shop:" + "0" * 32
 CUT = "was cut short while its files were copied in"
 
 
-def _accept_until_stopped(repo: str, run: tuple, copied: str, watched: tuple[str, ...]) -> None:
-    """A host accepting a run, stopped for good once the first of *watched* is copied in: the parent kills it."""
-    real = curation_tree.atomic_write
+def _accept_until_stopped(tree: curation_tree.Tree, copied: str, watched: tuple[str, ...]) -> None:
+    """A host accepting a run, stopped for good once the first of *watched* is copied in, or once its apply's record is
+    written when *watched* is empty: the parent kills it."""
+
+    def stop(name: str) -> None:
+        Path(copied).write_text(name)
+        time.sleep(120)
+
+    real, record = curation_tree.atomic_write, curation_apply.write
 
     def write(path, *args, **kw) -> None:
         real(path, *args, **kw)
         if Path(path).name in watched:
-            Path(copied).write_text(Path(path).name)
-            time.sleep(120)
+            stop(Path(path).name)
 
-    curation_tree.atomic_write = write
-    root, base, dirs, head = run
-    curation_tree.Tree(DataRepo(Path(repo)), Path(root), base, dirs, head).accept("shop", KEY, None)
+    def kept(*args) -> None:
+        record(*args)
+        if not watched:
+            stop("")
+
+    curation_tree.atomic_write, curation_apply.write = write, kept
+    tree.accept("shop", KEY, None)
 
 
-def stopped(repo: Path, remote: Path, at: Path) -> SimpleNamespace:
-    """An accepted run whose apply a stop cut short after the first of its two curated files was copied in.
-
-    Its run rewords A, adds B and removes C with its own commit, all curated in shop; it rewords pending P and deletes
-    owlbear's D without a commit, as the memory server defers a deletion.
-    """
-    shop, owlbear = repo / "shop" / "memory", repo / "owlbear" / "memory"
-    a, c, d = curated(shop, "Reworded"), curated(shop, "Removed"), curated(owlbear, "Deferred")
-    pushed(repo, "curated entries")
-    p = pending(shop, "Pending")
-    seed = {rel(e, f): (repo / rel(e, f)).read_bytes() for e, f in ((a, "shop"), (c, "shop"), (d, "owlbear"))}
-    tree = curation_tree.seed(DataRepo(repo), at / "run", ["owlbear", "shop"])
-    reword(tree.root / "shop" / "memory", a.id, "Reworded: the curator's version")
-    b = curated(tree.root / "shop" / "memory", "Added")
-    reword(tree.root / "shop" / "memory", p.id, "Pending: reworded")
-    (tree.root / rel(d, "owlbear")).unlink()
-    git(tree.root, "rm", "-q", "--", rel(c))
-    git(tree.root, "commit", "-qm", CURATOR)
-    target = {rel(e): (tree.root / rel(e)).read_bytes() for e in (a, b, p)}
+def _stop(tree: curation_tree.Tree, at: Path, watched: tuple[str, ...] = ()) -> str:
+    """Accept *tree*'s run in a child the parent kills where `_accept_until_stopped` stops; the file it copied last."""
     copied = at / "copied"
     child = multiprocessing.get_context("spawn").Process(
-        target=_accept_until_stopped,
-        args=(str(repo), (str(tree.root), tree.base, tree.dirs, tree.head), str(copied), (f"{a.id}.md", f"{b.id}.md")),
+        target=_accept_until_stopped, args=(tree, str(copied), watched)
     )
     child.start()
     end = time.monotonic() + 30
@@ -553,11 +544,42 @@ def stopped(repo: Path, remote: Path, at: Path) -> SimpleNamespace:
         time.sleep(0.05)
     child.kill()
     child.join()
-    first = f"shop/memory/{copied.read_text()}"
+    return copied.read_text()
+
+
+def _run(repo: Path, at: Path, curate) -> curation_tree.Tree:
+    """A run seeded from the checkout, whose curator calls *curate* with its worktree and commits."""
+    tree = curation_tree.seed(DataRepo(repo), at / "run", ["owlbear", "shop"])
+    curate(tree.root)
+    git(tree.root, "add", "-A")
+    git(tree.root, "commit", "-qm", CURATOR)
+    return tree
+
+
+def stopped(repo: Path, remote: Path, at: Path) -> SimpleNamespace:
+    """An accepted run whose apply a stop cut short after the first of its two curated files was copied in.
+
+    Its run rewords A and adds B, curated in shop, and removes owlbear's curated C with its own commit; it rewords
+    pending P and deletes owlbear's D without a commit, as the memory server defers a deletion.
+    """
+    shop, owlbear = repo / "shop" / "memory", repo / "owlbear" / "memory"
+    a, c, d = curated(shop, "Reworded"), curated(owlbear, "Removed"), curated(owlbear, "Deferred")
+    pushed(repo, "curated entries")
+    p = pending(shop, "Pending")
+    seed = {rel(e, f): (repo / rel(e, f)).read_bytes() for e, f in ((a, "shop"), (c, "owlbear"), (d, "owlbear"))}
+    tree = curation_tree.seed(DataRepo(repo), at / "run", ["owlbear", "shop"])
+    reword(tree.root / "shop" / "memory", a.id, "Reworded: the curator's version")
+    b = curated(tree.root / "shop" / "memory", "Added")
+    reword(tree.root / "shop" / "memory", p.id, "Pending: reworded")
+    (tree.root / rel(d, "owlbear")).unlink()
+    git(tree.root, "rm", "-q", "--", rel(c, "owlbear"))
+    git(tree.root, "commit", "-qm", CURATOR)
+    target = {rel(e): (tree.root / rel(e)).read_bytes() for e in (a, b, p)}
+    first = f"shop/memory/{_stop(tree, at, (f'{a.id}.md', f'{b.id}.md'))}"
     second = ({rel(a), rel(b)} - {first}).pop()
     assert curation_apply.read(DataRepo(repo)) is not None
     assert ((repo / first).read_bytes(), curation_tree._read(repo / second)) == (target[first], seed.get(second))  # noqa: SLF001
-    assert (repo / rel(c)).read_bytes() == seed[rel(c)]  # removed after the files, as the apply orders them
+    assert [e for e in (c, d) if (repo / rel(e, "owlbear")).exists()] == []  # removed first, as the apply does
     start = bare(remote, "rev-parse", "main").stdout.decode().strip()
     return SimpleNamespace(first=first, second=second, c=c, d=d, p=p, seed=seed, target=target, start=start)
 
@@ -597,15 +619,16 @@ def test_a_stop_while_an_accepted_runs_files_are_copied_in_publishes_none_until_
 
     assert (resumed.folder, resumed.done) == ("shop", True)
     for path, did in (
-        (left.first, "as the run left it"), (left.second, "written now"), (rel(left.c), "written now"),
-        (rel(left.d, "owlbear"), "written now"),
+        (left.first, "as the run left it"), (left.second, "written now"),
+        (rel(left.c, "owlbear"), "as the run left it"), (rel(left.d, "owlbear"), "as the run left it"),
     ):  # fmt: skip
         assert f"{path}: {did}" in resumed.said
     assert resumed.said.endswith("; published")
     assert remote_has(remote, sha)
     for path in (left.first, left.second):
         assert remote_bytes(remote, path) == left.target[path] == (repo / path).read_bytes()
-    assert (remote_bytes(remote, rel(left.c)), (repo / rel(left.c)).exists()) == (None, False)
+    removed = rel(left.c, "owlbear")
+    assert (remote_bytes(remote, removed), (repo / removed).exists()) == (None, False)
     deferred = rel(left.d, "owlbear")  # its deletion stays uncommitted, as the run's commits did not make it
     assert (remote_bytes(remote, deferred), (repo / deferred).exists()) == (left.seed[deferred], False)
     assert (remote_bytes(remote, rel(left.p)), (repo / rel(left.p)).read_bytes()) == (None, left.target[rel(left.p)])
@@ -619,15 +642,91 @@ def test_a_stop_while_an_accepted_runs_files_are_copied_in_publishes_none_until_
 
 
 def test_a_file_changed_after_the_stop_is_kept_and_published_with_the_rest(repo, remote, tmp_path) -> None:
-    left = stopped(repo, remote, tmp_path)
-    changed = reword(repo / "shop" / "memory", left.c.id, "Removed: kept by a later save")
+    shop = repo / "shop" / "memory"
+    x, y = curated(shop, "Saved later"), curated(shop, "Untouched")
+    pushed(repo, "curated entries")
+
+    def curate(root: Path) -> None:
+        reword(root / "shop" / "memory", x.id, "Saved later: the curator's version")
+        reword(root / "shop" / "memory", y.id, "Untouched: the curator's version")
+
+    tree = _run(repo, tmp_path, curate)
+    target = (tree.root / rel(y)).read_bytes()
+    _stop(tree, tmp_path)
+    changed = reword(shop, x.id, "Saved later: a hand chat's version")
 
     resumed = curation_tree.resume(DataRepo(repo))
 
     assert resumed.done
-    assert f"{rel(left.c)}: changed after the stop; that version is kept" in resumed.said
-    assert remote_bytes(remote, rel(left.c)) == (repo / rel(changed)).read_bytes()
-    assert remote_bytes(remote, left.second) == left.target[left.second]
+    assert f"{rel(x)}: changed after the stop; that version is kept" in resumed.said
+    assert f"{rel(y)}: written now" in resumed.said
+    assert remote_bytes(remote, rel(x)) == (repo / rel(changed)).read_bytes()
+    assert remote_bytes(remote, rel(y)) == target
+
+
+def _made_global(entry):
+    def curate(root: Path) -> None:
+        (root / "memory").mkdir(exist_ok=True)
+        git(root, "mv", rel(entry), f"memory/{entry.id}.md")
+
+    return curate
+
+
+def test_a_stop_while_an_entry_is_made_global_never_leaves_it_in_both_folders(repo, tmp_path) -> None:
+    g = curated(repo / "shop" / "memory", "Shared")
+    pushed(repo, "a curated entry")
+
+    _stop(_run(repo, tmp_path, _made_global(g)), tmp_path, (f"{g.id}.md",))
+
+    assert ((repo / rel(g)).exists(), (repo / "memory" / f"{g.id}.md").exists()) == (False, True)
+
+
+def test_an_entry_changed_after_a_stop_before_its_move_stays_where_it_was(repo, remote, tmp_path) -> None:
+    """A hand chat's challenge of an entry a stopped run made Global keeps it in its project; no Global copy remains."""
+    shop = repo / "shop" / "memory"
+    g = curated(shop, "Shared")
+    pushed(repo, "a curated entry")
+    _stop(_run(repo, tmp_path, _made_global(g)), tmp_path)
+    challenged = MemoryEngine(shop).get_entry(g.id)
+    MemoryEngine(shop).record_factually_wrong(g.id, task_id="task-1", expected_revision=challenged.revision)
+
+    resumed = curation_tree.resume(DataRepo(repo))
+
+    moved = f"memory/{g.id}.md"
+    assert resumed.done
+    assert f"{moved}: left as it was, as {rel(g)} of its entry changed after the stop" in resumed.said
+    assert (remote_bytes(remote, rel(g)), remote_bytes(remote, moved)) == ((repo / rel(g)).read_bytes(), None)
+    assert MemoryEngine(shop).get_entry(g.id).state == MemoryState.CONTESTED
+    assert not (repo / moved).exists()
+
+
+@pytest.mark.parametrize(
+    "refusal",
+    [
+        "this automatic trigger is off in the machine settings; it waits until it is turned on",
+        f"{curation_snapshots.UNSET[0]}agents.curator.model{curation_snapshots.UNSET[1]}",
+    ],
+)
+def test_a_refusal_whose_folders_apply_stays_cut_short_is_still_one_with_one_note(repo, refusal) -> None:
+    entry = curated(repo / "shop" / "memory", "Lesson")
+    pushed(repo, "a curated entry")
+    shared = DataRepo(repo)
+    seed = (repo / rel(entry)).read_bytes()
+    step = curation_apply.Step(curation_apply.digest(seed), "the run's version", removed=False)
+    curation_apply.write(shared, curation_apply.Apply("shop", {rel(entry): step}))
+    (Path(git(repo, "rev-parse", "--absolute-git-dir").strip()) / "index.lock").write_text("")  # a lingering Git's
+    job, at = idle(repo), datetime.now(UTC)
+    with job.lock:
+        runs = job.load()
+        runs.folders["shop"] = curation.FolderRun(state="failed", started_at=at, ended_at=at, reason=refusal)
+        job._write(runs)  # noqa: SLF001 - a refusal main wrote before any session
+
+    curation_resume.recover(job)
+    resumed = curation_resume.recover(job)
+
+    row = job.load().folders["shop"]
+    assert (curation_snapshots.refused(row), curation.legacy_uncertain(row)) == (True, False)
+    assert row.reason == f"{refusal}; its accepted edits could not be finished yet: {resumed.said}"
 
 
 def test_an_apply_that_cannot_be_finished_keeps_its_hold_and_refuses_the_next_run(
@@ -728,32 +827,3 @@ def test_an_apply_finished_first_leads_the_refusal_of_a_run_whose_file_changed_m
 
     assert refusal.startswith("first finished the apply a stop cut short of shop: x: written now; refused, ")
     assert (f"{rel(entry)} changed meanwhile" in refusal, notice) == (True, "")
-
-
-@pytest.mark.parametrize(
-    "refusal",
-    [
-        "this automatic trigger is off in the machine settings; it waits until it is turned on",
-        f"{curation_snapshots.UNSET[0]}agents.curator.model{curation_snapshots.UNSET[1]}",
-    ],
-)
-def test_a_refusal_whose_folders_apply_stays_cut_short_is_still_one_with_one_note(repo, refusal) -> None:
-    entry = curated(repo / "shop" / "memory", "Lesson")
-    pushed(repo, "a curated entry")
-    shared = DataRepo(repo)
-    seed = (repo / rel(entry)).read_bytes()
-    step = curation_apply.Step(curation_apply.digest(seed), "the run's version", removed=False)
-    curation_apply.write(shared, curation_apply.Apply("shop", {rel(entry): step}))
-    (Path(git(repo, "rev-parse", "--absolute-git-dir").strip()) / "index.lock").write_text("")  # a lingering Git's
-    job, at = idle(repo), datetime.now(UTC)
-    with job.lock:
-        runs = job.load()
-        runs.folders["shop"] = curation.FolderRun(state="failed", started_at=at, ended_at=at, reason=refusal)
-        job._write(runs)  # noqa: SLF001 - a refusal main wrote before any session
-
-    curation_resume.recover(job)
-    resumed = curation_resume.recover(job)
-
-    row = job.load().folders["shop"]
-    assert (curation_snapshots.refused(row), curation.legacy_uncertain(row)) == (True, False)
-    assert row.reason == f"{refusal}; its accepted edits could not be finished yet: {resumed.said}"

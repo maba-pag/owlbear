@@ -166,7 +166,8 @@ class Tree:
                 for r in touched
             }
             curation_apply.write(shared, curation_apply.Apply(folder, steps))  # before the first file: a stop keeps it
-            for r, text in texts.items():
+            # removals first: a stop never leaves an entry the run moves in two folders, for a later save to change one
+            for r, text in sorted(texts.items(), key=lambda item: item[1] is not None):
                 if text is None:
                     (shared.root / r).unlink(missing_ok=True)
                 else:
@@ -190,13 +191,28 @@ def _published(shared: DataRepo, message: str) -> str:
         return f"written, but not published: {type(exc).__name__}: {exc}"
 
 
-def _finished(path: Path, rel: str, step: curation_apply.Step) -> str:
-    """Bring one path of a cut-short set to the run's version unless it changed after the stop; say which."""
+def _target(step: curation_apply.Step) -> bytes | None:
+    return None if step.target is None else step.target.encode()
+
+
+def _later(now: bytes | None, step: curation_apply.Step) -> bool:
+    """Whether a path of a cut-short set changed after the stop: it holds neither its seed nor the run's version."""
+    return now != _target(step) and curation_apply.digest(now) != step.seed
+
+
+def _finished(path: Path, rel: str, step: curation_apply.Step, changed: str) -> str:
+    """Bring one path of a cut-short set to the run's version unless it changed after the stop; say which.
+
+    *changed* is the path of its entry that changed after the stop, else *rel*. A moved entry's other end stays too:
+    one entry is never left in two folders.
+    """
     now = _read(path)
-    if now == (None if step.target is None else step.target.encode()):
+    if now == _target(step):
         return f"{rel}: as the run left it"
-    if curation_apply.digest(now) != step.seed:
+    if _later(now, step):
         return f"{rel}: changed after the stop; that version is kept"
+    if changed != rel:
+        return f"{rel}: left as it was, as {changed} of its entry changed after the stop"
     if step.target is None:
         path.unlink()
     else:
@@ -208,8 +224,9 @@ def resume(shared: DataRepo) -> Resumed | None:
     """Finish the apply a stop cut short, commit its set and publish it; None when no apply was cut short.
 
     Each path the run touched gets the run's version, unless it changed after the stop: that version is kept, and
-    committed with the rest. Pending entries and a deletion the run's commits did not make stay uncommitted, as an
-    accept leaves them. When the set cannot be committed, the record stays and so does the hold on every push.
+    committed with the rest, and the other end of an entry the run moved stays as it is. Pending entries and a
+    deletion the run's commits did not make stay uncommitted, as an accept leaves them. When the set cannot be
+    committed, the record stays and so does the hold on every push.
     """
     if (record := curation_apply.read(shared)) is None:
         return None
@@ -219,7 +236,8 @@ def resume(shared: DataRepo) -> Resumed | None:
             for d in sorted({r.rpartition("/")[0] for r, _ in steps}):
                 (shared.root / d).mkdir(exist_ok=True)
                 locks.enter_context(writer_lock(shared.root / d))
-            lines = [_finished(shared.root / r, r, step) for r, step in steps]
+            later = {r.rpartition("/")[2]: r for r, step in steps if _later(_read(shared.root / r), step)}
+            lines = [_finished(shared.root / r, r, step, later.get(r.rpartition("/")[2], r)) for r, step in steps]
             kept = [
                 shared.root / r
                 for r, step in steps
