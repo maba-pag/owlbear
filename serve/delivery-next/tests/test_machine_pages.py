@@ -221,6 +221,9 @@ def test_changes_of_all_projects_or_one_the_top_row_switches_and_resumes_and_pro
             page.locator("p-drilldown").get_by_role("button", name="Settings").click()
             page.locator("p-drilldown").get_by_role("link", name="Overview").click()
             expect(page).to_have_url(f"{base}/config?project={a.id}#overview")  # a project page opens the first project
+            page.goto(f"{base}/memory")  # under All, the link to the Memory settings keeps the Global layer it names
+            page.get_by_role("link", name="Memory settings").click()
+            expect(page).to_have_url(f"{base}/config?project={a.id}&layer=global#memory")
             browser.close()
     finally:
         server.should_exit = True
