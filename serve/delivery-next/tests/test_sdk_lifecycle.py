@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -28,7 +29,7 @@ from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, sdk_spend, sdk_teardown
+from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, sdk_spend, sdk_teardown, step_budget
 from owlbear_delivery_next.runtimes.session_result import to_result
 from owlbear_delivery_next.state_store import spend_ledger
 from owlbear_delivery_next.state_store.database import StoreError
@@ -363,6 +364,32 @@ def test_a_clean_lifecycle_confirms_without_signals(world):
     assert world.signals == []
 
 
+class _Issued(step_budget.Budget):
+    """A teardown request's budget counted from the moment its request starts, frozen again once it answered (#943).
+
+    The test's 10 ms budget stands for production's 10 s. Counted from its creation, a stall on a loaded machine ran it
+    out before the request ran, or after it answered, so the request was skipped or its answer dropped; only the
+    resistant request's refusal is under test.
+    """
+
+    def __init__(self, seconds: float, clock: Callable[[], float], st: object) -> None:
+        self.real, self.made, self.since = clock, clock(), None
+        super().__init__(seconds, self.now, st)
+
+    def now(self) -> float:
+        return self.made if self.since is None else self.made + self.real() - self.since
+
+    async def run(self, operation, what, tick):
+        async def issued():
+            self.since = self.real()
+            try:
+                return await operation()
+            finally:
+                self.since = None  # an answered request is kept
+
+        return await super().run(issued, what, tick)
+
+
 @pytest.mark.parametrize("stage", ["list", "cancel", "disconnect", "stop"])
 # The child keeps the default 30 s; the parent waits for a child that a loaded machine can take a minute to start.
 @pytest.mark.timeout(30 if os.environ.get("OWLBEAR_TEST_OWNED_TEARDOWN") else 180)
@@ -412,7 +439,9 @@ def test_real_sdk_teardown_progresses_past_repeatedly_cancel_resistant_rpc(tmp_p
     )
     monkeypatch.setattr(target, stage, resistant)
     monkeypatch.setattr(sdk_teardown, "STOP_CALL", 0.01)
-    monkeypatch.setattr(loop_owner, "SHUTDOWN", 0.02)
+    monkeypatch.setattr(step_budget, "Budget", _Issued)
+    # Two shutdown windows of 0.2 s stay inside the 1 s bound and give the second cancellation room on a loaded machine.
+    monkeypatch.setattr(loop_owner, "SHUTDOWN", 0.2)
     monkeypatch.setattr(loop_owner, "RETRY", 0.001)
     started = time.monotonic()
     run = loop_owner.run(sdk_adapter.run(world.cfg))
