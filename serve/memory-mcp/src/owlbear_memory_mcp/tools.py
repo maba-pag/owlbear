@@ -37,6 +37,8 @@ from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError, f
 
 from owlbear_memory_mcp import receipts
 from owlbear_memory_mcp.git import commit_batch, commit_move, cut_short, format_git_failure, repo_locked
+from owlbear_memory_mcp.store import StoreError
+from owlbear_memory_mcp.store import shared_root as machine_shared_root
 
 if TYPE_CHECKING:
     from mcp.server.mcpserver import Context
@@ -134,9 +136,13 @@ def _memory_values(ctx: Context, *names: str) -> dict[str, float]:
     """The owner's memory values among *names*, read from the global settings now, not when the server started.
 
     Code ships no value for them: a tool that needs one the settings do not hold refuses, naming it. Settings that
-    cannot be read refuse too, with the file and the reason.
+    cannot be read refuse too, with the file and the reason. A server bound to the shared repository reads its global
+    settings; one that keeps its own local store looks for the machine's shared repository itself.
     """
-    root = _shared_root(ctx)
+    try:
+        root = _shared_root(ctx) or machine_shared_root()
+    except StoreError as exc:
+        raise ToolError(str(exc)) from exc
     data: object = {}
     if root is not None:
         path = root / CONFIG

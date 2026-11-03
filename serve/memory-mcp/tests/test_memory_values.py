@@ -130,6 +130,34 @@ async def test_a_point_value_that_is_not_a_finite_amount_is_unset(root: Path, st
         await tools.recall_memory(bound(root), agent="builder", limit=5)
 
 
+def name_shared_repository(monkeypatch: pytest.MonkeyPatch, path: Path) -> None:
+    """The host's view of the shared repository, as a chat's memory server gets it."""
+    monkeypatch.setenv("OWLBEAR_DATA", str(path.resolve()))
+
+
+@pytest.mark.asyncio
+async def test_a_server_keeping_its_own_store_reads_the_machines_shared_repository_settings(
+    root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unclaimed workspace has no folder in the shared repository; saved settings must still unblock it."""
+    local = tmp_path / "local"
+    seed(local, 1, "one")
+    context = SimpleNamespace(
+        engine=MemoryEngine(local), memory_dir=local, global_dir=None, global_engine=None, agents=frozenset()
+    )
+    ctx = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context))
+    name_shared_repository(monkeypatch, root)
+
+    with pytest.raises(ToolError, match="outstanding_boost"):  # the repository holds no settings yet
+        await tools.recall_memory(ctx, agent="builder", limit=5)
+    hold(root, **_VALUES)
+    assert titles(await tools.recall_memory(ctx, agent="builder", limit=5)) == ["one"]  # saving them unblocks it
+
+    name_shared_repository(monkeypatch, tmp_path / "no-repository")
+    with pytest.raises(ToolError, match="no git repository"):  # a named place that is no repository says so
+        await tools.recall_memory(ctx, agent="builder", limit=5)
+
+
 @pytest.mark.asyncio
 async def test_assessing_refuses_without_the_stale_factor_but_a_wrong_report_needs_none(
     root: Path, store: Path
