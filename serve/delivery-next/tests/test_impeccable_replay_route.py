@@ -99,6 +99,26 @@ def test_a_failed_replay_is_refused_with_its_reason_and_releases_the_job(error, 
     assert not job.lock.locked()
 
 
+@pytest.mark.parametrize("fails", ["noted", "command"])
+def test_a_replay_that_fails_answers_its_whole_error(whole_error, fails) -> None:
+    if fails == "noted":
+        broke = OSError(whole_error)
+        broke.add_note(f"the session's teardown also failed: OSError: {whole_error}")  # as loop_owner.run adds it
+        said = f"OSError: {whole_error}\nthe session's teardown also failed: OSError: {whole_error}"
+    else:
+        broke = subprocess.CalledProcessError(1, ["git", "worktree", "add"], "", whole_error)
+        said = (
+            f"CalledProcessError: Command '['git', 'worktree', 'add']' returned non-zero exit status 1.\n{whole_error}"
+        )
+
+    def replay(*_a, **_k):
+        raise broke
+
+    http, _job = client(replay)
+    answer = http.post("/impeccable/replay")
+    assert (answer.status_code, answer.json()) == (422, {"detail": said})
+
+
 def legacy_host(tmp_path, state, *, updater_dir):
     """A real project host whose store holds *state* as the last run, optionally with its pre-ledger updater."""
     path = tmp_path / "repo"
