@@ -2,7 +2,7 @@ import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { here, moved, loaded as clones, project as current } from "/assets/ui.mjs";
 import { SOURCES, state, drafts, page, show, notify, shown } from "./state.mjs";
-import { cell, row, table, button } from "./cells.mjs";
+import { cell, row, table, button, more } from "./cells.mjs";
 import { pendingLine, save, rename, reviewPrefs, hasEdits, anyEdits, pendingIn, useRecommended } from "./layers.mjs";
 import { machineSection } from "./machine.mjs";
 import { agentsGroup, runsGroup, checksGroup } from "./panels.mjs";
@@ -46,17 +46,16 @@ function scopeSection() {
         + "machine's settings can be saved, locally."}</p-text></div>
     <p-text id="storage-note">${state.layer === "machine" ? "This Mac only: machine preferences and this machine's "
       + "own settings are local files, never pushed."
-      : loaded.global_location ? "Synced to the shared repository: Save commits and pushes this layer. A failed "
-        + "publish is shown on this page."
+      : loaded.global_location ? "Synced to the shared repository: Save commits and pushes this layer; a failed "
+        + "publish shows here."
         : "This Mac only: project settings stay local until a shared repository is set up."}</p-text>
     <p-text id="recommend-note">${state.layer === "global" ? "Use recommended fills Global's blank values, across "
       + "all groups, as unsaved drafts. Saved values and existing drafts stay unchanged. Review them before Save, "
       + "especially models, spending limits and automatic actions."
-      : "Use recommended is available on Global only: filling a project or this machine would turn the values it "
-        + "inherits from Global into its own overrides."}</p-text>
-    <p-text>A blank project value uses this machine's; a blank value on this machine uses the global one. OwlBear's
-      code has no defaults: a value no layer sets is unset, and the project's work waits until it is set; the Changes
-      page names each project that waits.</p-text>
+      : "Use recommended is available on Global only: here it would turn inherited values into overrides."}</p-text>
+    ${more("How the layers combine", "A blank project value uses this machine's; a blank value on this machine uses "
+      + "the global one. OwlBear's code has no defaults: a value no layer sets is unset, and the project's work waits "
+      + "until it is set; the Changes page names each project that waits.")}
   </section>`;
 }
 

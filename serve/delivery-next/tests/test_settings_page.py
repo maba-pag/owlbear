@@ -401,8 +401,13 @@ LONGEST_LINE = """(el) => {
 @pytest.mark.browser
 def test_running_text_stops_at_about_75_characters_a_line_and_a_table_keeps_its_width(store, pds) -> None:
     """D-01M66D205WV75ZGAPVVYHCTADY: on a wide window a paragraph wraps at about 75 characters; a table does not."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
     with settings_page(store, pds) as page:
-        text = page.get_by_role("region", name="Where you edit").locator("p-text", has_text="A blank project value")
+        scope = page.get_by_role("region", name="Where you edit")
+        scope.get_by_text("How the layers combine").click()
+        text = scope.locator("p-text", has_text="A blank project value")
+        expect(text).to_be_visible()
         table = page.locator("p-table").first
         for width in (1280, 2400):
             page.set_viewport_size({"width": width, "height": 900})

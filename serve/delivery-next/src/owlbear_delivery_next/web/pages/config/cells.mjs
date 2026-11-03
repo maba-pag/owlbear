@@ -105,6 +105,12 @@ export function button(label, onclick, { id, icon, variant, busy = false, disabl
     variant=${variant ?? nothing} .loading=${busy} ?disabled=${disabled} @click=${onclick}>${label}</p-button>`;
 }
 
+// A panel's longer explanation, behind a disclosure that starts closed, so its controls come first.
+export function more(title, ...paragraphs) {
+  return html`<details class="more"><summary>${title}</summary>${paragraphs.map((p) => html`<p-text>${p}</p-text>`)}
+    </details>`;
+}
+
 // TD-209: one loop's round value, or a role's minutes (TD-286); blank inherits (the final review, the builder's).
 export function numberCell(owner, field, label, id) {
   const key = `${owner}.${field}`, final = owner === "final_review";
