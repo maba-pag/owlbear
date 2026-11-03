@@ -473,3 +473,17 @@ def test_a_read_that_fails_keeps_its_error_text_and_says_the_outcome_is_unknown(
     assert out == {"error": "the host is handing over", "next": chat_client.UNKNOWN_OUTCOME}
     if host is Cutting:
         assert [p for _, p, _ in slow.host.got].count("/changes") == 2
+
+
+@pytest.mark.parametrize(("failing", "error"), [
+    ("GET /changes", "the host is handing over"),
+    ("GET /chat/brief/c1-shop", "brief: the host is handing over; call show_status again"),
+])  # fmt: skip
+def test_a_wait_whose_first_reads_fail_says_the_outcome_is_unknown_but_an_unknown_handle_is_only_unknown(
+    monkeypatch, failing, error
+):
+    slow = Slow(monkeypatch, WAITING | {failing: (503, {"error": "the host is handing over"})})
+    assert slow.chat.await_challenge("c1", 2) == {"error": error, "next": chat_client.UNKNOWN_OUTCOME}
+    slow = Slow(monkeypatch, WAITING)
+    out = slow.chat.await_challenge("c9", 2)
+    assert ("c9 is not a Change here" in out["error"], "next" in out) == (True, False)

@@ -244,7 +244,8 @@ class Chat:
         read = self.show_status(change)
         row, brief = next(iter(read.get("changes", [])), None), read.get("brief")
         if row is None or brief is None:
-            return {"error": read.get("error") or read.get("message")}
+            failed = row is not None or "message" in read  # a read failed: it is not an unknown handle
+            return {"error": read.get("error") or read.get("message")} | ({"next": UNKNOWN_OUTCOME} if failed else {})
         if version != (current := brief["challenge"]["version"]):
             return {"error": f"brief v{version} is not the current draft v{current}"}
         slug, attempt = row["slug"], brief["challenge"]["attempt"]
