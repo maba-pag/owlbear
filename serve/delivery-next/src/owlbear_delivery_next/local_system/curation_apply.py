@@ -47,9 +47,12 @@ class Apply:
     steps: dict[str, Step]
 
 
-def where(repo: DataRepo) -> Path:
-    """The record's file, beside the repository lock; `DataRepoError` when Git names no Git folder for the checkout."""
-    return repo._lock_file().parent / "owlbear-curation-apply.json"  # noqa: SLF001 - found as the lock is
+def where(repo: DataRepo, until: float | None = None) -> Path:
+    """The record's file, beside the repository lock; `DataRepoError` when Git names no Git folder for the checkout.
+
+    *until* is the caller's deadline (monotonic): a push asks within its own.
+    """
+    return repo._lock_file(until).parent / "owlbear-curation-apply.json"  # noqa: SLF001 - found as the lock is
 
 
 def write(repo: DataRepo, apply: Apply) -> None:
@@ -57,9 +60,9 @@ def write(repo: DataRepo, apply: Apply) -> None:
     atomic_write(where(repo), json.dumps(asdict(apply), indent=2, sort_keys=True))
 
 
-def read(repo: DataRepo) -> Apply | None:
+def read(repo: DataRepo, until: float | None = None) -> Apply | None:
     """The kept record; None when there is none. Written atomically, so it is whole; an unreadable one raises."""
-    path = where(repo)
+    path = where(repo, until)
     if not path.exists():
         return None
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -71,9 +74,9 @@ def clear(repo: DataRepo) -> None:
     where(repo).unlink(missing_ok=True)
 
 
-def cut_short(repo: DataRepo) -> str:
+def cut_short(repo: DataRepo, until: float | None = None) -> str:
     """Why the checkout's work may not leave it or move: an apply a stop cut short; nothing when there is none."""
-    if (apply := read(repo)) is None:
+    if (apply := read(repo, until)) is None:
         return ""
     return (
         f"the memory curation of {apply.folder} was cut short while its files were copied in; OwlBear finishes it at "

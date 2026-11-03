@@ -309,7 +309,7 @@ def pushing(repo: DataRepo, push: Sequence[str], until: float | None) -> tuple[s
     configured forced or matching pushes cannot overwrite another checkout's work. Nothing is pushed while an accepted
     curation run's apply is cut short (`curation_apply`): its set would be published in part.
     """
-    if why := curation_apply.cut_short(repo):
+    if why := curation_apply.cut_short(repo, until):
         return f"nothing was pushed from {repo.root}: {why}", ()
     return _checked(repo, until, fetch=True, push=tuple(push))
 
