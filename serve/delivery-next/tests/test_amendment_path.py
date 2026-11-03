@@ -712,3 +712,21 @@ def test_a_scope_amendment_stays_inside_the_repository(path):
     assert amendments.check(outside, amendments.amendable(c)) == [
         f'items: scope {path} is not repository-relative - e.g. "packages/app"'
     ]
+
+
+@pytest.mark.parametrize(("field", "key"), [("criterion", "AC-1"), ("check", "check-1")])
+def test_an_item_added_after_a_removal_never_takes_its_id_so_reverting_the_removal_keeps_both(field, key):
+    c = change()
+    through(c, item(field, key, "", remove=True), said=verdict("weaker", qualifies=False))
+    answer(c, "yes")
+    through(c, item(field, "", "a new one", steps=["open /new"]), said=verdict("weaker", qualifies=False))
+    answer(c, "yes")
+    added = c.amendments[1].items[0].key
+
+    amending.objected(c, ObjectionItem(amendment="A1", at=NOW), NOW)
+    answer(c, "revert")
+    amending.opened(c, amending.current(c), RoundPolicy())
+    amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge-3", NOW)
+
+    held = {k.id: k.text for k in c.brief.criteria} | {p.id: p.expect for p in c.checks}
+    assert (added != key, held[added], key in held) == (True, "a new one", True)

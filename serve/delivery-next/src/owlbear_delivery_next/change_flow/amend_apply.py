@@ -206,7 +206,7 @@ def _criterion(c: Change, i: AmendedItem) -> None:
                       for k in b.criteria]  # fmt: skip
     else:  # new, or a removed one brought back above every version its evidence was recorded at
         was = max((k.version for x in b.approved for k in x.criteria if k.id == i.key), default=0)
-        i.key = i.key or _free("AC-", [k.id for k in b.criteria])
+        i.key = i.key or _free("AC-", [k.id for x in (b, *b.approved) for k in x.criteria])
         b.criteria.append(Criterion(id=i.key, text=i.new, version=was + 1))
         _covered(c, i.key)
 
@@ -224,7 +224,7 @@ def _visual(b: Brief, i: AmendedItem, v: int) -> None:
         b.visual.append(s.model_copy(update={"expect": i.new, "path": i.path or s.path, "version": v,
                                              "steps": s.steps if steps is None else steps}))  # fmt: skip
     else:
-        i.key = i.key or _free("amended-", [s.name for s in b.visual])
+        i.key = i.key or _free("amended-", [s.name for x in (b, *b.approved) for s in x.visual])
         b.visual.append(VisualState(name=i.key, path=i.path or "/", expect=i.new, steps=steps or [], version=v))
 
 
@@ -248,7 +248,7 @@ def _check(c: Change, i: AmendedItem) -> None:
             "visual": p.visual if i.visual is None else i.visual, "paths": coverage(c), "procedure": p.procedure + 1,
             "answer": None}))  # fmt: skip
         return
-    i.key = i.key or _free("check-", [p.id for p in c.checks])
+    i.key = i.key or _free("check-", [p.id for p in (*c.checks, *(p for x in c.brief.approved for p in x.checks))])
     c.checks.append(PersonCheck(id=i.key, criteria=covers or ids, steps=i.steps, expect=i.new, visual=bool(i.visual),
                                 paths=coverage(c)))  # fmt: skip
 
@@ -282,6 +282,7 @@ def _decision(c: Change, i: AmendedItem, level: Level, now: datetime) -> None:
 
 
 def _free(prefix: str, taken: list[str]) -> str:
+    """A new item's id: none any version held, so a revert of a removal never meets another item under it."""
     return next(f"{prefix}{n}" for n in range(1, 1000) if f"{prefix}{n}" not in taken)
 
 
