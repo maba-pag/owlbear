@@ -7,7 +7,7 @@ import { ROUNDS, LOOPS, back, state } from "./state.mjs";
 import {
   cell, row, setting, table, numberCell, designFailures, widths, sessionsAtOnce, prLabels, prMarker, subagentsCell,
   curatorThreshold, spotterCell, prefRows, USER_KEYS, userConfig, userConfigLabel, contextCell, editable,
-  guardLevel, more,
+  guardLevel, githubAccount, more,
 } from "./cells.mjs";
 
 const SPOTTER = [
@@ -194,9 +194,14 @@ export function checksGroup() {
     </section>
     <section class="panel" aria-labelledby="pr-title">
       <p-heading size="lg"><h2 id="pr-title" tabindex="-1">Pull requests</h2></p-heading>
-      <p-text>What OwlBear adds to each pull request it opens.</p-text>
+      <p-text>What OwlBear adds to each pull request it opens, and the GitHub account it works on them as.</p-text>
+      ${more("Which GitHub account",
+        "The account that pushes, opens, labels, answers and merges this project's pull requests; blank uses the "
+        + "layers above. repository-owner is the repository owner's account when gh has it, else maba-pag.",
+        "The account must be signed in to gh (gh auth login); the account active in gh stays as it is.")}
       ${table("Pull request settings: they apply to the next pull request", ["Setting", "Value"], "pr",
         [setting("set-pr_labels", "Labels", ["pr_labels"], prLabels()),
-          setting("set-pr_marker", "Marker line", ["pr_marker"], prMarker())])}
+          setting("set-pr_marker", "Marker line", ["pr_marker"], prMarker()),
+          setting("set-github_account", "GitHub account", ["github_account"], githubAccount())])}
     </section>`;
 }

@@ -250,6 +250,15 @@ export function prMarker() {
   { key, disabled: state.saving }), source(key, state.loaded.settings[key]));
 }
 
+// TD-402: the account a project's GitHub writes are made by; repository-owner shows the account TD-402's rule gives on
+// this project's origin now, whatever layer holds it (D-01M6G9XSXY0G5N65PBJ3RKKPK7).
+export function githubAccount() {
+  const key = "github_account";
+  return cell(typed("GitHub account: a login, or repository-owner", own(key), (v) => edit(key, v, true),
+    { key, placeholder: clear(inherited()[key]), disabled: state.saving }),
+  source(key, state.loaded.settings[key], true));
+}
+
 // D-01M5YE4P5317N1HWD0QN6N05E0: whether a Delivery step loads the owner's own instruction files or is offered his own
 // skills, from his Copilot folder; layered, with no default: steps refuse while either is unset.
 const USER_CONFIG = {

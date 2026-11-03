@@ -55,7 +55,7 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
         "format": F, "prefs": None, "prefs_imported": False, "roles_moved": False, "agents": {}, "widths": None,
         "preparations": None, "data": None, "design_failures": None, "final_review": None, "pr_labels": None,
         "pr_marker": None, "load_user_instructions": None, "load_user_skills": None, "load_user_memory": None,
-        "guard_level": None, "sessions": None, "spotter": None,
+        "guard_level": None, "github_account": None, "sessions": None, "spotter": None,
     }  # fmt: skip
     assert (got["global"], got["global_location"]) == (None, False)
     assert got["settings"]["agents"]["builder"]["model"] == "claude-opus-5.5"
@@ -74,7 +74,7 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
         "agents.design-judge.minutes", "agents.preparer.minutes", "agents.updater.minutes", "agents.picker.minutes",
         "agents.auditor.minutes",
         "pr_labels", "pr_marker", "load_user_instructions", "load_user_skills", "load_user_memory", "guard_level",
-        "prefs.merge_method",
+        "github_account", "prefs.merge_method",
         "prefs.delete_remote_branch", "prefs.ci_poll_seconds",
         "prefs.ci_start_window_seconds", "prefs.ask_before_merge",
         "agents.planner.subagents", "agents.builder.subagents", "agents.reviewer.subagents",
@@ -116,6 +116,7 @@ def test_recommendations_cover_current_required_settings_without_filling_any_lay
     assert suggested.spotter.verbose_until is None  # optional, not an invented expiry date
     assert {name for name, agent in suggested.agents.items() if agent.context == "long"} == {"design-judge", "shaper"}
     assert suggested.machine.retro_run_credit_limit == 61.0  # not the old carry's 20
+    assert suggested.github_account == "repository-owner"  # TD-402's rule, D-01M6G9XSXY0G5N65PBJ3RKKPK7
     assert suggested.preparations is None
     assert suggested.data is None  # no project-specific permissions invented
     assert {"format", "prefs_imported", "roles_moved", "machine_moved"}.isdisjoint(got["recommendations"])
@@ -253,7 +254,8 @@ def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tm
                                                          "final_review": None, "pr_labels": None,
                                                          "pr_marker": None, "load_user_instructions": None,
                                                          "load_user_skills": None, "load_user_memory": None,
-                                                         "guard_level": None, "sessions": None, "spotter": None,
+                                                         "guard_level": None, "github_account": None,
+                                                         "sessions": None, "spotter": None,
                                                          "curator_threshold": None, "machine": None,
                                                          "machine_moved": None},
                                                         True)  # fmt: skip

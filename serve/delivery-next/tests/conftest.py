@@ -154,8 +154,8 @@ def intervals_unset(monkeypatch):
 
 def complete_layer():
     """The carried values plus test values for what came later: the Spotter's settings, the retro roles and the
-    user-config switches, off (D-01M5YE4P5317N1HWD0QN6N05E0), and the shell guard
-    at strict (D-01M6DX04FRP680Z4GGHK5B9VRC)."""
+    user-config switches, off (D-01M5YE4P5317N1HWD0QN6N05E0), the shell guard
+    at strict (D-01M6DX04FRP680Z4GGHK5B9VRC) and GitHub writes by the repository owner's account (TD-402)."""
     from owlbear_delivery_next.settings import carried  # noqa: PLC0415
     from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter  # noqa: PLC0415
 
@@ -168,9 +168,8 @@ def complete_layer():
         role: base.agents["curator"].model_copy(update={"model": "gpt-6.1-sol", "effort": "medium"})
         for role in ("retro", "retro-review", "auditor")
     }
-    update = {"spotter": spotter, "agents": agents, "guard_level": "strict"} | dict.fromkeys(
-        ("load_user_instructions", "load_user_skills", "load_user_memory"), False
-    )
+    update = {"spotter": spotter, "agents": agents, "guard_level": "strict", "github_account": "repository-owner"}
+    update |= dict.fromkeys(("load_user_instructions", "load_user_skills", "load_user_memory"), False)
     return base.model_copy(update=update)
 
 
