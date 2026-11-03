@@ -691,6 +691,46 @@ def test_settings_say_a_failed_read_of_the_shared_repository_whole(
         assert said == []
 
 
+@pytest.mark.browser
+def test_settings_show_a_failed_source_the_models_and_global_s_machine_settings_whole(
+    tmp_path: Path, monkeypatch, pds, whole_error
+) -> None:
+    """#921: a failed outside source, a failed read of the offered models and unreadable global machine settings each
+    show whole in their own Settings group."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    failed = f"RuntimeError: {whole_error}"
+    unreadable = f"the global settings are unreadable: {whole_error}"
+    at = datetime.now(UTC).isoformat()
+    reads = {"read_at": at, "succeeded_at": None, "notices": [],
+             "failures": [{"source": "Impeccable releases", "at": at, "error": failed}]}  # fmt: skip
+
+    def machine(route) -> None:
+        body = route.fetch().json()
+        body["resolved"]["notice"] = unreadable
+        route.fulfill(json=body)
+
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.route("**/api/next/config/read", lambda r: r.fulfill(json={"reads": reads}))
+        page.route("**/api/next/config/models", lambda r: r.fulfill(json={"models": [], "error": failed}))
+        page.route(f"{base}/api/next/machine", lambda r: machine(r) if r.request.method == "GET" else r.fallback())
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        source = page.locator(".reads-failure")
+        expect(source).to_be_visible()
+        assert source.text_content().split() == f"Could not read: Impeccable releases — {failed}".split()
+        pds.group(page, "agents")
+        models = page.locator("#models-note")
+        expect(models).to_be_visible()
+        assert models.text_content() == f"Could not read the offered models ({failed}); type a model name."
+        pds.group(page, "this-machine")
+        notice = page.locator("#machine-notice")
+        expect(notice).to_be_visible()
+        assert notice.text_content() == unreadable
+        assert said == []
+
+
 def machine_saved(page, pds, channel: str) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
