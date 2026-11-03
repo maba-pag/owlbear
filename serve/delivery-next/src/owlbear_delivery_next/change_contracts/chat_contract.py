@@ -15,6 +15,10 @@ Contract 2: contract 1, and ``record_decision`` takes ``origin`` (`approved` whe
 recommendation as shown, D-01M5WAFJ99912ER7V0YEPJP2G5), sent to ``/decisions/propose``
 (``tests/fixtures/chat_contract_2.json``).
 
+Contract 3: contract 2, and a person check in ``save_brief`` takes ``covers``, the criteria it checks, so an amendment
+redoes only the checks of the criteria it changes (TD-185, ``tests/fixtures/chat_contract_3.json``). A server of an
+earlier contract sends none, which covers them all.
+
 A host whose contract answer has ``"admit_by": true`` refuses a ``/decisions/propose`` save that starts after the
 time in the request's ``X-OwlBear-Admit-By`` header (#846); a chat whose host lacks it never takes a lost answer as
 not saved.
@@ -28,8 +32,8 @@ from pydantic import BaseModel, ConfigDict
 
 from owlbear_delivery_next.local_system import codebase
 
-CHAT = 2  # the contract this code's chat server speaks
-SUPPORTED = frozenset({1, 2})  # the contracts this code's host serves
+CHAT = 3  # the contract this code's chat server speaks
+SUPPORTED = frozenset({1, 2, 3})  # the contracts this code's host serves
 HEADER = "X-OwlBear-Chat"
 CAPABILITY = "/api/next/chat/contract"  # a host that has none predates the contract
 UNSUPPORTED = (

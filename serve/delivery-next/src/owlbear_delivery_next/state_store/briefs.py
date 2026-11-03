@@ -64,9 +64,10 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
     c.checks = []
     for p in d.person_checks:
         prev = shown.get(p.name)
-        changed = (prev.steps, prev.expect, prev.visual) != (p.steps, p.expect, p.visual) if prev else False
-        procedure = prev.procedure + changed if prev else 1
-        fields = {"id": p.name, "criteria": ids, "steps": p.steps, "expect": p.expect, "visual": p.visual}
+        covers = p.covers or ids  # an amendment redoes only the checks of the criteria it changes (TD-185)
+        same = prev and (prev.steps, prev.expect, prev.visual, prev.criteria) == (p.steps, p.expect, p.visual, covers)
+        procedure = prev.procedure + (not same) if prev else 1
+        fields = {"id": p.name, "criteria": covers, "steps": p.steps, "expect": p.expect, "visual": p.visual}
         c.checks.append(PersonCheck(**fields, paths=paths, procedure=procedure))
     c.outcome = Outcome(
         exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", reason=f"challenge brief v{v}, then approve it",
@@ -195,7 +196,7 @@ def save_visual(store: Store, body: object) -> tuple[int, dict[str, Any]]:
     except StoreError as exc:
         return 409, {"errors": [f"change: {exc}"]}
     owner = set(c.brief.specified)
-    checks = [{"name": p.id, "steps": p.steps, "expect": p.expect, "visual": p.visual,
+    checks = [{"name": p.id, "steps": p.steps, "expect": p.expect, "covers": p.criteria, "visual": p.visual,
                "owner": f"check:{p.id}" in owner} for p in c.checks]  # fmt: skip
     brief = {"change": draft.change, "title": c.brief.title, "outcome": c.brief.outcome, "scope": c.brief.scope}
     brief |= {"criteria": [k.text for k in c.brief.criteria], "person_checks": checks, "ui": draft.ui}

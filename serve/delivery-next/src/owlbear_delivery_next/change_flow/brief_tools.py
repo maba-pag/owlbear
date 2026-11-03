@@ -24,6 +24,10 @@ class PersonCheckDraft(Args):
     name: str = Field(pattern=NAME, description="Short id of the check", examples=["preview"])
     steps: list[str] = bounded(10, "What the owner does, step by step", ["Open the preview page"])
     expect: str = bounded(300, "What the owner should see", "The page shows 'Hallo, Ada!'")
+    covers: list[str] = Field(
+        default_factory=list, max_length=30, description="The criteria it checks (AC-1 is the first); empty for all",
+        examples=[["AC-1"]],
+    )  # fmt: skip
     visual: bool = Field(default=False, description="Whether the owner judges how the UI looks", examples=[True])
     owner: bool = Field(default=False, description="Whether the owner stated this check himself", examples=[True])
 
@@ -230,5 +234,11 @@ def check_brief(brief: BriefDraft) -> list[str]:
         f"specified[{i}]: {s} names no criterion of this brief - use one of {', '.join(known) or 'AC-1'}"
         for i, s in enumerate(brief.specified)
         if s not in known
+    ]
+    errors += [
+        f"person_checks[{i}].covers: {k} names no criterion of this brief - use one of {', '.join(known) or 'AC-1'}"
+        for i, p in enumerate(brief.person_checks)
+        for k in p.covers
+        if k not in known
     ]
     return errors + _steps(brief)

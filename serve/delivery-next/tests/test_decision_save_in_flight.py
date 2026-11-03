@@ -557,7 +557,7 @@ def test_a_decision_like_a_new_one_in_a_change_is_never_taken_for_it(shared, wir
 
 
 def test_a_host_without_the_fence_never_has_a_lost_save_called_not_saved(wire):
-    chat, _ = wire(served={"supported": [2]})
+    chat, _ = wire(served={"supported": [chat_contract.CHAT]})
     out = chat.propose(REFUSED)
     assert (out["saved"], out["error"]) == (None, chat_client.UNCLEAR.format(why=chat_client.UNFENCED))
     assert chat.fenced is False

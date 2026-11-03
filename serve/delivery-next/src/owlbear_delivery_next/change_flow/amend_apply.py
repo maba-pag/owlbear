@@ -121,7 +121,7 @@ def reverted(c: Change, a: Amendment) -> list[AmendedItem]:
 
 
 def _shape(before: Brief, i: AmendedItem) -> dict[str, object]:
-    """What an item had besides its wording before amendment *i* came from changed or removed it."""
+    """What item *i* had besides its wording before its amendment changed or removed it."""
     match i.field:
         case "visual":
             return {"path": next((s.path for s in before.visual if s.name == i.key), "")}
@@ -135,11 +135,11 @@ def _shape(before: Brief, i: AmendedItem) -> dict[str, object]:
 def apply(c: Change, a: Amendment, level: Level, now: datetime) -> None:
     """Apply *a* as the next brief version at *level*, void its evidence, then resume the stopped step."""
     b, v = c.brief, c.brief.version + 1
-    changed, removed = set(), set()
+    removed = set()
     for i in sorted(a.items, key=lambda i: i.field != "criterion"):  # a check covers the criteria it brings
         _item(c, i, v, level, now)
-        if i.field == "criterion":
-            (removed if i.remove else changed).add(i.key)
+        if i.field == "criterion" and i.remove:
+            removed.add(i.key)
         if level != "autonomous" and not i.remove and i.field in {"criterion", "visual", "check"}:
             ref = {"criterion": i.key, "visual": f"screen:{i.key}", "check": f"check:{i.key}"}[i.field]
             b.specified = [*b.specified, ref] if ref not in b.specified else b.specified
@@ -149,7 +149,7 @@ def apply(c: Change, a: Amendment, level: Level, now: datetime) -> None:
     if level in {"approved", "decided"}:
         b.reference = v
     b.approved.append(b.model_copy(deep=True, update={"approved": [], "checks": [p.model_copy() for p in c.checks]}))
-    void(c, a, changed | removed)
+    void(c, a, removed)
     a.done = [t.id for t in (c.plan.tasks if c.plan else []) if t.done]
     resume(c, a, level, now)
     c.amending = None
@@ -238,12 +238,13 @@ def _free(prefix: str, taken: list[str]) -> str:
     return next(f"{prefix}{n}" for n in range(1, 1000) if f"{prefix}{n}" not in taken)
 
 
-def void(c: Change, a: Amendment, criteria_changed: set[str]) -> None:
+def void(c: Change, a: Amendment, removed: set[str]) -> None:
     """Void the evidence *a* touches; the rest keeps its result while its own inputs hold (TD-185 §3 step 6).
 
     The final review judged an earlier version: it is bound to its brief version (``Review.brief``), and the final
     loop's completion stands for that version only. A visual state or person check of a changed item, or one the
-    challenger named, is redone; another drops the changed criteria from its recorded inputs.
+    challenger named, is redone; a person check covering a changed criterion no longer holds by its version, and a
+    removed criterion leaves the checks that covered it.
     """
     if (lp := c.loops.get(FINAL)) is not None:
         lp.completion = None
@@ -253,9 +254,9 @@ def void(c: Change, a: Amendment, criteria_changed: set[str]) -> None:
         if p.id in checks:
             p.answer = None
             continue
-        p.criteria = [k for k in p.criteria if k not in criteria_changed]
+        p.criteria = [k for k in p.criteria if k not in removed]
         if p.answer and p.answer.inputs:
-            p.answer.inputs.criteria = {k: n for k, n in p.answer.inputs.criteria.items() if k not in criteria_changed}
+            p.answer.inputs.criteria = {k: n for k, n in p.answer.inputs.criteria.items() if k not in removed}
     states = {i.key for i in a.items if i.field == "visual"} | {n[7:] for n in named if n.startswith("screen:")}
     if (r := c.visual) is not None:
         r.criteria = criteria(c)

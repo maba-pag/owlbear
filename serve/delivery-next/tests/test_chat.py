@@ -194,7 +194,7 @@ def test_what_the_owner_stated_himself_is_recorded_and_survives_a_visual_save_an
     c = client(store)
     checks = [
         {"name": "feel", "steps": ["Flip five times"], "expect": "No stutter", "owner": True},
-        {"name": "copy", "steps": ["Read the label"], "expect": "It says Flip"},
+        {"name": "copy", "steps": ["Read the label"], "expect": "It says Flip", "covers": ["AC-2"]},
     ]
     body = {**BRIEF, "criteria": [*BRIEF["criteria"], "farewell('') returns 'Bye!'"], "specified": ["AC-2"]}
     body |= {"person_checks": checks}
@@ -212,9 +212,15 @@ def test_what_the_owner_stated_himself_is_recorded_and_survives_a_visual_save_an
     read_back = hosted(Store.open(repo)).show_status("c1")["brief"]  # what a resumed chat resaves
     assert read_back["specified"] == ["AC-2"]
     assert read_back["states"] == [{"name": "home", "owner": True}, {"name": "copy", "owner": False}]
-    assert read_back["person_checks"] == [{"name": "feel", "owner": True}, {"name": "copy", "owner": False}]
+    assert read_back["person_checks"] == [
+        {"name": "feel", "covers": ["AC-1", "AC-2"], "owner": True}, {"name": "copy", "covers": ["AC-2"], "owner": False}
+    ]  # fmt: skip
+    assert [p.procedure for p in store.read(slug).checks] == [1, 1]  # the visual check's resave kept what they cover
     unknown = c.post("/api/next/briefs", json={**body, "specified": ["AC-3"]}).json()["errors"]
     assert unknown == ["specified[0]: AC-3 names no criterion of this brief - use one of AC-1, AC-2"]
+    checks[1]["covers"] = ["AC-3"]
+    unknown = c.post("/api/next/briefs", json=body).json()["errors"]
+    assert unknown == ["person_checks[1].covers: AC-3 names no criterion of this brief - use one of AC-1, AC-2"]
 
 
 def test_a_brief_with_clicks_waits_for_a_declared_test_preparation_before_approval(tmp_path):

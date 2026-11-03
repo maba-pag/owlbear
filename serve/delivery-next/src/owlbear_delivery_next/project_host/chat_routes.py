@@ -26,7 +26,7 @@ def brief(change: Change) -> dict[str, Any]:
     out["decisions"] = [d.model_dump(mode="json", exclude={"id", "replaces"}) for d in b.decisions]  # as drafted
     owner = set(b.specified)  # sent back as saved, so a resave keeps who stated what
     states = [{"name": s.name, "owner": f"screen:{s.name}" in owner} for s in b.visual]
-    checks = [{"name": p.id, "owner": f"check:{p.id}" in owner} for p in change.checks]
+    checks = [{"name": p.id, "covers": p.criteria, "owner": f"check:{p.id}" in owner} for p in change.checks]
     out |= {"specified": [k.id for k in b.criteria if k.id in owner], "states": states, "person_checks": checks}
     # a candidate the owner adopts in chat, such as a merged Change's follow-up; the rest went their path (TD-185)
     shown = {"field", "key", "remove", "old", "new", "why"}

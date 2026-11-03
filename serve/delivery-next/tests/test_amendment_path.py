@@ -8,6 +8,7 @@ import pytest
 
 from owlbear_delivery_next.change_contracts.amend_tools import Affected, CandidateItem, CandidateResult, VerdictResult
 from owlbear_delivery_next.change_contracts.decision_records import BriefDecision, DecisionBaseline
+from owlbear_delivery_next.change_contracts import evidence
 from owlbear_delivery_next.change_contracts.evidence import next_check, review_valid, visual_valid
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, ObjectionItem
 from owlbear_delivery_next.change_contracts.models import (
@@ -43,7 +44,7 @@ ASKS = ["yes", "within", "reshape", "stop"]
 
 
 def passed(**criteria: int) -> Answer:
-    return Answer(at=NOW, passed=True, inputs=Inputs(criteria=criteria))
+    return Answer(at=NOW, passed=True, inputs=Inputs(criteria=criteria, procedure=1))
 
 
 def change(kind: StepKind = K.BUILD, task: str | None = "t1") -> Change:
@@ -330,6 +331,17 @@ def test_changed_and_named_evidence_is_redone_and_the_rest_keeps_its_result():
 
     assert (c.visual.states, visual_valid(c, "h1", "t1")) == ({"home": 0, "about": 3}, False)
     assert ([p.answer is None for p in c.checks], next_check(c, {}).id) == ([True, False], "check-1")
+
+
+def test_a_changed_criterion_redoes_only_the_checks_that_cover_it_and_a_removed_one_none():
+    c = change(K.CHECK, "check-1")
+    through(c, item("criterion", "AC-1", "greet() trims spaces"), item("criterion", "AC-2", "", remove=True),
+            said=verdict("weaker", qualifies=False))  # fmt: skip
+    answer(c, "yes")
+
+    assert ([p.criteria for p in c.checks], [p.answer is not None for p in c.checks]) == ([["AC-1"], []], [True, True])
+    held = [evidence.check_valid(p.answer.inputs, evidence.check_inputs(c, p, {})) for p in c.checks]
+    assert (held, next_check(c, {}).id) == ([False, True], "check-1")  # its recorded AC-1 is an earlier version
 
 
 @pytest.mark.parametrize(
