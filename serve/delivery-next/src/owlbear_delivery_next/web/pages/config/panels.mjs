@@ -194,7 +194,8 @@ export function memoryGroup() {
     </section>
     <section class="panel" aria-labelledby="memory-recall-title">
       <p-heading size="lg"><h2 id="memory-recall-title" tabindex="-1">Recall</h2></p-heading>
-      <p-text>What agents are told from memory: a step's lessons at its start, and what the recall tool returns.</p-text>
+      <p-text>What agents are told from memory: a step's lessons at its start, and what the recall tool
+        returns.</p-text>
       ${more("How recall fills its slots",
         "A step's lessons are the best-ranked entries for its role that fit both the count and the characters; an "
         + "entry never goes in cut short. The recall tool fills its explore slots with the entries rated least, its "

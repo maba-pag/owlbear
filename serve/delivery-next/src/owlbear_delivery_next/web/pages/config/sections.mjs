@@ -178,7 +178,8 @@ const FILTERS = [["all", "All settings"], ["unset", "Unset"], ["set", "Set on th
 const NONE = { unset: "No setting in this group is unset.", set: "This layer sets nothing in this group.",
   unsaved: "No unsaved edits in this group." };
 
-const LAYERED = ["agents", "guardrails", "memory", "checks"];  // the groups of settings a layer holds, saved by one Save
+// The groups of settings a layer holds, saved by one Save.
+const LAYERED = ["agents", "guardrails", "memory", "checks"];
 
 function filterBar() {
   if (!LAYERED.includes(state.group)) return nothing;
