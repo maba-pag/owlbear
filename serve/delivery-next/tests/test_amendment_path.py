@@ -957,3 +957,12 @@ def test_reverting_a_decision_amendment_another_amended_since_restores_the_decis
     amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge-3", NOW)
 
     assert [(d.question, d.answer, d.replaces) for d in c.brief.decisions] == [("Which store?", "SQLite only", latest)]
+
+
+def test_two_new_decisions_with_the_same_answer_keep_their_own_ids():
+    c = change()
+    one, two = (item("decision", "", "Yes", question=q) for q in ("Keep the cache?", "Keep the log?"))
+    through(c, one, two, said=verdict("weaker", qualifies=False))
+    answer(c, "yes")
+
+    assert len({d.id for d in c.brief.decisions}) == 3

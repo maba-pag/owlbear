@@ -291,12 +291,13 @@ def _covered(c: Change, key: str) -> None:
 def _decision(c: Change, i: AmendedItem, level: Level, now: datetime) -> None:
     """A Change-scoped brief decision: an approved answer is never edited, so a change is a successor."""
     b, old = c.brief, next((d for d in c.brief.decisions if d.id == i.key), None)
+    question = old.question if old else i.question
     b.decisions = [d for d in b.decisions if d.id != i.key] if i.key else b.decisions
     if i.remove:
         return
     made = BriefDecision(
-        id=new_id(now, seed=f"{c.slug}\n{i.key}\n{i.new}\n{now.isoformat()}"),
-        question=old.question if old else i.question,
+        id=new_id(now, seed=f"{c.slug}\n{i.key}\n{question}\n{i.new}\n{now.isoformat()}"),
+        question=question,
         answer=i.new,
         origin=level or "approved",
         reason=i.why if level == "autonomous" else "",
