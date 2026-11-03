@@ -24,6 +24,7 @@ from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.project_host import memory_routes
 from owlbear_delivery_next.runtimes import settings_read
+from owlbear_delivery_next.settings import recommendations
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, resolve
 from owlbear_delivery_next.state_store import prefs_import, profile_share
 from owlbear_delivery_next.state_store.store import StoreError, read_layer_bytes, update_layer
@@ -145,6 +146,7 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         "notice": notice or (store.shared.pending() if store.shared else ""),
         "prefs_pending": prof is not None and prof.prefs_import == "pending",
         "settings": settings.page(),
+        "recommendations": recommendations.page(),
         "inherited": {  # what a blank field in each layer resolves to: the layers below it only; None where unset
             "project": below.page(),
             "machine": resolved(glob, Layer(), None, []).page(),

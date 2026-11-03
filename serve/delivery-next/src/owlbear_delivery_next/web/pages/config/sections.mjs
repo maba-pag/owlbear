@@ -3,7 +3,7 @@ import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { here, moved, loaded as clones, project as current } from "/assets/ui.mjs";
 import { SOURCES, state, drafts, page, show, notify, shown } from "./state.mjs";
 import { cell, row, table, button } from "./cells.mjs";
-import { pendingLine, save, rename, reviewPrefs, hasEdits, anyEdits, pendingIn } from "./layers.mjs";
+import { pendingLine, save, rename, reviewPrefs, hasEdits, anyEdits, pendingIn, useRecommended } from "./layers.mjs";
 import { machineSection } from "./machine.mjs";
 import { agentsGroup, runsGroup, checksGroup } from "./panels.mjs";
 import { GROUPS, groupOf, rowOf } from "./groups.mjs";
@@ -19,8 +19,10 @@ function scopeSection() {
   const all = clones() ?? [], twin = (p) => all.some((o) => o !== p && o.name === p.name);
   const others = all.filter((p) => p.id !== current)
     .map((p) => [`go:${p.id}`, `Project ${p.name}${twin(p) ? ` (${p.path})` : ""}`]);
-  const options = [["project", mine ? `Project ${mine}` : "This project"], ["machine", "This machine (its projects)"],
-    ["global", "Global (every project)"], ...others];
+  const storage = loaded.global_location ? "synced to shared repository" : "this Mac only";
+  const options = [["project", `${mine ? `Project ${mine}` : "This project"} (${storage})`],
+    ["machine", "This machine (its projects; this Mac only)"],
+    ["global", "Global (every project; synced to shared repository)"], ...others];
   const pick = (v) => {
     if (!v.startsWith("go:")) {
       state.layer = v;
@@ -37,9 +39,21 @@ function scopeSection() {
     ?disabled=${v === "global" && !loaded.global_location}>${said}</p-select-option>`)}</p-select>`;
   return html`<section class="panel" aria-labelledby="scope-title">
     <p-heading size="lg"><h2 id="scope-title" tabindex="-1">Where you edit</h2></p-heading>
-    <div class="row">${control}<p-text id="scope-note" size="xs" color="contrast-medium">${loaded.global_location ? ""
+    <div class="row">${control}${button("Use recommended", useRecommended, { id: "recommend",
+      variant: "secondary", disabled: state.layer !== "global" || state.saving })}
+    <p-text id="scope-note" size="xs" color="contrast-medium">${loaded.global_location ? ""
       : "No shared settings location is set up (run owlbear-next data PATH), so only this project's and this "
         + "machine's settings can be saved, locally."}</p-text></div>
+    <p-text id="storage-note">${state.layer === "machine" ? "This Mac only: machine preferences and this machine's "
+      + "own settings are local files, never pushed."
+      : loaded.global_location ? "Synced to the shared repository: Save commits and pushes this layer. A failed "
+        + "publish is shown on this page."
+        : "This Mac only: project settings stay local until a shared repository is set up."}</p-text>
+    <p-text id="recommend-note">${state.layer === "global" ? "Use recommended fills Global's blank values, across "
+      + "all groups, as unsaved drafts. Saved values and existing drafts stay unchanged. Review them before Save, "
+      + "especially models, spending limits and automatic actions."
+      : "Use recommended is available on Global only: filling a project or this machine would turn the values it "
+        + "inherits from Global into its own overrides."}</p-text>
     <p-text>A blank project value uses this machine's; a blank value on this machine uses the global one. OwlBear's
       code has no defaults: a value no layer sets is unset, and the project's work waits until it is set; the Changes
       page names each project that waits.</p-text>
@@ -179,7 +193,8 @@ function saveBar() {
     ${button({ global: "Save global defaults", machine: "Save this machine's preferences" }[state.layer]
       ?? "Save project settings", save,
       { id: "save", icon: "check", variant: edits ? "primary" : "secondary", busy: state.saving })}
-    <p-text id="pending" size="sm" aria-live="polite">${pendingLine()}</p-text>
+    <p-text id="pending" size="sm" tabindex="0" aria-label="Unsaved settings"
+      aria-live="polite">${pendingLine()}</p-text>
     ${state.layer === "project" && state.loaded.prefs_pending
       ? button("Confirm merge preferences reviewed", reviewPrefs, {
           id: "review-prefs",
