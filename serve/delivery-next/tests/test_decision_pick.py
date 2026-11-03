@@ -10,7 +10,6 @@ from owlbear_delivery_next.change_contracts import pick_tools, tools
 from owlbear_delivery_next.change_contracts.models import Exit, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import loop
-from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.workflow_steps import pick
@@ -251,6 +250,6 @@ def test_a_brief_records_its_steps_start_before_its_decision_pick_runs(picking, 
         seen.append((cfg.role, picking.change().step.started_at is not None))
         return await real(cfg)
 
-    monkeypatch.setattr(runner.sdk_adapter, "run", run)
+    monkeypatch.setattr(sdk_adapter, "run", run)
     picking.step()
     assert seen == [("picker", True), ("challenger", True)]
