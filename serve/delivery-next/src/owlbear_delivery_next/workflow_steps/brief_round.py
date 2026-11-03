@@ -68,6 +68,8 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         policy = rounds.pinned(change, BRIEF, store.settings(), "shaper")
         brief_rounds.request(change, change.brief.version, {}, policy, now)
     if picks.owed(change):  # the version's decisions are picked before its challenger runs (TD-459)
+        change.step.started_at = now  # the pick's session is the step's: its stage counts from here (#718)
+        store.write(lock, change)
         change = pick.run(store, lock, change)
         if change.step.mode not in brief_rounds.MODES:
             brief_rounds.idle(change, datetime.now(UTC))
