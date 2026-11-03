@@ -738,11 +738,9 @@ def test_a_turn_that_never_goes_idle_holds_a_result_run_once_for_the_bound_and_a
             await _submit(world, st)
         else:
             st.finish("deadline", detail="step deadline")
-        finished, _ = await asyncio.wait({task}, timeout=3)  # teardown holds cancellation: never a timeout around it
-        return bool(finished), task.result() if finished else None
+        return await task  # a hang meets pytest's own timeout: a local one would fail a stalled loop
 
-    finished, run = asyncio.run(scenario())
-    assert finished, "the hold never ended"
+    run = asyncio.run(scenario())
     assert (run.ending, seen["late"]) == (ending, False)  # the final read is asked as soon as the hold ends
     if ending == "result":
         [made] = bounds  # one bound, not one per wake-up
