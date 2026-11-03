@@ -383,7 +383,6 @@ def test_the_wait_for_a_challenge_asked_for_earlier_returns_its_findings_and_ask
     assert shaping.ask_challenge(1).status_code == 200  # what challenge_brief sent, when its wait was cut short
     if landed_first:
         shaping.step()
-    monkeypatch.setattr(chat_client, "POLL", 0)
     monkeypatch.setattr(chat_client, "_pause", lambda _s: shaping.step())  # the host runs meanwhile
     out = chat.await_challenge("c1", 1)
     assert (out["running"], out["version"], [f["id"] for f in out["findings"]]) == (False, 1, ["F1"])

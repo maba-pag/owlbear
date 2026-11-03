@@ -280,9 +280,8 @@ class Chat:
         """Read the version's challenge until it is not running, a read fails, or *deadline*; the last read."""
         while True:
             code, now = self._read(slug, version, attempt)
-            if code == OK and not now.get("running"):
-                return code, now
-            if code not in {OK, 503} or time.monotonic() >= deadline:  # 503: the host is handing over, read again
+            ended = code == OK and not now.get("running")
+            if ended or code not in {OK, 503} or time.monotonic() >= deadline:  # 503: the host is handing over
                 return code, now
             _pause(POLL)
 
