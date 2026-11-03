@@ -98,7 +98,8 @@ def opened(c: Change, a: Amendment, policy: RoundPolicy) -> None:
 def _exact(c: Change, items: Iterable[CandidateItem]) -> list[AmendedItem]:
     return [
         amend_apply.exact(c, i.field, i.key, i.text, remove=i.remove, why=i.why, path=i.path, steps=i.steps,
-                          question=i.question, covers=i.covers)
+                          question=i.question, covers=i.covers, visual=i.visual,
+                          actions=None if i.actions is None else [x.model_dump() for x in i.actions])
         for i in items
     ]  # fmt: skip
 
@@ -217,10 +218,10 @@ def revised(c: Change, r: CandidateResult, now: datetime) -> None:
 
 
 def alone(c: Change, a: Amendment) -> bool:
-    """Delivery applies it alone only as an equivalent, independently shown replacement of generated criteria."""
+    """Delivery applies it alone only as an equivalent, independently shown replacement of generated checks."""
     return (
         a.verdict == "equivalent" and a.qualifies and not (a.build_only or a.tightening or a.unreviewed or a.widens)
-        and bool(a.items) and all(i.field == "criterion" and i.key and i.key not in c.brief.specified for i in a.items)
+        and bool(a.items) and all(i.key and (m := amend_apply.mark(i)) and m not in c.brief.specified for i in a.items)
     )  # fmt: skip
 
 
@@ -342,15 +343,10 @@ def _decided(c: Change, a: Amendment, item: AnswerItem, now: datetime) -> None:
         amend_apply.apply(c, a, "approved", now)
         return
     a.state, a.declined = "refused" if a.state == "refused" else "declined", " ".join(item.text.split())[:1000]
-    ended(c, a, a.choice, a.declined, now)
-
-
-def ended(c: Change, a: Amendment, how: str, why: str, now: datetime) -> None:
-    """The work goes on without it: within the approved brief, reshaped, or stopped."""
-    c.amending = None
-    if how == "reshape":
-        c.intent.words, c.intent.hold = why or a.reason, True
-    elif how == "stop":
+    c.amending = None  # the work goes on without it: within the approved brief, reshaped, or stopped
+    if a.choice == "reshape":
+        c.intent.words, c.intent.hold = a.declined or a.reason, True
+    elif a.choice == "stop":
         c.intent.abandoned_at = now
     else:
         _within(c, a, now)

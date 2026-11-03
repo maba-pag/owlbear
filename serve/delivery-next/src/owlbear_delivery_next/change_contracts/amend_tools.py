@@ -13,6 +13,14 @@ PREPARE, REVISE, CHALLENGE = "amendment-prepare", "amendment-revise", "amendment
 RECONSIDER = "amendment-reconsider"  # a finding the owner sent back with a note (TD-193)
 
 
+class Action(tools.Args):
+    """One click or typing step before a visual state's screenshot, in order; runs only on a prepared test copy."""
+
+    do: Literal["click", "type"] = Field(description="click a button or link, or type into a field", examples=["type"])
+    target: str = tools.bounded(120, "The control's visible name or the field's label, exactly as shown", "Search")
+    text: str = Field(default="", max_length=300, description="What to type; empty for a click", examples=["Ada"])
+
+
 class CandidateItem(tools.Args):
     """One item of the exact candidate: the whole new wording of one brief item, or its removal."""
 
@@ -41,6 +49,17 @@ class CandidateItem(tools.Args):
         max_length=20,
         description="Only for a new or changed person check: the criterion ids it checks; empty keeps a changed "
         "check's and gives a new one every criterion",
+    )
+    actions: list[Action] | None = Field(
+        default=None,
+        max_length=10,
+        description="Only for a new or changed visual state: the clicks and typing before its screenshot, in order; "
+        "omit to keep a changed state's, [] for none",
+    )
+    visual: bool | None = Field(
+        default=None,
+        description="Only for a new or changed person check: true when the person judges how the UI looks; omit to "
+        "keep a changed check's",
     )
     remove: bool = Field(default=False, description="true to remove the item instead of rewording it")
     why: str = tools.bounded(500, "Why the approved wording is wrong and what the new one keeps", "Tabs are not names")

@@ -217,11 +217,17 @@ function amendmentsPart(d) {
   m.list.length ? m.list.map((a) => amendment(a, d)) : text("None."));
 }
 
+function actionText(x) {
+  return x.do === "type" ? `type "${x.text}" into "${x.target}"` : `click "${x.target}"`;
+}
+
 function itemRow(i) {
   const name = `${i.field}${i.key ? ` ${i.key}` : ""}`;
   if (i.remove) return [name, `removed: ${i.old}`];
-  const shape = [i.path && `path ${i.path}`, i.steps?.length && `steps: ${i.steps.join("; ")}`,
-    i.covers?.length && `covers ${i.covers.join(", ")}`, i.question && `question: ${i.question}`]
+  const look = i.visual == null ? "" : i.visual ? "judged by look" : "not judged by look";
+  const shape = [i.path && `path ${i.path}`, i.actions && `actions: ${i.actions.map(actionText).join("; ") || "none"}`,
+    i.steps?.length && `steps: ${i.steps.join("; ")}`, i.covers?.length && `covers ${i.covers.join(", ")}`, look,
+    i.question && `question: ${i.question}`]
     .filter(Boolean).map((p) => ` (${p})`).join("");
   return [name, i.old ? `${i.old} → ${i.new}${shape}` : `added: ${i.new}${shape}`];
 }

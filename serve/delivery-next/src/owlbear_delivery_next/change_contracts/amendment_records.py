@@ -23,6 +23,14 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class Action(_Strict):
+    """One click or typing step before a visual state's screenshot, as ``models.VisualStep`` holds it."""
+
+    do: Literal["click", "type"]
+    target: str
+    text: str = ""
+
+
 class AmendedItem(_Strict):
     """One item's approved wording and its replacement: ``key`` names the item, empty to add one.
 
@@ -42,6 +50,8 @@ class AmendedItem(_Strict):
     steps: list[str] = Field(default_factory=list)
     question: str = ""  # a new decision's
     covers: list[str] = Field(default_factory=list)  # a person check's criterion ids; empty keeps or gives all
+    actions: list[Action] | None = None  # a visual state's steps before its screenshot; None keeps them
+    visual: bool | None = None  # whether the person judges how a check's UI looks; None keeps it
 
     @model_validator(mode="before")
     @classmethod

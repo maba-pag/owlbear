@@ -15,6 +15,7 @@ from owlbear_delivery_next.change_contracts.decision_records import BriefDecisio
 from owlbear_delivery_next.change_contracts.evidence import coverage, criteria
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import (
+    VISUAL,
     Criterion,
     ErrorKind,
     Exit,
@@ -22,23 +23,20 @@ from owlbear_delivery_next.change_contracts.models import (
     PersonCheck,
     StepKind,
     VisualState,
+    VisualStep,
 )
 from owlbear_delivery_next.change_contracts.round_records import FINAL
 from owlbear_delivery_next.change_flow import budgets
 from owlbear_delivery_next.change_flow.moves import go
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from datetime import datetime
 
-    from owlbear_delivery_next.change_contracts.amendment_records import Amendment, Level
+    from owlbear_delivery_next.change_contracts.amendment_records import Action, Amendment, Level
     from owlbear_delivery_next.change_contracts.models import Brief, Change
 
 STALE = 0  # a visual state version no brief has: its recorded result no longer holds
-
-
-def snapshot(c: Change, version: int | None) -> Brief | None:
-    """The retained approved version *version*, its person checks with it."""
-    return next((b for b in c.brief.approved if b.version == version), None)
 
 
 def kept(c: Change) -> None:
@@ -63,8 +61,10 @@ def lines(b: Brief, checks: list[PersonCheck]) -> list[str]:
     """A brief version as ``field:key: wording`` lines, the way a candidate names its items."""
     out = [f"ui: {str(b.ui).lower()}", *(f"scope:{s}" for s in b.scope)]
     out += [f"criterion:{k.id}: {k.text}" for k in b.criteria]
-    out += [f"visual:{s.name} ({s.path}): {s.expect}" for s in b.visual]
-    out += [f"check:{p.id}: {p.expect} (steps: {'; '.join(p.steps)})" for p in checks]
+    out += [f"visual:{s.name} ({s.path}{f'; actions: {_actions(s.steps)}' if s.steps else ''}): {s.expect}"
+            for s in b.visual]  # fmt: skip
+    out += [f"check:{p.id}: {p.expect} (steps: {'; '.join(p.steps)}; covers {', '.join(p.criteria)}"
+            f"{'; judged by look' if p.visual else ''})" for p in checks]  # fmt: skip
     out += [f"decision:{d.id} [{d.scope}]: {d.question} -> {d.answer}" for d in b.decisions]
     out += [f"outcome: {b.outcome}", *(f"non-goal: {n}" for n in b.non_goals)]
     return [f"{x}{' (the owner specified it)' if _ref(x) in b.specified else ''}" for x in out]
@@ -77,12 +77,18 @@ def _ref(line: str) -> str:
     return {"criterion": key, "visual": f"screen:{key}", "check": f"check:{key}"}.get(field, "")
 
 
+def _actions(steps: Sequence[VisualStep | Action]) -> str:
+    return "; ".join(f'type "{x.text}" into "{x.target}"' if x.do == "type" else f'click "{x.target}"' for x in steps)
+
+
 def shape(i: AmendedItem) -> str:
-    """What goes with an item's new wording: a state's path, a check's steps and criteria, a decision's question."""
+    """What goes with an item's new wording: a state's path and actions, a check's steps, criteria and look."""
     parts = [
         f"path {i.path}" if i.path else "",
+        f"actions: {_actions(i.actions) or 'none'}" if i.actions is not None else "",
         f"steps: {'; '.join(i.steps)}" if i.steps else "",
         f"covers {', '.join(i.covers)}" if i.covers else "",
+        "" if i.visual is None else "judged by look" if i.visual else "not judged by look",
         f"question: {i.question}" if i.question else "",
     ]
     return "".join(f" ({p})" for p in parts if p)
@@ -132,10 +138,11 @@ def _shape(before: Brief, i: AmendedItem) -> dict[str, object]:
     """What item *i* had besides its wording before its amendment changed or removed it."""
     match i.field:
         case "visual":
-            return {"path": next((s.path for s in before.visual if s.name == i.key), "")}
+            s = next((s for s in before.visual if s.name == i.key), None)
+            return {"path": s.path, "actions": [x.model_dump() for x in s.steps]} if s else {}
         case "check":
             p = next((p for p in before.checks if p.id == i.key), None)
-            return {"steps": p.steps, "covers": p.criteria} if p else {}
+            return {"steps": p.steps, "covers": p.criteria, "visual": p.visual} if p else {}
         case "decision":
             return {"question": next((d.question for d in before.decisions if d.id == i.key), i.question)}
     return {}
@@ -149,25 +156,25 @@ def apply(c: Change, a: Amendment, level: Level, now: datetime) -> None:
         _item(c, i, v, level, now)
         if i.field == "criterion" and i.remove:
             removed.add(i.key)
-        if level != "autonomous" and not i.remove and i.field in {"criterion", "visual", "check"}:
-            ref = {"criterion": i.key, "visual": f"screen:{i.key}", "check": f"check:{i.key}"}[i.field]
+        if level != "autonomous" and not i.remove and (ref := mark(i)):
             b.specified = [*b.specified, ref] if ref not in b.specified else b.specified
-    b.specified = [s for s in b.specified if s not in {*removed, *_gone(a)}]
+    gone = {f"{'screen' if i.field == 'visual' else 'check'}:{i.key}" for i in a.items
+            if i.remove and i.field in {"visual", "check"}}  # fmt: skip
+    b.specified = [s for s in b.specified if s not in removed | gone]
     b.version = b.approved_version = b.challenged = a.version = v
     b.approved_at, a.level, a.state = now, level, "applied"
     if level in {"approved", "decided"}:
         b.reference = v
-    kept(c)
     void(c, a, removed)
+    kept(c)  # with the coverage the removed criteria left
     a.done = [f"{c.plan.version}:{t.id}" for t in c.plan.tasks if t.done] if c.plan else []
     resume(c, a, level, now)
     c.amending = None
 
 
-def _gone(a: Amendment) -> set[str]:
-    return {f"screen:{i.key}" for i in a.items if i.remove and i.field == "visual"} | {
-        f"check:{i.key}" for i in a.items if i.remove and i.field == "check"
-    }
+def mark(i: AmendedItem) -> str:
+    """The ``specified`` entry of a criterion, visual state or person check item: "" for the other fields."""
+    return {"criterion": i.key, "visual": f"screen:{i.key}", "check": f"check:{i.key}"}.get(i.field, "")
 
 
 def _item(c: Change, i: AmendedItem, v: int, level: Level, now: datetime) -> None:
@@ -205,16 +212,20 @@ def _criterion(c: Change, i: AmendedItem) -> None:
 
 
 def _visual(b: Brief, i: AmendedItem, v: int) -> None:
+    steps = None if i.actions is None else [VisualStep(**x.model_dump()) for x in i.actions]
     if i.remove:
         b.visual = [s for s in b.visual if s.name != i.key]
     elif any(s.name == i.key for s in b.visual):
-        b.visual = [s.model_copy(update={"expect": i.new, "path": i.path or s.path, "version": v})
+        b.visual = [s.model_copy(update={"expect": i.new, "path": i.path or s.path, "version": v,
+                                         "steps": s.steps if steps is None else steps})
                     if s.name == i.key else s for s in b.visual]  # fmt: skip
     elif was := [s for x in b.approved for s in x.visual if s.name == i.key]:  # back with its steps
-        b.visual.append(was[-1].model_copy(update={"expect": i.new, "path": i.path or was[-1].path, "version": v}))
+        s = was[-1]
+        b.visual.append(s.model_copy(update={"expect": i.new, "path": i.path or s.path, "version": v,
+                                             "steps": s.steps if steps is None else steps}))  # fmt: skip
     else:
         i.key = i.key or _free("amended-", [s.name for s in b.visual])
-        b.visual.append(VisualState(name=i.key, path=i.path or "/", expect=i.new, version=v))
+        b.visual.append(VisualState(name=i.key, path=i.path or "/", expect=i.new, steps=steps or [], version=v))
 
 
 def _check(c: Change, i: AmendedItem) -> None:
@@ -227,16 +238,19 @@ def _check(c: Change, i: AmendedItem) -> None:
     for p in c.checks:
         if p.id == i.key:
             p.expect, p.steps, p.criteria = i.new, i.steps or p.steps, covers or p.criteria
+            p.visual = p.visual if i.visual is None else i.visual
             p.procedure, p.answer = p.procedure + 1, None
             return
     if was := [p for x in c.brief.approved for p in x.checks if p.id == i.key]:  # back as it was, a new procedure
         p = was[-1]
         c.checks.append(p.model_copy(deep=True, update={
             "criteria": covers or [k for k in p.criteria if k in ids], "steps": i.steps or p.steps, "expect": i.new,
-            "paths": coverage(c), "procedure": p.procedure + 1, "answer": None}))  # fmt: skip
+            "visual": p.visual if i.visual is None else i.visual, "paths": coverage(c), "procedure": p.procedure + 1,
+            "answer": None}))  # fmt: skip
         return
     i.key = i.key or _free("check-", [p.id for p in c.checks])
-    c.checks.append(PersonCheck(id=i.key, criteria=covers or ids, steps=i.steps, expect=i.new, paths=coverage(c)))
+    c.checks.append(PersonCheck(id=i.key, criteria=covers or ids, steps=i.steps, expect=i.new, visual=bool(i.visual),
+                                paths=coverage(c)))  # fmt: skip
 
 
 def _covered(c: Change, key: str) -> None:
@@ -254,13 +268,12 @@ def _decision(c: Change, i: AmendedItem, level: Level, now: datetime) -> None:
     b.decisions = [d for d in b.decisions if d.id != i.key] if i.key else b.decisions
     if i.remove:
         return
-    origin = level or "approved"
     made = BriefDecision(
         id=new_id(now, seed=f"{c.slug}\n{i.key}\n{i.new}\n{now.isoformat()}"),
         question=old.question if old else i.question,
         answer=i.new,
-        origin=origin,
-        reason=i.why if origin == "autonomous" else "",
+        origin=level or "approved",
+        reason=i.why if level == "autonomous" else "",
         scope="change",
         replaces=old.id if old else "",
     )
@@ -317,5 +330,8 @@ def resume(c: Change, a: Amendment, level: Level, now: datetime) -> None:
         c.outcome = Outcome(exit=Exit.BACK, cause=cause, reason=r.reason, at=now)
         budgets.back(c, r, now)
         return
-    go(c, s.kind, s.task, s.mode)
+    if s.kind == StepKind.CHECK and s.task != VISUAL and all(p.id != s.task for p in c.checks):
+        go(c, StepKind.FOLLOW)  # its person check is gone: the next one is chosen as after any follow
+    else:
+        go(c, s.kind, s.task, s.mode)
     c.outcome = None

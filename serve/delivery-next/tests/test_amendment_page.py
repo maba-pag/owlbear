@@ -143,8 +143,12 @@ def test_the_brief_panel_lists_each_amendment_and_takes_an_objection_to_an_appli
 
         c = applied_and_declined()
         c.amendments[1].unreviewed = True  # its final wording was revised after its last round
-        c.amendments[0].items.append(AmendedItem(field="check", key="check-1", old="it greets", new="it greets twice",
-                                                 steps=["open /"], covers=["AC-1"]))  # fmt: skip
+        c.amendments[0].items += [
+            AmendedItem(field="check", key="check-1", old="it greets", new="it greets twice", steps=["open /"],
+                        covers=["AC-1"], visual=True),
+            AmendedItem(field="visual", key="home", old="shows Hallo", new="shows Hello",
+                        actions=[{"do": "click", "target": "Greet"}]),
+        ]  # fmt: skip
         store.write(Lock(SLUG), c)
         page.reload()
         expect(part).to_contain_text("Current version v4; reference version v3")
@@ -153,7 +157,8 @@ def test_the_brief_panel_lists_each_amendment_and_takes_an_objection_to_an_appli
         for said in ["criterion AC-1", "greet() trims the name → greet() trims spaces",
                      "AC-1 is over-specific (from a worker)", "session ch: equivalent: AC-3 covers it",
                      "applied, made v4, applied by Delivery alone",
-                     "it greets → it greets twice (steps: open /) (covers AC-1)"]:  # fmt: skip
+                     "it greets → it greets twice (steps: open /) (covers AC-1) (judged by look)",
+                     'shows Hallo → shows Hello (actions: click "Greet")']:  # fmt: skip
             expect(first).to_contain_text(said)
         second = part.locator(".amendment", has_text="A2, proposed at the build step")
         for said in ["greet() trims spaces → greet() trims spaces and tabs",

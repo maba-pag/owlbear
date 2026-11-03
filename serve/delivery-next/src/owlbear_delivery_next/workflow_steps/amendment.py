@@ -125,7 +125,7 @@ def _made(store: Store, lock: Lock, change: Change, a: Amendment) -> Callable[[P
             rechecks=keys,
             cap=0 if phase in {"recheck", "reconsider"} or lp is None else lp.policy.max_findings,
             rejectable=tuple(f.id for f in lp.findings if f.state == "open") if shaper and lp else (),
-            amendable=amendments.amendable(change) if shaper else (),
+            amendable=amendments.amendable(change),  # the shaper's items, the challenger's affected names
             journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
             memory=sessions.memory(store),
         )
@@ -193,8 +193,8 @@ def _follow_up(c: Change, a: Amendment, number: int, taken: list[str]) -> Change
     new = Change(slug=slug, handle=f"c{number}", profile_version=c.profile_version,
                  names=Names(branch=f"owlbear/{slug}", target=c.names.target))  # fmt: skip
     new.intent.words = words[:4000]
-    kept = a.model_copy(deep=True, update={"state": "recorded", "reason": f"from {c.handle or c.slug}: {a.reason}"})
-    new.amendments.append(kept.model_copy(update={"id": "A1"}))
+    why = f"from {c.handle or c.slug}: {a.reason}"
+    new.amendments.append(a.model_copy(deep=True, update={"id": "A1", "state": "recorded", "reason": why}))
     now = datetime.now(UTC)
     new.outcome = Outcome(exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", at=now,
                           reason="shape the amendment of the merged Change in chat, then approve it")  # fmt: skip

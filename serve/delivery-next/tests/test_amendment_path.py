@@ -8,7 +8,13 @@ from types import SimpleNamespace
 import pytest
 
 from owlbear_delivery_next.change_contracts import evidence
-from owlbear_delivery_next.change_contracts.amend_tools import Affected, CandidateItem, CandidateResult, VerdictResult
+from owlbear_delivery_next.change_contracts.amend_tools import (
+    Action,
+    Affected,
+    CandidateItem,
+    CandidateResult,
+    VerdictResult,
+)
 from owlbear_delivery_next.change_contracts.decision_records import BriefDecision, DecisionBaseline
 from owlbear_delivery_next.change_contracts.evidence import next_check, review_valid, visual_valid
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, BriefApproval, ObjectionItem
@@ -563,7 +569,7 @@ def test_a_check_states_the_criteria_it_covers_and_every_shape_is_shown_where_it
     a = amending.start(c, "worker", reason="a check per criterion", now=NOW)
     wrong = CandidateResult(items=[item("check", "", "it says hi", covers=["AC-9"]), item(covers=["AC-2"])])
     assert amendments.check(wrong, amendments.amendable(c)) == [
-        "items: covers AC-9 - not criteria of the brief", "items: covers is only for a check"
+        "items: covers AC-9 - not criteria the brief keeps", "items: covers is only for a check"
     ]  # fmt: skip
     new = item("check", "", "it says hi", steps=["open /hi"], covers=["AC-2"])
     amending.prepared(c, CandidateResult(items=[new]), RoundPolicy(), NOW)
@@ -593,3 +599,82 @@ def test_the_final_review_is_told_the_scope_it_judges_a_constraint_against():
 
     assert "Scope (a constraint): packages/app" in step_input.review(c, None, Path(), tree)
     assert "Scope (a constraint)" not in step_input.review(c, c.plan.tasks[0], Path(), tree)
+
+
+@pytest.mark.parametrize(
+    "candidate", [item("visual", "home", "shows Hello"), item("check", "check-1", "it greets twice")]
+)
+def test_a_qualifying_replacement_of_a_generated_visual_state_or_person_check_applies_alone(candidate):
+    c = change()
+    a = through(c, candidate)
+
+    assert (a.state, a.level, c.brief.version) == ("applied", "autonomous", 4)
+
+    c = change()
+    c.brief.specified.append(f"screen:{candidate.key}" if candidate.field == "visual" else f"check:{candidate.key}")
+    through(c, candidate)
+
+    assert (c.brief.version, options(c)) == (3, ASKS)  # the owner's own asks him
+
+
+def test_a_candidate_sets_a_states_actions_and_whether_a_check_is_judged_by_look_and_a_revert_undoes_them():
+    c = change()
+    a = amending.start(c, "worker", reason="the home page greets after a click", now=NOW)
+    swapped = [item("check", "check-1", "it greets", actions=[]), item("visual", "home", "Hi", visual=True)]
+    assert amendments.check(CandidateResult(items=swapped), amendments.amendable(c)) == [
+        "items: actions are only for a visual state", "items: visual is only for a check"
+    ]  # fmt: skip
+    clicks = [Action(do="type", target="Name", text="Ada"), Action(do="click", target="Greet")]
+    candidate = [item("visual", "home", "shows Hello Ada", actions=clicks), item("check", "check-1", visual=True)]
+    amending.prepared(c, CandidateResult(items=candidate), RoundPolicy(), NOW)
+    amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge", NOW)
+    text = loop.open_question(c).text
+    assert 'actions: type "Ada" into "Name"; click "Greet"' in text
+    assert "(judged by look)" in text
+    answer(c, "yes")
+
+    assert ([(x.do, x.target, x.text) for x in c.brief.visual[0].steps], c.checks[0].visual) == (
+        [("type", "Name", "Ada"), ("click", "Greet", "")], True
+    )  # fmt: skip
+    amending.objected(c, ObjectionItem(amendment=a.id, at=NOW), NOW)
+    answer(c, "revert")
+    amending.opened(c, amending.current(c), RoundPolicy())
+    amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge-2", NOW)
+
+    assert (c.brief.visual[0].steps, c.checks[0].visual) == ([], False)
+
+
+def test_the_challenger_names_affected_evidence_the_way_the_brief_does():
+    c = change()
+    named = lambda *x: verdict(affected=[Affected(item=i, reason="it reads the home page") for i in x])  # noqa: E731
+
+    assert amendments.check(named("visual:home", "check:check-9"), amendments.amendable(c)) == [
+        f"affected: {x} is no visual state or person check of the brief - name it screen:<state name> or "
+        "check:<check id>" for x in ("visual:home", "check:check-9")
+    ]  # fmt: skip
+    assert amendments.check(named("screen:home", "check:check-2"), amendments.amendable(c)) == []
+
+
+def test_a_check_cannot_cover_a_criterion_the_same_candidate_removes():
+    c = change()
+    removes = CandidateResult(
+        items=[item(text="", remove=True), item("check", "check-1", "it greets", covers=["AC-1"])]
+    )
+
+    assert amendments.check(removes, amendments.amendable(c)) == ["items: covers AC-1 - not criteria the brief keeps"]
+
+
+def test_removing_the_person_check_that_stopped_goes_on_to_the_next_check():
+    c = change(K.CHECK, "check-1")
+    through(c, item("check", "check-1", "", remove=True), said=verdict("weaker", qualifies=False))
+    answer(c, "yes")
+
+    assert ([p.id for p in c.checks], c.step.kind) == (["check-2"], K.FOLLOW)
+
+
+def test_the_kept_version_holds_its_checks_without_a_criterion_it_removed():
+    c = change()
+    through(c, item(key="AC-2", text="", remove=True), said=verdict("weaker", qualifies=False))
+    answer(c, "yes")
+
+    assert [p.criteria for p in c.brief.approved[-1].checks] == [["AC-1"], []]
