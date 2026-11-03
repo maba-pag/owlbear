@@ -69,6 +69,7 @@ _SAID: dict[str, Callable[[dict[str, Any]], str]] = {
     "wave": lambda _e: "started judges",
     "answer": lambda e: f"answered {e.get('question')}: {str(e.get('class')).replace('_', ' ')}",  # TD-461
     "ended": lambda _e: "session ended",
+    "runner-failed": lambda _e: "the runner failed",
 }
 _WHO = {
     Waiting.CI: "CI",

@@ -18,6 +18,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failure
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -103,7 +105,7 @@ def run(at: Path, ids: tuple[str, ...] = (), *, runner: Runner = subprocess.run)
     try:
         done = runner(args, cwd=at, env=env, capture_output=True, text=True, timeout=SECONDS, check=False)
     except subprocess.TimeoutExpired as exc:
-        msg = f"the browser tests did not finish in {SECONDS} s"
+        msg = f"the browser tests did not finish in {SECONDS} s: {failure(exc)}"
         raise Unrunnable(msg) from exc
     output = f"{done.stdout or ''}\n{done.stderr or ''}"
     if CDN in output:
@@ -116,7 +118,7 @@ def _read(report: Path, code: int, output: str) -> Result:
     try:
         root = ET.parse(report).getroot()  # noqa: S314 - the run's own report
     except (OSError, ET.ParseError) as exc:
-        msg = f"the browser tests left no report (exit {code}): {exc}; {output.strip()}"
+        msg = f"the browser tests left no report (exit {code}): {failure(exc)}; {output.strip()}"
         raise Unrunnable(msg) from exc
     suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
     count = {k: sum(int(s.get(k, "0")) for s in suites) for k in ("tests", "failures", "errors", "skipped")}

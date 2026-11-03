@@ -13,17 +13,19 @@ def _said(stream: object) -> str:
 
 
 def failure(exc: BaseException) -> str:
-    """Its type and message, then what a command it carries printed.
+    """Its type and message, then what a command it carries printed, then its notes.
 
     ``str()`` of a ``CalledProcessError`` or ``TimeoutExpired`` names the command but not what it said, so its output
-    follows on its own lines: the one stream that said something as it is, or both, labelled, stderr first.
+    follows on its own lines: the one stream that said something as it is, or both, labelled, stderr first. Notes
+    added on the way up (``add_note``, a cleanup that also failed) follow, each on its own line.
     """
     stderr, stdout = _said(getattr(exc, "stderr", None)), _said(getattr(exc, "output", None))
     head = f"{type(exc).__name__}: {exc}"
+    notes = "".join(f"\n{note}" for note in getattr(exc, "__notes__", ()))
     if stderr and stdout:
-        return f"{head}\nstderr:\n{stderr}\nstdout:\n{stdout}"
+        return f"{head}\nstderr:\n{stderr}\nstdout:\n{stdout}{notes}"
     out = stderr or stdout
-    return head + (f"\n{out}" if out else "")
+    return head + (f"\n{out}" if out else "") + notes
 
 
 def failed(done: subprocess.CompletedProcess) -> str:

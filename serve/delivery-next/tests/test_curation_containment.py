@@ -26,6 +26,8 @@ from owlbear_delivery_next.runtimes.session_result import Run
 REPORT = MemoryCurationResult(summary="curated", entries=[])
 CURATOR = "chore: memory curation batch (memory-mcp, memory-curator)"
 HELD = re.compile(r"refs/owlbear/curation/[0-9a-f]{32}")
+WHOLE = "the session broke at its start\n" + "and then in its middle\n" * 30 + "and at its end"
+NOTE = "a note added on the way up"
 FULL = "[Errno 28] No space left on device"
 
 
@@ -239,18 +241,21 @@ def test_a_failed_run_that_cannot_be_held_shows_both_failures_in_full_in_its_row
         reword(cfg.memory, entry.id, "Lesson: the curator's version")
         if ends == "returned":  # an SDK failure comes back as the run's result
             return Run(cfg.session_id, ending="error", detail=broke, termination=Termination(confirmed=True))
-        raise RuntimeError(broke)
+        exc = RuntimeError(WHOLE)
+        exc.add_note(NOTE)
+        raise exc
 
     monkeypatch.setattr(curation_tree.subprocess, "run", run_)
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
     job.start("shop")
     row = drained(job)
 
-    ran = f"RuntimeError: {broke}" if ends == "raised" else f"ended error: {broke}"
+    ran = f"RuntimeError: {WHOLE}\n{NOTE}" if ends == "raised" else f"ended error: {broke}"
+    failed = f"DataRepoError: git update-ref failed: {said.strip()}"
     assert row.state == "failed"
-    assert f"{ran}; its edits are not held in a curation ref: DataRepoError: git update-ref failed: {said.strip()}" in (
-        row.reason
-    )
+    assert f"{ran}; its edits are not held in a curation ref: {failed}" in row.reason
+    if ends == "raised":
+        assert row.reason == f"RuntimeError: {ran}; its edits are not held in a curation ref: {failed}"
     (logged,) = [r for r in caplog.records if r.name == curation.__name__]
     assert (ran in caplog.text, said.strip() in caplog.text, logged.exc_info is not None) == (True, True, True)
 
@@ -443,8 +448,9 @@ def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(rep
         failing.append(True)  # the seed's own prune ran
         reword(cfg.memory, entry.id, "Lesson: the curator's version")
         if raises:
-            msg = "the session broke: " + "x" * 400  # longer than a row's reason keeps
-            raise RuntimeError(msg)
+            exc = RuntimeError(WHOLE)
+            exc.add_note(NOTE)
+            raise exc
         return Run(cfg.session_id, termination=Termination(confirmed=True), **REFUSALS["unread"])
 
     monkeypatch.setattr(curation_tree, "_git", git_)
@@ -453,6 +459,10 @@ def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(rep
 
     row = drained(job)
     assert (row.state, curation_tree.LISTED in row.reason, bool(HELD.search(row.reason))) == ("failed", True, True)
+    if raises:  # each wrapper on the way up keeps the whole failure, note included
+        where = f"its edits are held, never published, in {HELD.search(row.reason).group()}"
+        ran = f"RuntimeError: {WHOLE}\n{NOTE}"
+        assert row.reason == f"RuntimeError: {curation_tree.LISTED}; RuntimeError: {where}; {ran}"
     assert [r.getMessage() for r in caplog.records if r.name == curation_tree.__name__] == [
         f"{repo} still lists a finished curation run's worktree: {LOCKED}"
     ]

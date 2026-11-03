@@ -14,6 +14,10 @@ def test_a_failed_command_says_both_streams_whole(whole_error, as_bytes):
     stderr, stdout = (whole_error.encode(), OUT.encode()) if as_bytes else (whole_error, OUT)
     exc = subprocess.CalledProcessError(1, ["git", "push"], stdout, stderr)
     assert failure(exc) == f"CalledProcessError: {exc}\nstderr:\n{whole_error}\nstdout:\n{OUT}"
+    exc.add_note("teardown failed: OSError: gone")
+    exc.add_note(whole_error)
+    said = f"CalledProcessError: {exc}\nstderr:\n{whole_error}\nstdout:\n{OUT}"
+    assert failure(exc) == f"{said}\nteardown failed: OSError: gone\n{whole_error}"
 
 
 def test_a_timed_out_command_says_what_it_printed_before_it_was_stopped(whole_error):

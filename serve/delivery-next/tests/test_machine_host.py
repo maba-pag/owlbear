@@ -527,7 +527,7 @@ def test_a_recovered_legacy_pack_generation_is_not_resurrected_by_an_empty_recei
 def test_an_unconfirmed_pack_run_keeps_the_machine_busy_and_not_left_until_its_reboot_recovery(machine):
     """The pack ledger holds at machine scope even with no loaded project, so an update or stop waits for it."""
     ident = machine.maintenance.begin("unloaded", "pack:unloaded", "pack", "", now=datetime.now(UTC))
-    machine.maintenance.failed(ident, RuntimeError("synthetic unconfirmed run"))
+    machine.maintenance.failed(ident, "RuntimeError: synthetic unconfirmed run")
     assert (bool(machine.busy()), bool(machine.left())) == (True, True)
     booted = machine.maintenance.boot
     machine.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the unconfirmed run
