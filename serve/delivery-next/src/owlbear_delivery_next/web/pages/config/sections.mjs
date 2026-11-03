@@ -184,6 +184,7 @@ function filterBar() {
   if (!LAYERED.includes(state.group)) return nothing;
   const pick = (e) => {
     state.filter = e.target.value;
+    state.kept.clear();
     show();
   };
   return html`<div id="filter" class="row">

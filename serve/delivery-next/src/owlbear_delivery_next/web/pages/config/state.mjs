@@ -56,6 +56,7 @@ export const state = {
   machine: null, others: [], unread: [],  // the machine's values and the other projects' settings (TD-243)
   everything: false,  // the overview shows every setting, not only those a project sets apart (TD-295)
   filter: "all",  // the layered groups' rows shown: all, unset, set (on the edited layer) or unsaved
+  kept: new Set(),  // the Unsaved filter's rows once edited ("layer:id"), kept while the edit is undone
   machineDraft: null, machineSaving: false,  // the machine's settings as edited, before they are saved
   machineText: null,  // a list setting's text as typed, until a save
   machineUnread: "",  // why this machine's settings could not be read, until a read succeeds

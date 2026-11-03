@@ -326,6 +326,7 @@ async function saveLayer(review) {
     answers.shown();
     if (layer === "project" && !state.loaded.unpublished) state.prefsReview = false;  // kept until published
     for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
+    state.kept.clear();  // what was saved is no longer an unsaved edit for the filter
     error = state.loaded.notice ?? "";
     const whose = { global: "the global", machine: "this machine's" }[layer]
       ?? (named() ? `${named()}'s` : "this project's");

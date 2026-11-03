@@ -427,6 +427,33 @@ def test_the_unsaved_filter_shows_a_row_whose_draft_is_only_spelled_differently(
 
 
 @pytest.mark.browser
+def test_the_unsaved_filter_keeps_a_row_whose_edit_is_undone_until_the_filter_changes(store, pds, monkeypatch) -> None:
+    """Backspacing the only character of a draft must not hide its row and take the focus before a replacement can be
+    typed; the row goes once the filter, or a save, changes."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"sessions": None}))
+    with settings_page(store, pds) as page:
+        sessions, row = page.get_by_label("Agent sessions at once in one project"), page.locator("#set-sessions")
+        sessions.fill("3")
+        pds.pick(page, "Show", "unsaved")
+        expect(row).to_be_visible()
+        sessions.press("End")
+        sessions.press("Backspace")
+        expect(page.locator("#pending")).to_have_text("No unsaved edits.")
+        expect(row).to_be_visible()
+        expect(sessions).to_be_focused()
+        sessions.press_sequentially("5")
+        expect(page.locator("#pending")).to_contain_text("sessions: inherited \u2192 5")
+        sessions.press("Backspace")
+        pds.pick(page, "Show", "all")
+        pds.pick(page, "Show", "unsaved")
+        expect(row).to_be_hidden()
+
+
+@pytest.mark.browser
 def test_the_overview_counts_each_group_s_unset_names_its_first_three_and_opens_the_group_for_more(
     store, pds, monkeypatch
 ) -> None:

@@ -69,7 +69,11 @@ export function setting(id, name, keys, ...cells) {
     all: () => true,
     unset: () => unset,
     set: () => keys.some((k) => at(state.loaded[state.layer], k) != null),
-    unsaved: () => keys.some((k) => drafted(k) || preview(k)),  // a row that only follows an edited one counts too
+    unsaved: () => {
+      const edited = keys.some((k) => drafted(k) || preview(k)), pin = `${state.layer}:${id}`;  // or follows an edit
+      if (edited) state.kept.add(pin);  // undoing an edit by typing must not take the row from under the cursor
+      return state.kept.has(pin);
+    },
   }[state.filter]();
   return html`<p-table-row id=${id} tabindex="-1" data-setting ?hidden=${!matches}>${cell(html`<p-text
     color=${unset ? "error" : nothing}>${name}</p-text>`)}${cells}</p-table-row>`;
