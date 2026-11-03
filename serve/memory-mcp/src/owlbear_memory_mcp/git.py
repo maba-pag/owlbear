@@ -440,7 +440,10 @@ def _commit_batch_locked(memory_dir: Path, repo_dir: Path, *, session_type: str)
 
 
 def commit_batch(memory_dir: Path, *, session_type: str) -> BatchCommitResult:
-    """Commit validated non-pending memory changes and tracked deletions."""
+    """Commit validated non-pending memory changes and tracked deletions.
+
+    The shared repository's lock is taken first, then the folder's: a publication's rebase never sees the commit land.
+    """
     memory_dir = Path(memory_dir).resolve()
     if not memory_dir.exists():
         return BatchCommitResult(None)
@@ -451,7 +454,7 @@ def commit_batch(memory_dir: Path, *, session_type: str) -> BatchCommitResult:
 
     repo_dir = Path(_git(memory_dir, "rev-parse", "--show-toplevel"))
     try:
-        with writer_lock(memory_dir):
+        with repo_locked(repo_dir), writer_lock(memory_dir):
             repair_duplicate_ids(memory_dir)
             return _commit_batch_locked(memory_dir, repo_dir, session_type=session_type)
     except (DuplicateEntryError, MemoryBusyError) as exc:
@@ -522,7 +525,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         detail = format_git_failure(exc)
         sys.stderr.write(f"error: {detail}\n")
         return exc.returncode or 1
-    except ValueError as exc:
+    except (ValueError, TimeoutError) as exc:
         sys.stderr.write(f"error: {exc}\n")
         return 1
 
