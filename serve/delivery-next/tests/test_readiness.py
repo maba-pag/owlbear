@@ -30,6 +30,7 @@ READY = {
 AUTH = "gh auth status --hostname github.com"
 OUT = "OUT begins\nwhat gh printed on stdout, in the middle\nOUT ends"
 SIGN_IN = "Run `gh auth login --hostname github.com`"
+GPG_FIX = "Unlock your GPG key (`echo test | gpg --clearsign`), then run setup again"
 
 
 def failed(table: dict[str, tuple[int, str]]) -> list[tuple[str, str]]:
@@ -108,6 +109,44 @@ def test_a_probe_that_exits_non_zero_names_its_command_status_and_both_streams(t
     assert (sign_in.name, sign_in.detail) == ("github sign-in", said)
 
 
+GPG = "gpg --batch --yes --pinentry-mode error -u K --clearsign -o /dev/null /dev/null"
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        pytest.param((GPG, 2, "gpg key K locked or missing: {said}"), id="gpg"),
+        pytest.param(("ssh-add -L", 2, "ssh-agent not reachable: {said}"), id="ssh"),
+        pytest.param(("ssh-add -L", 1, "ssh key not in the agent"), id="no-identities"),
+    ],
+)
+def test_a_locked_gpg_key_or_an_unreachable_ssh_agent_keeps_the_probe_s_whole_failure(
+    tmp_path, monkeypatch, whole_error, case
+):
+    failing, code, detail = case
+    fmt = "" if failing == GPG else "ssh"
+    key = "key::ssh-ed25519 AAAAKEY" if fmt else "K"
+    said = {
+        "git config --bool commit.gpgsign": "true",
+        "git config gpg.format": fmt,
+        "git config user.signingkey": key,
+        **{argv: out for argv, (_code, out) in READY.items()},
+    }
+
+    def run(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess:
+        joined = " ".join(argv)
+        if joined == failing:
+            return subprocess.CompletedProcess(argv, code, OUT, whole_error)
+        return subprocess.CompletedProcess(argv, 0 if said.get(joined) else 1, said.get(joined, ""), "")
+
+    monkeypatch.setattr(git_files.subprocess, "run", run)
+    [signing] = [c for c in readiness.readiness("github.com", git_files.probe_in(tmp_path), None, "copilot")
+                 if c.name == "commit signing"]  # fmt: skip
+    command = f"CalledProcessError: Command '{failing.split()}' returned non-zero exit status {code}."
+    whole = f"{command}\nstderr:\n{whole_error}\nstdout:\n{OUT}"
+    assert (signing.ok, signing.detail) == (False, detail.format(said=whole))
+
+
 @pytest.mark.parametrize("step", ["detection", "legacy"])
 def test_a_failed_detection_or_legacy_import_names_its_error_s_type(tmp_path, monkeypatch, whole_error, step):
     def raised(*_args: object) -> None:
@@ -128,7 +167,12 @@ def test_a_project_s_failed_checks_show_whole_in_its_entry_and_the_host_s_log(
     tmp_path, monkeypatch, capsys, whole_error
 ):
     """Two checks the producers fail, through the project's own readiness run, as Projects reads them."""
-    probe = READY | {AUTH: (1, whole_error), "copilot --version": (1, OUT)}
+    signing = {
+        "git config --bool commit.gpgsign": (0, "true"),
+        "git config user.signingkey": (0, "K"),
+        GPG: (2, whole_error),
+    }
+    probe = READY | signing | {AUTH: (1, whole_error), "copilot --version": (1, OUT)}
     produced = readiness.readiness("github.com", lambda argv: probe.get(" ".join(argv), (0, "")), None, "copilot")
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: produced)
     monkeypatch.setattr(Host, "_spawn", lambda _self, slug: pytest.fail(f"no runner starts here ({slug})"))
@@ -150,6 +194,7 @@ def test_a_project_s_failed_checks_show_whole_in_its_entry_and_the_host_s_log(
     expected = [
         f"github sign-in: {whole_error} · fix: {SIGN_IN}",
         f"copilot cli: copilot: {OUT} · fix: {copilot_cli.FIX}",
+        f"commit signing: gpg key K locked or missing: {whole_error} · fix: {GPG_FIX}",
     ]
     assert ready == expected
     assert f"readiness: {'; '.join(expected)}\n" in capsys.readouterr().out
