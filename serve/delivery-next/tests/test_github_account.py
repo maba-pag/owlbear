@@ -4,9 +4,11 @@ D-01M6G9YYZHNDM3J6F0TYM9TWDK: the token goes only into the child's environment a
 the active ``gh`` account is never switched; an SSH push destination stops the write.
 """
 
+import contextlib
 import os
 import subprocess
 import time
+from pathlib import Path
 
 import pytest
 
@@ -14,6 +16,14 @@ from owlbear_delivery_next.git import access as access_module
 from owlbear_delivery_next.git.access import Access, PushRefused, destinations
 from owlbear_delivery_next.github import account
 from owlbear_delivery_next.github.account import AccountMissing, Origin, Writer, resolve
+from owlbear_delivery_next.github.gh import GhProvider
+from owlbear_delivery_next.github.provider import (
+    ConversationItem,
+    MergeMethod,
+    MergeRequest,
+    ProviderError,
+    PullRequest,
+)
 
 BOTH = {"github.com": {"maba-pag": "success", "boecht": "success"}}
 
@@ -220,3 +230,67 @@ def test_https_and_local_push_destinations_pass(repo, tmp_path):
     chosen = Access("boecht", "the setting names it", "github.com", "tok-boecht", "/usr/bin/gh")
     assert destinations(repo, "data", chosen, 10) == [str(tmp_path / "data.git")]
     assert destinations(repo, "origin", chosen, 10) == ["/nonexistent/offline-in-tests/boecht/sandbox.git"]
+
+
+HEAD = "a" * 40
+PR = PullRequest(
+    repository="acme/x", number=7, node_id="n", url="https://github.com/acme/x/pull/7", head_branch="owlbear/c1",
+    head_sha=HEAD, base_branch="main", draft=False, state="open", merged=False,
+)  # fmt: skip
+THREAD = ConversationItem(kind="thread", id="t1", url="https://github.com/acme/x/pull/7#t1", author="a", body="b")
+WRITES = {
+    "pull request": lambda gh: gh.create_pull_request("acme/x", "owlbear/c1", "main", "t", "b"),
+    "labels": lambda gh: gh.add_labels("acme/x", 7, ["release:minor"]),
+    "merge": lambda gh: gh.request_merge(MergeRequest(repository="acme/x", number=7, expected_head_sha=HEAD,
+                                                      method=MergeMethod.MERGE)),
+    "enqueue": lambda gh: gh.enqueue(PR, HEAD),
+    "branch deletion": lambda gh: gh.delete_branch("acme/x", "owlbear/c1", HEAD),
+    "reply": lambda gh: gh.post_reply("acme/x", 7, THREAD, "done"),
+    "thread resolution": lambda gh: gh.resolve_thread("t1"),
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("write", WRITES)
+@pytest.mark.parametrize(
+    ("setting", "owner", "active", "login"),
+    [
+        ("boecht", "acme", "maba-pag", "boecht"),
+        ("repository-owner", "boecht", "maba-pag", "boecht"),
+        ("repository-owner", "acme", "boecht", "maba-pag"),
+    ],
+)
+def test_each_gh_write_is_launched_with_only_the_chosen_accounts_token(  # noqa: PLR0913, PLR0917 - one case
+    fake_gh, monkeypatch, write, setting, owner, active, login
+):
+    for each in access_module.TOKENS:
+        monkeypatch.setenv(each, "tok-inherited")
+    fake_gh.set(BOTH, {"github.com": active})
+    gh = GhProvider(Path(), writer=Writer(setting, Origin("github.com", owner, "x")))
+    with contextlib.suppress(ProviderError):  # the fake answers ``{}``; the launch is what is checked
+        WRITES[write](gh)
+    launches = [c for c in fake_gh.calls() if c["argv"][0] != "auth"]
+    assert launches
+    assert {(c["GH_TOKEN"], c["GITHUB_TOKEN"], c["GH_ENTERPRISE_TOKEN"]) for c in launches} == {
+        (f"tok-{login}", None, None)
+    }
+    assert all(os.environ[k] == "tok-inherited" for k in access_module.TOKENS)
+    assert not any(f"tok-{login}" in " ".join(c["argv"]) for c in fake_gh.calls())
+
+
+def test_an_enterprise_gh_write_gets_the_enterprise_token_alone(fake_gh, monkeypatch):
+    for each in access_module.TOKENS:
+        monkeypatch.setenv(each, "tok-inherited")
+    fake_gh.set({"ghe.acme.test": {"maba-pag": "success", "boecht": "success"}}, {"ghe.acme.test": "maba-pag"})
+    gh = GhProvider(Path(), writer=Writer("boecht", Origin("ghe.acme.test", "acme", "x")), host="ghe.acme.test")
+    with contextlib.suppress(ProviderError):
+        WRITES["labels"](gh)
+    (launch,) = [c for c in fake_gh.calls() if c["argv"][0] != "auth"]
+    assert (launch["GH_TOKEN"], launch["GITHUB_TOKEN"], launch["GH_ENTERPRISE_TOKEN"]) == (None, None, "tok-boecht")
+
+
+def test_an_account_gh_lacks_launches_no_gh_write(fake_gh):
+    gh = GhProvider(Path(), writer=Writer("octo-writer", Origin("github.com", "acme", "x")))
+    with pytest.raises(AccountMissing) as raised:
+        WRITES["labels"](gh)
+    assert "octo-writer" in str(raised.value)
+    assert all(c["argv"][0] == "auth" for c in fake_gh.calls())

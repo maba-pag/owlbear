@@ -864,7 +864,7 @@ def _no_user(*_):
 
 def test_an_empty_conversation_passes_with_a_credential_that_cannot_read_the_viewer(tmp_path):
     gh = ChatGh(pr(head=A))
-    gh.viewer = GhProvider(tmp_path, runner=_no_user).viewer
+    gh.viewer = GhProvider(tmp_path, writer=None, runner=_no_user).viewer
     assert follow.conversation(ctx(tmp_path, gh), change(), gh.pr, StepKind.FOLLOW)[1] is None
 
 
@@ -874,7 +874,7 @@ def test_a_pending_replay_with_a_credential_that_cannot_read_the_viewer_names_gh
     c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
     c = handled(c, result, "answered", "Answered.")
     gh.items.append(comment("x1", f"Answered.\n\n<!-- delivery:c1:c1:{result.fix_task.id} -->", "delivery"))
-    gh.viewer = GhProvider(tmp_path, runner=_no_user).viewer
+    gh.viewer = GhProvider(tmp_path, writer=None, runner=_no_user).viewer
     with pytest.raises(ProviderError) as raised:
         follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert (raised.value.code, raised.value.retry_safe) == (FailureCode.AUTHENTICATION_REQUIRED, False)
@@ -1011,7 +1011,7 @@ def test_gh_reads_every_conversation_page_and_keeps_changes_requested_empty_revi
     ]
     calls, threads = [], []
 
-    def runner(argv, data, _timeout, _cwd):
+    def runner(argv, data, _timeout, _cwd, _env):
         body = json.loads(data)
         if "ThreadComments" in body["query"]:
             threads.append(body["variables"])
@@ -1019,7 +1019,7 @@ def test_gh_reads_every_conversation_page_and_keeps_changes_requested_empty_revi
         calls.append((argv, body["variables"]))
         return done({"data": {"repository": {"pullRequest": pages[len(calls) - 1]}}})
 
-    items = GhProvider(tmp_path, runner=runner).read_conversation("o/r", 7)
+    items = GhProvider(tmp_path, writer=None, runner=runner).read_conversation("o/r", 7)
     assert [(i.id, i.kind, i.bot) for i in items] == [
         ("c1", "comment", False),
         ("c2", "comment", True),
@@ -1040,13 +1040,13 @@ def test_gh_reads_every_conversation_page_and_keeps_changes_requested_empty_revi
 def test_gh_replies_in_threads_by_graphql_and_quotes_other_items_in_an_issue_comment(tmp_path):
     calls = []
 
-    def runner(argv, data, _timeout, _cwd):
+    def runner(argv, data, _timeout, _cwd, _env):
         calls.append((argv, json.loads(data)))
         if "graphql" in argv:
             return done({"data": {"addPullRequestReviewThreadReply": {"comment": {"id": "R1"}}}})
         return done({"node_id": "IC1"})
 
-    gh = GhProvider(tmp_path, runner=runner)
+    gh = GhProvider(tmp_path, writer=None, runner=runner)
     assert gh.post_reply("o/r", 7, thread("t1", ("h1", "o", "q")), "ok") == "R1"
     assert calls[-1][1]["variables"] == {"id": "t1", "body": "ok"}
     assert gh.post_reply("o/r", 7, comment("c1", "q"), "ok") == "IC1"
@@ -1058,7 +1058,7 @@ def test_gh_replies_in_threads_by_graphql_and_quotes_other_items_in_an_issue_com
 def test_an_unexpected_github_answer_is_raised_whole(tmp_path, whole_error, op):
     """#895: GitHub's whole answer reaches the step's retry reason through the engine."""
     said = {"errors": [{"message": whole_error}]}
-    gh = GhProvider(tmp_path, runner=lambda *_a: done(said))
+    gh = GhProvider(tmp_path, writer=None, runner=lambda *_a: done(said))
     calls = {
         "mark_ready": lambda: gh.mark_ready(pr()),
         "post_reply": lambda: gh.post_reply("o/r", 7, thread("t1", ("h1", "o", "q")), "ok"),
@@ -1531,7 +1531,7 @@ def test_a_merge_without_a_known_result_keeps_what_gh_said_whole(tmp_path, clone
     cases = gh_cases(whole_error, sent) | {"message": (message, lambda: f"{whole_error}\n{server}")}
     runner, said = cases[case]
     gh = FakeGh(pr(head=A))
-    gh.request_merge = GhProvider(tmp_path, runner=runner).request_merge
+    gh.request_merge = GhProvider(tmp_path, writer=None, runner=runner).request_merge
     cx = ctx(tmp_path, gh)
     _, result = merge.run(cx, change(worktree=str(clone)))
     (event,) = cx.events("c1", "merge-request")
@@ -1543,7 +1543,7 @@ def test_a_merge_refusal_without_a_message_keeps_gh_s_whole_error(tmp_path, clon
     """#921: a refusal whose answer has no message keeps all of gh's error output, in its event and its reason."""
     said = f"{whole_error}\ngh: HTTP 405"
     gh = FakeGh(pr(head=A))
-    gh.request_merge = GhProvider(tmp_path, runner=answered(1, stderr=said.encode())).request_merge
+    gh.request_merge = GhProvider(tmp_path, writer=None, runner=answered(1, stderr=said.encode())).request_merge
     cx = ctx(tmp_path, gh)
     _, result = merge.run(cx, change(worktree=str(clone)))
     (event,) = cx.events("c1", "merge-request")
@@ -2335,7 +2335,7 @@ def test_an_enqueue_without_a_known_result_keeps_what_github_said_whole(tmp_path
     }
     runner, said = cases[case]
     gh = QueueGh(pr(head=A))
-    gh.enqueue = GhProvider(tmp_path, runner=runner).enqueue
+    gh.enqueue = GhProvider(tmp_path, writer=None, runner=runner).enqueue
     _, result = queue_step(tmp_path, gh, change(worktree=str(clone)))
     (event,) = [e for e in Store(tmp_path / "store").events("c1") if e.get("event") == "merge-enqueue"]
     status = EnqueueStatus.REFUSED if case == "refused" else EnqueueStatus.UNKNOWN
@@ -2450,7 +2450,7 @@ def fold_store(tmp_path, monkeypatch, gh, c):
     store.write_profile(qprof())
     with store.lock("c1") as lock:
         store.write(lock, c)
-    monkeypatch.setattr(profile, "provider", lambda _p, _r: gh)
+    monkeypatch.setattr(profile, "provider", lambda _p, _r, _w: gh)
     store.put_inbox("c1", IntentItem(at=NOW, intent="pause"))
     return store
 
@@ -3129,11 +3129,11 @@ class PlanLimitedGh(FakeGh):
     """A private repository whose GitHub plan allows no rules: the real read of GitHub's plan-limit 403 (#936)."""
 
     def read_rules(self, repo, branch):
-        def limited(argv, _body, _timeout, _cwd):
+        def limited(argv, _body, _timeout, _cwd, _env):
             said = b"gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)\n"
             return subprocess.CompletedProcess(argv, 1, b"", said)
 
-        return GhProvider(Path(), runner=limited).read_rules(repo, branch)
+        return GhProvider(Path(), writer=None, runner=limited).read_rules(repo, branch)
 
 
 def test_a_plan_limited_repository_merges_without_the_owner_on_its_detected_profile(tmp_path, clone):

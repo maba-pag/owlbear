@@ -33,7 +33,7 @@ from owlbear_delivery_next.runtimes import (
 )
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.settings.config import SettingsUnset
-from owlbear_delivery_next.state_store import project_home, spend_ledger
+from owlbear_delivery_next.state_store import github_writer, project_home, spend_ledger
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 from owlbear_delivery_next.workflow_steps import (
     amend,
@@ -341,7 +341,7 @@ def _ready(prof: Profile, path: Path, now: datetime) -> Result | None:
 def _engine(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     now, kind = datetime.now(UTC), change.step.kind
     prof = store.read_profile() or Profile()
-    ctx = engine.Ctx(store, lock, repo, prof, profile.provider(prof, repo), now)
+    ctx = engine.Ctx(store, lock, repo, prof, profile.provider(prof, repo, github_writer.of(store, repo)), now)
     if kind in {StepKind.PUBLISH, StepKind.FOLLOW, StepKind.MERGE} and change.names.branch:
         path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
         change.names.worktree = str(path)

@@ -27,6 +27,7 @@ from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.github.provider import SUCCESS, EnqueueStatus, ProviderError
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import SettingsUnset
+from owlbear_delivery_next.state_store import github_writer
 from owlbear_delivery_next.workflow_steps import engine
 
 if TYPE_CHECKING:
@@ -319,7 +320,7 @@ def barrier(store: Store, repo: Path) -> Leave:
         queued = before.queue is not None or bool(prof and profile.value(prof, profile.QUEUE) == "yes")
         if not (queued and leaving(before, after) and before.names.pr and prof):
             return after
-        gh: Provider = profile.provider(prof, repo)
+        gh: Provider = profile.provider(prof, repo, github_writer.of(store, repo))
         repository = profile.value(prof, profile.REPO)
         try:
             q = gh.read_queue(repository, before.names.pr)
@@ -333,7 +334,7 @@ def barrier(store: Store, repo: Path) -> Leave:
                 return after
             gh.dequeue(gh.read_pull_request(repository, before.names.pr))
             q = gh.read_queue(repository, before.names.pr)
-        except ProviderError:
+        except ProviderError, SettingsUnset:  # an unset account holds the items, as unreachable GitHub does
             return None
         if q.entry is not None or q.merged:
             return None

@@ -142,11 +142,11 @@ class FakeGitHub:
         assert branch == "main"
         if self.plan_limited:  # the real read of GitHub's plan-limit 403: no rules, no required checks
 
-            def limited(argv, _body, _timeout, _cwd):
+            def limited(argv, _body, _timeout, _cwd, _env):
                 said = b"gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)\n"
                 return subprocess.CompletedProcess(argv, 1, b"", said)
 
-            return GhProvider(self.remote, runner=limited).read_rules(repository, branch)
+            return GhProvider(self.remote, writer=None, runner=limited).read_rules(repository, branch)
         return Rules(state="known", evidence="rules", required_checks=("CI",))
 
     def observe_checks(self, _repository: str, _number: int, _head: str) -> tuple[Check, ...]:

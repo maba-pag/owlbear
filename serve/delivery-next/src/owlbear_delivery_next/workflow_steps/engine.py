@@ -24,7 +24,8 @@ from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.git.remote_git import RemoteGitError, RemoteGitFailed, RemoteGitTimeout, run_remote_git
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.settings import profile
-from owlbear_delivery_next.settings.config import pref
+from owlbear_delivery_next.settings.config import SettingsUnset, pref
+from owlbear_delivery_next.state_store import github_writer
 from owlbear_delivery_next.workflow_steps import conversation
 
 if TYPE_CHECKING:
@@ -226,7 +227,7 @@ def pr_state(gh: Provider, repository: str, c: Change, offered: str | None = Non
             return state, False
         items = gh.read_conversation(repository, pr.number)
         opened = [s.item.id for s in conversation.open_items(c, items, gh.viewer)]
-    except ProviderError:
+    except ProviderError, SettingsUnset:  # an unset account observes nothing, as unreachable GitHub does
         return None, False
     return state, loop.consent_moved(c, offered, pr.head_sha, opened)
 
@@ -235,4 +236,5 @@ def observe(store: Store, repo: Path, slug: str) -> Seen:
     """The PR's terminal state of one Change, read from GitHub with the profile's provider."""
     prof = store.read_profile() or Profile()
     offered = next((e.get("head") for e in reversed(store.events(slug)) if e.get("event") == "merge-offer"), None)
-    return pr_state(profile.provider(prof, repo), profile.value(prof, profile.REPO), store.read(slug), offered)
+    gh = profile.provider(prof, repo, github_writer.of(store, repo))
+    return pr_state(gh, profile.value(prof, profile.REPO), store.read(slug), offered)

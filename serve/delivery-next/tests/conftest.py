@@ -25,6 +25,8 @@ from owlbear_delivery_next.change_contracts.models import Change
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git.access import Access
+from owlbear_delivery_next.github import account
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -250,6 +252,7 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(pack_files, "fetch", _offline)
     monkeypatch.setattr(model_choices, "_read", lambda: _offline("models.list"))
     monkeypatch.setattr(backlog_issues, "RUNNER", FakeGitHub(down=True))  # never the real backlog issues
+    monkeypatch.setattr(account, "resolve", _offline_account)  # nor the machine's gh accounts; fake_gh resolves
     monkeypatch.setattr(backlog, "_cache", {})
     monkeypatch.setattr(backlog, "_recent", {})
     monkeypatch.setattr(decision_cache, "_entries", {})  # no test sees another's decision snapshot
@@ -318,7 +321,7 @@ class FakeGitHub:
         self.issues, self.labels, self.comments, self.calls, self.hidden = {}, {}, [], [], set()
         self.down, self.fail_writes, self.tick, self.visibility = down, False, 0, "private"
 
-    def __call__(self, argv, data, _timeout, _cwd):
+    def __call__(self, argv, data, _timeout, _cwd, _env):
         if self.down:
             return subprocess.CompletedProcess(argv, 1, b"", b"error connecting to api.github.com\n")
         method, endpoint = argv[argv.index("--method") + 1], argv[10]
@@ -465,6 +468,7 @@ def fake_gh(tmp_path, monkeypatch) -> FakeGh:
         '[credential "https://github.com"]\n\thelper = "!f() { echo username=active; echo password=tok-active; }; f"\n'
     )
     gitconfig.write_text(gitconfig.read_text() + helper)
+    monkeypatch.setattr(account, "resolve", _RESOLVE)  # the real resolution, asking this fake
     return FakeGh(folder)
 
 
@@ -880,6 +884,18 @@ def pds(tmp_path_factory) -> type[Pds]:
 def _offline(url: str, *_args: object, **_kwargs: object) -> bytes:
     msg = f"offline in tests: {url}"
     raise OSError(msg)
+
+
+_RESOLVE = account.resolve
+
+
+def _offline_account(setting: str, origin: account.Origin, *, until: float | None = None) -> Access:
+    """The account a launch would write as, chosen without ``gh``: the named login, else ``maba-pag``."""
+    del until
+    if origin == account.Origin.LOCAL:
+        return Access.LOCAL
+    login = account.FALLBACK if setting == account.REPOSITORY_OWNER else setting
+    return Access(login, "chosen offline in tests", origin.host, f"tok-{login}", "gh")
 
 
 AUDITED_COMMIT = "51aa0e1c6"
