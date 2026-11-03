@@ -345,11 +345,17 @@ def _decided(c: Change, a: Amendment, item: AnswerItem, now: datetime) -> None:
     a.state, a.declined = "refused" if a.state == "refused" else "declined", " ".join(item.text.split())[:1000]
     c.amending = None  # the work goes on without it: within the approved brief, reshaped, or stopped
     if a.choice == "reshape":
-        c.intent.words, c.intent.hold = a.declined or a.reason, True
+        _reshape(c, a.declined or a.reason)
     elif a.choice == "stop":
         c.intent.abandoned_at = now
     else:
         _within(c, a, now)
+
+
+def _reshape(c: Change, words: str) -> None:
+    """His Reshape: back to shaping now, even from the merge step, whose PR must not merge on the old brief."""
+    c.intent.words, c.intent.hold = words, True
+    go(c, StepKind.SHAPE)
 
 
 def _within(c: Change, a: Amendment, now: datetime) -> None:
@@ -411,4 +417,4 @@ def _objection(c: Change, a: Amendment, item: AnswerItem, now: datetime) -> None
         start(c, "revert", reason=item.text or f"you reverted {a.id}", now=now, reverts=a.id,
               items=amend_apply.reverted(c, a))  # fmt: skip
     elif item.option == RESHAPE.id:
-        c.intent.words, c.intent.hold = item.text, True
+        _reshape(c, item.text)

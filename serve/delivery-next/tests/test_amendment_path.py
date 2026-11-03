@@ -730,3 +730,16 @@ def test_an_item_added_after_a_removal_never_takes_its_id_so_reverting_the_remov
 
     held = {k.id: k.text for k in c.brief.criteria} | {p.id: p.expect for p in c.checks}
     assert (added != key, held[added], key in held) == (True, "a new one", True)
+
+
+@pytest.mark.parametrize("objection", [False, True])
+def test_reshaping_an_amendment_at_the_merge_step_leaves_it_so_the_pr_never_merges(objection):
+    c = change(K.MERGE, None)
+    through(c, said=verdict("weaker", qualifies=objection))
+    if objection:
+        amending.objected(c, ObjectionItem(amendment="A1", at=NOW), NOW)
+    before, q = c.model_copy(deep=True), loop.open_question(c)
+
+    c, _ = loop.schedule(c, [AnswerItem(question=q.id, option="reshape", text="greet in French", at=NOW)], NOW)
+
+    assert (c.step.kind, c.intent.hold, queue.leaving(before, c)) == (K.SHAPE, False, True)
