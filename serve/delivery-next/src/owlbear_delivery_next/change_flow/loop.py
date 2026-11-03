@@ -155,9 +155,9 @@ DECISIONS = frozenset({"retry", "accept", "repair", "reconsider", "another", "re
 
 
 def owner_gated(c: Change) -> bool:
-    """An owner-only gate, including a persisted delivery discrepancy; its environment cannot settle or relaunch."""
+    """An owner-only gate: a persisted delivery discrepancy or an amendment's question too; nothing settles past it."""
     q = open_question(c)
-    return delivery_target.held(c) or bool(q and q.options and {o.next for o in q.options} & DECISIONS)
+    return delivery_target.held(c) or bool(q and ({o.next for o in q.options} & DECISIONS or amending.owned(q)))
 
 
 def brief_ready(c: Change) -> bool:

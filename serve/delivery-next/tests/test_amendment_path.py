@@ -17,6 +17,7 @@ from owlbear_delivery_next.change_contracts.amend_tools import (
 )
 from owlbear_delivery_next.change_contracts.amendment_records import AmendedItem, Amendment
 from owlbear_delivery_next.change_contracts.decision_records import BriefDecision, DecisionBaseline
+from owlbear_delivery_next.change_contracts.env_records import Environment
 from owlbear_delivery_next.change_contracts.evidence import next_check, review_valid, visual_valid
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, BriefApproval, IntentItem, ObjectionItem
 from owlbear_delivery_next.change_contracts.models import (
@@ -45,7 +46,7 @@ from owlbear_delivery_next.project_host import chat_routes
 from owlbear_delivery_next.runtimes import amendments, step_input
 from owlbear_delivery_next.state_store import briefs, change_record
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import queue
+from owlbear_delivery_next.workflow_steps import check, queue
 
 NOW = datetime(2026, 11, 4, 9, tzinfo=UTC)
 K = StepKind
@@ -905,3 +906,17 @@ def test_a_scope_amendment_binds_every_person_check_to_the_new_scope():
 
     assert [p.paths for p in c.checks] == [["a.txt", "b.txt", "packages/app", "packages/web"]] * 2
     assert next_check(c, before | {"packages/web/team.py": "f2"}).id == "check-1"  # a change there redoes them
+
+
+def test_a_check_answer_never_settles_past_his_open_objection():
+    c = change()
+    through(c)
+    c.step = Step(kind=K.CHECK, task="check-1")
+    p = c.checks[0]
+    p.answer = Answer(at=NOW, passed=True, inputs=evidence.check_inputs(c, p, {}))
+    c.env = Environment(check="check-1", command="npm run x", directory=".", ready_url="http://127.0.0.1:4173/")
+    assert check.action(c, live=True, paths={}) == "settle"
+
+    amending.objected(c, ObjectionItem(amendment="A1", at=NOW), NOW)
+
+    assert check.action(c, live=True, paths={}) == "dispose"  # his answer to the objection comes first
