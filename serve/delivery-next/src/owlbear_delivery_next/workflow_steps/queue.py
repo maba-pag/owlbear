@@ -286,7 +286,8 @@ def leaving(before: Change, after: Change) -> bool:
     paused = after.intent.paused_at is not None and before.intent.paused_at is None
     abandoned = after.intent.abandoned_at is not None and before.intent.abandoned_at is None
     amended = after.amending is not None and before.amending is None  # TD-185: never merged while it runs
-    return after.step.kind != M or paused or abandoned or amended
+    objected = {a.id for a in after.amendments if a.objected_at} - {a.id for a in before.amendments if a.objected_at}
+    return after.step.kind != M or paused or abandoned or amended or bool(objected)
 
 
 def _resolved(before: Change, after: Change) -> bool:

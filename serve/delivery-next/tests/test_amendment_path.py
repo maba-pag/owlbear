@@ -33,6 +33,7 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.runtimes import amendments
 from owlbear_delivery_next.state_store import change_record
 from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import queue
 
 NOW = datetime(2026, 11, 4, 9, tzinfo=UTC)
 K = StepKind
@@ -395,6 +396,16 @@ def test_keeping_or_reshaping_after_an_objection_leads_where_it_says(how, then):
 
     assert (c.amendments[0].objection, c.amending, c.brief.version) == (how, None, 4)
     assert (c.intent.words or None, c.intent.hold) == then
+
+
+def test_an_objection_at_the_merge_step_takes_a_queued_merge_out():
+    c = change(K.MERGE, None)
+    through(c)
+    before = c.model_copy(deep=True)
+
+    amending.objected(c, ObjectionItem(amendment="A1", at=NOW), NOW)
+
+    assert (queue.leaving(before, before), queue.leaving(before, c)) == (False, True)
 
 
 class Records:
