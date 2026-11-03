@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home
 
 if TYPE_CHECKING:
@@ -25,17 +26,6 @@ def git(cwd: Path, *args: str) -> str:
     return subprocess.run(  # noqa: S603 - fixed Git executable and argument vector.
         [GIT, *args], cwd=cwd, capture_output=True, text=True, check=True, timeout=60
     ).stdout
-
-
-def failure(exc: BaseException) -> str:
-    """The whole text of a failure: its type and message, then the output of a command it carries.
-
-    ``str()`` of a ``CalledProcessError`` names the command and its exit status but not what it said, so its whole
-    stderr follows on its own lines (its stdout when stderr is empty).
-    """
-    said = getattr(exc, "stderr", None) or getattr(exc, "output", None) or b""
-    out = (said.decode(errors="replace") if isinstance(said, bytes) else str(said)).strip()
-    return f"{type(exc).__name__}: {exc}" + (f"\n{out}" if out else "")
 
 
 def data_root() -> Path:
