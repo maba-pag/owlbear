@@ -18,12 +18,20 @@ if TYPE_CHECKING:
 EXPIRED = "the deadline passed before git could run"
 
 
-def run(cwd: Path, *args: str, until: float | None, cap: float, show: bool = False) -> subprocess.CompletedProcess[str]:
+def run(
+    cwd: Path,
+    *args: str,
+    until: float | None,
+    cap: float,
+    show: bool = False,
+    lossless: bool = False,
+) -> subprocess.CompletedProcess[str]:
     """One git command, ended by ``until`` (monotonic) at the latest and after *cap* seconds; never prompts.
 
     A command that times out or cannot start is a failed one (exit 128), and so is one whose deadline has already
     passed: Git is then never started. Without ``until`` it runs for *cap* seconds at most. When *show*, Git writes to
     the terminal and only the exit code is returned.
+    *lossless* preserves undecodable UTF-8 bytes for callers that classify separate records in one output.
     """
     seconds = cap if until is None else min(cap, until - time.monotonic())
     if seconds <= 0:
@@ -36,6 +44,8 @@ def run(cwd: Path, *args: str, until: float | None, cap: float, show: bool = Fal
             stdin=subprocess.DEVNULL,
             capture_output=not show,
             text=True,
+            encoding="utf-8" if lossless else None,
+            errors="surrogateescape" if lossless else "strict",
             timeout=seconds,
             check=False,
         )

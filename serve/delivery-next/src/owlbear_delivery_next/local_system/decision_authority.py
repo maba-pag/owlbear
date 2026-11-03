@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_decisions import DecisionError, Scope, State
-from owlbear_decisions.storage import parse
+from owlbear_decisions.storage import ignored_name, parse_named
 from owlbear_decisions.validate import Entry, Layer, check
 from owlbear_delivery_next.git.command_failure import failed
 
@@ -14,8 +14,8 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 
-def _run(repo: DataRepo, until: float | None, *args: str, empty: bool = False) -> str:
-    said = repo.git(*args, until=until)
+def _run(repo: DataRepo, until: float | None, *args: str, empty: bool = False, lossless: bool = False) -> str:
+    said = repo.git(*args, until=until, lossless=True) if lossless else repo.git(*args, until=until)
     if said.returncode and not (empty and said.returncode == 1):
         msg = f"the held decision's Git authority could not be read in {repo.root}: {failed(said)}"
         raise OSError(msg)
@@ -24,7 +24,7 @@ def _run(repo: DataRepo, until: float | None, *args: str, empty: bool = False) -
 
 def _layer(root: Path, rel: str) -> Layer | None:
     path = Path(rel)
-    if path.suffix != ".md":
+    if ignored_name(path.name):
         return None
     match path.parts:
         case ("decisions", _):
@@ -59,9 +59,9 @@ def _contents(text: str, commit: str) -> dict[str, str]:
 
 
 def _entries(repo: DataRepo, commit: str, until: float | None) -> tuple[list[Entry], list[tuple[Layer, str]]]:
-    tree = _run(repo, until, "ls-tree", "-r", "-z", commit)
+    tree = _run(repo, until, "ls-tree", "-r", "-t", "-z", commit)
     text = _run(repo, until, "grep", "-z", "-n", "-a", "-e", "^", commit, "--",
-                ":(glob)**/decisions/*.md", empty=True)  # fmt: skip
+                ":(glob)**/decisions/*.md", empty=True, lossless=True)  # fmt: skip
     contents, entries, unreadable = _contents(text, commit), [], []
     for row in filter(None, tree.split("\0")):
         info, rel = row.split("\t", 1)
@@ -69,12 +69,13 @@ def _entries(repo: DataRepo, commit: str, until: float | None) -> tuple[list[Ent
         if layer is None:
             continue
         path = repo.root / rel
-        if info.split(" ", 1)[0] not in {"100644", "100755"}:
+        if path.suffix != ".md" or info.split(" ", 1)[0] not in {"100644", "100755"}:
             unreadable.append((layer, f"{path} at {commit} is not a regular decision file"))
             continue
         try:
-            decision = parse(contents.get(rel, ""))
-        except DecisionError as exc:
+            text = contents.get(rel, "").encode("utf-8", "surrogateescape").decode("utf-8")
+            decision = parse_named(text, path.name)
+        except (DecisionError, UnicodeDecodeError) as exc:
             unreadable.append((layer, f"{path} at {commit}: {exc}"))
         else:
             entries.append(Entry(path, layer, decision))
