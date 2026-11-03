@@ -36,6 +36,7 @@ from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.roles import UserConfig
 from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import plan_round
 
 NOW = datetime(2026, 10, 18, 3, tzinfo=UTC)
 K = StepKind
@@ -517,3 +518,22 @@ def test_a_known_usage_challenge_whose_settlement_write_fails_is_charged_once_ac
     assert c.spend.credits == pytest.approx(4.5)  # planner 1.0 + challenge 3.5, once each
     assert [e["kind"] for e in fresh.events("c1") if e.get("kind") == "plan-challenge"] == ["plan-challenge"]
     assert (c.step.mode, c.outcome.exit) == (None, Exit.DONE)
+
+
+def test_a_continued_plan_challenge_records_its_start_before_its_challenger_runs(tmp_path, monkeypatch):
+    """#718: the challenger's session is the step's own; its stage shows from the step's start, not as starting."""
+    store = Store(tmp_path / "store")
+    plan = Plan(tasks=[Task(id="t1", title="greet")])
+    store.write(Lock("c1"), Change(slug="c1", plan=plan, step=Step(kind=StepKind.PLAN, mode=plan_rounds.CHALLENGE)))
+    seen = []
+
+    def challenge(store_, _lock, change, *_args):
+        seen.append(store_.read("c1").step.started_at is not None)
+        return loop.StepResult(exit=Exit.DONE, plan=change.plan, reason="the plan challenge passed")
+
+    monkeypatch.setattr(plan_round.worktree, "ensure", lambda *_a: tmp_path)
+    monkeypatch.setattr(plan_round, "git_common_dir", lambda repo: repo)
+    monkeypatch.setattr(plan_round, "scopes", lambda *_a: {})
+    monkeypatch.setattr(plan_round, "challenge", challenge)
+    assert plan_round.continued(store, Lock("c1"), store.read("c1"), tmp_path)
+    assert seen == [True]
