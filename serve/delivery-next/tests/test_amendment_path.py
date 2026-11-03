@@ -756,3 +756,15 @@ def test_a_yes_folded_after_reshaping_or_stopping_in_the_same_batch_approves_not
 
     assert [why for _, why in dropped] == [f"question {q.id}: the amendment it asks about has ended"]
     assert (c.amendments[0].state, c.amending, c.brief.version) == ("declined", None, 3)
+
+
+def test_a_second_objection_to_a_kept_amendment_takes_a_queued_merge_out_again():
+    c = change(K.MERGE, None)
+    through(c)
+    amending.objected(c, ObjectionItem(amendment="A1", at=NOW), NOW)
+    answer(c, "keep")
+    before = c.model_copy(deep=True)
+
+    amending.objected(c, ObjectionItem(amendment="A1", at=NOW.replace(hour=10)), NOW)
+
+    assert queue.leaving(before, c)

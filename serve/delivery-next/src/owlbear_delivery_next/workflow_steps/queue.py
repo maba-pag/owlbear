@@ -286,7 +286,9 @@ def leaving(before: Change, after: Change) -> bool:
     paused = after.intent.paused_at is not None and before.intent.paused_at is None
     abandoned = after.intent.abandoned_at is not None and before.intent.abandoned_at is None
     amended = after.amending is not None and before.amending is None  # TD-185: never merged while it runs
-    objected = {a.id for a in after.amendments if a.objected_at} - {a.id for a in before.amendments if a.objected_at}
+    objected = {(a.id, a.objected_at) for a in after.amendments if a.objected_at} - {
+        (a.id, a.objected_at) for a in before.amendments if a.objected_at
+    }  # a later objection to the same amendment too
     return after.step.kind != M or paused or abandoned or amended or bool(objected)
 
 
