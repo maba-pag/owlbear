@@ -495,4 +495,5 @@ def legacy_uncertain(run: FolderRun) -> bool:
         return True
     if run.state not in {"failed", "waiting"} or run.summary:
         return False  # never and done, a finished run's copy, and running, which the caller takes on its own
-    return not run.reason.startswith("ended ") or UNKNOWN in run.reason
+    reason = curation_snapshots.written(run.reason)
+    return not reason.startswith("ended ") or UNKNOWN in reason

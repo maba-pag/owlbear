@@ -10,7 +10,7 @@ import logging
 import subprocess
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.machine_host import curation_tree
+from owlbear_delivery_next.machine_host import curation_snapshots, curation_tree
 from owlbear_delivery_next.state_store.curation_runs import FolderRun
 
 if TYPE_CHECKING:
@@ -38,11 +38,12 @@ def recover(curation: Curation) -> curation_tree.Resumed | None:
 
 
 def _noted(curation: Curation, left: curation_tree.Resumed) -> None:
-    """Add the outcome to the folder's row: the run whose apply it was, which a restart marked interrupted."""
+    """Put the outcome on the folder's row, in place of an earlier one: readers judge the row without it."""
     said = "were finished afterwards" if left.done else "could not be finished yet"
     with curation.lock:
         runs = curation.load()
         row = runs.folders.get(left.folder, FolderRun(state="failed"))
-        reason = "; ".join(filter(None, (row.reason, f"its accepted edits {said}: {left.said}")))
+        note = f"{curation_snapshots.RESUMED}{said}: {left.said}"
+        reason = "; ".join(filter(None, (curation_snapshots.written(row.reason), note)))
         runs.folders[left.folder] = row.model_copy(update={"reason": reason})
         curation._write(runs)  # noqa: SLF001 - the job's own row file, under its lock

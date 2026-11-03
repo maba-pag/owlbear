@@ -7,6 +7,7 @@ import re
 import subprocess
 import threading
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,7 +20,7 @@ from owlbear_delivery_next.local_system import curation_apply, data_place, prelo
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import curation, curation_resume, curation_tree
+from owlbear_delivery_next.machine_host import curation, curation_resume, curation_snapshots, curation_tree
 from owlbear_delivery_next.runtimes.session_result import Run
 
 REPORT = MemoryCurationResult(summary="curated", entries=[])
@@ -727,3 +728,32 @@ def test_an_apply_finished_first_leads_the_refusal_of_a_run_whose_file_changed_m
 
     assert refusal.startswith("first finished the apply a stop cut short of shop: x: written now; refused, ")
     assert (f"{rel(entry)} changed meanwhile" in refusal, notice) == (True, "")
+
+
+@pytest.mark.parametrize(
+    "refusal",
+    [
+        "this automatic trigger is off in the machine settings; it waits until it is turned on",
+        f"{curation_snapshots.UNSET[0]}agents.curator.model{curation_snapshots.UNSET[1]}",
+    ],
+)
+def test_a_refusal_whose_folders_apply_stays_cut_short_is_still_one_with_one_note(repo, refusal) -> None:
+    entry = curated(repo / "shop" / "memory", "Lesson")
+    pushed(repo, "a curated entry")
+    shared = DataRepo(repo)
+    seed = (repo / rel(entry)).read_bytes()
+    step = curation_apply.Step(curation_apply.digest(seed), "the run's version", removed=False)
+    curation_apply.write(shared, curation_apply.Apply("shop", {rel(entry): step}))
+    (Path(git(repo, "rev-parse", "--absolute-git-dir").strip()) / "index.lock").write_text("")  # a lingering Git's
+    job, at = idle(repo), datetime.now(UTC)
+    with job.lock:
+        runs = job.load()
+        runs.folders["shop"] = curation.FolderRun(state="failed", started_at=at, ended_at=at, reason=refusal)
+        job._write(runs)  # noqa: SLF001 - a refusal main wrote before any session
+
+    curation_resume.recover(job)
+    resumed = curation_resume.recover(job)
+
+    row = job.load().folders["shop"]
+    assert (curation_snapshots.refused(row), curation.legacy_uncertain(row)) == (True, False)
+    assert row.reason == f"{refusal}; its accepted edits could not be finished yet: {resumed.said}"
