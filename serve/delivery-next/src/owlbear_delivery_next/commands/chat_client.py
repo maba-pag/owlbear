@@ -249,26 +249,31 @@ class Chat:
             return {"error": f"brief v{version} is not the current draft v{current}"}
         slug, attempt = row["slug"], brief["challenge"]["attempt"]
         code, now = self._wait(slug, version, attempt, start + WAIT)
-        if code == OK and now.get("running") and now.get("version") == version:
-            return self._unfinished(slug, version, attempt)
+        if code == OK and now.get("version") == version:
+            return self._ended(slug, version, attempt, now)
         return _told(version, code, now)
 
-    def _unfinished(self, slug: str, version: int, attempt: int) -> dict[str, Any]:
-        """The challenge still runs at the deadline: say whether someone must act, a verdict first.
+    def _ended(self, slug: str, version: int, attempt: int, now: dict[str, Any]) -> dict[str, Any]:
+        """The wait ended on a read for this draft: what the Change's row adds to it, a verdict first.
 
-        The Change's row is read before the outcome, so a verdict that lands between the two reads is told as the
-        verdict, not as an owner action (the Change then waits for the shaping chat, which its row shows as an action).
+        The row is read before a running challenge's outcome, so a verdict that lands between the two reads is told as
+        the verdict, not as an owner action (the Change then waits for the shaping chat, which its row shows as an
+        action). A row that has left shaping says so whatever the read held: a recheck of the same draft that was
+        abandoned reads as the previous round's findings.
         """
         code, rows = self.call("GET", "/changes")
         if code != OK:
             return _told(version, code, rows)
         row = next((r for r in rows if r.get("slug") == slug), {})
-        code, now = self._read(slug, version, attempt)
-        if code != OK or not now.get("running") or now.get("version") != version:
-            return _told(version, code, now)
+        if now.get("running"):
+            code, now = self._read(slug, version, attempt)
+            if code != OK or now.get("version") != version:
+                return _told(version, code, now)
         line = row.get("line")
         if row.get("step") != StepKind.SHAPE:  # abandoned or finished: no challenge will end
             return {"running": False, "line": line, "next": "the Change is no longer being shaped"}
+        if not now.get("running"):
+            return now
         if row.get("actor") != "delivery" and row.get("action") != APPROVE:
             return {"running": False, "owner_action": row.get("action"), "line": line}
         return {"running": True, "line": line, "next": STILL}
