@@ -307,10 +307,11 @@ group too, moved from Guardrails.
 
 None of the nine values has a default: while one is unset, the project's work waits as described above, the memory
 tools refuse the ratings and recalls that need it, naming it, and a step's starting lessons say so instead of listing
-any. They start unset after the update that adds them, so choose the Global layer, set each once and save. The values
-the code held before were 0.1, 0.01, 50, 30 days, 5 lessons, 2000 characters, 20 entries and 2 and 2 slots; enter
-them to keep memory as it was. The Memory page links to this group, and its **Remove** button, which now takes the
-purge age from here, stays disabled with the reason while it is unset.
+any. They start unset after the update that adds them, so choose the Global layer and use **Use recommended**, which
+drafts them with the values the code held before (0.1, 0.01, 50, 30 days, 5 lessons, 2000 characters, 20 entries, and 2
+and 2 slots); review the drafts and save once. The recommendations are only offered there and nothing resolves from
+them, so a value you never save stays unset. The Memory page links to this group, and its **Remove** button, which now
+takes the purge age from here, stays disabled with the reason while it is unset.
 
 The machine settings in **Settings → This machine** (versions, updating itself, curation per
 trigger, sessions at once) work the same way: each machine follows the global ones, which you
