@@ -14,6 +14,7 @@ import uvicorn
 
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_contracts.amend_tools import CandidateItem, CandidateResult, VerdictResult
+from owlbear_delivery_next.change_contracts.amendment_records import AmendedItem
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
 from owlbear_delivery_next.change_flow import amending, loop
@@ -142,6 +143,8 @@ def test_the_brief_panel_lists_each_amendment_and_takes_an_objection_to_an_appli
 
         c = applied_and_declined()
         c.amendments[1].unreviewed = True  # its final wording was revised after its last round
+        c.amendments[0].items.append(AmendedItem(field="check", key="check-1", old="it greets", new="it greets twice",
+                                                 steps=["open /"], covers=["AC-1"]))  # fmt: skip
         store.write(Lock(SLUG), c)
         page.reload()
         expect(part).to_contain_text("Current version v4; reference version v3")
@@ -149,7 +152,8 @@ def test_the_brief_panel_lists_each_amendment_and_takes_an_objection_to_an_appli
         first = part.locator(".amendment", has_text="A1, proposed at the build step")
         for said in ["criterion AC-1", "greet() trims the name → greet() trims spaces",
                      "AC-1 is over-specific (from a worker)", "session ch: equivalent: AC-3 covers it",
-                     "applied, made v4, applied by Delivery alone"]:  # fmt: skip
+                     "applied, made v4, applied by Delivery alone",
+                     "it greets → it greets twice (steps: open /) (covers AC-1)"]:  # fmt: skip
             expect(first).to_contain_text(said)
         second = part.locator(".amendment", has_text="A2, proposed at the build step")
         for said in ["greet() trims spaces → greet() trims spaces and tabs",

@@ -3,6 +3,7 @@
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -10,7 +11,7 @@ from owlbear_delivery_next.change_contracts import evidence
 from owlbear_delivery_next.change_contracts.amend_tools import Affected, CandidateItem, CandidateResult, VerdictResult
 from owlbear_delivery_next.change_contracts.decision_records import BriefDecision, DecisionBaseline
 from owlbear_delivery_next.change_contracts.evidence import next_check, review_valid, visual_valid
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem, ObjectionItem
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, BriefApproval, ObjectionItem
 from owlbear_delivery_next.change_contracts.models import (
     Answer,
     Brief,
@@ -26,13 +27,14 @@ from owlbear_delivery_next.change_contracts.models import (
     StepKind,
     Task,
     VisualState,
+    VisualStep,
 )
 from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
 from owlbear_delivery_next.change_contracts.visual_records import VisualResult
 from owlbear_delivery_next.change_flow import amend_apply, amending, loop
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import chat_routes
-from owlbear_delivery_next.runtimes import amendments
+from owlbear_delivery_next.runtimes import amendments, step_input
 from owlbear_delivery_next.state_store import change_record
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import queue
@@ -390,6 +392,17 @@ def test_an_objection_names_only_the_tasks_built_on_the_amendment():
     assert "Built and judged on it since: tasks t2," in loop.open_question(c).text
 
 
+def test_an_objection_after_a_replan_names_its_tasks_though_their_ids_repeat():
+    c = change(task="t2")
+    c.plan.tasks[0].done = True  # built before it, in plan v1
+    through(c)
+    c.plan = Plan(version=2, tasks=[Task(id="t1", title="again", scope=["a.txt"], done=True)])  # replanned, built
+
+    amending.objected(c, ObjectionItem(amendment="A1", at=NOW), NOW)
+
+    assert "Built and judged on it since: tasks t1," in loop.open_question(c).text
+
+
 def test_an_objection_pauses_dependent_work_and_a_revert_is_a_new_version():
     c = change()
     a1 = through(c)  # v4: AC-1 reworded alone
@@ -421,9 +434,14 @@ def test_an_objection_pauses_dependent_work_and_a_revert_is_a_new_version():
 
 def test_a_revert_brings_back_what_was_removed_or_changed_as_it_was():
     c = change()
+    c.brief.visual[1].steps = [VisualStep(do="click", target="Team")]
+    c.checks[1].visual = True
+    c.brief.approved = [
+        c.brief.model_copy(deep=True, update={"approved": [], "checks": [p.model_copy(deep=True) for p in c.checks]})
+    ]
     shape = lambda b, checks: (  # noqa: E731
-        sorted((k.id, k.text) for k in b.criteria), sorted((s.name, s.path, s.expect) for s in b.visual),
-        sorted((p.id, tuple(p.criteria), tuple(p.steps), p.expect) for p in checks),
+        sorted((k.id, k.text) for k in b.criteria), sorted((s.name, s.path, s.expect, str(s.steps)) for s in b.visual),
+        sorted((p.id, tuple(p.criteria), tuple(p.steps), p.expect, p.visual) for p in checks),
     )  # fmt: skip
     was = shape(c.brief, c.checks)
     exact = amend_apply.exact
@@ -524,3 +542,54 @@ def test_a_whitespace_change_is_a_change():
 
     assert [(i.old, i.new) for i in a.items] == [("Prints `Hello  Ada`", "Prints `Hello Ada`")]
     assert (a.state, c.brief.criteria[0].text) == ("applied", "Prints `Hello Ada`")
+
+
+def test_a_removed_criterion_brought_back_is_covered_again_by_its_checks():
+    c = change()
+    through(c, item(key="AC-1", text="", remove=True), said=verdict("weaker", qualifies=False))
+    answer(c, "yes")
+    assert c.checks[0].criteria == []  # check-1 kept its pass, covering nothing
+
+    amending.objected(c, ObjectionItem(amendment="A1", at=NOW), NOW)
+    answer(c, "revert")
+    amending.opened(c, amending.current(c), RoundPolicy())
+    amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge-2", NOW)
+
+    assert (c.checks[0].criteria, next_check(c, {}).id) == (["AC-1"], "check-1")  # it reruns
+
+
+def test_a_check_states_the_criteria_it_covers_and_every_shape_is_shown_where_it_is_judged():
+    c = change()
+    a = amending.start(c, "worker", reason="a check per criterion", now=NOW)
+    wrong = CandidateResult(items=[item("check", "", "it says hi", covers=["AC-9"]), item(covers=["AC-2"])])
+    assert amendments.check(wrong, amendments.amendable(c)) == [
+        "items: covers AC-9 - not criteria of the brief", "items: covers is only for a check"
+    ]  # fmt: skip
+    new = item("check", "", "it says hi", steps=["open /hi"], covers=["AC-2"])
+    amending.prepared(c, CandidateResult(items=[new]), RoundPolicy(), NOW)
+    assert "check:(new) '' -> 'it says hi' (steps: open /hi) (covers AC-2)" in amendments.challenge(
+        c, a, Path(), recheck=False
+    )
+    amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge", NOW)
+    assert "add check: 'it says hi' (steps: open /hi) (covers AC-2)" in loop.open_question(c).text
+
+    answer(c, "yes")
+
+    assert [(p.id, p.criteria, p.steps) for p in c.checks][2] == ("check-3", ["AC-2"], ["open /hi"])
+
+
+def test_his_approval_of_a_brief_version_is_the_reference_weakening_is_judged_from():
+    c = change(K.SHAPE, None)
+    c.brief.version = c.brief.challenged = 4  # reshaped after v3
+
+    c = loop.fold(c, [BriefApproval(version=4, at=NOW)], NOW)
+
+    assert (c.brief.reference, amend_apply.reference(c)) == (4, 4)
+
+
+def test_the_final_review_is_told_the_scope_it_judges_a_constraint_against():
+    tree = SimpleNamespace(base="a" * 40, head="b" * 40, changed=())
+    c = change(K.REVIEW, None)
+
+    assert "Scope (a constraint): packages/app" in step_input.review(c, None, Path(), tree)
+    assert "Scope (a constraint)" not in step_input.review(c, c.plan.tasks[0], Path(), tree)

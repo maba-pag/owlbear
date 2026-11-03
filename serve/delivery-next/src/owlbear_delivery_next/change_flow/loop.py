@@ -42,6 +42,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.visual_records import OwnerDecision
 from owlbear_delivery_next.change_flow import (
+    amend_apply,
     amending,
     answer_kinds,
     brief_rounds,
@@ -225,13 +226,13 @@ def fold(  # noqa: C901, PLR0912 - per item kind
     for item in items:
         match item:
             case BriefApproval(version=version) if version == c.brief.version == c.brief.challenged:
-                c.brief.approved_version, c.brief.approved_at = version, item.at
+                c.brief.approved_version, c.brief.approved_at, c.brief.reference = version, item.at, version
                 decision_baseline.approved(c, item.baseline, item.at if item.unpinned else None)
                 c.brief.picked = item.picked or c.brief.picked  # what the approval validated, not a later retry
                 held = {p.id: p for p in c.decisions_published} | {p.id: p for p in item.published}
                 c.decisions_published = list(held.values())
                 if all(b.version != version for b in c.brief.approved):  # with its person checks (TD-185)
-                    c.brief.approved.append(c.brief.model_copy(deep=True, update={"approved": [], "checks": c.checks}))
+                    amend_apply.kept(c)
                 if c.step.kind == StepKind.SHAPE:
                     _done(c, None, now)
                     c.outcome = None

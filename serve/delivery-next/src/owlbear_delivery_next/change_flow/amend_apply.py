@@ -41,6 +41,12 @@ def snapshot(c: Change, version: int | None) -> Brief | None:
     return next((b for b in c.brief.approved if b.version == version), None)
 
 
+def kept(c: Change) -> None:
+    """Keep the current version as approved, its person checks with it, never edited again."""
+    copied = [p.model_copy(deep=True) for p in c.checks]
+    c.brief.approved.append(c.brief.model_copy(deep=True, update={"approved": [], "checks": copied}))
+
+
 def reference(c: Change) -> int | None:
     """The version weakening is judged from: the owner's last, else the first approved one."""
     b = c.brief
@@ -71,13 +77,15 @@ def _ref(line: str) -> str:
     return {"criterion": key, "visual": f"screen:{key}", "check": f"check:{key}"}.get(field, "")
 
 
-def specified(c: Change, item: AmendedItem) -> bool:
-    """Whether *item* changes something the owner stated (TD-179's list), or adds to the brief."""
-    if not item.key:
-        return True  # a new item is never a replaced generated check
-    return {"criterion": item.key, "visual": f"screen:{item.key}", "check": f"check:{item.key}"}.get(
-        item.field, ""
-    ) in c.brief.specified or item.field not in {"criterion", "visual", "check"}
+def shape(i: AmendedItem) -> str:
+    """What goes with an item's new wording: a state's path, a check's steps and criteria, a decision's question."""
+    parts = [
+        f"path {i.path}" if i.path else "",
+        f"steps: {'; '.join(i.steps)}" if i.steps else "",
+        f"covers {', '.join(i.covers)}" if i.covers else "",
+        f"question: {i.question}" if i.question else "",
+    ]
+    return "".join(f" ({p})" for p in parts if p)
 
 
 def exact(c: Change, field: str, key: str, text: str, **more: object) -> AmendedItem:
@@ -126,7 +134,8 @@ def _shape(before: Brief, i: AmendedItem) -> dict[str, object]:
         case "visual":
             return {"path": next((s.path for s in before.visual if s.name == i.key), "")}
         case "check":
-            return {"steps": next((p.steps for p in before.checks if p.id == i.key), [])}
+            p = next((p for p in before.checks if p.id == i.key), None)
+            return {"steps": p.steps, "covers": p.criteria} if p else {}
         case "decision":
             return {"question": next((d.question for d in before.decisions if d.id == i.key), i.question)}
     return {}
@@ -148,9 +157,9 @@ def apply(c: Change, a: Amendment, level: Level, now: datetime) -> None:
     b.approved_at, a.level, a.state = now, level, "applied"
     if level in {"approved", "decided"}:
         b.reference = v
-    b.approved.append(b.model_copy(deep=True, update={"approved": [], "checks": [p.model_copy() for p in c.checks]}))
+    kept(c)
     void(c, a, removed)
-    a.done = [t.id for t in (c.plan.tasks if c.plan else []) if t.done]
+    a.done = [f"{c.plan.version}:{t.id}" for t in c.plan.tasks if t.done] if c.plan else []
     resume(c, a, level, now)
     c.amending = None
 
@@ -161,31 +170,16 @@ def _gone(a: Amendment) -> set[str]:
     }
 
 
-def _item(c: Change, i: AmendedItem, v: int, level: Level, now: datetime) -> None:  # noqa: C901 - per field
+def _item(c: Change, i: AmendedItem, v: int, level: Level, now: datetime) -> None:
     """Apply one item; a new item's key is recorded on it, so a revert can name it."""
     b = c.brief
     match i.field:
         case "ui":
             b.ui = i.new.strip().lower() == "true"
         case "criterion":
-            if i.remove:
-                b.criteria = [k for k in b.criteria if k.id != i.key]
-            elif any(k.id == i.key for k in b.criteria):
-                b.criteria = [k.model_copy(update={"text": i.new, "version": k.version + 1}) if k.id == i.key else k
-                              for k in b.criteria]  # fmt: skip
-            else:  # new, or a removed one brought back above every version its evidence was recorded at
-                was = max((k.version for x in b.approved for k in x.criteria if k.id == i.key), default=0)
-                i.key = i.key or _free("AC-", [k.id for k in b.criteria])
-                b.criteria.append(Criterion(id=i.key, text=i.new, version=was + 1))
+            _criterion(c, i)
         case "visual":
-            if i.remove:
-                b.visual = [s for s in b.visual if s.name != i.key]
-            elif any(s.name == i.key for s in b.visual):
-                b.visual = [s.model_copy(update={"expect": i.new, "path": i.path or s.path, "version": v})
-                            if s.name == i.key else s for s in b.visual]  # fmt: skip
-            else:
-                i.key = i.key or _free("amended-", [s.name for s in b.visual])
-                b.visual.append(VisualState(name=i.key, path=i.path or "/", expect=i.new, version=v))
+            _visual(b, i, v)
         case "check":
             _check(c, i)
         case "scope":
@@ -196,22 +190,62 @@ def _item(c: Change, i: AmendedItem, v: int, level: Level, now: datetime) -> Non
             _decision(c, i, level, now)
 
 
+def _criterion(c: Change, i: AmendedItem) -> None:
+    b = c.brief
+    if i.remove:
+        b.criteria = [k for k in b.criteria if k.id != i.key]
+    elif any(k.id == i.key for k in b.criteria):
+        b.criteria = [k.model_copy(update={"text": i.new, "version": k.version + 1}) if k.id == i.key else k
+                      for k in b.criteria]  # fmt: skip
+    else:  # new, or a removed one brought back above every version its evidence was recorded at
+        was = max((k.version for x in b.approved for k in x.criteria if k.id == i.key), default=0)
+        i.key = i.key or _free("AC-", [k.id for k in b.criteria])
+        b.criteria.append(Criterion(id=i.key, text=i.new, version=was + 1))
+        _covered(c, i.key)
+
+
+def _visual(b: Brief, i: AmendedItem, v: int) -> None:
+    if i.remove:
+        b.visual = [s for s in b.visual if s.name != i.key]
+    elif any(s.name == i.key for s in b.visual):
+        b.visual = [s.model_copy(update={"expect": i.new, "path": i.path or s.path, "version": v})
+                    if s.name == i.key else s for s in b.visual]  # fmt: skip
+    elif was := [s for x in b.approved for s in x.visual if s.name == i.key]:  # back with its steps
+        b.visual.append(was[-1].model_copy(update={"expect": i.new, "path": i.path or was[-1].path, "version": v}))
+    else:
+        i.key = i.key or _free("amended-", [s.name for s in b.visual])
+        b.visual.append(VisualState(name=i.key, path=i.path or "/", expect=i.new, version=v))
+
+
 def _check(c: Change, i: AmendedItem) -> None:
     """A person check changed, removed, added, or brought back as it was with a new procedure."""
     if i.remove:
         c.checks = [p for p in c.checks if p.id != i.key]
         return
+    ids = [k.id for k in c.brief.criteria]
+    covers = [k for k in i.covers if k in ids]
     for p in c.checks:
         if p.id == i.key:
-            p.expect, p.steps = i.new, i.steps or p.steps
+            p.expect, p.steps, p.criteria = i.new, i.steps or p.steps, covers or p.criteria
             p.procedure, p.answer = p.procedure + 1, None
             return
-    ids = [k.id for k in c.brief.criteria]
-    was = [p for x in c.brief.approved for p in x.checks if p.id == i.key]
-    covers, procedure = ([k for k in was[-1].criteria if k in ids], was[-1].procedure + 1) if was else (ids, 1)
+    if was := [p for x in c.brief.approved for p in x.checks if p.id == i.key]:  # back as it was, a new procedure
+        p = was[-1]
+        c.checks.append(p.model_copy(deep=True, update={
+            "criteria": covers or [k for k in p.criteria if k in ids], "steps": i.steps or p.steps, "expect": i.new,
+            "paths": coverage(c), "procedure": p.procedure + 1, "answer": None}))  # fmt: skip
+        return
     i.key = i.key or _free("check-", [p.id for p in c.checks])
-    c.checks.append(PersonCheck(id=i.key, criteria=covers, steps=i.steps, expect=i.new, paths=coverage(c),
-                                procedure=procedure))  # fmt: skip
+    c.checks.append(PersonCheck(id=i.key, criteria=covers or ids, steps=i.steps, expect=i.new, paths=coverage(c)))
+
+
+def _covered(c: Change, key: str) -> None:
+    """A criterion brought back goes back into the checks that covered it when it was last approved, to be redone."""
+    was = next((x for x in reversed(c.brief.approved) if any(k.id == key for k in x.criteria)), None)
+    held = {p.id for p in was.checks if key in p.criteria} if was else set()
+    for p in c.checks:
+        if p.id in held and key not in p.criteria:
+            p.criteria, p.answer = [*p.criteria, key], None
 
 
 def _decision(c: Change, i: AmendedItem, level: Level, now: datetime) -> None:

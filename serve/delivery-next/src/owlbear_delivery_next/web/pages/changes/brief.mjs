@@ -220,7 +220,10 @@ function amendmentsPart(d) {
 function itemRow(i) {
   const name = `${i.field}${i.key ? ` ${i.key}` : ""}`;
   if (i.remove) return [name, `removed: ${i.old}`];
-  return [name, i.old ? `${i.old} → ${i.new}` : `added: ${i.new}`];
+  const shape = [i.path && `path ${i.path}`, i.steps?.length && `steps: ${i.steps.join("; ")}`,
+    i.covers?.length && `covers ${i.covers.join(", ")}`, i.question && `question: ${i.question}`]
+    .filter(Boolean).map((p) => ` (${p})`).join("");
+  return [name, i.old ? `${i.old} → ${i.new}${shape}` : `added: ${i.new}${shape}`];
 }
 
 function amendment(a, d) {

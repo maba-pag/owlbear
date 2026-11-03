@@ -98,7 +98,7 @@ def opened(c: Change, a: Amendment, policy: RoundPolicy) -> None:
 def _exact(c: Change, items: Iterable[CandidateItem]) -> list[AmendedItem]:
     return [
         amend_apply.exact(c, i.field, i.key, i.text, remove=i.remove, why=i.why, path=i.path, steps=i.steps,
-                          question=i.question)
+                          question=i.question, covers=i.covers)
         for i in items
     ]  # fmt: skip
 
@@ -220,7 +220,7 @@ def alone(c: Change, a: Amendment) -> bool:
     """Delivery applies it alone only as an equivalent, independently shown replacement of generated criteria."""
     return (
         a.verdict == "equivalent" and a.qualifies and not (a.build_only or a.tightening or a.unreviewed or a.widens)
-        and bool(a.items) and all(i.field == "criterion" and not amend_apply.specified(c, i) for i in a.items)
+        and bool(a.items) and all(i.field == "criterion" and i.key and i.key not in c.brief.specified for i in a.items)
     )  # fmt: skip
 
 
@@ -261,7 +261,8 @@ def _item_line(i: AmendedItem) -> str:
     name = f"{i.field} {i.key}".strip()
     if i.remove:
         return f"remove {name} ({i.old})"
-    return f"{name}: {i.old!r} -> {i.new!r}" if i.old else f"add {name}: {i.new!r}"
+    shape = amend_apply.shape(i)
+    return f"{name}: {i.old!r} -> {i.new!r}{shape}" if i.old else f"add {name}: {i.new!r}{shape}"
 
 
 def _ask(c: Change, a: Amendment, what: str, text: str, *options: Option, now: datetime) -> None:
@@ -398,7 +399,7 @@ def objected(c: Change, item: ObjectionItem, now: datetime) -> None:
         return
     a.objected_at = item.at
     later = [x.id for x in c.amendments if x.state == "applied" and (x.version or 0) > (a.version or 0)]
-    done = [t.id for t in (c.plan.tasks if c.plan else []) if t.done and t.id not in a.done]
+    done = [t.id for t in c.plan.tasks if t.done and f"{c.plan.version}:{t.id}" not in a.done] if c.plan else []
     text = (
         f"You objected to amendment {a.id} (brief v{a.version}: {'; '.join(_item_line(i) for i in a.items)})"
         f"{f': {item.text}' if item.text else ''}. Built and judged on it since: tasks {', '.join(done) or 'none'}, "

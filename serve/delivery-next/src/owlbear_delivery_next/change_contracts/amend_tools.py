@@ -36,6 +36,12 @@ class CandidateItem(tools.Args):
     steps: list[str] = Field(
         default_factory=list, max_length=10, description="Only for a new or changed person check: its steps"
     )
+    covers: list[str] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Only for a new or changed person check: the criterion ids it checks; empty keeps a changed "
+        "check's and gives a new one every criterion",
+    )
     remove: bool = Field(default=False, description="true to remove the item instead of rewording it")
     why: str = tools.bounded(500, "Why the approved wording is wrong and what the new one keeps", "Tabs are not names")
 

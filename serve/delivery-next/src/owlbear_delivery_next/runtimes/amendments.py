@@ -60,6 +60,10 @@ def _errors(items: Sequence[tools.Amend | amend_tools.CandidateItem], allowed: t
             errors.append(f"{name}: remove needs the key of the {a.field} to remove")
         if not a.remove and not a.text.strip():
             errors.append(f"{name}: {ref} needs text - say what it should say, or set remove")
+        if isinstance(a, amend_tools.CandidateItem) and a.covers:
+            wrong = [k for k in a.covers if f"criterion:{k}" not in allowed]
+            errors += [f"{name}: covers is only for a check"] if a.field != "check" else []
+            errors += [f"{name}: covers {', '.join(wrong)} - not criteria of the brief"] if wrong else []
     return errors
 
 
@@ -69,7 +73,8 @@ HOSTED = (
 )
 CANDIDATE_RULES = (
     "Write the exact candidate against the current version: per item the field, its key as the brief names it (empty "
-    "to add one), the whole new wording, and why. Change only what the reason needs; keep the owner's intent and every "
+    "to add one), the whole new wording, and why; a new visual state's path, a new or changed person check's steps "
+    "and the criterion ids it covers (`covers`). Change only what the reason needs; keep the owner's intent and every "
     "item you do not need. A change against a project decision the Change follows is a new Change-scoped decision "
     "(field decision, empty key, its question and answer) recording the exception; the project decision stays. A "
     "change that needs the outcome or the non-goals is not an amendment: set `refuse` with why, and no items."
@@ -180,7 +185,7 @@ def _current(c: Change) -> list[str]:
 
 def _item(i: AmendedItem) -> str:
     name = f"{i.field}:{i.key or '(new)'}"
-    return f"{name} removed (was {i.old!r})" if i.remove else f"{name} {i.old!r} -> {i.new!r}"
+    return f"{name} removed (was {i.old!r})" if i.remove else f"{name} {i.old!r} -> {i.new!r}{amend_apply.shape(i)}"
 
 
 def _items(a: Amendment) -> list[str]:

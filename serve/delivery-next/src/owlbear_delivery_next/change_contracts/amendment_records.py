@@ -27,7 +27,8 @@ class AmendedItem(_Strict):
     """One item's approved wording and its replacement: ``key`` names the item, empty to add one.
 
     Keys: a criterion's id, a visual state's name, a person check's id, a scope line as approved, a brief decision's
-    id; ``ui`` has none. A visual state's ``path`` and a person check's ``steps`` go with a new or changed one.
+    id; ``ui`` has none. A visual state's ``path`` and a person check's ``steps`` and ``covers`` go with a new or
+    changed one.
     """
 
     field: AmendField = "criterion"
@@ -40,6 +41,7 @@ class AmendedItem(_Strict):
     path: str = ""
     steps: list[str] = Field(default_factory=list)
     question: str = ""  # a new decision's
+    covers: list[str] = Field(default_factory=list)  # a person check's criterion ids; empty keeps or gives all
 
     @model_validator(mode="before")
     @classmethod
@@ -89,7 +91,7 @@ class Amendment(_Strict):
     reverts: str = ""  # the amendment a revert undoes
     question: str = ""  # the question whose answer started it
     moved_to: str = ""  # the new Change that holds it: this one merged before it ended
-    done: list[str] = Field(default_factory=list)  # tasks already done when it applied: not built on it
+    done: list[str] = Field(default_factory=list)  # ``plan version:task id`` done when it applied: not built on it
     objected_at: datetime | None = None
     objection: Objection | Literal[""] = ""
 
