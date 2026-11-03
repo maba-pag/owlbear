@@ -395,6 +395,24 @@ class TestCounterIncrementPath:
         assert updated.score == pytest.approx(0.123)
         assert engine.get_entry(_ID_APPROVED).score == pytest.approx(0.123)
 
+    def test_a_rating_changes_only_its_counter_receipts_and_time_so_an_older_server_reads_the_file(
+        self, tmp_path: Path
+    ) -> None:
+        """Version skew: what the new code writes has the fields and shape every older server loads."""
+        engine = MemoryEngine(memory_dir=tmp_path)
+        entry = _make_entry(_ID_APPROVED, "approved", confidence=0.8, score=0.123)
+        _seed_entry(tmp_path, entry)
+        engine.load()
+        before = engine.get_entry(_ID_APPROVED).model_dump()
+
+        _record_assessment(engine, _ID_APPROVED, "unremarkable")
+
+        after = MemoryEngine(memory_dir=tmp_path).get_entry(_ID_APPROVED).model_dump()
+        assert {k for k in before if before[k] != after[k]} == {
+            "unremarkable_count", "assessment_receipts", "updated_at"
+        }  # fmt: skip
+        assert set(before) == set(after)
+
     def test_entry_score_follows_the_points_it_is_given(self, tmp_path: Path) -> None:
         """The score is worked out from confidence, the ratings and the points handed in, never from a stored value."""
         from owlbear_memory import Points, entry_score  # noqa: PLC0415

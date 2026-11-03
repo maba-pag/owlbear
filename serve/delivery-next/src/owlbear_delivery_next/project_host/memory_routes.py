@@ -79,7 +79,7 @@ def _shown(entry: MemoryEntry) -> dict[str, Any]:
     return entry.model_dump(mode="json", exclude={"assessment_receipts", "score"})  # the stored score ranks nothing
 
 
-UNSET_PURGE = "the purge age is unset: the owner sets it in the Memory group of the Settings page"
+UNSET_PURGE = "the purge age is unset; set it in the Memory group of the Settings page"
 
 
 def _purge_age(store: Store) -> tuple[int | None, str]:

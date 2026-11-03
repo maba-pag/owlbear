@@ -246,8 +246,9 @@ function purges() {
       busy: state.pending === `${old[0].place.key}:purge` }))}
     ${unset.map((place) => html`<p-button type="button" compact="true" variant="secondary" icon="delete"
       disabled="true">Remove old deleted entries from ${place.label}</p-button>
-      <p-text size="xs" color="contrast-medium">${place.purge_why}. <a href=${here({ layer: "global" },
-      "/config#memory")}>Set the purge age</a></p-text>`)}
+      <div><p-text size="xs" color="contrast-medium">${place.purge_why.charAt(0).toUpperCase()}${
+        place.purge_why.slice(1)}.</p-text><p-link-pure icon="arrow-right"><a href=${here({ layer: "global" },
+        "/config#memory")}>Set the purge age</a></p-link-pure></div>`)}
     </div>` : nothing;
 }
 

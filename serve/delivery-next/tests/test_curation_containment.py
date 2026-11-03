@@ -834,6 +834,16 @@ def test_an_apply_whose_folder_another_process_holds_stays_cut_short(repo, monke
     assert ((repo / rel(entry)).read_bytes(), curation_apply.read(shared) is not None) == (seed, True)
 
 
+def test_a_curation_run_is_seeded_with_the_global_settings_whole_memory_values_included(repo, tmp_path) -> None:
+    """The curator's memory server reads the settings beside its worktree: one copy of Global's file, byte for byte."""
+    text = '{"format": 21, "curator_threshold": 90, "memory": {"stale_factor": 50, "purge_days": 14}}'
+    (repo / "config.json").write_text(text)
+
+    tree = curation_tree.seed(DataRepo(repo), tmp_path / "run", ["shop"])
+
+    assert (tree.root / "config.json").read_text() == text
+
+
 def test_an_apply_finished_first_leads_the_refusal_of_a_run_whose_file_changed_meanwhile(repo, tmp_path) -> None:
     entry = curated(repo / "shop" / "memory", "Lesson")
     pushed(repo, "a curated entry")

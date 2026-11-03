@@ -576,7 +576,7 @@ def test_an_unset_purge_age_disables_the_removal_and_says_why_with_a_link_to_the
         expect(deleted.locator(".entry")).to_have_count(1)
         button = deleted.get_by_role("button", name=f"Remove old deleted entries from {store.name}")
         expect(button).to_be_disabled()
-        expect(deleted).to_contain_text("the purge age is unset")
+        expect(deleted).to_contain_text("purge age is unset")
         expect(deleted.get_by_role("link", name="Set the purge age")).to_have_attribute(
             "href", "/config?layer=global#memory"
         )
