@@ -494,7 +494,7 @@ def test_a_replay_judge_left_running_stops_the_replay_before_another_starts(repo
     assert len(started) == 1
 
 
-def test_an_unverified_session_end_says_its_problems_whole(repo, tmp_path, whole_error) -> None:
+def test_an_unverified_session_end_says_its_problems_whole(caplog, repo, tmp_path, whole_error) -> None:
     store = Store.open(repo)
     (shot := tmp_path / "s.png").write_bytes(b"png")
     shots = {"after-home-1280.png": shot, "before-home-1280.png": shot}
@@ -518,6 +518,8 @@ def test_an_unverified_session_end_says_its_problems_whole(repo, tmp_path, whole
     why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
     said = f"the replay judge {started[0]} may still be running; stop it before replaying again; {why}"
     assert (answer.status_code, answer.json()) == (409, {"detail": said})
+    logged = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == pack_routes.__name__]
+    assert logged == [("WARNING", f"calibration replay refused: {said}")]
 
 
 def test_a_replay_worktree_git_refuses_stops_the_replay_stage_with_gits_whole_words(repo, monkeypatch, whole_error):

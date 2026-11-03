@@ -7,6 +7,7 @@ beside it, each role's use of built-in subagents (TD-376).
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import subprocess
 from datetime import UTC, datetime
@@ -25,6 +26,7 @@ from owlbear_delivery_next.project_host import curation_routes, maintenance_rout
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.state_store import curation_runs
 
+_log = logging.getLogger(__name__)
 EARLIEST = datetime.min.replace(tzinfo=UTC)
 OLD = "/design-pack"  # the routes' prefix before the Impeccable rename
 REPLAY_FAILURES = (
@@ -273,9 +275,11 @@ def _replay(
         except pack_job.Busy as exc:
             raise HTTPException(409, str(exc)) from exc
         except pack_replay.ReplayError as exc:
+            _log.warning("calibration replay refused: %s", exc)  # the host's log, beside the answer the CLI prints
             raise HTTPException(409, str(exc)) from exc
         except REPLAY_FAILURES as exc:
-            raise HTTPException(422, failure(exc)) from exc
+            _log.warning("calibration replay failed: %s", said := failure(exc))
+            raise HTTPException(422, said) from exc
         return {"ok": r.ok, "report": f"calibration replay: {pack_candidate.said_replay(r)}"}
 
 

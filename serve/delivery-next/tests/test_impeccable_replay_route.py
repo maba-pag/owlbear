@@ -100,7 +100,7 @@ def test_a_failed_replay_is_refused_with_its_reason_and_releases_the_job(error, 
 
 
 @pytest.mark.parametrize("fails", ["noted", "command"])
-def test_a_replay_that_fails_answers_its_whole_error(whole_error, fails) -> None:
+def test_a_replay_that_fails_answers_and_logs_its_whole_error(caplog, whole_error, fails) -> None:
     if fails == "noted":
         broke = OSError(whole_error)
         broke.add_note(f"the session's teardown also failed: OSError: {whole_error}")  # as loop_owner.run adds it
@@ -117,6 +117,8 @@ def test_a_replay_that_fails_answers_its_whole_error(whole_error, fails) -> None
     http, _job = client(replay)
     answer = http.post("/impeccable/replay")
     assert (answer.status_code, answer.json()) == (422, {"detail": said})
+    logged = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == pack_routes.__name__]
+    assert logged == [("WARNING", f"calibration replay failed: {said}")]
 
 
 def legacy_host(tmp_path, state, *, updater_dir):
