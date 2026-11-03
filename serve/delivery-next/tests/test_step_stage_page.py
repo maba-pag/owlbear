@@ -54,6 +54,7 @@ def served(store: Store) -> tuple[uvicorn.Server, str]:
 
 
 @pytest.mark.browser
+@pytest.mark.timeout(120)  # a journey through 13 polled stages; it took 29 s alone and timed out on a loaded laptop
 def test_the_shown_stage_follows_a_builders_and_a_reviewers_events(tmp_path, pds) -> None:
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
