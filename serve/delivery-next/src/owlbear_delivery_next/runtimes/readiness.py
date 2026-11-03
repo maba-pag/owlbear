@@ -78,6 +78,9 @@ def _github(host: str, probe: Probe, writer: Writer) -> list[Check]:
         access = writer.access()
     except AccountMissing as exc:
         return [*out, Check("github sign-in", ok=False, detail=str(exc), fix=SIGN_IN.format(host=host))]
+    except StoreError as exc:  # the settings that name the account can't be read
+        fix = "Repair the settings file the error names, then run setup again"
+        return [*out, Check("github sign-in", ok=False, detail=str(exc), fix=fix)]
     rule = "; the GitHub account setting is unset, so TD-402's rule picked it" if writer.unset else ""
     out.append(Check("github sign-in", ok=True, detail=f"writes as {access.login or '-'} ({access.why}){rule}"))
     code, text = probe(["gh", "repo", "view", "--json", "nameWithOwner,viewerPermission"], access.environment())

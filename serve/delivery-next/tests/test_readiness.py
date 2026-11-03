@@ -37,11 +37,11 @@ SIGNED = SimpleNamespace(
 )
 
 
-def missing(reason: str) -> SimpleNamespace:
-    """A writer whose account ``gh`` lacks: *reason* is AccountMissing's whole text."""
+def missing(reason: str, error: type[Exception] = AccountMissing) -> SimpleNamespace:
+    """A writer whose account can't be had: *reason* is *error*'s whole text."""
 
     def access() -> Access:
-        raise AccountMissing(reason)
+        raise error(reason)
 
     return SimpleNamespace(access=access, unset=False)
 
@@ -75,8 +75,9 @@ def test_a_failed_command_s_whole_output_is_its_check_s_detail(table, name, deta
     assert failed(filled) == [(name, detail.format(W=whole_error))]
 
 
-def test_an_account_gh_lacks_keeps_its_whole_reason_as_the_sign_in_detail(whole_error):
-    assert failed({}, missing(whole_error)) == [("github sign-in", str(AccountMissing(whole_error)))]
+@pytest.mark.parametrize("error", [AccountMissing, StoreError])  # gh lacks it; the settings naming it can't be read
+def test_an_account_that_can_t_be_had_keeps_its_whole_reason_as_the_sign_in_detail(whole_error, error):
+    assert failed({}, missing(whole_error, error)) == [("github sign-in", str(error(whole_error)))]
 
 
 def test_an_unreached_host_s_whole_error_and_type_are_the_network_check_s_detail(monkeypatch, whole_error):
