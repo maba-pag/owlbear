@@ -23,7 +23,6 @@ from owlbear_delivery_next.project_host.host import HostRecord
 
 URL, TOKEN = "http://127.0.0.1:4321/", "t"  # the host's address and token
 WHOLE = {"key": "looking", "label": "", "state": "done", "started_at": None, "ended_at": None, "line": ""}  # a step
-RAW = "error: Failed to download `numpy==9.9`\n  Caused by: uv's own words"  # what uv says; never a step's line
 
 
 class FakeStandby:
@@ -96,15 +95,16 @@ def test_a_successful_update_reports_each_step_with_its_times_and_line_and_keeps
     assert oct((local_home.root() / update_steps.RECORD).stat().st_mode & 0o777) == "0o600"
 
 
-def test_a_failed_selfcheck_fails_its_step_with_its_last_line_and_nothing_after_it_starts(stepping):
-    stepping.check = "checking the store\nits store has format 9, newer than this version's 7"
+def test_a_failed_selfcheck_fails_its_step_with_its_whole_failure_and_nothing_after_it_starts(stepping, whole_error):
+    stepping.check = whole_error
     m = stepping.machine
 
     m.updater._update()  # noqa: SLF001
 
     report = m.updater.report()
     selfcheck = next(s for s in report["steps"] if s["key"] == "selfcheck")
-    assert (selfcheck["state"], selfcheck["line"]) == ("failed", "its store has format 9, newer than this version's 7")
+    assert (selfcheck["state"], selfcheck["line"]) == ("failed", whole_error)
+    assert {"step": "selfcheck", "line": whole_error} in [{"step": e["step"], "line": e["line"]} for e in report["log"]]
     assert selfcheck["ended_at"]
     later = dict.fromkeys(("impeccable", "waiting", "standby", "health", "switching", "handover"), "pending")
     assert states(report) == {"looking": "done", "getting": "done", "building": "done", "selfcheck": "failed"} | later
@@ -112,8 +112,8 @@ def test_a_failed_selfcheck_fails_its_step_with_its_last_line_and_nothing_after_
     assert stepping.activated == []
 
 
-def test_a_failed_pack_install_fails_installing_its_impeccable(stepping):
-    stepping.pack = "downloading the bundle\ncannot download the bundle"
+def test_a_failed_pack_install_fails_installing_its_impeccable_with_its_whole_failure(stepping, whole_error):
+    stepping.pack = whole_error
     m = stepping.machine
 
     m.updater._update()  # noqa: SLF001
@@ -121,21 +121,23 @@ def test_a_failed_pack_install_fails_installing_its_impeccable(stepping):
     report = m.updater.report()
     assert states(report)["selfcheck"] == "done"
     pack = next(s for s in report["steps"] if s["key"] == "impeccable")
-    assert (pack["state"], pack["line"]) == ("failed", "cannot download the bundle")
+    assert (pack["state"], pack["line"]) == ("failed", whole_error)
     assert states(report)["waiting"] == "pending"
     assert m.impeccable.read()["install"]["state"] == "failed"  # every page still offers Install
 
 
-def test_a_failed_environment_says_so_without_uvs_raw_output(stepping):
-    stepping.sync = RAW
+def test_a_failed_environment_fails_building_with_uvs_whole_output(stepping, whole_error):
+    stepping.sync = whole_error
     m = stepping.machine
 
     m.updater._update()  # noqa: SLF001
 
     report = m.updater.report()
-    assert states(report)["building"] == "failed"
-    assert RAW.splitlines()[0] not in json.dumps(report["steps"] + report["log"])
-    assert "numpy" in report["detail"]  # the phase's detail, unchanged, still names it
+    said = f"its environment could not be made: {whole_error}"
+    building = next(s for s in report["steps"] if s["key"] == "building")
+    assert (building["state"], building["line"]) == ("failed", said)
+    assert {"step": "building", "line": said} in [{"step": e["step"], "line": e["line"]} for e in report["log"]]
+    assert report["detail"] == said
 
 
 def test_waiting_for_running_steps_is_its_own_step_and_the_log_keeps_each_line_once(stepping):

@@ -20,6 +20,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
+from owlbear_delivery_next.git.command_failure import failed, failure
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, leases, local_home
 from owlbear_delivery_next.state_store import machine_settings, registry
 
@@ -118,11 +119,8 @@ def _git(*args: str, cwd: Path | None = None, timeout: float = FETCH) -> str:
             [shutil.which("git") or "git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=True,
             timeout=timeout,
         )  # fmt: skip
-    except subprocess.CalledProcessError as exc:
-        msg = f"git {verb} failed: {(exc.stderr or exc.stdout).strip()[:400]}"
-        raise VersionError(msg) from exc
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        msg = f"git {verb} failed: {exc}"
+    except (OSError, subprocess.SubprocessError) as exc:
+        msg = f"git {verb} failed: {failure(exc)}"
         raise VersionError(msg) from exc
     return done.stdout.strip()
 
@@ -205,8 +203,8 @@ def install(choice: Choice, report: Report = _quiet) -> Path:
     """Install *choice* beside the others with its own environment, check it and install its pack; its folder.
 
     A failure removes what it made, except a failed pack: the version stays so only its pack is tried again.
-    *report* hears each step's state and its line (an update's progress); a failed step's line is never a tool's
-    raw output.
+    *report* hears each step's state and its line (an update's progress); a failed step's line is its whole failure,
+    a tool's output included.
 
     Raises:
         VersionError: Too little free disk, or its worktree, environment or selfcheck failed.
@@ -259,8 +257,8 @@ def _build(choice: Choice, folder: Path, report: Report) -> None:
     report("building", "running", "uv sync --locked")
     try:
         _sync(folder)
-    except VersionError:
-        report("building", "failed", "its environment could not be made; the host log says why")
+    except VersionError as exc:
+        report("building", "failed", str(exc))
         raise
     report("building", "done", "its environment is in place")
     _checked(choice, folder, report)
@@ -304,16 +302,13 @@ def _sync(folder: Path) -> None:
         subprocess.run(  # noqa: S603 - uv and fixed arguments
             command, cwd=folder, env=env, capture_output=True, text=True, check=True, timeout=SYNC
         )
-    except subprocess.CalledProcessError as exc:
-        msg = f"its environment could not be made: {(exc.stderr or exc.stdout).strip()[-400:]}"
-        raise VersionError(msg) from exc
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        msg = f"its environment could not be made: {exc}"
+    except (OSError, subprocess.SubprocessError) as exc:
+        msg = f"its environment could not be made: {failure(exc)}"
         raise VersionError(msg) from exc
 
 
 def selfcheck(folder: Path) -> str:
-    """Run the version's own ``selfcheck`` with its own interpreter; empty when it passed, else what failed."""
+    """Run the version's own ``selfcheck`` with its own interpreter; empty when it passed, else its whole failure."""
     python = folder / ".venv" / "bin" / "python"
     try:
         done = subprocess.run(  # noqa: S603 - the version's own interpreter and a fixed module
@@ -321,8 +316,8 @@ def selfcheck(folder: Path) -> str:
             check=False, timeout=CHECK,
         )  # fmt: skip
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return f"it could not run: {exc}"
-    return "" if done.returncode == 0 else (done.stdout + done.stderr).strip()[-600:] or f"exit {done.returncode}"
+        return f"it could not run: {failure(exc)}"
+    return "" if done.returncode == 0 else failed(done)
 
 
 def pack(folder: Path) -> str:
@@ -334,8 +329,8 @@ def pack(folder: Path) -> str:
             capture_output=True, text=True, check=False, timeout=PACK,
         )  # fmt: skip
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return f"it could not run: {exc}"
-    return "" if done.returncode == 0 else (done.stdout + done.stderr).strip()[-600:] or f"exit {done.returncode}"
+        return f"it could not run: {failure(exc)}"
+    return "" if done.returncode == 0 else failed(done)
 
 
 def pins(commit: str) -> dict[str, Any]:
@@ -348,7 +343,7 @@ def pins(commit: str) -> dict[str, Any]:
     try:
         found = json.loads(text)
     except ValueError as exc:
-        msg = f"{name} at {commit[:12]} is no JSON: {exc}"
+        msg = f"{name} at {commit[:12]} is no JSON: {failure(exc)}"
         raise VersionError(msg) from exc
     if not isinstance(found, dict) or not isinstance(found.get("pack"), str):
         msg = f"{name} at {commit[:12]} names no Impeccable pack"

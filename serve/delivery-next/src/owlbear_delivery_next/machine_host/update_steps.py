@@ -1,10 +1,10 @@
 """An OwlBear update's ten steps as the pages show them, kept across the switch (D-01M63CCHPB2W34NM7K9NHEXFY3).
 
-Each step has a state, its start and end time and its line; a capped log keeps the lines in the order they came,
-written by OwlBear itself, never a tool's raw output. The current update's steps live in
-``~/.owlbear/update-steps.json``, rewritten on every change and overwritten by the next update: no history. The
-version that takes over reads the record its old host wrote for it and adds its own last step; with no such record it
-shows its own step alone.
+Each step has a state, its start and end time and its line; a capped log keeps the lines in the order they came. A
+line is OwlBear's own words on one line, except a failed step's: its whole failure, a tool's output included. The
+current update's steps live in ``~/.owlbear/update-steps.json``, rewritten on every change and overwritten by the next
+update: no history. The version that takes over reads the record its old host wrote for it and adds its own last
+step; with no such record it shows its own step alone.
 """
 
 from __future__ import annotations
@@ -79,14 +79,14 @@ class Steps:
         A step started again resets the ones after it.
         """
         with self.lock:
-            self._mark(key, state, line_of(line))
+            self._mark(key, state, line)
             self._write()
 
     def end(self, state: str, line: str) -> None:
         """The update ended: each running step takes *state* and *line*."""
         with self.lock:
             for step in [s for s in self.steps if s["state"] == "running"]:
-                self._mark(step["key"], state, line_of(line))
+                self._mark(step["key"], state, line)
             self._write()
 
     def read(self) -> dict[str, Any]:
@@ -106,11 +106,11 @@ class Steps:
             else:
                 self.steps, self.log = [], []
             self.version = version
-            self._mark("handover", state, line_of(line))
+            self._mark("handover", state, line)
             self._write()
 
-    def _mark(self, key: str, state: str, line: str) -> None:
-        at = _now()
+    def _mark(self, key: str, state: str, text: str) -> None:
+        at, line = _now(), text if state == "failed" else line_of(text)
         step = next((s for s in self.steps if s["key"] == key), None)
         if step is None:  # a step this host has no record of: its own, alone
             step = {"key": key, "label": LABELS[key], "state": "pending", "started_at": None, "ended_at": None,

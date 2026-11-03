@@ -11,6 +11,7 @@ import subprocess
 import sys
 import threading
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,8 +20,10 @@ import pytest
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home
 from owlbear_delivery_next.machine_host import environment, impeccable, selfcheck, update_checks, versions
+from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host import pages
+from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
 from owlbear_delivery_next.state_store import project_home, registry
 from owlbear_delivery_next.state_store.database import STORE_FORMAT
@@ -224,6 +227,125 @@ def test_a_version_whose_pack_fails_is_kept_unready_and_only_its_pack_is_tried_a
     (local_home.root() / "pack-exit").write_text("0")
     assert versions.install(Choice("v0.2", commit)) == local_home.root() / local_home.VERSIONS / "v0.2"
     assert (len(installing.synced), len(installing.packs())) == (1, 2)
+
+
+OUT = "OUT begins\nwhat the command printed on stdout, in the middle\nOUT ends"
+URL, TOKEN = "http://127.0.0.1:4321/", "t"  # the host's address and token
+FAILING = {  # a command of an update that fails: the step it fails, and what the update says before that step's line
+    "sync": ("building", ""),
+    "selfcheck": ("selfcheck", "v0.2 failed its selfcheck: "),
+    "design-pack": ("impeccable", "v0.2's Impeccable could not be installed: "),
+}
+
+
+@pytest.fixture
+def updating(origin, monkeypatch) -> SimpleNamespace:
+    """A machine at v0.1 updating to v0.2 through the real versions and install; ``said`` is its host log."""
+    runtime_at(origin, git(origin, "rev-parse", "v0.1^{commit}"))
+    record = HostRecord(url=URL, token=TOKEN, pid=1, started_at=datetime.now(UTC), code="c")
+    machine, said = Machine(record, paused=False), []
+    monkeypatch.setattr(machine, "say", said.append)
+    return SimpleNamespace(machine=machine, said=said)
+
+
+def ended(machine: Machine, step: str) -> tuple[str, str, list[str]]:
+    """The update's detail, *step*'s line and the lines the update's log has for it."""
+    report = machine.updater.report()
+    line = next(s["line"] for s in report["steps"] if s["key"] == step)
+    return report["detail"], line, [e["line"] for e in report["log"] if e["step"] == step]
+
+
+def streams(head: str, stderr: str) -> str:
+    """A failed command's whole text: its head, then what it printed on stderr and on stdout."""
+    return f"{head}\nstderr:\n{stderr}\nstdout:\n{OUT}"
+
+
+def test_a_git_verb_failing_while_looking_says_its_whole_stderr_on_the_page_and_in_the_log(updating, whole_error):
+    said = local_home.root() / "said.txt"
+    said.write_text(whole_error + "\n")
+    refusing = local_home.root() / "upload-pack"
+    refusing.write_text(f"#!/bin/sh\ncat {said} >&2\nexit 1\n")
+    refusing.chmod(0o755)
+    git(versions.repo(), "config", "remote.origin.uploadpack", str(refusing))
+
+    updating.machine.updater._update()  # noqa: SLF001 - the thread's work, run here
+
+    detail, line, logged = ended(updating.machine, "looking")
+    lead = "the versions could not be read: git fetch failed: CalledProcessError: Command '["
+    assert detail.startswith(lead)
+    assert f"' returned non-zero exit status 128.\n{whole_error}\n" in detail
+    assert (line, logged[-1]) == (detail, detail)
+    assert f"update: failed: {detail}" in updating.said
+
+
+@pytest.mark.parametrize("word", FAILING)
+def test_a_failing_build_step_says_both_its_streams_whole_on_the_page_and_in_the_log(
+    updating, word, whole_error, tmp_path, monkeypatch
+):
+    """uv, the version's selfcheck and its pack install, each failing with output on stdout and stderr."""
+    (tmp_path / "out").write_text(OUT)
+    (tmp_path / "err").write_text(whole_error)
+    tool = tmp_path / "bin" / "uv"  # uv, and the interpreter it makes
+    tool.parent.mkdir()
+    failing = f'case " $* " in *" {word} "*) cat {tmp_path}/out; cat {tmp_path}/err >&2; exit 3;; esac'
+    tool.write_text(f"#!/bin/sh\nmkdir -p .venv/bin && cp {tool} .venv/bin/python\n{failing}\n")
+    tool.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tool.parent}{os.pathsep}{os.environ['PATH']}")
+    python = str(local_home.root() / local_home.VERSIONS / "v0.2" / ".venv" / "bin" / "python")
+    command = {"sync": [str(tool), "sync", "--locked", "--quiet"],
+               "selfcheck": [python, "-m", "owlbear_delivery_next", "selfcheck"],
+               "design-pack": [python, "-m", "owlbear_delivery_next", "design-pack", "--install"]}[word]  # fmt: skip
+    step, lead = FAILING[word]
+    whole = streams(f"CalledProcessError: Command '{command}' returned non-zero exit status 3.", whole_error)
+    if word == "sync":
+        whole = f"its environment could not be made: {whole}"
+
+    updating.machine.updater._update()  # noqa: SLF001
+
+    detail, line, logged = ended(updating.machine, step)
+    assert (detail, line, logged[-1]) == (lead + whole, whole, whole)
+    assert f"update: failed v0.2: {detail}" in updating.said
+    if word == "design-pack":
+        assert updating.machine.impeccable.read()["install"]["detail"] == detail  # every page's banner
+
+
+@pytest.mark.parametrize("word", ["--detach", *FAILING])  # --detach: git worktree add
+def test_a_command_of_an_update_timing_out_says_what_it_printed_whole(updating, word, whole_error, monkeypatch):
+    run, which, seen = subprocess.run, shutil.which, []
+
+    def timing_out(command: list[str], *args: object, **kwargs: object) -> subprocess.CompletedProcess:
+        if word in command:
+            seen.append((command, kwargs["timeout"]))
+            raise subprocess.TimeoutExpired(command, kwargs["timeout"], OUT.encode(), whole_error.encode())
+        if Path(command[0]).name != "git":  # uv and the version's interpreter pass
+            return subprocess.CompletedProcess(command, 0, "", "")
+        return run(command, *args, **kwargs)
+
+    monkeypatch.setattr(versions.subprocess, "run", timing_out)
+    monkeypatch.setattr(versions.shutil, "which", lambda name: f"/bin/{name}" if name == "uv" else which(name))
+    step, lead = FAILING.get(word, ("getting", ""))
+
+    updating.machine.updater._update()  # noqa: SLF001
+
+    [(command, seconds)] = seen
+    whole = streams(f"TimeoutExpired: Command '{command}' timed out after {seconds} seconds", whole_error)
+    whole = {"--detach": f"git worktree failed: {whole}", "sync": f"its environment could not be made: {whole}"}.get(
+        word, f"it could not run: {whole}"
+    )
+    detail, line, logged = ended(updating.machine, step)
+    assert (detail, line, logged[-1]) == (lead + whole, whole, whole)
+    assert f"update: failed v0.2: {detail}" in updating.said
+
+
+def test_a_release_whose_manifest_is_no_json_says_the_parsers_whole_error(origin):
+    commit = released(origin, "v0.3", "{not json")
+    versions.fetch(versions.repo())
+
+    with pytest.raises(versions.VersionError) as raised:
+        versions.pins(commit)
+
+    expected = "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+    assert str(raised.value) == f"{versions.MANIFEST} at {commit[:12]} is no JSON: JSONDecodeError: {expected}"
 
 
 def at_v0_2(origin: Path) -> Path:
