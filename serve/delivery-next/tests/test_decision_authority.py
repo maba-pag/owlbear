@@ -158,6 +158,13 @@ def test_pinned_authority_rejects_unreadable_layer_containers(authority, rel, da
     assert bool(refused) is (not rel.startswith("other/"))
 
 
+@pytest.mark.parametrize(("setting", "value"), [("color.grep", "always"), ("grep.column", "true")])
+def test_pinned_authority_is_independent_of_git_presentation_settings(authority, setting, value):
+    repo, _rule, path = authority
+    assert repo.git("config", setting, value).returncode == 0
+    assert decision_authority.inactive(repo, "HEAD", path.relative_to(repo.root).as_posix(), None) == ""
+
+
 def test_pinned_pending_read_back_is_not_completion_authority(authority):
     repo, rule, path = authority
     pending = rule.model_copy(
