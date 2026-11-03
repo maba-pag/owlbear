@@ -19,6 +19,7 @@ from owlbear_delivery_next.change_flow import brief_tools
 from owlbear_delivery_next.commands.chat_client import Chat, Closed, workspace
 from owlbear_delivery_next.commands.mcp_launch import serve_stdio
 from owlbear_delivery_next.project_host import answers
+from owlbear_delivery_next.workflow_steps import lookup
 
 _STATE: dict[str, Chat | Closed] = {}
 ASKED = Field(min_length=1, max_length=1000, description="What you need to decide; a reply with failed is no answer")
@@ -140,7 +141,7 @@ def find_decisions(
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=False, destructive_hint=False))
 def lookup_decisions(question: Annotated[str, ASKED]) -> dict[str, Any]:
     """Ask which decisions govern a question; the picker answers in about a minute, a failure says `failed`."""
-    return _STATE["chat"].lookup_decisions(question)
+    return lookup.agent_reply(_STATE["chat"].lookup_decisions(question))
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
