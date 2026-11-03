@@ -433,6 +433,9 @@ _RUN = subprocess.run  # templates are built once per worker: a test's patched s
 _CHANGE_ENV = {"GIT_CONFIG_NOSYSTEM": "1"} | {
     f"GIT_{who}_{key}": value for who in ("AUTHOR", "COMMITTER") for key, value in (("NAME", "t"), ("EMAIL", "t@t"))
 }
+# #917: a commit or a push starts Git's maintenance in the background, and a copy made meanwhile can list its
+# objects/maintenance.lock and then find it gone. Each template repository turns it off in its own config.
+_NO_MAINTENANCE = (("maintenance.auto", "false"), ("gc.auto", "0"))
 
 
 def _template_git(cwd: Path, *args: str, env: dict[str, str], home: Path) -> None:
@@ -483,8 +486,11 @@ def _shared_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
     remote, root, url = base / "remote.git", base / "owlbear-data", "https://github.com/acme/owlbear-data.git"
     env, home = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}, tmp_path_factory.mktemp("home")
     _template_git(base, "init", "-q", "--bare", "-b", "main", str(remote), env=env, home=home)
+    for key, value in _NO_MAINTENANCE:  # its own config: the push's receive-pack doesn't get the pusher's
+        _template_git(base, "config", "--file", str(remote / "config"), key, value, env=env, home=home)
     _template_git(base, "clone", "-q", str(remote), str(root), env=env, home=home)
-    for key, value in (("user.name", "t"), ("user.email", "t@example.com"), (f"url.{remote}.insteadOf", url)):
+    settings = (("user.name", "t"), ("user.email", "t@example.com"), (f"url.{remote}.insteadOf", url), *_NO_MAINTENANCE)
+    for key, value in settings:
         _template_git(root, "config", key, value, env=env, home=home)
     _template_git(root, "remote", "set-url", "origin", url, env=env, home=home)
     _template_git(root, "commit", "-q", "--allow-empty", "-m", "start", env=env, home=home)
@@ -535,8 +541,10 @@ def _change_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
     env, work, home = _CHANGE_ENV | {"GIT_CONFIG_GLOBAL": str(base / "gitconfig")}, base / "work", base / "home"
     work.mkdir()
     home.mkdir()
-    for args in (("init", "-q", "-b", "main"), ("commit", "-q", "--allow-empty", "-m", "base")):
-        _template_git(work, *args, env=env, home=home)
+    _template_git(work, "init", "-q", "-b", "main", env=env, home=home)
+    for key, value in _NO_MAINTENANCE:
+        _template_git(work, "config", key, value, env=env, home=home)
+    _template_git(work, "commit", "-q", "--allow-empty", "-m", "base", env=env, home=home)
     (work / "a.txt").write_text("a\n")
     for args in (("checkout", "-q", "-b", "owlbear/c1"), ("add", "-A"), ("commit", "-qm", "a")):
         _template_git(work, *args, env=env, home=home)
