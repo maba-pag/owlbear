@@ -89,7 +89,7 @@ def _replay(
     with scratch("owlbear-replay-", keep) as tmp:
         code, text = git_files.probe_in(Path(tmp))(["git", "init", "-q"])  # the window places its files only in a repo
         if code:
-            msg = f"the replay's worktree could not be made a git repository: {text or f'exit {code}'}"
+            msg = f"the replay's worktree could not be made a git repository: {text}"
             raise pack_files.PackError(msg)
         base = sdk_adapter.Session(
             kind=StepKind.REVIEW, worktree=Path(tmp), session_id="", message="", resume=False,

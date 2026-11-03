@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.git.command_failure import failed, failure
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -16,14 +16,14 @@ type Probe = Callable[[list[str]], tuple[int, str]]
 
 
 def probe_in(cwd: Path) -> Probe:
-    """Run one command in *cwd*, bounded; a missing program is exit 127."""
+    """Run one command in *cwd*, bounded: what it printed, or its whole failure; a missing program is exit 127."""
 
     def run(argv: list[str]) -> tuple[int, str]:
         try:
             done = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=30, check=False)  # noqa: S603
         except (OSError, subprocess.TimeoutExpired) as exc:
             return 127, failure(exc)
-        return done.returncode, (done.stdout + done.stderr).strip()
+        return done.returncode, failed(done) if done.returncode else (done.stdout + done.stderr).strip()
 
     return run
 

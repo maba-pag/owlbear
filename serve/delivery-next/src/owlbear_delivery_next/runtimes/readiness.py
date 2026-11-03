@@ -64,15 +64,14 @@ def _network(host: str, error: str | None) -> Check:
 
 
 def _sign_in_failure(host: str, text: str) -> Check:
-    """The failed account's lines of ``gh auth status``, not the last account it lists; a bad GH_TOKEN is named."""
+    """``gh auth status``'s whole failure; a bad GH_TOKEN in the failed account's lines, not another's, is named."""
     lines = [ln.strip() for ln in text.splitlines()]
     start = next((i for i, ln in enumerate(lines) if ln.startswith("X ")), len(lines))
     end = next((i for i in range(start, len(lines)) if not lines[i]), len(lines))
-    detail = "\n".join(lines[start:end]) or text.strip()
     fix = f"Run `gh auth login --hostname {host}`"
-    if "GH_TOKEN" in detail:
+    if "GH_TOKEN" in "\n".join(lines[start:end] or lines):
         fix = f"Unset GH_TOKEN or set a valid token, then restart Delivery; or run `gh auth login --hostname {host}`"
-    return Check("github sign-in", ok=False, detail=detail, fix=fix)
+    return Check("github sign-in", ok=False, detail=text.strip(), fix=fix)
 
 
 def _github(host: str, probe: Probe) -> list[Check]:
@@ -115,11 +114,17 @@ def _ssh(key: str, probe: Probe) -> Check:
     )
 
 
+def _config(probe: Probe, *key: str) -> str:
+    """A git setting's value; an unset one, which git answers with exit 1, is empty."""
+    code, text = probe(["git", "config", *key])
+    return "" if code else text.strip()
+
+
 def _signing(probe: Probe) -> Check:
-    if probe(["git", "config", "--bool", "commit.gpgsign"])[1].strip() != "true":
+    if _config(probe, "--bool", "commit.gpgsign") != "true":
         return Check("commit signing", ok=True, detail="not required")
-    fmt = probe(["git", "config", "gpg.format"])[1].strip() or "openpgp"
-    key = probe(["git", "config", "user.signingkey"])[1].strip()
+    fmt = _config(probe, "gpg.format") or "openpgp"
+    key = _config(probe, "user.signingkey")
     if not key:
         return Check(
             "commit signing", ok=False, detail=f"{fmt} required, no key", fix="Set `git config user.signingkey`"

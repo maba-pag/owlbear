@@ -45,7 +45,7 @@ def failed(table: dict[str, tuple[int, str]]) -> list[tuple[str, str]]:
         pytest.param(
             {AUTH: (1, "github.com\n  X Failed to log in\n{W}\n\n  ✓ Logged in to github.com account ada")},
             "github sign-in",
-            "X Failed to log in\n{W}",
+            "github.com\n  X Failed to log in\n{W}\n\n  ✓ Logged in to github.com account ada",
             id="sign-in-account",
         ),
         pytest.param({AUTH: (1, "{W}\n")}, "github sign-in", "{W}", id="sign-in-no-account"),
@@ -89,21 +89,30 @@ def test_a_timed_out_probe_keeps_both_streams_in_its_check_s_detail(tmp_path, mo
     assert (gh.name, gh.detail) == ("github cli", said)
 
 
+def test_a_probe_that_exits_non_zero_names_its_command_status_and_both_streams(tmp_path, monkeypatch, whole_error):
+    def refused(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess:
+        code = 1 if argv[:2] == ["gh", "auth"] else 0
+        return subprocess.CompletedProcess(argv, code, OUT, whole_error if code else "")
+
+    monkeypatch.setattr(git_files.subprocess, "run", refused)
+    [sign_in] = [c for c in readiness.publishing("github.com", git_files.probe_in(tmp_path), None) if not c.ok]
+    command = f"CalledProcessError: Command '{['gh', 'auth', 'status', '--hostname', 'github.com']}'"
+    said = f"{command} returned non-zero exit status 1.\nstderr:\n{whole_error}\nstdout:\n{OUT}"
+    assert (sign_in.name, sign_in.detail) == ("github sign-in", said)
+
+
 @pytest.mark.parametrize("step", ["detection", "legacy"])
 def test_a_failed_detection_or_legacy_import_names_its_error_s_type(tmp_path, monkeypatch, whole_error, step):
-    def raised(exc: type[Exception]) -> object:
-        def raise_it(*_args: object) -> None:
-            raise exc(whole_error)
-
-        return raise_it
+    def raised(*_args: object) -> None:
+        raise (StoreError if step == "detection" else DataRepoError)(whole_error)
 
     monkeypatch.setattr(readiness, "check", lambda *_args: [])
     if step == "detection":
-        monkeypatch.setattr(profile_share, "checked", raised(StoreError))
+        monkeypatch.setattr(profile_share, "checked", raised)
         said = ("profile detection", f"StoreError: {whole_error}")
     else:
         monkeypatch.setattr(profile_share, "checked", lambda *_args: Profile())
-        monkeypatch.setattr(prefs_import, "run", raised(DataRepoError))
+        monkeypatch.setattr(prefs_import, "run", raised)
         said = ("legacy preferences", f"DataRepoError: {whole_error}")
     assert [(c.name, c.detail) for c in readiness.ready(Store(tmp_path / "s"), tmp_path, carry=True)] == [said]
 
