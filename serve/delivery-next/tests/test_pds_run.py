@@ -23,7 +23,7 @@ from owlbear_delivery_next.impeccable_runs import machine_lock, pack_job, pack_r
 from owlbear_delivery_next.impeccable_runs.pack_state import MACHINE_LOCK
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.pds_runs import audit, browser, pin, sessions, tree
+from owlbear_delivery_next.pds_runs import audit, audit_markdown, browser, pin, sessions, tree
 from owlbear_delivery_next.pds_runs import job as pds_job
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import pds_run_record
@@ -46,14 +46,16 @@ AUDITED = _sibling("test_pds_audit")  # a report the release's schema accepts
 git, GITHUB_URL = PACK.git, PACK.GITHUB_URL
 OLD, NEW = "4.9.0", "4.10.1"
 DEPRECATIONS = "skills/pds-knowledge-js/references/deprecations.md"
-SCHEMA = {str(audit.SCHEMA): (pin.package() / pin.TREE / audit.SCHEMA).read_bytes()}
+REPORT_FORMAT = {
+    str(path): (pin.package() / pin.TREE / path).read_bytes() for path in (audit.SCHEMA, audit_markdown.TEMPLATE)
+}
 RELEASES = {
-    OLD: PINS.BASE | SCHEMA | {
+    OLD: PINS.BASE | REPORT_FORMAT | {
         "CHANGELOG.md": b"# Changelog\n\n## [4.9.0] - 2026-09-01\n- p-tag gains a variant\n",
         DEPRECATIONS: b"[button](references/components/button.md)\n",
         "meta/old.mjs": b"only the old release has it",
     },
-    NEW: PINS.BASE | SCHEMA | {
+    NEW: PINS.BASE | REPORT_FORMAT | {
         "CHANGELOG.md": b"# Changelog\n\n## [4.10.1] - 2026-10-01\n- p-text: size x-small is deprecated, use xs\n\n"
                         b"## [4.9.0] - 2026-09-01\n- p-tag gains a variant\n",
         DEPRECATIONS: b"[button](references/components/button.md)\n- p-text size x-small: use xs\n",
@@ -133,7 +135,7 @@ class Fakes:
             self.calls.append("audit")
             if self.ending != "result":
                 return Run(cfg.session_id, self.ending, detail="the model stopped", termination=done)
-            said = AuditResult(report=json.dumps(report(cfg.worktree, self.follow_ups)), markdown="# Audit\n")
+            said = AuditResult(report=json.dumps(report(cfg.worktree, self.follow_ups)))
             return Run(cfg.session_id, "result", payload=said, termination=done)
         if cfg.submit is pack_repair.SUBMIT:  # the agent repairing the pull request's CI in a copy of its head
             self.calls.append("repair")

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import jsonschema
 
 from owlbear_delivery_next.change_contracts import audit_tools
-from owlbear_delivery_next.pds_runs import pin
+from owlbear_delivery_next.pds_runs import audit_markdown, pin
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -123,7 +123,8 @@ def message(version: str, ident: str) -> str:
     return (
         f"Audit this project for deprecated Porsche Design System use with the `{SKILL}` skill: PDS {version}, "
         f"{pin.NAME} under node_modules/. The project root is your working folder and `.` is its one package. "
-        f"Use runId {ident}. Submit both reports with submit_result; write no file."
+        f"Use runId {ident}. Submit only the JSON report with submit_result; Delivery renders its Markdown; "
+        "write no file."
     )
 
 
@@ -139,6 +140,10 @@ def audit(
     ident = run_id()
     skills = lay_out(at, web, tree, version)
     schema = json.loads((tree / SCHEMA).read_text(encoding="utf-8"))
+    try:
+        template = audit_markdown.template(tree, schema)
+    except audit_markdown.UnsupportedFormatError as exc:
+        return Audit(Verdict("stop", str(exc)), ident)
     before = digests(at)
     done = session(at, skills, message(version, ident))
     if moved := changed(before, digests(at)):  # first: a changed copy voids whatever the report says
@@ -153,11 +158,12 @@ def audit(
         return Audit(
             Verdict("stop", f"the audit report is not JSON: {type(exc).__name__}: {exc}"),
             ident,
-            markdown=result.markdown,
         )
-    verdict = judge(report, schema=schema, version=version, at=at)
     kept = report if isinstance(report, dict) else None
-    return Audit(verdict, ident, kept, result.report if kept is not None else "", result.markdown)
+    if why := _schema_error(report, schema):
+        return Audit(Verdict("stop", why), ident, kept, result.report if kept is not None else "")
+    verdict = _judge(report, version=version, at=at)
+    return Audit(verdict, ident, report, result.report, audit_markdown.render(report, template))
 
 
 def _unended(done: Run, result: audit_tools.AuditResult | None) -> str:
@@ -171,20 +177,29 @@ def _unended(done: Run, result: audit_tools.AuditResult | None) -> str:
     return ""
 
 
-def judge(report: object, *, schema: dict[str, Any], version: str, at: Path | None = None) -> Verdict:  # noqa: PLR0911
+def judge(report: object, *, schema: dict[str, Any], version: str, at: Path | None = None) -> Verdict:
     """The gate's verdict on *report* from the copy at *at*: every stop first, then findings, follow-ups, a pass."""
+    if why := _schema_error(report, schema):
+        return Verdict("stop", why)
+    assert isinstance(report, dict)  # noqa: S101 - the schema requires an object
+    return _judge(report, version=version, at=at)
+
+
+def _schema_error(report: object, schema: dict[str, Any]) -> str:
     errors = sorted(jsonschema.Draft202012Validator(schema).iter_errors(report), key=lambda e: list(e.absolute_path))
     if errors:
         where = "/".join(str(p) for p in errors[0].absolute_path) or "the report"
-        return Verdict("stop", f"the audit report breaks its schema at {where}: {errors[0].message}")
-    assert isinstance(report, dict)  # noqa: S101 - the schema requires an object
+        return f"the audit report breaks its schema at {where}: {errors[0].message}"
+    return ""
+
+
+def _judge(report: dict[str, Any], *, version: str, at: Path | None) -> Verdict:
     if (result := report["summary"]["result"]) != "completed":
         return Verdict("stop", f"the audit ended {result}: {_gaps(report)}")
     if why := _mismatch(report["audit"], version):
         return Verdict("stop", why)
-    if gaps := _gaps(report):
-        return Verdict("stop", f"the audit disclosed gaps: {gaps}")
-    if why := _scope(report["scope"], at):
+    gaps = _gaps(report)
+    if why := f"the audit disclosed gaps: {gaps}" if gaps else _scope(report["scope"], at):
         return Verdict("stop", why)
     if report["findings"]:
         return Verdict("findings", findings=[f for item in report["findings"] for f in mapped(item, at)])

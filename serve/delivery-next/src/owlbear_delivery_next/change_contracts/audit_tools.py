@@ -1,4 +1,4 @@
-"""The PDS auditor's one Delivery tool (#777): the audit skill's JSON report and its Markdown, which Delivery writes."""
+"""The PDS auditor's one Delivery tool: its JSON report, from which Delivery derives the human Markdown."""
 
 from __future__ import annotations
 
@@ -23,13 +23,10 @@ class AuditResult(tools.Args):
         "The JSON report, serialized: one object valid against the skill's references/report.schema.json",
         '{"schemaVersion": "1.0.0", "...": "..."}',
     )
-    markdown: str = tools.bounded(
-        REPORT, "The Markdown report rendered from that same JSON, as the skill's report template lays it out", "# ..."
-    )
 
 
 SUBMIT = tools.Spec(
-    "submit_result", "Submit both reports once, instead of writing them as files.", AuditResult, "result"
+    "submit_result", "Submit the JSON report once; Delivery writes both reports.", AuditResult, "result"
 )
 
 
