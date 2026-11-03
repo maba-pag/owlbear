@@ -413,18 +413,13 @@ class TestCounterIncrementPath:
         }  # fmt: skip
         assert set(before) == set(after)
 
-    def test_entry_score_follows_the_points_it_is_given(self, tmp_path: Path) -> None:
+    def test_entry_score_follows_the_points_it_is_given(self) -> None:
         """The score is worked out from confidence, the ratings and the points handed in, never from a stored value."""
         from owlbear_memory import Points, entry_score  # noqa: PLC0415
 
-        engine = MemoryEngine(memory_dir=tmp_path)
-        entry = _make_entry(_ID_APPROVED, "approved", confidence=0.8, outstanding_count=1, unremarkable_count=2)
-        _seed_entry(tmp_path, entry)
-        engine.load()
-
-        updated = _record_assessment(engine, _ID_APPROVED, "outstanding")
-        assert entry_score(updated, Points(0.1, 0.01)) == pytest.approx(0.8 + 2 * 0.1 - 2 * 0.01)
-        assert entry_score(updated, Points(0.3, 0.05)) == pytest.approx(0.8 + 2 * 0.3 - 2 * 0.05)
+        entry = _make_entry(_ID_APPROVED, "approved", confidence=0.8, outstanding_count=2, unremarkable_count=2)
+        assert entry_score(entry, Points(0.1, 0.01)) == pytest.approx(0.8 + 2 * 0.1 - 2 * 0.01)
+        assert entry_score(entry, Points(0.3, 0.05)) == pytest.approx(0.8 + 2 * 0.3 - 2 * 0.05)
 
     def test_approved_entry_is_voteable(self, tmp_path: Path) -> None:
         """approved state is a valid voteable state for counter-increment assessment."""

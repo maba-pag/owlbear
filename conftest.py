@@ -44,7 +44,7 @@ TODAYS_MEMORY_VALUES = {
 
 
 @pytest.fixture
-def todays_memory_values(monkeypatch: pytest.MonkeyPatch) -> dict[str, float]:
+def todays_memory_values(monkeypatch: pytest.MonkeyPatch) -> None:
     """Give the memory tools the values they once had in code, for tests of other behaviour than the values.
 
     Tests of the values themselves write a real ``config.json`` and leave this fixture out.
@@ -55,7 +55,6 @@ def todays_memory_values(monkeypatch: pytest.MonkeyPatch) -> dict[str, float]:
         return {name: TODAYS_MEMORY_VALUES[name] for name in names}
 
     monkeypatch.setattr(tools, "_memory_values", values)
-    return dict(TODAYS_MEMORY_VALUES)
 
 
 def pytest_configure(config: pytest.Config) -> None:

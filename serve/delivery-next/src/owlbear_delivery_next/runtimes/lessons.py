@@ -46,36 +46,21 @@ UNREAD = "Delivery could not read them all ({why}): call `recall_memory` with ag
 UNFIT = "None fitted in this message: call `recall_memory` with agent `{role}` before you start."
 OPEN, CLOSE = "```json", "```"
 BREAKS = {"\u0085": "\\u0085", "\u2028": "\\u2028", "\u2029": "\\u2029"}  # line ends JSON leaves unescaped
-PREFLIGHT = (
-    "memory.outstanding_boost",
-    "memory.unremarkable_penalty",
-    "memory.preflight_cap",
-    "memory.preflight_budget",
-)
 
 
-@dataclass(frozen=True)
-class Preflight:
-    """The owner's pre-flight values: what a rating is worth, how many lessons fit, and how many characters."""
+def preflight(memory: Path) -> tuple[Points, int, int]:
+    """What the owner set for the pre-flight recall, read now from the global settings beside *memory*.
 
-    points: Points
-    cap: int
-    budget: int
-
-
-def preflight(memory: Path) -> Preflight:
-    """The owner's pre-flight values, read now from the global settings beside *memory*.
-
-    ``SettingsUnset`` while one is unset; ``StoreError`` when the settings can't be read.
+    The points a rating is worth, the lessons that fit, and the characters they may use. ``SettingsUnset`` while one is
+    unset; ``StoreError`` when the settings can't be read.
     """
     settings = config.resolve(read_layer(memory.parent.parent / CONFIG, config.GlobalLayer), config.Layer())
-    settings.need(*PREFLIGHT)  # a test layer or the owner's global file: code ships no value
-    held = settings.memory
-    return Preflight(
-        Points(cast("float", held.outstanding_boost), cast("float", held.unremarkable_penalty)),
-        cast("int", held.preflight_cap),
-        cast("int", held.preflight_budget),
+    settings.need(  # a test layer or the owner's global file: code ships no value
+        "memory.outstanding_boost", "memory.unremarkable_penalty", "memory.preflight_cap", "memory.preflight_budget"
     )
+    held = settings.memory
+    points = Points(cast("float", held.outstanding_boost), cast("float", held.unremarkable_penalty))
+    return points, cast("int", held.preflight_cap), cast("int", held.preflight_budget)
 
 
 @dataclass(frozen=True)
@@ -140,7 +125,7 @@ def shown(exposure: Exposure | None, session: str, log: Callable[..., None], *, 
 def block(role: str, memory: Path) -> tuple[str, Exposure]:
     """The role's lessons from the project's *memory* folder and Global memory, within the owner's pre-flight budget."""
     try:
-        held = preflight(memory)
+        points, cap, budget = preflight(memory)
     except (
         config.SettingsUnset,
         StoreError,
@@ -155,9 +140,9 @@ def block(role: str, memory: Path) -> tuple[str, Exposure]:
         why = f"{missing} unreadable {'entry' if missing == 1 else 'entries'}"
         return f"{HEADING}\n{UNREAD.format(why=why, role=role)}", Exposure(role, "incomplete", failed=why)
     found = selection.readable(own.entries, common.entries)
-    head, room = [HEADING, FRAME, SHOWN, OPEN], held.budget - len(f"{HEADING}\n{FRAME}\n{SHOWN}\n{OPEN}\n{CLOSE}")
-    ranked = selection.ranked(found, role, held.points)
-    picked = selection.select(ranked, cost=lambda c: len(line(c)) + 1, room=room, cap=held.cap)  # a line ends a newline
+    head, room = [HEADING, FRAME, SHOWN, OPEN], budget - len(f"{HEADING}\n{FRAME}\n{SHOWN}\n{OPEN}\n{CLOSE}")
+    ranked = selection.ranked(found, role, points)
+    picked = selection.select(ranked, cost=lambda c: len(line(c)) + 1, room=room, cap=cap)  # a line ends a newline
     chosen = tuple(_ref(c) for c in picked.chosen)
     omitted = tuple(_ref(s.candidate) | {"reason": s.reason} for s in picked.omitted)
     if chosen:

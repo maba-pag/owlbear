@@ -345,7 +345,9 @@ def test_an_accepted_run_publishes_its_edits_once_and_leaves_pending_and_receipt
     pushed(repo, "curated entries")
     p1, p2 = pending(shop, "To curate"), pending(shop, "Left pending")
     c = MemoryEngine(shop).get_entry(c.id)
-    MemoryEngine(shop).record_assessment(c.id, "outstanding", task_id="task-1", expected_revision=c.revision)
+    MemoryEngine(shop).record_assessment(
+        c.id, "outstanding", task_id="task-1", expected_revision=c.revision, stale_factor=50
+    )
     seed = {p1.id: (repo / rel(p1)).read_bytes(), c.id: (repo / rel(c)).read_bytes()}
     start = bare(remote, "rev-parse", "main").stdout.strip().decode()
     made = {}

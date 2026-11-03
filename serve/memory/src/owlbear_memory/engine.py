@@ -281,8 +281,7 @@ def repair_duplicate_ids(memory_dir: Path | str) -> None:
 
 def compute_score(confidence: float, outstanding_count: int, unremarkable_count: int, points: Points) -> float:
     """An entry's score: its confidence plus what its ratings are worth under *points*."""
-    boost, penalty = outstanding_count * points.outstanding_boost, unremarkable_count * points.unremarkable_penalty
-    return confidence + boost - penalty
+    return confidence + outstanding_count * points.outstanding_boost - unremarkable_count * points.unremarkable_penalty
 
 
 def entry_score(entry: MemoryEntry, points: Points) -> float:

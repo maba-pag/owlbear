@@ -19,6 +19,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from owlbear_memory import Points
+
+POINTS = Points(outstanding_boost=0.1, unremarkable_penalty=0.01)
 
 # ---------------------------------------------------------------------------
 # Shared constants and helpers
@@ -115,12 +118,6 @@ class TestModelFields:
 # ---------------------------------------------------------------------------
 
 
-def _points() -> object:
-    from owlbear_memory import Points
-
-    return Points(outstanding_boost=0.1, unremarkable_penalty=0.01)
-
-
 class TestComputeScore:
     """AC2: compute_score formula and export from owlbear_memory."""
 
@@ -135,14 +132,14 @@ class TestComputeScore:
         from owlbear_memory import compute_score
 
         # 0.8 + (2 * 0.1) - (3 * 0.01) = 0.8 + 0.2 - 0.03 = 0.97
-        result = compute_score(confidence=0.8, outstanding_count=2, unremarkable_count=3, points=_points())
+        result = compute_score(confidence=0.8, outstanding_count=2, unremarkable_count=3, points=POINTS)
         assert result == pytest.approx(0.97)
 
     def test_compute_score_zero_counters_returns_confidence(self) -> None:
         """compute_score with all-zero counters returns confidence unchanged."""
         from owlbear_memory import compute_score
 
-        result = compute_score(confidence=0.9, outstanding_count=0, unremarkable_count=0, points=_points())
+        result = compute_score(confidence=0.9, outstanding_count=0, unremarkable_count=0, points=POINTS)
         assert result == pytest.approx(0.9)
 
     def test_compute_score_outstanding_only(self) -> None:
@@ -150,7 +147,7 @@ class TestComputeScore:
         from owlbear_memory import compute_score
 
         # 0.7 + (1 * 0.1) = 0.8
-        result = compute_score(confidence=0.7, outstanding_count=1, unremarkable_count=0, points=_points())
+        result = compute_score(confidence=0.7, outstanding_count=1, unremarkable_count=0, points=POINTS)
         assert result == pytest.approx(0.8)
 
     def test_compute_score_unremarkable_only(self) -> None:
@@ -158,14 +155,14 @@ class TestComputeScore:
         from owlbear_memory import compute_score
 
         # 0.9 - (5 * 0.01) = 0.9 - 0.05 = 0.85
-        result = compute_score(confidence=0.9, outstanding_count=0, unremarkable_count=5, points=_points())
+        result = compute_score(confidence=0.9, outstanding_count=0, unremarkable_count=5, points=POINTS)
         assert result == pytest.approx(0.85)
 
     def test_compute_score_return_type_is_float(self) -> None:
         """compute_score always returns float."""
         from owlbear_memory import compute_score
 
-        result = compute_score(confidence=0.8, outstanding_count=0, unremarkable_count=0, points=_points())
+        result = compute_score(confidence=0.8, outstanding_count=0, unremarkable_count=0, points=POINTS)
         assert isinstance(result, float)
 
     def test_each_point_value_moves_the_score_on_its_own(self) -> None:
