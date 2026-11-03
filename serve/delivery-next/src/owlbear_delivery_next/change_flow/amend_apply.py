@@ -312,10 +312,10 @@ def void(c: Change, a: Amendment, removed: set[str]) -> None:
     named = set(a.affected)
     checks = {i.key for i in a.items if i.field == "check"} | {n[6:] for n in named if n.startswith("check:")}
     for p in c.checks:
+        p.criteria = [k for k in p.criteria if k not in removed]
         if p.id in checks:
             p.answer = None
             continue
-        p.criteria = [k for k in p.criteria if k not in removed]
         if p.answer and p.answer.inputs:
             p.answer.inputs.criteria = {k: n for k, n in p.answer.inputs.criteria.items() if k not in removed}
     states = {i.key for i in a.items if i.field == "visual"} | {n[7:] for n in named if n.startswith("screen:")}

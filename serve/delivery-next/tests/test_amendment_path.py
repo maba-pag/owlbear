@@ -846,3 +846,18 @@ def test_a_yes_folded_with_the_pr_seen_merged_approves_nothing_and_the_amendment
     assert why == f"question {q.id}: the PR merged first; the amendment goes on as a new Change"
     assert (c.amendments, c.amending, c.brief) == (before.amendments, before.amending, before.brief)
     assert step.kind == K.CLEANUP  # where the amendment step hands it, candidate and all, to a new Change
+
+
+@pytest.mark.parametrize("how", ["changed", "named"])
+def test_a_check_the_amendment_changes_or_names_no_longer_covers_a_criterion_it_removed(how):
+    c = change()
+    removal = item("criterion", "AC-2", "", remove=True)
+    weaker = verdict("weaker", qualifies=False)
+    if how == "changed":
+        through(c, removal, item("check", "check-2", "it shows the whole team"), said=weaker)
+    else:
+        named = [Affected(item="check:check-2", reason="it reads the team page")]
+        through(c, removal, said=verdict("weaker", qualifies=False, affected=named))
+    answer(c, "yes")
+
+    assert [p.criteria for p in c.checks] == [p.criteria for p in c.brief.approved[-1].checks] == [["AC-1"], []]
