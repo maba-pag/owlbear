@@ -2601,7 +2601,8 @@ def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monk
 
 @pytest.mark.browser
 def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
-    """#921: a recorded reason, message, cleanup or notice keeps its paths; the log's own wording names a file."""
+    """#921: a recorded reason, message, cleanup, error or notice shows whole with its paths; the log's own wording
+    names a file."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     alpha = registry.register(clone(tmp_path / "alpha", "c1"))
@@ -2610,12 +2611,16 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
     message = f"{whole_error}\nsee /Users/o/app/.github/workflows/ci.yml and .github/workflows/ci.yml"
     cleanup = "git clean failed:\n/Users/o/app/web/node_modules/x.lock and web/dist/app.js are busy"
     notice = "read /Users/o/app/conf/a.toml\nthen conf/b.toml"
+    hook = f'Traceback (most recent call last):\n  File "/Users/o/app/guard/judge.py", line 9\n{whole_error}'
+    draft = ["title: too long in /Users/o/app/briefs/fix.md", whole_error]
     events = [
         {"event": "tool", "tool": "view", "summary": "Read /Users/o/app/src/main.py"},
         {"event": "workspace-kept", "path": "/Users/o/.owlbear/worktrees/app-c1", "reason": kept},
         {"event": "merge-enqueue", "pr": 7, "status": "unknown", "message": message},
         {"event": "prepared-end", "check": "web", "cleanup": cleanup},
         {"event": "mystery-thing", "notice": notice},
+        {"event": "hook-failed", "hook": "preToolUse", "error": hook},
+        {"event": "fix-draft-failed", "key": "main:ci:abc", "errors": draft},
     ]
     with store.lock("c1") as lock:
         for e in events:
@@ -2626,6 +2631,8 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
         "Merge queue for PR #7": f"Merge queue for PR #7: {message}",
         "Check web ended": f"Check web ended; cleanup incomplete: {cleanup}",
         "Mystery thing": f"Mystery thing: {notice}",
+        "The shell guard": f"The shell guard's warning hook failed; the step stopped: {hook}",
+        "Could not draft": f"Could not draft a fix Change: {'; '.join(draft)}",
     }
     with browsing(monkeypatch, pds) as (page, url):
         said = errors(page)
