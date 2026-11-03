@@ -1,6 +1,7 @@
 """The real SDK step lifecycle with synthetic clients, journals and process identities; no signals are sent."""
 
 import asyncio
+import contextlib
 import dataclasses
 import os
 import signal
@@ -689,46 +690,45 @@ def test_a_turn_that_never_goes_idle_holds_a_result_run_once_for_the_bound_and_a
 ):
     """A wake-up only re-checks the turn: a result run holds one fixed bound to its end, a deadline run none.
 
-    What the hold did is observed, not timed from the test's own clock, which read after ``_submit`` came back and
-    so, under load, after the hold had begun (#935). The final read's lateness is timed from the hold's own end.
+    What the hold did is observed, not timed: the test's own clock read after ``_submit`` came back, which under load
+    was after the hold had begun (#935).
     """
     _waited(world, monkeypatch)
     monkeypatch.setattr(sdk_teardown, "IDLE", 0.3)
-    real_idle, real_timeout, bounds, seen = sdk_teardown._idle, asyncio.timeout, [], {}  # noqa: SLF001 - the hold
+    real_idle, real_call, real_timeout = sdk_teardown._idle, sdk_teardown.owned_call, asyncio.timeout  # noqa: SLF001
+    bounds, seen = [], {}
 
-    class Bound:
+    @contextlib.asynccontextmanager
+    async def bound(delay: float):
         """The hold's ``asyncio.timeout``: its delay, its deadline as made, and whether anything waited around it."""
-
-        def __init__(self, delay: float) -> None:
-            self.cm, self.delay, self.early, self.left = real_timeout(delay), delay, bool(seen["entered"]), []
-            self.made = self.cm.when()
-            bounds.append(self)
-
-        async def __aenter__(self):
-            return await self.cm.__aenter__()
-
-        async def __aexit__(self, *exc):
-            try:
-                return await self.cm.__aexit__(*exc)  # raises TimeoutError once it expired
-            finally:
-                asyncio.get_running_loop().call_soon(self.left.append, None)
+        cm = real_timeout(delay)
+        bounds.append(made := SimpleNamespace(cm=cm, delay=delay, when=cm.when(), early=bool(seen["entered"]), left=[]))
+        try:
+            async with cm:
+                yield cm
+        finally:
+            asyncio.get_running_loop().call_soon(made.left.append, None)
 
     async def idle(st):
-        loop = asyncio.get_running_loop()
         seen["entered"] = entered = []
-        loop.call_soon(entered.append, None)  # runs only once the hold yields
+        asyncio.get_running_loop().call_soon(entered.append, None)  # runs only once the hold yields
         st.changed.set()  # a wake-up the hold must take without renewing its bound
         with monkeypatch.context() as patch:
-            patch.setattr(sdk_teardown, "asyncio", SimpleNamespace(**vars(asyncio) | {"timeout": Bound}))
+            patch.setattr(sdk_teardown, "asyncio", SimpleNamespace(**vars(asyncio) | {"timeout": bound}))
             await real_idle(st)
-        seen.update(yielded=bool(entered), after=[bool(b.left) for b in bounds], woken=st.changed.is_set(),
-                    returned=loop.time())  # fmt: skip
+        seen.update(yielded=bool(entered), after=[bool(b.left) for b in bounds], woken=st.changed.is_set(), since=[])
+        asyncio.get_running_loop().call_soon(seen["since"].append, None)  # runs only if a wait precedes the read
+
+    async def call(st, operation, what):
+        if what == "usage read":
+            seen["late"] = bool(seen["since"])
+        return await real_call(st, operation, what)
 
     async def once(_session, _model):
-        seen.setdefault("read", asyncio.get_running_loop().time())
         return _used(1.0)
 
     monkeypatch.setattr(sdk_teardown, "_idle", idle)
+    monkeypatch.setattr(sdk_teardown, "owned_call", call)
     monkeypatch.setattr(sdk_teardown, "usage_once", once)
 
     async def scenario():
@@ -743,15 +743,13 @@ def test_a_turn_that_never_goes_idle_holds_a_result_run_once_for_the_bound_and_a
 
     finished, run = asyncio.run(scenario())
     assert finished, "the hold never ended"
-    assert run.ending == ending
+    assert (run.ending, seen["late"]) == (ending, False)  # the final read is asked as soon as the hold ends
     if ending == "result":
-        [bound] = bounds  # one bound, not one per wake-up
-        assert (bound.delay, bound.cm.when(), bound.cm.expired()) == (sdk_teardown.IDLE, bound.made, True)
-        assert (bound.early, seen["after"], seen["woken"]) == (False, [False], False)  # no other wait; wake taken
-        assert seen["read"] - bound.made < 1.5  # read promptly once the bound ended
+        [made] = bounds  # one bound, not one per wake-up
+        assert (made.delay, made.cm.when(), made.cm.expired()) == (sdk_teardown.IDLE, made.when, True)
+        assert (made.early, seen["after"], seen["woken"]) == (False, [False], False)  # no other wait; wake taken
     else:
         assert (bounds, seen["yielded"]) == ([], False)  # a deadline run never holds
-        assert seen["read"] - seen["returned"] < 0.2
     _, end = _spend()
     assert end["usage"].get("incomplete") == "turn running"
 
