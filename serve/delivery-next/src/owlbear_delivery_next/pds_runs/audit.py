@@ -142,7 +142,7 @@ def audit(
     schema = json.loads((tree / SCHEMA).read_text(encoding="utf-8"))
     try:
         template = audit_markdown.template(tree, schema)
-    except audit_markdown.UnsupportedFormatError as exc:
+    except ValueError as exc:
         return Audit(Verdict("stop", str(exc)), ident)
     before = digests(at)
     done = session(at, skills, message(version, ident))

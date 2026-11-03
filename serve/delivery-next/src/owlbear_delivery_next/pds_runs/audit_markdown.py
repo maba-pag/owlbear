@@ -15,12 +15,6 @@ if TYPE_CHECKING:
 TEMPLATE = audit_tools.SCHEMA.with_name("report-template.md")
 SCHEMA_VERSION = "1.0.0"
 TEMPLATE_HASH = "f121c6aa8196d5f0f616e79c9ec6d170889013ff96a516caa022a42e3fb9409a"
-EFFORTS = ("trivial", "small", "medium", "large")
-CONFIDENCES = ("high", "medium")
-
-
-class UnsupportedFormatError(ValueError):
-    """The release does not declare the report format this renderer implements."""
 
 
 def template(tree: Path, schema: dict[str, Any]) -> str:
@@ -33,13 +27,13 @@ def template(tree: Path, schema: dict[str, Any]) -> str:
             f"unsupported PDS audit schema at {tree / audit_tools.SCHEMA}: "
             f"schemaVersion {version!r}, supported {SCHEMA_VERSION!r}"
         )
-        raise UnsupportedFormatError(msg)
+        raise ValueError(msg)
     path = tree / TEMPLATE
     raw = path.read_bytes()
     found = hashlib.sha256(raw).hexdigest()
     if found != TEMPLATE_HASH:
         msg = f"unsupported PDS audit template at {path}: SHA-256 {found}, supported {TEMPLATE_HASH}"
-        raise UnsupportedFormatError(msg)
+        raise ValueError(msg)
     return raw.decode("utf-8")
 
 
@@ -112,11 +106,11 @@ def render(body: dict[str, Any], source: str) -> str:
     ]
     if findings:
         lines += ["", "| Effort | Findings |", "| --- | --- |"]
-        for effort in EFFORTS:
+        for effort in ("trivial", "small", "medium", "large"):
             if count := sum(f.get("observedEffort", f["baselineEffort"]) == effort for f in findings):
                 lines.append(f"| {_code(effort)} | {count} |")
         lines += ["", "| Confidence | Findings |", "| --- | --- |"]
-        for confidence in CONFIDENCES:
+        for confidence in ("high", "medium"):
             if count := sum(f["confidence"] == confidence for f in findings):
                 lines.append(f"| {_code(confidence)} | {count} |")
     lines += ["", "## Findings", ""]
