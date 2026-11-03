@@ -112,9 +112,11 @@ def test_recommendations_cover_current_required_settings_without_filling_any_lay
     suggested = config.GlobalLayer.model_validate(got["recommendations"])
 
     assert set(suggested.agents) == set(config.ROLES)
-    assert config.resolve(suggested, config.Layer()).missing == [
-        f"memory.{name}" for name in config.MemoryValues.model_fields
-    ]  # the owner's own numbers: no recommendation invents them, so each stays unset until he saves it
+    assert config.resolve(suggested, config.Layer()).missing == []
+    assert suggested.memory.model_dump() == {
+        "outstanding_boost": 0.1, "unremarkable_penalty": 0.01, "stale_factor": 50, "purge_days": 30,
+        "preflight_cap": 5, "preflight_budget": 2000, "recall_limit": 20, "explore_slots": 2, "challenge_slots": 2,
+    }  # what the code held before the Memory group; none is a default: resolution never reads them  # fmt: skip
     assert machine_settings.resolve(config.MachineValues(), suggested.machine).missing == []
     assert suggested.spotter.verbose_until is None  # optional, not an invented expiry date
     assert {name for name, agent in suggested.agents.items() if agent.context == "long"} == {"design-judge", "shaper"}

@@ -954,6 +954,22 @@ def recommended_drafts_keep_saved_controls(page, pds) -> None:
     expect(pds.select(page, "The line Opened by OwlBear Delivery")).to_have_js_property("value", "off")
 
 
+MEMORY_RECOMMENDED = {
+    "outstanding_boost": 0.1, "unremarkable_penalty": 0.01, "stale_factor": 50, "purge_days": 30,
+    "preflight_cap": 5, "preflight_budget": 2000, "recall_limit": 20, "explore_slots": 2, "challenge_slots": 2,
+}  # fmt: skip  # what the code held before the Memory group: the recommendations offer them, nothing resolves them
+
+
+def the_memory_group_is_filled_with_the_values_the_code_held(page, pds) -> None:
+    """Use recommended drafts all nine memory values on Global, decimals as typed, and the group counts them."""
+    from playwright.sync_api import expect  # noqa: PLC0415
+
+    pds.group(page, "memory")
+    for field, label in MEMORY_LABELS.items():
+        expect(page.get_by_label(label)).to_have_value(str(MEMORY_RECOMMENDED[field]))
+    expect(page.locator("#groups a[href='#memory'] p-tag")).to_have_text("10 unsaved")  # the nine and the threshold
+
+
 def lower_layers_cannot_use_recommended(page, pds) -> None:
     """On This machine and a project the button is disabled and says why."""
     from playwright.sync_api import expect  # noqa: PLC0415
@@ -1001,6 +1017,7 @@ def test_recommendations_fill_only_globals_blanks_and_keep_saved_values_and_exis
         expect(page.locator("#pending")).to_have_text(pending)
         assert {name: path.read_bytes() for name, path in paths.items()} == before
         recommended_drafts_keep_saved_controls(page, pds)
+        the_memory_group_is_filled_with_the_values_the_code_held(page, pds)
         lower_layers_cannot_use_recommended(page, pds)
         pds.pick(page, "Layer", "global")
         page.locator("#save").click()
@@ -1013,6 +1030,7 @@ def test_recommendations_fill_only_globals_blanks_and_keep_saved_values_and_exis
     assert (written["pr_marker"], written["pr_labels"], written["spotter"]["steer_share"]) == (False, [], 0)
     assert "curator_threshold" in written
     assert "machine" in written
+    assert written["memory"] == MEMORY_RECOMMENDED  # decimals and whole numbers as they were typed into the drafts
     assert all(paths[name].read_bytes() == before[name] for name in ("project", "machine"))
 
 

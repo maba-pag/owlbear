@@ -82,7 +82,7 @@ export function useRecommended() {
       for (const [role, fields] of Object.entries(value)) {
         for (const [field, v] of Object.entries(fields)) values[`${role}.${field}`] = v;
       }
-    } else if (["prefs", "spotter", "machine"].includes(key)) {
+    } else if (["prefs", "spotter", "machine", "memory"].includes(key)) {
       for (const [field, v] of Object.entries(value)) values[`${key === "spotter" ? "spot" : key}.${field}`] = v;
     } else values[key] = value;
   }
