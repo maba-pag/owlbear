@@ -131,7 +131,7 @@ def no_render(monkeypatch):
     monkeypatch.setattr(audit_markdown, "render", forbidden)
 
 
-@pytest.mark.parametrize("changed", ["schema", "template"])
+@pytest.mark.parametrize("changed", ["schema", "template", "missing-template"])
 def test_an_unsupported_report_format_stops_before_the_auditor_starts(sources, changed):
     if changed == "schema":
         schema = json.loads((sources.tree / audit.SCHEMA).read_text(encoding="utf-8"))
@@ -140,13 +140,16 @@ def test_an_unsupported_report_format_stops_before_the_auditor_starts(sources, c
         path = sources.tree / audit.SCHEMA
     else:
         path = sources.tree / audit_markdown.TEMPLATE
-        path.write_text(TEMPLATE + "\nA new report shape.\n", encoding="utf-8")
+        if changed == "missing-template":
+            path.unlink()
+        else:
+            path.write_text(TEMPLATE + "\nA new report shape.\n", encoding="utf-8")
     calls, session = submitted(report())
     sources.at.mkdir()
     done = audit.audit(sources.at, web=sources.web, tree=sources.tree, version=VERSION, session=session)
     assert calls == []
     assert done.verdict.outcome == "stop"
-    assert f"unsupported PDS audit {changed}" in done.verdict.reason
+    assert f"unsupported PDS audit {changed.removeprefix('missing-')}" in done.verdict.reason
     assert str(path) in done.verdict.reason
     assert not done.markdown
 

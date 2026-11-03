@@ -28,7 +28,11 @@ def template(tree: Path, schema: dict[str, Any]) -> str:
         )
         raise ValueError(msg)
     path = tree / TEMPLATE
-    raw = path.read_bytes()
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError as exc:
+        msg = f"unsupported PDS audit template at {path}: {exc}"
+        raise ValueError(msg) from exc
     found = hashlib.sha256(raw).hexdigest()
     if found != TEMPLATE_HASH:
         msg = f"unsupported PDS audit template at {path}: SHA-256 {found}, supported {TEMPLATE_HASH}"
