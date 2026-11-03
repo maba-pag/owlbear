@@ -717,6 +717,8 @@ def test_settings_show_a_failed_source_the_models_and_global_s_machine_settings_
         page.route("**/api/next/config/models", lambda r: r.fulfill(json={"models": [], "error": failed}))
         page.route(f"{base}/api/next/machine", lambda r: machine(r) if r.request.method == "GET" else r.fallback())
         page.goto(f"{base}/config?project={a.id}#token=t")
+        # Both startup reads must finish; the second can replace the first error with a loading message.
+        page.evaluate("() => import('/assets/page/config/main.mjs')")
         source = page.locator(".reads-failure")
         expect(source).to_be_visible()
         assert source.text_content().split() == f"Could not read: Impeccable releases — {failed}".split()
