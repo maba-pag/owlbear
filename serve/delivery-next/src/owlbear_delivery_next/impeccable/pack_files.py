@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 import truststore
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home, preload
 
 if TYPE_CHECKING:
@@ -160,7 +161,7 @@ def install(download: Callable[[str], bytes] | None = None, pins: dict[str, Any]
         try:
             data = download(url)
         except OSError as exc:
-            msg = f"cannot download {url}: {exc}"
+            msg = f"cannot download {url}: {failure(exc)}"
             raise PackError(msg) from exc
         if hashlib.sha256(data).hexdigest() != digest:
             msg = f"{url} does not match Impeccable's digest; nothing was installed from it"

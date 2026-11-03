@@ -404,6 +404,53 @@ def test_install_puts_a_missing_pack_in_place_with_no_newer_version(updating, mo
     assert client.get(old.headers["location"], headers=auth).json()["install"] is None
 
 
+def test_an_update_meeting_an_unexpected_error_says_it_whole_with_its_type(updating, whole_error, monkeypatch):
+    m, said = updating.machine, []
+    monkeypatch.setattr(m, "say", said.append)
+
+    def breaks() -> None:
+        raise RuntimeError(whole_error)
+
+    monkeypatch.setattr(m.updater, "_update", breaks)
+    m.updater._run()  # noqa: SLF001 - the thread's work, run here
+
+    assert m.updater.read()["detail"] == f"RuntimeError: {whole_error}"
+    assert said == [f"update: failed: RuntimeError: {whole_error}"]
+
+
+def test_a_failed_install_says_its_whole_error_with_its_type_on_the_banner_and_in_the_log(
+    updating, whole_error, monkeypatch
+):
+    pinned_pack(monkeypatch)
+    m, said, asked = updating.machine, [], []
+    monkeypatch.setattr(m, "say", said.append)
+
+    def refused(url: str, _seconds: float = 0) -> bytes:
+        asked.append(url)
+        raise PermissionError(whole_error)
+
+    monkeypatch.setattr(pack_files, "fetch", refused)
+    m.impeccable.install()
+    m.impeccable.thread.join(10)
+
+    whole = f"PackError: cannot download {asked[0]}: PermissionError: {whole_error}"
+    assert m.impeccable.read()["install"]["detail"] == whole
+    assert said == [f"Impeccable: installing failed: {whole}"]
+
+
+@pytest.mark.parametrize("parsed", [False, True], ids=["no JSON", "JSON naming no failure"])
+def test_an_unreadable_kept_install_failure_says_why_whole(updating, parsed, whole_error, capsys):
+    path = local_home.root() / pack_files.PACKS / impeccable.FAILED
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(whole_error) if parsed else "{not json")
+    why = "JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+
+    detail = Machine(updating.machine.record).impeccable.read()["install"]["detail"]
+
+    assert detail == f"the kept Impeccable failure {path} is unreadable: {whole_error if parsed else why}"
+    assert f"Impeccable: {detail}\n" in capsys.readouterr().out
+
+
 def test_run_updates_now_is_refused_while_owlbear_stops_when_idle(updating):
     m = updating.machine
     m.ending = True

@@ -19,6 +19,7 @@ import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git import command_failure
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import versions
@@ -130,9 +131,9 @@ class Impeccable:
         except FileNotFoundError:
             return None
         except (OSError, ValueError) as exc:
-            kept = exc
+            kept = command_failure.failure(exc)
         if not (isinstance(kept, dict) and all(isinstance(kept.get(k), str) for k in ("version", "detail", "at"))):
-            said = f"the kept Impeccable failure {path} is unreadable: {kept}"[:600]
+            said = f"the kept Impeccable failure {path} is unreadable: {kept}"
             self.machine.say(f"Impeccable: {said}")
             return {"version": "", "detail": said, "at": None}
         return {k: kept[k] for k in ("version", "detail", "at")}
@@ -160,7 +161,7 @@ class Impeccable:
 
     def failed(self, tag: str, detail: str, expected: object = ANY) -> None:
         """Keep a version's pack that could not be installed, for the pages' banner, also across restarts."""
-        self._keep({"version": tag, "detail": detail[:600], "at": _now()}, expected)
+        self._keep({"version": tag, "detail": detail, "at": _now()}, expected)
 
     def ready(self, tag: str) -> None:
         """A version's pack is in place: a failure kept for it ends."""
@@ -235,8 +236,9 @@ class Impeccable:
             if tag != versions.running():
                 self._version(tag)
         except Exception as exc:  # noqa: BLE001 - the banner says how it ended
-            self.failed(tag, f"{type(exc).__name__}: {exc}", expected=failure)  # an update's newer one stays
-            self.machine.say(f"Impeccable: installing failed: {exc}")
+            said = command_failure.failure(exc)
+            self.failed(tag, said, expected=failure)  # an update's newer one stays
+            self.machine.say(f"Impeccable: installing failed: {said}")
         else:
             self._resolved(failure)
             self.machine.say("Impeccable: installed")
