@@ -662,12 +662,14 @@ def test_updates_impeccable_says_an_install_failure_it_could_not_keep_whole(
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
+            said = errors(page)
             pds.only(page, base)
             page.goto(f"{base}/updates/impeccable#token=t")
             expect(page.locator("#pack-install-state")).to_be_visible()
             shown = page.locator("#pack-unkept")
             expect(shown).to_be_visible()
             assert shown.text_content() == f"{unkept[0].upper()}{unkept[1:]}."
+            assert said == []
             browser.close()
     finally:
         server.should_exit = True
@@ -699,11 +701,13 @@ def test_updates_say_update_checks_that_started_afresh_whole(monkeypatch, capsys
         monkeypatch.setattr(Path, "read_text", read)
         assert broken == [path]
         logged = capsys.readouterr().out
+        said = errors(page)
         page.goto(f"{base}/updates/owlbear#token=t")
         shown = page.locator("#check-settings")
         expect(shown).to_be_visible()
-        said = r"It looks [^\n]*\.\s+How often is set in Settings → This machine\. Earlier check results were lost: "
-        assert re.fullmatch(said + re.escape(f"{unrestored}."), shown.text_content())
+        told = r"It looks [^\n]*\.\s+How often is set in Settings → This machine\. Earlier check results were lost: "
+        assert re.fullmatch(told + re.escape(f"{unrestored}."), shown.text_content())
+        assert said == []
     line = r"^\d\d:\d\d:\d\dZ update checks: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"  # up to the host log's next line
     assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [unrestored]
 
