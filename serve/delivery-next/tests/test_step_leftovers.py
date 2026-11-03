@@ -56,7 +56,7 @@ def host(store: Store, tmp_path: Path, said: list[str]) -> Host:
 
 
 def marked(store: Store, *, wrapped: bool = False) -> int:
-    """Run a shell command marked as c1's runner marks it, leaving a sleep behind; the sleep's pid."""
+    """Run a marked shell command, returning its background pid once the child has exec'd sleep."""
     with store.lock("c1") as lock, command_marks.marking(store, lock, "c1"):
         script = command_marks.folder(store, "c1") / command_marks.SCRIPT
         argv = ["/bin/bash", "-c", f'. "{script}"; {SLEEP} & echo $!']
@@ -64,7 +64,14 @@ def marked(store: Store, *, wrapped: bool = False) -> int:
             wrapper = "import subprocess, sys; sys.exit(subprocess.run(sys.argv[1:]).returncode)"
             argv = [sys.executable, "-c", wrapper, *argv]
         out = subprocess.run(argv, check=True, capture_output=True, text=True, timeout=30, start_new_session=True)  # noqa: S603
-    return int(out.stdout.split()[-1])
+    pid = int(out.stdout.split()[-1])
+    limit = time.monotonic() + 10
+    while (name := psutil.Process(pid).name()) != "sleep":
+        if time.monotonic() >= limit:
+            end(pid)
+            pytest.fail(f"{pid} stayed {name!r}; the fixture's background command did not exec sleep")
+        time.sleep(0.01)
+    return pid
 
 
 def end(pid: int) -> None:
