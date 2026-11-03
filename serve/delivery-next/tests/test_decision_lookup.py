@@ -312,7 +312,17 @@ def test_a_lead_chats_lookup_through_the_project_host_waits_past_fifteen_seconds
 
     found, failed = chat_tool("lookup_decisions", question=QUESTION), chat_tool("lookup_decisions", question=QUESTION)
 
-    assert [(d["id"], d["scope"]) for d in found["decisions"]] == [(general.id, "global")]
+    assert found == {
+        "decisions": [
+            {
+                "id": general.id,
+                "title": general.title,
+                "statement": general.statement,
+                "scope": "global",
+                "origin": "approved",
+            },
+        ],
+    }
     assert failed["failed"].startswith("its session ended error")
     assert opener.waited == [15.0, pick_tools.WAIT, pick_tools.WAIT]  # the host's chat contract is asked once first
     assert pick_tools.WAIT > 15  # the chat's other calls wait 15 seconds
@@ -455,10 +465,12 @@ def test_a_real_published_shaping_rules_binding_suffix_survives_every_consumer(p
 
     answer, _ = lookup.worker(picking.store, Lock(picking.slug), c, QUESTION)
     assert answer["decisions"][0]["statement"] == text, "worker"
+    assert answer["decisions"][0]["note"] == "it governs the work", "stored conflict answer"
     assert text in picking.pickers()[-1].message, "worker"
 
     answer, _ = lookup.chat(picking.shared, PROJECT, QUESTION, picking.store.settings)
     assert answer["decisions"][0]["statement"] == text, "chat"
+    assert answer["decisions"][0]["note"] == "it governs the work", "stored chat conflict answer"
     assert text in picking.pickers()[-1].message, "chat"
 
     chosen, why = pick.reassessed(picking.store, Lock(picking.slug), c, [rule], picking.shared.root)

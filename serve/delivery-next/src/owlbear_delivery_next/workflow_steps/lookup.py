@@ -220,17 +220,25 @@ def _unresolved(seen: Snapshot, found: list[Decision]) -> dict[str, Any] | None:
 
 
 def answered(done: Run, found: list[Decision]) -> dict[str, Any]:
-    """The picked decisions whole, without advisory picker notes; else why the lookup failed."""
+    """The decisions the session picked, each whole with its scope and origin; else why the lookup failed."""
     said = pick.judged(done, found, Pick(version=0))
     if said.status != "ok":
         return {"failed": said.reason}
     by_id = {d.id: d for d in found}
-    rows = [_row(by_id[p.id]) for p in said.decisions]
+    rows = [_row(by_id[p.id], p.note) for p in said.decisions]
     return {"decisions": rows} | ({"dropped": said.dropped} if said.dropped else {})
 
 
-def _row(d: Decision) -> dict[str, str]:
-    return {"id": d.id, "title": d.title, "statement": whole(d), "scope": str(d.scope), "origin": str(d.origin)}
+def _row(d: Decision, note: str) -> dict[str, str]:
+    row = {"id": d.id, "title": d.title, "statement": whole(d), "scope": str(d.scope), "origin": str(d.origin)}
+    return row | ({"note": note} if note else {})
+
+
+def agent_reply(answer: dict[str, Any]) -> dict[str, Any]:
+    """Omit advisory notes only from the agent-facing copy; conflict records keep their explanations."""
+    if "decisions" not in answer:
+        return answer
+    return answer | {"decisions": [{k: v for k, v in d.items() if k != "note"} for d in answer["decisions"]]}
 
 
 def _ran(settings: Settings, prefix: str, said: str, journal: sdk_adapter.Journal) -> Run:
@@ -297,8 +305,8 @@ class Asked:
         return said
 
     def helper(self) -> tuple[tools.Spec, Callable[[tools.Args], str]]:
-        """The step's tool and its answer."""
-        return pick_tools.LOOKUP, self
+        """The step's tool and its compact agent-facing answer."""
+        return pick_tools.LOOKUP, lambda args: json.dumps(agent_reply(json.loads(self(args))))
 
     def settled[T](self, step: Callable[[], T]) -> T:
         """*step*'s run; then no lookup starts, those admitted end and their spend is on the Change the runner holds."""
