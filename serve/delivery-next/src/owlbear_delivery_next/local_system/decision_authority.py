@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from io import StringIO
+from io import BytesIO, StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 def _run(repo: DataRepo, until: float | None, *args: str, lossless: bool = False) -> str:
-    said = repo.git(*args, until=until, lossless=True) if lossless else repo.git(*args, until=until)
+    said = repo.git(*args, until=until, lossless=lossless)
     if said.returncode:
         msg = f"the held decision's Git authority could not be read in {repo.root}: {failed(said)}"
         raise OSError(msg)
@@ -61,12 +61,8 @@ def _contents(repo: DataRepo, commit: str, blobs: dict[str, int], until: float |
     if len(data) != expected:
         msg = f"Git returned {len(data)} decision bytes at {commit} in {repo.root}; expected {expected}"
         raise OSError(msg)
-    found = {}
-    offset = 0
-    for oid, size in blobs.items():
-        found[oid] = data[offset : offset + size]
-        offset += size
-    return found
+    stream = BytesIO(data)
+    return {oid: stream.read(size) for oid, size in blobs.items()}
 
 
 def _entries(repo: DataRepo, commit: str, until: float | None) -> tuple[list[Entry], list[tuple[Layer, str]]]:
