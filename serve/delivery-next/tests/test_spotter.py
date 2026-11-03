@@ -11,6 +11,7 @@ import stat
 import threading
 import time
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -24,7 +25,17 @@ from owlbear_delivery_next.change_contracts.models import Brief, Change, Plan, S
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import ReviewResult, Worktree
 from owlbear_delivery_next.change_flow import loop
-from owlbear_delivery_next.improvement import acts, card, cases, chatlogs, credit_meter, events, retro_units, spotter
+from owlbear_delivery_next.improvement import (
+    acts,
+    card,
+    cases,
+    chatlogs,
+    credit_meter,
+    events,
+    improvement_view,
+    retro_units,
+    spotter,
+)
 from owlbear_delivery_next.improvement.events import Kept
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import sdk_adapter, spend_reconcile, spotter_look, step_decisions
@@ -758,6 +769,20 @@ def test_a_burst_of_samples_while_looks_run_is_counted_once_not_queued() -> None
     assert spotter.WORK.settled(5)
     got = records()
     assert sorted(r["skipped"][:30] for r in got) == ["", "", "capacity: 298 sampled looks sk"]
+
+    async def paused() -> None:  # a summary for another why, and one look skipped on its own
+        spot = spotter.Spotter(ctx(looks=("sample",), sample_rate=100), lambda: "s-2", judge(),
+                               room=lambda: "paused: the machine is paused")  # fmt: skip
+        for i in range(4):
+            spot.seen(started(f"p{i}", "bash", {"command": "ls"}))
+            spot.seen(done(f"p{i}", "ok"))
+        spot.skip("plan", 1.0, {"kind": "plan"}, "capacity: looks already running")
+        await spot.drain()
+
+    asyncio.run(paused())
+    assert spotter.WORK.settled(5)
+    spent = improvement_view.spotter({}, records(), datetime.now(UTC))["spend"]["p"]
+    assert spent == {"looks": 2, "credits": pytest.approx(0.5), "unknown": 0, "stopped": 0, "skipped": 298 + 4 + 1}
 
 
 def test_a_spotter_writes_where_it_started_whatever_changes_later(monkeypatch, tmp_path) -> None:
