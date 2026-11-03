@@ -410,3 +410,30 @@ def test_a_premise_from_a_session_left_going_starts_no_amendment(picking, monkey
     c = run.premised(AC1)
 
     assert (c.amendments, c.amending, c.brief.version) == ([], None, 1)
+
+
+def test_a_challengers_run_is_kept_when_its_settlement_fails_and_is_never_paid_again(picking, monkeypatch):
+    run = Amending(picking, monkeypatch)
+    run.premised(AC1)
+    picking.verdicts.append(candidate())
+    run.step()
+    picking.verdicts += [verdict(qualifies=True), verdict(qualifies=True)]
+    write, told = picking.store.write, len(picking.told)
+
+    def fails(lock, change):
+        if any(a.state == "applied" for a in change.amendments):
+            raise OSError(28, "the settling write fails")
+        write(lock, change)
+
+    monkeypatch.setattr(picking.store, "write", fails)
+    with pytest.raises(OSError, match="settling write"):
+        run.step()
+    monkeypatch.setattr(picking.store, "write", write)
+    kept = picking.change().pending_child
+    c = run.step()
+
+    assert (kept.label, kept.parent, kept.run is not None) == (amend_tools.CHALLENGE, "A1:challenge:0", True)
+    assert (run.roles(told), len(picking.verdicts)) == (["challenger"], 1)  # the second verdict is never asked for
+    assert (c.amendments[-1].state, c.pending_child, c.brief.version) == ("applied", None, 2)
+    steps = [e for e in picking.store.events(picking.slug) if e.get("kind") == amend_tools.CHALLENGE]
+    assert [e.get("event") for e in steps] == ["step"]  # its usage counts once, with its settlement

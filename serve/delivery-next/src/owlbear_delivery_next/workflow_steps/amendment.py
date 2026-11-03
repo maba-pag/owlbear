@@ -22,13 +22,14 @@ from owlbear_delivery_next.runtimes import amendments, sdk_adapter
 from owlbear_delivery_next.settings import profile, rounds
 from owlbear_delivery_next.state_store import identities
 from owlbear_delivery_next.state_store.briefs import new_slug
-from owlbear_delivery_next.workflow_steps import engine, sessions
+from owlbear_delivery_next.workflow_steps import engine, pending_child, sessions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.amendment_records import Amendment
+    from owlbear_delivery_next.runtimes.session_result import Run
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 LABELS = {
@@ -62,12 +63,25 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     store.write(lock, change)
     phase = am.phase
     label, submit = LABELS[phase]
-    # the stopped step's decisions, which the runner's gate holds, and the complete list for the challenger
-    verdict, done = sessions.review_run(store, lock, change, path, _made(store, lock, change, a), label, submit=submit)
-    now, payload = datetime.now(UTC), done.payload
+    made = _made(store, lock, change, a)
+
+    def start(keep: sessions.Keep) -> pending_child.Judged:
+        return sessions.review_run(store, lock, change, path, made, label, submit=submit, keep=keep)
+
+    # its paid run is kept until its result and spend commit together, in one of the writes below (RUN-04)
+    verdict, done = pending_child.child(store, lock, change, (label, pending_child.amending(change)), start)
+    step = pending_child.booked(change, done, {"exit": verdict.exit})
+    store.write(lock, _recorded(store, change, a, verdict, done))
+    if step is not None:
+        sessions.announce(store, lock, change.slug, step)
+
+
+def _recorded(store: Store, change: Change, a: Amendment, verdict: loop.StepResult, done: Run) -> Change:
+    """The Change with the session's result recorded; a failed one stays in its phase, to run again or ask."""
+    now, payload, phase = datetime.now(UTC), done.payload, change.amending.phase if change.amending else ""
     if phase == "reconsider" and _reconsidered(change, verdict, payload, now):
-        pass
-    elif verdict.cause is None and verdict.exit == Exit.DONE and isinstance(payload, amend_tools.VerdictResult):
+        return change
+    if verdict.cause is None and verdict.exit == Exit.DONE and isinstance(payload, amend_tools.VerdictResult):
         amending.judged(change, payload, done.session_id, now)
     elif verdict.cause is None and verdict.exit == Exit.DONE and isinstance(payload, amend_tools.CandidateResult):
         if phase == "prepare":
@@ -78,9 +92,8 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         whole = verdict.exit in {Exit.RETRY, Exit.STOP} or verdict.question or verdict.waiting
         cause = verdict.cause or cause_key(ErrorKind.RESULT, change.step.kind, f"amend {a.id}")
         failed = verdict if whole else verdict.model_copy(update={"exit": Exit.RETRY, "cause": cause})
-        store.write(lock, loop.apply(change, failed, now))
-        return
-    store.write(lock, change)
+        return loop.apply(change, failed, now)
+    return change
 
 
 def _reconsidered(change: Change, verdict: loop.StepResult, payload: object, now: datetime) -> bool:

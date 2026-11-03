@@ -44,8 +44,8 @@ class PendingChild(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    label: str  # the session's step label: plan-challenge or amendment-challenge
-    parent: str  # what the child judges: the plan version, or the candidate amendment's id
+    label: str  # the session's step label: plan-challenge or one of an amendment's sessions
+    parent: str  # what the child judges: the plan version, or the amendment's id, phase and revision
     brief: int | None = None  # the brief version its parent step ran on; a record without one never fits a step
     route: dict[str, Any] | None = None  # the proposing step's own result, which stands unless the challenger stops
     step: tuple[str, str | None, str | None] | None = None  # the proposing step's kind, task and mode

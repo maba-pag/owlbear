@@ -1,10 +1,10 @@
 """A paid child session of a durable parent step (RUN-04): its run is kept until its verdict and spend commit together.
 
-A plan challenge (TD-190) starts once the planned plan and its challenge mode are durable. The child's validated run
-is kept on the Change as soon as it returns, or in a capture file the next run adopts when that write fails, so a
-failed settlement is resumed from it without a second paid session. It is not an owner hold: its usage, tool calls
-and model check stay as the child reported them, so its own gates decide, and it counts once, in the write that
-settles it, with a receipt of its session.
+A plan challenge (TD-190) starts once the planned plan and its challenge mode are durable, an amendment's session
+(TD-185) once its amendment's phase is. The child's validated run is kept on the Change as soon as it returns, or in a
+capture file the next run adopts when that write fails, so a failed settlement is resumed from it without a second
+paid session. It is not an owner hold: its usage, tool calls and model check stay as the child reported them, so its
+own gates decide, and it counts once, in the write that settles it, with a receipt of its session.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 
+from owlbear_delivery_next.change_contracts import amend_tools
 from owlbear_delivery_next.change_contracts.held_records import PendingChild
 from owlbear_delivery_next.change_contracts.models import Exit, StepKind
 from owlbear_delivery_next.change_contracts.round_records import RECHECK
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
 
 type Judged = tuple[loop.StepResult, Run]
 type Start = Callable[[sessions.Keep], Judged]
+AMENDING = {amend_tools.PREPARE, amend_tools.REVISE, amend_tools.CHALLENGE, amend_tools.RECONSIDER}
 CAPTURE = "child-"  # a returned child's run, kept in its own file when its Change write failed
 
 
@@ -239,13 +241,21 @@ def fits(change: Change) -> bool:
     """Whether the step the pending child answers is still the Change's own, so its verdict may still route it.
 
     The child is bound to the brief version its parent step ran on: under a later brief, a plan version that repeats
-    is another child's.
+    is another child's. An amendment's session fits while its amendment is in the same phase and revision.
     """
     pending, s = change.pending_child, change.step
     if pending is None or pending.brief is None or pending.brief != change.brief.version:
         return False  # its own brief generation is gone, or it was never bound to one
+    if pending.label in AMENDING:
+        return pending.parent == amending(change)
     planned = change.plan is not None and str(change.plan.version) == pending.parent
     return planned and s.kind == StepKind.PLAN and s.mode in {plan_rounds.CHALLENGE, RECHECK}
+
+
+def amending(change: Change) -> str:
+    """What an amendment's session judges: its amendment, phase and revision; empty when no amendment runs (TD-185)."""
+    am = change.amending
+    return f"{am.id}:{am.phase}:{am.revision}" if am else ""
 
 
 def retired(store: Store, lock: Lock, change: Change) -> Change:
