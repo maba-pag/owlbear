@@ -47,8 +47,8 @@ class _Run:
 def _runs(events: Sequence[dict[str, Any]], since: datetime | None) -> list[_Run]:
     """Each session's latest run that opened in or after *since*, in the order they opened.
 
-    Without *since* (a step whose start is not recorded yet) only runs whose opening is retained and that have not
-    ended count: every run of an earlier step has ended.
+    Without *since* (a step whose start is not recorded yet) only the latest run whose opening is retained counts,
+    while it has not ended: an earlier step's runs have ended, and one a killed runner left open is older.
     """
     found: dict[str, _Run] = {}
     for e in events:
@@ -64,7 +64,8 @@ def _runs(events: Sequence[dict[str, Any]], since: datetime | None) -> list[_Run
         elif e.get("event") == "tool" and e.get("tool") in RESULT_TOOLS and run.result is not True:
             run.result = e.get("accepted", True) is not False  # an accepted one ends the run: later calls are late
     if since is None:
-        return [r for r in found.values() if r.opened and r.open]
+        latest = next((r for r in reversed(found.values()) if r.opened), None)
+        return [latest] if latest and latest.open else []
     return [r for r in found.values() if r.at >= since]
 
 

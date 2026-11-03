@@ -86,6 +86,8 @@ CHALLENGED = Outcome(exit=Exit.RETRY, reason="plan challenge: …", challenged=T
         (step(StepKind.SHAPE, None, started=None), [*PREVIOUS, opened(1, "p1", "picker")], "reviewer",
          "checking decisions"),  # a brief's first decision pick runs before the step's start is recorded
         (step(StepKind.PLAN, None, started=None), [opened(1, "ch", "challenger")], "planner", "challenging the plan"),
+        (step(StepKind.PLAN, None, started=None), [opened(-60, "p0", "picker"), opened(1, "ch", "challenger")],
+         "planner", "challenging the plan"),  # Copilot on #937: a killed runner's picker never ended
         (step(StepKind.BUILD, started=None), [ev(2, "tool", sid="c2", role="challenger", tool="lookup_decisions",
                                                  accepted=True)], "builder", "starting"),  # no retained opening
         (step(StepKind.FOLLOW, None), [opened(1)], "delivery", None),
