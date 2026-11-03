@@ -2,6 +2,7 @@
 and each at its own interval; a failure shows after two in a row; offline is unknown, never current."""
 
 import json
+import logging
 import threading
 import time
 from datetime import UTC, datetime, timedelta
@@ -182,6 +183,30 @@ def test_a_failing_check_says_why_whole_on_the_page_and_in_the_log(answer, whole
 
     assert [s[1] for s in seen(checks, "pds", 2)] == ["", why]  # shown once two came in a row
     assert said == [f"update check of Porsche Design System failed: {why}"] * 2
+
+
+@pytest.mark.parametrize("answer", ["unreachable", "no JSON"])
+def test_a_failing_impeccable_check_says_githubs_whole_error_on_the_page_and_in_both_logs(
+    answer, whole_error, monkeypatch, caplog
+):
+    def raising(_url: str, _seconds: float) -> bytes:
+        raise PermissionError(whole_error)
+
+    unparsed = "JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+    fetch, why = {
+        "unreachable": (raising, f"GitHub was not reached: PermissionError: {whole_error}"),
+        "no JSON": (answering(b"{not json"), f"GitHub's answer is not JSON: {unparsed}"),
+    }[answer]
+    monkeypatch.setattr(pack_files, "fetch", fetch)
+    said: list[str] = []
+    checks = Checks(SimpleNamespace(say=said.append, stopping=threading.Event()), Clock(), lambda work: work())
+
+    with caplog.at_level(logging.WARNING, logger=pack_update.__name__):
+        assert [s[1] for s in seen(checks, "impeccable", 2)] == ["", why]
+
+    assert said == [f"update check of Impeccable failed: {why}"] * 2
+    warned = [r.getMessage() for r in caplog.records if r.name == pack_update.__name__]
+    assert warned == [f"Impeccable: upstream's releases could not be read: {why}"] * 2
 
 
 def test_a_newer_version_stays_available_through_failures_until_withdrawn_or_applied(monkeypatch):
