@@ -606,6 +606,24 @@ def test_a_run_unconfirmed_without_processes_to_watch_retains_its_slot_and_says_
     assert slots.take("another-project", "c1", 1, 1) == 0
 
 
+def test_an_unverified_session_end_says_its_problems_whole(root, whole_error, caplog) -> None:
+    left = Termination(confirmed=False, unknown=(9,), problems=(f"disconnect failed: RuntimeError: {whole_error}",))
+
+    def run(cfg) -> Run:
+        return Run(cfg.session_id, ending="error", detail="the session's own detail", termination=left)
+
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    job.start("shop")
+    drained(job)
+    shop = {f["folder"]: f for f in job.read()["folders"]}["shop"]
+    why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
+    reason = f"ended error: {curation.UNKNOWN}; {why}; the session's own detail; "
+    reason += "the run changed no memory, so nothing is held"
+    assert (shop["state"], shop["reason"]) == ("failed", reason)
+    logged = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == curation.__name__]
+    assert logged == [("ERROR", f"memory curation of shop failed ({shop['key']}): {reason}")]
+
+
 def test_a_run_waiting_for_a_slot_never_starts_once_an_update_or_a_stop_fences_it(root) -> None:
     slots, fence = Slots(lambda: 1), [""]
     assert slots.take("0123456789abcdef", "a-change", 1, 1) == 1  # a project's step holds the only slot

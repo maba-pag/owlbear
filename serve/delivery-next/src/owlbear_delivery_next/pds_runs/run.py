@@ -23,6 +23,7 @@ from owlbear_delivery_next.impeccable_runs import pack_activation, pack_publish,
 from owlbear_delivery_next.impeccable_runs.pack_run import Stopped
 from owlbear_delivery_next.pds_runs import audit, checks, diff, pin, publish, repair, sessions, tree
 from owlbear_delivery_next.pds_runs.context import CANDIDATE, NEXT, UPDATER, Action, Context
+from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.workflow_steps import sessions as step_sessions
 
@@ -357,6 +358,7 @@ def _reconsider(job: Job, ctx: Context, lp: RoundLoop) -> Action:
         p = run.payload
         if not (run.termination and run.termination.confirmed):
             msg = f"the challenger {run.session_id} may still be running; stop it before updating again"
+            msg += f"; {session_result.unverified(run.termination)}"
             raise pack_files.PackError(msg)
         if run.ending == "premise" and isinstance(p, tools.WrongPremise):
             return dict.fromkeys(keys, ("unsure", f"premise: {p.reason}"))

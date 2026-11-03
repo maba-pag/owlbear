@@ -59,6 +59,8 @@ from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host import serve as host_start
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import host as host_module
+from owlbear_delivery_next.project_host import leftovers as host_leftovers
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.runtimes import copilot_cli, model_choices
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -973,6 +975,57 @@ def test_projects_lists_a_host_s_failed_readiness_checks_whole_under_its_reason(
         assert items.evaluate_all("l => l.map(e => getComputedStyle(e).maxInlineSize)").count("none") == 0
         page.set_viewport_size({"width": 375, "height": 800})
         assert page.evaluate("document.documentElement.scrollWidth") <= 375
+        assert broke == []
+
+
+@pytest.mark.browser
+def test_a_long_unverified_session_end_shows_whole_on_changes(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """#951: a step whose session's end is unproven says why whole in Recent activity, the forced stop and the step's
+    own line; the step's line keeps it once the host found the processes gone and cleared the stop."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "flip"))
+    path = Path(alpha.path)
+    store = Store.open(path)
+    names = Names(branch="owlbear/flip", target="main", worktree=str(path))
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
+    c = Change(slug="flip", brief=Brief(version=1), plan=plan, step=Step(kind=StepKind.BUILD, task="t1"), names=names)
+    stopped = f"runtime stop failed: RuntimeError: {whole_error}"
+    left = processes.Termination(
+        confirmed=False, unknown=(9,), problems=(f"disconnect failed: RuntimeError: {whole_error}",)
+    )
+
+    async def ended(cfg):
+        at = datetime.now(UTC).isoformat(timespec="seconds")
+        cfg.journal.event({"at": at, "event": "force-stop", "reason": stopped, "runtime_pid": 9})
+        return Run(cfg.session_id, "error", None, detail="the session failed", termination=left)
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", ended)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: path)
+    with store.lock("flip") as lock:
+        store.write(lock, c)
+        runner._step(store, lock, c, c.step, path)  # noqa: SLF001
+    why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
+    said = [
+        " ".join(f"Building stopped: {why}".split()),
+        " ".join(f"Tried to force the session to stop: {stopped}".split()),
+    ]
+    present = [True]  # the host finds process 9 until the owner ends it
+    monkeypatch.setattr(host_leftovers, "survivors", lambda *_a: {9: ""} if present[0] else {})
+    monkeypatch.setattr(host_module, "TICK", 0.5)  # the host looks again soon after the owner ended them
+    with browsing(monkeypatch, pds) as (page, base):
+        broke = errors(page)
+        opened(page, base, alpha.id, "flip")
+        lines = page.locator("#detail .log li > span")
+        expect(page.locator("#detail")).to_contain_text("stopped: processes still present: 9")
+        expect(lines).to_have_count(2)
+        assert lines.all_text_contents() == said  # Recent activity collapses whitespace
+        assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+        present[0] = False
+        expect(page.locator("#detail").get_by_text("Stopped", exact=True)).to_have_count(0, timeout=15000)
+        assert lines.all_text_contents() == said  # the step's line keeps why once the host cleared the stop
+        page.set_viewport_size({"width": 390, "height": 800})
+        assert page.evaluate("document.documentElement.scrollWidth") <= 390
         assert broke == []
 
 

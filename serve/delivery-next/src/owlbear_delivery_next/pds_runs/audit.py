@@ -20,6 +20,7 @@ import jsonschema
 
 from owlbear_delivery_next.change_contracts import audit_tools
 from owlbear_delivery_next.pds_runs import audit_markdown, pin
+from owlbear_delivery_next.runtimes import session_result
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -168,10 +169,11 @@ def audit(
 
 def _unended(done: Run, result: audit_tools.AuditResult | None) -> str:
     t = done.termination
+    gone = "" if t is not None and t.confirmed else f"; {session_result.unverified(t)}"
     if done.ending != "result" or result is None:
-        return f"the auditor submitted no report: ended {done.ending}; {done.detail}"
-    if t is None or not t.confirmed:
-        return "the auditor's processes are not proven ended; recover the session on the Maintenance page"
+        return f"the auditor submitted no report: ended {done.ending}; {done.detail}{gone}"
+    if gone:
+        return f"the auditor's processes are not proven ended; recover the session on the Maintenance page{gone}"
     if done.usage_unread:
         return f"the auditor's model is unknown: {done.usage_unread}"
     return ""

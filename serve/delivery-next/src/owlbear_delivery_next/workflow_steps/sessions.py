@@ -161,6 +161,8 @@ def account(change: Change, done: session_result.Run, fields: dict[str, object])
     step |= {"usage_unread": done.usage_unread} if done.usage_unread else {}
     step |= {"subagents": done.subagents} if done.subagents else {}  # within the usage, never added to the spend
     step["termination"] = dataclasses.asdict(done.termination) if done.termination else None
+    if not (done.termination and done.termination.confirmed):  # #951: Recent activity shows why, whole
+        step.setdefault("reason", session_result.unverified(done.termination))
     if done.usage.get("error") != "held":
         change.spend = change.spend.plus(done.usage, done.session_id)
         change.tool_use = change.tool_use.plus(done.tool_calls, done.wrong)

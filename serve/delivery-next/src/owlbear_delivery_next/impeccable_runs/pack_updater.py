@@ -20,7 +20,7 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_gates
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.workflow_steps import sessions
 
@@ -181,6 +181,7 @@ def ended(done: Run) -> UpdateResult:
     p = done.payload
     if not (done.termination and done.termination.confirmed):
         msg = f"the updater {done.session_id} may still be running; stop it before updating again"
+        msg += f"; {session_result.unverified(done.termination)}"
         raise pack_files.PackError(msg)
     if done.ending == "premise" and isinstance(p, tools.WrongPremise):
         msg = f"the updater asks the owner: {p.reason} ({'; '.join(p.evidence)})"

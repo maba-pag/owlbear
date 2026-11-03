@@ -962,3 +962,57 @@ def test_without_playwrights_browsers_the_tests_cannot_run(tmp_path, monkeypatch
     monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", str(tmp_path / "none"))
     with pytest.raises(browser.Unrunnable, match="Playwright's browsers are not installed"):
         browser.run(tmp_path, runner=Runner(suite(1)))
+
+
+@pytest.mark.parametrize("stage", ["updater", "challenger", "reconsider", "audit", "audit-no-report"])
+def test_an_unverified_session_end_says_its_problems_whole(tmp_path, checkout, whole_error, stage):
+    """A session whose end is not proven stops its stage saying why, each teardown problem whole (#951)."""
+    fakes = Fakes(checkout)
+    real, seen = fakes.session, []
+    left = Termination(confirmed=False, unknown=(9,), problems=(f"disconnect failed: RuntimeError: {whole_error}",))
+    fakes.verdicts = ["fix"] if stage == "reconsider" else []
+
+    def session(store: Store, cfg) -> Run:
+        if stage == "reconsider" and cfg.role == "challenger" and cfg.rechecks and cfg.submit is tools.REVIEW:
+            fakes.calls.append("challenger")  # the updater's rejection checked: the finding holds
+            upheld = [tools.Recheck(finding=k, upheld=True, reason="r") for k in cfg.rechecks]
+            return Run(cfg.session_id, "result", payload=tools.ReviewResult(verdict="pass", rechecked=upheld),
+                       termination=Termination(confirmed=True))  # fmt: skip
+        done = real(store, cfg)
+        if stage == "reconsider" and cfg.role == "updater" and fakes.calls.count("challenger") == 1:
+            rejected = [tools.Rejection(finding="F1", reason="it already holds")]
+            done = replace(done, payload=sessions.UpdateResult(summary=done.payload.summary, rejected=rejected))
+        aimed = {
+            "updater": cfg.role == "updater",
+            "challenger": cfg.role == "challenger",
+            "reconsider": cfg.role == "challenger" and bool(cfg.rechecks) and cfg.submit is not tools.REVIEW,
+            "audit": cfg.job == sessions.AUDIT,
+            "audit-no-report": cfg.job == sessions.AUDIT,
+        }[stage]
+        if aimed and not seen:
+            seen.append(cfg.session_id)
+            done = replace(done, termination=left)
+            if stage == "audit-no-report":
+                done = replace(done, ending="error", payload=None, detail="the model stopped")
+        return done
+
+    fakes.session = session
+    job = pds_job.Job(store(tmp_path), fakes.live(checkout))
+    state = run(job)
+    if stage == "reconsider":
+        state = PACK.answered(job, "reconsider", "the size is the release's own example")
+    role = "challenger" if stage == "reconsider" else stage
+    still = f"PackError: the {role} {seen[0]} may still be running; stop it before updating again"
+    name, said = {
+        "updater": ("update", still),
+        "challenger": ("challenger", still),
+        "audit": ("audit", "the auditor's processes are not proven ended; recover the session on the Maintenance page"),
+        "audit-no-report": ("audit", "the auditor submitted no report: ended error; the model stopped"),
+    }[role]
+    reason = f"{name}: {said}; termination unverified: processes 9 still present; disconnect failed: RuntimeError: "
+    reason += whole_error
+    assert (state["state"], state["reason"]) == ("failed", reason)
+    assert next(s for s in state["stages"] if s["name"] == name)["detail"] == reason
+    assert state["invocations"][-1]["detail"] == reason
+    logged = [line.split(" ", 1)[1] for line in state["log"]]
+    assert logged[-3:] == [f"{name}: running", f"{name}: failed: {reason}", reason]

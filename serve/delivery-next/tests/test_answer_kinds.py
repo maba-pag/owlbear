@@ -712,3 +712,32 @@ def test_a_check_that_fails_waits_with_its_whole_reason(picking, monkeypatch, wh
         else f"its verdict cannot be trusted: {whole_error}"
     )
     assert (c.outcome.exit, c.outcome.reason) == (Exit.PENDING, f"{clarification.FAILED}: {why}")
+
+
+@pytest.mark.parametrize("case", ["ending", "usage"])
+def test_an_unverified_session_end_says_its_problems_whole(picking, monkeypatch, whole_error, case):
+    run = Asking(picking, monkeypatch)
+    assert run.answer(kind="clarification", text=WORDS, statement=SAID, confirmed=True).status_code == 200
+    left = Termination(confirmed=False, unknown=(9,), problems=(f"disconnect failed: RuntimeError: {whole_error}",))
+    seen = []
+
+    async def unverified(cfg):
+        seen.append(cfg.session_id)
+        if case == "ending":
+            return Run(cfg.session_id, "error", None, detail="the runtime did not start", termination=left)
+        return Run(cfg.session_id, "result", verdict(), usage_unread="the usage was not read", termination=left)
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", unverified)
+
+    c = run.step()
+
+    why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
+    said = (
+        f"its session ended error: the runtime did not start; {why}"
+        if case == "ending"
+        else f"its verdict cannot be trusted: the usage was not read; {why}"
+    )
+    assert (c.outcome.exit, c.outcome.reason) == (Exit.PENDING, f"{clarification.FAILED}: {said}")
+    steps = [e for e in picking.store.events(picking.slug) if e.get("session") in seen]
+    ended = {"confirmed": False, "survivors": [], "unknown": [9], "problems": list(left.problems)}
+    assert [(e["termination"], e["reason"]) for e in steps] == [(ended, why)]

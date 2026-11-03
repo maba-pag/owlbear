@@ -370,20 +370,27 @@ def test_a_session_that_changed_its_copy_stops_even_with_a_clean_report(sources,
     assert done.report is None
 
 
+UNENDED = "the auditor's processes are not proven ended; recover the session on the Maintenance page; "
+UNENDED += "termination unverified: "
+
+
 @pytest.mark.parametrize(
     ("run", "why"),
     [
-        ({"ending": "error", "payload": None, "detail": "quota"}, "submitted no report: ended error; quota"),
-        ({"termination": Termination(confirmed=False)}, "not proven ended"),
-        ({"termination": None}, "not proven ended"),
-        ({"usage_unread": "no usage event"}, "model is unknown"),
+        (
+            {"ending": "error", "payload": None, "detail": "quota"},
+            "the auditor submitted no report: ended error; quota",
+        ),
+        ({"termination": Termination(confirmed=False, survivors=(4242,))}, f"{UNENDED}processes 4242 still present"),
+        ({"termination": None}, f"{UNENDED}termination did not run"),
+        ({"usage_unread": "no usage event"}, "the auditor's model is unknown: no usage event"),
     ],
     ids=["no-result", "unconfirmed", "no-termination", "usage"],
 )
 @pytest.mark.usefixtures("no_render")
 def test_a_session_that_did_not_end_cleanly_stops_whatever_it_reported(sources, run, why):
     verdict = audited(sources, report(), **run).verdict
-    assert (verdict.outcome, why in verdict.reason) == ("stop", True)
+    assert (verdict.outcome, verdict.reason) == ("stop", why)
 
 
 def auditor_settings(**auditor: object) -> config.Settings:

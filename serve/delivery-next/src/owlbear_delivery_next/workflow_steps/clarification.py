@@ -22,7 +22,7 @@ from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit
 from owlbear_delivery_next.change_flow import answer_kinds, loop
 from owlbear_delivery_next.change_flow.loop import StepResult
-from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, step_decisions
+from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, session_result, step_decisions
 from owlbear_delivery_next.workflow_steps import pick, sessions
 
 if TYPE_CHECKING:
@@ -109,10 +109,13 @@ def checked(store: Store, lock: Lock, c: Change) -> Change | None:
 
 def judged(done: Run) -> tuple[pick_tools.ClarificationResult | None, str]:
     """The session's verdict, or why there is none to trust."""
+    gone = done.termination and done.termination.confirmed
+    unproven = [] if gone else [session_result.unverified(done.termination)]
     if done.ending != "result" or not isinstance(done.payload, pick_tools.ClarificationResult):
-        return None, f"its session ended {done.ending}: {done.detail or 'no verdict was submitted'}"
-    if done.usage_unread or not (done.termination and done.termination.confirmed):
-        return None, f"its verdict cannot be trusted: {done.usage_unread or 'its processes were not confirmed gone'}"
+        said = "; ".join([done.detail or "no verdict was submitted", *unproven])
+        return None, f"its session ended {done.ending}: {said}"
+    if done.usage_unread or unproven:
+        return None, f"its verdict cannot be trusted: {'; '.join([*filter(None, [done.usage_unread]), *unproven])}"
     return done.payload, ""
 
 
