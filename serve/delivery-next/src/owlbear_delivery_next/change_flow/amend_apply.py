@@ -1,8 +1,9 @@
 """Applying a brief amendment (TD-185): the exact wording, the new version, the evidence it voids and the resume.
 
 The version it makes counts as approved and challenged; it is appended to the retained versions with its person
-checks, and earlier versions are never edited. Evidence of the changed items, and of those the challenger named, is
-voided; the rest keeps its result while its own inputs hold. The stopped step then resumes by the amendment's level.
+checks, and earlier versions are never edited (one an older build kept without them only gets them). Evidence of the
+changed items, and of those the challenger named, is voided; the rest keeps its result while its own inputs hold. The
+stopped step then resumes by the amendment's level.
 """
 
 from __future__ import annotations
@@ -43,6 +44,18 @@ def kept(c: Change) -> None:
     """Keep the current version as approved, its person checks with it, never edited again."""
     copied = [p.model_copy(deep=True) for p in c.checks]
     c.brief.approved.append(c.brief.model_copy(deep=True, update={"approved": [], "checks": copied}))
+
+
+def backfill(c: Change) -> None:
+    """Give the approved version its person checks when an older build kept it without them, before any amendment.
+
+    Until an amendment applies, the Change's checks are the ones that version approved.
+    """
+    if not c.checks or any(a.state == "applied" for a in c.amendments):
+        return
+    x = next((x for x in c.brief.approved if x.version == c.brief.approved_version), None)
+    if x is not None and not x.checks:
+        x.checks = [p.model_copy(deep=True) for p in c.checks]
 
 
 def reference(c: Change) -> int | None:

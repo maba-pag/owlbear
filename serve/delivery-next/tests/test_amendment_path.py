@@ -768,3 +768,19 @@ def test_a_second_objection_to_a_kept_amendment_takes_a_queued_merge_out_again()
     amending.objected(c, ObjectionItem(amendment="A1", at=NOW.replace(hour=10)), NOW)
 
     assert queue.leaving(before, c)
+
+
+def test_a_version_approved_before_checks_were_kept_with_it_still_reverts_a_check_as_it_was():
+    c = change()
+    c.brief.approved[0].checks = []  # approved by an older build
+    was = [(p.id, p.steps, p.expect, p.criteria) for p in c.checks]
+    changed = item("check", "check-1", "it greets twice", steps=["open /twice"])
+    through(c, changed, said=verdict("weaker", qualifies=False))
+    answer(c, "yes")
+
+    amending.objected(c, ObjectionItem(amendment="A1", at=NOW), NOW)
+    answer(c, "revert")
+    amending.opened(c, amending.current(c), RoundPolicy())
+    amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge-2", NOW)
+
+    assert [(p.id, p.steps, p.expect, p.criteria) for p in c.checks] == was

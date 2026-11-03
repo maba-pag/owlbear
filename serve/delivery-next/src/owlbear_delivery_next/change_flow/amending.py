@@ -70,6 +70,7 @@ def start(  # noqa: PLR0913 - what each source states
     reverts: str = "",
 ) -> Amendment:
     """Start an amendment from *source*: the Change runs it before its current step, which it then resumes."""
+    amend_apply.backfill(c)  # the version it amends, as a revert or the weaker rule reads it
     a = Amendment(
         id=f"A{len(c.amendments) + 1}", at=now, step=str(c.step.kind), session=session, source=source,
         base=c.brief.version, items=list(items), evidence=list(evidence), reason=" ".join(reason.split())[:2000],
