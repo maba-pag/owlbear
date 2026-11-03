@@ -212,12 +212,17 @@ def test_every_mutator_repairs_duplicates_before_its_own_change(tmp_path: Path, 
         "delete": partial(engine.delete, _TARGET_ID, target.updated_at),
         "purge": partial(engine.purge, min_age_days=0),
         "record_assessment": partial(
-            engine.record_assessment, _TARGET_ID, "outstanding", task_id="task-1", expected_revision=target.revision
+            engine.record_assessment,
+            _TARGET_ID,
+            "outstanding",
+            task_id="task-1",
+            expected_revision=target.revision,
+            stale_factor=50,
         ),
         "record_factually_wrong": partial(
             engine.record_factually_wrong, _TARGET_ID, "task-1", expected_revision=target.revision
         ),
-        "try_stale_transition": partial(engine.try_stale_transition, target),
+        "try_stale_transition": partial(engine.try_stale_transition, target, 50),
     }
     operations[operation]()
 

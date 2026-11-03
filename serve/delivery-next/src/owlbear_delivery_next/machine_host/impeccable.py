@@ -121,6 +121,7 @@ class Impeccable:
         self.thread: threading.Thread | None = None
         self.target = ""  # the version the running Install puts in place
         self.present: tuple[float, bool] | None = None
+        self.unkept = ""  # why the last failure could not be written or removed, until a later write succeeds
         self.failure: dict[str, Any] | None = self._restored()  # the last pack that failed: its version, what, when
 
     def _restored(self) -> dict[str, Any] | None:
@@ -157,7 +158,11 @@ class Impeccable:
                     tmp.write_text(json.dumps(failure) + "\n", encoding="utf-8")
                     tmp.replace(path)
             except OSError as exc:  # the banner holds it until the host ends
-                self.machine.say(f"Impeccable: the failure could not be kept in {path}: {exc}")
+                where = "removed from" if failure is None else "kept in"
+                self.unkept = f"the failure could not be {where} {path}: {command_failure.failure(exc)}"
+                self.machine.say(f"Impeccable: {self.unkept}")
+            else:
+                self.unkept = ""
 
     def failed(self, tag: str, detail: str, expected: object = ANY) -> None:
         """Keep a version's pack that could not be installed, for the pages' banner, also across restarts."""
@@ -190,9 +195,10 @@ class Impeccable:
         return found
 
     def read(self) -> dict[str, Any]:
-        """What every page shows: ``install`` (None, or missing, failed or installing) and ``release``."""
+        """What every page shows: ``install`` (None, or missing, failed or installing), ``release`` and ``unkept``."""
         with self.lock:
             installing, failure, target = self.thread is not None and self.thread.is_alive(), self.failure, self.target
+            unkept = self.unkept
         if failure and not installing and not self._applies(failure):
             self._resolved(failure)
             failure = None
@@ -211,7 +217,7 @@ class Impeccable:
             install = {"state": "missing", "version": running, "pack": pack, "detail": pack_files.status(), "at": None}
         else:
             install = None
-        return {"install": install, "release": release()}
+        return {"install": install, "release": release(), "unkept": unkept}
 
     def install(self) -> dict[str, Any]:
         """Install: the running version's pack when missing, and a failed version's own; refused while updating."""

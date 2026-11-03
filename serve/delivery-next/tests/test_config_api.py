@@ -112,6 +112,10 @@ def test_recommendations_cover_current_required_settings_without_filling_any_lay
 
     assert set(suggested.agents) == set(config.ROLES)
     assert config.resolve(suggested, config.Layer()).missing == []
+    assert suggested.memory.model_dump() == {
+        "outstanding_boost": 0.1, "unremarkable_penalty": 0.01, "stale_factor": 50, "purge_days": 30,
+        "preflight_cap": 5, "preflight_budget": 2000, "recall_limit": 20, "explore_slots": 2, "challenge_slots": 2,
+    }  # what the code held before the Memory group; none is a default: resolution never reads them  # fmt: skip
     assert machine_settings.resolve(config.MachineValues(), suggested.machine).missing == []
     assert suggested.spotter.verbose_until is None  # optional, not an invented expiry date
     assert {name for name, agent in suggested.agents.items() if agent.context == "long"} == {"design-judge", "shaper"}
@@ -256,7 +260,8 @@ def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tm
                                                          "pr_marker": None, "load_user_instructions": None,
                                                          "load_user_skills": None, "load_user_memory": None,
                                                          "guard_level": None, "sessions": None, "spotter": None,
-                                                         "curator_threshold": None, "machine": None,
+                                                         "curator_threshold": None, "memory": None,
+                                                         "machine": None,
                                                          "machine_moved": None},
                                                         True)  # fmt: skip
     data = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": {"format": F, "data": {}}})

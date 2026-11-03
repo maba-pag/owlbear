@@ -1,6 +1,7 @@
 """The Settings page's Impeccable update job (TD-101) and the Maintenance overview (TD-113), with fakes for the live
 parts: upstream, downloads, golden pages, replay and the challenger. Git runs only on local repositories in tmp."""
 
+import dataclasses
 import fcntl
 import hashlib
 import json
@@ -1576,6 +1577,58 @@ def test_a_failed_pack_stage_keeps_and_logs_its_whole_error(  # noqa: PLR0913, P
     assert state["invocations"][-1]["detail"] == reason
     logged = [line.split(" ", 1)[1] for line in state["log"]]
     assert logged[-3:] == [f"{stage}: running", f"{stage}: failed: {reason}", reason]
+
+
+@pytest.mark.parametrize("stage", ["updater", "challenger", "reconsider", "repair"])
+def test_an_unverified_session_end_says_its_problems_whole(tmp_path, checkout, clone, whole_error, stage):
+    """A session whose end is not proven stops its stage saying why, each teardown problem whole (#951)."""
+    left = Termination(confirmed=False, unknown=(9,), problems=(f"disconnect failed: RuntimeError: {whole_error}",))
+    seen: list[str] = []
+
+    def unproven(real, aimed):
+        def session(store: Store, cfg) -> Run:
+            done = real(store, cfg)
+            if aimed(cfg) and not seen:
+                seen.append(cfg.session_id)
+                done = dataclasses.replace(done, termination=left)
+            return done
+
+        return session
+
+    if stage == "reconsider":
+        job, _fakes, _state = upheld(tmp_path, checkout, clone)
+        job.live.challenge = unproven(job.live.challenge, lambda cfg: cfg.submit is dispute_tools.SUBMIT)
+        state = answered(job, "reconsider", "the halo is upstream's own example")
+    elif stage == "repair":
+        _fakes, job, _state = ci_failed(tmp_path, checkout, clone, {"fixed.txt": "fixed\n"})
+        job.live.update = unproven(job.live.update, lambda cfg: cfg.submit is pack_repair.SUBMIT)
+        state = answered(job, "repair")
+    else:
+        fakes = Fakes(clone)
+        if stage == "updater":
+            fakes.update = unproven(fakes.update, lambda _cfg: True)
+        else:
+            fakes.challenge = unproven(fakes.challenge, lambda _cfg: True)
+        state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+    why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
+    logged = [line.split(" ", 1)[1] for line in state["log"]]
+    if stage == "repair":
+        said = f"the agent's repair did not finish: PackError: the agent {seen[0]} may still be running; stop it on "
+        said += f"the Maintenance page; {why}"
+        published = state["published"]
+        reason = f"CI failed at {published['commit'][:12]} of {published['url']}: CI; {said}. Fix it and try again, "
+        reason += "have an agent try again, or discard"
+        assert (state["state"], state["reason"]) == ("waiting", reason)
+        assert [i["detail"] for i in state["invocations"] if i["operation"] == "ci-repair"] == [said]
+        assert next(s for s in state["stages"] if s["name"] == "merge")["detail"] == reason
+        assert logged[-3:] == ["merge: running", f"merge: failed: {said}", f"waiting for you: {reason}"]
+        return
+    name, who = ("update", "updater") if stage == "updater" else ("challenger", "challenger")
+    reason = f"{name}: PackError: the {who} {seen[0]} may still be running; stop it before updating again; {why}"
+    assert (state["state"], state["reason"]) == ("failed", reason)
+    assert next(s for s in state["stages"] if s["name"] == name)["detail"] == reason
+    assert state["invocations"][-1]["detail"] == reason
+    assert logged[-3:] == [f"{name}: running", f"{name}: failed: {reason}", reason]
 
 
 def test_a_hold_stops_a_running_invocation_with_its_whole_reason(whole_error) -> None:

@@ -25,7 +25,7 @@ def failed_session(root):
     owner = maintenance.Maintenance(Slots(lambda: 1), boot=lambda: 10.0)
     assert owner.slots.take("p", "pack:one", 1, 1) == 1
     ident = owner.begin("p", "pack:one", "pack", str(root), now=AT)
-    owner.failed(ident, RuntimeError("no Run returned"))
+    owner.failed(ident, "RuntimeError: no Run returned")
     return ident
 
 

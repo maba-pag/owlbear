@@ -23,7 +23,7 @@ from owlbear_delivery_next.change_contracts.decision_records import Pick, Picked
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_flow import picks
-from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter
+from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.state_store.decision_archive import whole
@@ -235,11 +235,12 @@ def _new_id(c: Change) -> str:
 
 def judged(done: Run, found: list[Decision], base: Pick) -> Pick:
     """The session's pick: its known ids with their revisions as listed, unknown ones dropped; else a failure."""
+    unproven = [] if done.termination and done.termination.confirmed else [session_result.unverified(done.termination)]
     if done.ending != "result" or not isinstance(done.payload, pick_tools.PickResult):
-        why = done.detail or "no pick was submitted"
+        why = "; ".join([done.detail or "no pick was submitted", *unproven])
         return base.model_copy(update={"status": "failed", "reason": f"its session ended {done.ending}: {why}"})
-    if done.usage_unread or not (done.termination and done.termination.confirmed):
-        why = done.usage_unread or "its processes were not confirmed gone"
+    if done.usage_unread or unproven:
+        why = "; ".join([*filter(None, [done.usage_unread]), *unproven])
         return base.model_copy(update={"status": "failed", "reason": f"its pick cannot be trusted: {why}"})
     by_id, notes = {d.id: d for d in found}, {p.id: p.note for p in done.payload.picked}
     kept = [by_id[i] for i in notes if i in by_id]

@@ -1,12 +1,15 @@
 """Item 5 slice 4: automatic memory curation runs one curator session per memory folder of the shared repository."""
 
 import json
+import logging
+import socket
 import threading
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+import uvicorn
 from owlbear_memory import MemoryCategory, MemoryEngine
 
 from owlbear_delivery_next.change_contracts import memory_curation_tools, tools
@@ -16,12 +19,13 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import curation, curation_snapshots, curation_tree
+from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import GlobalLayer
 from owlbear_delivery_next.state_store import layers, registry, settings_carry, spend_ledger
 from owlbear_delivery_next.state_store.curation_runs import Runs
-from owlbear_delivery_next.state_store.store import update_layer
+from owlbear_delivery_next.state_store.store import Store, update_layer
 
 
 def pending(folder: Path, title: str):
@@ -211,22 +215,32 @@ def test_an_entry_saved_during_a_run_stays_due_and_a_trigger_meanwhile_runs_the_
     assert (len(runs), job.due("shop")) == (2, False)  # the follow-up saw it
 
 
-def test_one_folder_that_fails_never_strands_the_next_and_a_restart_ends_interrupted_runs(repo) -> None:
+def test_one_folder_that_fails_never_strands_the_next_and_a_restart_ends_interrupted_runs(
+    repo, caplog, whole_error
+) -> None:
+    note = f"the session's teardown also failed: OSError: {whole_error}"
+
     def run(cfg) -> Run:
         if "owlbear" in cfg.session_id:
-            broke = "the runtime broke"
-            raise RuntimeError(broke)
+            broke = RuntimeError(whole_error)
+            broke.add_note(note)  # as loop_owner.run adds it
+            raise broke
         return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
                    termination=Termination(confirmed=True))  # fmt: skip
 
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
-    job.start("all")
-    drained(job)
+    with caplog.at_level("ERROR", logger=curation.__name__):
+        job.start("all")
+        drained(job)
     states = {f["folder"]: (f["state"], f["reason"]) for f in job.read()["folders"]}
     assert states == {
-        "owlbear": ("failed", "RuntimeError: the runtime broke"),
+        "owlbear": ("failed", f"RuntimeError: {whole_error}\n{note}"),
         "shop": ("failed", curation.LEFT),
     }
+    (logged,) = caplog.records
+    assert logged.getMessage() == f"memory curation of owlbear failed ({job.load().folders['owlbear'].key})"
+    traceback = logging.Formatter().formatException(logged.exc_info)
+    assert traceback.endswith(f"RuntimeError: {whole_error}\n{note}")  # the traceback says the note too
     assert job.slots.counts(curation.SLOT)[2] == 1
 
     job._save("shop", curation.FolderRun(state="running"))  # noqa: SLF001 - OwlBear stops while it runs
@@ -606,6 +620,68 @@ def test_a_run_unconfirmed_without_processes_to_watch_retains_its_slot_and_says_
     assert slots.take("another-project", "c1", 1, 1) == 0
 
 
+def test_an_unverified_session_end_says_its_problems_whole(root, whole_error, caplog) -> None:
+    left = Termination(confirmed=False, unknown=(9,), problems=(f"disconnect failed: RuntimeError: {whole_error}",))
+
+    def run(cfg) -> Run:
+        return Run(cfg.session_id, ending="error", detail="the session's own detail", termination=left)
+
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    job.start("shop")
+    drained(job)
+    shop = {f["folder"]: f for f in job.read()["folders"]}["shop"]
+    why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
+    reason = f"ended error: {curation.UNKNOWN}; {why}; the session's own detail; "
+    reason += "the run changed no memory, so nothing is held"
+    assert (shop["state"], shop["reason"]) == ("failed", reason)
+    logged = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == curation.__name__]
+    assert logged == [("ERROR", f"memory curation of shop failed ({shop['key']}): {reason}")]
+
+
+@pytest.mark.browser
+def test_a_failed_folder_s_whole_reason_shows_on_maintenance(root, tmp_path, pds, whole_error) -> None:
+    """#951: a folder's failed run, read as the host's route returns it, shows its whole reason in its Maintenance row;
+    every failed run's reason (raised, or ended unverified) goes through that one line."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    note = f"the session's teardown also failed: OSError: {whole_error}"
+
+    def run(_cfg) -> Run:
+        broke = RuntimeError(whole_error)
+        broke.add_note(note)  # as loop_owner.run adds it
+        raise broke
+
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    job.start("owlbear")
+    drained(job)
+    read, reason = job.read(), f"RuntimeError: {whole_error}\n{note}"
+    assert {f["folder"]: f["reason"] for f in read["folders"]}["owlbear"] == reason
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    app = api.create_app(Store(tmp_path, name="shop"), "tok", None)
+    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_keep_alive=60))
+    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
+    while not server.started:
+        time.sleep(0.05)
+    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.route("**/api/next/curation", lambda route: route.fulfill(json=read))
+            page.goto(f"{base}/maintenance#token=tok")
+            row = page.locator("#curation > li", has=page.get_by_role("heading", name="owlbear", exact=True))
+            expect(row).to_be_visible()
+            assert row.locator('p-text[size="xs"]:not(.blocked)').first.text_content() == reason
+            browser.close()
+    finally:
+        server.should_exit = True
+
+
 def test_a_run_waiting_for_a_slot_never_starts_once_an_update_or_a_stop_fences_it(root) -> None:
     slots, fence = Slots(lambda: 1), [""]
     assert slots.take("0123456789abcdef", "a-change", 1, 1) == 1  # a project's step holds the only slot
@@ -766,7 +842,7 @@ def test_an_unkeyed_unknown_row_is_never_taken_for_a_lease_merely_because_it_beg
     lease = first.maintenance.begin(
         curation.SLOT, "curate:shop:2bf0000000000000", "curation", "", now=t0 + timedelta(seconds=1)
     )
-    first.maintenance.failed(lease, RuntimeError("synthetic unconfirmed runtime"))
+    first.maintenance.failed(lease, "RuntimeError: synthetic unconfirmed runtime")
     for _ in range(2):
         restarted = curation.Curation(
             Slots(lambda: 1, closed=True), shared=lambda: DataRepo(root), run=lambda _cfg: pytest.fail("it ran")
@@ -786,7 +862,7 @@ def test_an_unkeyed_unknown_row_is_held_anew_once_after_the_lease_within_its_tim
     lease = first.maintenance.begin(
         curation.SLOT, "curate:shop:2bf0000000000001", "curation", "", now=t0 + timedelta(seconds=1)
     )
-    first.maintenance.failed(lease, RuntimeError("synthetic unconfirmed runtime"))
+    first.maintenance.failed(lease, "RuntimeError: synthetic unconfirmed runtime")
     booted = first.maintenance.boot
     first.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the failed session
     first.maintenance.recover(lease, rebooted=True)
@@ -802,7 +878,7 @@ def test_an_unrelated_earlier_curation_generation_never_covers_a_later_unkeyed_2
     first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
     early = datetime(2026, 10, 25, 0, 0, 0, tzinfo=UTC)
     old = first.maintenance.begin(curation.SLOT, "curate:shop:2bf00000000000aa", "curation", "", now=early)
-    first.maintenance.failed(old, RuntimeError("synthetic unconfirmed runtime"))
+    first.maintenance.failed(old, "RuntimeError: synthetic unconfirmed runtime")
     if unrelated == "recovered":
         booted = first.maintenance.boot
         first.maintenance.boot = lambda: booted() + 1

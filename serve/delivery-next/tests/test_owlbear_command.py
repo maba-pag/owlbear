@@ -301,7 +301,7 @@ def test_start_runs_one_detached_host_and_stop_ends_it() -> None:
         "update": None, "updated": "", "announce": None, "pack": None, "reads": None,
     }  # fmt: skip  # a real host: no Global and nothing set here, so it never updates while paused (2026-10-23)
     assert listed["update"]["phase"] == "idle"
-    assert set(listed["pack"]) == {"install", "release"}  # its content depends on this machine's own pack
+    assert set(listed["pack"]) == {"install", "release", "unkept"}  # its content depends on this machine's own pack
     end = time.monotonic() + 30
     while (reads := control.projects()["reads"])["read_at"] is None:  # the start read, against the outside world
         assert time.monotonic() < end, "the host never read at its start"

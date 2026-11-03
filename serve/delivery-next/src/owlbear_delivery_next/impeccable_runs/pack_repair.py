@@ -44,7 +44,7 @@ from owlbear_delivery_next.impeccable_runs.pack_repair_edits import asked as _as
 from owlbear_delivery_next.impeccable_runs.pack_repair_edits import config as _config
 from owlbear_delivery_next.impeccable_runs.pack_repair_edits import held as _held
 from owlbear_delivery_next.impeccable_runs.pack_repair_edits import staged as _staged
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.workflow_steps import follow, sessions
 
@@ -425,6 +425,7 @@ def _ended(done: Run) -> str:
     p = done.payload
     if not (done.termination and done.termination.confirmed):
         msg = f"the agent {done.session_id} may still be running; stop it on the Maintenance page"
+        msg += f"; {session_result.unverified(done.termination)}"
         raise pack_files.PackError(msg)
     if done.ending != "result" or not isinstance(p, RepairResult):
         said = p.reason if isinstance(p, tools.WrongPremise) else done.detail or "no result"

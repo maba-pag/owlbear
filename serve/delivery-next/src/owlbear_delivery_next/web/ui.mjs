@@ -141,7 +141,9 @@ const listed = (id) => bar.data.projects.some((p) => p.id === id);
 if (bar.data && !listed(project) && (project || scope !== "all")) {
   const first = bar.data.projects.find((p) => p.state === "loaded") ?? bar.data.projects[0];
   if (first || project) {  // a project page shows one project: the first loaded one when the link named none
-    location.replace(here({ project: first && scope !== "all" ? first.id : "" }, location.pathname + location.hash));
+    const layer = new URLSearchParams(location.search).get("layer") ?? "";  // Settings' layer is no project's own
+    location.replace(here({ project: first && scope !== "all" ? first.id : "", layer },
+      location.pathname + location.hash));
     await new Promise(() => {});
   }
 }

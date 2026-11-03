@@ -18,7 +18,7 @@ from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.impeccable_runs import pack_candidate
 from owlbear_delivery_next.local_system import pds_skill
 from owlbear_delivery_next.pds_runs import pin
-from owlbear_delivery_next.runtimes import sdk_adapter, step_input
+from owlbear_delivery_next.runtimes import sdk_adapter, session_result, step_input
 from owlbear_delivery_next.settings import roles
 
 if TYPE_CHECKING:
@@ -132,6 +132,7 @@ def updated(done: Run) -> UpdateResult:
     p = done.payload
     if not (done.termination and done.termination.confirmed):
         msg = f"the updater {done.session_id} may still be running; stop it before updating again"
+        msg += f"; {session_result.unverified(done.termination)}"
         raise pack_files.PackError(msg)
     if done.ending == "premise" and isinstance(p, tools.WrongPremise):
         msg = f"the updater asks the owner: {p.reason} ({'; '.join(p.evidence)})"

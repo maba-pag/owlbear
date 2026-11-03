@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.impeccable_runs import pack_progress, pack_publish, pack_repair, pack_rounds, pack_run
 from owlbear_delivery_next.impeccable_runs.pack_run import Stopped
@@ -146,7 +147,7 @@ def gate(job: Job, ctx: Context, lp: RoundLoop) -> None:
         ctx.source = pages
         job.keep(ctx, lp)
     except (pack_files.PackError, browser.Unrunnable, Stopped) as exc:
-        msg = f"the merge gate could not judge the head {head[:12]}: {exc}"
+        msg = f"the merge gate could not judge the head {head[:12]}: {failure(exc)}"
         raise pack_publish.Held(msg) from exc
     finally:
         tree.remove(root, at, live.git)

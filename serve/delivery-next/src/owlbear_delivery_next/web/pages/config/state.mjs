@@ -10,13 +10,16 @@ export const ROUNDS = [["max_rounds", "Rounds at most"], ["max_findings", "New f
   ["last_round_at", "Last round at or below"], ["ask_owner_at", "Ask you at or above"]];  // TD-209
 export const NUMBERS = [...ROUNDS.map(([f]) => f), "minutes", "sessions", "curator_threshold", "steer_share",
   "intervention_cap", "sample_rate", "update_check_hours_owlbear", "update_check_hours_pds",
-  "update_check_hours_impeccable"];  // whole numbers
+  "update_check_hours_impeccable", "stale_factor", "purge_days", "preflight_cap", "preflight_budget", "recall_limit",
+  "explore_slots", "challenge_slots"];  // whole numbers
 // Credit limits (D-01M5XCD49YHHR1NQKKY8TQD0C3): credit amounts, a fraction allowed.
 export const CREDITS = ["look_credit_limit", "retro_run_credit_limit", "replay_run_credit_limit"];
-// A typed number as sent: a whole number for NUMBERS, a decimal one for CREDITS; other text as typed, which the
-// server refuses with its reason.
+// What a memory rating is worth: a fraction allowed.
+export const POINTS = ["outstanding_boost", "unremarkable_penalty"];
+// A typed number as sent: a whole number for NUMBERS, a decimal one for CREDITS and POINTS; other text as typed, which
+// the server refuses with its reason.
 export function typedNumber(field, value) {
-  if (CREDITS.includes(field)) return /^\d+(\.\d+)?$/.test(value) ? Number(value) : value;
+  if (CREDITS.includes(field) || POINTS.includes(field)) return /^\d+(\.\d+)?$/.test(value) ? Number(value) : value;
   return /^\d+$/.test(value) ? Number(value) : value;
 }
 export const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan challenges (planner)"],

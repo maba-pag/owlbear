@@ -55,7 +55,7 @@ def router(read: Callable[[str], Change]) -> APIRouter:
     ) -> dict[str, Any]:
         c = read(slug)
         if brief_rounds.running(c, version, attempt) or picks.owed(c):
-            return {"running": True}
+            return {"running": True, "version": c.brief.version}  # the draft it answers for (chat contract 3)
         return {"running": False, **brief_rounds.status(c)}
 
     routes.add_api_route("/chat/contract", contract, methods=["GET"])

@@ -18,6 +18,7 @@ from owlbear_delivery_next.local_system import preload
 from owlbear_delivery_next.runtimes import lessons, sdk_adapter, sdk_usage, step_input
 
 PRODUCING = ("builder", "planner", "preparer", "updater", "test-curator")
+BUDGET = 2000  # the characters the tests' settings layer gives the pre-flight recall (conftest's complete_layer)
 RECALLING = (*PRODUCING, "reviewer", "challenger", "design-judge", "test-reviewer")
 NEVER = ("picker", "curator")  # the picker has no memory; the curator curates it and never recalls
 
@@ -141,12 +142,12 @@ def test_conflicting_lessons_are_both_shown_as_advice_under_the_frame(memory: Pa
 
 
 def test_whole_lessons_fit_the_hard_budget_wrappers_included_and_skipped_ones_are_logged(memory: Path) -> None:
-    big = [entry(n, content="x" * 1000, score=1.0 - n / 100) for n in (1, 2)]
-    small = [entry(n, score=0.5 - n / 100) for n in range(3, 10)]
+    big = [entry(n, content="x" * 1000, confidence=1.0 - n / 100) for n in (1, 2)]
+    small = [entry(n, confidence=0.9 - n / 100) for n in range(3, 10)]
     keep(memory, *big, *small)
     text, log = told("builder", memory)
     block = text.split("\n\n## Task\n", 1)[0]
-    assert len(block) <= selection.BUDGET
+    assert len(block) <= BUDGET
     quoted, kept = shown(text), len(shown(text)) - 1
     assert kept >= 1
     assert [q["id"] for q in quoted] == [e.id for e in (big[0], *small[:kept])]  # big[1] is skipped, never cut
@@ -155,11 +156,11 @@ def test_whole_lessons_fit_the_hard_budget_wrappers_included_and_skipped_ones_ar
     assert log[0]["omitted"] == [{"id": e.id, "revision": e.revision, "reason": "budget"} for e in skipped]
     assert len(quoted) + len(log[0]["omitted"]) == len(big) + len(small)  # every eligible lesson is accounted for
     for skipped in (big[1], small[kept]):
-        assert len(block) + len(lessons.line(selection.Candidate(skipped, "project", specific=True))) + 1 > 2000
+        assert len(block) + len(lessons.line(selection.Candidate(skipped, "project", specific=True))) + 1 > BUDGET
 
 
 def test_at_most_five_lessons_are_shown_and_none_fills_a_quota(memory: Path) -> None:
-    keep(memory, *(entry(n, score=0.9 - n / 100) for n in range(1, 9)))
+    keep(memory, *(entry(n, confidence=0.99 - n / 100) for n in range(1, 9)))
     text, log = told("builder", memory)
     assert [q["title"] for q in shown(text)] == [f"Lesson {n}" for n in range(1, 6)]
     assert [(o["id"][-5:], o["reason"]) for o in log[0]["omitted"]] == [(f"{n:05d}", "cap") for n in range(6, 9)]
@@ -173,6 +174,59 @@ def test_no_eligible_lessons_are_said_as_such(memory: Path) -> None:
     assert text == f"{lessons.HEADING}\n{lessons.NONE}\n\n## Task\nDo it."
     assert log == [selected(status="none")]
     assert told("builder", memory.parent / "absent")[0].startswith(f"{lessons.HEADING}\n{lessons.NONE}")
+
+
+def owner_holds(memory: Path, **values: object) -> None:
+    """The owner's memory values in the global file of the shared repository beside *memory*."""
+    (memory.parent.parent / "config.json").write_text(json.dumps({"format": 21, "memory": values}))
+
+
+def test_the_owners_cap_and_budget_decide_how_many_lessons_are_shown(memory: Path) -> None:
+    keep(memory, *(entry(n, confidence=0.99 - n / 100) for n in range(1, 6)))
+    owner_holds(memory, preflight_cap=2)
+    text, log = told("builder", memory)
+    assert [q["title"] for q in shown(text)] == ["Lesson 1", "Lesson 2"]
+    assert [o["reason"] for o in log[0]["omitted"]] == ["cap"] * 3
+
+    owner_holds(memory, preflight_cap=5, preflight_budget=len(lessons.HEADING) + 1)  # no room for the wrappers
+    text, log = told("builder", memory)
+    assert text.startswith(f"{lessons.HEADING}\n{lessons.UNFIT.format(role='builder')}")
+    assert {o["reason"] for o in log[0]["omitted"]} == {"budget"}
+
+
+def test_the_owners_points_decide_the_order_and_the_stored_score_ranks_nothing(memory: Path) -> None:
+    keep(
+        memory,
+        entry(1, title="rated", confidence=0.8, outstanding_count=2, score=0.1),
+        entry(2, title="confident", confidence=0.95, score=5.0),
+    )
+    owner_holds(memory, outstanding_boost=0.1)  # 1.0 against 0.95
+    assert [q["title"] for q in shown(told("builder", memory)[0])] == ["rated", "confident"]
+    owner_holds(memory, outstanding_boost=0.01)  # 0.82 against 0.95
+    assert [q["title"] for q in shown(told("builder", memory)[0])] == ["confident", "rated"]
+
+
+def test_an_unset_value_is_told_to_the_agent_and_never_stops_the_step(memory: Path, monkeypatch) -> None:
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+
+    monkeypatch.setattr(config, "BASE", None)  # production: no layer under the owner's own
+    keep(memory, entry(1))
+    owner_holds(memory, outstanding_boost=0.1, unremarkable_penalty=0.01)
+    text, log = told("builder", memory)
+    assert text.startswith(f"{lessons.HEADING}\nDelivery could not read them all (settings unset: ")
+    assert "memory.preflight_cap, memory.preflight_budget" in text
+    assert (log[0]["status"], "memory.preflight_cap" in log[0]["failed"], log[0]["lessons"]) == ("unread", True, [])
+
+
+def test_challenge_rounds_that_do_not_combine_are_told_to_the_agent_and_never_stop_the_step(memory: Path) -> None:
+    keep(memory, entry(1))
+    misfit = {"max_rounds": 5, "max_findings": 10, "last_round_at": 8, "ask_owner_at": 7}  # last must be below ask
+    (memory.parent.parent / "config.json").write_text(
+        json.dumps({"format": 21, "agents": {"builder": misfit}, "memory": {"stale_factor": 50}})
+    )
+    text, log = told("builder", memory)
+    assert text.startswith(f"{lessons.HEADING}\nDelivery could not read them all (the settings do not combine: ")
+    assert (log[0]["status"], log[0]["lessons"]) == ("unread", [])
 
 
 def test_lessons_that_exist_but_fit_nothing_send_the_agent_to_its_own_recall(memory: Path) -> None:

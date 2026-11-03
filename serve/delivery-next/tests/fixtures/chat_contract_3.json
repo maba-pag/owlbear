@@ -1,7 +1,8 @@
 {
   "replies": {
-    "GET /changes": ["[].handle", "[].slug"],
-    "GET /chat/challenge/{slug}": ["running"],
+    "GET /changes": ["[].handle", "[].slug", "[].step", "[].line", "[].action", "[].actor"],
+    "GET /chat/brief/{slug}": ["challenge.version", "challenge.attempt"],
+    "GET /chat/challenge/{slug}": ["running", "version"],
     "GET /chat/contract": ["supported"],
     "GET /decisions": [
       "available",
@@ -250,13 +251,6 @@
             "items": {
               "additionalProperties": false,
               "properties": {
-                "covers": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "maxItems": 30,
-                  "type": "array"
-                },
                 "expect": {
                   "maxLength": 300,
                   "minLength": 1,
@@ -964,6 +958,24 @@
         "type": "object"
       }
     },
+    "await_challenge": {
+      "input": {
+        "properties": {
+          "change": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": ["change", "version"],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
     "challenge_brief": {
       "input": {
         "$defs": {
@@ -1291,13 +1303,6 @@
           "PersonCheckDraft": {
             "additionalProperties": false,
             "properties": {
-              "covers": {
-                "items": {
-                  "type": "string"
-                },
-                "maxItems": 30,
-                "type": "array"
-              },
               "expect": {
                 "maxLength": 300,
                 "minLength": 1,

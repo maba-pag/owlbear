@@ -171,6 +171,13 @@ def to_result(run: Run, kind: StepKind, now: datetime, enclosing: StepKind | Non
     return result.model_copy(update={"denial": run.denials[-1]}) if run.denials and not result.denial else result
 
 
+def unverified(t: Termination | None) -> str:
+    """Why a session's end is not proven: the processes still present and each teardown problem, whole (#951)."""
+    t = t or Termination(confirmed=False, problems=("termination did not run",))
+    pids = ", ".join(str(p) for p in sorted({*t.survivors, *t.unknown}))
+    return "termination unverified: " + "; ".join([*([f"processes {pids} still present"] if pids else []), *t.problems])
+
+
 def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
     run: Run, kind: StepKind, now: datetime, enclosing: StepKind
 ) -> StepResult:
@@ -178,10 +185,9 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
     t = run.termination or Termination(confirmed=False, problems=("termination did not run",))
     if not t.confirmed:
         pids = ", ".join(str(p) for p in sorted({*t.survivors, *t.unknown}))
-        found = [f"processes {pids} still present"] if pids else []
         stop = Stop(
             kind=ErrorKind.LIVENESS,
-            reason="termination unverified: " + "; ".join([*found, *t.problems]),
+            reason=unverified(t),
             action=f"End processes {pids}" if pids else "Check that no process of this step remains",
             resume="No process of this step remains",
             at=now,
