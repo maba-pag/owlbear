@@ -191,7 +191,7 @@ def schedule(  # noqa: PLR0913 - the PR observation, the profile's consent setti
     dropped: list[tuple[AnswerItem, str]] | None = None,
 ) -> tuple[Change, Step | None]:
     """Fold the inbox, observe the PR's end and intent flags, and only then apply exclusions."""
-    c = fold(change, items, now, dropped)
+    c = fold(change, amending.unmerged(change, items, dropped) if pr_state == "merged" else items, now, dropped)
     routed = delivery_target.route(c, pr_state, now)
     if not routed and not c.finished_at and c.step.kind != StepKind.CLEANUP:
         if not asking and waiting_consent(c) and (q := open_question(c)) is not None:

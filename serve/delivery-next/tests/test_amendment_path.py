@@ -833,3 +833,16 @@ def test_a_brief_an_amendment_removed_a_criterion_from_is_read_back_and_saved_ag
         ["AC-2"],
     )
     assert after.brief.specified == ["AC-2"]
+
+
+def test_a_yes_folded_with_the_pr_seen_merged_approves_nothing_and_the_amendment_moves_on_whole():
+    c = change(K.MERGE, None)
+    through(c, said=verdict("weaker", qualifies=False))
+    q, dropped, before = loop.open_question(c), [], c.model_copy(deep=True)
+
+    c, step = loop.schedule(c, [AnswerItem(question=q.id, option="yes", at=NOW)], NOW, "merged", dropped=dropped)
+
+    (why,) = [why for _, why in dropped]
+    assert why == f"question {q.id}: the PR merged first; the amendment goes on as a new Change"
+    assert (c.amendments, c.amending, c.brief) == (before.amendments, before.amending, before.brief)
+    assert step.kind == K.CLEANUP  # where the amendment step hands it, candidate and all, to a new Change

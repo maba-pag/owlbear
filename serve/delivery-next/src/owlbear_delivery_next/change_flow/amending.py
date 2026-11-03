@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.amendment_records import Amending, Amendment
 from owlbear_delivery_next.change_contracts.failures import cause_key
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import Answer, ErrorKind, Exit, Option, Outcome, Question, StepKind
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_flow import amend_apply
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.change_contracts.amend_tools import CandidateItem, CandidateResult, VerdictResult
     from owlbear_delivery_next.change_contracts.amendment_records import AmendedItem, Choice, Objection, Source
-    from owlbear_delivery_next.change_contracts.inbox import AnswerItem, ObjectionItem
+    from owlbear_delivery_next.change_contracts.inbox import InboxItem, ObjectionItem
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
     from owlbear_delivery_next.change_contracts.tools import WrongPremise
@@ -282,6 +283,22 @@ def owned(q: Question) -> tuple[str, str] | None:
         return None
     _, ident, what = said.split(" ", 2)
     return ident, what
+
+
+def unmerged(c: Change, items: Iterable[InboxItem], dropped: list[tuple[AnswerItem, str]] | None) -> list[InboxItem]:
+    """The items without answers to the running amendment's questions, dropped with why, once its PR is seen merged.
+
+    Its answer approves nothing then: the amendment goes on whole, candidate and all, as a new Change (TD-185).
+    """
+    kept: list[InboxItem] = []
+    for item in items:
+        q = next((q for q in c.questions if q.id == item.question), None) if isinstance(item, AnswerItem) else None
+        own = owned(q) if q is not None else None
+        if own is None or own[1] == "objection":
+            kept.append(item)
+        elif dropped is not None:
+            dropped.append((item, f"question {q.id}: the PR merged first; the amendment goes on as a new Change"))
+    return kept
 
 
 def answered(c: Change, item: AnswerItem, now: datetime, dropped: list[tuple[AnswerItem, str]] | None) -> bool:
