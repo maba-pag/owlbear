@@ -101,6 +101,31 @@ def test_a_project_save_needs_the_revision_it_was_based_on(store):
     assert saved.json()["inherited"]["project"]["agents"]["builder"]["effort"] == "medium"
 
 
+def test_recommendations_cover_current_required_settings_without_filling_any_layer(store, monkeypatch):
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+    from owlbear_delivery_next.state_store import machine_settings  # noqa: PLC0415
+
+    monkeypatch.setattr(config, "BASE", None)
+    monkeypatch.setattr(machine_settings, "BASE", None)
+    got = client(store, headers=AUTH).get("/api/next/config").json()
+    suggested = config.GlobalLayer.model_validate(got["recommendations"])
+
+    assert set(suggested.agents) == set(config.ROLES)
+    assert config.resolve(suggested, config.Layer()).missing == []
+    assert machine_settings.resolve(config.MachineValues(), suggested.machine).missing == []
+    assert suggested.spotter.verbose_until is None  # optional, not an invented expiry date
+    assert {name for name, agent in suggested.agents.items() if agent.context == "long"} == {"design-judge", "shaper"}
+    assert suggested.machine.retro_run_credit_limit == 61.0  # not the old carry's 20
+    assert suggested.preparations is None
+    assert suggested.data is None  # no project-specific permissions invented
+    assert {"format", "prefs_imported", "roles_moved", "machine_moved"}.isdisjoint(got["recommendations"])
+    assert got["settings"]["missing"]
+    assert got["settings"]["agents"]["builder"]["model"] is None
+    assert got["settings"]["sources"].get("agents.builder.model") is None
+    assert not store.config_path.exists()
+    assert not store.machine_path.exists()
+
+
 def test_the_challenge_round_values_are_saved_per_loop(store):
     c = client(store, headers=AUTH)
     first = c.get("/api/next/config").json()

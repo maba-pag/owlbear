@@ -14,6 +14,7 @@
   p-text:empty { display: none !important; }
   .row { align-items: end; gap: var(--p-spacing-static-md); }
   #scope { min-width: 16rem; }
+  #pending { flex: 1 1 20rem; min-inline-size: 0; max-block-size: 6lh; overflow: auto; }
   p-table-cell p-input-text, p-table-cell p-select { min-width: 11rem; }
   /* A number needs a number's width, not the column's or the panel's. */
   p-table-cell p-input-text:is([inputmode="numeric"], [inputmode="decimal"]) { max-inline-size: 14rem; }
