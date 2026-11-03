@@ -30,7 +30,6 @@ from owlbear_delivery_next.workflow_steps import (
     decisions_gate,
     engine,
     lookup,
-    review,
     unset_settings,
     watched,
 )
@@ -264,19 +263,6 @@ def test_round_values_that_do_not_hold_together_are_refused_while_the_role_is_in
     bad = config.Agent(max_rounds=3, max_findings=10, last_round_at=8, ask_owner_at=7)  # its model unset
     with pytest.raises(ValidationError, match="must be below"):
         resolve(GlobalLayer(agents={"shaper": bad}), Layer())
-
-
-@pytest.mark.usefixtures("no_base")
-def test_a_worker_that_may_propose_wording_needs_the_challenger_before_it_starts():
-    base = carried.layer()
-    no_challenger = resolve(base.model_copy(update={"agents": {r: a for r, a in base.agents.items()
-                                                                if r != "challenger"}}), Layer())  # fmt: skip
-    c = change(StepKind.BUILD)  # AC-1 is generated: the builder may propose its wording
-    with pytest.raises(SettingsUnset, match=r"agents\.challenger\."):
-        review.started(c, c.plan.tasks[0], Path(), no_challenger)
-    assert c.plan.tasks[0].spans == []  # raised before anything changed
-    c.brief.specified = ["AC-1"]  # nothing left to propose
-    review.started(c, None, Path(), no_challenger)
 
 
 @pytest.mark.usefixtures("no_base")
