@@ -156,6 +156,19 @@ def test_a_premise_runs_its_amendment_on_the_shaper_and_a_separate_challenger_wi
     assert (c.amending, c.step.kind, c.step.task) == (None, K.BUILD, "t1")  # the stopped task reruns on v2
 
 
+def test_each_amendment_s_sessions_hold_the_decisions_the_stopped_step_works_by(picking, monkeypatch):
+    run = Amending(picking, monkeypatch)
+    told = len(picking.told)
+    for text in (TRIMS, f"{TRIMS} and 'Ada' alone returns 'Bye, Ada!'"):  # the second amends v2, which no pick chose
+        run.premised(AC1 | {"text": text})
+        picking.verdicts += [candidate(text), verdict(qualifies=True)]
+        run.step()
+        c = run.step()
+
+    assert (c.brief.version, run.roles(told)) == (3, ["build", "shaper", "challenger"] * 2)
+    assert all("Pages are plain HTML" in cfg.message for cfg in picking.told[told:] if cfg.role != tools.PICKER)
+
+
 def test_a_pinned_brief_loop_setting_is_honoured_and_the_verdict_binds_the_revised_wording(picking, monkeypatch):
     run = Amending(picking, monkeypatch)
     c = picking.change()

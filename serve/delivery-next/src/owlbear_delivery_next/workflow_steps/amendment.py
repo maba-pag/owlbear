@@ -18,11 +18,11 @@ from owlbear_delivery_next.change_contracts.round_records import BRIEF
 from owlbear_delivery_next.change_flow import amending, loop, worktree
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.local_system.git_files import git_common_dir
-from owlbear_delivery_next.runtimes import amendments, sdk_adapter, step_decisions
+from owlbear_delivery_next.runtimes import amendments, sdk_adapter
 from owlbear_delivery_next.settings import profile, rounds
 from owlbear_delivery_next.state_store import identities
 from owlbear_delivery_next.state_store.briefs import new_slug
-from owlbear_delivery_next.workflow_steps import decisions_gate, engine, sessions
+from owlbear_delivery_next.workflow_steps import engine, sessions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -62,9 +62,8 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         amend_tools.PREPARE if phase == "prepare" else amend_tools.REVISE
     )  # fmt: skip
     submit = amend_tools.VERDICT if label == amend_tools.CHALLENGE else amend_tools.CANDIDATE
-    with step_decisions.using(*decisions_gate.shaping(store, change)):  # the pick beside the complete list (TD-452)
-        verdict, done = sessions.review_run(store, lock, change, path, _made(store, lock, change, a), label,
-                                            submit=submit)  # fmt: skip
+    # the stopped step's decisions, which the runner's gate holds, and the complete list for the challenger
+    verdict, done = sessions.review_run(store, lock, change, path, _made(store, lock, change, a), label, submit=submit)
     now, payload = datetime.now(UTC), done.payload
     if verdict.cause is None and verdict.exit == Exit.DONE and isinstance(payload, amend_tools.VerdictResult):
         amending.judged(change, payload, done.session_id, now)
