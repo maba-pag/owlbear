@@ -12,6 +12,7 @@ import shlex
 import subprocess
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar
+from urllib.parse import urlsplit
 
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.git.remote_git import RemoteGitError
@@ -62,7 +63,11 @@ class Access:
         return ("-c", "credential.helper=", "-c", f"credential.helper=!{shlex.quote(self.gh)} auth git-credential")
 
     def destinations(self, repository: Path, remote: str, timeout: float) -> list[str]:
-        """Every URL a push to *remote* goes to; one that is neither HTTPS nor local raises ``PushRefused``."""
+        """Every URL a push to *remote* goes to; one that would push as another account raises ``PushRefused``.
+
+        That is a URL that is neither HTTPS nor local (SSH, the key's account), an HTTPS one carrying its own password
+        or token, and any non-local one when no account was chosen because the remote's fetch URL is local.
+        """
         environment = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")}
         command = (resolve_git_executable(), "-C", str(repository), "remote", "get-url", "--push", "--all", remote)
         try:
@@ -77,13 +82,28 @@ class Access:
             msg = f"the push URLs of {remote} in {repository} could not be read: {said}"
             raise RemoteGitError(msg, retry_safe=False)
         urls = done.stdout.decode(errors="replace").split()
+        who = f"instead of {self.login}" if self.login else "instead of the account the setting names"
+        fix = f"git -C {repository} remote set-url --push {remote} https://<host>/<owner>/<name>.git"
         for url in urls:
-            if not url.lower().startswith("https://") and not is_local(url):
-                who = f"instead of {self.login}" if self.login else "instead of the account the setting names"
+            if is_local(url):
+                continue
+            if not url.lower().startswith("https://"):
                 msg = (
                     f"{repository}'s remote {remote} pushes to {url}, over SSH, where the SSH key's account would push "
-                    f"{who}. Give it an HTTPS push URL: git -C {repository} remote set-url --push {remote} "
-                    "https://<host>/<owner>/<name>.git"
+                    f"{who}. Give it an HTTPS push URL: {fix}"
+                )
+                raise PushRefused(msg)
+            if urlsplit(url).password is not None:  # the URL itself is never shown: it holds a secret
+                msg = (
+                    f"{repository}'s remote {remote} has a push URL with a password or token in it, which Git would "
+                    f"push with {who}. Give it one without: {fix}"
+                )
+                raise PushRefused(msg)
+            if not self.login:
+                msg = (
+                    f"{repository}'s remote {remote} pushes to {url} although its URL is local, so no account was "
+                    f"chosen for it. Give it a local push URL, or an HTTPS URL to push as the setting's account: "
+                    f"git -C {repository} remote set-url {remote} https://<host>/<owner>/<name>.git"
                 )
                 raise PushRefused(msg)
         return urls
@@ -93,7 +113,7 @@ Access.LOCAL = Access("", "a local remote", "", "", "")
 
 
 class PushRefused(RemoteGitError):  # noqa: N818 - named for the owner's question, as RemoteGitFailed is
-    """A push would leave over SSH, where the key's account pushes instead of the chosen one."""
+    """A push would leave as another account than the chosen one: over SSH, with its URL's own token, or unchosen."""
 
     def __init__(self, detail: str) -> None:
         super().__init__(detail, retry_safe=False)

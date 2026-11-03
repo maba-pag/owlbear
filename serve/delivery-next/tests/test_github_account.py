@@ -215,6 +215,25 @@ def test_a_push_that_would_leave_over_ssh_is_refused_naming_the_fix(repo, setup)
     assert "remote set-url --push origin https://" in said
 
 
+@pytest.mark.parametrize(
+    ("url", "login", "said"),
+    [
+        ("https://boecht:tok-old@github.com/boecht/sandbox.git", "boecht", "a password or token in it"),
+        ("https://example.com/boecht/sandbox.git", "", "no account was chosen for it"),
+    ],
+)
+def test_a_push_url_that_would_bypass_the_chosen_account_is_refused_without_its_secret(
+    repo, tmp_path, url, login, said
+):
+    _git(repo, "remote", "add", "origin", str(tmp_path / "origin.git"))
+    _git(repo, "remote", "set-url", "--push", "origin", url)
+    chosen = Access(login, "the setting names it", "github.com", "tok-boecht", "/usr/bin/gh") if login else Access.LOCAL
+    with pytest.raises(PushRefused) as raised:
+        chosen.destinations(repo, "origin", 10)
+    assert said in str(raised.value)
+    assert "tok-old" not in str(raised.value)
+
+
 def test_https_and_local_push_destinations_pass(repo, tmp_path):
     _git(repo, "remote", "add", "origin", "https://github.com/boecht/sandbox.git")
     _git(repo, "remote", "add", "data", str(tmp_path / "data.git"))

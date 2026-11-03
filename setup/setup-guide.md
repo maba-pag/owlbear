@@ -18,7 +18,7 @@ Before running setup, ensure the following are installed on your Mac:
 | Python 3.14.8 | OwlBear runtime; OwlBear supports the 3.14 series only | [python.org](https://www.python.org/downloads/) |
 | [uv](https://docs.astral.sh/uv/) | Installs OwlBear's dependencies and launches its tool servers | [Installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
 | Git, with `user.name` and `user.email` set | Clone, and the commits of each Change | [git-scm.com](https://git-scm.com/) |
-| [GitHub CLI](https://cli.github.com/), signed in (`gh auth login`) to every account that writes to a project | Pushes, pull requests and merges, made as the account the Settings page's GitHub account names (by default the repository owner's when `gh` has it, else `maba-pag`); that account needs push access, over an HTTPS `origin` | [Installation guide](https://cli.github.com/manual/installation) |
+| [GitHub CLI](https://cli.github.com/), signed in (`gh auth login`) to every account that writes to a project | Pushes, pull requests and merges, made as the account the Settings page's GitHub account names (by default the repository owner's when `gh` has it, else `maba-pag`); that account needs push access, over an HTTPS `origin` with no token in its URL | [Installation guide](https://cli.github.com/manual/installation) |
 | GitHub Copilot CLI | Runs OwlBear's agent sessions | `brew install --cask copilot-cli`, or set `COPILOT_CLI_PATH` to its absolute path |
 | VS Code | New Change's shaping chat opens there | [code.visualstudio.com](https://code.visualstudio.com/) |
 | GitHub Copilot extension | Chat and agents | VS Code Extensions marketplace |
