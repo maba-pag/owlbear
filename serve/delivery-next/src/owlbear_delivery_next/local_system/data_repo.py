@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git import command_failure
 from owlbear_delivery_next.local_system import batch_journal, git_run, publication_hold
 
 if TYPE_CHECKING:
@@ -241,8 +242,12 @@ class DataRepo:
         if _git(self.root, "diff", "--cached", "--quiet", until=until).returncode:
             made = _git(self.root, "commit", "-q", "-m", f"settings: the folder {old} is now {new}", until=until)
             if made.returncode:
-                return f"renamed, but not committed: {made.stderr.strip()[:200]}"
-        return self._push(until)
+                said = f"renamed, but not committed: {command_failure.failed(made)}"
+                _log.warning("renaming %s to %s in %s: %s", old, new, self.root, said)
+                return said
+        if said := self._push(until):
+            _log.warning("renaming %s to %s in %s: %s", old, new, self.root, said)
+        return said
 
     def publish(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> str:
         """Commit ``paths`` alone if they changed and push; what the owner should know when that fails, else nothing.
@@ -250,7 +255,9 @@ class DataRepo:
         The caller holds ``locked``. Unpushed earlier commits are pushed too, so an unchanged save retries them.
         """
         until = time.monotonic() + SAVE_SECONDS if until is None else until
-        return self.commit(paths, message, until) or self._push(until)
+        if said := self.commit(paths, message, until) or self._push(until):
+            _log.warning("publishing %r in %s: %s", message, self.root, said)
+        return said
 
     def hold(self, watch: Path, requires: publication_hold.Requires, until: float | None = None) -> None:
         """Bind the automatic change about to be written to *watch* to the remote; the caller holds ``locked``."""
@@ -316,19 +323,24 @@ class DataRepo:
         held, run = publication_hold.pushing(self, ("push", "-q"), until)
         if held:
             return f"saved and committed in {self.root}, but not pushed: {held}"
-        if _git(self.root, *run, until=until).returncode == 0:
+        first = _git(self.root, *run, until=until)
+        if first.returncode == 0:
             publication_hold.settled(self, until)
             return ""
         if pulled := self.pull(until):
+            why = f"the push failed: {command_failure.failed(first)}; rebasing on the remote failed: {pulled}"
             if publication_hold.recorded(self, until):  # never pushed by hand: the remote must be checked first
-                return f"saved and committed in {self.root}, but not pushed: {pulled}"
-            return f"saved and committed in {self.root}, but it could not be merged with the remote; push it by hand"
+                return f"saved and committed in {self.root}, but not pushed: {why}"
+            return (
+                f"saved and committed in {self.root}, but it could not be merged with the remote; push it by hand. "
+                f"Not pushed: {why}"
+            )
         held, run = publication_hold.pushing(self, ("push", "-q"), until)  # the remote may have moved since the rebase
         if held:
             return f"saved and committed in {self.root}, but not pushed: {held}"
         sent = _git(self.root, *run, until=until)
         if sent.returncode:
-            return f"saved and committed in {self.root}, but the push failed: {sent.stderr.strip()[:200]}"
+            return f"saved and committed in {self.root}, but the push failed: {command_failure.failed(sent)}"
         publication_hold.settled(self, until)
         return ""
 
@@ -343,7 +355,7 @@ class DataRepo:
         except batch_journal.JournalBusyError as exc:
             return f"whether a decision batch is interrupted is not known yet: {exc}"
         except batch_journal.JournalError as exc:
-            return f"the decision batch journal cannot be read ({str(exc)[:200]}); repair it in Decisions"
+            return f"the decision batch journal cannot be read ({type(exc).__name__}: {exc}); repair it in Decisions"
         if batch is None:
             return ""
         return f"the decision batch {batch.generation} is interrupted; finish or abandon it in Decisions first"
@@ -408,7 +420,7 @@ class DataRepo:
         """Report a failed rebase and leave it exactly as Git stopped it: no abort, no index or worktree change."""
         if done.returncode == 0:
             return ""
-        why = done.stderr.strip() or failed
+        why = f"{failed}: {command_failure.failed(done)}"
         try:
             rebasing = self.rebasing(until)
         except DataRepoError as exc:
@@ -421,12 +433,12 @@ class DataRepo:
         """What in the shared checkout is not yet committed or pushed, as a notice; nothing when all is published."""
         until = time.monotonic() + PENDING_SECONDS
         status = _git(self.root, "status", "--porcelain", "--", ".", f":(exclude)*/{MEMORY}/*", until=until)
-        if status.returncode:
-            return f"the shared settings repository {self.root} cannot be read: {status.stderr.strip()[:200]}"
-        files = status.stdout.splitlines()
-        unpushed, why = self._unpushed(until)
+        unpushed, why = (0, command_failure.failed(status)) if status.returncode else self._unpushed(until)
         if why:
-            return f"the shared settings repository {self.root} cannot be read: {why}"
+            said = f"the shared settings repository {self.root} cannot be read: {why}"
+            _log.warning("%s", said)
+            return said
+        files = status.stdout.splitlines()
         parts = [f"{len(files)} file(s) not committed"] if files else []
         if unpushed:
             parts.append(f"{unpushed} commit(s) not pushed")
@@ -440,11 +452,13 @@ class DataRepo:
         if head.returncode == 1:
             return 0, ""
         if head.returncode:
-            return 0, head.stderr.strip()[:200] or "git could not resolve HEAD"
+            return 0, command_failure.failed(head)
         counted = _git(self.root, "rev-list", "--count", "HEAD", "--not", "--remotes", until=until)
         raw = counted.stdout.strip()
-        if counted.returncode or not (raw.isascii() and raw.isdecimal()):
-            return 0, counted.stderr.strip()[:200] or "git printed no valid commit count"
+        if counted.returncode:
+            return 0, command_failure.failed(counted)
+        if not (raw.isascii() and raw.isdecimal()):
+            return 0, f"git printed no valid commit count: {raw!r}"
         return int(raw), ""
 
 

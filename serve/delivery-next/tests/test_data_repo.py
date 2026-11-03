@@ -750,9 +750,160 @@ def test_each_failed_git_step_says_its_whole_stderr(shared, failing_git, whole_e
             data.rebasing()
         assert str(refused.value) == f"cannot tell whether a rebase is in progress in {root}: {whole_error}"
     elif step == "rebase":
-        assert data.rebase() == whole_error
+        rebase = ("-c", "rebase.autoStash=false", "rebase", "-q", "@{upstream}")
+        assert data.rebase() == f"git rebase failed: {git_failed(rebase)}\n{whole_error}"
     elif step == "tracked":
         said = data.commit(root / "gone.md", "notes")
         assert said == f"saved, but not committed: git cannot tell whether gone.md is tracked: {whole_error}"
     else:
         assert data.commit(root / "notes.md", "notes") == f"saved, but not committed: {whole_error}"
+
+
+OUT = "OUT begins\nwhat Git printed on stdout, in the middle\nOUT ends"
+
+
+def git_failed(args: tuple[str, ...], code: int = 128) -> str:
+    """The first line a failed Git command is said with, as `CalledProcessError` words it."""
+    return f"CalledProcessError: Command '{['git', *args]}' returned non-zero exit status {code}."
+
+
+def logged(caplog) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.name == data_repo.__name__]
+
+
+@pytest.fixture
+def git_says(monkeypatch):
+    """Makes the Git commands a picker chooses fail with distinct stdout and stderr; returns the args they ran with."""
+    real, ran = data_repo._git, []  # noqa: SLF001 - the repository's own Git calls are the boundary
+
+    def fail(stderr: str, fails, stdout: str = OUT) -> list[tuple[str, ...]]:
+        def git(cwd, *args, until=None):
+            if fails(args, until):
+                ran.append(args)
+                return subprocess.CompletedProcess(["git", *args], 128, stdout + "\n", stderr + "\n")
+            return real(cwd, *args, until=until)
+
+        monkeypatch.setattr(data_repo, "_git", git)
+        return ran
+
+    return fail
+
+
+PICKS = {
+    "second-push": lambda args, _: args[:1] == ("push",),
+    "journal": lambda args, until: args == ("rev-parse", "--absolute-git-dir") and until is not None,
+    "status": lambda args, _: args[:1] == ("status",),
+    "head": lambda args, _: args == ("rev-parse", "--verify", "--quiet", "HEAD"),
+    "count": lambda args, _: args[:1] == ("rev-list",),
+}
+
+
+def git_whole(args: tuple[str, ...], stderr: str) -> str:
+    return f"{git_failed(args)}\nstderr:\n{stderr}\nstdout:\n{OUT}"
+
+
+@pytest.mark.usefixtures("shared")
+@pytest.mark.parametrize("step", ["status", "head", "count"])
+def test_each_failed_pending_probe_says_git_whole_and_logs_it(repo, git_says, whole_error, caplog, step) -> None:
+    """#921: a settings read whose pending probe fails says the command and both streams whole, and logs it."""
+    ran = git_says(whole_error, PICKS[step])
+    caplog.set_level("WARNING", data_repo.__name__)
+
+    notice = client(Store.open(repo)).get("/api/next/config").json()["notice"]
+
+    root = data_repo.locate().root
+    assert notice == f"the shared settings repository {root} cannot be read: {git_whole(ran[-1], whole_error)}"
+    assert set(logged(caplog)) == {notice}
+
+
+@pytest.mark.parametrize("step", ["second-push", "journal"])
+def test_each_failed_publication_step_says_git_whole_and_logs_it(shared, git_says, whole_error, caplog, step) -> None:
+    """#921: a failed push or decision-journal probe says the command and both streams whole, and logs it once."""
+    root = shared[0]
+    (root / "notes.md").write_text("notes\n")
+    ran = git_says(whole_error, PICKS[step])
+    caplog.set_level("WARNING", data_repo.__name__)
+
+    said = data_repo.DataRepo(root).publish(root / "notes.md", "notes")
+
+    whole = git_whole(ran[-1], whole_error)
+    if step == "second-push":
+        assert said == f"saved and committed in {root}, but the push failed: {whole}"
+    else:
+        journal = f"JournalError: the git folder of {root} cannot be found: {whole}"
+        unread = f"the decision batch journal cannot be read ({journal}); repair it in Decisions"
+        assert said == f"saved and committed in {root}, but not pushed: {unread}"
+    assert said.count("BEGIN") == 1
+    assert logged(caplog) == [f"publishing 'notes' in {root}: {said}"]
+
+
+@pytest.mark.parametrize("held", [False, True])
+def test_a_failed_push_and_a_failed_rebase_on_the_remote_both_arrive_whole(
+    shared, whole_error, monkeypatch, caplog, held
+) -> None:
+    """#921: the first push's failure is kept beside the rebase's, whether or not an automatic change is held."""
+    root = shared[0]
+    data = data_repo.DataRepo(root)
+    (root / "notes.md").write_text("notes\n")
+    other = "\n".join(reversed(whole_error.split("\n")))  # its own beginning, middle and end
+    real = data_repo._git  # noqa: SLF001
+    ran: list[tuple[str, ...]] = []
+
+    def git(cwd, *args, until=None):
+        if args[:1] == ("push",) or "pull" in args[:4]:
+            ran.append(args)
+            said = whole_error if args[:1] == ("push",) else other
+            return subprocess.CompletedProcess(["git", *args], 1, OUT + "\n", said + "\n")
+        return real(cwd, *args, until=until)
+
+    monkeypatch.setattr(data_repo, "_git", git)
+    recorded = iter([False, held])  # the pull rebases plainly; the push then asks whether a change is held
+    monkeypatch.setattr(data_repo.publication_hold, "recorded", lambda *_a: next(recorded))
+    caplog.set_level("WARNING", data_repo.__name__)
+
+    said = data.publish(root / "notes.md", "notes")
+
+    push, pull = ran
+    pushed = f"{git_failed(push, 1)}\nstderr:\n{whole_error}\nstdout:\n{OUT}"
+    pulled = f"git pull failed: {git_failed(pull, 1)}\nstderr:\n{other}\nstdout:\n{OUT}"
+    why = f"the push failed: {pushed}; rebasing on the remote failed: {pulled}"
+    hand = "it could not be merged with the remote; push it by hand. Not pushed"
+    assert said == f"saved and committed in {root}, but {'not pushed' if held else hand}: {why}"
+    assert (said.count(whole_error), said.count(other)) == (1, 1)
+    assert logged(caplog) == [f"publishing 'notes' in {root}: {said}"]
+
+
+def test_a_failed_folder_rename_commit_says_git_whole_and_logs_it(shared, repo, git_says, whole_error, caplog) -> None:
+    """#921: the rename's commit failure arrives whole at `PUT /config/folder` and in the host log."""
+    store = Store.open(repo)
+    ran = git_says(whole_error, lambda args, _: "commit" in args[:3] and "settings: the folder" in " ".join(args))
+    caplog.set_level("WARNING", data_repo.__name__)
+
+    got = renamer(store, repo).put("/api/next/config/folder", json={"name": "acme-shop"})
+
+    notice = f"renamed, but not committed: {git_whole(ran[-1], whole_error)}"
+    assert (got.status_code, got.json()["notice"]) == (200, notice)
+    assert logged(caplog) == [f"renaming shop-site to acme-shop in {shared[0]}: {notice}"]
+
+
+def test_a_timed_out_git_says_its_type_and_what_it_printed(shared, monkeypatch, whole_error, caplog) -> None:
+    """#921: Git that timed out after printing is a failed command with its type and both streams, never `str(exc)`."""
+    root = shared[0]
+    real = subprocess.run
+
+    def run(argv, *a, **kw):
+        if "commit" in argv[1:4]:
+            raise subprocess.TimeoutExpired(argv, 10, output=OUT.encode(), stderr=whole_error.encode())
+        return real(argv, *a, **kw)
+
+    monkeypatch.setattr(data_place.git_run.subprocess, "run", run)
+    (root / "notes.md").write_text("notes\n")
+
+    caplog.set_level("WARNING", data_repo.__name__)
+
+    said = data_repo.DataRepo(root).publish(root / "notes.md", "notes")
+
+    timed_out = "saved, but not committed: TimeoutExpired: Command '['git', '-c', 'core.abbrev=no', 'commit'"
+    assert said.startswith(timed_out)
+    assert said.endswith(f"timed out after 10 seconds\nstderr:\n{whole_error}\nstdout:\n{OUT}")
+    assert logged(caplog) == [f"publishing 'notes' in {root}: {said}"]
