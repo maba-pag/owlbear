@@ -84,13 +84,13 @@ def of(c: Change, events: Sequence[dict[str, Any]], own: str) -> str | None:  # 
         return "starting"
     if judging := _judging(c, runs):
         return judging
+    if any(r.open and r.role == "picker" for r in runs):  # a lookup runs inside the worker's turn
+        return "checking decisions"
     worker = next((r for r in reversed(runs) if r.open and r.role != "picker"), None)
     if worker and worker.result is False:
         return "fixing its refused result" if worker.role == "builder" else "correcting its refused result"
     if worker and worker.result:
         return _HANDING.get(worker.role, "handing in its result")
-    if any(r.open and r.role == "picker" for r in runs):
-        return "checking decisions"
     if worker is None:
         return "recording the result"
     if worker.role == "challenger":

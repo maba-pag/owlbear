@@ -54,6 +54,9 @@ CHALLENGED = Outcome(exit=Exit.RETRY, reason="plan challenge: …", challenged=T
         (BUILD, [opened(1), result(20, ok=True), ended(25)], "builder", "recording the result"),
         (BUILD, [opened(1), *PICKED], "builder", "checking decisions"),
         (BUILD, [opened(1), *PICKED, ended(10, "p1", "picker")], "builder", None),
+        (BUILD, [opened(1), result(4, ok=False), *PICKED], "builder", "checking decisions"),  # Copilot on #931
+        (BUILD, [opened(1), result(2, ok=False), *PICKED, ended(10, "p1", "picker")], "builder",
+         "fixing its refused result"),
         (BUILD, [opened(1), result(20, ok=True), ev(21, "tool", tool="submit_result", accepted=False,
                                                     errors=["the step has already ended"])], "builder",
          "handing in its result"),  # a late call after the accepted one
