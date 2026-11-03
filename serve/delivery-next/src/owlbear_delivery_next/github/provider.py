@@ -196,7 +196,7 @@ class MergeResult(_Model):
     status: MergeStatus
     sha: str | None = Field(default=None, pattern=_SHA)
     refusal: Refusal | None = None
-    message: str | None = Field(default=None, max_length=_MAX_MESSAGE)
+    message: str | None = None
 
 
 class QueueEvent(_Model):
@@ -244,7 +244,7 @@ class EnqueueResult(_Model):
 
     status: EnqueueStatus
     queued_at: datetime | None = None  # the new entry's enqueuedAt
-    message: str | None = Field(default=None, max_length=_MAX_MESSAGE)
+    message: str | None = None
 
 
 class GroupRun(_Model):

@@ -209,7 +209,9 @@ def _merged(job: Job, gh: Provider, pub: Publication, gate: Callable[[], None]) 
         if done.status == MergeStatus.REFUSED and done.refusal not in {Refusal.HEAD_CHANGED, Refusal.NOT_MERGEABLE}:
             msg = f"GitHub refused the merge of {pr.url}: {done.refusal} {done.message or ''}".strip()
             raise Held(msg)
-        job.log(f"the merge of {pr.url} did not land ({done.status}); reading it back")  # a lost answer is read first
+        # a lost answer is read first
+        said = f": {done.message}" if done.message else ""
+        job.log(f"the merge of {pr.url} did not land ({done.status}){said}; reading it back")
     pr = gh.read_pull_request(pub.repository, pub.number)
     if pr.merged:
         return pr.merge_commit_sha or "", pr.head_sha

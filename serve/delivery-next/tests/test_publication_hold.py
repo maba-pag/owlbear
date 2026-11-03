@@ -162,7 +162,8 @@ def test_a_completion_after_the_winners_pull_holds_the_fill_before_any_push(thre
 def test_a_completion_at_the_first_push_holds_the_fill_instead_of_rebasing_it(three, monkeypatch):
     winner, settler, remote = three
     fired = at_git(monkeypatch, winner, nth_push(1), lambda: complete_and_delete(settler))
-    with pytest.raises(StoreError, match=r"not pushed: .*is held because"):
+    held = r"(?s)not pushed: the push failed: .*rebasing on the remote failed: .*is held because"
+    with pytest.raises(StoreError, match=held):
         prefs_import.run(winner)
 
     assert fired == [True]
@@ -593,7 +594,9 @@ def test_a_remote_profile_that_is_not_utf8_holds_the_fill_with_a_notice(three, m
 
     fired = at_git(monkeypatch, winner, nth_push(1), malformed)
     with pytest.raises(
-        StoreError, match=r"not pushed: .*is held because .*profile.json on the shared remote is unreadable"
+        StoreError,
+        match=r"(?s)not pushed: the push failed: .*rebasing on the remote failed: .*is held because "
+        r".*profile.json on the shared remote is unreadable",
     ):
         prefs_import.run(winner)
 

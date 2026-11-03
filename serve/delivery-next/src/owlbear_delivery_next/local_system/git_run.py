@@ -10,6 +10,8 @@ import subprocess
 import time
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failure
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -39,4 +41,4 @@ def run(cwd: Path, *args: str, until: float | None, cap: float, show: bool = Fal
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         # Exit 1 can mean no match or a difference; failure to run Git cannot answer either probe.
-        return subprocess.CompletedProcess(["git", *args], 128, "", str(exc))
+        return subprocess.CompletedProcess(["git", *args], 128, "", failure(exc))
