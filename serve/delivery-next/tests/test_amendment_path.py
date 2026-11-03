@@ -878,3 +878,15 @@ def test_a_criterion_added_after_an_amendment_removed_one_never_takes_an_id_an_a
 
     assert (code, code_more) == (200, 200)
     assert [k.id for k in store.read(out["slug"]).brief.criteria] == ["AC-1", "AC-3"]  # a revert brings AC-2 back
+
+
+def test_the_shaper_and_the_challenger_of_an_answers_amendment_read_the_question_it_answers():
+    c = change()
+    asked = loop.apply(c, loop.StepResult(exit=Exit.ASK, question=Question(step=K.BUILD, text="Which language?")), NOW)
+    q = loop.open_question(asked)
+    q.answer = Answer(option=None, text="French too", at=NOW, kind="brief_change")
+    a = amending.start(asked, "answer", reason="French too", now=NOW, question=q.id)
+    amending.prepared(asked, CandidateResult(items=[item()]), RoundPolicy(), NOW)
+
+    for told in (amendments.prepare(asked, a, Path()), amendments.challenge(asked, a, Path(), recheck=False)):
+        assert "The question it answers: Which language?\nThe owner's answer: French too" in told

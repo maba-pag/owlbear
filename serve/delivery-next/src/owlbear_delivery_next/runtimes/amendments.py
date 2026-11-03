@@ -107,11 +107,20 @@ def prepare(c: Change, a: Amendment, at: Path) -> str:
     return "\n".join([
         (f"You prepare a brief amendment ({a.id}) of the Change `{c.slug}` against brief v{c.brief.version}, in the "
          f"worktree {at}."), HOSTED, "", "## Why",
-        f"From {_FROM[a.source]}: {a.reason}", *(f"- evidence: {e}" for e in a.evidence),
+        f"From {_FROM[a.source]}: {a.reason}", *_asked(c, a), *(f"- evidence: {e}" for e in a.evidence),
         *(["What it proposed:", *proposed] if proposed else []), *_declined(c), "", *_current(c),
         *step_decisions.held(), "",
         "## Candidate", CANDIDATE_RULES, "", "## Finish", FINISH,
     ])  # fmt: skip
+
+
+def _asked(c: Change, a: Amendment) -> list[str]:
+    """The question an owner-sourced amendment answers, and his answer: the reason alone may not say what it settles."""
+    if a.source not in {"answer", "allow"}:
+        return []
+    asked = next((q for q in c.questions if q.id == a.question), None)
+    said = asked.answer.text if asked and asked.answer else ""
+    return [*([f"The question it answers: {asked.text}"] if asked else []), f"The owner's answer: {said or a.reason}"]
 
 
 def revise(c: Change, a: Amendment, at: Path) -> str:
@@ -141,16 +150,13 @@ def challenge(c: Change, a: Amendment, at: Path, *, recheck: bool) -> str:
     ]
     lp = c.loops[f"amendment:{a.id}"]
     pend = [f"- {f.id}: {f.text}\n  Shaper's reason: {f.reason}" for f in lp.findings if f.state == "rejected"]
-    asked = next((q for q in c.questions if q.id == a.question), None)
-    said = asked.answer.text if asked and asked.answer else ""
-    owner = [f"The owner's answer it comes from: {said or a.reason}"] if a.source in {"answer", "allow"} else []
     judge = RECHECK if recheck else JUDGE
     return "\n".join([
         f"You challenge brief amendment {a.id} of the Change `{c.slug}`, in the worktree {at}. You only read.", "",
         f"## The reference version v{ref}", *lines, "", *_current(c), *step_decisions.held(complete=True), "",
         "## Applied since the reference", *(since or ["- none"]), "",
         "## The candidate", f"From {_FROM[a.source]}: {a.reason}", *(f"- evidence: {e}" for e in a.evidence),
-        *_items(a), *owner, "", "## Judge", judge,
+        *_items(a), *_asked(c, a), "", "## Judge", judge,
         *(["", "## Rejections to judge", *pend] if pend else []), "", "## Finish", FINISH,
     ])  # fmt: skip
 
