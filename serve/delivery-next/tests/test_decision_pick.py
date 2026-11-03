@@ -235,3 +235,21 @@ def test_a_pick_has_no_size_limit_but_each_id_is_still_checked():
     assert "maxItems" not in pick_tools.PickResult.model_json_schema()["properties"]["picked"]
     with pytest.raises(ValueError, match="at most 40 characters"):
         pick_tools.PickResult.model_validate({"picked": [{"id": "D-" + "0" * 40}]})
+
+
+def test_a_brief_records_its_steps_start_before_its_decision_pick_runs(picking, monkeypatch):
+    """#718: the pick's session is the step's own, so its stage shows from the step's start, not as starting."""
+    rule = picking.put(make())
+    picking.save()
+    picking.ask(1)
+    picking.picks.append(picked(rule.id))
+    picking.verdicts.append(verdict())
+    seen, real = [], picking.run
+
+    async def run(cfg):
+        seen.append((cfg.role, picking.change().step.started_at is not None))
+        return await real(cfg)
+
+    monkeypatch.setattr(sdk_adapter, "run", run)
+    picking.step()
+    assert seen == [("picker", True), ("challenger", True)]

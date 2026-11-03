@@ -156,6 +156,7 @@ def continued(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
     else:
         path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
         change.names.worktree, s.started_at = str(path), now
+        store.write(lock, change)  # the challenger's session is the step's: its stage counts from here (#718)
         profile = store.read_profile() or Profile()
         if s.mode == plan_rounds.RECONSIDER:
             return _reconsider(store, lock, change, path)
