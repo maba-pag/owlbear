@@ -26,7 +26,7 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.local_system import data_repo, local_home, maintenance
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.machine_host import curation_block, curation_snapshots, curation_tree
+from owlbear_delivery_next.machine_host import curation_block, curation_resume, curation_snapshots, curation_tree
 from owlbear_delivery_next.machine_host.curation_block import LABEL
 from owlbear_delivery_next.runtimes import loop_owner, maintained, sdk_adapter
 from owlbear_delivery_next.settings import roles
@@ -463,7 +463,7 @@ class Curation:
             return FolderRun(
                 state="failed", started_at=started, ended_at=ended, reason=reason, key=key if unknown else ""
             )
-        refusal, notice = tree.accept(folder, key)
+        refusal, notice = tree.accept(folder, key, curation_resume.recover(self))
         if refusal:  # a confirmed end: "ended result: …" tells a restart its termination was judged
             return FolderRun(state="failed", started_at=started, ended_at=ended, reason=f"ended result: {refusal}")
         return FolderRun(
@@ -495,4 +495,5 @@ def legacy_uncertain(run: FolderRun) -> bool:
         return True
     if run.state not in {"failed", "waiting"} or run.summary:
         return False  # never and done, a finished run's copy, and running, which the caller takes on its own
-    return not run.reason.startswith("ended ") or UNKNOWN in run.reason
+    reason = curation_snapshots.written(run.reason)
+    return not reason.startswith("ended ") or UNKNOWN in reason

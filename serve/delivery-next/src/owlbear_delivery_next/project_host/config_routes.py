@@ -312,6 +312,7 @@ def _rename(store: Store, host: Host, name: str) -> str:
                 raise HTTPException(409, curating)
             until = time.monotonic() + data_repo.SAVE_SECONDS
             with store.shared.locked():
+                memory_routes.unmoved(store.shared, f"the folder {store.name}")
                 old = store.name
                 notice = store.shared.rename(old, name, until)
                 for h in held:

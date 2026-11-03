@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from owlbear_memory import MemoryBusyError, MemoryCategory, MemoryEngine, storage
 
-from owlbear_delivery_next.local_system import data_repo, local_home
+from owlbear_delivery_next.local_system import curation_apply, data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.machine_host import curation
 from owlbear_delivery_next.project_host import api, memory_routes
@@ -358,6 +358,28 @@ def test_a_move_that_fails_keeps_the_entry_where_it_was_with_its_origin_and_can_
     assert again.status_code == 200
     assert [e.id for e in MemoryEngine(folder).get_entries()] == [entry.id]
     assert MemoryEngine(common).get_entries() == []
+
+
+def test_no_entry_moves_while_a_curation_runs_apply_is_cut_short(shared):
+    """#875: the cut-short set names its files where they are, so neither Make global nor Move back moves one."""
+    root, _, repo = shared
+    store = Store.open(repo)
+    folder = root / store.name / "memory"
+    entry, other = seed(folder, "Pin the runtime", curated=True), seed(folder, "Sign every commit", curated=True)
+    c = client(store)
+    made = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at}).json()["entry"]
+    curation_apply.write(data_repo.DataRepo(root), curation_apply.Apply(store.name, {}))
+    head = git(root, "rev-parse", "HEAD")
+
+    refused = [
+        c.post(f"/api/next/memory/{other.id}/make-global", json={"updated_at": other.updated_at}),
+        c.post(f"/api/next/memory/{entry.id}/move-back", json={"updated_at": made["updated_at"]}),
+    ]
+
+    cut = f"stays: the memory curation of {store.name} was cut short while its files were copied in"
+    assert [(r.status_code, cut in r.json()["detail"]) for r in refused] == [(409, True), (409, True)]
+    assert ((folder / f"{other.id}.md").is_file(), (root / "memory" / f"{entry.id}.md").is_file()) == (True, True)
+    assert git(root, "rev-parse", "HEAD") == head
 
 
 def test_make_global_refuses_an_entry_global_memory_holds_or_the_curator_has_not_scoped(shared):
