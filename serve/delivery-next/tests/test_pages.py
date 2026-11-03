@@ -98,5 +98,6 @@ def test_the_menu_links_every_page_the_host_serves_once(tmp_path):
     groups = re.search(r"export const GROUPS = .*?\];", c.get("/assets/page/config/groups.mjs").text, re.DOTALL)
     assert re.findall(r'\["([a-z-]+)", "([A-Za-z ]+)"\]', groups.group()) == [
         ("overview", "Overview"), ("agents", "Agents and runs"), ("guardrails", "Guardrails"),
-        ("checks", "Checks and merge"), ("project", "Project"), ("this-machine", "This machine")
+        ("memory", "Memory"), ("checks", "Checks and merge"), ("project", "Project"),
+        ("this-machine", "This machine"),
     ]  # fmt: skip

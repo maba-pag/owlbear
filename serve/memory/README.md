@@ -76,7 +76,7 @@ Pydantic `BaseModel` representing a single markdown-backed memory entry.
 | `outstanding_count` | `int` | Default: `0`; incremented by assessment tool when entry was outstanding |
 | `unremarkable_count` | `int` | Default: `0`; incremented by assessment tool when entry was unremarkable |
 | `didnt_use_count` | `int` | Default: `0`; incremented by assessment tool when entry was skipped |
-| `score` | `float` | Default: `0.0`; initialized to `confidence` on `save()` |
+| `score` | `float` | Default: `0.0`; set to `confidence` on `save()` and never updated: ranking works the score out from the ratings and the owner's points |
 | `scope_agents` | `list[str]` | Default: `[]`; supplied members must be nonblank strings; `*` means all agents. MCP curation requires scope when promoting pending entries. |
 | `source_agent` | `str` | Non-blank; frozen after creation |
 | `created_at` | `str` | Timezone-aware ISO 8601 timestamp |
@@ -202,30 +202,34 @@ for consumers that need to read or mutate memory entries.
 engine = MemoryEngine(memory_dir)  # memory_dir created if absent
 ```
 
-#### Scoring Constants
+#### Scoring values
 
-| Constant | Value | Meaning |
-| --- | --- | --- |
-| `OUTSTANDING_BOOST` | `0.1` | Score boost per outstanding assessment |
-| `UNREMARKABLE_PENALTY` | `0.01` | Score penalty per unremarkable assessment |
-| `STALE_THRESHOLD` | `50` | Total assessments above which an entry is considered stale |
+The library ships no value for them: the owner sets them in the global settings and passes them in.
 
-#### `compute_score(confidence, outstanding_count, unremarkable_count) → float`
+| Value | Meaning |
+| --- | --- |
+| `Points(outstanding_boost, unremarkable_penalty)` | What each outstanding and unremarkable rating is worth to an entry's score |
+| `stale_factor` | The multiple of the outstanding and unremarkable ratings that skipped ratings must exceed before an entry goes stale |
+
+#### `compute_score(confidence, outstanding_count, unremarkable_count, points) → float`
 
 Computes a memory entry score:
 
 ```text
-score = confidence + (outstanding_count × OUTSTANDING_BOOST) − (unremarkable_count × UNREMARKABLE_PENALTY)
+score = confidence + (outstanding_count × points.outstanding_boost) − (unremarkable_count × points.unremarkable_penalty)
 ```
 
-Exported from the `owlbear_memory` package top-level.
+`entry_score(entry, points)` applies it to an entry. Recall ranks by this score, worked out per request. The stored
+`score` is set to the confidence on `save()`, is never updated and ranks nothing.
 
-#### `check_slot_efficiency(entry: MemoryEntry) → bool`
+Both are exported from the `owlbear_memory` package top-level, together with `Points`.
+
+#### `check_slot_efficiency(entry: MemoryEntry, stale_factor: int) → bool`
 
 Returns `True` when `didnt_use` slots dominate assessed slots:
 
 ```text
-entry.didnt_use_count > STALE_THRESHOLD × max(entry.outstanding_count + entry.unremarkable_count, 1)
+entry.didnt_use_count > stale_factor × max(entry.outstanding_count + entry.unremarkable_count, 1)
 ```
 
 Exported from the `owlbear_memory` package top-level. Used internally by `MemoryEngine.try_stale_transition`.
@@ -243,10 +247,10 @@ string. The universal `*` member is allowed; an empty list is allowed for pendin
 | `approve(id, expected_updated_at=None, *, expected_revision=None)` | `(str, str \| None) → MemoryEntry` | curated → approved; exactly one OCC token; raises `TransitionError` / `ConcurrencyError` |
 | `resolve(id, expected_updated_at)` | `(str, str) → MemoryEntry` | contested/disputed/stale → approved; sets `approved_at` and clears challenges; raises `TransitionError` / `ConcurrencyError` |
 | `record_factually_wrong(entry_id, task_id, *, expected_revision)` | `(str, str, *, expected_revision: str) → AssessmentResult` | Records the factually-wrong confirmation cycle. A repeated task, entry, and revision returns the first result; raises `TransitionError`, `ConcurrencyError` (revision mismatch), or `ValidationError` (invalid `task_id`). |
-| `record_assessment(entry_id, bucket, *, task_id, expected_revision)` | `(str, str, *, task_id: str, expected_revision: str) → AssessmentResult` | Increments the selected counter, recomputes `score`, and may transition the entry to `stale`. A repeated task, entry, and revision returns the first recorded bucket without applying again; raises `TransitionError`, `ConcurrencyError`, or `ValidationError`. |
+| `record_assessment(entry_id, bucket, *, task_id, expected_revision, stale_factor)` | `(str, str, *, task_id: str, expected_revision: str, stale_factor: int) → AssessmentResult` | Increments the selected counter, leaves the stored `score` alone, and may transition the entry to `stale` under *stale_factor*. A repeated task, entry, and revision returns the first recorded bucket without applying again; raises `TransitionError`, `ConcurrencyError`, or `ValidationError`. |
 | `edit(id, fields, expected_updated_at=None, *, expected_revision=None)` | `(str, EditPayload, str \| None) → MemoryEntry` | State-machine rules apply; exactly one OCC token; contested/disputed/stale preserve their state while fields are updated; deleted entries are blocked; raises `TransitionError` / `ConcurrencyError` |
 | `delete(id, expected_updated_at=None, *, expected_revision=None)` | `(str, str \| None) → MemoryEntry` | Hard-delete for pending, soft-delete for curated/approved/contested/disputed/stale; exactly one OCC token; raises `TransitionError` / `ConcurrencyError` |
-| `try_stale_transition(entry)` | `(MemoryEntry) → MemoryEntry` | Reloads under the writer lock and checks the passed entry's `updated_at`; raises `ConcurrencyError` if stale, even when no transition would occur. Returns unchanged entry when the predicate is False or state is ineligible; otherwise eligible entries become stale. |
+| `try_stale_transition(entry, stale_factor)` | `(MemoryEntry, int) → MemoryEntry` | Reloads under the writer lock and checks the passed entry's `updated_at`; raises `ConcurrencyError` if stale, even when no transition would occur. Returns unchanged entry when the predicate is False or state is ineligible; otherwise eligible entries become stale. |
 | `load()` | `() → list[MemoryEntry]` | Force full reparse; skips malformed files (lenient) |
 
 #### State Machine

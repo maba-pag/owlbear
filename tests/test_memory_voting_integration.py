@@ -19,9 +19,14 @@ from unittest.mock import MagicMock, patch
 from uuid import UUID
 
 import pytest
-from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, storage
+from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, Points, entry_score, storage
 from owlbear_memory.engine import compute_score
 from owlbear_memory.models import ChallengeRecord
+
+pytestmark = pytest.mark.usefixtures("todays_memory_values")
+
+_POINTS = Points(outstanding_boost=0.1, unremarkable_penalty=0.01)
+_STALE_FACTOR = 50
 
 # ---------------------------------------------------------------------------
 # Shared constants
@@ -72,7 +77,7 @@ def _make_approved_entry(  # noqa: PLR0913, PLR0917
     challenge_task_ids: list[str] | None = None,
 ) -> MemoryEntry:
     agents = scope_agents if scope_agents is not None else [_AGENT]
-    score = compute_score(confidence, outstanding_count, unremarkable_count)
+    score = compute_score(confidence, outstanding_count, unremarkable_count, _POINTS)
     approved_at = _TS_APPROVED if state == MemoryState.APPROVED else None
     entry = MemoryEntry(
         id=entry_id,
@@ -121,6 +126,7 @@ def _record_assessment(engine: MemoryEngine, entry_id: str, bucket: str) -> Memo
         bucket,
         task_id=f"voting-assessment-{next(_ASSESSMENT_TASK_IDS)}",
         expected_revision=entry.revision,
+        stale_factor=_STALE_FACTOR,
     )
     return result.entry
 
@@ -239,7 +245,7 @@ class TestMemoryVotingLifecycle:
         assert "Challenge B" in titles
 
     def test_score_formula_confidence_plus_outstanding_minus_unremarkable(self, tmp_path: Path) -> None:
-        """score = confidence + (outstanding x 0.1) - (unremarkable x 0.01) exactly."""
+        """The score is confidence + (outstanding x 0.1) - (unremarkable x 0.01), worked out from the points given."""
         entry = _make_approved_entry(_ID_SCORE_A, "Score Test", confidence=0.8)
         _write_entry(tmp_path, entry)
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -252,7 +258,7 @@ class TestMemoryVotingLifecycle:
         entry = _record_assessment(engine, _ID_SCORE_A, "unremarkable")
 
         expected_score = 0.8 + 3 * 0.1 - 2 * 0.01
-        assert entry.score == pytest.approx(expected_score, abs=1e-9)
+        assert entry_score(entry, _POINTS) == pytest.approx(expected_score, abs=1e-9)
 
     def test_counters_track_each_assessment_bucket_independently(self, tmp_path: Path) -> None:
         """outstanding, unremarkable, didnt_use counters increment independently per call."""

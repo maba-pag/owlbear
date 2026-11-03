@@ -117,6 +117,7 @@ def _approved(engine: MemoryEngine, title: str) -> str:
     return engine.approve(curated.id, curated.updated_at).id
 
 
+@pytest.mark.usefixtures("todays_memory_values")
 @pytest.mark.asyncio
 async def test_agents_read_global_memory_beside_their_projects_and_write_only_their_projects(tmp_path: Path) -> None:
     """TD-241: the store and Global memory are both read; a save goes to the store."""
@@ -146,6 +147,7 @@ async def test_agents_read_global_memory_beside_their_projects_and_write_only_th
     assert (saved["recommended"], saved["state"]) == ("global", "pending")
 
 
+@pytest.mark.usefixtures("todays_memory_values")
 @pytest.mark.asyncio
 async def test_disputed_entry_answers_carry_both_challenges_and_unchallenged_ones_omit_them(tmp_path: Path) -> None:
     """A curator sees both reports and the challenged revision; an unchallenged entry's answer stays small."""

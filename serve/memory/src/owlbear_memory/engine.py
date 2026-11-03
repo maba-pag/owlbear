@@ -39,12 +39,17 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-OUTSTANDING_BOOST = 0.1
-UNREMARKABLE_PENALTY = 0.01
-STALE_THRESHOLD = 50
 _ASSESSMENT_TASK_ID_MAX_LENGTH = 128
 _ASSESSMENT_RECEIPT_WINDOW = 20
 _DUPLICATE_COPY_THRESHOLD = 2
+
+
+@dataclass(frozen=True, slots=True)
+class Points:
+    """What each rating is worth to an entry's score: the owner's settings, of which the library ships no value."""
+
+    outstanding_boost: float
+    unremarkable_penalty: float
 
 
 @dataclass(slots=True)
@@ -274,15 +279,20 @@ def repair_duplicate_ids(memory_dir: Path | str) -> None:
     _delete_duplicate_sources(directory, plans)
 
 
-def compute_score(confidence: float, outstanding_count: int, unremarkable_count: int) -> float:
-    """Compute score from assessment counters."""
-    return confidence + (outstanding_count * OUTSTANDING_BOOST) - (unremarkable_count * UNREMARKABLE_PENALTY)
+def compute_score(confidence: float, outstanding_count: int, unremarkable_count: int, points: Points) -> float:
+    """An entry's score: its confidence plus what its ratings are worth under *points*."""
+    return confidence + outstanding_count * points.outstanding_boost - unremarkable_count * points.unremarkable_penalty
 
 
-def check_slot_efficiency(entry: MemoryEntry) -> bool:
-    """Return True when didnt_use dominates outstanding+unremarkable slots."""
+def entry_score(entry: MemoryEntry, points: Points) -> float:
+    """The score recall ranks *entry* by now. The stored ``score`` is no longer read for ranking."""
+    return compute_score(entry.confidence, entry.outstanding_count, entry.unremarkable_count, points)
+
+
+def check_slot_efficiency(entry: MemoryEntry, stale_factor: int) -> bool:
+    """Return True when didnt_use exceeds *stale_factor* times the outstanding and unremarkable ratings together."""
     denominator = max(entry.outstanding_count + entry.unremarkable_count, 1)
-    return entry.didnt_use_count > (STALE_THRESHOLD * denominator)
+    return entry.didnt_use_count > (stale_factor * denominator)
 
 
 class EditPayload(TypedDict, total=False):
@@ -398,7 +408,7 @@ class MemoryEngine:
                     raise
             return list(self._entries)
 
-    def preview_purge(self, min_age_days: int = 30) -> PurgePreview:
+    def preview_purge(self, min_age_days: int) -> PurgePreview:
         """Classify deleted entries without changing the filesystem."""
         with self._lock:
             eligible, too_recent = self._eligible_deleted(min_age_days)
@@ -408,7 +418,7 @@ class MemoryEngine:
                 too_recent=len(too_recent),
             )
 
-    def purge(self, min_age_days: int = 30) -> PurgeResult:
+    def purge(self, min_age_days: int) -> PurgeResult:
         """Best-effort remove age-eligible deleted entries."""
         with self._writer():
             eligible, too_recent = self._eligible_deleted(min_age_days)
@@ -509,13 +519,13 @@ class MemoryEngine:
             )
             return self._write_updated_entry(updated)
 
-    def try_stale_transition(self, entry: MemoryEntry) -> MemoryEntry:
+    def try_stale_transition(self, entry: MemoryEntry, stale_factor: int) -> MemoryEntry:
         """Transition eligible entries to stale when slot-efficiency predicate fires."""
         expected_updated_at = entry.updated_at
         with self._writer():
             entry = self.get_entry(entry.id)
             self._validate_occ(entry, expected_updated_at)
-            if not check_slot_efficiency(entry):
+            if not check_slot_efficiency(entry, stale_factor):
                 return entry
 
             if entry.state not in {MemoryState.APPROVED, MemoryState.CURATED, MemoryState.CONTESTED}:
@@ -563,12 +573,6 @@ class MemoryEngine:
             data["state"] = target_state
             data["approved_at"] = approved_at
             data["updated_at"] = self._now_iso(entry.updated_at)
-            if "confidence" in fields:
-                data["score"] = compute_score(
-                    fields["confidence"],
-                    entry.outstanding_count,
-                    entry.unremarkable_count,
-                )
 
             updated = MemoryEntry.model_validate(data)
             return self._write_updated_entry(updated)
@@ -677,8 +681,9 @@ class MemoryEngine:
         *,
         task_id: str,
         expected_revision: str,
+        stale_factor: int,
     ) -> AssessmentResult:
-        """Record counter-based assessments and recompute score."""
+        """Record a counter-based assessment; the entry goes stale once its unused ratings pass *stale_factor* times."""
         with self._writer():
             entry = self.get_entry(entry_id)
             previous = self._existing_assessment_result(
@@ -713,10 +718,9 @@ class MemoryEngine:
                     "outstanding_count": outstanding_count,
                     "unremarkable_count": unremarkable_count,
                     "didnt_use_count": didnt_use_count,
-                    "score": compute_score(entry.confidence, outstanding_count, unremarkable_count),
                 }
             )
-            if check_slot_efficiency(updated):
+            if check_slot_efficiency(updated, stale_factor):
                 updated = updated.model_copy(update={"state": MemoryState.STALE})
                 _LOGGER.info("Auto-transitioned entry %s to stale via slot-efficiency", entry.id)
 

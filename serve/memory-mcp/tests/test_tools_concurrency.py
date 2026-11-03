@@ -152,6 +152,7 @@ async def test_mutation_tools_translate_busy_errors_from_another_process(tmp_pat
         _finish_lock_holder(holder, release)
 
 
+@pytest.mark.usefixtures("todays_memory_values")
 @pytest.mark.asyncio
 async def test_assess_memories_reports_busy_entry_and_continues(tmp_path: Path) -> None:
     process_context = multiprocessing.get_context("spawn")

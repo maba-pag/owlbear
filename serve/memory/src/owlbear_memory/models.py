@@ -135,7 +135,7 @@ class MemoryEntry(BaseModel):
     outstanding_count: int = 0
     unremarkable_count: int = 0
     didnt_use_count: int = 0
-    score: float = 0.0
+    score: float = 0.0  # legacy: set when saved, no longer updated by ratings or edits and not read by ranking
     scope_agents: list[str] = Field(default_factory=list)
     source_agent: str = Field(frozen=True)
     recommended: Where | None = None

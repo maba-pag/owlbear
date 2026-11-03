@@ -90,7 +90,11 @@ def _record_assessments(
             entry = engine.get_entry(entry_id)
             try:
                 engine.record_assessment(
-                    entry_id, "outstanding", task_id=f"task-{uuid4()}", expected_revision=entry.revision
+                    entry_id,
+                    "outstanding",
+                    task_id=f"task-{uuid4()}",
+                    expected_revision=entry.revision,
+                    stale_factor=50,
                 )
             except ConcurrencyError:
                 continue
@@ -105,7 +109,7 @@ def _record_after_barrier(engine: MemoryEngine, entry_id: str, barrier: Barrier)
     barrier.wait(timeout=10)
     revision = engine.get_entry(entry_id).revision
     return engine.record_assessment(
-        entry_id, "outstanding", task_id=f"task-{uuid4()}", expected_revision=revision
+        entry_id, "outstanding", task_id=f"task-{uuid4()}", expected_revision=revision, stale_factor=50
     ).entry.outstanding_count
 
 
@@ -127,10 +131,12 @@ def _mutating_calls(engine: MemoryEngine, entry: MemoryEntry) -> list[Callable[[
         lambda: engine.approve(entry.id, expected_updated_at=entry.updated_at),
         lambda: engine.resolve(entry.id, expected_updated_at=entry.updated_at),
         lambda: engine.delete(entry.id, expected_updated_at=entry.updated_at),
-        engine.purge,
-        lambda: engine.record_assessment(entry.id, "outstanding", task_id="task-1", expected_revision=entry.revision),
+        lambda: engine.purge(min_age_days=30),
+        lambda: engine.record_assessment(
+            entry.id, "outstanding", task_id="task-1", expected_revision=entry.revision, stale_factor=50
+        ),
         lambda: engine.record_factually_wrong(entry.id, "task-1", expected_revision=entry.revision),
-        lambda: engine.try_stale_transition(entry),
+        lambda: engine.try_stale_transition(entry, 50),
     ]
 
 
@@ -371,7 +377,9 @@ def test_record_assessment_reenters_writer_lock_for_stale_transition(tmp_path: P
 
     updated = (
         MemoryEngine(tmp_path)
-        .record_assessment(entry.id, "didnt_use", task_id="task-stale", expected_revision=entry.revision)
+        .record_assessment(
+            entry.id, "didnt_use", task_id="task-stale", expected_revision=entry.revision, stale_factor=50
+        )
         .entry
     )
 
@@ -394,8 +402,12 @@ def test_multiple_engines_complete_sequential_and_threaded_mutations(tmp_path: P
     entry = first_engine.edit(entry.id, {"scope_agents": ["test-agent"]}, expected_updated_at=entry.updated_at)
     entry = first_engine.approve(entry.id, expected_updated_at=entry.updated_at)
 
-    first_engine.record_assessment(entry.id, "outstanding", task_id="task-a", expected_revision=entry.revision)
-    second_engine.record_assessment(entry.id, "outstanding", task_id="task-b", expected_revision=entry.revision)
+    first_engine.record_assessment(
+        entry.id, "outstanding", task_id="task-a", expected_revision=entry.revision, stale_factor=50
+    )
+    second_engine.record_assessment(
+        entry.id, "outstanding", task_id="task-b", expected_revision=entry.revision, stale_factor=50
+    )
 
     barrier = Barrier(2)
     with ThreadPoolExecutor(max_workers=2) as executor:

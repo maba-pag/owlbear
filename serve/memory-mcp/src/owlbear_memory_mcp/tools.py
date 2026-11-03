@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import subprocess
 from pathlib import Path
@@ -20,8 +21,10 @@ from owlbear_memory import (
     MemoryEntry,
     MemoryState,
     NotFoundError,
+    Points,
     TransitionError,
     Where,
+    entry_score,
     selection,
     storage,
     validate_scope_agents,
@@ -34,13 +37,13 @@ from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError, f
 
 from owlbear_memory_mcp import receipts
 from owlbear_memory_mcp.git import commit_batch, commit_move, cut_short, format_git_failure, repo_locked
+from owlbear_memory_mcp.store import StoreError
+from owlbear_memory_mcp.store import shared_root as machine_shared_root
 
 if TYPE_CHECKING:
     from mcp.server.mcpserver import Context
 
 __all__ = [
-    "SLOT_CHALLENGE",
-    "SLOT_EXPLORE",
     "approve_memory",
     "assess_memories",
     "commit_memory_batch",
@@ -54,12 +57,13 @@ __all__ = [
     "save_memory",
 ]
 
-SLOT_EXPLORE = 2
-SLOT_CHALLENGE = 2
 GLOBAL = "memory"  # Global memory: the shared repository's own memory folder (TD-241)
 FOLDER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")  # a project folder's name in the shared repository
-CONFIG = "config.json"  # the global settings, which hold the curator's threshold (TD-400)
+CONFIG = "config.json"  # the global settings, which hold the curator's threshold (TD-400) and the memory values
 UNSET_THRESHOLD = "the curator's confidence threshold is unset; the owner sets it on the Settings page"
+UNSET_VALUES = "these memory values are unset in the global settings; the owner sets them on the Settings page: "
+_INTEGER_VALUES = frozenset({"stale_factor", "recall_limit", "explore_slots", "challenge_slots"})
+_LEAST = {"stale_factor": 1, "recall_limit": 1}  # the settings' own lower bounds; every other value may be 0
 _WITNESSES = frozenset({MemoryState.CURATED, MemoryState.APPROVED})  # entries whose scope vouches for a named agent
 AssessmentTaskId = Annotated[StrictStr, Field(pattern=r"^[\x21-\x7e]{1,128}$")]
 
@@ -126,6 +130,40 @@ def _shared_root(ctx: Context) -> Path | None:
         return None
     root = _memory_dir_from_ctx(ctx).parent.parent
     return root if Path(common) == root / GLOBAL else None
+
+
+def _memory_values(ctx: Context, *names: str) -> dict[str, float]:
+    """The owner's memory values among *names*, read from the global settings now, not when the server started.
+
+    Code ships no value for them: a tool that needs one the settings do not hold refuses, naming it. Settings that
+    cannot be read refuse too, with the file and the reason. A server bound to the shared repository reads its global
+    settings; one that keeps its own local store looks for the machine's shared repository itself.
+    """
+    try:
+        root = _shared_root(ctx) or machine_shared_root()
+    except StoreError as exc:
+        raise ToolError(str(exc)) from exc
+    data: object = {}
+    if root is not None:
+        path = root / CONFIG
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            pass  # no global settings yet: every value is unset
+        except (OSError, ValueError) as exc:
+            msg = f"the global settings {path} can't be read, so no memory value is known: {exc}"
+            raise ToolError(msg) from exc
+    block = data.get("memory") if isinstance(data, dict) else None
+    block = block if isinstance(block, dict) else {}
+    found: dict[str, float] = {}
+    for name in names:
+        value, whole = block.get(name), name in _INTEGER_VALUES
+        number = isinstance(value, int) if whole else isinstance(value, (int, float))
+        if number and not isinstance(value, bool) and math.isfinite(value) and value >= _LEAST.get(name, 0):
+            found[name] = value
+    if unset := [name for name in names if name not in found]:
+        raise ToolError(UNSET_VALUES + ", ".join(unset))
+    return found
 
 
 def _in_folder(ctx: Context, folder: str | None) -> Context:
@@ -288,7 +326,6 @@ def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]:
         "outstanding_count": entry.outstanding_count,
         "unremarkable_count": entry.unremarkable_count,
         "didnt_use_count": entry.didnt_use_count,
-        "score": entry.score,
         "scope_agents": entry.scope_agents,
         "source_agent": entry.source_agent,
         "recommended": entry.recommended,
@@ -498,7 +535,16 @@ async def recall_memory(
     marker and one `Challenge task:` line per record between the revision and body.
     """
     category_filter = set(_coerce_categories(categories) or [])
-    capped_limit = 20 if limit is None else _validate_limit(limit)
+    values = _memory_values(
+        ctx, "outstanding_boost", "unremarkable_penalty", "explore_slots", "challenge_slots",
+        *(("recall_limit",) if limit is None else ()),
+    )  # fmt: skip
+    points, explore_slots, challenge_slots = (
+        Points(values["outstanding_boost"], values["unremarkable_penalty"]),
+        int(values["explore_slots"]),
+        int(values["challenge_slots"]),
+    )
+    capped_limit = int(values["recall_limit"]) if limit is None else _validate_limit(limit)
     readable = _readable(ctx)
     known_agents = _recognized_agent_names(readable)
     recognized = isinstance(agent, str) and bool(agent.strip()) and agent != "*" and agent in known_agents
@@ -513,16 +559,17 @@ async def recall_memory(
     if category_filter:
         entries = [entry for entry in entries if bool(category_filter.intersection(set(entry.categories)))]
 
-    explore_capacity = min(SLOT_EXPLORE, capped_limit)
-    regular_capacity = max(0, capped_limit - SLOT_EXPLORE - SLOT_CHALLENGE)
+    explore_capacity = min(explore_slots, capped_limit)
+    regular_capacity = max(0, capped_limit - explore_slots - challenge_slots)
 
     def _explore_metric(entry: MemoryEntry) -> int:
         return entry.outstanding_count + entry.unremarkable_count + entry.didnt_use_count
 
+    # the score is worked out now, from the current points: the stored score ranks nothing
     explore_pool = sorted(entries, key=lambda entry: (_explore_metric(entry), entry.id))[:explore_capacity]
     selected_ids = {entry.id for entry in explore_pool}
 
-    challenge_capacity = min(SLOT_CHALLENGE, max(0, capped_limit - len(explore_pool)))
+    challenge_capacity = min(challenge_slots, max(0, capped_limit - len(explore_pool)))
     challenge_candidates = [entry for entry in entries if entry.id not in selected_ids]
     challenge_pool = sorted(challenge_candidates, key=lambda entry: (entry.outstanding_count, entry.id))[
         :challenge_capacity
@@ -530,10 +577,12 @@ async def recall_memory(
     selected_ids.update(entry.id for entry in challenge_pool)
 
     regular_candidates = [entry for entry in entries if entry.id not in selected_ids]
-    regular_pool = sorted(regular_candidates, key=lambda entry: (-entry.score, entry.id))[:regular_capacity]
+    regular_pool = sorted(regular_candidates, key=lambda entry: (-entry_score(entry, points), entry.id))[
+        :regular_capacity
+    ]
 
     selected_entries = explore_pool + challenge_pool + regular_pool
-    selected_entries.sort(key=lambda entry: (state_rank[entry.state], -entry.score, entry.id))
+    selected_entries.sort(key=lambda entry: (state_rank[entry.state], -entry_score(entry, points), entry.id))
 
     blocks = "\n\n".join(_recall_block(entry) for entry in selected_entries)
     if recognized:
@@ -736,6 +785,11 @@ async def assess_memories(
         )
         raise ToolError(msg) from exc
 
+    stale_factor = (
+        int(_memory_values(ctx, "stale_factor")["stale_factor"])
+        if any(item.bucket != "factually_wrong" for item in batch.assessments)
+        else None
+    )  # only a rating that counts needs the owner's stale rule
     engine = _engine_from_ctx(ctx)
     results: list[dict[str, object]] = []
     root = _shared_root(ctx)
@@ -757,6 +811,7 @@ async def assess_memories(
                         bucket,
                         task_id=batch.task_id,
                         expected_revision=assessment.revision,
+                        stale_factor=cast("int", stale_factor),
                     )
                 results.append(
                     {

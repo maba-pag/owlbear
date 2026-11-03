@@ -33,6 +33,30 @@ def run_init_without_test_surface() -> Callable[..., None]:
     return run
 
 
+TODAYS_MEMORY_VALUES = {
+    "outstanding_boost": 0.1,
+    "unremarkable_penalty": 0.01,
+    "stale_factor": 50,
+    "recall_limit": 20,
+    "explore_slots": 2,
+    "challenge_slots": 2,
+}
+
+
+@pytest.fixture
+def todays_memory_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give the memory tools the values they once had in code, for tests of other behaviour than the values.
+
+    Tests of the values themselves write a real ``config.json`` and leave this fixture out.
+    """
+    from owlbear_memory_mcp import tools  # noqa: PLC0415
+
+    def values(_ctx: object, *names: str) -> dict[str, float]:
+        return {name: TODAYS_MEMORY_VALUES[name] for name in names}
+
+    monkeypatch.setattr(tools, "_memory_values", values)
+
+
 def pytest_configure(config: pytest.Config) -> None:
     """Silence pluggy's teardown warning project-wide."""
     config.addinivalue_line(
