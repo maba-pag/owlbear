@@ -82,7 +82,7 @@ CHALLENGED = Outcome(exit=Exit.RETRY, reason="plan challenge: …", challenged=T
          "preparer", "judging: 1 done, 1 running"),
         (step(StepKind.TESTS), [opened(1, "s1", "test-reviewer"), opened(1, "s2", "test-reviewer"),
                                 ended(30, "s1", "test-reviewer")], "test reviewer", "reviewing tests: 1 running"),
-        (step(StepKind.BUILD, started=None), [opened(1)], "builder", None),
+        (step(StepKind.BUILD, started=None), [opened(1)], "builder", "starting"),  # seen live: not yet "implementing"
         (step(StepKind.FOLLOW, None), [opened(1)], "delivery", None),
     ],
 )  # fmt: skip

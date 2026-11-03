@@ -77,9 +77,10 @@ def _judging(c: Change, runs: list[_Run]) -> str | None:
 
 def of(c: Change, events: Sequence[dict[str, Any]], own: str) -> str | None:  # noqa: PLR0911 - one rule per stage
     """The stage of *c*'s running step; None where the caller's words for its *own* role's work stand."""
-    if c.step.kind in _ENGINE or c.step.started_at is None:
+    if c.step.kind in _ENGINE:
         return None
-    runs = _runs(events, c.step.started_at.replace(microsecond=0))
+    since = c.step.started_at  # None while the runner prepares the step: no session of it has opened
+    runs = _runs(events, since.replace(microsecond=0)) if since else []
     if not runs:
         return "starting"
     if judging := _judging(c, runs):
