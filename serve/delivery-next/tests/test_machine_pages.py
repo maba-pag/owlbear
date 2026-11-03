@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import json
 import os
 import re
@@ -1151,7 +1152,7 @@ def test_a_crashed_runner_s_whole_error_shows_in_recent_activity(tmp_path: Path,
     with store.lock("flip") as lock:
         store.write(lock, c)
     with pytest.raises(RuntimeError) as crashed:
-        runner.main(["flip", "--repo", str(path)])
+        contextvars.copy_context().run(runner.main, ["flip", "--repo", str(path)])  # it sets the process's spend place
     assert (str(crashed.value), crashed.value.__notes__) == (whole_error, [note])
     reason = f"RuntimeError: {whole_error}\n{note}"
     with browsing(monkeypatch, pds) as (page, base):
