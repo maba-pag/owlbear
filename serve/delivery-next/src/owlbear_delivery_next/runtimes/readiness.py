@@ -122,7 +122,7 @@ class _UnreadSettingError(Exception):
 def _config(probe: Probe, *key: str) -> str:
     """A git setting's value; an unset one, which git answers with exit 1, is empty; any other failure is raised."""
     code, text = probe(["git", "config", *key])
-    if code > 1:
+    if code not in {0, 1}:
         raise _UnreadSettingError(text)
     return "" if code else text.strip()
 

@@ -55,7 +55,7 @@ def failed(table: dict[str, tuple[int, str]]) -> list[tuple[str, str]]:
         pytest.param({"copilot --version": (1, "{W}")}, "copilot cli", "copilot: {W}", id="copilot-cli"),
         pytest.param({"git config user.name": (128, "{W}")}, "git identity", "{W}", id="identity-unread"),
         pytest.param(
-            {"git config --bool commit.gpgsign": (0, "true"), "git config user.signingkey": (128, "{W}")},
+            {"git config --bool commit.gpgsign": (0, "true"), "git config user.signingkey": (-15, "{W}")},
             "commit signing",
             "{W}",
             id="signing-key-unread",
