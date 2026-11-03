@@ -716,20 +716,16 @@ def test_a_turn_that_never_goes_idle_holds_a_result_run_once_for_the_bound_and_a
         with monkeypatch.context() as patch:
             patch.setattr(sdk_teardown, "asyncio", SimpleNamespace(**vars(asyncio) | {"timeout": bound}))
             await real_idle(st)
-        seen.update(yielded=bool(entered), after=[bool(b.left) for b in bounds], woken=st.changed.is_set(), since=[])
-        asyncio.get_running_loop().call_soon(seen["since"].append, None)  # runs only if a wait precedes the read
+        seen.update(woken=st.changed.is_set(), since=bounds[-1].left if bounds else entered)
 
     async def call(st, operation, what):
         if what == "usage read":
-            seen["late"] = bool(seen["since"])
+            seen["late"] = bool(seen["since"])  # a wait since the bound's end (or since a deadline's entry)
         return await real_call(st, operation, what)
-
-    async def once(_session, _model):
-        return _used(1.0)
 
     monkeypatch.setattr(sdk_teardown, "_idle", idle)
     monkeypatch.setattr(sdk_teardown, "owned_call", call)
-    monkeypatch.setattr(sdk_teardown, "usage_once", once)
+    monkeypatch.setattr(sdk_teardown, "usage_once", sdk_adapter.usage_read)  # ``_waited``'s stub
 
     async def scenario():
         task = asyncio.create_task(sdk_adapter.run(world.cfg))
@@ -741,13 +737,13 @@ def test_a_turn_that_never_goes_idle_holds_a_result_run_once_for_the_bound_and_a
         return await task  # a hang meets pytest's own timeout: a local one would fail a stalled loop
 
     run = asyncio.run(scenario())
-    assert (run.ending, seen["late"]) == (ending, False)  # the final read is asked as soon as the hold ends
+    assert (run.ending, seen["late"]) == (ending, False)  # nothing waits between the hold and the final read
     if ending == "result":
         [made] = bounds  # one bound, not one per wake-up
         assert (made.delay, made.cm.when(), made.cm.expired()) == (sdk_teardown.IDLE, made.when, True)
-        assert (made.early, seen["after"], seen["woken"]) == (False, [False], False)  # no other wait; wake taken
+        assert (made.early, seen["woken"]) == (False, False)  # no wait before it; the wake was taken
     else:
-        assert (bounds, seen["yielded"]) == ([], False)  # a deadline run never holds
+        assert bounds == []  # a deadline run never holds
     _, end = _spend()
     assert end["usage"].get("incomplete") == "turn running"
 
