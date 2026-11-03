@@ -48,8 +48,7 @@ def _text(value: str) -> str:
 def _code(value: str) -> str:
     if not value or "\n" in value or "\r" in value:
         escaped = "".join(
-            "<br>" if char == "\n" else f"&#{ord(char)};"
-            for char in value.replace("\r\n", "\n").replace("\r", "\n")
+            "<br>" if char == "\n" else f"&#{ord(char)};" for char in value.replace("\r\n", "\n").replace("\r", "\n")
         )
         return f"<code>{escaped}</code>"
     longest = max((len(m[0]) for m in re.finditer(r"`+", value)), default=0)
