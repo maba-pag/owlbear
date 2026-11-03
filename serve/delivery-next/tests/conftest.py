@@ -389,6 +389,85 @@ def github(monkeypatch) -> FakeGitHub:
     return fake
 
 
+_FAKE_GH = """
+import json, os, sys
+from pathlib import Path
+
+here, args = Path(__file__).parent, sys.argv[1:]
+state = json.loads((here / "state.json").read_text())
+call = {"argv": args, **{k: os.environ.get(k) for k in ("GH_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_TOKEN")}}
+with (here / "calls.jsonl").open("a") as log:
+    log.write(json.dumps(call) + "\\n")
+opt = lambda name: args[args.index(name) + 1] if name in args else None
+accounts, active = state["accounts"], state["active"]
+if args[:2] == ["auth", "token"]:
+    host = opt("--hostname") or "github.com"
+    user = opt("--user") or active.get(host)
+    if user in accounts.get(host, {}):
+        print(f"tok-{user}")
+        sys.exit(0)
+    sys.exit(print(f"no oauth token found for {host} account {user}", file=sys.stderr) or 1)
+if args[:2] == ["auth", "status"]:
+    print(json.dumps({"hosts": {
+        h: [{"login": x, "state": s, "active": x == active.get(h), "host": h} for x, s in held.items()]
+        for h, held in accounts.items() if opt("--hostname") in (None, h)
+    }}))
+    sys.exit(0)
+env = os.environ.get
+if args[:2] == ["auth", "git-credential"]:
+    asked = dict(line.split("=", 1) for line in sys.stdin.read().splitlines() if "=" in line)
+    host = asked.get("host", "")
+    token = env("GH_TOKEN") if host == "github.com" else env("GH_ENTERPRISE_TOKEN")
+    if args[2] == "get":
+        print(f"protocol=https\\nhost={host}\\nusername=x-access-token\\npassword={token or 'tok-' + active[host]}")
+    sys.exit(0)
+token = env("GH_TOKEN") or env("GH_ENTERPRISE_TOKEN") or "tok-" + active["github.com"]
+for rule in state["answers"]:
+    if all(x in args for x in rule["has"]):
+        out = rule["by_token"].get(token, rule["out"]) if "by_token" in rule else rule["out"]
+        print(out if isinstance(out, str) else json.dumps(out))
+        sys.exit(rule.get("exit", 0))
+print("{}")
+"""
+
+
+class FakeGh:
+    """A ``gh`` first on PATH: it holds accounts per host and records each call's argv and GitHub tokens (TD-402)."""
+
+    def __init__(self, folder: Path) -> None:
+        self.folder = folder
+        self.path = folder / "gh"
+        self.path.write_text(f"#!{sys.executable}\n{_FAKE_GH}")
+        self.path.chmod(0o755)
+        self.set({"github.com": {"maba-pag": "success", "boecht": "success"}}, {"github.com": "maba-pag"})
+
+    def set(self, accounts: dict[str, dict[str, str]], active: dict[str, str], answers: list | None = None) -> None:
+        """*accounts*: host to login to state; *active*: host to login; *answers*: ``{"has", "out", "by_token"}``."""
+        state = {"accounts": accounts, "active": active, "answers": answers or []}
+        (self.folder / "state.json").write_text(json.dumps(state))
+
+    def calls(self) -> list[dict[str, Any]]:
+        log = self.folder / "calls.jsonl"
+        return [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+
+
+@pytest.fixture
+def fake_gh(tmp_path, monkeypatch) -> FakeGh:
+    """The fake ``gh``, and a github.com credential helper in HOME's Git config answering ``tok-active``.
+
+    The helper is the one a launch would use without its own: a credential-bearing launch must reset it.
+    """
+    folder = tmp_path / "fake-gh"
+    folder.mkdir()
+    monkeypatch.setenv("PATH", f"{folder}{os.pathsep}{os.environ['PATH']}")
+    gitconfig = Path.home() / ".gitconfig"
+    helper = (
+        '[credential "https://github.com"]\n\thelper = "!f() { echo username=active; echo password=tok-active; }; f"\n'
+    )
+    gitconfig.write_text(gitconfig.read_text() + helper)
+    return FakeGh(folder)
+
+
 class Warmth:
     """A decision read made cold (nothing kept) or warm (its snapshot kept); `parses` counts the parses after it."""
 
