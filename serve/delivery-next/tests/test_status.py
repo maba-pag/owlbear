@@ -241,3 +241,45 @@ def test_a_retry_says_its_last_failed_try_whole(activity, line, joined, said, wh
     )
     expected = f"Build 2/2 · {line}{joined}{reason}" if said else f"Build 2/2 · {line}"
     assert status(build(outcome=o), activity, NOW).line == expected
+
+
+def _ev(minutes: float, event: str, **more) -> dict:
+    """An event of the builder's session as the SDK runtime journals it (#718)."""
+    return {"at": (NOW - timedelta(minutes=minutes)).isoformat(timespec="seconds"), "session": "b1",
+            "role": "builder", "event": event, **more}  # fmt: skip
+
+
+OPENED = _ev(4, "session", id="b1", resumed=False)
+REFUSED = _ev(1, "tool", tool="submit_result", accepted=False, errors=["ruff: F401"])
+
+
+@pytest.mark.parametrize(
+    ("events", "said"),
+    [
+        ((), "starting"),
+        ((OPENED,), "implementing"),
+        ((OPENED, REFUSED), "fixing its refused result"),
+        ((OPENED, REFUSED, _ev(0.5, "tool", tool="submit_result", accepted=True)), "handing in its result"),
+    ],
+)
+def test_a_running_steps_line_says_its_stage_from_its_sessions_events(events, said):
+    """#718: the step started five minutes ago; its stage follows its session's events, and nothing else changes."""
+    alive = Activity(host_up=True, runner_alive=True, last_event_at=NOW - timedelta(seconds=30), events=events)
+    line = status(running(NOW - timedelta(minutes=5)), alive, NOW).line
+    assert line == f"Build 2/2 · {said}: rate limiter · builder active 30 s ago"
+
+
+@pytest.mark.parametrize(
+    ("change", "expected"),
+    [
+        (ASKING, "Build 2/2 · waiting for you: which key?"),
+        (STOPPED, "Build 2/2 · stopped: model blocked"),
+        (build(intent=Intent(hold=True)), "Build 2/2 · holding for your change: finishing build"),
+        (build(intent=Intent(paused_at=NOW)), "Build 2/2 · pausing: finishing build"),
+    ],
+)
+def test_a_stage_never_overrides_an_earlier_rule(change, expected):
+    started = change.model_copy(update={"step": change.step.model_copy(update={"started_at": NOW})})
+    events = tuple(e | {"at": NOW.isoformat()} for e in (OPENED, REFUSED))  # alone they would say "fixing"
+    alive = Activity(host_up=True, runner_alive=STOPPED is not change, events=events)
+    assert status(started, alive, NOW).line == expected

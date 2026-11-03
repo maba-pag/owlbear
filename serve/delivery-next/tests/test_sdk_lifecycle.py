@@ -914,3 +914,55 @@ def test_a_replacement_session_is_noted_as_ours_naming_the_one_it_replaces_befor
     run = asyncio.run(sdk_adapter.run(cfg))
     assert seen == []
     assert (run.ending, run.detail) == ("error", f"UnnotedError: {chatlogs.UNNOTED}")
+
+
+def test_an_opened_sessions_events_name_it_and_its_role_and_its_run_ends_after_the_runtime_stopped(world, monkeypatch):
+    """#718: a replacement's claimed id, not the configured one, and the role mark each event once the session opened;
+    startup marks name no role; ``ended`` comes once the runtime is stopped, also when the session failed."""
+    ended_after_stop = []
+
+    async def missing(_sid):
+        return None
+
+    async def send(*_args, **_kwargs):
+        msg = "stop here"
+        raise RuntimeError(msg)
+
+    async def create_session(**_kw):
+        world.session.send = send
+        return world.session
+
+    async def nothing(*_args):
+        return None
+
+    def event(record):
+        if record["event"] == "ended":
+            ended_after_stop.append(world.stop_calls == 1 and ROOT not in world.live)
+        world.event(record)
+
+    world.get_session_metadata, world.create_session = missing, create_session
+    monkeypatch.setattr(sdk_teardown, "CALL", 0.05)
+    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
+    monkeypatch.setattr(sdk_adapter, "session_options", nothing)
+    cfg = dataclasses.replace(world.cfg, resume=True, journal=sdk_adapter.Journal(event=event,
+                              replaced=lambda: "synthetic-2"))  # fmt: skip
+    run = asyncio.run(sdk_adapter.run(cfg))
+    assert run.ending == "error"
+    opened = next(i for i, e in enumerate(world.events) if e["event"] == "session")
+    assert all("role" not in e for e in world.events[:opened])  # the runtime's startup marks
+    assert {(e.get("session"), e.get("role")) for e in world.events[opened:]} == {("synthetic-2", "builder")}
+    assert (world.events[-1]["event"], world.events[-1]["ending"]) == ("ended", "error")
+    assert ended_after_stop == [True]
+
+
+def test_a_session_that_never_opened_logs_no_role_and_no_end(world, monkeypatch):
+    async def create_session(**_kw):
+        msg = "stop here"
+        raise RuntimeError(msg)
+
+    world.create_session = create_session
+    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
+    run = asyncio.run(sdk_adapter.run(world.cfg))
+    assert run.ending == "error"
+    assert world.events
+    assert [e for e in world.events if "role" in e or e["event"] == "ended"] == []
