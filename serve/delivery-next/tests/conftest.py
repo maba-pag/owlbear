@@ -783,7 +783,7 @@ class Pds:
 
     @staticmethod
     def group(page, group: str) -> None:
-        """Show Settings' group *group* (D-01M63C8QQMANY46N8GMNNKH1V9) by its link, as a person does."""
+        """Show Settings' group *group* by its link, as a person does."""
         from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
         link = page.locator(f"#groups a[href='#{group}']")

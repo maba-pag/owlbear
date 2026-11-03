@@ -1,5 +1,5 @@
-// The layered groups' panels (D-01M63C8QQMANY46N8GMNNKH1V9): Agents, Runs, and Checks and merge. Each setting's row
-// carries the id the unset list links to (GW8RT6).
+// The layered groups' panels: Agents and runs, Guardrails, and Checks and merge. Each setting's row carries the id the
+// unset list links to (GW8RT6).
 
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { held, here, project } from "/assets/ui.mjs";
@@ -46,6 +46,8 @@ function toMetrics(role) {
 const none = () => cell(html`<p-text color="contrast-medium">n/a</p-text>`);  // the shaper's chat and a Spotter look
 
 export function agentsGroup() {
+  const loop = (owner) => ROUNDS.map(([f]) =>
+    (owner === "final_review" ? `final_review.${f}` : `agents.${owner}.${f}`));
   return html`
     <section class="panel" aria-labelledby="agents-title">
       <p-heading size="lg"><h2 id="agents-title" tabindex="-1">Agents</h2></p-heading>
@@ -73,10 +75,33 @@ export function agentsGroup() {
         picker, which the chat reminds you of once.</p-text>
       <p-text id="models-note" size="xs" color="contrast-medium" aria-live="polite">${state.modelsNote}</p-text>
     </section>
+    <section class="panel" aria-labelledby="rounds-title">
+      <p-heading size="lg"><h2 id="rounds-title" tabindex="-1">Challenge rounds</h2></p-heading>
+      <p-text>A reviewer and the worker go back and forth in rounds. A round with few new findings is the last; after
+        the last allowed round with many, Delivery asks you. A loop keeps the values it started with.</p-text>
+      ${table("Challenge rounds: they apply to loops that start after a save", ["Loop", ...ROUNDS.map(([, l]) => l)],
+        "rounds", LOOPS.map(([owner, said]) => setting(`set-rounds-${owner}`, said, loop(owner),
+          ...ROUNDS.map(([field, label]) => numberCell(owner, field, label)))))}
+      <p-text size="xs" color="contrast-medium">Findings per round: 1 to 20. "Last round at or below" must be lower
+        than "ask you at or above", which may not exceed the findings per round. The final review inherits the
+        builder's values.</p-text>
+    </section>
+    <section class="panel" aria-labelledby="at-once-title">
+      <p-heading size="lg"><h2 id="at-once-title" tabindex="-1">Sessions at once</h2></p-heading>
+      <p-text>A step waits for a free slot before it starts. A visual check runs its judges in waves of the slots it
+        gets; an Impeccable update takes one slot per session. This machine's total holds across its projects.</p-text>
+      ${table("Sessions at once: they apply to the next step that starts", ["Setting", "Value"], "at-once",
+        [setting("set-sessions", "Agent sessions at once in one project", ["sessions"], sessionsAtOnce())])}
+      <p-text size="xs" color="contrast-medium">At least 1. Steps running now keep their sessions.</p-text>
+    </section>`;
+}
+
+export function guardrailsGroup() {
+  return html`
     <section class="panel" aria-labelledby="spotter-title">
       <p-heading size="lg"><h2 id="spotter-title" tabindex="-1">Spotter</h2></p-heading>
       <p-text>The Spotter looks at an agent's work beside it: at hand-offs, plans, state changes and a sample of
-        actions. Its model, effort and context are the spotter row under Agents.</p-text>
+        actions. Its model, effort and context are the spotter row in Agents and runs.</p-text>
       ${more("How the Spotter acts and stops",
         "It files each finding under one of four categories and acts as that category's setting says, in Delivery's "
         + "steps and in the VS Code chats of the enrolled folders (a terminal chat is not followed): it records it, "
@@ -111,6 +136,16 @@ export function agentsGroup() {
       ${table("Your instructions, skills and memory: they apply to the next session", ["Setting", "Value"],
         "user-config", USER_KEYS.map((key) => setting(`set-${key}`, userConfigLabel(key), [key], userConfig(key))))}
     </section>
+    <section class="panel" aria-labelledby="curation-title">
+      <p-heading size="lg"><h2 id="curation-title" tabindex="-1">Memory curation</h2></p-heading>
+      <p-text>The memory curator states its confidence in everything it would do to an entry. At or above this
+        threshold it acts alone, Make global included; below it, it asks you in an interactive session and leaves the
+        entry as it is in an automatic run.</p-text>
+      ${table("Memory curation: it applies to the next curation", ["Setting", "Value"], "curation",
+        [setting("set-curator_threshold", "Curator's confidence threshold (%)", ["curator_threshold"],
+          curatorThreshold())])}
+      <p-text size="xs" color="contrast-medium">50 to 100; one value for every project and machine.</p-text>
+    </section>
     <section class="panel" aria-labelledby="guard-title">
       <p-heading size="lg"><h2 id="guard-title" tabindex="-1">Shell guard</h2></p-heading>
       <p-text>Delivery reads each shell command a step runs for ways around Git hooks or signing, and for
@@ -124,41 +159,6 @@ export function agentsGroup() {
         + "and so do the step's folder, tool and file rules.")}
       ${table("Shell guard: it applies to the next step", ["Setting", "Value"], "guard",
         [setting("set-guard_level", "Shell guard level", ["guard_level"], guardLevel())])}
-    </section>`;
-}
-
-export function runsGroup() {
-  const loop = (owner) => ROUNDS.map(([f]) =>
-    (owner === "final_review" ? `final_review.${f}` : `agents.${owner}.${f}`));
-  return html`
-    <section class="panel" aria-labelledby="rounds-title">
-      <p-heading size="lg"><h2 id="rounds-title" tabindex="-1">Challenge rounds</h2></p-heading>
-      <p-text>A reviewer and the worker go back and forth in rounds. A round with few new findings is the last; after
-        the last allowed round with many, Delivery asks you. A loop keeps the values it started with.</p-text>
-      ${table("Challenge rounds: they apply to loops that start after a save", ["Loop", ...ROUNDS.map(([, l]) => l)],
-        "rounds", LOOPS.map(([owner, said]) => setting(`set-rounds-${owner}`, said, loop(owner),
-          ...ROUNDS.map(([field, label]) => numberCell(owner, field, label)))))}
-      <p-text size="xs" color="contrast-medium">Findings per round: 1 to 20. "Last round at or below" must be lower
-        than "ask you at or above", which may not exceed the findings per round. The final review inherits the
-        builder's values.</p-text>
-    </section>
-    <section class="panel" aria-labelledby="at-once-title">
-      <p-heading size="lg"><h2 id="at-once-title" tabindex="-1">Sessions at once</h2></p-heading>
-      <p-text>A step waits for a free slot before it starts. A visual check runs its judges in waves of the slots it
-        gets; an Impeccable update takes one slot per session. This machine's total holds across its projects.</p-text>
-      ${table("Sessions at once: they apply to the next step that starts", ["Setting", "Value"], "at-once",
-        [setting("set-sessions", "Agent sessions at once in one project", ["sessions"], sessionsAtOnce())])}
-      <p-text size="xs" color="contrast-medium">At least 1. Steps running now keep their sessions.</p-text>
-    </section>
-    <section class="panel" aria-labelledby="curation-title">
-      <p-heading size="lg"><h2 id="curation-title" tabindex="-1">Memory curation</h2></p-heading>
-      <p-text>The memory curator states its confidence in everything it would do to an entry. At or above this
-        threshold it acts alone, Make global included; below it, it asks you in an interactive session and leaves the
-        entry as it is in an automatic run.</p-text>
-      ${table("Memory curation: it applies to the next curation", ["Setting", "Value"], "curation",
-        [setting("set-curator_threshold", "Curator's confidence threshold (%)", ["curator_threshold"],
-          curatorThreshold())])}
-      <p-text size="xs" color="contrast-medium">50 to 100; one value for every project and machine.</p-text>
     </section>`;
 }
 

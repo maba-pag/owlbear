@@ -51,7 +51,7 @@ const asked = new URLSearchParams(location.search);
 export const state = {
   loaded: null, saving: false, offered: null, modelsNote: "", error: "", status: "",
   layer: ["machine", "global"].includes(asked.get("layer")) ? asked.get("layer") : "project",  // as a link names it
-  group: "overview",  // the group shown (D-01M63C8QQMANY46N8GMNNKH1V9); drafts of every group stay meanwhile
+  group: "overview",  // the group shown; drafts of every group stay meanwhile
   folder: null,
   machine: null, others: [], unread: [],  // the machine's values and the other projects' settings (TD-243)
   everything: false,  // the overview shows every setting, not only those a project sets apart (TD-295)

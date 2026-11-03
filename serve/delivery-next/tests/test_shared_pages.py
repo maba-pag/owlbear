@@ -503,11 +503,11 @@ def unsaved_edits_keep_the_page(page, here: str, pds) -> None:
     expect(said).to_be_visible()
     expect(page).to_have_url(here)
     page.get_by_role("button", name="Menu").click()
-    page.locator("p-drilldown").get_by_role("link", name="Agents").click()  # a group of this page: no leaving
-    expect(page).to_have_url(here.replace("#runs", "#agents"))
-    expect(page.locator("#agents-title")).to_be_focused()
-    expect(page.locator("#groups a[href='#runs'] p-tag")).to_have_text("1 unsaved")
-    pds.group(page, "runs")
+    page.locator("p-drilldown").get_by_role("link", name="Guardrails").click()  # a group of this page: no leaving
+    expect(page).to_have_url(here.replace("#agents", "#guardrails"))
+    expect(page.locator("#spotter-title")).to_be_focused()
+    expect(page.locator("#groups a[href='#agents'] p-tag")).to_have_text("1 unsaved")
+    pds.group(page, "agents")
     expect(page.get_by_label("Rounds at most, builder")).to_have_value("4")
 
 
@@ -594,9 +594,9 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
                  "Global (every project; synced to shared repository)", "Project shop-site (/s)",
                  "Project shop-site (/s2)"]
             )  # fmt: skip
-            pds.group(page, "runs")
+            pds.group(page, "agents")
             page.get_by_label("Rounds at most, builder").fill("4")
-            unsaved_edits_keep_the_page(page, f"{base}/config?project={DOCS}#runs", pds)
+            unsaved_edits_keep_the_page(page, f"{base}/config?project={DOCS}#agents", pds)
             docs = Store(tmp_path / DOCS, DataRepo(shared_repo[0]), "docs-site")
             off = {"agents": {"planner": Agent(subagents=False)}}
             assert (

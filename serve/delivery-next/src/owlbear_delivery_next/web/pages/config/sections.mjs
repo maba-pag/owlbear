@@ -5,8 +5,8 @@ import { SOURCES, state, drafts, page, show, notify, shown } from "./state.mjs";
 import { cell, row, table, button, more } from "./cells.mjs";
 import { pendingLine, save, rename, reviewPrefs, hasEdits, anyEdits, pendingIn, useRecommended } from "./layers.mjs";
 import { machineSection } from "./machine.mjs";
-import { agentsGroup, runsGroup, checksGroup } from "./panels.mjs";
-import { GROUPS, groupOf, rowOf } from "./groups.mjs";
+import { agentsGroup, guardrailsGroup, checksGroup } from "./panels.mjs";
+import { GROUPS, groupOf, renamed, rowOf } from "./groups.mjs";
 import { readsView } from "./reads.mjs";
 
 // The project this page edits, by its name in the machine host's list; "This project" on a clone's own host.
@@ -178,8 +178,10 @@ const FILTERS = [["all", "All settings"], ["unset", "Unset"], ["set", "Set on th
 const NONE = { unset: "No setting in this group is unset.", set: "This layer sets nothing in this group.",
   unsaved: "No unsaved edits in this group." };
 
+const LAYERED = ["agents", "guardrails", "checks"];  // the groups of settings a layer holds, saved by one Save
+
 function filterBar() {
-  if (!["agents", "runs", "checks"].includes(state.group)) return nothing;
+  if (!LAYERED.includes(state.group)) return nothing;
   const pick = (e) => {
     state.filter = e.target.value;
     show();
@@ -194,7 +196,7 @@ function filterBar() {
 const GROUP_VIEWS = {
   overview: () => html`${unsetSection()}${acrossSection()}`,
   agents: agentsGroup,
-  runs: runsGroup,
+  guardrails: guardrailsGroup,
   checks: checksGroup,
   project: folderSection,
   "this-machine": machineSection,
@@ -203,7 +205,7 @@ const GROUP_VIEWS = {
 // One Save for the layered settings, whichever group holds them (D-01M63C92B83D61XFXTRXG8JAVB): shown with a group
 // of them, and anywhere while a layer has edits to save. This machine's own settings keep their own Save.
 function saveBar() {
-  const layered = ["agents", "runs", "checks"].includes(state.group)
+  const layered = LAYERED.includes(state.group)
     || (state.group === "this-machine" && state.layer === "global");
   if (!layered && !anyEdits()) return nothing;
   const edits = hasEdits();
@@ -234,7 +236,7 @@ function addressed() {
   }
 }
 
-// Show the group the address names (D-01M63C8QQMANY46N8GMNNKH1V9): a group's own, or an older one naming a section or
+// Show the group the address names: a group's own, or an older one naming a section or
 // a row (#machine-title, #set-prefs-merge_method), which then gets the focus. A switch from elsewhere than the groups'
 // links (the menu, the back button) puts the focus on the group's first heading; *initial* is the page's first view.
 export function route(initial = false) {
@@ -244,7 +246,7 @@ export function route(initial = false) {
   const switched = group !== state.group, nav = document.activeElement?.closest?.("#groups");
   state.group = group;
   if (id && id !== group) {
-    page.target = `#${CSS.escape(id)}`;
+    page.target = `#${CSS.escape(renamed(id))}`;
     state.filter = "all";  // the row it names may be one the filter hides
   } else if (switched && !initial && !nav) page.target = "#groups ~ section h2";
   show();

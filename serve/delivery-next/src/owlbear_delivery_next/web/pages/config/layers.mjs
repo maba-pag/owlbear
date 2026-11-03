@@ -150,7 +150,7 @@ export function anyEdits() {
   return Object.keys(drafts).some((layer) => dirty(layer).length);
 }
 
-// A group's unsaved edits (D-01M63C8QQMANY46N8GMNNKH1V9): the edited layer's, This machine's own and a folder name
+// A group's unsaved edits: the edited layer's, This machine's own and a folder name
 // typed.
 export function pendingIn(group) {
   let n = dirty(state.layer).filter(([key]) => draftGroup(key) === group).length;

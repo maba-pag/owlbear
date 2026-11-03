@@ -87,7 +87,7 @@ def test_the_menu_links_every_page_the_host_serves_once(tmp_path):
     linked = re.findall(LINKED, menu)
     level = r'id: "settings", label: "(Settings)", links: GROUPS\.map\(\(\[id, said\]\) => \[`(/config)#'
     settings = re.search(level, menu)
-    assert settings, "Settings is a level of its groups (D-01M63C8QQMANY46N8GMNNKH1V9)"
+    assert settings, "Settings is a level of its groups"
     linked.append((settings[2], settings[1]))
 
     assert sorted(linked) == sorted(PAGES) == sorted((path, title) for path, title, _ in pages.PAGES)
@@ -97,6 +97,6 @@ def test_the_menu_links_every_page_the_host_serves_once(tmp_path):
     assert re.findall(LINKED, updates) == UPDATES
     groups = re.search(r"export const GROUPS = .*?\];", c.get("/assets/page/config/groups.mjs").text, re.DOTALL)
     assert re.findall(r'\["([a-z-]+)", "([A-Za-z ]+)"\]', groups.group()) == [
-        ("overview", "Overview"), ("agents", "Agents"), ("runs", "Runs"), ("checks", "Checks and merge"),
-        ("project", "Project"), ("this-machine", "This machine")
+        ("overview", "Overview"), ("agents", "Agents and runs"), ("guardrails", "Guardrails"),
+        ("checks", "Checks and merge"), ("project", "Project"), ("this-machine", "This machine")
     ]  # fmt: skip

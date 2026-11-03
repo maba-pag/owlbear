@@ -787,18 +787,18 @@ def a_read_failing_after_a_save_during_it_leaves_the_save_s_answer_unwarned(page
 
 
 def a_group_of_the_shown_page_opens_on_it(page, here: str) -> None:
-    """D-01M63C8QQMANY46N8GMNNKH1V9: a Settings group's link, followed from Settings, shows it with the menu closed;
-    the menu then opens on that group."""
+    """A Settings group's link, followed from Settings, shows it with the menu closed; the menu then opens on that
+    group."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     burger, menu = page.get_by_role("button", name="Menu"), page.locator("p-drilldown")
-    menu.get_by_role("link", name="Agents").click()
+    menu.get_by_role("link", name="Agents and runs").click()
     expect(menu.get_by_role("link")).to_have_count(0)
     expect(page).to_have_url(f"{here}#agents")
     expect(page.locator("#agents-title")).to_be_focused()
     burger.click()
-    expect(menu.get_by_role("link", name="Agents")).to_be_focused()
-    expect(menu.get_by_role("link", name="Agents")).to_have_attribute("aria-current", "page")
+    expect(menu.get_by_role("link", name="Agents and runs")).to_be_focused()
+    expect(menu.get_by_role("link", name="Agents and runs")).to_have_attribute("aria-current", "page")
 
 
 @pytest.mark.browser
@@ -823,7 +823,7 @@ def test_the_menu_reaches_every_page_moves_focus_into_each_level_and_back_to_the
         expect(overview).to_have_attribute("aria-current", "page")
         served = ["/", "/backlog", "/memory", "/decisions", "/metrics", "/improvement", "/projects", "/maintenance"]
         served += ["/updates/owlbear", "/updates/pds", "/updates/impeccable"]
-        groups = ["overview", "agents", "runs", "checks", "project", "this-machine"]  # D-01M63C8QQMANY46N8GMNNKH1V9
+        groups = ["overview", "agents", "guardrails", "checks", "project", "this-machine"]
         hrefs = menu.locator("a").evaluate_all("as => as.map(a => a.getAttribute('href'))")
         assert sorted(hrefs) == sorted([f"{path}?project={a.id}" for path in served]
                                        + [f"/config?project={a.id}#{group}" for group in groups])  # fmt: skip
