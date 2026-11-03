@@ -57,6 +57,8 @@ def wanted(c: Change, step: Step | None) -> int:
     """
     if step is None:
         return 0
+    if c.amending is not None:  # TD-185: its sessions run before the stopped step, whichever step it is
+        return 1
     if step.kind in NO_AGENT:
         o = c.outcome
         return int(o is not None and o.cause == cause_key(ErrorKind.NETWORK, step.kind, pick.LABEL))
