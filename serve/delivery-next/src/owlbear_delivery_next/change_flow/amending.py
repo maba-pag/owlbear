@@ -374,7 +374,7 @@ def objected(c: Change, item: ObjectionItem, now: datetime) -> None:
         return
     a.objected_at = item.at
     later = [x.id for x in c.amendments if x.state == "applied" and (x.version or 0) > (a.version or 0)]
-    done = [t.id for t in (c.plan.tasks if c.plan else []) if t.done]
+    done = [t.id for t in (c.plan.tasks if c.plan else []) if t.done and t.id not in a.done]
     text = (
         f"You objected to amendment {a.id} (brief v{a.version}: {'; '.join(_item_line(i) for i in a.items)})"
         f"{f': {item.text}' if item.text else ''}. Built and judged on it since: tasks {', '.join(done) or 'none'}, "

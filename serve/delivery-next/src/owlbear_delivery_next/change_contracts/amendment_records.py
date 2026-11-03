@@ -95,6 +95,7 @@ class Amendment(_Strict):
     reverts: str = ""  # the amendment a revert undoes
     question: str = ""  # the question whose answer started it
     moved_to: str = ""  # the new Change that holds it: this one merged before it ended
+    done: list[str] = Field(default_factory=list)  # tasks already done when it applied: not built on it
     objected_at: datetime | None = None
     objection: Objection | Literal[""] = ""
 

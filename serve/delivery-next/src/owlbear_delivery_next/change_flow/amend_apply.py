@@ -137,6 +137,7 @@ def apply(c: Change, a: Amendment, level: Level, now: datetime) -> None:
         b.reference = v
     b.approved.append(b.model_copy(deep=True, update={"approved": [], "checks": [p.model_copy() for p in c.checks]}))
     void(c, a, changed | removed)
+    a.done = [t.id for t in (c.plan.tasks if c.plan else []) if t.done]
     resume(c, a, level, now)
     c.amending = None
 

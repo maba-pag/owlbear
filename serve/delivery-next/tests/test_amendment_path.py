@@ -358,6 +358,17 @@ def test_an_answer_source_declined_within_the_brief_reopens_his_question():
     assert (a.state, loop.open_question(asked).id, q.answer) == ("declined", q.id, None)
 
 
+def test_an_objection_names_only_the_tasks_built_on_the_amendment():
+    c = change(task="t2")
+    c.plan.tasks[0].done = True  # built before it
+    through(c)
+    c.plan.tasks[1].done = True
+
+    amending.objected(c, ObjectionItem(amendment="A1", at=NOW), NOW)
+
+    assert "Built and judged on it since: tasks t2," in loop.open_question(c).text
+
+
 def test_an_objection_pauses_dependent_work_and_a_revert_is_a_new_version():
     c = change()
     a1 = through(c)  # v4: AC-1 reworded alone
