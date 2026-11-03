@@ -8,7 +8,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,8 +25,11 @@ from owlbear_delivery_next.change_contracts.models import Change
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git import remote_git
+from owlbear_delivery_next.git.access import Access
+from owlbear_delivery_next.github import account
 from owlbear_delivery_next.impeccable import pack_files
-from owlbear_delivery_next.local_system import data_repo, local_home
+from owlbear_delivery_next.local_system import data_repo, git_run, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
@@ -158,8 +161,8 @@ def intervals_unset(monkeypatch):
 
 def complete_layer():
     """The carried values plus test values for what came later: the Spotter's settings, the retro roles and the
-    user-config switches, off (D-01M5YE4P5317N1HWD0QN6N05E0), the shell guard at strict (D-01M6DX04FRP680Z4GGHK5B9VRC)
-    and the memory values, as they once stood in code."""
+    user-config switches, off (D-01M5YE4P5317N1HWD0QN6N05E0), the shell guard at strict (D-01M6DX04FRP680Z4GGHK5B9VRC),
+    the memory values, as they once stood in code, and GitHub writes by the repository owner's account (TD-402)."""
     from owlbear_delivery_next.settings import carried  # noqa: PLC0415
     from owlbear_delivery_next.settings.config import MemoryValues  # noqa: PLC0415
     from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter  # noqa: PLC0415
@@ -177,9 +180,9 @@ def complete_layer():
         outstanding_boost=0.1, unremarkable_penalty=0.01, stale_factor=50, purge_days=30, preflight_cap=5,
         preflight_budget=2000, recall_limit=20, explore_slots=2, challenge_slots=2,
     )  # fmt: skip
-    update = {"spotter": spotter, "agents": agents, "guard_level": "strict", "memory": memory} | dict.fromkeys(
-        ("load_user_instructions", "load_user_skills", "load_user_memory"), False
-    )
+    update = {"spotter": spotter, "agents": agents, "guard_level": "strict", "memory": memory}
+    update |= {"github_account": "repository-owner"}
+    update |= dict.fromkeys(("load_user_instructions", "load_user_skills", "load_user_memory"), False)
     return base.model_copy(update=update)
 
 
@@ -260,6 +263,7 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(pack_files, "fetch", _offline)
     monkeypatch.setattr(model_choices, "_read", lambda: _offline("models.list"))
     monkeypatch.setattr(backlog_issues, "RUNNER", FakeGitHub(down=True))  # never the real backlog issues
+    monkeypatch.setattr(account, "resolve", _offline_account)  # nor the machine's gh accounts; fake_gh resolves
     monkeypatch.setattr(backlog, "_cache", {})
     monkeypatch.setattr(backlog, "_recent", {})
     monkeypatch.setattr(decision_cache, "_entries", {})  # no test sees another's decision snapshot
@@ -328,7 +332,7 @@ class FakeGitHub:
         self.issues, self.labels, self.comments, self.calls, self.hidden = {}, {}, [], [], set()
         self.down, self.fail_writes, self.tick, self.visibility = down, False, 0, "private"
 
-    def __call__(self, argv, data, _timeout, _cwd):
+    def __call__(self, argv, data, _timeout, _cwd, _env):
         if self.down:
             return subprocess.CompletedProcess(argv, 1, b"", b"error connecting to api.github.com\n")
         method, endpoint = argv[argv.index("--method") + 1], argv[10]
@@ -397,6 +401,148 @@ def github(monkeypatch) -> FakeGitHub:
     fake = FakeGitHub()
     monkeypatch.setattr(backlog_issues, "RUNNER", fake)
     return fake
+
+
+_FAKE_GH = """
+import json, os, sys
+from pathlib import Path
+
+here, args = Path(__file__).parent, sys.argv[1:]
+state = json.loads((here / "state.json").read_text())
+call = {"argv": args, **{k: os.environ.get(k) for k in ("GH_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_TOKEN")}}
+with (here / "calls.jsonl").open("a") as log:
+    log.write(json.dumps(call) + "\\n")
+opt = lambda name: args[args.index(name) + 1] if name in args else None
+accounts, active = state["accounts"], state["active"]
+if args[:2] == ["auth", "token"]:
+    host = opt("--hostname") or "github.com"
+    user = opt("--user") or active.get(host)
+    if user in accounts.get(host, {}):
+        print(f"tok-{user}")
+        sys.exit(0)
+    sys.exit(print(f"no oauth token found for {host} account {user}", file=sys.stderr) or 1)
+if args[:2] == ["auth", "status"]:
+    print(json.dumps({"hosts": {
+        h: [{"login": x, "state": s, "active": x == active.get(h), "host": h} for x, s in held.items()]
+        for h, held in accounts.items() if opt("--hostname") in (None, h)
+    }}))
+    sys.exit(0)
+env = os.environ.get
+if args[:2] == ["auth", "git-credential"]:
+    asked = dict(line.split("=", 1) for line in sys.stdin.read().splitlines() if "=" in line)
+    host = asked.get("host", "")
+    cloud = host == "github.com" or host.endswith(".ghe.com")  # gh's rule; other hosts are GitHub Enterprise Server
+    token = env("GH_TOKEN") if cloud else env("GH_ENTERPRISE_TOKEN")
+    if args[2] == "get":
+        print(f"protocol=https\\nhost={host}\\nusername=x-access-token\\npassword={token or 'tok-' + active[host]}")
+    sys.exit(0)
+token = env("GH_TOKEN") or env("GH_ENTERPRISE_TOKEN") or "tok-" + active["github.com"]
+for rule in state["answers"]:
+    if all(x in args for x in rule["has"]):
+        out = rule["by_token"].get(token, rule["out"]) if "by_token" in rule else rule["out"]
+        print(out if isinstance(out, str) else json.dumps(out))
+        sys.exit(rule.get("exit", 0))
+print("{}")
+"""
+
+
+class FakeGh:
+    """A ``gh`` first on PATH: it holds accounts per host and records each call's argv and GitHub tokens (TD-402)."""
+
+    def __init__(self, folder: Path) -> None:
+        self.folder = folder
+        self.path = folder / "gh"
+        self.path.write_text(f"#!{sys.executable}\n{_FAKE_GH}")
+        self.path.chmod(0o755)
+        self.set({"github.com": {"maba-pag": "success", "boecht": "success"}}, {"github.com": "maba-pag"})
+
+    def set(self, accounts: dict[str, dict[str, str]], active: dict[str, str], answers: list | None = None) -> None:
+        """*accounts*: host to login to state; *active*: host to login; *answers*: ``{"has", "out", "by_token"}``."""
+        state = {"accounts": accounts, "active": active, "answers": answers or []}
+        (self.folder / "state.json").write_text(json.dumps(state))
+
+    def calls(self) -> list[dict[str, Any]]:
+        log = self.folder / "calls.jsonl"
+        return [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+
+
+@pytest.fixture
+def fake_gh(tmp_path, monkeypatch) -> FakeGh:
+    """The fake ``gh``, and a github.com credential helper in HOME's Git config answering ``tok-active``.
+
+    The helper is the one a launch would use without its own: a credential-bearing launch must reset it.
+    """
+    folder = tmp_path / "fake-gh"
+    folder.mkdir()
+    monkeypatch.setenv("PATH", f"{folder}{os.pathsep}{os.environ['PATH']}")
+    gitconfig = Path.home() / ".gitconfig"
+    helper = (
+        '[credential "https://github.com"]\n\thelper = "!f() { echo username=active; echo password=tok-active; }; f"\n'
+    )
+    gitconfig.write_text(gitconfig.read_text() + helper)
+    monkeypatch.setattr(account, "resolve", _RESOLVE)  # the real resolution, asking this fake
+    return FakeGh(folder)
+
+
+class GitLaunches:
+    """``remote_git``'s ``subprocess``: each Git launch's argv and environment is recorded, and the real Git runs."""
+
+    def __init__(self) -> None:
+        self.seen: list[tuple[tuple[str, ...], dict[str, str]]] = []
+        self.Popen = self._launch
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(subprocess, name)
+
+    def _launch(self, command: Sequence[str], **kwargs: Any) -> subprocess.Popen[bytes]:
+        self.seen.append((tuple(command), dict(kwargs["env"])))
+        return subprocess.Popen(command, **kwargs)  # noqa: S603 - the launch under test, unchanged
+
+    def verbs(self) -> list[str]:
+        return [argv[argv.index("-C") + 2 + len(self.options(argv))] for argv, _ in self.seen]
+
+    @staticmethod
+    def options(argv: tuple[str, ...]) -> tuple[str, ...]:
+        """The ``-c`` options straight after ``git -C <repository>``."""
+        start = argv.index("-C") + 2
+        end = start
+        while end < len(argv) and argv[end] == "-c":
+            end += 2
+        return argv[start:end]
+
+
+@pytest.fixture
+def git_launches(monkeypatch) -> GitLaunches:
+    """The remote Git launches the test starts."""
+    recording = GitLaunches()
+    monkeypatch.setattr(remote_git, "subprocess", recording)
+    return recording
+
+
+class GitRuns:
+    """``git_run``'s ``subprocess``: each Git run that reaches a remote is recorded with its environment."""
+
+    def __init__(self) -> None:
+        self.seen: list[tuple[tuple[str, ...], dict[str, str]]] = []
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(subprocess, name)
+
+    def run(self, command: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if git_run._remote(tuple(command[1:])):  # noqa: SLF001 - the verb as git_run reads it
+            self.seen.append((tuple(command), dict(kwargs["env"])))
+        return subprocess.run(command, **kwargs)  # noqa: S603, PLW1510 - the run under test, unchanged
+
+    def verbs(self) -> list[str]:
+        return [git_run._remote(argv[1:]) for argv, _ in self.seen]  # noqa: SLF001
+
+
+@pytest.fixture
+def git_runs(monkeypatch) -> GitRuns:
+    """The Git runs through ``git_run`` that reach a remote."""
+    recording = GitRuns()
+    monkeypatch.setattr(git_run, "subprocess", recording)
+    return recording
 
 
 class Warmth:
@@ -579,6 +725,7 @@ class Host:
     paused = staticmethod(lambda: False)
     draining = staticmethod(lambda: False)
     maintenance = None  # the real host's seam; None: no maintenance owns this fake's sessions
+    repo = None  # no clone: the settings page shows TD-402's rule as unreadable
     started = datetime(2026, 10, 21, 9, tzinfo=UTC)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=started, code=CURRENT)  # noqa: S106
 
@@ -811,6 +958,18 @@ def pds(tmp_path_factory) -> type[Pds]:
 def _offline(url: str, *_args: object, **_kwargs: object) -> bytes:
     msg = f"offline in tests: {url}"
     raise OSError(msg)
+
+
+_RESOLVE = account.resolve
+
+
+def _offline_account(setting: str, origin: account.Origin, *, until: float | None = None) -> Access:
+    """The account a launch would write as, chosen without ``gh``: the named login, else ``maba-pag``."""
+    del until
+    if origin == account.Origin.LOCAL:
+        return Access.LOCAL
+    login = account.FALLBACK if setting == account.REPOSITORY_OWNER else setting
+    return Access(login, "chosen offline in tests", origin.host, f"tok-{login}", "gh")
 
 
 AUDITED_COMMIT = "51aa0e1c6"

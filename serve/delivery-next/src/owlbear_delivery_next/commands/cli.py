@@ -37,6 +37,7 @@ from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.settings.config import Agent, Layer
 from owlbear_delivery_next.state_store import (
     backlog_migrate,
+    github_writer,
     offline_protocol,
     prefs_import,
     profile_share,
@@ -203,7 +204,8 @@ def show_profile(
     overrides: list[tuple[Role, RoleModel]] | None = None,
 ) -> str:
     """Detect the profile, apply the owner's confirmations and role overrides to the project settings."""
-    prof = profile.detect(repo, profile.provider(store.read_profile() or Profile(), repo), store.read_profile())
+    gh = profile.provider(store.read_profile() or Profile(), repo, github_writer.of(store, repo, detecting=True))
+    prof = profile.detect(repo, gh, store.read_profile())
     for key, value in confirms:
         prof = profile.confirm(prof, key, value, datetime.now(UTC))
     store.write_profile(prof)

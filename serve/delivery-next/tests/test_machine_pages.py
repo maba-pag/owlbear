@@ -2858,10 +2858,10 @@ def test_a_long_step_error_shows_whole_on_the_status_line(tmp_path: Path, monkey
     store = Store(tmp_path / "store")
     store.write_profile(Profile(entries={profile.REPO: ProfileEntry(state="known", value="o/r")}))
 
-    def refused(argv, _body, _timeout, _cwd):
+    def refused(argv, _body, _timeout, _cwd, _env):
         return subprocess.CompletedProcess(argv, 1, b"", f"gh: {whole_error}\n".encode())
 
-    monkeypatch.setattr(runner.profile, "provider", lambda _p, r: GhProvider(r, runner=refused))
+    monkeypatch.setattr(runner.profile, "provider", lambda _p, r, _w: GhProvider(r, writer=None, runner=refused))
     with store.lock("c1") as lock:
         c = Change(slug="c1", step=Step(kind=StepKind.FOLLOW), names=Names(pr=7))
         store.write(lock, c)
@@ -2935,7 +2935,7 @@ def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monk
     alpha = registry.register(clone(tmp_path / "alpha", "c1"))
     store = Store.open(Path(alpha.path))
 
-    def refused(argv, _body, _timeout, _cwd):
+    def refused(argv, _body, _timeout, _cwd, _env):
         return subprocess.CompletedProcess(argv, 1, b"", f"gh: {whole_error}\n".encode())
 
     pr = PullRequest(
@@ -2944,7 +2944,14 @@ def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monk
     )  # fmt: skip
     entries = {profile.REPO: ProfileEntry(state="known", value="o/r")}
     with store.lock("c1") as lock:
-        ctx = Ctx(store, lock, tmp_path, Profile(entries=entries), GhProvider("o/r", runner=refused), datetime.now(UTC))
+        ctx = Ctx(
+            store,
+            lock,
+            tmp_path,
+            Profile(entries=entries),
+            GhProvider("o/r", writer=None, runner=refused),
+            datetime.now(UTC),
+        )
         publish.labelled(ctx, store.read("c1"), pr, ["owlbear"])
     (event,) = [e for e in store.events("c1") if e["event"] == "labels-failed"]
     reason = f"ProviderError: add_labels: {whole_error}"

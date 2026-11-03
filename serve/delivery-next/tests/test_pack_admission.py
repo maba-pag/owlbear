@@ -265,12 +265,12 @@ def node(number: int, head: str, *, fork: bool = False) -> dict:
 def served(pages: list[dict], cursors: list) -> GhProvider:
     """``gh`` answering each GraphQL page in turn, recording the cursor each request asked from."""
 
-    def server(argv, body, _timeout, _cwd):
+    def server(argv, body, _timeout, _cwd, _env):
         assert "graphql" in argv
         cursors.append(json.loads(body)["variables"]["after"])
         return subprocess.CompletedProcess(argv, 0, json.dumps(pages.pop(0)).encode(), b"")
 
-    return GhProvider(Path("/nowhere"), runner=server)
+    return GhProvider(Path("/nowhere"), writer=None, runner=server)
 
 
 def test_open_pack_pull_requests_are_read_to_the_last_page_and_a_list_cut_short_refuses_a_start(tmp_path):

@@ -290,9 +290,7 @@ class GhProvider(Queue, Conversation):
         endpoint = f"{repo(request.repository)}/pulls/{request.number}/merge"
         args = ("api", "--method", "PUT", "--hostname", self.host, "-H", f"X-GitHub-Api-Version: {API_VERSION}")
         try:
-            done = self.runner(
-                ("gh", *args, endpoint, "--input", "-"), merge_request_body(request), self.timeout, self.cwd
-            )
+            done = self._launch(("gh", *args, endpoint, "--input", "-"), merge_request_body(request))
         except (OSError, subprocess.TimeoutExpired) as exc:
             return MergeResult(status=MergeStatus.UNKNOWN, message=failure(exc))
         payload, unread = gh_client.answer(done.stdout)

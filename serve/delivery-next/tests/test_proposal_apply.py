@@ -40,7 +40,7 @@ class FakeGitHub:
     def __init__(self):
         self.issues, self.sent, self.close_fails = [{"number": 1, "pull_request": {}, "body": "x"}], [], 0
 
-    def __call__(self, argv, data, _timeout, _cwd):
+    def __call__(self, argv, data, _timeout, _cwd, _env):
         method, endpoint = argv[argv.index("--method") + 1], next(a for a in argv if a.startswith("repos/"))
         body = json.loads(data) if data else None
         self.sent.append(body)
@@ -189,7 +189,7 @@ def test_an_owlbear_change_is_one_issue_in_its_repository_carrying_the_marker(wo
 def test_an_issue_search_that_reads_every_page_without_the_marker_makes_none(world, tmp_path):
     asked = []
 
-    def full(argv, _data, _timeout, _cwd):  # every page is full and none carries the marker
+    def full(argv, _data, _timeout, _cwd, _env):  # every page is full and none carries the marker
         asked.append(argv[argv.index("--method") + 1])
         page = [{"number": n, "body": "other", "html_url": "u", "state": "open"} for n in range(100)]
         return subprocess.CompletedProcess((), 0, json.dumps(page).encode(), b"")

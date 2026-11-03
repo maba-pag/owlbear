@@ -44,7 +44,7 @@ class RefServer:
     def head(self):
         return git(self.root, "for-each-ref", "--format=%(objectname)", REF)
 
-    def __call__(self, argv, data, timeout, _cwd):
+    def __call__(self, argv, data, timeout, _cwd, _env):
         assert "graphql" in argv
         body = json.loads(data)
         if "query Branch(" in body["query"]:
@@ -90,7 +90,7 @@ class RefServer:
 
 def test_atomic_retirement_uses_the_exact_merged_head_and_no_force(history):
     server = RefServer(history)
-    result = GhProvider(server.root, runner=server).delete_branch("o/r", "owlbear/work", server.merged)
+    result = GhProvider(server.root, writer=None, runner=server).delete_branch("o/r", "owlbear/work", server.merged)
     assert result.state is BranchState.DELETED
     assert server.head() == ""
     assert len(server.writes) == server.reads == 1
@@ -98,7 +98,7 @@ def test_atomic_retirement_uses_the_exact_merged_head_and_no_force(history):
 
 def test_a_head_moved_between_read_and_mutation_survives_real_compare_and_swap(history):
     server = RefServer(history, "race")
-    result = GhProvider(server.root, runner=server).delete_branch("o/r", "owlbear/work", server.merged)
+    result = GhProvider(server.root, writer=None, runner=server).delete_branch("o/r", "owlbear/work", server.merged)
     assert (result.state, result.head) == (BranchState.MOVED, server.newer)
     assert server.head() == server.newer
     assert len(server.writes) == 1
@@ -108,7 +108,7 @@ def test_a_head_moved_between_read_and_mutation_survives_real_compare_and_swap(h
 def test_an_already_advanced_branch_is_not_mutated(history):
     server = RefServer(history)
     git(server.root, "update-ref", REF, server.newer)
-    result = GhProvider(server.root, runner=server).delete_branch("o/r", "owlbear/work", server.merged)
+    result = GhProvider(server.root, writer=None, runner=server).delete_branch("o/r", "owlbear/work", server.merged)
     assert (result.state, result.head) == (BranchState.MOVED, server.newer)
     assert server.head() == server.newer
     assert server.writes == []
@@ -117,7 +117,7 @@ def test_an_already_advanced_branch_is_not_mutated(history):
 def test_an_absent_branch_is_not_confused_with_an_unreadable_repository(history):
     server = RefServer(history)
     git(server.root, "update-ref", "-d", REF)
-    gh = GhProvider(server.root, runner=server)
+    gh = GhProvider(server.root, writer=None, runner=server)
     assert gh.delete_branch("o/r", "owlbear/work", server.merged).state is BranchState.GONE
     server.mode = "missing-repository"
     with pytest.raises(ProviderError) as failed:
@@ -132,7 +132,7 @@ def test_an_absent_branch_is_not_confused_with_an_unreadable_repository(history)
 )
 def test_a_lost_mutation_answer_is_reconciled_without_repeating_the_write(history, mode, state):
     server = RefServer(history, mode)
-    result = GhProvider(server.root, runner=server).delete_branch("o/r", "owlbear/work", server.merged)
+    result = GhProvider(server.root, writer=None, runner=server).delete_branch("o/r", "owlbear/work", server.merged)
     assert result.state is state
     assert server.head() == (server.newer if state is BranchState.MOVED else "")
     assert len(server.writes) == 1
@@ -141,7 +141,7 @@ def test_a_lost_mutation_answer_is_reconciled_without_repeating_the_write(histor
 @pytest.mark.parametrize("mode", ["normal", "lost-ack"])
 def test_a_fresh_provider_replay_retains_a_branch_recreated_after_the_first_retirement(history, mode):
     first = RefServer(history, mode)
-    assert GhProvider(first.root, runner=first).delete_branch(
+    assert GhProvider(first.root, writer=None, runner=first).delete_branch(
         "o/r",
         "owlbear/work",
         first.merged,
@@ -149,7 +149,9 @@ def test_a_fresh_provider_replay_retains_a_branch_recreated_after_the_first_reti
     git(first.root, "update-ref", REF, first.newer)
     restarted = RefServer(history)
 
-    result = GhProvider(restarted.root, runner=restarted).delete_branch("o/r", "owlbear/work", restarted.merged)
+    result = GhProvider(restarted.root, writer=None, runner=restarted).delete_branch(
+        "o/r", "owlbear/work", restarted.merged
+    )
 
     assert (result.state, result.head) == (BranchState.MOVED, first.newer)
     assert restarted.head() == first.newer
@@ -171,7 +173,7 @@ def test_invalid_or_failed_read_is_never_acknowledged_as_an_absent_branch(histor
     server = RefServer(history, "invalid-read")
     server.ack = reply
     with pytest.raises(ProviderError) as failed:
-        GhProvider(server.root, runner=server).delete_branch("o/r", "owlbear/work", server.merged)
+        GhProvider(server.root, writer=None, runner=server).delete_branch("o/r", "owlbear/work", server.merged)
     assert failed.value.code is FailureCode.INVALID_RESPONSE
     assert server.head() == server.merged
     assert server.writes == []
@@ -192,7 +194,7 @@ def test_malformed_or_rejected_mutation_is_not_success_and_a_guarded_retry_is_sa
     server = RefServer(history, "invalid-ack")
     server.ack = ack
     with pytest.raises(ProviderError) as failed:
-        GhProvider(server.root, runner=server).delete_branch("o/r", "owlbear/work", server.merged)
+        GhProvider(server.root, writer=None, runner=server).delete_branch("o/r", "owlbear/work", server.merged)
     assert failed.value.code is FailureCode.RESPONSE_UNKNOWN
     assert failed.value.retry_safe
     assert server.head() == server.merged
