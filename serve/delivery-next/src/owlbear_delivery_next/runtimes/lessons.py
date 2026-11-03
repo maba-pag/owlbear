@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from owlbear_memory import Points, selection
+from pydantic import ValidationError
 
 from owlbear_delivery_next.local_system import pds_skill, preload
 from owlbear_delivery_next.local_system.data_repo import CONFIG
@@ -52,9 +53,13 @@ def preflight(memory: Path) -> tuple[Points, int, int]:
     """What the owner set for the pre-flight recall, read now from the global settings beside *memory*.
 
     The points a rating is worth, the lessons that fit, and the characters they may use. ``SettingsUnset`` while one is
-    unset; ``StoreError`` when the settings can't be read.
+    unset; ``StoreError`` when the settings can't be read or do not combine.
     """
-    settings = config.resolve(read_layer(memory.parent.parent / CONFIG, config.GlobalLayer), config.Layer())
+    try:
+        settings = config.resolve(read_layer(memory.parent.parent / CONFIG, config.GlobalLayer), config.Layer())
+    except ValidationError as exc:  # each layer is valid, their combination is not (the challenge rounds)
+        msg = f"the settings do not combine: {exc.errors()[0]['msg']}"
+        raise StoreError(msg) from exc
     settings.need(  # a test layer or the owner's global file: code ships no value
         "memory.outstanding_boost", "memory.unremarkable_penalty", "memory.preflight_cap", "memory.preflight_budget"
     )

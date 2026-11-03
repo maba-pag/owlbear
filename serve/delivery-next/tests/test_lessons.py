@@ -218,6 +218,17 @@ def test_an_unset_value_is_told_to_the_agent_and_never_stops_the_step(memory: Pa
     assert (log[0]["status"], "memory.preflight_cap" in log[0]["failed"], log[0]["lessons"]) == ("unread", True, [])
 
 
+def test_challenge_rounds_that_do_not_combine_are_told_to_the_agent_and_never_stop_the_step(memory: Path) -> None:
+    keep(memory, entry(1))
+    misfit = {"max_rounds": 5, "max_findings": 10, "last_round_at": 8, "ask_owner_at": 7}  # last must be below ask
+    (memory.parent.parent / "config.json").write_text(
+        json.dumps({"format": 21, "agents": {"builder": misfit}, "memory": {"stale_factor": 50}})
+    )
+    text, log = told("builder", memory)
+    assert text.startswith(f"{lessons.HEADING}\nDelivery could not read them all (the settings do not combine: ")
+    assert (log[0]["status"], log[0]["lessons"]) == ("unread", [])
+
+
 def test_lessons_that_exist_but_fit_nothing_send_the_agent_to_its_own_recall(memory: Path) -> None:
     keep(memory, entry(1, title="t" * 2000))
     text, log = told("builder", memory)
