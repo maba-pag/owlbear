@@ -155,7 +155,8 @@ def test_rendering_preserves_fields_order_counts_and_markdown_sensitive_values(s
     first = finding()
     first["title"] += " #"
     first["deprecationMessage"] = ""
-    first["remediation"]["replacement"] = {"from": "size=`x-small`", "to": "size=`xs`"}
+    literal = "**literal** _value_ [label](target) \\ & <tag>"
+    first["remediation"]["replacement"] = {"from": f"size=`x-small`\n{literal}", "to": "size=`xs`"}
     first["evidence"][0]["snippet"] = "const size = `x-small`;\n```"
     first["evidence"][0]["anchor"] = {"path": "web/anchor.mjs", "line": 8, "snippet": "const size = `x-small`;"}
     first["evidence"].append(
@@ -192,7 +193,7 @@ def test_rendering_preserves_fields_order_counts_and_markdown_sensitive_values(s
     assert text.count("- **Deprecation message:**") == 1
     assert "- **Deprecation message:** \n" in text
     assert text.count("- **Replacement:**") == 1
-    assert "- **Replacement:** `` size=`x-small` `` \u2192 `` size=`xs` ``" in text
+    assert " \u2192 `` size=`xs` ``" in text
     assert "    ````\n    const size = `x-small`;\n    ```\n    ````" in text
     assert "    anchored by `web/anchor.mjs:8`\n    ```\n    const size = `x-small`;\n    ```" in text
     assert "  - `web/other.mjs:9`" in text
@@ -204,6 +205,14 @@ def test_rendering_preserves_fields_order_counts_and_markdown_sensitive_values(s
     assert "- **Reason:** dynamic value" in text
     assert "- **Evidence (1):**" in text
     tokens = MarkdownIt("commonmark").parse(text)
+    replacement = next(token.children for token in tokens if token.content.startswith("**Replacement:**"))
+    start = next(i for i, token in enumerate(replacement) if token.content == "<code>")
+    end = next(i for i, token in enumerate(replacement) if token.content == "</code>")
+    assert [(token.type, token.content) for token in replacement[start + 1 : end]] == [
+        ("text", "size=`x-small`"),
+        ("html_inline", "<br>"),
+        ("text", literal),
+    ]
     headings = [
         "".join(child.content for child in tokens[i + 1].children or [] if child.type in {"text", "code_inline"})
         for i, token in enumerate(tokens)
