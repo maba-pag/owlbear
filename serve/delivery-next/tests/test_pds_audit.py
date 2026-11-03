@@ -202,7 +202,9 @@ def test_rendering_preserves_fields_order_counts_and_markdown_sensitive_values(s
     assert "  - `web/other.mjs:9`" in text
     assert "  - `web/second.mjs:4`" in text
     assert text.count(", value `literal`") == 2
-    assert f"  - `pds-knowledge-js/references/components.md` (PDS {VERSION})" in text
+    assert f"<code>pds-knowledge-js/references/components.md</code> (PDS {VERSION})" in MarkdownIt("commonmark").render(
+        text
+    )
     assert "- **Rule id:** `dynamic/value`" in text
     assert "### 1. Unresolved value" in text
     assert "- **Reason:** dynamic value" in text
@@ -223,6 +225,22 @@ def test_rendering_preserves_fields_order_counts_and_markdown_sensitive_values(s
     ]
     assert f"1. {first['title']}" in headings
     assert f"1. {manual['subject']}" in headings
+
+
+def test_limitation_text_remains_literal_without_markdown_blocks(sources):
+    limitations = ["---", "- literal", "+ literal", "1. literal", "1) literal"]
+    body = report(limitations=limitations)
+    jsonschema.Draft202012Validator(SCHEMA).validate(body)
+    done = audited(sources, body)
+    assert done.verdict.outcome == "stop"
+    tokens = MarkdownIt("commonmark").parse(done.markdown)
+    start = next(i for i, token in enumerate(tokens) if token.content == "Limitations")
+    end = next(i for i, token in enumerate(tokens) if token.content == "Summary")
+    shown = tokens[start + 2 : end - 1]
+    assert sum(token.type == "bullet_list_open" for token in shown) == 1
+    assert [
+        [(child.type, child.content) for child in token.children or []] for token in shown if token.type == "inline"
+    ] == [[("text", value)] for value in limitations]
 
 
 def test_the_copy_holds_the_authored_pages_the_manifest_and_the_release_never_the_vendored_folders(sources):
@@ -272,7 +290,11 @@ def test_only_a_completed_clean_report_passes_and_its_files_hold_what_was_submit
     folder = tmp_path / "out" / audit.REPORTS / done.run_id
     assert (folder / f"{audit.SKILL}.json").read_text(encoding="utf-8") == clean
     assert (folder / f"{audit.SKILL}.md").read_text(encoding="utf-8") == done.markdown
-    assert done.markdown.startswith("# Porsche Design System deprecation audit (js) \u2014 2026-11-01T00-00-00Z\n")
+    assert (
+        MarkdownIt("commonmark")
+        .render(done.markdown)
+        .startswith("<h1>Porsche Design System deprecation audit (js) \u2014 2026-11-01T00-00-00Z</h1>\n")
+    )
     assert "- **0** findings across **0** locations\n- **0** manual follow-ups" in done.markdown
     assert "No deprecated usage was found." in done.markdown
     assert "No manual follow-ups." in done.markdown

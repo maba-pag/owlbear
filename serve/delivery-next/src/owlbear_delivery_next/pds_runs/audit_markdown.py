@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import string
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import audit_tools
@@ -41,7 +42,7 @@ def template(tree: Path, schema: dict[str, Any]) -> str:
 
 
 def _text(value: str) -> str:
-    escaped = re.sub(r"([\\`*_\[\]|&<>~#])", r"\\\1", value)
+    escaped = re.sub(f"([{re.escape(string.punctuation)}])", r"\\\1", value)
     return escaped.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "<br>")
 
 
