@@ -74,6 +74,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_delivery_next.change_contracts.models import Change, Step
+    from owlbear_delivery_next.github.account import Writer
     from owlbear_delivery_next.state_store.store import Lock
 
 AGENT = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})
@@ -333,10 +334,10 @@ def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     _out("; ".join([f"before: {len(shots.files)} screenshots at {shots.head[:7]}", *shots.findings]))
 
 
-def _ready(prof: Profile, path: Path, now: datetime) -> Result | None:
+def _ready(prof: Profile, path: Path, now: datetime, writer: Writer) -> Result | None:
     """DR2 before publishing: the publishing readiness facts, their first failure as its exit."""
     host = profile.value(prof, profile.HOST, "github.com")
-    return publish.gate(readiness.publishing(host, git_files.probe_in(path), readiness.reach(host)), now)
+    return publish.gate(readiness.publishing(host, git_files.probe_in(path), readiness.reach(host), writer), now)
 
 
 def _engine(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -348,7 +349,7 @@ def _engine(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
         change.names.worktree = str(path)
     step = ENGINE.get(kind)
-    gated = _ready(prof, Path(change.names.worktree or repo), now) if kind == StepKind.PUBLISH else None
+    gated = _ready(prof, Path(change.names.worktree or repo), now, writer) if kind == StepKind.PUBLISH else None
     if gated:
         result = gated
     else:

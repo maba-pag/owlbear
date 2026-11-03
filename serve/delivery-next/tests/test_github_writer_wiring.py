@@ -20,7 +20,7 @@ from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.impeccable import pack_git
 from owlbear_delivery_next.impeccable_runs import pack_live
-from owlbear_delivery_next.local_system import data_place, data_repo
+from owlbear_delivery_next.local_system import data_place, data_repo, git_files
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.pds_runs import job
 from owlbear_delivery_next.project_host import host
@@ -314,3 +314,45 @@ def test_each_write_that_is_not_a_projects_runs_as_its_own_repositorys_account(
     for argv, environment, _ in git_runs.seen:
         assert argv[1:3] == ("-c", "credential.helper=")
         assert environment["GH_TOKEN"] == f"tok-{owner}"
+
+
+REPO_VIEW = ["repo", "view", "--json", "nameWithOwner,viewerPermission"]
+
+
+@pytest.mark.parametrize(("pushes", "ok"), [("maba-pag", False), ("octo-writer", True)])
+def test_readiness_asks_whether_the_projects_account_can_push_not_the_active_one(
+    pushes, ok, fake_gh, tmp_path, monkeypatch
+):
+    """Only the account the push answers for counts: maba-pag is active, the project names octo-writer."""
+    can = {f"tok-{x}": {"nameWithOwner": "acme/tools", "viewerPermission": "ADMIN" if x == pushes else "READ"}
+           for x in ("maba-pag", "octo-writer")}  # fmt: skip
+    fake_gh.set(ACCOUNTS, {"github.com": "maba-pag"}, [{"has": REPO_VIEW, "out": "{}", "by_token": can}])
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"github_account": "octo-writer"}))
+    store, repo = _project(tmp_path)
+    checks = readiness.publishing("github.com", git_files.probe_in(repo), None, github_writer.of(store, repo))
+    said = {c.name: c for c in checks}
+    assert said["github sign-in"].detail == "writes as octo-writer (the setting names it)"
+    assert (said["repository"].ok, said["repository"].detail) == (ok, f"acme/tools: {'ADMIN' if ok else 'READ'}")
+    assert not [c for c in fake_gh.calls() if c["argv"][:2] == ["auth", "status"] and "--json" not in c["argv"]]
+
+
+@pytest.mark.parametrize(("host", "token"), [("github.com", "GH_TOKEN"), ("ghe.acme.test", "GH_ENTERPRISE_TOKEN")])
+def test_setups_readiness_checks_the_origins_host_as_td_402s_rule_while_the_setting_is_unset(
+    host, token, fake_gh, tmp_path, monkeypatch
+):
+    both = {"maba-pag": "success", "boecht": "success"}
+    fake_gh.set({"github.com": both, host: both}, {"github.com": "maba-pag", host: "maba-pag"})
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"github_account": None}))
+    store = Store(tmp_path / "store")
+    store.root.mkdir()
+    repo = _clone(tmp_path / "tools", f"https://{host}/boecht/tools.git")
+    reached: list[str] = []
+    monkeypatch.setattr(readiness, "reach", reached.append)
+    checks = readiness.check(repo, None, github_writer.of(store, repo, detecting=True))
+    sign_in = next(c for c in checks if c.name == "github sign-in")
+    assert sign_in.detail == (
+        "writes as boecht (the repository owner); the GitHub account setting is unset, so TD-402's rule picked it"
+    )
+    assert reached == [host]
+    (view,) = [c for c in fake_gh.calls() if c["argv"][:2] == ["repo", "view"]]
+    assert view[token] == "tok-boecht"

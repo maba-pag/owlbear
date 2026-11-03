@@ -22,8 +22,10 @@ def of(store: Store, repo: Path, *, detecting: bool = False) -> Writer:
     def setting() -> str:
         settings = store.settings()
         if settings.github_account is None and detecting:
+            writer.unset = True
             return REPOSITORY_OWNER
         settings.need("github_account")
         return str(settings.github_account)
 
-    return Writer(setting, repo)
+    writer = Writer(setting, repo)
+    return writer

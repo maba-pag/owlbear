@@ -382,13 +382,13 @@ def run(
             return 1
         return _settle(store, receipt.profile, say, _project_files(repo, python, local_files, ask, say))
     prev, unreadable, source, target = _saved(store, say)
-    checks = readiness.check(repo, prev)
+    writer = github_writer.of(store, repo, detecting=True)
+    checks = readiness.check(repo, prev, writer)
     say("Readiness")
     say("\n".join(f"  {'ok ' if c.ok else 'FIX'} {c.name}: {c.detail}" for c in checks))
     if failed := [c for c in checks if not c.ok]:
         say(f"Next: {failed[0].fix}")
         return 1
-    writer = github_writer.of(store, repo, detecting=True)
     prof = profile.detect(repo, profile.provider(prev or Profile(), repo, writer), prev)
     for key, value in confirms:
         prof = profile.confirm(prof, key, value, datetime.now(UTC))

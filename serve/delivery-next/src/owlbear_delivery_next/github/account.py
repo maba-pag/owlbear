@@ -198,6 +198,7 @@ class Writer:
     def __init__(self, setting: str | Callable[[], str], origin: Origin | Path) -> None:
         self._setting, self._origin = setting, origin
         self._access: Access | None = None
+        self.unset = False  # set by a setting that was unset and stood in for by TD-402's rule
 
     @classmethod
     def rule(cls, origin: Origin | Path) -> Writer:
