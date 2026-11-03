@@ -3,6 +3,7 @@ import os
 import subprocess
 import tarfile
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -3122,3 +3123,24 @@ def test_a_failed_fetch_keeps_gits_whole_output(clone, whole_error, monkeypatch)
     monkeypatch.setattr(engine, "run_remote_git", refused)
     result = engine.needs_target(c, clone, "greet() exists only on main", NOW)
     assert (result.exit, result.reason) == (Exit.RETRY, f"RemoteGitFailed: fetch of main failed: {whole_error}")
+
+
+class PlanLimitedGh(FakeGh):
+    """A private repository whose GitHub plan allows no rules: the real read of GitHub's plan-limit 403 (#936)."""
+
+    def read_rules(self, repo, branch):
+        def limited(argv, _body, _timeout, _cwd):
+            said = b"gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)\n"
+            return subprocess.CompletedProcess(argv, 1, b"", said)
+
+        return GhProvider(Path(), runner=limited).read_rules(repo, branch)
+
+
+def test_a_plan_limited_repository_merges_without_the_owner_on_its_detected_profile(tmp_path, clone):
+    gh = PlanLimitedGh(pr(head=A))
+    merged(gh)
+    base = {k: e for k, e in prof().entries.items() if k not in profile.rule_entries(FORBIDDEN)}
+    detected = Profile(version=1, entries=base | profile.rule_entries(gh.read_rules("o/r", "main")))
+    assert not any(profile.is_confirmed(e) for e in detected.entries.values())  # no confirmation lets it through
+    _, result = merge.run(ctx(tmp_path, gh, detected), change(worktree=str(clone)))
+    assert (result.exit, len(gh.merges)) == (Exit.DONE, 1)

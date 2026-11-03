@@ -20,6 +20,7 @@ from owlbear_delivery_next.change_contracts import dispute_tools, pack_tools, to
 from owlbear_delivery_next.change_contracts.models import Brief, Change
 from owlbear_delivery_next.change_contracts.round_records import RoundFinding, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import disputes
+from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import (
     BranchDelete,
     BranchState,
@@ -83,6 +84,7 @@ class FakeGitHub:
         self.behind, self.labels_fail, self.refusal = 0, False, None
         self.can_push, self.lose_create = True, False
         self.listing: Exception | None = None  # why the open pull requests cannot be read
+        self.plan_limited = False  # the repository's GitHub plan allows no rules (#936)
 
     def read_repository(self) -> Repository:
         return Repository(
@@ -136,8 +138,15 @@ class FakeGitHub:
             raise ProviderError(FailureCode.INVALID_RESPONSE, "add_labels", "no such label", retry_safe=False)
         self.prs[number]["labels"] += labels
 
-    def read_rules(self, _repository: str, branch: str) -> Rules:
+    def read_rules(self, repository: str, branch: str) -> Rules:
         assert branch == "main"
+        if self.plan_limited:  # the real read of GitHub's plan-limit 403: no rules, no required checks
+
+            def limited(argv, _body, _timeout, _cwd):
+                said = b"gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)\n"
+                return subprocess.CompletedProcess(argv, 1, b"", said)
+
+            return GhProvider(self.remote, runner=limited).read_rules(repository, branch)
         return Rules(state="known", evidence="rules", required_checks=("CI",))
 
     def observe_checks(self, _repository: str, _number: int, _head: str) -> tuple[Check, ...]:
@@ -1928,10 +1937,14 @@ def test_a_refused_push_waits_for_the_owner_and_trying_again_reconciles_with_git
     assert fakes.github.calls == ["create", "merge", "delete"]
 
 
-def test_a_failed_check_waits_and_a_branch_behind_main_is_brought_up_to_date_first(tmp_path, checkout, clone):
+@pytest.mark.parametrize("plan_limited", [False, True])
+def test_a_failed_check_waits_and_a_branch_behind_main_is_brought_up_to_date_first(
+    tmp_path, checkout, clone, plan_limited
+):
     fakes = Fakes(clone)
     job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
     fakes.live(checkout)
+    fakes.github.plan_limited = plan_limited  # no required checks: an observed failure still holds it (#936)
     fakes.github.checks = ["running", "failure"]
 
     state = run(job)
