@@ -911,8 +911,51 @@ def test_an_unrunnable_browser_run_is_told_with_its_whole_output(tmp_path, brows
     with pytest.raises(browser.Unrunnable) as raised:
         browser.run(tmp_path, runner=Runner(None, 2, whole_error))
     report = tmp_path / ".pds" / browser.REPORT
-    exc = f"[Errno 2] No such file or directory: '{report}'"
+    exc = f"FileNotFoundError: [Errno 2] No such file or directory: '{report}'"
     assert str(raised.value) == f"the browser tests left no report (exit 2): {exc}; {whole_error}"
+
+
+@pytest.mark.parametrize("where", ["candidate", "head"])
+def test_a_timed_out_browser_gate_keeps_and_logs_its_whole_error(tmp_path, checkout, browsers, whole_error, where):  # noqa: ARG001
+    """The browser tests timing out, on the candidate or on the pull request's changed head, reach the reason, stage,
+    invocation and log whole: the command, what it printed and the error's types (#951)."""
+    fakes, timed = Fakes(checkout), []
+    real = fakes.browser
+    out = "OUT begins\nwhat pytest printed on stdout\nOUT ends"
+
+    def timing_out(args: list[str], **kwargs: object) -> None:
+        timed.append(
+            subprocess.TimeoutExpired(args, kwargs["timeout"], output=out.encode(), stderr=whole_error.encode())
+        )
+        raise timed[-1]
+
+    def browse(at: Path, ids: tuple[str, ...]) -> browser.Result:
+        if at.name != where:
+            return real(at, ids)
+        fakes.calls.append("browser")
+        return browser.run(at, ids, runner=timing_out)
+
+    fakes.browser = browse
+    if where == "head":
+        fakes.github.push = {f"{REPO}{PAGE}": DEMO.replace(PLANT, 'size="xs"') + "export const u = 1;\n"}
+    state = run(pds_job.Job(store(tmp_path), fakes.live(checkout)))
+
+    [exc] = timed
+    said = (f"Unrunnable: the browser tests did not finish in {browser.SECONDS} s: TimeoutExpired: {exc}\n"
+            f"stderr:\n{whole_error}\nstdout:\n{out}")  # fmt: skip
+    logged = [line.split(" ", 1)[1] for line in state["log"]]
+    if where == "candidate":
+        reason = f"browser: {said}"
+        assert (state["state"], state["reason"]) == ("failed", reason)
+        assert next(s for s in state["stages"] if s["name"] == "browser")["detail"] == reason
+        assert [i["detail"] for i in state["invocations"] if i["operation"] == "browser"][-1] == reason
+        assert logged[-3:] == ["browser: running", f"browser: failed: {reason}", reason]
+        return
+    reason = f"the merge gate could not judge the head {pr_head(checkout, fakes)[:12]}: {said}"
+    assert (state["state"], state["reason"]) == ("waiting", reason)
+    assert next(s for s in state["stages"] if s["name"] == "merge")["detail"] == reason
+    assert [i["detail"] for i in state["invocations"] if i["operation"] == "merge"][-1] == reason
+    assert logged[-2:] == [f"merge: failed: {reason}", f"waiting for you: {reason}"]
 
 
 def test_without_playwrights_browsers_the_tests_cannot_run(tmp_path, monkeypatch):

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable_runs import pack_progress
 from owlbear_delivery_next.impeccable_runs.pack_run import Stopped
 from owlbear_delivery_next.impeccable_runs.pack_state import LOG
@@ -116,7 +117,7 @@ class Steps:
             if hold is not None and isinstance(exc, hold):
                 self._step(inv, name, getattr(exc, "result", "failed"), str(exc))  # held for the owner, or failed
                 raise
-            reason = f"{name}: {type(exc).__name__}: {exc}"  # any failure stops the run, its stage named
+            reason = f"{name}: {failure(exc)}"  # any failure stops the run, its stage named
             self._step(inv, name, "failed", reason)
             raise Stopped(reason) from exc
         made = identity(out) if callable(identity) else ""
