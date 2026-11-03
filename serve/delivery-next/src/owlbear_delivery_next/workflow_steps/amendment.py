@@ -29,7 +29,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.amendment_records import Amendment
-    from owlbear_delivery_next.change_contracts.models import Question
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 LABELS = {
@@ -136,16 +135,11 @@ def _made(store: Store, lock: Lock, change: Change, a: Amendment) -> Callable[[P
 
 def _asked(c: Change, a: Amendment, now: datetime) -> None:
     """Waiting on the owner: his open question gates again; with none open, the path goes on."""
-    q = next((q for q in reversed(c.questions) if q.answer is None and _of(q, a)), None)
+    q = next((q for q in reversed(c.questions) if q.answer is None and (amending.owned(q) or [None])[0] == a.id), None)
     if q is not None:
         c.outcome = Outcome(exit=Exit.ASK, cause=q.cause, reason=q.text, who="you", question=q.id, at=now)
     else:
         amending.proceed(c, now)
-
-
-def _of(q: Question, a: Amendment) -> bool:
-    own = amending.owned(q)
-    return own is not None and own[0] == a.id
 
 
 def _merged(store: Store, lock: Lock, c: Change, repo: Path, now: datetime) -> bool:

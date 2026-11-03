@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 type AmendField = Literal["criterion", "ui", "visual", "check", "scope", "decision"]
 type Source = Literal["worker", "answer", "allow", "revert"]
 type AmendState = Literal["recorded", "proposed", "applied", "declined", "refused", "moved"]
-type Phase = Literal["prepare", "challenge", "recheck", "reconsider", "revise", "decide", "ask", "apply"]
+type Phase = Literal["prepare", "challenge", "recheck", "reconsider", "revise", "ask"]
 type Level = Literal["", "autonomous", "approved", "decided"]
 type Choice = Literal["yes", "within", "reshape", "stop"]
 type Objection = Literal["revert", "keep", "reshape"]

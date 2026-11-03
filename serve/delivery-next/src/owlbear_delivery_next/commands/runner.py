@@ -459,7 +459,7 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
         elif step is None or change.env is not None:
             _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
         elif step.kind == StepKind.TESTS or change.amending is not None:
-            _aside(store, lock, change, repo)
+            (curation.run if step.kind == StepKind.TESTS else amendment.run)(store, lock, change, repo)
         elif step.kind in AGENT:
             agent = _reused(store, lock, change)
             agent = agent or prepare.refused(store, lock, change) or review.completed(store, lock, change, repo)
@@ -481,14 +481,6 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
         store.write(lock, loop.apply(store.read(lock.slug), _unshelved(exc), now))
     except SettingsUnset as exc:
         unset_settings.asked(store, lock, exc)
-
-
-def _aside(store: Store, lock: Lock, change: Change, repo: Path) -> None:
-    """A test review's reviewers (TD-373), or the amendment that runs before the step it stopped (TD-185)."""
-    if change.step.kind == StepKind.TESTS:
-        curation.run(store, lock, change, repo)
-    else:
-        amendment.run(store, lock, change, repo)
 
 
 def _unshelved(exc: worktree.ShelveError) -> Result:
