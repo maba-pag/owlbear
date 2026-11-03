@@ -523,7 +523,7 @@ def a_role_s_subagents_are_switched_off_and_saved(page, store: Store, pds) -> No
     expect(page.locator("#pending")).to_have_text("No unsaved edits.")
     assert store.read_config().agents["reviewer"].subagents is False
     pds.pick(page, "Layer", "machine")  # TD-336: this machine's own preferences, kept local
-    pds.group(page, "runs")
+    pds.group(page, "agents")
     page.get_by_label("Minutes per session, builder").fill("55")
     page.locator(".bar").get_by_role("button", name="Save this machine's preferences").click()
     expect(pds.modal(page)).to_contain_text("These apply to every project on this machine")

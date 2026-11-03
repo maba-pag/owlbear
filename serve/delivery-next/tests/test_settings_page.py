@@ -132,7 +132,7 @@ def the_global_layer_kept_its_edit_and_takes_one_more(page, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     pds.pick(page, "Layer", "global")
-    pds.group(page, "runs")
+    pds.group(page, "agents")
     expect(page.get_by_label("Minutes per session, builder")).to_have_value("60")
     pds.group(page, "checks")
     expect(page.locator("#pr")).to_contain_text("Unset")  # D-01M61SEXPFT9MXZGQHYVYFQ77C: nothing under Global
@@ -166,13 +166,14 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with settings_page(store, pds) as page:
-        pds.group(page, "runs")
-        limits = page.locator("#limits")  # TD-286: each worker role's minutes; the shaper's chat has none
-        expect(limits).to_contain_text("builder")
-        expect(limits).not_to_contain_text("shaper")
-        minutes = limits.get_by_label("Minutes per session, builder")
-        expect(minutes).to_have_attribute("placeholder", "inherit (40)")
         pds.group(page, "agents")
+        rows = page.locator("#agents-rows")  # TD-286: a worker role's minutes; the shaper's chat and a look have none
+        expect(rows.locator("#set-agents-builder-minutes")).to_be_visible()
+        for role in ("shaper", "spotter"):
+            expect(rows.locator(f"#set-agents-{role}-minutes")).to_have_count(0)
+            expect(rows.locator(f"#set-agents-{role}")).to_contain_text("n/a")
+        minutes = rows.get_by_label("Minutes per session, builder")
+        expect(minutes).to_have_attribute("placeholder", "inherit (40)")
         pds.pick(page, "Model for builder", "tiny")
         expect(page.locator("#agents-rows")).to_contain_text("tiny takes no effort setting")
         pds.pick(page, "Model for reviewer", "claude-opus-5.5")
@@ -183,7 +184,6 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
         expect(page.locator("#error")).to_contain_text("Not saved: claude-opus-5.5 does not offer effort xhigh")
         pds.pick(page, "Effort for reviewer", "high")
         expect(message).to_have_count(0)
-        pds.group(page, "runs")
         minutes.fill("60")
         page.get_by_role("button", name="Save project settings").click()
         expect(pds.modal(page)).to_contain_text("These apply to this project only")  # TD-396
@@ -209,8 +209,10 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         expect(page.locator("#pending")).to_have_text("No unsaved edits. This project: 1 more unsaved.")
         expect(page.locator("#save")).to_have_attribute("variant", "secondary")  # nothing of this layer to save
         expect(rounds).to_have_value("")
+        pds.group(page, "agents")
         page.get_by_label("Minutes per session, builder").fill("60")
         pds.pick(page, "Layer", "project")
+        pds.group(page, "runs")
         expect(rounds).to_have_value("4")
         expect(page.locator("#pending")).to_have_text(
             "Unsaved: builder max rounds: inherited → 4. All projects: 1 more unsaved."
@@ -262,28 +264,31 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
         got = c.get("/api/next/config").json()
         newer = got["project"] | {"widths": [1600]}
         assert c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": newer}).status_code == 200
-        pds.group(page, "runs")
+        pds.group(page, "agents")
         page.get_by_label("Minutes per session, reviewer").fill("25")
+        page.get_by_label("Minutes per session, builder").fill("35")
+        pds.group(page, "runs")
         page.get_by_label("Rounds at most, builder").fill("4")
         pds.group(page, "checks")  # D-01M63C92B83D61XFXTRXG8JAVB: edits in several groups, each group's counted
         pds.pick(page, "Merge method", "squash")
         unsaved = page.locator("#groups p-tag")
-        expect(unsaved).to_have_text(["2 unsaved", "1 unsaved"])
-        expect(page.locator("#groups a[href='#runs'] p-tag")).to_have_text("2 unsaved")
+        expect(unsaved).to_have_text(["2 unsaved", "1 unsaved", "1 unsaved"])
+        expect(page.locator("#groups a[href='#agents'] p-tag")).to_have_text("2 unsaved")
         save = page.get_by_role("region", name="Save settings").get_by_role("button", name="Save project settings")
         save.click()
         pds.answer(page, "Save project settings")
         expect(page.locator("#error")).to_contain_text("kept your unsaved edits; check them and save again.")
-        expect(unsaved).to_have_text(["2 unsaved", "1 unsaved"])
+        expect(unsaved).to_have_text(["2 unsaved", "1 unsaved", "1 unsaved"])
         expect(pds.select(page, "Merge method")).to_have_js_property("value", "squash")
-        pds.group(page, "runs")
+        pds.group(page, "agents")
         expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("25")
         save.click()  # the answered confirmation may still be fading out with its own button of this name
         pds.answer(page, "Save project settings")
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         expect(unsaved).to_have_count(0)
     saved = json.loads(store.config_path.read_text())
-    assert (saved["widths"], saved["agents"]["reviewer"]["minutes"]) == ([1600], 25)
+    minutes = (saved["agents"]["reviewer"]["minutes"], saved["agents"]["builder"]["minutes"])
+    assert (saved["widths"], *minutes) == ([1600], 25, 35)
     assert (saved["agents"]["builder"]["max_rounds"], saved["prefs"]["merge_method"]) == (4, "squash")  # one save
 
 
@@ -524,7 +529,7 @@ def test_models_arriving_during_a_save_apply_once_it_ends(store, monkeypatch, pd
             page = browser.new_page()
             pds.only(page, base)
             page.goto(f"{base}/config#token=tok")
-            pds.group(page, "runs")
+            pds.group(page, "agents")
             page.get_by_label("Minutes per session, builder").fill("50")
             page.get_by_role("button", name="Save project settings").click()
             pds.answer(page, "Save project settings")
@@ -563,7 +568,7 @@ def test_a_refresh_answered_after_a_save_keeps_the_saved_values(store, pds) -> N
                 break
             page.wait_for_timeout(50)
         assert held
-        pds.group(page, "runs")
+        pds.group(page, "agents")
         page.get_by_label("Minutes per session, builder").fill("50")
         page.get_by_role("button", name="Save project settings").click()
         pds.answer(page, "Save project settings")
@@ -612,7 +617,7 @@ def test_a_refresh_begun_during_a_save_keeps_the_saved_values(store, pds, monkey
         page.route("**/api/next/config/read", hold(read, "POST"))
         page.locator("#read-again").click()
         route, answer = held(read)
-        pds.group(page, "runs")
+        pds.group(page, "agents")
         page.get_by_label("Minutes per session, builder").fill("50")
         page.get_by_role("button", name="Save project settings").click()
         pds.answer(page, "Save project settings")
@@ -653,7 +658,7 @@ def test_an_older_read_s_layers_answered_last_never_replace_a_newer_read_s(store
         store.config_path.parent.mkdir(parents=True, exist_ok=True)
         store.config_path.write_text(json.dumps({"format": CONFIG_FORMAT, "agents": {"builder": {"minutes": 45}}}))
         page.locator("#read-again").click()  # the second read's refresh shows the change
-        pds.group(page, "runs")
+        pds.group(page, "agents")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("45")
         route, before = held[0]
         with page.expect_response("**/config/models"):  # the first refresh goes on past the layers it read
@@ -694,7 +699,7 @@ def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, 
         for step in steps if order == "failure first" else steps[::-1]:
             with page.expect_response("**/api/next/config"):
                 step()
-        pds.group(page, "runs")
+        pds.group(page, "agents")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("45")
 
 
@@ -814,7 +819,7 @@ def lower_layers_cannot_use_recommended(page, pds) -> None:
         pds.pick(page, "Layer", layer)
         expect(recommended).to_be_disabled()
         expect(page.locator("#recommend-note")).to_contain_text("available on Global only")
-        pds.group(page, "runs")
+        pds.group(page, "agents")
         expect(page.get_by_label("Minutes per session, auditor")).to_have_value("")
 
 
@@ -833,8 +838,9 @@ def test_recommendations_fill_only_globals_blanks_and_keep_saved_values_and_exis
     before = {name: path.read_bytes() for name, path in paths.items()}
     with settings_page(store, pds) as page:
         pds.pick(page, "Layer", "global")
-        pds.group(page, "runs")
+        pds.group(page, "agents")
         page.get_by_label("Minutes per session, builder").fill("66")
+        pds.group(page, "runs")
         page.get_by_label("Agent sessions at once in one project").fill("")  # deliberate unsaved clear
         recommended = page.get_by_role("button", name="Use recommended", exact=True)
         expect(recommended).to_have_count(1)
@@ -845,8 +851,9 @@ def test_recommendations_fill_only_globals_blanks_and_keep_saved_values_and_exis
         assert box["width"] >= 24
         assert box["height"] >= 24
         expect(page.locator("#status")).to_contain_text("nothing has been saved")
-        expect(page.get_by_label("Minutes per session, builder")).to_have_value("66")
         expect(page.get_by_label("Agent sessions at once in one project")).to_have_value("")
+        pds.group(page, "agents")
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("66")
         expect(page.get_by_label("Minutes per session, auditor")).to_have_value("40")
         pending = page.locator("#pending").inner_text()
         recommended.click()
@@ -941,7 +948,8 @@ def global_s_agents_clear_to_unset_and_warn_where_needed(page, pds) -> None:
     expect(_option(page, pds, "Effort for builder")).to_have_text("Unset")
     builder = page.locator("#set-agents-builder")
     expect(builder.get_by_role("button", name="Unset")).to_be_visible()  # its own long context
-    expect(builder.locator("p-text[color='warning']")).to_have_count(0)
+    expect(builder.locator("p-text[color='warning']")).to_have_count(1)  # only its subagents, which GLOBAL leaves unset
+    expect(builder.locator("#set-agents-builder-subagents p-text[color='warning']")).to_have_count(1)
     expect(page.locator("#set-agents-planner")).to_contain_text(WARNED)
     expect(_option(page, pds, "Built-in subagents, builder")).to_have_text("Unset")
     expect(_option(page, pds, "On or off")).to_have_text("Unset")  # the Spotter's switch
@@ -1654,7 +1662,7 @@ def test_cost_arrows_rank_every_rate_and_leave_models_efforts_and_rates_unmarked
             options = pds.select(page, label).locator("p-select-option")
             expect(options).not_to_have_count(0)
             assert not any("\u2191" in said for said in options.all_inner_texts()), label
-        rates = row.locator("p-table-cell").last
+        rates = row.locator("p-table-cell").nth(1)  # under the model it prices
         expect(rates).to_contain_text("in 200 \u00b7 out 1,000 \u00b7 cache 10 \u00b7 cache write 250")
         expect(rates).not_to_contain_text("\u2191")
         pds.pick(page, "Model for builder", "claude-opus-5.5")  # its tiers are priced equally

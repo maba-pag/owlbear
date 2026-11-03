@@ -1879,7 +1879,7 @@ def big_enough(target) -> None:
 
 def rates(page: Page):
     """The rates the builder's model costs, as Agents shows them."""
-    return page.locator("#set-agents-builder p-table-cell").last
+    return page.locator("#set-agents-builder p-table-cell").nth(1)  # under the model it prices
 
 
 def machine_layer(**fields: object) -> None:
@@ -1908,7 +1908,7 @@ def test_opening_settings_reads_without_a_click(tmp_path: Path, monkeypatch, pds
         pds.group(page, "agents")
         expect(rates(page)).to_contain_text("in 4 ")
         pds.pick(page, "Layer", "global")
-        pds.group(page, "runs")
+        pds.group(page, "agents")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("45")
         assert said == []
 
@@ -1930,7 +1930,7 @@ def test_read_again_updates_every_surface_and_keeps_drafts(tmp_path: Path, monke
         expect(page.locator(".reads-failure")).to_contain_text("Could not read: Impeccable releases — GitHub's")
         pds.group(page, "checks")
         expect(page.locator("#impeccable")).to_contain_text("releases upstream unknown")
-        pds.group(page, "runs")
+        pds.group(page, "agents")
         page.get_by_label("Minutes per session, reviewer").fill("50")  # a draft of this project's layer
         pds.group(page, "this-machine")
         pds.pick(page, "Layer", "machine")  # #809: this machine's own values are set with it chosen
@@ -1958,7 +1958,7 @@ def test_read_again_updates_every_surface_and_keeps_drafts(tmp_path: Path, monke
         pds.group(page, "agents")
         expect(rates(page)).to_contain_text("in 5 ")
         pds.pick(page, "Layer", "project")
-        pds.group(page, "runs")
+        pds.group(page, "agents")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("30")
         expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("50")
         pds.pick(page, "Layer", "machine")
@@ -1997,7 +1997,7 @@ def test_a_read_s_layers_answered_while_a_save_reads_across_never_replace_the_sa
         page.locator("#read-again").click()
         until(page, lambda: "read" in held, READS_TIME)
         page.route(f"**/p/{a.id}/api/next/config/project", hold("save", "PUT"))
-        pds.group(page, "runs")
+        pds.group(page, "agents")
         page.get_by_label("Minutes per session, builder").fill("50")
         page.get_by_role("button", name="Save project settings").click()
         pds.answer(page, "Save project settings")
@@ -2486,7 +2486,7 @@ def test_a_layer_that_does_not_read_still_shows_the_read(tmp_path: Path, monkeyp
         page.goto(f"{base}/config?project={a.id}#token=t")
         status = page.locator("#reads-status")
         expect(status).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        pds.group(page, "runs")
+        pds.group(page, "agents")
         page.get_by_label("Minutes per session, reviewer").fill("50")
         mine = local_home.root() / MACHINE_SETTINGS
         mine.write_text("{not json")
@@ -2498,7 +2498,7 @@ def test_a_layer_that_does_not_read_still_shows_the_read(tmp_path: Path, monkeyp
         expect(status).to_contain_text("last full read")
         pds.group(page, "agents")
         expect(rates(page)).to_contain_text("in 7 ")
-        pds.group(page, "runs")
+        pds.group(page, "agents")
         expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("50")
         pds.group(page, "overview")
         page.get_by_role("button", name="Read again").click()
@@ -2556,7 +2556,7 @@ def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
         entry.get_by_role("link", name="agents.builder.minutes").focus()
         page.keyboard.press("Enter")
         expect(pds.select(page, "Layer")).to_have_js_property("value", "global")
-        expect(page.locator("#groups a[href='#runs']")).to_have_attribute("aria-current", "page")
+        expect(page.locator("#groups a[href='#agents']")).to_have_attribute("aria-current", "page")
         minutes = page.get_by_label("Minutes per session, builder")
         expect(minutes).to_be_focused()
         expect(minutes).to_be_in_viewport()
@@ -2571,7 +2571,7 @@ def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
         expect(minutes).to_have_value("30")
         pds.group(page, "overview")
         entry.get_by_role("link", name="beta").click()
-        expect(page).to_have_url(f"{base}/config?project={b.id}#runs")
+        expect(page).to_have_url(f"{base}/config?project={b.id}#agents")
         expect(minutes).to_have_value("20")
         expect(minutes).to_be_focused()
         assert said == []
@@ -2595,13 +2595,13 @@ def test_another_project_s_link_opens_in_a_new_tab_while_an_edit_is_unsaved(
         page.get_by_role("button", name="Read again").click()
         entry = page.locator("#reads-changed li")
         expect(entry).to_contain_text("Set apart by beta", timeout=READS_TIME * 1000)
-        pds.group(page, "runs")
+        pds.group(page, "agents")
         page.get_by_label("Minutes per session, builder").fill("31")
         expect(page.locator("#pending")).not_to_have_text("No unsaved edits.")
         pds.group(page, "overview")
         with page.context.expect_page() as opened:
             entry.get_by_role("link", name="beta").click(modifiers=["ControlOrMeta"])
-        expect(opened.value).to_have_url(f"{base}/config?project={b.id}#runs")
+        expect(opened.value).to_have_url(f"{base}/config?project={b.id}#agents")
 
 
 @pytest.mark.browser

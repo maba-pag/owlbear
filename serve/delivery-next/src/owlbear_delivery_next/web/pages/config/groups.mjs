@@ -8,8 +8,8 @@ export const GROUPS = [["overview", "Overview"], ["agents", "Agents"], ["runs", 
 // (set-spotter-switch) or a control's (global-machine-channel). An old address names one of them.
 const PARTS = {
   overview: ["scope", "unset", "across", "reads"],
-  agents: ["agents", "models", "shaper", "subagents", "spotter", "user-config", "load_user", "guard"],
-  runs: ["rounds", "limits", "at-once", "sessions", "curation", "curator_threshold"],
+  agents: ["agents", "models", "shaper", "subagents", "limits", "spotter", "user-config", "load_user", "guard"],
+  runs: ["rounds", "at-once", "sessions", "curation", "curator_threshold"],
   checks: ["general", "widths", "design_failures", "agreement", "impeccable", "merge", "prefs", "pr"],
   project: ["folder", "rename"],
   "this-machine": ["machine", "global-machine"],
@@ -28,9 +28,8 @@ export function rowOf(key) {
   const [head, role, field] = key.split(".");
   if (head === "final_review") return "set-rounds-final_review";
   if (head !== "agents") return `set-${key.replaceAll(".", "-")}`;
-  const table = ["model", "effort", "context"].includes(field) ? "agents" : field === "minutes" ? "limits"
-    : field === "subagents" ? "subagents" : "rounds";
-  return `set-${table}-${role}`;
+  if (["minutes", "subagents"].includes(field)) return `set-agents-${role}-${field}`;  // a cell of the agent's row
+  return `set-${["model", "effort", "context"].includes(field) ? "agents" : "rounds"}-${role}`;
 }
 
 // The group an unsaved draft belongs to, by its key as the page keeps it ("builder.model", "spot.looks").
@@ -38,7 +37,7 @@ export function draftGroup(key) {
   const [head, field] = key.split(".");
   if (head === "machine") return "this-machine";
   if (head === "spot" || head.startsWith("load_user_") || head === "guard_level"
-    || ["model", "effort", "context", "subagents"].includes(field)) {
+    || ["model", "effort", "context", "subagents", "minutes"].includes(field)) {
     return "agents";
   }
   return ["widths", "design_failures", "prefs", "pr_labels", "pr_marker"].includes(head) ? "checks" : "runs";

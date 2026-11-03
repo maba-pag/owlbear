@@ -6,7 +6,7 @@ import { held, here, project } from "/assets/ui.mjs";
 import { ROUNDS, LOOPS, back, state } from "./state.mjs";
 import {
   cell, row, setting, table, numberCell, designFailures, widths, sessionsAtOnce, prLabels, prMarker, subagentsCell,
-  curatorThreshold, spotterCell, prefRows, USER_KEYS, userConfig, userConfigLabel, contextCell, ratesCell, editable,
+  curatorThreshold, spotterCell, prefRows, USER_KEYS, userConfig, userConfigLabel, contextCell, editable,
   guardLevel,
 } from "./cells.mjs";
 
@@ -27,8 +27,6 @@ const SPOTTER = [
   ["look_credit_limit", "Credit limit per look (credits)", "Credit limit per look"],
 ];
 
-const roles = () => Object.keys(state.loaded.settings.agents);
-
 // The way to the role's compaction on Metrics: back to the filters a compaction row's link came from, else the
 // role's on this project, or on every project from This machine or Global; unsaved edits keep the page.
 function toMetrics(role) {
@@ -45,31 +43,33 @@ function toMetrics(role) {
   };
   return html`<br><a class="compaction-link" href=${href} @click=${leave}>Compaction on Metrics</a>`;
 }
-const workers = () => roles().filter((role) => !["shaper", "spotter"].includes(role));
+const none = () => cell(html`<p-text color="contrast-medium">n/a</p-text>`);  // the shaper's chat and a Spotter look
 
 export function agentsGroup() {
   return html`
     <section class="panel" aria-labelledby="agents-title">
       <p-heading size="lg"><h2 id="agents-title" tabindex="-1">Agents</h2></p-heading>
-      ${table("Agents: model, effort and context apply to the next session",
-        ["Agent", "Model", "Effort", "Context", "AI credits per 1M tokens"], "agents-rows",
-        roles().map((role) => setting(`set-agents-${role}`, html`${role === "shaper" ? "shaper (a recommendation)"
-          : role}${toMetrics(role)}`,
-          ["model", "effort", "context"].map((f) => `agents.${role}.${f}`), editable(role, "model"),
-          editable(role, "effort"), contextCell(role), ratesCell(role))))}
+      ${table("Agents: they apply to the next session",
+        ["Agent", "Model", "Effort", "Context", "Subagents", "Minutes per session"],
+        "agents-rows", Object.keys(state.loaded.settings.agents).map((role) => {
+          const timed = !["shaper", "spotter"].includes(role);
+          return setting(`set-agents-${role}`, html`${role === "shaper" ? "shaper (a recommendation)"
+            : role}${toMetrics(role)}`,
+          ["model", "effort", "context", ...(timed ? ["subagents", "minutes"] : [])].map((f) => `agents.${role}.${f}`),
+          editable(role, "model"), editable(role, "effort"), contextCell(role),
+          timed ? subagentsCell(role) : none(),
+          timed ? numberCell(role, "minutes", "Minutes per session", `set-agents-${role}-minutes`) : none());
+        }))}
+      <p-text id="agents-note">Subagents: an agent may start the runtime's built-in subagents, such as explore or
+        code-review, for side questions. They work under the step's own permissions, and Delivery records each one;
+        Maintenance shows their use per agent. Minutes per session, 1 to 480: a session ends after this many minutes
+        in total; its step then counts as a failed attempt and runs again. The shaper's chat and the Spotter's looks
+        are no sessions of their own, so they show n/a. The credits under a model are its rates at the row's context
+        tier; the runtime prices no effort, so they are the same at every effort.</p-text>
       <p-text id="shaper-note" size="xs" color="contrast-medium">The shaper's model and effort are a recommendation
         (TD-328): Delivery's own turns in the shaping chat use them; what you type there runs on the chat's model
         picker, which the chat reminds you of once.</p-text>
       <p-text id="models-note" size="xs" color="contrast-medium" aria-live="polite">${state.modelsNote}</p-text>
-    </section>
-    <section class="panel" aria-labelledby="subagents-title">
-      <p-heading size="lg"><h2 id="subagents-title" tabindex="-1">Subagents</h2></p-heading>
-      <p-text>An agent may start the runtime's built-in subagents, such as explore or code-review, for side
-        questions. They work under the step's own permissions, and Delivery records each one; Maintenance shows their
-        use per agent.</p-text>
-      ${table("Subagents: they apply to the next session", ["Agent", "Built-in subagents"], "subagents",
-        workers().map((role) => setting(`set-subagents-${role}`, role, [`agents.${role}.subagents`],
-          subagentsCell(role))))}
     </section>
     <section class="panel" aria-labelledby="spotter-title">
       <p-heading size="lg"><h2 id="spotter-title" tabindex="-1">Spotter</h2></p-heading>
@@ -131,15 +131,6 @@ export function runsGroup() {
       <p-text size="xs" color="contrast-medium">Findings per round: 1 to 20. "Last round at or below" must be lower
         than "ask you at or above", which may not exceed the findings per round. The final review inherits the
         builder's values.</p-text>
-    </section>
-    <section class="panel" aria-labelledby="limits-title">
-      <p-heading size="lg"><h2 id="limits-title" tabindex="-1">Session time limits</h2></p-heading>
-      <p-text>An agent session ends after this many minutes in total; its step then counts as a failed attempt and
-        runs again. The shaper's chat has no limit.</p-text>
-      ${table("Session time limits: they apply to the next session", ["Agent", "Minutes per session"], "limits",
-        workers().map((role) => setting(`set-limits-${role}`, role, [`agents.${role}.minutes`],
-          numberCell(role, "minutes", "Minutes per session"))))}
-      <p-text size="xs" color="contrast-medium">1 to 480 minutes.</p-text>
     </section>
     <section class="panel" aria-labelledby="at-once-title">
       <p-heading size="lg"><h2 id="at-once-title" tabindex="-1">Sessions at once</h2></p-heading>

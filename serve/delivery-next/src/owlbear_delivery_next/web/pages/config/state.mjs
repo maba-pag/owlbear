@@ -91,8 +91,9 @@ export function show() {
 // until both have stayed a few frames, for at most a second, and never after the owner's next key, pointer press or
 // wheel, which moves them himself.
 async function reveal(target) {
-  const control = target.matches("p-table-row, div") ? target.querySelector(":is([data-key], [id^='machine-'], "
-    + "[id^='global-machine-'], p-select, p-input-text, p-segmented-control):not([disabled])")
+  const control = target.matches("p-table-row, p-table-cell, div")
+    ? target.querySelector(":is([data-key], [id^='machine-'], [id^='global-machine-'], p-select, p-input-text, "
+      + "p-segmented-control):not([disabled])")
     : null;  // a setting the shown layer cannot hold is read-only: its row takes the focus
   const into = control ?? target, block = control ? "center" : "start";
   into.scrollIntoView({ block });

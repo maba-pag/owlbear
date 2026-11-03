@@ -51,6 +51,11 @@ export function cell(...parts) {
   return html`<p-table-cell multiline="true">${parts}</p-table-cell>`;
 }
 
+// A cell an unset-list link can name by its *id* and focus its control.
+export function cellWith(id, ...parts) {
+  return html`<p-table-cell id=${id} tabindex="-1" multiline="true">${parts}</p-table-cell>`;
+}
+
 export function row(...cells) {
   return html`<p-table-row>${cells}</p-table-row>`;
 }
@@ -101,12 +106,12 @@ export function button(label, onclick, { id, icon, variant, busy = false, disabl
 }
 
 // TD-209: one loop's round value, or a role's minutes (TD-286); blank inherits (the final review, the builder's).
-export function numberCell(owner, field, label) {
+export function numberCell(owner, field, label, id) {
   const key = `${owner}.${field}`, final = owner === "final_review";
   const below = final ? finalBelow(field) : inherited().agents[owner][field];
   const inUse = final ? state.loaded.settings.final_review?.[field] : state.loaded.settings.agents[owner][field];
-  return cell(typed(`${label}, ${owner.replace("_", " ")}`, own(key), (v) => edit(key, v),
-    { key, placeholder: clear(below), inputmode: "numeric", disabled: state.saving }),
+  return (id ? (...parts) => cellWith(id, ...parts) : cell)(typed(`${label}, ${owner.replace("_", " ")}`, own(key),
+    (v) => edit(key, v), { key, placeholder: clear(below), inputmode: "numeric", disabled: state.saving }),
   source(final ? key : `agents.${key}`, inUse));
 }
 
@@ -267,7 +272,7 @@ function tokens(n) {
 // TD-376: whether a role's sessions may start the runtime's built-in subagents; on unless a layer says off.
 export function subagentsCell(role) {
   const key = `${role}.subagents`, below = onOff(inherited().agents[role].subagents);
-  return cell(choose(`Built-in subagents, ${role}`, [[INHERIT, clear(below)],
+  return cellWith(`set-agents-${role}-subagents`, choose(`Built-in subagents, ${role}`, [[INHERIT, clear(below)],
     ["true", "on: may start them"], ["false", "off: none"]], own(key) || INHERIT, (v) => edit(key, v),
     { key, disabled: state.saving }),
   source(`agents.${key}`, state.loaded.settings.agents[role].subagents));
@@ -331,16 +336,18 @@ function amount(n) {
   return n.toLocaleString("en", { maximumFractionDigits: 2 });
 }
 
-export function ratesCell(role) {
+// The chosen model's rates at the row's context tier, shown under its select, with the effort in use: the runtime
+// prices no effort, so the rates are the same at every one.
+function ratesNote(role) {
   const model = offeredModel(role), long = tierOf(role) === "long" && model?.long;
   const rates = long ? model.long.rates : model?.rates;
-  if (!rates) return cell(html`<p-text>\u2014</p-text><p-text size="xs" color="contrast-medium">not known</p-text>`);
+  if (!rates) return html`<p-text size="xs" color="contrast-medium">AI credits per 1M tokens: not known</p-text>`;
   const write = rates.cache_write ? ` \u00b7 cache\u00a0write\u00a0${amount(rates.cache_write)}` : "";
   const flow = `in\u00a0${amount(rates.input)} \u00b7 out\u00a0${amount(rates.output)}`;
   const line = `${flow} \u00b7 cache\u00a0${rates.cache == null ? "not known" : amount(rates.cache)}${write}`;
-  const effort = own(`${role}.effort`) || inherited().agents[role].effort;  // the runtime prices no effort
-  return cell(html`<p-text>${line}</p-text><p-text color="contrast-medium">${model.id}, ${long ? "long"
-    : "default"} context \u00b7 effort\u00a0${said(effort)}; same rates at every effort</p-text>`);
+  const effort = own(`${role}.effort`) || inherited().agents[role].effort;
+  return html`<p-text size="xs">AI credits per 1M tokens: ${line}</p-text><p-text size="xs"
+    color="contrast-medium">effort\u00a0${said(effort)}: same rates at every effort</p-text>`;
 }
 
 export function editable(role, field) {
@@ -371,5 +378,6 @@ export function editable(role, field) {
   } else {
     control = typed(label, value, set, { ...common, placeholder: clear(below) });
   }
-  return cell(control, note, source(`agents.${key}`, state.loaded.settings.agents[role][field]));
+  return cell(control, note, source(`agents.${key}`, state.loaded.settings.agents[role][field]),
+    field === "model" ? ratesNote(role) : nothing);
 }
