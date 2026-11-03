@@ -33,6 +33,12 @@ REFUSALS = frozenset({  # the fixed reasons main's ``_one`` writes when it refus
 })  # fmt: skip
 SUBAGENTS_UNSET = "agents.curator.subagents is unset"  # main's ``_unset`` reasons, before any session and SDK call
 UNSET = ("settings unset: ", "; fill them in on the Settings page")
+RESUMED = "its accepted edits "  # how `curation_resume` adds to a row what it did; never part of the row's own reason
+
+
+def written(reason: str) -> str:
+    """A row's reason as its producer wrote it, without the note `curation_resume` added."""
+    return "" if reason.startswith(RESUMED) else reason.partition(f"; {RESUMED}")[0]
 
 
 def observed(runs: Runs) -> str:
@@ -118,9 +124,10 @@ def refused(run: FolderRun) -> bool:
     """
     if run.state not in {"failed", "waiting"} or run.started_at is None or run.ended_at is None:
         return False
-    if run.reason in REFUSALS or run.reason.startswith(UNREADABLE):  # main's block of unreadable settings, too
+    reason = written(run.reason)
+    if reason in REFUSALS or reason.startswith(UNREADABLE):  # main's block of unreadable settings, too
         return run.ended_at == run.started_at
-    unset = run.reason == SUBAGENTS_UNSET or (run.reason.startswith(UNSET[0]) and run.reason.endswith(UNSET[1]))
+    unset = reason == SUBAGENTS_UNSET or (reason.startswith(UNSET[0]) and reason.endswith(UNSET[1]))
     return unset and run.ended_at >= run.started_at
 
 

@@ -3,7 +3,8 @@
 The curator works in a detached worktree seeded with the checkout's memory as it is, uncommitted files included. Its
 commits never land on the checkout's branch, so no publication, its own or another writer's, can carry them. An
 accepted run's changed files are written into the checkout and published in one commit; a refused run's edits, committed
-or not, are kept in a local ref that no push names.
+or not, are kept in a local ref that no push names. The apply keeps a record of the set until it is committed
+(`curation_apply`), so a stop while the files are copied in publishes none of it; `resume` finishes it.
 """
 
 from __future__ import annotations
@@ -16,8 +17,9 @@ import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from owlbear_memory import MemoryState, storage, writer_lock
+from owlbear_memory import MemoryBusyError, MemoryState, storage, writer_lock
 
+from owlbear_delivery_next.local_system import curation_apply
 from owlbear_delivery_next.local_system.data_place import HELD
 from owlbear_delivery_next.local_system.data_repo import CONFIG, MEMORY, DataRepoError
 from owlbear_delivery_next.local_system.storage_io import atomic_write
@@ -30,6 +32,7 @@ if TYPE_CHECKING:
 
 NO_EDITS = "the run changed no memory, so nothing is held"
 LISTED = "its worktree is still listed (the log says why)"
+MESSAGE = "chore: memory curation of {folder} (machine host)"
 
 _log = logging.getLogger(__name__)
 
@@ -77,6 +80,18 @@ def _pending(rel: str, raw: bytes) -> bool:
 
 
 @dataclass(frozen=True)
+class Resumed:
+    """What finishing an apply a stop cut short did: its folder, whether its set is committed, and what each path got.
+
+    The folder is "" when the record could not be read; a committed set's record is cleared.
+    """
+
+    folder: str
+    done: bool
+    said: str
+
+
+@dataclass(frozen=True)
 class Tree:
     """One run's worktree and the checkout's memory as it was seeded."""
 
@@ -112,13 +127,23 @@ class Tree:
         index.unlink(missing_ok=True)
         return f"its edits are held, never published, in {ref}"
 
-    def accept(self, folder: str, key: str) -> tuple[str, str]:
+    def accept(self, folder: str, key: str, left: Resumed | None) -> tuple[str, str]:
         """Write the run's changes into the checkout and publish them: why it was refused, or the publication notice.
 
-        Refused whole, and held, when a file it changed changed in the checkout meanwhile. Pending entries it wrote
-        stay uncommitted there, and so does a deletion its own commits did not make: the memory server defers one
-        whose entry lives on pending.
+        Refused whole, and held, when a file it changed changed in the checkout meanwhile, or when an apply a stop cut
+        short, *left* by `resume`, is not finished yet; a finished one leads the answer. Pending entries it wrote stay
+        uncommitted there, and so does a deletion its own commits did not make: the memory server defers one whose
+        entry lives on pending.
         """
+        if left and not left.done:
+            return f"refused, {left.said}; {self.hold(folder, key)}", ""
+        refusal, notice = self._accepted(folder, key)
+        if left is None:
+            return refusal, notice
+        first = f"first finished the apply a stop cut short of {left.folder}: {left.said}"
+        return (f"{first}; {refusal}", notice) if refusal else ("", "; ".join(filter(None, (first, notice))))
+
+    def _accepted(self, folder: str, key: str) -> tuple[str, str]:
         changed = self.changed()
         texts = {r: None if b is None else b.decode() for r, b in changed.items()}  # undecodable: raised, held
         made = ("diff", "-z", "--name-only", "--no-renames", "--diff-filter=D", self.head, "HEAD", "--", *self.dirs)
@@ -131,20 +156,106 @@ class Tree:
                 locks.enter_context(writer_lock(shared.root / d))
             if moved := next((r for r in touched if _read(shared.root / r) != self.base.get(r)), None):
                 return f"refused, {moved} changed meanwhile; {self.hold(folder, key)}", ""
-            for r, text in texts.items():
-                if text is None:
-                    (shared.root / r).unlink(missing_ok=True)
-                else:
-                    atomic_write(shared.root / r, text)
             kept = [
                 shared.root / r
                 for r in touched
                 if ((b := changed.get(r)) is None and r in deleted) or (b is not None and not _pending(r, b))
             ]
+            steps = {
+                r: curation_apply.Step(curation_apply.digest(self.base.get(r)), texts.get(r), r in deleted)
+                for r in touched
+            }
+            curation_apply.write(shared, curation_apply.Apply(folder, steps))  # before the first file: a stop keeps it
+            # removals first: a stop never leaves an entry the run moves in two folders, for a later save to change one
+            for r, text in sorted(texts.items(), key=lambda item: item[1] is not None):
+                if text is None:
+                    (shared.root / r).unlink(missing_ok=True)
+                else:
+                    atomic_write(shared.root / r, text)
+            message = MESSAGE.format(folder=folder)
             try:
-                return "", shared.publish(kept, f"chore: memory curation of {folder} (machine host)")
-            except (OSError, DataRepoError, subprocess.SubprocessError) as exc:  # live, maybe committed: it stands
-                return "", f"written, but not published: {type(exc).__name__}: {exc}"
+                made = shared.commit(kept, message)
+            except (OSError, DataRepoError, subprocess.SubprocessError) as exc:
+                made = f"{type(exc).__name__}: {exc}"
+            if made:  # the set is in the checkout, not committed: the record keeps every push of it back
+                return "", f"written, but not committed: {made}; {curation_apply.cut_short(shared)}"
+            curation_apply.clear(shared)
+            return "", _published(shared, message)
+
+
+def _published(shared: DataRepo, message: str) -> str:
+    """Push the committed set; what the owner should know when that fails. The next push carries it."""
+    try:
+        return shared.publish([], message)
+    except (OSError, DataRepoError, subprocess.SubprocessError) as exc:  # committed: it stands
+        return f"written, but not published: {type(exc).__name__}: {exc}"
+
+
+def _target(step: curation_apply.Step) -> bytes | None:
+    return None if step.target is None else step.target.encode()
+
+
+def _later(now: bytes | None, step: curation_apply.Step) -> bool:
+    """Whether a path of a cut-short set changed after the stop: it holds neither its seed nor the run's version."""
+    return now != _target(step) and curation_apply.digest(now) != step.seed
+
+
+def _finished(path: Path, rel: str, step: curation_apply.Step, changed: str) -> str:
+    """Bring one path of a cut-short set to the run's version unless it changed after the stop; say which.
+
+    *changed* is the path of its entry that changed after the stop, else *rel*. A moved entry's other end stays too:
+    one entry is never left in two folders.
+    """
+    now = _read(path)
+    if now == _target(step):
+        return f"{rel}: as the run left it"
+    if _later(now, step):
+        return f"{rel}: changed after the stop; that version is kept"
+    if changed != rel:
+        return f"{rel}: left as it was, as {changed} of its entry changed after the stop"
+    if step.target is None:
+        path.unlink()
+    else:
+        atomic_write(path, step.target)
+    return f"{rel}: written now"
+
+
+def resume(shared: DataRepo) -> Resumed | None:
+    """Finish the apply a stop cut short, commit its set and publish it; None when no apply was cut short.
+
+    Each path the run touched gets the run's version, unless it changed after the stop: that version is kept, and
+    committed with the rest, and the other end of an entry the run moved stays as it is. Pending entries and a
+    deletion the run's commits did not make stay uncommitted, as an accept leaves them. When the set cannot be
+    committed, the record stays and so does the hold on every push.
+    """
+    if (record := curation_apply.read(shared)) is None:
+        return None
+    message = MESSAGE.format(folder=record.folder)
+    # removals first, as an accept does: a stop in here never leaves a moved entry in two folders either
+    steps = sorted(record.steps.items(), key=lambda item: (item[1].target is not None, item[0]))
+    try:
+        with shared.locked(), contextlib.ExitStack() as locks:
+            for d in sorted({r.rpartition("/")[0] for r, _ in steps}):
+                (shared.root / d).mkdir(exist_ok=True)
+                locks.enter_context(writer_lock(shared.root / d))
+            later = {r.rpartition("/")[2]: r for r, step in steps if _later(_read(shared.root / r), step)}
+            lines = [_finished(shared.root / r, r, step, later.get(r.rpartition("/")[2], r)) for r, step in steps]
+            kept = [
+                shared.root / r
+                for r, step in steps
+                if ((raw := _read(shared.root / r)) is None and step.removed)
+                or (raw is not None and not _pending(r, raw))
+            ]
+            if made := shared.commit(kept, message):
+                cut = curation_apply.cut_short(shared)
+                return Resumed(record.folder, done=False, said="; ".join([*lines, f"not committed: {made}; {cut}"]))
+            curation_apply.clear(shared)
+            notice = _published(shared, message)
+    except (DataRepoError, OSError, subprocess.SubprocessError, MemoryBusyError) as exc:  # a busy lock, or Git failed
+        cut = curation_apply.cut_short(shared)
+        return Resumed(record.folder, done=False, said=f"{type(exc).__name__}: {exc}; {cut}")
+    committed = f"committed {made.commit}" if made.commit else "nothing left to commit"
+    return Resumed(record.folder, done=True, said="; ".join([*lines, committed, notice or "published"]))
 
 
 def seed(shared: DataRepo, at: Path, folders: Sequence[str]) -> Tree:

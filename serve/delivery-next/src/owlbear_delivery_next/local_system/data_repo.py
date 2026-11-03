@@ -128,8 +128,8 @@ class DataRepo:
             publication_hold.settled(self, until)
         return done
 
-    def _lock_file(self) -> Path:
-        found = _git(self.root, "rev-parse", "--absolute-git-dir")
+    def _lock_file(self, until: float | None = None) -> Path:
+        found = _git(self.root, "rev-parse", "--absolute-git-dir", until=until)
         admin = Path(found.stdout.strip())
         if found.returncode or not admin.is_dir():
             msg = f"the git folder of {self.root} cannot be found: {found.stderr.strip()}"

@@ -124,6 +124,22 @@ async def test_a_folder_that_links_to_global_or_outside_the_repository_is_refuse
 
 
 @pytest.mark.asyncio
+async def test_make_global_refuses_while_deliverys_apply_of_a_curation_run_is_cut_short(root: Path) -> None:
+    """#875: the cut-short set names its entries where they are; Delivery finishes it from its record by name."""
+    entry = saved(root / "docs" / "memory", "Pin the runtime", curated=True)
+    git(root, "add", "-A")
+    git(root, "commit", "-qm", "seed")
+    record = Path(git(root, "rev-parse", "--absolute-git-dir")) / "owlbear-curation-apply.json"
+    record.write_text(json.dumps({"folder": "docs", "steps": {}}))
+
+    with pytest.raises(ToolError, match=f"{entry.id} stays: the memory curation of docs was cut short"):
+        await tools.make_global(bound(root), entry_id=entry.id, revision=entry.revision, folder="docs")
+
+    assert (root / "docs" / "memory" / f"{entry.id}.md").is_file()
+    assert git(root, "status", "--porcelain") == ""
+
+
+@pytest.mark.asyncio
 async def test_a_make_global_whose_commit_fails_leaves_the_entry_where_it_was_and_can_be_tried_again(
     root: Path,
 ) -> None:
