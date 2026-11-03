@@ -270,4 +270,5 @@ def write(out: Path, done: Audit) -> None:
     folder = out / REPORTS / done.run_id
     folder.mkdir(parents=True, exist_ok=True)
     (folder / f"{SKILL}.json").write_text(done.raw, encoding="utf-8")
-    (folder / f"{SKILL}.md").write_text(done.markdown, encoding="utf-8")
+    if done.markdown:
+        (folder / f"{SKILL}.md").write_text(done.markdown, encoding="utf-8")

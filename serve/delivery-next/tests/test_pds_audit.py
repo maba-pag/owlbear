@@ -316,12 +316,19 @@ def test_a_report_short_of_complete_and_clean_stops(sources, body, why):
     done = audited(sources, body)
     assert done.verdict.outcome == "stop"
     assert why in done.verdict.reason
+    out = sources.at.parent / "out"
+    audit.write(out, done)
+    folder = out / audit.REPORTS / done.run_id
+    if isinstance(body, dict):
+        assert (folder / f"{audit.SKILL}.json").read_text(encoding="utf-8") == json.dumps(body)
     if isinstance(body, dict) and jsonschema.Draft202012Validator(SCHEMA).is_valid(body):
         assert done.report == body
         assert f"- **Result:** `{body['summary']['result']}`" in done.markdown
         assert "## How to act on this report" in done.markdown
+        assert (folder / f"{audit.SKILL}.md").read_text(encoding="utf-8") == done.markdown
     else:
         assert not done.markdown
+        assert not (folder / f"{audit.SKILL}.md").exists()
 
 
 @pytest.mark.parametrize(
