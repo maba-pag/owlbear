@@ -271,8 +271,8 @@ class GitHub:
         )  # fmt: skip
 
 
-@pytest.mark.parametrize("merged", [True, False])
-def test_a_submitted_merge_is_observed_before_the_amendment_goes_on(picking, monkeypatch, merged):
+@pytest.mark.parametrize(("merged", "killed"), [(True, False), (False, False), (True, True)])
+def test_a_submitted_merge_is_observed_before_the_amendment_goes_on(picking, monkeypatch, merged, killed):
     run = Amending(picking, monkeypatch)
     c = picking.change()
     amending.start(c, "answer", reason="he wants spaces around a name trimmed", now=NOW)
@@ -291,7 +291,19 @@ def test_a_submitted_merge_is_observed_before_the_amendment_goes_on(picking, mon
         assert (run.roles(told), c.amending.phase, c.step.kind) == (["shaper"], "challenge", K.MERGE)
         return
     assert (run.roles(told), c.step.kind, c.amending is not None) == ([], K.CLEANUP, True)  # the merge ends first
-    c = run.step()
+    if killed:  # the runner dies once the follow-up exists: the record says so, and no rerun makes a second one
+        write = picking.store.write
+
+        def dies(lock, change):
+            if any(x.state == "moved" for x in change.amendments):
+                raise RuntimeError("killed")
+            write(lock, change)
+
+        monkeypatch.setattr(picking.store, "write", dies)
+        with pytest.raises(RuntimeError, match="killed"):
+            run.step()
+        monkeypatch.setattr(picking.store, "write", write)
+    c = picking.change() if killed else run.step()
     (a,) = c.amendments
     assert (a.state, c.amending, c.brief.version) == ("moved", None, 1)  # this Change finishes unchanged
     (new,) = [picking.store.read(s) for s in picking.store.slugs() if s != picking.slug]

@@ -40,7 +40,7 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     now, a = datetime.now(UTC), amending.current(change)
     if a is not None and _merged(store, lock, change, repo, now):
         return
-    if a is None or _left(store, change, a):
+    if a is None or _left(store, lock, change, a):
         store.write(lock, change)
         return
     am = change.amending
@@ -147,7 +147,7 @@ def _merged(store: Store, lock: Lock, c: Change, repo: Path, now: datetime) -> b
     return True
 
 
-def _left(store: Store, c: Change, a: Amendment) -> bool:
+def _left(store: Store, lock: Lock, c: Change, a: Amendment) -> bool:
     """Whether the Change left the stopped step's work: stopped, reshaped, or merged before it ended."""
     s = c.step
     if c.intent.abandoned_at or (s.kind == StepKind.CLEANUP and s.mode in STOPPED):
@@ -155,9 +155,14 @@ def _left(store: Store, c: Change, a: Amendment) -> bool:
     elif s.kind == StepKind.SHAPE:
         amending.left(c, "the brief is reshaped")
     elif s.kind == StepKind.CLEANUP:  # its pull request merged: it finishes unchanged, a new Change holds this
-        new = identities.publish_new(store, lambda number, taken: _follow_up(c, a, number, taken))
-        amending.left(c, "")
-        a.state, a.moved_to = "moved", new.handle
+
+        def moved(number: int, taken: list[str]) -> Change:
+            new = _follow_up(c, a, number, taken)
+            amending.left(c, "")
+            a.state, a.moved_to = "moved", new.handle
+            return new
+
+        identities.publish_new(store, moved, parent=(lock, c))  # both or neither: a rerun makes no second one
     else:
         return False
     return True
