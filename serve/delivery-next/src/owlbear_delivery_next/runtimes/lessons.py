@@ -3,8 +3,10 @@
 Delivery reads the project's memory folder and the shared repository's Global memory itself, never through the
 memory server, and selects with the memory package's policy (``owlbear_memory.selection``). Each SDK conversation it
 creates gets them once, ahead of its first message: a fresh session or its replacement, a repair's fallback included;
-a resumed session gets nothing. Delivering them is the role's startup recall; when the read fails or nothing fits, the
-message says so and the agent recalls with its own tool. A role without the recall tool, or a step without memory,
+a resumed session gets nothing. Delivering them is the role's startup recall; when the read fails, an owner's value
+is unset or nothing fits, the message says so and the agent recalls with its own tool. The cap, the budget and what a
+rating is worth are the owner's, read from the global settings for each conversation. A role without the recall tool,
+or a step without memory,
 gets nothing. The step's activity logs the selection when it is made, with every eligible lesson left out and why,
 then what the conversation was given. A session's exposure is ``lessons-shown``, confirmed: its first message was sent
 and acknowledged. Earlier builds logged window chats as ``lessons-sent``, unconfirmed; that historical record is still
@@ -16,11 +18,15 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
-from owlbear_memory import selection
+from owlbear_memory import Points, selection
 
 from owlbear_delivery_next.local_system import pds_skill, preload
+from owlbear_delivery_next.local_system.data_repo import CONFIG
+from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.state_store.database import StoreError
+from owlbear_delivery_next.state_store.layers import read_layer
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -40,6 +46,36 @@ UNREAD = "Delivery could not read them all ({why}): call `recall_memory` with ag
 UNFIT = "None fitted in this message: call `recall_memory` with agent `{role}` before you start."
 OPEN, CLOSE = "```json", "```"
 BREAKS = {"\u0085": "\\u0085", "\u2028": "\\u2028", "\u2029": "\\u2029"}  # line ends JSON leaves unescaped
+PREFLIGHT = (
+    "memory.outstanding_boost",
+    "memory.unremarkable_penalty",
+    "memory.preflight_cap",
+    "memory.preflight_budget",
+)
+
+
+@dataclass(frozen=True)
+class Preflight:
+    """The owner's pre-flight values: what a rating is worth, how many lessons fit, and how many characters."""
+
+    points: Points
+    cap: int
+    budget: int
+
+
+def preflight(memory: Path) -> Preflight:
+    """The owner's pre-flight values, read now from the global settings beside *memory*.
+
+    ``SettingsUnset`` while one is unset; ``StoreError`` when the settings can't be read.
+    """
+    settings = config.resolve(read_layer(memory.parent.parent / CONFIG, config.GlobalLayer), config.Layer())
+    settings.need(*PREFLIGHT)  # a test layer or the owner's global file: code ships no value
+    held = settings.memory
+    return Preflight(
+        Points(cast("float", held.outstanding_boost), cast("float", held.unremarkable_penalty)),
+        cast("int", held.preflight_cap),
+        cast("int", held.preflight_budget),
+    )
 
 
 @dataclass(frozen=True)
@@ -102,7 +138,14 @@ def shown(exposure: Exposure | None, session: str, log: Callable[..., None], *, 
 
 
 def block(role: str, memory: Path) -> tuple[str, Exposure]:
-    """The role's lessons from the project's *memory* folder and Global memory, within the policy's budget."""
+    """The role's lessons from the project's *memory* folder and Global memory, within the owner's pre-flight budget."""
+    try:
+        held = preflight(memory)
+    except (
+        config.SettingsUnset,
+        StoreError,
+    ) as exc:  # never stops a step: the agent recalls itself, or is told why not
+        return f"{HEADING}\n{UNREAD.format(why=exc, role=role)}", Exposure(role, "unread", failed=str(exc))
     try:
         own, common = selection.stored(memory), selection.stored(preload.global_memory(memory))
     except Exception as exc:  # noqa: BLE001 - an unread memory never stops a step: the agent recalls itself
@@ -112,8 +155,9 @@ def block(role: str, memory: Path) -> tuple[str, Exposure]:
         why = f"{missing} unreadable {'entry' if missing == 1 else 'entries'}"
         return f"{HEADING}\n{UNREAD.format(why=why, role=role)}", Exposure(role, "incomplete", failed=why)
     found = selection.readable(own.entries, common.entries)
-    head, room = [HEADING, FRAME, SHOWN, OPEN], selection.BUDGET - len(f"{HEADING}\n{FRAME}\n{SHOWN}\n{OPEN}\n{CLOSE}")
-    picked = selection.select(found, role, cost=lambda c: len(line(c)) + 1, room=room)  # each line ends a newline
+    head, room = [HEADING, FRAME, SHOWN, OPEN], held.budget - len(f"{HEADING}\n{FRAME}\n{SHOWN}\n{OPEN}\n{CLOSE}")
+    ranked = selection.ranked(found, role, held.points)
+    picked = selection.select(ranked, cost=lambda c: len(line(c)) + 1, room=room, cap=held.cap)  # a line ends a newline
     chosen = tuple(_ref(c) for c in picked.chosen)
     omitted = tuple(_ref(s.candidate) | {"reason": s.reason} for s in picked.omitted)
     if chosen:
