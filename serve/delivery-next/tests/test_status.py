@@ -26,7 +26,13 @@ STOP = Stop(kind=ErrorKind.POLICY, reason="model blocked", action="Allow the mod
 
 
 def build(**fields) -> Change:
-    return Change(slug="c1", plan=PLAN, step=Step(kind=StepKind.BUILD, task="t2"), **fields)
+    return Change(slug="c1", plan=PLAN, step=Step(kind=StepKind.BUILD, task="t2", started_at=NOW - timedelta(hours=1)),
+                  **fields)  # fmt: skip
+
+
+# the builder's session opened for the step: its stage is its own work (#718)
+WORKING = ({"at": (NOW - timedelta(minutes=50)).isoformat(timespec="seconds"), "session": "b1", "role": "builder",
+            "event": "session", "id": "b1", "resumed": False},)  # fmt: skip
 
 
 ASKING = build(outcome=Outcome(exit=Exit.ASK, reason="which key?", who="you", at=NOW))
@@ -77,12 +83,12 @@ def test_a_done_change_whose_pull_back_left_the_target_behind_says_so_and_offers
         ),
         (
             build(),
-            Activity(host_up=True, runner_alive=True, last_event_at=NOW - timedelta(seconds=40)),
+            Activity(host_up=True, runner_alive=True, last_event_at=NOW - timedelta(seconds=40), events=WORKING),
             Status("Build 2/2 · implementing: rate limiter · builder active 40 s ago", None, "delivery"),
         ),
         (
             build(),
-            Activity(host_up=True, runner_alive=True, last_event_at=NOW - timedelta(minutes=12)),
+            Activity(host_up=True, runner_alive=True, last_event_at=NOW - timedelta(minutes=12), events=WORKING),
             Status("Build 2/2 · implementing: rate limiter · no activity for 12 min", None, "delivery"),
         ),
         (
@@ -97,7 +103,7 @@ def test_a_done_change_whose_pull_back_left_the_target_behind_says_so_and_offers
         ),
         (
             build(outcome=Outcome(exit=Exit.RETRY, denial="docker compose up", at=NOW)),
-            Activity(host_up=True, runner_alive=True, last_event_at=NOW),
+            Activity(host_up=True, runner_alive=True, last_event_at=NOW, events=WORKING),
             Status("Build 2/2 · implementing: rate limiter · last denied: docker compose up", None, "delivery"),
         ),
         (
@@ -221,7 +227,7 @@ def test_card_is_quiet_only_past_the_step_kind_threshold_while_running(silent, q
 
 
 TRIED, FAILED = "tooling:build:sdk", " · last try failed: "
-ALIVE = Activity(host_up=True, runner_alive=True, last_event_at=NOW)
+ALIVE = Activity(host_up=True, runner_alive=True, last_event_at=NOW, events=WORKING)
 LINES = [
     (ALIVE, "implementing: rate limiter · builder active 0 s ago", FAILED),
     (Activity(host_up=True, holder_pid=4242), "not running: waiting for process 4242 to end", FAILED),
