@@ -32,7 +32,7 @@ from owlbear_memory import (
 from owlbear_memory import ValidationError as MemoryValidationError
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from owlbear_delivery_next.local_system import data_repo
+from owlbear_delivery_next.local_system import curation_apply, data_repo
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -142,6 +142,7 @@ def _move(store: Store, entry_id: str, shown: str, *, back: bool) -> dict[str, A
             if len(found) != 1:
                 raise NotFoundError(entry_id)
             path, entry = found[0]
+            unmoved(shared, entry.title)
             if _shown(entry)["updated_at"] != shown:
                 raise ConcurrencyError(entry_id)
             if back and entry.origin is None:
@@ -162,6 +163,12 @@ def _move(store: Store, entry_id: str, shown: str, *, back: bool) -> dict[str, A
     except tuple(e for e, _, _ in REFUSED) as exc:
         raise _refused(exc) from exc
     return {"entry": _shown(entry), "notice": notice}
+
+
+def unmoved(shared: data_repo.DataRepo, what: str) -> None:
+    """Refuse a move while an accepted curation run's apply is cut short: its record names the files where they are."""
+    if why := curation_apply.cut_short(shared):
+        raise HTTPException(409, f"{what} stays: {why}")
 
 
 def _later(entry: MemoryEntry) -> str:

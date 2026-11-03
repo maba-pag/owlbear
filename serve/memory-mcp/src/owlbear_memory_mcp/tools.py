@@ -33,7 +33,7 @@ from owlbear_memory import (
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError, field_validator
 
 from owlbear_memory_mcp import receipts
-from owlbear_memory_mcp.git import commit_batch, commit_move, format_git_failure, repo_locked
+from owlbear_memory_mcp.git import commit_batch, commit_move, cut_short, format_git_failure, repo_locked
 
 if TYPE_CHECKING:
     from mcp.server.mcpserver import Context
@@ -781,6 +781,13 @@ async def assess_memories(
     return {"results": results}
 
 
+def _unmoved(root: Path, entry_id: str) -> None:
+    """Refuse a move while Delivery's apply of a curation run is cut short: its record names the entries in place."""
+    if why := cut_short(root):
+        msg = f"{entry_id} stays: {why}"
+        raise ToolError(msg)
+
+
 async def make_global(ctx: Context, *, entry_id: str, revision: str, folder: str | None = None) -> dict[str, Any]:
     """Move one entry of a project's memory into Global, recording the project (TD-292), and commit both paths."""
     ctx = _in_folder(ctx, folder)
@@ -796,6 +803,7 @@ async def make_global(ctx: Context, *, entry_id: str, revision: str, folder: str
     target.mkdir(exist_ok=True)
     try:
         with repo_locked(root), writer_lock(source), writer_lock(target):  # the repository lock first, as the page
+            _unmoved(root, entry_id)
             found = [(p, e) for p in sorted(source.glob("*.md")) if (e := storage.read_entry(p)) and e.id == entry_id]
             if len(found) != 1:
                 msg = f"entry not found: {entry_id}"

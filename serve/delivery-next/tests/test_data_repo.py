@@ -13,7 +13,7 @@ from owlbear_delivery_next.change_contracts.models import Brief, BriefDecision, 
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.commands import cli, setup
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError, PullRequest
-from owlbear_delivery_next.local_system import data_place, data_repo, local_home
+from owlbear_delivery_next.local_system import curation_apply, data_place, data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host import host as host_module
@@ -680,6 +680,23 @@ def test_a_rename_to_a_taken_or_unsafe_name_is_refused(shared, repo) -> None:
     assert "belongs to github.com/other/shop-site" in taken.json()["detail"]
     assert "no folder name" in unsafe.json()["detail"]
     assert (store.name, Store.open(repo).name) == ("shop-site", "shop-site")
+
+
+def test_a_rename_is_refused_while_a_curation_runs_apply_is_cut_short(shared, repo) -> None:
+    """#875: the cut-short set names its files under the folder's name, so the folder keeps it."""
+    root, _ = shared
+    store = Store.open(repo)
+    curation_apply.write(store.shared, curation_apply.Apply("shop-site", {}))
+    head = git(root, "rev-parse", "HEAD")
+
+    refused = renamer(store, repo).put("/api/next/config/folder", json={"name": "acme-shop"})
+
+    assert refused.status_code == 409
+    assert refused.json()["detail"].startswith("the folder shop-site stays: the memory curation of shop-site was cut")
+    assert ((root / "shop-site").is_dir(), (root / "acme-shop").exists(), git(root, "rev-parse", "HEAD")) == (
+        True, False, head
+    )  # fmt: skip
+    assert Store.open(repo).name == "shop-site"
 
 
 def test_a_rename_waits_for_running_steps_and_a_host_picks_up_a_rename_made_elsewhere(shared, repo) -> None:

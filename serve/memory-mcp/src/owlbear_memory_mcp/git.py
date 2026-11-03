@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import fcntl
+import json
 import os
 import re
 import shlex
@@ -480,6 +481,24 @@ def repo_locked(root: Path, wait: float = 30.0) -> Iterator[None]:
         yield
     finally:
         os.close(fd)
+
+
+APPLY = "owlbear-curation-apply.json"  # Delivery's record of a curation run's apply, beside the repository lock
+
+
+def cut_short(root: Path) -> str:
+    """Why nothing may move in the shared repository: Delivery's apply of a curation run was cut short; else nothing.
+
+    The record names the run's files where they are, and Delivery finishes the apply from it.
+    """
+    path = Path(_git(root, "rev-parse", "--absolute-git-dir")) / APPLY
+    if not path.exists():
+        return ""
+    folder = json.loads(path.read_text(encoding="utf-8"))["folder"]
+    return (
+        f"the memory curation of {folder} was cut short while its files were copied in; OwlBear finishes it at its "
+        f"next start, or before its next curation run (record: {path})"
+    )
 
 
 def _known(repo_dir: Path, rel: str) -> bool:

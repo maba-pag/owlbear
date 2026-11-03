@@ -22,6 +22,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.local_system import curation_apply
 from owlbear_delivery_next.local_system.storage_io import atomic_write, read_regular
 
 if TYPE_CHECKING:
@@ -305,8 +306,11 @@ def pushing(repo: DataRepo, push: Sequence[str], until: float | None) -> tuple[s
 
     Plain and held pushes must land on the checked upstream. With nothing held, an explicit non-forced push may
     name its caller's captured destination. A plain push still runs as one non-forced refspec after a hold retires:
-    configured forced or matching pushes cannot overwrite another checkout's work.
+    configured forced or matching pushes cannot overwrite another checkout's work. Nothing is pushed while an accepted
+    curation run's apply is cut short (`curation_apply`): its set would be published in part.
     """
+    if why := curation_apply.cut_short(repo):
+        return f"nothing was pushed from {repo.root}: {why}", ()
     return _checked(repo, until, fetch=True, push=tuple(push))
 
 
