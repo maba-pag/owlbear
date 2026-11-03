@@ -172,6 +172,25 @@ function groupNav() {
   return html`<nav id="groups" aria-label="Settings groups">${GROUPS.map(link)}</nav>`;
 }
 
+// Which rows the layered groups show (config.html hides the others and a panel left without a row); it stays across
+// the groups and layers, and a link to a row shows every row again.
+const FILTERS = [["all", "All settings"], ["unset", "Unset"], ["set", "Set on this layer"], ["unsaved", "Unsaved"]];
+const NONE = { unset: "No setting in this group is unset.", set: "This layer sets nothing in this group.",
+  unsaved: "No unsaved edits in this group." };
+
+function filterBar() {
+  if (!["agents", "runs", "checks"].includes(state.group)) return nothing;
+  const pick = (e) => {
+    state.filter = e.target.value;
+    show();
+  };
+  return html`<div id="filter" class="row">
+    <p-select label="Show" .value=${live(state.filter)} @change=${pick}>${FILTERS.map(([v, said]) =>
+      html`<p-select-option value=${v}>${said}</p-select-option>`)}</p-select>
+    <p-text id="filter-none" size="sm">${NONE[state.filter]}</p-text>
+  </div>`;
+}
+
 const GROUP_VIEWS = {
   overview: () => html`${unsetSection()}${acrossSection()}`,
   agents: agentsGroup,
@@ -224,8 +243,10 @@ export function route(initial = false) {
   if (id && id !== group) history.replaceState(history.state, "", `${location.pathname}${location.search}#${group}`);
   const switched = group !== state.group, nav = document.activeElement?.closest?.("#groups");
   state.group = group;
-  if (id && id !== group) page.target = `#${CSS.escape(id)}`;
-  else if (switched && !initial && !nav) page.target = "#groups ~ section h2";
+  if (id && id !== group) {
+    page.target = `#${CSS.escape(id)}`;
+    state.filter = "all";  // the row it names may be one the filter hides
+  } else if (switched && !initial && !nav) page.target = "#groups ~ section h2";
   show();
 }
 
@@ -238,7 +259,7 @@ export function view() {
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
     </p-inline-notification>
     <p-text id="status" role="status" aria-live="polite">${state.status}</p-text>
-    ${loaded ? html`${scopeSection()}${groupNav()}` : nothing}
+    ${loaded ? html`${scopeSection()}${groupNav()}${filterBar()}` : nothing}
     ${(loaded ? state.group === "overview" : state.reads) ? readsView() : nothing}
     ${loaded ? html`${GROUP_VIEWS[state.group]()}${saveBar()}` : nothing}`;
 }

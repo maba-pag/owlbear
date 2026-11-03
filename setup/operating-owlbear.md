@@ -257,6 +257,11 @@ Machine preferences and this machine's own settings are always **this Mac only**
 The latter keep their separate **Save machine settings** button and confirmation.
 The per-project session limit and the machine-wide limit across all projects remain separate.
 
+The **Agents**, **Runs** and **Checks and merge** groups have a **Show** menu: all settings, only the **unset** ones,
+only those the chosen layer **sets** (as saved), or only those with **unsaved** edits. It hides the other rows and any
+panel left without one, and stays across those groups and layers until you follow a link to a setting. A group's long
+explanations sit behind disclosures, closed until opened.
+
 Three of them, in **Settings → Your instructions, skills and memory**, decide whether Delivery's agent steps
 also use your own Copilot files from `~/.copilot` (or `$COPILOT_HOME`) and Copilot Memory. **Your instructions in
 Delivery steps** keeps your instruction files there, each entry of `instructions/` and

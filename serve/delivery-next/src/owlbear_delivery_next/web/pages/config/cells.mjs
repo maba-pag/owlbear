@@ -3,6 +3,7 @@ import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { EFFORTS, INHERIT, SOURCES, state, shown } from "./state.mjs";
 import { own, inherited, edit, layerValue, preview } from "./layers.mjs";
 import { levels, arrows } from "./cost.mjs";
+import { at } from "./sections.mjs";
 
 // Code ships no defaults (2026-10-23): a value no layer sets is unset; its row's name says so in red (GW8RT6). While
 // the edited layer has an unsaved edit of it, the line says what the save would give (#809).
@@ -63,8 +64,15 @@ export function row(...cells) {
 // GW8RT6: a setting's row, which the unset list links to by its *id*; its name is red while a key it sets is unset.
 export function setting(id, name, keys, ...cells) {
   const missing = state.loaded.settings.missing ?? [], unset = keys.some((k) => missing.includes(k));
-  return html`<p-table-row id=${id} tabindex="-1">${cell(html`<p-text color=${unset ? "error" : nothing}>${name}
-    </p-text>`)}${cells}</p-table-row>`;
+  // The Show filter: set on the edited layer as saved, or with an unsaved edit.
+  const matches = {
+    all: () => true,
+    unset: () => unset,
+    set: () => keys.some((k) => at(state.loaded[state.layer], k) != null),
+    unsaved: () => keys.some((k) => preview(k)),
+  }[state.filter]();
+  return html`<p-table-row id=${id} tabindex="-1" data-setting ?hidden=${!matches}>${cell(html`<p-text
+    color=${unset ? "error" : nothing}>${name}</p-text>`)}${cells}</p-table-row>`;
 }
 
 export function table(caption, heads, body, rows, { id, hidden = false } = {}) {

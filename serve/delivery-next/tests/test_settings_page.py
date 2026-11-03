@@ -343,6 +343,57 @@ def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(store, p
 
 
 @pytest.mark.browser
+def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row_shows_every_row(
+    store, pds, monkeypatch
+) -> None:
+    """A group's rows can be narrowed to the unset ones, those the layer sets and its unsaved edits; a panel left
+    without a row goes too, and a link to a row names it whatever the filter hid."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"sessions": None}))
+    with settings_page(store, pds) as page:
+        rows, none = page.locator("p-table-row[data-setting]:visible"), page.locator("#filter-none")
+        panels = page.locator("main section.panel:visible h2")
+        pds.group(page, "runs")
+        expect(panels).to_have_text(["Where you edit", "Challenge rounds", "Sessions at once", "Memory curation"])
+        pds.pick(page, "Show", "unset")
+        expect(rows).to_have_count(1)
+        expect(page.locator("#set-sessions")).to_be_visible()
+        expect(panels).to_have_text(["Where you edit", "Sessions at once"])
+        expect(none).to_be_hidden()
+        pds.group(page, "agents")  # the filter stays across the groups
+        expect(rows).to_have_count(0)
+        expect(none).to_have_text("No setting in this group is unset.")
+        pds.pick(page, "Show", "all")
+        expect(none).to_be_hidden()
+        pds.group(page, "runs")
+        page.get_by_label("Rounds at most, builder").fill("4")
+        pds.pick(page, "Show", "unsaved")
+        expect(rows).to_have_count(2)  # the final review follows the builder's rounds, so it changes too
+        expect(page.locator("#set-rounds-builder, #set-rounds-final_review")).to_have_count(2)
+        pds.group(page, "checks")
+        expect(none).to_have_text("No unsaved edits in this group.")
+        pds.group(page, "runs")
+        page.get_by_role("button", name="Save project settings").click()
+        pds.answer(page, "Save project settings")
+        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        expect(rows).to_have_count(0)  # saved: no longer an edit
+        pds.pick(page, "Show", "set")
+        expect(rows).to_have_count(1)  # this project sets the builder's rounds, nothing else
+        expect(page.locator("#set-rounds-builder")).to_be_visible()
+        pds.pick(page, "Layer", "global")
+        expect(rows).to_have_count(0)
+        expect(none).to_have_text("This layer sets nothing in this group.")
+        pds.pick(page, "Layer", "project")
+        pds.group(page, "overview")
+        page.locator("#unset").get_by_role("link", name="sessions", exact=True).click()
+        expect(page.locator("#set-sessions")).to_be_visible()
+        expect(pds.select(page, "Show")).to_have_js_property("value", "all")
+
+
+@pytest.mark.browser
 def test_the_overview_counts_each_group_s_unset_names_its_first_three_and_opens_the_group_for_more(
     store, pds, monkeypatch
 ) -> None:
