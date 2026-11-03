@@ -6,6 +6,8 @@ import shutil
 import subprocess
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failure
+
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
@@ -20,7 +22,7 @@ def probe_in(cwd: Path) -> Probe:
         try:
             done = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=30, check=False)  # noqa: S603
         except (OSError, subprocess.TimeoutExpired) as exc:
-            return 127, str(exc)
+            return 127, failure(exc)
         return done.returncode, (done.stdout + done.stderr).strip()
 
     return run
