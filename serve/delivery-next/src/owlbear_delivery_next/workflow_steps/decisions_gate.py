@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from owlbear_decisions import Decision, Queued, Snapshot
+    from owlbear_delivery_next.change_contracts.decision_records import PickedDecision
     from owlbear_delivery_next.change_contracts.models import Change, Step
     from owlbear_delivery_next.state_store.decision_store import DataView
     from owlbear_delivery_next.state_store.store import Lock, Store
@@ -95,10 +96,10 @@ def _attached(d: Decision, c: Change) -> bool:
     return d.scope is Scope.CHANGE or d.id in {p.id for p in c.decisions_published}
 
 
-def _picked(c: Change) -> set[str] | None:
-    """The ids *c*'s pick chose; None for a Change approved without one (no data repository, or before picking)."""
+def _picked(c: Change) -> dict[str, PickedDecision] | None:
+    """What *c*'s pick chose, by id; None for a Change approved without one (no data repository, or before picking)."""
     p = c.brief.picked
-    return {d.id for d in p.decisions} if p is not None and p.status == "ok" else None
+    return {d.id: d for d in p.decisions} if p is not None and p.status == "ok" else None
 
 
 def _said(d: Decision) -> Said:
@@ -108,9 +109,12 @@ def _said(d: Decision) -> Said:
 def baseline(view: DataView, c: Change, now: datetime) -> DecisionBaseline:
     """The decisions in force considered by rule revision, and the wording of those pinned.
 
-    A first pin considers every decision in force and pins the pick and the Change's own, or every one without a
-    pick. A later one from a pick keeps the pinned set at its current revisions and every other considered one at
-    the revision it was considered at, so a decision new to it stays for the picker (`_later`).
+    A first pin from a pick pins the picked decisions as the pick read them, in force or not, and the Change's own;
+    it considers what the pick read at the revision it read, so a decision new or changed since stays for the
+    picker (`_later`) and a picked one changed since asks the owner (`differences`). A pick saved before it recorded
+    what it read counts only its picked ones as read. Without a pick a first pin considers and pins every decision in
+    force. A later pin from a pick keeps the pinned set at its current revisions and every other considered one at
+    the revision it was considered at.
     """
     found, prior = in_force(view.snapshot, c), c.decisions_baseline
     if prior is not None and prior.picked:
@@ -119,9 +123,14 @@ def baseline(view: DataView, c: Change, now: datetime) -> DecisionBaseline:
         revisions = held | {d.id: d.rule_revision for d in found if d.id in said}
         return DecisionBaseline(commit=view.commit, at=now, revisions=revisions, said=said, picked=True)
     chosen = _picked(c) if prior is None else None  # a pin without a pick stays one
-    said = {d.id: _said(d) for d in found if chosen is None or d.id in chosen or _attached(d, c)}
-    revisions = {d.id: d.rule_revision for d in found}
-    return DecisionBaseline(commit=view.commit, at=now, revisions=revisions, said=said, picked=chosen is not None)
+    if chosen is None:
+        said, revisions = {d.id: _said(d) for d in found}, {d.id: d.rule_revision for d in found}
+        return DecisionBaseline(commit=view.commit, at=now, revisions=revisions, said=said, picked=False)
+    read, own = c.brief.picked.read, [d for d in found if _attached(d, c)]
+    said = {k: Said(title=p.title, statement=p.statement) for k, p in chosen.items()} | {d.id: _said(d) for d in own}
+    revisions = {k: p.revision for k, p in chosen.items()} | {d.id: read[d.id] for d in found if d.id in read}
+    revisions |= {d.id: d.rule_revision for d in own}
+    return DecisionBaseline(commit=view.commit, at=now, revisions=revisions, said=said, picked=True)
 
 
 def loaded(store: Store) -> DataView | None:
@@ -302,21 +311,28 @@ def _refresh(store: Store) -> str:
         return f"not refreshed: {exc}"
 
 
-def _faulty_wording(view: DataView, c: Change) -> list[str]:
-    return [why for d in in_force(view.snapshot, c) if (why := problem(d))]
+def _faulty_wording(found: Iterable[Decision]) -> list[str]:
+    return [why for d in found if (why := problem(d))]
 
 
 def _wording_faults(view: DataView, c: Change, now: datetime) -> Gate | None:
     """Unrecoverable full wording blocks before baseline construction or any paid reassessment."""
-    if faults := _faulty_wording(view, c):
+    if faults := _faulty_wording(in_force(view.snapshot, c)):
         stopped = _stopped(ErrorKind.STATE, "; ".join(faults), FAULTY, "The full decision wording is resolved", now)
         return Gate(c, stopped)
     return None
 
 
 def unworded(view: DataView | None, c: Change) -> str:
-    """Why an approval may not pin *c*'s decisions yet: an in-force full wording cannot be read; "" otherwise."""
-    if view is None or not (faults := _faulty_wording(view, c)):
+    """Why an approval may not pin *c*'s decisions yet: a full wording it pins cannot be read; "" otherwise.
+
+    From a pick it pins the picked decisions and the Change's own; any other one waits for the next step's gate.
+    """
+    if view is None:
+        return ""
+    chosen = _picked(c)
+    found = [d for d in in_force(view.snapshot, c) if chosen is None or d.id in chosen or _attached(d, c)]
+    if not (faults := _faulty_wording(found)):
         return ""
     why = f"the full decision wording is unresolved: {'; '.join(faults)}"
     _log.warning("brief approval refused: %s", why)

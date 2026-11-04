@@ -19,7 +19,7 @@ from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.state_store import change_record, decision_batch, decision_store
 from owlbear_delivery_next.state_store.store import Lock
-from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate, pick
+from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -333,7 +333,9 @@ def test_a_refused_conflict_flag_commit_after_the_approvals_commit_keeps_the_app
     assert a.brief.approved_version == 1
 
 
-def test_a_published_decision_withdrawn_outside_the_change_makes_the_next_versions_pick_stale(picking, shared_repo):
+def test_a_published_decision_withdrawn_outside_the_change_does_not_block_the_next_versions_approval(
+    picking, shared_repo
+):
     root, _ = shared_repo
     (first,) = shape(picking, 1, LASTING).brief.decisions
     picking.approve(1)
@@ -343,14 +345,8 @@ def test_a_published_decision_withdrawn_outside_the_change_makes_the_next_versio
     rule = read(root / rel(first.id))
     write(rule.model_copy(update={"state": State.WITHDRAWN}), root / PROJECT, rule.revision)  # the Decisions page
 
-    said = picking.approve(2)
-
-    assert said.status_code == 409
-    assert pick.CHANGED in said.json()["detail"]
-    assert picking.ask(2, retry=True).status_code == 200
-    picking.step()
-    assert picking.approve(2).status_code == 200  # picked again with the withdrawal: it stands
-    assert read(root / rel(first.id)).state == State.WITHDRAWN
+    assert picking.approve(2).status_code == 200  # the next step's gate judges the withdrawal
+    assert read(root / rel(first.id)).state == State.WITHDRAWN  # it stands
 
 
 @pytest.mark.parametrize("pr", [None, MERGED], ids=["abandoned", "merged"])

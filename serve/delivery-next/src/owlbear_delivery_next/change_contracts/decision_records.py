@@ -59,13 +59,14 @@ class PickedDecision(_Strict):
 
 
 class Pick(_Strict):
-    """The picker's choice for one brief version (TD-459); approval pins it only while the list is as it read it."""
+    """The picker's choice for one brief version (TD-459): approval pins what it read; the next step judges the rest."""
 
     version: int
     status: Literal["owed", "ok", "failed"] = "owed"  # owed: a request asked for it and the runner picks next
     reason: str = ""  # why it failed, or the ids it returned that the list did not hold
     commit: str = ""  # the data commit the list was read at
-    listed: str = ""  # digest of the list it read: every id with its rule revision
+    listed: str = ""  # digest of the list it read, written before `read`: kept so older records load
+    read: dict[str, str] = Field(default_factory=dict)  # each decision on the list it judged, by id: its rule revision
     at: datetime | None = None
     decisions: list[PickedDecision] = Field(default_factory=list)
     dropped: list[str] = Field(default_factory=list)
