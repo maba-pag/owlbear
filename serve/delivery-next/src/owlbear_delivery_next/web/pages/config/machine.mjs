@@ -1,6 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
-import { call, here, loaded as clones, project as current } from "/assets/ui.mjs";
+import { call, displayName, here, loaded as clones, project as current } from "/assets/ui.mjs";
 import { CREDITS, INHERIT, SOURCES, WRITE, state, show, notify, typedNumber, turns } from "./state.mjs";
 import { button } from "./cells.mjs";
 import { edit, own, layerValue } from "./layers.mjs";
@@ -284,9 +284,9 @@ export async function readAcross() {
   state.others = [];
   state.unread = [];
   read.forEach((r, i) => {
-    if (r.status === "rejected") return state.unread.push(`${others[i].name}: ${r.reason.message}`);
+    if (r.status === "rejected") return state.unread.push(`${displayName(others[i])}: ${r.reason.message}`);
     if (r.value.folder && seen.has(r.value.folder)) return null;
     seen.add(r.value.folder);
-    return state.others.push({ name: others[i].name, config: r.value });
+    return state.others.push({ name: displayName(others[i]), config: r.value });
   });
 }

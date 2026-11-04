@@ -1,6 +1,8 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { blockedOf, here, HostDown, loaded, project, Restarted, Slow, shown } from "/assets/ui.mjs";
+import {
+  OWN_TAG, blockedOf, displayName, here, HostDown, isOwn, loaded, project, Restarted, Slow, shown,
+} from "/assets/ui.mjs";
 import { KEY, state, page, show, call, keyOf, parts, several, failed } from "./state.mjs";
 import { hd, text } from "./widgets.mjs";
 import { spentText } from "./progress.mjs";
@@ -33,12 +35,13 @@ function card([c, label, variant]) {
   }
   if (c.quiet) bits.push("quiet");
   if (c.watcher?.outside) bits.push(`${c.watcher.outside} outside write${c.watcher.outside === 1 ? "" : "s"} observed`);
+  const own = c.own ? html` <p-tag compact="true">${OWN_TAG}</p-tag>` : nothing;
   return html`<li class=${current ? "card current" : "card"}>
     <div class="top"><a href=${here({ change: c.key })} class="open" data-key=${c.key}
       aria-current=${current ? "true" : nothing} @click=${open}>${c.title || c.slug}</a>
       <p-tag variant=${variant} compact="true">${label}</p-tag></div>
     ${c.title || several() ? html`<p class="meta">${c.title ? c.slug : ""}${c.title && several() ? " \u00b7 " : ""}${
-      several() ? html`<span class="project">${c.projectName}</span>` : nothing}</p>` : nothing}
+      several() ? html`<span class="project">${c.projectName}</span>${own}` : nothing}</p>` : nothing}
     ${step ? html`<p class="says stage">${step}</p>` : nothing}
     <p class="says">${stage && !step && stage !== label ? html`<span class="stage">${stage}</span> \u00b7 `
       : nothing}${rest}</p>
@@ -85,12 +88,12 @@ function listView() {
 function blockedBanner() {
   const all = loaded() ?? [], blocked = all.filter((p) => blockedOf(p.id));
   if (!blocked.length) return nothing;
-  const every = blocked.length === all.length, names = blocked.map((p) => p.name).join(", ");
+  const every = blocked.length === all.length, names = blocked.map(displayName).join(", ");
   const heading = every ? "No work can be done until the unset settings are set."
     : `${names} can't start work until ${blocked.length === 1 ? "its" : "their"} settings are set.`;
   return html`<p-inline-notification id="blocked" state=${every ? "error" : "warning"} heading=${heading}
     heading-tag="h2" dismiss-button="false"><ul>${blocked.map((p) => html`<li><a href=${here({ project: p.id,
-      change: "" }, "/config")}>${p.name}</a>: ${blockedOf(p.id)}</li>`)}</ul></p-inline-notification>`;
+      change: "" }, "/config")}>${displayName(p)}</a>: ${blockedOf(p.id)}</li>`)}</ul></p-inline-notification>`;
 }
 
 export function view() {
@@ -163,7 +166,7 @@ async function everything() {
   if (down) throw down.reason;
   const rows = [], notes = [], failing = new Set();
   each.forEach((r, i) => {  // one project that cannot be read keeps its last Changes and says why; the others go on
-    const p = projects[i], named = (n) => (projects.length > 1 ? `${p.name}: ${n}` : n);
+    const p = projects[i], named = (n) => (projects.length > 1 ? `${displayName(p)}: ${n}` : n);
     if (r.status === "rejected") {
       failing.add(p.id);
       rows.push(...(state.changes ?? []).filter((c) => c.project === p.id));
@@ -171,7 +174,8 @@ async function everything() {
       return;
     }
     const [changes, said] = r.value;
-    rows.push(...changes.map((c) => ({ ...c, key: keyOf(p.id, c.slug), project: p.id, projectName: p.name })));
+    rows.push(...changes.map((c) => ({ ...c, key: keyOf(p.id, c.slug), project: p.id, projectName: displayName(p),
+      own: isOwn(p) })));
     notes.push(...said.map(named));
   });
   return [rows, notes, failing];

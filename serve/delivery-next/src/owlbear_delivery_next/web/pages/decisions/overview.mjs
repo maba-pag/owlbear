@@ -22,7 +22,8 @@ function said(got) {
 export const scopes = overview({
   fixed: [
     { key: "global", name: "Global", href: here({ view: "global" }), path: "/owlbear/decisions?where=global" },
-    { key: "owlbear", name: "OwlBear", href: here({ view: "owlbear" }), path: "/owlbear/decisions?where=project" },
+    { key: "owlbear", name: "OwlBear", href: here({ view: "owlbear" }), path: "/owlbear/decisions?where=project",
+      own: true },
   ],
   path: "/decisions?where=project", said, unread: (got) => (got.available ? "" : got.reason || "it is unavailable"),
   show: () => show(), live: () => wide === "",

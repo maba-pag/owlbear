@@ -1,6 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
-import { here, moved, loaded as clones, project as current } from "/assets/ui.mjs";
+import { displayName, here, moved, loaded as clones, project as current } from "/assets/ui.mjs";
 import { SOURCES, state, drafts, page, show, notify, shown } from "./state.mjs";
 import { cell, row, table, button, more } from "./cells.mjs";
 import { pendingLine, save, rename, reviewPrefs, hasEdits, anyEdits, pendingIn, useRecommended } from "./layers.mjs";
@@ -12,14 +12,15 @@ import { readsView } from "./reads.mjs";
 
 // The project this page edits, by its name in the machine host's list; "This project" on a clone's own host.
 export function named(id = current) {
-  return clones()?.find((p) => p.id === id)?.name ?? "";
+  const p = clones()?.find((o) => o.id === id);
+  return p ? displayName(p) : "";
 }
 
 function scopeSection() {
   const loaded = state.loaded, mine = named();
-  const all = clones() ?? [], twin = (p) => all.some((o) => o !== p && o.name === p.name);
+  const all = clones() ?? [], twin = (p) => all.some((o) => o !== p && displayName(o) === displayName(p));
   const others = all.filter((p) => p.id !== current)
-    .map((p) => [`go:${p.id}`, `Project ${p.name}${twin(p) ? ` (${p.path})` : ""}`]);
+    .map((p) => [`go:${p.id}`, `Project ${displayName(p)}${twin(p) ? ` (${p.path})` : ""}`]);
   const storage = loaded.global_location ? "synced to shared repository" : "this Mac only";
   const options = [["project", `${mine ? `Project ${mine}` : "This project"} (${storage})`],
     ["machine", "This machine (its projects; this Mac only)"],
