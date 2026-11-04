@@ -166,6 +166,44 @@ def test_a_pointer_written_while_cloning_wins_and_the_clone_is_dropped(url: str,
     assert (record(), clones(), data_place.default().exists()) == ({"repository": "/elsewhere"}, [], False)
 
 
+@pytest.mark.parametrize("site", ["parse", "write", "move", "common"])
+def test_a_pointer_or_git_folder_that_cannot_be_read_or_written_says_the_whole_error(
+    tmp_path: Path, monkeypatch, whole_error: str, site: str
+) -> None:
+    def refused(*_args: object, **_kwargs: object) -> None:
+        raise OSError(whole_error)
+
+    monkeypatch.setattr(data_place, "atomic_write", refused)
+    path = data_place.pointer()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    old = path.with_name(data_place.OLD_POINTER)
+    done = subprocess.CompletedProcess(["git", "rev-parse"], 128, "", whole_error)
+    monkeypatch.setattr(data_place, "_top", lambda root: root)
+    monkeypatch.setattr(data_place, "_git", lambda *_args: done)
+    if site == "parse":
+        path.write_text("{")
+    if site == "move":
+        old.write_text("{}\n")
+    act = {
+        "parse": lambda: data_place._parse(path),  # noqa: SLF001 - the pointer's own read
+        "write": lambda: data_place._write({}),  # noqa: SLF001 - the pointer's own write
+        "move": lambda: data_place._move_old(path, held=True),  # noqa: SLF001 - the old pointer's move
+        "common": lambda: data_place._common(tmp_path),  # noqa: SLF001 - the Git folder lookup alone
+    }[site]
+    with pytest.raises(data_repo.DataRepoError) as raised:
+        act()
+    said = {
+        "parse": f"{path} names no repository: JSONDecodeError: {raised.value.__cause__}",
+        "write": f"the pointer {path} could not be written: OSError: {whole_error}",
+        "move": f"the pointer {old} could not be moved to {path}: OSError: {whole_error}",
+        "common": (
+            f"the Git folder of {tmp_path.resolve()} cannot be found: CalledProcessError: "
+            f"Command '['git', 'rev-parse']' returned non-zero exit status 128.\n{whole_error}"
+        ),
+    }[site]
+    assert str(raised.value) == said
+
+
 @pytest.mark.parametrize("where", ["mkdtemp", "rename", "lock"])
 def test_a_disk_failure_while_cloning_is_said_kept_and_retried(url: str, monkeypatch, where: str) -> None:
     home().mkdir(parents=True, exist_ok=True)

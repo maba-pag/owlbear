@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -1534,6 +1535,39 @@ def test_a_failed_hold_probe_names_git_s_whole_stderr(held, monkeypatch, failing
     git = f"CalledProcessError: Command '{['git', *ran[-1]]}' returned non-zero exit status 128.\n{whole_error}"
     expected = f"nothing was pushed or rebased in {shared.root}: a held automatic change cannot be checked: {git}"
     assert said == expected
+
+
+@pytest.mark.parametrize("site", ["journal", "authority", "rebasing"])
+def test_a_held_decision_or_rebase_that_cannot_be_checked_says_the_whole_error(
+    tmp_path, monkeypatch, whole_error, site
+):
+    """A held decision's pending journal or active authority, or a rebase probe, that fails: its whole error."""
+    from owlbear_delivery_next.local_system import batch_journal, decision_authority  # noqa: PLC0415
+
+    error = {"journal": batch_journal.JournalError, "authority": OSError, "rebasing": DataRepoError}[site]
+
+    def refused(*_args: object, **_kwargs: object) -> None:
+        raise error(whole_error)
+
+    if site == "rebasing":
+        monkeypatch.setattr(DataRepo, "rebasing", refused)
+        said = DataRepo(tmp_path)._pull_held(None)  # noqa: SLF001 - the held pull's own probe
+        assert said == f"not rebased on the remote: DataRepoError: {whole_error}"
+        return
+    held = {"watch": "w", "file": "w", "since": "s", "base": "b", "decision_active": True}
+    monkeypatch.setattr(publication_hold.batch_journal, "pending", refused)
+    monkeypatch.setattr(decision_authority, "inactive", refused)
+    monkeypatch.setattr(publication_hold, "_run", lambda *_args: "")
+    monkeypatch.setattr(publication_hold, "_blob_at", lambda *_args: "b")
+    repo = SimpleNamespace(git=lambda *args, **_kwargs: subprocess.CompletedProcess(args, 0, "", ""))
+    check = publication_hold._lapsed if site == "journal" else publication_hold._unmet  # noqa: SLF001
+    with pytest.raises(publication_hold._UnknownError) as unknown:  # noqa: SLF001 - the probe's own error
+        check(repo, held, None)
+    where = {
+        "journal": "the completion's pending journal cannot be checked: JournalError",
+        "authority": "the held decision's active authority cannot be checked: OSError",
+    }[site]
+    assert str(unknown.value) == f"{where}: {whole_error}"
 
 
 def test_a_spent_decision_whose_hold_git_fails_is_refused_with_git_s_whole_words(picking, failing_git, whole_error):

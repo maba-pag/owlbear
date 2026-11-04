@@ -9,6 +9,7 @@ from fastapi import HTTPException
 
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import backlog_routes
@@ -358,6 +359,20 @@ def test_saving_is_online_only_and_an_unreachable_github_fails_with_its_reason(s
     assert (sorted(p.name for p in root.iterdir()), git(remote, "log", "--format=%s", "main")) == ([".git"], "start")
     with pytest.raises(BacklogError, match="no shared repository is set up"):
         Backlog.of(Store(tmp_path / "store"))
+
+
+def test_a_save_github_could_not_be_reached_for_says_its_whole_reason(shared, whole_error):
+    root, _ = shared
+    backlog = view(root)
+
+    def unreachable() -> None:
+        raise ProviderError(FailureCode.UNAVAILABLE, "create_issue", whole_error, retry_safe=True)
+
+    with pytest.raises(BacklogError) as unsaved:
+        backlog._github("create", unreachable)  # noqa: SLF001 - one GitHub call's failure alone
+    said = f"ProviderError: {unsaved.value.__cause__}"
+    assert unsaved.value.text == f"not saved: GitHub (acme/owlbear-data) could not be reached: {said}"
+    assert unsaved.value.text.endswith(whole_error)
 
 
 def test_nothing_is_written_unless_github_says_the_shared_repository_is_private(shared, github):
