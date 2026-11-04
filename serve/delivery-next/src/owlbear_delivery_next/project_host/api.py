@@ -35,6 +35,7 @@ from owlbear_delivery_next.project_host import (
     amendment_routes,
     answers,
     backlog_routes,
+    brief_actions,
     brief_routes,
     brief_view,
     chat_routes,
@@ -471,6 +472,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     wake, ending = lambda: host.wake.set(), lambda: host.draining()  # noqa: PLW0108 - read late
     router.include_router(brief_routes.router(store, read, wake, ending))
     router.include_router(brief_routes.revising(read, start_chat))
+    router.include_router(brief_actions.router(store, read, wake))
     router.include_router(stop_routes.router(store, read, wake))
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))
     router.include_router(memory_routes.router(store))

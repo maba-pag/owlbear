@@ -9,7 +9,8 @@ from owlbear_decisions import Decision, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.change_contracts import pick_tools, tools
 from owlbear_delivery_next.change_contracts.models import Exit, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow import loop, status
+from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import sdk_adapter
@@ -19,6 +20,7 @@ from owlbear_delivery_next.workflow_steps import pick
 
 AT = datetime(2026, 10, 21, 9, tzinfo=UTC)
 PROJECT = "shop-site"
+LAST = RoundPolicy(max_rounds=1, max_findings=5, last_round_at=0, ask_owner_at=5)  # a revision after it: unreviewed
 
 
 def make(**changes) -> Decision:
@@ -109,6 +111,11 @@ def test_a_failed_pick_blocks_approval_until_a_retry_that_uses_no_round(picking)
     assert picking.ask(1, {"F1": "no"}, retry=True).status_code == 422
     rounds = c.loops[BRIEF].round
     assert picking.ask(1, retry=True).status_code == 200
+    retried = picking.change()
+    assert (retried.brief.picked.status, retried.loops[BRIEF].extra, retried.loops[BRIEF].verdicts) == (
+        "owed", c.loops[BRIEF].extra, c.loops[BRIEF].verdicts
+    )  # fmt: skip
+    assert "Delivery picks the decisions" in picking.approve(1).json()["detail"]
     assert loop.next_step(picking.change(), AT).kind == StepKind.SHAPE  # runnable: the runner picks
     picking.picks.append(picked(rule.id))
     c = picking.step()
@@ -124,8 +131,7 @@ def test_an_unreviewed_last_revision_is_picked_and_pinned_without_a_challenger(p
     picking.save()
     with picking.store.lock(picking.slug) as lock:
         c = picking.store.read(picking.slug)
-        last = RoundPolicy(max_rounds=1, max_findings=5, last_round_at=0, ask_owner_at=5)
-        c.loops[BRIEF] = RoundLoop(subject=BRIEF, policy=last)
+        c.loops[BRIEF] = RoundLoop(subject=BRIEF, policy=LAST)
         picking.store.write(lock, c)
     picking.ask(1)
     picking.picks.append(picked(rule.id))
@@ -141,6 +147,83 @@ def test_an_unreviewed_last_revision_is_picked_and_pinned_without_a_challenger(p
     assert (c.brief.picked.version, c.outcome.reason, len(picking.told)) == (2, "approve brief v2", 3)
     assert picking.approve(2, unreviewed=True).status_code == 200
     assert picking.approved().brief.approved[-1].picked.version == 2
+
+
+# The owner's one more challenge of that revision, from the Changes page (#966).
+def unreviewed(picking) -> None:
+    """Brief v2, saved after the loop's only round and picked, waits for approval with no challenger having read it."""
+    rule = picking.put(make())
+    picking.save()
+    with picking.store.lock(picking.slug) as lock:
+        c = picking.store.read(picking.slug)
+        c.loops[BRIEF] = RoundLoop(subject=BRIEF, policy=LAST)
+        picking.store.write(lock, c)
+    picking.ask(1)
+    picking.picks += [picked(rule.id)] * 2
+    picking.verdicts.append(verdict("AC-1"))
+    picking.step()
+    picking.save(criteria=["farewell('Ada') returns exactly 'Bye, Ada!'"])
+    picking.ask(2)
+    picking.step()  # v2's pick, no challenger
+
+
+def again(picking, version: int):
+    return picking.http.post(f"/api/next/changes/{picking.slug}/challenge-brief", json={"version": version})
+
+
+def shown(picking) -> dict:
+    return picking.http.get(f"/api/next/changes/{picking.slug}").json()["brief"]
+
+
+def test_one_more_challenge_with_a_clean_verdict_clears_the_mark_and_approves_without_the_tick(picking):
+    unreviewed(picking)
+    lp = picking.change().loops[BRIEF]
+    assert (lp.round, lp.extra, lp.unreviewed, [v.version for v in lp.verdicts]) == (1, 0, ["v2"], [1])
+    assert shown(picking)["versions"]["versions"][1]["actions"] == ["approve", "challenge"]
+
+    assert again(picking, 2).json() == {"accepted": "brief-challenge"}
+    c = picking.change()
+    assert (c.step.mode, c.brief.challenged, c.loops[BRIEF].ended, c.loops[BRIEF].extra) == ("challenge", None, "", 1)
+    assert "the challenge of brief v2 is running" in picking.approve(2, unreviewed=True).json()["detail"]
+    assert picking.change().brief == c.brief  # the refused approval changed nothing
+    assert again(picking, 2).status_code == 409  # one round at a time
+
+    picking.verdicts.append(verdict())
+    c = picking.step()
+    lp = c.loops[BRIEF]
+    assert (lp.round, lp.unreviewed, lp.ended, [v.version for v in lp.verdicts]) == (2, [], "clean", [1, 2])
+    assert "## Focus" in picking.told[-1].message  # the whole brief, focused on what changed
+    assert len(picking.pickers()) == 2  # v2's pick stands
+    b = shown(picking)
+    assert (b["unreviewed"], b["unapprovable"], b["versions"]["versions"][1]["actions"]) == (False, "", ["approve"])
+    assert picking.approve(2).json() == {"accepted": "brief-approval"}  # no tick
+    assert picking.approved().brief.approved_version == 2
+
+
+def test_one_more_challenge_with_findings_sends_the_version_to_the_shaper(picking):
+    unreviewed(picking)
+    again(picking, 2)
+    picking.verdicts.append(verdict("scope"))
+    c = picking.step()
+    assert (c.outcome.reason, status.status(c, Activity(host_up=True), AT).action) == (
+        "the shaper revises brief v2 for F2", status.CONTINUE
+    )  # fmt: skip
+    b = shown(picking)
+    assert (b["revising"], b["unapprovable"], b["versions"]["versions"][1]["state"]) == (
+        ["F2"], "the shaper revises brief v2 for F2", "findings"
+    )  # fmt: skip
+    assert again(picking, 2).status_code == 409
+
+
+def test_a_stale_or_approved_version_is_refused_and_nothing_changes(picking):
+    unreviewed(picking)
+    before = picking.change().model_dump()
+    assert again(picking, 1).json()["detail"] == "brief v1 is not the current draft v2"
+    assert picking.change().model_dump() == before
+    assert picking.approve(2, unreviewed=True).status_code == 200
+    approved = picking.approved().model_dump()
+    assert again(picking, 2).status_code == 409
+    assert picking.change().model_dump() == approved
 
 
 def test_approval_checks_the_pick_and_pins_the_baseline_from_one_read(picking, monkeypatch):

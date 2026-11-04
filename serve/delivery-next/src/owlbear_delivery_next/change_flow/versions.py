@@ -105,6 +105,8 @@ def brief(c: Change) -> dict:
         v["approved"] = v["n"] in approved
         if v["current"] and not v["approved"] and c.step.kind == StepKind.SHAPE:
             v["actions"] = ["approve"]  # off while brief_rounds.approvable says why
+            if not brief_rounds.unchallengeable(c, v["n"]):
+                v["actions"].append("challenge")  # #966: one more round on a revision no challenge read
     return listed
 
 

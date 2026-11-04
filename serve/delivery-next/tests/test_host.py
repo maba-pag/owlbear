@@ -22,6 +22,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Exit,
     Inputs,
     Names,
+    Outcome,
     PersonCheck,
     Plan,
     Question,
@@ -31,11 +32,13 @@ from owlbear_delivery_next.change_contracts.models import (
     Stop,
     Task,
     VisualState,
+    Waiting,
 )
 from owlbear_delivery_next.change_contracts.preparation import BASE, Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_contracts.round_records import BRIEF, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_contracts.visual_records import VisualResult
-from owlbear_delivery_next.change_flow import delivery_target, loop, worktree
+from owlbear_delivery_next.change_flow import brief_rounds, delivery_target, loop, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity, status
 from owlbear_delivery_next.commands import cli, runner
@@ -849,6 +852,32 @@ def test_while_paused_only_a_cleanup_or_the_owners_brief_challenge_starts(store,
     assert fake.host.tick(NOW) == []
     fake.host.closed = lambda: False
     assert fake.host.tick(NOW) == (["c1"] if runs else [])
+
+
+def test_the_owners_one_more_brief_challenge_runs_while_paused_and_what_follows_waits(store, tmp_path):
+    """#966: asked for on the Changes page, it passes the pause as the chat's request does (TD-287); planning waits."""
+    fake, flag = Fake(store, tmp_path), [True]
+    paused(fake, flag)
+    c = Change(slug="c1", brief=Brief(version=2, requested=2, challenged=2), step=Step(kind=StepKind.SHAPE),
+               names=Names(worktree=fake.worktree))  # fmt: skip
+    c.loops[BRIEF] = RoundLoop(subject=BRIEF, policy=RoundPolicy(max_rounds=1), round=1, head="1", ended="count",
+                               unreviewed=["v2"])  # fmt: skip
+    save(store, c.model_copy(update={"outcome": Outcome(exit=Exit.PENDING, waiting=Waiting.CHAT, who="you",
+                                                        reason="approve brief v2", at=NOW)}))  # fmt: skip
+    http = client(store, fake)
+    assert fake.host.tick(NOW) == []
+    asked = http.post("/api/next/changes/c1/challenge-brief", json={"version": 2})
+    assert asked.json() == {"accepted": "brief-challenge"}
+    assert fake.host.tick(NOW) == ["c1"]
+    with store.lock("c1") as lock:  # the challenger's clean verdict, as brief_round.judged counts it
+        c = store.read("c1")
+        brief_rounds.counted(c, [], {}, NOW)
+        store.write(lock, c)
+    fake.live.clear()
+    assert http.post("/api/next/changes/c1/approve-brief", json={"version": 2}).json() == {"accepted": "brief-approval"}
+    assert (fake.host.tick(NOW), store.read("c1").step.kind) == ([], StepKind.PLAN)
+    flag[0] = False
+    assert fake.host.tick(NOW) == ["c1"]
 
 
 def test_a_runner_gone_while_paused_is_charged_and_forgotten_and_nothing_starts(store, tmp_path):
