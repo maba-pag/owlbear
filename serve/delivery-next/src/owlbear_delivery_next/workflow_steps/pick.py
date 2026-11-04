@@ -147,14 +147,11 @@ def reassessed(store: Store, lock: Lock, c: Change, found: list[Decision], root:
     spend counts like any session's. A failure is never an empty pick.
     """
     held = c.decisions_baseline
-    context = [
-        "",
-        "## The work's rules so far (context, not to judge)",
-        *(f"{k} | {_one(s.statement)}" for k, s in held.said.items()),
-    ]
+    context = "".join(f"\n{k} | {_one(s.statement)}" for k, s in held.said.items())
+    instruction = f"{LATER}\n\n## The work's rules so far (context, not to judge){context}"
     try:
         log = corrections(root, store.name)
-        message_text = message(c, found, log, "\n".join([LATER, *context]))
+        message_text = message(c, found, log, instruction)
     except (OSError, ValueError) as exc:
         return [], f"{type(exc).__name__}: {exc}"
     done = _session(store, lock, c, message_text, held)

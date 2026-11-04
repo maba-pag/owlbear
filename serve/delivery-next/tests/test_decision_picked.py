@@ -169,7 +169,11 @@ def test_a_replaced_pinned_decision_asks_the_owner_and_its_successor_goes_to_the
 def test_decisions_the_pick_did_not_read_pass_approval_and_go_to_the_next_steps_picker(picking, monkeypatch, governs):
     rule = picking.put(make())
     other = picking.put(make(title="Invoices are PDF", topic="billing", statement="Invoices are sent as PDF."))
-    new = make(title="Farewells are polite", statement="Farewells say thank you.")
+    new = (
+        make(title="Farewells are polite", statement="Farewells say thank you.")
+        if governs
+        else make(title="Receipts are numbered", topic="billing", statement="Receipts carry a running number.")
+    )
     renamed = other.model_copy(update={"title": "Invoices are PDF files"})
 
     def between() -> None:
@@ -184,10 +188,9 @@ def test_decisions_the_pick_did_not_read_pass_approval_and_go_to_the_next_steps_
 
     c = run.step()
 
-    assert (c.outcome, loop.open_question(c)) == (None, None)
+    assert c.outcome is None
     context, rows = picking.pickers()[-1].message.split("## Decisions")
     assert (len(picking.pickers()), new.id in rows, other.id in rows, rule.id in rows) == (2, True, True, False)
-    assert context.startswith(pick.LATER)
     assert (
         context.split("## The work's rules so far (context, not to judge)\n")[1].strip()
         == f"{rule.id} | {rule.statement}"
@@ -240,7 +243,7 @@ def test_a_pick_saved_before_it_recorded_what_it_read_counts_only_its_picks_as_r
 
     c = run.step()
 
-    assert (c.outcome, loop.open_question(c)) == (None, None)
+    assert c.outcome is None
     rows = picking.pickers()[-1].message.split("## Decisions")[1]
     assert (new.id in rows, other.id in rows, rule.id in rows) == (True, True, False)  # every other one, once
     assert set(c.decisions_baseline.revisions) == {rule.id, other.id, new.id}

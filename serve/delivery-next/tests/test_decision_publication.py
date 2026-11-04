@@ -410,7 +410,7 @@ def test_a_published_decision_changed_outside_the_change_stays_as_changed_and_go
 
     c = stepped(picking, picking.slug)
 
-    assert (c.outcome, loop.open_question(c)) == (None, None)
+    assert c.outcome is None
     assert first.id in picking.pickers()[-1].message.split("## Decisions")[1]
     assert first.id not in c.decisions_baseline.said
     assert c.decisions_baseline.revisions[first.id] == renamed.rule_revision

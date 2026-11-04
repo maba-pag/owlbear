@@ -404,8 +404,7 @@ def test_an_unreadable_rule_recorded_after_the_pick_passes_approval_and_stops_th
     c.plan = Plan(tasks=[Task(id="t1", title="Add notes", scope=["packages/app"], checks=["true"])])
     c.step = Step(kind=StepKind.BUILD, task="t1")
     picking.store.write(Lock(picking.slug), c)
-    monkeypatch.setattr(runner, "_agent", lambda *_a: pytest.fail("no worker on an unreadable rule"))
-    monkeypatch.setattr(runner, "_engine", lambda *_a: pytest.fail("no worker on an unreadable rule"))
+    monkeypatch.setattr(runner, "_run", lambda *_a: pytest.fail("no worker on an unreadable rule"))
     runner._step(picking.store, Lock(picking.slug), c, c.step, picking.repo)  # noqa: SLF001
     stop = picking.change().stop
     assert (stop.kind, stop.action) == (ErrorKind.STATE, decisions_gate.FAULTY)
