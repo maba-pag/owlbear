@@ -1570,6 +1570,44 @@ def test_a_held_decision_or_rebase_that_cannot_be_checked_says_the_whole_error(
     assert str(unknown.value) == f"{where}: {whole_error}"
 
 
+@pytest.mark.parametrize("site", ["record", "lock-folder", "settle"])
+def test_a_held_record_lock_folder_or_rebase_state_that_cannot_be_read_says_the_whole_error(
+    tmp_path, monkeypatch, whole_error, site
+):
+    """A held record, the batch lock's Git folder or a failed rebase's state that cannot be read: the whole error."""
+    from owlbear_delivery_next.local_system import batch_journal  # noqa: PLC0415
+
+    def unknown(*_args: object) -> None:
+        raise DataRepoError(whole_error)
+
+    if site == "settle":
+        monkeypatch.setattr(DataRepo, "rebasing", unknown)
+        done = subprocess.CompletedProcess(["git", "rebase"], 1, "", whole_error)
+        said = DataRepo(tmp_path)._settle(done, "git rebase failed", None)  # noqa: SLF001 - the rebase report alone
+        git = f"CalledProcessError: Command '['git', 'rebase']' returned non-zero exit status 1.\n{whole_error}"
+        left = "so it was left as it is for the owner to check"
+        assert said == f"git rebase failed: {git}; DataRepoError: {whole_error}, {left}"
+        return
+    path = tmp_path / "held.json"
+    path.write_text("{")
+    monkeypatch.setattr(batch_journal, "admin", lambda *_args: path)
+    act = {
+        "record": lambda: publication_hold._load(path),  # noqa: SLF001 - the record's reader is the unit
+        "lock-folder": lambda: batch_journal.locked(SimpleNamespace()).__enter__(),
+    }[site]
+    with pytest.raises((publication_hold._UnknownError, batch_journal.JournalError)) as raised:  # noqa: SLF001
+        act()
+    cause = f"{type(raised.value.__cause__).__name__}: {raised.value.__cause__}"
+    said = {
+        "record": f"the held publication record {path} cannot be read ({cause}); check it before removing it",
+        "lock-folder": f"the git folder {path} cannot be opened for the batch lock: {cause}",
+    }[site]
+    assert (str(raised.value), type(raised.value.__cause__).__name__) == (
+        said,
+        "JSONDecodeError" if site == "record" else "NotADirectoryError",
+    )
+
+
 def test_a_spent_decision_whose_hold_git_fails_is_refused_with_git_s_whole_words(picking, failing_git, whole_error):
     """P21: spending an active project decision holds it first; a hold Git fails refuses the save, Git's words whole."""
     from owlbear_decisions import State  # noqa: PLC0415
