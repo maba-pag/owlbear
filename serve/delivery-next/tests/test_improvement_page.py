@@ -265,6 +265,7 @@ def contained(page: Page) -> None:
 
 
 @pytest.mark.browser
+@pytest.mark.timeout(90)
 def test_synthetic_retro_is_visible_as_history_without_action_buttons(tmp_path, monkeypatch, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -280,6 +281,12 @@ def test_synthetic_retro_is_visible_as_history_without_action_buttons(tmp_path, 
         props.transition(redirected, "redirected", "owner", direction="Keep the old direction")
         child = props.redrafted(redirected, {"cause": "c", "target": "agent:builder", "mechanism": "m"}, "old")
         props.reviewed(child, props.folded()[child]["evidence"], {"verdict": "survive", "publishable": TEXT})
+        partial = props.file(props.open_key("synthetic", "delivery-change", "old"), ["f-history"],
+                             kind="delivery-change", target="delivery:review", provenance="synthetic")  # fmt: skip
+        props.reviewed(partial, props.folded()[partial]["evidence"], {"verdict": "survive", "publishable": TEXT})
+        snapshot = {"destination": {"kind": "issue", "repository": "o/r", "synthetic": True}}
+        props.transition(partial, "accepted", "owner", snapshot=snapshot)
+        props.outcome(partial, "applied", step="created", artefact={"kind": "issue", "where": "o/r", "ref": "#2"})
         page = improvement(w, pds)
         old = card(page, pid)
         expect(old).to_contain_text("Historical")
@@ -294,6 +301,9 @@ def test_synthetic_retro_is_visible_as_history_without_action_buttons(tmp_path, 
         expect(history).to_contain_text("Your direction: Keep the old direction")
         expect(history).to_contain_text(f"Redrafted as {child}.")
         expect(history.get_by_role("button")).to_have_count(0)
+        expect(card(page, partial)).to_contain_text("Partly made")
+        expect(card(page, partial)).not_to_contain_text("closed at once")
+        expect(card(page, partial).get_by_role("button")).to_have_count(0)
 
 
 @pytest.mark.browser

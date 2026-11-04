@@ -35,7 +35,7 @@ function landing(d) {
   switch (d.kind) {
     case "memory": return `A pending memory in ${d.folder}, for ${d.roles?.length ? d.roles.join(", ") : "every "
       + "agent"}, recommended as a ${d.recommended} memory.`;
-    case "issue": return `An issue in ${d.repository}${d.synthetic ? ", titled [synthetic] and closed at once" : ""}.`;
+    case "issue": return `An issue in ${d.repository}${d.synthetic ? ", titled [synthetic]" : ""}.`;
     case "backlog": return d.folder ? `A backlog entry in ${d.folder}'s backlog.` : "A shared backlog entry.";
     case "case": return `A Spotter case from record ${d.record}${d.call ? `, which should have been ${d.call}` : ""}`
       + `${d.synthetic ? ", marked synthetic" : ""}, then its paid check.`;
@@ -135,7 +135,8 @@ function actions(p) {
 function made(a) {
   const { kind, where, ref, link } = a.artefact ?? {};
   const said = `${kind ?? a.step} ${ref ?? ""}${where ? ` in ${where}` : ""}`.trim();
-  return link ? html`Made: <a href=${link} target="_blank" rel="noopener">${said}</a>` : `Made: ${said}`;
+  const verb = a.step === "closed" ? "Closed" : "Made";
+  return link ? html`${verb}: <a href=${link} target="_blank" rel="noopener">${said}</a>` : `${verb}: ${said}`;
 }
 
 function outcome(p) {
