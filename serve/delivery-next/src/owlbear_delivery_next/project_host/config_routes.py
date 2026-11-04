@@ -417,6 +417,18 @@ def _read_routes(routes: APIRouter, reads: Callable[[], settings_read.Reader]) -
         return {"reads": reads().shown()}
 
 
+def _save_global(store: Store, path: Path, host: Host, body: Save, reads: settings_read.Reader) -> str:
+    """Save Global from the page; its notice also says whole when the save could not be recorded as seen."""
+    unrecorded: list[str] = []
+
+    def own(before: GlobalLayer, after: GlobalLayer) -> None:
+        # this machine's change of Global is never noticed as one from elsewhere; if it was not recorded, say so
+        unrecorded.append(reads.ledger.own(before, after))
+
+    notice = _save(store, path, GlobalLayer, body, "global: from the settings page", host, written=own)
+    return "; ".join(filter(None, [notice, *unrecorded]))
+
+
 def router(store: Store, host: Host) -> APIRouter:
     """The settings routes; the caller adds the token check."""
     routes, reads = APIRouter(), _reader(store, host)
@@ -441,9 +453,7 @@ def router(store: Store, host: Host) -> APIRouter:
     def put_global(body: Save) -> dict[str, Any]:
         if store.global_path is None:
             raise HTTPException(409, "no shared settings location is set up; run `owlbear-next data PATH`")
-        what = "global: from the settings page"
-        # this machine's change of Global is never noticed as one from elsewhere
-        return state(_save(store, store.global_path, GlobalLayer, body, what, host, written=reads().ledger.own))
+        return state(_save_global(store, store.global_path, host, body, reads()))
 
     @routes.put("/config/machine")
     def put_machine(body: Save) -> dict[str, Any]:

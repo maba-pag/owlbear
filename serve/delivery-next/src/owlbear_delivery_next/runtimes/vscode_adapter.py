@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.runtimes import ahp, readiness
 from owlbear_delivery_next.runtimes import window_files as wf
 from owlbear_delivery_next.runtimes.vscode_contract import Hooks, Outcome, StepSpec, launch_code_chat
@@ -38,14 +39,14 @@ def connect(folder: Path) -> ahp.Connection:
     """
     entry = ahp.endpoint()
     client = f"owlbear-delivery-{uuid.uuid4().hex[:8]}"
-    stale = "no agent host was published"
+    stale, cause = "no agent host was published", None
     if entry is not None:
         try:
             return ahp.connect(entry, client)
         except ahp.HostRefusedError:
             raise
         except (OSError, ahp.HostError) as exc:  # a stale endpoint: the editor that published it is gone
-            stale = f"the published agent host failed: {type(exc).__name__}: {exc}"
+            stale, cause = f"the published agent host failed: {failure(exc)}", exc
             _log.warning("%s; starting VS Code on %s", stale, folder)
     launch_code_chat(["code", str(folder)], folder)
     end = time.monotonic() + START
@@ -55,7 +56,7 @@ def connect(folder: Path) -> ahp.Connection:
         if fresh is not None and fresh != entry:
             return ahp.connect(fresh, client)
     why = f"VS Code published no agent host within {START:.0f} s; before that, {stale}"
-    raise ahp.HostError(why)
+    raise ahp.HostError(why) from cause
 
 
 @dataclass(frozen=True)
@@ -89,14 +90,14 @@ def open_chat(folder: Path, role: Effective, prompt: str, env: Env | None = None
             if (line := wf.add_harness(where)) is not None:
                 added.append(line)
         except OSError as exc:
-            raise wf.SettingsError(str(exc)) from exc
+            raise wf.SettingsError(failure(exc)) from exc
 
     try:
         conn = env.connect(folder)
         hooks = Hooks(launch=env.launch, clock=env.clock, settings=harness)
         out = Step(conn, spec, hooks).open()
     except (OSError, wf.SettingsError, ahp.HostError, subprocess.SubprocessError) as exc:
-        out = Outcome("error", f"{type(exc).__name__}: {exc}")
+        out = Outcome("error", failure(exc))
         _log.exception("the shaping chat in %s did not open", folder)
     finally:
         if close := getattr(conn, "close", None):

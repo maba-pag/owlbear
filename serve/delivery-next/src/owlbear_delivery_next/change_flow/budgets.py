@@ -160,7 +160,7 @@ def _environment(c: Change, r: StepResult, now: datetime) -> None:
     """
     cause, kind = r.cause or "", kind_of(r.cause)
     quota = cause.endswith(f":{QUOTA}")
-    sig = signature(kind, str(c.step.kind), "quota" if quota else r.reason)
+    sig = signature(kind, str(c.step.kind), "quota" if quota else r.classified or r.reason)
     b = c.budgets.causes.get(cause)
     if b is None or b.since is None or b.signature != sig:
         b = Budget(signature=sig, since=now)
@@ -185,7 +185,7 @@ def _environment(c: Change, r: StepResult, now: datetime) -> None:
 def _defect(c: Change, r: StepResult, now: datetime) -> None:
     """Retry a Delivery defect; the same signature three times in a row asks with the error."""
     cause = r.cause or ""
-    sig = signature(kind_of(cause), str(c.step.kind), r.reason)
+    sig = signature(kind_of(cause), str(c.step.kind), r.classified or r.reason)
     b = c.budgets.causes.get(cause)
     count = b.count + 1 if b and b.signature == sig else 1
     c.budgets.causes[cause] = Budget(count=count, signature=sig, task=c.step.task, at=now)
@@ -303,7 +303,7 @@ def retry(c: Change, r: StepResult, now: datetime) -> None:
         _defect(c, r, now)
         return
     limit = FLAKE_LIMIT if s.kind == StepKind.FOLLOW else RETRY_LIMIT
-    if _count(c, r.cause, now, r.score, r.reason) > limit:
+    if _count(c, r.cause, now, r.score, r.classified or r.reason) > limit:
         _exhausted(c, r, now)
     else:
         s.attempt += 1
@@ -323,7 +323,7 @@ def back(c: Change, r: StepResult, now: datetime) -> None:
     if c.tests is not None and target in curation_flow.FIXED:  # never counted, never a re-plan (TD-390)
         curation_flow.stop(c, r.reason or f"it would go back to {target}", r.cause, now)
         return
-    if _count(c, r.cause, now, r.score, r.reason) > RETRY_LIMIT:
+    if _count(c, r.cause, now, r.score, r.classified or r.reason) > RETRY_LIMIT:
         _exhausted(c, r, now)
         return
     if target == StepKind.PLAN:

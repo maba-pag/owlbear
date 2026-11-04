@@ -269,12 +269,15 @@ def _time(run: dict[str, Any]) -> str | None:
 def _base(run: dict[str, Any]) -> dict[str, Any]:
     keys = ("run", "session", "project", "name", "clone", "change", "step", "job", "ending", "stopped", "stopped_by",
             "limit", "source", "look")  # fmt: skip
-    why = (run.get("usage") or {}).get("incomplete")
+    usage = run.get("usage") or {}
+    why = usage.get("incomplete")
     incomplete = bool(why) and not run.get("settled")  # a lower bound
+    failed = incomplete and str(why) not in LOWER_BOUNDS
     return {k: run.get(k) or ("" if k != "limit" else None) for k in keys} | {
         "role": run.get("agent") or "",
         "incomplete": incomplete,
-        "failed": incomplete and str(why) not in LOWER_BOUNDS,
+        "failed": failed,
+        "why": str(usage.get("error", why if failed else "")),  # the failed read's error (#971)
     }
 
 
@@ -462,7 +465,8 @@ def _session(group: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not found and (bound := _base(run))["incomplete"]:
             for piece in credited:  # a lower bound repeating what they credited: they are lower bounds too
                 piece["incomplete"] = True
-                piece["failed"] = piece["failed"] or (bound["failed"] and not own)
+                if bound["failed"] and not own and not piece["failed"]:
+                    piece["failed"], piece["why"] = True, bound["why"]
         if not found and own:
             # nothing spent, or nothing known: still a run, with its ending and stop
             zero = {f: (0.0 if known else None) if f == "credits" else 0.0 for f in FIELDS}

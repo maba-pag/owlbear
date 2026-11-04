@@ -530,3 +530,27 @@ def test_a_long_shared_git_change_stops_with_its_whole_reason(store, change_repo
     c = reviewed(store, change_repo)
     expected = f"a read-only step changed shared Git settings: added config owlbear.note={value}"
     assert (c.outcome.exit, c.stop.reason) == (Exit.STOP, expected)
+
+
+@pytest.mark.parametrize("read", ["_shared", "_refs"])
+def test_a_read_only_check_that_cannot_read_says_git_s_whole_error(store, change_repo, monkeypatch, whole_error, read):
+    """#971: the check after the session says Git's whole refusal, its stderr and notes, in the step's outcome."""
+    refused = subprocess.CalledProcessError(128, ["git", "config"], stderr=f"{whole_error}\n")
+    refused.add_note("NOTE-MARK")
+
+    def broken(*_a):
+        raise refused
+
+    reviewer(monkeypatch, lambda _cfg: monkeypatch.setattr(disposable, read, broken))  # the copy was made first
+    c = reviewed(store, change_repo)
+    said = (
+        f"CalledProcessError: Command '['git', 'config']' returned non-zero exit status 128.\n{whole_error}\nNOTE-MARK"
+    )
+    if read == "_shared":
+        reason = (
+            f"a read-only step changed shared Git settings: the shared Git config and hooks could not be read: {said}"
+        )
+        assert (c.outcome.exit, c.stop.reason) == (Exit.STOP, reason)
+    else:
+        reason = f"a read-only step changed the repository: its refs could not be read: {said}"
+        assert (c.outcome.exit, c.outcome.reason) == (Exit.RETRY, reason)

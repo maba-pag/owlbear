@@ -357,8 +357,10 @@ class FakeGitHub:
         self.issues, self.labels, self.comments, self.calls, self.hidden = {}, {}, [], [], set()
         self.down, self.fail_writes, self.tick, self.visibility = down, False, 0, "private"
         self.said = ""  # what gh prints when GitHub is down or refuses a write, in place of its usual line
+        self.ran = []  # every gh command, failed ones too
 
     def __call__(self, argv, data, _timeout, _cwd, _env):
+        self.ran.append(argv)
         if self.down:
             said = self.said or "error connecting to api.github.com"
             return subprocess.CompletedProcess(argv, 1, b"", f"{said}\n".encode())

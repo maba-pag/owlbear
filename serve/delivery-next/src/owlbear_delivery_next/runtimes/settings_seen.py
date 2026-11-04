@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 from pydantic import Field, ValidationError
 
 from owlbear_delivery_next.change_contracts.models import Record
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
@@ -138,10 +139,11 @@ class Ledger:
             self._write(seen)
             return seen
 
-    def own(self, before: Layer | None, after: Layer) -> None:
+    def own(self, before: Layer | None, after: Layer) -> str:
         """Take this machine's own save of Global as seen, so only changes made elsewhere are noticed.
 
-        It runs right after the save's write; a failure to record it is said, never the save's failure.
+        It runs right after the save's write; a failure to record it is said and returned for the save's notice, never
+        the save's failure.
         """
         old, new = flatten(before), flatten(after)
         with self._lock:
@@ -149,12 +151,15 @@ class Ledger:
             self._owned |= updates
             seen = self._read()[0]
             if seen.seen is None:
-                return
+                return ""
             seen.seen = {k: v for k, v in (seen.seen | updates).items() if v is not None}
             try:
                 self._write(seen)
             except OSError as exc:
-                self.say(f"settings read: the saved Global values could not be recorded as seen: {exc}")
+                said = f"the saved Global values could not be recorded as seen: {failure(exc)}"
+                self.say(f"settings read: {said}")
+                return said
+            return ""
 
     def dismiss(self, ids: Collection[str]) -> None:
         """Remove the notices with these ids; unknown ids are ignored."""

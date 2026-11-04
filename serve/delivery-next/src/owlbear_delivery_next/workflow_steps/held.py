@@ -66,6 +66,7 @@ def dump_run(run: Run) -> HeldRun:
         session_id=run.session_id,
         ending=run.ending,
         detail=run.detail,
+        classified=run.classified,
         head=run.head,
         changed=run.changed,
         payload={"model": type(p).__name__, "args": p.model_dump(mode="json")} if p else None,
@@ -108,6 +109,7 @@ def _unloaded(data: HeldRun) -> Run:
         data.session_id,
         ending=data.ending,  # type: ignore[arg-type] - checked by the ending dispatch, which refuses unknown ones
         detail=data.detail,
+        classified=data.classified,
         head=data.head,
         changed=list(data.changed),
         denials=list(data.denials),

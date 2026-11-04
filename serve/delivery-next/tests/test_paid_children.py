@@ -28,7 +28,9 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_contracts.round_records import PLAN, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
 from owlbear_delivery_next.workflow_steps import disposable, held, pending_child, plan_round, sessions
@@ -483,15 +485,19 @@ def test_a_child_run_no_storage_keeps_is_printed_and_reported_never_claimed(tmp_
             raise OSError(msg)
         return real_write(self, lock, change)
 
+    refused = []
+
     def no_capture(path, _text):
-        msg = f"{path.name} refused"
-        raise OSError(msg)
+        refused.append(error := OSError(f"{path.name} refused"))
+        error.add_note("the capture's own note")
+        raise error
 
     monkeypatch.setattr(Store, "write", write)
     monkeypatch.setattr(pending_child, "atomic_write", no_capture)
     with pytest.raises(OSError, match="change refused") as failed:
         restart(tmp_path, change_repo)
-    assert any("could not be kept" in note for note in failed.value.__notes__)
+    lost = f"OSError: {refused[0]}\nthe capture's own note"  # #971: the capture's failure whole
+    assert f"the paid child's run could not be kept ({lost}); it is printed above" in failed.value.__notes__
     printed = [json.loads(line) for line in capsys.readouterr().out.splitlines() if "child-unkept" in line]
     assert [p["child"]["run"]["session_id"] for p in printed] == paid.children
     monkeypatch.setattr(Store, "write", real_write)
@@ -836,11 +842,47 @@ def test_a_kept_child_that_no_longer_loads_retries_with_its_whole_reason(
     paid = settlement_fails(tmp_path, change_repo, monkeypatch)
     paid.verdicts.append(passing())
 
+    trigger = "the connection timed out once the quota of credits was read"  # words retries classify (R7)
+
     def unloadable(_data):
-        raise ValueError(whole_error)
+        error = ValueError(whole_error)
+        error.add_note(trigger)
+        raise error
 
     monkeypatch.setattr(pending_child.held, "restored", unloadable)
     store = restart(tmp_path, change_repo)
-    expected = f"its kept result no longer loads: ValueError: {whole_error}"
-    assert (store.read("c1").outcome.exit, store.read("c1").outcome.reason) == (Exit.RETRY, expected)
+    expected = f"its kept result no longer loads: ValueError: {whole_error}\n{trigger}"
+    outcome = store.read("c1").outcome
+    assert (outcome.exit, outcome.reason, outcome.cause) == (Exit.RETRY, expected, "tooling:review:sdk")
     assert [e["detail"] for e in store.events("c1") if e.get("kind") == "plan-challenge"][-1] == expected
+
+
+@pytest.mark.parametrize(("ending", "error"), [
+    ("error", RuntimeError("bad request")),
+    ("deadline", TimeoutError("no answer within 60 s")),
+])  # fmt: skip
+def test_a_kept_child_s_failure_retries_after_a_restart_as_it_did_live(
+    tmp_path, change_repo, whole_error, ending, error
+):
+    """#971 R7: a kept child's whole error keeps the text its retries classified live, so a restart retries it alike."""
+    trigger = "the connection dropped once the quota of credits was read"  # words retries classify
+    error.add_note(f"{whole_error}\n{trigger}")
+    classified = f"{type(error).__name__}: {error}" if ending == "error" else str(error)  # as sdk_adapter keeps it
+    live = Run("s1", ending=ending, detail=failure(error), classified=classified, termination=DONE, usage=CHILD)
+    live.model_check = "verified"
+    kept = PendingChild(label="plan-challenge", parent="plan v1", brief=1, run=held.dump_run(live))
+    change = made(change_repo)
+    change.pending_child = PendingChild.model_validate_json(kept.model_dump_json())  # as a restart reads it
+
+    def never(_keep):
+        pytest.fail("a kept child never runs again")
+
+    now = datetime.now(UTC)
+    store = Store(tmp_path / "store")
+    reloaded, run = pending_child.child(store, Lock("c1"), change, ("plan-challenge", "plan v1"), never)
+    assert run.detail == live.detail
+    said = session_result.to_result(live, K.REVIEW, now, change.step.kind)
+    cause = "tooling:review:sdk" if ending == "error" else "liveness:review:deadline"
+    assert (reloaded, said.cause) == (said, cause)
+    after, before = loop.apply(change, reloaded, now), loop.apply(change, said, now)
+    assert (after.outcome, after.budgets) == (before.outcome, before.budgets)

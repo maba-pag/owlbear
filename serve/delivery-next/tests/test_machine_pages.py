@@ -501,6 +501,50 @@ def test_the_brief_offers_a_new_shaping_chat_and_says_how_it_went(tmp_path: Path
 
 
 @pytest.mark.browser
+def test_a_shaping_chat_that_could_not_open_says_the_host_s_whole_error(
+    tmp_path: Path, monkeypatch, pds, whole_error
+) -> None:
+    """#971: a refused upgrade of the published agent host reaches the shaping launch's line whole, its note too."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+    from websockets.exceptions import InvalidHandshake  # noqa: PLC0415 - the library's own error
+
+    from owlbear_delivery_next.runtimes import ahp, readiness, vscode_adapter  # noqa: PLC0415
+
+    refused = InvalidHandshake(whole_error)
+    refused.add_note("NOTE-MARK")
+
+    def upgrade(*_a: object, **_k: object) -> None:
+        raise refused
+
+    monkeypatch.setattr(api, "LAUNCH_GAP", 0)
+    monkeypatch.setattr(api, "create_app", partial(api.create_app, which=lambda _n: "/bin/code"))
+    monkeypatch.setattr(
+        ahp, "endpoint", lambda: {"endpoint": {"path": str(tmp_path / "h.sock")}, "connectionToken": "t"}
+    )
+    monkeypatch.setattr(ahp, "unix_connect", upgrade)
+    monkeypatch.setattr(readiness, "shaper_path", lambda _home: None)
+    monkeypatch.setattr(vscode_adapter, "launch_code_chat", lambda _args, _cwd: None)
+    monkeypatch.setattr(vscode_adapter, "START", 0.0)
+    alpha = registry.register(clone(tmp_path / "alpha", "same"))
+    shaping(Path(alpha.path), "Alpha brief")
+    detail = (
+        "HostError: VS Code published no agent host within 0 s; before that, the published agent host failed: "
+        f"HostError: upgrade refused: InvalidHandshake: {whole_error}\nNOTE-MARK"
+    )
+    with browsing(monkeypatch, pds) as (page, base):
+        broke = errors(page)
+        opened(page, base, alpha.id)
+        page.locator("#detail").get_by_role("button", name=REVISE).click()
+        pds.answer(page, "Open the chat")
+        command = page.locator("#started code")
+        expect(command).to_be_visible(timeout=15000)
+        said = f"the Copilot chat did not start (error: {detail}); run this in {alpha.path}"
+        expected = f"Could not open the chat to revise c1: {said}. Copy this command: {command.text_content()}"
+        assert page.locator("#started").text_content() == expected
+        assert broke == []
+
+
+@pytest.mark.browser
 def test_a_brief_that_cannot_take_a_revision_shows_no_button(tmp_path: Path, monkeypatch, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -1595,7 +1639,7 @@ def test_a_long_unverified_session_end_shows_whole_on_changes(tmp_path: Path, mo
         runner._step(store, lock, c, c.step, path)  # noqa: SLF001
     why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
     said = [
-        " ".join(f"Building stopped: {why}".split()),
+        " ".join(f"Building stopped: {why}; the session failed".split()),  # #971: and the session's own error
         " ".join(f"Tried to force the session to stop: {stopped}".split()),
     ]
     present = [True]  # the host finds process 9 until the owner ends it
@@ -1614,6 +1658,43 @@ def test_a_long_unverified_session_end_shows_whole_on_changes(tmp_path: Path, mo
         assert lines.all_text_contents() == said  # the step's line keeps why once the host cleared the stop
         page.set_viewport_size({"width": 390, "height": 800})
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
+        assert broke == []
+
+
+@pytest.mark.browser
+def test_a_failed_sdk_step_s_whole_error_shows_in_recent_activity(
+    tmp_path: Path, monkeypatch, pds, whole_error
+) -> None:
+    """#971 P22: a session that failed says its whole error, JSON-RPC data and notes included, on its step's line."""
+    from copilot._jsonrpc import JsonRpcError  # noqa: PLC0415 - the SDK's own error, as a request raises it
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.runtimes import sdk_spend  # noqa: PLC0415
+
+    alpha = registry.register(clone(tmp_path / "alpha", "flip"))
+    path = Path(alpha.path)
+    store = Store.open(path)
+    names = Names(branch="owlbear/flip", target="main", worktree=str(path))
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
+    c = Change(slug="flip", brief=Brief(version=1), plan=plan, step=Step(kind=StepKind.BUILD, task="t1"), names=names)
+    exc = JsonRpcError(-32603, whole_error, {"marker": "DATA-MARK"})
+    exc.add_note("NOTE-MARK")
+    detail = sdk_spend.failed(exc)
+
+    async def failed(cfg):
+        return Run(cfg.session_id, "error", None, detail=detail, termination=processes.Termination(confirmed=True))
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", failed)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: path)
+    with store.lock("flip") as lock:
+        store.write(lock, c)
+        runner._step(store, lock, c, c.step, path)  # noqa: SLF001
+    with browsing(monkeypatch, pds, details=True) as (page, base):  # Recent activity is a detail
+        broke = errors(page)
+        opened(page, base, alpha.id, "flip")
+        lines = page.locator("#detail .log li > span")
+        expect(lines.first).to_contain_text("DATA-MARK")
+        assert lines.all_text_contents() == [" ".join(f"Building will try again: {detail}".split())]
         assert broke == []
 
 
@@ -3463,8 +3544,10 @@ def test_a_long_step_error_shows_whole_on_the_status_line(tmp_path: Path, monkey
     """#895 K1: gh's whole multiline stderr reaches the engine step's event and outcome."""
     store = Store(tmp_path / "store")
     store.write_profile(Profile(entries={profile.REPO: ProfileEntry(state="known", value="o/r")}))
+    ran = []
 
     def refused(argv, _body, _timeout, _cwd, _env):
+        ran.append(argv)
         return subprocess.CompletedProcess(argv, 1, b"", f"gh: {whole_error}\n".encode())
 
     monkeypatch.setattr(runner.profile, "provider", lambda _p, r, _w: GhProvider(r, writer=None, runner=refused))
@@ -3472,7 +3555,8 @@ def test_a_long_step_error_shows_whole_on_the_status_line(tmp_path: Path, monkey
         c = Change(slug="c1", step=Step(kind=StepKind.FOLLOW), names=Names(pr=7))
         store.write(lock, c)
         runner._engine(store, lock, c, tmp_path)  # noqa: SLF001
-    reason = f"ProviderError: read_pull_request: {whole_error}"
+    gh = f"CalledProcessError: Command '{ran[-1]}' returned non-zero exit status 1."
+    reason = f"ProviderError: read_pull_request: {whole_error}\n{gh}"
     step = next(e for e in store.events("c1") if e.get("event") == "step")
     assert (step["exit"], step["reason"], store.read("c1").outcome.reason) == (Exit.RETRY, reason, reason)
     page = TestClient(api.create_app(store, "tok", Host(store, tmp_path)), base_url="http://127.0.0.1",
@@ -3540,8 +3624,10 @@ def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monk
 
     alpha = registry.register(clone(tmp_path / "alpha", "c1"))
     store = Store.open(Path(alpha.path))
+    ran = []
 
     def refused(argv, _body, _timeout, _cwd, _env):
+        ran.append(argv)
         return subprocess.CompletedProcess(argv, 1, b"", f"gh: {whole_error}\n".encode())
 
     pr = PullRequest(
@@ -3560,7 +3646,8 @@ def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monk
         )
         publish.labelled(ctx, store.read("c1"), pr, ["owlbear"])
     (event,) = [e for e in store.events("c1") if e["event"] == "labels-failed"]
-    reason = f"ProviderError: add_labels: {whole_error}"
+    gh = f"CalledProcessError: Command '{ran[-1]}' returned non-zero exit status 1."
+    reason = f"ProviderError: add_labels: {whole_error}\n{gh}"
     assert event["reason"] == reason
     with browsing(monkeypatch, pds, details=True) as (page, url):
         said = errors(page)
@@ -3587,6 +3674,7 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
     refused = ["changed: /Users/o/app/src/main.py is outside the task", whole_error]
     lint = ["lint: ruff found problems in /Users/o/app/src/main.py", "lint: biome broke on web/app.json"]
     failed = f"RuntimeError: {whole_error}"
+    install = f"`npm ci` did not start: PermissionError: [Errno 13] {whole_error}\nNOTE-MARK"
     events = [
         {"event": "tool", "tool": "view", "summary": "Read /Users/o/app/src/main.py"},
         {"event": "workspace-kept", "path": "/Users/o/.owlbear/worktrees/app-c1", "reason": kept},
@@ -3598,6 +3686,7 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
         {"event": "tool", "tool": "submit_result", "accepted": False, "errors": refused},
         {"event": "lint-unresolved", "errors": lint},
         {"event": "request-failed", "operation": "tasks.list", "error": failed},
+        {"event": "ro-install", "package": "app", "command": "npm ci", "seconds": 0.1, "ok": False, "error": install},
     ]
     with store.lock("c1") as lock:
         for e in events:
@@ -3613,6 +3702,7 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
         "Submitted its result": f"Submitted its result (refused): {'; '.join(refused)}",
         "Lint problems": f"Lint problems left unresolved: {'; '.join(lint)}",
         "Request tasks.list": f"Request tasks.list failed ({failed})",
+        "npm ci in app": f"npm ci in app failed: {install}",
     }
     with browsing(monkeypatch, pds, details=True) as (page, url):
         said = errors(page)
@@ -3769,8 +3859,8 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
         page, pack, c.brief.visual[0], width=1280, url="http://127.0.0.1:9/", browser="", cwd=tmp_path
     )
     why = (
-        f"not scanned: the page refused the design detector: RuntimeError: {whole_error}; "
-        f"the engine's own browser: {failed}"
+        f"not scanned: DetectorError: the page refused the design detector: RuntimeError: {whole_error}; "
+        f"the engine's own browser: DetectorError: {failed}"
     )
     out = capsys.readouterr().out  # an earlier test's machine may still say it stopped, between these lines too
     assert all(

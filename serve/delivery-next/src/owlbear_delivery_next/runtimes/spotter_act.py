@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, Any
 from copilot.session import AgentMessageSource
 
 from owlbear_delivery_next.improvement import acts, spotter
+from owlbear_delivery_next.runtimes import sdk_spend
 from owlbear_delivery_next.runtimes.sdk_teardown import CALL, call
 
 if TYPE_CHECKING:
@@ -108,7 +109,7 @@ class StepActor:
                 return
             sent = await self._called(record, self.session.send(note, source=SOURCE), NOTE)
         except Exception as exc:
-            failed = UNRESUMED.format(error=f"{type(exc).__name__}: {exc}")
+            failed = UNRESUMED.format(error=sdk_spend.failed(exc))
             self.step.gate.finish("spotter-ask", None, f"{HARM.format(note=act.note)} {failed}" if act.harm else failed)
             raise
         await self._confirmed(record, sent)

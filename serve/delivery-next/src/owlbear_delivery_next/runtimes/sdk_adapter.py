@@ -20,6 +20,7 @@ from copilot.rpc import PermissionDecisionApproveOnce, PermissionDecisionReject
 from owlbear_delivery_next.change_contracts import tools, user_config
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import decide, identities, view
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import chatlogs
 from owlbear_delivery_next.improvement.chatlogs import around as chatlogged
 from owlbear_delivery_next.local_system import pds_skill, preload, processes
@@ -182,8 +183,8 @@ class _Step(StepTools):
         who = {"session": self.run.session_id, "role": role_of(self.cfg)} if self.session is not None else {}
         self.cfg.journal.event({"at": datetime.now(UTC).isoformat(timespec="seconds"), **who, **event})
 
-    def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "") -> None:
-        self.gate.finish(ending, payload, detail)
+    def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "", classified: str = "") -> None:
+        self.gate.finish(ending, payload, detail, classified)
 
     def on_event(self, ev: Any) -> None:  # noqa: ANN401, C901 - an SDK session event; one branch per family
         kind = getattr(ev.type, "value", str(ev.type))
@@ -357,7 +358,9 @@ class _Step(StepTools):
         self.log(event="session-missing", previous=sorted(self.cfg.previous), gone=prior.confirmed)
         if not prior.confirmed:
             self.run.pids.update(self.cfg.previous)
-            self.finish("missing", detail="session missing; earlier processes are not observed gone")
+            states = ((prior.survivors, "still present"), (prior.unknown, "in an unknown state"))
+            seen = "; ".join(f"{', '.join(map(str, pids))} {state}" for pids, state in states if pids)
+            self.finish("missing", detail=f"session missing; earlier processes are not observed gone: {seen}")
         elif (sid := self.cfg.journal.replaced()) is None:
             self.finish("missing", detail="session missing again")
         else:
@@ -388,7 +391,8 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
             events = await _call(session.get_events(), "transcript read")
             watch_feed.spotted(st.feed, lambda s: s.history(events))  # the task and evidence it had before
         except Exception as exc:  # noqa: BLE001 - an unobserved transcript never authorizes a resend
-            st.finish("unread", detail=f"transcript read failed ({type(exc).__name__}); the answer was not resent")
+            said = "transcript read failed ({}); the answer was not resent"
+            st.finish("unread", detail=said.format(sdk_spend.failed(exc)), classified=said.format(type(exc).__name__))
             return session
         if lessons.sent(events, message):
             message, resent = step_decisions.resumed(step_input.CONTINUE), False
@@ -448,10 +452,10 @@ async def _run(st: _Step) -> Run:
                     session = await _open(client, st)
                     if session is not None:
                         await st.wait(session)
-            except TimeoutError as exc:
-                st.finish("deadline", detail=str(exc) or "step deadline")
+            except TimeoutError as exc:  # retries classify its message alone, as before (R7)
+                st.finish("deadline", detail=failure(exc) if str(exc) else "step deadline", classified=str(exc))
             except Exception as exc:  # noqa: BLE001 - any SDK failure ends the step with retry after teardown
-                st.finish("error", detail=f"{type(exc).__name__}: {exc}")
+                st.finish("error", detail=sdk_spend.failed(exc), classified=f"{type(exc).__name__}: {exc}")
             session = st.session
             st.run.usage = await usage_read(session, cfg.model) if session else {}
             limit_reached(st.run, cfg.credit_limit)

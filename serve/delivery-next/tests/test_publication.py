@@ -40,7 +40,10 @@ from owlbear_delivery_next.change_contracts.round_records import RoundLoop, Roun
 from owlbear_delivery_next.change_flow import budgets, delivery_target, loop, round_flow, worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git import access as git_access
+from owlbear_delivery_next.git import remote_git
 from owlbear_delivery_next.git.access import Access
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify_write_readback, read_remote_ref
 from owlbear_delivery_next.github import account, gh_queue, merge_offer
 from owlbear_delivery_next.github import provider as provider_contract
@@ -441,12 +444,14 @@ def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_m
     saving = cx.store.write_profile
 
     def locked(_profile) -> None:
-        raise SharedError(whole_error)
+        busy = SharedError(whole_error)
+        busy.add_note("NOTE-MARK")
+        raise busy
 
     cx.store.write_profile = locked
     assert follow.declared(cx, c, gh.pr, StepKind.MERGE) == ((), None)  # the answer holds though unsaved
     assert [e["reason"] for e in cx.store.events(c.slug) if e.get("event") == "profile-not-saved"] == [
-        f"SharedError: {whole_error}"
+        f"SharedError: {whole_error}\nNOTE-MARK"  # #971: its notes too
     ]
     cx.store.write_profile, cx.profile = saving, p
     names, held = follow.declared(cx, c, gh.pr, StepKind.MERGE)
@@ -1253,7 +1258,9 @@ def test_a_pr_gets_the_projects_labels_once_and_the_marker_line_follows_its_swit
     def add_labels(repo, number, labels):
         added.append((repo, number, labels))
         if fails:
-            raise ProviderError(FailureCode.NOT_FOUND, "add_labels", "no such label", retry_safe=True)
+            refused = ProviderError(FailureCode.NOT_FOUND, "add_labels", "no such label", retry_safe=True)
+            refused.add_note("NOTE-MARK")
+            raise refused
 
     gh.find_pull_request, gh.create_pull_request, gh.add_labels = (lambda *_a: gh.pr), create, add_labels
     cx = ctx(tmp_path, gh)
@@ -1270,8 +1277,9 @@ def test_a_pr_gets_the_projects_labels_once_and_the_marker_line_follows_its_swit
     gh.pr = gh.pr.model_copy(update={"draft": False})  # someone marked it ready meanwhile
     assert publish.pull_request(cx, c, A).number == 7  # the next runner
     assert (added, "Opened by OwlBear Delivery" in bodies[0]) == ([("o/r", 7, ["release:minor"])], False)
-    said = {e["event"]: (e["pr"], e["labels"]) for e in cx.store.events(c.slug) if "labels" in e}
-    assert said == {"labels-failed" if fails else "labels": (7, ["release:minor"])}
+    said = {e["event"]: (e["pr"], e["labels"], e.get("reason")) for e in cx.store.events(c.slug) if "labels" in e}
+    why = "ProviderError: add_labels: no such label\nNOTE-MARK" if fails else None  # #971: its notes too
+    assert said == {"labels-failed" if fails else "labels": (7, ["release:minor"], why)}
     publish.pull_request(cx, cx.store.read(c.slug), A)  # a runner that died right after labelling reads it back
     assert (len(added), cx.store.read(c.slug).names.labelled) == (1, 7)  # never again on this PR
     cleared = {"pr_labels": None, "pr_marker": None}
@@ -1766,17 +1774,27 @@ def test_cleanup_removes_the_change_s_read_only_worktree_with_its_own(worktree_w
     assert not any("note.txt" in p for p in result.preserved)
 
 
-def test_failed_preservation_stops_and_leaves_the_worktree_untouched(worktree_with_work, tmp_path, monkeypatch):
+@pytest.mark.parametrize("step", ["inventory", "preserve"])
+def test_failed_preservation_stops_and_leaves_the_worktree_untouched(
+    worktree_with_work, tmp_path, monkeypatch, whole_error, step
+):
+    """#971: Git's whole refusal (its stderr and notes) is the stop's reason, at either stage."""
     clone, wt = worktree_with_work
+    refused = subprocess.CalledProcessError(128, ["git", "status"], stderr=f"{whole_error}\n")
+    refused.add_note("NOTE-MARK")
 
     def broken(*_args):
-        raise cleanup.PreservationError(wt)
+        raise refused
 
-    monkeypatch.setattr(cleanup, "preserve", broken)
+    monkeypatch.setattr(cleanup, step, broken)
     c = change(StepKind.CLEANUP, worktree=str(wt))
     c.names.branch, c.names.pr = "owlbear/c2", None
     _, result = cleanup.run(ctx(tmp_path, FakeGh(pr()), repo=clone), c)
-    assert result.exit == Exit.STOP
+    said = (
+        f"CalledProcessError: Command '['git', 'status']' returned non-zero exit status 128.\n{whole_error}\nNOTE-MARK"
+    )
+    reason = f"could not {'inventory' if step == 'inventory' else 'save'} {wt}: {said}"
+    assert (result.exit, result.reason, result.stop.reason) == (Exit.STOP, reason, reason)
     assert result.stop.action.startswith(f"Copy or delete {wt}")
     assert (wt / "new.txt").read_text() == "untracked\n"
     assert (wt / "kept.txt").exists()
@@ -2233,7 +2251,9 @@ def test_a_refused_reopen_is_logged_with_its_whole_error(tmp_path, clone, whole_
 
     class Refusing(FakeGh):
         def reopen_pull_request(self, _repo, _number):
-            raise ProviderError(FailureCode.CONFLICT, "reopen_pull_request", whole_error, retry_safe=True)
+            refused = ProviderError(FailureCode.CONFLICT, "reopen_pull_request", whole_error, retry_safe=True)
+            refused.add_note("NOTE-MARK")
+            raise refused
 
     gh = Refusing(pr(head=head, state="closed"))
     c, _ = loop.schedule(change(StepKind.FOLLOW, worktree=str(clone)), [], NOW, "closed")
@@ -2241,7 +2261,7 @@ def test_a_refused_reopen_is_logged_with_its_whole_error(tmp_path, clone, whole_
     on = ctx(tmp_path, gh, prof(**entries, **{profile.PUSH: ProfileEntry(state="known", value="yes")}))
     c, result = follow.run(on, c)
     (event,) = [e for e in on.store.events("c1") if e.get("event") == "reopen"]
-    assert (result.exit, event["error"]) == (Exit.ASK, f"ProviderError: reopen_pull_request: {whole_error}")
+    assert (result.exit, event["error"]) == (Exit.ASK, f"ProviderError: reopen_pull_request: {whole_error}\nNOTE-MARK")
 
 
 def test_a_silent_rejecting_pre_push_hook_becomes_a_builder_fix_after_readback(clone):
@@ -3151,7 +3171,141 @@ def test_a_failed_fetch_keeps_gits_whole_output(clone, whole_error, monkeypatch)
 
     monkeypatch.setattr(engine, "run_remote_git", refused)
     result = engine.needs_target(c, clone, "greet() exists only on main", NOW, Writer.rule(clone))
-    assert (result.exit, result.reason) == (Exit.RETRY, f"RemoteGitFailed: fetch of main failed: {whole_error}")
+    spec = "+refs/heads/main:refs/remotes/origin/main"
+    ran = ("fetch", "--quiet", "--no-tags", "origin", spec)
+    said = f"RemoteGitFailed: fetch of main failed: {whole_error}\n"  # the stderr is said once, after the command
+    said += f"CalledProcessError: Command '{ran}' returned non-zero exit status 1."
+    assert (result.exit, result.reason) == (Exit.RETRY, said)
+
+
+def _remote_failures(clone: Path, monkeypatch, whole_error: str) -> dict[str, Exception]:
+    """Each remote Git failure whose detail stays the same while Git said more; its output names the network."""
+    said = b"fatal: unable to access 'https://github.com/o/r/': Connection timed out\n"
+
+    def refused(_path, argv, **_k):
+        return subprocess.CompletedProcess(argv, 128, b"", said)
+
+    def invalid(_path, argv, **_k):
+        return subprocess.CompletedProcess(argv, 0, said, b"")
+
+    def slow(argv, **_k):
+        raise subprocess.TimeoutExpired(argv, 5, output=said)
+
+    def no_remote(argv, **_k):
+        return subprocess.CompletedProcess(argv, 2, f"OUT-BEGIN\n{whole_error}\nOUT-END".encode(), NO_REMOTE.encode())
+
+    found: dict[str, Exception] = {}
+    for name, kind in (("read-timeout", "read"), ("write-timeout", "write")):
+        found[name] = _stalled(clone, monkeypatch, kind, stalled_streams(whole_error))
+    for name, ran in (("refused", refused), ("invalid", invalid)):
+        monkeypatch.setattr(remote_git, "run_remote_git", ran)
+        with pytest.raises(remote_git.RemoteGitFailed) as raised:
+            read_remote_ref(clone, "origin", "refs/heads/CMD-MARK", access=Access.LOCAL)
+        found[name] = raised.value
+    found["write"] = RemoteGitWriteUnknown(
+        "remote Git write did not confirm its outcome", timed_out=False,
+        result=subprocess.CompletedProcess(["git", "push", "origin", "CMD-MARK"], 1, b"", said),
+    )  # fmt: skip
+    with monkeypatch.context() as m:
+        m.setattr(git_access.subprocess, "run", no_remote)
+        with pytest.raises(remote_git.RemoteGitError) as raised:
+            Access("ada", "chosen", "github.com", "tok", "gh").destinations(clone, "CMD-MARK", 5)
+    found["urls-refused"] = raised.value
+    monkeypatch.setattr(git_access.subprocess, "run", slow)
+    with pytest.raises(remote_git.RemoteGitError) as raised:
+        Access("ada", "chosen", "github.com", "tok", "gh").destinations(clone, "origin", 5)
+    found["urls"] = raised.value
+    return found
+
+
+NO_REMOTE = "error: No such remote 'CMD-MARK'"
+
+
+def stalled_streams(whole_error: str) -> tuple[str, str]:
+    """What a stalled remote Git printed before its bound: two long streams, each with its own marks."""
+    return f"OUT-BEGIN\n{whole_error}\nOUT-END", "ERR-BEGIN\nConnection timed out\nERR-END"
+
+
+def _stalled(clone: Path, monkeypatch, kind: str, streams: tuple[str, str]) -> Exception:
+    """A remote Git command that printed some of its output, then passed its bound."""
+
+    class Stalled:
+        pid = 0
+
+        def __init__(self, command, **_k) -> None:
+            self.args = command
+
+        def communicate(self, timeout=None):
+            raise subprocess.TimeoutExpired(self.args, timeout, streams[0].encode(), streams[1].encode())
+
+    with monkeypatch.context() as m:
+        m.setattr(remote_git.subprocess, "Popen", Stalled)
+        m.setattr(remote_git, "_terminate_group", lambda _process: None)
+        m.setattr(remote_git, "_configured_ssh_command", lambda *_a: None)
+        m.setattr(Access, "destinations", lambda *_a: [])
+        with pytest.raises(remote_git.RemoteGitError) as raised:
+            remote_git.run_remote_git(clone, ("fetch", "origin"), kind=kind, access=Access.LOCAL)
+    return raised.value
+
+
+@pytest.mark.parametrize(
+    "which", ["refused", "invalid", "write", "urls", "urls-refused", "read-timeout", "write-timeout"]
+)
+def test_a_remote_git_failure_is_whole_and_retries_as_its_detail_always_did(clone, monkeypatch, whole_error, which):
+    """#971 R7: the reason says what Git printed, but the cause and the wait still read the detail alone: Git
+    saying "Connection timed out" never turns a defect into a network episode."""
+    exc = _remote_failures(clone, monkeypatch, whole_error)[which]
+    out, err = stalled_streams(whole_error)
+    said = "fatal: unable to access 'https://github.com/o/r/': Connection timed out"
+    git_url = (resolve_git_executable(), "-C", str(clone), "remote", "get-url", "--push", "--all", "origin")
+    fetch = (resolve_git_executable(), "-C", str(clone), "fetch", "origin")
+    ls = ("ls-remote", "--exit-code", "--refs", "origin", "refs/heads/CMD-MARK")
+    push = ["git", "push", "origin", "CMD-MARK"]
+    no_remote = (*git_url[:-1], "CMD-MARK")
+    expected = {
+        "refused": "RemoteGitFailed: remote ref could not be observed\n"
+        f"CalledProcessError: Command '{ls}' returned non-zero exit status 128.\n{said}",
+        "invalid": f"RemoteGitFailed: remote ref response is invalid\nCommand '{ls}' returned exit status 0.\n{said}",
+        "write": "RemoteGitWriteUnknown: remote Git write did not confirm its outcome\n"
+        f"CalledProcessError: Command '{push}' returned non-zero exit status 1.\n{said}",
+        "urls-refused": f"RemoteGitError: the push URLs of CMD-MARK in {clone} could not be read: {NO_REMOTE}\n"
+        f"CalledProcessError: Command '{no_remote}' returned non-zero exit status 2.\n"
+        f"stderr:\n{NO_REMOTE}\nstdout:\nOUT-BEGIN\n{whole_error}\nOUT-END",
+        "urls": f"RemoteGitError: the push URLs of origin in {clone} could not be read in 5 s\n"
+        f"TimeoutExpired: Command '{git_url}' timed out after 5 seconds\n{said}",
+    } | {
+        f"{kind}-timeout": f"{name}: remote Git {kind} exceeded 120 s\nTimeoutExpired: Command '{fetch}' timed out "
+        f"after 120.0 seconds\nstderr:\n{err}\nstdout:\n{out}"
+        for kind, name in (("read", "RemoteGitTimeout"), ("write", "RemoteGitWriteUnknown"))
+    }
+    assert failures.transient(str(exc)) is None  # the detail alone, as classified before #971
+    result = engine.failed(change(StepKind.BUILD), exc, NOW)
+    error = ErrorKind.NETWORK if which.endswith("timeout") else ErrorKind.TOOLING  # by its type, as before
+    cause = failures.cause_key(error, StepKind.BUILD, "git")
+    assert (result.exit, result.cause, result.wake_at) == (Exit.RETRY, cause, NOW + timedelta(minutes=1))
+    assert result.reason == expected[which]
+
+
+@pytest.mark.parametrize("which", ["account", "credential", "conflict"])
+def test_a_provider_failure_the_owner_handles_says_its_whole_error(whole_error, which):
+    """#971: the question or stop names GitHub's whole error, notes included, beside the owner's words."""
+    exc = {
+        "account": account.AccountMissing(whole_error),
+        "credential": ProviderError(FailureCode.AUTHENTICATION_REQUIRED, "read_pr", whole_error, retry_safe=False),
+        "conflict": ProviderError(FailureCode.CONFLICT, "merge", whole_error, retry_safe=False),
+    }[which]
+    exc.add_note("NOTE-MARK")
+    result = engine.failed(change(StepKind.MERGE), exc, NOW)
+    said = f"{type(exc).__name__}: {exc}\nNOTE-MARK"
+    expected = {
+        "account": f"{said}; then continue",
+        "credential": f"GitHub refused the credential ({said}): "
+        "run `gh auth login` (or `gh auth refresh`), then continue",
+        "conflict": said,
+    }
+    assert result.reason == expected[which]
+    if which == "conflict":
+        assert (result.exit, result.stop.reason) == (Exit.STOP, said)
 
 
 class PlanLimitedGh(FakeGh):

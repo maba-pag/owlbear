@@ -76,13 +76,14 @@ def test_a_missing_baseline_takes_the_growth_with_its_time_uncertain() -> None:
     assert said == [("r1", 2.0, ["agent", "at"]), ("r2", 4.0, ["at"])]  # r1's start, naming its agent, was lost
 
 
-def test_an_unread_baseline_spreads_a_runs_share_over_the_window_since_the_last_report() -> None:
-    """Sol's counterexample: 2 on Oct 1, then 6 on Oct 2 after an unread baseline put all 4 on Oct 2."""
+def test_an_unread_baseline_spreads_a_runs_share_over_the_window_since_the_last_report(whole_error) -> None:
+    """Sol's counterexample: 2 on Oct 1, then 6 on Oct 2 after an unread baseline put all 4 on Oct 2; #971 P14: the
+    spend that may lie in a filtered period says its failed read's whole error."""
     lines = [
         start("r1", "2026-10-01T09:00:00+00:00", before={}),
         end("r1", "2026-10-01T10:00:00+00:00", usage(2.0)),
         start("r2", "2026-10-02T10:00:00+00:00", before=None),
-        end("r2", "2026-10-02T11:00:00+00:00", usage(6.0)),
+        end("r2", "2026-10-02T11:00:00+00:00", usage(6.0) | {"incomplete": whole_error}),
     ]
     pieces = spend_shares.derive(lines)
     assert [(p["run"], p["credits"], p["lo"], p["hi"]) for p in pieces] == [
@@ -93,6 +94,8 @@ def test_an_unread_baseline_spreads_a_runs_share_over_the_window_since_the_last_
     assert [(r["key"], r["credits"]) for r in days["rows"]] == [("2026-10-01", 2.0), ("?", 4.0)]
     oct2 = spend_metrics.query(pieces, tz=UTC, start=date(2026, 10, 2), end=date(2026, 10, 3))
     assert (oct2["totals"]["credits"], oct2["undated"]["credits"]) == (0.0, 4.0)
+    undated = oct2["undated"]
+    assert (undated["failed"], undated.get("failed_why"), undated.get("unknown_why")) == (1, [whole_error], [])
     both = spend_metrics.query(pieces, tz=UTC, start=date(2026, 10, 1), end=date(2026, 10, 3))
     assert (both["totals"]["credits"], both["undated"]) == (6.0, None)
 
@@ -175,13 +178,13 @@ def test_a_read_that_may_be_short_is_a_lower_bound_and_only_a_failed_one_says_it
         start("turn", "2026-10-01T10:00:00+00:00", session="s1", before={}),
         end("turn", "2026-10-01T10:01:00+00:00", usage(9.33) | {"incomplete": "turn running"}, session="s1"),
         start("timeout", "2026-10-01T11:00:00+00:00", session="s2", before={}),
-        end("timeout", "2026-10-01T11:01:00+00:00", usage(9.73) | {"incomplete": "TimeoutError"}, session="s2"),
+        end("timeout", "2026-10-01T11:01:00+00:00", usage(9.73) | {"incomplete": "TimeoutError: A"}, session="s2"),
         event,
         mark,
         start("exact", "2026-10-01T12:00:00+00:00", session="s4", before={}),
         end("exact", "2026-10-01T12:01:00+00:00", usage(5.0), session="s4"),
         start("resumed", "2026-10-01T13:00:00+00:00", session="s4", before=usage(5.0)),
-        end("resumed", "2026-10-01T13:01:00+00:00", usage(5.0) | {"incomplete": "TimeoutError"}, session="s4"),
+        end("resumed", "2026-10-01T13:01:00+00:00", usage(5.0) | {"incomplete": "JsonRpcError: B"}, session="s4"),
     ]
     pieces = spend_shares.derive(lines)
     flags = {p["run"]: (p["incomplete"], p["failed"]) for p in pieces}
@@ -189,6 +192,21 @@ def test_a_read_that_may_be_short_is_a_lower_bound_and_only_a_failed_one_says_it
                      "exact": (True, False), "resumed": (True, True)}  # fmt: skip
     totals = spend_metrics.query(pieces, tz=UTC)["totals"]
     assert (totals["incomplete"], totals["failed"], totals["credits"]) == (5, 3, 34.06)
+    assert totals["failed_why"] == ["TimeoutError: A", "unread", "JsonRpcError: B"]  # #971: each failed read's error
+
+
+def test_a_run_whose_usage_was_never_read_says_why() -> None:
+    """#971 P14: the totals name each unread run's error once; a run still open has none to name."""
+    said = "JsonRpcError: JSON-RPC Error -32603: refused\nNOTE-MARK {'marker': 'DATA-MARK'}"
+    lines = [
+        start("r1", "2026-10-01T10:00:00+00:00", session="s1", before={}),
+        end("r1", "2026-10-01T10:40:00+00:00", {"error": said}, session="s1"),
+        start("r2", "2026-10-01T11:00:00+00:00", session="s2", before={}),
+        end("r2", "2026-10-01T11:40:00+00:00", {"error": said}, session="s2"),
+        start("r3", "2026-10-01T12:00:00+00:00", session="s3", before={}),
+    ]
+    totals = spend_metrics.query(spend_shares.derive(lines), tz=UTC)["totals"]
+    assert (totals["unknown"], totals["open"], totals["unknown_why"], totals["failed_why"]) == (3, 1, [said], [])
 
 
 def test_a_killed_run_stays_open_and_unknown_until_reconciled() -> None:

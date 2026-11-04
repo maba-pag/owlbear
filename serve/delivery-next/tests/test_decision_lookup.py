@@ -779,8 +779,10 @@ def _raises(exc: Exception):
 def test_a_failed_lookup_answers_and_logs_whole(picking, monkeypatch, caplog, whole_error, fails):
     building(picking, picking.put(make()))
     if fails == "load":
-        monkeypatch.setattr(lookup.decision_store, "load", _raises(decision_store.DecisionsUnavailable(whole_error)))
-        failed = f"DecisionsUnavailable: {whole_error}"
+        unavailable = decision_store.DecisionsUnavailable(whole_error)
+        unavailable.add_note("NOTE-MARK")
+        monkeypatch.setattr(lookup.decision_store, "load", _raises(unavailable))
+        failed = f"DecisionsUnavailable: {whole_error}\nNOTE-MARK"
     else:
         broke = RuntimeError(whole_error)
         broke.add_note(f"the session's teardown also failed: OSError: {whole_error}")  # as loop_owner.run adds it

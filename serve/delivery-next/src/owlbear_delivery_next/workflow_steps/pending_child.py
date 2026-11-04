@@ -21,6 +21,7 @@ from owlbear_delivery_next.change_contracts.held_records import PendingChild
 from owlbear_delivery_next.change_contracts.models import Exit, StepKind
 from owlbear_delivery_next.change_contracts.round_records import RECHECK
 from owlbear_delivery_next.change_flow import loop, plan_rounds
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.state_store.store import StoreError
@@ -131,8 +132,12 @@ def _reloaded(data: HeldRun) -> Run:
     try:
         return held.restored(data)
     except (ValueError, ValidationError, TypeError) as exc:
+        said = "its kept result no longer loads: "
         return replace(
-            held.accounted(data), ending="error", detail=f"its kept result no longer loads: {type(exc).__name__}: {exc}"
+            held.accounted(data),
+            ending="error",
+            detail=said + failure(exc),
+            classified=f"{said}{type(exc).__name__}: {exc}",  # retries classify it as before (R7)
         )
 
 
@@ -156,7 +161,7 @@ def _capture_or_report(store: Store, slug: str, record: PendingChild, exc: Excep
         atomic_write(_capture(store, slug, record), record.model_dump_json())
     except OSError as lost:
         sessions.out(json.dumps({"event": "child-unkept", "slug": slug, "child": record.model_dump(mode="json")}))
-        exc.add_note(f"the paid child's run could not be kept ({lost}); it is printed above")
+        exc.add_note(f"the paid child's run could not be kept ({failure(lost)}); it is printed above")
 
 
 def _capture(store: Store, slug: str, pending: PendingChild) -> Path:

@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar
 from urllib.parse import urlsplit
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.git.remote_git import RemoteGitError
 
@@ -77,11 +78,13 @@ class Access:
             )
         except subprocess.TimeoutExpired as exc:
             msg = f"the push URLs of {remote} in {repository} could not be read in {timeout:g} s"
-            raise RemoteGitError(msg, retry_safe=True) from exc
+            error = RemoteGitError(msg, retry_safe=True)
+            error.add_note(failure(exc))
+            raise error from exc
         if done.returncode:
             said = done.stderr.decode(errors="replace").strip() or f"exit {done.returncode}"
             msg = f"the push URLs of {remote} in {repository} could not be read: {said}"
-            raise RemoteGitError(msg, retry_safe=False)
+            raise RemoteGitError(msg, retry_safe=False, result=done)
         urls = done.stdout.decode(errors="replace").split()
         who = f"instead of {self.login}" if self.login else "instead of the account the setting names"
         fix = f"git -C {repository} remote set-url --push {remote} https://<host>/<owner>/<name>.git"

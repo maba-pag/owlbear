@@ -10,12 +10,15 @@ from types import SimpleNamespace
 
 import pytest
 from owlbear_memory import MemoryEntry, MemoryState, selection, storage
+from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.local_system import preload
 from owlbear_delivery_next.runtimes import lessons, sdk_adapter, sdk_usage, step_input
+from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.state_store.layers import read_layer
 
 PRODUCING = ("builder", "planner", "preparer", "updater", "test-curator")
 BUDGET = 2000  # the characters the tests' settings layer gives the pre-flight recall (conftest's complete_layer)
@@ -213,7 +216,7 @@ def test_an_unset_value_is_told_to_the_agent_and_never_stops_the_step(memory: Pa
     keep(memory, entry(1))
     owner_holds(memory, outstanding_boost=0.1, unremarkable_penalty=0.01)
     text, log = told("builder", memory)
-    assert text.startswith(f"{lessons.HEADING}\nDelivery could not read them all (settings unset: ")
+    assert text.startswith(f"{lessons.HEADING}\nDelivery could not read them all (SettingsUnset: settings unset: ")
     assert "memory.preflight_cap, memory.preflight_budget" in text
     assert (log[0]["status"], "memory.preflight_cap" in log[0]["failed"], log[0]["lessons"]) == ("unread", True, [])
 
@@ -225,8 +228,11 @@ def test_challenge_rounds_that_do_not_combine_are_told_to_the_agent_and_never_st
         json.dumps({"format": 21, "agents": {"builder": misfit}, "memory": {"stale_factor": 50}})
     )
     text, log = told("builder", memory)
-    assert text.startswith(f"{lessons.HEADING}\nDelivery could not read them all (the settings do not combine: ")
-    assert (log[0]["status"], log[0]["lessons"]) == ("unread", [])
+    with pytest.raises(ValidationError) as misfits:
+        config.resolve(read_layer(memory.parent.parent / "config.json", config.GlobalLayer), config.Layer())
+    why = f"StoreError: the settings do not combine: ValidationError: {misfits.value}"  # #971: every error, whole
+    assert text.startswith(f"{lessons.HEADING}\n{lessons.UNREAD.format(why=why, role='builder')}")
+    assert (log[0]["status"], log[0]["failed"], log[0]["lessons"]) == ("unread", why, [])
 
 
 def test_lessons_that_exist_but_fit_nothing_send_the_agent_to_its_own_recall(memory: Path) -> None:
@@ -241,15 +247,18 @@ def test_lessons_that_exist_but_fit_nothing_send_the_agent_to_its_own_recall(mem
     ]
 
 
-def test_an_unread_memory_falls_back_to_the_agents_own_recall(memory: Path, monkeypatch) -> None:
+def test_an_unread_memory_falls_back_to_the_agents_own_recall(memory: Path, monkeypatch, whole_error) -> None:
     def broken(_folder: Path) -> list:
-        raise PermissionError
+        refused = PermissionError(13, "Permission denied", "m")
+        refused.add_note(whole_error)
+        raise refused
 
     monkeypatch.setattr(selection, "stored", broken)
     text, log = told("reviewer", memory)
-    assert text.startswith(f"{lessons.HEADING}\n{lessons.UNREAD.format(why='PermissionError', role='reviewer')}")
+    why = f"PermissionError: [Errno 13] Permission denied: 'm'\n{whole_error}"  # #971: its type, message and notes
+    assert text.startswith(f"{lessons.HEADING}\n{lessons.UNREAD.format(why=why, role='reviewer')}")
     assert "call `recall_memory` with agent `reviewer` before you start" in text
-    assert log == [selected("reviewer", status="unread", failed="PermissionError")]
+    assert log == [selected("reviewer", status="unread", failed=why)]
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root reads files whatever their mode")
@@ -277,10 +286,12 @@ def test_a_memory_folder_the_real_reader_cannot_list_is_unread_and_an_absent_one
         text, log = told("builder", memory)
     finally:
         memory.chmod(0o700)
-    assert text.startswith(f"{lessons.HEADING}\n{lessons.UNREAD.format(why='PermissionError', role='builder')}")
-    assert log == [selected(status="unread", failed="PermissionError")]
+    why = f"PermissionError: [Errno 13] Permission denied: '{memory}'"  # #971: the OS error, whole
+    assert text.startswith(f"{lessons.HEADING}\n{lessons.UNREAD.format(why=why, role='builder')}")
+    assert log == [selected(status="unread", failed=why)]
     (memory.parent / "file").write_text("")
-    assert told("builder", memory.parent / "file")[1] == [selected(status="unread", failed="NotADirectoryError")]
+    why = f"NotADirectoryError: {memory.parent / 'file'}"
+    assert told("builder", memory.parent / "file")[1] == [selected(status="unread", failed=why)]
     text, log = told("builder", memory.parent / "absent")  # no folders yet: memory holds nothing, completely
     assert (text.split("\n\n")[0], log) == (f"{lessons.HEADING}\n{lessons.NONE}", [selected(status="none")])
 

@@ -12,6 +12,7 @@ from owlbear_delivery_next.change_contracts.models import Episode, ErrorKind, Ex
 from owlbear_delivery_next.change_contracts.round_records import FINAL
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.git.remote_git import (
     RemoteGitWriteUnknown,
     classify_write_readback,
@@ -97,7 +98,7 @@ def labelled(ctx: Ctx, c: Change, pr: PullRequest, labels: list[str]) -> None:
             ctx.gh.add_labels(pr.repository, pr.number, labels)
             ctx.log(c.slug, "labels", pr=pr.number, labels=labels)
         except ProviderError as exc:
-            ctx.log(c.slug, "labels-failed", pr=pr.number, labels=labels, reason=f"{type(exc).__name__}: {exc}")
+            ctx.log(c.slug, "labels-failed", pr=pr.number, labels=labels, reason=failure(exc))
     c.names.labelled = pr.number
     ctx.store.write(ctx.lock, c)  # before anything else can fail: a recovering runner never labels it again
 

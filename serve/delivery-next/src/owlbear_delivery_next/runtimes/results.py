@@ -15,6 +15,7 @@ from owlbear_delivery_next.change_contracts import (
     tools,
 )
 from owlbear_delivery_next.change_flow import disputes
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import design_tools
 from owlbear_delivery_next.local_system import lint
 from owlbear_delivery_next.runtimes import amendments
@@ -46,17 +47,21 @@ class Gate:
         self._lock = threading.Lock()
         self._linting = threading.Lock()
 
-    def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "") -> bool:
-        """End the step once and close the gate; the first ending is kept. Return whether it had already ended."""
+    def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "", classified: str = "") -> bool:
+        """End the step once and close the gate; the first ending is kept. Return whether it had already ended.
+
+        *classified* is what retries classify and sign when *detail* says more (``Run.classified``).
+        """
         with self._lock:
             was = self.done
-            self._finish(ending, payload, detail)
+            self._finish(ending, payload, detail, classified)
         self.ended()
         return was
 
-    def _finish(self, ending: Ending, payload: tools.Args | None, detail: str) -> None:
+    def _finish(self, ending: Ending, payload: tools.Args | None, detail: str, classified: str = "") -> None:
         if not self.done:
             self.done, self.run.ending, self.run.payload, self.run.detail = True, ending, payload, detail
+            self.run.classified = classified
 
     def _closed(self) -> bool:
         if self.stopped:
@@ -70,6 +75,7 @@ class Gate:
         with self._lock:
             self.done = True
             self.run.ending, self.run.payload, self.run.head, self.run.detail = "error", None, None, detail
+            self.run.classified = ""
             self.run.changed = []
             self.run.changed = []
         self.ended()
@@ -217,7 +223,7 @@ class Gate:
         try:
             tree = self.cfg.observe()
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
-            return [f"changes: the worktree could not be read ({type(exc).__name__}); try again"], None
+            return [f"changes: the worktree could not be read ({failure(exc)}); try again"], None
         cfg = self.cfg
         if isinstance(args, design_tools.DesignLook):
             return design_tools.check(args, tree), tree

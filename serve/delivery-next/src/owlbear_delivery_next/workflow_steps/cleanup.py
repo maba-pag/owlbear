@@ -445,7 +445,7 @@ def _workspace(ctx: Ctx, c: Change, path: Path, pr: PullRequest | None) -> tuple
         inv = inventory(path, c.names.branch, keep)
         kept = large(path, inv)
     except (PreservationError, OSError, subprocess.SubprocessError) as exc:
-        return [], False, _stopped(ctx, path, f"could not inventory {path}: {exc}")
+        return [], False, _stopped(ctx, path, f"could not inventory {path}: {worktree.failure(exc)}")
     if kept:
         ctx.log(c.slug, "workspace-kept", path=str(path), reason="large ignored files")
         return [], True, None
@@ -465,7 +465,7 @@ def _retire(ctx: Ctx, c: Change, path: Path, inv: Inventory) -> tuple[list[Path]
     try:
         saved = preserve(path, c.names.branch, inv, dest, f"{c.slug}-{len(c.names.preserved) + 1}")
     except (PreservationError, subprocess.CalledProcessError, OSError, tarfile.TarError) as exc:
-        return [], _stopped(ctx, path, f"could not save {path}: {exc}")
+        return [], _stopped(ctx, path, f"could not save {path}: {worktree.failure(exc)}")
     dirty, ignored = list(inv.dirty)[:50], list(inv.ignored)[:50]
     saved_paths = [str(s) for s in saved]
     ctx.log(c.slug, "preserved", commits=len(inv.commits), dirty=dirty, ignored=ignored, saved=saved_paths)

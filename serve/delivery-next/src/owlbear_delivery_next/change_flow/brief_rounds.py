@@ -113,6 +113,12 @@ def approvable(c: Change) -> str:
     return _held(c)[0]
 
 
+def ready(c: Change) -> bool:
+    """Planning starts only from the approved current brief version its challenge loop ended on (TD-249)."""
+    b = c.brief
+    return b.approved_version == b.version == b.challenged
+
+
 def revising(c: Change) -> tuple[str, ...]:
     """The findings the shaper revises the current brief version for, when that is what holds its approval."""
     return _held(c)[1]
