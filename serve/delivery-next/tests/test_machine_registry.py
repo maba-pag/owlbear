@@ -116,6 +116,36 @@ def test_an_invalid_registry_says_its_whole_validation_error(home):
     assert "projects" in str(cause)
 
 
+@pytest.mark.parametrize("site", ["source", "binding", "revalidate"])
+def test_a_registration_check_that_fails_says_the_whole_error(tmp_path, monkeypatch, whole_error, site):
+    work = clone(tmp_path / "work").resolve()
+    store = work / ".git" / "owlbear-delivery"
+
+    def refused(*_args: object, **_kwargs: object) -> None:
+        raise OSError(whole_error)
+
+    if site == "revalidate":
+
+        def gone(_path: Path) -> None:
+            raise RegistryError(whole_error)
+
+        monkeypatch.setattr(registry, "_canonical", gone)
+        with pytest.raises(RegistryError) as raised:
+            registry._revalidate(work, store, "pid")  # noqa: SLF001 - the publication fence alone
+        retry = "nothing was registered; check the clone and retry"
+        assert str(raised.value) == f"{work}'s clone is no longer admissible: {retry}: RegistryError: {whole_error}"
+        return
+    monkeypatch.setattr(*((project_move, "pin") if site == "source" else (registry, "store_of")), refused)
+    with pytest.raises(RegistryError) as raised:
+        registry.register(work)
+    where = (
+        f"{store}'s source witnesses cannot be checked"
+        if site == "source"
+        else f"{work}'s Git directory binding cannot be checked"
+    )
+    assert str(raised.value) == f"{where}: nothing was registered: OSError: {whole_error}"
+
+
 def test_a_registry_from_a_newer_release_is_refused(home):
     (home / "machine.json").write_text(f'{{"format": {registry.MACHINE_FORMAT + 1}, "projects": []}}')
     with pytest.raises(RegistryError, match=f"newer than {registry.MACHINE_FORMAT}"):
