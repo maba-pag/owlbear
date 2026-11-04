@@ -22,7 +22,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK, RoundLoop, RoundPolicy, Verdict
 from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop, plan_rounds, status
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import chat_client, runner
@@ -134,6 +134,7 @@ def test_the_shaper_asks_rejects_and_revises_until_the_owner_may_approve_the_ver
     shaping.verdicts += [verdict("AC-1", "scope"), verdict(upheld={"F2": True})]
     c = shaping.step()
     assert ([f.id for f in c.loops[BRIEF].findings], c.outcome.waiting) == (["F1", "F2"], Waiting.CHAT)
+    assert c.loops[BRIEF].verdicts == [Verdict(round=1, version=1)]
     assert "the shaper revises brief v1 for F1, F2" in shaping.approve(1).json()["detail"]
     assert action(c) == status.CONTINUE
     assert shaping.ask_challenge(1, {"F2": "no"}).status_code == 409  # F1 is taken: a revision first
@@ -144,6 +145,7 @@ def test_the_shaper_asks_rejects_and_revises_until_the_owner_may_approve_the_ver
     said = shaping.told[-1].message
     assert ("Shaper's reason: the scope is the package" in said, "Judge only these rejections" in said) == (True, True)
     assert (shaping.told[-1].cap, c.outcome.exit, c.loops[BRIEF].findings[1].state) == (0, Exit.ASK, "escalated")
+    assert c.loops[BRIEF].verdicts[1:] == [Verdict(round=1, version=2, recheck=True, upheld=1)]  # outside the count
     assert shaping.save(title="Add a farewell").get("errors")[0].startswith("change: a finding")
     c = shaping.answer("fix", "keep the package scope narrow")
     assert (c.loops[BRIEF].findings[1].state, c.outcome.waiting) == ("owner-fix", Waiting.CHAT)
@@ -153,6 +155,7 @@ def test_the_shaper_asks_rejects_and_revises_until_the_owner_may_approve_the_ver
     c = shaping.change()
     assert (c.brief.challenged, c.loops[BRIEF].ended, c.loops[BRIEF].unreviewed) == (3, "count", ["v2", "v3"])
     assert action(c) == status.APPROVE  # only the wait to approve a challenged version is the owner's
+    assert [v.version for v in c.loops[BRIEF].verdicts] == [1, 2]  # no challenger read v3
     assert "was not reviewed" in shaping.approve(3).json()["detail"]  # TD-255: the owner ticks that he accepts it
     assert shaping.approve(3, unreviewed=True).json() == {"accepted": "brief-approval"}
     c, step = shaping.store.fold(Lock(shaping.slug), shaping.slug, datetime.now(UTC))
@@ -174,6 +177,7 @@ def test_a_save_after_the_loop_ended_needs_one_more_round_on_the_changes(shaping
     c = shaping.step()
     assert "## Focus" in shaping.told[-1].message
     assert (c.brief.challenged, c.loops[BRIEF].round, c.loops[BRIEF].ended) == (2, 2, "clean")
+    assert c.loops[BRIEF].verdicts == [Verdict(round=1, version=1), Verdict(round=2, version=2)]
 
 
 def test_the_last_allowed_round_with_many_findings_asks_the_owner(shaping):

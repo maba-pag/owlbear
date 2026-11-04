@@ -25,7 +25,14 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_contracts.round_records import FINAL, PLAN, UNJUDGED, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_contracts.round_records import (
+    FINAL,
+    PLAN,
+    UNJUDGED,
+    RoundLoop,
+    RoundPolicy,
+    Verdict,
+)
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.change_flow import disputes, loop, plan_rounds, round_flow, round_marks
 from owlbear_delivery_next.change_flow.loop import StepResult
@@ -225,6 +232,8 @@ def test_an_early_last_round_with_rejections_gets_a_check_outside_the_count(
     assert (c.step.kind, lp.round, lp.ended, lp.unreviewed, lp.findings[0].state) == (
         K.BUILD, 1, "count" if unreviewed else "clean", unreviewed, "standing"
     )  # fmt: skip
+    assert c.plan.version == 2
+    assert lp.verdicts == [Verdict(round=1, version=1), Verdict(round=1, version=2, recheck=True)]
 
 
 def test_a_plan_resubmitted_unchanged_after_the_last_round_is_no_unreviewed_revision(store, change_repo, mp):

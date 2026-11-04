@@ -197,7 +197,9 @@ def counted(c: Change, found: list[str], judged: Mapping[str, tuple[bool, str]])
     """Count one challenger verdict: its judgements and new findings; then the owner, the planner or the end."""
     lp = c.loops[PLAN]
     recheck = c.step.mode == RECHECK
-    lp.verdict(found, judged, identity(c.plan), f"r{lp.round}", recheck=recheck)
+    upheld = lp.verdict(found, judged, identity(c.plan), f"r{lp.round}", recheck=recheck)
+    if c.plan:
+        lp.read(c.plan.version, recheck=recheck, upheld=upheld)
     if _undecided(lp) is not None:
         return "ask"
     if addressing(c):

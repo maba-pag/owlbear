@@ -69,6 +69,15 @@ class RoundFinding(_Record):
         return f"- {self.id}: {self.text}"
 
 
+class Verdict(_Record):
+    """One counted verdict and the version it read: a brief's or a plan's version number."""
+
+    round: int  # the loop's round after it: a recheck keeps the round it followed
+    version: int
+    recheck: bool = False
+    upheld: int = 0  # the rejections it did not accept
+
+
 class Completion(_Record):
     """The engine's record that the final loop ended without a pass (TD-208): it stands for this content only."""
 
@@ -98,6 +107,7 @@ class RoundLoop(_Record):
     rebuild: list[str] = Field(default_factory=list)  # the plan tasks the owner ticked, until their undo is done
     undo: str = ""  # the head an undo of this loop's work started from, recorded before anything is promoted
     history: list[RoundLoop] = Field(default_factory=list)  # the attempts a retry or restart replaced
+    verdicts: list[Verdict] = Field(default_factory=list)  # each verdict's version, for subjects with versions
 
     def raise_findings(self, texts: Sequence[str], tasks: Sequence[Sequence[str]] = ()) -> list[RoundFinding]:
         """Record new findings of the current round under the next free IDs, in order."""
@@ -134,11 +144,14 @@ class RoundLoop(_Record):
 
     def verdict(
         self, found: Sequence[str], judged: Mapping[str, tuple[bool, str]], head: str, label: str, *, recheck: bool
-    ) -> None:
+    ) -> int:
         """Count one challenger verdict on *head*: its judgements of the open rejections and its new findings.
 
         A rejections-only check of a changed *head* leaves its repair, *label*, unreviewed; a full round reviews every
         reported repair. The check counts outside the rounds (TD-330).
+
+        Returns:
+            How many rejections it did not accept.
         """
         if recheck:
             if head != self.head:  # a repair the check judged the rejections of, never its changes
@@ -146,14 +159,21 @@ class RoundLoop(_Record):
         else:
             self.reviewed, self.unreviewed = sorted({f.repair for f in self.findings if f.repair}), []
         self.round, self.head = self.round + (not recheck), head
+        upheld = 0
         for f in self.findings:
             if f.state != "rejected":
                 continue
             if (j := judged.get(f.id)) is not None:
                 f.state, f.judgement = ("escalated" if j[0] else "standing"), " ".join(j[1].split())[:1000]
+                upheld += j[0]
             elif recheck:  # a wrong premise instead: the check never runs again for it
                 f.state, f.judgement = "standing", UNJUDGED
         self.count(len(self.raise_findings(found)), recheck=recheck)
+        return upheld
+
+    def read(self, version: int, *, recheck: bool, upheld: int) -> None:
+        """Record which version the verdict just counted read, and how many rejections it did not accept."""
+        self.verdicts.append(Verdict(round=self.round, version=version, recheck=recheck, upheld=upheld))
 
 
 def parse(text: str) -> tuple[str, str] | None:
