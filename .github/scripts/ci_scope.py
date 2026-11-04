@@ -13,7 +13,9 @@ import re
 import subprocess
 import sys
 
-HOME = "maba-pag/owlbear"  # Snyk's token reaches only changes from OwlBear's own repository (TD-363)
+# Snyk's token reaches only changes from OwlBear's own repository (TD-363), known by its GitHub id, which a rename or
+# transfer keeps.
+HOME = "1167866812"
 SUITES: dict[str, tuple[str, ...]] = {
     "python": (
         ".github/workflows/python.yml",
@@ -135,8 +137,12 @@ def changed(base: str, head: str) -> list[str]:
 
 
 def tokened() -> bool:
-    """Whether GitHub gives this run Snyk's token: OwlBear's own run of a change from OwlBear itself (TD-363)."""
-    if os.environ.get("GITHUB_REPOSITORY", HOME) != HOME:
+    """Whether GitHub gives this run Snyk's token: OwlBear's own run of a change from OwlBear itself (TD-363).
+
+    A push, a merge group of the queue and a manual run are OwlBear's own; a pull request is when it comes from
+    OwlBear's repository, never from a fork.
+    """
+    if os.environ.get("GITHUB_REPOSITORY_ID", HOME) != HOME:
         return False
     return os.environ.get("EVENT") != "pull_request" or os.environ.get("SOURCE_REPOSITORY") == HOME
 
