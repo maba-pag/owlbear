@@ -611,7 +611,8 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
             expect(page.locator("#status")).to_have_text("Saved docs-site's settings. They apply to the next session.")
             pds.group(page, "overview")
             expect(across).to_contain_text("docs-site: no")  # the overview follows the save
-            expect(across.locator("text=Agents and runs · Final review · Rounds at most")).to_have_count(1)  # the builder's rounds, inherited
+            # the builder's rounds, inherited
+            expect(across.locator("text=Agents and runs · Final review · Rounds at most")).to_have_count(1)
             expect(across).to_contain_text("docs-site: 4")
             a_role_s_subagents_are_switched_off_and_saved(page, docs, pds)
             page.goto(f"{base}/config?project={DOCS}")

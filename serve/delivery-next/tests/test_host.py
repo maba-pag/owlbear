@@ -965,9 +965,10 @@ def test_resume_leaves_a_stop_and_the_owners_recovery_reruns_its_step(store, tmp
     assert api_.post("/api/next/changes/c1/intent", json={"intent": "resume"}).status_code == 200
     assert fake.host.tick(NOW) == []
     assert store.read("c1").outcome.exit == Exit.STOP
-    assert api_.get("/api/next/changes/c1").json()["recovery"] == {
-        "reason": "GitHub refused", "unset": None, "settings": {"count": 0, "reason": ""}
-    } | SHOWN
+    assert (
+        api_.get("/api/next/changes/c1").json()["recovery"]
+        == {"reason": "GitHub refused", "unset": None, "settings": {"count": 0, "reason": ""}} | SHOWN
+    )
     answer = api_.post("/api/next/changes/c1/recovery", json=SHOWN)
     assert (answer.status_code, answer.json()) == (200, {"accepted": "recovery"})
     assert [(i["kind"], i["action"]) for i in map(json.loads, queued(store))] == [("recovery", "Resolve it in GitHub")]

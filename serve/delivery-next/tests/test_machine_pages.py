@@ -384,7 +384,8 @@ def test_the_brief_offers_a_new_shaping_chat_and_says_how_it_went(tmp_path: Path
         # the project's work now waits for its settings (#808): the button is held and says why
         expect(again).to_be_disabled(timeout=15000)
         expect(page.locator("#detail section.info p-button", has_text=REVISE)).to_have_attribute(
-            "title", "7 settings are unset; set them on the Settings page"  # the shaper's model, effort, context, loop
+            "title",
+            "7 settings are unset; set them on the Settings page",  # the shaper's model, effort, context, loop
         )
         assert len(launched.calls) == 2
 

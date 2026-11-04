@@ -1449,7 +1449,7 @@ def test_the_user_config_switches_save_in_each_layer_reload_and_clear_back_to_in
     with settings_page(store, pds) as page:
         shown = page.locator("#user-config")
         pds.group(page, "overview")
-        expect(page.locator("#unset")).to_contain_text(", ".join((INSTRUCTIONS, SKILLS, MEMORY)))
+        expect(page.locator("#unset")).to_contain_text(f"{INSTRUCTIONS}, {SKILLS}, {MEMORY}")
         pds.group(page, "guardrails")
         for key in USER_KEYS:  # GW8RT6: a red name, no line saying it is unset
             expect(page.locator(f"#set-{key} p-text[color='error']")).to_have_count(1)

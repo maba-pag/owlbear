@@ -192,7 +192,8 @@ export function loaded() {
 export function settingsWait(count, reason, text) {
   if (reason) return text;
   if (!count) return "";
-  return `${count} setting${count === 1 ? " is" : "s are"} unset; set ${count === 1 ? "it" : "them"} on the Settings page`;
+  const one = count === 1;
+  return `${count} setting${one ? " is" : "s are"} unset; set ${one ? "it" : "them"} on the Settings page`;
 }
 
 // Why no work may start for project *id* (#808), as the machine host last polled it; "" when its work may start, and
