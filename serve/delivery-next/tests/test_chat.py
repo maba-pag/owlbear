@@ -178,17 +178,52 @@ def test_decisions_and_non_goals_stay_on_the_brief_version_reach_the_workers_and
     assert [e.split(":", 1)[0] for e in errors] == ["decisions[0].reason"]  # an autonomous choice says why
 
 
-def test_a_saved_decision_reaches_the_workers_whole(repo):
+def _long(head: str, size: int, end: str) -> str:
+    return head + "x" * (size - len(head) - len(end)) + end
+
+
+def test_a_saved_brief_reaches_the_workers_whole(repo):
+    """#962: every brief field save_brief or an amendment stores reaches the step inputs whole, never cut."""
     store = Store.open(repo)
     question = "Which states may the greeting show? " + "q" * 240 + " end of question"
     answer = "Home and checkout. " + "x" * 400 + " Never on the payment page."
     decided = [{"question": question, "answer": answer, "origin": "decided"}]
     assert answer.index("Never") > 400  # past the old cut
-    assert client(store).post("/api/next/briefs", json={**BRIEF, "decisions": decided}).status_code == 200
+    outcome = _long("Farewell everywhere. ", 2000, " OUTCOME-END")
+    criterion = _long("farewell('Ada') returns 'Bye, Ada!' ", 500, " CRITERION-END")
+    non_goal = _long("No translations ", 300, " NONGOAL-END")
+    steps = [_long(f"Step {n}: open the farewell page ", 45, f"S{n}-END") for n in range(1, 11)]
+    assert criterion.index("CRITERION-END") > 400  # past the old cut
+    assert len(" / ".join(steps)) > 400
+    checks = [{"name": "walk", "steps": steps, "expect": "Walk ends"}]
+    states = [{"name": "home", "path": "/", "expect": "Bye"}]
+    body = {**BRIEF, "outcome": outcome, "criteria": [criterion], "non_goals": [non_goal], "decisions": decided}
+    saved = hosted(store).save_brief(body | {"person_checks": checks, "ui": True, "visual": states})
+    assert saved["saved"] is True
     change = store.read(store.slugs()[0])
 
     for text in (step_input.plan(change, Profile(), Path("/w"), {}), "\n".join(step_input.brief(change))):
         assert f"- {' '.join(question.split())} -> {answer} (decided)" in text
+    challenge = step_input.brief_challenge(change, Path("/w"))
+    assert f"> {outcome}" in challenge
+    assert f"- AC-1: {criterion}" in challenge
+    assert f"- {non_goal}" in challenge
+    assert all(f"\n  - {s}\n" in challenge for s in steps)
+    assert "(cut)" not in challenge
+
+    # an amendment stores an expectation up to 2000 characters, and a step has no length cap
+    expect, state = (_long(f"{w} shows ", 900, f" {w}-END") for w in ("EXPECT", "VISUAL"))
+    step = _long("Step 1 ", 1600, " LONGSTEP-END")
+    change.checks[0].expect, change.brief.visual[0].expect, change.checks[0].steps[0] = expect, state, step
+    shown = {
+        "plan": step_input.plan(change, Profile(), Path("/w"), {}),
+        "check": step_input.check(change, change.checks[0], Path("/w"), []),
+        "visual": step_input.visual(change, [("home", 1280, "a.png")]),
+        "challenge": step_input.brief_challenge(change, Path("/w")),
+    }
+    wanted = {"plan": [expect], "check": [expect, f"> {step}"], "visual": [state], "challenge": [expect, step, state]}
+    assert {k: [w for w in wanted[k] if w not in v] for k, v in shown.items()} == {k: [] for k in shown}
+    assert [k for k, v in shown.items() if "(cut)" in v] == []
 
 
 def test_what_the_owner_stated_himself_is_recorded_and_survives_a_visual_save_and_a_revision(repo):
