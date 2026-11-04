@@ -18,14 +18,17 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts import chat_contract
+from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_flow import brief_tools
+from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import chat_client, mcp_server
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import lookup
 
 FIXTURES = Path(__file__).parent / "fixtures"
 WORDING = {"description", "examples", "title"}  # what a tool says to the model; its shape is the contract
@@ -35,6 +38,7 @@ ROUTES = [  # what chat_client calls, under a project and (the decisions) under 
     ("post", "/briefs"), ("post", "/briefs/visual"), ("post", "/briefs/challenge"), ("get", "/changes"),
     ("get", "/chat/brief/{slug}"), ("get", "/chat/challenge/{slug}"), ("post", "/changes/{slug}/answers"),
     ("get", "/decisions"), ("get", "/decisions/{decision_id}"), ("post", "/decisions/lookup"),
+    ("post", "/decisions/lookups"), ("get", "/decisions/lookups/{lookup_id}"),
     ("post", "/decisions/propose"),
     ("get", "/chat/contract"),
     *(("post", f"/decisions/{{decision_id}}/{w}") for w in ("retire", "read-back", "correct-origin")),
@@ -146,11 +150,13 @@ def hosted(monkeypatch, answers: dict[str, object], rec: HostRecord) -> tuple[ch
 def test_a_chat_works_whatever_code_its_host_runs_and_never_opens_the_state(monkeypatch):
     monkeypatch.setattr(Store, "open", lambda *_a, **_k: pytest.fail("a chat's server reads no state itself"))
     monkeypatch.setattr(chat_client, "_pause", lambda _s: None)
-    row = {"handle": "c1", "slug": "c1-shop"}
+    row = {"handle": "c1", "slug": "c1-shop", "step": "shape"}
     chat, host = hosted(monkeypatch, {
         "GET /chat/contract": SERVES, "GET /changes": [row], "GET /chat/brief/c1-shop": {"version": 2},
-        "POST /briefs/challenge": {"slug": "c1-shop", "attempt": 1}, "GET /chat/challenge/c1-shop": {"running": False},
-        "GET /decisions": {"available": True, "decisions": []}, "POST /decisions/lookup": {"decisions": []},
+        "POST /briefs/challenge": {"slug": "c1-shop", "attempt": 1},
+        "GET /chat/challenge/c1-shop": {"running": False, "version": 2},
+        "GET /decisions": {"available": True, "decisions": []}, "POST /decisions/lookups": {"lookup_id": "L1"},
+        "GET /decisions/lookups/L1": {"running": False, "answer": {"decisions": []}},
         "POST /changes/c1-shop/answers": (409, {"detail": "question q1 is not open"}),
     }, record(code="0" * 64))  # fmt: skip
 
@@ -160,12 +166,13 @@ def test_a_chat_works_whatever_code_its_host_runs_and_never_opens_the_state(monk
 
     assert [s.get("error") for s in said] == [None, None, None, "question: c1.q1 is not open", None, None, None]
     assert said[1]["brief"] == {"version": 2}
-    assert said[2] == {"requested": True}
+    assert said[2] == {"requested": True, "version": 2}
+    assert said[5] == {"decisions": []}
     assert [(m, p) for m, p, _ in host.got] == [
         ("GET", "/chat/contract"), ("POST", "/briefs"), ("GET", "/changes"), ("GET", "/chat/brief/c1-shop"),
         ("POST", "/briefs/challenge"), ("GET", "/chat/challenge/c1-shop?version=2&attempt=1"), ("GET", "/changes"),
-        ("POST", "/changes/c1-shop/answers"), ("GET", "/decisions?text=x&where=all&retired=false"),
-        ("POST", "/decisions/lookup"), ("POST", "/decisions/propose"),
+        ("GET", "/changes"), ("POST", "/changes/c1-shop/answers"), ("GET", "/decisions?text=x&where=all&retired=false"),
+        ("POST", "/decisions/lookups"), ("GET", "/decisions/lookups/L1"), ("POST", "/decisions/propose"),
     ]  # fmt: skip  # its contract asked once, before the first write
 
 
@@ -192,8 +199,10 @@ def test_a_chat_writes_nothing_to_a_host_older_than_its_contract_and_asks_again_
 
 def test_a_challenge_is_read_through_a_host_handover_and_never_asked_for_again(monkeypatch):
     monkeypatch.setattr(chat_client, "_pause", lambda _s: None)
-    answers = iter([(200, {"running": True}), (503, {"error": "down"}), (200, {"running": False, "verdict": "ok"})])
-    asked = {"GET /chat/contract": SERVES, "POST /briefs/challenge": {"slug": "c1-shop", "attempt": 2}}
+    answers = iter([(200, {"running": True, "version": 3}), (503, {"error": "down"}),
+                    (200, {"running": False, "version": 3, "verdict": "ok"})])  # fmt: skip
+    asked = {"GET /chat/contract": SERVES, "POST /briefs/challenge": {"slug": "c1-shop", "attempt": 2},
+             "GET /changes": [{"slug": "c1-shop", "step": "shape"}]}  # fmt: skip
     chat, host = hosted(monkeypatch, asked, record())
     reads = host.__call__
 
@@ -202,8 +211,9 @@ def test_a_challenge_is_read_through_a_host_handover_and_never_asked_for_again(m
         return next(answers) if "/chat/challenge/" in url else out
 
     monkeypatch.setattr(chat, "send", call)
-    assert chat.challenge_brief("c1", 3, []) == {"requested": True, "verdict": "ok"}
+    assert chat.challenge_brief("c1", 3, []) == {"requested": True, "version": 3, "verdict": "ok"}
     assert [m for m, p, _ in host.got if "challenge" in p] == ["POST", "GET", "GET", "GET"]
+    assert [p for _, p, _ in host.got].count("/changes") == 1  # the row read at the end of the wait
 
 
 class Lost:
@@ -315,7 +325,7 @@ def http(monkeypatch):
     m.stop_all()
 
 
-@pytest.mark.parametrize("sent", ["6", "", "01", "²", "1" * 5000])
+@pytest.mark.parametrize("sent", ["7", "", "01", "²", "1" * 5000])
 def test_a_host_refuses_a_contract_it_does_not_serve_before_any_route_runs(tmp_path, http, shared_repo, monkeypatch,
                                                                            sent):  # fmt: skip
     monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
@@ -338,7 +348,7 @@ def test_a_host_refuses_a_contract_it_does_not_serve_before_any_route_runs(tmp_p
                            capture_output=True, text=True, check=True).stdout  # fmt: skip
     assert after == head
     served = http.get("/api/next/chat/contract", headers={chat_contract.HEADER: "1"}).json()
-    assert served == {"supported": [1, 2, 3, 4, 5], "admit_by": True}
+    assert served == {"supported": [1, 2, 3, 4, 5, 6], "admit_by": True}
 
 
 def test_a_host_reply_without_what_a_chat_reads_breaks_the_contract(chat_replied):
@@ -375,7 +385,7 @@ WAITING = {  # a challenge that never ends, asked for at v2, as the host answers
 
 
 class Slow:
-    """A virtual clock for a chat's waits: every request takes its whole 15 s allowance, a pause its own length."""
+    """A virtual clock for a chat's waits: every request takes its whole allowance, a pause its own length."""
 
     def __init__(self, monkeypatch, answers: dict[str, object], host=Answering) -> None:
         self.now = 0.0
@@ -387,7 +397,7 @@ class Slow:
         monkeypatch.setattr(chat_client, "_pause", self.pause)
 
     def send(self, *args, **kwargs):
-        self.now += 15
+        self.now += args[4]  # the request's timeout
         return self.host(*args, **kwargs)
 
     def pause(self, seconds: float) -> None:
@@ -404,6 +414,63 @@ def test_a_challenge_wait_ends_under_the_clients_limit_with_every_request_taking
     assert max(took) < 170  # the Copilot client cuts an MCP tool call at 180 s: the old wait took 645
 
 
+class Looking(Answering):
+    """A host whose lookup L1 runs until the virtual *clock* reaches 200 s, then answers as told."""
+
+    def __call__(self, *args, **kwargs):
+        _rec, method, url, body, _timeout = args
+        if method == "GET" and url.endswith("/decisions/lookups/L1") and self.clock() < 200:
+            self.got.append((method, url.split("api/next", 1)[1], body))
+            return 200, {"running": True}
+        return super().__call__(*args, **kwargs)
+
+
+def looking(monkeypatch, answer: dict[str, object]) -> Slow:
+    slow = Slow(monkeypatch, {
+        "GET /chat/contract": SERVES, "POST /decisions/lookups": {"lookup_id": "L1"},
+        "GET /decisions/lookups/L1": {"running": False, "answer": answer},
+    }, Looking)  # fmt: skip
+    slow.host.clock = lambda: slow.now
+    return slow
+
+
+def chat_tool(slow: Slow, name: str, **args: object) -> tuple[dict, float]:
+    """What the MCP tool *name* of *slow*'s chat gave, and how long it took on the virtual clock."""
+    start = slow.now
+    return asyncio.run(mcp_server.mcp.call_tool(name, args)).structured_content, slow.now - start
+
+
+@pytest.mark.parametrize("answer", [{"decisions": [{"id": "D1", "note": "why"}]}, {"failed": "its session ended"}])
+def test_a_lookup_longer_than_the_clients_cut_reaches_the_chat_as_running_then_its_answer(monkeypatch, answer):
+    slow = looking(monkeypatch, answer)
+    monkeypatch.setitem(mcp_server._STATE, "chat", slow.chat)  # noqa: SLF001 - the server's one chat
+    told = [chat_tool(slow, "lookup_decisions", question="q")]
+    while told[-1][0].get("running"):
+        assert told[-1][0] == {"running": True, "lookup_id": "L1", "next": chat_client.AWAIT_LOOKUP}
+        told.append(chat_tool(slow, "await_lookup", lookup_id="L1"))
+    assert told[-1][0] == lookup.agent_reply(answer)  # whole, as the tool gives it: its notes left out
+    assert (len(told) > 2, max(t for _, t in told) < 170, slow.now >= 200) == (True, True, True)  # 180 s: the cut
+    assert [p for m_, p, _ in slow.host.got if m_ == "POST"] == ["/decisions/lookups"]  # started once
+
+    direct = looking(monkeypatch, answer)  # a Python caller (chat_acts) waits for the answer, as before
+    assert direct.chat.lookup_decisions("q") == answer
+    assert [p for _, p, _ in direct.host.got].count("/decisions/lookups") == 1
+
+
+def test_a_refused_lookup_start_or_read_says_failed_and_asks_nothing_more(monkeypatch):
+    gone = lookup.GONE.format("L1")
+    slow = Slow(monkeypatch, {
+        "GET /chat/contract": SERVES, "POST /decisions/lookups": (409, {"detail": lookup.BUSY}),
+        "GET /decisions/lookups/L1": (404, {"detail": gone}),
+    })  # fmt: skip
+    assert slow.chat.lookup_decisions("q", chat_client.WAIT) == {"failed": lookup.BUSY}
+    assert slow.chat.await_lookup("L1") == {"failed": gone}
+    assert [(m_, p) for m_, p, _ in slow.host.got if p != "/chat/contract"] == [
+        ("POST", "/decisions/lookups"),
+        ("GET", "/decisions/lookups/L1"),
+    ]  # no read after the refused start, no start for the unknown read
+
+
 def test_a_wait_for_a_version_that_is_not_the_draft_any_more_gets_the_error_not_the_findings_of_the_draft(monkeypatch):
     slow = Slow(monkeypatch, WAITING | {"GET /chat/challenge/c1-shop": FOUND | {"version": 3}})
     assert slow.chat.await_challenge("c1", 2) == {"error": "brief v2 was replaced: the host's current draft is v3"}
@@ -416,6 +483,7 @@ def test_a_wait_for_a_version_that_is_not_the_draft_any_more_gets_the_error_not_
 @pytest.mark.parametrize(("row", "told"), [
     ({"actor": "you", "action": "Resume"}, {"running": False, "owner_action": "Resume"}),
     ({"actor": "you", "action": "Approve brief"}, {"running": True}),  # the shaper's own wait is no owner action
+    ({"actor": "you", "action": "Continue in the shaping chat"}, {"running": True}),
     ({"actor": "delivery", "step": "cleanup"}, {"running": False, "next": "the Change is no longer being shaped"}),
     ({}, {"running": True, "next": chat_client.STILL}),
 ])  # fmt: skip
@@ -424,6 +492,26 @@ def test_a_wait_that_ends_still_running_says_who_must_act(monkeypatch, row, told
     out = slow.chat.await_challenge("c1", 2)
     assert told.items() <= out.items()
     assert out["line"] == ROW["line"]
+
+
+def waiting_for_the_chat(slug: str, version: int, challenged: int | None, reason: str) -> m.Change:
+    out = m.Outcome(exit=m.Exit.PENDING, waiting=m.Waiting.CHAT, who="you", reason=reason, at=datetime.now(UTC))
+    brief = m.Brief(version=version, challenged=challenged, title=slug)
+    return m.Change(slug=slug, brief=brief, step=m.Step(kind=m.StepKind.SHAPE), outcome=out)
+
+
+def test_a_chat_of_each_contract_reads_the_shaping_chats_own_waits_as_its_contract_names_them(tmp_path):
+    store = Store(tmp_path)
+    store.write(Lock("flip"), waiting_for_the_chat("flip", 2, 2, "approve brief v2"))
+    store.write(Lock("tidy"), waiting_for_the_chat("tidy", 1, None, "the shaper revises brief v1 for F1"))
+    host = SimpleNamespace(maintenance=None, activity=lambda _s: Activity(host_up=True))
+    http = TestClient(api.create_app(store, "t", host), base_url="http://127.0.0.1", headers=AUTH)
+    for n in [*sorted(chat_contract.SUPPORTED), None]:
+        sent = {} if n is None else {chat_contract.HEADER: str(n)}
+        rows = {r["slug"]: r["action"] for r in http.get("/api/next/changes", headers=sent).json()}
+        own = set(frozen(n or chat_contract.CHAT).get("own_waits", ["Approve brief"]))  # contract 3's until 6 froze it
+        revises = "Continue in the shaping chat" if n is None or n >= 6 else "Approve brief"
+        assert (rows, set(rows.values()) <= own) == ({"flip": "Approve brief", "tidy": revises}, True), n
 
 
 class Landing(Answering):
@@ -438,12 +526,6 @@ class Landing(Answering):
         return out
 
 
-class Replacing(Landing):
-    """The same, but what lands is the next draft, which still runs (its decisions are being picked)."""
-
-    then = RUNNING | {"version": 3}
-
-
 def test_a_verdict_that_lands_after_the_last_running_read_is_told_as_the_verdict_not_as_an_owner_action(monkeypatch):
     slow = Slow(monkeypatch, WAITING | {"GET /changes": [ROW | {"actor": "you", "action": "Resume"}]}, Landing)
     out = slow.chat.await_challenge("c1", 2)
@@ -456,7 +538,8 @@ def test_a_draft_that_replaces_the_awaited_one_is_told_as_replaced_whether_its_c
     replaced = {"error": "brief v2 was replaced: the host's current draft is v3"}
     assert slow.chat.await_challenge("c1", 2) == replaced  # at its first read: the next draft's pick runs
     assert [p for _, p, _ in slow.host.got].count("/changes") == 1  # the wait ended there, with no owner-action read
-    slow = Slow(monkeypatch, WAITING | {"GET /changes": [ROW | {"actor": "you", "action": "Resume"}]}, Replacing)
+    slow = Slow(monkeypatch, WAITING | {"GET /changes": [ROW | {"actor": "you", "action": "Resume"}]}, Landing)
+    slow.host.then = RUNNING | {"version": 3}  # what lands is the next draft, which still runs
     assert slow.chat.await_challenge("c1", 2) == replaced  # at its last read, after the Change's row
 
 

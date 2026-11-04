@@ -29,6 +29,13 @@ Contract 5: contract 4, and ``complete_decision`` marks a wholly finite OwlBear 
 its expected revision, exact condition quote and evidence, sent to ``/decisions/{id}/complete``
 (``tests/fixtures/chat_contract_5.json``). Existing withdrawal and replacement contracts are unchanged.
 
+Contract 6: contract 5, and ``lookup_decisions`` starts the lookup and waits about 70 s, then says running with its
+``lookup_id``, which the ``await_lookup`` tool reads (``POST /decisions/lookups``,
+``GET /decisions/lookups/{lookup_id}``), so no tool call outlasts the Copilot client's 180 s cut (#972). A Change
+whose shaping chat acts next shows ``Continue in the shaping chat`` (#960); a host answers it as ``Approve brief`` to
+a chat of an earlier contract, whose ``await_challenge`` reads only that label as the shaping chat's own wait
+(``own_waits`` in ``tests/fixtures/chat_contract_6.json``).
+
 A host whose contract answer has ``"admit_by": true`` refuses a ``/decisions/propose`` save that starts after the
 time in the request's ``X-OwlBear-Admit-By`` header (#846); a chat whose host lacks it never takes a lost answer as
 not saved.
@@ -42,8 +49,8 @@ from pydantic import BaseModel, ConfigDict
 
 from owlbear_delivery_next.local_system import codebase
 
-CHAT = 5  # the contract this code's chat server speaks
-SUPPORTED = frozenset({1, 2, 3, 4, 5})  # the contracts this code's host serves
+CHAT = 6  # the contract this code's chat server speaks
+SUPPORTED = frozenset({1, 2, 3, 4, 5, 6})  # the contracts this code's host serves
 HEADER = "X-OwlBear-Chat"
 CAPABILITY = "/api/next/chat/contract"  # a host that has none predates the contract
 UNSUPPORTED = (

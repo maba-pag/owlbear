@@ -16,6 +16,7 @@ import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -1234,6 +1235,12 @@ def test_a_terminal_session_is_not_followed_but_listed_while_a_vs_code_one_in_th
     assert {r["session"] for r in records()} == {"vs"}
 
 
+def test_a_lookup_still_running_when_the_conflict_checks_wait_ends_is_kept_as_failed(monkeypatch):
+    running = {"running": True, "lookup_id": "L1", "next": chat_client.AWAIT_LOOKUP}
+    monkeypatch.setattr(chat_client, "workspace", lambda _repo: SimpleNamespace(lookup_decisions=lambda _q: running))
+    assert list(json.loads(chat_acts.conflicts("w", "git push"))) == ["failed"]  # so the record stays preliminary
+
+
 @pytest.mark.parametrize(
     "answer",
     [
@@ -1249,7 +1256,7 @@ def test_a_chats_state_change_is_checked_through_the_hosts_lookup_and_a_failed_o
     class Host(chat_client.Chat):
         def call(self, method: str, path: str, body: object = None, *_: Any, **__: Any) -> tuple[int, Any]:
             asked_.append((method, path, body))
-            return 200, answer
+            return 200, {"lookup_id": "L1"} if method == "POST" else {"running": False, "answer": answer}
 
     async def found(_card: dict[str, Any], _ctx: spotter.Context, meter: credit_meter.Meter) -> str:
         meter.part().ended(None, confirmed=True)
@@ -1268,8 +1275,9 @@ def test_a_chats_state_change_is_checked_through_the_hosts_lookup_and_a_failed_o
     asyncio.run(scenario())
     assert spotter.WORK.settled(5)
     assert acts.CHECKS.settled(5)
-    [(method, path, body)] = asked_
-    assert (method, path, "git push" in body["question"]) == ("POST", "/decisions/lookup", True)
+    [(method, path, body), read] = asked_
+    assert (method, path, "git push" in body["question"]) == ("POST", "/decisions/lookups", True)
+    assert read == ("GET", "/decisions/lookups/L1", None)  # started, then read (#972)
     [record] = [r for r in retro_units.records() if r["look"] == "state-change"]
     assert (record["act"], json.loads(record["conflict"])) == ("none", answer)
     preliminary = retro_units.grade(record, "r1", "useful")["preliminary"]

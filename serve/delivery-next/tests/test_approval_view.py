@@ -448,6 +448,24 @@ def test_a_card_names_the_files_its_activity_touches_without_their_paths(page_ur
 
 
 @pytest.mark.browser
+def test_a_shaping_rows_next_action_says_whether_the_owner_approves_or_the_shaping_chat_continues(
+    page_url, pds
+) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    waits = m.Outcome(exit=m.Exit.PENDING, waiting=m.Waiting.CHAT, who="you", reason="approve brief v2", at=NOW)
+    store.write(Lock("flip"), change().model_copy(update={"outcome": waits}))  # v2 challenged: the owner approves it
+    revises = waits.model_copy(update={"reason": "the shaper revises brief v1 for F1"})
+    tidy = m.Brief(version=1, title="Tidy the footer")
+    store.write(Lock("tidy"), m.Change(slug="tidy", brief=tidy, step=m.Step(kind=m.StepKind.SHAPE), outcome=revises))
+    with opened(base, "flip", pds) as page:
+        flip, tidy = (page.locator(f"#changes .card:has(a[data-key='{k}']) p.next") for k in ("flip", "tidy"))
+        expect(flip).to_have_text("Next: Approve brief")
+        expect(tidy).to_have_text("Next: Continue in the shaping chat")
+
+
+@pytest.mark.browser
 def test_a_change_reads_by_its_title_and_its_slug_stands_in_while_it_has_none(page_url, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 

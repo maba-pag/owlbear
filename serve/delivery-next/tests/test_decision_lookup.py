@@ -272,6 +272,67 @@ def test_a_lead_chats_lookup_whose_processes_are_not_confirmed_gone_holds_the_ne
     assert len(picking.pickers()) == 2
 
 
+@pytest.mark.parametrize("error", [OSError, asyncio.CancelledError])
+def test_a_started_lookup_that_raises_reads_the_whole_error_and_frees_the_slot(monkeypatch, error):
+    def broke(*_a):
+        msg = "the picker's folder went away"
+        raise error(msg)
+
+    monkeypatch.setattr(lookup, "chat", broke)
+    chats = lookup.Chats()
+    raised = chats.start()
+    with pytest.raises(error, match="folder went away"):  # the host's log has it too
+        chats.finish(raised, None, PROJECT, QUESTION, None)
+    said = {"failed": f"{error.__name__}: the picker's folder went away"}
+    assert chats.read(raised) == {"running": False, "answer": said}  # never running forever
+    assert chats.start() is not None  # the slot is free
+
+
+def started(picking):
+    return picking.http.post("/api/next/decisions/lookups", json={"question": QUESTION})
+
+
+def test_a_lead_chats_started_lookup_is_read_by_its_id_one_at_a_time_and_an_unknown_id_is_named(
+    picking, monkeypatch, chat_replied
+):
+    rule, general = picking.put(make()), picking.put(fonts(scope=Scope.GLOBAL, project=""))
+    picking.picks += [picked(rule.id), picked(general.id)]
+
+    def read(lookup_id: str) -> dict:
+        r = picking.http.get(f"/api/next/decisions/lookups/{lookup_id}")
+        assert r.status_code == 200, r.text
+        chat_replied("GET", str(r.url), r.json())
+        return r.json()
+
+    ids = []
+    for _ in range(2):
+        r = started(picking)
+        chat_replied("POST", str(r.url), r.json())
+        ids.append(r.json()["lookup_id"])
+    answers = [read(i) for i in (*ids, *ids)]
+    assert len(set(ids)) == 2  # each lookup is read by its own id, twice the same
+    assert [[d["id"] for d in a["answer"]["decisions"]] for a in answers] == [[rule.id], [general.id]] * 2
+    gone = picking.http.get("/api/next/decisions/lookups/nope")
+    assert (gone.status_code, gone.json()["detail"]) == (404, lookup.GONE.format("nope"))
+
+    work = Blocked(Run("look", "result", termination=DONE))
+    monkeypatch.setattr(lookup, "chat", work)
+    monkeypatch.setattr(lookup, "SLOT_WAIT", 0.05)
+    with picking.http.stream("POST", "/api/next/decisions/lookups", json={"question": QUESTION}) as r:
+        body = r.iter_bytes()
+        try:
+            lookup_id = json.loads(next(body))["lookup_id"]  # answered before the pick ran
+            assert read(lookup_id) == {"running": True}
+            busy = started(picking)
+            assert (busy.status_code, busy.json()["detail"]) == (409, lookup.BUSY)
+            assert host_lookup(picking) == {"failed": lookup.BUSY}  # the blocking route shares the slot
+        finally:
+            work.release.set()
+            assert list(body) == []  # the request ends once the pick has
+    assert read(lookup_id) == {"running": False, "answer": {"decisions": []}}
+    assert (host_lookup(picking), work.most) == ({"decisions": []}, 1)  # contracts 1-5's route still answers
+
+
 class Answer(io.BytesIO):
     def __init__(self, data: bytes, status: int) -> None:
         super().__init__(data)
@@ -299,7 +360,7 @@ def chat_tool(name: str, **args: object) -> dict:
     return asyncio.run(mcp_server.mcp.call_tool(name, args)).structured_content
 
 
-def test_a_lead_chats_lookup_through_the_project_host_waits_past_fifteen_seconds_and_a_failure_says_failed(
+def test_a_lead_chats_lookup_through_the_project_host_is_started_and_read_and_a_failure_says_failed(
     picking, monkeypatch
 ):
     rule, general = picking.put(make()), picking.put(fonts(scope=Scope.GLOBAL, project=""))
@@ -316,8 +377,7 @@ def test_a_lead_chats_lookup_through_the_project_host_waits_past_fifteen_seconds
     whole = {"id": general.id, "title": general.title, "statement": general.statement, "scope": "global"}
     assert found == {"decisions": [whole | {"origin": "approved"}]}
     assert failed["failed"].startswith("its session ended error")
-    assert opener.waited == [15.0, pick_tools.WAIT, pick_tools.WAIT]  # the host's chat contract is asked once first
-    assert pick_tools.WAIT > 15  # the chat's other calls wait 15 seconds
+    assert opener.waited == [15.0] * 5  # the host's chat contract once first, then each lookup's start and read
     message = picking.pickers()[0].message
     assert all(x in message for x in (QUESTION, rule.id, general.id))
     assert "## The work" not in message  # no Change: no brief
@@ -457,7 +517,7 @@ def test_a_lead_chats_lookup_in_owlbears_workspace_goes_through_the_machine_host
         machine.stop_all()
 
     assert [d["id"] for d in found["decisions"]] == [own.id]
-    assert opener.waited == [15.0, pick_tools.WAIT]  # the host's chat contract first
+    assert opener.waited == [15.0] * 3  # the host's chat contract first, then the start and the read
     [cfg] = told
     assert (cfg.role, own.id in cfg.message, general.id in cfg.message, project.id in cfg.message) == (
         tools.PICKER, True, True, False

@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import chat_contract, pick_tools
 from owlbear_delivery_next.change_contracts.models import StepKind
-from owlbear_delivery_next.change_flow.status import APPROVE
+from owlbear_delivery_next.change_flow.status import APPROVE, CONTINUE
 from owlbear_delivery_next.local_system import codebase, data_repo, local_home
 from owlbear_delivery_next.project_host import answers, api, host
 from owlbear_delivery_next.state_store import project_home
@@ -64,12 +64,10 @@ CUT = (OSError, ValueError, http.client.HTTPException)  # no answer, or one cut 
 
 
 def _told(version: int, code: int, now: dict[str, Any]) -> dict[str, Any]:
-    """A challenge read as the chat tools tell it: *now* when it is *version*'s, else why not."""
+    """A challenge read that cannot be told as this version's: why not."""
     if code != OK:
         return {"error": now.get("error") or now.get("detail"), "next": UNKNOWN_OUTCOME}
-    if now.get("version") != version:
-        return {"error": f"brief v{version} was replaced: the host's current draft is v{now.get('version')}"}
-    return now
+    return {"error": f"brief v{version} was replaced: the host's current draft is v{now.get('version')}"}
 
 
 def done(code: int) -> bool | None:
@@ -91,6 +89,7 @@ PAGE_ONLY = ("progress", "spend", "tool_use", "pullback")  # off the list of all
 PAUSED = "paused: ask the owner to press Resume on the Changes page; the challenge runs then - call show_status"
 STILL = "the challenge still runs: call await_challenge with the handle and the version"
 UNKNOWN_OUTCOME = "the challenge's outcome is unknown: call await_challenge again"
+AWAIT_LOOKUP = "the lookup still runs: call await_lookup with this lookup_id at once"
 _pause = time.sleep  # the poll's own pause
 FOUND = 20  # decisions a find returns; the rest are counted
 SHORT = ("id", "title", "statement", "scope", "origin", "state", "conflict", "read_back", "revision")
@@ -233,10 +232,10 @@ class Chat:
         if out.get("paused"):  # TD-283: recorded now, judged once the owner resumes Delivery
             return {"requested": True, "running": False, "next": PAUSED}
         code, now = self._wait(out["slug"], version, out["attempt"], start + WAIT)  # only its outcome is read
-        if code == OK and not now.get("running"):
-            return {"requested": True, **{k: v for k, v in now.items() if k != "running"}}
-        why = {} if code in {OK, 503} else {"error": now.get("error") or now.get("detail")}
-        return {"requested": True, "running": True, "next": STILL} | why
+        out = self._ended(out["slug"], version, out["attempt"], code, now)
+        if "version" in out:  # the verdict, as the host read it: its guidance kept
+            return {"requested": True, **{k: v for k, v in out.items() if k != "running"}}
+        return {"requested": True, **out}
 
     def await_challenge(self, change: str, version: int) -> dict[str, Any]:
         """Wait for the version's challenge, which is only read: its findings by ID, who must act, or that it runs."""
@@ -249,19 +248,20 @@ class Chat:
         if version != (current := brief["challenge"]["version"]):
             return {"error": f"brief v{version} is not the current draft v{current}"}
         slug, attempt = row["slug"], brief["challenge"]["attempt"]
-        code, now = self._wait(slug, version, attempt, start + WAIT)
-        if code == OK and now.get("version") == version:
-            return self._ended(slug, version, attempt, now)
-        return _told(version, code, now)
+        return self._ended(slug, version, attempt, *self._wait(slug, version, attempt, start + WAIT))
 
-    def _ended(self, slug: str, version: int, attempt: int, now: dict[str, Any]) -> dict[str, Any]:
-        """The wait ended on a read for this draft: what the Change's row adds to it, a verdict first.
+    def _ended(self, slug: str, version: int, attempt: int, code: int, now: dict[str, Any]) -> dict[str, Any]:
+        """How challenge_brief's and await_challenge's wait ended, from its last read.
 
+        It tells the verdict, who must act, why the Change is no longer shaped, that it still runs, or why the read
+        cannot be told as this draft's.
         The row is read before a running challenge's outcome, so a verdict that lands between the two reads is told as
         the verdict, not as an owner action (the Change then waits for the shaping chat, which its row shows as an
         action). A row that has left shaping says so whatever the read held: a recheck of the same draft that was
         abandoned reads as the previous round's findings.
         """
+        if code != OK or now.get("version") != version:
+            return _told(version, code, now)
         code, rows = self.call("GET", "/changes")
         if code != OK:
             return _told(version, code, rows)
@@ -275,9 +275,9 @@ class Chat:
             return {"running": False, "line": line, "next": "the Change is no longer being shaped"}
         if not now.get("running"):
             return now
-        if row.get("actor") != "delivery" and row.get("action") != APPROVE:
-            return {"running": False, "owner_action": row.get("action"), "line": line}
-        return {"running": True, "line": line, "next": STILL}
+        waits = row.get("actor") == "delivery" or row.get("action") in {APPROVE, CONTINUE}  # no one else must act
+        told = {"running": True, "next": STILL} if waits else {"running": False, "owner_action": row.get("action")}
+        return told | {"line": line}
 
     def _read(self, slug: str, version: int, attempt: int) -> tuple[int, dict[str, Any]]:
         return self.call("GET", f"/chat/challenge/{urllib.parse.quote(slug)}?version={version}&attempt={attempt}")
@@ -325,12 +325,30 @@ class Chat:
         rows = [{k: d[k] for k in SHORT} for d in out["decisions"]]
         return {"found": True, "decisions": rows[:FOUND], "more": len(rows[FOUND:]), "decisions_page": self.page()}
 
-    def lookup_decisions(self, question: str) -> dict[str, Any]:
-        """The picker's answer, waited for as long as a pick takes; any failure says failed, never none."""
-        code, out = self.call("POST", "/decisions/lookup", {"question": question}, timeout=pick_tools.WAIT)
+    def lookup_decisions(self, question: str, wait: float = pick_tools.WAIT) -> dict[str, Any]:
+        """Start the picker; its answer within *wait* s, else that it runs. A failure says failed, never none.
+
+        The default waits past the picker's limit, for callers that need the answer.
+        """
+        start = time.monotonic()
+        code, out = self.call("POST", "/decisions/lookups", {"question": question})
         if code != OK:
-            return {"failed": str(out.get("detail") or out.get("error") or f"the host answered {code}")}
-        return out
+            return {"failed": _why(code, out)}
+        return self.await_lookup(out["lookup_id"], wait, start)
+
+    def await_lookup(self, lookup_id: str, wait: float = WAIT, start: float | None = None) -> dict[str, Any]:
+        """A started lookup's whole answer, waited for until *wait* s after *start* (now), else that it still runs."""
+        deadline = (time.monotonic() if start is None else start) + wait
+        while True:
+            code, now = self.call("GET", f"/decisions/lookups/{urllib.parse.quote(lookup_id, safe='')}")
+            if code == OK and not now.get("running"):
+                return now["answer"]
+            if code not in {OK, 503}:  # 503: the host is handing over, or was not reached
+                return {"failed": _why(code, now)}
+            if time.monotonic() >= deadline:
+                told = {"running": True, "lookup_id": lookup_id, "next": AWAIT_LOOKUP}
+                return told | ({"error": _why(code, now)} if code != OK else {})
+            _pause(POLL)
 
     def write(self, path: str, body: dict[str, Any], headers: dict[str, str] | None = None) -> dict[str, Any]:
         """One decision write through the host: its receipts, or why it was refused."""
@@ -393,6 +411,10 @@ class Chat:
         if body["confirmed"] and body.get("replaces") and body.get("effect") != "wording":
             notice += IMPACT_LOST
         return {"saved": True, "receipts": [{"id": made["id"], "saved": True}], "notice": notice}
+
+
+def _why(code: int, out: dict[str, Any]) -> str:
+    return str(out.get("detail") or out.get("error") or f"the host answered {code}")
 
 
 def _same(row: dict[str, Any], body: dict[str, Any]) -> bool:
