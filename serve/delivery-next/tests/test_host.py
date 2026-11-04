@@ -45,7 +45,7 @@ from owlbear_delivery_next.project_host import api, host
 from owlbear_delivery_next.project_host.host import Host, RunnerRecord
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import Layer
-from owlbear_delivery_next.state_store import machine_settings
+from owlbear_delivery_next.state_store import machine_settings, work_block
 from owlbear_delivery_next.state_store.database import put_record
 from owlbear_delivery_next.state_store.store import ACTIVITY_LIMIT, Store
 from owlbear_delivery_next.workflow_steps import check, disposable, prepare
@@ -965,7 +965,9 @@ def test_resume_leaves_a_stop_and_the_owners_recovery_reruns_its_step(store, tmp
     assert api_.post("/api/next/changes/c1/intent", json={"intent": "resume"}).status_code == 200
     assert fake.host.tick(NOW) == []
     assert store.read("c1").outcome.exit == Exit.STOP
-    assert api_.get("/api/next/changes/c1").json()["recovery"] == {"reason": "GitHub refused", "unset": None} | SHOWN
+    assert api_.get("/api/next/changes/c1").json()["recovery"] == {
+        "reason": "GitHub refused", "unset": None, "settings": {"count": 0, "reason": ""}
+    } | SHOWN
     answer = api_.post("/api/next/changes/c1/recovery", json=SHOWN)
     assert (answer.status_code, answer.json()) == (200, {"accepted": "recovery"})
     assert [(i["kind"], i["action"]) for i in map(json.loads, queued(store))] == [("recovery", "Resolve it in GitHub")]
@@ -1035,6 +1037,24 @@ def test_a_stop_the_owner_cannot_clear_is_refused_and_nothing_is_queued(store, t
     assert (api_.get("/api/next/changes/c1").json()["recovery"] is None) is (case not in changed)
     with store.lock("c1") as lock:
         assert store.fold(lock, "c1", NOW)[0].stop == c.stop
+
+
+@pytest.mark.parametrize(("unset", "unreadable"), [(True, False), (False, True), (True, True)])
+def test_the_recovery_read_counts_the_unset_settings_and_keeps_why_they_cannot_be_read(
+    store, tmp_path, monkeypatch, unset, unreadable
+):
+    """The page says how many are unset, never their keys, and never hides an unreadable file behind that count."""
+    if unset:
+        monkeypatch.setattr(machine_settings, "BASE", None)
+    if unreadable:
+        store.config_path.write_text("{not json")
+    fake = Fake(store, tmp_path)
+    save(store, stopped(fake))
+    recovery = client(store, fake).get("/api/next/changes/c1").json()["recovery"]
+    block = work_block.of_store(store)
+    assert (bool(block.keys), bool(block.reason)) == (unset, unreadable)
+    assert recovery["settings"] == {"count": len(block.keys), "reason": block.reason}  # one read: parts and words agree
+    assert recovery["unset"].startswith("The settings can't be read" if unreadable else "Settings unset: ")
 
 
 @pytest.mark.parametrize("layer", [machine_settings, config])

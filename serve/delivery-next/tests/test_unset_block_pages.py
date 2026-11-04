@@ -40,7 +40,8 @@ if TYPE_CHECKING:
 
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
 GAP = "prefs.ci_poll_seconds"
-UNSET = f"settings unset: {GAP}; fill them in on the Settings page"
+UNSET = "1 setting is unset; set it on the Settings page"  # the pages' words: a count, never the keys
+FOLDER = f"settings unset: {GAP}; fill them in on the Settings page"  # a curation folder still shows the server's text
 EVERY = "No work can be done until the unset settings are set."
 NONE_OPEN = "every project's settings are unset or can't be read"
 NO_FOLDER = "every folder's settings are unset or can't be read"
@@ -249,7 +250,8 @@ def test_an_unreadable_layer_is_named_with_its_reason_and_an_unset_interval_bloc
     expect(banner).to_have_attribute("state", "error", timeout=WAIT)
     expect(banner).to_have_attribute("heading", EVERY)
     expect(banner.locator("li")).to_have_count(2)
-    expect(banner.locator("li").nth(1)).to_contain_text("beta: settings unset: machine.update_check_hours_")
+    expect(banner.locator("li").nth(0)).to_have_text("alpha: settings can't be read: state of config is unreadable")
+    expect(banner.locator("li").nth(1)).to_have_text("beta: 3 settings are unset; set them on the Settings page")
     expect(page.get_by_role("button", name="New Change")).to_be_disabled()
 
 
@@ -264,16 +266,16 @@ def test_maintenance_holds_curation_and_a_test_review_only_where_work_may_not_st
     page.goto(f"{base}/maintenance?project={a}")
     rows, body = page.locator("#curation li"), page.locator("body")
     expect(rows.locator("h3")).to_have_text(["alpha", "beta"], timeout=WAIT)
-    held_with(rows.nth(0), "Curate alpha now", UNSET)
-    expect(rows.nth(0).locator("p-text.blocked")).to_have_text(f"S{UNSET[1:]}.")
+    held_with(rows.nth(0), "Curate alpha now", FOLDER)
+    expect(rows.nth(0).locator("p-text.blocked")).to_have_text(f"S{FOLDER[1:]}.")
     expect(rows.nth(1).get_by_role("button", name="Curate beta now")).to_be_enabled()
     expect(page.get_by_role("button", name="Curate all now")).to_be_enabled()
     held_with(page.locator("#tests"), "Review tests", UNSET)
-    expect(page.locator("#tests-blocked")).to_have_text(f"S{UNSET[1:]}.")
+    expect(page.locator("#tests-blocked")).to_have_text(f"{UNSET}.")
 
     poll_interval(host.stores["beta"], None)  # every folder waits now: the open page follows the machine's poll
     held_with(body, "Curate all now", NO_FOLDER)
-    held_with(rows.nth(1), "Curate beta now", UNSET)
+    held_with(rows.nth(1), "Curate beta now", FOLDER)
     poll_interval(host.stores["beta"], 20)
     expect(page.get_by_role("button", name="Curate all now")).to_be_enabled(timeout=WAIT)
     poll_interval(host.stores["alpha"], 30)

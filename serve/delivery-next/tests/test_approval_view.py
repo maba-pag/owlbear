@@ -586,7 +586,10 @@ def test_the_owner_reruns_a_stopped_step_after_confirming_what_follows(page_url,
         again = page.get_by_role("button", name="Done: run the step again")
         if case in {"liveness", "unset"}:
             if case == "unset":
-                expect(note).to_contain_text("Settings unset: ")
+                expect(note).to_contain_text(
+                    re.compile(r"\d+ settings are unset; set them on the Settings page to run the step again")
+                )
+                expect(note).not_to_contain_text("agents.")  # how many, never which keys
             expect(again).to_have_count(0)
             return
         posts = []

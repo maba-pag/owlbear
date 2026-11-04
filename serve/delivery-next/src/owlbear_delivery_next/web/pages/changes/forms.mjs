@@ -1,4 +1,5 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
+import { settingsWait } from "/assets/ui.mjs";
 import { DIALOG, REVERT, state, show, draft, notify, send, starts } from "./state.mjs";
 import {
   button, external, field, choice, tick, hd, text, list, row, panel, info, notice, refusal,
@@ -330,12 +331,19 @@ export function pullbackNote(p, d) {
     @action=${behind ? pull : nothing}>${p.reason || ""}</p-inline-notification>`;
 }
 
+// What keeps the rerun from starting: the unreadable settings in full, else how many are unset (never their keys).
+function recoveryWait(r) {
+  const words = settingsWait(r.settings.count, r.settings.reason, r.unset);
+  return r.settings.reason ? words : `${words} to run the step again`;
+}
+
 // A stop the owner may clear once he did what it asks (#754), so Delivery reruns its step; *d.recovery* has the stop,
 // as a paused Change's line describes its pause. Unset settings withhold the action (D-01M61SBWK4VE4MNTD35TR0VPS8).
 export function stopNotice(d) {
   const r = d.recovery, reason = r ? r.reason : d.line.replace(/^.*?stopped: /, ""), action = r ? r.action : d.action;
-  if (!r || r.unset) {
-    return notice("error", "Stopped", `${reason}.`, action ? `What to do: ${action}.` : "", r ? `${r.unset}.` : "");
+  const wait = r?.unset ? recoveryWait(r) : "";
+  if (!r || wait) {
+    return notice("error", "Stopped", `${reason}.`, action ? `What to do: ${action}.` : "", r ? `${wait}.` : "");
   }
   const clear = async () => {
     const again = "If the cause is still there, it stops again with the same message.";
