@@ -77,8 +77,14 @@ def test_unproven_response_repository_is_not_relabelled_as_the_requested_one(tmp
 
 
 def test_a_gh_failure_keeps_its_whole_stderr_and_an_expected_status_its_last_line(tmp_path, whole_error):
+    """#971: a failed gh keeps its whole stderr as the detail its code is read from, then the command and the error
+    body `gh api` printed on stdout; an expected status keeps gh's last line."""
+    ran = []
+    body = '{\n  "message": "BODY-MARK",\n  "documentation_url": "https://docs.github.com/rest"\n}'
+
     def failing(argv, _body, _timeout, _cwd, _env):
-        return subprocess.CompletedProcess(argv, 1, b"", f"gh: {whole_error}\n".encode())
+        ran.append(argv)
+        return subprocess.CompletedProcess(argv, 1, f"{body}\n".encode(), f"gh: {whole_error}\n".encode())
 
     def forbidden(argv, _body, _timeout, _cwd, _env):
         stderr = f"{whole_error}\ngh: Resource not accessible (HTTP 403)\n"
@@ -86,7 +92,10 @@ def test_a_gh_failure_keeps_its_whole_stderr_and_an_expected_status_its_last_lin
 
     with pytest.raises(ProviderError) as failed:
         GhProvider(tmp_path, writer=None, runner=failing).read_pull_request("o/r", 7)
-    assert (failed.value.code, str(failed.value)) == (FailureCode.UNAVAILABLE, f"read_pull_request: {whole_error}")
+    note = f"CalledProcessError: Command '{ran[0]}' returned non-zero exit status 1.\nstdout:\n{body}"
+    assert (failed.value.code, failed.value.retry_safe, str(failed.value), getattr(failed.value, "__notes__", [])) == (
+        FailureCode.UNAVAILABLE, True, f"read_pull_request: {whole_error}", [note]
+    )  # fmt: skip
     found = GhProvider(tmp_path, writer=None, runner=forbidden)._gh("read_protection", ("api", "x"), absent={403})  # noqa: SLF001
     assert found == Missing(403, "Resource not accessible (HTTP 403)")  # an expected status keeps gh's last line
 
