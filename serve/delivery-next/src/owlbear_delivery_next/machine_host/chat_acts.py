@@ -171,7 +171,7 @@ def opened() -> Transport:
 def conflicts(workspace: str, change: str) -> str:
     """The decision-conflict check of a chat's state *change*, by the host's lookup for *workspace*'s clone, as JSON.
 
-    It goes through the running host's ``/decisions/lookup``, whose coordinator admits one lookup at a time and
+    It starts and reads the running host's ``/decisions/lookups``, whose coordinator admits one lookup at a time and
     accounts its run; a busy, failed or refused lookup is kept as ``failed``, so the record stays preliminary.
     """
     question = CONFLICT.format(change=" ".join(change.split())[:800])

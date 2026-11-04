@@ -47,6 +47,7 @@ CHAT_TOOLS |= {"find_decisions", "record_decision", "read_back_decision"}  # TD-
 CHAT_TOOLS |= {"queue_read_back"}  # TD-427: the read-back queue, not granted to the shaper
 CHAT_TOOLS |= {"retire_decision"}  # TD-450: decisions changed in a lead chat, not granted to the shaper
 CHAT_TOOLS |= {"lookup_decisions"}  # TD-456, TD-459: the picker's answer, not granted to the shaper
+CHAT_TOOLS |= {"await_lookup"}  # #972: the wait for a lookup that outlasts the client's tool limit, not the shaper's
 CHAT_TOOLS |= {"correct_decision_origin"}  # the owner's provenance correction (2026-10-23), not the shaper's
 CHAT_TOOLS |= {"complete_decision"}  # the lead's finite OwlBear completion, not granted to the shaper
 WINDOW_TOOLS = {"ask_user"}  # a window chat's structured question (live probe, TD-109)

@@ -89,6 +89,7 @@ PAGE_ONLY = ("progress", "spend", "tool_use", "pullback")  # off the list of all
 PAUSED = "paused: ask the owner to press Resume on the Changes page; the challenge runs then - call show_status"
 STILL = "the challenge still runs: call await_challenge with the handle and the version"
 UNKNOWN_OUTCOME = "the challenge's outcome is unknown: call await_challenge again"
+AWAIT_LOOKUP = "the lookup still runs: call await_lookup with this lookup_id at once"
 _pause = time.sleep  # the poll's own pause
 FOUND = 20  # decisions a find returns; the rest are counted
 SHORT = ("id", "title", "statement", "scope", "origin", "state", "conflict", "read_back", "revision")
@@ -324,12 +325,30 @@ class Chat:
         rows = [{k: d[k] for k in SHORT} for d in out["decisions"]]
         return {"found": True, "decisions": rows[:FOUND], "more": len(rows[FOUND:]), "decisions_page": self.page()}
 
-    def lookup_decisions(self, question: str) -> dict[str, Any]:
-        """The picker's answer, waited for as long as a pick takes; any failure says failed, never none."""
-        code, out = self.call("POST", "/decisions/lookup", {"question": question}, timeout=pick_tools.WAIT)
+    def lookup_decisions(self, question: str, wait: float = pick_tools.WAIT) -> dict[str, Any]:
+        """Start the picker; its answer within *wait* s, else that it runs. A failure says failed, never none.
+
+        The default waits past the picker's limit, for callers that need the answer.
+        """
+        start = time.monotonic()
+        code, out = self.call("POST", "/decisions/lookups", {"question": question})
         if code != OK:
-            return {"failed": str(out.get("detail") or out.get("error") or f"the host answered {code}")}
-        return out
+            return {"failed": _why(code, out)}
+        return self.await_lookup(out["lookup_id"], wait, start)
+
+    def await_lookup(self, lookup_id: str, wait: float = WAIT, start: float | None = None) -> dict[str, Any]:
+        """A started lookup's whole answer, waited for until *wait* s after *start* (now), else that it still runs."""
+        deadline = (time.monotonic() if start is None else start) + wait
+        while True:
+            code, now = self.call("GET", f"/decisions/lookups/{urllib.parse.quote(lookup_id, safe='')}")
+            if code == OK and not now.get("running"):
+                return now["answer"]
+            if code not in {OK, 503}:  # 503: the host is handing over, or was not reached
+                return {"failed": _why(code, now)}
+            if time.monotonic() >= deadline:
+                told = {"running": True, "lookup_id": lookup_id, "next": AWAIT_LOOKUP}
+                return told | ({"error": _why(code, now)} if code != OK else {})
+            _pause(POLL)
 
     def write(self, path: str, body: dict[str, Any], headers: dict[str, str] | None = None) -> dict[str, Any]:
         """One decision write through the host: its receipts, or why it was refused."""
@@ -392,6 +411,10 @@ class Chat:
         if body["confirmed"] and body.get("replaces") and body.get("effect") != "wording":
             notice += IMPACT_LOST
         return {"saved": True, "receipts": [{"id": made["id"], "saved": True}], "notice": notice}
+
+
+def _why(code: int, out: dict[str, Any]) -> str:
+    return str(out.get("detail") or out.get("error") or f"the host answered {code}")
 
 
 def _same(row: dict[str, Any], body: dict[str, Any]) -> bool:
