@@ -182,6 +182,10 @@ def test_a_blocked_or_unloadable_change_keeps_its_whole_error(  # noqa: PLR0913,
     whole = f"{said}{type(error).__name__}: {whole_error}\na note added on the way up"
     if where == "record":
         assert logged(capsys.readouterr().out, "c1: ") == [whole]
+        c = client(store, fake)  # the Change's card and its refused detail say it whole too
+        assert c.get("/api/next/changes").json()[0]["line"] == f"stopped: {whole}"
+        detail = c.get("/api/next/changes/c1")
+        assert (detail.status_code, detail.json()["detail"]) == (409, whole)
         return
     assert store.read("c1").blocked.reason == whole
     assert logged(capsys.readouterr().out, "c1: no writer starts: ") == [whole]

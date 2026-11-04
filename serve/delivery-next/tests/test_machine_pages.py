@@ -55,6 +55,7 @@ from owlbear_delivery_next.change_contracts.visual_records import (
 )
 from owlbear_delivery_next.change_flow import loop, round_flow
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import pack_files
@@ -71,7 +72,7 @@ from owlbear_delivery_next.machine_host import alias, app, project, update_check
 from owlbear_delivery_next.machine_host import impeccable as machine_impeccable
 from owlbear_delivery_next.machine_host import serve as host_start
 from owlbear_delivery_next.machine_host.machine import Machine
-from owlbear_delivery_next.project_host import api, pack_routes
+from owlbear_delivery_next.project_host import api, pack_routes, runner_end
 from owlbear_delivery_next.project_host import host as host_module
 from owlbear_delivery_next.project_host import leftovers as host_leftovers
 from owlbear_delivery_next.project_host.host import Host, HostRecord
@@ -81,7 +82,7 @@ from owlbear_delivery_next.runtimes.settings_seen import NAME as SEEN
 from owlbear_delivery_next.settings import carried, config, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
 from owlbear_delivery_next.state_store import decision_store, registry, watch_reports
-from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store
+from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store, StoreError
 from owlbear_delivery_next.workflow_steps import decision, design, judges, pick, publish, retry, visual
 from owlbear_delivery_next.workflow_steps.engine import Ctx
 
@@ -591,6 +592,51 @@ def test_a_failed_host_pass_is_noted_whole_on_the_changes_page(tmp_path: Path, m
         expect(notes).to_have_count(1, timeout=15000)
         whole = f"RuntimeError: {whole_error}\na note added on the way up"
         assert notes.all_text_contents() == [f"The host's last pass failed: {whole}"]
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)  # a real browser and the machine host; a loaded runner needs more than 30 s
+def test_a_blocked_or_unreadable_changes_card_shows_its_whole_error(
+    tmp_path: Path, monkeypatch, pds, whole_error
+) -> None:
+    """R1 (#971): a card that says why its Change stopped keeps every path and line of the error, unclipped."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "stuck"))
+    folder = f"{alpha.path}/.owlbear/changes"
+    now = datetime.now(UTC)
+    shaping(Path(alpha.path), "Stuck brief", "stuck", step=Step(kind=StepKind.SHAPE, started_at=now),
+            blocked=runner_end.block({9: ""}, now))  # fmt: skip
+    shaping(Path(alpha.path), "Broken brief", "broken")
+    pids = OSError(13, whole_error, f"{folder}/stuck/step-pids.json")
+    pids.add_note(f"a note naming {folder}/stuck")
+    broken = StoreError(f"{whole_error}\nunreadable: {folder}/broken/change.json")
+    broken.add_note("a note added on the way up")
+
+    def recorded(*_args: object) -> None:
+        raise pids
+
+    def read(self: Store, slug: str, *args: object, **kwargs: object) -> Change:
+        if slug == "broken":
+            raise broken
+        return reading(self, slug, *args, **kwargs)
+
+    reading = Store.read
+    monkeypatch.setattr(host_leftovers.step_pids, "recorded", recorded)
+    monkeypatch.setattr(Store, "read", read)
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/#token=t")
+        stuck = page.locator("li.card", has=page.locator('a[data-key$="stuck"]')).locator("p.says:not(.stage)")
+        unreadable = page.locator("li.card", has=page.locator('a[data-key$="broken"]')).locator("p.says")
+        expect(stuck).to_contain_text("could not be read", timeout=15000)
+        expect(unreadable).to_contain_text("StoreError")
+        assert stuck.text_content() == f"stopped: the step's recorded processes could not be read: {failure(pids)}"
+        assert unreadable.text_content() == f"stopped: {failure(broken)}"
+        for says in (stuck, unreadable):
+            expect(says).to_be_visible()
+            assert says.evaluate("e => e.scrollHeight <= e.clientHeight && getComputedStyle(e).overflow === 'visible'")
         assert said == []
 
 

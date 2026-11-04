@@ -20,7 +20,9 @@ function groupOf(label) {
 }
 
 function card([c, label, variant]) {
-  const current = c.key === state.selected, [stage, rest] = split(short(c.line)), step = c.progress?.line;
+  const stopped = label === "Stopped";  // why it stopped is an error, said whole: every path, unclamped (#971)
+  const current = c.key === state.selected, [stage, rest] = split(stopped ? c.line : short(c.line));
+  const step = c.progress?.line;
   const open = (event) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
@@ -43,8 +45,8 @@ function card([c, label, variant]) {
     ${c.title || several() ? html`<p class="meta">${c.title ? c.slug : ""}${c.title && several() ? " \u00b7 " : ""}${
       several() ? html`<span class="project">${c.projectName}</span>${own}` : nothing}</p>` : nothing}
     ${step ? html`<p class="says stage">${step}</p>` : nothing}
-    <p class="says">${stage && !step && stage !== label ? html`<span class="stage">${stage}</span> \u00b7 `
-      : nothing}${rest}</p>
+    <p class=${stopped ? "says whole" : "says"}>${stage && !step && stage !== label
+      ? html`<span class="stage">${stage}</span> \u00b7 ` : nothing}${rest}</p>
     ${c.action && groupOf(label) !== "working" ? html`<p class="next">Next: ${c.action}</p>` : nothing}
     ${bits.length ? html`<p class="meta">${bits.join(" \u00b7 ")}</p>` : nothing}
     ${(c.overlaps || []).map((o) => html`<p class="meta">${o}</p>`)}

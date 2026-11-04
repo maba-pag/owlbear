@@ -30,6 +30,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import loop, moves, rebuilds, round_flow, round_marks, versions
 from owlbear_delivery_next.change_flow.progress import progress
 from owlbear_delivery_next.change_flow.status import card, for_chat, status, unloadable
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable_runs import pack_job
 from owlbear_delivery_next.project_host import (
     amendment_routes,
@@ -165,7 +166,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     try:
         c = store.read(slug)
     except StoreError as exc:
-        s = unloadable(exc.stop(now))
+        s = unloadable(exc.stop(now).model_copy(update={"reason": failure(exc)}))
         return {"slug": slug, "line": s.line, "action": s.action, "actor": s.actor}
     tool = store.now(slug)
     s = status(c, act, now, tool)
@@ -256,7 +257,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         try:
             return store.read(slug)
         except StoreError as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise HTTPException(409, failure(exc)) from exc
 
     def summary_of(slug: str) -> dict[str, Any]:
         return summary(store, slug, host.activity(slug), datetime.now(UTC))
