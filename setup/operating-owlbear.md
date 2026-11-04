@@ -235,12 +235,13 @@ Retro, curation of its memory folder and test review wait. On the Changes page t
 would start its work, such as Resume, Answer and the approvals, are disabled; Pause, Withdraw and
 Pull still work, and a draft answer stays. The page names each project that waits, with how many of its
 settings are unset (or why they can't be read) and a link to its settings, and shows an error once no
-project can start work. The Unset settings list, Across projects and the changed-elsewhere notices name a
-setting by the words its row on the Settings page shows, such as "planner · Model", so you can find it there;
-a setting the page has no row for is named by its key, and the technical keys stay in the CLI, logs and
-agent errors. A step that already runs when one turns unset asks you to fill it in. Automatic memory curation
-also waits until its role and threshold are set; a memory folder with no project settings of its own
-waits only for those and this machine's. A new machine that uses your
+project can start work. Maintenance's curation folders say the same for their own block and for their last
+refused run. The Unset settings list, Across projects, the changed-elsewhere notices and the pending line and
+save dialogs of Settings name a setting by the words its row on the Settings page shows, such as
+"planner · Model", so you can find it there; a setting the page has no row for is named by its key, and the
+technical keys stay in the CLI, logs and agent errors. A step that already runs when one turns unset asks you
+to fill it in. Automatic memory curation also waits until its role and threshold are set; a memory folder
+with no project settings of its own waits only for those and this machine's. A new machine that uses your
 shared repository takes its global settings; one without starts with every setting unset. Nothing
 lies under the global settings, so with the Global layer chosen the page names the choice that
 clears a value Unset and warns while a needed one is unset.

@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 SESSIONS = "Agent sessions at once in one project"  # the row's name; its key is `sessions`
+LOOKS = "Spotter · Looks (hand-off, plan, state-change, sample)"
 
 MODELS = {
     "models": [
@@ -142,7 +143,7 @@ def the_global_layer_kept_its_edit_and_takes_one_more(page, pds) -> None:
     threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")
     expect(threshold).to_have_attribute("placeholder", "Unset")
     threshold.fill("90")
-    expect(page.locator("#pending")).to_contain_text("curator threshold: unset → 90")
+    expect(page.locator("#pending")).to_contain_text("Curator's confidence threshold (%): unset → 90")
     pds.pick(page, "Layer", "project")
     held = page.locator("#set-curator_threshold")  # #809: one value everywhere, shown read-only as saved
     expect(held).to_contain_text("set on Global")
@@ -159,7 +160,7 @@ def a_list_keeps_its_text_as_typed_and_counts_only_new_items(page, looks) -> Non
     looks.press_sequentially(",")
     expect(looks).to_have_value("hand-off,sample,")
     looks.press_sequentially(" plan")
-    expect(page.locator("#pending")).to_contain_text("spot looks: hand-off, sample → hand-off,sample, plan")
+    expect(page.locator("#pending")).to_contain_text(f"{LOOKS}: hand-off, sample → hand-off,sample, plan")
     looks.fill("hand-off, sample")
 
 
@@ -199,6 +200,19 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
 
 
 @pytest.mark.browser
+def test_the_pending_line_names_a_final_review_and_a_merge_edit_by_their_rows_words(store, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with settings_page(store, pds) as page:
+        page.get_by_label("Rounds at most, final review").fill("5")
+        pds.group(page, "checks")
+        page.get_by_label("CI poll interval (seconds)").fill("30")
+        expect(page.locator("#pending")).to_have_text(
+            "Unsaved: Final review · Rounds at most: inherited → 5; CI poll interval (seconds): inherited → 30."
+        )
+
+
+@pytest.mark.browser
 def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(store, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -213,7 +227,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         pds.pick(page, "Layer", "project")
         expect(rounds).to_have_value("4")
         expect(page.locator("#pending")).to_have_text(
-            "Unsaved: builder max rounds: inherited → 4. All projects: 1 more unsaved."
+            "Unsaved: Task reviews (builder) · Rounds at most: inherited → 4. All projects: 1 more unsaved."
         )
         expect(page.locator("#save")).to_have_attribute("variant", "primary")
         pds.group(page, "checks")
@@ -445,7 +459,7 @@ def test_the_unsaved_filter_shows_a_row_whose_draft_is_only_spelled_differently(
         pds.answer(page, "Save project settings")
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         sessions.fill("02")
-        expect(page.locator("#pending")).to_contain_text("sessions: 2 \u2192 02")
+        expect(page.locator("#pending")).to_contain_text(f"{SESSIONS}: 2 \u2192 02")
         pds.pick(page, "Show", "unsaved")
         expect(page.locator("#set-sessions")).to_be_visible()
 
@@ -470,7 +484,7 @@ def test_the_unsaved_filter_keeps_a_row_whose_edit_is_undone_until_the_filter_ch
         expect(row).to_be_visible()
         expect(sessions).to_be_focused()
         sessions.press_sequentially("5")
-        expect(page.locator("#pending")).to_contain_text("sessions: inherited \u2192 5")
+        expect(page.locator("#pending")).to_contain_text(f"{SESSIONS}: inherited \u2192 5")
         sessions.press("Backspace")
         pds.pick(page, "Show", "all")
         pds.pick(page, "Show", "unsaved")
@@ -1133,7 +1147,7 @@ def global_s_rounds_curation_and_checks_clear_to_unset_and_warn_where_needed(pag
     expect(page.locator("#set-sessions p-text[color='warning']")).to_have_count(0)
     at_once.fill("")  # the warning follows the edit, before any save
     expect(page.locator("#set-sessions")).to_contain_text(WARNED)
-    expect(page.locator("#pending")).to_contain_text("sessions: 2 → unset")
+    expect(page.locator("#pending")).to_contain_text(f"{SESSIONS}: 2 → unset")
     at_once.fill("2")
     expect(page.locator("#set-sessions p-text[color='warning']")).to_have_count(0)
     pds.group(page, "memory")
@@ -1577,7 +1591,7 @@ def test_the_github_account_shows_the_account_it_resolves_to_in_each_layer(
         assert min(box["width"], box["height"]) >= 24  # WCAG 2.5.8 target size
         field.fill("repository-owner")
         expect(_in_use(page, "set-github_account")).to_have_text(f"in use: {FALLBACK}, from global")
-        expect(page.locator("#pending")).to_have_text("Unsaved: github account: unset → repository-owner.")
+        expect(page.locator("#pending")).to_have_text("Unsaved: GitHub account: unset → repository-owner.")
         _saved_by_keyboard(page, pds, "Save global defaults", "the global")
         pds.pick(page, "Layer", "project")
         expect(field).to_have_attribute("placeholder", "inherit (repository-owner)")
@@ -1767,7 +1781,7 @@ def test_a_cancelled_review_is_not_sent_with_a_later_unrelated_save(pending_shar
         expect(page.get_by_role("dialog")).to_have_count(0)  # the page takes edits again once it has closed
         pds.group(page, "agents")
         page.get_by_label("Rounds at most, builder").fill("4")
-        expect(page.locator("#pending")).to_contain_text("builder max rounds: inherited → 4")
+        expect(page.locator("#pending")).to_contain_text("Task reviews (builder) · Rounds at most: inherited → 4")
         page.locator("#save").click()  # the cancelled confirmation may still be fading out
         pds.modal(page).get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
@@ -1961,7 +1975,7 @@ def test_every_memory_value_is_saved_to_global_exactly_and_shown_again_after_a_r
             page.get_by_label(label).fill(str(MEMORY_VALUES[field]))
         expect(page.locator("#groups a[href='#memory'] p-tag")).to_have_text("9 unsaved")
         expect(page.locator("#groups a[href='#guardrails'] p-tag")).to_have_count(0)
-        expect(page.locator("#pending")).to_contain_text("memory stale factor: unset → 7")
+        expect(page.locator("#pending")).to_contain_text(f"{MEMORY_LABELS['stale_factor']}: unset → 7")
         _saved(page, pds, "Save global defaults", "the global")
         assert json.loads(store.global_path.read_text())["memory"] == MEMORY_VALUES
 
@@ -1971,8 +1985,8 @@ def test_every_memory_value_is_saved_to_global_exactly_and_shown_again_after_a_r
 
         page.get_by_label(MEMORY_LABELS["purge_days"]).fill("0")  # zero is a value, not an unset one
         page.get_by_label(MEMORY_LABELS["explore_slots"]).fill("")  # blank clears it again
-        expect(page.locator("#pending")).to_contain_text("memory purge days: 14 → 0")
-        expect(page.locator("#pending")).to_contain_text("memory explore slots: 1 → unset")
+        expect(page.locator("#pending")).to_contain_text(f"{MEMORY_LABELS['purge_days']}: 14 → 0")
+        expect(page.locator("#pending")).to_contain_text("Recall slots for the least-rated entries: 1 → unset")
         _saved(page, pds, "Save global defaults", "the global")
     assert json.loads(store.global_path.read_text())["memory"] == MEMORY_VALUES | {
         "purge_days": 0,
