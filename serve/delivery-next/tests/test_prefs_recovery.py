@@ -27,6 +27,7 @@ from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.settings.config import Layer, Prefs
 from owlbear_delivery_next.state_store import layers, prefs_import, profile_repair, profile_share, roles_move
+from owlbear_delivery_next.state_store import store as store_module
 from owlbear_delivery_next.state_store.store import RoleSourceError, Store, StoreError
 
 AUTH = {"authorization": "Bearer " + "t"}
@@ -1350,6 +1351,87 @@ def test_bad_local_overlay_never_replaces_a_readable_unshared_profile(
     assert overlay.read_text() == "{not json"
     assert not (store.root / profile_repair.RECEIPT).exists()
     assert "r-2" in store.config_path.read_text()
+
+
+@pytest.mark.parametrize("unreadable", ["profile", "stat", "overlay-open", "overlay"])
+def test_a_profile_that_reads_now_says_the_earlier_error_whole(
+    repo: Path, tmp_path_factory, monkeypatch, whole_error, unreadable
+) -> None:
+    """#971: setup's refusal names the profile read's whole error, its notes too, from the profile or the overlay."""
+    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
+    monkeypatch.setattr(readiness, "check", lambda *_a: [])
+    store = Store.open(repo)
+    store.root.mkdir(parents=True, exist_ok=True)
+    source = store.root / profile_share.PROFILE
+    source.write_text(PRIVATE_READABLE)
+    overlay = store.root / profile_share.LOCAL
+    overlay.write_text("{}")
+    note = "while reading the profile of this clone"
+    error = OSError(whole_error)
+    error.add_note(note)
+    real_parse, real_stat, real_open = store_module._parse, Path.stat, profile_share.os.open  # noqa: SLF001
+
+    def parse(text, name, *rest):
+        if unreadable == "overlay" and name == "profile.local":
+            raise error
+        return real_parse(text, name, *rest)
+
+    def stat(self, *args, **kwargs):
+        if unreadable == "stat" and self == source:
+            monkeypatch.setattr(Path, "stat", real_stat)  # once: the later reads find the file again
+            raise error
+        return real_stat(self, *args, **kwargs)
+
+    def opened(name, *args, **kwargs):
+        if unreadable == "overlay-open" and Path(name) == overlay:
+            raise error
+        return real_open(name, *args, **kwargs)
+
+    def read(_source):
+        raise error
+
+    monkeypatch.setattr(store_module, "_parse", parse)
+    monkeypatch.setattr(Path, "stat", stat)
+    monkeypatch.setattr(profile_share.os, "open", opened)
+    if unreadable == "profile":
+        monkeypatch.setattr(profile_share, "_read", read)
+    why = f"OSError: {whole_error}\n{note}"
+    said = {
+        "profile": f"the profile could not be read: {why}",
+        "stat": f"the profile is unreadable: {source}: {why}",
+        "overlay-open": f"this clone's profile facts are unreadable: {overlay}: {why}",
+        "overlay": f"this clone's profile facts are unreadable: {overlay}: {why}",
+    }[unreadable]
+    with pytest.raises(StoreError) as refused:
+        setup.run(repo, [], yes=True, local_files="no")
+    assert str(refused.value) == (
+        f"the saved profile could not be read (StoreError: {said}) and reads now; nothing was replaced; run setup again"
+    )
+
+
+def test_an_unreadable_profile_s_whole_error_is_said_before_its_replacement_is_offered(
+    repo: Path, tmp_path_factory, monkeypatch, capsys, whole_error
+) -> None:
+    """#971: setup names the profile read's whole error, its type and notes too, when it offers a replacement."""
+    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
+    monkeypatch.setattr(readiness, "check", lambda *_a: [])
+    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    store = Store.open(repo)
+    store.root.mkdir(parents=True, exist_ok=True)
+    (store.root / profile_share.PROFILE).write_text('{"format": 1, "models": {}}')
+    note = "while reading the profile of this clone"
+
+    def read(_source):
+        exc = OSError(whole_error)
+        exc.add_note(note)
+        raise exc
+
+    monkeypatch.setattr(profile_share, "_read", read)
+    assert setup.run(repo, [], yes=False, local_files="no", ask=lambda _q: "n") == 1
+    why = f"StoreError: the profile could not be read: OSError: {whole_error}\n{note}"
+    said = f"The saved profile cannot be read ({why}); detecting a new one.\n"
+    out = capsys.readouterr().out
+    assert out.startswith(said) or f"\n{said}" in out
 
 
 def refuse_publish(monkeypatch) -> None:
