@@ -47,7 +47,11 @@ const TOOLS = {  // Delivery's own tools; change_flow/status.py says them the sa
   scan_design: "Scanned the design",
 };
 const pr = (e) => (e.pr ? ` PR #${e.pr}` : "");
-const why = (said) => (said ? `: ${said}` : "");
+// a step's session error (#971) follows its reason, unless the reason already holds it
+const why = (said, detail) => {
+  const all = [said, detail && !String(said || "").includes(detail) ? detail : ""].filter(Boolean).join("; ");
+  return all ? `: ${all}` : "";
+};
 const sha = (s) => String(s || "").slice(0, 7);
 const words = (name) => {
   const said = String(name).replaceAll(/[-_]/g, " ");
@@ -68,7 +72,7 @@ function linted(e) {
 
 // Each recorded event in plain words; an event this page does not know reads as its name, with its reason if any.
 const SAID = {
-  step: (e) => `${STEPS[e.kind] ?? words(e.kind ?? "step")} ${EXITS[e.exit] ?? "ended"}${why(e.reason)}`,
+  step: (e) => `${STEPS[e.kind] ?? words(e.kind ?? "step")} ${EXITS[e.exit] ?? "ended"}${why(e.reason, e.detail)}`,
   tool: (e) => `${e.summary && e.summary !== e.tool ? short(e.summary)
     : `${TOOLS[e.tool] ?? `Called ${e.tool}`}${e.accepted === false ? " (refused)" : ""}`}${
     why((e.errors || []).join("; "))}`,

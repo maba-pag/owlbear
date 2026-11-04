@@ -1595,7 +1595,7 @@ def test_a_long_unverified_session_end_shows_whole_on_changes(tmp_path: Path, mo
         runner._step(store, lock, c, c.step, path)  # noqa: SLF001
     why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
     said = [
-        " ".join(f"Building stopped: {why}".split()),
+        " ".join(f"Building stopped: {why}; the session failed".split()),  # #971: and the session's own error
         " ".join(f"Tried to force the session to stop: {stopped}".split()),
     ]
     present = [True]  # the host finds process 9 until the owner ends it
@@ -1614,6 +1614,43 @@ def test_a_long_unverified_session_end_shows_whole_on_changes(tmp_path: Path, mo
         assert lines.all_text_contents() == said  # the step's line keeps why once the host cleared the stop
         page.set_viewport_size({"width": 390, "height": 800})
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
+        assert broke == []
+
+
+@pytest.mark.browser
+def test_a_failed_sdk_step_s_whole_error_shows_in_recent_activity(
+    tmp_path: Path, monkeypatch, pds, whole_error
+) -> None:
+    """#971 P22: a session that failed says its whole error, JSON-RPC data and notes included, on its step's line."""
+    from copilot._jsonrpc import JsonRpcError  # noqa: PLC0415 - the SDK's own error, as a request raises it
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.runtimes import sdk_spend  # noqa: PLC0415
+
+    alpha = registry.register(clone(tmp_path / "alpha", "flip"))
+    path = Path(alpha.path)
+    store = Store.open(path)
+    names = Names(branch="owlbear/flip", target="main", worktree=str(path))
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
+    c = Change(slug="flip", brief=Brief(version=1), plan=plan, step=Step(kind=StepKind.BUILD, task="t1"), names=names)
+    exc = JsonRpcError(-32603, whole_error, {"marker": "DATA-MARK"})
+    exc.add_note("NOTE-MARK")
+    detail = sdk_spend.failed(exc)
+
+    async def failed(cfg):
+        return Run(cfg.session_id, "error", None, detail=detail, termination=processes.Termination(confirmed=True))
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", failed)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: path)
+    with store.lock("flip") as lock:
+        store.write(lock, c)
+        runner._step(store, lock, c, c.step, path)  # noqa: SLF001
+    with browsing(monkeypatch, pds, details=True) as (page, base):  # Recent activity is a detail
+        broke = errors(page)
+        opened(page, base, alpha.id, "flip")
+        lines = page.locator("#detail .log li > span")
+        expect(lines.first).to_contain_text("DATA-MARK")
+        assert lines.all_text_contents() == [" ".join(f"Building will try again: {detail}".split())]
         assert broke == []
 
 
