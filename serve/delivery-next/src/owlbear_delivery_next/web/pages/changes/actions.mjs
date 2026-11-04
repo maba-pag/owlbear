@@ -24,6 +24,10 @@ export function actionItems(d) {
     lines.push(`${LOOPS(f.loop)} ${f.id}, ${f.state}: ${f.text}`);
   }
   for (const u of repairs) lines.push(`No review yet of ${u.title || u.id} (${LOOPS(u.loop)})`);
+  for (const a of (d.amendments?.list ?? []).filter((x) => x.state === "applied" && x.unreviewed)) {
+    lines.push(`Amendment ${a.id} was applied in a wording no challenger reviewed: turn on Show details to read it`
+      + (a.object ? "" : ", and object if you disagree"));
+  }
   if (!lines.length) return nothing;
   return html`<div class="actions">${info("Open items", list(lines),
     act === nothing ? nothing : row(act))}</div>`;

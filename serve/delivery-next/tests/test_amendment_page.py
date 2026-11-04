@@ -104,7 +104,7 @@ def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
 
 
 @contextlib.contextmanager
-def opened(base: str, pds: Any) -> Iterator[Any]:
+def opened(base: str, pds: Any, details: str = "on") -> Iterator[Any]:
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     with sync_playwright() as pw:
@@ -115,7 +115,7 @@ def opened(base: str, pds: Any) -> Iterator[Any]:
         page = browser.new_page()
         pds.only(page, base)
         page.add_init_script("sessionStorage.setItem('token', 'tok');")
-        page.add_init_script("localStorage.setItem('owlbear-improvement-detail', 'on');")  # the record behind the work
+        page.add_init_script(f"localStorage.setItem('owlbear-improvement-detail', '{details}');")  # the record behind
         page.goto(f"{base}/?change={SLUG}")
         yield page
         browser.close()
@@ -185,6 +185,27 @@ def test_the_brief_panel_lists_each_amendment_and_takes_an_objection_to_an_appli
         assert reply.value.status == 200
         with store.db.read() as db:
             assert '"amendment":"A1"' in db.execute("SELECT item FROM inbox").fetchone()[0].replace(" ", "")
+
+
+@pytest.mark.browser
+def test_an_amendment_applied_in_an_unreviewed_wording_is_an_open_item_with_the_details_off(page_url, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    c = applied_and_declined()
+    for a in c.amendments:
+        a.unreviewed = True  # A1 applied, A2 declined
+    store.write(Lock(SLUG), c)
+    with opened(base, pds, details="off") as page:
+        items = page.locator("#detail .actions")
+        expect(items).to_contain_text(
+            "Amendment A1 was applied in a wording no challenger reviewed: turn on Show details to read it, and object "
+            "if you disagree"
+        )
+        expect(items).not_to_contain_text("A2")  # a declined one changed nothing
+        expect(page.locator(".brief .amendment")).to_have_count(0)
+        page.locator("#details-switch").click()
+        expect(page.locator(".brief .amendment", has_text="A1,").get_by_role("button", name="Object")).to_be_visible()
 
 
 @pytest.mark.browser
