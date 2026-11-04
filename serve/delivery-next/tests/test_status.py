@@ -66,6 +66,7 @@ def test_a_done_change_whose_pull_back_left_the_target_behind_says_so_and_offers
         "Done · merged PR #13 · local main is behind: main is checked out in 2 worktrees",
         "Pull on the Changes page",
         "you",
+        error=True,
     )
     pulled = done.model_copy(update={"pullback": Pullback(state="updated", at=NOW)})
     assert status(pulled, Activity(host_up=True), NOW) == Status("Done · merged PR #13", None, "delivery")

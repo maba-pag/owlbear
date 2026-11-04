@@ -30,6 +30,7 @@ from copilot.generated import rpc
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.decision_records import Pick, PickedDecision
+from owlbear_delivery_next.change_contracts.merge_records import Pullback
 from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     Brief,
@@ -643,23 +644,32 @@ def test_a_blocked_or_unreadable_changes_card_shows_its_whole_error(
 
 
 @pytest.mark.browser
-def test_a_retrying_changes_card_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
-    """#971: a retry's reason is an error too: its card keeps every path and line of it, unclipped."""
+@pytest.mark.parametrize("kind", ["retrying", "pulled-back"])
+def test_an_erring_changes_card_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, whole_error, kind) -> None:
+    """#971: a retry's reason and a failed pull-back are errors too: the card keeps every path and line, unclipped."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    alpha = registry.register(clone(tmp_path / "alpha", "retrying"))
-    now, path = datetime.now(UTC), f"{alpha.path}/.owlbear/changes/retrying/step-pids.json"
+    alpha = registry.register(clone(tmp_path / "alpha", kind))
+    now, path = datetime.now(UTC), f"{alpha.path}/.owlbear/changes/{kind}/step-pids.json"
     wake = now + timedelta(hours=1)
     reason = f"OSError: [Errno 13] {whole_error}: '{path}'\na note naming {path}"
-    retrying = Outcome(exit=Exit.RETRY, cause="environment:network", reason=reason, wake_at=wake, at=now)
-    shaping(Path(alpha.path), "Retrying brief", "retrying", outcome=retrying)
+    if kind == "retrying":
+        retrying = Outcome(exit=Exit.RETRY, cause="environment:network", reason=reason, wake_at=wake, at=now)
+        shaping(Path(alpha.path), "Retrying brief", kind, outcome=retrying)
+        line = f"retrying: environment:network (1 of {RETRY_LIMIT}) at {wake:%H:%M} · {reason}"
+    else:
+        behind = Pullback(state="behind", reason=f"local main is behind: {reason}", at=now)
+        shaping(
+            Path(alpha.path), "Pulled brief", kind, finished_at=now, names=Names(target="main", pr=13), pullback=behind
+        )
+        line = f"Done · merged PR #13 · local main is behind: {reason}"
     with browsing(monkeypatch, pds) as (page, base):
         said = errors(page)
         page.goto(f"{base}/#token=t")
         page.locator("#machine").get_by_role("button", name="Resume").click()  # a paused Delivery says only that
-        says = page.locator("li.card", has=page.locator('a[data-key$="retrying"]')).locator("p.says:not(.stage)")
-        expect(says).to_contain_text("retrying", timeout=15000)
-        assert says.text_content() == (f"retrying: environment:network (1 of {RETRY_LIMIT}) at {wake:%H:%M} · {reason}")
+        says = page.locator("li.card", has=page.locator(f'a[data-key$="{kind}"]')).locator("p.says:not(.stage)")
+        expect(says).to_contain_text("a note naming", timeout=15000)
+        assert says.text_content() == line
         expect(says).to_be_visible()
         assert says.evaluate("e => e.scrollHeight <= e.clientHeight && getComputedStyle(e).overflow === 'visible'")
         assert said == []

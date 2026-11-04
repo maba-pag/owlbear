@@ -14,7 +14,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.git.command_failure import failed, failure, streams
+from owlbear_delivery_next.git.command_failure import failed, failure
 from owlbear_delivery_next.impeccable.pack_files import PackError
 
 if TYPE_CHECKING:
@@ -114,8 +114,11 @@ def _engine(
 
 
 def _answered(command: list[str], code: int, out: str, err: str) -> str:
-    """The command whose answer could not be used, its exit status and what it printed, both streams labelled."""
-    said = streams(subprocess.CalledProcessError(code, command, out, err))  # only its streams are read
+    """The command whose answer could not be used, its exit status and what it printed, each stream labelled.
+
+    Unlike `streams`, a lone stream is labelled too: a bad answer on stdout reads apart from a log on stderr.
+    """
+    said = "\n".join(f"{name}:\n{text}" for name, text in (("stderr", err.strip()), ("stdout", out.strip())) if text)
     return f"Command '{command}' exited {code}" + (f" and printed:\n{said}" if said else " and printed nothing")
 
 

@@ -229,6 +229,23 @@ def test_a_scan_that_did_not_complete_says_its_whole_error(tmp_path, monkeypatch
     assert str(caught.value) == said
 
 
+@pytest.mark.parametrize("stream", ["stdout", "stderr"])
+def test_an_unreadable_answer_on_one_stream_names_that_stream(tmp_path, whole_error, stream) -> None:
+    """#971: a bad answer printed on one stream only says which stream it was, its text whole."""
+    (tmp_path / "said").write_text(whole_error)
+    engine = tmp_path / "impeccable"
+    engine.write_text(f"#!/bin/sh\ncat {tmp_path / 'said'}{' >&2' if stream == 'stderr' else ''}\n")
+    engine.chmod(engine.stat().st_mode | stat.S_IEXEC)
+    pack = pack_files.Installed(engine, hashlib.sha256(engine.read_bytes()).hexdigest(), "")
+    command = [str(engine), "detect", "--json", "--no-config", str(tmp_path / "a.html")]
+    with pytest.raises(detector.DetectorError) as caught:
+        detector.scan_source(pack, [tmp_path / "a.html"], tmp_path)
+    assert str(caught.value) == (
+        "the design detector's answer is not JSON: JSONDecodeError: Expecting value: line 1 column 1 (char 0)\n"
+        f"Command '{command}' exited 0 and printed:\n{stream}:\n{whole_error}"
+    )
+
+
 def test_a_page_that_refuses_the_detector_says_its_whole_error(tmp_path, whole_error) -> None:
     """#971: the page's whole refusal, with the notes added on its way up, is the scan's error."""
     error = RuntimeError(whole_error)
