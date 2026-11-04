@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.github.account import Origin, Writer
 from owlbear_delivery_next.github.gh_client import GhClient, invalid, repo
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 
@@ -40,7 +41,9 @@ class OwlbearIssues(GhClient):
     """The issues of one public repository given by name (``owner/name``)."""
 
     def __init__(self, repository: str, cwd: Path, *, runner: Runner | None = None) -> None:
-        super().__init__(cwd, **({"runner": runner} if runner else {}))
+        """Writes go as TD-402's rule on *repository* (D-01M6G9YHN2XHJANSWDADZTT6EG)."""
+        writer = Writer.rule(Origin("github.com", *repository.split("/", 1)))
+        super().__init__(cwd, writer=writer, **({"runner": runner} if runner else {}))
         self.repository = repository
 
     def find(self, marker: str) -> Issue | None:

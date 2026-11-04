@@ -40,9 +40,11 @@ from owlbear_delivery_next.change_contracts.round_records import RoundLoop, Roun
 from owlbear_delivery_next.change_flow import budgets, delivery_target, loop, round_flow, worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git.access import Access
 from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify_write_readback, read_remote_ref
-from owlbear_delivery_next.github import gh_queue, merge_offer
+from owlbear_delivery_next.github import account, gh_queue, merge_offer
 from owlbear_delivery_next.github import provider as provider_contract
+from owlbear_delivery_next.github.account import Writer
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import (
     Check,
@@ -139,6 +141,13 @@ class FakeGh:
         self.pr, self.merges, self.result = current, [], MergeResult(status=MergeStatus.UNKNOWN)
         self.checks = (Check(name="test", status="completed", conclusion="success"),)
         self.after, self.reopened, self.commit_checks, self.review = None, [], (), (None, ())
+        self.can_push = False  # what the project's account reads when the detected permission is no
+
+    def read_repository(self):
+        return Repository(
+            repository="o/r", url="https://github.com/o/r", default_branch="main", methods=(MergeMethod.SQUASH,),
+            can_push=self.can_push, delete_branch_on_merge=False,
+        )  # fmt: skip
 
     def observe_commit_checks(self, _repo, _sha):
         return self.commit_checks
@@ -200,7 +209,8 @@ def set_prefs(monkeypatch, **values):
 
 
 def ctx(tmp_path, gh, p=None, repo=None):
-    return engine.Ctx(Store(tmp_path / "store"), Lock("c1"), repo or tmp_path, p or prof(), gh, NOW)
+    local = Writer.rule(account.Origin.LOCAL)  # the step's own Git runs on fakes or a local origin
+    return engine.Ctx(Store(tmp_path / "store"), Lock("c1"), repo or tmp_path, p or prof(), gh, NOW, local)
 
 
 def change(kind=StepKind.MERGE, worktree="", head=A, **fields):
@@ -864,7 +874,7 @@ def _no_user(*_):
 
 def test_an_empty_conversation_passes_with_a_credential_that_cannot_read_the_viewer(tmp_path):
     gh = ChatGh(pr(head=A))
-    gh.viewer = GhProvider(tmp_path, runner=_no_user).viewer
+    gh.viewer = GhProvider(tmp_path, writer=None, runner=_no_user).viewer
     assert follow.conversation(ctx(tmp_path, gh), change(), gh.pr, StepKind.FOLLOW)[1] is None
 
 
@@ -874,7 +884,7 @@ def test_a_pending_replay_with_a_credential_that_cannot_read_the_viewer_names_gh
     c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
     c = handled(c, result, "answered", "Answered.")
     gh.items.append(comment("x1", f"Answered.\n\n<!-- delivery:c1:c1:{result.fix_task.id} -->", "delivery"))
-    gh.viewer = GhProvider(tmp_path, runner=_no_user).viewer
+    gh.viewer = GhProvider(tmp_path, writer=None, runner=_no_user).viewer
     with pytest.raises(ProviderError) as raised:
         follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert (raised.value.code, raised.value.retry_safe) == (FailureCode.AUTHENTICATION_REQUIRED, False)
@@ -1011,7 +1021,7 @@ def test_gh_reads_every_conversation_page_and_keeps_changes_requested_empty_revi
     ]
     calls, threads = [], []
 
-    def runner(argv, data, _timeout, _cwd):
+    def runner(argv, data, _timeout, _cwd, _env):
         body = json.loads(data)
         if "ThreadComments" in body["query"]:
             threads.append(body["variables"])
@@ -1019,7 +1029,7 @@ def test_gh_reads_every_conversation_page_and_keeps_changes_requested_empty_revi
         calls.append((argv, body["variables"]))
         return done({"data": {"repository": {"pullRequest": pages[len(calls) - 1]}}})
 
-    items = GhProvider(tmp_path, runner=runner).read_conversation("o/r", 7)
+    items = GhProvider(tmp_path, writer=None, runner=runner).read_conversation("o/r", 7)
     assert [(i.id, i.kind, i.bot) for i in items] == [
         ("c1", "comment", False),
         ("c2", "comment", True),
@@ -1040,13 +1050,13 @@ def test_gh_reads_every_conversation_page_and_keeps_changes_requested_empty_revi
 def test_gh_replies_in_threads_by_graphql_and_quotes_other_items_in_an_issue_comment(tmp_path):
     calls = []
 
-    def runner(argv, data, _timeout, _cwd):
+    def runner(argv, data, _timeout, _cwd, _env):
         calls.append((argv, json.loads(data)))
         if "graphql" in argv:
             return done({"data": {"addPullRequestReviewThreadReply": {"comment": {"id": "R1"}}}})
         return done({"node_id": "IC1"})
 
-    gh = GhProvider(tmp_path, runner=runner)
+    gh = GhProvider(tmp_path, writer=None, runner=runner)
     assert gh.post_reply("o/r", 7, thread("t1", ("h1", "o", "q")), "ok") == "R1"
     assert calls[-1][1]["variables"] == {"id": "t1", "body": "ok"}
     assert gh.post_reply("o/r", 7, comment("c1", "q"), "ok") == "IC1"
@@ -1058,7 +1068,7 @@ def test_gh_replies_in_threads_by_graphql_and_quotes_other_items_in_an_issue_com
 def test_an_unexpected_github_answer_is_raised_whole(tmp_path, whole_error, op):
     """#895: GitHub's whole answer reaches the step's retry reason through the engine."""
     said = {"errors": [{"message": whole_error}]}
-    gh = GhProvider(tmp_path, runner=lambda *_a: done(said))
+    gh = GhProvider(tmp_path, writer=None, runner=lambda *_a: done(said))
     calls = {
         "mark_ready": lambda: gh.mark_ready(pr()),
         "post_reply": lambda: gh.post_reply("o/r", 7, thread("t1", ("h1", "o", "q")), "ok"),
@@ -1303,10 +1313,10 @@ def test_a_pr_head_lagging_the_push_is_observed_again_shortly_without_budget(clo
 def test_a_pr_head_lag_with_a_moved_branch_republishes_instead_of_waiting(clone, tmp_path, monkeypatch):
     head = git(clone, "rev-parse", "HEAD")
     c, gh = change(StepKind.PUBLISH, worktree=str(clone)), FakeGh(pr(head=A))
-    monkeypatch.setattr(publish, "read_remote_ref", lambda *_a: B)
+    monkeypatch.setattr(publish, "read_remote_ref", lambda *_a, **_k: B)
     pushed = []
     monkeypatch.setattr(
-        publish, "push", lambda _p, _c, h: pushed.append(h) or engine.integrate(c, StepKind.PUBLISH, "x")
+        publish, "push", lambda _p, _c, h, _access: pushed.append(h) or engine.integrate(c, StepKind.PUBLISH, "x")
     )
     result = publish.lagging(ctx(tmp_path, gh), c, gh.pr, head)
     assert (result.exit, pushed, c.lag) == (Exit.BACK, [head], None)
@@ -1414,21 +1424,24 @@ def test_write_readback_replays_only_on_confirmed_absence():
 def test_an_unknown_push_is_read_back_and_replayed_only_when_absent(clone, monkeypatch, applied, pushes):
     real, calls = publish.run_remote_git, []
 
-    def flaky(path, args, *, kind):
+    def flaky(path, args, *, kind, access):
         calls.append(args)
         if len(calls) == 1:
             if applied:
-                real(path, args, kind=kind)
+                real(path, args, kind=kind, access=access)
             raise RemoteGitWriteUnknown(TIMED_OUT, timed_out=True)
-        return real(path, args, kind=kind)
+        return real(path, args, kind=kind, access=access)
 
     monkeypatch.setattr(publish, "run_remote_git", flaky)
     (clone / "b.txt").write_text("b\n")
     git(clone, "add", "b.txt")
     git(clone, "commit", "-q", "-m", "b")
     head = git(clone, "rev-parse", "HEAD")
-    assert publish.push(clone, change(StepKind.PUBLISH), head) is None
-    assert (len(calls), read_remote_ref(clone, "origin", "refs/heads/owlbear/c1")) == (pushes, head)
+    assert publish.push(clone, change(StepKind.PUBLISH), head, Access.LOCAL) is None
+    assert (len(calls), read_remote_ref(clone, "origin", "refs/heads/owlbear/c1", access=Access.LOCAL)) == (
+        pushes,
+        head,
+    )
 
 
 @pytest.mark.parametrize(("after", "exit_"), [("merged", Exit.DONE), ("open", Exit.RETRY)])
@@ -1460,6 +1473,20 @@ def test_without_ask_before_merge_a_gated_head_merges_without_consent(tmp_path, 
     asked = ctx(tmp_path, FakeGh(pr(head=A)), prof())
     _, result = merge.run(asked, change(worktree=str(clone)))
     assert (result.exit, result.cause) == (Exit.ASK, loop.CONSENT)
+
+
+@pytest.mark.parametrize(("detected", "account"), [("yes", False), ("no", True), ("no", False)])
+def test_merge_asks_the_projects_account_again_when_detection_found_no_push_permission(
+    tmp_path, clone, detected, account
+):
+    """The setting may name another account than detection ran as (TD-402): a detected no doesn't block it."""
+    gh = FakeGh(pr(head=A))
+    gh.can_push = account
+    merged(gh)
+    on = ctx(tmp_path, gh, prof(**{profile.PUSH: ProfileEntry(state="known", value=detected)}))
+    _, result = merge.run(on, change(worktree=str(clone)))
+    permitted = detected == "yes" or account
+    assert (result.exit, len(gh.merges)) == ((Exit.DONE, 1) if permitted else (Exit.PENDING, 0))
 
 
 def test_a_head_without_a_valid_final_review_goes_back_to_publish(tmp_path, clone):
@@ -1531,7 +1558,7 @@ def test_a_merge_without_a_known_result_keeps_what_gh_said_whole(tmp_path, clone
     cases = gh_cases(whole_error, sent) | {"message": (message, lambda: f"{whole_error}\n{server}")}
     runner, said = cases[case]
     gh = FakeGh(pr(head=A))
-    gh.request_merge = GhProvider(tmp_path, runner=runner).request_merge
+    gh.request_merge = GhProvider(tmp_path, writer=None, runner=runner).request_merge
     cx = ctx(tmp_path, gh)
     _, result = merge.run(cx, change(worktree=str(clone)))
     (event,) = cx.events("c1", "merge-request")
@@ -1543,7 +1570,7 @@ def test_a_merge_refusal_without_a_message_keeps_gh_s_whole_error(tmp_path, clon
     """#921: a refusal whose answer has no message keeps all of gh's error output, in its event and its reason."""
     said = f"{whole_error}\ngh: HTTP 405"
     gh = FakeGh(pr(head=A))
-    gh.request_merge = GhProvider(tmp_path, runner=answered(1, stderr=said.encode())).request_merge
+    gh.request_merge = GhProvider(tmp_path, writer=None, runner=answered(1, stderr=said.encode())).request_merge
     cx = ctx(tmp_path, gh)
     _, result = merge.run(cx, change(worktree=str(clone)))
     (event,) = cx.events("c1", "merge-request")
@@ -1968,7 +1995,7 @@ def test_a_moved_target_integrates_before_merging_whatever_github_reports(tmp_pa
 def test_a_builder_needing_target_work_integrates_then_resumes_its_task(clone):
     c = change(StepKind.BUILD, worktree=str(clone))
     c.step.task = "t1"
-    c = loop.apply(c, engine.needs_target(c, clone, "greet() exists only on main", NOW), NOW)
+    c = loop.apply(c, engine.needs_target(c, clone, "greet() exists only on main", NOW, Writer.rule(clone)), NOW)
     assert (c.step.task, c.plan.tasks[-1].origin) == ("t2", "integration")
     assert "greet() exists only on main" in c.plan.tasks[-1].detail
     c = loop.apply(c, loop.StepResult(exit=Exit.DONE), NOW)  # its build; the task's next round reviews the merge
@@ -2183,15 +2210,17 @@ def test_a_repaired_task_resolves_only_after_every_part_and_the_parts_run_before
 # Reopen and the pre-push hook
 
 
-@pytest.mark.parametrize("push", ["yes", "no"])
-def test_reopen_reopens_the_pr_when_permitted_else_asks_the_owner(tmp_path, clone, push):
+@pytest.mark.parametrize(("push", "account"), [("yes", False), ("no", True), ("no", False)])
+def test_reopen_reopens_the_pr_when_permitted_else_asks_the_owner(tmp_path, clone, push, account):
+    """A detected no is asked again of the project's account, which the setting may have changed (TD-402)."""
     head, entries = ci_head(clone, "test")
     gh = FakeGh(pr(head=head, state="closed"))
+    gh.can_push = account
     c, _ = loop.schedule(change(StepKind.FOLLOW, worktree=str(clone)), [], NOW, "closed")
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question="q1", option="reopen")], NOW, "closed")
     pushing = {profile.PUSH: ProfileEntry(state="known", value=push)}
     c, result = follow.run(ctx(tmp_path, gh, prof(**entries, **pushing)), c)
-    if push == "yes":
+    if push == "yes" or account:
         assert (result.exit, gh.reopened, bool(c.questions[0].effect_observed_at)) == (Exit.DONE, [7], True)
     else:
         assert (result.exit, gh.reopened, c.questions[0].effect_observed_at) == (Exit.ASK, [], None)
@@ -2219,9 +2248,9 @@ def test_a_silent_rejecting_pre_push_hook_becomes_a_builder_fix_after_readback(c
     hook = clone / ".git" / "hooks" / "pre-push"
     hook.write_text("#!/bin/sh\nexit 1\n")
     hook.chmod(0o755)
-    result = publish.push(clone, change(StepKind.PUBLISH), git(clone, "rev-parse", "HEAD"))
+    result = publish.push(clone, change(StepKind.PUBLISH), git(clone, "rev-parse", "HEAD"), Access.LOCAL)
     assert (result.back_to, result.cause) == (StepKind.BUILD, "commit-policy:publish:pre-push")
-    assert read_remote_ref(clone, "origin", "refs/heads/owlbear/c1") is None
+    assert read_remote_ref(clone, "origin", "refs/heads/owlbear/c1", access=Access.LOCAL) is None
     assert not publish.hook_rejected(128, b"fatal: Could not read from remote repository.", hook=True)
     assert not publish.hook_rejected(1, b" ! [remote rejected] main (protected branch)", hook=True)
 
@@ -2335,7 +2364,7 @@ def test_an_enqueue_without_a_known_result_keeps_what_github_said_whole(tmp_path
     }
     runner, said = cases[case]
     gh = QueueGh(pr(head=A))
-    gh.enqueue = GhProvider(tmp_path, runner=runner).enqueue
+    gh.enqueue = GhProvider(tmp_path, writer=None, runner=runner).enqueue
     _, result = queue_step(tmp_path, gh, change(worktree=str(clone)))
     (event,) = [e for e in Store(tmp_path / "store").events("c1") if e.get("event") == "merge-enqueue"]
     status = EnqueueStatus.REFUSED if case == "refused" else EnqueueStatus.UNKNOWN
@@ -2450,7 +2479,7 @@ def fold_store(tmp_path, monkeypatch, gh, c):
     store.write_profile(qprof())
     with store.lock("c1") as lock:
         store.write(lock, c)
-    monkeypatch.setattr(profile, "provider", lambda _p, _r: gh)
+    monkeypatch.setattr(profile, "provider", lambda _p, _r, _w: gh)
     store.put_inbox("c1", IntentItem(at=NOW, intent="pause"))
     return store
 
@@ -3033,9 +3062,9 @@ def test_an_unknown_withdrawal_keeps_the_barrier_and_asks_nothing(tmp_path):
 
 @pytest.fixture
 def both_prefs_unset(tmp_path, monkeypatch):
-    """A real Store with a queued merge, no settings layer, and the synthetic queue provider through the runner."""
+    """A real Store with a queued merge, no settings layer but the GitHub account, and the synthetic queue provider."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    monkeypatch.setattr(config, "BASE", None)
+    monkeypatch.setattr(config, "BASE", config.GlobalLayer(github_account=account.REPOSITORY_OWNER))
     for args in (
         ["init", "-q"],
         ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"],
@@ -3071,7 +3100,7 @@ def both_prefs_unset(tmp_path, monkeypatch):
 
 def run_merge_step(store, capsys):
     with store.lock("c1") as lock:
-        runner._step(store, lock, store.read("c1"), Step(kind=StepKind.MERGE), store.root)  # noqa: SLF001
+        runner._step(store, lock, c := store.read("c1"), Step(kind=StepKind.MERGE), Path(c.names.worktree))  # noqa: SLF001
     return json.loads(capsys.readouterr().out.strip().splitlines()[-1])
 
 
@@ -3093,7 +3122,7 @@ def test_an_uncertain_withdrawal_with_both_prefs_unset_waits_and_a_later_confirm
     gh.__dict__.pop("dequeue", None)  # the next pass reaches GitHub normally and reads back the removal
     gh.dequeue_fails = False
     with store.lock("c1") as lock:
-        runner._step(store, lock, store.read("c1"), Step(kind=StepKind.MERGE), store.root)  # noqa: SLF001
+        runner._step(store, lock, c := store.read("c1"), Step(kind=StepKind.MERGE), Path(c.names.worktree))  # noqa: SLF001
     after = store.read("c1")
     assert (after.queue, gh.state.entry) == (None, None)
     assert len(after.questions) == 1
@@ -3121,7 +3150,7 @@ def test_a_failed_fetch_keeps_gits_whole_output(clone, whole_error, monkeypatch)
         return subprocess.CompletedProcess(argv, 1, b"", f"{whole_error}\n".encode())
 
     monkeypatch.setattr(engine, "run_remote_git", refused)
-    result = engine.needs_target(c, clone, "greet() exists only on main", NOW)
+    result = engine.needs_target(c, clone, "greet() exists only on main", NOW, Writer.rule(clone))
     assert (result.exit, result.reason) == (Exit.RETRY, f"RemoteGitFailed: fetch of main failed: {whole_error}")
 
 
@@ -3129,11 +3158,11 @@ class PlanLimitedGh(FakeGh):
     """A private repository whose GitHub plan allows no rules: the real read of GitHub's plan-limit 403 (#936)."""
 
     def read_rules(self, repo, branch):
-        def limited(argv, _body, _timeout, _cwd):
+        def limited(argv, _body, _timeout, _cwd, _env):
             said = b"gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)\n"
             return subprocess.CompletedProcess(argv, 1, b"", said)
 
-        return GhProvider(Path(), runner=limited).read_rules(repo, branch)
+        return GhProvider(Path(), writer=None, runner=limited).read_rules(repo, branch)
 
 
 def test_a_plan_limited_repository_merges_without_the_owner_on_its_detected_profile(tmp_path, clone):

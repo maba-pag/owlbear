@@ -215,6 +215,7 @@ def review(change: Change, task: Task | None, worktree: Path, tree: Worktree) ->
             *(f"- {p}" for p in tree.changed[:50]),
             "",
             *_brief(change, challenged=challenged, complete=True),
+            *([] if task or not change.brief.scope else ["", f"Scope (a constraint): {', '.join(change.brief.scope)}"]),
             *_fixes(change, challenged=challenged),
             *disputes.review_lines(change, task),
             *round_flow.review_lines(change, task),

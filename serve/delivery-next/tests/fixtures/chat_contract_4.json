@@ -251,6 +251,13 @@
             "items": {
               "additionalProperties": false,
               "properties": {
+                "covers": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 30,
+                  "type": "array"
+                },
                 "expect": {
                   "maxLength": 300,
                   "minLength": 1,
@@ -720,56 +727,6 @@
         }
       ]
     },
-    "POST /decisions/{decision_id}/complete": {
-      "body": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "additionalProperties": false,
-              "properties": {
-                "condition": {
-                  "maxLength": 4000,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                "evidence": {
-                  "maxLength": 4000,
-                  "minLength": 1,
-                  "type": "string"
-                },
-                "revision": {
-                  "pattern": "^[0-9a-f]{64}$",
-                  "type": "string"
-                }
-              },
-              "required": ["revision", "condition", "evidence"],
-              "type": "object"
-            }
-          }
-        },
-        "required": true
-      },
-      "parameters": [
-        {
-          "in": "path",
-          "name": "decision_id",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "in": "query",
-          "name": "where",
-          "required": false,
-          "schema": {
-            "default": "all",
-            "enum": ["project", "global", "all", "owlbear"],
-            "type": "string"
-          }
-        }
-      ]
-    },
     "POST /decisions/{decision_id}/correct-origin": {
       "body": {
         "content": {
@@ -1081,36 +1038,6 @@
         "type": "object"
       }
     },
-    "complete_decision": {
-      "input": {
-        "properties": {
-          "condition": {
-            "maxLength": 4000,
-            "minLength": 1,
-            "type": "string"
-          },
-          "decision": {
-            "pattern": "^D-[0-7][0-9A-HJKMNP-TV-Z]{25}$",
-            "type": "string"
-          },
-          "evidence": {
-            "maxLength": 4000,
-            "minLength": 1,
-            "type": "string"
-          },
-          "revision": {
-            "pattern": "^[0-9a-f]{64}$",
-            "type": "string"
-          }
-        },
-        "required": ["decision", "revision", "condition", "evidence"],
-        "type": "object"
-      },
-      "output": {
-        "additionalProperties": true,
-        "type": "object"
-      }
-    },
     "correct_decision_origin": {
       "input": {
         "properties": {
@@ -1383,6 +1310,13 @@
           "PersonCheckDraft": {
             "additionalProperties": false,
             "properties": {
+              "covers": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 30,
+                "type": "array"
+              },
               "expect": {
                 "maxLength": 300,
                 "minLength": 1,

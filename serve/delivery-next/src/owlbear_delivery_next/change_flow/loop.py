@@ -15,6 +15,7 @@ from owlbear_delivery_next.change_contracts.inbox import (
     CheckResult,
     ConsentItem,
     IntentItem,
+    ObjectionItem,
     PullItem,
     Recovery,
     RestartItem,
@@ -41,6 +42,8 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.visual_records import OwnerDecision
 from owlbear_delivery_next.change_flow import (
+    amend_apply,
+    amending,
     answer_kinds,
     brief_rounds,
     budgets,
@@ -152,9 +155,9 @@ DECISIONS = frozenset({"retry", "accept", "repair", "reconsider", "another", "re
 
 
 def owner_gated(c: Change) -> bool:
-    """An owner-only gate, including a persisted delivery discrepancy; its environment cannot settle or relaunch."""
+    """An owner-only gate: a persisted delivery discrepancy or an amendment's question too; nothing settles past it."""
     q = open_question(c)
-    return delivery_target.held(c) or bool(q and q.options and {o.next for o in q.options} & DECISIONS)
+    return delivery_target.held(c) or bool(q and ({o.next for o in q.options} & DECISIONS or amending.owned(q)))
 
 
 def brief_ready(c: Change) -> bool:
@@ -188,7 +191,7 @@ def schedule(  # noqa: PLR0913 - the PR observation, the profile's consent setti
     dropped: list[tuple[AnswerItem, str]] | None = None,
 ) -> tuple[Change, Step | None]:
     """Fold the inbox, observe the PR's end and intent flags, and only then apply exclusions."""
-    c = fold(change, items, now, dropped)
+    c = fold(change, amending.unmerged(change, items, dropped) if pr_state == "merged" else items, now, dropped)
     routed = delivery_target.route(c, pr_state, now)
     if not routed and not c.finished_at and c.step.kind != StepKind.CLEANUP:
         if not asking and waiting_consent(c) and (q := open_question(c)) is not None:
@@ -197,6 +200,8 @@ def schedule(  # noqa: PLR0913 - the PR observation, the profile's consent setti
         if moved and waiting_consent(c):
             c.outcome = None  # the merge step runs again: it routes the comment or offers the moved head
         if pr_state == "merged" or c.intent.abandoned_at:
+            if pr_state != "merged":
+                amending.left(c, "the Change stopped before it ended")
             go(c, StepKind.CLEANUP, mode=None if pr_state == "merged" else "abandon")
             c.outcome = None
         elif pr_state == "closed" and not any(q.cause == PR_CLOSED and not q.effect_observed_at for q in c.questions):
@@ -208,6 +213,7 @@ def schedule(  # noqa: PLR0913 - the PR observation, the profile's consent setti
             ]
             ask(c, Question(step=StepKind.MERGE, text="The PR was closed", options=options, cause=PR_CLOSED), now)
         elif c.intent.hold and c.step.kind != StepKind.MERGE:
+            amending.left(c, "the brief is reshaped")  # its question no longer approves anything
             go(c, StepKind.SHAPE)
             c.intent.hold = False
             c.outcome = None
@@ -223,18 +229,20 @@ def fold(  # noqa: C901, PLR0912 - per item kind
     for item in items:
         match item:
             case BriefApproval(version=version) if version == c.brief.version == c.brief.challenged:
-                c.brief.approved_version, c.brief.approved_at = version, item.at
+                c.brief.approved_version, c.brief.approved_at, c.brief.reference = version, item.at, version
                 decision_baseline.approved(c, item.baseline, item.at if item.unpinned else None)
                 c.brief.picked = item.picked or c.brief.picked  # what the approval validated, not a later retry
                 held = {p.id: p for p in c.decisions_published} | {p.id: p for p in item.published}
                 c.decisions_published = list(held.values())
-                if all(b.version != version for b in c.brief.approved):
-                    c.brief.approved.append(c.brief.model_copy(deep=True, update={"approved": []}))
+                if all(b.version != version for b in c.brief.approved):  # with its person checks (TD-185)
+                    amend_apply.kept(c)
                 if c.step.kind == StepKind.SHAPE:
                     _done(c, None, now)
                     c.outcome = None
-            case AnswerItem() if answer_kinds.held(c, item, now):  # #717: the Spotter's question, kept, asked again
-                pass
+            case AnswerItem() if answer_kinds.held(c, item, now) or amending.answered(c, item, now, dropped):
+                pass  # #717: the Spotter's question, kept; an amendment's, recorded or dropped by its path (TD-185)
+            case ObjectionItem():
+                amending.objected(c, item, now)
             case AnswerItem():  # one that settles nothing goes to *dropped* with why, for the activity (#791)
                 if (why := _answer(c, item, now)) and dropped is not None:
                     dropped.append((item, why))
@@ -317,8 +325,8 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> str:
         return f"question {q.id} is settled only by one of its options, a reconsideration by a note"
     if gate and (target != "pause" or c.step.kind != StepKind.CLEANUP):
         c.outcome = None
-    if kind == "brief_change":  # never delivered: the work stops and asks while amendments are not built
-        ask(c, answer_kinds.question(c, q), now)
+    if kind == "brief_change":  # never delivered: the brief's amendment runs first (TD-185)
+        amending.start(c, "answer", reason=item.text, now=now, question=q.id)
         return ""
     if q.cause and kind_of(q.cause) in ENVIRONMENT | DEFECT and target != "pause":
         c.budgets.causes.pop(q.cause, None)  # "Done, continue" starts a new episode or streak
@@ -405,17 +413,9 @@ def apply(change: Change, result: StepResult, now: datetime) -> Change:
     if result.exit not in EXITS[kind]:
         msg = f"{kind} has no {result.exit} exit"
         raise ValueError(msg)
-    c.outcome = Outcome(
-        exit=result.exit,
-        cause=result.cause,
-        reason=result.reason,
-        who=result.who,
-        waiting=result.waiting,
-        wake_at=result.wake_at,
-        denial=result.denial,
-        challenged=result.challenged,
-        at=now,
-    )
+    c.outcome = Outcome(exit=result.exit, cause=result.cause, reason=result.reason, who=result.who,
+                        waiting=result.waiting, wake_at=result.wake_at, denial=result.denial,
+                        challenged=result.challenged, at=now)  # fmt: skip
     budgets.streaks(c, result)
     match result.exit:
         case Exit.DONE:

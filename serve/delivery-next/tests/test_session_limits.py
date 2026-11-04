@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.amendment_records import Amending
 from owlbear_delivery_next.change_contracts.inbox import IntentItem
 from owlbear_delivery_next.change_contracts.models import Change, Exit, Names, Plan, Question, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
@@ -180,6 +181,8 @@ def test_a_step_without_an_agent_reserves_nothing_and_a_visual_check_asks_for_th
         0,
         1,
     ]
+    amending = c.model_copy(update={"amending": Amending(id="A1", phase="challenge")})
+    assert session_slots.wanted(amending, amending.step) == 1  # a revert's challenger runs before the merge (TD-185)
     fake.host.wants["m1"] = 0
     assert fake.host.slots.take("q", "q1", 1, 1) == 1  # the machine is full
     assert session_slots.reserve(fake.host, "m1") == 0  # a merge still runs

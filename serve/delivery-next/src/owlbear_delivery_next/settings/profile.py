@@ -16,12 +16,14 @@ import yaml
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
+from owlbear_delivery_next.github import account
 from owlbear_delivery_next.github.gh import GhProvider
 
 if TYPE_CHECKING:
     from datetime import datetime
     from pathlib import Path
 
+    from owlbear_delivery_next.github.account import Writer
     from owlbear_delivery_next.github.provider import Provider, Rules
 
 HOST, REPO, DEFAULT = "github:host", "github:repository", "github:default-branch"
@@ -383,6 +385,6 @@ def known(profile: Profile, key: str) -> bool:
     return entry is not None and entry.state == "known"
 
 
-def provider(profile: Profile, repo: Path) -> GhProvider:
-    """Return the ``gh`` provider for the profile's host, run in *repo*."""
-    return GhProvider(repo, host=value(profile, HOST, "github.com"))
+def provider(profile: Profile, repo: Path, writer: Writer) -> GhProvider:
+    """The ``gh`` provider run in *repo* as *writer*'s account, for the profile's host, else the origin's (TD-402)."""
+    return GhProvider(repo, writer=writer, host=value(profile, HOST, account.host_of(repo)))

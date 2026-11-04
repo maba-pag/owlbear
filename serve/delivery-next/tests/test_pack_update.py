@@ -25,6 +25,7 @@ from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.visual_records import DesignInput, JudgeVerdict, OwnerDecision, VisualRound
 from owlbear_delivery_next.commands import cli, replay_client
 from owlbear_delivery_next.commands.chat_client import NOT_RUNNING, NOT_SERVED
+from owlbear_delivery_next.github.account import Writer
 from owlbear_delivery_next.impeccable import calibration, design_tools, detector, pack_files, pack_update
 from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_job, pack_replay, pack_run
 from owlbear_delivery_next.local_system import local_home, preload
@@ -121,7 +122,8 @@ def test_the_notice_is_read_offline_refreshed_at_most_daily_and_shown_by_setup_a
     assert config_routes._state(Store.open(repo))["impeccable"] == shown  # noqa: SLF001
     monkeypatch.setattr(readiness, "readiness", lambda *_a: [])  # the other facts probe the machine and the network
     monkeypatch.setattr(readiness, "reach", lambda *_a: None)  # its argument is evaluated first: no real request
-    assert readiness.check(repo, None) == [readiness.Check("Impeccable updates", ok=True, detail=shown)]  # host start
+    checks = readiness.check(repo, None, Writer.rule(repo))  # a host start
+    assert checks == [readiness.Check("Impeccable updates", ok=True, detail=shown)]
     path = pack_files.folder().parent / pack_update.NOTICE
     path.write_text(json.dumps(json.loads(path.read_text()) | {"tag": "skill-v4.0.0"}))
     assert pack_update.notice(refresh=False)["behind"] is None  # another pinned pack's count

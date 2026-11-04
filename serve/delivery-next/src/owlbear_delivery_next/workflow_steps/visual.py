@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_decisions import new_id
+from owlbear_delivery_next.change_contracts.evidence import criteria
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import VISUAL, Decision, ErrorKind, Exit, Option, StepKind
 from owlbear_delivery_next.change_contracts.visual_records import PageError, VisualResult
@@ -185,6 +186,12 @@ def classify(errors: Sequence[PageError], before: VisualResult | None) -> tuple[
     return new, [e for e in errors if key(e) in seen]
 
 
+def existing(c: Change) -> list[str]:
+    """The visual result's browser errors the "before" capture had too, as the Changes page lists them."""
+    return [f"{e.state} at {e.width}px, {e.kind} error: {e.text}"
+            for e in classify(c.visual.errors if c.visual else [], c.before)[1]]  # fmt: skip
+
+
 def tree(path: Path, head: str) -> str:
     """The tree of *head*: a visual result holds for exactly this content."""
     return worktree.git(path, "rev-parse", f"{head}^{{tree}}").strip()
@@ -281,6 +288,14 @@ def broken(reason: str) -> StepResult:
     )
 
 
+def redone(c: Change, head: str, tree_id: str) -> list[VisualState]:
+    """The states to capture: on the head and tree a passed result holds for, those an amendment voided (TD-185)."""
+    r, states = c.visual, list(c.brief.visual)
+    if r is None or not r.passed or r.head != head or r.tree != tree_id or r.criteria != criteria(c):
+        return states
+    return [s for s in states if r.states.get(s.name) != s.version] or states
+
+
 def judged(  # noqa: PLR0913 - one result from every visual input
     c: Change,
     head: str,
@@ -315,10 +330,12 @@ def judged(  # noqa: PLR0913 - one result from every visual input
     elif not failed and verdict is None:
         found.append("the screenshots were not judged")
     ends, sent = decision.route(kept, found, verdict, broken=bool(failed or raised))
-    files = [s.file for s in shots if s.file]
-    states, criteria = {s.name: s.version for s in c.brief.visual}, {k.id: k.version for k in c.brief.criteria}
+    r = c.visual  # the states an amendment left valid keep their screenshots (TD-185)
+    kept_files = r.files if r and r.passed and (r.head, r.tree) == (head, tree_id) else []
+    files = list(dict.fromkeys([*kept_files, *(s.file for s in shots if s.file)]))
+    states = {s.name: s.version for s in c.brief.visual}
     c.visual = VisualResult(
-        head=head, tree=tree_id, states=states, criteria=criteria, files=files, passed=ends == "merge",
+        head=head, tree=tree_id, states=states, criteria=criteria(c), files=files, passed=ends == "merge",
         findings=sent, errors=errors, doubts=decision.doubts(ends, verdict, kept), design=list(scans), at=now,
     )  # fmt: skip
     if kept is not None and ends != "again":

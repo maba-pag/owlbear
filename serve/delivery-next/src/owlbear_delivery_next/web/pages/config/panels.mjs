@@ -7,7 +7,7 @@ import { ROUNDS, LOOPS, back, state } from "./state.mjs";
 import {
   cell, row, setting, table, numberCell, designFailures, widths, sessionsAtOnce, prLabels, prMarker, subagentsCell,
   curatorThreshold, memoryValue, spotterCell, prefRows, USER_KEYS, userConfig, userConfigLabel, contextCell, editable,
-  guardLevel, more,
+  guardLevel, githubAccount, more,
 } from "./cells.mjs";
 
 const SPOTTER = [
@@ -54,7 +54,7 @@ export function agentsGroup() {
       ${table("Agents: they apply to the next session",
         ["Agent", "Model", "Effort", "Context", "Subagents", "Minutes per session"],
         "agents-rows", Object.keys(state.loaded.settings.agents).map((role) => {
-          const timed = !["shaper", "spotter"].includes(role);
+          const timed = role !== "spotter";  // the shaper's apply to its amendment sessions (TD-185)
           return setting(`set-agents-${role}`, html`${role === "shaper" ? "shaper (a recommendation)"
             : role}${toMetrics(role)}`,
           ["model", "effort", "context", ...(timed ? ["subagents", "minutes"] : [])].map((f) => `agents.${role}.${f}`),
@@ -67,8 +67,8 @@ export function agentsGroup() {
         + "questions. They work under the step's own permissions, and Delivery records each one; Maintenance shows "
         + "their use per agent.",
         "Minutes per session, 1 to 480: a session ends after this many minutes in total; its step then counts as a "
-        + "failed attempt and runs again. The shaper's chat and the Spotter's looks are no sessions of their own, so "
-        + "they show n/a.",
+        + "failed attempt and runs again. The shaper's apply to its brief amendment sessions, not to the shaping "
+        + "chat. The Spotter's looks are no sessions of their own, so it shows n/a.",
         "The credits under a model are its rates at the row's context tier.")}
       <p-text id="shaper-note" size="xs" color="contrast-medium">The shaper's model and effort are a recommendation
         (TD-328): Delivery's own turns in the shaping chat use them; what you type there runs on the chat's model
@@ -254,9 +254,14 @@ export function checksGroup() {
     </section>
     <section class="panel" aria-labelledby="pr-title">
       <p-heading size="lg"><h2 id="pr-title" tabindex="-1">Pull requests</h2></p-heading>
-      <p-text>What OwlBear adds to each pull request it opens.</p-text>
+      <p-text>What OwlBear adds to each pull request it opens, and the GitHub account it works on them as.</p-text>
+      ${more("Which GitHub account",
+        "The account that pushes, opens, labels, answers and merges this project's pull requests; blank uses the "
+        + "layers above. repository-owner is the repository owner's account when gh has it, else maba-pag.",
+        "The account must be signed in to gh (gh auth login); the account active in gh stays as it is.")}
       ${table("Pull request settings: they apply to the next pull request", ["Setting", "Value"], "pr",
         [setting("set-pr_labels", "Labels", ["pr_labels"], prLabels()),
-          setting("set-pr_marker", "Marker line", ["pr_marker"], prMarker())])}
+          setting("set-pr_marker", "Marker line", ["pr_marker"], prMarker()),
+          setting("set-github_account", "GitHub account", ["github_account"], githubAccount())])}
     </section>`;
 }

@@ -50,6 +50,7 @@ from owlbear_delivery_next.impeccable_runs import (
     pack_run,
     pack_updater,
 )
+from owlbear_delivery_next.local_system import git_run
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.maintenance import Maintenance
 from owlbear_delivery_next.local_system.processes import Termination
@@ -143,11 +144,11 @@ class FakeGitHub:
         assert branch == "main"
         if self.plan_limited:  # the real read of GitHub's plan-limit 403: no rules, no required checks
 
-            def limited(argv, _body, _timeout, _cwd):
+            def limited(argv, _body, _timeout, _cwd, _env):
                 said = b"gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)\n"
                 return subprocess.CompletedProcess(argv, 1, b"", said)
 
-            return GhProvider(self.remote, runner=limited).read_rules(repository, branch)
+            return GhProvider(self.remote, writer=None, runner=limited).read_rules(repository, branch)
         return Rules(state="known", evidence="rules", required_checks=("CI",))
 
     def observe_checks(self, _repository: str, _number: int, _head: str) -> tuple[Check, ...]:
@@ -1548,10 +1549,10 @@ def test_a_failed_pack_stage_keeps_and_logs_its_whole_error(  # noqa: PLR0913, P
 
         def refusing(args, *rest, **kw):
             if args[:3] == ["git", "rev-parse", "--show-toplevel"]:
-                raise subprocess.CalledProcessError(128, args, output="", stderr=f"{whole_error}\n")
+                return subprocess.CompletedProcess(args, 128, "", f"{whole_error}\n")
             return real(args, *rest, **kw)
 
-        monkeypatch.setattr(pack_git.subprocess, "run", refusing)
+        monkeypatch.setattr(git_run.subprocess, "run", refusing)
         stage = "candidate"
         said = (
             f"PackError: the package at {checkout.resolve()} is not a git checkout, so an update cannot be committed: "

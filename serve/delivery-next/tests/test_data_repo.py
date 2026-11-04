@@ -40,6 +40,7 @@ AFTER = "BBBBBBBB-0000-4000-8000-000000000002"
 
 
 class Host:
+    repo = None  # no clone
     maintenance = None
     wake = SimpleNamespace(set=lambda: None)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106

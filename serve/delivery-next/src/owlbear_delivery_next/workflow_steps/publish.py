@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from owlbear_delivery_next.change_contracts.models import Change
+    from owlbear_delivery_next.git.access import Access
     from owlbear_delivery_next.github.provider import PullRequest
     from owlbear_delivery_next.runtimes.readiness import Check
     from owlbear_delivery_next.workflow_steps.engine import Ctx
@@ -41,28 +42,29 @@ def hook_rejected(returncode: int | None, stderr: bytes, *, hook: bool) -> bool:
     return hook and returncode == _PUSH_FAILED and b"rejected]" not in stderr
 
 
-def push(path: Path, c: Change, head: str) -> StepResult | None:  # noqa: PLR0911 - one exit per readback
+def push(path: Path, c: Change, head: str, access: Access) -> StepResult | None:  # noqa: PLR0911 - one per readback
     """Push HEAD to the Change branch, never forced and with hooks; an unknown result is read back first.
 
     Only a readback that confirms absence replays the push, once, or names a rejecting pre-push hook;
     a moved remote branch is integrated.
     """
     ref = f"refs/heads/{c.names.branch}"
-    before = read_remote_ref(path, "origin", ref)
+    before = read_remote_ref(path, "origin", ref, access=access)
     if before == head:
         return None
     if before and not engine.contains(path, before, head):
-        engine.fetch(path, c.names.branch)
+        engine.fetch(path, c.names.branch, access)
         return engine.integrate(c, P, f"origin/{c.names.branch}")
     for _ in range(2):
         try:
-            run_remote_git(path, ("push", "--quiet", "origin", f"{head}:{ref}"), kind="write")
+            run_remote_git(path, ("push", "--quiet", "origin", f"{head}:{ref}"), kind="write", access=access)
         except RemoteGitWriteUnknown as exc:
-            match classify_write_readback(read_remote_ref(path, "origin", ref), intended=head, expected_old=before):
+            seen = read_remote_ref(path, "origin", ref, access=access)
+            match classify_write_readback(seen, intended=head, expected_old=before):
                 case "applied":
                     return None
                 case "conflict":
-                    engine.fetch(path, c.names.branch)
+                    engine.fetch(path, c.names.branch, access)
                     return engine.integrate(c, P, f"origin/{c.names.branch}")
                 case "not-applied" if exc.result and hook_rejected(
                     exc.result.returncode, exc.result.stderr, hook=profile.pre_push_hook(path)[0]
@@ -171,11 +173,11 @@ def gate(checks: Sequence[Check], now: datetime) -> StepResult | None:
 
 def lagging(ctx: Ctx, c: Change, pr: PullRequest, head: str) -> StepResult:
     """The PR shows another head: re-publish when the branch itself differs, else wait, then ask after ``LAG``."""
-    path = Path(c.names.worktree)
-    if read_remote_ref(path, "origin", f"refs/heads/{c.names.branch}") != head:
+    path, access = Path(c.names.worktree), ctx.writer.access()
+    if read_remote_ref(path, "origin", f"refs/heads/{c.names.branch}", access=access) != head:
         c.lag = None
         reason = f"the branch no longer holds {head[:7]}; published again"
-        return push(path, c, head) or engine.pending(Waiting.NETWORK, reason, ctx.poll())
+        return push(path, c, head, access) or engine.pending(Waiting.NETWORK, reason, ctx.poll())
     if c.lag is None or (c.lag.head, c.lag.pr) != (head, pr.number):
         c.lag = Episode(head=head, pr=pr.number, since=ctx.now)
     if ctx.now - c.lag.since < LAG:  # GitHub reads lag a push just made: observed again shortly, never budgeted
@@ -194,14 +196,14 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - on
     path, target = Path(c.names.worktree), c.names.target
     if (asked := engine.rules_changed(ctx, c)[0]) is not None:
         return c, asked
-    engine.fetch(path, target)
+    engine.fetch(path, target, ctx.writer.access())
     if not engine.contains(path, f"origin/{target}"):
         return c, engine.integrate(c, P, f"origin/{target}")
     head = engine.head(path)
     if not reviewed(c, path, head):
         cause, reason = cause_key(ErrorKind.GATE, P, "unreviewed"), f"no valid final review of {head[:7]}"
         return c, StepResult(exit=Exit.BACK, back_to=StepKind.REVIEW, cause=cause, reason=reason)
-    if (r := push(path, c, head)) is not None:
+    if (r := push(path, c, head, ctx.writer.access())) is not None:
         return c, r
     pr = pull_request(ctx, c, head)
     if pr and pr.head_sha != head:

@@ -51,6 +51,8 @@ def save(
         "outcome": outcome,
         "pr": {"number": pr.number, "url": pr.url, "merge_commit": pr.merge_commit_sha} if pr else None,
         "brief": brief.model_dump(mode="json", include=BRIEF),
+        "versions": [b.model_dump(mode="json", include=BRIEF | {"checks"}) for b in c.brief.approved],  # TD-185
+        "amendments": [a.model_dump(mode="json") for a in c.amendments],
         "decisions": [d.model_dump(mode="json", include={"text", "origin", "at"}) for d in c.decisions],
         "decisions_applied": sorted(c.decisions_baseline.said) if c.decisions_baseline else [],  # its impact (TD-428)
         "decisions_picked": {d.id: d.revision for d in brief.picked.decisions} if brief.picked else {},  # TD-459

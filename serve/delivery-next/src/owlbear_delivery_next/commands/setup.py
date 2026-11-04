@@ -14,7 +14,7 @@ from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import data_repo, git_files, local_home, preload, text_files
 from owlbear_delivery_next.runtimes import readiness, window_files
 from owlbear_delivery_next.settings import profile, roles
-from owlbear_delivery_next.state_store import prefs_import, profile_repair, profile_share, roles_move
+from owlbear_delivery_next.state_store import github_writer, prefs_import, profile_repair, profile_share, roles_move
 from owlbear_delivery_next.state_store.profile_errors import (
     OldProfileUnreadableError,
     SharedSyncError,
@@ -382,13 +382,14 @@ def run(
             return 1
         return _settle(store, receipt.profile, say, _project_files(repo, python, local_files, ask, say))
     prev, unreadable, source, target = _saved(store, say)
-    checks = readiness.check(repo, prev)
+    writer = github_writer.of(store, repo, detecting=True)
+    checks = readiness.check(repo, prev, writer)
     say("Readiness")
     say("\n".join(f"  {'ok ' if c.ok else 'FIX'} {c.name}: {c.detail}" for c in checks))
     if failed := [c for c in checks if not c.ok]:
         say(f"Next: {failed[0].fix}")
         return 1
-    prof = profile.detect(repo, profile.provider(prev or Profile(), repo), prev)
+    prof = profile.detect(repo, profile.provider(prev or Profile(), repo, writer), prev)
     for key, value in confirms:
         prof = profile.confirm(prof, key, value, datetime.now(UTC))
     say(render(prof))

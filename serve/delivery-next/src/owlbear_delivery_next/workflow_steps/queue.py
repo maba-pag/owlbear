@@ -27,6 +27,7 @@ from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.github.provider import SUCCESS, EnqueueStatus, ProviderError
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import SettingsUnset
+from owlbear_delivery_next.state_store import github_writer
 from owlbear_delivery_next.workflow_steps import engine
 
 if TYPE_CHECKING:
@@ -280,12 +281,16 @@ def run(ctx: Ctx, c: Change, pr: PullRequest, rules: Rules, gate: Gate) -> tuple
 
 
 def leaving(before: Change, after: Change) -> bool:
-    """Whether folding the inbox moves a Change off its merge step, pauses it or abandons it."""
+    """Whether folding the inbox moves a Change off its merge step, pauses it, abandons it or amends its brief."""
     if before.step.kind != M:
         return False
     paused = after.intent.paused_at is not None and before.intent.paused_at is None
     abandoned = after.intent.abandoned_at is not None and before.intent.abandoned_at is None
-    return after.step.kind != M or paused or abandoned
+    amended = after.amending is not None and before.amending is None  # TD-185: never merged while it runs
+    objected = {(a.id, a.objected_at) for a in after.amendments if a.objected_at} - {
+        (a.id, a.objected_at) for a in before.amendments if a.objected_at
+    }  # a later objection to the same amendment too
+    return after.step.kind != M or paused or abandoned or amended or bool(objected)
 
 
 def _resolved(before: Change, after: Change) -> bool:
@@ -319,7 +324,7 @@ def barrier(store: Store, repo: Path) -> Leave:
         queued = before.queue is not None or bool(prof and profile.value(prof, profile.QUEUE) == "yes")
         if not (queued and leaving(before, after) and before.names.pr and prof):
             return after
-        gh: Provider = profile.provider(prof, repo)
+        gh: Provider = profile.provider(prof, repo, github_writer.of(store, repo))
         repository = profile.value(prof, profile.REPO)
         try:
             q = gh.read_queue(repository, before.names.pr)
@@ -333,7 +338,7 @@ def barrier(store: Store, repo: Path) -> Leave:
                 return after
             gh.dequeue(gh.read_pull_request(repository, before.names.pr))
             q = gh.read_queue(repository, before.names.pr)
-        except ProviderError:
+        except ProviderError, SettingsUnset:  # an unset account holds the items, as unreachable GitHub does
             return None
         if q.entry is not None or q.merged:
             return None

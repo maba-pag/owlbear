@@ -27,8 +27,9 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    happen. Consider how the criteria could all pass while missing the owner's outcome, and close a
    material gap with a criterion or a person check. Where an expected result is not obvious, take it
    from the rule that governs it, a real input with its known result, or the owner's explicit
-   choice, not from your guess. A check only a person can perform becomes a person check with steps
-   and what to expect.
+   choice, not from your guess. A check only a person can perform becomes a person check with steps,
+   what to expect and the criteria it `covers` (empty for all), so changing one criterion later
+   redoes only its checks.
 4. For a UI change ask which page states must render: each visual state has a `name`, a `path`
    under the preview root and what to `expect`. Write each expectation as what a screenshot shows
    ("the Dark mode button is filled and darker than in light mode"), not as a state only the code
@@ -113,7 +114,9 @@ an item he corrects as above, then save.
   then classify his answer and call `answer_question` with its id, the chosen option id, his words
   and `kind`: `event` when it only settles how the work goes on; `clarification` when it settles
   what the approved brief means; `brief_change` when it changes the brief's outcome, scope,
-  criteria or non-goals (the work stops and asks; amendments are not built). For a clarification,
+  criteria or non-goals (Delivery amends the brief from it: the shaper words the change, a
+  challenger judges it, and the owner is asked only about what goes beyond his answer; an outcome
+  or non-goal change goes back to reshaping). For a clarification,
   state his intent in at most two lines, read it back to him and pass that confirmed `statement`
   with `confirmed: true`, never his words; it becomes a decision of this Change once a check finds
   it within the brief. When unsure between clarification and brief change, ask him.

@@ -14,7 +14,7 @@ function saved(layer, key) {
     return typeof v === "boolean" ? (v ? "on" : "off") : String(v);
   }
   if (key === "widths") return (loaded[layer]?.widths ?? []).join(", ");
-  if (["design_failures", "guard_level", "sessions", "curator_threshold"].includes(key)) {
+  if (["design_failures", "guard_level", "github_account", "sessions", "curator_threshold"].includes(key)) {
     return String(loaded[layer]?.[key] ?? "");
   }
   if (key.startsWith("spot.")) {  // the Spotter's settings (design §4)
@@ -184,7 +184,7 @@ function edited(layer) {
       next.widths = value ? value.split(",").map((w) => Number(w.trim())) : null;
       continue;
     }
-    if (key === "design_failures" || key === "guard_level") {
+    if (["design_failures", "guard_level", "github_account"].includes(key)) {
       next[key] = value || null;
       continue;
     }

@@ -52,8 +52,15 @@ def reserve(store: Store, name: Callable[[int, list[str]], str]) -> tuple[int, s
     return number, slug
 
 
-def publish_new(store: Store, make: Callable[[int, list[str]], Change]) -> Change:
-    """Allocate and create a new Change in one cross-process SQLite transaction."""
+def publish_new(
+    store: Store, make: Callable[[int, list[str]], Change], parent: tuple[Lock, Change] | None = None
+) -> Change:
+    """Allocate and create a new Change in one cross-process SQLite transaction.
+
+    *parent*, a Change *make* updates for the new one, is written in the same transaction, so neither stands alone.
+    """
+    if parent is not None:
+        parent[0].check(parent[1].slug)
     with store.db.write() as db:
         number, taken = _claim(store, db)
         change = make(number, taken)
@@ -61,6 +68,8 @@ def publish_new(store: Store, make: Callable[[int, list[str]], Change]) -> Chang
             msg = f"{change.slug} is taken"
             raise StoreError(msg)
         put_record(db, change.slug, change.model_dump_json(indent=1))
+        if parent is not None:
+            put_record(db, parent[1].slug, parent[1].model_dump_json(indent=1))
     return change
 
 

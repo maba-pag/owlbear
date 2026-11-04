@@ -1,11 +1,10 @@
 """A paid child session of a durable parent step (RUN-04): its run is kept until its verdict and spend commit together.
 
-A plan challenge (TD-190) starts once the planned plan and its challenge mode are durable; an amendment challenge
-(TD-179) once its candidate and the proposing step's effects, accounting and own route are. The child's validated run
-is kept on the Change as soon as it returns, or in a capture file the next run adopts when that write fails, so a
-failed settlement is resumed from it without a second paid session. It is not an owner hold: its usage, tool calls
-and model check stay as the child reported them, so its own gates decide, and it counts once, in the write that
-settles it, with a receipt of its session.
+A plan challenge (TD-190) starts once the planned plan and its challenge mode are durable, an amendment's session
+(TD-185) once its amendment's phase is. The child's validated run is kept on the Change as soon as it returns, or in a
+capture file the next run adopts when that write fails, so a failed settlement is resumed from it without a second
+paid session. It is not an owner hold: its usage, tool calls and model check stay as the child reported them, so its
+own gates decide, and it counts once, in the write that settles it, with a receipt of its session.
 """
 
 from __future__ import annotations
@@ -17,12 +16,13 @@ from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 
+from owlbear_delivery_next.change_contracts import amend_tools
 from owlbear_delivery_next.change_contracts.held_records import PendingChild
 from owlbear_delivery_next.change_contracts.models import Exit, StepKind
 from owlbear_delivery_next.change_contracts.round_records import RECHECK
 from owlbear_delivery_next.change_flow import loop, plan_rounds
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.runtimes import amendments, session_result
+from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import held, sessions
 
@@ -30,7 +30,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from owlbear_delivery_next.change_contracts.amendment_records import Amendment
     from owlbear_delivery_next.change_contracts.held_records import HeldRun
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.runtimes.session_result import Run
@@ -38,6 +37,7 @@ if TYPE_CHECKING:
 
 type Judged = tuple[loop.StepResult, Run]
 type Start = Callable[[sessions.Keep], Judged]
+AMENDING = {amend_tools.PREPARE, amend_tools.REVISE, amend_tools.CHALLENGE, amend_tools.RECONSIDER}
 CAPTURE = "child-"  # a returned child's run, kept in its own file when its Change write failed
 
 
@@ -237,35 +237,31 @@ def booked(change: Change, run: Run, fields: dict[str, object]) -> dict[str, obj
     return sessions.account(change, run, {"kind": pending.label} | fields)
 
 
-def candidate(change: Change, pending: PendingChild) -> Amendment | None:
-    """The amendment an amendment challenge judges."""
-    return next((a for a in change.amendments if a.id == pending.parent), None)
-
-
 def fits(change: Change) -> bool:
     """Whether the step the pending child answers is still the Change's own, so its verdict may still route it.
 
-    The child is bound to the brief version its parent step ran on: under a later brief, ids that repeat (a plan
-    version, an amendment id) are another child's. An amendment's proposing step is the same step, task and mode on
-    the brief version its candidate was prepared against, whatever its session: the owner's retry of a challenge
-    reruns the challenger, never its proposer.
+    The child is bound to the brief version its parent step ran on: under a later brief, a plan version that repeats
+    is another child's. An amendment's session fits while its amendment is in the same phase and revision.
     """
     pending, s = change.pending_child, change.step
     if pending is None or pending.brief is None or pending.brief != change.brief.version:
         return False  # its own brief generation is gone, or it was never bound to one
-    if pending.label == amendments.LABEL:
-        made = candidate(change, pending)
-        if made is None or made.verdict or made.base != change.brief.version:
-            return False
-        return pending.step == (s.kind, s.task, s.mode)
+    if pending.label in AMENDING:
+        return pending.parent == amending(change)
     planned = change.plan is not None and str(change.plan.version) == pending.parent
     return planned and s.kind == StepKind.PLAN and s.mode in {plan_rounds.CHALLENGE, RECHECK}
+
+
+def amending(change: Change) -> str:
+    """What an amendment's session judges: its amendment, phase and revision; empty when no amendment runs (TD-185)."""
+    am = change.amending
+    return f"{am.id}:{am.phase}:{am.revision}" if am else ""
 
 
 def retired(store: Store, lock: Lock, change: Change) -> Change:
     """A pending child whose step the Change has left, after the owner's abandon or new brief: counted once, unrouted.
 
-    Its spend and tool calls count, and an amendment keeps a verdict it judged; the step it would have routed is gone.
+    Its spend and tool calls count; the step it would have routed is gone.
     A pause keeps the step, so its child waits and settles when the step runs again.
     """
     change = recovered(store, lock, change)
@@ -275,22 +271,9 @@ def retired(store: Store, lock: Lock, change: Change) -> Change:
     step = None
     if pending.run is not None:
         run = held.accounted(pending.run)  # counted whether or not its result still loads
-        made = candidate(change, pending) if pending.label == amendments.LABEL else None
-        if made is not None and not made.verdict:
-            _left_verdict(change, pending.run, made)
         step = booked(change, run, {"exit": "retired"})
     change.pending_child = None
     store.write(lock, change)
     if step is not None:
         sessions.announce(store, lock, change.slug, step)
     return change
-
-
-def _left_verdict(change: Change, data: HeldRun, made: Amendment) -> None:
-    """The candidate keeps the verdict of a left step's challenger, when its result still loads and judges."""
-    try:
-        run = held.restored(data)
-    except ValueError, ValidationError, TypeError:
-        return  # a result that no longer loads judges nothing; its usage still counts
-    if judgeable(session_result.to_result(run, StepKind.REVIEW, datetime.now(UTC), change.step.kind)):
-        amendments.judged(made, run)

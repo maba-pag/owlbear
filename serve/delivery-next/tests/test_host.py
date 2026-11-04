@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.change_contracts.amendment_records import Amending
 from owlbear_delivery_next.change_contracts.evidence import check_inputs, next_check
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, CheckResult, IntentItem
 from owlbear_delivery_next.change_contracts.merge_records import Pullback
@@ -254,6 +255,7 @@ def answered(c, at, *, passed=True, inputs=None):
         (answered(checking(ready_at=NOW), NOW, inputs=Inputs()), True, "keep"),  # stale inputs
         (checking(ready_at=NOW).model_copy(update={"step": Step(kind=StepKind.BUILD, task="t2")}), True, "dispose"),
         (checking(ready_at=NOW).model_copy(update={"finished_at": NOW}), True, "dispose"),
+        (checking(ready_at=NOW).model_copy(update={"amending": Amending(id="A1")}), True, "dispose"),  # TD-185
         (Change(slug="c1"), True, None),
     ],
 )

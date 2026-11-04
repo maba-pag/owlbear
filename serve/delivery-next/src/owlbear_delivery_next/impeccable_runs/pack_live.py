@@ -11,6 +11,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
+from owlbear_delivery_next.github.account import Writer
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.impeccable import pack_files, pack_git, pack_update
 from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_replay
@@ -59,7 +60,9 @@ class Live:
     challenge: Callable[[Store, Session], Run] = sessions.run
     update: Callable[[Store, Session], Run] = sessions.run  # the writing updater (TD-125)
     git: pack_git.Git = pack_git.git
-    github: Callable[[Path], Provider] = GhProvider
+    github: Callable[[Path], Provider] = lambda path: GhProvider(
+        path, writer=Writer.rule(path)
+    )  # D-01M6G9Y5XAJGZWMHJYAX2DQKH0
     sleep: Callable[[float], None] = time.sleep
     poll: float = 30.0  # seconds between looks at the pull request's checks
     ci_wait: float = 3600.0  # seconds CI may take at one head before the owner is asked

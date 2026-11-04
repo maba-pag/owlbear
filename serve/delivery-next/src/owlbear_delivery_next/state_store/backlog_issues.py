@@ -13,6 +13,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.github import gh_client
+from owlbear_delivery_next.github.account import Origin, Writer
 from owlbear_delivery_next.github.gh_client import GhClient, Json, Missing, repo
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.local_system import data_repo
@@ -40,12 +41,16 @@ class Issues(GhClient):
     """The fixed issue and label operations on one ``owner/name`` repository."""
 
     def __init__(self, shared: DataRepo) -> None:
-        """The GitHub repository the shared checkout's ``origin`` names; a ValueError when it names none."""
+        """The GitHub repository the shared checkout's ``origin`` names; a ValueError when it names none.
+
+        Writes go as TD-402's rule on it (D-01M6G9YHN2XHJANSWDADZTT6EG): its owner's account, else maba-pag.
+        """
         parts = data_repo.identity(shared.root).split("/")
         if len(parts) != 3 or "." not in parts[0]:  # noqa: PLR2004 - host/owner/name
             msg = f"the shared repository {shared.root} has no GitHub origin remote"
             raise ValueError(msg)
-        super().__init__(shared.root, host=parts[0], runner=RUNNER)
+        writer = Writer.rule(Origin(*parts))
+        super().__init__(shared.root, writer=writer, host=parts[0], runner=RUNNER)
         self.repository = f"{parts[1]}/{parts[2]}"
         self._labels: set[str] | None = None
 

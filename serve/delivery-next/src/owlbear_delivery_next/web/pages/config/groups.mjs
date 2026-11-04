@@ -11,7 +11,7 @@ const PARTS = {
   agents: ["agents", "models", "shaper", "subagents", "limits", "runs", "rounds", "at-once", "sessions"],
   guardrails: ["spotter", "user-config", "load_user", "guard"],
   memory: ["memory", "curation", "curator_threshold"],  // the curation section and its threshold moved here
-  checks: ["general", "widths", "design_failures", "agreement", "impeccable", "merge", "prefs", "pr"],
+  checks: ["general", "widths", "design_failures", "agreement", "impeccable", "merge", "prefs", "pr", "github_account"],
   project: ["folder", "rename"],
   "this-machine": ["machine", "global-machine"],
 };
@@ -47,5 +47,6 @@ export function draftGroup(key) {
   if (head === "machine") return "this-machine";
   if (head === "memory" || head === "curator_threshold") return "memory";
   if (head === "spot" || head.startsWith("load_user_") || head === "guard_level") return "guardrails";
-  return ["widths", "design_failures", "prefs", "pr_labels", "pr_marker"].includes(head) ? "checks" : "agents";
+  const checks = ["widths", "design_failures", "prefs", "pr_labels", "pr_marker", "github_account"];
+  return checks.includes(head) ? "checks" : "agents";
 }

@@ -12,6 +12,7 @@ from fastapi import APIRouter, Query
 
 from owlbear_delivery_next.change_contracts import chat_contract
 from owlbear_delivery_next.change_flow import brief_rounds, picks
+from owlbear_delivery_next.state_store import briefs
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -24,12 +25,15 @@ def brief(change: Change) -> dict[str, Any]:
     b = change.brief
     out = b.model_dump(mode="json", include={"version", "title", "outcome", "scope", "non_goals"})
     out["decisions"] = [d.model_dump(mode="json", exclude={"id", "replaces"}) for d in b.decisions]  # as drafted
-    owner = set(b.specified)  # sent back as saved, so a resave keeps who stated what
+    owner, placed = set(b.specified), briefs.positions(b)  # sent back as saved: a resave keeps who stated what
     states = [{"name": s.name, "owner": f"screen:{s.name}" in owner} for s in b.visual]
-    checks = [{"name": p.id, "owner": f"check:{p.id}" in owner} for p in change.checks]
-    out |= {"specified": [k.id for k in b.criteria if k.id in owner], "states": states, "person_checks": checks}
-    proposed = [i.model_dump(include={"criterion", "old", "new", "why"}) | {"verdict": a.verdict or "not judged"}
-                for a in change.amendments for i in a.items]  # fmt: skip
+    checks = [{"name": p.id, "covers": [placed.get(k, k) for k in p.criteria], "owner": f"check:{p.id}" in owner}
+              for p in change.checks]  # fmt: skip
+    out |= {"specified": [placed[k.id] for k in b.criteria if k.id in owner], "states": states, "person_checks": checks}
+    # a candidate the owner adopts in chat, such as a merged Change's follow-up; the rest went their path (TD-185)
+    shown = {"field", "key", "remove", "old", "new", "why", "path", "actions", "steps", "covers", "visual", "question"}
+    proposed = [i.model_dump(mode="json", include=shown) | {"verdict": a.verdict or "not judged"}
+                for a in change.amendments if a.state == "recorded" for i in a.items]  # fmt: skip
     out |= {"challenge": brief_rounds.status(change)}  # TD-221: the brief challenge's findings by ID
     return out | {"criteria": [k.text for k in b.criteria], "proposed_wording": proposed}
 
