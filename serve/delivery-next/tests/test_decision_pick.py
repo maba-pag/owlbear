@@ -107,6 +107,8 @@ def test_a_failed_pick_blocks_approval_until_a_retry_that_uses_no_round(picking)
     refused = picking.approve(1).json()["detail"]
     assert "the picker failed" in refused
     assert "retry_pick" in refused
+    shown = picking.http.get(f"/api/next/changes/{picking.slug}").json()["brief"]["unapprovable"]
+    assert shown.endswith("; use Pick the decisions again under Open items")  # the page's own way to retry
     assert "the picker failed" in picking.ask(1).json()["detail"]  # a challenge request does not pick again
     assert picking.ask(1, {"F1": "no"}, retry=True).status_code == 422
     rounds = c.loops[BRIEF].round

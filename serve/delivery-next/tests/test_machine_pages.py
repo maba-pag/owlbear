@@ -443,9 +443,6 @@ def opened(page: Page, base: str, of: str, slug: str = "same") -> None:
 
 
 REVISE = "Revise the brief in a new chat"
-# A native modal dialog: past either end focus leaves for the browser's own controls (body), never the page behind.
-INSIDE = """() => document.activeElement === document.body
-    || [...document.querySelectorAll('p-modal')].some((m) => m.open && m.contains(document.activeElement))"""
 
 
 @pytest.mark.browser
@@ -468,7 +465,7 @@ def test_the_brief_offers_a_new_shaping_chat_and_says_how_it_went(tmp_path: Path
         pds.settled(page)
         for key in ["Shift+Tab"] * 3 + ["Tab"] * 3:  # the dialog keeps focus at both ends
             page.keyboard.press(key)
-            assert page.evaluate(INSIDE), key
+            assert page.evaluate(pds.INSIDE), key
         pds.answer(page, "Not now")
         assert REVISE in page.evaluate("document.activeElement?.textContent ?? ''")  # focus back on the button
         assert launched.calls == []
@@ -3649,7 +3646,7 @@ def test_a_failed_pick_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, w
         follows = page.locator(".brief section", has_text="Decisions this work follows")
         shown = follows.locator("p-text")
         expect(shown).to_have_count(1)
-        assert shown.text_content() == f"The pick failed: {failed}. The shaping chat can ask for it again."
+        assert shown.text_content() == f"The pick failed: {failed}. Pick the decisions again under Open items."
         assert said == []
 
 

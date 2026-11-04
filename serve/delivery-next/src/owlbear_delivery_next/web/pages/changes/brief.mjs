@@ -86,7 +86,7 @@ function picked(d, on) {
   if (!on) return text(`This version follows ${n} decision${n === 1 ? "" : "s"}.`);
   if (p.status === "owed") return part(title, text("Delivery is picking them from the decisions in force."));
   if (p.status === "failed") {
-    return part(title, text(`The pick failed: ${p.reason}. The shaping chat can ask for it again.`));
+    return part(title, text(`The pick failed: ${p.reason}. Pick the decisions again under Open items.`));
   }
   if (!n) return part(title, text("None of the decisions in force governs it."));
   const items = d.brief.picked_items, why = d.brief.picked_unavailable;
@@ -173,10 +173,32 @@ function approveButton(d) {
     { icon: "check", aria: DIALOG, disabled: Boolean(d.brief.unapprovable), ...starts(d) });
 }
 
+// One more challenge of the current version, whose revision after its last challenge no challenger read (#966).
+function challengeButton(d) {
+  const version = d.brief.version, key = `${d.key}:approve:${version}`;
+  const start = async () => {
+    if (await ask({
+      title: `Challenge brief v${version} once more?`, yes: "Challenge it", no: "Keep it waiting",
+      now: `A challenger reads brief v${version}, including the revision no challenger reviewed. It starts at once, `
+        + "even while paused, and uses AI credits.",
+      then: `If it finds nothing, you approve v${version} without ticking that revision. If it finds something, the `
+        + "shaper revises the brief for it in the shaping chat.",
+      after: `The challenge only reads brief v${version}, which stays as it is. Once it runs, a pause doesn't stop it `
+        + "and the credits it uses stay spent.",
+      instead: `Brief v${version} waits; you can approve it as it is, ticking that no challenger reviewed its `
+        + "revision.",
+    })) {
+      send("/challenge-brief", { version }, d, key);
+    }
+  };
+  return button(`Challenge v${version}`, start, { variant: "secondary", aria: DIALOG, ...starts(d) });
+}
+
 export function approval(d) {
   const version = d.brief.version, key = `${d.key}:approve:${version}`, on = detailsOn();
   const why = d.brief.unapprovable;  // TD-249: off until its challenge loop ended on this version
-  const act = (v) => (v.actions.includes("approve") ? approveButton(d) : nothing);
+  const act = (v) => [v.actions.includes("approve") ? approveButton(d) : nothing,
+    v.actions.includes("challenge") ? challengeButton(d) : nothing];
   return panel(`Brief v${version}${d.brief.title ? `: ${d.brief.title}` : ""}`, key,
     html`<div class="brief">${d.brief.outcome ? text(d.brief.outcome, { size: "md" }) : nothing}${agreement(d)}
       ${picked(d, on)}${technical(d)}${on ? readBacks(d) : nothing}</div>`,
