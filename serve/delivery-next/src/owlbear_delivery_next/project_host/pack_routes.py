@@ -124,7 +124,7 @@ def memory_last(store: Store) -> dict[str, Any] | None:
     try:
         run = curation_last(store.name) if store.name else None
     except (OSError, ValueError) as exc:
-        unread = f"memory curation's runs could not be read, so they are not counted: {exc}"
+        unread = f"memory curation's runs could not be read, so they are not counted: {failure(exc)}"
         return (owner or {"by": "curation", "state": "unknown"}) | {"reason": unread}
     found = [last for last in (owner, run) if last]
     return max(found, key=lambda last: _when(last) or EARLIEST) if found else None

@@ -15,7 +15,7 @@ from owlbear_memory import MemoryBusyError, MemoryCategory, MemoryEngine, storag
 from owlbear_delivery_next.local_system import curation_apply, data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.machine_host import curation
-from owlbear_delivery_next.project_host import api, memory_routes
+from owlbear_delivery_next.project_host import api, memory_routes, pack_routes
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import Store
@@ -259,6 +259,24 @@ def test_memorys_last_run_is_the_later_of_a_curation_run_and_the_owners_action(s
     got = last()
     assert (got["by"], got["action"]) == ("owner", "approve Run ruff first")
     assert got["reason"].startswith("memory curation's runs could not be read, so they are not counted")
+
+
+def test_unreadable_curation_runs_qualify_memorys_last_run_whole(shared, monkeypatch, whole_error):
+    _root, _, repo = shared
+    store = Store.open(repo)
+    curated(store.name, "done", datetime.now(UTC))
+    error = ValueError(whole_error)
+    error.add_note("a note added on the way up")
+
+    def unreadable(_text: str):
+        raise error
+
+    monkeypatch.setattr(pack_routes.curation_runs.Runs, "model_validate_json", unreadable)
+    got = {a["name"]: a for a in client(store).get("/api/next/maintenance").json()}["Memory curation"]["last"]
+
+    why = f"ValueError: {whole_error}\na note added on the way up"
+    unread = f"memory curation's runs could not be read, so they are not counted: {why}"
+    assert got == {"by": "curation", "state": "unknown", "reason": unread}
 
 
 def test_refused_memory_actions_say_why(shared):

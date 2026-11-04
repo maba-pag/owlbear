@@ -233,6 +233,37 @@ def test_an_unreadable_or_second_waiting_record_elsewhere_refuses_a_fresh_start_
     assert not (job.store.root / pack_job.FILE).exists()
 
 
+@pytest.mark.parametrize(
+    ("where", "said"),
+    [
+        ("registry", "the machine's registry cannot be read, so other projects' updates cannot be ruled out: {}"),
+        ("record", "the Impeccable run record of gamma cannot be read ({}); unreadable is never idle, repair it first"),
+        ("pulls", "OwlBear's open Impeccable pull requests could not be read ({}); try again"),
+    ],
+)
+def test_a_start_refused_by_an_unreadable_registry_record_or_pull_request_list_says_why_whole(
+    tmp_path, monkeypatch, whole_error, where, said
+):
+    registered(tmp_path, {"beta": "", "gamma": ""})
+    error = {"registry": registry.RegistryError, "record": OSError, "pulls": RuntimeError}[where](whole_error)
+    error.add_note("a note added on the way up")
+    real = pack_run_record.observed
+
+    def raising(*args):
+        if where == "record" and args[0] != project_home.home("gamma"):
+            return real(*args)
+        raise error
+
+    if where != "pulls":
+        monkeypatch.setattr(*((registry, "load") if where == "registry" else (pack_run_record, "observed")), raising)
+    github = SimpleNamespace(open_pull_requests=raising if where == "pulls" else lambda *_a: ())
+    job = pack_job.Job(Store(project_home.home("beta"), None, "beta"), pack_job.Live(github=lambda _root: github))
+    with pytest.raises(pack_job.Busy) as refused:
+        job.start()
+    whole = f"{type(error).__name__}: {whole_error}\na note added on the way up"
+    assert str(refused.value) == said.format(whole)
+
+
 def test_a_waiting_run_goes_on_only_as_itself_alone_and_with_no_pack_pull_request_but_its_own(tmp_path):
     registered(tmp_path, {"alpha": waiting("r-alpha"), "gamma": ""})
     root = project_home.home("alpha")
