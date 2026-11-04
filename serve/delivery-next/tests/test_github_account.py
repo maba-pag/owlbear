@@ -452,3 +452,36 @@ def test_a_push_over_ssh_through_git_run_is_a_failed_run_and_starts_no_push(fake
     assert "over SSH" in done.stderr
     assert git_runs.seen == []
     assert fake_gh.calls()
+
+
+def _unstartable(case: str, whole_error: str) -> tuple[BaseException, str]:
+    """What choosing the account raised, with a note, and the whole failed run's stderr built from its parts."""
+    if case == "account":
+        exc: BaseException = AccountMissing(whole_error)
+        said = f"AccountMissing: github account: {whole_error}"
+    elif case == "remote":
+        exc = remote_git.RemoteGitError(whole_error, retry_safe=True)
+        said = f"RemoteGitError: {whole_error}"
+    elif case == "timeout":
+        exc = subprocess.TimeoutExpired(["git", "remote", "get-url"], 3, stderr=whole_error.encode())
+        said = (
+            f"{git_run.EXPIRED}: TimeoutExpired: Command '['git', 'remote', 'get-url']' timed out after 3 seconds"
+            f"\n{whole_error}"
+        )
+    else:
+        exc = TimeoutError(git_run.EXPIRED)
+        said = f"TimeoutError: {git_run.EXPIRED}"
+    exc.add_note("note: the account step's own detail")
+    return exc, f"{said}\nnote: the account step's own detail"
+
+
+@pytest.mark.parametrize("case", ["account", "remote", "timeout", "deadline"])
+def test_a_git_run_whose_account_cannot_be_had_fails_with_the_whole_reason(case, repo, monkeypatch, whole_error):
+    exc, said = _unstartable(case, whole_error)
+
+    def refusing(*_args):
+        raise exc
+
+    monkeypatch.setattr(git_run, "_access", refusing)
+    done = git_run.run(repo, "fetch", "-q", until=None, cap=10)
+    assert (done.returncode, done.stdout, done.stderr) == (128, "", said)

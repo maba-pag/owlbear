@@ -52,7 +52,9 @@ def run(
         access = _access(cwd, args, deadline)
         seconds = _left(deadline) if _remote(args) else seconds
     except (AccountMissing, RemoteGitError, TimeoutError, subprocess.TimeoutExpired) as exc:
-        said = EXPIRED if isinstance(exc, TimeoutError | subprocess.TimeoutExpired) else str(exc)
+        said = failure(exc)
+        if isinstance(exc, subprocess.TimeoutExpired):  # `_left`'s own TimeoutError already says EXPIRED
+            said = f"{EXPIRED}: {said}"
         return subprocess.CompletedProcess(["git", *args], 128, "", said)
     command = ["git", *access.options(), *args]
     try:
