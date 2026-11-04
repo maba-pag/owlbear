@@ -3,29 +3,15 @@
 
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { held, here, project } from "/assets/ui.mjs";
-import { ROUNDS, LOOPS, back, state } from "./state.mjs";
+import { back, state } from "./state.mjs";
 import {
   cell, row, setting, table, numberCell, designFailures, widths, sessionsAtOnce, prLabels, prMarker, subagentsCell,
-  curatorThreshold, memoryValue, spotterCell, prefRows, USER_KEYS, userConfig, userConfigLabel, contextCell, editable,
+  curatorThreshold, memoryValue, spotterCell, prefRows, USER_KEYS, userConfig, contextCell, editable,
   guardLevel, githubAccount, more,
 } from "./cells.mjs";
-
-const SPOTTER = [
-  ["switch", "On or off", "On or off"],
-  ["hand_off_fitness", "Hand-off fitness: the result should not be accepted as it stands", "Hand-off fitness"],
-  ["course_and_constraints", "Course and constraints: recoverable work heading materially wrong",
-    "Course and constraints"],
-  ["outside_state_changes", "Outside-state changes: a consequential change beyond the task's files",
-    "Outside-state changes"],
-  ["irreversible_harm", "Irreversible harm, in the Spotter's own judgement; it takes precedence", "Irreversible harm"],
-  ["steer_share", "Steered share (%)", "Steered share"],
-  ["intervention_cap", "Steering notes at most, per step or chat turn", "Notes at most"],
-  ["verbose", "Verbose", "Verbose"],
-  ["verbose_until", "Verbose until (YYYY-MM-DD; empty: no end)", "Verbose until"],
-  ["looks", "Looks (hand-off, plan, state-change, sample)", "Looks"],
-  ["sample_rate", "Sampled actions (%)", "Sampled actions"],
-  ["look_credit_limit", "Credit limit per look (credits)", "Credit limit per look"],
-];
+import {
+  COLUMN, LOOPS, PLAIN_NAMES, PURGE, RATINGS, RECALLS, ROUNDS, SPOTTER, USER_NAMES, agentName,
+} from "./names.mjs";
 
 // The way to the role's compaction on Metrics: back to the filters a compaction row's link came from, else the
 // role's on this project, or on every project from This machine or Global; unsaved edits keep the page.
@@ -52,15 +38,14 @@ export function agentsGroup() {
     <section class="panel" aria-labelledby="agents-title">
       <p-heading size="lg"><h2 id="agents-title" tabindex="-1">Agents</h2></p-heading>
       ${table("Agents: they apply to the next session",
-        ["Agent", "Model", "Effort", "Context", "Subagents", "Minutes per session"],
+        ["Agent", ...Object.values(COLUMN)],
         "agents-rows", Object.keys(state.loaded.settings.agents).map((role) => {
           const timed = role !== "spotter";  // the shaper's apply to its amendment sessions (TD-185)
-          return setting(`set-agents-${role}`, html`${role === "shaper" ? "shaper (a recommendation)"
-            : role}${toMetrics(role)}`,
+          return setting(`set-agents-${role}`, html`${agentName(role)}${toMetrics(role)}`,
           ["model", "effort", "context", ...(timed ? ["subagents", "minutes"] : [])].map((f) => `agents.${role}.${f}`),
           editable(role, "model"), editable(role, "effort"), contextCell(role),
           timed ? subagentsCell(role) : none(),
-          timed ? numberCell(role, "minutes", "Minutes per session", `set-agents-${role}-minutes`) : none());
+          timed ? numberCell(role, "minutes", COLUMN.minutes, `set-agents-${role}-minutes`) : none());
         }))}
       ${more("What the columns mean",
         "Subagents: an agent may start the runtime's built-in subagents, such as explore or code-review, for side "
@@ -91,7 +76,7 @@ export function agentsGroup() {
       <p-text>A step waits for a free slot before it starts. A visual check runs its judges in waves of the slots it
         gets; an Impeccable update takes one slot per session. This machine's total holds across its projects.</p-text>
       ${table("Sessions at once: they apply to the next step that starts", ["Setting", "Value"], "at-once",
-        [setting("set-sessions", "Agent sessions at once in one project", ["sessions"], sessionsAtOnce())])}
+        [setting("set-sessions", PLAIN_NAMES.sessions, ["sessions"], sessionsAtOnce())])}
       <p-text size="xs" color="contrast-medium">At least 1. Steps running now keep their sessions.</p-text>
     </section>`;
 }
@@ -134,7 +119,7 @@ export function guardrailsGroup() {
         + "never use it. A memory saved this way skips OwlBear's memory curation and reaches your later hand-run "
         + "chats in this repository, so off is recommended.")}
       ${table("Your instructions, skills and memory: they apply to the next session", ["Setting", "Value"],
-        "user-config", USER_KEYS.map((key) => setting(`set-${key}`, userConfigLabel(key), [key], userConfig(key))))}
+        "user-config", USER_KEYS.map((key) => setting(`set-${key}`, USER_NAMES[key], [key], userConfig(key))))}
     </section>
     <section class="panel" aria-labelledby="guard-title">
       <p-heading size="lg"><h2 id="guard-title" tabindex="-1">Shell guard</h2></p-heading>
@@ -148,28 +133,11 @@ export function guardrailsGroup() {
         "A warning reaches the agent and the step's journal. At every level a read-only step's writes stay refused, "
         + "and so do the step's folder, tool and file rules.")}
       ${table("Shell guard: it applies to the next step", ["Setting", "Value"], "guard",
-        [setting("set-guard_level", "Shell guard level", ["guard_level"], guardLevel())])}
+        [setting("set-guard_level", PLAIN_NAMES.guard_level, ["guard_level"], guardLevel())])}
     </section>`;
 }
 
 // Memory: every value memory management uses, Global's alone (each unset until saved; the projects' work waits).
-// A row: its key, its name, its control's label when that differs from the name, and its input mode.
-const RATINGS = [
-  ["outstanding_boost", "Points an outstanding rating adds", "Points an outstanding rating adds to an entry's score",
-    "decimal"],
-  ["unremarkable_penalty", "Points an unremarkable rating takes off",
-    "Points an unremarkable rating takes off an entry's score", "decimal"],
-  ["stale_factor", "Skipped ratings per other rating before an entry is stale"],
-];
-const RECALLS = [
-  ["preflight_cap", "Lessons a step starts with, at most", "Lessons a step is told at its start, at most"],
-  ["preflight_budget", "Characters of lessons a step starts with, at most",
-    "Character budget for a step's starting lessons"],
-  ["recall_limit", "Entries the recall tool returns when it is given no limit"],
-  ["explore_slots", "Recall slots for the least-rated entries"],
-  ["challenge_slots", "Recall slots for the least-outstanding entries"],
-];
-
 export function memoryGroup() {
   const rows = (list) => list.map(([field, name, label = name, inputmode]) =>
     setting(`set-memory-${field}`, name, [`memory.${field}`], memoryValue(field, label, inputmode)));
@@ -207,7 +175,7 @@ export function memoryGroup() {
       <p-text>A deleted entry's file stays until you remove it on the Memory page, and then only once it was deleted at
         least this many days ago. The shared repository's history keeps it either way.</p-text>
       ${table("Deleted entries: it applies to the next removal", ["Setting", "Value"], "memory-purge",
-        rows([["purge_days", "Days a deleted entry waits before its file can be removed"]]))}
+        rows(PURGE))}
       <p-text color="contrast-medium">0 to 3650; one value for every project and machine.</p-text>
     </section>
     <section class="panel" aria-labelledby="curation-title">
@@ -216,7 +184,7 @@ export function memoryGroup() {
         threshold it acts alone, Make global included; below it, it asks you in an interactive session and leaves the
         entry as it is in an automatic run.</p-text>
       ${table("Memory curation: it applies to the next curation", ["Setting", "Value"], "curation",
-        [setting("set-curator_threshold", "Curator's confidence threshold (%)", ["curator_threshold"],
+        [setting("set-curator_threshold", PLAIN_NAMES.curator_threshold, ["curator_threshold"],
           curatorThreshold())])}
       <p-text color="contrast-medium">50 to 100; one value for every project and machine.</p-text>
     </section>`;
@@ -229,8 +197,8 @@ export function checksGroup() {
     <section class="panel" aria-labelledby="general-title">
       <p-heading size="lg"><h2 id="general-title" tabindex="-1">Visual checks</h2></p-heading>
       ${table("Visual check settings: they apply to the next visual check", ["Setting", "Value"], "general",
-        [setting("set-widths", "Screenshot widths", ["widths"], widths()),
-          setting("set-design_failures", "Design failures", ["design_failures"], designFailures())])}
+        [setting("set-widths", PLAIN_NAMES.widths, ["widths"], widths()),
+          setting("set-design_failures", PLAIN_NAMES.design_failures, ["design_failures"], designFailures())])}
       <p-heading size="md"><h3 id="agreement-title" tabindex="-1">Agreement with your visual decisions</h3></p-heading>
       <p-text id="impeccable" size="xs">${loaded.impeccable}</p-text>
       <p-text id="agreement-note" size="xs" color="contrast-medium">${loaded.agreement.length
@@ -260,8 +228,8 @@ export function checksGroup() {
         + "layers above. repository-owner is the repository owner's account when gh has it, else maba-pag.",
         "The account must be signed in to gh (gh auth login); the account active in gh stays as it is.")}
       ${table("Pull request settings: they apply to the next pull request", ["Setting", "Value"], "pr",
-        [setting("set-pr_labels", "Labels", ["pr_labels"], prLabels()),
-          setting("set-pr_marker", "Marker line", ["pr_marker"], prMarker()),
-          setting("set-github_account", "GitHub account", ["github_account"], githubAccount())])}
+        [setting("set-pr_labels", PLAIN_NAMES.pr_labels, ["pr_labels"], prLabels()),
+          setting("set-pr_marker", PLAIN_NAMES.pr_marker, ["pr_marker"], prMarker()),
+          setting("set-github_account", PLAIN_NAMES.github_account, ["github_account"], githubAccount())])}
     </section>`;
 }

@@ -4,6 +4,7 @@ import { EFFORTS, INHERIT, SOURCES, state, shown } from "./state.mjs";
 import { own, inherited, edit, layerValue, preview, drafted } from "./layers.mjs";
 import { levels, arrows } from "./cost.mjs";
 import { at } from "./sections.mjs";
+import { PLAIN_NAMES, PREF_NAMES, USER_NAMES } from "./names.mjs";
 
 // Code ships no defaults (2026-10-23): a value no layer sets is unset; its row's name says so in red (GW8RT6). While
 // the edited layer has an unsaved edit of it, the line says what the save would give (#809).
@@ -153,11 +154,6 @@ export function designFailures() {
 
 // R15: five preferences, each set per layer and never defaulted in code; the project's value wins, then this
 // machine's, then Global's. A blank or "inherit" choice clears the layer's own value.
-export const PREFS = ["merge_method", "delete_remote_branch", "ci_poll_seconds", "ci_start_window_seconds",
-  "ask_before_merge"];
-const PREF_NAMES = { merge_method: "Merge method", delete_remote_branch: "Delete the remote branch after merging",
-  ci_poll_seconds: "CI poll interval (seconds)", ci_start_window_seconds: "CI start window (seconds)",
-  ask_before_merge: "Ask before merging" };
 const PREF_CHOICES = { merge_method: [["merge", "merge commit"], ["squash", "squash"], ["rebase", "rebase"]],
   delete_remote_branch: [["on", "on"], ["off", "off"]], ask_before_merge: [["on", "on"], ["off", "off"]] };
 
@@ -174,7 +170,8 @@ function prefCell(field) {
 }
 
 export function prefRows() {
-  return PREFS.map((field) => setting(`set-prefs-${field}`, PREF_NAMES[field], [`prefs.${field}`], prefCell(field)));
+  return Object.entries(PREF_NAMES).map(([field, name]) =>
+    setting(`set-prefs-${field}`, name, [`prefs.${field}`], prefCell(field)));
 }
 
 export function widths() {
@@ -188,7 +185,7 @@ export function widths() {
 // TD-336: how many agent sessions of one project run at once; the machine's total holds as well.
 export function sessionsAtOnce() {
   const key = "sessions", below = inherited()[key];
-  return cell(typed("Agent sessions at once in one project", own(key), (v) => edit(key, v),
+  return cell(typed(PLAIN_NAMES.sessions, own(key), (v) => edit(key, v),
     { key, placeholder: clear(below), inputmode: "numeric", disabled: state.saving }),
   source(key, state.loaded.settings[key]));
 }
@@ -274,21 +271,16 @@ export function githubAccount() {
 // D-01M5YE4P5317N1HWD0QN6N05E0: whether a Delivery step loads the owner's own instruction files or is offered his own
 // skills, from his Copilot folder; layered, with no default: steps refuse while either is unset.
 const USER_CONFIG = {
-  load_user_instructions: ["Your instructions in Delivery steps", "on: your instruction files load too",
-    "off: only the repository's instructions"],
-  load_user_skills: ["Your skills in Delivery steps", "on: your skills are offered too", "off: only Delivery's skills"],
-  load_user_memory: ["Copilot Memory in Delivery sessions", "on: they recall it; producing steps may save",
+  load_user_instructions: ["on: your instruction files load too", "off: only the repository's instructions"],
+  load_user_skills: ["on: your skills are offered too", "off: only Delivery's skills"],
+  load_user_memory: ["on: they recall it; producing steps may save",
     "off: no Copilot Memory (recommended)"], // D-01M69EBRBBW97001KZ43C0BJM1
 };
 export const USER_KEYS = Object.keys(USER_CONFIG);
 
-export function userConfigLabel(key) {
-  return USER_CONFIG[key][0];
-}
-
 export function userConfig(key) {
-  const [label, on, off] = USER_CONFIG[key], below = onOff(inherited()[key]);
-  return cell(choose(label, [[INHERIT, clear(below)], ["on", on], ["off", off]], own(key) || INHERIT,
+  const [on, off] = USER_CONFIG[key], below = onOff(inherited()[key]);
+  return cell(choose(USER_NAMES[key], [[INHERIT, clear(below)], ["on", on], ["off", off]], own(key) || INHERIT,
     (v) => edit(key, v), { key, disabled: state.saving }), source(key, state.loaded.settings[key], true, onOff));
 }
 
@@ -300,7 +292,7 @@ const GUARD = [["strict", "strict: refuse what it finds, warn on weak signs"],
 
 export function guardLevel() {
   const key = "guard_level", below = inherited()[key];
-  return cell(choose("Shell guard level", [[INHERIT, clear(below)], ...GUARD], own(key) || INHERIT,
+  return cell(choose(PLAIN_NAMES.guard_level, [[INHERIT, clear(below)], ...GUARD], own(key) || INHERIT,
     (v) => edit(key, v), { key, disabled: state.saving }), source(key, state.loaded.settings[key]));
 }
 

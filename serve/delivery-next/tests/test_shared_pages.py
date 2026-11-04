@@ -532,10 +532,10 @@ def a_role_s_subagents_are_switched_off_and_saved(page, store: Store, pds) -> No
     assert store.settings().sources["agents.builder.minutes"] == "machine"
     pds.group(page, "overview")
     across = page.locator("#across-table p-table-row")
-    minutes = across.filter(has_text="agents · builder · minutes")  # both baselines, apart
-    cells = ["agents · builder · minutes", "40 (built-in default)", "55", "none"]
+    minutes = across.filter(has_text="Agents and runs · builder · Minutes per session")  # both baselines, apart
+    cells = ["Agents and runs · builder · Minutes per session", "40 (built-in default)", "55", "none"]
     expect(minutes.locator("p-table-cell")).to_have_text(cells)
-    rounds = across.filter(has_text="final_review · max_rounds")  # derived from the builder's
+    rounds = across.filter(has_text="Agents and runs · Final review · Rounds at most")  # derived from the builder's
     expect(rounds.locator("p-table-cell").nth(2)).to_have_text("same")
     pds.pick(page, "Layer", "project")
 
@@ -545,15 +545,15 @@ def the_overview_shows_what_projects_set_apart(page) -> Any:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     across = page.locator("#across-table")
-    expect(across).to_contain_text("widths")
+    expect(across).to_contain_text("Checks and merge · Screenshot widths")
     expect(across).to_contain_text("(built-in default)")
     expect(across).to_contain_text("shop-site: 1600")  # once, though two clones of it are registered
     expect(across).not_to_contain_text("docs-site")
-    expect(across).not_to_contain_text("planner · subagents")
+    expect(across).not_to_contain_text("planner · Subagents")
     page.get_by_label("Show all settings").check()  # every setting, those nobody sets apart too (TD-295)
-    expect(across.get_by_text("agents · planner · subagents", exact=True)).to_have_count(1)
+    expect(across.get_by_text("Agents and runs · planner · Subagents", exact=True)).to_have_count(1)
     page.get_by_label("Show all settings").uncheck()
-    expect(across).not_to_contain_text("planner · subagents")
+    expect(across).not_to_contain_text("planner · Subagents")
     return across
 
 
@@ -611,7 +611,8 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
             expect(page.locator("#status")).to_have_text("Saved docs-site's settings. They apply to the next session.")
             pds.group(page, "overview")
             expect(across).to_contain_text("docs-site: no")  # the overview follows the save
-            expect(across.locator("text=final_review · max_rounds")).to_have_count(1)  # the builder's rounds, inherited
+            # the builder's rounds, inherited
+            expect(across.locator("text=Agents and runs · Final review · Rounds at most")).to_have_count(1)
             expect(across).to_contain_text("docs-site: 4")
             a_role_s_subagents_are_switched_off_and_saved(page, docs, pds)
             page.goto(f"{base}/config?project={DOCS}")
@@ -665,6 +666,99 @@ def a_machine_s_clear_shows_global_s_saved_value_and_global_ignores_its_draft(pa
     expect(line).to_have_text("in use: Every minor version (v0.1, v0.2 …), from this machine")
 
 
+# The page's modules, imported as the page does, so the probes read the page's own state and name table.
+OVERVIEW_KEYS = """
+async () => {
+  const { state } = await import("/assets/page/config/state.mjs");
+  const { rowOf, groupOf } = await import("/assets/page/config/groups.mjs");
+  const unset = [...state.loaded.settings.missing, ...state.machine.resolved.missing.map((k) => `machine.${k}`)];
+  const shown = ["agents.shaper.minutes", "agents.shaper.subagents", "spotter.sample_rate", "spotter.verbose_until"];
+  return [...unset, ...shown].map((key) => ({ key, group: groupOf(rowOf(key)), unset: unset.includes(key) }));
+}
+"""
+# What the page shows for each key: its row's own name, the heading of its section and, in the agents and rounds tables,
+# the head of the column whose cell holds the key's control.
+ROW_WORDS = """
+async (keys) => {
+  const { nameOf, hasRow } = await import("/assets/page/config/names.mjs");
+  const { rowOf } = await import("/assets/page/config/groups.mjs");
+  const own = (el) => [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join("").trim();
+  return keys.map((key) => {
+    const el = document.getElementById(rowOf(key));
+    if (!el) return { key, found: false };
+    const row = el.closest("p-table-row") ?? el;
+    const label = row.matches("p-table-row")
+      ? row.querySelector("p-table-cell p-text") : el.querySelector(":scope > p-text");
+    let column = "";
+    if (/^set-(agents|rounds)-/.test(el.id)) {
+      const draft = key.replace(/^agents[.]/, ""), control = row.querySelector(`[data-key="${draft}"]`);
+      const cells = [...row.children].filter((c) => c.matches("p-table-cell"));
+      const heads = row.closest("p-table").querySelectorAll("p-table-head-cell");
+      column = heads[cells.indexOf(control?.closest("p-table-cell"))]?.textContent.trim() ?? "";
+    }
+    return { key, found: true, has: hasRow(key), name: nameOf(key), row: own(label), column,
+      section: el.closest("section")?.querySelector("h2")?.textContent.trim() ?? "" };
+  });
+}
+"""
+# The settings the page has no row for: a role that runs no loop has no round values to set, the Spotter's minutes and
+# subagents show n/a, and test preparations and data permissions have no editor yet.
+NO_ROW = """
+async () => {
+  const { nameOf, hasRow, LOOPS, ROUNDS } = await import("/assets/page/config/names.mjs");
+  const { state } = await import("/assets/page/config/state.mjs");
+  const { rowOf } = await import("/assets/page/config/groups.mjs");
+  const loops = LOOPS.map(([owner]) => owner), roles = Object.keys(state.loaded.settings.agents);
+  const keys = ["data", "preparations", "agents.spotter.minutes", "agents.spotter.subagents",
+    ...roles.filter((r) => !loops.includes(r)).flatMap((r) => ROUNDS.map(([f]) => `agents.${r}.${f}`))];
+  let unknown = "";
+  try { nameOf("agents.planner.bogus"); } catch (e) { unknown = e.message; }
+  return { count: keys.length, unknown,
+    wrong: keys.filter((k) => hasRow(k) || nameOf(k) !== k || document.getElementById(rowOf(k))) };
+}
+"""
+# A change notice kept from an older version, for a setting since retired, as the read state keeps it until dismissed.
+RETIRED_NOTICE = """
+async (notices) => {
+  const { state, show } = await import("/assets/page/config/state.mjs");
+  state.reads = { ...(state.reads ?? {}), notices };
+  show();
+}
+"""
+SECTIONED = {"spotter.": "Spotter", "pr_labels": "Pull requests", "pr_marker": "Pull requests"}
+
+
+def every_name_is_what_its_row_shows(page, pds) -> None:
+    """The unset list's names are the page's own: each key's name is its row's visible name, behind its section's
+    heading where the row means little alone, and its column's head in the agents and rounds tables (never built from
+    the name table itself); the row sits in the group the list links to; a key with no row is named as written."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    retired = {"id": "n1", "key": "machine.spotter_budget", "old": "5", "new": None, "at": "2026-11-04T09:00:00Z"}
+    page.evaluate(RETIRED_NOTICE, [retired])  # it is shown as its key and can be dismissed, never a failure to draw
+    expect(page.locator("#reads-changed li")).to_contain_text("machine.spotter_budget: 5 → unset")
+    expect(page.get_by_role("button", name="Dismiss the change of machine.spotter_budget")).to_have_count(1)
+    page.evaluate(RETIRED_NOTICE, [])
+    keys = page.evaluate(OVERVIEW_KEYS)
+    assert (len(keys), sum(k["unset"] for k in keys)) == (149, 145)  # 131 + 14 unset, and four shown when set
+    for group in dict.fromkeys(k["group"] for k in keys):
+        pds.group(page, group)
+        for shown in page.evaluate(ROW_WORDS, [k["key"] for k in keys if k["group"] == group]):
+            key = shown["key"]
+            assert shown["found"], f"{key}: no row in {group}"
+            prefix = next((f"{section} · " for head, section in SECTIONED.items() if key.startswith(head)), "")
+            assert shown["section"] == prefix.removesuffix(" · ") or not prefix, key
+            expected = prefix + shown["row"] + (f" · {shown['column']}" if shown["column"] else "")
+            assert shown["has"]
+            assert shown["name"] == expected, key
+            if key.startswith(("agents.", "final_review.")) and key.split(".")[-1] not in ("minutes", "subagents"):
+                assert shown["column"], f"{key}: no column"
+    pds.group(page, "agents")
+    nothing = page.evaluate(NO_ROW)
+    assert (nothing["count"], nothing["wrong"]) == (52, [])
+    assert "agents.planner.bogus" in nothing["unknown"]
+
+
 @pytest.mark.browser
 def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_move(
     tmp_path: Path, shared_repo, pds, monkeypatch
@@ -690,10 +784,11 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
             page.goto(f"{base}/config?project={DOCS}#token=t")
             listed = page.locator("#unset-this-machine")  # D-01M66B6GS0HKACV9C4R4QKFX7T: its count, its first three
             expect(listed).to_have_text(
-                "This machine, 14 unset: machine.channel, machine.update_when_idle, "
-                "machine.update_while_paused and 11 more"
+                "This machine, 14 unset: Versions this machine takes, Update itself when idle, "
+                "Update itself while paused and 11 more"
             )
             expect(listed.get_by_role("link", name="and 11 more")).to_have_attribute("href", "#this-machine")
+            every_name_is_what_its_row_shows(page, pds)
             pds.group(page, "this-machine")
             region = page.get_by_role("region", name="This machine")
             expect(page.locator("#machine-pending")).to_contain_text("offline")

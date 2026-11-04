@@ -384,7 +384,8 @@ def test_the_brief_offers_a_new_shaping_chat_and_says_how_it_went(tmp_path: Path
         # the project's work now waits for its settings (#808): the button is held and says why
         expect(again).to_be_disabled(timeout=15000)
         expect(page.locator("#detail section.info p-button", has_text=REVISE)).to_have_attribute(
-            "title", re.compile("shaper")
+            "title",
+            "7 settings are unset; set them on the Settings page",  # the shaper's model, effort, context, loop
         )
         assert len(launched.calls) == 2
 
@@ -2664,7 +2665,9 @@ def test_an_open_page_follows_reads_and_dismissals_made_elsewhere(tmp_path: Path
         Outside.read(base, a.id)
         changed = page.locator("#reads-changed li")
         expect(changed).to_have_count(1, timeout=READS_TIME * 1000)
-        expect(changed).to_contain_text("agents.builder.minutes: unset → 45")
+        expect(changed).to_contain_text("builder · Minutes per session: unset → 45")  # the row's words, not its key
+        dismiss = changed.get_by_role("button", name="Dismiss the change of builder · Minutes per session")
+        expect(dismiss).to_have_count(1)
         expect(page.locator(".reads-failure")).to_contain_text("Could not read: Impeccable releases")
         expect(status).to_contain_text(re.compile(rf"last full read\s+{re.escape(full)}"))
         pds.group(page, "agents")
@@ -2744,10 +2747,10 @@ def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
         outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 50}})
         page.get_by_role("button", name="Read again").click()
         entry = page.locator("#reads-changed li")
-        expect(entry).to_contain_text("agents.builder.minutes: 45 → 50", timeout=READS_TIME * 1000)
+        expect(entry).to_contain_text("builder · Minutes per session: 45 → 50", timeout=READS_TIME * 1000)
         expect(entry).to_contain_text("Set apart by this machine, alpha, beta, so it does not apply there.")
         page.context.add_init_script("sessionStorage.setItem('token', 't')")  # a new tab has no token of its own
-        for name, layer in (("agents.builder.minutes", "global"), ("this machine", "machine")):
+        for name, layer in (("builder · Minutes per session", "global"), ("this machine", "machine")):
             with page.context.expect_page() as opened:  # a new tab loads the address, which names the layer
                 entry.get_by_role("link", name=name).click(modifiers=["ControlOrMeta"])
             tab = opened.value
@@ -2755,7 +2758,7 @@ def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
             expect(tab.get_by_label("Minutes per session, builder")).to_have_value("50" if layer == "global" else "33")
             tab.close()
         expect(pds.select(page, "Layer")).to_have_js_property("value", "project")  # this page stays as it was
-        entry.get_by_role("link", name="agents.builder.minutes").focus()
+        entry.get_by_role("link", name="builder · Minutes per session").focus()
         page.keyboard.press("Enter")
         expect(pds.select(page, "Layer")).to_have_js_property("value", "global")
         expect(page.locator("#groups a[href='#agents']")).to_have_attribute("aria-current", "page")

@@ -187,10 +187,20 @@ export function loaded() {
   return bar.data ? bar.data.projects.filter((p) => p.state === "loaded") : null;
 }
 
+// What a settings block says in words: its unreadable-settings *reason* in full and first (the host's *text* of it),
+// else how many settings are unset, never their keys; "" when nothing blocks.
+export function settingsWait(count, reason, text) {
+  if (reason) return text;
+  if (!count) return "";
+  const one = count === 1;
+  return `${count} setting${one ? " is" : "s are"} unset; set ${one ? "it" : "them"} on the Settings page`;
+}
+
 // Why no work may start for project *id* (#808), as the machine host last polled it; "" when its work may start, and
 // on a clone's own host, whose refusals come from its API.
 export function blockedOf(id) {
-  return loaded()?.find((p) => p.id === id)?.blocked ?? "";
+  const p = loaded()?.find((o) => o.id === id);
+  return p ? settingsWait(p.unset?.length ?? 0, p.unset_reason, p.blocked ?? "") : "";
 }
 for (const link of document.querySelectorAll("#top a[href^='/']")) link.href = here({}, link.getAttribute("href"));
 // The guard covers every link of the top row, the menu and the notes under it; a link opened in another tab leaves

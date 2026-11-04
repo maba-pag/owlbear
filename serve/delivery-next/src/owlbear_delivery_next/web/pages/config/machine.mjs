@@ -4,6 +4,7 @@ import { call, here, loaded as clones, project as current } from "/assets/ui.mjs
 import { CREDITS, INHERIT, SOURCES, WRITE, state, show, notify, typedNumber, turns } from "./state.mjs";
 import { button } from "./cells.mjs";
 import { edit, own, layerValue } from "./layers.mjs";
+import { MACHINE_LABELS } from "./names.mjs";
 
 // The machine settings: Global's for every machine, each machine may set its own (D-01M5MZKEPPVMFC9HK795MMG91B);
 // changed only here or in a terminal, never in a project's layer (TD-243).
@@ -11,21 +12,6 @@ const CHANNELS = [["minor", "Every minor version (v0.1, v0.2 …)"], ["major", "
 // Each automatic curation trigger: off, on, or on even while paused; the Maintenance button always runs (2026-10-23).
 const CURATE = [["off", "Off"], ["on", "On, not while paused"], ["paused", "On, even while paused"]];
 const SWITCH = [["true", "On"], ["false", "Off"]];
-const MACHINE_LABELS = {
-  channel: "Versions this machine takes", update_when_idle: "Update itself when idle",
-  update_while_paused: "Update itself while paused", curate_after_merge: "Curate memory after a merge",
-  curate_when_idle: "Curate memory when idle (the Maintenance button always runs)",
-  sessions: "Agent sessions at once on this machine, across its projects",
-  retro_run_credit_limit: "Retro: credit limit per run (credits)",
-  replay_run_credit_limit: "Spotter cases: credit limit per paid replay run (credits)",
-  retro_after_change: "Retro after a Change ends (the Improvement button always runs)",
-  retro_when_idle: "Retro over finished enrolled chats when idle",
-  enrolled_chats: "Enrolled chats: workspace folders whose chats the Spotter and Retro may read, comma-separated; "
-    + "none for no chats",
-  update_check_hours_owlbear: "Hours between checks for a newer OwlBear (it also checks at launch)",
-  update_check_hours_pds: "Hours between checks for a newer Porsche Design System (it also checks at launch)",
-  update_check_hours_impeccable: "Hours between checks for a newer Impeccable (it also checks at launch)",
-};
 const CHOICES = { channel: CHANNELS, update_when_idle: SWITCH, update_while_paused: SWITCH,
   curate_after_merge: CURATE, curate_when_idle: CURATE, retro_after_change: CURATE, retro_when_idle: CURATE };
 // Typed, not chosen.

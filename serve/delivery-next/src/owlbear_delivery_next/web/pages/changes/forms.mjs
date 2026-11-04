@@ -1,4 +1,5 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
+import { settingsWait } from "/assets/ui.mjs";
 import { DIALOG, REVERT, state, show, draft, notify, send, starts } from "./state.mjs";
 import {
   button, external, field, choice, tick, hd, text, list, row, panel, info, notice, refusal,
@@ -334,8 +335,10 @@ export function pullbackNote(p, d) {
 // as a paused Change's line describes its pause. Unset settings withhold the action (D-01M61SBWK4VE4MNTD35TR0VPS8).
 export function stopNotice(d) {
   const r = d.recovery, reason = r ? r.reason : d.line.replace(/^.*?stopped: /, ""), action = r ? r.action : d.action;
-  if (!r || r.unset) {
-    return notice("error", "Stopped", `${reason}.`, action ? `What to do: ${action}.` : "", r ? `${r.unset}.` : "");
+  // what keeps the rerun from starting: the unreadable settings in full, else how many are unset (never their keys)
+  const wait = !r?.unset ? "" : r.settings.reason ? r.unset : `${settingsWait(r.settings.count)} to run the step again`;
+  if (!r || wait) {
+    return notice("error", "Stopped", `${reason}.`, action ? `What to do: ${action}.` : "", r ? `${wait}.` : "");
   }
   const clear = async () => {
     const again = "If the cause is still there, it stops again with the same message.";
