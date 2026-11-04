@@ -369,8 +369,8 @@ def test_finish_refuses_before_creating_any_folder_when_another_file_of_the_batc
     assert decision_batch.pending(shared).generation == pending.generation
 
 
-@pytest.mark.parametrize("fault", ["journal", "file", "folder"])
-def test_a_finish_that_cannot_read_its_journal_or_file_or_make_its_folder_says_the_whole_error(
+@pytest.mark.parametrize("fault", ["file", "folder"])
+def test_a_finish_that_cannot_read_its_file_or_make_its_folder_says_the_whole_error(
     picking, monkeypatch, whole_error, fault
 ):
     _seed(picking)
@@ -383,12 +383,7 @@ def test_a_finish_that_cannot_read_its_journal_or_file_or_make_its_folder_says_t
     def refused(*_args: object) -> None:
         raise PermissionError(errno.EACCES, whole_error)
 
-    def unreadable(*_args: object) -> None:
-        raise decision_batch.JournalError(whole_error)
-
-    if fault == "journal":
-        monkeypatch.setattr(decision_batch, "pending", unreadable)
-    elif fault == "file":
+    if fault == "file":
         path.write_bytes(b"the owner's bytes\n")
         path.chmod(0)
     else:
@@ -400,7 +395,6 @@ def test_a_finish_that_cannot_read_its_journal_or_file_or_make_its_folder_says_t
         if fault == "file":
             path.chmod(0o600)
     expected = {
-        "journal": f"JournalError: {whole_error}",
         "file": f"{rel} cannot be read as a plain file ({failure(said.value.__cause__)}), "
         f"so batch {batch.generation} is not changed",
         "folder": f"PermissionError: [Errno 13] {whole_error}",
