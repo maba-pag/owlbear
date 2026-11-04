@@ -1,5 +1,5 @@
 import { html } from "/assets/lit-html/3.3.3/lit-html.js";
-import { blockedOf, project, shown } from "/assets/ui.mjs";
+import { blockedOf, displayName, project, shown } from "/assets/ui.mjs";
 import { state, show, call, several, failed } from "./state.mjs";
 import { button } from "./widgets.mjs";
 
@@ -59,7 +59,7 @@ function chooserView() {
   };
   const stop = () => { state.choosing = false; show(); };
   return html`<div id="choose" class="row"><p-select label="Shape the new Change in" .value=${state.choosing}
-    @change=${picked}>${offered.map((p) => html`<p-select-option value=${p.id}>${p.name}</p-select-option>`)}
+    @change=${picked}>${offered.map((p) => html`<p-select-option value=${p.id}>${displayName(p)}</p-select-option>`)}
     </p-select>
     ${button("Continue", go, { disabled: !ready, title: ready ? undefined : unshapeable() })}
     ${button("Cancel", stop, { variant: "secondary" })}</div>`;

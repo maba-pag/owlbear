@@ -4,7 +4,9 @@
 
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { Slow, call, defined, here, machineState, project, reread, unread } from "/assets/ui.mjs";
+import {
+  OWN_TAG, Slow, call, defined, displayName, here, isOwn, machineState, ownFirst, project, reread, unread,
+} from "/assets/ui.mjs";
 
 const state = { draft: "", busy: "", error: "", said: "" };
 const TAG = { loading: "info", failed: "error", replaced: "warning", stopped: "info" };  // loaded needs no tag
@@ -40,7 +42,7 @@ function add() {
   return act("add", async () => {
     const added = await call("/projects", { body: { path }, machine: true });
     if (state.draft.trim() === path) state.draft = "";  // a folder typed in the meantime stays for the next Add
-    return `Added ${added.name}.`;
+    return `Added ${displayName(added)}.`;
   });
 }
 
@@ -58,8 +60,8 @@ async function refocus(pick) {
 }
 
 async function remove(p) {
-  const at = machineState().projects.findIndex((o) => o.id === p.id);
-  const yes = await ask({ title: `Remove ${p.name}?`, now: `OwlBear stops serving ${p.path}.`,
+  const at = ownFirst(machineState().projects).findIndex((o) => o.id === p.id), name = displayName(p);
+  const yes = await ask({ title: `Remove ${name}?`, now: `OwlBear stops serving ${p.path}.`,
     then: "Its Changes, settings and memory stay in the clone; nothing is deleted.",
     after: "Add the folder again to serve it once more.", instead: "It keeps running.", yes: "Remove project",
     destructive: true });
@@ -67,10 +69,10 @@ async function remove(p) {
   await act(`remove ${p.id}`, async () => {
     await call(`/projects/${p.id}`, { method: "DELETE", machine: true });
     if (p.id === project) location.replace(here({ project: "" }));  // the top row no longer has it to show
-    return `Removed ${p.name}; nothing in ${p.path} was deleted.`;
+    return `Removed ${name}; nothing in ${p.path} was deleted.`;
   });
   await refocus(() => {  // the Remove button now in its place takes focus, or Folder when none is left
-    const left = document.querySelectorAll("#projects > li");
+    const left = document.querySelectorAll(".projects > li");
     return left.length ? left[Math.max(0, Math.min(at, left.length - 1))].querySelector(".row p-button:last-child")
       : document.querySelector("#add p-input-text");
   });
@@ -81,7 +83,7 @@ async function adopt(p) {
   await act(`adopt ${p.id}`, async () => {
     adopted = await call(`/projects/${p.id}/adopt`, { method: "POST", machine: true });
     if (p.id === project) location.replace(here({ project: adopted.id }));
-    return `${adopted.name} now serves the clone at ${adopted.path}.`;
+    return `${displayName(adopted)} now serves the clone at ${adopted.path}.`;
   });
   if (adopted && p.id !== project) {  // its Adopt button is gone: the adopted project's Remove takes focus
     const row = `li[aria-labelledby="p-${CSS.escape(adopted.id)}"]`;
@@ -92,10 +94,11 @@ async function adopt(p) {
 // One project: its name, folder and state, and each readiness check its host failed, whole; a replaced clone asks to
 // be adopted, so Adopt is its one primary.
 function entry(p, all) {
-  const twin = all.some((o) => o !== p && o.name === p.name);
+  const name = displayName(p), twin = all.some((o) => o !== p && displayName(o) === name);
   return html`<li class="project" aria-labelledby=${`p-${p.id}`}>
     <div class="heading-row">
-      <p-heading size="md"><h2 id=${`p-${p.id}`}>${p.name}</h2></p-heading>
+      <p-heading size="md"><h3 id=${`p-${p.id}`}>${name}</h3></p-heading>
+      ${isOwn(p) ? html`<p-tag compact="true">${OWN_TAG}</p-tag>` : nothing}
       ${TAG[p.state] ? html`<p-tag compact="true" variant=${TAG[p.state]}>${p.state}</p-tag>` : nothing}
       ${p.id === project ? html`<p-tag compact="true">shown now</p-tag>` : nothing}
     </div>
@@ -104,7 +107,7 @@ function entry(p, all) {
     ${p.ready?.length ? html`<ul class="ready" aria-label="Failed readiness checks">
       ${p.ready.map((failed) => html`<li>${failed}</li>`)}</ul>` : nothing}
     ${p.setup ? html`<p-inline-notification state="warning" dismiss-button="false" heading="Setup required"
-      heading-tag="h3">The chats of ${p.name} cannot reach Delivery yet. Run
+      heading-tag="h4">The chats of ${name} cannot reach Delivery yet. Run
       <code>${p.setup}</code> in a terminal, then reload the project's VS Code window.</p-inline-notification>`
       : nothing}
     <div class="row">
@@ -127,13 +130,21 @@ function view() {
       heading-tag="h2" description="This page is served by one project's own host, which serves only that project.
       Open the address owlbear status prints to add, remove or adopt projects."></p-inline-notification>`;
   }
-  const { projects } = machine;
+  const { projects } = machine, own = projects.filter(isOwn), consumers = projects.filter((p) => !isOwn(p));
+  // keyed, so a row and its focused button stay with their project when the list changes
+  const list = (id, label, of) => html`<ul id=${id} class="projects" aria-label=${label}>${repeat(of, (p) => p.id,
+    (p) => entry(p, projects))}</ul>`;
   return html`
     ${state.error ? html`<p-text role="alert">${state.error}</p-text>` : nothing}
     ${state.said ? html`<p-text role="status">${state.said}</p-text>` : nothing}
     ${why ? html`<p-text role="alert">This list may be out of date: ${why}</p-text>` : nothing}
-    ${projects.length  // keyed, so a row and its focused button stay with their project when the list changes
-      ? html`<ul id="projects" aria-label="Projects">${repeat(projects, (p) => p.id, (p) => entry(p, projects))}</ul>`
+    ${own.length ? html`<section aria-labelledby="own-title">
+      <p-heading size="lg"><h2 id="own-title">OwlBear</h2></p-heading>${list("own", "OwlBear", own)}</section>`
+      : nothing}
+    ${projects.length ? html`<section aria-labelledby="consumers-title">
+      <p-heading size="lg"><h2 id="consumers-title">Consumer projects</h2></p-heading>
+      ${consumers.length ? list("projects", "Consumer projects", consumers)
+        : html`<p-text class="empty">No consumer project yet: add the folder of a clone below.</p-text>`}</section>`
       : html`<p-text class="empty">No project yet: add the folder of a clone below.</p-text>`}
     <section id="add" class="panel" aria-labelledby="add-title">
       <p-heading size="md"><h2 id="add-title">Add a project</h2></p-heading>

@@ -255,6 +255,26 @@ def test_a_project_that_fails_to_load_is_listed_with_its_reason_beside_a_working
     assert http.get(f"/p/{bad.id}/api/next/changes").status_code == 200
 
 
+def test_owlbears_own_clone_is_its_own_kind_by_its_data_folder_and_nothing_about_it_is_stored(
+    tmp_path, http, machine, shared_repo, monkeypatch
+):
+    """D-01M6JZMMXE7JEZW6402WN77TQS: OwlBear's kind follows the shared-data folder owlbear/, not the clone's directory;
+    its name stays the folder that Settings and Backlog match, and a clone whose store never opened can't be known."""
+    monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
+    own = registry.register(origin(clone(tmp_path / "mine"), "https://github.com/maba-pag/owlbear.git"))
+    shop = registry.register(origin(clone(tmp_path / "shop"), "https://github.com/acme/shop.git"))
+    unopened = registry.register(origin(clone(tmp_path / "other"), "https://github.com/maba-pag/owlbear.git"))
+    (Path(unopened.path) / ".git" / "owlbear-delivery" / "format").write_text("99\n")
+    machine.load_all()
+    listed = http.get("/api/next/projects").json()["projects"]
+    assert [(p["id"], p["path"], p["name"], p["kind"], p["state"]) for p in listed] == [
+        (own.id, own.path, "owlbear", "owlbear", "loaded"),
+        (shop.id, shop.path, "shop", "consumer", "loaded"),
+        (unopened.id, unopened.path, "other", "consumer", "failed"),
+    ]
+    assert [p.model_dump().keys() for p in registry.load().projects] == [{"id", "path", "added_at"}] * 3
+
+
 @pytest.mark.parametrize(
     "bad",
     [
