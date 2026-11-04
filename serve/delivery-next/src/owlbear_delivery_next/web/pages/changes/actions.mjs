@@ -1,5 +1,5 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
-import { LOOPS, plural } from "./progress.mjs";
+import { LOOPS } from "./progress.mjs";
 import { reviseButton } from "./brief.mjs";
 import { info, list, row } from "./widgets.mjs";
 

@@ -35,8 +35,8 @@ def _attempts(lp: RoundLoop | None, subject: str) -> list[RoundLoop]:
     return [*(x for x in lp.history if x.subject == subject), lp] if lp else []
 
 
-def _legacy(attempts: list[RoundLoop]) -> tuple[str, bool]:
-    """The line on rounds counted before versions were recorded, and whether there were any."""
+def _legacy(attempts: list[RoundLoop]) -> str:
+    """The line on rounds counted before versions were recorded, or ""."""
     lines = []
     for x in attempts:
         k = x.round - sum(not v.recheck for v in x.verdicts)
@@ -45,7 +45,7 @@ def _legacy(attempts: list[RoundLoop]) -> tuple[str, bool]:
         said = "Challenge 1 ran" if k == 1 else f"Challenges 1 to {k} ran"
         lead = f"Attempt {x.attempt}: " if len(attempts) > 1 else ""
         lines.append(f"{lead}{said} before versions were recorded per challenge")
-    return "; ".join(lines), bool(lines)
+    return "; ".join(lines)
 
 
 def _label(v: Verdict, attempt: int, *, many: bool) -> str:
@@ -53,9 +53,9 @@ def _label(v: Verdict, attempt: int, *, many: bool) -> str:
     return f"Rejections checked after challenge {v.round}{of}" if v.recheck else f"Challenge {v.round}{of}"
 
 
-def _versions(attempts: list[RoundLoop], current: int, *, running: int, waits: int) -> list[dict]:
-    """Versions 1 to *current*; *running* and *waits* name the version a challenge runs on or waits for you on."""
-    legacy = _legacy(attempts)[1]
+def _versions(attempts: list[RoundLoop], current: int, *, running: int, waits: int) -> dict:
+    """Versions 1 to *current* and the legacy line; *running* and *waits*: the version a challenge runs or waits on."""
+    legacy = _legacy(attempts)
     read = [(x, v) for x in attempts for v in x.verdicts]
     earliest = min((v.version for _, v in read), default=current + 1)
     lp = attempts[-1] if attempts else None
@@ -77,9 +77,9 @@ def _versions(attempts: list[RoundLoop], current: int, *, running: int, waits: i
         many = len(attempts) > 1
         out.append({
             "n": n, "state": state, "word": WORDS[state], "current": n == current, "approved": False, "actions": [],
-            "challenges": [{"label": _label(v, x.attempt, many=many)} for x, v in mine],
+            "challenges": [_label(v, x.attempt, many=many) for x, v in mine],
         })  # fmt: skip
-    return out
+    return {"versions": out, "legacy": legacy}
 
 
 def brief(c: Change) -> dict:
@@ -90,13 +90,13 @@ def brief(c: Change) -> dict:
     asks = brief_rounds.first(c) or brief_rounds.due(c) or brief_rounds.owned_open(c)
     waits = int(live.head) if live and live.head and asks else 0
     on = c.step.kind == StepKind.SHAPE and c.step.mode in brief_rounds.MODES
-    versions = _versions(attempts, b.version, running=(b.requested or b.version) if on else 0, waits=waits)
+    listed = _versions(attempts, b.version, running=(b.requested or b.version) if on else 0, waits=waits)
     approved = {b.approved_version, *(a.version for a in b.approved)}
-    for v in versions:
+    for v in listed["versions"]:
         v["approved"] = v["n"] in approved
         if v["current"] and not v["approved"] and c.step.kind == StepKind.SHAPE:
             v["actions"] = ["approve"]  # off while brief_rounds.approvable says why
-    return {"versions": versions, "legacy": _legacy(attempts)[0]}
+    return listed
 
 
 def plan(c: Change) -> dict:
@@ -108,7 +108,4 @@ def plan(c: Change) -> dict:
     n = c.plan.version if live else 0
     running = n if c.step.kind == StepKind.PLAN and c.step.mode in _PLAN_MODES else 0
     waits = n if plan_rounds.first(c) or plan_rounds.due(c) or plan_rounds.owned_open(c) else 0
-    return {
-        "versions": _versions(attempts, c.plan.version, running=running, waits=waits),
-        "legacy": _legacy(attempts)[0],
-    }
+    return _versions(attempts, c.plan.version, running=running, waits=waits)

@@ -33,7 +33,7 @@ def found(raised: int, state: str = "fixed", n: int = 1) -> RoundFinding:
 
 
 def shown(listed: dict) -> list[tuple[int, str, list[str], list[str]]]:
-    return [(v["n"], v["state"], [x["label"] for x in v["challenges"]], v["actions"]) for v in listed["versions"]]
+    return [(v["n"], v["state"], v["challenges"], v["actions"]) for v in listed["versions"]]
 
 
 def test_c1_lists_v2_and_v3_challenged_and_v4_not(c1):

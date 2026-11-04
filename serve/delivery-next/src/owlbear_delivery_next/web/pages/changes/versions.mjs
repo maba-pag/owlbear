@@ -14,7 +14,7 @@ export function versionList(listed, title, act = () => nothing) {
   const items = listed.versions.map((v) => {
     const said = [v.word, v.approved && "approved", v.current && "current"].filter(Boolean).join(", ");
     return html`<li><span class="version">${dot(v.state)}<span><strong>v${v.n}</strong> ${said}</span>${act(v)}</span>
-      ${v.challenges.length ? html`<ul>${v.challenges.map((x) => html`<li>${x.label}</li>`)}</ul>` : nothing}</li>`;
+      ${v.challenges.length ? html`<ul>${v.challenges.map((x) => html`<li>${x}</li>`)}</ul>` : nothing}</li>`;
   });
   return html`<section class="versions">${hd(4, title, "sm")}<ul class="version-list">${items}</ul>
     ${listed.legacy ? text(`${listed.legacy}.`, { size: "xs", color: "contrast-medium" }) : nothing}
