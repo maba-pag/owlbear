@@ -1,6 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { call, here } from "/assets/ui.mjs";
+import { call, defined, here } from "/assets/ui.mjs";
 import { receipts } from "./actions.mjs";
 import { detail, open } from "./entry.mjs";
 import { scopes, scopesView } from "./overview.mjs";
@@ -54,8 +54,14 @@ async function openLinked() {
   unopened = "";
   await open(linked, { address: state.loaded.address });
   const card = document.querySelector(`.entry[data-id="${CSS.escape(linked)}"]`);
-  card?.scrollIntoView({ block: "start" });
-  card?.querySelector(".heading")?.focus();
+  const heading = card?.querySelector(".heading");
+  if (!heading) return;
+  // The heading sits in the accordion's slot, which can't take focus until the accordion is defined and rendered.
+  await defined(["p-accordion"]);
+  await card.querySelector("p-accordion").componentOnReady();
+  if (!heading.isConnected) return;
+  card.scrollIntoView({ block: "start" });
+  heading.focus();
 }
 
 function chose(key) {

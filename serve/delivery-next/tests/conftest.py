@@ -55,8 +55,19 @@ def c1(tmp_path) -> tuple[Store, Any]:
 
     It is c1 waiting on brief v4 after challenges of v2 and v3, its decisions' wording replaced and its long texts cut.
     """
+    return _c1(Store(tmp_path / "c1"))
+
+
+@pytest.fixture
+def c1_shared(tmp_path, shared_repo) -> tuple[Store, Any]:
+    """``c1`` in project ``shop-site`` of a shared data repository, where its decisions can be picked again."""
+    shared = DataRepo(shared_repo[0])
+    shared.claim("shop-site", "github.com/acme/shop-site")
+    return _c1(Store(tmp_path / "c1", shared, "shop-site"))
+
+
+def _c1(store: Store) -> tuple[Store, Any]:
     c = Change.model_validate_json((Path(__file__).parent / "fixtures" / "c1_v4_waiting.json").read_text())
-    store = Store(tmp_path / "c1")
     store.write(Lock(c.slug), c)
     return store, api.create_app(store, "tok", Host())
 
@@ -842,6 +853,9 @@ class Pds:
     TRIES = 2
     _fetched: ClassVar[dict[str, tuple[int, dict[str, str], bytes]]] = {}  # CDN URL -> its answer, per test worker
     shared: ClassVar[Path | None] = None  # the run's folder of CDN answers, read by every worker; set by ``pds``
+    # A native modal dialog: past either end focus leaves for the browser's own controls (body), never the page behind.
+    INSIDE = """() => document.activeElement === document.body
+        || [...document.querySelectorAll('p-modal')].some((m) => m.open && m.contains(document.activeElement))"""
 
     @classmethod
     def only(cls, page, base: str) -> None:

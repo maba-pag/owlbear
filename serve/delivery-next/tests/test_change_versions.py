@@ -47,7 +47,7 @@ def test_c1_lists_v2_and_v3_challenged_and_v4_not(c1):
         (1, "unreviewed", [], []),
         (2, "findings", ["Challenge 1"], []),
         (3, "findings", ["Challenge 2"], []),
-        (4, "unreviewed", [], ["approve"]),
+        (4, "unreviewed", [], ["approve", "challenge"]),
     ]
     assert (d["brief"]["versions"]["legacy"], d["brief"]["unreviewed"], d["brief"]["unapprovable"]) == ("", True, "")
     assert [v["word"] for v in d["brief"]["versions"]["versions"]][1:] == ["findings", "findings", "not challenged"]
@@ -95,7 +95,7 @@ def test_a_rejections_only_check_is_not_a_challenge():
 
     assert shown(listed) == [
         (1, "findings", ["Challenge 1"], []),
-        (2, "unreviewed", ["Rejections checked after challenge 1"], ["approve"]),
+        (2, "unreviewed", ["Rejections checked after challenge 1"], ["approve", "challenge"]),
     ]
     assert listed["legacy"] == ""
 

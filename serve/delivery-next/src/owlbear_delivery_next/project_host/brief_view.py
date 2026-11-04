@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.state_store.store import Store
 
+PICK_AGAIN = "use Pick the decisions again under Open items"  # the page's way to the chat's retry_pick
+
 
 def shown(store: Store, c: Change) -> dict[str, Any]:
     """The detail's ``brief`` block."""
@@ -29,7 +31,7 @@ def shown(store: Store, c: Change) -> dict[str, Any]:
         "approved_at": b.approved_at.isoformat() if b.approved_at else None,
         "ui": b.ui,
         "visual": [s.model_dump() for s in b.visual],
-        "unapprovable": brief_rounds.approvable(c),  # TD-249: why the approve button is off
+        "unapprovable": brief_rounds.approvable(c).replace(picks.RETRY, PICK_AGAIN),  # TD-249: why approve is off
         "revising": brief_rounds.revising(c),  # the findings the shaper revises this version for
         "unrevisable": unrevisable(c),  # why no new shaping chat may revise the saved brief
         "unreviewed": brief_rounds.unreviewed(c),  # TD-255: approving needs the owner's tick

@@ -186,3 +186,90 @@ def test_partial_state_is_said(c1, pds) -> None:
         expect(detail).to_contain_text("Challenges 1 to 2 ran before versions were recorded per challenge.")
         expect(detail.locator(".actions")).to_contain_text("Delivery is picking the decisions this version follows")
         expect(detail.get_by_role("button", name="Approve v4")).to_be_disabled()
+
+
+@pytest.mark.browser
+def test_one_more_challenge_confirms_keeps_focus_and_runs(c1, pds) -> None:
+    """#966: v4's revision no challenger read gets one more challenge from its line; approval waits for its verdict."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store = c1[0]
+    with opened(c1, pds) as page:
+        current = page.locator("#detail .version-list > li").nth(3)
+        challenge = current.get_by_role("button", name="Challenge v4")
+        pds.settled(page)
+        big(challenge)
+        challenge.click()
+        expect(pds.modal(page)).to_contain_text("Challenge brief v4 once more?")
+        expect(pds.modal(page)).to_contain_text("Once it runs, a pause doesn't stop it")
+        pds.settled(page)
+        for key in ["Shift+Tab"] * 3 + ["Tab"] * 3:  # the dialog keeps focus at both ends
+            page.keyboard.press(key)
+            assert page.evaluate(pds.INSIDE), key
+        page.keyboard.press("Escape")
+        page.wait_for_function("() => document.activeElement?.textContent?.trim() === 'Challenge v4'")
+        assert store.read(SLUG).step.mode is None  # declined: nothing asked
+        challenge.click()
+        pds.answer(page, "Challenge it")
+        expect(current).to_contain_text("v4 challenge running, current")
+        expect(current.locator(".dot.running")).to_have_count(1)
+        expect(current.get_by_role("button", name="Approve v4")).to_be_disabled()
+        expect(current.get_by_role("button", name="Challenge v4")).to_have_count(0)
+        expect(page.get_by_text("Not yet: the challenge of brief v4 is running.")).to_be_visible()
+        expect(page.locator("#detail .actions")).not_to_contain_text(UNREVIEWED)
+    c = store.read(SLUG)
+    assert (c.step.mode, c.brief.requested, c.brief.challenged, c.loops[BRIEF].reentry) == ("challenge", 4, None, True)
+
+
+def failed(c: Change) -> None:
+    """c1's pick of v4's decisions failed."""
+    c.brief.picked = Pick(version=4, status="failed", reason="the runtime did not start")
+
+
+@pytest.mark.browser
+def test_pick_the_decisions_again_retries_without_a_round(c1_shared, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store = c1_shared[0]
+    with opened(c1_shared, pds, failed) as page:
+        items = page.locator("#detail .actions")
+        expect(items).to_contain_text("Picking the decisions failed: the runtime did not start")
+        expect(page.get_by_text("Not yet: the picker failed: the runtime did not start; use Pick the decisions "
+                                "again under Open items.")).to_be_visible()  # fmt: skip
+        expect(page.get_by_role("button", name="Approve v4")).to_be_disabled()
+        expect(page.get_by_role("button", name="Challenge v4")).to_have_count(0)  # the pick goes first
+        again = items.get_by_role("button", name="Pick the decisions again")
+        pds.settled(page)
+        big(again)
+        assert again.get_attribute("variant") is None  # the panel's one primary action
+        before = store.read(SLUG).loops[BRIEF].model_dump(include={"round", "extra", "verdicts"})
+        again.click()
+        expect(items).to_contain_text("Delivery is picking the decisions this version follows")
+        expect(items.get_by_role("button", name="Pick the decisions again")).to_have_count(0)
+        expect(page.get_by_role("button", name="Approve v4")).to_be_disabled()
+    c = store.read(SLUG)
+    assert c.brief.picked.status == "owed"
+    assert c.loops[BRIEF].model_dump(include={"round", "extra", "verdicts"}) == before  # no round spent
+
+
+@pytest.mark.browser
+def test_a_refused_pick_again_says_why(c1_shared, pds) -> None:
+    """Delivery started picking between the page's render and the click: the host refuses and the page says why."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store = c1_shared[0]
+
+    def picking_meanwhile(route: Any) -> None:
+        c = store.read(SLUG)
+        c.brief.picked = Pick(version=4)
+        store.write(Lock(SLUG), c)
+        route.continue_()
+
+    with opened(c1_shared, pds, failed) as page:
+        page.route("**/briefs/challenge", picking_meanwhile)
+        again = page.locator("#detail .actions").get_by_role("button", name="Pick the decisions again")
+        pds.settled(page)
+        again.click()
+        expect(page.locator("#detail .refused")).to_contain_text(
+            "the decisions of brief v4 are being picked; ask again after it"
+        )
