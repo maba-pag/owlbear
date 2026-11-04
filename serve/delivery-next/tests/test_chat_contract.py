@@ -417,10 +417,6 @@ def test_a_challenge_wait_ends_under_the_clients_limit_with_every_request_taking
 class Looking(Answering):
     """A host whose lookup L1 runs until the virtual *clock* reaches 200 s, then answers as told."""
 
-    def __init__(self, answers: dict[str, object]) -> None:
-        super().__init__(answers)
-        self.clock = lambda: 0.0
-
     def __call__(self, *args, **kwargs):
         _rec, method, url, body, _timeout = args
         if method == "GET" and url.endswith("/decisions/lookups/L1") and self.clock() < 200:
@@ -504,11 +500,6 @@ def waiting_for_the_chat(slug: str, version: int, challenged: int | None, reason
     return m.Change(slug=slug, brief=brief, step=m.Step(kind=m.StepKind.SHAPE), outcome=out)
 
 
-def own_waits(n: int | None) -> set[str]:
-    """The actions a chat of contract *n* (None: a page, as the current one) reads as its shaping chat's own wait."""
-    return set(frozen(n or chat_contract.CHAT).get("own_waits", ["Approve brief"]))  # contract 3's, until 6 froze it
-
-
 def test_a_chat_of_each_contract_reads_the_shaping_chats_own_waits_as_its_contract_names_them(tmp_path):
     store = Store(tmp_path)
     store.write(Lock("flip"), waiting_for_the_chat("flip", 2, 2, "approve brief v2"))
@@ -518,8 +509,9 @@ def test_a_chat_of_each_contract_reads_the_shaping_chats_own_waits_as_its_contra
     for n in [*sorted(chat_contract.SUPPORTED), None]:
         sent = {} if n is None else {chat_contract.HEADER: str(n)}
         rows = {r["slug"]: r["action"] for r in http.get("/api/next/changes", headers=sent).json()}
+        own = set(frozen(n or chat_contract.CHAT).get("own_waits", ["Approve brief"]))  # contract 3's until 6 froze it
         revises = "Continue in the shaping chat" if n is None or n >= 6 else "Approve brief"
-        assert (rows, set(rows.values()) <= own_waits(n)) == ({"flip": "Approve brief", "tidy": revises}, True), n
+        assert (rows, set(rows.values()) <= own) == ({"flip": "Approve brief", "tidy": revises}, True), n
 
 
 class Landing(Answering):
