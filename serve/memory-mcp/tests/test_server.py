@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from pathlib import Path
 
@@ -909,3 +910,44 @@ async def test_live_server_in_a_claimed_workspace_uses_its_shared_folder(
     (entry,) = (data / "shop" / "memory").iterdir()
     assert "title: Claimed store" in entry.read_text(encoding="utf-8")
     assert not (work / ".owlbear" / "memory").exists()
+
+
+def _whole_error() -> str:
+    """A long error with a distinct beginning, middle and end, as delivery-next's ``whole_error`` fixture builds it."""
+    words = [f"w{i:04d}" for i in range(700)]
+    lines = [" ".join(words[i : i + 20]) for i in range(0, 700, 20)]
+    return "\n".join(['BEGIN <a & "b">', *lines[:17], "MIDDLE", *lines[17:], "END"])
+
+
+def _refusal_logged(caplog: pytest.LogCaptureFixture, tool: str) -> list[str]:
+    """The MCP server's own log line for a tool's refusal: its answer, repr'd onto one line."""
+    prefix = f"Tool {tool!r} failed: "
+    return [record.getMessage() for record in caplog.records if record.getMessage().startswith(prefix)]
+
+
+@pytest.mark.asyncio
+async def test_unreadable_global_settings_reach_the_tool_answer_whole(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A settings read failing with a long error is answered with its type and every line of its message (#971)."""
+    store = _bound_store(monkeypatch, tmp_path)
+    _create_entry(store, title="Known habit", state=MemoryState.APPROVED)
+    config = store.parent.parent / "config.json"
+    error = _whole_error()
+    read_text = Path.read_text
+
+    def unreadable(path: Path, *args: object, **kwargs: object) -> str:
+        if path == config:
+            raise OSError(error)
+        return read_text(path, *args, **kwargs)
+
+    caplog.set_level(logging.INFO)
+    async with mcp.Client(memory_mcp) as client:
+        monkeypatch.setattr(Path, "read_text", unreadable)
+        result = await client.call_tool("recall_memory", {"agent": "builder", "limit": 5})
+
+    refusal = f"the global settings {config} can't be read, so no memory value is known: OSError: {error}"
+    expected = f"Error executing tool recall_memory: {refusal}"
+    assert result.is_error
+    assert _text(result) == expected
+    assert _refusal_logged(caplog, "recall_memory") == [f"Tool 'recall_memory' failed: {expected!r}"]
