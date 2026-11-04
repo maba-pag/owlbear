@@ -28,7 +28,7 @@ from owlbear_delivery_next.change_contracts.inbox import (
 )
 from owlbear_delivery_next.change_contracts.models import Change, Exit, PersonCheck, Waiting
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import brief_rounds, loop, picks, rebuilds, round_flow, round_marks
+from owlbear_delivery_next.change_flow import loop, moves, rebuilds, round_flow, round_marks, versions
 from owlbear_delivery_next.change_flow.progress import progress
 from owlbear_delivery_next.change_flow.status import card, for_chat, status, unloadable
 from owlbear_delivery_next.impeccable_runs import pack_job
@@ -37,6 +37,7 @@ from owlbear_delivery_next.project_host import (
     answers,
     backlog_routes,
     brief_routes,
+    brief_view,
     chat_routes,
     config_routes,
     decision_routes,
@@ -55,9 +56,9 @@ from owlbear_delivery_next.runtimes.window_files import HARNESS
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import spend_ledger, tool_metrics, watch_reports, work_block
-from owlbear_delivery_next.state_store.briefs import save_brief, save_visual, unrevisable
+from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
 from owlbear_delivery_next.state_store.store import StoreError
-from owlbear_delivery_next.workflow_steps import check, decision, decisions_gate, held, visual
+from owlbear_delivery_next.workflow_steps import check, decision, held, visual
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -361,26 +362,11 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         return (
             summary_of(slug)
             | {
-                "brief": {
-                    "version": c.brief.version,
-                    "approved": c.brief.approved_version,
-                    "title": c.brief.title,
-                    "outcome": c.brief.outcome,
-                    "scope": c.brief.scope,
-                    "non_goals": c.brief.non_goals,
-                    "decisions": [x.model_dump(exclude={"id", "replaces"}) for x in c.brief.decisions],  # as drafted
-                    "specified": c.brief.specified,
-                    "approved_at": c.brief.approved_at.isoformat() if c.brief.approved_at else None,
-                    "ui": c.brief.ui,
-                    "visual": [s.model_dump() for s in c.brief.visual],
-                    "unapprovable": brief_rounds.approvable(c),  # TD-249: why the approve button is off
-                    "unrevisable": unrevisable(c),  # why no new shaping chat may revise the saved brief
-                    "unreviewed": brief_rounds.unreviewed(c),  # TD-255: approving needs the owner's tick
-                    "read_backs": decisions_gate.checkpoint(store, c),  # TD-427: at most three, never blocking
-                    "picked": picks.shown(c),  # TD-459: the decisions this version's work follows, by title
-                },
+                "brief": brief_view.shown(store, c),
                 "criteria": [k.model_dump() for k in c.brief.criteria],
                 "plan": [t.model_dump() for t in c.plan.tasks] if c.plan else [],
+                "plan_versions": versions.plan(c),
+                "open_task": t.id if (t := moves.open_task(c)) else None,  # a repair part runs before later tasks
                 "handled": [
                     h.model_dump(mode="json", include={"item", "kind", "url", "how", "text", "resolved", "at"})
                     for h in c.handled

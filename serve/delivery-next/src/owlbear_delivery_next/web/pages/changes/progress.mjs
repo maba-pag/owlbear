@@ -1,5 +1,7 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
-import { toggle, disclosure, hd, text, list, meta } from "./widgets.mjs";
+import { toggle, disclosure, hd, text, list, meta, info } from "./widgets.mjs";
+import { detailsOn } from "./details.mjs";
+import { versionList } from "./versions.mjs";
 
 function count(n) {
   return n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`;
@@ -62,14 +64,22 @@ export function spentText(credits, unknown) {
   return credits ? `${credits.toFixed(2)}+ credits (${sessions})` : `credits ${sessions}`;
 }
 
-export function planList(d) {
+// The plan: the task at work outside the fold, every task in it with its count done, then the plan's versions. The
+// review badges of each task show with the details.
+export function planInfo(d) {
   const working = ["build", "review", "integrate"].includes(d.step) && !d.line.startsWith("Done");
-  const now = working ? d.plan.find((t) => !t.done) : null;
-  return html`<ol class="plan">${d.plan.map((t) => {
+  const now = working ? d.plan.find((t) => t.id === d.open_task) : null, on = detailsOn();
+  const item = (t, where = "") => {
     const [label, variant] = t.done ? ["done", "success"] : t === now ? ["now", "info"] : ["to do", "secondary"];
     return html`<li><p-tag variant=${variant} compact="true">${label}</p-tag><span>${t.title}${t.origin
-      && t.origin !== "plan" ? html` ${meta(`from ${t.origin}`)}` : nothing}</span>${taskRounds(t.id, d)}</li>`;
-  })}</ol>`;
+      && t.origin !== "plan" ? html` ${meta(`from ${t.origin}`)}` : nothing}</span>${on ? taskRounds(t.id, d, where)
+      : nothing}</li>`;
+  };
+  const done = d.plan.filter((t) => t.done).length;
+  return info("Plan", now ? html`<ol class="plan">${item(now, ", the current task")}</ol>` : nothing,
+    d.plan.length ? toggle("plan-tasks", `Tasks: ${done} of ${d.plan.length} done`,
+      html`<ol class="plan">${d.plan.map((t) => item(t))}</ol>`) : nothing,
+    versionList(d.plan_versions, "Plan versions"));
 }
 
 // TD-217: a round's marker is its most urgent finding's kind, in words with a count; the loop's latest round is bold.
@@ -97,7 +107,7 @@ export function findingDetails(summary, loops) {
 }
 export const WORKERS = { task: ["Builder", "Reviewer"], plan: ["Planner", "Challenger"],
   brief: ["Shaper", "Challenger"] };
-const LOOPS = (loop) => ({ final: "final review", plan: "plan challenge", brief: "brief challenge" })[loop]
+export const LOOPS = (loop) => ({ final: "final review", plan: "plan challenge", brief: "brief challenge" })[loop]
   ?? `task ${loop}`;
 
 // A plan task's markers, task review and final review apart, with their finding details; nothing without rounds.
@@ -110,10 +120,11 @@ export function taskRounds(id, d, where = "") {
     `Finding details of ${id}${where}`, shown)}`;
 }
 
-// The plan challenge's and the final review's own rounds, the work no round reviewed, and the rejections that stand.
-export function roundsInfo(r, d) {
+// The brief and plan challenges' and the final review's own rounds, the work no round reviewed, and the rejections that
+// stand.
+export function roundsInfo(r) {
   const parts = [];
-  if (r.brief?.length && d.brief.approved) {  // before approval the approval view shows them
+  if (r.brief?.length) {
     parts.push(marks("Brief challenge", r.brief),
       findingDetails("Finding details of the brief challenge", [["Brief challenge", r.brief, WORKERS.brief]]));
   }

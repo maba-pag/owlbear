@@ -169,8 +169,9 @@ comes from, its spend over the last week and the enrolled chats it does not foll
 (its act, whether its Change or chat was drawn steered or silent, and whether the act was delivered or why not) and the outside writes the watcher saw, by
 project and Change; Retro's switches, runs and findings, with **Run Retro** on a finished Change; and
 the Spotter cases, whose moves queue a regression run and wait until it has run. A look or a Retro
-finding can be followed up as one backlog entry. The menu's switch **Show the Spotter's and Retro's
-detail on Change pages** adds a Change's looks and findings to its page.
+finding can be followed up as one backlog entry. A Change page's switch **Show details**, one setting for every
+Change of every project, adds a Change's looks and findings to its page, with its review rounds and the rest of its
+record.
 
 The **Metrics** page shows every credit OwlBear spent on this Mac: every agent session it ran
 (Delivery's workers, judges, picker and lookups, the curator, Impeccable runs, Spotter looks, Retro),

@@ -69,8 +69,9 @@ def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
 
 
 @contextlib.contextmanager
-def opened(base: str, pds: Any) -> Iterator[Any]:
-    """The Changes page on the stopped Change in a real browser: only the test host and the PDS CDN answer."""
+def opened(base: str, pds: Any, *, details: bool = False) -> Iterator[Any]:
+    """The Changes page on the stopped Change in a real browser, its details shown or not: only the test host and the
+    PDS CDN answer."""
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     with sync_playwright() as pw:
@@ -81,6 +82,8 @@ def opened(base: str, pds: Any) -> Iterator[Any]:
         page = browser.new_page()
         pds.only(page, base)
         page.add_init_script("sessionStorage.setItem('token', 'tok');")
+        if details:
+            page.add_init_script("localStorage.setItem('owlbear-improvement-detail', 'on');")
         page.goto(f"{base}/?change={SLUG}")
         yield page
         browser.close()
@@ -100,7 +103,7 @@ def test_allowing_what_the_spotter_stopped_starts_an_amendment_instead_of_asking
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
-    with opened(base, pds) as page:
+    with opened(base, pds, details=True) as page:  # its amendment shows with the details
         first = page.locator("section.act", has_text="Question q1")
         first.get_by_label("Allow it", exact=False).check()
         assert answer(page, first).status == 200
