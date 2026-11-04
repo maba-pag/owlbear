@@ -8,13 +8,9 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 import yaml
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 ROOT = Path(__file__).parents[1]
 WORKFLOWS = ROOT / ".github/workflows"
@@ -77,7 +73,7 @@ def _rendered(env: dict[str, str], github: dict[str, object]) -> dict[str, str]:
     return {name: render(text) for name, text in env.items()}
 
 
-def _queued(tmp_path: Path, files: dict[str, str]) -> tuple[Callable[..., str], dict[str, object]]:
+def _queued(tmp_path: Path, files: dict[str, str]) -> dict[str, object]:
     """A repository whose merge queue built a group: main, then a pull request's *files* merged on top of it."""
 
     def git(*args: str) -> str:
@@ -103,8 +99,7 @@ def _queued(tmp_path: Path, files: dict[str, str]) -> tuple[Callable[..., str], 
     git("switch", "-q", "-c", "gh-readonly-queue/main/pr-1", "main")
     git("merge", "-q", "--no-ff", "-m", "merge", "work")
     head = git("rev-parse", "HEAD")
-    group = {"event_name": "merge_group", "sha": head, "event": {"merge_group": {"base_sha": base, "head_sha": head}}}
-    return git, group
+    return {"event_name": "merge_group", "sha": head, "event": {"merge_group": {"base_sha": base}}}
 
 
 def _default_install(lock: dict[str, object]) -> set[str]:
@@ -319,7 +314,7 @@ def test_a_push_is_scoped_by_the_merge_against_its_first_parent(tmp_path: Path) 
 
 def test_a_merge_group_is_scoped_by_the_change_it_adds_to_main(tmp_path: Path) -> None:
     """TD-326: the queue's merge group runs CI with no pull request; its base is the main it builds on."""
-    _git, group = _queued(tmp_path, {"share/skills/x/SKILL.md": "x\n"})
+    group = _queued(tmp_path, {"share/skills/x/SKILL.md": "x\n"})
     step = next(s for s in _jobs("ci.yml")["scope"]["steps"] if s.get("id") == "scope")
     out = tmp_path / "output"
     env = _rendered(step["env"], group) | {"PATH": os.environ["PATH"], "GITHUB_OUTPUT": str(out),
@@ -330,7 +325,7 @@ def test_a_merge_group_is_scoped_by_the_change_it_adds_to_main(tmp_path: Path) -
 
 def test_tooling_scopes_a_merge_group_by_the_change_it_adds_to_main(tmp_path: Path) -> None:
     """TD-326: without the group's base, tooling's scope asked git for the merge base of nothing and failed."""
-    _git, group = _queued(tmp_path, {"renovate.json": "{}\n"})
+    group = _queued(tmp_path, {"renovate.json": "{}\n"})
     step = next(s for s in _jobs("tooling.yml")["verify"]["steps"] if s.get("id") == "scope")
     out, summary = tmp_path / "output", tmp_path / "summary"
     env = _rendered(step["env"], group) | {"PATH": os.environ["PATH"], "GITHUB_OUTPUT": str(out),
