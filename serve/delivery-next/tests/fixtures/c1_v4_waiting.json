@@ -1,0 +1,1222 @@
+{
+  "format": 8,
+  "intent": {
+    "words": "",
+    "paused_at": null,
+    "pause_reason": "",
+    "abandoned_at": null,
+    "hold": false
+  },
+  "checks": [
+    {
+      "id": "real-page-look",
+      "criteria": ["AC-1", "AC-2", "AC-3", "AC-4", "AC-5", "AC-6", "AC-7", "AC-8", "AC-9", "AC-10"],
+      "steps": [
+        "Open Metrics from this PR's branch with your real data, in light mode",
+        "Hover the bars; Tab into each chart, use the arrow keys, press Enter",
+        "Click a legend entry, All and Invert; toggle relative length and model/step",
+        "Change Split by and Period; click a credits bar and a tool bar",
+        "Switch the OS to dark mode and look again"
+      ],
+      "expect": "In both modes: charts readable, colours distinguishable, exact values in tooltips, smooth transitions,…",
+      "visual": true,
+      "paths": [
+        "serve/delivery-next/src/owlbear_delivery_next/machine_host/selfcheck.py",
+        "serve/delivery-next/src/owlbear_delivery_next/project_host/metrics_routes.py",
+        "serve/delivery-next/src/owlbear_delivery_next/project_host/pages.py",
+        "serve/delivery-next/src/owlbear_delivery_next/runtimes/compaction_report.py",
+        "serve/delivery-next/src/owlbear_delivery_next/state_store/spend_metrics.py",
+        "serve/delivery-next/src/owlbear_delivery_next/web/metrics.html",
+        "serve/delivery-next/src/owlbear_delivery_next/web/pages/metrics",
+        "serve/delivery-next/src/owlbear_delivery_next/web/vendor/echarts",
+        "serve/delivery-next/tests"
+      ],
+      "procedure": 3,
+      "environment": [],
+      "answer": null
+    }
+  ],
+  "slug": "c1-fixture",
+  "handle": "c1",
+  "brief": {
+    "version": 4,
+    "approved_version": 0,
+    "approved_at": null,
+    "challenged": 4,
+    "requested": 4,
+    "title": "Charts on the Metrics page: credits, compaction timing, tool-use health",
+    "outcome": "The owner rarely opens Metrics because its tables are tiring; after this Change one look shows the…",
+    "scope": [
+      "serve/delivery-next/src/owlbear_delivery_next/web/metrics.html",
+      "serve/delivery-next/src/owlbear_delivery_next/web/pages/metrics",
+      "serve/delivery-next/src/owlbear_delivery_next/web/vendor/echarts",
+      "serve/delivery-next/src/owlbear_delivery_next/project_host/metrics_routes.py",
+      "serve/delivery-next/src/owlbear_delivery_next/project_host/pages.py",
+      "serve/delivery-next/src/owlbear_delivery_next/machine_host/selfcheck.py",
+      "serve/delivery-next/src/owlbear_delivery_next/state_store/spend_metrics.py",
+      "serve/delivery-next/src/owlbear_delivery_next/runtimes/compaction_report.py",
+      "serve/delivery-next/tests"
+    ],
+    "non_goals": [
+      "The context-at-start chart and its recording: Change B, shaped next, reusing this Change's chart code",
+      "Zoom and pan, save as image, linked charts, sorting, a stacked/side-by-side switch, row brush, row slider and the…",
+      "A tool filter on the server or the page",
+      "A chart for the runs list",
+      "Any change to how spend, tool use or compaction is measured or counted",
+      "An updates page for ECharts: a newer release is a Change of its own",
+      "Observable Plot, D3 or a hand-drawn SVG chart layer",
+      "Screen-reader support for the charts: accessible summaries, announcements and a screen-reader check"
+    ],
+    "decisions": [
+      {
+        "id": "D-01M6GACSMPHPWEPCFPPMGWKVXN",
+        "question": "Decision 1",
+        "answer": "The answer to decision 1, worded for the fixture.",
+        "origin": "decided",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMP51ATQ0J7ZF6CC9ZS",
+        "question": "Decision 2",
+        "answer": "The answer to decision 2, worded for the fixture.",
+        "origin": "approved",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPR2N6KGY1KDN7XFFW",
+        "question": "Decision 3",
+        "answer": "The answer to decision 3, worded for the fixture.",
+        "origin": "approved",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPYRK1WXSVWF1M64W0",
+        "question": "Decision 4",
+        "answer": "The answer to decision 4, worded for the fixture.",
+        "origin": "approved",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPBWAYYDNFW8YES30B",
+        "question": "Decision 5",
+        "answer": "The answer to decision 5, worded for the fixture.",
+        "origin": "decided",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMP0FE8G88TEDN2DVZV",
+        "question": "Decision 6",
+        "answer": "The answer to decision 6, worded for the fixture.",
+        "origin": "approved",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPSJP34KG6RESYQFEF",
+        "question": "Decision 7",
+        "answer": "The answer to decision 7, worded for the fixture.",
+        "origin": "decided",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPKXF4NM9YT4PMNBGM",
+        "question": "Decision 8",
+        "answer": "The answer to decision 8, worded for the fixture.",
+        "origin": "approved",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPHFG755BZWHY76YJ7",
+        "question": "Decision 9",
+        "answer": "The answer to decision 9, worded for the fixture.",
+        "origin": "decided",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPSP0AC07MMYRBERN0",
+        "question": "Decision 10",
+        "answer": "The answer to decision 10, worded for the fixture.",
+        "origin": "approved",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPCDSBZGJWGS29WTBR",
+        "question": "Decision 11",
+        "answer": "The answer to decision 11, worded for the fixture.",
+        "origin": "approved",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPCABJBB7NZTCWD5SZ",
+        "question": "Decision 12",
+        "answer": "The answer to decision 12, worded for the fixture.",
+        "origin": "approved",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPY7MT9ZFRXNMFJRB2",
+        "question": "Decision 13",
+        "answer": "The answer to decision 13, worded for the fixture.",
+        "origin": "decided",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPENVVYCE5AA6GWBG1",
+        "question": "Decision 14",
+        "answer": "The answer to decision 14, worded for the fixture.",
+        "origin": "approved",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMP6EFJZHJ97JKG5C6X",
+        "question": "Decision 15",
+        "answer": "The answer to decision 15, worded for the fixture.",
+        "origin": "approved",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GBEQ7C0R96E40BK466RWR7",
+        "question": "Decision 16",
+        "answer": "The answer to decision 16, worded for the fixture.",
+        "origin": "decided",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GCJZFHPG4AC68Y7X76YMKJ",
+        "question": "Decision 17",
+        "answer": "The answer to decision 17, worded for the fixture.",
+        "origin": "decided",
+        "reason": "",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPBN9DAJN5G9XQ4HS7",
+        "question": "Decision 18",
+        "answer": "The answer to decision 18, worded for the fixture.",
+        "origin": "autonomous",
+        "reason": "The reason for decision 18, worded for the fixture.",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMP4Q4MWHE2W2GYV293",
+        "question": "Decision 19",
+        "answer": "The answer to decision 19, worded for the fixture.",
+        "origin": "autonomous",
+        "reason": "The reason for decision 19, worded for the fixture.",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMP4V0AEYEYXBV4QEM8",
+        "question": "Decision 20",
+        "answer": "The answer to decision 20, worded for the fixture.",
+        "origin": "autonomous",
+        "reason": "The reason for decision 20, worded for the fixture.",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPEGKB9P4RZ2G5DYVX",
+        "question": "Decision 21",
+        "answer": "The answer to decision 21, worded for the fixture.",
+        "origin": "autonomous",
+        "reason": "The reason for decision 21, worded for the fixture.",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMP4HP8HEZGWJ7AZFNN",
+        "question": "Decision 22",
+        "answer": "The answer to decision 22, worded for the fixture.",
+        "origin": "autonomous",
+        "reason": "The reason for decision 22, worded for the fixture.",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GBEQ7C2SR890ZMZAZVMNJ6",
+        "question": "Decision 23",
+        "answer": "The answer to decision 23, worded for the fixture.",
+        "origin": "autonomous",
+        "reason": "The reason for decision 23, worded for the fixture.",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPT6CHPFT022P8YWD6",
+        "question": "Decision 24",
+        "answer": "The answer to decision 24, worded for the fixture.",
+        "origin": "autonomous",
+        "reason": "The reason for decision 24, worded for the fixture.",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPKZSEWY3WMFT1K6S9",
+        "question": "Decision 25",
+        "answer": "The answer to decision 25, worded for the fixture.",
+        "origin": "autonomous",
+        "reason": "The reason for decision 25, worded for the fixture.",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMP1CMRT0K6JZAGHWBK",
+        "question": "Decision 26",
+        "answer": "The answer to decision 26, worded for the fixture.",
+        "origin": "autonomous",
+        "reason": "The reason for decision 26, worded for the fixture.",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPHZTTZN1P1NNHZ328",
+        "question": "Decision 27",
+        "answer": "The answer to decision 27, worded for the fixture.",
+        "origin": "autonomous",
+        "reason": "The reason for decision 27, worded for the fixture.",
+        "scope": "change",
+        "replaces": ""
+      },
+      {
+        "id": "D-01M6GACSMPJYPK7Y1M0NHA5ZA0",
+        "question": "Decision 28",
+        "answer": "The answer to decision 28, worded for the fixture.",
+        "origin": "autonomous",
+        "reason": "The reason for decision 28, worded for the fixture.",
+        "scope": "change",
+        "replaces": ""
+      }
+    ],
+    "picked": {
+      "version": 4,
+      "status": "ok",
+      "reason": "",
+      "commit": "2ead3ade6e449c93c50998b46f4968dbf7de8f5a",
+      "listed": "c231f1ab6cc860cde6b8077c9b242258d5145de79257d618f36b681aecbe4d6c",
+      "at": "2026-11-03T11:57:17.322046Z",
+      "decisions": [
+        {
+          "id": "D-01M5DW3X0007SQ19NV3Z6XD3Q7",
+          "revision": "968d9fde931c7ffac83ba9fb5829c548f501a3d0b7858cffea00d6b2153a7554",
+          "title": "Picked decision 1",
+          "statement": "Picked decision 1 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X000S0Q319Q7KHHE0VB",
+          "revision": "f0ae96fe30a4f9d6dc22cecf00fc4c26635ee7c36d722135b2ead2132bcf1803",
+          "title": "Picked decision 2",
+          "statement": "Picked decision 2 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X000S7599KMKEPTBH0P",
+          "revision": "21ddc0eafa4472da6310d6fb1ceb165fbfef4ba373eaa94d7067adec82308410",
+          "title": "Picked decision 3",
+          "statement": "Picked decision 3 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X0011PA47JVCR1YZCXG",
+          "revision": "1508c12540b70a1fe73d2eedc786de55cead8a3632b6f4c67752f039a8768723",
+          "title": "Picked decision 4",
+          "statement": "Picked decision 4 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X001GWD0HTVW8BAHH7Z",
+          "revision": "b9ec327784e53177a6faf409813fcd2b63b92cfcdc52835771e826ebcce26508",
+          "title": "Picked decision 5",
+          "statement": "Picked decision 5 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X001NR5YDS2CMTDA7KF",
+          "revision": "15e0fcd6e9df2b3e9dcb410e4a1b954de1350d9f1646f39b1a992a9d3a691885",
+          "title": "Picked decision 6",
+          "statement": "Picked decision 6 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X001ZXZR3H7NR507HNV",
+          "revision": "2f93834934465a5d9397333803a55d8afb6d1e63a28160e23f623f18888843d0",
+          "title": "Picked decision 7",
+          "statement": "Picked decision 7 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X002G2Q0PC4NE31M2CB",
+          "revision": "5bedaf91477dcfb305c005ce7bc2259f8b2a4961d80d9576490e50f77f654809",
+          "title": "Picked decision 8",
+          "statement": "Picked decision 8 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X002ZZX0JY6NQ129YKC",
+          "revision": "a3d5ee6794dd08f231dcd0cf3fa296566f684bde534fe804efac989574d11d46",
+          "title": "Picked decision 9",
+          "statement": "Picked decision 9 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X0032E13EVKAKSZPMCR",
+          "revision": "6be325108a7913f3c39318ee2db71a0f5d7927eed6bb855331810a1beaa9ed02",
+          "title": "Picked decision 10",
+          "statement": "Picked decision 10 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X003PS6GHPR08R1KAHG",
+          "revision": "e71a225b70d82d7978b387d4f90318384899986a526c946f075bc11d6ddfeee7",
+          "title": "Picked decision 11",
+          "statement": "Picked decision 11 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X004TWST4M44TS2B59D",
+          "revision": "cb1e46fb6f1ee19fa5ed95bfe3a8240822d2ed786673ac90f77b062dc89fbe8c",
+          "title": "Picked decision 12",
+          "statement": "Picked decision 12 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X0051SZX2GX4E2YQHX3",
+          "revision": "afd2bbde349ed618641d245e77faa04d10b893d2224d03e1c1060e87c506b6fb",
+          "title": "Picked decision 13",
+          "statement": "Picked decision 13 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00530VRMSAG9X67WKK",
+          "revision": "b48e8f344a24b6ca214227d21c557a93e554b021b83064945b2afe4ba5488f56",
+          "title": "Picked decision 14",
+          "statement": "Picked decision 14 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X0058ZX8DN5AFEB0BN4",
+          "revision": "a5db8c41c0d2940f91a04131a39f7a1b550e721a10e41d95370867623118600c",
+          "title": "Picked decision 15",
+          "statement": "Picked decision 15 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X005QKVC9WJNEXFQH38",
+          "revision": "e10910ac0b5cc93d9f67f6bc4d6dee105fbb96516050fec88e35dd6e62852fa6",
+          "title": "Picked decision 16",
+          "statement": "Picked decision 16 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X0066TB9QJ04BAABB8C",
+          "revision": "6e7d2e251e0ff45ca79e3cdad629280587536d023cf5291efba67ad9bc7766d7",
+          "title": "Picked decision 17",
+          "statement": "Picked decision 17 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X0067HCE0PDWFB32EX6",
+          "revision": "dc4bc271455a58e2f018741e2b0cc4397a38b62e02bf0a84cd41ae4062b746d0",
+          "title": "Picked decision 18",
+          "statement": "Picked decision 18 says what this Change follows, worded for the fixture.",
+          "note": "A note on picked decision 18, worded for the fixture."
+        },
+        {
+          "id": "D-01M5DW3X006GV9QGRS3AMZY64X",
+          "revision": "932afd96e1e1491aa11371dbb95207b68c8617e33289092b452f35ff1f8d3fcf",
+          "title": "Picked decision 19",
+          "statement": "Picked decision 19 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X007WK435AEAABZ807E",
+          "revision": "b103646a30fabb52067b20b97adf3efd49ba0a5e7efba7eb1bb2cabe2945f907",
+          "title": "Picked decision 20",
+          "statement": "Picked decision 20 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00816XTC1M0B41C50R",
+          "revision": "83c1fe1ddd8c32db35560fff5afa7198fca8e26179004ebf69a5dbc218bab525",
+          "title": "Picked decision 21",
+          "statement": "Picked decision 21 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X008696MSES4PW3WYT3",
+          "revision": "058e99f474b41d51ca9fdbe412fa1ec0f17d903068d4c90a84a3725d3285b080",
+          "title": "Picked decision 22",
+          "statement": "Picked decision 22 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X0094A141R5JTDQ0ZY3",
+          "revision": "e0ac655442edd5ad878fce1ac48a6f49bae71551e971435332183f9b73ed80a2",
+          "title": "Picked decision 23",
+          "statement": "Picked decision 23 says what this Change follows, worded for the fixture.",
+          "note": "A note on picked decision 23, worded for the fixture."
+        },
+        {
+          "id": "D-01M5DW3X0095VRM8CVA9ZNTYX8",
+          "revision": "3e07d91a40466442043277795fadffe87c5f1dae9f3e447b70aa2022cc65e499",
+          "title": "Picked decision 24",
+          "statement": "Picked decision 24 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X009FXRW2B42S48AAN2",
+          "revision": "5a9c7ec0c50cf8b2c074596f268d383a9eafdd9e11251dae3b9f70f303d7743e",
+          "title": "Picked decision 25",
+          "statement": "Picked decision 25 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00AKQ7BNSGF5F2BZRJ",
+          "revision": "130847601e5c20d43e8e436a6fa8681b9d4309993cdba52f938645d1fe2c0eb4",
+          "title": "Picked decision 26",
+          "statement": "Picked decision 26 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00BCH51BZJAS9Y05M0",
+          "revision": "9b47d31bea6347a4e0b9d2d6e021eb03c3d020656ffea7421d528ac374eccfea",
+          "title": "Picked decision 27",
+          "statement": "Picked decision 27 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00BZ7YAPD85NVXXQ45",
+          "revision": "713129fa2f259ac45ec65271398ce288137cba01e8bbd71f0552ff27a5c2e020",
+          "title": "Picked decision 28",
+          "statement": "Picked decision 28 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00C0MCMCXZMKGEAF7V",
+          "revision": "4c619e2bcb065d5098683bcf64466336c1adaf9a5e009ddbc519e3d987aaa48a",
+          "title": "Picked decision 29",
+          "statement": "Picked decision 29 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00DQHPF1586M4PHR02",
+          "revision": "ab0c91442d7b215b1750d2c07e9d4ad19e77bf108446f1ea3fc7eebeecdd232d",
+          "title": "Picked decision 30",
+          "statement": "Picked decision 30 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00EEQ9H4GFBKRHRDQB",
+          "revision": "66f81e3aba782080f257e61f1029d553ba9aebeaae21a95b145235e67b849a70",
+          "title": "Picked decision 31",
+          "statement": "Picked decision 31 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00EG7FVA9Y2CNGBFSE",
+          "revision": "009242e285a0def1beae56c0ea64d657dd1eef7e2b77bbe279bb5b832fdd7a74",
+          "title": "Picked decision 32",
+          "statement": "Picked decision 32 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00F7BBWJXK2QJX6RF3",
+          "revision": "57b1068a801a4dc78857e3a131a3785f33eedd96f518359443473203c5d98e7a",
+          "title": "Picked decision 33",
+          "statement": "Picked decision 33 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00FF0QA6AV6A00H0JC",
+          "revision": "6e78cda34eb6f72bda3941d112dff3cd57f3434208949261bf24e2f8ad8c3333",
+          "title": "Picked decision 34",
+          "statement": "Picked decision 34 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00G6NKHPP9394X4XHD",
+          "revision": "9015585117fdc80dac3c84ce4e431b8d2f94fcc576c7f41a341243d24d0c2cc2",
+          "title": "Picked decision 35",
+          "statement": "Picked decision 35 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00HGSKHB0JRQD4K697",
+          "revision": "46b1c9a209f477cf7cd26c38d14d18fb6ccab1c99658a001c9623971863230fe",
+          "title": "Picked decision 36",
+          "statement": "Picked decision 36 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00J01D2BEGF9ZV9MKK",
+          "revision": "61620d9c66a8f7a41e84720effaae2d68635fdd4e0206a89a75f0dff28dbb1b1",
+          "title": "Picked decision 37",
+          "statement": "Picked decision 37 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00JBGE3S8C67TNH8EV",
+          "revision": "8178c4e63c464d175875585297bb10e68a99d00c458a51a41e238a84b88095e8",
+          "title": "Picked decision 38",
+          "statement": "Picked decision 38 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00JPRG24DEK2ZYKY3N",
+          "revision": "506f894f66b7e2485ff287854f1d1edcaa2cb7ce25d5902b7b9dd3e5578885d5",
+          "title": "Picked decision 39",
+          "statement": "Picked decision 39 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00JVBK2GWSYBG2WQXR",
+          "revision": "06a78b9d4a6138332af9ec11ed795fcabdab393be4adc9935412a6643726111c",
+          "title": "Picked decision 40",
+          "statement": "Picked decision 40 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00KTYS6JXQSZZ0WG06",
+          "revision": "4e69ef7d1f1c2667268ba10244233e6b9fbb6c711d9434d26b65afe29ddc2025",
+          "title": "Picked decision 41",
+          "statement": "Picked decision 41 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00KW72F87WNEZ6YY0D",
+          "revision": "5f28c51d78238a64d658f18507374d47b6c0536ffd776c0d972447c3d5eddcf1",
+          "title": "Picked decision 42",
+          "statement": "Picked decision 42 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00MFNTJ241G1Z5YY7J",
+          "revision": "46c65d5d8270e714102c354327a0f2b1e002f7ff3afe7422b2feb0e26592403d",
+          "title": "Picked decision 43",
+          "statement": "Picked decision 43 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00MG3RWKHE0WWHVVSM",
+          "revision": "f0ac8850ac18665d4ec13cba9d39e247373eefe1c7d86dcb7011d7cbdbff2f45",
+          "title": "Picked decision 44",
+          "statement": "Picked decision 44 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00MYNK0CEXMHJFKN3Y",
+          "revision": "8cfc305c6ab447e36729e9a0ea6227c95dd2133f3ca48c4b56bb8480ed32f8c5",
+          "title": "Picked decision 45",
+          "statement": "Picked decision 45 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00NFB5CXS5DPG7FTY9",
+          "revision": "22e9cba02cd4d7d7684e8ab22c4898e0e4c8d267f3716902950e08a8a159b83e",
+          "title": "Picked decision 46",
+          "statement": "Picked decision 46 says what this Change follows, worded for the fixture.",
+          "note": "A note on picked decision 46, worded for the fixture."
+        },
+        {
+          "id": "D-01M5DW3X00NH2HWBPQKYMA92TH",
+          "revision": "774a29c540e916c688ae395a2f794a714a29729a97f5e88062c2235101249e75",
+          "title": "Picked decision 47",
+          "statement": "Picked decision 47 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00NVKSFK089HDBW2DK",
+          "revision": "6c863a09a63ee8b1e679d69ecc656ac4f772815fd9ae42ebac6ad4da6ac7517b",
+          "title": "Picked decision 48",
+          "statement": "Picked decision 48 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00NZPSHHAV1RM3J77Q",
+          "revision": "e1ab7d5f5a9feb6242fe8253feeb3b18df6a5ab647af1ba20b6f8d151cea7edb",
+          "title": "Picked decision 49",
+          "statement": "Picked decision 49 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00P6ND1128SP4A3549",
+          "revision": "b5732c6f5938d96344e7d3fe7a2977757c93a129a252dbef1785288473d0b006",
+          "title": "Picked decision 50",
+          "statement": "Picked decision 50 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00PPZG3G7W61N16WNN",
+          "revision": "1f79e8fc417a5d0f3a677cc438cf5e18b3c4e0f697dd5c4d68af269ab34390c3",
+          "title": "Picked decision 51",
+          "statement": "Picked decision 51 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00PYNXCBNEK59H0FJZ",
+          "revision": "279da0066323c36160005027812e021656c731b1651b36d04916c6dfb2b1ba28",
+          "title": "Picked decision 52",
+          "statement": "Picked decision 52 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00QWQP3NJYRZBTB8H3",
+          "revision": "56ed01b1ef7d97aaa4f6e8d84bd8c4aed2128079ad8415d0342332940d4626f4",
+          "title": "Picked decision 53",
+          "statement": "Picked decision 53 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00R4B5S7KV67WZSSJ7",
+          "revision": "087ba553e67765b7f4c1639999b2ba025c80c12db34139980ec30e332f3a3d73",
+          "title": "Picked decision 54",
+          "statement": "Picked decision 54 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00RJF11VB04XDREP9W",
+          "revision": "7ca23f309d8851f6f33093575ca5186dd0f05cc427fba4e56206a40f7bccaca7",
+          "title": "Picked decision 55",
+          "statement": "Picked decision 55 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00SJXHK9DHMGB801VP",
+          "revision": "484ee912bb415df92e2dde88441c3359e09c0c9f5a7e10ceffb5ffeaba90df6e",
+          "title": "Picked decision 56",
+          "statement": "Picked decision 56 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00SKKH682EPX3PDTAR",
+          "revision": "23411de3c7df3f81a8cf3289d0f870672499f3952c4e7a285700d02d0e9afa21",
+          "title": "Picked decision 57",
+          "statement": "Picked decision 57 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00SM0ZRT4DWY35VV3A",
+          "revision": "7e6d1d93bdeb65dff9485a2ecbfc38be19bdce2fa2ee0e6acafd0b29c6fcdd84",
+          "title": "Picked decision 58",
+          "statement": "Picked decision 58 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00SWP47K947ZK67PSP",
+          "revision": "fbb4fd734b9eda3214c8ddc2a812f465ce6eee2f64f325191c913b6876760402",
+          "title": "Picked decision 59",
+          "statement": "Picked decision 59 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00T7C4S5EJVX1ABT9A",
+          "revision": "77f96114504818f474a1d0e134d21d8ac9c48c063e6f86133a58f34bd35ee8c9",
+          "title": "Picked decision 60",
+          "statement": "Picked decision 60 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00TZ58EDRPJQ6MDQ70",
+          "revision": "50b6e5a1124eeb2ff2ea098f3763012e3268859ad1701b0cc2e76ce1668388e1",
+          "title": "Picked decision 61",
+          "statement": "Picked decision 61 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00V0P15TJ2WSZ1X5AM",
+          "revision": "ec5424b8d3ded6aa624c149127100b1f8ad9864d473144083c2e0b2618778131",
+          "title": "Picked decision 62",
+          "statement": "Picked decision 62 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00W6D43Z32R2Q7E1FW",
+          "revision": "62a51947011bcb3afdfc0cf9c3d74e2d44e82d6051aac5ad47f42893332d983b",
+          "title": "Picked decision 63",
+          "statement": "Picked decision 63 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00WDZ0BDBW9ST0W93A",
+          "revision": "02e64f434c90be4e7f07ea1906be60319d3157af537a2037a0c635a44835b634",
+          "title": "Picked decision 64",
+          "statement": "Picked decision 64 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00WZG9CET589F41JKN",
+          "revision": "6d43388a96530655fe106f0ec3b2421bba717ff1c1c8994491657ca1fc27be9e",
+          "title": "Picked decision 65",
+          "statement": "Picked decision 65 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00X7K3XEKVVWVS0AVE",
+          "revision": "4615fbfe42920ae1ef87ed4e90da65026880ce1b546e8787fa5fc89cb8e77c5c",
+          "title": "Picked decision 66",
+          "statement": "Picked decision 66 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00Y4R86ASS41MB0GJV",
+          "revision": "032ac18f7497ff8aa8d2b96f3374d5fb82f4fa0066fae5fdbf7ee5c4ac7663eb",
+          "title": "Picked decision 67",
+          "statement": "Picked decision 67 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00YBNTXCH1E1K91SCS",
+          "revision": "4bc1dc7549097df789e722193b86cb5fdf74530c6c56b8ec0c7a1f4c561a169d",
+          "title": "Picked decision 68",
+          "statement": "Picked decision 68 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00Z8HTRE0TFCPSXZPX",
+          "revision": "5b3782ac16434081105e730bd32a56e1116e566fe653b8082e51ec93195fe430",
+          "title": "Picked decision 69",
+          "statement": "Picked decision 69 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5DW3X00ZXS1T7XHVWK7B0M8",
+          "revision": "24140e02086ded842da974fc1ba1557feff2e80bab651bd372d364ff31c1d4db",
+          "title": "Picked decision 70",
+          "statement": "Picked decision 70 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5WA09V20PP0K0HV920FT3Q8",
+          "revision": "907584be552e3438b3d5a445882a850b16ddf4429ae219d11b79265d8626d3dc",
+          "title": "Picked decision 71",
+          "statement": "Picked decision 71 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5XCDF6G60VG5GHTWF5QSSDE",
+          "revision": "fbe6c2b490082351c7c5788d725b9872eed4debc922837ffb337e8e60dcb74f1",
+          "title": "Picked decision 72",
+          "statement": "Picked decision 72 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M5ZE13N37HZAGJ69VWW69X23",
+          "revision": "43c3655c96c7e380317a8d990eec563771fd39c683e2d7076c9f25f613047b84",
+          "title": "Picked decision 73",
+          "statement": "Picked decision 73 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M61V2GR0C6JV2R6KJ0WR4PNB",
+          "revision": "50bc1207e184fdac90ccb0c0af4db085b037bfb9ebc23650a823c3cef5ee122b",
+          "title": "Picked decision 74",
+          "statement": "Picked decision 74 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M61V5F0J7SDJ6Q3TYFBKGYFZ",
+          "revision": "0fdd930a786327659c309cf129e1149d31f8f08586b4a12c11c7af651679c45e",
+          "title": "Picked decision 75",
+          "statement": "Picked decision 75 says what this Change follows, worded for the fixture.",
+          "note": "A note on picked decision 75, worded for the fixture."
+        },
+        {
+          "id": "D-01M63C6PMQD4TXK6HN5YANP5DN",
+          "revision": "7bc69825be8a54d97c6e7548c6092cce3354215b6e2fa1b4675925269bec0567",
+          "title": "Picked decision 76",
+          "statement": "Picked decision 76 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M63C7SXN4X82WSS48VFVB4V8",
+          "revision": "9ac77e2d001a5e0287502e9c1c7f7c6c12a291b03c13ae7dbaa909c3002ce5f8",
+          "title": "Picked decision 77",
+          "statement": "Picked decision 77 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M63CA0J8WGA56HJH93EHMKYN",
+          "revision": "924c3b5c462b102de8ccee6d3262a5f283b09e456f85bf7593b63465c65914cf",
+          "title": "Picked decision 78",
+          "statement": "Picked decision 78 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M63CEQYQ64VYQHFKCDGX7W9F",
+          "revision": "75b6f479fe34a35f70222fabf8b5426028cf14f252e44b2eaae653149b3ac629",
+          "title": "Picked decision 79",
+          "statement": "Picked decision 79 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M63D9K0JGFYR5JMTA06K27A2",
+          "revision": "00a9f4ad7ad7bc30e0949d49696c62df0db26def3bc51015257a326fb8791810",
+          "title": "Picked decision 80",
+          "statement": "Picked decision 80 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M63DB7Z1G2A9NCCM7MKEWBAX",
+          "revision": "113d99f5c72e0e8561f7b7686db8c214b3d166b6b9d9df13d08eec03a1622e75",
+          "title": "Picked decision 81",
+          "statement": "Picked decision 81 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M63DCEGB74ASJXEX2CGBGG38",
+          "revision": "a2f58163eef923e901be343f7ec786f2a846982dbad093341289d83a29fb5bff",
+          "title": "Picked decision 82",
+          "statement": "Picked decision 82 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M63DD6WEDB8R0QS9M5KV6YX1",
+          "revision": "ee1b238f6eda59296682c4af56d440036fecc3ec95b1c5c322afef8f70ae245c",
+          "title": "Picked decision 83",
+          "statement": "Picked decision 83 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M64HSM4EPWCFNPMXDPE1ZBSM",
+          "revision": "ce852defa09cb9394581e345d50632a657801fa13e895c9a7453eab152fefc0f",
+          "title": "Picked decision 84",
+          "statement": "Picked decision 84 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M64TXG1P1HMPQH7Q9CWAYSSW",
+          "revision": "b9f02b3a1b56a526189b8ec5e6d6d90294d81d6805ffa3f52e540fd8a06cd569",
+          "title": "Picked decision 85",
+          "statement": "Picked decision 85 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M64Y2KMCNGPTND58CVEQWXG5",
+          "revision": "7ae07285a2f46a9e105e0105f0a1516d2d5a55cecc7ea86b78384db2cafe36af",
+          "title": "Picked decision 86",
+          "statement": "Picked decision 86 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M655FF3CVH5M5R4486K9YA9G",
+          "revision": "59843ed80373d255c6552c2bc26a8a71ce57aa872974d8bd6c32890a4feaf476",
+          "title": "Picked decision 87",
+          "statement": "Picked decision 87 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M66D205WV75ZGAPVVYHCTADY",
+          "revision": "d0bd7511bf16d9f23ac9050f7243c292d9ebaa9e31e8f78781d135fdd3f6d3c3",
+          "title": "Picked decision 88",
+          "statement": "Picked decision 88 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M68YFDTF19NH23SKXZCBWWMV",
+          "revision": "a65997c788e3319cc6395c4116aa4f90d14ea93e1e200755d352d68267535d5e",
+          "title": "Picked decision 89",
+          "statement": "Picked decision 89 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M68Z8Q740BSN13D1R06JX6DW",
+          "revision": "6f7fa7a91e72a67a120cf02162f25fe1f4ec4acf1f0dbc8ff8dca11e7dd0e01c",
+          "title": "Picked decision 90",
+          "statement": "Picked decision 90 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M69C82SQMBHZ8FBKJBX42H3Y",
+          "revision": "032d3e8a9287c7148de98fadbd51c66925d0308040792c1cbf76e6b63e8cfd2e",
+          "title": "Picked decision 91",
+          "statement": "Picked decision 91 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M69DEX5D5P26HTE4SYD3DFGE",
+          "revision": "190eb72fea1e9fa12940b6e161a2fa5790027420b834be2a2bbbcb6e22a241c3",
+          "title": "Picked decision 92",
+          "statement": "Picked decision 92 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M69ED5D9GKTY9Q8MRMPEVR3B",
+          "revision": "db3f077cf0a245f6263704b8c0ee3108fd2ca1b27231df81a317740f4d043ca5",
+          "title": "Picked decision 93",
+          "statement": "Picked decision 93 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M69M8E5TF2H6W6P78Y9VPJJB",
+          "revision": "66d3f4c4a0bc30db080463448e427e38e2dfbce60ad068801d491add29185c0d",
+          "title": "Picked decision 94",
+          "statement": "Picked decision 94 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M6DX3FBCWXYR12504VEZB0HB",
+          "revision": "ea50d9c837d10df4ad1f3534640d11208f54bf00d64fdaeb7da828bb4efc81ab",
+          "title": "Picked decision 95",
+          "statement": "Picked decision 95 says what this Change follows, worded for the fixture.",
+          "note": ""
+        },
+        {
+          "id": "D-01M6F7PHDCPEKX3P0Y4WFZSVTD",
+          "revision": "ffdb6f52fcd41bbdde323bcc1c0a314be44f008272d7ebd472966b6a25f853ec",
+          "title": "Picked decision 96",
+          "statement": "Picked decision 96 says what this Change follows, worded for the fixture.",
+          "note": ""
+        }
+      ],
+      "dropped": [],
+      "session": ""
+    },
+    "criteria": [
+      {
+        "id": "AC-1",
+        "text": "ECharts is vendored like lit-html: one pinned stable release's unmodified echarts.min.js under…",
+        "version": 2
+      },
+      {
+        "id": "AC-2",
+        "text": "Metrics shows filters, totals with the 'How exact' notes, the credits, compaction and tool-use sections,…",
+        "version": 2
+      },
+      {
+        "id": "AC-3",
+        "text": "Credits chart: axis = the split table's keys in its order (Day: vertical columns by date, no 'Time…",
+        "version": 2
+      },
+      {
+        "id": "AC-4",
+        "text": "Compaction chart: a row per table row with compacted sessions; a dot per compacted session with a timing…",
+        "version": 3
+      },
+      {
+        "id": "AC-5",
+        "text": "Tool-use chart: one bar per tool, stacked by its 7 disjoint outcomes (accepted, invalid arguments,…",
+        "version": 2
+      },
+      {
+        "id": "AC-6",
+        "text": "Interactions: a relative-length switch on credits and tool charts shows parts as shares of full-length…",
+        "version": 2
+      },
+      {
+        "id": "AC-7",
+        "text": "Keyboard and state: each chart is one Tab stop; arrow keys move between bars and parts, each focus…",
+        "version": 3
+      },
+      {
+        "id": "AC-8",
+        "text": "Colours: credits stacks and the 6 refusal kinds use Okabe-Ito (light: orange, sky blue, yellow darkened…",
+        "version": 3
+      },
+      {
+        "id": "AC-9",
+        "text": "Sections keep their 'none' texts under today's conditions, with no chart; readable sessions with none…",
+        "version": 3
+      },
+      {
+        "id": "AC-10",
+        "text": "No number changes: for the same fixture /metrics returns today's totals, split, compaction and tool…",
+        "version": 2
+      }
+    ],
+    "ui": true,
+    "visual": [
+      {
+        "name": "by-agent",
+        "path": "/metrics?period=all&by=agent",
+        "expect": "Above Runs, three charts: credits as horizontal bars per agent, stacked in up to 7 colours with a…",
+        "steps": [],
+        "version": 2
+      },
+      {
+        "name": "by-day",
+        "path": "/metrics?period=all&by=day",
+        "expect": "The credits chart shows vertical columns, one per day in date order, stacked by model in distinct…",
+        "steps": [],
+        "version": 2
+      },
+      {
+        "name": "empty",
+        "path": "/metrics?period=custom&from=2000-01-01&to=2000-01-01",
+        "expect": "No chart is drawn; the credits, compaction and tool-use sections show their existing texts saying…",
+        "steps": [],
+        "version": 2
+      }
+    ],
+    "specified": [],
+    "approved": [],
+    "checks": [],
+    "reference": null
+  },
+  "loops": {
+    "brief": {
+      "subject": "brief",
+      "attempt": 1,
+      "since": 0,
+      "round": 2,
+      "found": 1,
+      "extra": 0,
+      "policy": {
+        "max_rounds": 3,
+        "max_findings": 10,
+        "last_round_at": 4,
+        "ask_owner_at": 7
+      },
+      "findings": [
+        {
+          "id": "F1",
+          "text": "AC-4: Omission: compacted sessions do not always have a timing share. compaction_report.py::_count…",
+          "raised": 1,
+          "tasks": [],
+          "state": "fixed",
+          "reason": "",
+          "judgement": "",
+          "note": "",
+          "repair": "v3",
+          "reconsider": "",
+          "clarified": ""
+        },
+        {
+          "id": "F2",
+          "text": "AC-9: Contradiction with the code: chart emptiness is not section emptiness. A readable session without…",
+          "raised": 1,
+          "tasks": [],
+          "state": "fixed",
+          "reason": "",
+          "judgement": "",
+          "note": "",
+          "repair": "v3",
+          "reconsider": "",
+          "clarified": ""
+        },
+        {
+          "id": "F3",
+          "text": "AC-8: Contradiction: AC-8 prescribes original Okabe-Ito colours in dark mode for every part, while AC-5…",
+          "raised": 1,
+          "tasks": [],
+          "state": "fixed",
+          "reason": "",
+          "judgement": "",
+          "note": "",
+          "repair": "v3",
+          "reconsider": "",
+          "clarified": ""
+        },
+        {
+          "id": "F4",
+          "text": "Person-only checks: real-page-look / AC-7: Omission: the owner's screen-reader usability requirement…",
+          "raised": 1,
+          "tasks": [],
+          "state": "fixed",
+          "reason": "",
+          "judgement": "",
+          "note": "",
+          "repair": "v3",
+          "reconsider": "",
+          "clarified": ""
+        },
+        {
+          "id": "F5",
+          "text": "F5's text, which named recorded decisions, worded for the fixture.",
+          "raised": 1,
+          "tasks": [],
+          "state": "fixed",
+          "reason": "Both decisions govern how a brief is shaped and challenged (the shaping conversation and the…",
+          "judgement": "F5's judgement, which named recorded decisions, worded for the fixture.",
+          "note": "",
+          "repair": "v4",
+          "reconsider": "",
+          "clarified": ""
+        },
+        {
+          "id": "F6",
+          "text": "Brief v3 input: AC-1, AC-3, AC-4, AC-6, AC-8, AC-9 and real-page-look: Unsafe ambiguity: these fields…",
+          "raised": 2,
+          "tasks": [],
+          "state": "fixed",
+          "reason": "",
+          "judgement": "",
+          "note": "",
+          "repair": "v4",
+          "reconsider": "",
+          "clarified": ""
+        }
+      ],
+      "last": true,
+      "ended": "count",
+      "unreviewed": ["v4"],
+      "reviewed": ["v3"],
+      "batch": [],
+      "head": "3",
+      "reentry": false,
+      "completion": null,
+      "rebuild": [],
+      "undo": "",
+      "history": [],
+      "verdicts": [
+        {
+          "round": 1,
+          "version": 2,
+          "recheck": false
+        },
+        {
+          "round": 2,
+          "version": 3,
+          "recheck": false
+        }
+      ]
+    }
+  },
+  "step": {
+    "kind": "shape"
+  },
+  "outcome": {
+    "exit": "pending",
+    "waiting": "chat",
+    "who": "you",
+    "reason": "approve brief v4",
+    "at": "2026-11-03T11:40:00Z"
+  },
+  "names": {
+    "branch": "owlbear/c1-fixture",
+    "target": "main"
+  }
+}
