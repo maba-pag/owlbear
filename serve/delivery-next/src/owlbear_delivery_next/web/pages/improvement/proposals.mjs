@@ -31,10 +31,11 @@ export function seenIn(f) {
 // Where the proposal lands once accepted, in words.
 function landing(d) {
   if (!d || d.error) return `It cannot be accepted: ${d?.error ?? "where it lands is not known"}.`;
+  if (!d.kind) return "No destination was recorded.";
   switch (d.kind) {
     case "memory": return `A pending memory in ${d.folder}, for ${d.roles?.length ? d.roles.join(", ") : "every "
       + "agent"}, recommended as a ${d.recommended} memory.`;
-    case "issue": return `An issue in ${d.repository}${d.synthetic ? ", titled [synthetic] and closed at once" : ""}.`;
+    case "issue": return `An issue in ${d.repository}${d.synthetic ? ", titled [synthetic]" : ""}.`;
     case "backlog": return d.folder ? `A backlog entry in ${d.folder}'s backlog.` : "A shared backlog entry.";
     case "case": return `A Spotter case from record ${d.record}${d.call ? `, which should have been ${d.call}` : ""}`
       + `${d.synthetic ? ", marked synthetic" : ""}, then its paid check.`;
@@ -47,7 +48,7 @@ const ACCEPT = {
   memory: ["OwlBear saves it as a pending memory, then shows it here as made.",
     "Nothing: a pending memory is used only once you approve it on the Memory page.",
     "Rejecting the memory there removes it; this proposal stays accepted."],
-  issue: ["OwlBear opens the issue on GitHub; a synthetic one it closes at once.",
+  issue: ["OwlBear opens the issue on GitHub.",
     "Nothing more: Delivery works on the issue only once you shape it into a Change.",
     "The issue stays on GitHub, public in a public repository; close it there."],
   backlog: ["OwlBear adds the entry to the backlog.", "Nothing more: the entry waits in the backlog.",
@@ -105,6 +106,7 @@ function redraftAgain(p) {
 }
 
 function actions(p) {
+  if (synthetic(p)) return nothing;
   const busy = (k) => state.busy === `${k}:${p.id}`, off = Boolean(state.busy);
   if (OPEN.has(p.state)) {
     const cannot = Boolean(p.destination?.error);
@@ -133,7 +135,8 @@ function actions(p) {
 function made(a) {
   const { kind, where, ref, link } = a.artefact ?? {};
   const said = `${kind ?? a.step} ${ref ?? ""}${where ? ` in ${where}` : ""}`.trim();
-  return link ? html`Made: <a href=${link} target="_blank" rel="noopener">${said}</a>` : `Made: ${said}`;
+  const verb = a.step === "closed" ? "Closed" : "Made";
+  return link ? html`${verb}: <a href=${link} target="_blank" rel="noopener">${said}</a>` : `${verb}: ${said}`;
 }
 
 function outcome(p) {
@@ -148,6 +151,8 @@ function outcome(p) {
     lines.push(`Your direction: ${p.direction}`);
     const run = p.redraft_run ?? {};
     if (p.redraft && p.redraft_state !== "drafted") lines.push(`Redrafted as ${p.redraft}.`);
+    else if (synthetic(p) && p.redraft) lines.push(`Redrafted as ${p.redraft}; its review did not finish.`);
+    else if (synthetic(p)) lines.push("No redraft was completed.");
     else if (run.state === "queued") lines.push("Retro redrafts it on its next run.");
     else if (run.state && run.state !== "ended") lines.push("Retro is redrafting it.");
     else if (p.redraft) lines.push(`Redrafted as ${p.redraft}, but its run stopped before reviewing it: ask for it `
@@ -161,13 +166,15 @@ function outcome(p) {
 }
 
 function card(p) {
-  const [said, variant] = STATES[p.state] ?? [p.state, "secondary"], last = p.history.at(-1);
+  const [said, variant] = STATES[p.state] ?? [p.state, "secondary"];
+  const last = p.history.at(-1);
   const counts = [plural(p.findings.length, "finding"), plural(p.counterexamples?.count ?? 0, "counterexample")];
   return html`<li class="panel proposal" id=${`proposal-${p.id}`}>
-    <div class="row">${tag(said, variant)}${tag(p.kind)}${synthetic(p) ? tag("Synthetic", "info") : nothing}
+    <div class="row">${tag(synthetic(p) ? `Historical: ${said}` : said, variant)}${tag(p.kind)}
+      ${synthetic(p) ? tag("Synthetic", "info") : nothing}
       ${quiet(html`${p.id} · ${when(last?.at)}`)}</div>
     ${heading(3, title(p), "md")}
-    ${p.state === "drafted" ? quiet("Retro reviews it before you can decide on it.") : nothing}
+    ${p.state === "drafted" && !synthetic(p) ? quiet("Retro reviews it before you can decide on it.") : nothing}
     ${text(html`<strong>Why:</strong> ${p.why || p.mechanism || "not said yet"} (${counts.join(", ")}).`)}
     ${p.seen?.length ? html`<ul class="meta">${p.seen.map((f) => html`<li>Seen in ${seenIn(f)}: ${
       f.what}${f.cost ? html` <strong>Cost:</strong> ${f.cost}` : nothing}</li>`)}</ul>` : nothing}
@@ -181,7 +188,7 @@ function card(p) {
 }
 
 export function proposalsSection(list) {
-  const waiting = list.filter((p) => ["waiting", "shown"].includes(p.state)).length;
+  const waiting = list.filter((p) => !synthetic(p) && ["waiting", "shown"].includes(p.state)).length;
   return html`<section id="proposals" aria-labelledby="proposals-title">
     ${heading(2, "Retro's proposals", "lg", "proposals-title")}
     ${quiet(waiting ? `${plural(waiting, "proposal")} ${waiting === 1 ? "waits" : "wait"} for you.`

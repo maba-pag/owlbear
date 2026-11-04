@@ -322,15 +322,16 @@ def test_without_a_shared_repository_units_outside_projects_wait_on_the_settings
     assert blocked("chat:cx") == blocked("syn:large") == UNSET
 
 
-def test_the_button_on_a_synthetic_unit_records_a_refusal_when_global_is_unreadable(tmp_path, machine, monkeypatch):
+def test_the_button_on_a_chat_records_a_refusal_when_global_is_unreadable(tmp_path, machine, monkeypatch):
     shared = tmp_path / "data"
     shared.mkdir()
     (shared / data_place.DataRepo(shared).global_path.name).write_text("{not json")
     monkeypatch.setenv(data_place.VIEW, str(shared))
-    retro_store.request("owner", synthetic="large")
+    _chat("cx", tmp_path / "elsewhere")
+    retro_store.request("owner", chat="cx")
     _job(machine, []).tick(0.0)
     [(unit, trigger, mode, result)] = _runs()
-    assert (unit.startswith("syn:"), trigger, mode) == (True, "button", "judge")
+    assert (unit, trigger, mode) == ("chat:cx", "button", "judge")
     assert result.startswith("refused: settings can't be read: ")
     assert retro_block.block(unit, {}) == result.removeprefix("refused: ")
 

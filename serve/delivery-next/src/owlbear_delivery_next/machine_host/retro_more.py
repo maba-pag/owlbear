@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.improvement import followups, improvement_view, retro_redraft
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
-from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement.retro_calls import Work
 from owlbear_delivery_next.improvement.retro_segments import Prepared
 from owlbear_delivery_next.machine_host.retro_inputs import Running
@@ -27,10 +26,9 @@ UNIT = {"redraft": "proposal", "followup": "finding"}  # a run's unit id: ``<kin
 
 
 def running(request: Mapping[str, Any]) -> Running | None:
-    """The run a button *request* for a synthetic unit, a redraft or a follow-up asks for; None for a Change or chat."""
+    """The run a legacy synthetic request, a redraft or a follow-up asks for; None for a Change or chat."""
     if named := request.get("synthetic"):
-        spec = syn.specs(named)[0]
-        return Running(syn.unit_id(spec), "button", request.get("by", ""), provenance="synthetic", spec=spec["name"])
+        return Running(f"syn:{named}", "button", request.get("by", ""), provenance="synthetic")
     mode = next((m for m in MODES if request.get(m)), "")
     if not mode:
         return None

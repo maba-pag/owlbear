@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
+from tests import retro_fixture as syn
 
 from owlbear_delivery_next.change_contracts.decision_records import BriefDecision
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Criterion, Exit, Inputs, Names, Outcome, Review
@@ -25,13 +26,12 @@ from owlbear_delivery_next.improvement import (
     spotter,
 )
 from owlbear_delivery_next.improvement import retro_proposals as props
-from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.local_system import codebase, maintenance, processes
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import cases_job, retro_job
 from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR
 from owlbear_delivery_next.machine_host.machine import Machine
-from owlbear_delivery_next.machine_host.retro_inputs import Running, pinned
+from owlbear_delivery_next.machine_host.retro_inputs import pinned
 from owlbear_delivery_next.machine_host.retro_job import LINGERING, RetroJob, Seams
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import spotter_look
@@ -128,6 +128,33 @@ def _runs():
     return list(retro_store.run_states().values())
 
 
+@pytest.mark.parametrize("source", ["queued", "restored", "restored-unsettled"])
+@pytest.mark.usefixtures("said")
+def test_legacy_synthetic_work_is_ended_without_a_paid_call(source):
+    if source == "queued":
+        with retro_store.locked():
+            retro_store.append("requests.jsonl", {"id": "legacy", "by": "owner", "synthetic": "large"})
+    else:
+        retro_store.run_event("legacy-run", "opened", unit="syn:large", provenance="synthetic", trigger="button",
+                              limit=5.0)  # fmt: skip
+        if source == "restored-unsettled":
+            retro_store.run_event("legacy-run", "inflight", batch="old")
+
+    job = _job(asker := Asker(), restarted=source != "queued")
+    job.tick(0.0)
+
+    [run] = _runs()
+    result = (
+        "stopped: unknown spend after an interruption"
+        if source == "restored-unsettled"
+        else (f"refused: {retro_store.SYNTHETIC_RETIRED}")
+    )
+    assert (run["result"], asker.seen, retro_store.queued()) == (
+        result, [], [])  # fmt: skip
+    if source == "restored-unsettled":
+        assert run["known"] is False
+
+
 def _large():
     return syn.specs("large")[0]
 
@@ -178,6 +205,39 @@ def _finished_change(tmp_path):
     return {"p1": (st, None)}
 
 
+def _large_change(tmp_path):
+    """A real Change whose captured session has enough fixture events for two judging batches."""
+    projects, spec = _finished_change(tmp_path), _large()
+    events, _ = syn.events(spec)
+    log = "".join(json.dumps(event) + "\n" for event in events)
+    (retro_units.folder("s-build") / "log.jsonl.gz").write_bytes(gzip.compress(log.encode()))
+    records = syn.records(spec)
+    for r in records:
+        card = r.pop("card")
+        r.update(session="s-build", step="build", project="p1", change="fix-it", provenance="real")
+        (spotter.root() / "cards" / f"{r['id']}.json.gz").write_bytes(gzip.compress(json.dumps(card).encode()))
+    (spotter.root() / "records-2026-01-01.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
+    return projects
+
+
+def _large_chat(tmp_path, sid):
+    """An enrolled chat with enough fixture events for two judging batches."""
+    folder, spec = _chat(tmp_path, sid), _large()
+    events, _ = syn.events(spec)
+    log = chatlogs.state() / sid / "events.jsonl"
+    log.write_text("".join(json.dumps(event) + "\n" for event in events))
+    at = (datetime.now(UTC) - timedelta(days=2)).timestamp()
+    os.utime(log, (at, at))
+    records = syn.records(spec)
+    for r in records:
+        card = r.pop("card")
+        r.update(session=sid, step="chat", provenance="real")
+        (spotter.root() / "cards" / f"{r['id']}.json.gz").write_bytes(gzip.compress(json.dumps(card).encode()))
+    (spotter.root() / "records-2026-01-01.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
+    retro_store.update(lambda t: t.update(watermark=(datetime.now(UTC) - timedelta(days=3)).isoformat()))
+    return folder
+
+
 def test_a_finished_change_is_planned_then_judged_against_its_brief_and_reviews_with_its_records_graded(said, tmp_path):
     projects, said.retro_after_change = _finished_change(tmp_path), "on"
     assert retro_evidence.plan("chg:p1:fix-it", projects)["judge_batches"] == 1
@@ -214,10 +274,11 @@ def test_a_changes_evidence_holds_its_brief_decisions_and_its_last_activity_mask
 
 @pytest.mark.parametrize("when", ["after its session, before its settled line", "during its session"])
 @pytest.mark.usefixtures("said")
-def test_a_call_interrupted_unsettled_ends_its_run_stopped_on_restore_and_nothing_more_is_asked(when):
+def test_a_call_interrupted_unsettled_ends_its_run_stopped_on_restore_and_nothing_more_is_asked(when, tmp_path):
+    projects = _large_change(tmp_path)
     first = Asker()
-    job = _job(first)
-    retro_store.request("owner", synthetic="large")
+    job = _job(first, projects=projects)
+    retro_store.request("owner", change="p1:fix-it")
     with pytest.MonkeyPatch.context() as dying:
         if when == "during its session":
             first.during = _die
@@ -227,20 +288,22 @@ def test_a_call_interrupted_unsettled_ends_its_run_stopped_on_restore_and_nothin
         with pytest.raises(Dead):
             job.tick(0.0)
 
-    again = _job(later := Asker(), restarted=True)
+    again = _job(later := Asker(), restarted=True, projects=projects)
     again.tick(1.0)
 
     [run] = _runs()
     assert (run["result"], later.seen) == ("stopped: unknown spend after an interruption", [])
-    [rev] = retro_store.units(synthetic=True)[syn.unit_id(_large())]["revisions"]
+    assert run["known"] is False
+    [rev] = retro_store.units()["chg:p1:fix-it"]["revisions"]
     assert rev["state"] == "stopped"
     assert again.lingering() is (when == "during its session")
     assert again.working() == ([LINGERING] if again.lingering() else [])
 
 
 @pytest.mark.usefixtures("said")
-def test_a_run_whose_host_stopped_after_its_end_before_its_revision_settled_leaves_it_as_the_run_ended():
-    retro_store.request("owner", synthetic="large")
+def test_a_run_whose_host_stopped_after_its_end_before_its_revision_settled_leaves_it_as_the_run_ended(tmp_path):
+    projects = _large_change(tmp_path)
+    retro_store.request("owner", change="p1:fix-it")
     real = retro_units.settle
 
     def dies_settling_its_end(uid, rev, state, **fields):
@@ -251,10 +314,10 @@ def test_a_run_whose_host_stopped_after_its_end_before_its_revision_settled_leav
     with pytest.MonkeyPatch.context() as dying:
         dying.setattr(retro_units, "settle", dies_settling_its_end)
         with pytest.raises(Dead):
-            _job(Asker()).tick(0.0)
+            _job(Asker(), projects=projects).tick(0.0)
 
-    _job(Asker(), restarted=True).tick(1.0)
-    [rev] = retro_store.units(synthetic=True)[syn.unit_id(_large())]["revisions"]
+    _job(Asker(), restarted=True, projects=projects).tick(1.0)
+    [rev] = retro_store.units()["chg:p1:fix-it"]["revisions"]
     assert (rev["state"], rev["result"]) == ("judged", "judged")
 
 
@@ -287,8 +350,9 @@ def test_a_button_retry_owns_the_revision_it_takes_again_so_a_stop_before_settli
     assert (rev["state"], rev["run"]) == ("judged", retry["id"])
 
 
-def test_a_run_interrupted_between_settled_calls_resumes_on_what_is_left_of_its_limit(said):
+def test_a_run_interrupted_between_settled_calls_resumes_on_what_is_left_of_its_limit(said, tmp_path):
     said.limit = 1.5
+    projects = _large_change(tmp_path)
     first, calls = Asker(), []
     real = retro_store.run_event
 
@@ -298,13 +362,13 @@ def test_a_run_interrupted_between_settled_calls_resumes_on_what_is_left_of_its_
             raise Dead
         real(run, event, **fields)
 
-    retro_store.request("owner", synthetic="large")
+    retro_store.request("owner", change="p1:fix-it")
     with pytest.MonkeyPatch.context() as dying:
         dying.setattr(retro_store, "run_event", dies_at_the_second_call)
         with pytest.raises(Dead):
-            _job(first).tick(0.0)
+            _job(first, projects=projects).tick(0.0)
 
-    _job(later := Asker(), restarted=True).tick(1.0)
+    _job(later := Asker(), restarted=True, projects=projects).tick(1.0)
 
     [run] = _runs()
     assert (first.seen, later.seen) == (["retro"], ["retro"])  # the first batch replayed, not asked again
@@ -502,10 +566,10 @@ def test_a_chats_grade_only_run_stopped_in_review_is_finished_by_the_button_with
 
 
 @pytest.mark.usefixtures("said")
-def test_the_button_runs_while_paused_and_switched_off_but_never_through_the_fence():
+def test_the_button_runs_while_paused_and_switched_off_but_never_through_the_fence(tmp_path):
     state = SimpleNamespace(paused=True, fence="curation is running", idle=False)
-    job = _job(asker := Asker(), state)
-    rid = retro_store.request("owner", synthetic="verify-a")
+    job = _job(asker := Asker(), state, projects=_finished_change(tmp_path))
+    rid = retro_store.request("owner", change="p1:fix-it")
     job.tick(0.0)
     assert ([r["id"] for r in retro_store.queued()], asker.seen, _runs()) == ([rid], [], [])
     state.fence = ""
@@ -515,7 +579,7 @@ def test_the_button_runs_while_paused_and_switched_off_but_never_through_the_fen
 
 
 @pytest.mark.usefixtures("said")
-def test_drain_cancels_the_running_call_and_keeps_how_its_run_ended(monkeypatch):
+def test_drain_cancels_the_running_call_and_keeps_how_its_run_ended(monkeypatch, tmp_path):
     started = threading.Event()
 
     async def slow(_message, meter, _role, **_kw):
@@ -528,8 +592,8 @@ def test_drain_cancels_the_running_call_and_keeps_how_its_run_ended(monkeypatch)
             share.ended(1.0, confirmed=True)
 
     monkeypatch.setattr(retro_job, "EVERY", 0.01)
-    job, stopping = _job(slow), threading.Event()
-    retro_store.request("owner", synthetic="verify-a")
+    job, stopping = _job(slow, projects=_finished_change(tmp_path)), threading.Event()
+    retro_store.request("owner", change="p1:fix-it")
     job.start(stopping, time.monotonic)
     assert started.wait(10)
     stopping.set()
@@ -539,29 +603,30 @@ def test_drain_cancels_the_running_call_and_keeps_how_its_run_ended(monkeypatch)
     assert not job.lingering()
 
 
-@pytest.mark.parametrize("unit", ["large", "verify-a"])  # its first call of several, its only call
+@pytest.mark.parametrize("unit", ["large", "short"])  # its first call of several, its only call
 @pytest.mark.usefixtures("said")
-def test_an_unconfirmed_runtime_end_keeps_its_lease_and_ends_the_run_stopped(unit):
-    job = _job(asker := Asker(during=lambda _n: spotter_look.UNENDED.get().append("retro-session")))
-    retro_store.request("owner", synthetic=unit)
+def test_an_unconfirmed_runtime_end_keeps_its_lease_and_ends_the_run_stopped(unit, tmp_path):
+    projects = _large_change(tmp_path) if unit == "large" else _finished_change(tmp_path)
+    job = _job(asker := Asker(during=lambda _n: spotter_look.UNENDED.get().append("retro-session")), projects=projects)
+    retro_store.request("owner", change="p1:fix-it")
     job.tick(0.0)
     [run] = _runs()
     assert (run["result"], asker.seen) == ("stopped: runtime end unconfirmed", ["retro"])
     assert job.working() == [LINGERING]
-    retro_store.request("owner", synthetic="verify-b")
+    retro_store.request("owner", chat="another-chat")
     job.tick(1.0)
     assert (len(_runs()), len(retro_store.queued())) == (1, 1)  # no Retro call starts until Maintenance recovers it
 
 
 @pytest.mark.parametrize("site", ["a role cannot be read", "a runtime's end is not confirmed"])
 @pytest.mark.usefixtures("said")
-def test_a_retro_run_keeps_its_whole_reason(monkeypatch, whole_error, site):
+def test_a_retro_run_keeps_its_whole_reason(monkeypatch, whole_error, site, tmp_path):
     names, told = whole_error.splitlines(), []
     if site == "a role cannot be read":
         monkeypatch.setattr(retro_job, "session", lambda _agent: (_ for _ in ()).throw(ValueError(whole_error)))
-    job = _job(Asker(during=lambda _n: spotter_look.UNENDED.get().extend(names)))
+    job = _job(Asker(during=lambda _n: spotter_look.UNENDED.get().extend(names)), projects=_finished_change(tmp_path))
     job.seams = dataclasses.replace(job.seams, say=told.append)
-    retro_store.request("owner", synthetic="verify-a")
+    retro_store.request("owner", change="p1:fix-it")
     job.tick(0.0)
     [run] = _runs()
     if site == "a role cannot be read":
@@ -584,17 +649,11 @@ def test_the_machine_waits_for_retros_running_run():
         m.stop_all()
 
 
-def test_an_idle_run_waits_at_its_next_call_once_owlbear_is_busy_and_goes_on_when_idle_again(said, monkeypatch):
+def test_an_idle_run_waits_at_its_next_call_once_owlbear_is_busy_and_goes_on_when_idle_again(said, tmp_path):
     said.retro_when_idle = "on"
+    said.enrolled_chats = [_large_chat(tmp_path, "large-chat")]
     state = SimpleNamespace(paused=False, fence="", idle=True)
     asker = Asker(during=lambda n: n == 1 and setattr(state, "idle", False))  # a builder starts after its first call
-    due = iter([[{"unit": syn.unit_id(_large()), "rev": "", "mode": "judge"}]])
-    monkeypatch.setattr(retro_units, "due_chats", lambda *_a, **_k: next(due, []))
-
-    def chat(uid, trigger, *args, **kwargs):  # the synthetic unit, as if an enrolled chat
-        return Running(uid, trigger, *args, **({"provenance": "synthetic", "spec": "large"} | kwargs))
-
-    monkeypatch.setattr(retro_job, "Running", chat)
     job = _job(asker, state)
     job.tick(0.0)
     [run] = _runs()
@@ -610,23 +669,16 @@ def test_an_idle_run_waits_at_its_next_call_once_owlbear_is_busy_and_goes_on_whe
 
 
 @pytest.mark.parametrize("restarted", [False, True])
-def test_a_waiting_run_asks_nothing_more_once_an_assumption_it_rests_on_is_retired(said, monkeypatch, restarted):
+def test_a_waiting_run_asks_nothing_more_once_an_assumption_it_rests_on_is_retired(said, tmp_path, restarted):
     said.retro_after_change = "on"
+    projects = _large_change(tmp_path)
     state = SimpleNamespace(paused=False, fence="", idle=False)
     asker = Asker(during=lambda n: n == 1 and setattr(state, "paused", True))
-    due = iter([[{"unit": syn.unit_id(_large()), "rev": "", "mode": "judge"}]])
-    monkeypatch.setattr(retro_units, "due_changes", lambda *_a, **_k: next(due, []))
-
-    def automatic(uid, trigger, *args, **kwargs):
-        return Running(uid, trigger, *args, **({"provenance": "synthetic", "spec": "large"} | kwargs))
-
-    automatic.of = Running.of
-    monkeypatch.setattr(retro_job, "Running", automatic)
-    job = _job(asker, state)
+    job = _job(asker, state, projects=projects)
     job.tick(0.0)
     assumptions.reset()
     state.paused = False
-    (_job(asker, state, restarted=True) if restarted else job).tick(1.0)
+    (_job(asker, state, restarted=True, projects=projects) if restarted else job).tick(1.0)
 
     [run] = _runs()
     assert run["result"].startswith("refused: it rests on retired assumptions (retro-segments-1")
@@ -636,18 +688,13 @@ def test_a_waiting_run_asks_nothing_more_once_an_assumption_it_rests_on_is_retir
 # A paused run and the button, gate L3
 
 
-def test_a_paused_automatic_run_waits_while_the_button_runs_and_is_taken_over_with_its_spend(said, monkeypatch):
+def test_a_paused_automatic_run_waits_while_the_button_runs_and_is_taken_over_with_its_spend(said, tmp_path):
     said.retro_after_change = "on"
+    projects = _large_change(tmp_path)
+    said.enrolled_chats = [_chat(tmp_path, "other-chat")]
     state = SimpleNamespace(paused=False, fence="", idle=False)
     asker = Asker(during=lambda n: n == 1 and setattr(state, "paused", True))  # paused after its first call
-    due = iter([[{"unit": syn.unit_id(_large()), "rev": "", "mode": "judge"}]])
-    monkeypatch.setattr(retro_units, "due_changes", lambda *_a, **_k: next(due, []))
-
-    def automatic(uid, trigger, *args, **kwargs):  # the synthetic unit, as if a finished Change
-        return Running(uid, trigger, *args, **({"provenance": "synthetic", "spec": "large"} | kwargs))
-
-    monkeypatch.setattr(retro_job, "Running", automatic)
-    job = _job(asker, state)
+    job = _job(asker, state, projects=projects)
     job.tick(0.0)
     [paused] = _runs()
     assert (paused["state"], paused["why"], paused["spent"], paused["calls"]) == (
@@ -657,13 +704,13 @@ def test_a_paused_automatic_run_waits_while_the_button_runs_and_is_taken_over_wi
         1,
     )
 
-    retro_store.request("owner", synthetic="verify-a")
+    retro_store.request("owner", chat="other-chat")
     job.tick(1.0)
     other = next(r for r in _runs() if r["id"] != paused["id"])
     assert (other["result"], retro_store.run_states()[paused["id"]]["state"]) == ("judged", "waiting")
 
     state.fence = "curation is running"
-    retro_store.request("owner", synthetic="large")
+    retro_store.request("owner", change="p1:fix-it")
     job.tick(2.0)
     assert len(retro_store.queued()) == 1
     state.fence = ""
@@ -671,7 +718,7 @@ def test_a_paused_automatic_run_waits_while_the_button_runs_and_is_taken_over_wi
     run = retro_store.run_states()[paused["id"]]
     assert (run["result"], run["trigger"], run["spent"], run["calls"]) == ("judged", "button", 2.0, 2)
     assert (len(_runs()), state.paused) == (2, True)
-    graded = retro_store.grades(synthetic=True, unit=syn.unit_id(_large()))
+    graded = retro_store.grades(unit="chg:p1:fix-it")
     assert len(graded) == len(_large()["records"])
 
 

@@ -74,16 +74,16 @@ def test_a_spotter_case_becomes_a_case_and_a_lesson_too_long_for_a_memory_is_ref
         _resolve(_snap("lesson", "agent:builder", ["f-1"], body="x" * 1025), places, tmp_path)
 
 
-def test_synthetic_proposals_publish_only_to_the_sandbox(places, tmp_path):
-    with pytest.raises(store.RetroError, match="only to the sandbox"):
-        _resolve(_snap("agent-change", "agent:scout", ["f-3"], "synthetic"), places, tmp_path)
+def test_a_historical_synthetic_spotter_case_cannot_be_accepted(places, tmp_path):
+    case = {"kind": "spotter-case", "record": "r1", "call": "none", "findings": ["g-1"], "provenance": "synthetic"}
+    with pytest.raises(store.RetroError, match=r"synthetic Retro.*retired"):
+        _resolve(case, places, tmp_path)
 
-    sandbox = tmp_path / targets.SANDBOX
-    sandbox.mkdir()
-    places = {**places, "p9": targets.Place(folder="sandbox-folder", clone=sandbox)}
-    got = _resolve(_snap("agent-change", "agent:scout", ["f-3"], "synthetic"), places, tmp_path)
-    assert (got["kind"], got["project"]) == ("backlog", "p9")
-    lesson = _resolve(_snap("lesson", "agent:scout", ["f-1"], "synthetic"), places, tmp_path)
-    assert lesson["folder"] == str(tmp_path / "shared" / "sandbox-folder" / "memory")
-    issue = _resolve(_snap("delivery-change", "tool:edit", ["f-1"], "synthetic"), places, tmp_path)
-    assert (issue["kind"], issue["synthetic"]) == ("issue", True)
+
+@pytest.mark.parametrize(
+    ("kind", "target"),
+    [("agent-change", "agent:scout"), ("lesson", "agent:scout"), ("delivery-change", "tool:edit")],
+)
+def test_synthetic_proposals_have_no_publication_destination(places, tmp_path, kind, target):
+    with pytest.raises(store.RetroError, match=r"synthetic Retro.*retired"):
+        _resolve(_snap(kind, target, ["f-3"], "synthetic"), places, tmp_path)

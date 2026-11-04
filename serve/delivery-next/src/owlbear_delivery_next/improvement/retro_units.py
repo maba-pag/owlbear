@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 LINE = 8 << 20  # bytes: a longer event is left out, as the chat intake leaves it out (``chats.LINE``)
 OPEN = frozenset({"open", "waiting"})  # a revision whose run has not ended
 SHAPING = "the chat that shaped the brief is not attributable to the Change"
-SYNTHETIC = "syn-"  # a synthetic unit's session (``retro_synthetic``)
+SYNTHETIC = "syn-"  # historical synthetic sessions remain in Retro's own folder
 UNREADABLE = (StoreError, sqlite3.Error, OSError, ValueError)  # a Change or its activity cannot be read
 
 

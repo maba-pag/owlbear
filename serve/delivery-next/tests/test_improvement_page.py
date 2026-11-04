@@ -265,6 +265,48 @@ def contained(page: Page) -> None:
 
 
 @pytest.mark.browser
+@pytest.mark.timeout(90)
+def test_synthetic_retro_is_visible_as_history_without_action_buttons(tmp_path, monkeypatch, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
+        store.add_findings([{"id": "f-history", "unit": "syn:old", "what": "An invented finding",
+                             "provenance": "synthetic"}])  # fmt: skip
+        pid = props.file(props.open_key("synthetic", "lesson", "old"), ["f-history"], kind="lesson",
+                         target="agent:builder", provenance="synthetic")  # fmt: skip
+        props.reviewed(pid, props.folded()[pid]["evidence"], {"verdict": "survive", "publishable": TEXT})
+        redirected = props.file(props.open_key("synthetic", "agent-change", "old"), ["f-history"], kind="agent-change",
+                                target="agent:builder", provenance="synthetic")  # fmt: skip
+        props.reviewed(redirected, props.folded()[redirected]["evidence"], {"verdict": "survive", "publishable": TEXT})
+        props.transition(redirected, "redirected", "owner", direction="Keep the old direction")
+        child = props.redrafted(redirected, {"cause": "c", "target": "agent:builder", "mechanism": "m"}, "old")
+        props.reviewed(child, props.folded()[child]["evidence"], {"verdict": "survive", "publishable": TEXT})
+        partial = props.file(props.open_key("synthetic", "delivery-change", "old"), ["f-history"],
+                             kind="delivery-change", target="delivery:review", provenance="synthetic")  # fmt: skip
+        props.reviewed(partial, props.folded()[partial]["evidence"], {"verdict": "survive", "publishable": TEXT})
+        snapshot = {"destination": {"kind": "issue", "repository": "o/r", "synthetic": True}}
+        props.transition(partial, "accepted", "owner", snapshot=snapshot)
+        props.outcome(partial, "applied", step="created", artefact={"kind": "issue", "where": "o/r", "ref": "#2"})
+        page = improvement(w, pds)
+        old = card(page, pid)
+        expect(old).to_contain_text("Historical")
+        expect(old).to_contain_text("synthetic Retro is retired")
+        expect(old.get_by_role("button")).to_have_count(0)
+        expect(page.locator("#finding-f-history")).to_contain_text("An invented finding")
+        expect(page.locator("#finding-f-history")).to_contain_text("Synthetic finding: historical only.")
+        expect(page.locator("#finding-f-history").get_by_role("button", name="Follow up")).to_have_count(0)
+        expect(page.locator("#proposals")).to_contain_text("None waits for you.")
+        history = card(page, redirected)
+        expect(history).to_contain_text("Redirected")
+        expect(history).to_contain_text("Your direction: Keep the old direction")
+        expect(history).to_contain_text(f"Redrafted as {child}.")
+        expect(history.get_by_role("button")).to_have_count(0)
+        expect(card(page, partial)).to_contain_text("Partly made")
+        expect(card(page, partial)).not_to_contain_text("closed at once")
+        expect(card(page, partial).get_by_role("button")).to_have_count(0)
+
+
+@pytest.mark.browser
 @pytest.mark.timeout(120)  # a journey through every proposal dialog
 def test_proposals_are_decided_by_direction_and_each_dialog_says_what_follows(  # noqa: PLR0915 - a journey
     tmp_path, monkeypatch, pds
@@ -702,10 +744,11 @@ def test_a_failed_retro_run_shows_its_whole_error(tmp_path, monkeypatch, pds, wh
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
         slots = Slots(lambda: 1)
         slots.open()
-        store.request("owner", synthetic="large")
+        store.request("owner", change=f"{w.pid}:{DONE}")
         with monkeypatch.context() as settings:  # the job's own view of the machine's settings
             settings.setattr(machine_settings, "current", lambda: found)
-            aside(lambda: RETRO_TICK(retro_job.RetroJob(slots, owner=maintenance.Maintenance(slots)), 0.0))
+            seams = retro_job.Seams(projects=w.machine.retro.seams.projects)
+            aside(lambda: RETRO_TICK(retro_job.RetroJob(slots, seams, owner=maintenance.Maintenance(slots)), 0.0))
         [run] = store.run_states().values()
         expected = f"failed: RuntimeError: {whole_error}"
         assert run["result"] == expected
