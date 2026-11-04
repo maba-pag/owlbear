@@ -148,7 +148,7 @@ def _check_text_files(name: str, *, staged: bool) -> int:
         try:
             data = path.read_bytes()
         except OSError as exc:
-            print(f"{path}: unable to read: {exc}")  # noqa: T201
+            print(f"{path}: unable to read: {type(exc).__name__}: {exc}")  # noqa: T201
             failures += 1
             continue
         if not data or b"\0" in data:
