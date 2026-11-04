@@ -1,5 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { here } from "/assets/ui.mjs";
+import { folded } from "./fold.mjs";
 
 const HEADS = ["Agent", "Project", "Sessions", "Compacted", "Compactions", "How early (median)", "Earliest",
   "Context setting"];
@@ -39,23 +40,24 @@ function row(r) {
 
 /** Per agent, how often its sessions compacted their context and how early, with links to its context setting. */
 export function compaction(c) {
-  const read = c.rows.some((r) => r.logs);
+  const read = c.rows.some((r) => r.logs), errors = c.errors.length || c.settings_errors.length;
   return html`<section id="compaction" aria-labelledby="compaction-title">
     <p-heading size="lg"><h2 id="compaction-title" tabindex="-1">Context compaction</h2></p-heading>
     <p-text size="sm">A session compacts its context when its conversation nears the model's context window: the
       runtime replaces earlier turns with a summary. How early is the share of the agent's model calls made before
       its first compaction, over the sessions that compacted; only sessions whose runtime log is readable count.
       </p-text>
+    ${read ? nothing : html`<p-text id="compaction-none" size="sm">No session of these filters has a readable log.
+      </p-text>`}
+    ${c.rows.length || errors ? folded("compaction", "Table: compaction per agent", html`
     ${c.rows.length ? html`<p-table id="compaction-table" caption="Compaction per agent"><p-table-head>
       <p-table-head-row>${HEADS.map((h) => html`<p-table-head-cell>${h}</p-table-head-cell>`)}</p-table-head-row>
       </p-table-head><p-table-body>${c.rows.map(row)}</p-table-body></p-table>` : nothing}
-    ${read ? nothing : html`<p-text id="compaction-none" size="sm">No session of these filters has a readable log.
-      </p-text>`}
-    ${c.errors.length || c.settings_errors.length ? html`<ul id="compaction-errors" class="notes">
+    ${errors ? html`<ul id="compaction-errors" class="notes">
       ${c.errors.map((e) => html`<li class="error">Could not read the log of session ${e.session}
         (${e.project || "this machine"}): ${e.error}</li>`)}
       ${c.settings_errors.map((e) => html`<li class="error">Could not read the settings of ${e.project}
-        (${e.file}): ${e.error}</li>`)}</ul>` : nothing}
+        (${e.file}): ${e.error}</li>`)}</ul>` : nothing}`) : nothing}
   </section>`;
 }
 

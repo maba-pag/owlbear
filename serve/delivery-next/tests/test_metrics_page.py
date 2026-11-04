@@ -104,6 +104,8 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
             expect(page.locator("#runs .lower")).to_have_count(1)
             expect(page.locator("#lower-bound")).to_contain_text("spent at least this")
             expect(page.locator("#exact li")).to_have_text([re.compile(r"^1 run did not report its credits")])
+            for fold in ("split", "tools"):  # the tables are folded below their charts
+                page.locator(f"#{fold}-fold > summary").click()
             expect(rows.locator(".share")).to_have_text(["57%", "29%", "14%", "0%"])  # of the 3.50 credits
             expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("may have reached its credit limit of 0.5")
             tools = page.locator("#tools p-table-row")  # C-28: weighted, 1 of 1 and 0 of 9 calls accepted
@@ -152,6 +154,55 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
             page.reload()  # the filters stay in the address
             expect(page.locator("#split-none")).to_be_visible()
             expect(page.locator("#error")).to_have_count(0)
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
+@pytest.mark.browser
+def test_metrics_orders_its_sections_folds_its_tables_and_loads_the_vendored_echarts(pds) -> None:
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    seeded()
+    machine, server, base = serve()
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+            pds.only(page, base)
+            page.goto(f"{base}/metrics#token=t")
+            expect(page.locator("#split p-table-row")).to_have_count(4)
+            assert page.locator("#page h2, #exact").evaluate_all("hs => hs.map(h => h.id)") == [
+                "totals-title", "exact", "split-title", "compaction-title", "tool-use-title", "runs-title",
+                "coverage-title"]  # fmt: skip
+            assert page.locator("script[src*=echarts]").evaluate_all("s => s.map(e => e.getAttribute('src'))") == [
+                "/assets/echarts/6.1.0/echarts.min.js"
+            ]
+            expect(page.locator("#split-chart + details#split-fold #split")).to_have_count(1)  # chart, then its fold
+            expect(page.locator("#compaction-chart + details#compaction-fold #compaction-table")).to_have_count(1)
+            expect(page.locator("#tools-chart + details#tools-fold #tools")).to_have_count(1)
+            expect(page.locator("#tools-fold #wrong")).to_have_count(1)
+            assert page.evaluate("window.echarts.version") == "6.1.0"
+            for name, table_id in (("split", "split"), ("compaction", "compaction-table"), ("tools", "tools")):
+                fold, table = page.locator(f"#{name}-fold"), page.locator(f"#{table_id}")
+                expect(fold).not_to_have_attribute("open", "")  # closed on load
+                expect(table).to_be_hidden()
+            for name, key in (("split", "Enter"), ("tools", " ")):
+                page.locator(f"#{name}-fold > summary").focus()
+                page.keyboard.press(key)
+                expect(page.locator(f"#{name}-fold")).to_have_attribute("open", "")
+                expect(page.locator(f"#{name} p-table-row").first).to_be_visible()
+            page.reload()
+            expect(page.locator("#split p-table-row")).to_have_count(4)
+            assert page.locator("details.fold").evaluate_all("ds => ds.map(d => d.open)") == [False] * 3
+            assert errors == []
             browser.close()
     finally:
         server.should_exit = True

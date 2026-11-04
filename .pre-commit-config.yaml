@@ -59,6 +59,8 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
         stages: [manual]
+        # the vendored ECharts release, npm's unmodified 1.1 MB file; the owner approved this one exclusion
+        exclude: ^serve/delivery-next/src/owlbear_delivery_next/web/vendor/echarts/echarts\.min\.js$
 
   # ── Python ──────────────────────────────────────────────
   - repo: https://github.com/astral-sh/ruff-pre-commit

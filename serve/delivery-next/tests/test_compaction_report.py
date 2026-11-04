@@ -388,6 +388,12 @@ def returned(page: Page, pds, left: str) -> None:
     expect(page.locator("#stopped")).to_have_js_property("checked", query.get("stopped") == "1")
 
 
+def unfold(page: Page, *folds: str) -> None:
+    """Open the folds below the charts, closed at each load, where a row's link or button is clicked."""
+    for fold in folds:
+        page.locator(f"#{fold}-fold > summary").click()
+
+
 def setting_link(page: Page, row: str):
     return page.locator(f"#set-agents-{row}").get_by_role("link", name="Compaction on Metrics")
 
@@ -411,6 +417,7 @@ def test_metrics_shows_each_roles_compaction_and_its_setting_leads_back_with_the
             ["reviewer", "shop", "1", "0 of 1 (0%)", "0", NONE, NONE],
         ]  # fmt: skip
         table = page.locator("#compaction-table")
+        unfold(page, "compaction")
         expect(table.locator("p-table-row").nth(3).locator("p-table-cell").last).to_have_text(NONE)
         retro = table.get_by_role("link", name="This machine, retro's context setting")
         assert f"project={shop}&layer=machine" in (retro.get_attribute("href") or "")
@@ -421,6 +428,7 @@ def test_metrics_shows_each_roles_compaction_and_its_setting_leads_back_with_the
                   "&stopped=1&by=day")  # fmt: skip
         expect(page.locator("#compaction-table p-table-row")).to_have_count(1)
         left = page.url
+        unfold(page, "compaction")
         table.get_by_role("link", name="shop: Global (unset), reviewer's context setting").click()
         expect(page.locator("#set-agents-reviewer :focus")).not_to_have_count(0)  # its first control
         assert page.url.startswith(f"{base}/config?project={shop}&layer=global&back=")
@@ -432,6 +440,7 @@ def test_metrics_shows_each_roles_compaction_and_its_setting_leads_back_with_the
         page.goto(f"{base}/metrics?in=&agent=builder")
         expect(page.locator("#compaction-table p-table-row")).to_have_count(3)  # explore is an agent of its own
         left = page.url
+        unfold(page, "compaction")
         table.get_by_role("link", name="mill: project layer, builder's context setting").last.click()
         expect(page.locator("#set-agents-builder :focus")).not_to_have_count(0)  # its first control
         expect(pds.select(page, "Layer")).to_have_js_property("value", "project")
@@ -440,11 +449,13 @@ def test_metrics_shows_each_roles_compaction_and_its_setting_leads_back_with_the
         )
         setting_link(page, "builder").click()
         returned(page, pds, left)
+        unfold(page, "compaction")
         table.locator("p-table-row").first.get_by_role("link", name="shop: Global, builder's context setting").click()
         expect(pds.select(page, "Layer")).to_have_js_property("value", "global")
         assert f"project={shop}&" in page.url
         setting_link(page, "builder").click()
         returned(page, pds, left)
+        unfold(page, "split")
         page.locator("#split").get_by_role("button", name="Show only builder").click()  # the drill still filters
         expect(page).to_have_url(re.compile(r"agent=builder"))
         expect(page.locator("#compaction-table p-table-row")).to_have_count(3)  # explore is an agent of its own

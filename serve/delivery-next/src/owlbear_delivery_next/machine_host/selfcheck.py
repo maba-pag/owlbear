@@ -76,14 +76,16 @@ def _registered() -> list[tuple[str, Path]]:
 
 
 def _pages() -> list[str]:
-    """Every page and every asset the pages load: the design system, lit-html, ``ui.mjs`` and each page's modules."""
+    """Every page and every asset the pages load: PDS, lit-html, ECharts, ``ui.mjs`` and each page's modules."""
     from owlbear_delivery_next.project_host import pages  # noqa: PLC0415 - checked above
 
     web = files("owlbear_delivery_next").joinpath("web")
     try:
         listed = pages.pages()
         names = [("pds", n) for n in pages.PDS] + [(pages.LIT, *n.split("/")) for n in pages.lit_files()]
+        names += [(pages.ECHARTS, n) for n in pages.echarts_files()]
         pages.lit_version()
+        pages.echarts_version()
         own = pages.page_files()
         named = {tuple(n) for html in listed.values() for n in re.findall(r'"/assets/page/([^/"]+)/([^/"]+)"', html)}
         for page, name in own:

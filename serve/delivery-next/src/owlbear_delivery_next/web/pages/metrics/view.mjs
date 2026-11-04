@@ -5,6 +5,7 @@ import { PERIODS, SPLITS, filter, state, show, kept, query, preselect } from "./
 import { credits, count, head, runs } from "./runs.mjs";
 import { toolUse } from "./tools.mjs";
 import { compaction } from "./compaction.mjs";
+import { folded } from "./fold.mjs";
 
 const UNKNOWN = "?";
 const DRILL = { project: "in", agent: "agent", model: "model", change: "change" };  // a row that filters its value
@@ -162,9 +163,10 @@ function split() {
   const heads = [label, "Credits", "Share", "Runs", "Unknown", "Tokens"];
   return html`<section aria-labelledby="split-title">
     <p-heading size="lg"><h2 id="split-title">By ${label.toLowerCase()}</h2></p-heading>
-    ${rows.length ? html`<p-table id="split" caption=${`Credits by ${label.toLowerCase()}`}><p-table-head>
+    ${rows.length ? folded("split", `Table: credits by ${label.toLowerCase()}`, html`<p-table id="split"
+      caption=${`Credits by ${label.toLowerCase()}`}><p-table-head>
       <p-table-head-row>${heads.map(head)}</p-table-head-row>
-      </p-table-head><p-table-body>${rows.map((r) => splitRow(r, total))}</p-table-body></p-table>`
+      </p-table-head><p-table-body>${rows.map((r) => splitRow(r, total))}</p-table-body></p-table>`)
       : html`<p-text id="split-none" size="sm">Nothing was spent that these filters show.</p-text>`}
   </section>`;
 }
@@ -200,6 +202,6 @@ export function view() {
   const error = state.error ? html`<p-inline-notification id="error" state="error" heading="Not shown"
     description=${state.error} dismiss-button="false"></p-inline-notification>` : nothing;
   if (!state.data) return html`${error}${filters()}<p-text id="loading">Reading the spend…</p-text>`;
-  return html`${error}${filters()}${totals()}${split()}${compaction(state.data.compaction)}${runs()}
-    ${toolUse(state.data.tool_use)}${coverage()}`;
+  return html`${error}${filters()}${totals()}${split()}${compaction(state.data.compaction)}
+    ${toolUse(state.data.tool_use)}${runs()}${coverage()}`;
 }
