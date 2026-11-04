@@ -80,6 +80,7 @@ class Published(_Strict):
     title: str
     state: str  # in force, or retired by a later approved version
     revision: str = ""  # the file's revision the save wrote
+    rule: str = ""  # its rule revision, which a read-back leaves alone; empty in receipts saved before it was kept
     saved: bool = False
     committed: bool = False
     published: bool = False  # the remote held it after the save; else the data repository's next save pushes it

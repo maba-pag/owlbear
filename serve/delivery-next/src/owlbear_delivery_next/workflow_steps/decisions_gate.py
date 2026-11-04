@@ -96,7 +96,7 @@ def _attached(d: Decision, c: Change) -> bool:
 
     A published one counts only as its approval saved it: changed elsewhere since, the picker judges it like any other.
     """
-    return d.scope is Scope.CHANGE or any(p.id == d.id and p.revision == d.revision for p in c.decisions_published)
+    return d.scope is Scope.CHANGE or pick.published(c, d)
 
 
 def _picked(c: Change) -> dict[str, PickedDecision] | None:

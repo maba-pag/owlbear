@@ -8,7 +8,19 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, read, validate_repo, write
+from owlbear_decisions import (
+    Decision,
+    Link,
+    LinkType,
+    Origin,
+    ReadBackKind,
+    Scope,
+    State,
+    new_id,
+    read,
+    validate_repo,
+    write,
+)
 from owlbear_delivery_next.change_contracts import pick_tools, tools
 from owlbear_delivery_next.change_contracts.inbox import BriefApproval
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
@@ -414,6 +426,33 @@ def test_a_published_decision_changed_outside_the_change_stays_as_changed_and_go
     assert first.id in picking.pickers()[-1].message.split("## Decisions")[1]
     assert first.id not in c.decisions_baseline.said
     assert c.decisions_baseline.revisions[first.id] == renamed.rule_revision
+
+
+def test_a_published_decision_only_read_back_since_stays_the_changes_own_through_a_later_approval(
+    picking, shared_repo, monkeypatch
+):
+    root, _ = shared_repo
+    (first,) = shape(picking, 1, LASTING).brief.decisions
+    assert picking.approve(1).status_code == 200
+    reshape(picking)
+    shape(picking, 2, LASTING, OWN)
+    rule = read(root / rel(first.id))
+    asked = {"read_back": "pending", "read_back_why": "check it", "read_back_kind": ReadBackKind.UNCERTAIN}
+    write(rule.model_copy(update=asked), root / PROJECT, rule.revision)  # a read-back queued, no rule changed
+    queued = read(root / rel(first.id))
+    assert (queued.revision != rule.revision, queued.rule_revision) == (True, rule.rule_revision)
+
+    assert picking.approve(2).status_code == 200
+
+    a = picking.approved()
+    assert first.id in a.decisions_baseline.said
+    monkeypatch.setattr(runner, "_run", lambda *_a: None)
+    pickers = len(picking.pickers())
+
+    c = stepped(picking, picking.slug)
+
+    assert (c.outcome, len(picking.pickers())) == (None, pickers)  # nothing for the picker
+    assert c.decisions_baseline.revisions[first.id] == queued.rule_revision
 
 
 @pytest.mark.parametrize("pr", [None, MERGED], ids=["abandoned", "merged"])

@@ -158,8 +158,10 @@ def _record(d: Decision, r: Receipt | None, at: datetime) -> Published:
     """*d*'s save with its receipt; without one, planned and not yet saved."""
     if r is None:
         return Published(id=d.id, title=d.title, state=d.state.value, at=at)
-    fields = {"revision": r.revision, "saved": r.saved, "committed": r.batch, "published": r.published}
-    return Published(id=d.id, title=d.title, state=d.state.value, notice=r.notice, at=at, **fields)
+    fields = {"revision": r.revision, "rule": d.rule_revision, "saved": r.saved, "committed": r.batch}
+    return Published(
+        id=d.id, title=d.title, state=d.state.value, published=r.published, notice=r.notice, at=at, **fields
+    )
 
 
 def _pinned(baseline: DecisionBaseline | None, saved: list[Decision]) -> DecisionBaseline | None:

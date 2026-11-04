@@ -59,17 +59,22 @@ def listed(seen: Snapshot, c: Change) -> list[Decision]:
     their files hold what it published. One changed outside the Change since is on it like any other rule.
     """
     own = {d.id for b in [*c.brief.approved, c.brief] for d in b.decisions if d.id}
-    held = {p.id: p.revision for p in c.decisions_published}
     found = (e.decision for e in seen.entries)
     return sorted(
         (
             d
             for d in found
-            if d.state is State.IN_FORCE
-            and d.scope is not Scope.CHANGE
-            and not (d.id in own and held.get(d.id) == d.revision)
+            if d.state is State.IN_FORCE and d.scope is not Scope.CHANGE and not (d.id in own and published(c, d))
         ),
         key=lambda d: d.id,
+    )
+
+
+def published(c: Change, d: Decision) -> bool:
+    """*d*'s file holds the rule *c*'s approval published: a read-back since leaves it so, an edit of its rule not."""
+    return any(
+        p.id == d.id and (p.rule == d.rule_revision if p.rule else p.revision == d.revision)
+        for p in c.decisions_published
     )
 
 
