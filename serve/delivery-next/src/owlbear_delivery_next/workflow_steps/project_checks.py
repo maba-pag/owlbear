@@ -108,8 +108,7 @@ def _uncovered(prof: Profile, scope: Sequence[str]) -> list[str]:
 def _cause(prof: Profile, missing: list[str]) -> str:
     """The question's cause, bound to what was detected for each home it names: a new detection asks again."""
     seen = [[h, *((e.state, e.value) if (e := prof.entries.get(f"check:{h}")) else ("absent", ""))] for h in missing]
-    digest = hashlib.sha256(json.dumps(seen).encode()).hexdigest()[:12]
-    return f"{PREFIX}{digest}"
+    return PREFIX + hashlib.sha256(json.dumps(seen).encode()).hexdigest()[:12]
 
 
 def _detected(prof: Profile, home: str) -> str:
@@ -137,8 +136,7 @@ def _answered(
         return None
     if latest.cause == cause and latest.answer.option == "detected":
         return {home: _detected(prof, home) for home in missing}
-    asked = latest.cause.removeprefix(f"{cause}{TYPED}")
-    first = next((q for q in change.questions if q.id == asked and q.answer), None)
+    first = next((q for q in change.questions if q.answer and latest.cause == f"{cause}{TYPED}{q.id}"), None)
     return _parsed(first.answer.text, prof)[0] if latest.answer.option == "save" and first else None
 
 
