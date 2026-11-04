@@ -1096,11 +1096,15 @@ def test_updates_owlbear_says_old_versions_it_could_not_remove_at_the_start_whol
     machine, server, base = serve()
     try:
         machine.updater.unpruned, machine.updater.unmigrated = unpruned, left  # as the host's start sets them
+        if failing == "both":  # an update that failed after the start: its error ends before the start's notes
+            machine.updater.state |= {"phase": "failed", "detail": f"OSError: {whole_error}", "version": "v0.3"}
         text, said = _checks_page(base, "/updates/owlbear", "#owlbear-state")
     finally:
         server.should_exit = True
         machine.stop_all()
     told = "No update has run since OwlBear started."
+    if failing == "both":
+        told = f"The update to v0.3 failed: OSError: {whole_error}."
     if failing != "prune":
         told += (" The runtime from before the first update could not be put away at this start: "
                  f"VersionError: {whole_error}\na note on the refusal.")  # fmt: skip

@@ -63,9 +63,12 @@ function phaseLine(r) {
 }
 
 function stateLine(r) {
-  const left = r.unmigrated
-    ? ` The runtime from before the first update could not be put away at this start: ${r.unmigrated}.` : "";
-  return phaseLine(r) + left + (r.unpruned ? ` Old versions could not be removed at this start: ${r.unpruned}.` : "");
+  const notes = [
+    r.unmigrated && `The runtime from before the first update could not be put away at this start: ${r.unmigrated}.`,
+    r.unpruned && `Old versions could not be removed at this start: ${r.unpruned}.`,
+  ].filter(Boolean);
+  const phase = phaseLine(r);  // a failed or refused update ends with its error, unpunctuated
+  return [notes.length && !phase.endsWith(".") ? `${phase}.` : phase, ...notes].join(" ");
 }
 
 function step(s) {
