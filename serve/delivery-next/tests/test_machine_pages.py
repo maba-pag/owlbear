@@ -3544,8 +3544,10 @@ def test_a_long_step_error_shows_whole_on_the_status_line(tmp_path: Path, monkey
     """#895 K1: gh's whole multiline stderr reaches the engine step's event and outcome."""
     store = Store(tmp_path / "store")
     store.write_profile(Profile(entries={profile.REPO: ProfileEntry(state="known", value="o/r")}))
+    ran = []
 
     def refused(argv, _body, _timeout, _cwd, _env):
+        ran.append(argv)
         return subprocess.CompletedProcess(argv, 1, b"", f"gh: {whole_error}\n".encode())
 
     monkeypatch.setattr(runner.profile, "provider", lambda _p, r, _w: GhProvider(r, writer=None, runner=refused))
@@ -3553,7 +3555,8 @@ def test_a_long_step_error_shows_whole_on_the_status_line(tmp_path: Path, monkey
         c = Change(slug="c1", step=Step(kind=StepKind.FOLLOW), names=Names(pr=7))
         store.write(lock, c)
         runner._engine(store, lock, c, tmp_path)  # noqa: SLF001
-    reason = f"ProviderError: read_pull_request: {whole_error}"
+    gh = f"CalledProcessError: Command '{ran[-1]}' returned non-zero exit status 1."
+    reason = f"ProviderError: read_pull_request: {whole_error}\n{gh}"
     step = next(e for e in store.events("c1") if e.get("event") == "step")
     assert (step["exit"], step["reason"], store.read("c1").outcome.reason) == (Exit.RETRY, reason, reason)
     page = TestClient(api.create_app(store, "tok", Host(store, tmp_path)), base_url="http://127.0.0.1",
@@ -3621,8 +3624,10 @@ def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monk
 
     alpha = registry.register(clone(tmp_path / "alpha", "c1"))
     store = Store.open(Path(alpha.path))
+    ran = []
 
     def refused(argv, _body, _timeout, _cwd, _env):
+        ran.append(argv)
         return subprocess.CompletedProcess(argv, 1, b"", f"gh: {whole_error}\n".encode())
 
     pr = PullRequest(
@@ -3641,7 +3646,8 @@ def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monk
         )
         publish.labelled(ctx, store.read("c1"), pr, ["owlbear"])
     (event,) = [e for e in store.events("c1") if e["event"] == "labels-failed"]
-    reason = f"ProviderError: add_labels: {whole_error}"
+    gh = f"CalledProcessError: Command '{ran[-1]}' returned non-zero exit status 1."
+    reason = f"ProviderError: add_labels: {whole_error}\n{gh}"
     assert event["reason"] == reason
     with browsing(monkeypatch, pds, details=True) as (page, url):
         said = errors(page)

@@ -242,6 +242,7 @@ def test_the_backlog_page_says_whole_why_github_could_not_be_read(  # noqa: PLR0
             return self._github("read", unreachable)  # the read's own way of saying GitHub failed
 
         monkeypatch.setattr(Backlog, "read", docs_unreachable)
+    before = len(github.ran)
     server, base = serving(machine(tmp_path, shared_repo[0])[0])
     said: list[str] = []
     try:
@@ -258,7 +259,8 @@ def test_the_backlog_page_says_whole_why_github_could_not_be_read(  # noqa: PLR0
             if failing == "every":
                 expect(page.locator("#error")).to_be_visible()
                 shown = page.locator("#error").text_content()
-                expected = f"{read[0].upper()}{read[1:]}\n    "  # the template's indent before the closing tag
+                gh = f"CalledProcessError: Command '{github.ran[before]}' returned non-zero exit status 1."
+                expected = f"{read[0].upper()}{read[1:]}\n{gh}\n    "  # the template's indent before the closing tag
             else:
                 expect(page.locator("li.entry")).to_have_count(1)
                 shown = page.locator("#where").text_content()
