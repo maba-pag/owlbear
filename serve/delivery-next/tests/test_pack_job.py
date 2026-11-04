@@ -1019,8 +1019,7 @@ def test_a_repair_that_cannot_be_read_or_laid_out_holds_with_its_whole_error(
     """#971: GitHub's or git's whole error holds the update: its reason, its question and its log."""
     fakes, job, _state = ci_failed(tmp_path, checkout, clone, {DETECTOR: "# repaired\n"})
     fakes.github.checks = ["success"]
-    error = ProviderError(FailureCode.INVALID_RESPONSE, "read_pull_request", whole_error, retry_safe=False)
-    error.add_note("a note added on the way up")
+    error = noted(ProviderError(FailureCode.INVALID_RESPONSE, "read_pull_request", whole_error, retry_safe=False))
     whole, real = f"{type(error).__name__}: {error}\na note added on the way up", job.live.git
     reading, listing, listed = fakes.github.read_pull_request, fakes.github.open_pull_requests, []
 
@@ -1038,9 +1037,7 @@ def test_a_repair_that_cannot_be_read_or_laid_out_holds_with_its_whole_error(
 
     def refusing(at: Path, argv: list[str]) -> str:
         if argv[0] == "ls-tree":  # the repair's protected content, read from its commit
-            refused = pack_files.PackError(whole_error)
-            refused.add_note("a note added on the way up")
-            raise refused
+            raise noted(pack_files.PackError(whole_error))
         return real(at, argv)
 
     if cause == "read":
@@ -1074,8 +1071,7 @@ def test_labels_that_cannot_be_added_are_logged_whole_and_never_hold_the_update(
     fakes, store = Fakes(clone), Store(tmp_path / "store")
     store.root.mkdir(parents=True)
     (store.root / "config.json").write_text(json.dumps({"format": 4, "pr_labels": ["release:minor"]}))
-    error = ProviderError(FailureCode.INVALID_RESPONSE, "add_labels", whole_error, retry_safe=False)
-    error.add_note("a note added on the way up")
+    error = noted(ProviderError(FailureCode.INVALID_RESPONSE, "add_labels", whole_error, retry_safe=False))
     live = fakes.live(checkout)
 
     def refused(_repository: str, _number: int, _labels: list[str]) -> None:

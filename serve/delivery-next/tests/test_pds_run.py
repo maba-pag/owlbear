@@ -389,12 +389,7 @@ def test_a_release_npm_does_not_give_stops_the_candidate_with_its_whole_error(
         "unusable": f"npm's metadata for {pin.NAME} {NEW} names no tarball and integrity: {whole}",
         "tarball": f"the tarball {tarball} was not downloaded: {whole}",
     }[cause]
-    reason = f"candidate: PinError: {said}"
-    assert (state["state"], state["reason"]) == ("failed", reason)
-    assert next(s for s in state["stages"] if s["name"] == "candidate")["detail"] == reason
-    assert state["invocations"][-1]["detail"] == reason
-    logged = [line.split(" ", 1)[1] for line in state["log"]]
-    assert logged[-3:] == ["candidate: running", f"candidate: failed: {reason}", reason]
+    PACK.stage_failed(state, "candidate", f"PinError: {said}")
 
 
 def test_a_failure_the_update_caused_goes_to_a_fresh_updater_and_both_gates_run_again(tmp_path, checkout):

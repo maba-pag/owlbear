@@ -75,10 +75,8 @@ def _places(own: tuple[str, Path] | None) -> tuple[list[tuple[str, str, Path, bo
         listed = registry.load().projects
         unread = ""
     except registry.RegistryError as exc:
-        listed, unread = (
-            [],
-            f"the machine's registry cannot be read, so other projects' runs are not shown: {failure(exc)}",
-        )
+        listed = []
+        unread = f"the machine's registry cannot be read, so other projects' runs are not shown: {failure(exc)}"
     places: dict[str, list[Any]] = {}
     if own is not None:
         places[os.path.realpath(own[1])] = ["", own[0], own[1], True]
