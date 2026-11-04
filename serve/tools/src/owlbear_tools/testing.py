@@ -24,6 +24,9 @@ _INVARIANT_TESTS = ("tests/test_package_boundary.py",)
 # --testmon-forceselect, because the configured -m otherwise turns its selection off.
 _TESTMON_NAMESPACES = frozenset({"owlbear_delivery_next"})
 _TESTMON_DATA = ".owlbear/scratch"
+# A page file of the Delivery engine runs only the tests that load pages or name page files (#968).
+_PAGES = "serve/delivery-next/src/owlbear_delivery_next/web/"
+_PAGE_TESTS = re.compile(r"mark\.browser|\.mjs\b|\.html\b|\.css\b|/web/|[\"']web[\"']|\bWEB\b")
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +131,12 @@ def _package_scope(package: _WorkspacePackage) -> list[str]:
     return _relative_paths([*_package_tests(package), *_neighbour_tests(package)])
 
 
+def _page_scope(package: _WorkspacePackage) -> list[str]:
+    tests = [*_package_tests(package), *_neighbour_tests(package)]
+    pages = [path for path in tests if _PAGE_TESTS.search(path.read_text(encoding="utf-8"))]
+    return _relative_paths([*pages, *(_REPOSITORY_ROOT / path for path in _INVARIANT_TESTS)])
+
+
 def _neighbour_tests(package: _WorkspacePackage) -> list[Path]:
     """Root and consumer tests that import the package, and the invariant tests."""
     packages = _workspace_packages()
@@ -200,7 +209,9 @@ def _python_scope(path: str) -> list[str] | None:
     package = _package_for_path(normalized)
     if package is not None:
         package_prefix = f"serve/{package.directory.name}/"
-        if normalized.startswith(f"{package_prefix}src/") or normalized == f"{package_prefix}pyproject.toml":
+        if normalized.startswith(_PAGES) and Path(normalized).suffix in {".mjs", ".html", ".css"}:
+            scope = _page_scope(package)
+        elif normalized.startswith(f"{package_prefix}src/") or normalized == f"{package_prefix}pyproject.toml":
             scope = _package_scope(package)
         elif normalized.startswith(f"{package_prefix}tests/"):
             candidate = _REPOSITORY_ROOT / normalized
