@@ -24,6 +24,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Stop
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock, read_regular
 
 if TYPE_CHECKING:
@@ -225,7 +226,7 @@ class Database:
             try:
                 yield self._connection()
             except sqlite3.Error as exc:
-                msg = f"the Delivery database failed: {exc}"
+                msg = f"the Delivery database failed: {failure(exc)}"
                 raise StoreError(msg) from exc
 
     @contextlib.contextmanager
@@ -254,7 +255,7 @@ class Database:
                     raise
                 connection.execute("COMMIT")
             except sqlite3.Error as exc:
-                msg = f"the Delivery database failed: {exc}"
+                msg = f"the Delivery database failed: {failure(exc)}"
                 code = (getattr(exc, "sqlite_errorcode", 0) or 0) & 0xFF  # an extended code's primary one
                 held = wait is not None and code in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}
                 raise (BusyError if held else StoreError)(msg) from exc

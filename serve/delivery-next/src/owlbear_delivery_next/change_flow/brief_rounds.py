@@ -3,7 +3,8 @@
 The shaper asks for a challenge once its draft is ready, with its reasons for each finding it does not take. A round
 judges that version; the next judges those rejections and looks for new findings. A rejection the challenger upholds
 goes to the owner (TD-193). A version is approvable once its loop ended on it: judged with nothing left to address, or
-the shaper's revision after the last round, unreviewed. A later save needs one more round (TD-215, TD-235).
+the shaper's revision after the last round, unreviewed. A later save needs one more round (TD-215, TD-235), and the
+owner may ask for one on that unreviewed revision (#966).
 """
 
 from __future__ import annotations
@@ -167,7 +168,7 @@ def request(c: Change, version: int, rejected: Mapping[str, str], policy: RoundP
     if found and lp.head == str(version) and set(rejected) != {f.id for f in found}:
         return "save a revision for the findings you take (save_brief), or reject each of them, then ask again"
     if lp.ended:  # new work after the loop ended: one more round on it (TD-215, TD-235)
-        lp.ended, lp.last, lp.reentry, lp.extra = "", False, True, max(lp.extra, lp.round + 1 - lp.policy.max_rounds)
+        _reopen(lp)
     for f in found:
         if f.id in rejected:
             f.state, f.reason = "rejected", _flat(rejected[f.id], 1000)
@@ -199,6 +200,41 @@ def _refusal(c: Change, version: int) -> str:
     if c.step.mode in MODES or first(c) is not None or owned_open(c):
         return "its challenge runs or waits for the owner's decision; ask again after it"
     return ""
+
+
+def unchallengeable(c: Change, version: int) -> str:
+    """Why the owner may not ask for one more challenge of *version* (#966), or "": only an unreviewed revision."""
+    b, p = c.brief, picks.current(c)
+    busy = c.step.mode in MODES or first(c) is not None or due(c) or owned_open(c)
+    refusals = (
+        (c.step.kind != StepKind.SHAPE or c.finished_at or c.intent.abandoned_at, "the Change is not being shaped"),
+        (version != b.version, f"brief v{version} is not the current draft v{b.version}"),
+        (b.approved_version == version, f"brief v{version} is approved"),
+        (busy, "its challenge runs or waits for your decision"),
+        (p is not None and p.status == "failed", f"picking brief v{version}'s decisions failed; pick them again first"),
+        (not unreviewed(c), f"a challenge has read brief v{version}'s last revision"),
+    )
+    return next((why for held, why in refusals if held), "")
+
+
+def again(c: Change, version: int) -> str:
+    """The owner asks for one more round on the unreviewed *version*: the ended loop reopens, as a new save does.
+
+    Returns:
+        Why it is refused, or "".
+    """
+    if why := unchallengeable(c, version):
+        return why
+    _reopen(c.loops[BRIEF])
+    c.brief.challenged, c.brief.requested = None, version
+    _mode(c, CHALLENGE)
+    c.outcome = None  # runnable: the host starts the challenger
+    return ""
+
+
+def _reopen(lp: RoundLoop) -> None:
+    """The ended loop takes one more round, which judges the whole brief, focused on what changed."""
+    lp.ended, lp.last, lp.reentry, lp.extra = "", False, True, max(lp.extra, lp.round + 1 - lp.policy.max_rounds)
 
 
 def _refused(found: list[RoundFinding], rejected: Mapping[str, str]) -> str:

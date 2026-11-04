@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-import secrets
 import shlex
 import shutil
 import time
@@ -36,6 +35,7 @@ from owlbear_delivery_next.project_host import (
     amendment_routes,
     answers,
     backlog_routes,
+    brief_actions,
     brief_routes,
     brief_view,
     chat_routes,
@@ -47,6 +47,7 @@ from owlbear_delivery_next.project_host import (
     pds_routes,
     session_slots,
     stop_routes,
+    token_guard,
 )
 from owlbear_delivery_next.project_host.admission import admitted
 from owlbear_delivery_next.project_host.launches import Launches, Refused
@@ -234,6 +235,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
 ) -> FastAPI:
     """Return the host's app: its pages without data, and a guarded API under ``/api/next``."""
     app = FastAPI(title="OwlBear Delivery", docs_url=None, redoc_url=None, openapi_url=None)
+    app.add_exception_handler(Exception, token_guard.uncaught)
     expected = f"Bearer {token}".encode()
     launches = Launches(LAUNCH_GAP, time.monotonic)
 
@@ -246,8 +248,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         return await call_next(request)
 
     def auth(request: Request) -> None:
-        if not secrets.compare_digest(request.headers.get("authorization", "").encode(), expected):
-            raise HTTPException(401, "token required")
+        token_guard.admit(request, expected)
 
     def read(slug: str) -> Change:
         if not SLUG.fullmatch(slug) or slug not in store.slugs():
@@ -471,6 +472,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     wake, ending = lambda: host.wake.set(), lambda: host.draining()  # noqa: PLW0108 - read late
     router.include_router(brief_routes.router(store, read, wake, ending))
     router.include_router(brief_routes.revising(read, start_chat))
+    router.include_router(brief_actions.router(store, read, wake))
     router.include_router(stop_routes.router(store, read, wake))
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))
     router.include_router(memory_routes.router(store))

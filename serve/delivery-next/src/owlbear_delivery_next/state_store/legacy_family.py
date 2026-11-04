@@ -76,7 +76,7 @@ IMPORTS = (
     ("state_store/project_home.py", "c79464a6139fe571efd600903aa848dc67c9673f016d12c093d7d6b94b74a681"),
     ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
 )
-CURRENT_FAMILY_AGGREGATE = "b5aff37fb00bb5f1ca87836f869a3fa98293c6e809be8f387a18875a508d71ba"
+CURRENT_FAMILY_AGGREGATE = "8d139d302fe612cbb0f568c6fab9e4e02c0e97b7a9a81c93708abbded573503f"
 CURRENT_FUNCTIONS = (
     ("commands/chat_client.py:Chat.call", "a3dae79af4df3874c83c2466621b379fc3e9fc3e670045c20a8e8fca44113250"),
     ("commands/chat_client.py:workspace", "4e1bd94f29805ab94eff49182ba65966b93988ce4a8e3f395576601499a4855d"),
@@ -96,7 +96,7 @@ CURRENT_FUNCTIONS = (
     ("machine_host/project.py:Project.load", "90cb161f238ce91af9469fc383d03ecb7f5225e239796463fd25cb96f5a92654"),
     ("state_store/registry.py:adopt", "57e10ae159a32d7da6b2ca403f378d2af53dc7fb8ef8e0b78ed647a2d88cf7ad"),
     ("state_store/registry.py:canonical", "73a7cda1befda9f7e2b3e82a37ae61b582977b1f5bf194b012116e875dc29fa9"),
-    ("state_store/registry.py:_switched", "c2978760c71196773958b52f09bf745847b30b7b41eaab6513a88561d9efe9a0"),
+    ("state_store/registry.py:_switched", "6a8011191ad0b3016397e4793b5bd5690c17cae346f99005fc11ed0d8497e43a"),
     ("state_store/registry.py:register", "79cb7840274422a93d94582da3f361fb56a1bbd3606dac3808d0cfdb035b255b"),
     ("state_store/registry.py:replaced", "5d48cb39f6ea67966760e0de397f920fd7d6ebf07f403f377fec1e56b0245231"),
     ("machine_host/selfcheck.py:_project", "b9bd170d392b1fb675466c5b68a46ad32987df9183c7ada36687b1eea99923a6"),
@@ -120,7 +120,7 @@ CURRENT_FUNCTIONS = (
     ("state_store/project_home.py:ensure_pinned", "448d703d46f3c59a8c5856ef22adf3222ddf61d91f88e12ab1de20b0a1cf88db"),
     ("state_store/project_home.py:located", "d859e5fc314bd5c5be3e94cb2e5cdead74832ccbba657ff56ac4a29bc7ffc656"),
     ("state_store/store.py:Store.__init__", "02cdf4d6c264a0cfe2e610b3341d3612171c42b60cb1735209a4d4e228ee5764"),
-    ("state_store/store.py:Store.open", "94404672c552ea7fa1354c693a2e64a9e1272455322f6aabb75290453e047481"),
+    ("state_store/store.py:Store.open", "0a8d9833e2cfb2fd98f7aba9dd32398e4f7ccf4b1824d687062a637526a0f8c2"),
 )
 CURRENT_IMPORTS = (
     ("commands/chat_client.py", "af396923535b3f9ba702493f7bbefe0c38470d2911d1f96d8651662464ce4fb1"),
@@ -129,16 +129,16 @@ CURRENT_IMPORTS = (
     ("commands/mcp_server.py", "0bbf148875390e1cd91d58e4eb8e6f4a2ccbe0249324e8957de3c5cbce6bb8e9"),
     ("commands/runner.py", "767630a46491c1c44f53b8175d5e53c8a324f565d5cf247f46bc27a2835fdebe"),
     ("commands/setup.py", "aeddeb68e82b89c56ad0c8dbe512181429f7435b6854a025b9ff7402be396fbc"),
-    ("machine_host/app.py", "758ed5c07b6dd30b5373b2f7d67a1401b6d5f9e4dde2cc95fa9e05bff3f672fd"),
+    ("machine_host/app.py", "ed461982d65af7ef85ce636daf394e6a97353eac66524efc41efa8b75764c507"),
     ("machine_host/command.py", "577ce56b1140fdf075a0e005468cb52ae5ccbab25c6519efa162e2bff05cb714"),
     ("machine_host/install.py", "1fea081f41157c301181bcd795210d56f91ae1dc58fc89a9b913610fc8c4bdaf"),
     ("machine_host/machine.py", "0fee999e1fe246d3b69855a3b5def6958c99040eddb64512444d8f9eee351aea"),
     ("machine_host/project.py", "e70c0b45b6aa0df6787891d270927fdbf8c75d7e0d05db659d36cda43579020b"),
-    ("state_store/registry.py", "31b8b0c0a1cb85b977952c0d28bf1e7cd8067ea7a057b999cf2a425fdc05b84a"),
+    ("state_store/registry.py", "b40c2445c80b23271a509ae75e9cb4b0c6c2cb47c881d11e0743647bb625c133"),
     ("machine_host/selfcheck.py", "2f7bbb8a056729042ef4c3ee0dd2daf25d80b9116c548dab9c64e2ca635e73ea"),
     ("project_host/host.py", "04a1724b9c43aa86fa1d2619ba04f8aec267548971a3f2f8cee02655f45432d3"),
-    ("state_store/project_home.py", "16a597223c63af3ad03bdd479d930d57050649c295c0f1d476f8113d42ede7d3"),
-    ("state_store/store.py", "e7a34b523998cc7ab37a9380509d7ccb930847621e3692e54994d93c98f584e9"),
+    ("state_store/project_home.py", "bdfc352236f59f04934c706eaec42d4039618dc9beea0dff353a4473499e507e"),
+    ("state_store/store.py", "db5720c805cadf2e982217fe27a622f6748ed1f4645691973a475e01d60e74c7"),
     ("state_store/switched_authority.py", "df2480a19ffe37e7e94c3da755795d757a6ff6184f865145831ea92064529c54"),
 )
 CONSTANTS = (

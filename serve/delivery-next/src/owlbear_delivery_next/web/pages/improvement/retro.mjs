@@ -38,6 +38,13 @@ function run(r) {
       : nothing}</li>`;
 }
 
+// The Retro job's last pass, when it failed: its whole error, until a pass succeeds.
+function passFailed(failed) {
+  if (!failed) return nothing;
+  return html`<li class="panel" id="retro-failed"><div class="row">${tag("Pass failed", "warning")}</div>
+    <p class="meta">Retro's last pass failed, and the next one tries again: ${failed}</p></li>`;
+}
+
 async function followUp(f) {
   if (state.busy || !(await askFollowup(f, "finding"))) return;
   await act(`followup:${f.id}`, () => send(f), said);
@@ -102,6 +109,7 @@ export function retroSection(r) {
     ${r.findings.length ? html`<ul class="cards">${repeat(r.findings, (f) => f.id, shownFinding)}</ul>`
       : empty("Retro has found nothing yet.")}
     ${heading(3, "Runs", "md")}
-    ${r.runs.length ? html`<ul class="cards">${r.runs.map(run)}</ul>` : empty("No Retro run yet.")}
+    ${r.runs.length || r.failed ? html`<ul class="cards">${passFailed(r.failed)}${r.runs.map(run)}</ul>`
+      : empty("No Retro run yet.")}
   </section>`;
 }

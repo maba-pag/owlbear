@@ -19,6 +19,7 @@ Every ``POLL`` seconds, one pass:
    next read; one over ``LINE`` bytes is left out and said in the chat's cards from then on.
 
 A pass that fails is told in host.log, its whole error (``failed``) on the Improvement page until a pass does not fail.
+A lock that cannot be opened is told the same way (``refused``); no chat is followed then until OwlBear starts again.
 
 Where a chat starts: one whose folder existed when the follower started following (at its start, when switched on and
 when the enrolled folders change: the baseline, by folder names alone) starts at its end then; one found later starts
@@ -51,7 +52,6 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
-import fcntl
 import functools
 import json
 import os
@@ -61,8 +61,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import cases, chatlogs, spotter
-from owlbear_delivery_next.machine_host import chat_acts, chat_looks, chat_offsets
+from owlbear_delivery_next.machine_host import chat_acts, chat_lock, chat_looks, chat_offsets
 from owlbear_delivery_next.machine_host.chat_settings import Plan, settings_now
 from owlbear_delivery_next.runtimes import spotter_look
 from owlbear_delivery_next.runtimes.chat_moments import Moments
@@ -143,6 +144,7 @@ class Follower:
         self.share = 0  # the steer share of the latest pass
         self.turns = 0
         self.said = self.failed = ""  # the line last told, and the last pass's whole error if it failed
+        self.refused = ""  # why the follower did not start, whole: no chat is followed until OwlBear starts again
         self.saved: dict[str, Any] = {}
 
     def start(self) -> None:
@@ -182,11 +184,12 @@ class Follower:
         try:
             fd = os.open(spotter.root() / LOCK, os.O_WRONLY | os.O_CREAT, 0o600)
         except OSError as exc:
-            self.say(f"chats follower: its lock cannot be opened ({exc}); no chat is followed")
+            self.refused = f"its lock cannot be opened: {failure(exc)}"  # the Improvement page's thread reads it
+            self.say(f"chats follower: its lock cannot be opened ({failure(exc)}); no chat is followed")
             self.ended.set()
             return
         try:
-            if not self._owned(fd):
+            if not chat_lock.held(fd, self.closed, self.poll, self.say):
                 return
             loop = asyncio.new_event_loop()
             try:
@@ -202,27 +205,13 @@ class Follower:
             os.close(fd)
             self.ended.set()
 
-    def _owned(self, fd: int) -> bool:
-        waited = False
-        while True:
-            try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                if not waited:
-                    self.say("chats follower: waiting for the previous one to end; no chat is read meanwhile")
-                    waited = True
-                if self.closed.wait(self.poll):
-                    return False
-            else:
-                return True
-
     async def _main(self) -> None:
         while not self.closed.is_set():
             try:
                 await self._pass()
                 self.failed = ""
             except Exception as exc:  # noqa: BLE001 - the follower outlives one failed pass
-                self.failed = f"{type(exc).__name__}: {exc}"  # the Improvement page's thread reads it
+                self.failed = failure(exc)  # the Improvement page's thread reads it
                 self._tell(f"chats follower: a pass failed: {self.failed}")
             await self._nap()
         await self._quit()

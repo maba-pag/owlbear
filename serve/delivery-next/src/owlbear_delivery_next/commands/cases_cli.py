@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import (
     case_edits,
     case_intake,
@@ -39,8 +40,8 @@ if TYPE_CHECKING:
     import argparse
 
 BY = "owner (command)"
-REFUSED = (CaseError, retro.RetroError, registry.RegistryError, StoreError, spotter_test.Refused, SettingsUnset,
-           data_repo.DataRepoError)  # fmt: skip
+REFUSED = (CaseError, retro.RetroError, registry.RegistryError, StoreError, data_repo.DataRepoError)  # fmt: skip
+SAID = (spotter_test.Refused, SettingsUnset)  # refusals in OwlBear's own words, whole as they are
 QUEUED = "queued {}: the machine host runs it once OwlBear runs; `owlbear cases runs` shows its result"
 
 
@@ -62,8 +63,11 @@ def main(a: argparse.Namespace) -> int:
                 _say(f"synthetic {art['kind']} in {art['where']}: {art['ref']} {art.get('link') or ''}".rstrip())
         else:
             return _cases(a)
-    except REFUSED as exc:
+    except SAID as exc:
         _say(f"refused: {exc}")
+        return 1
+    except REFUSED as exc:
+        _say(f"refused: {failure(exc)}")
         return 1
     return 0
 

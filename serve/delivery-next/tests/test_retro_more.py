@@ -346,16 +346,25 @@ def test_a_follow_up_cut_at_its_limit_saves_nothing_and_a_synthetic_one_is_refus
 
 
 @pytest.mark.usefixtures("said")
-def test_a_follow_up_whose_backlog_cannot_be_reached_keeps_its_whole_reason(world, monkeypatch, whole_error):
+@pytest.mark.parametrize("site", ["its backlog", "its subject"])
+def test_a_follow_up_whose_backlog_or_subject_cannot_be_reached_keeps_its_whole_reason(
+    world, monkeypatch, whole_error, site
+):
     def unreachable(*_args, **_kwargs):
-        raise BacklogError(502, whole_error)
+        exc = BacklogError(502, whole_error) if site == "its backlog" else store.RetroError(whole_error)
+        exc.add_note("GitHub answered while the shared repository moved")
+        raise exc
 
     monkeypatch.setattr(FakeBacklog, "add", unreachable)
     followups.request("rf-2", "owner", world.places, followups.backlog)
+    if site == "its subject":  # asked for, then its subject became unreadable before the run
+        monkeypatch.setattr(followups, "subject", unreachable)
     _job(Model(TEXT), world.projects).tick(0.0)
     [run] = _runs()
-    assert (run["result"], world.entries) == (
-        f"stopped: the backlog could not be reached (BacklogError: {whole_error})", [])  # fmt: skip
+    whole = f"{whole_error}\nGitHub answered while the shared repository moved"
+    said = (f"stopped: the backlog could not be reached (BacklogError: {whole})" if site == "its backlog" else
+            f"refused: RetroError: {whole}")  # fmt: skip
+    assert (run["result"], world.entries) == (said, [])
 
 
 def test_a_follow_ups_spend_counts_for_its_change_and_an_unscoped_ones_machine_wide(world):

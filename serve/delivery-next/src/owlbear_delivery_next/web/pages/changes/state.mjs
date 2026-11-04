@@ -88,16 +88,21 @@ export function notify(message) {
 export function formsOf(d) {
   const r = d.visual_round, asked = d.checks.filter((c) => c.waiting).map((c) => [c.id, c.url, c.inputs]);
   return JSON.stringify([d.key, d.question?.id, d.question?.options?.map((o) => o.id), d.merge?.head, asked,
-    d.brief.version, d.brief.approved, d.pullback?.state, d.paused, r?.number, r?.outcome,
+    d.brief.version, d.brief.approved, d.brief.picked?.status, d.pullback?.state, d.paused, r?.number, r?.outcome,
     d.owner_criteria.map((k) => k.id), d.retry?.attempt, d.retry?.head]);
 }
 
 // One action of the owner on the shown Change. A refusal goes beside the form that was used (*form*), so it is seen
 // where he is looking; the poll keeps it until the forms change, then a definite one moves to the top of its Change
 // and stays there until he acts, or opens another (#914). True once the host took it.
-export async function send(path, body, d, form = "") {
+export function send(path, body, d, form = "") {
+  return sendTo(`/changes/${d.slug}${path}`, body, d, form);
+}
+
+// The same, through a route that names the Change in its body (*url* from the host's root).
+export async function sendTo(url, body, d, form = "") {
   try {
-    await call(`/changes/${d.slug}${path}`, body, d.project);
+    await call(url, body, d.project);
   } catch (e) {
     if (e instanceof HostDown || e instanceof Restarted || state.selected !== d.key) return failed(e) && false;
     const unsure = e instanceof Slow;

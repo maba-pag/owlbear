@@ -26,6 +26,7 @@ from dataclasses import asdict, dataclass, fields
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement.events import NOTE
 from owlbear_delivery_next.improvement.spotter_store import Worker, _append
 
@@ -187,7 +188,7 @@ def checked(folder: Path, record: str, conflicts: Callable[[str], str] | None, c
         try:
             answer = conflicts(change)
         except Exception as exc:  # noqa: BLE001 - kept as the answer, whole
-            answer = json.dumps({"failed": f"{type(exc).__name__}: {exc}"})
+            answer = json.dumps({"failed": failure(exc)})
     update(folder, record, conflict=answer)
     return answer
 

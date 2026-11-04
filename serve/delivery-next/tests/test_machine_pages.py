@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextvars
 import json
+import logging
 import os
 import re
 import shlex
@@ -13,6 +14,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -56,12 +58,20 @@ from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import pack_files
-from owlbear_delivery_next.local_system import codebase, data_place, data_repo, leases, local_home, processes
+from owlbear_delivery_next.local_system import (
+    codebase,
+    data_place,
+    data_repo,
+    leases,
+    local_home,
+    maintenance,
+    processes,
+)
 from owlbear_delivery_next.machine_host import alias, app, project, update_checks, versions
 from owlbear_delivery_next.machine_host import impeccable as machine_impeccable
 from owlbear_delivery_next.machine_host import serve as host_start
 from owlbear_delivery_next.machine_host.machine import Machine
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import api, pack_routes
 from owlbear_delivery_next.project_host import host as host_module
 from owlbear_delivery_next.project_host import leftovers as host_leftovers
 from owlbear_delivery_next.project_host.host import Host, HostRecord
@@ -131,6 +141,52 @@ def browsing(monkeypatch, pds, width: int = 1280, *, details: bool = False) -> I
     finally:
         server.should_exit = True
         machine.stop_all()
+
+
+@contextmanager
+def logged(caplog) -> Iterator[None]:
+    """Uvicorn's records for the host log in *caplog*: its logger does not pass them on to the root, where caplog
+    listens. Enter it once the server runs, as starting one sets up that logger afresh."""
+    server = logging.getLogger("uvicorn.error")
+    server.addHandler(caplog.handler)
+    try:
+        yield
+    finally:
+        server.removeHandler(caplog.handler)
+
+
+COMMAND = ["git", "owlbear-test-read"]  # the failed command an uncaught read raises
+
+
+def uncaught(whole_error: str) -> tuple[Callable[..., Any], str, str]:
+    """A read no route catches: it raises *COMMAND*'s failure, long stderr and stdout with it, and a note added on
+    the way up. Also the error's whole text as a page says it, and as the host log's traceback ends."""
+    out = "\n".join(f"out {line}" for line in whole_error.splitlines())
+    note = "NOTE added on the way up"
+
+    def read(*_args: object) -> Any:
+        exc = subprocess.CalledProcessError(1, COMMAND, output=out, stderr=whole_error)
+        exc.add_note(note)
+        raise exc
+
+    head = f"CalledProcessError: Command '{COMMAND}' returned non-zero exit status 1."
+    said = f"stderr:\n{whole_error}\nstdout:\n{out}"
+    return read, f"{head}\n{said}\n{note}", f"subprocess.{head}\n{note}\n{said}\n"  # a traceback names its module
+
+
+def traced(caplog, page: Page) -> set[tuple[str, str]]:
+    """What uvicorn logged into the host log about *COMMAND*'s failure, once it did: each record's message and the
+    exception its traceback ends with. A page's other reads may fail too, with other errors."""
+
+    def ours() -> list[logging.LogRecord]:
+        return [
+            r
+            for r in caplog.records
+            if r.name == "uvicorn.error" and r.exc_info and getattr(r.exc_info[1], "cmd", None) == COMMAND
+        ]
+
+    until(page, ours)
+    return {(r.getMessage(), "".join(traceback.format_exception_only(r.exc_info[1]))) for r in ours()}
 
 
 def until(page: Page, done: Callable[[], object], seconds: float = 8) -> None:
@@ -387,9 +443,6 @@ def opened(page: Page, base: str, of: str, slug: str = "same") -> None:
 
 
 REVISE = "Revise the brief in a new chat"
-# A native modal dialog: past either end focus leaves for the browser's own controls (body), never the page behind.
-INSIDE = """() => document.activeElement === document.body
-    || [...document.querySelectorAll('p-modal')].some((m) => m.open && m.contains(document.activeElement))"""
 
 
 @pytest.mark.browser
@@ -412,7 +465,7 @@ def test_the_brief_offers_a_new_shaping_chat_and_says_how_it_went(tmp_path: Path
         pds.settled(page)
         for key in ["Shift+Tab"] * 3 + ["Tab"] * 3:  # the dialog keeps focus at both ends
             page.keyboard.press(key)
-            assert page.evaluate(INSIDE), key
+            assert page.evaluate(pds.INSIDE), key
         pds.answer(page, "Not now")
         assert REVISE in page.evaluate("document.activeElement?.textContent ?? ''")  # focus back on the button
         assert launched.calls == []
@@ -1467,7 +1520,8 @@ def test_projects_says_why_a_move_of_the_shared_repository_stopped_whole(
         expect(shop.locator("p-tag")).to_have_text("failed")
         said = shop.locator("p-text").filter(has_text="is not finished")
         expect(said).to_have_count(1)
-        assert said.text_content() == f"its Delivery state cannot be opened: {unfinished}; `owlbear data` finishes it"
+        opened = f"its Delivery state cannot be opened: DataRepoError: {unfinished}"
+        assert said.text_content() == f"{opened}; `owlbear data` finishes it"
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
         assert broke == []
 
@@ -2370,6 +2424,75 @@ def each_scope_opens_its_view_and_leads_back(page, pds, base: str, row: dict, a:
     expect(page.locator("#queue .queued").get_by_role("button", name="Ignore for now")).to_have_count(1)
     page.goto(f"{base}/decisions?project=nobody")  # a project no longer listed opens the overview
     expect(page).to_have_url(f"{base}/decisions")
+
+
+FAILED_500 = "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+
+
+@pytest.mark.browser
+def test_an_error_no_machine_route_caught_shows_whole_on_its_page_and_in_the_host_log(
+    monkeypatch, pds, caplog, whole_error
+) -> None:
+    """#971: the machine's held-sessions read failing with an error nothing catches, a command's with its output, says
+    it whole on Maintenance, as the host log's traceback does."""
+    read, whole, logged_whole = uncaught(whole_error)
+    monkeypatch.setattr(maintenance.Maintenance, "read", read)
+    with browsing(monkeypatch, pds) as (page, base), logged(caplog):
+        broke = errors(page)
+        with page.expect_response("**/api/next/maintenance/sessions") as answered:
+            page.goto(f"{base}/maintenance#token=t")
+        assert (answered.value.status, answered.value.json()) == (500, {"detail": whole})
+        assert page.locator("#sessions-error").text_content().strip() == f"Could not read the held sessions: {whole}."
+        assert traced(caplog, page) == {("Exception in ASGI application\n", logged_whole)}
+        assert set(broke) == {FAILED_500}  # the browser's own line for the answer, no script error
+
+
+@pytest.mark.browser
+def test_a_recovery_no_route_caught_shows_its_whole_error_in_the_held_sessions_row(
+    monkeypatch, pds, whole_error
+) -> None:
+    """#971: releasing a held session failing with an error nothing catches says it whole in that session's row."""
+    held = {"id": "s-1", "project": "p", "kind": "pack", "started_at": "2026-10-25T00:00:00+00:00"}
+    held |= {"workspace": "/w/s-1", "reason": "no Run returned", "state": "held", "recoverable": True}
+
+    def recover(*_args: object, **_kwargs: object) -> Any:
+        raise RuntimeError(whole_error)
+
+    monkeypatch.setattr(maintenance.Maintenance, "read", lambda _self: {"sessions": [held]})
+    monkeypatch.setattr(maintenance.Maintenance, "recover", recover)
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/maintenance#token=t")
+        page.get_by_label("The computer has rebooted since this session failed").check()
+        page.get_by_role("button", name="Release this session").click()
+        with page.expect_response("**/api/next/maintenance/sessions/s-1/recover") as answered:
+            pds.answer(page, "Release")
+        assert answered.value.status == 500
+        refused = page.locator("#sessions > li p-inline-notification")
+        refused.wait_for()
+        assert refused.text_content().strip() == f"RuntimeError: {whole_error}"
+
+
+@pytest.mark.browser
+def test_an_error_no_project_route_caught_shows_whole_on_its_page_and_in_the_host_log(
+    tmp_path: Path, monkeypatch, pds, caplog, whole_error
+) -> None:
+    """#971: a project's maintenance read, through the machine host's dispatcher, failing with an error nothing catches
+    says it whole on that project's Maintenance page, as the host log's traceback does."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha"))
+    read, whole, logged_whole = uncaught(whole_error)
+    monkeypatch.setattr(pack_routes, "overview", read)
+    with browsing(monkeypatch, pds) as (page, base), logged(caplog):
+        broke = errors(page)
+        with page.expect_response(f"**/p/{alpha.id}/api/next/maintenance") as answered:
+            page.goto(f"{base}/maintenance?project={alpha.id}#token=t")
+        assert (answered.value.status, answered.value.json()) == (500, {"detail": whole})
+        notice = page.locator("#error")
+        expect(notice).to_be_visible()
+        assert notice.text_content().strip() == whole
+        assert traced(caplog, page) == {("Exception in ASGI application\n", logged_whole)}
+        assert set(broke) == {FAILED_500}
 
 
 @pytest.mark.browser
@@ -3524,7 +3647,7 @@ def test_a_failed_pick_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, w
         follows = page.locator(".brief section", has_text="Decisions this work follows")
         shown = follows.locator("p-text")
         expect(shown).to_have_count(1)
-        assert shown.text_content() == f"The pick failed: {failed}. The shaping chat can ask for it again."
+        assert shown.text_content() == f"The pick failed: {failed}. Pick the decisions again under Open items."
         assert said == []
 
 

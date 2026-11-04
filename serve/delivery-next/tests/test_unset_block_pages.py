@@ -7,6 +7,7 @@ shared repository, with a memory folder for each project, and a fake GitHub hold
 
 from __future__ import annotations
 
+import json
 import re
 import socket
 import subprocess
@@ -24,6 +25,7 @@ import uvicorn
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_contracts.merge_records import Pullback
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, project
@@ -240,16 +242,19 @@ def test_an_unreadable_layer_is_named_with_its_reason_and_an_unset_interval_bloc
 
     page, base = host.page, host.base
     host.stores["alpha"].config_path.write_text("{")
+    try:
+        json.loads("{")
+    except ValueError as exc:
+        unreadable = f"alpha: settings can't be read: state of config is unreadable: {failure(exc)}"
     page.goto(f"{base}/#token=t")
     banner = page.locator("#blocked")
-    expect(banner.locator("li")).to_have_text(["alpha: settings can't be read: state of config is unreadable"],
-                                              timeout=WAIT)  # fmt: skip
+    expect(banner.locator("li")).to_have_text([unreadable], timeout=WAIT)
 
     request.getfixturevalue("intervals_unset")  # this machine's update checks: every project waits
     expect(banner).to_have_attribute("state", "error", timeout=WAIT)
     expect(banner).to_have_attribute("heading", EVERY)
     expect(banner.locator("li")).to_have_count(2)
-    expect(banner.locator("li").nth(0)).to_have_text("alpha: settings can't be read: state of config is unreadable")
+    expect(banner.locator("li").nth(0)).to_have_text(unreadable)
     expect(banner.locator("li").nth(1)).to_have_text("beta: 3 settings are unset; set them on the Settings page")
     expect(page.get_by_role("button", name="New Change")).to_be_disabled()
 

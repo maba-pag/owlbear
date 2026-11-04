@@ -82,9 +82,11 @@ def test_an_unreadable_ledger_refuses_before_the_record_or_any_move_changes(tmp_
         raise maintenance.MaintenanceError(msg)
 
     monkeypatch.setattr(maintenance.Maintenance, "lookup_receipt", staticmethod(unreadable))
-    with pytest.raises(StoreError, match=r"could not be settled.*nothing was moved"):
+    with pytest.raises(StoreError, match=r"could not be settled.*nothing was moved") as refused:
         offline_protocol._settle_pack_run(folder)  # noqa: SLF001
     assert asked, "the receipt lookup never ran, so the refusal proves nothing"
+    said = f"the Impeccable run record in {folder} could not be settled: MaintenanceError: ledger is unreadable"
+    assert str(refused.value) == f"{said}; nothing was moved"
     assert path.read_bytes() == before
     assert project_move.record(folder) is None
 

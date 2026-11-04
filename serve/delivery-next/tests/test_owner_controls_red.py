@@ -8,6 +8,7 @@ import pytest
 from owlbear_delivery_next.change_contracts.inbox import IntentItem
 from owlbear_delivery_next.change_contracts.models import Change, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import Store
@@ -56,8 +57,10 @@ def test_an_invalid_cross_layer_policy_still_folds_an_owner_abandon(store):
         owner=True,
     )
     assert notice == ""  # the owner's policy is written, so the fold below meets the invalid policy
-    with pytest.raises(StoreError, match="do not combine"):
+    with pytest.raises(StoreError) as refused:
         store.settings()  # the merged policy is invalid: the fold must still fold the owner's abandon over it
+    assert str(refused.value) == f"the settings do not combine: {failure(refused.value.__cause__)}"
+    assert str(refused.value).startswith("the settings do not combine: ValidationError: ")
     change_after, _ = fold(store, "abandon")
     assert (change_after.intent.abandoned_at, store.read("c1").intent.abandoned_at) == (NOW, NOW)
 

@@ -84,8 +84,7 @@ def serialize(decision: Decision) -> str:
 
 def _schema_error(error: ValidationError) -> DecisionFileError:
     locations = tuple(".".join(str(p) for p in item["loc"]) or "decision" for item in error.errors())
-    details = ", ".join(f"{loc}: {item['msg']}" for loc, item in zip(locations, error.errors(), strict=True))
-    return DecisionFileError(f"schema: {details}", locations)
+    return DecisionFileError(f"schema: {type(error).__name__}: {error}", locations)
 
 
 def parse(text: str) -> Decision:
@@ -96,7 +95,7 @@ def parse(text: str) -> Decision:
     try:
         data = _yaml().load(text[len(_FENCE) : end + 1])
     except YAMLError as exc:
-        msg = f"front matter is not valid YAML: {str(exc).splitlines()[0]}"
+        msg = f"front matter is not valid YAML: {type(exc).__name__}: {exc}"
         raise DecisionFileError(msg) from exc
     if not isinstance(data, dict):
         msg = "front matter must be a mapping"

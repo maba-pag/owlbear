@@ -12,6 +12,7 @@ import re
 import time
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github import gh_client
 from owlbear_delivery_next.github.account import Origin, Writer
 from owlbear_delivery_next.github.gh_client import GhClient, Json, Missing, repo
@@ -79,7 +80,7 @@ class Issues(GhClient):
         try:
             got = self._api(VISIBILITY, "GET", repo(self.repository))
         except ProviderError as exc:
-            why = f"its visibility is unknown ({exc}); the backlog is written only to a private repository"
+            why = f"its visibility is unknown ({failure(exc)}); the backlog is written only to a private repository"
             raise ProviderError(exc.code, VISIBILITY, why, retry_safe=True) from exc
         facts = got if isinstance(got, dict) else {}
         if facts.get("private") is not True or facts.get("visibility", "private") != "private":

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -13,6 +14,7 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.state_store import (
     decision_actions,
     decision_batch,
+    decision_cache,
     decision_store,
     decision_sync,
 )
@@ -130,6 +132,73 @@ def test_an_unreadable_decisions_folder_stops_loading(shared, locked) -> None:
             load(shared, PROJECT)
     finally:
         folder.chmod(0o755)
+
+
+def test_a_checkout_folder_the_disk_refuses_says_the_whole_error(shared) -> None:
+    root = shared.root
+    assert save(shared, make(), expected_revision=None, message="m").saved
+    root.parent.chmod(0)
+    try:
+        with pytest.raises(DecisionsUnavailable) as raised:
+            load(shared, PROJECT)
+    finally:
+        root.parent.chmod(0o755)
+    cause = raised.value.__cause__
+    said = f"{type(cause).__name__}: {cause}"
+    assert str(raised.value) == f"the shared data repository {root} cannot be read: {said}"
+
+
+@pytest.mark.parametrize("site", ["folder", "files", "whole", "save"])
+def test_a_decisions_read_or_write_the_disk_refuses_says_the_whole_error(
+    shared, monkeypatch, whole_error, site
+) -> None:
+    root, decision = shared.root, make()
+    assert save(shared, decision, expected_revision=None, message="m").saved
+    decision_cache.clear()
+
+    def refused(*_args: object, **_kwargs: object) -> None:
+        raise OSError(whole_error)
+
+    patched = {"folder": "kind", "files": "snapshot", "whole": "collect", "save": "_save_all"}[site]
+    monkeypatch.setattr(decision_store, patched, refused)
+    act = {
+        "whole": lambda: decision_store.whole(shared),
+        "save": lambda: decision_store.save_all(shared, [(decision, decision.revision)], message="m"),
+    }.get(site, lambda: load(shared, PROJECT))
+    with pytest.raises(DecisionsUnavailable) as raised:
+        act()
+    where = {
+        "folder": f"{root / PROJECT} cannot be read",
+        "files": f"the decisions in {root} cannot be read",
+        "whole": f"the decisions in {root} cannot be read",
+        "save": f"{decision.id} could not be written in {root}",
+    }[site]
+    assert str(raised.value) == f"{where}: OSError: {whole_error}"
+
+
+def test_every_decision_that_cannot_be_read_is_refused_with_the_whole_error(shared, monkeypatch, whole_error) -> None:
+    def unreadable(_layers: object) -> None:
+        raise OSError(whole_error)
+
+    monkeypatch.setattr(decision_actions, "read_layers", unreadable)
+    with pytest.raises(DecisionsUnavailable) as refused:
+        decision_actions.every(shared)
+    assert str(refused.value) == f"the decisions in {shared.root} cannot be read: OSError: {whole_error}"
+
+
+def test_a_commit_or_rebase_that_cannot_tell_a_rebase_is_ambiguous_and_says_why_whole(
+    shared, monkeypatch, whole_error
+) -> None:
+    def unknown(*_args: object) -> bool:
+        raise DataRepoError(whole_error)
+
+    monkeypatch.setattr(DataRepo, "rebasing", unknown)
+    until = time.monotonic() + 60
+    head, sent = decision_sync._ready(shared, until)  # noqa: SLF001
+    assert (head, sent.notice, sent.ambiguous) == ("", f"DataRepoError: {whole_error}, so nothing was committed", True)
+    sent = decision_sync._rebase_failed(shared, "saved", "the rebase stopped", until)  # noqa: SLF001
+    rebased = "saved, but it could not be rebased on the remote: the rebase stopped"
+    assert (sent.notice, sent.ambiguous) == (f"{rebased}; DataRepoError: {whole_error}", True)
 
 
 @pytest.mark.parametrize("broken", ["invalid", "unreadable"])
@@ -430,11 +499,32 @@ def test_an_ambiguous_conflict_flag_publish_stays_interrupted(shared, monkeypatc
         load(shared, PROJECT)
 
 
-def test_refresh_reports_uncommitted_work_instead_of_pulling(shared) -> None:
-    decision = make()
-    save(shared, decision, expected_revision=None, message="m")
-    (shared.root / PROJECT / "decisions" / f"{decision.id}.md").write_text("edited\n")
-    assert refresh(shared).startswith("not refreshed: 1 uncommitted file(s)")
+@pytest.mark.parametrize("site", ["uncommitted", "rev-list", "status"])
+def test_refresh_reports_uncommitted_work_instead_of_pulling(  # noqa: PLR0913, PLR0917 - its fixtures
+    shared_repo, shared, tmp_path, whole_error, failing_git, site
+) -> None:
+    """Uncommitted work, or a count behind the remote or a status Git fails while catching up, said whole."""
+    decision, second = held(shared, shared_repo[1], tmp_path / "second")
+    if site == "uncommitted":
+        (shared.root / PROJECT / "decisions" / f"{decision.id}.md").write_text("edited\n")
+        assert refresh(shared) == f"not refreshed: 1 uncommitted file(s) in {shared.root}; the next save publishes"
+        return
+    assert save(second, make(), expected_revision=None, message="decisions: from the second checkout").published
+    seen: list[tuple[str, ...]] = []
+
+    def pick(args: tuple[str, ...], _until: float | None) -> bool:
+        if args[:1] != (site,):
+            return False
+        seen.append(args)
+        return site == "rev-list" or len(seen) == 2  # refresh's own status runs first; catch-up's is the second
+
+    failing_git(whole_error, pick)
+    said = refresh(shared)
+    assert said == (
+        f"not refreshed from the remote: CalledProcessError: Command '{['git', *seen[-1]]}' returned non-zero exit "
+        f"status 128.\n{whole_error}"
+    )
+    assert [args[0] for args in seen] == ([site] if site == "rev-list" else [site, site])
 
 
 def test_a_commit_a_hook_added_is_never_taken_back(shared_repo, shared, tmp_path, monkeypatch) -> None:
@@ -517,7 +607,13 @@ def test_each_git_failure_of_a_save_is_said_whole(shared, monkeypatch, whole_err
         "commit": lambda args, _: "commit" in args[:3],
         "fetch": lambda args, _: args[:1] == ("fetch",),
     }
-    failing_git(whole_error, picks.get(site, lambda args, _: args[:1] == ("push",)))
+    ran: list[tuple[str, ...]] = []
+    pick = picks.get(site, lambda args, _: args[:1] == ("push",))
+    failing_git(whole_error, lambda args, until: pick(args, until) and not ran.append(args))
+
+    def git() -> str:  # the failed command as `CalledProcessError` words it, then Git's whole stderr
+        return f"CalledProcessError: Command '{['git', *ran[-1]]}' returned non-zero exit status 128.\n{whole_error}"
+
     if site == "push-unflagged":  # the flags' round could not run: only the save's own notice is left
         monkeypatch.setattr(decision_store, "_reconcile", lambda *_args: None)
     elif site == "push-gone":  # the rebase removed the file just written
@@ -528,19 +624,20 @@ def test_each_git_failure_of_a_save_is_said_whole(shared, monkeypatch, whole_err
     if site == "head":
         with pytest.raises(DecisionsUnavailable) as refused:
             save(shared, make(), expected_revision=None, message="decisions: notes")
-        assert str(refused.value) == f"Git cannot read the shared data repository {root}: {whole_error}"
+        assert str(refused.value) == f"Git cannot read the shared data repository {root}: {git()}"
         return
     said = save(shared, make(), expected_revision=None, message="decisions: notes")
+    probe = f"DataRepoError: cannot tell whether a rebase is in progress in {root}: {git()}"
     expected = {
-        "rebase-probe": f"cannot tell whether a rebase is in progress in {root}: {whole_error}, so nothing was written",
-        "fetch": f"not checked against the remote: {whole_error}",
+        "rebase-probe": f"{probe}, so nothing was written",
+        "fetch": f"not checked against the remote: {git()}",
         "push-unflagged": pushed,
         "push-gone": f"{pushed}; the file is gone",
     }.get(site)
     if site == "commit":  # the batch stays interrupted for the owner
         generation = decision_batch.pending(shared).generation
         held = f"(interrupted batch {generation}: finish or abandon it in Decisions)"
-        expected = f"saved, but not committed: {whole_error} {held}"
+        expected = f"saved, but not committed: {git()} {held}"
     assert said.notice == expected
 
 
@@ -575,7 +672,7 @@ def test_each_journal_or_write_refusal_is_said_whole(shared, monkeypatch, whole_
             expected = f"the interrupted decision batch g1 ({whole_error}) must be finished or abandoned"
         else:
             monkeypatch.setattr(decision_batch, "stamp", broken)
-            expected = whole_error
+            expected = f"JournalError: {whole_error}"
         with pytest.raises(DecisionsUnavailable) as refused:
             load(set_up(shared), PROJECT)
         assert str(refused.value) == expected
@@ -584,7 +681,7 @@ def test_each_journal_or_write_refusal_is_said_whole(shared, monkeypatch, whole_
         monkeypatch.setattr(decision_batch, "begin", broken)
         with pytest.raises(DecisionsUnavailable) as refused:
             save(shared, decision, expected_revision=None, message="decisions: notes")
-        assert str(refused.value) == whole_error
+        assert str(refused.value) == f"JournalError: {whole_error}"
         return
     head = shared.git("rev-parse", "HEAD").stdout.strip()
     if site == "held":  # refused midway, and the files are not proved put back

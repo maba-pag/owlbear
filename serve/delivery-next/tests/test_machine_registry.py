@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import environment
 from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move, registry
@@ -80,8 +81,11 @@ def test_a_reclone_at_the_same_path_shows_as_replaced_until_adopted_or_removed(t
 
 def test_a_folder_that_is_no_clone_of_the_owner_or_newer_state_is_refused(tmp_path, monkeypatch):
     (tmp_path / "plain").mkdir()
-    with pytest.raises(RegistryError, match="is not a git work tree"):
+    with pytest.raises(RegistryError) as refused:
         registry.register(tmp_path / "plain")
+    git = refused.value.__cause__
+    assert str(refused.value) == f"{tmp_path / 'plain'} is not a git work tree: {failure(git)}"
+    assert git.stderr.strip() in str(refused.value)  # Git's own words, after the failed command
     with pytest.raises(RegistryError, match="does not exist"):
         registry.register(tmp_path / "missing")
     work = clone(tmp_path / "work")
@@ -91,13 +95,55 @@ def test_a_folder_that_is_no_clone_of_the_owner_or_newer_state_is_refused(tmp_pa
     with pytest.raises(RegistryError, match=f"format {STORE_FORMAT + 1}, newer than {STORE_FORMAT}"):
         registry.register(work)
     (store / "format").write_text("four\n")
-    with pytest.raises(RegistryError, match="is unreadable"):
+    with pytest.raises(RegistryError) as unreadable:
         registry.register(work)
+    assert str(unreadable.value) == f"{store / 'format'} is unreadable: {failure(unreadable.value.__cause__)}"
+    assert isinstance(unreadable.value.__cause__, ValueError)
     (store / "format").unlink()
     monkeypatch.setattr(os, "getuid", lambda: os.geteuid() + 1)
     with pytest.raises(RegistryError, match="belongs to another user"):
         registry.register(work)
     assert (registry.load().projects, (store / "clone-id").exists()) == ([], False)
+
+
+def test_an_invalid_registry_says_its_whole_validation_error(home):
+    (home / "machine.json").write_text(f'{{"format": {registry.MACHINE_FORMAT}, "projects": "none"}}')
+    with pytest.raises(RegistryError) as unreadable:
+        registry.load()
+    cause = unreadable.value.__cause__
+    assert str(unreadable.value) == f"{home / 'machine.json'} is unreadable: {failure(cause)}"
+    assert type(cause).__name__ == "ValidationError"
+    assert "projects" in str(cause)
+
+
+@pytest.mark.parametrize("site", ["source", "binding", "revalidate"])
+def test_a_registration_check_that_fails_says_the_whole_error(tmp_path, monkeypatch, whole_error, site):
+    work = clone(tmp_path / "work").resolve()
+    store = work / ".git" / "owlbear-delivery"
+
+    def refused(*_args: object, **_kwargs: object) -> None:
+        raise OSError(whole_error)
+
+    if site == "revalidate":
+
+        def gone(_path: Path) -> None:
+            raise RegistryError(whole_error)
+
+        monkeypatch.setattr(registry, "_canonical", gone)
+        with pytest.raises(RegistryError) as raised:
+            registry._revalidate(work, store, "pid")  # noqa: SLF001 - the publication fence alone
+        retry = "nothing was registered; check the clone and retry"
+        assert str(raised.value) == f"{work}'s clone is no longer admissible: {retry}: RegistryError: {whole_error}"
+        return
+    monkeypatch.setattr(*((project_move, "pin") if site == "source" else (registry, "store_of")), refused)
+    with pytest.raises(RegistryError) as raised:
+        registry.register(work)
+    where = (
+        f"{store}'s source witnesses cannot be checked"
+        if site == "source"
+        else f"{work}'s Git directory binding cannot be checked"
+    )
+    assert str(raised.value) == f"{where}: nothing was registered: OSError: {whole_error}"
 
 
 def test_a_registry_from_a_newer_release_is_refused(home):

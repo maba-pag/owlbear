@@ -15,6 +15,7 @@ import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.improvement import case_review, retro_judge
 from owlbear_delivery_next.improvement import proposal_targets as targets
@@ -188,8 +189,8 @@ def run(w: Work, fid: str, places: Mapping[str, targets.Place], backlogs: Backlo
         said = paid(w, f"followup:{fid}", message, _valid, "retro-review")
         return {"followup": save(subj, said, backlogs)}
     except store.RetroError as exc:
-        msg = f"refused: {exc}"
+        msg = f"refused: {failure(exc)}"
         raise StoppedError(msg) from exc
     except (BacklogError, ProviderError, OSError) as exc:  # the answer is kept: the next run saves it unpaid
-        msg = f"stopped: the backlog could not be reached ({type(exc).__name__}: {exc})"
+        msg = f"stopped: the backlog could not be reached ({failure(exc)})"
         raise StoppedError(msg) from exc

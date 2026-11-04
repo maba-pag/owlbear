@@ -29,6 +29,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import proposal_apply, retro_judge
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_units as units
@@ -36,7 +37,7 @@ from owlbear_delivery_next.improvement.credit_meter import Meter
 from owlbear_delivery_next.improvement.retro_calls import Paid, StoppedError, WaitingError, Work
 from owlbear_delivery_next.improvement.retro_evidence import evidence
 from owlbear_delivery_next.local_system import maintenance, processes
-from owlbear_delivery_next.machine_host import cases_job, retro_block, retro_more
+from owlbear_delivery_next.machine_host import cases_job, retro_block, retro_more, retro_restore
 from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR
 from owlbear_delivery_next.machine_host.retro_inputs import (
     Running,
@@ -44,7 +45,6 @@ from owlbear_delivery_next.machine_host.retro_inputs import (
     failed_grading,
     prune,
     session,
-    settle_open,
     unfinished,
     where,
 )
@@ -96,6 +96,7 @@ class RetroJob:
         self.waiting: list[Running] = []
         self.checked, self.pruned_at = False, -PRUNE_EVERY
         self.skips = retro_block.Skips(self.seams.say, self.seams.blocked)
+        self.failed = ""  # the last pass's whole error, until a pass succeeds
 
     @classmethod
     def attach(cls, m: Machine, fenced: Callable[[], str]) -> RetroJob:
@@ -153,14 +154,16 @@ class RetroJob:
         while not stopping.wait(EVERY):
             try:
                 self.tick(clock())
+                self.failed = ""
             except Exception as exc:
                 LOG.exception("a Retro pass failed")
-                self.seams.say(f"Retro failed: {type(exc).__name__}: {exc}")
+                self.failed = failure(exc)  # the Improvement page's thread reads it
+                self.seams.say(f"Retro failed: {self.failed}")
 
     def tick(self, now: float) -> None:
         """One pass: restore once, then the button's requests, a waiting run, Changes, chats and the pruning."""
         if not self.checked:
-            self._restore()
+            self.waiting += retro_restore.restored(self._ended)
             self.checked = True
         store.add_grades(units.gap_grades(units.records(), store.known(), store.graded()))  # no call needed
         for request in store.queued():
@@ -185,27 +188,6 @@ class RetroJob:
 
     # Starting and ending runs
 
-    def _restore(self) -> None:
-        """Take up the runs this host's predecessor left open; end those whose spend is not known."""
-        live = set()
-        for snap in store.run_states().values():
-            if snap["state"] == "ended":
-                continue
-            ctx = Running.of(snap)
-            if snap["unsettled"] or not snap["known"]:
-                ctx.known = False
-                self._ended(ctx, "stopped: unknown spend after an interruption")
-            elif ctx.provenance == "synthetic" or ctx.uid.startswith("syn:"):
-                self._ended(ctx, f"refused: {store.SYNTHETIC_RETIRED}")
-            elif ctx.limit - ctx.spent <= 0:
-                self._ended(ctx, "stopped: its credit limit is spent")
-            else:
-                ctx.why = "OwlBear restarted"
-                store.run_event(ctx.id, "waiting", why=ctx.why)
-                self.waiting.append(ctx)
-                live.add((ctx.uid, ctx.rev))
-        settle_open(live)
-
     def _button(self, request: dict[str, Any]) -> None:
         by = request.get("by", "")
         if (more := retro_more.running(request)) is not None:  # a synthetic unit, a redraft or a follow-up
@@ -228,7 +210,7 @@ class RetroJob:
         try:
             item = self._due(uid, request)
         except (store.RetroError, OSError) as exc:
-            self._start(Running(uid, "button", by), f"refused: {exc}")
+            self._start(Running(uid, "button", by), f"refused: {failure(exc)}")
             return
         if item is None or item["rev"] in {i["rev"] for i in late}:  # that judged revision is graded now
             if not late:
@@ -298,7 +280,7 @@ class RetroJob:
             result = "stopped: OwlBear stopped"
         except Exception as exc:
             LOG.exception("a Retro run failed")
-            result = f"failed: {type(exc).__name__}: {exc}"
+            result = f"failed: {failure(exc)}"
         finally:
             self.running = ""
         self._ended(ctx, result, out)

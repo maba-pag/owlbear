@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.decision_records import Pick
 from owlbear_delivery_next.change_contracts.dispute_tools import ReconsiderResult
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import (
@@ -15,7 +16,9 @@ from owlbear_delivery_next.change_contracts.models import (
     Brief,
     Change,
     Exit,
+    Outcome,
     Plan,
+    Question,
     Step,
     StepKind,
     Task,
@@ -342,6 +345,49 @@ def test_an_unchanged_version_at_the_round_limit_needs_no_tick(shaping):
         1, 1, "clean", []
     )  # fmt: skip
     assert shaping.approve(1).json() == {"accepted": "brief-approval"}
+
+
+def _shaped_away(c: Change) -> None:
+    c.step = Step(kind=K.PLAN)
+
+
+def _reviewed(c: Change) -> None:
+    c.loops[BRIEF].unreviewed = []
+
+
+def _running(c: Change) -> None:
+    c.step = Step(kind=K.SHAPE, mode=brief_rounds.CHALLENGE)
+
+
+def _owner_asked(c: Change) -> None:
+    q = Question(id="q1", step=K.SHAPE, text="?", options=brief_rounds.OPTIONS, cause=f"{brief_rounds.DISPUTE}1 F1")
+    c.questions.append(q)
+    c.outcome = Outcome(exit=Exit.ASK, question="q1", at=NOW)
+
+
+def _pick_failed(c: Change) -> None:
+    c.brief.picked = Pick(version=2, status="failed", reason="the runtime did not start")
+
+
+@pytest.mark.parametrize(
+    ("change", "said"),
+    [
+        (_shaped_away, "the Change is not being shaped"),
+        (_reviewed, "a challenge has read brief v2's last revision"),
+        (_running, "its challenge runs or waits for your decision"),
+        (_owner_asked, "its challenge runs or waits for your decision"),
+        (_pick_failed, "picking brief v2's decisions failed; pick them again first"),  # as the chat's request is
+    ],
+)
+def test_one_more_challenge_is_refused_unless_the_version_waits_unreviewed(change, said):
+    c = Change(slug="c1", brief=Brief(version=2, requested=2, challenged=2), step=Step(kind=K.SHAPE))
+    c.loops[BRIEF] = RoundLoop(
+        subject=BRIEF, policy=RoundPolicy(max_rounds=1), round=1, head="1", ended="count", unreviewed=["v2"]
+    )
+    change(c)
+    before = c.model_dump()
+    assert brief_rounds.again(c, 2) == said
+    assert c.model_dump() == before
 
 
 def test_a_wait_for_a_verdict_ends_when_its_request_was_retired():

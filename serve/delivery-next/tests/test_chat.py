@@ -43,7 +43,7 @@ from owlbear_delivery_next.runtimes.vscode_contract import Outcome as Outcome_
 from owlbear_delivery_next.settings import carried
 from owlbear_delivery_next.settings.config import Agent, Layer
 from owlbear_delivery_next.state_store import briefs, work_block
-from owlbear_delivery_next.state_store.database import put_record
+from owlbear_delivery_next.state_store.database import StoreError, put_record
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -730,6 +730,22 @@ def test_a_state_that_refuses_a_revision_says_why_and_opens_no_chat(tmp_path, up
     refused = c.post("/api/next/changes/flip/revise-brief")
     assert (refused.status_code, refused.json()["detail"], opening.calls) == (409, reason, [])
     assert briefs.save_brief(store, DRAFT) == (409, {"errors": [f"change: {reason}"]})
+
+
+@pytest.mark.parametrize("call", ["revise", "create", "visual"])
+def test_a_store_failure_of_a_brief_or_visual_save_is_answered_whole(tmp_path, monkeypatch, whole_error, call):
+    store = revisable(tmp_path)
+
+    def failing(*_args: object) -> None:
+        raise StoreError(whole_error)
+
+    monkeypatch.setattr(store, "read_profile" if call == "create" else "read", failing)
+    if call == "visual":
+        said = briefs.save_visual(store, {"change": "c1", "ui": False})
+        assert said == (409, {"errors": [f"change: StoreError: {whole_error}"]})
+        return
+    said = briefs.save_brief(store, DRAFT if call == "revise" else {k: v for k, v in DRAFT.items() if k != "change"})
+    assert said == (409, {"errors": [f"change: StoreError: {whole_error}; try again"]})
 
 
 def test_a_new_change_while_one_opens_is_refused_and_the_gap_starts_when_it_ends(tmp_path, monkeypatch):

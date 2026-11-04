@@ -183,8 +183,8 @@ def _no_group(_pid):
 @pytest.mark.parametrize(
     ("what", "detail"),
     [
-        ("table", "the step's processes could not be looked for: the process table could not be listed: "),
-        ("group", "its group or session could not be read: [Errno 1] Operation not permitted"),
+        ("table", "the step's processes could not be looked for: the process table could not be listed: AccessDenied"),
+        ("group", "its group or session could not be read: PermissionError: [Errno 1] Operation not permitted"),
         ("marks", "the step's command marks could not be read: [Errno 21] Is a directory"),
         ("pids", "the step's recorded processes could not be read: [Errno 21] Is a directory"),
     ],

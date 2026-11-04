@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -160,6 +161,17 @@ def test_a_runner_and_the_host_write_at_once(tmp_path) -> None:
     assert (store.read("c2").profile_version, len(store.events("c2")), len(store.events("c1"))) == (59, 60, 60)
     with store.db.read() as db:
         assert db.execute("SELECT count(*) FROM inbox").fetchone() == (60,)
+
+
+@pytest.mark.parametrize("operation", ["read", "write"])
+def test_a_failed_read_or_write_says_the_database_error_whole(tmp_path, operation) -> None:
+    store = Store(tmp_path)
+    store.slugs()
+    with pytest.raises(StoreError) as refused, getattr(store.db, operation)() as db:
+        db.execute("SELECT * FROM not_a_table")
+    cause = refused.value.__cause__
+    assert isinstance(cause, sqlite3.OperationalError)
+    assert str(refused.value) == f"the Delivery database failed: OperationalError: {cause}"
 
 
 def test_a_fold_whose_barrier_waits_does_not_hold_another_changes_write(tmp_path) -> None:

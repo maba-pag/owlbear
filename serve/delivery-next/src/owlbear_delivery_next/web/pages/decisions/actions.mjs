@@ -9,13 +9,14 @@ const SUBMIT = { replace: "Replace", exception: "Record the exception", "queue-r
 const WIDER = { change: "the project", project: "Global" };
 const WHY = "Why it changes (recorded with the new rule)";
 
-// One receipt in words: each step the save reached, or why it was not saved; the decision named by its title.
+// One receipt in words: each step the save reached, or why it was not saved; the decision named by its title. A
+// notice says what failed, so it shows as produced, ids and paths included (D-01M6K2QT33Y51A83HQDR9X0D37).
 export function said(r) {
   const name = untagged(r.id);
-  if (!r.saved) return `${name}: not saved. ${untagged(r.notice)}`;
+  if (!r.saved) return `${name}: not saved. ${r.notice}`;
   const steps = ["saved", r.committed ? "committed" : "not committed", r.committed && (r.published ? "published"
     : "not published"), r.active ? "active" : r.conflict ? "in conflict, not active" : "not active"];
-  return `${name}: ${steps.filter(Boolean).join(" · ")}${r.notice ? `. ${untagged(r.notice)}` : ""}`;
+  return `${name}: ${steps.filter(Boolean).join(" · ")}${r.notice ? `. ${r.notice}` : ""}`;
 }
 
 export function receipts() {

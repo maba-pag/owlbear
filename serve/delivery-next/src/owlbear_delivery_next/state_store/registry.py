@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 from pydantic import ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
 from owlbear_delivery_next.change_contracts.models import Record
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings.config import MachineValues
@@ -141,12 +142,12 @@ def load() -> Machine:
     except FileNotFoundError:
         return Machine()
     except (OSError, ValueError) as exc:
-        msg = f"{path} is unreadable: {exc}"
+        msg = f"{path} is unreadable: {failure(exc)}"
         raise RegistryError(msg) from exc
     try:
         machine = Machine.model_validate_json(raw)
     except ValidationError as exc:
-        msg = f"{path} is unreadable: {exc.errors()[0]['msg']}"
+        msg = f"{path} is unreadable: {failure(exc)}"
         raise RegistryError(msg) from exc
     if machine.format > MACHINE_FORMAT:
         msg = f"{path} has format {machine.format}, newer than {MACHINE_FORMAT}: this OwlBear is older"
@@ -185,7 +186,7 @@ def _git(cwd: Path, *args: str) -> Path:
             [git, *args], cwd=cwd, capture_output=True, text=True, check=True, timeout=30
         ).stdout.strip()
     except (OSError, subprocess.SubprocessError) as exc:
-        msg = f"{cwd} is not a git work tree"
+        msg = f"{cwd} is not a git work tree: {failure(exc)}"
         raise RegistryError(msg) from exc
     return (cwd / out).resolve()
 
@@ -214,7 +215,7 @@ def _marker_at(store: Path, folder_fd: int | None) -> int:
         text = fd_tree.read_at(folder_fd, MARKER)
         return int(text) if text is not None else 0
     except (OSError, UnicodeError, ValueError) as exc:
-        msg = f"{store / MARKER} is unreadable"
+        msg = f"{store / MARKER} is unreadable: {failure(exc)}"
         raise RegistryError(msg) from exc
 
 
@@ -251,7 +252,7 @@ def _source_images(store: Path) -> Iterator[int | None]:
             msg = f"{store} no longer names the source being validated: nothing was registered"
             raise RegistryError(msg)
     except (OSError, StoreError) as exc:
-        msg = f"{store}'s source witnesses cannot be checked: nothing was registered: {exc}"
+        msg = f"{store}'s source witnesses cannot be checked: nothing was registered: {failure(exc)}"
         raise RegistryError(msg) from exc
     finally:
         if folder_fd is not None:
@@ -291,7 +292,7 @@ def _git_images(work: Path) -> Iterator[Path]:
                 msg = f"{work}'s Git directory binding changed during validation: nothing was registered"
                 raise RegistryError(msg)
     except (OSError, ValueError, StoreError) as exc:
-        msg = f"{work}'s Git directory binding cannot be checked: nothing was registered: {exc}"
+        msg = f"{work}'s Git directory binding cannot be checked: nothing was registered: {failure(exc)}"
         raise RegistryError(msg) from exc
 
 
@@ -338,7 +339,7 @@ def _switched(store: Path, pid: str | None) -> bool:
     try:
         return switched_authority.retained_target(store, pid) is not None
     except StoreError as exc:
-        raise RegistryError(str(exc)) from exc
+        raise RegistryError(failure(exc)) from exc
 
 
 def clone_id(store: Path) -> str | None:
@@ -346,7 +347,7 @@ def clone_id(store: Path) -> str | None:
     try:
         return project_home.clone_id(store)
     except StoreError as exc:
-        raise RegistryError(str(exc)) from exc
+        raise RegistryError(failure(exc)) from exc
 
 
 def _ensure_id(work: Path, store: Path, expected: str | None) -> str:
@@ -354,7 +355,7 @@ def _ensure_id(work: Path, store: Path, expected: str | None) -> str:
     try:
         pid = project_home.ensure_id(store)
     except StoreError as exc:
-        raise RegistryError(str(exc)) from exc
+        raise RegistryError(failure(exc)) from exc
     if (expected is not None and pid != expected) or clone_id(store) != pid:
         msg = f"{store}'s clone id changed while it was made durable: nothing was registered"
         raise RegistryError(msg)
@@ -370,7 +371,8 @@ def _revalidate(work: Path, store: Path, pid: str) -> None:
     try:
         same = _canonical(work) == (work, store, pid)
     except RegistryError as exc:
-        msg = f"{work}'s clone is no longer admissible: nothing was registered; check the clone and retry: {exc}"
+        said = failure(exc)
+        msg = f"{work}'s clone is no longer admissible: nothing was registered; check the clone and retry: {said}"
         raise RegistryError(msg) from exc
     if not same:
         msg = f"{work}'s clone changed before publication: nothing was registered; check the clone and retry"

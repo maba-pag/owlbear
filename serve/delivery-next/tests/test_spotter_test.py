@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -19,6 +20,7 @@ from copilot.generated.session_events import SessionEvent
 
 from owlbear_delivery_next.change_contracts.models import Change
 from owlbear_delivery_next.commands import cases_cli
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import cases, spotter, spotter_test_run
 from owlbear_delivery_next.local_system import data_place, data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -130,6 +132,17 @@ def test_a_declaration_is_refused_once_the_test_started_and_left_as_it_was(layer
     with pytest.raises(spotter_test.Refused, match=rf"{test['id']} \('fewer reworked hand-offs'\) started at"):
         spotter_test.declare("something else", "A", "1%")
     assert spotter_test.current() == test
+
+
+def test_an_unreadable_record_is_said_with_its_path_and_the_parser_s_whole_error() -> None:
+    spotter_test.path().parent.mkdir(parents=True, exist_ok=True)
+    spotter_test.path().write_text("{")
+    try:
+        json.loads("{")
+    except ValueError as exc:
+        whole = f"the Spotter's test record {spotter_test.path()} cannot be read: {failure(exc)}"
+    with pytest.raises(ValueError, match=rf"^{re.escape(whole)}\Z"):
+        spotter_test.current()
 
 
 def test_while_the_test_runs_no_version_changes_the_examples_and_a_candidate_is_still_added(layers) -> None:
@@ -282,3 +295,26 @@ def test_the_command_refuses_to_start_while_the_shared_repository_is_not_ready(l
     code = cases_cli.main(argparse.Namespace(command="improvement", action="test", test="start"))
 
     assert (code, capsys.readouterr().out.startswith("refused: ")) == (1, True)
+
+
+@pytest.mark.parametrize("broken", ["the prompt file", "the Spotter cases"])
+def test_a_start_whose_prompt_or_examples_cannot_be_read_is_refused_with_the_whole_reason(
+    layers, capsys, broken
+) -> None:
+    layers.set("gpt-6-luna", "medium", "long", "Judge the card.")
+    spotter_test.declare("fewer reworked hand-offs", "B", "10% fewer")
+    if broken == "the prompt file":
+        layers.prompt.unlink()
+        layers.prompt.mkdir()
+        why = f"the Spotter's prompt could not be read: IsADirectoryError: [Errno 21] Is a directory: '{layers.prompt}'"
+    else:
+        cases.place().mkdir(parents=True, exist_ok=True)
+        (cases.place() / "versions.jsonl").write_text("{not json\n")
+        why = (
+            "the Spotter cases could not be read, so no examples were shown (CaseError: versions.jsonl cannot be "
+            "read: JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1))"
+        )
+
+    code = cases_cli.main(argparse.Namespace(command="improvement", action="test", test="start"))
+
+    assert (code, capsys.readouterr().out) == (1, f"refused: the Spotter test cannot start: {why}\n")

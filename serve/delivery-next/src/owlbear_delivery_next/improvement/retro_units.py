@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import acts, chatlogs, retro_store, spotter
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.state_store.database import StoreError
@@ -76,14 +77,19 @@ def records() -> list[dict[str, Any]]:
     return found
 
 
-def manifest() -> list[dict[str, Any]] | None:
-    """Retro's manifest lines; None when it exists but cannot be read."""
+def manifest() -> list[dict[str, Any]]:
+    """Retro's manifest lines.
+
+    Raises:
+        RetroError: The manifest exists but cannot be read.
+    """
     try:
         text = (chatlogs.root() / "manifest.jsonl").read_text()
     except FileNotFoundError:
         return []
-    except OSError:
-        return None
+    except OSError as exc:
+        msg = f"Retro's manifest cannot be read: {failure(exc)}"
+        raise retro_store.RetroError(msg) from exc
     found = []
     for line in text.splitlines():
         with contextlib.suppress(ValueError):
@@ -122,7 +128,7 @@ def events(session: str) -> Iterator[dict[str, Any]]:
                     if isinstance(d := json.loads(raw), dict):
                         yield d
     except (EOFError, zlib.error) as exc:
-        raise OSError(str(exc)) from exc
+        raise OSError(failure(exc)) from exc
 
 
 def fingerprint(session: str) -> dict[str, Any]:
@@ -212,9 +218,6 @@ def describe_change(uid: str, st: Store, repo: Path | None) -> dict[str, Any]:
     """
     slug = uid.split(":", 2)[2]
     lines = manifest()
-    if lines is None:
-        msg = "Retro's manifest cannot be read"
-        raise retro_store.RetroError(msg)
     place, gaps, seen = change_place(st, repo, slug), [SHAPING], set()
     sessions = change_sessions(lines, place) if place else []
     if not place:
@@ -379,7 +382,7 @@ def eligible(
         try:
             return "" if projects[pid][0].read(slug).finished_at is not None else "it is not finished"
         except UNREADABLE as exc:
-            return f"it cannot be read ({type(exc).__name__})"
+            return f"it cannot be read ({failure(exc)})"
     return "it is no unit Retro knows"
 
 
@@ -394,7 +397,7 @@ def _chat_refusal(session: str, enrolled: list[str], logs: Path, *, fresh: bool)
     try:
         st = (logs / session / "events.jsonl").stat()
     except OSError as exc:
-        return f"its log cannot be read ({type(exc).__name__})"
+        return f"its log cannot be read ({failure(exc)})"
     return _fresh_refusal(session, st) if fresh else ""
 
 

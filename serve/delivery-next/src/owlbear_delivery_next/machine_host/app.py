@@ -34,6 +34,7 @@ from owlbear_delivery_next.project_host import (
     metrics_routes,
     pack_routes,
     pages,
+    token_guard,
 )
 from owlbear_delivery_next.state_store import decision_impact, machine_settings, registry, work_block
 
@@ -134,6 +135,7 @@ def create(machine: Machine, ended: Callable[[], None] = lambda: None) -> ASGIAp
         ended()
 
     app = FastAPI(title="OwlBear", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+    app.add_exception_handler(Exception, token_guard.uncaught)
     expected = f"Bearer {machine.record.token}".encode()
 
     @app.middleware("http")
@@ -145,8 +147,7 @@ def create(machine: Machine, ended: Callable[[], None] = lambda: None) -> ASGIAp
         return await call_next(request)
 
     def auth(request: Request) -> None:
-        if not secrets.compare_digest(request.headers.get("authorization", "").encode(), expected):
-            raise HTTPException(401, "token required")
+        token_guard.admit(request, expected)
 
     pages.assets(app)
     for path, html in pages.pages().items():

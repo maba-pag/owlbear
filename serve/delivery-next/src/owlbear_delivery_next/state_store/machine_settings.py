@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import Field
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.settings.config import GlobalLayer, MachineValues
 from owlbear_delivery_next.state_store import registry
@@ -57,7 +58,7 @@ def shared_values(shared: DataRepo | None) -> tuple[MachineValues | None, str]:
     try:
         return read_layer(shared.global_path, GlobalLayer).machine, ""
     except StoreError as exc:
-        return None, f"the global settings are unreadable: {exc}"
+        return None, f"the global settings are unreadable: {failure(exc)}"
 
 
 def current(local: registry.Settings | None = None) -> Resolved:
@@ -65,5 +66,5 @@ def current(local: registry.Settings | None = None) -> Resolved:
     try:
         glob, notice = shared_values(data_repo.locate())
     except data_repo.DataRepoError as exc:
-        glob, notice = None, str(exc)
+        glob, notice = None, failure(exc)
     return resolve(registry.load().settings if local is None else local, glob, notice)

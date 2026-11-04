@@ -11,6 +11,7 @@ import re
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import case_replay, cases, followups, proposal_apply, spotter_test_run
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
@@ -165,8 +166,10 @@ def _finished(projects: units.Projects) -> list[dict[str, Any]]:
     return _newest(found)
 
 
-def retro(projects: units.Projects, switches: Mapping[str, Any]) -> dict[str, Any]:
+def retro(projects: units.Projects, switches: Mapping[str, Any], failed: str = "") -> dict[str, Any]:
     """Retro's queue, newest runs and findings, units by state, switches and the finished Changes it may run on.
+
+    *failed* is the Retro job's last pass's whole error, "" once a pass succeeded.
 
     Each finding carries its follow-up, a chat's too: a chat has no Change page to follow it up on.
     """
@@ -182,6 +185,7 @@ def retro(projects: units.Projects, switches: Mapping[str, Any]) -> dict[str, An
         "units": by_state,
         "switches": dict(switches),
         "finished": _finished(projects)[:LOOKS],
+        "failed": failed,
     }
 
 
@@ -208,7 +212,7 @@ def _case(cid: str, entry: Mapping[str, Any]) -> dict[str, Any]:
     try:
         fact = cases.fact(cid)
     except CaseError as exc:
-        return {"id": cid, **entry, "marks": [], "error": str(exc)}
+        return {"id": cid, **entry, "marks": [], "error": failure(exc)}
     marks = [m for m, on in (("reserve", fact.get("reserve")), ("synthetic", fact.get("source") == "synthetic"),
                              ("unscored", fact.get("unscored"))) if on]  # fmt: skip
     if fact.get("assumption"):
@@ -216,8 +220,12 @@ def _case(cid: str, entry: Mapping[str, Any]) -> dict[str, Any]:
     return {"id": cid, **entry, "source": fact.get("source"), "marks": marks, "prefill": prefill(cid)}
 
 
-def spotter_cases() -> dict[str, Any]:
-    """The newest version's cases with marks and last checks, its versions and case runs (newest first), the queue."""
+def spotter_cases(failed: str = "", unpublished: str = "") -> dict[str, Any]:
+    """The newest version's cases with marks and last checks, its versions and case runs (newest first), the queue.
+
+    *failed* is the cases job's last pass's whole error and *unpublished* why its last publication sync could not
+    start, each "" once that went well.
+    """
     cur, runs = cases.current(), case_replay.results()
     shown = [{k: v for k, v in v.items() if k != "cases"} for v in cases.versions()]
     last: dict[str, dict[str, Any]] = {}
@@ -235,6 +243,8 @@ def spotter_cases() -> dict[str, Any]:
         "versions": shown[::-1][:VERSIONS],
         "runs": runs[::-1][:VERSIONS],
         "queued": [*case_replay.queued(), *({**r, "running": True} for r in case_replay.running())],
+        "failed": failed,
+        "unpublished": unpublished,
     }
 
 

@@ -102,8 +102,16 @@ function failedLooks(r) {
 function replay(r) {
   if ("applied" in r && !("result" in r)) return html`<li>${when(r.at)} \u00b7 run ${r.id}: ${r.applied === null
     ? r.why : `wrote version ${r.applied}`}</li>`;
-  return html`<li>${when(r.ended ?? r.at)} \u00b7 ${r.kind ?? "run"} ${r.id}: ${r.result ?? "no result"}${
-    failedLooks(r)}</li>`;
+  return html`<li>${when(r.ended ?? r.at)} \u00b7 ${r.kind ?? "run"} ${r.id}: <span class="said">${
+    r.result ?? "no result"}</span>${failedLooks(r)}</li>`;
+}
+
+// The cases job's own failures, whole, before its runs: its last pass, and a publication sync that could not start.
+function jobFailed(c) {
+  const pass = "The job's last pass failed, and the next one tries again: ";
+  const sync = "Not published, and the next sync tries again: ";
+  return html`${c.failed ? html`<li id="cases-failed">${pass}${c.failed}</li>` : nothing}${c.unpublished
+    ? html`<li id="cases-unpublished">${sync}${c.unpublished}</li>` : nothing}`;
 }
 
 export function casesSection(c) {
@@ -123,7 +131,8 @@ export function casesSection(c) {
       : empty(`No ${label.toLowerCase()}.`)}`)}
     <div class="panel">${heading(3, "Versions", "sm")}${c.versions.length
       ? html`<ol class="meta">${c.versions.map(version)}</ol>` : text("No version yet.", { size: "sm" })}</div>
-    <div class="panel">${heading(3, "Replay runs", "sm")}${c.runs.length
-      ? html`<ol class="meta">${c.runs.map(replay)}</ol>` : text("No replay run yet.", { size: "sm" })}</div>
+    <div class="panel">${heading(3, "Replay runs", "sm")}${c.runs.length || c.failed || c.unpublished
+      ? html`<ol class="meta">${jobFailed(c)}${c.runs.map(replay)}</ol>` : text("No replay run yet.", { size: "sm" })}
+    </div>
   </section>`;
 }

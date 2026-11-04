@@ -208,3 +208,26 @@ def test_a_regular_utf8_file_is_read_as_before_and_other_failures_keep_their_nam
         read(path)
     with pytest.raises(DecisionFileError, match="unreadable: FileNotFoundError"):
         read(tmp_path / "missing.md")
+
+
+def test_a_schema_or_yaml_error_keeps_the_whole_report(make):
+    """#971: every failing field with its message and input, and the YAML parser's every line, as the parser said."""
+    import pydantic  # noqa: PLC0415
+    from ruamel.yaml.error import YAMLError  # noqa: PLC0415
+
+    from owlbear_decisions.models import Decision  # noqa: PLC0415
+
+    text = serialize(make()).replace("origin: decided", "origin: maybe").replace("state: active", "state: gone")
+    with pytest.raises(DecisionFileError) as refused:
+        storage.parse(text)
+    with pytest.raises(pydantic.ValidationError) as schema:
+        Decision.model_validate(storage._yaml().load(text.split("---\n")[1]))  # noqa: SLF001 - the parser's own reading
+    assert str(refused.value) == f"schema: ValidationError: {schema.value}"
+    assert refused.value.locations == tuple(".".join(map(str, e["loc"])) for e in schema.value.errors())
+
+    broken = "---\nid: [unclosed\n---\n"
+    with pytest.raises(DecisionFileError) as unreadable:
+        storage.parse(broken)
+    with pytest.raises(YAMLError) as yaml:
+        storage._yaml().load("id: [unclosed\n")  # noqa: SLF001
+    assert str(unreadable.value) == f"front matter is not valid YAML: {type(yaml.value).__name__}: {yaml.value}"

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from owlbear_decisions.snapshot import CONFLICT
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch, decision_store, decision_sync, decision_transaction
@@ -36,7 +37,7 @@ def _current(shared: DataRepo, generation: str) -> decision_batch.Batch:
     try:
         batch = decision_batch.pending(shared)
     except decision_batch.JournalError as exc:
-        raise DecisionsUnavailable(str(exc), RECOVER) from exc
+        raise DecisionsUnavailable(failure(exc), RECOVER) from exc
     if batch is None or batch.generation != generation:
         msg = f"no interrupted decision batch has generation {generation}; it may be finished or changed"
         raise DecisionsUnavailable(msg, RECOVER)
@@ -67,8 +68,8 @@ def _written(root: DataRepo, batch: decision_batch.Batch) -> None:
 
 def _idle(shared: DataRepo, batch: decision_batch.Batch) -> None:
     """Refuse while a rebase is active or unknown: it is read before any other Git read, restore or remote proof."""
-    if not decision_transaction.operation_idle(shared):
-        msg = f"a rebase is active or unknown, so batch {batch.generation} is not recovered; resolve it in Git first"
+    msg = f"a rebase is active or unknown, so batch {batch.generation} is not recovered; resolve it in Git first"
+    if decision_transaction.rebasing(shared, DecisionsUnavailable(msg, RECOVER)):
         raise DecisionsUnavailable(msg, RECOVER)
 
 
@@ -127,7 +128,7 @@ def _preflight(root: DataRepo, batch: decision_batch.Batch) -> None:
         try:
             current = storage_io.read_regular(path)
         except OSError as exc:  # a pipe, a link or an unreadable file: refused before any write, the batch kept
-            msg = f"{rel} cannot be read as a plain file ({exc}), so batch {batch.generation} is not changed"
+            msg = f"{rel} cannot be read as a plain file ({failure(exc)}), so batch {batch.generation} is not changed"
             raise DecisionsUnavailable(msg, RECOVER) from exc
         if current not in (before, after):
             msg = f"{rel} was edited since batch {batch.generation} began, so nothing is changed; resolve it by hand"
@@ -186,7 +187,7 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
                 said = f"finished here, but not yet on the remote: {sent.notice}"
             return Recovery(generation=generation, done=True, notice=said)
     except (DataRepoError, OSError) as exc:
-        raise DecisionsUnavailable(str(exc), RECOVER) from exc
+        raise DecisionsUnavailable(failure(exc), RECOVER) from exc
 
 
 def _validate(root: DataRepo, batch: decision_batch.Batch) -> None:
@@ -243,4 +244,4 @@ def abandon(shared: DataRepo, generation: str) -> Recovery:
             notice = "abandoned: the files are as they were; Git is unchanged"
             return Recovery(generation=generation, done=True, notice=notice)
     except (DataRepoError, OSError) as exc:
-        raise DecisionsUnavailable(str(exc), RECOVER) from exc
+        raise DecisionsUnavailable(failure(exc), RECOVER) from exc

@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline, Said
 from owlbear_delivery_next.change_contracts.models import Change, Step, StepKind
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -322,11 +323,15 @@ def test_older_or_unreadable_change_records_are_listed_as_incomplete(tmp_path, s
         "unknown", ("20261020-090000-c1.json: merged, but records no decisions it applied",))  # fmt: skip
 
     (changes / "20261020-100000-c2.json").write_text("{not json")
+    try:
+        json.loads("{not json")
+    except ValueError as exc:
+        unreadable = failure(exc)
     shown = decision_impact.shown(decision_impact.report(shared, PROJECT, new.id, here))
     [p] = shown["projects"]
     assert (p["status"], p["incomplete"]) == ("unknown", [
         "20261020-090000-c1.json: merged, but records no decisions it applied",
-        "20261020-100000-c2.json: cannot be read (JSONDecodeError)"])  # fmt: skip
+        f"20261020-100000-c2.json: cannot be read ({unreadable})"])  # fmt: skip
 
 
 def test_keeping_existing_code_is_refused_when_the_rule_changed_after_the_report_was_read(
