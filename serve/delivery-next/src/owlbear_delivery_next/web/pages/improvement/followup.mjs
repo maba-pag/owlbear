@@ -26,8 +26,7 @@ export function askFollowup(item, what) {
   return ask({
     title: `Follow up this ${what}?`,
     now: `OwlBear adds one backlog entry for ${item.id}, in the backlog of the project it happened in, or the `
-      + "shared one when that project is not loaded; a synthetic one's only in the sandbox's. One already made is "
-      + "shown instead of a second.",
+      + "shared one when that project is not loaded. One already made is shown instead of a second.",
     then: "Unless a reviewed proposal already put it in words, a Retro run writes them first: one paid call within "
       + "Retro's limits. Words holding a credential, an email address or a home path are refused, nothing written.",
     after: "The entry stays in the backlog: close it there if it is not needed.",
@@ -49,8 +48,9 @@ export function said(answer) {
 // The follow-up line of *item*, with its button while none is saved or running; *go* runs the follow-up.
 export function followupLine(item, go, { busy = false, disabled = false } = {}) {
   const now = followupState(item), f = item.followup?.state ?? "";
-  const open = !now || f === "ended";
+  const open = item.provenance !== "synthetic" && (!now || f === "ended");
   return html`<div class="row followup">${now ? html`<p-text size="sm">${now}</p-text>` : nothing}
+    ${item.provenance === "synthetic" ? html`<p-text size="sm">Synthetic finding: historical only.</p-text>` : nothing}
     ${open ? button(f === "ended" ? "Follow up again" : "Follow up", go, { busy, disabled, aria: DIALOG }) : nothing}
   </div>`;
 }

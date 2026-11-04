@@ -109,16 +109,26 @@ def owned(q: Question) -> bool:
 
 def approvable(c: Change) -> str:
     """Why the current brief version cannot be approved yet, or "" (TD-249)."""
+    return _held(c)[0]
+
+
+def revising(c: Change) -> tuple[str, ...]:
+    """The findings the shaper revises the current brief version for, when that is what holds its approval."""
+    return _held(c)[1]
+
+
+def _held(c: Change) -> tuple[str, tuple[str, ...]]:
     b, lp = c.brief, c.loops.get(BRIEF)
     if b.challenged == b.version:
-        return picks.unready(c)
+        return picks.unready(c), ()
     if c.step.mode in MODES:
-        return f"the challenge of brief v{b.version} is running"
+        return f"the challenge of brief v{b.version} is running", ()
     if first(c) is not None or due(c) or owned_open(c):
-        return "a finding of its challenge waits for your decision"
+        return "a finding of its challenge waits for your decision", ()
     if (found := addressing(c)) and lp and lp.head == str(b.version):
-        return f"the shaper revises brief v{b.version} for {', '.join(f.id for f in found)}"
-    return f"brief v{b.version} has not been challenged; the shaper asks for its challenge once the draft is ready"
+        ids = tuple(f.id for f in found)
+        return f"the shaper revises brief v{b.version} for {', '.join(ids)}", ids
+    return f"brief v{b.version} has not been challenged; the shaper asks for its challenge once the draft is ready", ()
 
 
 def unreviewed(c: Change) -> bool:
@@ -238,7 +248,10 @@ def _ended(c: Change, version: int, ended: Ended, now: datetime) -> None:
 def counted(c: Change, found: list[str], upheld: Mapping[str, tuple[bool, str]], now: datetime) -> None:
     """Count one challenger verdict on the requested version; then the owner, the shaper or the approval."""
     lp, version = c.loops[BRIEF], c.brief.requested or c.brief.version
-    lp.verdict(found, upheld, str(version), f"v{version}", recheck=c.step.mode == RECHECK)
+    recheck = c.step.mode == RECHECK
+    repair = lp.head != str(version)
+    said = lp.verdict(found, upheld, str(version), f"v{version}", recheck=recheck)
+    lp.read(version, recheck=recheck, upheld=said, repair=repair)
     lp.reentry = False
     _mode(c, None)
     proceed(c, now)

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.improvement import retro_bars, retro_judge
 from owlbear_delivery_next.improvement import retro_proposals as props
+from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement.retro_calls import StoppedError, paid, strings
 
 if TYPE_CHECKING:
@@ -56,6 +57,9 @@ def run(w: Work, pid: str) -> dict[str, Any]:
     snap = props.folded().get(pid)
     if snap is None or snap["state"] != "redirected":
         msg = f"refused: proposal {pid} is {'unknown' if snap is None else snap['state']}, not redirected"
+        raise StoppedError(msg)
+    if snap.get("provenance") == "synthetic":
+        msg = f"refused: {store.SYNTHETIC_RETIRED}"
         raise StoppedError(msg)
     if snap["redraft"] and props.folded()[snap["redraft"]]["state"] != "drafted":
         return {"redraft": snap["redraft"], "reviews": 0}

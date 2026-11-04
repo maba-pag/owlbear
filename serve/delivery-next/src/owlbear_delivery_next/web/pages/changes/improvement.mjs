@@ -5,18 +5,16 @@ import { askFollowup, followupLine, said, send } from "/assets/page/improvement/
 import { finding, look } from "/assets/page/improvement/record.mjs";
 import { show } from "./state.mjs";
 import { info, notice, text } from "./widgets.mjs";
+import { detailsOn } from "./details.mjs";
 
-// The Spotter's and Retro's detail of one Change (#716), shown only while the menu's switch is on: its looks and
-// Retro's findings, each with its follow-up. A Change stopped for irreversible harm says so above, switch or not.
+// The Spotter's and Retro's detail of one Change (#716), shown only with the page's details: its looks and Retro's
+// findings, each with its follow-up. A Change stopped for irreversible harm says so above, switch or not.
 
-const DETAIL = "owlbear-improvement-detail";  // the switch, in localStorage: "on" shows this section
 const FRESH = 30000;  // ms a Change's read is kept: the page redraws every few seconds
 const read = new Map();  // key -> { at, data, error, reading }
 const outcome = new Map();  // key -> the last follow-up's notice
 let busy = "";
 
-const detailOn = () => localStorage.getItem(DETAIL) === "on";
-for (const event of [DETAIL, "storage"]) addEventListener(event, () => show());
 
 function fetched(d) {
   const kept = read.get(d.key);
@@ -65,6 +63,6 @@ function body(d, r) {
 }
 
 export function improvementSection(d) {
-  if (!detailOn() || !d.project) return nothing;
+  if (!detailsOn() || !d.project) return nothing;
   return html`<div id="improvement-detail">${info("The Spotter and Retro", body(d, fetched(d)))}</div>`;
 }

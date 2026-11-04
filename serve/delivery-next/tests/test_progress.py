@@ -19,6 +19,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
     VisualState,
 )
+from owlbear_delivery_next.change_contracts.round_records import BRIEF, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_contracts.visual_records import VisualRound
 from owlbear_delivery_next.change_flow import budgets
 from owlbear_delivery_next.change_flow.loop import StepResult
@@ -62,6 +63,17 @@ def test_a_new_change_is_shaping_with_no_round():
         "checks": "skipped",
         "merge": "upcoming",
     }
+
+
+def test_shaping_shows_no_round_count():
+    """The brief's versions say which challenge read which version, so the Shape stage counts no rounds."""
+    c = Change(slug="c1", step=Step(kind=StepKind.SHAPE, mode="challenge"))
+    c.loops[BRIEF] = RoundLoop(subject=BRIEF, round=2, policy=RoundPolicy())
+
+    p = progress(c)
+
+    assert (p.line, p.round) == ("Shape · Brief challenge", 1)
+    assert next(s.rounds for s in p.stages if s.key == "shape") == 1
 
 
 def test_one_plan_challenge_makes_planning_round_two():

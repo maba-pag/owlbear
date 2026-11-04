@@ -3,8 +3,9 @@ import { here } from "/assets/ui.mjs";
 import { DIALOG, state, send, starts, draft } from "./state.mjs";
 import { button, field, hd, text, list, panel, info, row } from "./widgets.mjs";
 import { merging } from "./forms.mjs";
-import { marks, findingDetails, WORKERS } from "./progress.mjs";
 import { reviseBrief } from "./shaping.mjs";
+import { detailsOn } from "./details.mjs";
+import { versionList } from "./versions.mjs";
 
 function screen(s) {
   const steps = s.steps.map((x) => (x.do === "type" ? `type "${x.text}" into ${x.target}` : `click ${x.target}`));
@@ -126,32 +127,38 @@ function readBacks(d) {
 }
 
 // A new shaping chat on the saved brief, offered only while the brief may take a revision.
-function reviseButton(d) {
+export function reviseButton(d) {
   if (d.brief.unrevisable !== "") return nothing;
   return button("Revise the brief in a new chat", () => reviseBrief(d),
     { variant: "secondary", icon: "edit", aria: DIALOG, busy: state.creating, ...starts(d) });
 }
 
-export function approval(d) {
+// Approving the current version, from its line in the version list; off, with the reason above, until it may be.
+function approveButton(d) {
   const version = d.brief.version, key = `${d.key}:approve:${version}`;
   const start = async () => {
     if (await ask(approving(d))) {
       send("/approve-brief", { version, unreviewed: Boolean(d.brief.unreviewed) }, d, key);
     }
   };
+  return button(`Approve v${version}`, start,
+    { icon: "check", aria: DIALOG, disabled: Boolean(d.brief.unapprovable), ...starts(d) });
+}
+
+export function approval(d) {
+  const version = d.brief.version, key = `${d.key}:approve:${version}`, on = detailsOn();
   const why = d.brief.unapprovable;  // TD-249: off until its challenge loop ended on this version
+  const act = (v) => (v.actions.includes("approve") ? approveButton(d) : nothing);
   return panel(`Brief v${version}${d.brief.title ? `: ${d.brief.title}` : ""}`, key,
     html`<div class="brief">${d.brief.outcome ? text(d.brief.outcome, { size: "md" }) : nothing}${agreement(d)}
-      ${picked(d)}${technical(d)}${readBacks(d)}</div>`,
-    d.rounds?.brief?.length ? html`${marks("Brief challenge", d.rounds.brief)}${findingDetails(
-      "Finding details of the brief challenge", [["Brief challenge", d.rounds.brief, WORKERS.brief]])}` : nothing,
+      ${on ? picked(d) : nothing}${technical(d)}${on ? readBacks(d) : nothing}</div>`,
     text("Nothing is built until you approve. You approve the whole brief, including the collapsed technical "
       + "details; your own choices stay yours to change. Approval authorises work within this brief, not new "
       + `product commitments. To change the brief before approving, ${d.brief.unrevisable === ""
         ? "revise it in a new chat or in the shaping chat" : "return to the shaping chat"}.`),
     why ? text(`Not yet: ${why}.`, { weight: "semibold" }) : nothing,
-    row(button(`Approve brief v${version}`, start,
-      { icon: "check", aria: DIALOG, disabled: Boolean(why), ...starts(d) }), reviseButton(d)));
+    versionList(d.brief.versions, "Versions", act),
+    d.brief.revising.length ? nothing : row(reviseButton(d)));  // while the shaper revises, Open items offers it
 }
 
 // What approving starts (TD-151): the brief, details included, becomes the baseline; then the challenge, planning,
@@ -187,11 +194,12 @@ export function briefInfo(d) {
   const at = d.brief.approved_at ? new Date(d.brief.approved_at).toLocaleString() : "";
   const v = d.brief.approved || d.brief.version;
   const added = (d.owner_criteria || []).map((k) => [`You added in visual round ${k.round}`, k.text]);
+  const on = detailsOn();
   return info(`Brief v${v}${at ? `, approved ${at}` : ""}`, html`<div class="brief">
-    ${d.brief.outcome ? text(d.brief.outcome) : nothing}${agreement(d, true)}${picked(d)}${technical(d)}
-    ${part("Changes since you approved", added.length ? saidList(added)
-      : text("None besides the amendments below."))}
-    ${amendmentsPart(d)}</div>
+    ${d.brief.outcome ? text(d.brief.outcome) : nothing}${agreement(d, true)}${on ? picked(d) : nothing}${technical(d)}
+    ${on ? part("Changes since you approved", added.length ? saidList(added)
+      : text("None besides the amendments below.")) : nothing}
+    ${on ? amendmentsPart(d) : nothing}${versionList(d.brief.versions, "Versions")}</div>
     ${d.brief.unrevisable === "" ? row(reviseButton(d)) : nothing}`);
 }
 

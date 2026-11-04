@@ -23,9 +23,10 @@ SHARED = [Overlap(other="c2", paths=["src/app.ts"])]
 
 
 @pytest.fixture
-def store(tmp_path, change_repo, monkeypatch) -> Store:
+def store(tmp_path, change_repo, monkeypatch, checks_settled) -> Store:
     """Change c1 about to plan ``src/app.ts``, which the open Change c2 plans too."""
     store = Store(tmp_path / "store")
+    checks_settled(store)
     names = Names(branch="owlbear/c1", target="main", worktree=str(change_repo))
     brief = Brief(version=1, approved_version=1, challenged=1)
     store.write(Lock("c1"), Change(slug="c1", brief=brief, step=Step(kind=StepKind.PLAN), names=names))

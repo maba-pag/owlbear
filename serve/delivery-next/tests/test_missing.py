@@ -332,8 +332,11 @@ def test_prompts_name_the_report() -> None:
 
 
 @pytest.mark.parametrize("how", ["refused", "left"])
-def test_a_shelve_failure_is_asked_and_logged_whole(repo, tmp_path, whole_error, monkeypatch, how) -> None:
+def test_a_shelve_failure_is_asked_and_logged_whole(  # noqa: PLR0913, PLR0917 - fixtures
+    repo, tmp_path, whole_error, monkeypatch, how, checks_settled
+) -> None:
     store = Store(tmp_path / "store")
+    checks_settled(store)
     c = change(K.PLAN).model_copy(update={"names": Names(branch="owlbear/c1", target="main")})
     store.write(Lock("c1"), c)
     left = [f"new-{i:02d}-{'x' * 12}.txt" for i in range(30)]

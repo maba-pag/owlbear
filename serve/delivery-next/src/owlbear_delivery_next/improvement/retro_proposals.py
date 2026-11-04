@@ -217,13 +217,13 @@ def file(
 
 
 def due_reviews() -> list[dict[str, Any]]:
-    """The drafted proposals, synthetic ones included: their current evidence has no review yet.
+    """The drafted real proposals whose current evidence has no review yet.
 
     That holds too for evidence grown back to a digest reviewed before, since growth made that review stale. None that
     rests on a retired assumption is listed.
     """
     gone = store.retired_ids()
-    return [p for p in folded().values() if p["state"] == "drafted" and store.visible(p, gone, synthetic=True)]
+    return [p for p in folded().values() if p["state"] == "drafted" and store.visible(p, gone, synthetic=False)]
 
 
 def reviewed(proposal: str, digest: str, answer: Mapping[str, Any]) -> None:

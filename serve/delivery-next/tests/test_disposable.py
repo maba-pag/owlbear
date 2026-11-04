@@ -261,9 +261,10 @@ def test_judges_of_a_batch_share_the_read_only_worktree_and_a_violation_voids_ea
 
 
 def test_the_planner_and_its_challenge_each_judge_a_clean_head_in_the_read_only_worktree(
-    tmp_path, change_repo, monkeypatch
+    tmp_path, change_repo, monkeypatch, checks_settled
 ):
     store, seen = Store(tmp_path / "store"), []
+    checks_settled(store)
     names = Names(branch="owlbear/c1", target="main", worktree=str(change_repo))
     change = Change(slug="c1", brief=Brief(version=1, approved_version=1, challenged=1), step=Step(kind=K.PLAN))
     store.write(Lock("c1"), change.model_copy(update={"names": names}))

@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 from owlbear_decisions import Decision, Scope, write
 from owlbear_delivery_next.change_contracts import chat_contract, pick_tools, tools
 from owlbear_delivery_next.change_contracts.models import Change
+from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
@@ -37,6 +38,7 @@ from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices, sdk_adapter, spotter_look
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import backlog, backlog_issues, decision_cache, decision_store, legacy_family
 from owlbear_delivery_next.state_store.store import Lock, Store
 
@@ -45,6 +47,18 @@ CHAT_REPLIES = {  # what a chat of each contract this host serves reads from its
     n: json.loads((Path(__file__).parent / "fixtures" / f"chat_contract_{n}.json").read_text())["replies"]
     for n in sorted(chat_contract.SUPPORTED)
 }
+
+
+@pytest.fixture
+def c1(tmp_path) -> tuple[Store, Any]:
+    """A store holding Change ``c1-fixture`` and the project app serving it with token ``tok``.
+
+    It is c1 waiting on brief v4 after challenges of v2 and v3, its decisions' wording replaced and its long texts cut.
+    """
+    c = Change.model_validate_json((Path(__file__).parent / "fixtures" / "c1_v4_waiting.json").read_text())
+    store = Store(tmp_path / "c1")
+    store.write(Lock(c.slug), c)
+    return store, api.create_app(store, "tok", Host())
 
 
 def pytest_configure() -> None:
@@ -718,6 +732,16 @@ def change_repo(tmp_path, monkeypatch, _change_template: Path) -> Path:
     # the copies have new inodes; without a refresh, plumbing such as diff-index sees a.txt as changed
     _RUN(["git", "update-index", "-q", "--refresh"], cwd=work, check=True, capture_output=True)
     return work
+
+
+def _settled(store: Store) -> None:
+    store.write_profile(profile.confirm(Profile(), "check:.", "true", datetime.now(UTC)))
+
+
+@pytest.fixture
+def checks_settled() -> Callable[[Store], None]:
+    """Record a confirmed root check command in a store's profile, so its plan steps start their sessions (#968)."""
+    return _settled
 
 
 class Host:

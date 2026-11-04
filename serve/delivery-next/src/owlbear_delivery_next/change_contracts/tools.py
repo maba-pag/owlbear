@@ -273,7 +273,7 @@ def check_plan(
 ) -> list[str]:
     """Return field errors for task checks outside the profile (*packages* word the hint) and scopes outside."""
     errors = [f"changes: uncommitted files ({_few(tree.dirty)}); planning changes nothing"] if tree.dirty else []
-    listed = ", ".join(f'"{c}"' for c in checks) or "none - ask the owner which command checks this package"
+    listed = ", ".join(f'"{c}"' for c in checks) or "none - the owner confirmed no check command for this package"
     brief = ", ".join(scope)
     for i, task in enumerate(plan.tasks):
         errors += [

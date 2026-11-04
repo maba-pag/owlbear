@@ -133,6 +133,27 @@ def test_an_accepted_proposal_is_applied_from_the_page(world) -> None:
     assert (redraft.status_code, store.queued()) == (409, [])
 
 
+def test_historical_synthetic_actions_are_refused_at_the_routes(world) -> None:
+    store.add_findings([{"id": "f-old", "unit": "syn:old", "provenance": "synthetic"}])
+    pid = props.file(props.open_key("synthetic", "lesson", "old"), ["f-old"], kind="lesson",
+                     target="agent:builder", provenance="synthetic")  # fmt: skip
+    props.reviewed(pid, props.folded()[pid]["evidence"], {"verdict": "survive", "publishable": TEXT})
+    (shown,) = world.http.get(API).json()["proposals"]
+    before = store.lines(props.FILE)
+
+    for state in ("accepted", "redirected", "rejected"):
+        response = world.http.post(f"{API}/proposals/{pid}/decide",
+                                   json={"state": state, "token": shown["token"], "direction": "change"})  # fmt: skip
+        assert (response.status_code, response.json()["detail"]) == (409, store.SYNTHETIC_RETIRED)
+    response = world.http.post(f"{API}/followups", json={"finding": "f-old"})
+    assert (response.status_code, response.json()["detail"]) == (409, store.SYNTHETIC_RETIRED)
+    assert (store.lines(props.FILE), store.queued()) == (before, [])
+
+    props.transition(pid, "redirected", "owner", direction="old")
+    response = world.http.post(f"{API}/proposals/{pid}/redraft")
+    assert (response.status_code, response.json()["detail"], store.queued()) == (409, store.SYNTHETIC_RETIRED, [])
+
+
 @pytest.mark.parametrize("write", ["decide", "move"])
 def test_a_write_that_arrives_while_an_update_takes_the_barrier_is_refused_with_nothing_written(world, write) -> None:
     if write == "decide":

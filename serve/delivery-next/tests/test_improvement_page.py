@@ -265,6 +265,48 @@ def contained(page: Page) -> None:
 
 
 @pytest.mark.browser
+@pytest.mark.timeout(90)
+def test_synthetic_retro_is_visible_as_history_without_action_buttons(tmp_path, monkeypatch, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
+        store.add_findings([{"id": "f-history", "unit": "syn:old", "what": "An invented finding",
+                             "provenance": "synthetic"}])  # fmt: skip
+        pid = props.file(props.open_key("synthetic", "lesson", "old"), ["f-history"], kind="lesson",
+                         target="agent:builder", provenance="synthetic")  # fmt: skip
+        props.reviewed(pid, props.folded()[pid]["evidence"], {"verdict": "survive", "publishable": TEXT})
+        redirected = props.file(props.open_key("synthetic", "agent-change", "old"), ["f-history"], kind="agent-change",
+                                target="agent:builder", provenance="synthetic")  # fmt: skip
+        props.reviewed(redirected, props.folded()[redirected]["evidence"], {"verdict": "survive", "publishable": TEXT})
+        props.transition(redirected, "redirected", "owner", direction="Keep the old direction")
+        child = props.redrafted(redirected, {"cause": "c", "target": "agent:builder", "mechanism": "m"}, "old")
+        props.reviewed(child, props.folded()[child]["evidence"], {"verdict": "survive", "publishable": TEXT})
+        partial = props.file(props.open_key("synthetic", "delivery-change", "old"), ["f-history"],
+                             kind="delivery-change", target="delivery:review", provenance="synthetic")  # fmt: skip
+        props.reviewed(partial, props.folded()[partial]["evidence"], {"verdict": "survive", "publishable": TEXT})
+        snapshot = {"destination": {"kind": "issue", "repository": "o/r", "synthetic": True}}
+        props.transition(partial, "accepted", "owner", snapshot=snapshot)
+        props.outcome(partial, "applied", step="created", artefact={"kind": "issue", "where": "o/r", "ref": "#2"})
+        page = improvement(w, pds)
+        old = card(page, pid)
+        expect(old).to_contain_text("Historical")
+        expect(old).to_contain_text("synthetic Retro is retired")
+        expect(old.get_by_role("button")).to_have_count(0)
+        expect(page.locator("#finding-f-history")).to_contain_text("An invented finding")
+        expect(page.locator("#finding-f-history")).to_contain_text("Synthetic finding: historical only.")
+        expect(page.locator("#finding-f-history").get_by_role("button", name="Follow up")).to_have_count(0)
+        expect(page.locator("#proposals")).to_contain_text("None waits for you.")
+        history = card(page, redirected)
+        expect(history).to_contain_text("Redirected")
+        expect(history).to_contain_text("Your direction: Keep the old direction")
+        expect(history).to_contain_text(f"Redrafted as {child}.")
+        expect(history.get_by_role("button")).to_have_count(0)
+        expect(card(page, partial)).to_contain_text("Partly made")
+        expect(card(page, partial)).not_to_contain_text("closed at once")
+        expect(card(page, partial).get_by_role("button")).to_have_count(0)
+
+
+@pytest.mark.browser
 @pytest.mark.timeout(120)  # a journey through every proposal dialog
 def test_proposals_are_decided_by_direction_and_each_dialog_says_what_follows(  # noqa: PLR0915 - a journey
     tmp_path, monkeypatch, pds
@@ -623,8 +665,8 @@ def test_an_empty_machine_says_so_and_an_unread_one_says_why(tmp_path, monkeypat
 
 
 @pytest.mark.browser
-@pytest.mark.timeout(120)  # a journey through the menu, the Change page and a reload
-def test_a_changes_detail_shows_behind_the_menu_switch(tmp_path, monkeypatch, pds) -> None:
+@pytest.mark.timeout(120)  # a journey through the Change page, the menu and a reload
+def test_a_changes_detail_shows_behind_the_details_switch(tmp_path, monkeypatch, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with machine_page(tmp_path, monkeypatch, pds) as w:
@@ -640,10 +682,11 @@ def test_a_changes_detail_shows_behind_the_menu_switch(tmp_path, monkeypatch, pd
         page.get_by_role("button", name="Menu").click()
         menu = page.locator("p-drilldown")
         expect(menu.get_by_role("link", name="Changes")).to_be_focused()  # it opens on the Work level, this page's
-        switch = page.locator("#improvement-detail-switch")
+        expect(menu.locator("p-switch")).to_have_count(0)  # the switch moved to the Change page
+        page.keyboard.press("Escape")
+        switch = page.locator("#details-switch")
         expect(switch).to_be_visible()
         switch.click()
-        page.keyboard.press("Escape")
         detail = page.locator("#improvement-detail")
         expect(detail.locator("#look-r-note")).to_contain_text("It said done with the week column unchecked.")
         finding = detail.locator("#finding-f-1")
@@ -662,6 +705,11 @@ def test_a_changes_detail_shows_behind_the_menu_switch(tmp_path, monkeypatch, pd
         page.reload()
         expect(page.locator("#improvement-detail #finding-f-1")).to_be_visible()  # the switch stays on
         expect(page.get_by_text(STOPPED).first).to_be_visible()
+
+        page.route("**/improvement/change?*", lambda route: route.fulfill(status=500, body="spotter store unreadable"))
+        page.reload()
+        expect(page.get_by_text("The Spotter's and Retro's detail could not be read")).to_be_visible()
+        expect(page.get_by_text(STOPPED).first).to_be_visible()  # the rest of the page still shows
 
 
 def aside(work: Callable[[], object]) -> None:
@@ -696,10 +744,11 @@ def test_a_failed_retro_run_shows_its_whole_error(tmp_path, monkeypatch, pds, wh
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
         slots = Slots(lambda: 1)
         slots.open()
-        store.request("owner", synthetic="large")
+        store.request("owner", change=f"{w.pid}:{DONE}")
         with monkeypatch.context() as settings:  # the job's own view of the machine's settings
             settings.setattr(machine_settings, "current", lambda: found)
-            aside(lambda: RETRO_TICK(retro_job.RetroJob(slots, owner=maintenance.Maintenance(slots)), 0.0))
+            seams = retro_job.Seams(projects=w.machine.retro.seams.projects)
+            aside(lambda: RETRO_TICK(retro_job.RetroJob(slots, seams, owner=maintenance.Maintenance(slots)), 0.0))
         [run] = store.run_states().values()
         expected = f"failed: RuntimeError: {whole_error}"
         assert run["result"] == expected
