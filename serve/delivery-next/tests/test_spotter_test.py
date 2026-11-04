@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -19,6 +20,7 @@ from copilot.generated.session_events import SessionEvent
 
 from owlbear_delivery_next.change_contracts.models import Change
 from owlbear_delivery_next.commands import cases_cli
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import cases, spotter, spotter_test_run
 from owlbear_delivery_next.local_system import data_place, data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -130,6 +132,17 @@ def test_a_declaration_is_refused_once_the_test_started_and_left_as_it_was(layer
     with pytest.raises(spotter_test.Refused, match=rf"{test['id']} \('fewer reworked hand-offs'\) started at"):
         spotter_test.declare("something else", "A", "1%")
     assert spotter_test.current() == test
+
+
+def test_an_unreadable_record_is_said_with_its_path_and_the_parser_s_whole_error() -> None:
+    spotter_test.path().parent.mkdir(parents=True, exist_ok=True)
+    spotter_test.path().write_text("{")
+    try:
+        json.loads("{")
+    except ValueError as exc:
+        whole = f"the Spotter's test record {spotter_test.path()} cannot be read: {failure(exc)}"
+    with pytest.raises(ValueError, match=rf"^{re.escape(whole)}\Z"):
+        spotter_test.current()
 
 
 def test_while_the_test_runs_no_version_changes_the_examples_and_a_candidate_is_still_added(layers) -> None:

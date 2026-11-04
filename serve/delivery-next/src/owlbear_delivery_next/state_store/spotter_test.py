@@ -17,6 +17,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home, storage_io
 
 if TYPE_CHECKING:
@@ -47,7 +48,7 @@ def current() -> dict[str, Any] | None:
     try:
         return json.loads(raw)
     except ValueError as exc:
-        msg = f"the Spotter's test record {path()} cannot be read: {exc}"
+        msg = f"the Spotter's test record {path()} cannot be read: {failure(exc)}"
         raise ValueError(msg) from exc
 
 
