@@ -220,6 +220,7 @@ def record_decision(  # noqa: PLR0913 - the decision's fields
 
     Keep implementation-only details in work evidence; do not record an unchanged rule again merely because it was used.
     Preserve the owner's scope and mixed intent unless he confirms separation; if full binding cannot fit, ask.
+    Continuing intent does not expire on implementation or merge.
     Read back free text and unclear answers at once; before the chat ends, run one closing check of everything you
     record. A replacement retires what it replaces; the reply shows its impact on existing work.
     """
