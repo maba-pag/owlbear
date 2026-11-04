@@ -50,7 +50,7 @@ class Gate:
     def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "", classified: str = "") -> bool:
         """End the step once and close the gate; the first ending is kept. Return whether it had already ended.
 
-        *classified* is what retries classify when *detail* says more (``Run.classified``).
+        *classified* is what retries classify and sign when *detail* says more (``Run.classified``).
         """
         with self._lock:
             was = self.done

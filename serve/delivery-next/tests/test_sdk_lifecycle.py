@@ -923,6 +923,33 @@ def test_a_failed_sdk_request_keeps_its_notes_and_data_and_retries_as_before(wor
     assert (result.reason, result.exit, result.cause, result.wake_at) == (want, Exit.RETRY, "tooling:build:sdk", None)
 
 
+def test_three_sdk_failures_whose_data_and_notes_say_different_words_ask_as_one_defect(world, monkeypatch, whole_error):
+    """#971: a request's JSON-RPC data and notes differ each time; retries sign the error without them, so the third
+    asks, showing the last one whole."""
+    c = Change(
+        slug="c1",
+        brief=Brief(version=1, approved_version=1),
+        plan=Plan(tasks=[Task(id="t1", title="one", scope=["a"])]),
+        step=Step(kind=StepKind.BUILD, task="t1", started_at=NOW),
+    )
+    signatures = set()
+    for where in ("queue drained", "worker replaced", "lease handed over"):
+        error = JsonRpcError(-32603, whole_error, {"where": where})
+        error.add_note(f"while the {where}")
+
+        async def broken(*_args, error=error, **_kw):
+            raise error
+
+        monkeypatch.setattr(sdk_adapter, "_open", broken)
+        c = loop.apply(c, to_result(asyncio.run(sdk_adapter.run(world.cfg)), StepKind.BUILD, NOW), NOW)
+        signatures.add(c.budgets.causes["tooling:build:sdk"].signature)
+    budget = c.budgets.causes["tooling:build:sdk"]
+    assert (len(signatures), budget.count, c.outcome.exit) == (1, 3, Exit.ASK)
+    said = f"JsonRpcError: JSON-RPC Error -32603: {whole_error}\nwhile the lease handed over"
+    said += " {'where': 'lease handed over'}"
+    assert loop.open_question(c).text == f"Delivery failed the same way 3 times (tooling:build:sdk): {said}"
+
+
 @pytest.mark.parametrize(
     ("said", "cause"),
     [
@@ -945,6 +972,7 @@ def test_a_timed_out_session_keeps_its_whole_error_and_retries_as_before(world, 
     assert (run.ending, _step_detail(run, tmp_path)) == ("deadline", want)
     result = to_result(run, StepKind.BUILD, NOW)
     assert (result.reason, result.exit, result.cause, result.wake_at) == (want, Exit.RETRY, cause, None)
+    assert result.classified == said  # retries sign the message alone, as before (#971)
 
 
 def test_an_unread_transcript_keeps_its_whole_error(world, monkeypatch, tmp_path, whole_error):
@@ -969,6 +997,7 @@ def test_an_unread_transcript_keeps_its_whole_error(world, monkeypatch, tmp_path
     assert (run.ending, _step_detail(run, tmp_path)) == ("unread", want)
     result = to_result(run, StepKind.BUILD, NOW)
     assert (result.reason, result.cause, result.wake_at) == (want, "liveness:build:transcript", None)
+    assert result.classified == "transcript read failed (JsonRpcError); the answer was not resent"  # what retries sign
 
 
 @pytest.mark.parametrize("unknown", [False, True])

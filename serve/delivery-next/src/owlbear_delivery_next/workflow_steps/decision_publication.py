@@ -60,7 +60,7 @@ def approve(store: Store, lock: Lock, c: Change, approval: BriefApproval) -> str
     store.write(lock, after)
     if not items:
         return ""
-    done, why = _published(store, after, items)
+    done, why, _ = _published(store, after, items)
     store.write(lock, c if why else done)
     return _refused(store, lock, c, f"{REFUSED}: {why}") if why else ""
 
@@ -79,15 +79,18 @@ def resume(store: Store, lock: Lock, c: Change, now: datetime) -> Change | None:
     if all(p.committed for p in c.decisions_published):
         return c
     try:
-        done, why = _published(store, c, _items(store, c))
+        done, why, said = _published(store, c, _items(store, c))
     except (decision_store.DecisionsUnavailable, DecisionError, OSError) as exc:
-        done, why = c, failure(exc)
+        done, why, said = c, failure(exc), f"{type(exc).__name__}: {exc}"
     if not why:
         store.write(lock, done)
         return done
     reason = f"{UNSAVED}: {why}"
     cause = cause_key(ErrorKind.NETWORK, c.step.kind, "decisions")
-    retry = StepResult(exit=Exit.RETRY, cause=cause, reason=reason, wake_at=now + timedelta(minutes=1))
+    signed = f"{UNSAVED}: {said}" if said else ""  # the environment's wait signs it without the notes (#971)
+    retry = StepResult(
+        exit=Exit.RETRY, cause=cause, reason=reason, classified=signed, wake_at=now + timedelta(minutes=1)
+    )
     store.log(lock, c.slug, {"event": "decisions-unsaved", "at": now.isoformat(), "reason": reason})
     store.write(lock, loop.apply(c, retry, now))
     return None
@@ -106,8 +109,11 @@ def _items(store: Store, c: Change) -> list[Item]:
     return [item for d in found if (item := _item(store.shared.root, c, d)) is not None]
 
 
-def _published(store: Store, c: Change, items: list[Item]) -> tuple[Change, str]:
-    """*c* with the receipts of saving *items* in one commit and its pin taking them in, or why they were not saved."""
+def _published(store: Store, c: Change, items: list[Item]) -> tuple[Change, str, str]:
+    """*c* with the receipts of saving *items* in one commit and its pin taking them in, or why they were not saved.
+
+    A failed save also returns what its retries sign: the error without its notes.
+    """
     done = c.model_copy(deep=True)
     saved: dict[str, Published] = {}
     if items:
@@ -115,15 +121,15 @@ def _published(store: Store, c: Change, items: list[Item]) -> tuple[Change, str]
         try:
             receipts = decision_store.save_all(store.shared, items, message=message)
         except (decision_store.DecisionsUnavailable, DecisionError, OSError) as exc:
-            return c, failure(exc)
+            return c, failure(exc), str(exc)
         if failed := [r for r in receipts if not r.batch]:  # a conflict flag left uncommitted is in the notice
-            return c, "; ".join(_failed(r) for r in failed)
+            return c, "; ".join(_failed(r) for r in failed), ""
         at = c.brief.approved_at or datetime.now(UTC)
         saved = {d.id: _record(d, r, at) for (d, _), r in zip(items, receipts, strict=True)}
         done.decisions_baseline = _pinned(c.decisions_baseline, [d for d, _ in items])
     kept = [p for p in c.decisions_published if p.committed and p.id not in saved]  # planned ones not saved go
     done.decisions_published = [*kept, *saved.values()]
-    return done, ""
+    return done, "", ""
 
 
 def _item(root: Path, c: Change, d: Decision) -> Item | None:

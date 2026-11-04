@@ -102,6 +102,7 @@ class StepResult(Record):
     exit: Exit
     cause: str | None = None
     reason: str = ""
+    classified: str = ""  # what retries sign when reason says more (#971)
     back_to: StepKind | None = None
     question: Question | None = None
     stop: Stop | None = None

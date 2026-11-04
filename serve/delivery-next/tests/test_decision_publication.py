@@ -25,6 +25,7 @@ from owlbear_delivery_next.change_contracts import pick_tools, tools
 from owlbear_delivery_next.change_contracts.inbox import BriefApproval
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_flow import loop, status
+from owlbear_delivery_next.change_flow.budgets import EPISODE_ASK
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.github.provider import PullRequest
@@ -720,10 +721,10 @@ def test_unavailable_authority_is_not_proof_that_malformed_history_was_never_pub
     assert picking.store.read(picking.slug).brief.approved_version == 1
 
 
-def _unavailable(reason: str):
+def _unavailable(reason: str, note: str = "NOTE-MARK"):
     def fail(*_args, **_kwargs):
         error = decision_store.DecisionsUnavailable(reason)
-        error.add_note("NOTE-MARK")
+        error.add_note(note)
         raise error
 
     return fail
@@ -765,3 +766,31 @@ def test_a_recovery_that_fails_waits_with_its_whole_reason(picking, monkeypatch,
     assert waiting.outcome.reason == reason
     (event,) = [e for e in picking.store.events(picking.slug) if e.get("event") == "decisions-unsaved"]
     assert event["reason"] == reason
+
+
+@pytest.mark.parametrize("fails", ["save", "items"])
+def test_a_day_of_the_same_failed_recovery_asks_though_its_notes_said_different_words(
+    picking, monkeypatch, whole_error, fails
+):
+    """#971: a failed save's notes differ each time; the wait signs the error without them, so a day of it asks,
+    showing the last one whole."""
+    shape(picking, 1, LASTING)
+
+    def crashed(*_args, **_kwargs):
+        raise Crash
+
+    monkeypatch.setattr(decision_store, "save_all", crashed)
+    with pytest.raises(Crash):
+        picking.approve(1)
+    target = (decision_store, "save_all") if fails == "save" else (decision_publication.decision_archive, "lasting")
+    for at, note in ((AT, "the push was refused"), (AT + EPISODE_ASK, "the fetch was cut off")):
+        monkeypatch.setattr(*target, _unavailable(whole_error, note))
+        with picking.store.lock(picking.slug) as lock:
+            assert decision_publication.resume(picking.store, lock, picking.store.read(picking.slug), at) is None
+
+    c = picking.store.read(picking.slug)
+    budget = c.budgets.causes[f"network:{c.step.kind}:decisions"]
+    assert (budget.since, budget.attempts, c.outcome.exit) == (AT, 2, Exit.ASK)
+    reason = f"{decision_publication.UNSAVED}: DecisionsUnavailable: {whole_error}\nthe fetch was cut off"
+    since = f"{AT:%Y-%m-%d %H:%M}"
+    assert loop.open_question(c).text == f"network keeps failing for {c.step.kind} since {since}; last error: {reason}"

@@ -192,7 +192,8 @@ def failed(c: Change, exc: Exception, now: datetime) -> StepResult:
         return StepResult(exit=Exit.STOP, reason=reason, stop=stop)
     cause = failures.cause_key(classify(exc), kind, "github" if isinstance(exc, ProviderError) else "git")
     reason = failure(exc)  # the classification above reads str(exc): the notes and streams never change it
-    return StepResult(exit=Exit.RETRY, cause=cause, reason=reason, wake_at=now + timedelta(minutes=1))
+    said = f"{type(exc).__name__}: {exc}"  # retries sign it without the notes, whose partial output varies
+    return StepResult(exit=Exit.RETRY, cause=cause, reason=reason, classified=said, wake_at=now + timedelta(minutes=1))
 
 
 def classify(exc: Exception) -> ErrorKind:

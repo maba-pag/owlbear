@@ -391,7 +391,8 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
             events = await _call(session.get_events(), "transcript read")
             watch_feed.spotted(st.feed, lambda s: s.history(events))  # the task and evidence it had before
         except Exception as exc:  # noqa: BLE001 - an unobserved transcript never authorizes a resend
-            st.finish("unread", detail=f"transcript read failed ({sdk_spend.failed(exc)}); the answer was not resent")
+            said = "transcript read failed ({}); the answer was not resent"
+            st.finish("unread", detail=said.format(sdk_spend.failed(exc)), classified=said.format(type(exc).__name__))
             return session
         if lessons.sent(events, message):
             message, resent = step_decisions.resumed(step_input.CONTINUE), False

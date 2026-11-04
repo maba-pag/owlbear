@@ -22,8 +22,10 @@ from owlbear_delivery_next.change_flow.budgets import EPISODE_ASK, PAUSE, PAUSE_
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.change_flow.status import Activity, card, status
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.git.remote_git import RemoteGitTimeout
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import session_result
+from owlbear_delivery_next.workflow_steps import engine
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 K = StepKind
@@ -96,6 +98,28 @@ def test_the_same_delivery_defect_three_times_asks_with_the_error(whole_error):
     q = loop.open_question(c)
     assert q.text == f"Delivery failed the same way 3 times (tooling:build:sdk): {said}"
     assert [o.id for o in q.options] == ["done", "pause"]
+
+
+def test_a_day_of_remote_git_timeouts_that_printed_different_words_asks_with_the_last_whole_error():
+    """#971: a timed-out fetch notes what it printed before its bound, different each time; the episode signs the
+    error without it, so a day of the same timeout still asks, and the question shows the last one whole."""
+    c, signatures, reasons = change(), set(), []
+    for at, printed in ((NOW, b"remote: Enumerating objects"), (NOW + EPISODE_ASK, b"remote: Compressing objects")):
+        error = RemoteGitTimeout("remote Git read exceeded 30 s")  # as remote_git raises it
+        error.add_note(failure(subprocess.TimeoutExpired(["git", "fetch", "origin"], 30, b"Fetching origin", printed)))
+        result = engine.failed(c, error, at)
+        reasons.append(result.reason)
+        c = loop.apply(c, result, at)
+        signatures.add(c.budgets.causes["network:build:git"].signature)
+    budget = c.budgets.causes["network:build:git"]
+    assert (len(signatures), budget.since, budget.attempts, c.outcome.exit) == (1, NOW, 2, Exit.ASK)
+    assert reasons[1] == (
+        "RemoteGitTimeout: remote Git read exceeded 30 s\n"
+        "TimeoutExpired: Command '['git', 'fetch', 'origin']' timed out after 30 seconds\n"
+        "stderr:\nremote: Compressing objects\nstdout:\nFetching origin"
+    )
+    q = loop.open_question(c)
+    assert q.text == f"network keeps failing for build since 2026-10-10 12:00; last error: {reasons[1]}"
 
 
 WRONG = "wrong model: a turn ran on gpt-6-sol, the step needs gpt-6-luna"
