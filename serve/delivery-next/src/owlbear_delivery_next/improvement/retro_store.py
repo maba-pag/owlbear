@@ -25,6 +25,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import assumptions
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
@@ -133,7 +134,7 @@ def lines(name: str) -> list[dict[str, Any]]:
     try:
         return [json.loads(line) for line in text.splitlines() if line.strip()]
     except ValueError as exc:
-        msg = f"Retro's {name} cannot be read: {exc}"
+        msg = f"Retro's {name} cannot be read: {failure(exc)}"
         raise RetroError(msg) from exc
 
 
@@ -171,7 +172,7 @@ def table() -> dict[str, Any]:
     except FileNotFoundError:
         return {"watermark": "", "units": {}}
     except ValueError as exc:
-        msg = f"Retro's {UNITS} cannot be read: {exc}"
+        msg = f"Retro's {UNITS} cannot be read: {failure(exc)}"
         raise RetroError(msg) from exc
     if not isinstance(found, dict) or not isinstance(found.get("units"), dict):
         msg = f"Retro's {UNITS} is not a table of units"

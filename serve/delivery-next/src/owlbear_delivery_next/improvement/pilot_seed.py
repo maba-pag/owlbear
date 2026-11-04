@@ -19,6 +19,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import assumptions, case_intake, cases
 from owlbear_delivery_next.improvement.card import bounded
 from owlbear_delivery_next.improvement.cases import CaseError
@@ -107,12 +108,12 @@ def _read(folder: Path, name: str) -> Any:  # noqa: ANN401 - each file's JSON
     try:
         text = (folder / name).read_text()
     except OSError as exc:
-        msg = f"the pilot's {name} cannot be read: {exc}"
+        msg = f"the pilot's {name} cannot be read: {failure(exc)}"
         raise CaseError(msg) from exc
     try:
         return [json.loads(x) for x in text.splitlines() if x.strip()] if name.endswith(".jsonl") else json.loads(text)
     except ValueError as exc:
-        msg = f"the pilot's {name} cannot be read: {exc}"
+        msg = f"the pilot's {name} cannot be read: {failure(exc)}"
         raise CaseError(msg) from exc
 
 

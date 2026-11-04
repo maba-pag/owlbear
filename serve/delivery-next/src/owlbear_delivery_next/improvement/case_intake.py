@@ -14,6 +14,7 @@ import hashlib
 import json
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement.cases import (
     CALLS,
     CaseError,
@@ -44,7 +45,7 @@ def families() -> dict[str, dict[str, str]]:
     except FileNotFoundError:
         return {}
     except ValueError as exc:
-        msg = f"families.json cannot be read: {exc}"
+        msg = f"families.json cannot be read: {failure(exc)}"
         raise CaseError(msg) from exc
 
 
@@ -122,7 +123,7 @@ def from_record(record: str, call: str, why: str, by: str, proposal: str = "") -
         with gzip.open(spot / "cards" / f"{record}.json.gz", "rt") as fh:
             the_card = json.load(fh)
     except (OSError, ValueError) as exc:
-        msg = f"the card of record {record} cannot be read: {exc}"
+        msg = f"the card of record {record} cannot be read: {failure(exc)}"
         raise CaseError(msg) from exc
     family = f"change:{found['change']}" if found.get("change") else f"session:{found.get('session', '')}"
     keep = ("id", "at", "session", "change", "step", "look", "call", "category", "prompt", "cases", "turn")
