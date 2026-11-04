@@ -81,8 +81,8 @@ export function at(value, key) {
 
 // A setting's name in the table: its group and its name on the page; a setting with no row, as it is written.
 function acrossName(key) {
-  const group = GROUPS.find(([id]) => id === groupOf(rowOf(key)))[1];
-  return hasRow(key) ? `${group} · ${nameOf(key)}` : key.replaceAll(".", " · ");
+  if (!hasRow(key)) return key;
+  return `${GROUPS.find(([id]) => id === groupOf(rowOf(key)))[1]} · ${nameOf(key)}`;
 }
 
 // Each setting a project sets apart from the global value, with that global value and where it comes from.

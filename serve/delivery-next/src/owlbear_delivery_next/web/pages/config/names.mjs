@@ -84,7 +84,7 @@ export const PLAIN_NAMES = { sessions: "Agent sessions at once in one project", 
 const SECTION = { spotter: "Spotter", pr_labels: "Pull requests", pr_marker: "Pull requests" };
 
 // A setting's name in three parts: the section, the row and, in the agents and rounds tables, the column; null where
-// the page shows no row for it. A key the page knows nothing about is a defect, not a name to guess.
+// the page shows no row for it, undefined for a key the page knows nothing about.
 function parts(key) {
   const [head, a, b] = key.split(".");
   const round = (f) => ROUNDS.find(([r]) => r === f);
@@ -110,17 +110,29 @@ function parts(key) {
   } else if (PLAIN_NAMES[key]) {
     return [SECTION[key] ?? "", PLAIN_NAMES[key], ""];
   }
-  throw new Error(`No Settings name is known for the setting "${key}"`);
+  return undefined;
+}
+
+// A key of a setting in force that the page knows nothing about is a defect, not a name to guess.
+function known(key) {
+  const found = parts(key);
+  if (found === undefined) throw new Error(`No Settings name is known for the setting "${key}"`);
+  return found;
+}
+
+// Whether the page knows the setting at all: a change notice kept from an older version can name one since retired.
+export function isKnown(key) {
+  return parts(key) !== undefined;
 }
 
 // Whether the page shows a row, or a cell of one, that sets *key*.
 export function hasRow(key) {
-  return parts(key) !== null;
+  return known(key) !== null;
 }
 
 // The words the owner finds on the page for *key*: "Spotter · On or off", "planner · Model", "Final review · Rounds
 // at most". A setting with no row is named as it is written.
 export function nameOf(key) {
-  const found = parts(key);
+  const found = known(key);
   return found ? found.filter(Boolean).join(" · ") : key;
 }

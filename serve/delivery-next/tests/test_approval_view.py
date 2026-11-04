@@ -26,7 +26,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings import config
-from owlbear_delivery_next.state_store import decision_store, machine_settings, spend_ledger
+from owlbear_delivery_next.state_store import decision_store, machine_settings, spend_ledger, work_block
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import decision_publication
 
@@ -586,8 +586,9 @@ def test_the_owner_reruns_a_stopped_step_after_confirming_what_follows(page_url,
         again = page.get_by_role("button", name="Done: run the step again")
         if case in {"liveness", "unset"}:
             if case == "unset":
+                count = len(work_block.of_store(store).keys)
                 expect(note).to_contain_text(
-                    re.compile(r"\d+ settings are unset; set them on the Settings page to run the step again")
+                    f"{count} settings are unset; set them on the Settings page to run the step again."
                 )
                 expect(note).not_to_contain_text("agents.")  # how many, never which keys
             expect(again).to_have_count(0)
