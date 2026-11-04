@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 import uvicorn
-from owlbear_memory import MemoryCategory, MemoryEngine
+from owlbear_memory import MemoryCategory, MemoryEngine, storage
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
@@ -29,6 +29,7 @@ from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer
 from owlbear_delivery_next.state_store import backlog_issues, machine_settings, registry
 from owlbear_delivery_next.state_store.backlog import Backlog, Entry
+from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import Store, read_layer
 
 if TYPE_CHECKING:
@@ -341,6 +342,73 @@ def test_memory_shows_each_folder_once_beside_global_and_makes_an_entry_global(
     assert {e.title: e.state for e in MemoryEngine(root / "shop-site" / "memory").get_entries()}["Read the twin"] == (
         "approved"
     )
+
+
+@pytest.mark.browser
+def test_memory_shows_unreadable_settings_and_a_failed_move_whole(
+    tmp_path: Path, shared_repo, pds, monkeypatch, whole_error
+) -> None:
+    """#971: the purge line says why the purge age is unknown, and a move that fails says why, each whole."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    folder = shared_repo[0] / "docs-site" / "memory"
+    curated(folder, "Pin the runtime")
+    curated(folder, "Old lesson")
+    engine = MemoryEngine(folder)
+    old = next(e for e in engine.get_entries() if e.title == "Old lesson")
+    engine.delete(old.id, engine.approve(old.id, old.updated_at).updated_at)
+    unread, refused = StoreError(whole_error), ValueError(whole_error)
+    for error in (unread, refused):
+        error.add_note("a note added on the way up")
+
+    def unreadable(_store):
+        raise unread
+
+    real = storage.write_entry
+
+    def refusing(path, written, *, memory_dir):  # only the moving entry's write, which names its origin, fails
+        if getattr(written, "origin", None):
+            raise refused
+        return real(path, written, memory_dir=memory_dir)
+
+    monkeypatch.setattr(Store, "settings", unreadable)
+    server, base = serving(machine(tmp_path, shared_repo[0])[0])
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            said: list[str] = []
+            page.on("console", lambda m: said.append(f"{m.text} {m.location['url']}") if m.type == "error" else None)
+            page.on("pageerror", lambda e: said.append(str(e)))
+            page.goto(f"{base}/memory?project={DOCS}#token=t")
+            pds.pick(page.locator("#filters"), "State", "any")
+            line = page.locator("section.quiet div.row > div > p-text")  # the purge line
+            expect(line).to_have_count(1)
+            assert line.text_content() == (
+                f"The settings can't be read: StoreError: {whole_error}\na note added on the way up."
+            )
+            monkeypatch.setattr(storage, "write_entry", refusing)
+            pinned = page.locator("li.entry").filter(has_text="Pin the runtime")
+            pinned.get_by_role("button", name="Make global").click()
+            pds.answer(page, "Make global")
+            expect(page.locator("#error")).to_be_visible()
+            assert page.locator("#error").text_content().strip() == (
+                f"Pin the runtime cannot move: ValueError: {whole_error}\na note added on the way up"
+            )
+            moved = next(e.id for e in engine.get_entries() if e.title == "Pin the runtime")
+            answered = "Failed to load resource: the server responded with a status of"
+            assert set(said) == {  # the test machine has no update checks or seen marks; the refused move
+                f"{answered} 404 (Not Found) {base}/api/next/updates",
+                f"{answered} 404 (Not Found) {base}/api/next/seen",
+                f"{answered} 422 (Unprocessable Content) {base}/p/{DOCS}/api/next/memory/{moved}/make-global",
+            }
+            browser.close()
+    finally:
+        server.should_exit = True
 
 
 def test_an_older_scope_label_without_its_project_label_means_the_project_it_was_found_in():

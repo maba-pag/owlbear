@@ -17,6 +17,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.machine_host import curation
 from owlbear_delivery_next.project_host import api, memory_routes
 from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -190,6 +191,26 @@ def test_purge_without_an_age_and_without_the_setting_is_refused_and_the_page_is
     assert (refused.status_code, "purge age is unset" in refused.json()["detail"]) == (409, True)
     assert len(list(folder.glob("*.md"))) == 1  # nothing was removed
     assert c.post("/api/next/memory/purge", json={"min_age_days": 0}).json()["purged"] == 1  # an age sent still works
+
+
+def test_unreadable_settings_reach_the_purge_line_and_its_refusal_whole(shared, monkeypatch, whole_error):
+    root, _, repo = shared
+    store = Store.open(repo)
+    deleted_days_ago(root / store.name / "memory", "Old lesson", 400)
+    c = client(store)
+    error = StoreError(whole_error)
+    error.add_note("a note added on the way up")
+
+    def unreadable(_store):
+        raise error
+
+    monkeypatch.setattr(Store, "settings", unreadable)
+    listed = c.get("/api/next/memory").json()
+    refused = c.post("/api/next/memory/purge", json={})
+
+    why = f"the settings can't be read: StoreError: {whole_error}\na note added on the way up"
+    assert (listed["purge_days"], listed["purge_why"]) == (None, why)
+    assert (refused.status_code, refused.json()["detail"]) == (409, why)
 
 
 def test_an_entry_shown_to_the_page_carries_no_stored_score(shared):
@@ -422,6 +443,40 @@ def test_a_move_that_fails_keeps_the_entry_where_it_was_with_its_origin_and_can_
     assert again.status_code == 200
     assert [e.id for e in MemoryEngine(folder).get_entries()] == [entry.id]
     assert MemoryEngine(common).get_entries() == []
+
+
+@pytest.mark.parametrize(
+    ("error", "answer"),
+    [
+        (ValueError, (422, "Pin the runtime cannot move: {}")),
+        (PermissionError, (409, "Pin the runtime could not move: {}; try again")),
+    ],
+)
+def test_a_move_that_fails_answers_with_its_whole_error(shared, monkeypatch, whole_error, error, answer):
+    root, _, repo = shared
+    store = Store.open(repo)
+    entry = seed(root / store.name / "memory", "Pin the runtime", curated=True)
+    raised, rendered = (
+        (error(whole_error), f"ValueError: {whole_error}")
+        if error is ValueError
+        else (error(13, whole_error, "entry.md"), f"PermissionError: [Errno 13] {whole_error}: 'entry.md'")
+    )
+    raised.add_note("a note added on the way up")
+    real = storage.write_entry
+
+    def refusing(path, written, *, memory_dir):  # only the moving entry's write, which names its origin, fails
+        if getattr(written, "origin", None):
+            raise raised
+        return real(path, written, memory_dir=memory_dir)
+
+    monkeypatch.setattr(storage, "write_entry", refusing)
+    failed = client(store).post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at})
+
+    status, said = answer
+    assert (failed.status_code, failed.json()["detail"]) == (
+        status,
+        said.format(f"{rendered}\na note added on the way up"),
+    )
 
 
 def test_no_entry_moves_while_a_curation_runs_apply_is_cut_short(shared):
