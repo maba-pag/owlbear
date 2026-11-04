@@ -15,6 +15,7 @@ from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, ne
 from owlbear_delivery_next.change_contracts import pick_tools, tools
 from owlbear_delivery_next.change_contracts.decision_records import Pick
 from owlbear_delivery_next.change_contracts.dispute_tools import ReconsiderResult
+from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import Change, ErrorKind, Exit, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.profile_record import Profile
@@ -382,6 +383,10 @@ def test_plan_and_code_reconsiderations_read_the_complete_list(which):
     assert said.index(line(rule)) < said.index(step_decisions.COMPLETE) < said.index(line(other))
 
 
+# trigger words in a note leave the gate's cause as it was (#971)
+NOTE = "while reading the corrections log; the request timed out over quota"
+
+
 def _session_said(ending: str, payload: pick_tools.PickResult | None = None, **fields):
     async def run(cfg):
         return Run(cfg.session_id, ending, payload, termination=Termination(confirmed=True), **fields)
@@ -392,16 +397,19 @@ def _session_said(ending: str, payload: pick_tools.PickResult | None = None, **f
 @pytest.mark.parametrize(
     ("said", "why"),
     [
-        ("corrections", "OSError: {e}"),
+        ("corrections", "OSError: {e}\n" + NOTE),
         ("detail", "its session ended error: {e}"),
         ("usage_unread", "its pick cannot be trusted: {e}"),
     ],
+    ids=["corrections", "detail", "usage_unread"],
 )
 def test_a_failed_pick_at_a_boundary_keeps_its_whole_reason(picking, monkeypatch, whole_error, said, why):
     run = Running(picking, monkeypatch, picking.put(make()))
     picking.put(make(title="Farewells are polite", statement="Farewells say thank you."))
     if said == "corrections":
-        monkeypatch.setattr(pick, "corrections", lambda *_a: (_ for _ in ()).throw(OSError(whole_error)))
+        unreadable = OSError(whole_error)
+        unreadable.add_note(NOTE)
+        monkeypatch.setattr(pick, "corrections", lambda *_a: (_ for _ in ()).throw(unreadable))
     elif said == "detail":
         monkeypatch.setattr(runner.sdk_adapter, "run", _session_said("error", detail=whole_error))
     else:
@@ -410,6 +418,6 @@ def test_a_failed_pick_at_a_boundary_keeps_its_whole_reason(picking, monkeypatch
     c = run.step()
 
     reason = f"{decisions_gate.REPICK}: {why.format(e=whole_error)}"
-    assert c.outcome.reason == reason
+    assert (c.outcome.reason, c.outcome.cause) == (reason, cause_key(ErrorKind.NETWORK, StepKind.BUILD, pick.LABEL))
     (event,) = [e for e in picking.store.events(picking.slug) if e.get("kind") == StepKind.BUILD]
     assert event["reason"] == reason

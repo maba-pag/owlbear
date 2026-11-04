@@ -21,6 +21,7 @@ from owlbear_delivery_next.change_contracts.decision_records import Pick, Picked
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_flow import picks
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.state_store import decision_store
@@ -128,7 +129,7 @@ def run(store: Store, lock: Lock, c: Change) -> Change:
         found = listed(view.snapshot, c)
         said = message(c, found, log)
     except (decision_store.DecisionsUnavailable, OSError, ValueError) as exc:
-        why = f"{type(exc).__name__}: {exc}"
+        why = failure(exc)
         c.brief.picked = base.model_copy(update={"status": "failed", "reason": why})
         store.log(lock, c.slug, {"event": "pick-failed", "at": now.isoformat(), "reason": why})
         store.write(lock, c)
@@ -158,7 +159,7 @@ def reassessed(store: Store, lock: Lock, c: Change, found: list[Decision], root:
         log = corrections(root, store.name)
         message_text = message(c, found, log, instruction)
     except (OSError, ValueError) as exc:
-        return [], f"{type(exc).__name__}: {exc}"
+        return [], failure(exc)
     done = _session(store, lock, c, message_text, held)
     said = judged(done, found, Pick(version=c.brief.version))
     held.session = ""  # done: the next reassessment is a session of its own
