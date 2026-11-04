@@ -813,3 +813,18 @@ def test_the_sessions_a_record_or_pilot_case_rests_on_are_kept_and_a_synthetic_c
     for cid, prov in made.items():
         (cases.place() / f"{cid}.json").write_text(json.dumps({"id": cid, "provenance": prov}))
     assert pinned() == {"s-rec", "s-pil"}
+
+
+@pytest.mark.usefixtures("said")
+def test_a_pass_whose_units_cannot_be_read_keeps_the_whole_error() -> None:
+    job, told = _job(Asker()), []
+    job.seams = dataclasses.replace(job.seams, say=told.append)
+    retro_store.place().mkdir(parents=True, exist_ok=True)
+    (retro_store.place() / "units.json").write_text("{x")
+    passes = iter([False, True])  # one pass, then stop
+    stopping = SimpleNamespace(wait=lambda _s: next(passes))
+
+    job.loop(stopping, lambda: 0.0)
+
+    bad = "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+    assert told == [f"Retro failed: RetroError: Retro's units.json cannot be read: JSONDecodeError: {bad}"]

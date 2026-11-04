@@ -483,3 +483,15 @@ def test_a_case_from_an_old_record_keeps_what_the_record_has() -> None:
     assert (f["source"], f["family"], f["provenance"]["record"]["change"]) == ("record", "change:c1", "c1")
     assert cases.current()["cases"][cid]["stage"] == "candidate"
     assert case_intake.side("change:c1") == ("reserve" if f["reserve"] else "dev")
+
+
+def test_a_comparison_whose_prompt_cannot_be_read_is_refused_with_the_whole_reason(tmp_path, monkeypatch) -> None:
+    new("hand-off-fitness", text="pos", reserve=True)
+    rid, _ = case_replay.release("owner")
+    monkeypatch.setattr(cases, "PROMPT", tmp_path)  # a folder where the prompt's file belongs
+
+    with pytest.raises(CaseError) as refused:
+        case_replay.comparison(rid, 0, 1, "owner")
+
+    said = f"the Spotter's prompt cannot be read: IsADirectoryError: [Errno 21] Is a directory: '{tmp_path}'"
+    assert str(refused.value) == said
