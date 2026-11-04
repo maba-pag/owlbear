@@ -726,6 +726,30 @@ def test_a_failed_publication_is_kept_with_its_spend(monkeypatch, shared_repo, w
     assert kept["credits"]["credits"] == pytest.approx(0.2)
 
 
+def test_a_publication_failed_by_a_later_review_keeps_an_earlier_cases_reason(
+    monkeypatch, shared_repo, whole_error
+) -> None:
+    j = Job(monkeypatch)
+    j.job.shared = lambda: DataRepo(shared_repo[0])
+    first = min(reviewed(), reviewed())  # reviewed first: its write fails, then the other's review
+    later = "\n".join(f"line {i:03d} of the second review's error <&>" for i in range(60))
+    answers = iter([GOOD])
+
+    async def answering(_text, _meter, _role) -> str:
+        if (said := next(answers, None)) is None:
+            raise RuntimeError(later)
+        return said
+
+    def refused(_self: DataRepo, _path: Path, _message: str) -> str:
+        raise DataRepoError(whole_error)
+
+    j.job.asked = answering
+    monkeypatch.setattr(DataRepo, "publish", refused)
+    j.job.tick(1000)
+    [kept] = [r for r in case_replay.results() if r["kind"] == "publication"]
+    assert kept["result"] == f"failed: RuntimeError: {later}\ncase {first}, failed: DataRepoError: {whole_error}"
+
+
 def test_the_job_counts_in_what_a_stop_waits_for(monkeypatch) -> None:
     j = Job(monkeypatch)
     queue_regression()

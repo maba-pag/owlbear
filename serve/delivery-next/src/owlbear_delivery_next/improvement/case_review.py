@@ -292,6 +292,10 @@ async def sync(shared: DataRepo | None, ask: Ask, meter: Meter, halt: Callable[[
         await _review(shared, review, ask, meter, halt, out)
     except asyncio.CancelledError:  # the host ended: the revision under review stays due
         out["stopped"] = "OwlBear stopped during a review"
+    except Exception as exc:
+        if out.get("result"):  # earlier cases' reasons travel with the error into the run's result
+            exc.add_note(out["result"])
+        raise
     return out
 
 
