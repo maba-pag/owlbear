@@ -184,6 +184,61 @@ def test_a_scan_that_hangs_ends(tmp_path, monkeypatch) -> None:
         detector.scan_source(fake_engine(tmp_path, 0, "[]", sleep=5), [tmp_path / "a.html"], tmp_path)
 
 
+@pytest.mark.parametrize("cause", ["unverified", "unstarted", "hung", "failed", "unreadable"])
+def test_a_scan_that_did_not_complete_says_its_whole_error(tmp_path, monkeypatch, whole_error, cause) -> None:
+    """#971: what the engine printed, and the whole error of a check, a start or a wait, is the scan's error."""
+    (tmp_path / "said").write_text(whole_error)
+    (tmp_path / "printed").write_text("what the engine printed")
+    engine = tmp_path / "impeccable"
+    engine.write_text(
+        f"#!/bin/sh\ncat {tmp_path / 'printed'}\ncat {tmp_path / 'said'} >&2\n"
+        if cause != "unreadable"
+        else f"#!/bin/sh\ncat {tmp_path / 'said'}\n"
+    )
+    engine.write_text(engine.read_text() + {"hung": "sleep 60\n", "failed": "exit 1\n"}.get(cause, ""))
+    engine.chmod(engine.stat().st_mode | stat.S_IEXEC)
+    pack = pack_files.Installed(engine, hashlib.sha256(engine.read_bytes()).hexdigest(), "")
+    command = [str(engine), "detect", "--json", "--no-config", str(tmp_path / "a.html")]
+    error = OSError(whole_error)
+    error.add_note("a note added on the way up")
+    noted = f"OSError: {whole_error}\na note added on the way up"
+    streams = f"stderr:\n{whole_error}\nstdout:\nwhat the engine printed"
+    if cause == "unverified":
+        pack = SimpleNamespace(verified_engine=lambda: (_ for _ in ()).throw(error))
+    if cause == "unstarted":
+        monkeypatch.setattr(detector.subprocess, "Popen", lambda *_a, **_k: (_ for _ in ()).throw(error))
+    if cause == "hung":  # long enough for a loaded machine to start it and let it print
+        monkeypatch.setattr(detector, "SECONDS", 5.0)
+    said = {
+        "unverified": f"the design detector cannot be verified: {noted}",
+        "unstarted": f"the design detector did not start: {noted}",
+        "hung": f"the design detector did not finish within 5 s: TimeoutExpired: "
+        f"{subprocess.TimeoutExpired(command, 5.0)}\n{streams}",
+        "failed": f"the design detector failed (1): CalledProcessError: "
+        f"{subprocess.CalledProcessError(1, command)}\n{streams}",
+        "unreadable": "the design detector's answer is not JSON: JSONDecodeError: Expecting value: line 1 column 1 "
+        f"(char 0)\nIt answered:\n{whole_error}",
+    }[cause]
+    with pytest.raises(detector.DetectorError) as caught:
+        detector.scan_source(pack, [tmp_path / "a.html"], tmp_path)
+    assert str(caught.value) == said
+
+
+def test_a_page_that_refuses_the_detector_says_its_whole_error(tmp_path, whole_error) -> None:
+    """#971: the page's whole refusal, with the notes added on its way up, is the scan's error."""
+    error = RuntimeError(whole_error)
+    error.add_note("a note added on the way up")
+
+    def refuse(_js: str) -> None:
+        raise error
+
+    pack = pack_files.Installed(tmp_path / "e", "0" * 64, "window.detector = 1")
+    with pytest.raises(detector.DetectorError) as caught:
+        detector.scan_page(SimpleNamespace(evaluate=refuse, add_script_tag=print), pack)
+    said = f"the page refused the design detector: RuntimeError: {whole_error}\na note added on the way up"
+    assert str(caught.value) == said
+
+
 def test_the_detector_keeps_the_callers_session(tmp_path) -> None:
     engine = tmp_path / "impeccable"
     engine.write_text(

@@ -310,6 +310,6 @@ def _in_pages(installed: Installed, root: Path, names: list[str]) -> dict[str, s
             finally:
                 browser.close()
     except Error as exc:
-        msg = f"the golden pages did not render: {exc}"
+        msg = f"the golden pages did not render: {failure(exc)}"
         raise detector.DetectorError(msg) from exc
     return seen

@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system.pds_skill import package
 
@@ -131,10 +132,10 @@ def release(version: str, fetch: Callable[[str, float], bytes] | None = None) ->
         meta = json.loads(get(f"{REGISTRY}/{version}", SECONDS))
         url, integrity = meta["dist"]["tarball"], meta["dist"]["integrity"]
     except OSError as exc:
-        msg = f"npm was not reached for {NAME} {version}: {exc}"
+        msg = f"npm was not reached for {NAME} {version}: {failure(exc)}"
         raise PinError(msg) from exc
     except (ValueError, KeyError, TypeError) as exc:
-        msg = f"npm's metadata for {NAME} {version} names no tarball and integrity"
+        msg = f"npm's metadata for {NAME} {version} names no tarball and integrity: {failure(exc)}"
         raise PinError(msg) from exc
     if not (isinstance(url, str) and url.startswith(TARBALLS) and isinstance(integrity, str)):
         msg = f"npm's tarball for {NAME} {version} is not on the registry: {str(url)[:120]}"
@@ -142,7 +143,7 @@ def release(version: str, fetch: Callable[[str, float], bytes] | None = None) ->
     try:
         data = get(url, SECONDS)
     except OSError as exc:
-        msg = f"the tarball {url} was not downloaded: {exc}"
+        msg = f"the tarball {url} was not downloaded: {failure(exc)}"
         raise PinError(msg) from exc
     return unpack(version, integrity, data)
 

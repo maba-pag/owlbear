@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failed, failure
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import git_run
 
@@ -30,7 +31,7 @@ def git(cwd: Path, args: list[str]) -> str:
     """One git command in *cwd*: its output, or a PackError with git's own words; TD-402's account reaches remotes."""
     done = git_run.run(cwd, *args, until=None, cap=120)  # never prompts, so a host thread never waits on one
     if done.returncode:
-        msg = f"git {args[0]} failed: {(done.stderr or done.stdout).strip() or f'exit {done.returncode}'}"
+        msg = f"git {args[0]} failed: {failed(done)}"
         raise pack_files.PackError(msg)
     return done.stdout.strip()
 
@@ -53,7 +54,7 @@ def source(package: Path, run: Git = git, repository: str = REPOSITORY) -> Sourc
     try:
         top = Path(run(package, ["rev-parse", "--show-toplevel"]))
     except pack_files.PackError as exc:
-        msg = f"the package at {package} is not a git checkout, so an update cannot be committed: {exc}"
+        msg = f"the package at {package} is not a git checkout, so an update cannot be committed: {failure(exc)}"
         raise pack_files.PackError(msg) from exc
     url = _quiet(run, top, ["config", "--get", "remote.origin.url"])  # as written, before any insteadOf
     if (found := _SLUG.fullmatch(url)) is None or found[1].casefold() != repository.casefold():

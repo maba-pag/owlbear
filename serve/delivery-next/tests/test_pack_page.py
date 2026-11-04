@@ -390,21 +390,26 @@ def test_a_ci_failed_publish_stop_fits_a_phone_and_says_no_calibration_evidence_
 def test_a_failed_pack_stage_shows_and_logs_its_whole_error(  # noqa: PLR0913, PLR0917 - its fixtures
     served, pds, tmp_path, checkout, clone, monkeypatch, whole_error
 ) -> None:
-    """A refused push holds the publication: git's whole words are its reason, its stage's and its log's (#895)."""
+    """A refused push holds the publication: git's whole words, both streams, are its reason, its stage's and its log's
+    (#895, #971)."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    real = subprocess.run
+    real, pushed, out = subprocess.run, [], "what git printed"
 
     def refusing(args, *rest, **kw):
         if "push" in args:  # after the account's -c options
-            return subprocess.CompletedProcess(args, 1, "", f"{whole_error}\n")
+            pushed.append(args)
+            return subprocess.CompletedProcess(args, 1, f"{out}\n", f"{whole_error}\n")
         return real(args, *rest, **kw)
 
     monkeypatch.setattr(git_run.subprocess, "run", refusing)
     job = pack_job.Job(Store(tmp_path / "store"), JOB.Fakes(clone).live(checkout))
     state = JOB.run(job)
 
-    said = f"git push failed: {whole_error}"
+    said = (
+        f"PackError: git push failed: CalledProcessError: Command '{pushed[0]}' returned non-zero exit status 1.\n"
+        f"stderr:\n{whole_error}\nstdout:\n{out}"
+    )
     assert (state["state"], state["reason"]) == ("waiting", said)
     assert next(s for s in state["stages"] if s["name"] == "push")["detail"] == said
     assert [i["detail"] for i in state["invocations"] if i["operation"] == "push"] == [said]

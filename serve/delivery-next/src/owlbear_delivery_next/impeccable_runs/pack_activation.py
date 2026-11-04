@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.impeccable_runs import (
     pack_candidate,
@@ -139,7 +140,7 @@ def laid(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -> 
     try:
         snap = pack_repair_content.snapshot(job, ctx, c)
     except pack_files.PackError as exc:
-        job.hold(ctx, f"the agent's repair {r.commit[:12]} could not be laid out for its check: {exc}")
+        job.hold(ctx, f"the agent's repair {r.commit[:12]} could not be laid out for its check: {failure(exc)}")
         return False
     pack_repair_content.lay(at, snap)
     pack_updater.taken(at, c)
@@ -157,7 +158,7 @@ def _alike(job: Job, c: pack_candidate.Candidate, ctx: Context) -> bool:
     try:
         differ = pack_repair_content.unlike(job.workspace, c, pack_repair_content.snapshot(job, ctx, c))
     except pack_files.PackError as exc:
-        differ = [str(exc)]
+        differ = [failure(exc)]
     if differ:
         r.laid = ""  # trying again lays it out and checks it again
         job.hold(ctx, f"the checked candidate is not the agent's repair {r.commit[:12]}: {', '.join(differ[:10])}")

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.provider import (
     BranchState,
     Check,
@@ -149,7 +150,7 @@ def _held[T](job: Job, name: str, work: Callable[[], T], said: Callable[[T], str
         except Held:
             raise
         except Exception as exc:
-            raise Held(str(exc)) from exc
+            raise Held(failure(exc)) from exc
 
     return job.do(name, guarded, said, hold=Held, identity=made)
 
@@ -175,7 +176,7 @@ def _opened(  # noqa: PLR0913 - the job, GitHub, the publication and the pull re
         if settings.pr_labels:
             gh.add_labels(pub.repository, pr.number, list(settings.pr_labels))
     except ProviderError as exc:  # a label never holds the update (TD-308)
-        job.log(f"the labels {', '.join(settings.pr_labels)} were not added: {exc}")
+        job.log(f"the labels {', '.join(settings.pr_labels)} were not added: {failure(exc)}")
     if pr.draft:
         gh.mark_ready(pr)
     return pr

@@ -3870,12 +3870,25 @@ def shown_texts(page: Page, base: str, of: str, section: str) -> list[str]:
 
 
 def refusing_pack(tmp_path: Path, text: str) -> tuple[Path, SimpleNamespace]:
-    """A file holding *text*, and an Impeccable pack whose engine fails with it as its stderr."""
-    said, engine = tmp_path / "said.txt", tmp_path / "engine"
+    """A file holding *text*, and an Impeccable pack whose engine fails with it as its stderr; each run's arguments
+    are a tab-separated line of ``calls.txt`` beside it."""
+    said, engine, calls = tmp_path / "said.txt", tmp_path / "engine", shlex.quote(str(tmp_path / "calls.txt"))
     said.write_text(text)
-    engine.write_text(f"#!/bin/sh\ncat {shlex.quote(str(said))} >&2\nexit 1\n")
+    engine.write_text(
+        f"#!/bin/sh\nprintf '%s\\t' \"$@\" >> {calls}\necho >> {calls}\ncat {shlex.quote(str(said))} >&2\nexit 1\n"
+    )
     engine.chmod(0o755)
     return said, SimpleNamespace(bundle="", verified_engine=lambda: engine)
+
+
+def engine_failures(tmp_path: Path, text: str) -> list[str]:
+    """What the design detector said of each run of *refusing_pack*'s engine, in order."""
+    engine, calls = str(tmp_path / "engine"), (tmp_path / "calls.txt").read_text().replace("\t\n", "\n")
+    return [
+        f"the design detector failed (1): CalledProcessError: Command '{[engine, *args.split(chr(9))]}' "
+        f"returned non-zero exit status 1.\n{text}"
+        for args in calls.splitlines()
+    ]
 
 
 def updated(store: Store, **update: object) -> None:
@@ -3887,7 +3900,8 @@ def updated(store: Store, **update: object) -> None:
 @pytest.mark.browser
 @pytest.mark.timeout(90)  # git, the before capture and a real browser over three renders
 def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, capsys, whole_error: str) -> None:
-    """#895 K4: a judge's whole error, the detector's whole refusals and the before capture's whole finding."""
+    """#895 K4: a judge's whole error, the detector's whole refusals and the before capture's whole finding; #971: the
+    detector's failure names its command."""
     said, pack = refusing_pack(tmp_path, whole_error)
     monkeypatch.setattr(design, "pack", lambda: pack)
     install = shlex.join(
@@ -3897,7 +3911,6 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
     with store.lock("c1") as lock:
         store.write(lock, c)
         runner._before(store, lock, c, Path(c.names.worktree))  # noqa: SLF001
-    failed = f"the design detector failed (1): {whole_error}"
     note = f"`{shlex.join(shlex.split(install))}` failed: {whole_error}"
     b = store.read("c1").before
 
@@ -3908,15 +3921,16 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
     after = design.rendered(
         page, pack, c.brief.visual[0], width=1280, url="http://127.0.0.1:9/", browser="", cwd=tmp_path
     )
+    sources, scanned = engine_failures(tmp_path, whole_error)  # the before capture's scan, then this one's
     why = (
         f"not scanned: DetectorError: the page refused the design detector: RuntimeError: {whole_error}; "
-        f"the engine's own browser: DetectorError: {failed}"
+        f"the engine's own browser: DetectorError: {scanned}"
     )
     out = capsys.readouterr().out  # an earlier test's machine may still say it stopped, between these lines too
     assert all(
         message in out
         for message in (
-            f"design detector: sources: {failed}\n",
+            f"design detector: sources: {sources}\n",
             f"before: 0 screenshots at {b.head[:7]}; {note}\n",
             f"design detector: home at 1280: {why}\n",
         )
@@ -3932,7 +3946,7 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
         number=1, head=head, tree="t", widths=[1280, 1920, 2400], verdicts=[correct, looked],
         detector=[after, unexplained, clean], outcome="ask", at=now,
     )  # fmt: skip
-    items = [f"home at 1280px: {why}", "home at 1920px: no reason given", f"before, changed sources: {failed}"]
+    items = [f"home at 1280px: {why}", "home at 1920px: no reason given", f"before, changed sources: {sources}"]
     line = f"The design detector could not scan: {'; '.join(items)}"
     with store.lock("c1") as lock:
         c = store.read("c1")
@@ -3949,7 +3963,7 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
         updated(store, visual_rounds=[])  # a failed shot is judged without a round: the capture keeps its scans
         assert line in shown_texts(page, url, of, "Before and after")
         updated(store, visual=None)
-        before_only = {f"Not available: {note}", f"The design detector could not scan: changed sources: {failed}"}
+        before_only = {f"Not available: {note}", f"The design detector could not scan: changed sources: {sources}"}
         assert before_only <= set(shown_texts(page, url, of, "Before and after"))
         updated(store, visual_rounds=[kept.model_copy(update={"outcome": None})])  # a judge failed: no judged capture
         assert f"The design detector could not scan round 1 at {head[:7]}: {'; '.join(items[:2])}" in shown_texts(

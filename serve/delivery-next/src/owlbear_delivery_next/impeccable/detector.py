@@ -14,6 +14,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failed, failure
 from owlbear_delivery_next.impeccable.pack_files import PackError
 
 if TYPE_CHECKING:
@@ -74,15 +75,15 @@ def _run(command: list[str], cwd: Path, env: dict[str, str]) -> tuple[int, str, 
             process_group=0,
         )
     except OSError as exc:
-        msg = f"the design detector did not start: {exc}"
+        msg = f"the design detector did not start: {failure(exc)}"
         raise DetectorError(msg) from exc
     try:
         out, err = proc.communicate(timeout=SECONDS)
     except subprocess.TimeoutExpired as exc:
         with contextlib.suppress(ProcessLookupError):
             os.killpg(proc.pid, signal.SIGKILL)
-        proc.communicate()
-        msg = f"the design detector did not finish within {SECONDS:.0f} s"
+        exc.output, exc.stderr = proc.communicate()  # what it said before it was stopped
+        msg = f"the design detector did not finish within {SECONDS:.0f} s: {failure(exc)}"
         raise DetectorError(msg) from exc
     return proc.returncode, out, err
 
@@ -94,16 +95,17 @@ def _engine(
     try:
         engine = pack.verified_engine()
     except (PackError, OSError) as exc:  # a changed, missing or unreadable engine is never run
-        msg = f"the design detector cannot be verified: {exc}"
+        msg = f"the design detector cannot be verified: {failure(exc)}"
         raise DetectorError(msg) from exc
-    code, out, err = _run([str(engine), "detect", "--json", "--no-config", *args], cwd, env)
+    command = [str(engine), "detect", "--json", "--no-config", *args]
+    code, out, err = _run(command, cwd, env)
     if code not in {0, 2}:  # 2 means findings; anything else, a target was not scanned
-        msg = f"the design detector failed ({code}): {err.strip()}"
+        msg = f"the design detector failed ({code}): {failed(subprocess.CompletedProcess(command, code, out, err))}"
         raise DetectorError(msg)
     try:
         raw = json.loads(out)
     except ValueError as exc:
-        msg = "the design detector's answer is not JSON"
+        msg = f"the design detector's answer is not JSON: {failure(exc)}\nIt answered:\n{out}"
         raise DetectorError(msg) from exc
     if not isinstance(raw, list) or not all(isinstance(f, dict) for f in raw):
         msg = "the design detector's answer is not a list of findings"
@@ -137,7 +139,7 @@ def scan_page(page: Any, pack: Installed) -> list[Finding]:  # noqa: ANN401 - a 
         page.add_script_tag(content=pack.bundle)  # the verified text, not a path that could change
         groups = page.evaluate(PAGE, PAGE_MS)
     except Exception as exc:  # Playwright's own errors: the page refused the detector
-        msg = f"the page refused the design detector: {type(exc).__name__}: {exc}"
+        msg = f"the page refused the design detector: {failure(exc)}"
         raise DetectorError(msg) from exc
     shaped = isinstance(groups, list) and all(
         isinstance(g, dict)
