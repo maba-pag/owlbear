@@ -191,3 +191,18 @@ def test_the_first_plan_challenge_runs_before_its_loop_exists():
     )
 
     assert shown(versions.plan(c)) == [(1, "running", [], [])]
+
+
+def test_a_rechecked_repair_stays_not_challenged_after_the_next_save():
+    """Round 1 read v1 before versions were recorded; the check of its rejection read v2, a repair it never judged."""
+    c = briefed(2, findings=[found(1, "rejected")], round=1, head="1", ended="")
+    lp = c.loops[BRIEF]
+    lp.verdict([], {"F1": (False, "fair")}, "2", "v2", recheck=True)
+    lp.read(2, recheck=True, upheld=0)
+    c.brief.version = 3
+
+    assert lp.unreviewed == ["v2"]
+    assert shown(versions.brief(c))[:2] == [
+        (1, "unknown", [], []),
+        (2, "unreviewed", ["Rejections checked after challenge 1"], []),
+    ]

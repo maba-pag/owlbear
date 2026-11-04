@@ -62,6 +62,8 @@ def _versions(attempts: list[RoundLoop], current: int, *, running: int, waits: i
     read = [(x, v) for x in attempts for v in x.verdicts]
     earliest = min((v.version for _, v in read if not v.recheck), default=current + 1)  # a full challenge's
     lp = attempts[-1] if attempts else None
+    marked = {i for x in attempts for i in x.unreviewed}  # a brief's repairs are vN, a plan's rN
+    unmarked = not (lp and lp.unreviewed)
     out = []
     for n in range(1, current + 1):
         mine = [(x, v) for x, v in read if v.version == n]
@@ -73,7 +75,7 @@ def _versions(attempts: list[RoundLoop], current: int, *, running: int, waits: i
         elif full:
             x, v = full[-1]
             state = "findings" if v.upheld or any(f.raised == v.round for f in x.findings) else "clean"
-        elif legacy and n < min(earliest, fresh) and not (n == current and lp and lp.unreviewed):  # no round read it
+        elif legacy and n < min(earliest, fresh) and f"v{n}" not in marked and (n != current or unmarked):
             state = "unknown"
         else:
             state = "unreviewed"
