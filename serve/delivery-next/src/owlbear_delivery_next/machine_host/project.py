@@ -21,6 +21,7 @@ from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.host import Host, HostRecord, running
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.state_store import registry, work_block
+from owlbear_delivery_next.state_store.decision_impact import OWLBEAR
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 
 if TYPE_CHECKING:
@@ -251,9 +252,12 @@ class Project:
 
         A loaded project's ``reason`` names the MCP files its setup check could not read. A loaded project names what
         keeps its work from starting: ``unset`` keys, or ``unset_reason`` when its settings can't be read, and
-        ``blocked`` as the owner reads it. *here* is this machine's block, read now unless given.
+        ``blocked`` as the owner reads it. ``kind`` is ``owlbear`` for OwlBear's own repository, known by its
+        shared-data folder, else ``consumer``, also while a store that never opened hides its folder. *here* is this
+        machine's block, read now unless given.
         """
         out: dict[str, Any] = {"id": self.entry.id, "name": self.name, "path": self.entry.path, "state": self.state}
+        out["kind"] = "owlbear" if self.store and self.store.name == OWLBEAR else "consumer"
         if self.state == "loaded" and self.store is not None:
             block = work_block.of_store(self.store, here)
             out |= {"unset": list(block.keys), "unset_reason": block.reason, "blocked": block.text()}
