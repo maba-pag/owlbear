@@ -909,6 +909,47 @@ def test_completion_keeps_a_competing_successor_that_arrives_during_its_save_unr
         assert git(owlbear_shared.root, "rev-parse", "HEAD") == git(other.root, "rev-parse", "HEAD")
 
 
+@pytest.mark.parametrize("folder", ["owlbear/decisions", "decisions"])
+def test_completion_receipt_escapes_non_utf8_publication_paths(owner, completion_competition, monkeypatch, folder):
+    shared, chosen, _competing, other = completion_competition
+    rel = f"owlbear/decisions/{chosen.id}.md"
+    head = git(other.root, "rev-parse", "HEAD")
+    blob = git(other.root, "rev-parse", f"HEAD:{rel}")
+    entry = f"100644,{blob},{folder}/unreadable-\udcff.md"
+    added = other.git("update-index", "--add", "--cacheinfo", entry)
+    assert added.returncode == 0, added.stderr
+    tree = git(other.root, "write-tree")
+    remote_commit = git(other.root, "commit-tree", tree, "-p", head, "-m", "unreadable publication path")
+    publish, arrived = decision_sync.publish, []
+
+    def publishing(repo, paths, message, until, prepared, *continuation):
+        if repo.root == shared.root and not arrived:
+            git(other.root, "update-ref", "HEAD", remote_commit)
+            pushed = other.git("push", "origin", "HEAD:refs/heads/main")
+            assert pushed.returncode == 0, pushed.stderr
+            arrived.append(remote_commit)
+        return publish(repo, paths, message, until, prepared, *continuation)
+
+    monkeypatch.setattr(decision_sync, "publish", publishing)
+    got = owner.post(
+        f"/api/next/decisions/{chosen.id}/complete",
+        params={"where": "owlbear"},
+        json={"revision": chosen.revision, "condition": chosen.statement, "evidence": "The fixture report exists."},
+    )
+
+    assert arrived == [remote_commit]
+    assert got.status_code == 200
+    assert got.json()["saved"] is True
+    receipt = got.json()["receipts"][0]
+    assert (receipt["committed"], receipt["published"], receipt["active"]) == (True, False, False)
+    assert chosen.id in receipt["notice"]
+    assert "\\udcff" in receipt["notice"]
+    assert "\udcff" not in receipt["notice"]
+    assert publication_hold.recorded(shared, None)
+    assert other.git("ls-remote", "origin", "refs/heads/main").stdout.split()[0] == remote_commit
+    assert git(other.root, "rev-parse", f"HEAD:{rel}") == blob
+
+
 @pytest.mark.parametrize("recovery", ["finish-with-rival", "abandon"])
 def test_a_journal_before_the_first_completion_write_keeps_its_condition_during_head_proof(
     completion_competition, monkeypatch, recovery

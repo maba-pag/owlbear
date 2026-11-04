@@ -77,12 +77,12 @@ def _entries(repo: DataRepo, commit: str, until: float | None) -> tuple[list[Ent
             continue
         path = repo.root / rel
         if path.suffix != ".md" or mode not in {"100644", "100755"} or kind != "blob":
-            unreadable.append((layer, f"{path} at {commit} is not a regular decision file"))
+            unreadable.append((layer, f"{str(path)!r} at {commit} is not a regular decision file"))
             continue
         try:
             wanted[path] = (layer, oid, int(size))
         except ValueError as exc:
-            msg = f"Git returned an unreadable object size {size!r} for {path} at {commit}"
+            msg = f"Git returned an unreadable object size {size!r} for {str(path)!r} at {commit}"
             raise OSError(msg) from exc
     contents = _contents(repo, commit, {oid: size for _layer, oid, size in wanted.values()}, until)
     for path, (layer, oid, _size) in wanted.items():
@@ -90,7 +90,7 @@ def _entries(repo: DataRepo, commit: str, until: float | None) -> tuple[list[Ent
             text = contents[oid].decode("utf-8")
             decision = parse_named(StringIO(text, newline=None).read(), path.name)
         except (DecisionError, UnicodeDecodeError) as exc:
-            unreadable.append((layer, f"{path} at {commit}: {exc}"))
+            unreadable.append((layer, f"{str(path)!r} at {commit}: {exc}"))
         else:
             entries.append(Entry(path, layer, decision))
     return entries, unreadable
