@@ -12,7 +12,7 @@ import subprocess
 from pathlib import PurePath
 from typing import TYPE_CHECKING, Literal
 
-from owlbear_delivery_next.git.command_failure import output
+from owlbear_delivery_next.git.command_failure import failure, output
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 
 if TYPE_CHECKING:
@@ -174,9 +174,11 @@ def _configured_ssh_command(repository: Path, base: Mapping[str, str], global_op
         )
     except subprocess.TimeoutExpired as exc:
         error = RemoteGitFailed("Git SSH configuration could not be read", retry_safe=True)
+        error.add_note(failure(exc))  # beside the detail retries classify (#971 R7)
         raise error from exc
     except OSError as exc:
         error = RemoteGitFailed("Git is unavailable for remote access", retry_safe=False)
+        error.add_note(failure(exc))
         raise error from exc
     if result.returncode == _CONFIG_UNSET:
         return None
@@ -220,6 +222,7 @@ def run_remote_git(
         )
     except OSError as exc:
         error = RemoteGitFailed("Git is unavailable for remote access", retry_safe=False)
+        error.add_note(failure(exc))
         raise error from exc
     finished = False
     try:
@@ -233,8 +236,10 @@ def run_remote_git(
         finished = True
         if kind == "write":
             write_error = RemoteGitWriteUnknown(f"remote Git write exceeded {bound:g} s", timed_out=True)
+            write_error.add_note(failure(exc))  # the command and what it printed before its bound
             raise write_error from exc
         read_error = RemoteGitTimeout(f"remote Git read exceeded {bound:g} s")
+        read_error.add_note(failure(exc))
         raise read_error from exc
     finally:
         if not finished:

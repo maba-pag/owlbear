@@ -3175,7 +3175,7 @@ def test_a_failed_fetch_keeps_gits_whole_output(clone, whole_error, monkeypatch)
     assert (result.exit, result.reason) == (Exit.RETRY, said)
 
 
-def _remote_failures(clone: Path, monkeypatch) -> dict[str, Exception]:
+def _remote_failures(clone: Path, monkeypatch, whole_error: str) -> dict[str, Exception]:
     """Each remote Git failure whose detail stays the same while Git said more; its output names the network."""
     said = b"fatal: unable to access 'https://github.com/o/r/': Connection timed out\n"
 
@@ -3189,6 +3189,8 @@ def _remote_failures(clone: Path, monkeypatch) -> dict[str, Exception]:
         raise subprocess.TimeoutExpired(argv, 5, output=said)
 
     found: dict[str, Exception] = {}
+    for name, kind in (("read-timeout", "read"), ("write-timeout", "write")):
+        found[name] = _stalled(clone, monkeypatch, kind, stalled_streams(whole_error))
     for name, ran in (("refused", refused), ("invalid", invalid)):
         monkeypatch.setattr(remote_git, "run_remote_git", ran)
         with pytest.raises(remote_git.RemoteGitFailed) as raised:
@@ -3205,23 +3207,57 @@ def _remote_failures(clone: Path, monkeypatch) -> dict[str, Exception]:
     return found
 
 
-@pytest.mark.parametrize("which", ["refused", "invalid", "write", "urls"])
-def test_a_remote_git_failure_is_whole_and_retries_as_its_detail_always_did(clone, monkeypatch, which):
+def stalled_streams(whole_error: str) -> tuple[str, str]:
+    """What a stalled remote Git printed before its bound: two long streams, each with its own marks."""
+    return f"OUT-BEGIN\n{whole_error}\nOUT-END", "ERR-BEGIN\nConnection timed out\nERR-END"
+
+
+def _stalled(clone: Path, monkeypatch, kind: str, streams: tuple[str, str]) -> Exception:
+    """A remote Git command that printed some of its output, then passed its bound."""
+
+    class Stalled:
+        pid = 0
+
+        def __init__(self, command, **_k) -> None:
+            self.args = command
+
+        def communicate(self, timeout=None):
+            raise subprocess.TimeoutExpired(self.args, timeout, streams[0].encode(), streams[1].encode())
+
+    with monkeypatch.context() as m:
+        m.setattr(remote_git.subprocess, "Popen", Stalled)
+        m.setattr(remote_git, "_terminate_group", lambda _process: None)
+        m.setattr(remote_git, "_configured_ssh_command", lambda *_a: None)
+        m.setattr(Access, "destinations", lambda *_a: [])
+        with pytest.raises(remote_git.RemoteGitError) as raised:
+            remote_git.run_remote_git(clone, ("fetch", "origin"), kind=kind, access=Access.LOCAL)
+    return raised.value
+
+
+@pytest.mark.parametrize("which", ["refused", "invalid", "write", "urls", "read-timeout", "write-timeout"])
+def test_a_remote_git_failure_is_whole_and_retries_as_its_detail_always_did(clone, monkeypatch, whole_error, which):
     """#971 R7: the reason says what Git printed, but the cause and the wait still read the detail alone: Git
     saying "Connection timed out" never turns a defect into a network episode."""
-    exc = _remote_failures(clone, monkeypatch)[which]
+    exc = _remote_failures(clone, monkeypatch, whole_error)[which]
+    out, err = stalled_streams(whole_error)
     said = "fatal: unable to access 'https://github.com/o/r/': Connection timed out"
     git_url = (resolve_git_executable(), "-C", str(clone), "remote", "get-url", "--push", "--all", "origin")
+    fetch = (resolve_git_executable(), "-C", str(clone), "fetch", "origin")
     expected = {
         "refused": f"RemoteGitFailed: remote ref could not be observed\nexit status 128\n{said}",
         "invalid": f"RemoteGitFailed: remote ref response is invalid\nexit status 0\n{said}",
         "write": f"RemoteGitWriteUnknown: remote Git write did not confirm its outcome\nexit status 1\n{said}",
         "urls": f"RemoteGitError: the push URLs of origin in {clone} could not be read in 5 s\n"
         f"TimeoutExpired: Command '{git_url}' timed out after 5 seconds\n{said}",
+    } | {
+        f"{kind}-timeout": f"{name}: remote Git {kind} exceeded 120 s\nTimeoutExpired: Command '{fetch}' timed out "
+        f"after 120.0 seconds\nstderr:\n{err}\nstdout:\n{out}"
+        for kind, name in (("read", "RemoteGitTimeout"), ("write", "RemoteGitWriteUnknown"))
     }
     assert failures.transient(str(exc)) is None  # the detail alone, as classified before #971
     result = engine.failed(change(StepKind.BUILD), exc, NOW)
-    cause = failures.cause_key(ErrorKind.TOOLING, StepKind.BUILD, "git")
+    error = ErrorKind.NETWORK if which.endswith("timeout") else ErrorKind.TOOLING  # by its type, as before
+    cause = failures.cause_key(error, StepKind.BUILD, "git")
     assert (result.exit, result.cause, result.wake_at) == (Exit.RETRY, cause, NOW + timedelta(minutes=1))
     assert result.reason == expected[which]
 
