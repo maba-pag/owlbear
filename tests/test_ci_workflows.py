@@ -8,9 +8,13 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 import yaml
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 ROOT = Path(__file__).parents[1]
 WORKFLOWS = ROOT / ".github/workflows"
@@ -55,6 +59,52 @@ def _jobs(name: str) -> dict[str, dict[str, object]]:
 
 def _runs(job: dict[str, object]) -> str:
     return "\n".join(str(step.get("run", "")) for step in job["steps"])
+
+
+def _rendered(env: dict[str, str], github: dict[str, object]) -> dict[str, str]:
+    """A step's env as GitHub renders it for one event: context paths joined by ``||``, a missing one empty."""
+
+    def value(path: str) -> str:
+        node: object = {"github": github}
+        for key in path.split("."):
+            node = node.get(key) if isinstance(node, dict) else None
+        return "" if node is None else str(node)
+
+    def render(text: str) -> str:
+        expression = re.fullmatch(r"\$\{\{ (.+) \}\}", text)
+        return next((v for v in map(value, expression[1].split(" || ")) if v), "") if expression else text
+
+    return {name: render(text) for name, text in env.items()}
+
+
+def _queued(tmp_path: Path, files: dict[str, str]) -> tuple[Callable[..., str], dict[str, object]]:
+    """A repository whose merge queue built a group: main, then a pull request's *files* merged on top of it."""
+
+    def git(*args: str) -> str:
+        done = subprocess.run(  # noqa: S603 - fixed git argument vector
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],  # noqa: S607
+            cwd=tmp_path, capture_output=True, text=True, check=True,
+        )  # fmt: skip
+        return done.stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    for rel in (".github/scripts/ci_scope.py", "serve/tools/src/owlbear_tools/dependency_ci.py"):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_bytes((ROOT / rel).read_bytes())
+    git("add", ".")
+    git("commit", "-q", "-m", "base")
+    base = git("rev-parse", "HEAD")
+    git("switch", "-q", "-c", "work")
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text)
+    git("add", ".")
+    git("commit", "-q", "-m", "change")
+    git("switch", "-q", "-c", "gh-readonly-queue/main/pr-1", "main")
+    git("merge", "-q", "--no-ff", "-m", "merge", "work")
+    head = git("rev-parse", "HEAD")
+    group = {"event_name": "merge_group", "sha": head, "event": {"merge_group": {"base_sha": base, "head_sha": head}}}
+    return git, group
 
 
 def _default_install(lock: dict[str, object]) -> set[str]:
@@ -108,6 +158,7 @@ def test_the_ci_gate_calls_each_touched_suite_and_passes_only_when_all_of_them_p
     assert (pull_request["branches"], "paths" in pull_request) == (["main"], False)
     assert "ready_for_review" in pull_request["types"]
     assert gate["on"]["push"] == {"branches": ["main"]}  # every merge gets its own CI (self-update design section 8)
+    assert gate["on"]["merge_group"] == {"types": ["checks_requested"]}  # the queue's groups need the CI check (TD-326)
     assert set(called) == set(ci_scope.SUITES)
     assert {job["uses"] for job in called.values()} == {f"./.github/workflows/{n}" for n in SUITE_WORKFLOWS}
     for name, job in called.items():
@@ -163,7 +214,7 @@ def test_the_scope_reads_changed_paths_unquoted(tmp_path: Path) -> None:
         ["python3", str(ROOT / ".github/scripts/ci_scope.py"), base, "HEAD"],  # noqa: S607
         cwd=tmp_path,
         env={k: v for k, v in os.environ.items() if k not in {"EVENT", "SOURCE_REPOSITORY"}}
-        | {"GITHUB_REPOSITORY": ci_scope.HOME},
+        | {"GITHUB_REPOSITORY_ID": ci_scope.HOME},
         capture_output=True,
         text=True,
         check=True,
@@ -172,25 +223,35 @@ def test_the_scope_reads_changed_paths_unquoted(tmp_path: Path) -> None:
     assert paths == 'suites=["python", "python-browser", "static", "security"]\n'
 
 
+OWN = "1167866812"  # OwlBear's repository id: gh api repos/maba-pag/owlbear --jq .id
+
+
 @pytest.mark.parametrize(
     "case",
     [
-        ("maba-pag/owlbear", "pull_request", "maba-pag/owlbear", True),
-        ("maba-pag/owlbear", "push", "", True),
-        ("maba-pag/owlbear", "pull_request", "someone/owlbear", False),  # a fork's pull request into OwlBear
-        ("maba-pag/owlbear", "pull_request", "", False),  # its fork deleted
-        ("someone/owlbear", "pull_request", "maba-pag/owlbear", False),  # OwlBear's branch into a fork
-        ("someone/owlbear", "push", "", False),  # a copy
+        ("maba-pag/owlbear", OWN, "pull_request", OWN, True),
+        ("maba-pag/owlbear", OWN, "push", "", True),
+        ("maba-pag/owlbear", OWN, "merge_group", "", True),  # the queue's group of OwlBear's own pull requests
+        ("another/owlbear", OWN, "pull_request", OWN, True),  # transferred: the name changed, the id stays
+        ("maba-pag/owlbear", OWN, "pull_request", "42", False),  # a fork's pull request into OwlBear
+        ("maba-pag/owlbear", OWN, "pull_request", "", False),  # its fork deleted
+        ("someone/owlbear", "42", "pull_request", OWN, False),  # OwlBear's branch into a fork
+        ("someone/owlbear", "42", "push", "", False),  # a copy
+        ("maba-pag/owlbear", "42", "push", "", False),  # a new repository at OwlBear's old name after its transfer
     ],
 )
 def test_only_owlbear_s_own_changes_select_the_snyk_suite(
-    monkeypatch: pytest.MonkeyPatch, capsys, case: tuple[str, str, str, bool]
+    monkeypatch: pytest.MonkeyPatch, capsys, case: tuple[str, str, str, str, bool]
 ) -> None:
-    """TD-363: GitHub gives Snyk's token only to OwlBear's own runs of its own changes; others must not wait for it."""
+    """TD-363: GitHub gives Snyk's token only to OwlBear's own runs of its own changes; others must not wait for it.
+    OwlBear is known by its repository id, which its transfer keeps (TD-326)."""
     step = next(s for s in _jobs("ci.yml")["scope"]["steps"] if s.get("id") == "scope")
-    assert step["env"]["SOURCE_REPOSITORY"] == "${{ github.event.pull_request.head.repo.full_name }}"
+    assert step["env"]["SOURCE_REPOSITORY"] == "${{ github.event.pull_request.head.repo.id }}"
+    assert ci_scope.HOME == OWN
     *values, selected = case
-    for name, value in zip(("GITHUB_REPOSITORY", "EVENT", "SOURCE_REPOSITORY"), values, strict=True):
+    for name, value in zip(
+        ("GITHUB_REPOSITORY", "GITHUB_REPOSITORY_ID", "EVENT", "SOURCE_REPOSITORY"), values, strict=True
+    ):
         monkeypatch.setenv(name, value)
     ci_scope.main([])
     assert ("security" in capsys.readouterr().out) is selected
@@ -254,6 +315,30 @@ def test_a_push_is_scoped_by_the_merge_against_its_first_parent(tmp_path: Path) 
            "GITHUB_OUTPUT": str(out)}  # fmt: skip
     subprocess.run(["bash", "-c", run], cwd=tmp_path, env=env, check=True)  # noqa: S603, S607
     assert out.read_text() == 'suites=["static", "agent-ecosystem"]\n'  # the merge's own change, not every suite
+
+
+def test_a_merge_group_is_scoped_by_the_change_it_adds_to_main(tmp_path: Path) -> None:
+    """TD-326: the queue's merge group runs CI with no pull request; its base is the main it builds on."""
+    _git, group = _queued(tmp_path, {"share/skills/x/SKILL.md": "x\n"})
+    step = next(s for s in _jobs("ci.yml")["scope"]["steps"] if s.get("id") == "scope")
+    out = tmp_path / "output"
+    env = _rendered(step["env"], group) | {"PATH": os.environ["PATH"], "GITHUB_OUTPUT": str(out),
+                                           "GITHUB_REPOSITORY_ID": OWN}  # fmt: skip
+    subprocess.run(["bash", "-c", step["run"]], cwd=tmp_path, env=env, check=True)  # noqa: S603, S607
+    assert out.read_text() == 'suites=["static", "agent-ecosystem"]\n'
+
+
+def test_tooling_scopes_a_merge_group_by_the_change_it_adds_to_main(tmp_path: Path) -> None:
+    """TD-326: without the group's base, tooling's scope asked git for the merge base of nothing and failed."""
+    _git, group = _queued(tmp_path, {"renovate.json": "{}\n"})
+    step = next(s for s in _jobs("tooling.yml")["verify"]["steps"] if s.get("id") == "scope")
+    out, summary = tmp_path / "output", tmp_path / "summary"
+    env = _rendered(step["env"], group) | {"PATH": os.environ["PATH"], "GITHUB_OUTPUT": str(out),
+                                           "GITHUB_STEP_SUMMARY": str(summary), "GITHUB_WORKSPACE": str(tmp_path),
+                                           "RUNNER_TEMP": str(tmp_path)}  # fmt: skip
+    subprocess.run(["bash", "-c", step["run"]], cwd=tmp_path, env=env, check=True)  # noqa: S603, S607
+    assert (tmp_path / "tooling-paths").read_bytes() == b"renovate.json\0"
+    assert "renovate=true" in out.read_text().splitlines()
 
 
 @pytest.mark.parametrize("name", sorted(path.name for path in WORKFLOWS.glob("*.yml")))
