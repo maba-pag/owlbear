@@ -51,6 +51,7 @@ def change() -> m.Change:
         m.BriefDecision(question="Where does the button sit?", answer="Top right of the hero", origin="decided"),
         m.BriefDecision(question="Animation length", answer="250 ms ease-out", origin="autonomous"),
         m.BriefDecision(question="Hero motion", answer="Never autoplay", origin="decided", scope="project"),
+        m.BriefDecision(question="Button label", answer="Flip", origin="approved"),
     ]
     brief = m.Brief(
         version=2, challenged=2, title="Flip the hero", outcome="Visitors flip the hero image with one button.",
@@ -103,7 +104,39 @@ def opened(base: str, slug: str, pds: Any, *, details: bool = False) -> Iterator
         browser.close()
 
 
+def big(control: Any) -> None:
+    """WCAG 2.5.8: *control*, laid out, takes at least 24 by 24 CSS pixels."""
+    box = control.bounding_box()
+    assert box is not None
+    assert (box["width"] >= 24, box["height"] >= 24) == (True, True), box
+
+
 STAGES = ["Shape", "Plan", "Build", "Final review", "Publish", "Visual check", "Your checks", "Merge"]
+
+
+def agreed(brief: Any) -> None:
+    """The outcome comes first; the owner's decisions, the shaper's choices and what is out fold under their counts."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    expect(brief.locator(":scope > *").first).to_have_text("Visitors flip the hero image with one button.")
+    folds = brief.locator(":scope > section > details > summary")
+    expect(folds).to_have_text(["Your decisions (4)", "Shaper's choices (1)", "Out of scope (1)"])
+    expect(brief.get_by_text("Top right of the hero")).to_be_hidden()  # folded until opened
+    for fold in folds.all():
+        big(fold)
+        fold.click()
+    yours = brief.locator("section", has_text="Your decisions")
+    expect(yours.locator(".said").first.locator("li")).to_have_text([
+        "Where does the button sit? Top right of the hero (you decided)",
+        "Hero motion Never autoplay (you decided; lasting: applies to later Changes too)",  # C-14
+        "Button label Flip (you took the shaper's recommendation)",
+    ])  # fmt: skip
+    expect(yours.locator("p-heading", has_text="You specified").locator("+ ul.said")).to_contain_text(MINE)
+    shaper = brief.locator("section", has_text="Shaper's choices")
+    expect(shaper).to_contain_text("Approving accepts these choices.Animation length")
+    expect(shaper).not_to_contain_text("Flip")  # the recommendation he took is his
+    expect(brief.locator("section", has_text="Out of scope")).to_contain_text("Saving the direction")
+    expect(brief.locator("section", has_text="Decisions this work follows")).to_contain_text("Motion stays subtle")
 
 
 @pytest.mark.browser
@@ -119,15 +152,9 @@ def test_the_agreement_keeps_details_collapsed_and_the_approved_brief_lists_the_
         expect(current).to_contain_text("Shape")
         expect(page.locator("ol.stepper .loops")).to_have_count(0)  # no stage looped yet
         brief = page.locator(".brief").first
-        yours = brief.locator("section", has_text="Your decisions")
-        expect(yours).to_contain_text("Top right of the hero")
-        expect(yours).to_contain_text("Never autoplay (lasting: applies to later Changes too)")  # C-14
-        expect(yours.get_by_text("Top right of the hero (lasting", exact=False)).to_have_count(0)
-        expect(yours).to_contain_text(MINE)  # an owner-stated criterion is part of his agreement
-        expect(brief.locator("section", has_text="Choices proposed by the shaper")).to_contain_text("250 ms")
-        expect(brief.locator("section", has_text="Not in this Change")).to_contain_text("Saving the direction")
-        expect(brief.locator("section", has_text="Decisions this work follows")).to_contain_text("Motion stays subtle")
-        expect(brief.locator("summary")).to_contain_text("2 criteria \u00b7 1 screen \u00b7 1 check for you")
+        agreed(brief)
+        technical = brief.locator("summary", has_text="Technical details")
+        expect(technical).to_contain_text("2 criteria \u00b7 1 screen \u00b7 1 check for you")
         expect(page.get_by_text(LEFT_TO_SHAPER, exact=False)).to_be_hidden()  # collapsed until opened
         page.get_by_role("button", name="Approve v2").click()
         dialog = page.get_by_role("dialog")

@@ -1,7 +1,7 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { here } from "/assets/ui.mjs";
 import { DIALOG, state, send, starts, draft } from "./state.mjs";
-import { button, field, hd, text, list, panel, info, row } from "./widgets.mjs";
+import { button, field, hd, text, list, panel, info, row, toggle } from "./widgets.mjs";
 import { merging } from "./forms.mjs";
 import { reviseBrief } from "./shaping.mjs";
 import { detailsOn } from "./details.mjs";
@@ -28,30 +28,39 @@ function part(title, ...children) {
   return html`<section>${hd(4, title, "sm")}${children}</section>`;
 }
 
-// A project-scope decision stays in force for later Changes once approved, so it says so (C-14, TD-426).
+const ORIGINS = { decided: "you decided", approved: "you took the shaper's recommendation" };
+
+// Who made the decision, then whether it stays in force for later Changes once approved (C-14, TD-426).
 function said(x) {
-  return [x.question, x.scope === "project" ? `${x.answer} (lasting: applies to later Changes too)` : x.answer];
+  const how = [ORIGINS[x.origin], x.scope === "project" && "lasting: applies to later Changes too"].filter(Boolean);
+  return [x.question, how.length ? `${x.answer} (${how.join("; ")})` : x.answer];
 }
 
-// The agreement the owner approves (TD-122, TD-179 rule 2): his decisions, what he specified among the technical
-// details, the shaper's choices that the approval accepts, and what is out.
+// The agreement the owner approves (TD-122, TD-179 rule 2): his decisions with their origins and what he specified
+// among the technical details, the shaper's own choices that the approval accepts, and what is out; each folded
+// under its count, the outcome above them.
 function agreement(d, approved = false) {
   const decisions = d.brief.decisions || [], out = d.brief.non_goals || [], parts = [];
-  const mine = decisions.filter((x) => x.origin === "decided").map(said);
+  const mine = decisions.filter((x) => x.origin in ORIGINS).map(said);
   const specified = [
     ...d.criteria.filter((k) => yours(d, k.id)).map((k) => ["Acceptance criterion", k.text]),
     ...d.brief.visual.filter((s) => yours(d, `screen:${s.name}`)).map((s) => ["Screen the visual check takes",
       screenSaid(s)]),
     ...d.checks.filter((c) => yours(d, `check:${c.id}`)).map((c) => ["Check you do yourself", checkSaid(c)]),
   ];
-  if (mine.length || specified.length) parts.push(part("Your decisions", saidList([...mine, ...specified])));
-  const proposed = decisions.filter((x) => x.origin !== "decided").map(said);
+  const fold = (name, n, ...inside) => html`<section>${toggle(`${d.key}:${name}`, `${name} (${n})`, inside)}
+    </section>`;
+  if (mine.length || specified.length) {
+    parts.push(fold("Your decisions", mine.length + specified.length, mine.length ? saidList(mine) : nothing,
+      specified.length ? [hd(5, "You specified", "xs"), saidList(specified)] : nothing));
+  }
+  const proposed = decisions.filter((x) => !(x.origin in ORIGINS)).map(said);
   if (proposed.length) {
     const accepts = approved ? "Your approval accepted these choices." : "Approving accepts these choices.";
-    parts.push(part("Choices proposed by the shaper", text(accepts), saidList(proposed)));
+    parts.push(fold("Shaper's choices", proposed.length, text(accepts), saidList(proposed)));
   }
   if (!decisions.length && !specified.length) parts.push(text("No separate decisions recorded."));
-  if (out.length) parts.push(part("Not in this Change", list(out)));
+  if (out.length) parts.push(fold("Out of scope", out.length, list(out)));
   return parts;
 }
 
