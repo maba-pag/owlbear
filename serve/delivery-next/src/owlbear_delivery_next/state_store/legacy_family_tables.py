@@ -17,7 +17,7 @@ CURRENT_MODULES = (
     ("commands/chat_client.py", "8b783758baf39476f99e7308885b594e92cc07af33178c46ca448fdbe8d5b587"),
     ("commands/cli.py", "ed09425188138edd6192a758e2dee9c307f92689eff7c9489e76d63288e25ced"),
     ("commands/dispatch.py", "8af7e2e296eae5cd7a70dd441af65472745988da535b558121d8ab3ccbc3851c"),
-    ("commands/mcp_server.py", "75df53ed063d3809be218a7ccb72aa186e661bfa7ff16a58aecb41496a4d80e9"),
+    ("commands/mcp_server.py", "81a933d46accf7a13c9e666aae9b4e0a7a65b49d85f0fed32edd5c54a9dd97c9"),
     ("commands/project_commands.py", "2c43e370e6f1cf0e68cb06788a9affeef837863007334de889aaaf2427702148"),
     ("commands/runner.py", "8f73c1852e723a4a640ffd113de9e354b43be0302d6f3f44b00b9dd4812b9154"),
     ("commands/setup.py", "de871de65343b53758ae3b7b43119f538bb462da249ccdd0d10cca9153916916"),

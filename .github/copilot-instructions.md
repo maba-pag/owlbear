@@ -47,6 +47,12 @@ what is wrong (TD-150). In OwlBear also:
 - Record each answer with `record_decision`: his confirmed intent, never his words (TD-449); a changed
   decision names the one it replaces. "Take your recommendation" records what the option showed as
   `approved` (`confirmed=true`, `origin="approved"`); details you add stay `autonomous` with their reason.
+- Before recording, distinguish new owner intent from implementation/work evidence; do not record an unchanged rule
+  again merely because it was used. Keep a finite instruction's explicit bound in its confirmed binding statement,
+  not just its rationale. Preserve continuing intent and the owner's scope; implementation or merge implies no expiry.
+  Keep mixed intent whole unless the owner confirms its separation; do not mechanically split every instruction.
+  If the whole binding cannot fit the statement's limit, ask for faithful wording rather than truncating, hiding
+  obligations in rationale or inventing an end condition.
 - End the session with one check of everything you record (TD-448). At work completion, use that same check to
   consider only decisions recorded or materially relied on in this work, not the whole inventory.
   For a wholly finite OwlBear project instruction, verify its explicit end condition and every binding clause are
