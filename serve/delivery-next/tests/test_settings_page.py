@@ -202,6 +202,19 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
 
 
 @pytest.mark.browser
+def test_the_pending_line_names_a_final_review_and_a_merge_edit_by_their_rows_words(store, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with settings_page(store, pds) as page:
+        page.get_by_label("Rounds at most, final review").fill("5")
+        pds.group(page, "checks")
+        page.get_by_label("CI poll interval (seconds)").fill("30")
+        expect(page.locator("#pending")).to_have_text(
+            "Unsaved: Final review · Rounds at most: inherited → 5; CI poll interval (seconds): inherited → 30."
+        )
+
+
+@pytest.mark.browser
 def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(store, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
