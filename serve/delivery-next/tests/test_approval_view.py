@@ -13,7 +13,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 import uvicorn
+from fastapi.testclient import TestClient
 
+from owlbear_decisions import Decision, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_contracts.decision_records import Pick, PickedDecision
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
@@ -23,7 +25,8 @@ from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.project_host import api, brief_view
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.state_store import decision_store, machine_settings, spend_ledger, work_block
@@ -32,6 +35,7 @@ from owlbear_delivery_next.workflow_steps import decision_publication
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from pathlib import Path
 
 NOW = datetime(2026, 10, 16, 2, tzinfo=UTC)
 MINE, LEFT_TO_SHAPER = "Turns the hero 180 degrees in under 300 ms", "A second press returns the hero"
@@ -66,10 +70,9 @@ def change() -> m.Change:
     return m.Change(slug="flip", brief=brief, checks=checks, step=m.Step(kind=m.StepKind.SHAPE))
 
 
-@pytest.fixture
-def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
-    store = Store(tmp_path)
-    store.write(Lock("flip"), change())
+@contextlib.contextmanager
+def served(store: Store) -> Iterator[str]:
+    """The project app over *store* on a free local port, with token ``tok``."""
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
@@ -79,8 +82,16 @@ def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
     threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
     while not server.started:
         time.sleep(0.05)
-    yield store, f"http://127.0.0.1:{sock.getsockname()[1]}"
+    yield f"http://127.0.0.1:{sock.getsockname()[1]}"
     server.should_exit = True
+
+
+@pytest.fixture
+def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
+    store = Store(tmp_path)
+    store.write(Lock("flip"), change())
+    with served(store) as base:
+        yield store, base
 
 
 @contextlib.contextmanager
@@ -120,7 +131,9 @@ def agreed(brief: Any) -> None:
 
     expect(brief.locator(":scope > *").first).to_have_text("Visitors flip the hero image with one button.")
     folds = brief.locator(":scope > section > details > summary")
-    expect(folds).to_have_text(["Your decisions (4)", "Shaper's choices (1)", "Out of scope (1)"])
+    expect(folds).to_have_text(  # the decisions picked fold too, shown with the details
+        ["Your decisions (4)", "Shaper's choices (1)", "Out of scope (1)", "Decisions this work follows (1)"]
+    )
     expect(brief.get_by_text("Top right of the hero")).to_be_hidden()  # folded until opened
     for fold in folds.all():
         big(fold)
@@ -181,6 +194,102 @@ def test_the_agreement_keeps_details_collapsed_and_the_approved_brief_lists_the_
         expect(current.locator(".loops [aria-hidden=true]")).to_have_text("\u00d73")
         expect(current.locator(".loops .sr")).to_have_text("3 rounds")
         expect(page.locator("ol.stepper .loops")).to_have_count(1)
+
+
+PROJECT = "shop-site"
+
+
+def rule(title: str, scope: Scope, state: State = State.IN_FORCE) -> Decision:
+    where = {Scope.GLOBAL: {}, Scope.PROJECT: {"project": PROJECT}}.get(scope, {"project": PROJECT, "change": "flip"})
+    return Decision(id=new_id(), title=title, statement=f"{title}.", scope=scope, origin=Origin.DECIDED, actor="owner",
+                    state=state, created_at=NOW, **where)  # fmt: skip
+
+
+@pytest.fixture
+def shared_url(tmp_path: Path, shared_repo) -> Iterator[tuple[Store, str, dict[str, Decision]]]:
+    """Change ``flip`` picking a Global, two project (one withdrawn since), a Change and an unknown decision."""
+    import subprocess  # noqa: PLC0415
+
+    shared = DataRepo(shared_repo[0])
+    shared.claim(PROJECT, "github.com/acme/shop-site")
+    rules = {
+        "global": rule("Pages are plain HTML", Scope.GLOBAL),
+        "project": rule("Notes live in SQLite", Scope.PROJECT),
+        "withdrawn": rule("Cache every read", Scope.PROJECT, State.WITHDRAWN),
+        "change": rule("The flip button stays square", Scope.CHANGE),
+    }
+    for r in rules.values():
+        folder = {Scope.GLOBAL: shared.root, Scope.PROJECT: shared.root / PROJECT}.get(r.scope)
+        write(r, folder or shared.root / PROJECT / "changes" / "flip")
+    for args in (("add", "-A"), ("commit", "-qm", "seed"), ("push", "-q", "origin", "HEAD")):
+        subprocess.run(["git", *args], cwd=shared.root, check=True, capture_output=True)  # noqa: S603, S607
+    store = Store(tmp_path / "store", shared, PROJECT)
+    c = change()
+    said = [PickedDecision(id=r.id, revision=r.revision, title=r.title, statement=r.statement) for r in rules.values()]
+    gone = PickedDecision(id=new_id(), revision="r0", title="An old rule since moved away", statement="Gone.")
+    c.brief.picked = Pick(version=2, status="ok", decisions=[*said, gone])
+    store.write(Lock("flip"), c)
+    with served(store) as base:
+        yield store, base, rules
+
+
+@pytest.mark.browser
+def test_picked_decisions_group_by_scope_and_link(shared_url, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _store, base, rules = shared_url
+    with opened(base, "flip", pds) as page:
+        expect(page.get_by_text("This version follows 5 decisions.")).to_be_visible()  # details off: one line
+        page.locator("#details-switch").click()
+        follows = page.locator(".brief section", has_text="Decisions this work follows")
+        summary = follows.locator("summary")
+        expect(summary).to_have_text("Decisions this work follows (5)")
+        big(summary)
+        summary.click()
+        expect(follows.locator("p-heading")).to_have_text(
+            ["Global (1)", "This project (2)", "This Change (1)", "Not in the current decisions (1)"]
+        )
+        expect(follows.locator("li")).to_have_text([
+            "Pages are plain HTML", "Notes live in SQLite", "Cache every read (withdrawn)",
+            "The flip button stays square", "An old rule since moved away",
+        ])  # fmt: skip
+        expect(follows.get_by_role("link")).to_have_count(4)  # the one gone from the list has nowhere to go
+        withdrawn = rules["withdrawn"]
+        follows.get_by_role("link", name="Cache every read").click()
+        expect(page).to_have_url(re.compile(rf"/decisions\?decision={withdrawn.id}$"))
+        card = page.locator(f'.entry[data-id="{withdrawn.id}"]')
+        expect(card).to_have_count(1)
+        expect(card.locator(".heading")).to_have_text("Cache every read.")  # its statement, which the title cuts
+        expect(card.locator("#detail")).to_be_visible()
+        expect(card).to_be_in_viewport()
+        expect(card.locator(".heading")).to_be_focused()
+        pds.pick(page, "State", "all")  # now listed, it shows once, still open
+        expect(page.locator(f'.entry[data-id="{withdrawn.id}"]')).to_have_count(1)
+        expect(page.locator("#linked")).to_have_count(0)
+        expect(page.locator(f'.entry[data-id="{withdrawn.id}"] #detail')).to_be_visible()
+
+
+@pytest.mark.parametrize("case", ["no-shared-data", "save-in-progress"])
+def test_an_unavailable_decision_list_is_said(c1, request, monkeypatch, case: str) -> None:
+    """The picked decisions can't be grouped without the list; the rest of the detail answers all the same."""
+    store, app = c1
+    reason = "there is no shared data repository, so there are no decisions to work by"
+    if case == "save-in-progress":
+        reason = "a decision save is in progress; try again in a moment"
+
+        def saving(*_args: object) -> None:
+            raise decision_store.DecisionsUnavailable(reason)
+
+        monkeypatch.setattr(brief_view.decision_store, "load", saving)
+        moved = Store(store.root, DataRepo(request.getfixturevalue("shared_repo")[0]), PROJECT)
+        app = api.create_app(moved, "tok", Host())
+    client = TestClient(app, base_url="http://127.0.0.1", headers={"authorization": "Bearer tok"})
+    detail = client.get("/api/next/changes/c1-fixture")
+    assert detail.status_code == 200, detail.text
+    brief = detail.json()["brief"]
+    assert (brief["picked"]["status"], len(brief["picked"]["decisions"])) == ("ok", 96)
+    assert (brief["picked_items"], brief["picked_unavailable"]) == (None, reason)
+    assert [v["n"] for v in brief["versions"]["versions"]] == [1, 2, 3, 4]
 
 
 @pytest.mark.browser

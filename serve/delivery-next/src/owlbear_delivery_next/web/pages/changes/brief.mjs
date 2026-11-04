@@ -68,15 +68,34 @@ function checkSaid(c) {
   return `${c.steps.join("; ")}${c.expect ? `. Expected: ${c.expect}` : ""}`;
 }
 
-// The decisions in force this version's work follows, as Delivery's picker chose them (TD-459): titles only.
-function picked(d) {
-  const p = d.brief.picked, title = "Decisions this work follows";
-  if (!p) return nothing;
+const SCOPES = [["global", "Global"], ["project", "This project"], ["change", "This Change"],
+  [null, "Not in the current decisions"]];
+const NOT_IN_FORCE = { draft: "draft", replaced: "replaced", withdrawn: "withdrawn", spent: "spent" };
+
+// One picked decision, linked to its entry on the Decisions page; one no longer in force says what it is now.
+function pickedItem(x) {
+  const was = NOT_IN_FORCE[x.state];
+  if (!x.scope) return x.title;
+  return html`<a href=${here({ decision: x.id }, "/decisions")}>${x.title}</a>${was ? ` (${was})` : ""}`;
+}
+
+// The decisions in force this version's work follows, as Delivery's picker chose them (TD-459). Without the details
+// one line counts them; with them they fold under their count, grouped by where each applies, each linked.
+function picked(d, on) {
+  const p = d.brief.picked, title = "Decisions this work follows", n = p?.decisions.length;
+  if (!p || (!on && p.status !== "ok")) return nothing;
+  if (!on) return text(`This version follows ${n} decision${n === 1 ? "" : "s"}.`);
   if (p.status === "owed") return part(title, text("Delivery is picking them from the decisions in force."));
   if (p.status === "failed") {
     return part(title, text(`The pick failed: ${p.reason}. The shaping chat can ask for it again.`));
   }
-  return part(title, p.decisions.length ? list(p.decisions) : text("None of the decisions in force governs it."));
+  if (!n) return part(title, text("None of the decisions in force governs it."));
+  const items = d.brief.picked_items, why = d.brief.picked_unavailable;
+  const groups = items ? SCOPES.map(([scope, name]) => {
+    const held = items.filter((x) => x.scope === scope);
+    return held.length ? [hd(5, `${name} (${held.length})`, "xs"), list(held.map(pickedItem))] : nothing;
+  }) : [text(`They can't be grouped or linked: ${why}.`), list(p.decisions)];
+  return html`<section>${toggle(`${d.key}:picked`, `${title} (${n})`, groups)}</section>`;
 }
 
 // A screen as the owner reads it: what it must show, then where and after which clicks.
@@ -160,7 +179,7 @@ export function approval(d) {
   const act = (v) => (v.actions.includes("approve") ? approveButton(d) : nothing);
   return panel(`Brief v${version}${d.brief.title ? `: ${d.brief.title}` : ""}`, key,
     html`<div class="brief">${d.brief.outcome ? text(d.brief.outcome, { size: "md" }) : nothing}${agreement(d)}
-      ${on ? picked(d) : nothing}${technical(d)}${on ? readBacks(d) : nothing}</div>`,
+      ${picked(d, on)}${technical(d)}${on ? readBacks(d) : nothing}</div>`,
     text("Nothing is built until you approve. You approve the whole brief, including the collapsed technical "
       + "details; your own choices stay yours to change. Approval authorises work within this brief, not new "
       + `product commitments. To change the brief before approving, ${d.brief.unrevisable === ""
@@ -205,7 +224,7 @@ export function briefInfo(d) {
   const added = (d.owner_criteria || []).map((k) => [`You added in visual round ${k.round}`, k.text]);
   const on = detailsOn();
   return info(`Brief v${v}${at ? `, approved ${at}` : ""}`, html`<div class="brief">
-    ${d.brief.outcome ? text(d.brief.outcome) : nothing}${agreement(d, true)}${on ? picked(d) : nothing}${technical(d)}
+    ${d.brief.outcome ? text(d.brief.outcome) : nothing}${agreement(d, true)}${picked(d, on)}${technical(d)}
     ${on ? part("Changes since you approved", added.length ? saidList(added)
       : text("None besides the amendments below.")) : nothing}
     ${on ? amendmentsPart(d) : nothing}${versionList(d.brief.versions, "Versions")}</div>
