@@ -26,7 +26,6 @@ from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.state_store import backlog
-from owlbear_delivery_next.state_store.backlog import BacklogError
 
 UNITS = {"f-1": "chg:p1:fix", "f-2": "chg:p2:fix", "f-3": "syn:scout-a", "f-4": "chg:p1:other"}
 TEXT = {
@@ -218,7 +217,7 @@ def test_a_failure_longer_than_any_cut_is_kept_whole_and_masked(world, whole_err
 
     class Unreachable(FakeBacklog):
         def read(self, *, fresh=False):  # noqa: ARG002 - the backlog's signature
-            raise BacklogError(502, f"{whole_error}\n(token {token})")
+            raise backlog.BacklogError(502, f"{whole_error}\n(token {token})")
 
     agents = world.places["p2"].clone / ".github" / "agents"
     agents.mkdir(parents=True)
