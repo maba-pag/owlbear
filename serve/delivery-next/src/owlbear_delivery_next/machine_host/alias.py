@@ -17,6 +17,7 @@ import subprocess
 import sys
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git import command_failure
 from owlbear_delivery_next.local_system import data_place, data_repo, local_home
 from owlbear_delivery_next.machine_host import versions
 from owlbear_delivery_next.state_store import registry
@@ -64,10 +65,14 @@ def activate(folder: Path, tag: str) -> None:
         _marked(tag)
 
 
-def complete() -> None:
-    """Finish a first migration a crash interrupted, and raise the mark to the alias's version; at every start."""
+def complete() -> str:
+    """Finish a first migration a crash interrupted, and raise the mark to the alias's version; at every start.
+
+    Returns why the legacy folder could not be put away, else ''.
+    """
     home = local_home.root()
     new = home / NEW
+    why = ""
     if new.is_symlink():
         new.unlink()  # made, never renamed: the old version stays
     elif new.is_dir():
@@ -82,6 +87,7 @@ def complete() -> None:
         with contextlib.suppress(OSError):
             (runtime.resolve() / versions.ACTIVATED).touch(exist_ok=True)
         _marked(runtime.resolve().name)
+    return why
 
 
 def _kept(new: Path) -> str:
@@ -93,7 +99,7 @@ def _kept(new: Path) -> str:
         versions.keep_data(new)
         named = data_place.protected()
     except (versions.VersionError, data_repo.DataRepoError) as exc:
-        return str(exc)
+        return command_failure.failure(exc)
     runtime = local_home.root() / local_home.RUNTIME
     for path in named:
         if path.absolute() == runtime or runtime in path.absolute().parents:

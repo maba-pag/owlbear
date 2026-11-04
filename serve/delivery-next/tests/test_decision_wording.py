@@ -11,7 +11,17 @@ from owlbear_decisions.models import STATEMENT_LIMIT
 from owlbear_decisions.storage import parse, serialize
 from owlbear_delivery_next.change_contracts import decision_wording, pick_tools, tools
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline
-from owlbear_delivery_next.change_contracts.models import Brief, BriefDecision, Change, ErrorKind
+from owlbear_delivery_next.change_contracts.models import (
+    Brief,
+    BriefDecision,
+    Change,
+    ErrorKind,
+    Plan,
+    Step,
+    StepKind,
+    Task,
+)
+from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.state_store import decision_actions, decision_archive, decision_origin, decision_store
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.workflow_steps import brief_round, decision_publication, decisions_gate, lookup, pick
@@ -367,11 +377,6 @@ def test_an_approval_refuses_a_saved_pick_of_an_unreadable_rule_before_its_basel
     # The same rule now carries a pre-upgrade legacy rationale; its statement and origin are unchanged.
     legacy = legacy_ambiguous().model_copy(update={"id": rule.id})
     write(legacy, picking.shared.root / PROJECT, rule.revision)
-    c = picking.change()
-    view = decisions_gate.loaded(picking.store)
-    fixed = pick.digest(pick.listed(view.snapshot, c), pick.moved(view.snapshot, c))
-    c.brief.picked = c.brief.picked.model_copy(update={"listed": fixed})
-    picking.store.write(Lock(picking.slug), c)
 
     got = picking.approve(1)
 
@@ -379,6 +384,32 @@ def test_an_approval_refuses_a_saved_pick_of_an_unreadable_rule_before_its_basel
     assert rule.id in got.json()["detail"]
     assert "unresolved" in got.json()["detail"]
     assert picking.approved().decisions_baseline is None
+
+
+def test_an_unreadable_rule_recorded_after_the_pick_passes_approval_and_stops_the_next_step_before_a_picker(
+    picking, monkeypatch
+):
+    rule = picking.put(archived())
+    picking.save()
+    assert picking.ask(1).status_code == 200
+    picking.picks.append(pick_tools.PickResult(picked=[{"id": rule.id, "note": "it governs the page"}]))
+    picking.verdicts.append(tools.ReviewResult(verdict="pass"))
+    picking.step()
+    bad = picking.put(legacy_ambiguous())
+
+    assert picking.approve(1).status_code == 200  # the pick never read it
+
+    c = picking.approved()
+    assert set(c.decisions_baseline.revisions) == {rule.id}
+    c.plan = Plan(tasks=[Task(id="t1", title="Add notes", scope=["packages/app"], checks=["true"])])
+    c.step = Step(kind=StepKind.BUILD, task="t1")
+    picking.store.write(Lock(picking.slug), c)
+    monkeypatch.setattr(runner, "_run", lambda *_a: pytest.fail("no worker on an unreadable rule"))
+    runner._step(picking.store, Lock(picking.slug), c, c.step, picking.repo)  # noqa: SLF001
+    stop = picking.change().stop
+    assert (stop.kind, stop.action) == (ErrorKind.STATE, decisions_gate.FAULTY)
+    assert bad.id in stop.reason
+    assert len(picking.pickers()) == 1
 
 
 def test_an_approval_saves_the_whole_wording_of_a_long_project_rule_in_its_baseline(picking):

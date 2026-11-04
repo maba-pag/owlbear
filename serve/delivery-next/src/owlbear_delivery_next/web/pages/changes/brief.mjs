@@ -1,7 +1,7 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { here } from "/assets/ui.mjs";
 import { DIALOG, state, send, starts, draft } from "./state.mjs";
-import { button, field, hd, text, list, panel, info, row } from "./widgets.mjs";
+import { button, field, hd, text, list, panel, info, row, toggle } from "./widgets.mjs";
 import { merging } from "./forms.mjs";
 import { reviseBrief } from "./shaping.mjs";
 import { detailsOn } from "./details.mjs";
@@ -28,30 +28,39 @@ function part(title, ...children) {
   return html`<section>${hd(4, title, "sm")}${children}</section>`;
 }
 
-// A project-scope decision stays in force for later Changes once approved, so it says so (C-14, TD-426).
+const ORIGINS = { decided: "you decided", approved: "you took the shaper's recommendation" };
+
+// Who made the decision, then whether it stays in force for later Changes once approved (C-14, TD-426).
 function said(x) {
-  return [x.question, x.scope === "project" ? `${x.answer} (lasting: applies to later Changes too)` : x.answer];
+  const how = [ORIGINS[x.origin], x.scope === "project" && "lasting: applies to later Changes too"].filter(Boolean);
+  return [x.question, how.length ? `${x.answer} (${how.join("; ")})` : x.answer];
 }
 
-// The agreement the owner approves (TD-122, TD-179 rule 2): his decisions, what he specified among the technical
-// details, the shaper's choices that the approval accepts, and what is out.
+// The agreement the owner approves (TD-122, TD-179 rule 2): his decisions with their origins and what he specified
+// among the technical details, the shaper's own choices that the approval accepts, and what is out; each folded
+// under its count, the outcome above them.
 function agreement(d, approved = false) {
   const decisions = d.brief.decisions || [], out = d.brief.non_goals || [], parts = [];
-  const mine = decisions.filter((x) => x.origin === "decided").map(said);
+  const mine = decisions.filter((x) => x.origin in ORIGINS).map(said);
   const specified = [
     ...d.criteria.filter((k) => yours(d, k.id)).map((k) => ["Acceptance criterion", k.text]),
     ...d.brief.visual.filter((s) => yours(d, `screen:${s.name}`)).map((s) => ["Screen the visual check takes",
       screenSaid(s)]),
     ...d.checks.filter((c) => yours(d, `check:${c.id}`)).map((c) => ["Check you do yourself", checkSaid(c)]),
   ];
-  if (mine.length || specified.length) parts.push(part("Your decisions", saidList([...mine, ...specified])));
-  const proposed = decisions.filter((x) => x.origin !== "decided").map(said);
+  const fold = (name, n, ...inside) => html`<section>${toggle(`${d.key}:${name}`, `${name} (${n})`, inside)}
+    </section>`;
+  if (mine.length || specified.length) {
+    parts.push(fold("Your decisions", mine.length + specified.length, mine.length ? saidList(mine) : nothing,
+      specified.length ? [hd(5, "You specified", "xs"), saidList(specified)] : nothing));
+  }
+  const proposed = decisions.filter((x) => !(x.origin in ORIGINS)).map(said);
   if (proposed.length) {
     const accepts = approved ? "Your approval accepted these choices." : "Approving accepts these choices.";
-    parts.push(part("Choices proposed by the shaper", text(accepts), saidList(proposed)));
+    parts.push(fold("Shaper's choices", proposed.length, text(accepts), saidList(proposed)));
   }
   if (!decisions.length && !specified.length) parts.push(text("No separate decisions recorded."));
-  if (out.length) parts.push(part("Not in this Change", list(out)));
+  if (out.length) parts.push(fold("Out of scope", out.length, list(out)));
   return parts;
 }
 
@@ -59,15 +68,34 @@ function checkSaid(c) {
   return `${c.steps.join("; ")}${c.expect ? `. Expected: ${c.expect}` : ""}`;
 }
 
-// The decisions in force this version's work follows, as Delivery's picker chose them (TD-459): titles only.
-function picked(d) {
-  const p = d.brief.picked, title = "Decisions this work follows";
-  if (!p) return nothing;
+const SCOPES = [["global", "Global"], ["project", "This project"], ["change", "This Change"],
+  [null, "Not in the current decisions"]];
+
+// One picked decision, linked to its entry on its project's Decisions page; one no longer in force says what it is now.
+function pickedItem(project, x) {
+  if (!x.scope) return x.title;
+  const was = x.state === "in_force" ? "" : ` (${x.state})`;
+  return html`<a href=${here({ project, decision: x.id }, "/decisions")}>${x.title}</a>${was}`;
+}
+
+// The decisions in force this version's work follows, as Delivery's picker chose them (TD-459). Without the details
+// one line counts them; with them they fold under their count, grouped by where each applies, each linked.
+function picked(d, on) {
+  const p = d.brief.picked, title = "Decisions this work follows", n = p?.decisions.length;
+  if (!p || (!on && p.status !== "ok")) return nothing;
+  if (!on) return text(`This version follows ${n} decision${n === 1 ? "" : "s"}.`);
   if (p.status === "owed") return part(title, text("Delivery is picking them from the decisions in force."));
   if (p.status === "failed") {
     return part(title, text(`The pick failed: ${p.reason}. The shaping chat can ask for it again.`));
   }
-  return part(title, p.decisions.length ? list(p.decisions) : text("None of the decisions in force governs it."));
+  if (!n) return part(title, text("None of the decisions in force governs it."));
+  const items = d.brief.picked_items, why = d.brief.picked_unavailable;
+  const groups = items ? SCOPES.map(([scope, name]) => {
+    const held = items.filter((x) => x.scope === scope);
+    if (!held.length) return nothing;
+    return [hd(5, `${name} (${held.length})`, "xs"), list(held.map((x) => pickedItem(d.project, x)))];
+  }) : [text(`They can't be grouped or linked: ${why}.`), list(p.decisions)];
+  return html`<section>${toggle(`${d.key}:picked`, `${title} (${n})`, groups)}</section>`;
 }
 
 // A screen as the owner reads it: what it must show, then where and after which clicks.
@@ -151,7 +179,7 @@ export function approval(d) {
   const act = (v) => (v.actions.includes("approve") ? approveButton(d) : nothing);
   return panel(`Brief v${version}${d.brief.title ? `: ${d.brief.title}` : ""}`, key,
     html`<div class="brief">${d.brief.outcome ? text(d.brief.outcome, { size: "md" }) : nothing}${agreement(d)}
-      ${on ? picked(d) : nothing}${technical(d)}${on ? readBacks(d) : nothing}</div>`,
+      ${picked(d, on)}${technical(d)}${on ? readBacks(d) : nothing}</div>`,
     text("Nothing is built until you approve. You approve the whole brief, including the collapsed technical "
       + "details; your own choices stay yours to change. Approval authorises work within this brief, not new "
       + `product commitments. To change the brief before approving, ${d.brief.unrevisable === ""
@@ -196,7 +224,7 @@ export function briefInfo(d) {
   const added = (d.owner_criteria || []).map((k) => [`You added in visual round ${k.round}`, k.text]);
   const on = detailsOn();
   return info(`Brief v${v}${at ? `, approved ${at}` : ""}`, html`<div class="brief">
-    ${d.brief.outcome ? text(d.brief.outcome) : nothing}${agreement(d, true)}${on ? picked(d) : nothing}${technical(d)}
+    ${d.brief.outcome ? text(d.brief.outcome) : nothing}${agreement(d, true)}${picked(d, on)}${technical(d)}
     ${on ? part("Changes since you approved", added.length ? saidList(added)
       : text("None besides the amendments below.")) : nothing}
     ${on ? amendmentsPart(d) : nothing}${versionList(d.brief.versions, "Versions")}</div>

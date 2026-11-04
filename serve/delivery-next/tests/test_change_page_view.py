@@ -105,6 +105,7 @@ def test_details_off_then_on(c1, pds) -> None:
         for hidden in ("Review rounds", "Decisions this work follows", "Recent activity"):
             expect(detail.get_by_role("heading", name=hidden)).to_have_count(0)
         expect(detail.locator(".actions")).not_to_contain_text("No review yet")  # v4 is named once, above
+        expect(detail.get_by_text("This version follows 96 decisions.")).to_be_visible()
 
         pds.settled(page)
         switch = detail.locator("#details-switch")
@@ -112,7 +113,12 @@ def test_details_off_then_on(c1, pds) -> None:
         big(approve)
         switch.click()
         expect(detail.get_by_role("heading", name="Review rounds")).to_be_visible()
-        expect(detail.get_by_role("heading", name="Decisions this work follows")).to_be_visible()
+        follows = detail.locator("summary", has_text="Decisions this work follows (96)")
+        big(follows)
+        follows.click()
+        unread = "They can't be grouped or linked: there is no shared data repository"
+        expect(detail.get_by_text(unread)).to_be_visible()
+        expect(detail.get_by_text("This version follows 96 decisions.")).to_have_count(0)
         expect(detail.get_by_role("heading", name="Recent activity")).to_be_visible()
         detail.get_by_text("Finding details of the brief challenge").click()  # its findings before approval too
         rounds = detail.locator(".rounds")

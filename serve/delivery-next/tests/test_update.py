@@ -19,7 +19,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.impeccable import pack_files
-from owlbear_delivery_next.local_system import leases, local_home, processes
+from owlbear_delivery_next.local_system import data_place, data_repo, leases, local_home, processes
 from owlbear_delivery_next.machine_host import alias, app, control, handover, impeccable, serve, update, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.machine_host.versions import Choice
@@ -134,6 +134,31 @@ def test_a_start_keeps_the_legacy_runtime_when_the_pointer_names_the_data_throug
     assert ((new / "data" / ".git").is_dir(), (local_home.root() / "data.json").read_text()) == (True, said)
     assert list((local_home.root() / local_home.VERSIONS).glob("legacy-*")) == []
     assert f"it holds the shared data at {new / 'data'}" in caplog.text
+
+
+def test_a_start_logs_a_shared_data_pointer_it_could_not_read_whole(caplog, monkeypatch, whole_error):
+    """#971: a legacy runtime left in place because the pointer could not be read is logged with the whole reason, and
+    the start gets that reason for its page."""
+    runtime, folder = legacy(), version("v0.2")
+    new = local_home.root() / alias.NEW
+    new.symlink_to(folder)
+    alias._swap(new, runtime)  # noqa: SLF001 - an older update crashed right after the rename
+    error = data_repo.DataRepoError(whole_error)
+    error.add_note("a note on the failure")
+
+    def unreadable(_folder):
+        raise error
+
+    monkeypatch.setattr(data_place, "holds_data", unreadable)
+
+    left = alias.complete()
+
+    assert new.is_dir()
+    assert list((local_home.root() / local_home.VERSIONS).glob("legacy-*")) == []
+    reason = "nothing is removed while the shared data's pointer cannot be read: DataRepoError: "
+    whole = f"VersionError: {reason}{whole_error}\na note on the failure"
+    said = [r.getMessage() for r in caplog.records if r.name == alias.__name__]
+    assert (left, said) == (whole, [whole])  # the start carries it to Updates ▸ OwlBear
 
 
 def test_a_link_made_but_never_renamed_is_removed_and_the_old_runtime_stays():
@@ -674,6 +699,27 @@ def test_the_old_runtime_is_removed_only_on_the_owners_word():
     assert (said.status_code, said.json()["legacy"]) == (200, [])
     assert not kept[0].exists()
     assert runtime.resolve().name == "v0.3"
+
+
+def test_the_old_runtime_stays_and_says_why_whole_when_its_data_cannot_be_ruled_out(monkeypatch, whole_error):
+    """#971: removing the old runtime refused because it may hold the shared data says why whole, notes included."""
+    legacy()
+    alias.activate(version("v0.3"), "v0.3")
+    monkeypatch.setattr(leases, "unpinned", list)
+    error = versions.VersionError(whole_error)
+    error.add_note("a note on the failure")
+
+    def refusing(_path):
+        raise error
+
+    monkeypatch.setattr(versions, "keep_data", refusing)
+    record = HostRecord(url="http://127.0.0.1:4321/", token=TOKEN, pid=1, started_at=datetime.now(UTC), code="c")
+    client = TestClient(app.create(Machine(record)), base_url="http://127.0.0.1")
+
+    said = client.post("/api/next/machine/legacy/remove", headers={"authorization": f"Bearer {TOKEN}"})
+
+    assert (said.status_code, said.json()) == (409, {"detail": f"VersionError: {whole_error}\na note on the failure"})
+    assert len(versions.legacy()) == 1
 
 
 def test_the_old_runtime_stays_while_a_process_still_runs_it(monkeypatch):

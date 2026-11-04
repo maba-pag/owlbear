@@ -60,8 +60,8 @@ def store(tmp_path, shared_repo) -> Store:
 
 
 @contextlib.contextmanager
-def decisions_page(store: Store, pds: Any) -> Iterator[Any]:
-    """The Decisions page in a real browser: only the test host and the PDS CDN answer."""
+def decisions_page(store: Store, pds: Any, query: str = "") -> Iterator[Any]:
+    """The Decisions page, with *query*, in a real browser: only the test host and the PDS CDN answer."""
     import uvicorn  # noqa: PLC0415
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
@@ -80,7 +80,7 @@ def decisions_page(store: Store, pds: Any) -> Iterator[Any]:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
             pds.only(page, base)
-            page.goto(f"{base}/decisions#token=tok")
+            page.goto(f"{base}/decisions{query}#token=tok")
             yield page
             browser.close()
     finally:
@@ -118,6 +118,37 @@ def held_once(page: Any, held: list[Any]) -> Any:
             return held.pop(0)
         page.wait_for_timeout(50)
     pytest.fail("the page sent no request to hold")
+
+
+@pytest.mark.browser
+def test_a_missing_linked_decision_is_said(store, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with decisions_page(store, pds, f"?decision={new_id()}") as page:
+        missing = re.compile("no such decision in this project's view", re.IGNORECASE)
+        expect(page.locator("#error")).to_contain_text(missing)
+        expect(page.locator(".entry")).to_have_count(2)  # the list still shows, nothing opened
+        expect(page.locator("#linked, #detail")).to_have_count(0)
+
+
+@pytest.mark.browser
+def test_a_linked_decision_opens_once_the_list_can_be_read(store, pds):
+    """#996 review: a first list read that fails keeps the linked decision waiting; the next read opens it."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    rule = in_force(store)["Notes live in one SQLite table."]
+    with decisions_page(store, pds) as page:
+        base = page.url.split("/decisions")[0]
+        listing = re.compile(r".*/api/next/decisions\?.*")
+        page.route(listing, lambda route: route.fulfill(status=503, body="down"))
+        page.goto(f"{base}/decisions?decision={rule.id}")
+        expect(page.locator("#error")).to_be_visible()
+        expect(page.locator("#detail")).to_have_count(0)
+        page.unroute(listing)
+        page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+        expect(page.locator(f'.entry[data-id="{rule.id}"] #detail')).to_be_visible()
+        # no input reached the page, so the window may lack focus: the heading must be the active element
+        page.wait_for_function(f"document.activeElement?.matches('.entry[data-id=\"{rule.id}\"] .heading')")
 
 
 @pytest.mark.browser

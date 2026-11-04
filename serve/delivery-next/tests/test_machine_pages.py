@@ -27,6 +27,7 @@ import uvicorn
 from copilot.generated import rpc
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.change_contracts.decision_records import Pick, PickedDecision
 from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     Brief,
@@ -55,8 +56,8 @@ from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import pack_files
-from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home, processes
-from owlbear_delivery_next.machine_host import app, project, update_checks, versions
+from owlbear_delivery_next.local_system import codebase, data_place, data_repo, leases, local_home, processes
+from owlbear_delivery_next.machine_host import alias, app, project, update_checks, versions
 from owlbear_delivery_next.machine_host import impeccable as machine_impeccable
 from owlbear_delivery_next.machine_host import serve as host_start
 from owlbear_delivery_next.machine_host.machine import Machine
@@ -765,6 +766,108 @@ def test_updates_impeccable_says_an_install_failure_it_could_not_keep_whole(
 
 
 @pytest.mark.browser
+@pytest.mark.parametrize("unread", ["versions", "pins"])
+def test_updates_say_a_release_look_that_could_not_read_the_versions_whole(
+    monkeypatch, capsys, pds, whole_error, unread
+) -> None:
+    """#971: the OwlBear check's look whose versions or newer pack could not be read says why whole on Updates ▸
+    Impeccable and Updates ▸ OwlBear, and in the host's log."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    error = versions.VersionError(whole_error)
+    error.add_note("a note on the failure")
+
+    def failing(*_args, **_kwargs):
+        raise error
+
+    if unread == "versions":
+        monkeypatch.setattr(versions, "target", failing)
+        detail = f"the versions could not be read: VersionError: {whole_error}\na note on the failure"
+    else:
+        monkeypatch.setattr(versions, "target", lambda _channel=None: versions.Choice("v9.9", "c" * 40))
+        monkeypatch.setattr(versions, "pins", failing)
+        detail = f"v9.9's Impeccable is unreadable: VersionError: {whole_error}\na note on the failure"
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    machine, server, base = serve()
+    for _ in range(2):  # a failure shows after two in a row
+        assert machine.checks.start("owlbear")
+        assert machine.checks.drain(10)
+    logged = capsys.readouterr().out
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            said = errors(page)
+            pds.only(page, base)
+            page.goto(f"{base}/updates/impeccable#token=t")
+            shown = page.locator("#pack-release")
+            expect(shown).to_be_visible()
+            assert shown.text_content() == f"Not known yet: {detail}."
+            page.goto(f"{base}/updates/owlbear#token=t")
+            if unread == "versions":
+                shown = page.locator("#check-failure")
+                expect(shown).to_be_visible()
+                told = r"The last\s+2 checks failed; the latest at [^\n]*?: "
+                assert re.fullmatch(told + re.escape(f"{detail}."), shown.text_content())
+            else:
+                shown = page.locator("#check-latest")
+                expect(shown).to_be_visible()
+                assert shown.text_content() == f"v9.9 ({detail})"
+            assert said == []
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    line = r"^\d\d:\d\d:\d\dZ update check of OwlBear failed: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
+    assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == ([detail] * 2 if unread == "versions" else [])
+
+
+@pytest.mark.browser
+def test_updates_owlbear_says_an_update_whose_versions_could_not_be_read_whole(
+    monkeypatch, capsys, pds, whole_error
+) -> None:
+    """#971: an update whose look failed says why whole, its type and notes included, on Updates ▸ OwlBear and in the
+    host's log."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    error = versions.VersionError(whole_error)
+    error.add_note("a note on the failure")
+
+    def failing(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(versions, "target", failing)
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    detail = f"the versions could not be read: VersionError: {whole_error}\na note on the failure"
+    machine, server, base = serve()
+    machine.updater._update()  # noqa: SLF001 - the update thread's work, run here
+    logged = capsys.readouterr().out
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            said = errors(page)
+            pds.only(page, base)
+            page.goto(f"{base}/updates/owlbear#token=t")
+            shown = page.locator("#owlbear-state")
+            expect(shown).to_be_visible()
+            assert re.fullmatch(r"The update failed \([^)]*\): " + re.escape(detail), shown.text_content())
+            assert said == []
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    line = r"^\d\d:\d\d:\d\dZ update: failed: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
+    assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [detail]
+
+
+@pytest.mark.browser
 def test_updates_say_update_checks_that_started_afresh_whole(monkeypatch, capsys, pds, whole_error) -> None:
     """#951: update checks whose earlier results could not be read at the start say why whole on Updates and in the
     host's log."""
@@ -796,6 +899,219 @@ def test_updates_say_update_checks_that_started_afresh_whole(monkeypatch, capsys
         assert said == []
     line = r"^\d\d:\d\d:\d\dZ update checks: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"  # up to the host log's next line
     assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [unrestored]
+
+
+def _checks_page(base: str, path: str, locator: str) -> tuple[str, list[str]]:
+    """The text of *locator* on the machine host's page at *path* once shown, and the page's errors."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    with sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        page = browser.new_page()
+        said = errors(page)
+        page.goto(f"{base}{path}#token=t")
+        shown = page.locator(locator)
+        expect(shown).to_be_visible()
+        text = shown.text_content()
+        browser.close()
+    return text, said
+
+
+def _tick_fails_once(monkeypatch, machine: Machine, error: Exception, released: threading.Event) -> None:
+    """Run *machine*'s update-check loop until its first look whether a check is due failed with *error*; its next
+    look waits for *released*, so nothing clears it."""
+    looks = []
+
+    def ticking() -> None:
+        looks.append(1)
+        if len(looks) == 1:
+            raise error
+        released.wait()
+
+    monkeypatch.setattr(update_checks, "TICK", 0.05)
+    monkeypatch.setattr(machine.checks, "start", lambda _name: False)
+    monkeypatch.setattr(machine.checks, "tick", ticking)
+    threading.Thread(target=machine.checks.loop, daemon=True).start()
+    for _ in range(200):
+        if len(looks) > 1:
+            return
+        time.sleep(0.05)
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("failing", ["unkept", "unsettled", "unticked"])
+def test_updates_say_update_checks_that_could_not_be_kept_set_or_looked_at_whole(
+    monkeypatch, capsys, whole_error, failing
+) -> None:
+    """#971: update checks whose results could not be written, whose machine settings could not be read, or whose
+    look whether one is due failed say why whole on Updates and in the host's log."""
+    error = OSError(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising(*_args, **_kwargs):
+        raise error
+
+    newer = {"newer": True, "current": "3.0.0", "latest": "999.0.0", "detail": ""}
+    monkeypatch.setitem(update_checks.CHECKS, "pds", lambda: newer)
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    released = threading.Event()
+    machine, server, base = serve()
+    try:
+        whole = f"OSError: {whole_error}\na note on the failure"
+        if failing == "unkept":
+            monkeypatch.setattr(update_checks, "atomic_write", raising)
+            assert machine.checks.start("pds")
+            assert machine.checks.drain(10)
+            told = f"The check results are not kept: {machine.checks.path} could not be written: {whole}."
+            logged = f"update checks: {machine.checks.path} could not be written: {whole}"
+        elif failing == "unsettled":
+            monkeypatch.setattr(update_checks, "machine_settings", SimpleNamespace(current=raising))
+            told = f"The machine settings could not be read, so no check runs at its interval: {whole}."
+            logged = f"update checks: the machine settings could not be read: {whole}"
+        else:
+            _tick_fails_once(monkeypatch, machine, error, released)
+            told = f"The last look whether a check is due failed: {whole}."
+            logged = f"update checks failed: {whole}"
+        text, said = _checks_page(base, "/updates/owlbear", "#check-settings")
+    finally:
+        released.set()
+        server.should_exit = True
+        machine.stop_all()
+    lead = r"It looks [^\n]*\.\s+How often is set in Settings → This machine\. "
+    assert re.fullmatch(lead + re.escape(told), text)
+    assert said == []
+    line = r"^\d\d:\d\d:\d\dZ (update checks.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
+    lines = re.findall(line, capsys.readouterr().out, re.MULTILINE | re.DOTALL)
+    assert set(lines) == {logged}
+
+
+@pytest.mark.browser
+def test_updates_pds_says_a_newer_release_whose_projects_runs_could_not_be_read_whole(
+    monkeypatch, capsys, whole_error
+) -> None:
+    """#971: a newer PDS whose projects' updates could not be read says why whole beside it on Updates ▸ PDS and in
+    the host's log."""
+    error = OSError(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising(*_args, **_kwargs):
+        raise error
+
+    newer = {"newer": True, "current": "3.0.0", "latest": "999.0.0", "detail": ""}
+    monkeypatch.setitem(update_checks.CHECKS, "pds", lambda: newer)
+    monkeypatch.setattr(update_checks, "_pds_runs", raising)  # the PDS page's own run list reads them apart
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    machine, server, base = serve()
+    try:
+        assert machine.checks.start("pds")
+        assert machine.checks.drain(10)
+        text, said = _checks_page(base, "/updates/pds", "#check-latest")
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    whole = f"OSError: {whole_error}\na note on the failure"
+    assert text == f"999.0.0 (whether a project already takes it could not be read: {whole})"
+    assert said == []
+    line = r"^\d\d:\d\d:\d\dZ (update checks.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
+    lines = re.findall(line, capsys.readouterr().out, re.MULTILINE | re.DOTALL)
+    assert set(lines) == {f"update checks: the PDS updates could not be read: {whole}"}
+
+
+@pytest.mark.browser
+def test_updates_owlbear_logs_update_steps_that_could_not_be_kept_whole(monkeypatch, capsys, whole_error) -> None:
+    """#971: an update whose steps could not be written logs why whole, once, under its step on Updates ▸ OwlBear and in
+    the host's log."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.machine_host import update_steps  # noqa: PLC0415
+
+    error = OSError(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(update_steps, "atomic_write", raising)
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    machine, server, base = serve()
+    path = local_home.root() / update_steps.RECORD
+    line = f"its steps could not be kept in {path}: OSError: {whole_error}\na note on the failure"
+    try:
+        machine.updater.steps.begin()
+        machine.updater.steps.mark("looking", "running", "fetching the versions")
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            said = errors(page)
+            page.goto(f"{base}/updates/owlbear#token=t")
+            page.locator("#owlbear-log-box summary").click()
+            shown = page.locator("#owlbear-log")
+            expect(shown).to_be_visible()
+            text = shown.text_content()
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    looking = r"[^\n]*? · Looking for a newer version: "
+    assert re.fullmatch(f"{looking}{re.escape(line)}\n{looking}fetching the versions", text)
+    assert said == []
+    logged = r"^\d\d:\d\d:\d\dZ update: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
+    assert re.findall(logged, capsys.readouterr().out, re.MULTILINE | re.DOTALL) == [line]
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("failing", ["prune", "migration", "both"])
+def test_updates_owlbear_says_old_versions_it_could_not_remove_at_the_start_whole(
+    monkeypatch, whole_error, failing
+) -> None:
+    """#971: old versions the host's start could not remove, and the runtime from before the first update it could not
+    put away, say why whole on Updates ▸ OwlBear's update line."""
+    error = OSError(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising(*_args):
+        raise error
+
+    refused = versions.VersionError(whole_error)
+    refused.add_note("a note on the refusal")
+
+    def refusing(_path):
+        raise refused
+
+    left = unpruned = ""
+    if failing != "migration":
+        monkeypatch.setattr(versions, "prune", raising)
+        unpruned = f"OSError: {whole_error}\na note on the failure"
+        assert host_start._pruned() == ([], unpruned)  # noqa: SLF001 - the start's own step
+    if failing != "prune":
+        (local_home.root() / alias.NEW).mkdir(parents=True)  # a first migration a crash interrupted
+        monkeypatch.setattr(versions, "keep_data", refusing)
+        left = alias.complete()
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    machine, server, base = serve()
+    try:
+        machine.updater.unpruned, machine.updater.unmigrated = unpruned, left  # as the host's start sets them
+        if failing == "both":  # an update that failed after the start: its error ends before the start's notes
+            machine.updater.state |= {"phase": "failed", "detail": f"OSError: {whole_error}", "version": "v0.3"}
+        text, said = _checks_page(base, "/updates/owlbear", "#owlbear-state")
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    told = "No update has run since OwlBear started."
+    if failing == "both":
+        told = f"The update to v0.3 failed: OSError: {whole_error}."
+    if failing != "prune":
+        told += (" The runtime from before the first update could not be put away at this start: "
+                 f"VersionError: {whole_error}\na note on the refusal.")  # fmt: skip
+    if failing != "migration":
+        told += f" Old versions could not be removed at this start: {unpruned}."
+    assert (text, said) == (told, [])
 
 
 def targets(scope) -> list[str]:
@@ -875,6 +1191,37 @@ def test_settings_say_a_failed_read_of_the_shared_repository_whole(
         why = f"{failed}\nstderr:\n{stderr}\nstdout:\n{stdout}"
         assert notice.text_content().strip() == f"The shared settings repository {shared} cannot be read: {why}"
         assert said == []
+
+
+@pytest.mark.browser
+def test_settings_say_why_the_old_runtime_stays_whole(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """#971: Remove the old runtime, refused because the folder may hold the shared data, says why whole in Settings'
+    notice."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    kept = local_home.root() / local_home.VERSIONS / "legacy-c1c1c1c1c1c1"
+    kept.mkdir(parents=True)
+    error = versions.VersionError(whole_error)
+    error.add_note("a note on the failure")
+
+    def refusing(_path):
+        raise error
+
+    monkeypatch.setattr(versions, "legacy", lambda: [kept])
+    monkeypatch.setattr(leases, "unpinned", list)
+    monkeypatch.setattr(versions, "keep_data", refusing)
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        pds.group(page, "this-machine")
+        page.get_by_role("button", name="Remove the old runtime").click()
+        pds.answer(page, "Remove it")
+        notice = page.locator("#error")
+        expect(notice).to_be_visible()
+        assert notice.text_content().strip() == f"VersionError: {whole_error}\na note on the failure"
+        assert said == ["Failed to load resource: the server responded with a status of 409 (Conflict)"]
+    assert kept.is_dir()
 
 
 @pytest.mark.browser
@@ -3178,6 +3525,41 @@ def test_a_failed_pick_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, w
         shown = follows.locator("p-text")
         expect(shown).to_have_count(1)
         assert shown.text_content() == f"The pick failed: {failed}. The shaping chat can ask for it again."
+        assert said == []
+
+
+@pytest.mark.browser
+def test_a_picked_decision_opens_in_its_project_from_all_projects(
+    tmp_path: Path, monkeypatch, pds, shared_repo
+) -> None:
+    """#964: a picked decision followed from a Change opened under All projects opens in that Change's project."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    shared = shared_repo[0]
+    monkeypatch.setenv(data_place.VIEW, str(shared))
+    alpha, _beta = (registry.register(clone(tmp_path / n, "c1")) for n in ("alpha", "beta"))
+    store = Store.open(Path(alpha.path))
+    decided(shared, store.name, "Lint once.")
+    (rule,) = [
+        e.decision
+        for e in decision_store.load(store.shared, store.name).snapshot.entries
+        if e.decision.title == "Lint once."
+    ]
+    with store.lock("c1") as lock:
+        c = Change(slug="c1", brief=Brief(version=1, title="Notes"), step=Step(kind=StepKind.SHAPE))
+        c.brief.picked = Pick(
+            version=1,
+            status="ok",
+            decisions=[PickedDecision(id=rule.id, revision="r1", title="Lint once.", statement="Lint once.")],
+        )
+        store.write(lock, c)
+    with browsing(monkeypatch, pds, details=True) as (page, base):
+        said = errors(page)
+        opened(page, base, alpha.id, "c1")
+        page.get_by_text("Decisions this work follows (1)").click()
+        page.get_by_role("link", name="Lint once.").click()
+        expect(page).to_have_url(f"{base}/decisions?project={alpha.id}&decision={rule.id}")
+        expect(page.locator(f'.entry[data-id="{rule.id}"] .heading')).to_be_focused()
         assert said == []
 
 

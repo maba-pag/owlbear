@@ -63,13 +63,13 @@ def _found() -> dict[str, Any]:
     try:
         choice = versions.target(channel)  # the channel kept with the look is the one it ran on
     except (versions.VersionError, registry.RegistryError) as exc:
-        return {"state": "unknown", "detail": f"the versions could not be read: {exc}"}
+        return {"state": "unknown", "detail": f"the versions could not be read: {command_failure.failure(exc)}"}
     if choice is None or not choice.tag:
         return {"state": "none", "detail": "; ".join(choice.notes) if choice else "", "channel": channel}
     try:
         pins = versions.pins(choice.commit)
     except versions.VersionError as exc:
-        detail = f"{choice.tag}'s Impeccable is unreadable: {exc}"
+        detail = f"{choice.tag}'s Impeccable is unreadable: {command_failure.failure(exc)}"
         return {"state": "unknown", "version": choice.tag, "detail": detail, "channel": channel}
     return {"state": "found", "version": choice.tag, "commit": choice.commit, "pins": pins, "channel": channel}
 

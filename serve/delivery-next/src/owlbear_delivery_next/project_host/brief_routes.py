@@ -75,7 +75,7 @@ def refused(store: Store, c: Change, body: ApproveBody, view: DataView | None) -
     if brief_rounds.unreviewed(c) and not body.unreviewed:  # TD-255: the owner ticks that he accepts it
         return f"brief v{brief.version}'s last revision was not reviewed; accept that to approve"
     # TD-459: approval pins the pick, never picks; wording is checked before the baseline reads it
-    if why := pick.unapproved(store, c, view) or decisions_gate.unworded(view, c):
+    if why := pick.unapproved(store, c) or decisions_gate.unworded(view, c):
         return f"brief v{brief.version} cannot be approved yet: {why}"
     if (stepped := [s.name for s in brief.visual if s.steps]) and not store.settings().preparations:
         return (
@@ -89,7 +89,7 @@ def refused(store: Store, c: Change, body: ApproveBody, view: DataView | None) -
 def approved(store: Store, lock: Lock, body: ApproveBody) -> str:
     """Check and record the owner's approval under *lock*, its project decisions published; or why it is refused."""
     c = store.read(lock.slug)
-    view = decisions_gate.loaded(store)  # one read: the pick is checked against the list the baseline pins
+    view = decisions_gate.loaded(store)  # one read: the wording is checked on the decisions the baseline pins
     if why := refused(store, c, body, view):
         return why
     now = datetime.now(UTC)  # the decisions in force now are the Change's baseline (TD-419)

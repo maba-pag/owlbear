@@ -2,15 +2,13 @@
 
 The picker reads every active Global and project decision, the correction logs and the brief, and submits ids. Ids
 the list does not hold are dropped and reported; any other ending is a failed pick, shown with its reason and never
-taken for an empty set. Its spend counts like any session's. An approval pins a pick only for its version and only
-while the list is the one it read. At a later step boundary only the decisions new to the pin go to the picker
-(`reassessed`).
+taken for an empty set. Its spend counts like any session's. An approval pins a pick for its version, and what it read
+(`Pick.read`); at a later step boundary only the decisions new to the pin go to the picker (`reassessed`).
 """
 
 from __future__ import annotations
 
 import dataclasses
-import hashlib
 import tempfile
 import uuid
 from datetime import UTC, datetime
@@ -35,7 +33,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.runtimes.session_result import Run
     from owlbear_delivery_next.settings.config import Settings
-    from owlbear_delivery_next.state_store.decision_store import DataView
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 LABEL = "decision-pick"
@@ -47,50 +44,38 @@ INSTRUCTION = (
     "would cause a wrong result, include it."
 )
 FINISH = "Call `submit_result` once with the id of every decision you pick. If it is rejected, fix each field it names."
-CHANGED = f"the decisions in force changed since they were picked; {picks.RETRY}"
 LATER = (
     "The rules of this work were picked earlier; these decisions came into force or changed since. Select every one "
     "the work must respect or that determines what it must do. When in doubt about a rule whose violation would "
-    "cause a wrong result, include it."
+    "cause a wrong result, include it. The work's rules so far are listed for context: choose only from the "
+    "decisions below them."
 )
 
 
 def listed(seen: Snapshot, c: Change) -> list[Decision]:
     """The active Global and project decisions, by id; other Changes' own and *c*'s published ones are not on it.
 
-    *c*'s project decisions are in force once its approval published them (TD-453): leaving them out while their
-    files hold what it published keeps the list a pick was made from the one a retried approval checks. One changed
-    outside the Change since is on it like any other rule.
+    *c*'s project decisions are in force once its approval published them (TD-453) and are pinned as its own while
+    their files hold what it published. One changed outside the Change since is on it like any other rule.
     """
     own = {d.id for b in [*c.brief.approved, c.brief] for d in b.decisions if d.id}
-    held = {p.id: p.revision for p in c.decisions_published}
     found = (e.decision for e in seen.entries)
     return sorted(
         (
             d
             for d in found
-            if d.state is State.IN_FORCE
-            and d.scope is not Scope.CHANGE
-            and not (d.id in own and held.get(d.id) == d.revision)
+            if d.state is State.IN_FORCE and d.scope is not Scope.CHANGE and not (d.id in own and published(c, d))
         ),
         key=lambda d: d.id,
     )
 
 
-def moved(seen: Snapshot, c: Change) -> list[str]:
-    """*c*'s published decisions whose files no longer hold what its approval wrote: changed or retired outside it."""
-    found = []
-    for p in c.decisions_published:
-        e = seen.get(p.id)
-        if (now := e.decision.revision if e else "") != p.revision:
-            found.append(f"{p.id} {now or 'gone'}")
-    return found
-
-
-def digest(found: list[Decision], changed: list[str]) -> str:
-    """The list's identity: every id with its rule revision, and the Change's publications changed since (`moved`)."""
-    lines = [*(f"{d.id} {d.rule_revision}" for d in found), *changed]
-    return hashlib.sha256("\n".join(lines).encode()).hexdigest()
+def published(c: Change, d: Decision) -> bool:
+    """*d*'s file holds the rule *c*'s approval published: a read-back since leaves it so, an edit of its rule not."""
+    return any(
+        p.id == d.id and (p.rule == d.rule_revision if p.rule else p.revision == d.revision)
+        for p in c.decisions_published
+    )
 
 
 def corrections(root: Path, project: str) -> str:
@@ -148,7 +133,7 @@ def run(store: Store, lock: Lock, c: Change) -> Change:
         store.log(lock, c.slug, {"event": "pick-failed", "at": now.isoformat(), "reason": why})
         store.write(lock, c)
         return c
-    base = base.model_copy(update={"commit": view.commit, "listed": digest(found, moved(view.snapshot, c))})
+    base = base.model_copy(update={"commit": view.commit, "read": {d.id: d.rule_revision for d in found}})
     if not found:  # nothing in force: nothing to pick, and no session
         c.brief.picked = base.model_copy(update={"status": "ok"})
         store.write(lock, c)
@@ -163,15 +148,17 @@ def reassessed(store: Store, lock: Lock, c: Change, found: list[Decision], root:
     """Those of *found* the picker picks for *c*'s running work, or why its pick failed (TD-456).
 
     *found* holds only the decisions that came into force or changed since *c*'s pin, put to one session with its
-    brief and the correction logs in the data repository at *root*; its spend counts like any session's. A failure
-    is never an empty pick.
+    brief, the pinned rules' statements as context and the correction logs in the data repository at *root*; its
+    spend counts like any session's. A failure is never an empty pick.
     """
+    held = c.decisions_baseline
+    context = "".join(f"\n{k} | {_one(s.statement)}" for k, s in held.said.items())
+    instruction = f"{LATER}\n\n## The work's rules so far (context, not to judge){context}"
     try:
         log = corrections(root, store.name)
-        message_text = message(c, found, log, LATER)
+        message_text = message(c, found, log, instruction)
     except (OSError, ValueError) as exc:
         return [], f"{type(exc).__name__}: {exc}"
-    held = c.decisions_baseline
     done = _session(store, lock, c, message_text, held)
     said = judged(done, found, Pick(version=c.brief.version))
     held.session = ""  # done: the next reassessment is a session of its own
@@ -253,19 +240,13 @@ def judged(done: Run, found: list[Decision], base: Pick) -> Pick:
     return base.model_copy(update={"status": "ok", "decisions": chosen, "dropped": dropped, "reason": reason})
 
 
-def unapproved(store: Store, c: Change, view: DataView | None) -> str:
-    """Why an approval may not pin the current version's pick, or "": present, picked, on *view*'s list.
+def unapproved(store: Store, c: Change) -> str:
+    """Why an approval may not pin the current version's pick, or "": there is none.
 
-    *view* is the read the approval pins (`decisions_gate.loaded`). Without a data repository there is nothing to
-    pick. Decisions that do not load leave the pick as it is: the approval is then pinned unread and the gate asks
-    the owner, as before.
+    Without a data repository there is nothing to pick. Whether it is picked is `brief_rounds.approvable`'s check
+    (`picks.unready`). What came into force or changed since it read the list never blocks: the next step's picker
+    judges it (`decisions_gate._later`).
     """
-    if store.shared is None:
+    if store.shared is None or picks.current(c) is not None:
         return ""
-    if (p := picks.current(c)) is None:
-        return f"the decisions brief v{c.brief.version} must follow were not picked; {picks.RETRY}"
-    if why := picks.unready(c):
-        return why
-    if view is None:
-        return ""
-    return CHANGED if digest(listed(view.snapshot, c), moved(view.snapshot, c)) != p.listed else ""
+    return f"the decisions brief v{c.brief.version} must follow were not picked; {picks.RETRY}"

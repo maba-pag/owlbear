@@ -18,6 +18,8 @@ export const VIEWS = { global: { where: "global", name: "Global" }, owlbear: { w
 const asked = new URLSearchParams(location.search).get("view") ?? "";
 export const wide = shown() !== null && !project ? (Object.hasOwn(VIEWS, asked) ? asked : "") : null;
 export const ROOT = wide === null ? "" : "/owlbear";
+// A decision another page links to (the Change page's picked decisions): opened once the list has loaded.
+export const linked = new URLSearchParams(location.search).get("decision") ?? "";
 // Everything the page shows comes from here, so a re-render never loses what the owner typed or opened.
 export const state = {
   loaded: null, error: "", receipts: [], notice: "",

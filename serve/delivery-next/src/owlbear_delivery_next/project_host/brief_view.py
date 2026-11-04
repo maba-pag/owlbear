@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_flow import brief_rounds, picks, versions
+from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.state_store.briefs import unrevisable
 from owlbear_delivery_next.workflow_steps import decisions_gate
 
@@ -34,5 +35,26 @@ def shown(store: Store, c: Change) -> dict[str, Any]:
         "unreviewed": brief_rounds.unreviewed(c),  # TD-255: approving needs the owner's tick
         "read_backs": decisions_gate.checkpoint(store, c),  # TD-427: at most three, never blocking
         "picked": picks.shown(c),  # TD-459: the decisions this version's work follows, by title
+        **placed(store, c),  # where each picked decision applies, for the page's grouped list
         "versions": versions.brief(c),  # each version's state and the challenges that read it
     }
+
+
+def placed(store: Store, c: Change) -> dict[str, Any]:
+    """The current pick's decisions with the scope and state the decision list holds now, or why it can't be read.
+
+    An id the list no longer holds keeps its stored title with no scope; nothing is read without a picked decision.
+    """
+    p = picks.current(c)
+    if p is None or not p.decisions:
+        return {"picked_items": None, "picked_unavailable": None}
+    try:
+        seen = decision_store.load(store.shared, store.name).snapshot
+    except decision_store.DecisionsUnavailable as exc:
+        return {"picked_items": None, "picked_unavailable": str(exc)}
+    items = []
+    for d in p.decisions:
+        e = seen.get(d.id)
+        held = {"scope": str(e.decision.scope), "state": str(e.decision.state)} if e else {"scope": None, "state": None}
+        items.append({"id": d.id, "title": d.title, **held})
+    return {"picked_items": items, "picked_unavailable": None}

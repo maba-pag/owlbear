@@ -131,8 +131,8 @@ def _item(root: Path, c: Change, d: Decision) -> Item | None:
     current = read(path) if path.exists() else None
     if current is None:
         return d, None
-    if current.state is d.state:  # a retried approval rewrites it unchanged
-        return current, current.revision
+    if current.state is d.state:  # saved by an earlier approval, it stands as it is; a retried one rewrites it
+        return None if any(p.id == d.id and p.committed for p in c.decisions_published) else (current, current.revision)
     if current.state is State.IN_FORCE:
         rationale = "\n\n".join(filter(None, [current.rationale, _retired(c, d)]))
         return current.model_copy(update={"state": d.state, "rationale": rationale}), current.revision
@@ -158,8 +158,10 @@ def _record(d: Decision, r: Receipt | None, at: datetime) -> Published:
     """*d*'s save with its receipt; without one, planned and not yet saved."""
     if r is None:
         return Published(id=d.id, title=d.title, state=d.state.value, at=at)
-    fields = {"revision": r.revision, "saved": r.saved, "committed": r.batch, "published": r.published}
-    return Published(id=d.id, title=d.title, state=d.state.value, notice=r.notice, at=at, **fields)
+    fields = {"revision": r.revision, "rule": d.rule_revision, "saved": r.saved, "committed": r.batch}
+    return Published(
+        id=d.id, title=d.title, state=d.state.value, published=r.published, notice=r.notice, at=at, **fields
+    )
 
 
 def _pinned(baseline: DecisionBaseline | None, saved: list[Decision]) -> DecisionBaseline | None:
