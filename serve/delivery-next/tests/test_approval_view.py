@@ -17,7 +17,7 @@ import uvicorn
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_contracts.decision_records import Pick, PickedDecision
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
-from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_contracts.round_records import RoundFinding, RoundLoop, RoundPolicy, Verdict
 from owlbear_delivery_next.change_contracts.tool_use import ToolUse
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
@@ -83,8 +83,9 @@ def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
 
 
 @contextlib.contextmanager
-def opened(base: str, slug: str, pds: Any) -> Iterator[Any]:
-    """The Changes page on *slug* in a real browser: only the test host and the PDS CDN answer."""
+def opened(base: str, slug: str, pds: Any, *, details: bool = False) -> Iterator[Any]:
+    """The Changes page on *slug* in a real browser, its details shown or not: only the test host and the PDS CDN
+    answer."""
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     with sync_playwright() as pw:
@@ -95,6 +96,8 @@ def opened(base: str, slug: str, pds: Any) -> Iterator[Any]:
         page = browser.new_page()
         pds.only(page, base)
         page.add_init_script("sessionStorage.setItem('token', 'tok');")
+        if details:
+            page.add_init_script("localStorage.setItem('owlbear-improvement-detail', 'on');")
         page.goto(f"{base}/?change={slug}")
         yield page
         browser.close()
@@ -108,7 +111,7 @@ def test_the_agreement_keeps_details_collapsed_and_the_approved_brief_lists_the_
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
-    with opened(base, "flip", pds) as page:
+    with opened(base, "flip", pds, details=True) as page:  # the decisions picked show with the details
         expect(page.locator("ol.stepper > li > span > span:first-child")).to_have_text(STAGES)
         current = page.locator("ol.stepper > li[aria-current]")
         expect(current).to_have_count(1)
@@ -126,7 +129,7 @@ def test_the_agreement_keeps_details_collapsed_and_the_approved_brief_lists_the_
         expect(brief.locator("section", has_text="Decisions this work follows")).to_contain_text("Motion stays subtle")
         expect(brief.locator("summary")).to_contain_text("2 criteria \u00b7 1 screen \u00b7 1 check for you")
         expect(page.get_by_text(LEFT_TO_SHAPER, exact=False)).to_be_hidden()  # collapsed until opened
-        page.get_by_role("button", name="Approve brief v2").click()
+        page.get_by_role("button", name="Approve v2").click()
         dialog = page.get_by_role("dialog")
         expect(dialog).to_be_visible()
         said = pds.modal(page)
@@ -154,15 +157,70 @@ def test_the_agreement_keeps_details_collapsed_and_the_approved_brief_lists_the_
 
 
 @pytest.mark.browser
+def test_a_planned_change_folds_its_plan_with_the_current_task_outside(page_url, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    built = change().model_copy(update={"step": m.Step(kind=m.StepKind.BUILD)})
+    built.brief = built.brief.model_copy(update={"approved_version": 2, "approved_at": NOW})
+    titles = ["Add the flip button", "Animate the hero", "Keep the caption readable"]
+    tasks = [m.Task(id=f"t{n}", title=t, done=n == 1) for n, t in enumerate(titles, 1)]
+    part = m.Task(id="t4", title="Label the hero's controls", origin="review", fixes="t2")  # runs before t3
+    built.plan = m.Plan(version=2, tasks=[*tasks, part])
+    found = RoundFinding(id="F1", text="t2: AC-1: no timing check - fix: measure it", raised=1, state="fixed")
+    verdicts = [Verdict(round=1, version=1), Verdict(round=2, version=2)]
+    built.loops["plan"] = RoundLoop(subject="plan", policy=RoundPolicy(), round=2, ended="clean", findings=[found],
+                                    verdicts=verdicts)  # fmt: skip
+    reviewed = RoundFinding(id="F1", text="the button lacks a label - fix: name it", raised=1, state="fixed")
+    built.loops["t1"] = RoundLoop(subject="t1", policy=RoundPolicy(), round=1, ended="clean", findings=[reviewed])
+    store.write(Lock("flip"), built)
+    with opened(base, "flip", pds) as page:
+        plan = page.locator("section.info", has=page.get_by_role("heading", name="Plan", exact=True))
+        now = plan.locator(":scope > ol.plan > li")
+        expect(now).to_have_count(1)  # the task at work, outside the fold
+        expect(now).to_contain_text("now")
+        expect(now).to_contain_text("Label the hero's controls")  # the repair part the build works on
+        fold = plan.locator("details", has_text="Tasks: 1 of 4 done")
+        expect(fold.locator("summary")).to_have_text("Tasks: 1 of 4 done")
+        expect(page.get_by_text("Keep the caption readable")).to_be_hidden()
+        versions = plan.locator(".version-list > li")
+        expect(versions).to_have_count(2)
+        expect(versions.nth(0)).to_contain_text("v1 findings")
+        expect(versions.nth(0)).to_contain_text("Challenge 1")
+        expect(versions.nth(1)).to_contain_text("v2 clean, current")
+        expect(versions.nth(1).locator(".dot.clean")).to_have_count(1)
+        expect(plan.locator(".versions p-button")).to_have_count(0)  # the plan's versions take no action here
+        pds.settled(page)
+        fold.locator("summary").click()
+        expect(page.get_by_text("Keep the caption readable")).to_be_visible()
+        expect(plan.get_by_text("Task review")).to_have_count(0)  # its review badges show with the details
+        box = fold.locator("summary").bounding_box()
+        assert box is not None
+        assert (box["width"] >= 24, box["height"] >= 24) == (True, True), box
+
+        page.locator("#details-switch").click()
+        first = fold.locator("li", has_text="Add the flip button")
+        expect(first).to_contain_text("Task review")
+        expect(first).to_contain_text("R1 \u00b7 1 unverified")
+
+
+@pytest.mark.browser
 def test_an_unreviewed_last_revision_is_approved_only_once_the_owner_ticks_that_he_accepts_it(page_url, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
     tail = change().model_copy(update={"slug": "tail"})
-    tail.loops["brief"] = RoundLoop(subject="brief", policy=RoundPolicy(), round=3, ended="max", unreviewed=["v2"])
+    said = "AC-2: the empty state has no check, so a list that renders nothing at all would pass every check we run"
+    kept = RoundFinding(id="F4", text=said, raised=3, state="rejected")
+    tail.loops["brief"] = RoundLoop(
+        subject="brief", policy=RoundPolicy(), round=3, ended="max", unreviewed=["v2"], findings=[kept]
+    )
     store.write(Lock("tail"), tail)
     with opened(base, "tail", pds) as page:
-        page.get_by_role("button", name="Approve brief v2").click()
+        items = page.locator(".actions")
+        expect(items).to_contain_text(f"brief challenge F4, rejection not reviewed: {said}")  # whole, never cut
+        expect(items).not_to_contain_text("No review yet")  # while shaping, the line on v2 says it
+        page.get_by_role("button", name="Approve v2").click()
         dialog = pds.modal(page)
         confirm = dialog.get_by_role("button", name="Approve and start")
         expect(confirm).to_be_disabled()  # TD-255
@@ -172,6 +230,10 @@ def test_an_unreviewed_last_revision_is_approved_only_once_the_owner_ticks_that_
             confirm.click()
         expect(page.get_by_role("dialog")).to_be_hidden()
     assert store.fold(Lock("tail"), "tail", NOW)[0].brief.approved_version == 2
+    with opened(base, "tail", pds) as page:  # approved, the unreviewed revision is still open
+        expect(page.locator(".actions")).to_contain_text(
+            "No review yet of brief v2, revised after its last challenge (brief challenge)"
+        )
 
 
 @pytest.mark.browser
@@ -189,7 +251,7 @@ def test_the_changes_tool_calls_show_under_its_spend_most_called_first(page_url,
     )  # fmt: skip
     ran(store, "idle", {}, {"no_result": 2})
     assert spend_ledger.WRITER.settled(10)
-    with opened(base, "used", pds) as page:
+    with opened(base, "used", pds, details=True) as page:  # tool calls show with the details
         expect(page.get_by_text("Tool calls (8)")).to_be_visible()
         page.get_by_text("Tool calls (8)").click()
         expect(page.get_by_text("report_wrong_premise: 4 calls, 25% succeeded, 25% refused (1 invalid arguments), "
@@ -199,7 +261,7 @@ def test_the_changes_tool_calls_show_under_its_spend_most_called_first(page_url,
         ).to_be_visible()
         expect(page.get_by_text("ask_question: 1 call, 100% succeeded, 0% refused, 0 retries")).to_be_visible()
         expect(page.get_by_text("Wrong tool choices: 2 denials by the guard")).to_be_visible()
-    with opened(base, "idle", pds) as page:  # no call counted, yet its wrong choices show
+    with opened(base, "idle", pds, details=True) as page:  # no call counted, yet its wrong choices show
         page.get_by_text("Tool calls (0)").click()
         expect(page.get_by_text("Wrong tool choices: 2 turns without a result")).to_be_visible()
 
@@ -248,7 +310,7 @@ def test_an_answer_being_typed_survives_polls_that_bring_new_activity_and_is_sen
 
     store, base = page_url
     store.write(Lock("greet"), asking())
-    with opened(base, "greet", pds) as page:
+    with opened(base, "greet", pds, details=True) as page:
         form = page.locator("section.act", has_text="Question q1")
         expect(form).to_contain_text("Which language?")
         form.get_by_label("English").check()
@@ -521,7 +583,7 @@ def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_coun
     ]  # fmt: skip
     for e in events:
         store.log(Lock("flip"), "flip", e)
-    with opened(base, "flip", pds) as page:
+    with opened(base, "flip", pds, details=True) as page:  # Recent activity shows with the details
         lines = page.locator("#detail .log li")
         expect(lines).to_have_count(11)
         said = lines.nth(0).locator(":scope > span")
@@ -667,7 +729,7 @@ def test_a_refused_approval_shows_its_whole_reason(page_url, pds, monkeypatch, w
     store, base = page_url
     reason = f"{decision_publication.REFUSED}: DecisionsUnavailable: {whole_error}"
     with opened(base, "flip", pds) as page:
-        page.get_by_role("button", name="Approve brief v2").click()
+        page.get_by_role("button", name="Approve v2").click()
         with replied(page, "/approve-brief") as reply:
             pds.modal(page).get_by_role("button", name="Approve and start").click()
         assert (reply.value.status, reply.value.json()["detail"]) == (409, reason)

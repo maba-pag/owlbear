@@ -107,9 +107,9 @@ def serve() -> tuple[Machine, uvicorn.Server, str]:
 
 
 @contextmanager
-def browsing(monkeypatch, pds, width: int = 1280) -> Iterator[tuple[Page, str]]:
-    """A Chromium page at *width* that reaches only a machine host serving the registered projects and the PDS CDN, and
-    the host's address; the scheduler runs, no runner starts."""
+def browsing(monkeypatch, pds, width: int = 1280, *, details: bool = False) -> Iterator[tuple[Page, str]]:
+    """A Chromium page at *width*, the Change page's details shown or not, that reaches only a machine host serving the
+    registered projects and the PDS CDN, and the host's address; the scheduler runs, no runner starts."""
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
@@ -122,6 +122,8 @@ def browsing(monkeypatch, pds, width: int = 1280) -> Iterator[tuple[Page, str]]:
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page(viewport={"width": width, "height": 800})
+            if details:
+                page.add_init_script("localStorage.setItem('owlbear-improvement-detail', 'on');")
             pds.only(page, base)
             yield page, base
             browser.close()
@@ -491,6 +493,31 @@ def test_two_projects_whose_changes_share_a_handle_revise_the_one_clicked(tmp_pa
         pds.answer(page, "Open the chat")
         expect(page.locator("#started")).to_have_text("A chat opened in VS Code to shape the new Change.")
         assert [(Path(r), p.startswith(api.START_PROMPT)) for r, p in launched.calls[1:]] == [(Path(a.path), True)]
+
+
+@pytest.mark.browser
+def test_show_details_holds_for_every_change_of_every_project(tmp_path: Path, monkeypatch, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
+    with browsing(monkeypatch, pds) as (page, base):
+        broke = errors(page)
+        opened(page, base, a.id, "alpha-1")
+        switch = page.locator("#details-switch")
+        expect(switch).to_be_visible()
+        expect(page.get_by_role("heading", name="Recent activity")).to_have_count(0)
+        pds.settled(page)
+        switch.click()
+        expect(page.get_by_role("heading", name="Recent activity")).to_be_visible()
+        page.goto(f"{base}/?change={b.id}%2Fbeta-1")
+        expect(page.locator("#detail")).to_contain_text("beta-1")
+        expect(page.get_by_role("heading", name="Recent activity")).to_be_visible()
+        page.reload()
+        expect(page.get_by_role("heading", name="Recent activity")).to_be_visible()
+        pds.settled(page)
+        page.locator("#details-switch").click()
+        expect(page.get_by_role("heading", name="Recent activity")).to_have_count(0)
+        assert broke == []
 
 
 @pytest.mark.browser
@@ -1173,7 +1200,7 @@ def test_a_long_unverified_session_end_shows_whole_on_changes(tmp_path: Path, mo
     present = [True]  # the host finds process 9 until the owner ends it
     monkeypatch.setattr(host_leftovers, "survivors", lambda *_a: {9: ""} if present[0] else {})
     monkeypatch.setattr(host_module, "TICK", 0.5)  # the host looks again soon after the owner ended them
-    with browsing(monkeypatch, pds) as (page, base):
+    with browsing(monkeypatch, pds, details=True) as (page, base):
         broke = errors(page)
         opened(page, base, alpha.id, "flip")
         lines = page.locator("#detail .log li > span")
@@ -1220,7 +1247,7 @@ def test_a_crashed_runner_s_whole_error_shows_in_recent_activity(
     reason = f"RuntimeError: {whole_error}\n{note}"
     printed = [json.loads(line) for line in capsys.readouterr().out.splitlines() if '"runner-failed"' in line]
     assert [e["reason"] for e in printed] == [reason]
-    with browsing(monkeypatch, pds) as (page, base):
+    with browsing(monkeypatch, pds, details=True) as (page, base):
         broke = errors(page)
         opened(page, base, alpha.id, "flip")
         expect(page.locator("#detail")).to_contain_text("Recent activity")
@@ -3065,7 +3092,7 @@ def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monk
     (event,) = [e for e in store.events("c1") if e["event"] == "labels-failed"]
     reason = f"ProviderError: add_labels: {whole_error}"
     assert event["reason"] == reason
-    with browsing(monkeypatch, pds) as (page, url):
+    with browsing(monkeypatch, pds, details=True) as (page, url):
         said = errors(page)
         opened(page, url, alpha.id, "c1")
         line = page.locator("ol.log > li", has_text="Could not label PR #7").locator(":scope > span")
@@ -3117,7 +3144,7 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
         "Lint problems": f"Lint problems left unresolved: {'; '.join(lint)}",
         "Request tasks.list": f"Request tasks.list failed ({failed})",
     }
-    with browsing(monkeypatch, pds) as (page, url):
+    with browsing(monkeypatch, pds, details=True) as (page, url):
         said = errors(page)
         opened(page, url, alpha.id, "c1")
         for start, line in lines.items():
@@ -3144,7 +3171,7 @@ def test_a_failed_pick_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, w
     failed = f"DecisionsUnavailable: {whole_error}"
     (event,) = [e for e in store.events("c1") if e["event"] == "pick-failed"]
     assert event["reason"] == failed
-    with browsing(monkeypatch, pds) as (page, url):
+    with browsing(monkeypatch, pds, details=True) as (page, url):
         said = errors(page)
         opened(page, url, alpha.id, "c1")
         follows = page.locator(".brief section", has_text="Decisions this work follows")
@@ -3316,7 +3343,7 @@ def test_a_failed_shot_and_the_watchers_failures_show_whole_on_the_changes_page(
     out = capsys.readouterr().out
     assert all(f"visual check: {f}\n" in out for f in found), out
     reason = f"Fix: the visual check of {head[:7]} failed: {found[0]} (see gone at 1280px)"
-    with browsing(monkeypatch, pds) as (page, url):
+    with browsing(monkeypatch, pds, details=True) as (page, url):
         said = errors(page)
         opened(page, url, of, "c1")
         pictures = page.locator("section", has_text="Before and after").last
@@ -3358,7 +3385,7 @@ def test_a_failed_calibration_shows_in_recent_activity(tmp_path: Path, monkeypat
     assert f"calibration: {reason}\n" in capsys.readouterr().out
     [kept] = [e for e in store.events("same") if e["event"] == "calibration-not-kept"]
     assert kept["reason"] == reason
-    with browsing(monkeypatch, pds) as (page, base):
+    with browsing(monkeypatch, pds, details=True) as (page, base):
         opened(page, base, alpha.id)
         line = page.locator("#detail ol.log > li > span", has_text="Calibration not kept")
         expect(line).to_have_text(f"Calibration not kept: RuntimeError: {' '.join(whole_error.split())}")

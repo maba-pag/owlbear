@@ -47,6 +47,18 @@ CHAT_REPLIES = {  # what a chat of each contract this host serves reads from its
 }
 
 
+@pytest.fixture
+def c1(tmp_path) -> tuple[Store, Any]:
+    """A store holding Change ``c1-fixture`` and the project app serving it with token ``tok``.
+
+    It is c1 waiting on brief v4 after challenges of v2 and v3, its decisions' wording replaced and its long texts cut.
+    """
+    c = Change.model_validate_json((Path(__file__).parent / "fixtures" / "c1_v4_waiting.json").read_text())
+    store = Store(tmp_path / "c1")
+    store.write(Lock(c.slug), c)
+    return store, api.create_app(store, "tok", Host())
+
+
 def pytest_configure() -> None:
     """Give every Playwright ``expect`` 15 s: a git-backed save can take 9 s on a loaded worker; the default is 5 s."""
     try:

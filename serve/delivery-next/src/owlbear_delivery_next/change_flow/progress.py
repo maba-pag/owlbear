@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from owlbear_delivery_next.change_contracts.models import VISUAL, StepKind
-from owlbear_delivery_next.change_contracts.round_records import BRIEF, FINAL
+from owlbear_delivery_next.change_contracts.round_records import FINAL
 from owlbear_delivery_next.change_flow.brief_rounds import MODES as CHALLENGING
 from owlbear_delivery_next.change_flow.budgets import review_round
 
@@ -97,7 +97,6 @@ def _current(c: Change) -> str:
 def _rounds(c: Change) -> dict[str, int]:
     r = c.budgets.loops  # never reset, so a round shown never goes down and a finished stage keeps its badge
     return {
-        "shape": (c.loops[BRIEF].round if BRIEF in c.loops else 0) + 1,  # the brief challenge's rounds (TD-221)
         "plan": r.get("plan", 0) + c.budgets.replans + 1,
         "build": max((n for k, n in r.items() if k not in _OWN), default=0) + 1,
         "final": r.get("final", 0) + 1,
@@ -135,7 +134,7 @@ def _work(c: Change, rounds: dict[str, int]) -> tuple[str | None, int]:  # noqa:
     if s.kind in _SUB:
         return _SUB[s.kind], 1
     if kind == StepKind.SHAPE:
-        return ("Brief challenge" if c.step.mode in CHALLENGING else None), rounds["shape"]
+        return ("Brief challenge" if c.step.mode in CHALLENGING else None), 1  # the brief's versions show its rounds
     if kind == StepKind.PLAN:
         again = "Re-planning after the plan challenge" if c.budgets.loops.get("plan") else "Re-planning"
         return (again if rounds["plan"] > 1 else None), rounds["plan"]
