@@ -152,7 +152,7 @@ def publish_config_unlocked(store: Store) -> str:
             f"settings: {store.name}: {'project layer' if store.config_path.exists() else 'project layer removed'}",
         )
     except DataRepoError as exc:
-        notice = str(exc)
+        notice = failure(exc)
     return settle_config(store, notice)
 
 
@@ -190,7 +190,7 @@ def settle_config(store: Store, notice: str, *, owner: bool = False) -> str:
             target, f"settings: {store.name}: project config {'pending' if want else 'published'}"
         )
     except DataRepoError as exc:
-        extra = str(exc)
+        extra = failure(exc)
     return "; ".join(dict.fromkeys(part for part in (notice, extra) if part))
 
 
@@ -469,7 +469,7 @@ def checked(store: Store, repo: Path) -> Profile | None:
             return store.read_profile()  # a changed snapshot must be reconciled before detection is acknowledged
         fresh = kept
     except DataRepoError as exc:
-        msg = f"the detected profile could not be published: {exc}"
+        msg = f"the detected profile could not be published: {failure(exc)}"
         raise StoreError(msg) from exc
     atomic_write(mark, f"profile v{fresh.version} detected in this clone\n")
     return fresh
