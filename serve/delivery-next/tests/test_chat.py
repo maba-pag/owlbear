@@ -179,7 +179,7 @@ def test_decisions_and_non_goals_stay_on_the_brief_version_reach_the_workers_and
 
 
 def _long(head: str, size: int, end: str) -> str:
-    return head + "x" * (size - len(head) - len(end)) + end
+    return head.ljust(size - len(end), "x") + end
 
 
 def test_a_saved_brief_reaches_the_workers_whole(repo):

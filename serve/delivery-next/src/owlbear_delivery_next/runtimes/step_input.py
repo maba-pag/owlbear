@@ -71,8 +71,7 @@ def _cut(text: str, limit: int = LIMIT) -> str:
 
 def _quote(text: str, limit: int | None = LIMIT) -> str:
     """Quote *text*, cut at *limit*; None keeps it whole, so a brief field reaches the session as saved (#962)."""
-    kept = text if limit is None else _cut(text, limit)
-    return "\n".join(f"> {line}" for line in kept.splitlines() or [""])
+    return "\n".join(f"> {line}" for line in (text if limit is None else _cut(text, limit)).splitlines() or [""])
 
 
 def _one(text: str, limit: int = 400) -> str:
