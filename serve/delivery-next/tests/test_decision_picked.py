@@ -202,6 +202,28 @@ def test_decisions_the_pick_did_not_read_pass_approval_and_go_to_the_next_steps_
     assert (line(new) in worker, line(rule) in worker) == (governs, True)
     (event,) = [e for e in picking.store.events(picking.slug) if e.get("reassessed")]
     assert sorted(event["reassessed"]) == sorted([new.id, other.id])
+    assert picking.approve(1).status_code == 200  # a retried approval keeps what was judged since
+    again = picking.change().decisions_baseline
+    assert (again.said, again.revisions) == (pin.said, pin.revisions)
+
+
+def test_a_pick_approved_while_the_decisions_did_not_load_offers_its_rule_as_it_stands_and_pins_that(
+    picking, monkeypatch, tmp_path
+):
+    rule, data, away = picking.put(make()), picking.shared.root / PROJECT, tmp_path / "away"
+    run = Running(picking, monkeypatch, rule, between=lambda: data.rename(away))
+    assert run.p.change().decisions_unpinned_at is not None
+    away.rename(data)
+    renamed = rule.model_copy(update={"title": "Pages are plain HTML files"})
+    write(renamed, data, rule.revision)
+
+    q = loop.open_question(run.step())
+
+    assert f"{rule.id} Pages are plain HTML files:" in q.text
+    c, _ = loop.schedule(run.p.change(), [AnswerItem(at=AT, question=q.id, option="continue")], AT)
+    picking.store.write(Lock(picking.slug), c)
+    assert run.step().outcome is None  # no second question
+    assert run.p.change().decisions_baseline.revisions[rule.id] == renamed.rule_revision
 
 
 @pytest.mark.parametrize("fate", ["changed", "withdrawn"])

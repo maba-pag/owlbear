@@ -149,9 +149,11 @@ def loaded(store: Store) -> DataView | None:
 def pinned(store: Store, c: Change, now: datetime, view: DataView | None) -> tuple[DecisionBaseline | None, bool]:
     """The baseline a brief approval pins from *view* (`loaded`), and whether one is owed.
 
-    None is owed without a data repository; one is owed when the decisions did not load. An approval pins afresh,
-    whatever an earlier approval pinned.
+    None is owed without a data repository; one is owed when the decisions did not load. An approval of a new version
+    pins afresh, whatever an earlier approval pinned; a retried one of the approved version keeps what it holds.
     """
+    if c.decisions_baseline is not None and c.brief.approved_version == c.brief.version:
+        return c.decisions_baseline, False
     if view is None:
         return None, store.shared is not None
     return baseline(view, c.model_copy(update={"decisions_baseline": None}), now), False
@@ -183,6 +185,15 @@ def differences(seen: Snapshot, pinned_at: DecisionBaseline, now: DecisionBaseli
         else:
             lines.append(f"- changed: {key} {title}: was {was}; now {_quoted(whole(entry.decision))}")
     return lines
+
+
+def _recovered(seen: Snapshot, pin: DecisionBaseline) -> DecisionBaseline:
+    """*pin* with its pinned decisions as they stand now, for the owner to see and pin; withdrawn ones leave it."""
+    now = {k: e.decision for k in pin.said if (e := seen.get(k)) and e.decision.state is State.IN_FORCE}
+    revisions = {k: v for k, v in pin.revisions.items() if k not in pin.said} | {
+        k: d.rule_revision for k, d in now.items()
+    }
+    return pin.model_copy(update={"said": {k: _said(d) for k, d in now.items()}, "revisions": revisions})
 
 
 def unpinned(now: DecisionBaseline) -> list[str]:
@@ -361,6 +372,7 @@ def _judged(view: DataView, c: Change, now: datetime, store: Store, lock: Lock |
     if stop := _faults(seen, c, pin.said.keys() | (set() if pin.picked else current.said.keys()), now):
         return stop
     if c.decisions_baseline is None and c.decisions_unpinned_at is not None:  # its approval could not pin them
+        current = _recovered(seen, current)
         return _asked(c, current, UNPINNED, unpinned(current), _waiting_lines(store, view, c))
     pinning = c.decisions_baseline is None  # a Change approved before this gate
     if pinning:
