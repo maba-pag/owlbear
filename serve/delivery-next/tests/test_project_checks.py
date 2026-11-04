@@ -61,8 +61,8 @@ class Sessions:
         return [cfg for cfg in self.told if cfg.submit is tools.PLAN]
 
 
-def entry(value: str = "npm test") -> ProfileEntry:
-    return ProfileEntry(state="known", value=value, evidence="package.json scripts.test")
+def entry() -> ProfileEntry:
+    return ProfileEntry(state="known", value="npm test", evidence="package.json scripts.test")
 
 
 def confirmed(prof: Profile, home: str, value: str = "npm test") -> Profile:

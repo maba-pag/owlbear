@@ -735,8 +735,7 @@ def change_repo(tmp_path, monkeypatch, _change_template: Path) -> Path:
 
 
 def _settled(store: Store) -> None:
-    prof = profile.confirm(store.read_profile() or Profile(), "check:.", "true", datetime.now(UTC))
-    store.write_profile(prof)
+    store.write_profile(profile.confirm(Profile(), "check:.", "true", datetime.now(UTC)))
 
 
 @pytest.fixture
