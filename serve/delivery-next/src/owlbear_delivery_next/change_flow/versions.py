@@ -53,8 +53,11 @@ def _label(v: Verdict, attempt: int, *, many: bool) -> str:
     return f"Rejections checked after challenge {v.round}{of}" if v.recheck else f"Challenge {v.round}{of}"
 
 
-def _versions(attempts: list[RoundLoop], current: int, *, running: int, waits: int) -> dict:
-    """Versions 1 to *current* and the legacy line; *running* and *waits*: the version a challenge runs or waits on."""
+def _versions(attempts: list[RoundLoop], current: int, *, running: int, waits: int, fresh: int) -> dict:
+    """Versions 1 to *current* and the legacy line; *running* and *waits*: the version a challenge runs or waits on.
+
+    *fresh* is the first version newer than any the loop judged: no challenge read it, legacy rounds included.
+    """
     legacy = _legacy(attempts)
     read = [(x, v) for x in attempts for v in x.verdicts]
     earliest = min((v.version for _, v in read if not v.recheck), default=current + 1)  # a full challenge's
@@ -70,7 +73,7 @@ def _versions(attempts: list[RoundLoop], current: int, *, running: int, waits: i
         elif full:
             x, v = full[-1]
             state = "findings" if v.upheld or any(f.raised == v.round for f in x.findings) else "clean"
-        elif legacy and n < earliest and not (n == current and lp and lp.unreviewed):  # a repair no round read
+        elif legacy and n < min(earliest, fresh) and not (n == current and lp and lp.unreviewed):  # no round read it
             state = "unknown"
         else:
             state = "unreviewed"
@@ -90,7 +93,8 @@ def brief(c: Change) -> dict:
     asks = brief_rounds.first(c) or brief_rounds.due(c) or brief_rounds.owned_open(c)
     waits = (b.requested or int(live.head)) if live and live.head and asks else 0  # the revision the choice is on
     on = c.step.kind == StepKind.SHAPE and c.step.mode in brief_rounds.MODES
-    listed = _versions(attempts, b.version, running=(b.requested or b.version) if on else 0, waits=waits)
+    fresh = int(lp.head) + 1 if lp and lp.head.isdigit() else b.version + 1
+    listed = _versions(attempts, b.version, running=(b.requested or b.version) if on else 0, waits=waits, fresh=fresh)
     approved = {b.approved_version, *(a.version for a in b.approved)}
     for v in listed["versions"]:
         v["approved"] = v["n"] in approved
@@ -104,8 +108,9 @@ def plan(c: Change) -> dict:
     if c.plan is None:
         return {"versions": [], "legacy": ""}
     attempts = _attempts(c.loops.get(PLAN), PLAN)
-    live = plan_rounds.current(c)
-    n = c.plan.version if live else 0
-    running = n if c.step.kind == StepKind.PLAN and c.step.mode in _PLAN_MODES else 0
-    waits = n if plan_rounds.first(c) or plan_rounds.due(c) or plan_rounds.owned_open(c) else 0
-    return _versions(attempts, c.plan.version, running=running, waits=waits)
+    n, lp = c.plan.version, c.loops.get(PLAN)
+    running = n if c.step.kind == StepKind.PLAN and c.step.mode in _PLAN_MODES else 0  # its loop may not exist yet
+    asks = plan_rounds.first(c) or plan_rounds.due(c) or plan_rounds.owned_open(c)
+    waits = n if plan_rounds.current(c) and asks else 0
+    fresh = n if lp and lp.head and lp.head != plan_rounds.identity(c.plan) else n + 1
+    return _versions(attempts, n, running=running, waits=waits, fresh=fresh)

@@ -13,7 +13,7 @@ from owlbear_delivery_next.change_contracts.round_records import (
     RoundPolicy,
     Verdict,
 )
-from owlbear_delivery_next.change_flow import brief_rounds, versions
+from owlbear_delivery_next.change_flow import brief_rounds, plan_rounds, versions
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 LEGACY_2 = "Challenges 1 to 2 ran before versions were recorded per challenge"
@@ -168,3 +168,26 @@ def test_after_the_last_round_the_revision_asked_for_waits_for_you():
     assert brief_rounds.request(c, 2, {}, policy, datetime(2026, 11, 4, tzinfo=UTC)) == ""
     assert c.outcome.question  # the owner's choice after the last round
     assert shown(versions.brief(c)) == [(1, "findings", ["Challenge 1"], []), (2, "waits", [], ["approve"])]
+
+
+def test_a_draft_saved_after_a_legacy_loop_ended_is_not_challenged():
+    """Two rounds before versions were recorded ended on v3; the shaper's v4 is newer than anything judged."""
+    c = briefed(3, findings=[found(1), found(2, n=2)], round=2, head="3")
+    c.brief.version = 4
+
+    assert shown(versions.brief(c)) == [
+        (1, "unknown", [], []),
+        (2, "unknown", [], []),
+        (3, "unknown", [], []),
+        (4, "unreviewed", [], ["approve"]),
+    ]
+
+
+def test_the_first_plan_challenge_runs_before_its_loop_exists():
+    c = Change(
+        slug="c1",
+        plan=Plan(version=1, tasks=[Task(id="t1", title="part 1", scope=["src"])]),
+        step=Step(kind=StepKind.PLAN, mode=plan_rounds.CHALLENGE),
+    )
+
+    assert shown(versions.plan(c)) == [(1, "running", [], [])]
