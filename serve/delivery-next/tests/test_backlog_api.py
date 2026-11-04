@@ -242,7 +242,8 @@ def test_the_page_shows_why_github_could_not_be_reached_and_nothing_is_saved(sto
     patched = c.patch(f"/api/next/backlog/{entry.id}", json={"notes": "lost"})
 
     assert [r.status_code for r in (listed, added, patched)] == [503] * 3
-    assert "could not be read from GitHub (acme/owlbear-data): list_issues: error connecting" in listed.json()["detail"]
+    read = "could not be read from GitHub (acme/owlbear-data): ProviderError: list_issues: error connecting"
+    assert read in listed.json()["detail"]
     assert "did not confirm the save" in patched.json()["detail"]
     assert [i["title"] for i in github.issues.values()] == ["Wider status line"]
     assert "lost" not in github.issues[1]["body"]
