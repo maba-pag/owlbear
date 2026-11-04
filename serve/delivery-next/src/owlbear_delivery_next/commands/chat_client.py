@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import chat_contract, pick_tools
 from owlbear_delivery_next.change_contracts.models import StepKind
-from owlbear_delivery_next.change_flow.status import APPROVE
+from owlbear_delivery_next.change_flow.status import APPROVE, CONTINUE
 from owlbear_delivery_next.local_system import codebase, data_repo, local_home
 from owlbear_delivery_next.project_host import answers, api, host
 from owlbear_delivery_next.state_store import project_home
@@ -274,7 +274,7 @@ class Chat:
             return {"running": False, "line": line, "next": "the Change is no longer being shaped"}
         if not now.get("running"):
             return now
-        waits = row.get("actor") == "delivery" or row.get("action") == APPROVE  # no one else must act
+        waits = row.get("actor") == "delivery" or row.get("action") in {APPROVE, CONTINUE}  # no one else must act
         told = {"running": True, "next": STILL} if waits else {"running": False, "owner_action": row.get("action")}
         return told | {"line": line}
 

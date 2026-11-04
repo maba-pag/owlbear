@@ -123,7 +123,7 @@ CURRENT_FUNCTIONS = (
     ("state_store/store.py:Store.open", "94404672c552ea7fa1354c693a2e64a9e1272455322f6aabb75290453e047481"),
 )
 CURRENT_IMPORTS = (
-    ("commands/chat_client.py", "e89be202b2e06a4a1f34722c6e987f4a71aceba6e132ef3e632b9bd2dc86a96f"),
+    ("commands/chat_client.py", "af396923535b3f9ba702493f7bbefe0c38470d2911d1f96d8651662464ce4fb1"),
     ("commands/cli.py", "1060e182e094303ce4cf4d690367f4c8869ba7fd492a0024e95feb55caae347f"),
     ("commands/dispatch.py", "326c281057f28ebdb70e9ddfb43e62ad0693957ce5cf2305201d67e7d4cba0e4"),
     ("commands/mcp_server.py", "fc81edf0b950c13d4871b0f2e88edac95ab06e9e20637cc3900fe4e91f1b979a"),

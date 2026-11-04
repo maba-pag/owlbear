@@ -18,14 +18,16 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts import chat_contract
+from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_flow import brief_tools
+from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import chat_client, mcp_server
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store.store import Lock, Store
 
 FIXTURES = Path(__file__).parent / "fixtures"
 WORDING = {"description", "examples", "title"}  # what a tool says to the model; its shape is the contract
@@ -420,6 +422,7 @@ def test_a_wait_for_a_version_that_is_not_the_draft_any_more_gets_the_error_not_
 @pytest.mark.parametrize(("row", "told"), [
     ({"actor": "you", "action": "Resume"}, {"running": False, "owner_action": "Resume"}),
     ({"actor": "you", "action": "Approve brief"}, {"running": True}),  # the shaper's own wait is no owner action
+    ({"actor": "you", "action": "Continue in the shaping chat"}, {"running": True}),
     ({"actor": "delivery", "step": "cleanup"}, {"running": False, "next": "the Change is no longer being shaped"}),
     ({}, {"running": True, "next": chat_client.STILL}),
 ])  # fmt: skip
@@ -428,6 +431,30 @@ def test_a_wait_that_ends_still_running_says_who_must_act(monkeypatch, row, told
     out = slow.chat.await_challenge("c1", 2)
     assert told.items() <= out.items()
     assert out["line"] == ROW["line"]
+
+
+def waiting_for_the_chat(slug: str, version: int, challenged: int | None, reason: str) -> m.Change:
+    out = m.Outcome(exit=m.Exit.PENDING, waiting=m.Waiting.CHAT, who="you", reason=reason, at=datetime.now(UTC))
+    brief = m.Brief(version=version, challenged=challenged, title=slug)
+    return m.Change(slug=slug, brief=brief, step=m.Step(kind=m.StepKind.SHAPE), outcome=out)
+
+
+def own_waits(n: int | None) -> set[str]:
+    """The actions a chat of contract *n* (None: a page) reads as its shaping chat's own wait."""
+    return {"Approve brief", "Continue in the shaping chat"} if n is None or n >= 6 else {"Approve brief"}
+
+
+def test_a_chat_of_each_contract_reads_the_shaping_chats_own_waits_as_its_contract_names_them(tmp_path):
+    store = Store(tmp_path)
+    store.write(Lock("flip"), waiting_for_the_chat("flip", 2, 2, "approve brief v2"))
+    store.write(Lock("tidy"), waiting_for_the_chat("tidy", 1, None, "the shaper revises brief v1 for F1"))
+    host = SimpleNamespace(maintenance=None, activity=lambda _s: Activity(host_up=True))
+    http = TestClient(api.create_app(store, "t", host), base_url="http://127.0.0.1", headers=AUTH)
+    for n in [*sorted(chat_contract.SUPPORTED), None]:
+        sent = {} if n is None else {chat_contract.HEADER: str(n)}
+        rows = {r["slug"]: r["action"] for r in http.get("/api/next/changes", headers=sent).json()}
+        revises = "Continue in the shaping chat" if n is None or n >= 6 else "Approve brief"
+        assert (rows, set(rows.values()) <= own_waits(n)) == ({"flip": "Approve brief", "tidy": revises}, True), n
 
 
 class Landing(Answering):

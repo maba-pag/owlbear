@@ -23,7 +23,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK, RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop, plan_rounds
+from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop, plan_rounds, status
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import chat_client, runner
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -117,8 +117,14 @@ def verdict(*places: str, upheld: dict[str, bool] | None = None) -> tools.Review
     return tools.ReviewResult(verdict="fix" if places else "pass", findings=found, rechecked=judged)
 
 
+def action(c: Change) -> str | None:
+    """The next action the Change's row shows."""
+    return status.status(c, Activity(host_up=True), NOW).action
+
+
 def test_the_shaper_asks_rejects_and_revises_until_the_owner_may_approve_the_version(shaping):
     assert shaping.save()["version"] == 1
+    assert action(shaping.change()) == status.CONTINUE  # D-01M6JY6QW936SGFAJ6W3DV48KA: the chat asks for the challenge
     assert "has not been challenged" in shaping.approve(1).json()["detail"]
     assert shaping.ask_challenge(1).status_code == 200
     assert shaping.change().step.mode == "challenge"
@@ -129,6 +135,7 @@ def test_the_shaper_asks_rejects_and_revises_until_the_owner_may_approve_the_ver
     c = shaping.step()
     assert ([f.id for f in c.loops[BRIEF].findings], c.outcome.waiting) == (["F1", "F2"], Waiting.CHAT)
     assert "the shaper revises brief v1 for F1, F2" in shaping.approve(1).json()["detail"]
+    assert action(c) == status.CONTINUE
     assert shaping.ask_challenge(1, {"F2": "no"}).status_code == 409  # F1 is taken: a revision first
     assert shaping.save(criteria=["farewell('Ada') returns exactly 'Bye, Ada!'"])["version"] == 2
     assert shaping.ask_challenge(2, {"F2": "the scope is the package"}).status_code == 200
@@ -145,6 +152,7 @@ def test_the_shaper_asks_rejects_and_revises_until_the_owner_may_approve_the_ver
     assert shaping.ask_challenge(3).status_code == 200
     c = shaping.change()
     assert (c.brief.challenged, c.loops[BRIEF].ended, c.loops[BRIEF].unreviewed) == (3, "count", ["v2", "v3"])
+    assert action(c) == status.APPROVE  # only the wait to approve a challenged version is the owner's
     assert "was not reviewed" in shaping.approve(3).json()["detail"]  # TD-255: the owner ticks that he accepts it
     assert shaping.approve(3, unreviewed=True).json() == {"accepted": "brief-approval"}
     c, step = shaping.store.fold(Lock(shaping.slug), shaping.slug, datetime.now(UTC))
@@ -192,7 +200,9 @@ def test_the_last_allowed_round_with_many_findings_asks_the_owner(shaping):
     assert (c.questions[-1].answer, c.loops[BRIEF].extra) == (None, 0)  # not the open question: nothing recorded
     c = shaping.answer("retry")
     assert c.questions[-1].answer.option == brief_rounds.RETIRED  # a question of the attempt that ended
-    assert (c.loops[BRIEF].attempt, c.outcome.waiting, c.brief.challenged) == (2, Waiting.CHAT, None)
+    assert (c.loops[BRIEF].attempt, c.outcome.waiting, c.brief.challenged, action(c)) == (
+        2, Waiting.CHAT, None, status.CONTINUE
+    )  # fmt: skip
     assert "asked to shape the brief again after round 1" in brief_rounds.status(c)["why_again"]
 
 
@@ -294,6 +304,7 @@ def test_a_return_to_shaping_after_approval_waits_for_the_revision_and_never_pla
         shaping.store.write(lock, c)
     c = shaping.step()
     assert (c.step.kind, c.outcome.waiting, shaping.told) == (K.SHAPE, Waiting.CHAT, [])
+    assert action(c) == status.CONTINUE  # the approved version is challenged, but approved already
 
 
 def test_a_reconsideration_that_cannot_confirm_its_end_stops_the_change_for_the_owner(shaping):
