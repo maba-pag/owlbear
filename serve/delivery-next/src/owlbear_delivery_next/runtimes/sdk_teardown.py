@@ -134,7 +134,7 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
             try:
                 final = await owned_call(st, partial(usage_once, session, st.cfg.model), "usage read")
             except Exception as exc:  # noqa: BLE001 - an unread usage is recorded as such
-                final = {"error": type(exc).__name__}
+                final = {"error": sdk_spend.failed(exc)}
             sdk_spend.final(st, final, settled=settled)
         try:
             await owned_call(st, session.disconnect, "disconnect")

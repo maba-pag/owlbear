@@ -8,6 +8,7 @@ from typing import ClassVar
 
 import psutil
 import pytest
+from copilot._jsonrpc import JsonRpcError
 
 from owlbear_delivery_next.change_contracts import tool_schema, tools
 from owlbear_delivery_next.change_contracts.models import (
@@ -324,7 +325,9 @@ def test_usage_is_read_once_more_and_a_still_unread_read_names_why_the_check_can
         async def get_metrics(self) -> SimpleNamespace:
             if self.fails:
                 self.fails -= 1
-                raise RuntimeError
+                error = JsonRpcError(-32603, "MESSAGE-MARK", {"marker": "DATA-MARK"})
+                error.add_note("NOTE-MARK")
+                raise error
             tokens = SimpleNamespace(input_tokens=5, output_tokens=7)
             luna = SimpleNamespace(total_nano_aiu=2e9, usage=tokens)
             return SimpleNamespace(total_nano_aiu=2e9, model_metrics={"gpt-6-luna": luna})
@@ -334,8 +337,9 @@ def test_usage_is_read_once_more_and_a_still_unread_read_names_why_the_check_can
     assert asyncio.run(sdk_usage.usage_read(once, "gpt-6-luna"))["models"]["gpt-6-luna"]["tokens"] == 12
     twice = SimpleNamespace(rpc=SimpleNamespace(usage=Usage(2)))
     after = asyncio.run(sdk_usage.usage_read(twice, "gpt-6-luna"))
-    assert after == {"error": "RuntimeError"}
-    assert sdk_usage.unread({}, after) == "the usage at the step's end could not be read (RuntimeError)"
+    said = "JsonRpcError: JSON-RPC Error -32603: MESSAGE-MARK\nNOTE-MARK {'marker': 'DATA-MARK'}"  # #971: whole
+    assert after == {"error": said}
+    assert sdk_usage.unread({}, after) == f"the usage at the step's end could not be read ({said})"
     before = sdk_usage.unread({"error": "TimeoutError"}, {"models": {}})
     assert before == "the usage before the resumed turn could not be read (TimeoutError)"
     assert sdk_usage.unread({}, {}) == sdk_usage.unread({}, {"models": {}}) == ""
@@ -347,7 +351,8 @@ def test_a_session_that_opened_but_could_not_send_still_needs_its_usage_read(mon
             self.rpc = SimpleNamespace(usage=SimpleNamespace(get_metrics=self.metrics))
 
         async def metrics(self) -> None:
-            raise RuntimeError
+            msg = "usage refused"
+            raise RuntimeError(msg)
 
         async def send(self, *_a, **_k) -> None:
             raise ConnectionError
@@ -376,7 +381,8 @@ def test_a_session_that_opened_but_could_not_send_still_needs_its_usage_read(mon
     monkeypatch.setattr(sdk_usage, "USAGE_PAUSE", 0)
     cfg = dataclasses.replace(step().cfg, model="gpt-6-luna", resume=False)
     run = asyncio.run(sdk_adapter.run(cfg))
-    assert (run.ending, run.usage_unread) == ("error", "the usage at the step's end could not be read (RuntimeError)")
+    said = "the usage at the step's end could not be read (RuntimeError: usage refused)"
+    assert (run.ending, run.usage_unread) == ("error", said)
     assert Client.excluded == ["ask_user"]
     Client.opens = False  # nothing opened, so no model ran
     assert asyncio.run(sdk_adapter.run(cfg)).usage_unread == ""

@@ -134,6 +134,14 @@ def _sum(group: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _why(group: list[dict[str, Any]]) -> dict[str, list[str]]:
+    """Why runs count as unknown or only up to an earlier read: each failed read's error, once (#971)."""
+    return {
+        "unknown_why": list(dict.fromkeys(p["why"] for p in group if p["credits"] is None and p["why"])),
+        "failed_why": list(dict.fromkeys(p["why"] for p in group if p["failed"] and p["why"])),
+    }
+
+
 def query(  # noqa: PLR0913 - one value per filter the page offers
     found: list[dict[str, Any]], *, tz: ZoneInfo, start: date | None = None, end: date | None = None, project: str = "",
     agent: str = "", model: str = "", change: str = "", stopped: bool = False, by: str = "agent", cursor: int = 0,
@@ -157,7 +165,7 @@ def query(  # noqa: PLR0913 - one value per filter the page offers
     listed = [rows[k] | _sum(g) for k, g in groups.items()]
     listed.sort(key=(lambda r: r["key"]) if by == "day" else (lambda r: (-r["credits"], r["label"])))
     return {
-        "totals": _sum(inside),
+        "totals": _sum(inside) | _why(inside),
         "undated": _sum(undated) if undated else None,
         "rows": listed,
         "runs": _runs(inside, names, cursor),

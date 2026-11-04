@@ -42,7 +42,9 @@ async def _usage(session: CopilotSession, requested: str | None) -> dict[str, An
     try:
         m = await asyncio.wait_for(session.rpc.usage.get_metrics(), READ)
     except Exception as exc:  # noqa: BLE001 - experimental RPC; usage is reported, never required
-        return {"error": type(exc).__name__}
+        from owlbear_delivery_next.runtimes import sdk_spend  # noqa: PLC0415 - sdk_spend imports this module
+
+        return {"error": sdk_spend.failed(exc)}
     return parsed(m, requested)
 
 

@@ -285,6 +285,52 @@ def test_only_a_failed_read_is_said_to_have_failed(pds) -> None:
 
 
 @pytest.mark.browser
+def test_each_unread_or_short_run_says_its_whole_error(pds, whole_error: str) -> None:
+    """#971 P14: the exactness notes named how many runs were unread or short, never the error that made them so."""
+    from copilot._jsonrpc import JsonRpcError  # noqa: PLC0415 - the SDK's own error, as a request raises it
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.runtimes import sdk_spend  # noqa: PLC0415
+
+    def said(message: str, note: str) -> str:
+        exc = JsonRpcError(-32603, message, {"marker": f"DATA-{note}"})
+        exc.add_note(f"NOTE-{note}")
+        return sdk_spend.failed(exc)
+
+    unread, short = said(whole_error, "UNREAD"), said("SHORT-MARK", "SHORT")
+    now = datetime.now(UTC) - timedelta(hours=1)
+    place = {"project": "shop", "name": "shop", "change": "c1", "agent": "builder"}
+    spent = {"credits": 9.0, "models": {"m1": {"credits": 9.0, "input": 100, "output": 10}}}
+    spend_ledger.append([
+        *run("unread", now, {"error": unread}, place),
+        *run("short", now + timedelta(minutes=1), spent | {"incomplete": short}, place),
+    ])  # fmt: skip
+    machine, server, base = serve()
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            pds.only(page, base)
+            page.goto(f"{base}/metrics#token=t")
+            said_li = page.locator("#exact li")
+            expect(said_li).to_have_count(2)
+            assert said_li.nth(0).locator(".why").all_text_contents() == [unread]
+            assert said_li.nth(1).locator(".why").all_text_contents() == [short]
+            expect(said_li.nth(0)).to_contain_text("1 run did not report its credits")
+            expect(said_li.nth(1)).to_contain_text("its last read failed")
+            assert errors == []
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
+@pytest.mark.browser
 def test_spend_said_apart_from_the_period_never_reads_unknown_as_zero_or_a_counted_run_as_left_out(pds) -> None:
     """Sol's and Copilot's counterexamples: a run with only its start said "0.00 more"; one carrying known credits too
     said "credits not known"; and a resumed run, counted with its own spend, was called one more run not counted."""

@@ -619,12 +619,37 @@ def test_a_cancelled_run_reads_its_usage_before_the_disconnect_and_is_recorded(w
     assert order == ["usage", "disconnect"]
     _, end = _spend()
     expected = (
-        {"credits": 0.75, "models": {}, "incomplete": "interrupted"} if read == "read" else {"error": "RuntimeError"}
+        {"credits": 0.75, "models": {}, "incomplete": "interrupted"}
+        if read == "read"
+        else {"error": "RuntimeError: synthetic"}
     )
     assert (end["ending"], end["usage"]) == (
         "interrupted",
         expected,
     )  # a call may still have been billed: a lower bound
+
+
+@pytest.mark.parametrize("earlier", [False, True])
+def test_a_failed_final_usage_read_reaches_the_ledger_whole(world, monkeypatch, whole_error, earlier):
+    """#971 P14: the ledger keeps the final read's whole error, with its notes and JSON-RPC data: as the run's unread
+    usage, or as why the step's earlier read is only a lower bound."""
+    _metered(world, monkeypatch)
+    used = {"credits": 1.25, "models": {"gpt-6-luna": {"credits": 1.25, "input": 9, "output": 1}}}
+    error = JsonRpcError(-32603, whole_error, {"marker": "DATA-MARK"})
+    error.add_note("NOTE-MARK")
+
+    async def usage(_session, _model):
+        return used if earlier else {}
+
+    async def once(_session, _model):
+        raise error
+
+    monkeypatch.setattr(sdk_adapter, "usage_read", usage)
+    monkeypatch.setattr(sdk_teardown, "usage_once", once)
+    asyncio.run(sdk_adapter.run(world.cfg))
+    said = f"JsonRpcError: JSON-RPC Error -32603: {whole_error}\nNOTE-MARK {{'marker': 'DATA-MARK'}}"
+    _, end = _spend()
+    assert end["usage"] == (used | {"incomplete": said} if earlier else {"error": said})
 
 
 def test_a_run_that_never_opened_a_session_records_nothing(world):
