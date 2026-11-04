@@ -78,9 +78,12 @@ if TYPE_CHECKING:
     from playwright.sync_api import Page
 
 
-def clone(path: Path, slug: str = "") -> Path:
+def clone(path: Path, slug: str = "", origin: str = "") -> Path:
+    """A clone with one Change in Build; *origin*, when given, is its remote, so its store claims that folder."""
     for args in (["init", "-q", str(path)], ["-C", str(path), "commit", "-q", "--allow-empty", "-m", "i"]):
         subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
+    if origin:
+        subprocess.run(["git", "-C", str(path), "remote", "add", "origin", origin], check=True)  # noqa: S603, S607
     store = Store.open(path)
     slug = slug or f"{path.name}-1"
     with store.lock(slug) as lock:
@@ -228,6 +231,56 @@ def test_changes_of_all_projects_or_one_the_top_row_switches_and_resumes_and_pro
     finally:
         server.should_exit = True
         machine.stop_all()
+
+
+OWLBEAR_ORIGIN = "https://github.com/maba-pag/owlbear.git"
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("width", [390, 1280])
+def test_owlbears_own_project_shows_as_owlbear_apart_and_first_wherever_projects_are_listed(
+    tmp_path: Path, monkeypatch, pds, shared_repo, width: int
+) -> None:
+    """D-01M5ZGGSMKBZ830H8FQSPHH5BN, D-01M6JZQEEAXBNNH9P05HT7JNH2: the project whose data folder is owlbear/, added
+    after a consumer, shows as OwlBear with its tag in its own section above the consumer projects, first in the
+    picker, and as OwlBear on Changes, where it is still reached by its id."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
+    registry.register(clone(tmp_path / "alpha"))
+    own = registry.register(clone(tmp_path / "mine", origin=OWLBEAR_ORIGIN))
+    with browsing(monkeypatch, pds, width) as (page, base):
+        errors: list[str] = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+        page.goto(f"{base}/projects#token=t")
+        expect(page.locator("#page h2")).to_have_text(["OwlBear", "Consumer projects", "Add a project"])
+        expect(page.locator("#own > li h3")).to_have_text(["OwlBear"])
+        expect(page.locator("#own > li p-tag")).to_have_text(["OwlBear's own"])
+        expect(page.locator("#projects > li h3")).to_have_text(["alpha"])
+        expect(page.locator("#projects p-tag")).to_have_count(0)
+        picker = pds.select(page.locator("#top"), "Project").locator("p-select-option")
+        expect(picker).to_have_text(["All projects", "OwlBear", "alpha"])
+        assert targets(page.locator("#page p-button, #page p-input-text input")) == []
+        assert page.evaluate("document.documentElement.scrollWidth") <= width
+        page.goto(f"{base}/#token=t")
+        card = page.locator("#changes li.card", has_text="mine-1")
+        expect(card.locator(".project")).to_have_text("OwlBear")
+        card.locator("a.open").click()
+        expect(page).to_have_url(f"{base}/?change={own.id}%2Fmine-1")
+        expect(page.locator("#detail")).to_contain_text("in OwlBear")
+        page.go_back()
+        page.get_by_role("button", name="New Change").click()
+        chooser = pds.select(page.locator("#choose"), "Shape the new Change in").locator("p-select-option")
+        expect(chooser).to_have_text(["alpha", "OwlBear"])
+        page.goto(f"{base}/projects#token=t")
+        page.get_by_role("listitem", name="OwlBear").get_by_role("button", name="Remove project").click()
+        expect(pds.modal(page)).to_contain_text("Remove OwlBear?")
+        pds.answer(page, "Remove project")
+        expect(page.locator("#page > [role=status]")).to_contain_text("Removed OwlBear; nothing in")
+        expect(page.get_by_role("listitem", name="alpha").get_by_role("button", name="Remove project")).to_be_focused()
+        expect(page.locator("#own")).to_have_count(0)
+        assert errors == []
 
 
 @pytest.mark.browser
@@ -1814,6 +1867,7 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
         expect(row["global"]).to_contain_text("2 in force · 0 drafts")
         expect(row["global"]).to_contain_text("1 read-back waiting")
         expect(row["owlbear"]).to_contain_text("1 in force · 0 drafts")
+        expect(row["owlbear"].locator("p-tag", has_text="OwlBear's own")).to_have_count(1)
         expect(row[gone.id]).to_contain_text("gone is replaced: ")
         expect(row[gone.id].get_by_role("link", name="Open Projects")).to_have_attribute("href", "/projects")
         until(page, lambda: held)
@@ -1830,6 +1884,32 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
         assert targets(page.locator("#scopes a, #scopes button")) == []
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
         each_scope_opens_its_view_and_leads_back(page, pds, base, row, a)
+
+
+@pytest.mark.browser
+def test_owlbears_fixed_scope_stays_its_one_row_once_its_own_project_is_registered(
+    tmp_path: Path, monkeypatch, pds, shared_repo
+) -> None:
+    """D-01M5ZGHDMEG897N2SD1XNEXYNQ, D-01M6JZQEEAXBNNH9P05HT7JNH2: with OwlBear's own clone registered, All projects
+    still shows OwlBear once, as the fixed scope tagged as OwlBear's own, never as a project row too."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.local_system import data_place  # noqa: PLC0415
+
+    shared = shared_repo[0]
+    monkeypatch.setenv(data_place.VIEW, str(shared))
+    decided(shared, "owlbear", "Lint once.")
+    registry.register(clone(tmp_path / "alpha"))
+    own = registry.register(clone(tmp_path / "mine", origin=OWLBEAR_ORIGIN))
+    with browsing(monkeypatch, pds, 390) as (page, base):
+        page.goto(f"{base}/decisions#token=t")
+        for _ in ("loaded", "reloaded"):
+            expect(page.locator("#scopes .scope h3")).to_have_text(["Global", "OwlBear", "alpha"])
+            expect(page.locator(f'#scopes .scope[data-key="{own.id}"]')).to_have_count(0)
+            row = page.locator('#scopes .scope[data-key="owlbear"]')
+            expect(row).to_contain_text("1 in force · 0 drafts")
+            expect(row.locator("p-tag", has_text="OwlBear's own")).to_have_count(1)
+            page.reload()
 
 
 @pytest.mark.browser
@@ -1902,18 +1982,23 @@ def each_scope_opens_its_view_and_leads_back(page, pds, base: str, row: dict, a:
 
 @pytest.mark.browser
 def test_maintenance_under_all_projects_sums_up_each_project_and_opens_it_even_with_a_project_unread(
-    tmp_path: Path, monkeypatch, pds
+    tmp_path: Path, monkeypatch, pds, shared_repo
 ) -> None:
     """D-01M63C6PMT4FX370W6B2VS9HAM: All projects shows one maintenance summary per project, each opening it; a
-    project that cannot be read says why and the rest still shows."""
+    project that cannot be read says why and the rest still shows. OwlBear's own, added last, comes first with its tag
+    (D-01M6JZQEEAXBNNH9P05HT7JNH2)."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
+    monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
     a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
+    own = registry.register(clone(tmp_path / "mine", origin=OWLBEAR_ORIGIN))
     with browsing(monkeypatch, pds) as (page, base):
         page.route(f"**/p/{b.id}/api/next/maintenance", lambda route: route.abort())
         page.goto(f"{base}/maintenance#token=t")
-        row = {p.id: page.locator(f'#projects .scope[data-key="{p.id}"]') for p in (a, b)}
-        expect(page.locator("#projects h3")).to_have_text(["alpha", "beta"])
+        row = {p.id: page.locator(f'#projects .scope[data-key="{p.id}"]') for p in (a, b, own)}
+        expect(page.locator("#projects h3")).to_have_text(["OwlBear", "alpha", "beta"])
+        expect(row[own.id].locator("p-tag", has_text="OwlBear's own")).to_have_count(1)
+        expect(page.locator("#projects p-tag", has_text="OwlBear's own")).to_have_count(1)
         expect(row[a.id]).to_contain_text("Memory curation: never run")
         expect(row[b.id]).to_contain_text("Could not read it: Delivery is not running")
         expect(row[b.id].get_by_role("button", name="Read beta again")).to_be_visible()
