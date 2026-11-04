@@ -153,9 +153,9 @@ def test_historical_synthetic_actions_are_refused_at_the_routes(world) -> None:
     for state in ("accepted", "redirected", "rejected"):
         response = world.http.post(f"{API}/proposals/{pid}/decide",
                                    json={"state": state, "token": shown["token"], "direction": "change"})  # fmt: skip
-        assert (response.status_code, response.json()["detail"]) == (409, store.SYNTHETIC_RETIRED)
+        assert (response.status_code, response.json()["detail"]) == (409, f"RetroError: {store.SYNTHETIC_RETIRED}")
     response = world.http.post(f"{API}/followups", json={"finding": "f-old"})
-    assert (response.status_code, response.json()["detail"]) == (409, store.SYNTHETIC_RETIRED)
+    assert (response.status_code, response.json()["detail"]) == (409, f"RetroError: {store.SYNTHETIC_RETIRED}")
     assert (store.lines(props.FILE), store.queued()) == (before, [])
 
     props.transition(pid, "redirected", "owner", direction="old")
