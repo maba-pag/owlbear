@@ -15,11 +15,16 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 
+def _diagnostic(text: str) -> str:
+    """Keep diagnostic text UTF-8 encodable without losing undecodable path characters."""
+    return text.encode("utf-8", "backslashreplace").decode("utf-8")
+
+
 def _run(repo: DataRepo, until: float | None, *args: str, lossless: bool = False) -> str:
     said = repo.git(*args, until=until, lossless=lossless)
     if said.returncode:
         msg = f"the held decision's Git authority could not be read in {repo.root}: {failed(said)}"
-        raise OSError(msg)
+        raise OSError(_diagnostic(msg))
     return said.stdout
 
 
@@ -60,7 +65,7 @@ def _contents(repo: DataRepo, commit: str, blobs: dict[str, int], until: float |
     expected = sum(blobs.values())
     if len(data) != expected:
         msg = f"Git returned {len(data)} decision bytes at {commit} in {repo.root}; expected {expected}"
-        raise OSError(msg)
+        raise OSError(_diagnostic(msg))
     stream = BytesIO(data)
     return {oid: stream.read(size) for oid, size in blobs.items()}
 
@@ -83,7 +88,7 @@ def _entries(repo: DataRepo, commit: str, until: float | None) -> tuple[list[Ent
             wanted[path] = (layer, oid, int(size))
         except ValueError as exc:
             msg = f"Git returned an unreadable object size {size!r} for {str(path)!r} at {commit}"
-            raise OSError(msg) from exc
+            raise OSError(_diagnostic(msg)) from exc
     contents = _contents(repo, commit, {oid: size for _layer, oid, size in wanted.values()}, until)
     for path, (layer, oid, _size) in wanted.items():
         try:
@@ -102,11 +107,11 @@ def inactive(repo: DataRepo, ref: str, rel: str, until: float | None) -> str:
     entries, unreadable = _entries(repo, commit, until)
     target = next((e.decision for e in entries if e.path == repo.root / rel), None)
     if target is None or target.scope is not Scope.PROJECT:
-        return f"{rel} is not a usable project decision at {commit}"
+        return _diagnostic(f"{rel} is not a usable project decision at {commit}")
     if target.state is not State.IN_FORCE or target.conflict or target.read_back == "pending":
-        return f"{target.id} is no longer active and clear of owner questions at {commit}"
+        return _diagnostic(f"{target.id} is no longer active and clear of owner questions at {commit}")
     unknown = [why for layer, why in unreadable if layer.scope is Scope.GLOBAL or layer.project == target.project]
     if unknown:
-        return f"{target.id}'s authority is incomplete: {'; '.join(unknown)}"
+        return _diagnostic(f"{target.id}'s authority is incomplete: {'; '.join(unknown)}")
     findings = [f.message for f in check(entries) if target.id in f.involves]
-    return f"{target.id} is no longer active at {commit}: {'; '.join(findings)}" if findings else ""
+    return _diagnostic(f"{target.id} is no longer active at {commit}: {'; '.join(findings)}") if findings else ""

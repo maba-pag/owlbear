@@ -909,13 +909,21 @@ def test_completion_keeps_a_competing_successor_that_arrives_during_its_save_unr
         assert git(owlbear_shared.root, "rev-parse", "HEAD") == git(other.root, "rev-parse", "HEAD")
 
 
-@pytest.mark.parametrize("folder", ["owlbear/decisions", "decisions"])
-def test_completion_receipt_escapes_non_utf8_publication_paths(owner, completion_competition, monkeypatch, folder):
+@pytest.mark.parametrize(
+    "damaged",
+    [
+        "owlbear/decisions/unreadable-\udcff.md",
+        "decisions/unreadable-\udcff.md",
+        "owlbear/changes/unreadable-\udcff/decisions/{id}.md",
+    ],
+    ids=["own-file", "global-file", "change-directory"],
+)
+def test_completion_receipt_escapes_non_utf8_publication_paths(owner, completion_competition, monkeypatch, damaged):
     shared, chosen, _competing, other = completion_competition
     rel = f"owlbear/decisions/{chosen.id}.md"
     head = git(other.root, "rev-parse", "HEAD")
     blob = git(other.root, "rev-parse", f"HEAD:{rel}")
-    entry = f"100644,{blob},{folder}/unreadable-\udcff.md"
+    entry = f"100644,{blob},{damaged.format(id=chosen.id)}"
     added = other.git("update-index", "--add", "--cacheinfo", entry)
     assert added.returncode == 0, added.stderr
     tree = git(other.root, "write-tree")
