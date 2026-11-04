@@ -33,7 +33,7 @@ def failure(exc: BaseException) -> str:
 
 def rpc_failure(exc: BaseException) -> str:
     """`failure`, then the data a JSON-RPC error carries beside its message, which its ``str()`` leaves out."""
-    return failure(exc) + (f" {data!r}" if (data := getattr(exc, "data", None)) else "")
+    return failure(exc) + ("" if (data := getattr(exc, "data", None)) is None else f" {data!r}")
 
 
 def output(stderr: object, stdout: object) -> str:

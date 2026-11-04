@@ -899,10 +899,16 @@ def _step_detail(run, tmp_path) -> str:
     return step["detail"]
 
 
-@pytest.mark.parametrize("data", [{"marker": "DATA-MARK"}, None])
+@pytest.mark.parametrize(
+    "case",
+    [({"marker": "DATA-MARK"}, " {'marker': 'DATA-MARK'}"), (0, " 0"), ("", " ''"), (None, "")],
+    ids=["data", "zero", "empty", "none"],
+)
 def test_a_failed_sdk_request_keeps_its_notes_and_data_and_retries_as_before(world, monkeypatch, tmp_path, whole_error,
-                                                                             data):  # fmt: skip
-    """#971 R5/R7: the step's error keeps the request's notes and JSON-RPC data; retries classify what they did."""
+                                                                             case):  # fmt: skip
+    """#971 R5/R7: the step's error keeps the request's notes and JSON-RPC data, falsy data too; retries classify
+    what they did."""
+    data, shown = case
     error = JsonRpcError(-32603, whole_error, data)
     error.add_note(TRIGGER)
 
@@ -911,7 +917,7 @@ def test_a_failed_sdk_request_keeps_its_notes_and_data_and_retries_as_before(wor
 
     monkeypatch.setattr(sdk_adapter, "_open", broken)
     run = asyncio.run(sdk_adapter.run(world.cfg))
-    want = f"JsonRpcError: JSON-RPC Error -32603: {whole_error}\n{TRIGGER}" + (f" {data!r}" if data else "")
+    want = f"JsonRpcError: JSON-RPC Error -32603: {whole_error}\n{TRIGGER}{shown}"  # falsy data is data too
     assert _step_detail(run, tmp_path) == want
     result = to_result(run, StepKind.BUILD, NOW)
     assert (result.reason, result.exit, result.cause, result.wake_at) == (want, Exit.RETRY, "tooling:build:sdk", None)
