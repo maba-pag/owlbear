@@ -11,10 +11,12 @@ from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import Brief, Change, ErrorKind, Exit, Names, Step, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.github.provider import MergeMethod, Repository, Rules
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import answers
+from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
@@ -292,3 +294,23 @@ def test_the_question_is_an_engine_decision_the_changes_page_answers(store, chan
     assert isinstance(item, AnswerItem)
     labels = " ".join(o.label for o in q.options)
     assert ("every task" in labels, "before anything is saved" in labels) == (True, True)
+
+
+def test_a_change_already_asking_plans_once_another_change_s_answer_settles_the_checks(
+    store, change_repo, monkeypatch, tmp_path
+):
+    store.write_profile(Profile(entries={"check:.": entry()}))
+    sessions(monkeypatch)
+    for slug in ("c1", "c2"):
+        made(store, change_repo, ["src"], slug)
+        asked(step(store, change_repo, slug))
+    answer(store, "detected")
+    step(store, change_repo)
+    host = Host(store, tmp_path, spawn=lambda _slug: None)
+    host.observe_pr = lambda _slug: (None, False)
+    assert host._one("c2", datetime.now(UTC))  # noqa: SLF001 - one pass: planning is due without another answer
+    c = store.read("c2")
+    q = c.questions[-1]
+    assert (q.answer.option, loop.next_step(c, datetime.now(UTC))) == ("settled", c.step)
+    late = answers.answer_item(store, c, answers.AnswerBody(question=q.id, option="detected"))
+    assert late == (409, f"question {q.id} is not open")

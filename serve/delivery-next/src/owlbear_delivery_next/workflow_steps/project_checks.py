@@ -15,7 +15,7 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.failures import cause_key
-from owlbear_delivery_next.change_contracts.models import ErrorKind, Option, StepKind
+from owlbear_delivery_next.change_contracts.models import Answer, ErrorKind, Option, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.github.provider import ProviderError
@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 
 ROOT = "."
 TYPED = "-typed-"
+PREFIX = cause_key(ErrorKind.GATE, StepKind.PLAN, "checks-")
 _PAUSE = Option(id="pause", label="Pause this Change; nothing is planned until you answer", next="pause")
 
 
@@ -65,6 +66,17 @@ def profile_for(store: Store, lock: Lock, change: Change, repo: Path) -> Profile
     question = _read_back(prof, missing, latest, cause) if typed and latest else _first(prof, missing, cause)
     store.write(lock, loop.apply(change, question, now))
     return None
+
+
+def settle(store: Store, change: Change, now: datetime) -> None:
+    """Close a Change's checks question another Change's answer made needless, so it plans without another answer."""
+    q = loop.open_question(change)
+    if q is None or not (q.cause or "").startswith(PREFIX):
+        return
+    if (prof := store.read_profile()) is not None and not _uncovered(prof, change.brief.scope):
+        why = "the project's check commands were confirmed on another Change"
+        q.answer = Answer(option="settled", text=why, at=now)
+        q.effect_observed_at, change.outcome = now, None
 
 
 def _packages(prof: Profile) -> set[str]:
@@ -104,7 +116,7 @@ def _cause(prof: Profile, missing: list[str]) -> str:
     """The question's cause, bound to what was detected for each home it names: a new detection asks again."""
     seen = [[h, *((e.state, e.value) if (e := prof.entries.get(f"check:{h}")) else ("absent", ""))] for h in missing]
     digest = hashlib.sha256(json.dumps(seen).encode()).hexdigest()[:12]
-    return cause_key(ErrorKind.GATE, StepKind.PLAN, f"checks-{digest}")
+    return f"{PREFIX}{digest}"
 
 
 def _option(q: Question) -> str | None:
