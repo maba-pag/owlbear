@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import Answer, ErrorKind, Option, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow import loop, worktree
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import github_writer
@@ -62,8 +62,8 @@ def profile_for(store: Store, lock: Lock, change: Change, repo: Path) -> Profile
         if not (missing := _uncovered(prof, scope)):
             return profile.vouched(prof)
         cause, latest = _cause(prof, missing), None  # typed lines that left part of the scope unconfirmed
-    typed = latest is not None and latest.cause == cause and _option(latest) == "typed"
-    question = _read_back(prof, missing, latest, cause) if typed and latest else _first(prof, missing, cause)
+    typed = latest is not None and latest.cause == cause and latest.answer.option == "typed"
+    question = _read_back(prof, missing, latest, cause) if typed else _first(prof, missing, cause)
     store.write(lock, loop.apply(change, question, now))
     return None
 
@@ -83,12 +83,6 @@ def _packages(prof: Profile) -> set[str]:
     return {key.removeprefix("check:") for key in prof.entries if key.startswith("check:")}
 
 
-def _vouched(prof: Profile, home: str) -> bool:
-    """Whether the owner confirmed a check command that covers *home*: its own or the root's."""
-    entries = (prof.entries.get(f"check:{key}") for key in (home, ROOT))
-    return any(e is not None and e.state == "known" and e.value and profile.is_confirmed(e) for e in entries)
-
-
 def _homes(prof: Profile, scope: Sequence[str]) -> set[str]:
     """The packages whose checks the scope's tasks run: per path its deepest holding package and those inside it."""
     packages = _packages(prof)
@@ -96,9 +90,8 @@ def _homes(prof: Profile, scope: Sequence[str]) -> set[str]:
         return packages or {ROOT}
     homes: set[str] = set()
     for path in scope:
-        parts = PurePosixPath(path).parts
-        holding = [d for d in packages if parts[: len(dp := PurePosixPath(d).parts)] == dp]
-        inside = {d for d in packages if PurePosixPath(d).parts[: len(parts)] == parts}
+        holding = [d for d in packages if PurePosixPath(path).is_relative_to(d)]
+        inside = {d for d in packages if PurePosixPath(d).is_relative_to(path)}
         deepest = {max(holding, key=lambda d: len(PurePosixPath(d).parts))} if holding else set()
         homes |= deepest | inside or {ROOT}  # a path in no package: every task needs a check, so the root's
     return homes
@@ -106,10 +99,10 @@ def _homes(prof: Profile, scope: Sequence[str]) -> set[str]:
 
 def _uncovered(prof: Profile, scope: Sequence[str]) -> list[str]:
     """Every unconfirmed package of the project once the scope touches one, with the root when the scope needs it."""
-    homes = _homes(prof, scope)
-    if all(_vouched(prof, home) for home in homes):
+    homes, covered = _homes(prof, scope), {p for p, _ in worktree.checks(profile.vouched(prof))}
+    if ROOT in covered or homes <= covered:
         return []
-    return sorted(home for home in _packages(prof) | (homes & {ROOT}) if not _vouched(prof, home))
+    return sorted((_packages(prof) | (homes & {ROOT})) - covered)
 
 
 def _cause(prof: Profile, missing: list[str]) -> str:
@@ -117,10 +110,6 @@ def _cause(prof: Profile, missing: list[str]) -> str:
     seen = [[h, *((e.state, e.value) if (e := prof.entries.get(f"check:{h}")) else ("absent", ""))] for h in missing]
     digest = hashlib.sha256(json.dumps(seen).encode()).hexdigest()[:12]
     return f"{PREFIX}{digest}"
-
-
-def _option(q: Question) -> str | None:
-    return q.answer.option if q.answer else None
 
 
 def _detected(prof: Profile, home: str) -> str:
@@ -146,11 +135,11 @@ def _answered(
     """The commands the latest answer confirms: the detected ones, or the typed ones the owner saved."""
     if latest is None:
         return None
-    if latest.cause == cause and _option(latest) == "detected":
+    if latest.cause == cause and latest.answer.option == "detected":
         return {home: _detected(prof, home) for home in missing}
     asked = (latest.cause or "").removeprefix(f"{cause}{TYPED}")
     first = next((q for q in change.questions if q.id == asked and q.answer), None)
-    return _parsed(first.answer.text, prof)[0] if _option(latest) == "save" and first and first.answer else None
+    return _parsed(first.answer.text, prof)[0] if latest.answer.option == "save" and first and first.answer else None
 
 
 def _first(prof: Profile, missing: list[str], cause: str) -> loop.StepResult:
