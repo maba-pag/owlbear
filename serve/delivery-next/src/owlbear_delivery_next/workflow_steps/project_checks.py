@@ -137,9 +137,9 @@ def _answered(
         return None
     if latest.cause == cause and latest.answer.option == "detected":
         return {home: _detected(prof, home) for home in missing}
-    asked = (latest.cause or "").removeprefix(f"{cause}{TYPED}")
+    asked = latest.cause.removeprefix(f"{cause}{TYPED}")
     first = next((q for q in change.questions if q.id == asked and q.answer), None)
-    return _parsed(first.answer.text, prof)[0] if latest.answer.option == "save" and first and first.answer else None
+    return _parsed(first.answer.text, prof)[0] if latest.answer.option == "save" and first else None
 
 
 def _first(prof: Profile, missing: list[str], cause: str) -> loop.StepResult:
@@ -161,7 +161,7 @@ def _first(prof: Profile, missing: list[str], cause: str) -> loop.StepResult:
 
 
 def _read_back(prof: Profile, missing: list[str], first: Question, cause: str) -> loop.StepResult:
-    parsed, unparsed = _parsed(first.answer.text if first.answer else "", prof)
+    parsed, unparsed = _parsed(first.answer.text, prof)
     left = [h for h in missing if h not in parsed and ROOT not in parsed]
     lines = [
         "These check commands will be saved to the project profile, and every Change's tasks will run them:",
