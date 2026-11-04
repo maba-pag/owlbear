@@ -384,16 +384,18 @@ def test_nothing_is_written_unless_github_says_the_shared_repository_is_private(
     for visibility, said in [
         ("public", "it is public, not private"),
         ("internal", "it is internal, not private"),
-        ("unread", "its visibility is unknown (ProviderError: repo_visibility: Not Found (HTTP 404))"),
+        ("unread", "its visibility is unknown (ProviderError: repo_visibility: Not Found (HTTP 404)\n{ran})"),
     ]:
         github.visibility, github.answer = visibility, unread if visibility == "unread" else answer
 
         with pytest.raises(BacklogError) as refused:
             view(root).add("a report")
 
+        gh = f"CalledProcessError: Command '{github.ran[-1]}' returned non-zero exit status 1."
+
         assert refused.value.status == 503
-        why = f"not saved to GitHub (acme/owlbear-data): repo_visibility: {said}; the backlog is written only to a "
-        assert refused.value.text == why + "private repository"
+        why = f"not saved to GitHub (acme/owlbear-data): repo_visibility: {said.format(ran=gh)}; the backlog is "
+        assert refused.value.text == why + "written only to a private repository"
         assert (github.issues, github.labels, [m for m, *_ in github.calls if m != "GET"]) == ({}, {}, [])
 
 
