@@ -2454,6 +2454,31 @@ def test_an_error_no_machine_route_caught_shows_whole_on_its_page_and_in_the_hos
 
 
 @pytest.mark.browser
+def test_a_recovery_no_route_caught_shows_its_whole_error_in_the_held_sessions_row(
+    monkeypatch, pds, whole_error
+) -> None:
+    """#971: releasing a held session failing with an error nothing catches says it whole in that session's row."""
+    held = {"id": "s-1", "project": "p", "kind": "pack", "started_at": "2026-10-25T00:00:00+00:00"}
+    held |= {"workspace": "/w/s-1", "reason": "no Run returned", "state": "held", "recoverable": True}
+
+    def recover(*_args: object, **_kwargs: object) -> Any:
+        raise RuntimeError(whole_error)
+
+    monkeypatch.setattr(maintenance.Maintenance, "read", lambda _self: {"sessions": [held]})
+    monkeypatch.setattr(maintenance.Maintenance, "recover", recover)
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/maintenance#token=t")
+        page.get_by_label("The computer has rebooted since this session failed").check()
+        page.get_by_role("button", name="Release this session").click()
+        with page.expect_response("**/api/next/maintenance/sessions/s-1/recover") as answered:
+            pds.answer(page, "Release")
+        assert answered.value.status == 500
+        refused = page.locator("#sessions > li p-inline-notification")
+        refused.wait_for()
+        assert refused.text_content().strip() == f"RuntimeError: {whole_error}"
+
+
+@pytest.mark.browser
 def test_an_error_no_project_route_caught_shows_whole_on_its_page_and_in_the_host_log(
     tmp_path: Path, monkeypatch, pds, caplog, whole_error
 ) -> None:
