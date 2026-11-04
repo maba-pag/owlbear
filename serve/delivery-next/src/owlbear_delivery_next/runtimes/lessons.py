@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from owlbear_memory import Points, selection
 from pydantic import ValidationError
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import pds_skill, preload
 from owlbear_delivery_next.local_system.data_repo import CONFIG
 from owlbear_delivery_next.settings import config
@@ -58,7 +59,7 @@ def preflight(memory: Path) -> tuple[Points, int, int]:
     try:
         settings = config.resolve(read_layer(memory.parent.parent / CONFIG, config.GlobalLayer), config.Layer())
     except ValidationError as exc:  # each layer is valid, their combination is not (the challenge rounds)
-        msg = f"the settings do not combine: {exc.errors()[0]['msg']}"
+        msg = f"the settings do not combine: {failure(exc)}"
         raise StoreError(msg) from exc
     settings.need(  # a test layer or the owner's global file: code ships no value
         "memory.outstanding_boost", "memory.unremarkable_penalty", "memory.preflight_cap", "memory.preflight_budget"
@@ -135,11 +136,12 @@ def block(role: str, memory: Path) -> tuple[str, Exposure]:
         config.SettingsUnset,
         StoreError,
     ) as exc:  # never stops a step: the agent recalls itself, or is told why not
-        return f"{HEADING}\n{UNREAD.format(why=exc, role=role)}", Exposure(role, "unread", failed=str(exc))
+        why = failure(exc)
+        return f"{HEADING}\n{UNREAD.format(why=why, role=role)}", Exposure(role, "unread", failed=why)
     try:
         own, common = selection.stored(memory), selection.stored(preload.global_memory(memory))
     except Exception as exc:  # noqa: BLE001 - an unread memory never stops a step: the agent recalls itself
-        why = type(exc).__name__
+        why = failure(exc)
         return f"{HEADING}\n{UNREAD.format(why=why, role=role)}", Exposure(role, "unread", failed=why)
     if missing := own.unreadable + common.unreadable:
         why = f"{missing} unreadable {'entry' if missing == 1 else 'entries'}"
