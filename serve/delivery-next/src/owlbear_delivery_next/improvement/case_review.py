@@ -285,9 +285,9 @@ async def sync(shared: DataRepo | None, ask: Ask, meter: Meter, halt: Callable[[
         committed, pushed, why = _write(shared, cid, None)
         if committed:
             _set(cid, remote="", pushed=pushed, why=why)
-        out["removed" if committed and pushed else "pending" if committed else "failed"].append(cid)
+        _told(out, cid, "removed" if committed and pushed else "pending" if committed else "failed", why)
     for cid, rev in write.items():
-        out[_place(shared, cid, rev, _kept(cid, rev) or "")].append(cid)
+        _told(out, cid, *_place(shared, cid, rev, _kept(cid, rev) or ""))
     try:
         await _review(shared, review, ask, meter, halt, out)
     except asyncio.CancelledError:  # the host ended: the revision under review stays due
@@ -324,7 +324,17 @@ async def _review(  # noqa: PLR0913, PLR0917 - the repository, what is due, the 
             continue
         _keep(cid, rev, made)
         _set(cid, review={"revision": rev, "outcome": "passed", "why": ""})
-        out[_place(shared, cid, rev, made)].append(cid)
+        _told(out, cid, *_place(shared, cid, rev, made))
+
+
+def _told(out: dict[str, Any], cid: str, state: str, why: str) -> None:
+    """Count case *cid* under *state*; a write or withdrawal that did not go through adds its whole reason.
+
+    The reason joins the run's result, one case to a line.
+    """
+    out[state].append(cid)
+    if why:
+        out["result"] = "\n".join(filter(None, (out.get("result", ""), f"case {cid}, {state}: {why}")))
 
 
 def _stopped(meter: Meter, halt: Callable[[], str]) -> str:
@@ -332,8 +342,8 @@ def _stopped(meter: Meter, halt: Callable[[], str]) -> str:
     return halt() or ("" if meter.admit() else f"the retro run's spend is {meter.report()['stopped']}")
 
 
-def _place(shared: DataRepo, cid: str, rev: str, text: str) -> str:
-    """Write the reviewed export, if the case is still exactly what was reviewed; what happened.
+def _place(shared: DataRepo, cid: str, rev: str, text: str) -> tuple[str, str]:
+    """Write the reviewed export, if the case is still exactly what was reviewed; what happened, and why not ("" if so).
 
     A case changed during its review is not written; one removed (or no longer published) meanwhile is withdrawn now
     if the shared repository holds an earlier revision of it, else by the next sync: what the repository holds is kept
@@ -343,15 +353,15 @@ def _place(shared: DataRepo, cid: str, rev: str, text: str) -> str:
         entry = cases.current()["cases"].get(cid)
         if entry is None or not eligible(cid, entry) or cases.content(cid, entry) != rev:
             _set(cid, review={"revision": rev, "outcome": "changed", "why": "changed or removed during its review"})
-            had = _get(cid)
+            had, why = _get(cid), ""
             if (entry is None or not eligible(cid, entry)) and (had["remote"] or not had["pushed"]):
                 committed, pushed, why = _write(shared, cid, None)
                 if committed:
                     _set(cid, remote="", pushed=pushed, why=why)
-            return "changed"
+            return "changed", why
         committed, pushed, why = _write(shared, cid, text)
         if committed:
             _set(cid, remote=rev, pushed=pushed, why=why)
-            return "published" if pushed else "pending"
+            return ("published" if pushed else "pending"), why
         _set(cid, pushed=False, why=why)  # the file may be in the checkout or its index: a withdrawal cleans it
-        return "failed"
+        return "failed", why

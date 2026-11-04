@@ -102,8 +102,8 @@ function failedLooks(r) {
 function replay(r) {
   if ("applied" in r && !("result" in r)) return html`<li>${when(r.at)} \u00b7 run ${r.id}: ${r.applied === null
     ? r.why : `wrote version ${r.applied}`}</li>`;
-  return html`<li>${when(r.ended ?? r.at)} \u00b7 ${r.kind ?? "run"} ${r.id}: ${r.result ?? "no result"}${
-    failedLooks(r)}</li>`;
+  return html`<li>${when(r.ended ?? r.at)} \u00b7 ${r.kind ?? "run"} ${r.id}: <span class="said">${
+    r.result ?? "no result"}</span>${failedLooks(r)}</li>`;
 }
 
 // The cases job's own failures, whole, before its runs: its last pass, and a publication sync that could not start.

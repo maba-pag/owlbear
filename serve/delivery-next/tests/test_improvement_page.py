@@ -35,7 +35,7 @@ from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.local_system import codebase, maintenance
-from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import (
@@ -1007,3 +1007,48 @@ def test_a_failed_cases_or_retro_pass_and_an_unpublished_sync_show_their_whole_e
         )
         assert said.evaluate("e => e.scrollWidth <= e.clientWidth")
         assert console == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_a_publication_that_did_not_go_through_shows_each_cases_whole_reason(
+    tmp_path, monkeypatch, pds, shared_repo, whole_error
+) -> None:
+    good = (
+        '{"situation": "An agent stopped with half the task done.", "call": "hand-off-fitness", "why": "Unfinished."}'
+    )
+
+    async def asked(_text: str, _meter: object, _role: object) -> str:
+        return good
+
+    with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
+        ids = []
+        for task in ("t one", "t two"):
+            cid = cases.freeze({"intent": {"task": task}}, {"source": "pilot", "family": "f"})
+            entry = {"stage": "candidate", "call": "hand-off-fitness", "why": "why", "example": "", "review": None}
+            cases.commit(cases.current()["n"], {cid: entry}, "t", "add")
+            reviewed = cases.edited(cid, entry, stage="test", reviewed_by="sol")
+            cases.commit(cases.current()["n"], {cid: reviewed}, "t", "reviewed")
+            ids.append(cid)
+        refused, unpushed = ids
+        warned = f"saved and committed in {shared_repo[0]}, but not pushed: the push failed: {whole_error}"
+
+        def publish(_self: DataRepo, path: Path, _message: str) -> str:
+            if path.stem == refused:
+                raise _noted(DataRepoError(whole_error))
+            return warned
+
+        monkeypatch.setattr(DataRepo, "publish", publish)
+        job = _cases_job(monkeypatch, asked=asked)
+        job.shared = lambda: DataRepo(shared_repo[0])
+        aside(job._publish)  # noqa: SLF001 - one publication sync, as the job's loop runs it
+        [run] = [r for r in case_replay.results() if r["kind"] == "publication"]
+        reasons = {refused: f"failed: DataRepoError: {whole_error}\n{NOTE}", unpushed: f"pending: {warned}"}
+        expected = "\n".join(f"case {cid}, {reasons[cid]}" for cid in sorted(ids))  # in the order they were written
+        assert (run["failed"], run["pending"], run["result"]) == ([refused], [unpushed], expected)
+        page = improvement(w, pds)
+        line = _run_line(page, "publication", run["id"])
+        assert line.evaluate(BARE) == f" \u00b7 publication {run['id']}: {expected}"
+        said = line.locator(".said")
+        assert said.evaluate("e => e.innerText") == expected  # as shown, its lines kept
+        assert said.evaluate("e => e.scrollWidth <= e.clientWidth")
