@@ -444,12 +444,14 @@ def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_m
     saving = cx.store.write_profile
 
     def locked(_profile) -> None:
-        raise SharedError(whole_error)
+        busy = SharedError(whole_error)
+        busy.add_note("NOTE-MARK")
+        raise busy
 
     cx.store.write_profile = locked
     assert follow.declared(cx, c, gh.pr, StepKind.MERGE) == ((), None)  # the answer holds though unsaved
     assert [e["reason"] for e in cx.store.events(c.slug) if e.get("event") == "profile-not-saved"] == [
-        f"SharedError: {whole_error}"
+        f"SharedError: {whole_error}\nNOTE-MARK"  # #971: its notes too
     ]
     cx.store.write_profile, cx.profile = saving, p
     names, held = follow.declared(cx, c, gh.pr, StepKind.MERGE)
@@ -1256,7 +1258,9 @@ def test_a_pr_gets_the_projects_labels_once_and_the_marker_line_follows_its_swit
     def add_labels(repo, number, labels):
         added.append((repo, number, labels))
         if fails:
-            raise ProviderError(FailureCode.NOT_FOUND, "add_labels", "no such label", retry_safe=True)
+            refused = ProviderError(FailureCode.NOT_FOUND, "add_labels", "no such label", retry_safe=True)
+            refused.add_note("NOTE-MARK")
+            raise refused
 
     gh.find_pull_request, gh.create_pull_request, gh.add_labels = (lambda *_a: gh.pr), create, add_labels
     cx = ctx(tmp_path, gh)
@@ -1273,8 +1277,9 @@ def test_a_pr_gets_the_projects_labels_once_and_the_marker_line_follows_its_swit
     gh.pr = gh.pr.model_copy(update={"draft": False})  # someone marked it ready meanwhile
     assert publish.pull_request(cx, c, A).number == 7  # the next runner
     assert (added, "Opened by OwlBear Delivery" in bodies[0]) == ([("o/r", 7, ["release:minor"])], False)
-    said = {e["event"]: (e["pr"], e["labels"]) for e in cx.store.events(c.slug) if "labels" in e}
-    assert said == {"labels-failed" if fails else "labels": (7, ["release:minor"])}
+    said = {e["event"]: (e["pr"], e["labels"], e.get("reason")) for e in cx.store.events(c.slug) if "labels" in e}
+    why = "ProviderError: add_labels: no such label\nNOTE-MARK" if fails else None  # #971: its notes too
+    assert said == {"labels-failed" if fails else "labels": (7, ["release:minor"], why)}
     publish.pull_request(cx, cx.store.read(c.slug), A)  # a runner that died right after labelling reads it back
     assert (len(added), cx.store.read(c.slug).names.labelled) == (1, 7)  # never again on this PR
     cleared = {"pr_labels": None, "pr_marker": None}
@@ -2246,7 +2251,9 @@ def test_a_refused_reopen_is_logged_with_its_whole_error(tmp_path, clone, whole_
 
     class Refusing(FakeGh):
         def reopen_pull_request(self, _repo, _number):
-            raise ProviderError(FailureCode.CONFLICT, "reopen_pull_request", whole_error, retry_safe=True)
+            refused = ProviderError(FailureCode.CONFLICT, "reopen_pull_request", whole_error, retry_safe=True)
+            refused.add_note("NOTE-MARK")
+            raise refused
 
     gh = Refusing(pr(head=head, state="closed"))
     c, _ = loop.schedule(change(StepKind.FOLLOW, worktree=str(clone)), [], NOW, "closed")
@@ -2254,7 +2261,7 @@ def test_a_refused_reopen_is_logged_with_its_whole_error(tmp_path, clone, whole_
     on = ctx(tmp_path, gh, prof(**entries, **{profile.PUSH: ProfileEntry(state="known", value="yes")}))
     c, result = follow.run(on, c)
     (event,) = [e for e in on.store.events("c1") if e.get("event") == "reopen"]
-    assert (result.exit, event["error"]) == (Exit.ASK, f"ProviderError: reopen_pull_request: {whole_error}")
+    assert (result.exit, event["error"]) == (Exit.ASK, f"ProviderError: reopen_pull_request: {whole_error}\nNOTE-MARK")
 
 
 def test_a_silent_rejecting_pre_push_hook_becomes_a_builder_fix_after_readback(clone):
