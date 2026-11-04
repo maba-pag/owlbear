@@ -90,6 +90,11 @@ def task(n: int) -> dict:
     return {"title": f"step {n}", "goal": "AC-1", "scope": ["src"], "checks": ["true"]}
 
 
+@pytest.fixture(autouse=True)
+def _checks_settled(tmp_path, checks_settled) -> None:
+    checks_settled(Store(tmp_path / "store"))
+
+
 def made(repo: Path) -> Change:
     c = Change(slug="c1", brief=Brief(version=1, approved_version=1, challenged=1), step=Step(kind=K.PLAN))
     c.names = Names(branch="owlbear/c1", target="main", worktree=str(repo))

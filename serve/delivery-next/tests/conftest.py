@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 from owlbear_decisions import Decision, Scope, write
 from owlbear_delivery_next.change_contracts import chat_contract, pick_tools, tools
 from owlbear_delivery_next.change_contracts.models import Change
+from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
@@ -37,6 +38,7 @@ from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices, sdk_adapter, spotter_look
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import backlog, backlog_issues, decision_cache, decision_store, legacy_family
 from owlbear_delivery_next.state_store.store import Lock, Store
 
@@ -730,6 +732,17 @@ def change_repo(tmp_path, monkeypatch, _change_template: Path) -> Path:
     # the copies have new inodes; without a refresh, plumbing such as diff-index sees a.txt as changed
     _RUN(["git", "update-index", "-q", "--refresh"], cwd=work, check=True, capture_output=True)
     return work
+
+
+def _settled(store: Store, command: str = "true") -> None:
+    prof = profile.confirm(store.read_profile() or Profile(), "check:.", command, datetime.now(UTC))
+    store.write_profile(prof)
+
+
+@pytest.fixture
+def checks_settled() -> Callable[..., None]:
+    """Record a confirmed root check command in a store's profile, so its plan steps start their sessions (#968)."""
+    return _settled
 
 
 class Host:

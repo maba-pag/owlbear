@@ -121,6 +121,12 @@ def is_confirmed(entry: ProfileEntry) -> bool:
     return bool(entry.observed) or entry.evidence.startswith(CONFIRMED)
 
 
+def vouched(prof: Profile) -> Profile:
+    """The profile without the check commands the owner has not confirmed: the only ones a plan may name (#968)."""
+    entries = {k: e for k, e in prof.entries.items() if not k.startswith("check:") or is_confirmed(e)}
+    return prof.model_copy(update={"entries": entries})
+
+
 def holds(confirmed: ProfileEntry, observed: ProfileEntry) -> bool:
     """Only a confirmation bound to this exact observation is fresh."""
     return bool(confirmed.observed) and confirmed.observed == fingerprint(observed)

@@ -20,6 +20,7 @@ from owlbear_delivery_next.change_flow.moves import ask
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import sdk_adapter, step_input
 from owlbear_delivery_next.settings import rounds
+from owlbear_delivery_next.settings.profile import vouched
 from owlbear_delivery_next.workflow_steps import held_writes, overlap, pending_child, sessions
 
 if TYPE_CHECKING:
@@ -157,7 +158,7 @@ def continued(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
         path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
         change.names.worktree, s.started_at = str(path), now
         store.write(lock, change)  # the challenger's session is the step's: its stage counts from here (#718)
-        profile = store.read_profile() or Profile()
+        profile = vouched(store.read_profile() or Profile())  # the planner's packages (#968)
         if s.mode == plan_rounds.RECONSIDER:
             return _reconsider(store, lock, change, path)
         others = scopes(store, change.slug)

@@ -59,9 +59,10 @@ def finding(where: str) -> dict:
 
 
 @pytest.fixture
-def store(tmp_path, change_repo, monkeypatch) -> Store:
+def store(tmp_path, change_repo, monkeypatch, checks_settled) -> Store:
     """Change c1 at planning, its plan loop pinned to FEW."""
     store = Store(tmp_path / "store")
+    checks_settled(store)
     names = Names(branch="owlbear/c1", target="main", worktree=str(change_repo))
     c = Change(slug="c1", brief=Brief(version=1, approved_version=1, challenged=1), step=Step(kind=K.PLAN), names=names)
     c.loops[PLAN] = RoundLoop(subject=PLAN, policy=FEW)
