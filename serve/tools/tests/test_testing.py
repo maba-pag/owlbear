@@ -45,7 +45,8 @@ def test_package_test_module_routes_to_itself() -> None:
 
 
 _LOOP = "serve/delivery-next/src/owlbear_delivery_next/change_flow/loop.py"
-_PAGE = "serve/delivery-next/src/owlbear_delivery_next/web/config.html"
+_WEB = "serve/delivery-next/src/owlbear_delivery_next/web/"
+_TESTS = "serve/delivery-next/tests/"
 
 
 def _routed(*paths: str, coverage: bool = False) -> list[list[str]]:
@@ -70,16 +71,35 @@ def test_delivery_next_source_runs_testmon_beside_the_tests_it_cannot_see() -> N
     assert not set(plain) & {path for path in monitored if path.endswith(".py")}
 
 
-@pytest.mark.parametrize(
-    "paths",
-    [(_PAGE,), (_PAGE, _LOOP), ("serve/delivery-next/tests/conftest.py", _LOOP)],
-    ids=["page", "page-and-source", "fixture-and-source"],
-)
-def test_a_delivery_next_change_testmon_cannot_see_runs_the_whole_package(paths: tuple[str, ...]) -> None:
-    (command,) = _routed(*paths)
+def test_a_delivery_next_change_testmon_cannot_see_runs_the_whole_package() -> None:
+    (command,) = _routed("serve/delivery-next/tests/conftest.py", _LOOP)
 
     assert "serve/delivery-next/tests/test_loop.py" in command
     assert "--testmon" not in command
+
+
+@pytest.mark.parametrize(
+    ("page", "selected"),
+    [
+        ("pages/changes/forms.mjs", {"test_amendment_page.py", "test_spotter_question_page.py"}),
+        ("pages/metrics/runs.mjs", {"test_assets.py"}),
+        ("config.html", {"test_machine_pages.py", "test_config_api.py"}),
+    ],
+)
+def test_a_page_change_runs_the_tests_that_load_pages(page: str, selected: set[str]) -> None:
+    (command,) = _routed(_WEB + page)
+
+    assert {_TESTS + name for name in selected} <= set(command)
+    assert "tests/test_package_boundary.py" in command
+    assert _TESTS + "test_loop.py" not in command
+
+
+def test_a_page_change_beside_a_source_change_keeps_the_source_scope() -> None:
+    (plain, monitored) = _routed(_WEB + "pages/changes/forms.mjs", _LOOP)
+
+    assert _TESTS + "test_amendment_page.py" in plain
+    assert _TESTS + "test_dispatch.py" in plain
+    assert _TESTS + "test_loop.py" in monitored
 
 
 @pytest.mark.parametrize(

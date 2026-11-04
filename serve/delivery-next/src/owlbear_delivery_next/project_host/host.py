@@ -37,6 +37,7 @@ from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import github_writer
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 from owlbear_delivery_next.workflow_steps import before, check, disposable, engine, prepare, pullback, queue
+from owlbear_delivery_next.workflow_steps.project_checks import settle as settle_checks
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -287,6 +288,7 @@ class Host:
         paused = self.paused()
         with self.store.lock(slug) as lock:
             c = self._folded(lock, slug, rec, now, paused=paused)
+            settle_checks(self.store, c, now)  # another Change's answer settled the project's checks (#968)
             if paused:
                 if not (self.owner_runs() and passes(c, now)):
                     return self._ended(lock, c, rec, now)

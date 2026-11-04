@@ -60,6 +60,7 @@ from owlbear_delivery_next.workflow_steps import (
     pending_child,
     plan_round,
     prepare,
+    project_checks,
     publish,
     queue,
     review,
@@ -104,9 +105,8 @@ _kept = held.kept_session
 
 def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noqa: C901, PLR0915 - session lifecycle
     now, s, slug = datetime.now(UTC), change.step, change.slug
-    if held.settled(store, lock, change):  # its result is recorded already: only the hold's cleanup remains (RUN-04)
-        return
-    profile = store.read_profile() or Profile()
+    if held.settled(store, lock, change) or (profile := project_checks.profile_for(store, lock, change, repo)) is None:
+        return  # its result is recorded already (RUN-04), or the owner settles the project's checks first (#968)
     path = worktree.ensure(repo, git_common_dir(repo), slug, change.names.branch, change.names.target)
     change.names.worktree = str(path)
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
