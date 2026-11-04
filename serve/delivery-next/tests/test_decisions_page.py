@@ -585,7 +585,7 @@ def test_a_refused_save_shows_its_whole_notice(store, pds, whole_error, failing_
 
 
 @pytest.mark.browser
-def test_an_error_or_a_failed_save_shows_its_ids_and_paths_as_produced(store, pds, monkeypatch):
+def test_an_error_or_a_failed_save_shows_its_ids_and_paths_as_produced(store, pds, monkeypatch, whole_error):
     """An error and a not-saved receipt's notice say what failed exactly as produced, a decision's file and its bare
     id included, though the page knows its title; the receipt still names the decision by title."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
@@ -596,23 +596,30 @@ def test_an_error_or_a_failed_save_shows_its_ids_and_paths_as_produced(store, pd
                 read_back_why="Asked again.", read_back_kind="uncertain")  # fmt: skip
     write(rule, store.shared.root / PROJECT)
     file = store.shared.root / PROJECT / f"{rule.id}.md"
-    behind = f"HEAD is not on the remote: {file} differs, so {rule.id} waits"
+    behind = f"HEAD is not on the remote: {file} differs, so {rule.id} waits: {whole_error}"
     monkeypatch.setattr(decision_sync, "prepare", lambda *_args, **_kwargs: ("", behind))
+    why = f"the journal names {file}, and {rule.id} is in it: {whole_error}"
+
+    def unreadable(_shared):
+        raise decision_batch.JournalError(why)
+
     with decisions_page(store, pds) as page:
+        said: list[str] = []
+        page.on("console", lambda m: said.append(f"{m.text} {m.location['url']}") if m.type == "error" else None)
+        page.on("pageerror", lambda e: said.append(str(e)))
         page.reload()
         queued = page.locator("#queue .queued", has_text="Exports are CSV")
         still_right = queued.get_by_role("button", name="Still right")
         still_right.click()
-        expect(page.locator("#receipts li")).to_have_text(f"\u201cExports are CSV\u201d: not saved. {behind}")
-
-        def unreadable(_shared):
-            msg = f"the journal names {file}, and {rule.id} is in it"
-            raise decision_batch.JournalError(msg)
-
+        expect(page.locator("#receipts li")).to_have_count(1)
+        receipt = page.locator("#receipts li").text_content()
         monkeypatch.setattr(decision_batch, "pending", unreadable)
         still_right.click()
-        detail = f"JournalError: the journal names {file}, and {rule.id} is in it ({decision_store.RECOVER})"
-        expect(page.locator("#error")).to_have_text(detail)
+        expect(page.locator("#error")).to_be_visible()
+        error = page.locator("#error").text_content()
+    assert receipt == f"\u201cExports are CSV\u201d: not saved. {behind}"
+    assert error == f"JournalError: {why} ({decision_store.RECOVER})\n    "  # the template's indent before its end tag
+    assert [s for s in said if "/api/next/projects" not in s and "409" not in s] == []  # a refusal's status, no more
 
 
 def owner(store: Store) -> Any:
