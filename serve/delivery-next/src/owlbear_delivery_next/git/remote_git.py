@@ -12,6 +12,7 @@ import subprocess
 from pathlib import PurePath
 from typing import TYPE_CHECKING, Literal
 
+from owlbear_delivery_next.git.command_failure import output
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 
 if TYPE_CHECKING:
@@ -52,6 +53,9 @@ class RemoteGitError(RuntimeError):
         super().__init__(detail)
         self.retry_safe = retry_safe
         self.result = result
+        if result is not None:  # what Git said, beside the detail the retry classification reads, unless it holds it
+            said = output(result.stderr, result.stdout)
+            self.add_note(f"exit status {result.returncode}" + (f"\n{said}" if said and said not in detail else ""))
 
 
 class RemoteGitTimeout(RemoteGitError):  # noqa: N818 - interface name fixed by the N02 plan.

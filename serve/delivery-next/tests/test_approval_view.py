@@ -859,11 +859,13 @@ def test_a_refused_approval_shows_its_whole_reason(page_url, pds, monkeypatch, w
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     def unavailable(*_args, **_kwargs):
-        raise decision_store.DecisionsUnavailable(whole_error)
+        error = decision_store.DecisionsUnavailable(whole_error)
+        error.add_note("NOTE-MARK")
+        raise error
 
     monkeypatch.setattr(decision_publication.decision_archive, "lasting", unavailable)
     store, base = page_url
-    reason = f"{decision_publication.REFUSED}: DecisionsUnavailable: {whole_error}"
+    reason = f"{decision_publication.REFUSED}: DecisionsUnavailable: {whole_error}\nNOTE-MARK"
     with opened(base, "flip", pds) as page:
         page.get_by_role("button", name="Approve v2").click()
         with replied(page, "/approve-brief") as reply:

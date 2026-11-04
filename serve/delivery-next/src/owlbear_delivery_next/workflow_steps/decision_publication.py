@@ -21,6 +21,7 @@ from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.loop import StepResult
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.state_store import decision_archive, decision_store
 from owlbear_delivery_next.workflow_steps import decisions_gate
 
@@ -52,7 +53,7 @@ def approve(store: Store, lock: Lock, c: Change, approval: BriefApproval) -> str
     try:
         items = _items(store, after)
     except (decision_store.DecisionsUnavailable, DecisionError, OSError) as exc:
-        return _refused(store, lock, c, f"{REFUSED}: {type(exc).__name__}: {exc}")
+        return _refused(store, lock, c, f"{REFUSED}: {failure(exc)}")
     if items:
         planned = [_record(d, None, approval.at) for d, _ in items]
         after = loop.fold(c, [approval.model_copy(update={"published": planned})], approval.at)
@@ -80,7 +81,7 @@ def resume(store: Store, lock: Lock, c: Change, now: datetime) -> Change | None:
     try:
         done, why = _published(store, c, _items(store, c))
     except (decision_store.DecisionsUnavailable, DecisionError, OSError) as exc:
-        done, why = c, f"{type(exc).__name__}: {exc}"
+        done, why = c, failure(exc)
     if not why:
         store.write(lock, done)
         return done
@@ -114,7 +115,7 @@ def _published(store: Store, c: Change, items: list[Item]) -> tuple[Change, str]
         try:
             receipts = decision_store.save_all(store.shared, items, message=message)
         except (decision_store.DecisionsUnavailable, DecisionError, OSError) as exc:
-            return c, str(exc)
+            return c, failure(exc)
         if failed := [r for r in receipts if not r.batch]:  # a conflict flag left uncommitted is in the notice
             return c, "; ".join(_failed(r) for r in failed)
         at = c.brief.approved_at or datetime.now(UTC)

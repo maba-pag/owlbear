@@ -40,7 +40,10 @@ from owlbear_delivery_next.change_contracts.round_records import RoundLoop, Roun
 from owlbear_delivery_next.change_flow import budgets, delivery_target, loop, round_flow, worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git import access as git_access
+from owlbear_delivery_next.git import remote_git
 from owlbear_delivery_next.git.access import Access
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify_write_readback, read_remote_ref
 from owlbear_delivery_next.github import account, gh_queue, merge_offer
 from owlbear_delivery_next.github import provider as provider_contract
@@ -1766,17 +1769,27 @@ def test_cleanup_removes_the_change_s_read_only_worktree_with_its_own(worktree_w
     assert not any("note.txt" in p for p in result.preserved)
 
 
-def test_failed_preservation_stops_and_leaves_the_worktree_untouched(worktree_with_work, tmp_path, monkeypatch):
+@pytest.mark.parametrize("step", ["inventory", "preserve"])
+def test_failed_preservation_stops_and_leaves_the_worktree_untouched(
+    worktree_with_work, tmp_path, monkeypatch, whole_error, step
+):
+    """#971: Git's whole refusal (its stderr and notes) is the stop's reason, at either stage."""
     clone, wt = worktree_with_work
+    refused = subprocess.CalledProcessError(128, ["git", "status"], stderr=f"{whole_error}\n")
+    refused.add_note("NOTE-MARK")
 
     def broken(*_args):
-        raise cleanup.PreservationError(wt)
+        raise refused
 
-    monkeypatch.setattr(cleanup, "preserve", broken)
+    monkeypatch.setattr(cleanup, step, broken)
     c = change(StepKind.CLEANUP, worktree=str(wt))
     c.names.branch, c.names.pr = "owlbear/c2", None
     _, result = cleanup.run(ctx(tmp_path, FakeGh(pr()), repo=clone), c)
-    assert result.exit == Exit.STOP
+    said = (
+        f"CalledProcessError: Command '['git', 'status']' returned non-zero exit status 128.\n{whole_error}\nNOTE-MARK"
+    )
+    reason = f"could not {'inventory' if step == 'inventory' else 'save'} {wt}: {said}"
+    assert (result.exit, result.reason, result.stop.reason) == (Exit.STOP, reason, reason)
     assert result.stop.action.startswith(f"Copy or delete {wt}")
     assert (wt / "new.txt").read_text() == "untracked\n"
     assert (wt / "kept.txt").exists()
@@ -3151,7 +3164,81 @@ def test_a_failed_fetch_keeps_gits_whole_output(clone, whole_error, monkeypatch)
 
     monkeypatch.setattr(engine, "run_remote_git", refused)
     result = engine.needs_target(c, clone, "greet() exists only on main", NOW, Writer.rule(clone))
-    assert (result.exit, result.reason) == (Exit.RETRY, f"RemoteGitFailed: fetch of main failed: {whole_error}")
+    said = f"RemoteGitFailed: fetch of main failed: {whole_error}\nexit status 1"  # the stderr is said once
+    assert (result.exit, result.reason) == (Exit.RETRY, said)
+
+
+def _remote_failures(clone: Path, monkeypatch) -> dict[str, Exception]:
+    """Each remote Git failure whose detail stays the same while Git said more; its output names the network."""
+    said = b"fatal: unable to access 'https://github.com/o/r/': Connection timed out\n"
+
+    def refused(_path, argv, **_k):
+        return subprocess.CompletedProcess(argv, 128, b"", said)
+
+    def invalid(_path, argv, **_k):
+        return subprocess.CompletedProcess(argv, 0, said, b"")
+
+    def slow(argv, **_k):
+        raise subprocess.TimeoutExpired(argv, 5, output=said)
+
+    found: dict[str, Exception] = {}
+    for name, ran in (("refused", refused), ("invalid", invalid)):
+        monkeypatch.setattr(remote_git, "run_remote_git", ran)
+        with pytest.raises(remote_git.RemoteGitFailed) as raised:
+            read_remote_ref(clone, "origin", "refs/heads/main", access=Access.LOCAL)
+        found[name] = raised.value
+    found["write"] = RemoteGitWriteUnknown(
+        "remote Git write did not confirm its outcome", timed_out=False,
+        result=subprocess.CompletedProcess(["git", "push"], 1, b"", said),
+    )  # fmt: skip
+    monkeypatch.setattr(git_access.subprocess, "run", slow)
+    with pytest.raises(remote_git.RemoteGitError) as raised:
+        Access("ada", "chosen", "github.com", "tok", "gh").destinations(clone, "origin", 5)
+    found["urls"] = raised.value
+    return found
+
+
+@pytest.mark.parametrize("which", ["refused", "invalid", "write", "urls"])
+def test_a_remote_git_failure_is_whole_and_retries_as_its_detail_always_did(clone, monkeypatch, which):
+    """#971 R7: the reason says what Git printed, but the cause and the wait still read the detail alone: Git
+    saying "Connection timed out" never turns a defect into a network episode."""
+    exc = _remote_failures(clone, monkeypatch)[which]
+    said = "fatal: unable to access 'https://github.com/o/r/': Connection timed out"
+    git_url = (resolve_git_executable(), "-C", str(clone), "remote", "get-url", "--push", "--all", "origin")
+    expected = {
+        "refused": f"RemoteGitFailed: remote ref could not be observed\nexit status 128\n{said}",
+        "invalid": f"RemoteGitFailed: remote ref response is invalid\nexit status 0\n{said}",
+        "write": f"RemoteGitWriteUnknown: remote Git write did not confirm its outcome\nexit status 1\n{said}",
+        "urls": f"RemoteGitError: the push URLs of origin in {clone} could not be read in 5 s\n"
+        f"TimeoutExpired: Command '{git_url}' timed out after 5 seconds\n{said}",
+    }
+    assert failures.transient(str(exc)) is None  # the detail alone, as classified before #971
+    result = engine.failed(change(StepKind.BUILD), exc, NOW)
+    cause = failures.cause_key(ErrorKind.TOOLING, StepKind.BUILD, "git")
+    assert (result.exit, result.cause, result.wake_at) == (Exit.RETRY, cause, NOW + timedelta(minutes=1))
+    assert result.reason == expected[which]
+
+
+@pytest.mark.parametrize("which", ["account", "credential", "conflict"])
+def test_a_provider_failure_the_owner_handles_says_its_whole_error(whole_error, which):
+    """#971: the question or stop names GitHub's whole error, notes included, beside the owner's words."""
+    exc = {
+        "account": account.AccountMissing(whole_error),
+        "credential": ProviderError(FailureCode.AUTHENTICATION_REQUIRED, "read_pr", whole_error, retry_safe=False),
+        "conflict": ProviderError(FailureCode.CONFLICT, "merge", whole_error, retry_safe=False),
+    }[which]
+    exc.add_note("NOTE-MARK")
+    result = engine.failed(change(StepKind.MERGE), exc, NOW)
+    said = f"{type(exc).__name__}: {exc}\nNOTE-MARK"
+    expected = {
+        "account": f"{said}; then continue",
+        "credential": f"GitHub refused the credential ({said}): "
+        "run `gh auth login` (or `gh auth refresh`), then continue",
+        "conflict": said,
+    }
+    assert result.reason == expected[which]
+    if which == "conflict":
+        assert (result.exit, result.stop.reason) == (Exit.STOP, said)
 
 
 class PlanLimitedGh(FakeGh):

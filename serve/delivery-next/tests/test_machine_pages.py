@@ -3853,8 +3853,8 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
         page, pack, c.brief.visual[0], width=1280, url="http://127.0.0.1:9/", browser="", cwd=tmp_path
     )
     why = (
-        f"not scanned: the page refused the design detector: RuntimeError: {whole_error}; "
-        f"the engine's own browser: {failed}"
+        f"not scanned: DetectorError: the page refused the design detector: RuntimeError: {whole_error}; "
+        f"the engine's own browser: DetectorError: {failed}"
     )
     out = capsys.readouterr().out  # an earlier test's machine may still say it stopped, between these lines too
     assert all(

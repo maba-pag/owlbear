@@ -543,7 +543,7 @@ def test_a_refresh_git_cannot_read_stops_an_irreversible_step_with_its_whole_err
 
     probe = ["git", "status", "--porcelain", "--untracked-files=no"]
     why = f"CalledProcessError: Command '{probe}' returned non-zero exit status 128.\n{whole_error}"
-    said = f"not refreshed: Git cannot read the shared data repository {shared.root}: {why}"
+    said = f"not refreshed: DecisionsUnavailable: Git cannot read the shared data repository {shared.root}: {why}"
     reason = f"the decisions were not refreshed before {K.PUBLISH}, which cannot be undone: {said}"
     assert (ran, c.stop.reason) == ([], reason)
     assert gate_event(store, K.PUBLISH)["reason"] == reason

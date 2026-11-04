@@ -18,10 +18,7 @@ def streams(exc: BaseException) -> str:
     The one stream that said something as it is, or both, labelled, stderr first. ``str()`` of a
     ``CalledProcessError`` or ``TimeoutExpired`` leaves it out.
     """
-    stderr, stdout = _said(getattr(exc, "stderr", None)), _said(getattr(exc, "output", None))
-    if stderr and stdout:
-        return f"stderr:\n{stderr}\nstdout:\n{stdout}"
-    return stderr or stdout
+    return output(getattr(exc, "stderr", None), getattr(exc, "output", None))
 
 
 def failure(exc: BaseException) -> str:
@@ -32,6 +29,12 @@ def failure(exc: BaseException) -> str:
     out = streams(exc)
     notes = "".join(f"\n{note}" for note in getattr(exc, "__notes__", ()))
     return f"{type(exc).__name__}: {exc}" + (f"\n{out}" if out else "") + notes
+
+
+def output(stderr: object, stdout: object) -> str:
+    """What a command printed: the one stream that said something as it is, or both, labelled, stderr first."""
+    err, out = _said(stderr), _said(stdout)
+    return f"stderr:\n{err}\nstdout:\n{out}" if err and out else err or out
 
 
 def failed(done: subprocess.CompletedProcess) -> str:

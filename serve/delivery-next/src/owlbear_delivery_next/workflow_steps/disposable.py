@@ -118,7 +118,7 @@ def tampered(copy: Copy) -> list[str]:
     try:
         now = _shared(copy.source)
     except (OSError, subprocess.SubprocessError) as exc:
-        return [f"the shared Git config and hooks could not be read ({type(exc).__name__})"]
+        return [f"the shared Git config and hooks could not be read: {worktree.failure(exc)}"]
     added, removed = Counter(now) - Counter(copy.shared), Counter(copy.shared) - Counter(now)
     found = [f"added {e}" for e in sorted(added.elements())] + [f"removed {e}" for e in sorted(removed.elements())]
     return found or (["reordered shared config entries"] if now != copy.shared else [])
@@ -140,7 +140,7 @@ def changed(copy: Copy) -> list[str]:
         now = _refs(copy.source)
         held = {e["branch"] for e in _listed(copy.source) if "branch" in e and not _same(e["worktree"], copy.path)}
     except (OSError, subprocess.SubprocessError) as exc:
-        return [f"its refs could not be read ({type(exc).__name__})"]
+        return [f"its refs could not be read: {worktree.failure(exc)}"]
     found = []
     for ref, oid in sorted(now.items()):
         if copy.refs.get(ref) == oid or ref.startswith(OWN) or ref in held:

@@ -82,7 +82,7 @@ def worker(store: Store, lock: Lock, c: Change, question: str) -> tuple[dict[str
         found += _own(c, store.name, found)
         log, settings = pick.corrections(view.snapshot.root, store.name), store.settings()
     except (StoreError, OSError, ValueError) as exc:
-        return {"failed": f"{type(exc).__name__}: {exc}"}, None
+        return {"failed": failure(exc)}, None
     if not found:
         return {"decisions": [], "note": NONE}, None
     journal = sdk_adapter.Journal(lambda e: store.log(lock, c.slug, e))
@@ -152,7 +152,7 @@ def _chat(
             return blocked, None
         log, resolved = pick.corrections(view.snapshot.root, project), settings() if settings else machine(shared)
     except (StoreError, OSError, ValueError) as exc:
-        return {"failed": f"{type(exc).__name__}: {exc}"}, None
+        return {"failed": failure(exc)}, None
     if not found:
         return {"decisions": [], "note": NONE}, None
     try:

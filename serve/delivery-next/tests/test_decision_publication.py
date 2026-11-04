@@ -722,7 +722,9 @@ def test_unavailable_authority_is_not_proof_that_malformed_history_was_never_pub
 
 def _unavailable(reason: str):
     def fail(*_args, **_kwargs):
-        raise decision_store.DecisionsUnavailable(reason)
+        error = decision_store.DecisionsUnavailable(reason)
+        error.add_note("NOTE-MARK")
+        raise error
 
     return fail
 
@@ -733,7 +735,7 @@ def test_a_save_that_fails_refuses_the_approval_with_its_whole_reason(picking, m
 
     said = picking.approve(1)
 
-    reason = f"{decision_publication.REFUSED}: {whole_error}"
+    reason = f"{decision_publication.REFUSED}: DecisionsUnavailable: {whole_error}\nNOTE-MARK"
     assert (said.status_code, said.json()["detail"]) == (409, reason)
     (event,) = [e for e in picking.store.events(picking.slug) if e.get("event") == "approval-refused"]
     assert event["reason"] == reason
@@ -751,10 +753,10 @@ def test_a_recovery_that_fails_waits_with_its_whole_reason(picking, monkeypatch,
         picking.approve(1)
     if fails == "save":
         monkeypatch.setattr(decision_store, "save_all", _unavailable(whole_error))
-        why = whole_error
+        why = f"DecisionsUnavailable: {whole_error}\nNOTE-MARK"
     else:
         monkeypatch.setattr(decision_publication.decision_archive, "lasting", _unavailable(whole_error))
-        why = f"DecisionsUnavailable: {whole_error}"
+        why = f"DecisionsUnavailable: {whole_error}\nNOTE-MARK"
     monkeypatch.setattr(runner, "_run", lambda *_a: pytest.fail("no step works before the saves"))
 
     waiting = stepped(picking, picking.slug)

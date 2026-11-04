@@ -144,10 +144,14 @@ class GhClient:
         try:
             done = self._launch(("gh", *args), data)
         except FileNotFoundError as exc:
-            raise ProviderError(FailureCode.UNAVAILABLE, operation, "gh is not installed", retry_safe=False) from exc
+            error = ProviderError(FailureCode.UNAVAILABLE, operation, "gh is not installed", retry_safe=False)
+            error.add_note(command_failure.failure(exc))  # the path it names: gh, or a working folder that is gone
+            raise error from exc
         except subprocess.TimeoutExpired as exc:
             code = FailureCode.RESPONSE_UNKNOWN if write else FailureCode.TIMEOUT
-            raise ProviderError(code, operation, "gh timed out", retry_safe=not write) from exc
+            error = ProviderError(code, operation, "gh timed out", retry_safe=not write)
+            error.add_note(command_failure.failure(exc))  # and what gh printed before it was stopped
+            raise error from exc
         if done.returncode != 0:
             if (found := status(done.stderr)) in absent:
                 return Missing(found or 0, message(done.stderr))
@@ -158,7 +162,9 @@ class GhClient:
             return json.loads(done.stdout)
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             code = FailureCode.RESPONSE_UNKNOWN if write else FailureCode.INVALID_RESPONSE
-            raise ProviderError(code, operation, "gh returned invalid JSON", retry_safe=not write) from exc
+            error = ProviderError(code, operation, "gh returned invalid JSON", retry_safe=not write)
+            error.add_note(f"{command_failure.failure(exc)}\nstdout:\n{done.stdout.decode(errors='replace').strip()}")
+            raise error from exc
 
     def _api(self, operation: str, method: str, endpoint: str, **kw: Any) -> Json:  # noqa: ANN401 - JSON
         args = ("api", "--method", method, "--hostname", self.host, "-H", "Accept: application/vnd.github+json")

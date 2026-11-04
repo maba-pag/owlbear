@@ -89,3 +89,32 @@ def test_a_gh_failure_keeps_its_whole_stderr_and_an_expected_status_its_last_lin
     assert (failed.value.code, str(failed.value)) == (FailureCode.UNAVAILABLE, f"read_pull_request: {whole_error}")
     found = GhProvider(tmp_path, writer=None, runner=forbidden)._gh("read_protection", ("api", "x"), absent={403})  # noqa: SLF001
     assert found == Missing(403, "Resource not accessible (HTTP 403)")  # an expected status keeps gh's last line
+
+
+@pytest.mark.parametrize("fails", ["missing", "slow", "garbled"])
+def test_a_gh_that_cannot_answer_keeps_its_whole_cause_in_a_note(tmp_path, whole_error, fails):
+    """#971: the OS error (gh, or a working folder that is gone), what gh printed before its timeout, or the JSON it
+    could not parse follows the provider's detail, which its code and classification read as before."""
+    said = f"{whole_error}\n"
+
+    def broken(argv, _body, _timeout, _cwd, _env):
+        if fails == "missing":
+            raise FileNotFoundError(2, "No such file or directory", str(tmp_path / "gone"))
+        if fails == "slow":
+            raise subprocess.TimeoutExpired(argv, 30, output=said.encode())
+        return subprocess.CompletedProcess(argv, 0, said.encode(), b"")
+
+    with pytest.raises(ProviderError) as failed:
+        GhProvider(tmp_path, writer=None, runner=broken).read_pull_request("o/r", 7)
+    exc = failed.value
+    cause = exc.__cause__
+    if fails == "missing":
+        code, detail = FailureCode.UNAVAILABLE, "gh is not installed"
+        note = f"FileNotFoundError: [Errno 2] No such file or directory: '{tmp_path / 'gone'}'"
+    elif fails == "slow":
+        code, detail = FailureCode.TIMEOUT, "gh timed out"
+        note = f"TimeoutExpired: Command '{cause.cmd}' timed out after 30 seconds\n{whole_error}"
+    else:
+        code, detail = FailureCode.INVALID_RESPONSE, "gh returned invalid JSON"
+        note = f"JSONDecodeError: {cause}\nstdout:\n{whole_error}"
+    assert (exc.code, str(exc), exc.__notes__) == (code, f"read_pull_request: {detail}", [note])

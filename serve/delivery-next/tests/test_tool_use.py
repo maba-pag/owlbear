@@ -1,5 +1,6 @@
 """C-28 T8: each Delivery tool's calls of a step, counted by its gate and kept on the Change."""
 
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -154,3 +155,22 @@ def test_a_missing_tool_report_is_pointless_while_the_guard_denies_it_or_only_a_
     assert reported("docker", "docker compose up > log", after=("docker ps",)) == {}  # as Delivery classifies it
     assert reported("browser") == {"missing_pointless": 1}  # only a VS Code window has one
     assert reported("docker") == {}
+
+
+def test_a_worktree_that_cannot_be_read_refuses_the_submit_with_git_s_whole_error(whole_error) -> None:
+    """#971: the refusal, which the activity's tool line shows, says Git's whole error with its stderr and notes."""
+    refused = subprocess.CalledProcessError(128, ["git", "status"], stderr=f"{whole_error}\n")
+    refused.add_note("NOTE-MARK")
+
+    def observe() -> Worktree:
+        raise refused
+
+    events: list[dict] = []
+    g = Gate(session(observe=observe), Run("s1"), lambda **e: events.append(e), lambda: None)
+    assert g.call(tools.SUBMIT, GOOD)[1] is False
+    said = (
+        f"CalledProcessError: Command '['git', 'status']' returned non-zero exit status 128.\n{whole_error}\nNOTE-MARK"
+    )
+    assert [e["errors"] for e in events if e.get("event") == "tool"] == [
+        [f"changes: the worktree could not be read ({said}); try again"]
+    ]

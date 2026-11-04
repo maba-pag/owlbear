@@ -18,6 +18,7 @@ import psutil
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.visual_records import DetectorFinding, DetectorScan
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import detector, pack_files
 from owlbear_delivery_next.workflow_steps import sessions
 
@@ -103,7 +104,7 @@ def rendered(  # noqa: PLR0913 - one rendered state and where else to reach it
     try:
         found = _in_page(page, pack)
     except detector.DetectorError as exc:
-        refused = str(exc)
+        refused = failure(exc)
     else:
         return DetectorScan(state=state.name, width=width, kind="page", scanned=True, findings=_kept(found))
     if state.steps:
@@ -112,7 +113,7 @@ def rendered(  # noqa: PLR0913 - one rendered state and where else to reach it
     try:
         found = detector.scan_url(pack, url, width, browser, cwd)
     except detector.DetectorError as exc:
-        reason = f"not scanned: {refused}; the engine's own browser: {exc}"
+        reason = f"not scanned: {refused}; the engine's own browser: {failure(exc)}"
         return _refused(DetectorScan(state=state.name, width=width, kind="url", scanned=False, reason=reason))
     return DetectorScan(state=state.name, width=width, kind="url", scanned=True, findings=_kept(found))
 

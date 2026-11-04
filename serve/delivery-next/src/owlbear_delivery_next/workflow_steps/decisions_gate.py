@@ -28,6 +28,7 @@ from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Optio
 from owlbear_delivery_next.change_flow import loop, picks
 from owlbear_delivery_next.change_flow.decision_baseline import PREFIX
 from owlbear_delivery_next.change_flow.loop import StepResult
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.runtimes import step_decisions
 from owlbear_delivery_next.state_store import decision_store, read_backs
 from owlbear_delivery_next.state_store.decision_archive import whole
@@ -320,7 +321,7 @@ def _refresh(store: Store) -> str:
     try:
         return decision_store.refresh(store.shared)
     except decision_store.DecisionsUnavailable as exc:
-        return f"not refreshed: {exc}"
+        return f"not refreshed: {failure(exc)}"
 
 
 def _faulty_wording(found: Iterable[Decision]) -> list[str]:
