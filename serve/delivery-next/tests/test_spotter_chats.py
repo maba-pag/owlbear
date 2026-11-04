@@ -16,6 +16,7 @@ import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -1232,6 +1233,12 @@ def test_a_terminal_session_is_not_followed_but_listed_while_a_vs_code_one_in_th
     assert world.follower.not_followed() == [
         {"session": "term", "workspace": str(world.work), "why": "not followed: terminal chat"}]  # fmt: skip
     assert {r["session"] for r in records()} == {"vs"}
+
+
+def test_a_lookup_still_running_when_the_conflict_checks_wait_ends_is_kept_as_failed(monkeypatch):
+    running = {"running": True, "lookup_id": "L1", "next": chat_client.AWAIT_LOOKUP}
+    monkeypatch.setattr(chat_client, "workspace", lambda _repo: SimpleNamespace(lookup_decisions=lambda _q: running))
+    assert list(json.loads(chat_acts.conflicts("w", "git push"))) == ["failed"]  # so the record stays preliminary
 
 
 @pytest.mark.parametrize(

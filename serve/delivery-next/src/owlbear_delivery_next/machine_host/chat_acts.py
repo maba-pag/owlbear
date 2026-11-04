@@ -176,8 +176,8 @@ def conflicts(workspace: str, change: str) -> str:
     """
     question = CONFLICT.format(change=" ".join(change.split())[:800])
     said = chat_client.workspace(Path(workspace)).lookup_decisions(question)
-    if "error" in said and "failed" not in said:
-        said = {"failed": str(said["error"])}
+    if "failed" not in said and ("error" in said or said.get("running")):  # still running: no answer to grade by
+        said = {"failed": str(said.get("error") or "the lookup still ran when its wait ended")}
     return json.dumps(said)
 
 
