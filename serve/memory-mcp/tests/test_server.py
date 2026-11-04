@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from mcp.types import CallToolResult
 from owlbear_memory import MemoryCategory, MemoryEngine, MemoryEntry, MemoryState, storage
 from owlbear_memory.models import AssessmentReceipt
 
+from owlbear_memory_mcp import git as memory_git
 from owlbear_memory_mcp.server import mcp as memory_mcp
 
 _REVIEWED_MEMORY = """---
@@ -951,3 +953,32 @@ async def test_unreadable_global_settings_reach_the_tool_answer_whole(
     assert result.is_error
     assert _text(result) == expected
     assert _refusal_logged(caplog, "recall_memory") == [f"Tool 'recall_memory' failed: {expected!r}"]
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_memory_file_reaches_the_batch_answer_whole(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A memory file whose read fails names the file, the validation and the read error whole in the answer (#971)."""
+    store = _bound_store(monkeypatch, tmp_path)
+    entry = _create_entry(store, title="Unreadable habit", state=MemoryState.APPROVED)
+    target = store / f"{entry.id}.md"
+    error = _whole_error()
+    opened = os.open
+
+    def refused(path: object, *args: object, **kwargs: object) -> int:
+        if Path(os.fsdecode(path)) == target:  # type: ignore[arg-type]
+            raise OSError(error)
+        return opened(path, *args, **kwargs)  # type: ignore[arg-type]
+
+    caplog.set_level(logging.INFO)
+    monkeypatch.setattr(memory_git.os, "open", refused)
+    async with mcp.Client(memory_mcp) as client:
+        result = await client.call_tool("commit_memory_batch", {"session_type": "review"})
+
+    inner = f"memory batch validation failed: unsafe or unreadable memory path {target.name}: OSError: {error}"
+    refusal = f"memory batch validation failed:\n- shop/memory/{target.name}: ValueError: {inner}"
+    expected = f"Error executing tool commit_memory_batch: {refusal}"
+    assert result.is_error
+    assert _text(result) == expected
+    assert _refusal_logged(caplog, "commit_memory_batch") == [f"Tool 'commit_memory_batch' failed: {expected!r}"]
