@@ -215,6 +215,61 @@ def moves_back_only_where_it_came_from(page, pds, entries) -> None:
     expect(pinned.locator(".place")).to_have_text("Global")
 
 
+@pytest.mark.browser
+@pytest.mark.parametrize("failing", ["every", "one"])
+def test_the_backlog_page_says_whole_why_github_could_not_be_read(  # noqa: PLR0913, PLR0917 - its fixtures
+    tmp_path: Path, shared_repo, pds, github, whole_error, monkeypatch, failing: str
+) -> None:
+    """GitHub's whole words reach the page: in the error when no clone was read, beside the backlog when one was not."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.github.provider import FailureCode, ProviderError  # noqa: PLC0415
+
+    Backlog(DataRepo(shared_repo[0]), "shop-site").add("Found in the shop", source="review")
+    read = f"the backlog could not be read from GitHub (acme/owlbear-data): ProviderError: list_issues: {whole_error}"
+    if failing == "every":
+        github.down, github.said = True, whole_error
+    else:
+        reads = Backlog.read
+
+        def docs_unreachable(self: Backlog, *, fresh: bool = False):
+            if self.project != "docs-site":
+                return reads(self, fresh=fresh)
+
+            def unreachable():
+                raise ProviderError(FailureCode.UNAVAILABLE, "list_issues", whole_error, retry_safe=True)
+
+            return self._github("read", unreachable)  # the read's own way of saying GitHub failed
+
+        monkeypatch.setattr(Backlog, "read", docs_unreachable)
+    server, base = serving(machine(tmp_path, shared_repo[0])[0])
+    said: list[str] = []
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            page.on("console", lambda m: said.append(f"{m.text} {m.location['url']}") if m.type == "error" else None)
+            page.on("pageerror", lambda e: said.append(str(e)))
+            pds.only(page, base)
+            page.goto(f"{base}/backlog?project={SHOP}#token=t")
+            if failing == "every":
+                expect(page.locator("#error")).to_be_visible()
+                shown = page.locator("#error").text_content()
+                expected = f"{read[0].upper()}{read[1:]}\n    "  # the template's indent before the closing tag
+            else:
+                expect(page.locator("li.entry")).to_have_count(1)
+                shown = page.locator("#where").text_content()
+                expected = f"The backlog is the issues of acme/owlbear-data. Not read just now: docs-site: {read}."
+    finally:
+        server.should_exit = True
+    assert shown == expected
+    # the browser logs each failed read's status, and this machine host's missing updates route (404), nothing else
+    assert [s for s in said if "503" not in s and "/api/next/updates" not in s] == []
+
+
 def recommendation_shows_while_pending(page, entries, folder: Path) -> None:
     """TD-293: the saver's recommended scope shows on a pending entry, and no longer once it is curated."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime

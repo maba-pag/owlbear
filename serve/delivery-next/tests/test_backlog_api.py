@@ -231,20 +231,25 @@ def test_create_change_without_code_gives_the_command_and_leaves_the_entries(sto
     assert c.post("/api/next/backlog/change", json={"ids": []}).status_code == 422
 
 
-def test_the_page_shows_why_github_could_not_be_reached_and_nothing_is_saved(store, github):
+def test_the_page_shows_why_github_could_not_be_reached_and_nothing_is_saved(store, github, whole_error):
+    """A read, a save GitHub refused before doing it, and a save it did not confirm: each with gh's whole words."""
     c = client(store)
     entry = Backlog.of(store).add("Wider status line")[0]
-    github.down = True
+    github.down, github.said = True, whole_error
 
     listed = c.get("/api/next/backlog")
+    github.down, github.fail_writes, github.said = False, True, f"{whole_error}\n(HTTP 429)"
     added = c.post("/api/next/backlog", json={"title": "lost"})
-    github.down, github.fail_writes = False, True
+    github.said = whole_error
     patched = c.patch(f"/api/next/backlog/{entry.id}", json={"notes": "lost"})
 
     assert [r.status_code for r in (listed, added, patched)] == [503] * 3
-    read = "could not be read from GitHub (acme/owlbear-data): ProviderError: list_issues: error connecting"
-    assert read in listed.json()["detail"]
-    assert "did not confirm the save" in patched.json()["detail"]
+    repo = "GitHub (acme/owlbear-data)"
+    assert [r.json()["detail"] for r in (listed, added, patched)] == [
+        f"the backlog could not be read from {repo}: ProviderError: list_issues: {whole_error}",
+        f"not saved: {repo} could not be reached: ProviderError: create_issue: {whole_error}\n(HTTP 429)",
+        f"{repo} did not confirm the save; check its issues before retrying: ProviderError: edit_issue: {whole_error}",
+    ]
     assert [i["title"] for i in github.issues.values()] == ["Wider status line"]
     assert "lost" not in github.issues[1]["body"]
 

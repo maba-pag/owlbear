@@ -356,13 +356,16 @@ class FakeGitHub:
     def __init__(self, *, down: bool = False) -> None:
         self.issues, self.labels, self.comments, self.calls, self.hidden = {}, {}, [], [], set()
         self.down, self.fail_writes, self.tick, self.visibility = down, False, 0, "private"
+        self.said = ""  # what gh prints when GitHub is down or refuses a write, in place of its usual line
 
     def __call__(self, argv, data, _timeout, _cwd, _env):
         if self.down:
-            return subprocess.CompletedProcess(argv, 1, b"", b"error connecting to api.github.com\n")
+            said = self.said or "error connecting to api.github.com"
+            return subprocess.CompletedProcess(argv, 1, b"", f"{said}\n".encode())
         method, endpoint = argv[argv.index("--method") + 1], argv[10]
         if self.fail_writes and method != "GET":
-            return subprocess.CompletedProcess(argv, 1, b"", b"gh: Server Error (HTTP 502)\n")
+            said = self.said or "gh: Server Error (HTTP 502)"
+            return subprocess.CompletedProcess(argv, 1, b"", f"{said}\n".encode())
         body = json.loads(data) if data else None
         self.calls.append((method, endpoint, body))
         path, _, query = endpoint.partition("?")
