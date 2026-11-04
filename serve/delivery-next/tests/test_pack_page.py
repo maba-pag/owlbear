@@ -30,7 +30,7 @@ from owlbear_delivery_next.local_system import git_run, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.state_store import pack_run_record, registry
 from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
@@ -467,6 +467,33 @@ def test_an_unreadable_registry_shows_whole_in_the_runs_and_in_a_refused_start(
             f"{answered} 404 (Not Found) {base}/api/next/projects",
             f"{answered} 409 (Conflict) {base}/api/next/impeccable/update",
         }
+
+
+@pytest.mark.browser
+def test_a_sole_unreadable_run_record_shows_whole_in_the_runs(served, pds, tmp_path, monkeypatch, whole_error) -> None:
+    """#971: a readable registry and one project whose run record cannot be read still list that project's error."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _job, base = served()
+    error = OSError(whole_error)
+    error.add_note("a note added on the way up")
+    real = pack_run_record.observed
+
+    def unreadable(root, *rest):
+        if os.path.realpath(root) != os.path.realpath(tmp_path):
+            return real(root, *rest)
+        raise error
+
+    monkeypatch.setattr(pack_run_record, "observed", unreadable)
+    with opened(base, pds) as page:
+        page.reload()
+        page.get_by_text("Each project's last Impeccable run").click()
+        listed = page.locator("#pack-runs li")
+        expect(listed).to_have_count(1)
+        expect(listed).to_be_visible()
+        assert listed.text_content() == (
+            f"{tmp_path.name}: Its run record cannot be read (OSError: {whole_error}\na note added on the way up)"
+        )
 
 
 @pytest.mark.browser
