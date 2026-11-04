@@ -486,15 +486,15 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
         store.write(lock, loop.apply(store.read(lock.slug), exc.result(now), now))
     except worktree.ShelveError as exc:  # the planner never starts on edits it would have to reject
         now = datetime.now(UTC)
-        reason = f"{type(exc).__name__}: {exc}"
+        reason = failure(exc)
         store.log(lock, lock.slug, {"event": "not-shelved", "at": now.isoformat(timespec="seconds"), "reason": reason})
-        store.write(lock, loop.apply(store.read(lock.slug), _unshelved(exc), now))
+        store.write(lock, loop.apply(store.read(lock.slug), _unshelved(reason), now))
     except SettingsUnset as exc:
         unset_settings.asked(store, lock, exc)
 
 
-def _unshelved(exc: worktree.ShelveError) -> Result:
-    """The owner clears the worktree the planner would find dirty, then planning runs again."""
-    text = f"Delivery could not set aside the uncommitted edits before planning ({exc}). Commit, stash or discard them."
+def _unshelved(why: str) -> Result:
+    """The owner clears the worktree the planner would find dirty, then planning runs again; *why* says the error."""
+    text = f"Delivery could not set aside the uncommitted edits before planning ({why}). Commit, stash or discard them."
     cause = cause_key(ErrorKind.STATE, StepKind.PLAN, "dirty-worktree")
     return engine.ask(StepKind.PLAN, text, cause, engine.continue_or_pause(StepKind.PLAN))

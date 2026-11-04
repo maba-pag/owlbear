@@ -28,6 +28,7 @@ from owlbear_delivery_next.change_contracts.round_records import RoundLoop, Roun
 from owlbear_delivery_next.change_flow import brief_rounds, budgets, loop, plan_rounds, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import missing, sdk_adapter, step_input
 from owlbear_delivery_next.runtimes.session_result import Run, to_result
@@ -317,7 +318,7 @@ def test_planning_starts_on_a_clean_tree_whatever_step_left_edits(repo, monkeypa
 def test_a_failed_shelve_asks_the_owner_before_any_planner_runs(tmp_path) -> None:
     with pytest.raises(worktree.ShelveError, match="git stash failed") as caught:
         worktree.shelve(tmp_path, "owlbear c1")  # not a repository: Git fails
-    asked = runner._unshelved(caught.value)  # noqa: SLF001
+    asked = runner._unshelved(failure(caught.value))  # noqa: SLF001
     assert (asked.exit, asked.cause, options(asked)) == (
         Exit.ASK,
         "state:plan:dirty-worktree",
@@ -362,7 +363,8 @@ def test_a_shelve_failure_is_asked_and_logged_whole(  # noqa: PLR0913, PLR0917 -
     )
     q = loop.open_question(store.read("c1"))
     assert q.text == (
-        f"Delivery could not set aside the uncommitted edits before planning ({why}). Commit, stash or discard them."
+        "Delivery could not set aside the uncommitted edits before planning "
+        f"(ShelveError: {why}). Commit, stash or discard them."
     )
     assert [e["reason"] for e in store.events("c1") if e["event"] == "not-shelved"] == [f"ShelveError: {why}"]
 

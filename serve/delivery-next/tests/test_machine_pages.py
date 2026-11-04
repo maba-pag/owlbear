@@ -88,7 +88,7 @@ from owlbear_delivery_next.runtimes.settings_seen import NAME as SEEN
 from owlbear_delivery_next.settings import carried, config, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
 from owlbear_delivery_next.state_store import decision_store, registry, watch_reports
-from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store, StoreError
+from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Lock, Store, StoreError
 from owlbear_delivery_next.workflow_steps import decision, design, judges, pick, publish, retry, visual
 from owlbear_delivery_next.workflow_steps.engine import Ctx
 
@@ -3865,6 +3865,51 @@ def test_a_long_undo_failure_is_asked_whole(tmp_path: Path, monkeypatch, pds, wh
         form = page.locator("section.act", has_text=f"Question {q.id}")
         expect(form).to_be_visible()
         assert form.locator("p-text").first.text_content() == asked
+        assert said == []
+
+
+@pytest.mark.browser
+def test_a_shelve_failure_is_asked_and_shown_whole(
+    tmp_path: Path, monkeypatch, pds, whole_error: str, checks_settled
+) -> None:
+    """#971: git's whole refusal to set the edits aside is asked on the Changes page and reads whole in Recent
+    activity, its type named in both."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "c1"))
+    work = clone(tmp_path / "work")
+    (work / "a.txt").write_text("edited\n")
+    real = runner.worktree.git
+
+    def refused(cwd, *args):
+        if args[0] == "stash":
+            raise subprocess.CalledProcessError(1, "git stash push", stderr=whole_error)
+        return real(cwd, *args)
+
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: work)
+    monkeypatch.setattr(runner.worktree, "git", refused)
+    store = Store.open(Path(alpha.path))
+    checks_settled(store)
+    with store.lock("c1") as lock:
+        c = Change(slug="c1", names=Names(branch="owlbear/c1", target="main"), step=Step(kind=StepKind.PLAN))
+        store.write(lock, c)
+    runner._step(store, Lock("c1"), store.read("c1"), Step(kind=StepKind.PLAN), work)  # noqa: SLF001
+    why = (
+        f"ShelveError: git stash failed in {work}: CalledProcessError: Command 'git stash push' returned non-zero "
+        f"exit status 1.\n{whole_error}"
+    )
+    asked = (
+        f"Delivery could not set aside the uncommitted edits before planning ({why}). Commit, stash or discard them."
+    )
+    q = store.read("c1").questions[-1]
+    with browsing(monkeypatch, pds, details=True) as (page, url):
+        said = errors(page)
+        opened(page, url, alpha.id, "c1")
+        form = page.locator("section.act", has_text=f"Question {q.id}")
+        expect(form).to_be_visible()
+        assert form.locator("p-text").first.text_content() == asked
+        line = page.locator("ol.log > li", has_text="Not shelved").locator(":scope > span")
+        expect(line).to_have_text(" ".join(f"Not shelved: {why}".split()))
         assert said == []
 
 
