@@ -137,7 +137,7 @@ def test_a_failed_environment_fails_building_with_uvs_whole_output(stepping, who
     building = next(s for s in report["steps"] if s["key"] == "building")
     assert (building["state"], building["line"]) == ("failed", said)
     assert {"step": "building", "line": said} in [{"step": e["step"], "line": e["line"]} for e in report["log"]]
-    assert report["detail"] == said
+    assert report["detail"] == f"VersionError: {said}"
 
 
 def test_waiting_for_running_steps_is_its_own_step_and_the_log_keeps_each_line_once(stepping):

@@ -825,6 +825,48 @@ def test_updates_say_a_release_look_that_could_not_read_the_versions_whole(
 
 
 @pytest.mark.browser
+def test_updates_owlbear_says_an_update_whose_versions_could_not_be_read_whole(
+    monkeypatch, capsys, pds, whole_error
+) -> None:
+    """#971: an update whose look failed says why whole, its type and notes included, on Updates ▸ OwlBear and in the
+    host's log."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    error = versions.VersionError(whole_error)
+    error.add_note("a note on the failure")
+
+    def failing(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(versions, "target", failing)
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    detail = f"the versions could not be read: VersionError: {whole_error}\na note on the failure"
+    machine, server, base = serve()
+    machine.updater._update()  # noqa: SLF001 - the update thread's work, run here
+    logged = capsys.readouterr().out
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            said = errors(page)
+            pds.only(page, base)
+            page.goto(f"{base}/updates/owlbear#token=t")
+            shown = page.locator("#owlbear-state")
+            expect(shown).to_be_visible()
+            assert re.fullmatch(r"The update failed \([^)]*\): " + re.escape(detail), shown.text_content())
+            assert said == []
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    line = r"^\d\d:\d\d:\d\dZ update: failed: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
+    assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [detail]
+
+
+@pytest.mark.browser
 def test_updates_say_update_checks_that_started_afresh_whole(monkeypatch, capsys, pds, whole_error) -> None:
     """#951: update checks whose earlier results could not be read at the start say why whole on Updates and in the
     host's log."""

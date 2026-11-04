@@ -271,11 +271,36 @@ def test_a_git_verb_failing_while_looking_says_its_whole_stderr_on_the_page_and_
     updating.machine.updater._update()  # noqa: SLF001 - the thread's work, run here
 
     detail, line, logged = ended(updating.machine, "looking")
-    lead = "the versions could not be read: git fetch failed: CalledProcessError: Command '["
+    lead = "the versions could not be read: VersionError: git fetch failed: CalledProcessError: Command '["
     assert detail.startswith(lead)
     assert f"' returned non-zero exit status 128.\n{whole_error}\n" in detail
     assert (line, logged[-1]) == (detail, detail)
     assert f"update: failed: {detail}" in updating.said
+
+
+def test_a_look_whose_git_fetch_fails_says_the_whole_failure_on_the_page_and_in_the_log(
+    updating, whole_error, monkeypatch
+):
+    """#971: the failed look's detail, its step's line and the host's log carry the error's type, streams and notes."""
+    run, seen = subprocess.run, []
+
+    def failing(command: list[str], *args: object, **kwargs: object) -> subprocess.CompletedProcess:
+        if "fetch" in command:
+            seen.append(command)
+            error = subprocess.CalledProcessError(128, command, OUT, whole_error)
+            error.add_note("a note on the failure")
+            raise error
+        return run(command, *args, **kwargs)
+
+    monkeypatch.setattr(versions.subprocess, "run", failing)
+
+    updating.machine.updater._update()  # noqa: SLF001 - the thread's work, run here
+
+    [command] = seen
+    failed = streams(f"CalledProcessError: Command '{command}' returned non-zero exit status 128.", whole_error)
+    whole = f"the versions could not be read: VersionError: git fetch failed: {failed}\na note on the failure"
+    assert ended(updating.machine, "looking") == (whole, whole, ["fetching the versions", whole])
+    assert updating.said[-1] == f"update: failed: {whole}"
 
 
 @pytest.mark.parametrize("word", FAILING)
@@ -303,10 +328,30 @@ def test_a_failing_build_step_says_both_its_streams_whole_on_the_page_and_in_the
     updating.machine.updater._update()  # noqa: SLF001
 
     detail, line, logged = ended(updating.machine, step)
-    assert (detail, line, logged[-1]) == (lead + whole, whole, whole)
+    kind = "PackInstallError" if word == "design-pack" else "VersionError"
+    assert (detail, line, logged[-1]) == (f"{kind}: {lead}{whole}", whole, whole)
     assert f"update: failed v0.2: {detail}" in updating.said
     if word == "design-pack":
         assert updating.machine.impeccable.read()["install"]["detail"] == detail  # every page's banner
+
+
+def test_a_switch_that_fails_says_the_whole_failure_on_the_page_and_in_the_log(updating, whole_error, monkeypatch):
+    """#971: a version that could not take over: the update's detail and the host's log carry the error's notes."""
+    error = versions.VersionError(whole_error)
+    error.add_note("a note on the failure")
+
+    def failing(_folder: Path, _tag: str) -> bool:
+        raise error
+
+    updater = updating.machine.updater
+    monkeypatch.setattr(updater, "_prepared", lambda _choice: local_home.root() / local_home.VERSIONS / "v0.2")
+    monkeypatch.setattr(updater, "_switch", failing)
+
+    updater._update()  # noqa: SLF001 - the thread's work, run here
+
+    whole = f"VersionError: {whole_error}\na note on the failure"
+    assert (updater.read()["phase"], updater.read()["detail"]) == ("failed", whole)
+    assert updating.said[-1] == f"update: failed v0.2: {whole}"
 
 
 @pytest.mark.parametrize("word", ["--detach", *FAILING])  # --detach: git worktree add
@@ -333,7 +378,8 @@ def test_a_command_of_an_update_timing_out_says_what_it_printed_whole(updating, 
         word, f"it could not run: {whole}"
     )
     detail, line, logged = ended(updating.machine, step)
-    assert (detail, line, logged[-1]) == (lead + whole, whole, whole)
+    kind = "PackInstallError" if word == "design-pack" else "VersionError"
+    assert (detail, line, logged[-1]) == (f"{kind}: {lead}{whole}", whole, whole)
     assert f"update: failed v0.2: {detail}" in updating.said
 
 

@@ -128,7 +128,7 @@ class Updater:
         try:
             choice = versions.target()
         except (versions.VersionError, registry.RegistryError) as exc:
-            self._set("failed", f"the versions could not be read: {exc}")
+            self._set("failed", f"the versions could not be read: {failure(exc)}")
             return
         if choice is None or not choice.tag:
             said = "; ".join(choice.notes) if choice else "no newer version of this machine's channel"
@@ -156,7 +156,7 @@ class Updater:
                 if self._switch(folder, tag):
                     return
             except versions.VersionError as exc:
-                self._set("failed", str(exc), tag)
+                self._set("failed", failure(exc), tag)
                 return
         self._set("refused", why, tag)
 
@@ -169,8 +169,8 @@ class Updater:
         except versions.VersionError as exc:
             self.attempts[tag] = self.attempts.get(tag, 0) + 1
             if isinstance(exc, versions.PackInstallError):  # every page offers Install for it
-                self.machine.impeccable.failed(tag, str(exc))
-            self._set("failed", str(exc), tag)
+                self.machine.impeccable.failed(tag, failure(exc))
+            self._set("failed", failure(exc), tag)
             return None
         self.machine.impeccable.ready(tag)
         return folder
