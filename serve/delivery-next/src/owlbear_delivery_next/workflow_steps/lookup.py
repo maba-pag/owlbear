@@ -209,7 +209,7 @@ class Chats:
         """Run the started lookup *lookup_id* and keep its answer, then free the slot."""
         try:
             said = self._run(shared, project, question, settings)
-        except Exception as exc:
+        except BaseException as exc:  # a cancelled run too
             said = {"failed": failure(exc)}  # a read never says running forever; the host logs the exception
             raise
         finally:

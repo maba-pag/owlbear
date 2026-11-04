@@ -272,17 +272,18 @@ def test_a_lead_chats_lookup_whose_processes_are_not_confirmed_gone_holds_the_ne
     assert len(picking.pickers()) == 2
 
 
-def test_a_started_lookup_that_raises_reads_the_whole_error_and_frees_the_slot(monkeypatch):
+@pytest.mark.parametrize("error", [OSError, asyncio.CancelledError])
+def test_a_started_lookup_that_raises_reads_the_whole_error_and_frees_the_slot(monkeypatch, error):
     def broke(*_a):
         msg = "the picker's folder went away"
-        raise OSError(msg)
+        raise error(msg)
 
     monkeypatch.setattr(lookup, "chat", broke)
     chats = lookup.Chats()
     raised = chats.start()
-    with pytest.raises(OSError, match="folder went away"):  # the host's log has it too
+    with pytest.raises(error, match="folder went away"):  # the host's log has it too
         chats.finish(raised, None, PROJECT, QUESTION, None)
-    said = {"failed": "OSError: the picker's folder went away"}
+    said = {"failed": f"{error.__name__}: the picker's folder went away"}
     assert chats.read(raised) == {"running": False, "answer": said}  # never running forever
     assert chats.start() is not None  # the slot is free
 
