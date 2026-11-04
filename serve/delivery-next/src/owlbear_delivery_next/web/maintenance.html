@@ -184,7 +184,7 @@ function folderRun(f) {
   const said = f.state === "never" ? "Never curated." : `Last run: ${f.state}${when}`;
   const skipped = f.entries.filter((e) => e.action === "skipped");
   const blocked = settingsWait(f.unset.length, f.unset_reason, f.blocked);
-  const reason = f.reason_unset ? settingsWait(f.reason_unset, "", f.reason) : f.reason;  // a refusal for unset settings
+  const reason = f.reason_unset ? settingsWait(f.reason_unset, "", f.reason) : f.reason;  // refused for unset settings
   return html`<li class="action">
     <div class="title"><p-heading size="md"><h3>${f.folder}</h3></p-heading>
       <p-button type="button" compact="true" variant="secondary" .loading=${state.curating === f.folder}
