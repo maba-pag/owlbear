@@ -2057,3 +2057,37 @@ def test_a_refused_memory_save_keeps_the_typed_values_and_says_why(store, pds, m
         expect(page.get_by_label(MEMORY_LABELS["recall_limit"])).to_have_value("12")
         expect(page.locator("#groups a[href='#memory'] p-tag")).to_have_text("2 unsaved")
     assert store.global_path.read_bytes() == before
+
+
+@pytest.mark.browser
+def test_a_global_save_not_recorded_as_seen_says_why_whole(store, pds, monkeypatch, whole_error) -> None:
+    """#971 P16: the save stands; its notice says whole why the next read may take it for a change from elsewhere."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _layered(store, monkeypatch, GLOBAL, {}, {})
+    seen = local_home.root() / settings_seen.NAME
+    seen.parent.mkdir(parents=True, exist_ok=True)
+    seen.write_text(settings_seen.Seen(seen={}).model_dump_json())  # a read has recorded Global as found
+    full = OSError(28, whole_error)
+    full.add_note("NOTE-MARK")
+    real = settings_seen.atomic_write
+
+    def write(path: Path, text: str) -> None:
+        if path == seen and refusing:
+            raise full
+        real(path, text)
+
+    refusing: list[bool] = []
+    monkeypatch.setattr(settings_seen, "atomic_write", write)
+    with settings_page(store, pds) as page:
+        pds.group(page, "overview")
+        expect(page.locator("#reads-status")).to_contain_text("Last read")
+        refusing.append(True)
+        pds.pick(page, "Layer", "global")
+        pds.group(page, "agents")
+        page.get_by_label("Minutes per session, builder").fill("50")
+        _saved(page, pds, "Save global defaults", "the global")
+        said = f"The saved Global values could not be recorded as seen: OSError: [Errno 28] {whole_error}\nNOTE-MARK"
+        expect(page.locator("#error")).to_be_visible()
+        assert page.locator("#error").text_content().strip() == said
+    assert '"minutes":50' in store.global_path.read_text().replace(" ", "")

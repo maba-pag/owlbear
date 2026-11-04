@@ -5,6 +5,7 @@ import logging
 import shutil
 import subprocess
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -19,12 +20,12 @@ from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import model_choices, settings_read
+from owlbear_delivery_next.runtimes import model_choices, settings_read, settings_seen
 from owlbear_delivery_next.runtimes.settings_read import Reader
 from owlbear_delivery_next.runtimes.settings_seen import NAME
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT, GlobalLayer
 from owlbear_delivery_next.state_store import layers, registry, settings_carry
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store.store import Store, StoreError
 
 
 def git(cwd: Path, *args: str) -> None:
@@ -442,11 +443,13 @@ def test_a_source_s_whole_error_is_said_and_shown(world, tmp_path, monkeypatch, 
     """#921 D1: a source's unexpected failure, type included, uncut in the read state and the host's log."""
 
     def broken(**_kwargs: object) -> dict[str, object]:
-        raise RuntimeError(whole_error)
+        exc = RuntimeError(whole_error)
+        exc.add_note("NOTE-MARK")
+        raise exc
 
     monkeypatch.setattr(settings_read.pack_update, "notice", broken)
     c = client(Store(tmp_path / "shop"), world.reader())
-    expected = f"RuntimeError: {whole_error}"
+    expected = f"RuntimeError: {whole_error}\nNOTE-MARK"  # #971: its notes too
 
     [failure] = c.post("/api/next/config/read").json()["reads"]["failures"]
 
@@ -470,3 +473,55 @@ def test_a_failed_model_read_is_shown_and_logged_whole(world, tmp_path, monkeypa
     assert got["error"] == expected
     logged = [r.getMessage() for r in caplog.records if r.name == model_choices.__name__]
     assert logged == [f"the offered models were not read: {expected}"]
+
+
+def _raising(exc: Exception) -> Callable[..., object]:
+    def raised(*_a: object, **_k: object) -> object:
+        raise exc
+
+    return raised
+
+
+@pytest.mark.parametrize("fails", ["locate", "sync", "global", "machine", "layer"])
+def test_each_source_s_typed_error_is_shown_whole(world, tmp_path, monkeypatch, whole_error, fails):
+    """#971: a source's own error kept only its message; it is shown with its type and notes, as it is said."""
+    world.reader().read()  # the first read: Global as found
+    machine = local_home.root() / "settings.json"
+    exc, mp, place = {
+        "locate": (data_repo.DataRepoError(whole_error), (data_repo, "locate"), "the shared settings location"),
+        "sync": (registry.RegistryError(whole_error), (settings_carry, "sync"), str(world.root)),
+        "global": (StoreError(whole_error), (settings_read, "read_layer_settled"), str(world.root / "config.json")),
+        "machine": (registry.RegistryError(whole_error), (settings_read.machine_settings, "current"), ""),
+        "layer": (StoreError(whole_error), (settings_read, "read_layer"), str(machine)),
+    }[fails]
+    exc.add_note("NOTE-MARK")
+    if fails == "layer":
+        machine.write_text(layer())
+        real = settings_read.read_layer
+        monkeypatch.setattr(settings_read, "read_layer", lambda p, m: _raising(exc)() if p == machine else real(p, m))
+    else:
+        monkeypatch.setattr(*mp, _raising(exc))
+    c = client(Store(tmp_path / "shop"), world.reader())
+    said = f"{type(exc).__name__}: {whole_error}\nNOTE-MARK"
+
+    failures = c.post("/api/next/config/read").json()["reads"]["failures"]
+
+    assert [f["error"] for f in failures] == [f"{place}: {said}" if place else said]
+    assert any(line.endswith(f"failed{f' at {place}' if place else ''}: {said}") for line in world.said)
+
+
+def test_an_own_save_not_recorded_as_seen_is_said_whole_with_the_save(world, tmp_path, monkeypatch, whole_error):
+    """#971 P16: the failure was said to host.log alone; the Global save's notice now says it too, whole."""
+    reader = world.reader()
+    reader.read()
+    c = client(Store(tmp_path / "shop", data_repo.DataRepo(world.root), "shop"), reader)
+    rev = c.get("/api/next/config").json()["global_rev"]
+    full = OSError(28, whole_error)
+    full.add_note("NOTE-MARK")
+    monkeypatch.setattr(settings_seen, "atomic_write", _raising(full))
+
+    saved = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": CONFIG_FORMAT, **builder("x")}})
+
+    said = f"the saved Global values could not be recorded as seen: OSError: [Errno 28] {whole_error}\nNOTE-MARK"
+    assert (saved.status_code, saved.json()["notice"]) == (200, said)
+    assert f"settings read: {said}" in world.said
