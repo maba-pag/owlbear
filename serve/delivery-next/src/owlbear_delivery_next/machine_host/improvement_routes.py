@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Query
 from owlbear_memory.engine import MemoryEngine
 from pydantic import Field
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.improvement import case_edits, cases, followups, improvement_view, proposal_apply
@@ -100,7 +101,7 @@ def _switches() -> dict[str, Any]:
     try:
         s = machine_settings.current()
     except registry.RegistryError as exc:
-        return {"error": f"the machine's settings cannot be read: {exc}"}
+        return {"error": f"the machine's settings cannot be read: {failure(exc)}"}
     return {"retro_after_change": s.retro_after_change, "retro_when_idle": s.retro_when_idle}
 
 
@@ -157,8 +158,8 @@ def _reads(routes: APIRouter, m: _Machine) -> None:
         return {
             "spotter": spotted
             | {"not_followed": m.machine.chats.not_followed(), "follower_failed": m.machine.chats.failed},
-            "retro": improvement_view.retro(loaded, _switches()),
-            "cases": improvement_view.spotter_cases(),
+            "retro": improvement_view.retro(loaded, _switches(), m.machine.retro.failed),
+            "cases": improvement_view.spotter_cases(m.machine.cases.failed, m.machine.cases.unpublished),
             "proposals": improvement_view.proposals(loaded, m.root()),
         }
 
@@ -197,7 +198,7 @@ def _retro(routes: APIRouter, m: _Machine) -> None:
             try:
                 finished = loaded is not None and slug in loaded[0].slugs() and loaded[0].read(slug).finished_at
             except (StoreError, OSError, ValueError) as exc:
-                raise HTTPException(409, f"Change {body.change} cannot be read: {exc}") from exc
+                raise HTTPException(409, f"Change {body.change} cannot be read: {failure(exc)}") from exc
             if not finished:
                 msg = f"{body.change} is not a finished Change of a loaded project: Retro runs on one"
                 raise HTTPException(409, msg)
@@ -212,9 +213,9 @@ def _retro(routes: APIRouter, m: _Machine) -> None:
         except followups.Unknown as exc:
             raise HTTPException(404, str(exc)) from exc
         except store.RetroError as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise HTTPException(409, failure(exc)) from exc
         except UNREACHABLE as exc:
-            raise HTTPException(409, f"the backlog could not be reached: {type(exc).__name__}: {exc}") from exc
+            raise HTTPException(409, f"the backlog could not be reached: {failure(exc)}") from exc
 
 
 def _proposals(routes: APIRouter, m: _Machine) -> None:
@@ -231,7 +232,7 @@ def _proposals(routes: APIRouter, m: _Machine) -> None:
         except proposal_apply.Refused as exc:
             raise HTTPException(422, str(exc)) from exc
         except store.RetroError as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise HTTPException(409, failure(exc)) from exc
 
     @routes.post("/proposals/{pid}/apply")
     def apply(pid: str) -> dict[str, Any]:
@@ -240,7 +241,7 @@ def _proposals(routes: APIRouter, m: _Machine) -> None:
             with m.admitted(f"applying proposal {pid}"):
                 return proposal_apply.apply(pid, seams(lambda: m.machine.cases.running), m.writable)
         except store.RetroError as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise HTTPException(409, failure(exc)) from exc
 
     @routes.post("/proposals/{pid}/redraft")
     def redraft(pid: str) -> dict[str, Any]:
@@ -266,4 +267,4 @@ def _cases(routes: APIRouter, m: _Machine) -> None:
         except Stale as exc:
             raise HTTPException(409, str(exc)) from exc
         except CaseError as exc:
-            raise HTTPException(422, str(exc)) from exc
+            raise HTTPException(422, failure(exc)) from exc

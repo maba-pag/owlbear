@@ -24,6 +24,7 @@ from owlbear_delivery_next.improvement import (
     acts,
     case_edits,
     case_replay,
+    case_review,
     cases,
     followups,
     improvement_view,
@@ -68,6 +69,7 @@ ALLOW = "Allow it: the brief is amended first, then the step goes on"  # the Spo
 PREFILL = "t hand-off-fitness\n\nbash make"
 FAILED = "HostError: VS Code's agent host is not running: its published endpoint failed: ConnectionRefusedError"
 RETRO_TICK, CASES_TICK = retro_job.RetroJob.tick, cases_job.CasesJob.tick  # taken before machine_page stubs them
+NOTE = "the runtime said more after the error"  # a note an error carries, which its whole text keeps
 # An element's text without its times, which the browser words in its own locale, nor its nested list.
 BARE = (
     "e => { const c = e.cloneNode(true); c.querySelectorAll('time, ul').forEach((t) => t.remove()); "
@@ -768,6 +770,11 @@ def _cases_job(monkeypatch, **seams: Any) -> cases_job.CasesJob:
     return cases_job.CasesJob(slots, shared=lambda: None, **seams)
 
 
+def _noted(exc: Exception) -> Exception:
+    exc.add_note(NOTE)
+    return exc
+
+
 def _run_line(page: Page, kind: str, rid: str):
     return page.locator("#cases ol.meta > li", has_text=f"{kind} {rid}:")
 
@@ -776,7 +783,7 @@ def _run_line(page: Page, kind: str, rid: str):
 @pytest.mark.timeout(90)
 def test_a_failed_retro_run_shows_its_whole_error(tmp_path, monkeypatch, pds, whole_error) -> None:
     def failing(_work: object) -> None:
-        raise RuntimeError(whole_error)
+        raise _noted(RuntimeError(whole_error))
 
     found = SimpleNamespace(retro_after_change="off", retro_when_idle="off", enrolled_chats=[])
     monkeypatch.setattr(cases_job, "limits", lambda: {"retro": 5.0})
@@ -791,7 +798,7 @@ def test_a_failed_retro_run_shows_its_whole_error(tmp_path, monkeypatch, pds, wh
             seams = retro_job.Seams(projects=w.machine.retro.seams.projects)
             aside(lambda: RETRO_TICK(retro_job.RetroJob(slots, seams, owner=maintenance.Maintenance(slots)), 0.0))
         [run] = store.run_states().values()
-        expected = f"failed: RuntimeError: {whole_error}"
+        expected = f"failed: RuntimeError: {whole_error}\n{NOTE}"
         assert run["result"] == expected
         page = improvement(w, pds)
         shown = page.locator(f"#run-{run['id']} > p.meta").first
@@ -803,12 +810,12 @@ def test_a_failed_retro_run_shows_its_whole_error(tmp_path, monkeypatch, pds, wh
 @pytest.mark.timeout(90)
 def test_a_failed_cases_run_shows_its_whole_error(tmp_path, monkeypatch, pds, whole_error) -> None:
     async def asked(_text: str, _meter: object, _role: object) -> str:
-        raise RuntimeError(whole_error)
+        raise _noted(RuntimeError(whole_error))
 
     def unread(_name: str) -> None:
-        raise RuntimeError(whole_error)
+        raise _noted(RuntimeError(whole_error))
 
-    expected = f"failed: RuntimeError: {whole_error}"
+    expected = f"failed: RuntimeError: {whole_error}\n{NOTE}"
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
         ids = []
         for task in ("t one", "t two"):
@@ -843,7 +850,7 @@ def test_a_failed_replay_look_shows_its_whole_note(tmp_path, monkeypatch, pds, w
         request = case_replay.regression(edits, "owner", "promote")
         _quiet, failing = request["frozen"]  # in their order, each before then after; the run ends after a failure
         answers = [{"category": "hand-off-fitness", "note": "It said done early."}, {"category": "none", "note": ""},
-                   RuntimeError(whole_error), RuntimeError(whole_error),  # a failed look is retried once
+                   _noted(RuntimeError(whole_error)), _noted(RuntimeError(whole_error)),  # a failed look is retried
                    {"category": "failed", "note": ""}, {"category": "failed", "note": ""}]  # fmt: skip
 
         async def looked(_card, _prompt, meter, _spot) -> dict[str, Any]:
@@ -859,7 +866,7 @@ def test_a_failed_replay_look_shows_its_whole_note(tmp_path, monkeypatch, pds, w
         rid = case_replay.ask(request)
         aside(lambda: CASES_TICK(job, 0.0))
         [run] = [r for r in case_replay.results() if r["id"] == rid and "answers" in r]
-        note = f"RuntimeError: {whole_error}"
+        note = f"RuntimeError: {whole_error}\n{NOTE}"
         assert (run["answers"][failing]["before"]["note"], answers) == (note, [])
         console: list[str] = []
         w.page.on("console", lambda m: console.append(m.text) if m.type == "error" else None)
@@ -873,7 +880,7 @@ def test_a_failed_replay_look_shows_its_whole_note(tmp_path, monkeypatch, pds, w
 @pytest.mark.timeout(90)
 def test_a_failed_spotter_look_shows_its_whole_error(tmp_path, monkeypatch, pds, whole_error) -> None:
     async def judge(_card: object, _ctx: object, _meter: object) -> str:
-        raise RuntimeError(whole_error)
+        raise _noted(RuntimeError(whole_error))
 
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
         ctx = spotter.Context(project=w.pid, change=SLUG, step="build", looks=("hand-off",), sample_rate=0,
@@ -887,7 +894,7 @@ def test_a_failed_spotter_look_shows_its_whole_error(tmp_path, monkeypatch, pds,
         aside(lambda: asyncio.run(main()))
         assert spotter.WORK.settled(5)
         [record] = [json.loads(x) for f in spotter.root().glob("records-*.jsonl") for x in f.read_text().splitlines()]
-        expected = f"RuntimeError: {whole_error}"
+        expected = f"RuntimeError: {whole_error}\n{NOTE}"
         assert record["skipped"] == expected
         page = improvement(w, pds)
         tag = page.locator(f"#look-{record['id']} p-tag").first
@@ -904,7 +911,7 @@ def test_a_failed_chats_pass_shows_its_whole_error_until_a_pass_succeeds(
     error = f"{whole_error}\n/{'x' * 3000}"  # and an unbroken path component, wider than the page
 
     def read() -> chat_settings.Plan:
-        raise RuntimeError(error)
+        raise _noted(RuntimeError(error))
 
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
         follower, told = w.machine.chats, []
@@ -914,7 +921,7 @@ def test_a_failed_chats_pass_shows_its_whole_error_until_a_pass_succeeds(
         page = improvement(w, pds)
         failed = page.locator("#not-followed #follower-failed")
         expect(failed).to_be_visible()
-        said = f"All enrolled chats: the last pass failed, and the next one tries again: RuntimeError: {error}"
+        said = f"All enrolled chats: the last pass failed, and the next one tries again: RuntimeError: {error}\n{NOTE}"
         assert failed.evaluate("e => e.innerText") == said  # as shown, its lines kept
         assert failed.evaluate("e => e.scrollWidth <= e.clientWidth")  # wrapped, not cut off at the page's edge
 
@@ -932,3 +939,71 @@ def _until(done: Callable[[], object]) -> None:
     while not done():
         assert time.monotonic() < deadline, "not reached in 10 s"
         time.sleep(0.02)
+
+
+class _Passes(threading.Event):
+    """A loop's stop signal that lets *n* passes run, then stops it."""
+
+    def __init__(self, n: int) -> None:
+        super().__init__()
+        self.left = n
+
+    def wait(self, timeout: float | None = None) -> bool:  # noqa: ARG002 - no pass waits its interval here
+        self.left -= 1
+        return self.left < 0
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_a_failed_cases_or_retro_pass_and_an_unpublished_sync_show_their_whole_error(
+    tmp_path, monkeypatch, pds, whole_error
+) -> None:
+    def raising(exc: Exception) -> Any:
+        raise _noted(exc)
+
+    told: list[str] = []
+    bad = "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+    with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
+        monkeypatch.setattr(cases_job.CasesJob, "tick", CASES_TICK)
+        monkeypatch.setattr(retro_job.RetroJob, "tick", RETRO_TICK)
+        cases_now = _cases_job(monkeypatch, say=told.append)
+        monkeypatch.setattr(cases_job, "limits", lambda: raising(OSError(whole_error)))
+        with monkeypatch.context() as due:  # a sync with work: it cannot read its limits
+            due.setattr(case_review, "due", lambda: ({"c-1": "r"}, {}, []))
+            cases_now.loop(_Passes(1), lambda: 0.0)
+        cases.place().mkdir(parents=True, exist_ok=True)
+        (cases.place() / "published.json").write_text("{x")  # the next sync cannot read what was published
+        cases_now.loop(_Passes(1), lambda: cases_job.PUBLISH_EVERY)
+        loaded, broken = w.machine.retro.seams.projects, [True]
+        slots = Slots(lambda: 1)
+        slots.open()
+        seams = retro_job.Seams(
+            say=told.append, projects=lambda: raising(RuntimeError(whole_error)) if broken else loaded()
+        )
+        retro_now = retro_job.RetroJob(slots, seams, maintenance.Maintenance(slots))
+        retro_now.loop(_Passes(1), lambda: 0.0)  # the loaded projects cannot be read, for this pass only
+        broken.clear()
+        unpublished = f"the credit limits cannot be read: OSError: {whole_error}\n{NOTE}"
+        failed = f"CaseError: published.json cannot be read: JSONDecodeError: {bad}"
+        retro_failed = f"RuntimeError: {whole_error}\n{NOTE}"
+        assert told == [
+            f"the Spotter cases are not published: {unpublished}",
+            f"the Spotter cases job failed: {failed}",
+            f"Retro failed: {retro_failed}",
+        ]
+        w.machine.cases, w.machine.retro = cases_now, retro_now  # what the page reads
+        console: list[str] = []
+        w.page.on("console", lambda m: console.append(m.text) if m.type == "error" else None)
+        page = improvement(w, pds)
+        shown = page.locator("#cases ol.meta > li")
+        assert shown.evaluate_all("els => els.map((e) => e.textContent)") == [
+            f"The job's last pass failed, and the next one tries again: {failed}",
+            f"Not published, and the next sync tries again: {unpublished}",
+        ]
+        said = page.locator("#retro #retro-failed .meta")
+        assert (
+            said.evaluate("e => e.textContent")
+            == f"Retro's last pass failed, and the next one tries again: {retro_failed}"
+        )
+        assert said.evaluate("e => e.scrollWidth <= e.clientWidth")
+        assert console == []
