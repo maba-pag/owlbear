@@ -17,7 +17,7 @@ from pydantic import Field
 from owlbear_decisions.models import ID_PATTERN
 from owlbear_delivery_next.change_contracts import tools  # noqa: TC001 - MCP resolves the tools' annotations at runtime
 from owlbear_delivery_next.change_flow import brief_tools
-from owlbear_delivery_next.commands.chat_client import Chat, Closed, workspace
+from owlbear_delivery_next.commands.chat_client import WAIT, Chat, Closed, workspace
 from owlbear_delivery_next.commands.mcp_launch import serve_stdio
 from owlbear_delivery_next.project_host import answers
 from owlbear_delivery_next.workflow_steps import lookup
@@ -157,8 +157,22 @@ def find_decisions(
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=False, destructive_hint=False))
 def lookup_decisions(question: Annotated[str, ASKED]) -> dict[str, Any]:
-    """Ask which decisions govern a question; the picker answers in about a minute, a failure says `failed`."""
-    return lookup.agent_reply(_STATE["chat"].lookup_decisions(question))
+    """Ask which decisions govern a question; waits about 70 s.
+
+    Gives the decisions, `failed`, or running: then call await_lookup with its lookup_id at once.
+    """
+    return lookup.agent_reply(_STATE["chat"].lookup_decisions(question, WAIT))
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
+def await_lookup(
+    lookup_id: Annotated[str, Field(description="The lookup_id lookup_decisions gave", max_length=64)],
+) -> dict[str, Any]:
+    """Wait about 70 s more for a lookup_decisions answer; it asks for nothing.
+
+    While it says running, call it again at once.
+    """
+    return lookup.agent_reply(_STATE["chat"].await_lookup(lookup_id))
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))

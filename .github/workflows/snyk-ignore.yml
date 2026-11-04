@@ -11,9 +11,10 @@ permissions: {}
 jobs:
   ignore:
     name: Snyk ignore
-    # Only the owner's tick on the Security job's own finding comment in OwlBear's repository (TD-363).
+    # Only the owner's tick on the Security job's own finding comment in OwlBear's repository, known by its id, which
+    # survives a transfer (TD-363).
     if: >-
-      github.repository == 'maba-pag/owlbear'
+      github.repository_id == '1167866812'
       && github.event.issue.pull_request
       && github.event.sender.id == 238680231
       && github.event.comment.user.login == 'github-actions[bot]'

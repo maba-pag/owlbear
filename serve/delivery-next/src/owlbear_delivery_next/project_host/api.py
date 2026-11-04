@@ -30,7 +30,7 @@ from owlbear_delivery_next.change_contracts.models import Change, Exit, PersonCh
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import brief_rounds, loop, picks, rebuilds, round_flow, round_marks
 from owlbear_delivery_next.change_flow.progress import progress
-from owlbear_delivery_next.change_flow.status import card, status, unloadable
+from owlbear_delivery_next.change_flow.status import card, for_chat, status, unloadable
 from owlbear_delivery_next.impeccable_runs import pack_job
 from owlbear_delivery_next.project_host import (
     amendment_routes,
@@ -328,8 +328,8 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         return JSONResponse(out, status_code=code)
 
     @router.get("/changes")
-    def changes() -> list[dict[str, Any]]:
-        return [summary_of(slug) for slug in store.slugs()]
+    def changes(request: Request) -> list[dict[str, Any]]:
+        return [for_chat(summary_of(slug), request.headers.get(chat_contract.HEADER)) for slug in store.slugs()]
 
     @router.get("/project")
     def project() -> dict[str, list[str]]:

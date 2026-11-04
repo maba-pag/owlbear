@@ -147,7 +147,10 @@ def _read_snapshot_file(file_path: Path, memory_dir: Path) -> bytes:
             descriptor = None
             return snapshot_file.read()
     except OSError as exc:
-        msg = f"memory batch validation failed: unsafe or unreadable memory path {relative_path}"
+        msg = (
+            "memory batch validation failed: unsafe or unreadable memory path "
+            f"{relative_path}: {type(exc).__name__}: {exc}"
+        )
         raise ValueError(msg) from exc
     finally:
         if descriptor is not None:
@@ -164,7 +167,7 @@ def _load_snapshot(memory_dir: Path, repo_dir: Path) -> dict[str, tuple[MemoryEn
             raw = _read_snapshot_file(file_path, memory_dir)
             entry = storage.read_entry_bytes_strict(raw)
         except ValueError as exc:
-            failures.append(f"{relative_path}: {exc}")
+            failures.append(f"{relative_path}: {type(exc).__name__}: {exc}")
             continue
         entries[relative_path] = (entry, raw)
 

@@ -23,7 +23,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK, RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop, plan_rounds
+from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop, plan_rounds, status
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import chat_client, runner
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -117,8 +117,14 @@ def verdict(*places: str, upheld: dict[str, bool] | None = None) -> tools.Review
     return tools.ReviewResult(verdict="fix" if places else "pass", findings=found, rechecked=judged)
 
 
+def action(c: Change) -> str | None:
+    """The next action the Change's row shows."""
+    return status.status(c, Activity(host_up=True), NOW).action
+
+
 def test_the_shaper_asks_rejects_and_revises_until_the_owner_may_approve_the_version(shaping):
     assert shaping.save()["version"] == 1
+    assert action(shaping.change()) == status.CONTINUE  # D-01M6JY6QW936SGFAJ6W3DV48KA: the chat asks for the challenge
     assert "has not been challenged" in shaping.approve(1).json()["detail"]
     assert shaping.ask_challenge(1).status_code == 200
     assert shaping.change().step.mode == "challenge"
@@ -129,6 +135,7 @@ def test_the_shaper_asks_rejects_and_revises_until_the_owner_may_approve_the_ver
     c = shaping.step()
     assert ([f.id for f in c.loops[BRIEF].findings], c.outcome.waiting) == (["F1", "F2"], Waiting.CHAT)
     assert "the shaper revises brief v1 for F1, F2" in shaping.approve(1).json()["detail"]
+    assert action(c) == status.CONTINUE
     assert shaping.ask_challenge(1, {"F2": "no"}).status_code == 409  # F1 is taken: a revision first
     assert shaping.save(criteria=["farewell('Ada') returns exactly 'Bye, Ada!'"])["version"] == 2
     assert shaping.ask_challenge(2, {"F2": "the scope is the package"}).status_code == 200
@@ -145,6 +152,7 @@ def test_the_shaper_asks_rejects_and_revises_until_the_owner_may_approve_the_ver
     assert shaping.ask_challenge(3).status_code == 200
     c = shaping.change()
     assert (c.brief.challenged, c.loops[BRIEF].ended, c.loops[BRIEF].unreviewed) == (3, "count", ["v2", "v3"])
+    assert action(c) == status.APPROVE  # only the wait to approve a challenged version is the owner's
     assert "was not reviewed" in shaping.approve(3).json()["detail"]  # TD-255: the owner ticks that he accepts it
     assert shaping.approve(3, unreviewed=True).json() == {"accepted": "brief-approval"}
     c, step = shaping.store.fold(Lock(shaping.slug), shaping.slug, datetime.now(UTC))
@@ -192,7 +200,9 @@ def test_the_last_allowed_round_with_many_findings_asks_the_owner(shaping):
     assert (c.questions[-1].answer, c.loops[BRIEF].extra) == (None, 0)  # not the open question: nothing recorded
     c = shaping.answer("retry")
     assert c.questions[-1].answer.option == brief_rounds.RETIRED  # a question of the attempt that ended
-    assert (c.loops[BRIEF].attempt, c.outcome.waiting, c.brief.challenged) == (2, Waiting.CHAT, None)
+    assert (c.loops[BRIEF].attempt, c.outcome.waiting, c.brief.challenged, action(c)) == (
+        2, Waiting.CHAT, None, status.CONTINUE
+    )  # fmt: skip
     assert "asked to shape the brief again after round 1" in brief_rounds.status(c)["why_again"]
 
 
@@ -200,20 +210,12 @@ def test_the_chat_tool_waits_for_the_verdict_and_returns_the_findings_by_id(shap
     shaping.save()
     shaping.host.paused = lambda: True  # TD-287: the challenge the owner's chat asks for runs while paused
     shaping.verdicts += [verdict("AC-1")]
-    chat = chat_client.Chat.__new__(chat_client.Chat)
-    chat.repo, chat.home = Path(), shaping.store.root
-
-    def call(method, path, body=None):
-        r = shaping.http.request(method, f"/api/next{path}", json=body)
-        if r.status_code == 200:
-            chat_replied(method, path, r.json())
-        return r.status_code, r.json()
-
-    chat.call = call
+    chat, _ = chat_of(shaping, chat_replied)
     monkeypatch.setattr(chat_client, "POLL", 0)
     monkeypatch.setattr(chat_client, "_pause", lambda _s: shaping.step())  # the host runs meanwhile
     out = chat.challenge_brief("c1", 1, [])
     assert (out["requested"], [f["id"] for f in out["findings"]], out["approvable"]) == (True, ["F1"], False)
+    assert ("running" in out, "next" in out) == (False, True)  # the verdict as the host read it, with its guidance
     assert chat.challenge_brief("c1", 2, [])["requested"] is False  # no such version
 
 
@@ -302,6 +304,7 @@ def test_a_return_to_shaping_after_approval_waits_for_the_revision_and_never_pla
         shaping.store.write(lock, c)
     c = shaping.step()
     assert (c.step.kind, c.outcome.waiting, shaping.told) == (K.SHAPE, Waiting.CHAT, [])
+    assert action(c) == status.CONTINUE  # the approved version is challenged, but approved already
 
 
 def test_a_reconsideration_that_cannot_confirm_its_end_stops_the_change_for_the_owner(shaping):
@@ -357,16 +360,21 @@ def test_the_brief_challenger_never_sees_the_owners_brief_decisions():
     assert "secret finding" not in step_input.brief_challenge(c, Path("/w"))
 
 
-def chat_of(shaping, chat_replied) -> tuple[chat_client.Chat, list[tuple[str, str]]]:
-    """A chat whose host is *shaping*'s API, checked for what a chat reads of it; and each request it sends."""
-    chat, sent = chat_client.Chat.__new__(chat_client.Chat), []
-    chat.repo, chat.home = Path(), shaping.store.root
+def chat_of(shaping, chat_replied, after=None) -> tuple[chat_client.Chat, list[tuple[str, str]]]:
+    """A chat whose host is *shaping*'s API, checked for what a chat reads of it; and each request it sends.
+
+    *after* runs once, right after the host answered the chat's request for a challenge.
+    """
+    chat, sent = chat_client.Chat(Path(), shaping.store.root), []
+    hooks = [after] if after else []
 
     def call(method, path, body=None):
         sent.append((method, path))
         r = shaping.http.request(method, f"/api/next{path}", json=body)
         if r.status_code == 200:
             chat_replied(method, path, r.json())
+        if path == "/briefs/challenge" and hooks:
+            hooks.pop()()
         return r.status_code, r.json()
 
     chat.call = call
@@ -416,21 +424,56 @@ def test_the_wait_says_it_is_no_longer_shaped_or_that_the_owner_must_resume_inst
     assert "Abandoned" in gone["line"]
 
 
+@pytest.mark.parametrize("tool", ["challenge_brief", "await_challenge"])
 def test_an_abandoned_recheck_of_the_same_draft_is_told_as_no_longer_shaped_not_as_the_previous_findings(
-    shaping, monkeypatch, chat_replied
+    shaping, monkeypatch, chat_replied, tool
 ):
     shaping.save()
     shaping.verdicts += [verdict("AC-1")]
     shaping.ask_challenge(1)
     shaping.step()  # round 1 found F1
-    assert shaping.ask_challenge(1, {"F1": "see AC-1"}).status_code == 200  # the shaper rejects it: a recheck runs
-    chat, _ = chat_of(shaping, chat_replied)
+
+    def abandon():
+        owner_does(shaping, "abandon")
+        shaping.step()
+
     monkeypatch.setattr(chat_client, "WAIT", 0)
-    assert chat.await_challenge("c1", 1)["running"] is True
-    owner_does(shaping, "abandon")
-    shaping.step()
+    if tool == "challenge_brief":  # the shaper rejects F1 through the tool: a recheck runs, then is abandoned
+        chat, _ = chat_of(shaping, chat_replied, after=abandon)
+        gone = chat.challenge_brief("c1", 1, [{"finding": "F1", "reason": "see AC-1"}])
+    else:
+        assert shaping.ask_challenge(1, {"F1": "see AC-1"}).status_code == 200
+        chat, _ = chat_of(shaping, chat_replied)
+        assert chat.await_challenge("c1", 1)["running"] is True
+        abandon()
+        gone = chat.await_challenge("c1", 1)
     attempt = shaping.change().loops[BRIEF].attempt
     stale = shaping.http.get(f"/api/next/chat/challenge/{shaping.slug}?version=1&attempt={attempt}").json()
     assert (stale["running"], [f["id"] for f in stale["findings"]]) == (False, ["F1"])  # the host's read of it
-    gone = chat.await_challenge("c1", 1)
-    assert (gone["running"], gone["next"]) == (False, "the Change is no longer being shaped")
+    line = shaping.http.get("/api/next/changes").json()[0]["line"]
+    told = {"running": False, "line": line, "next": "the Change is no longer being shaped"}
+    assert gone == told | ({"requested": True} if tool == "challenge_brief" else {})
+
+
+@pytest.mark.parametrize("ending", ["abandoned", "stopped", "paused"])
+def test_a_challenge_asked_for_by_the_tool_ends_with_who_must_act_when_the_change_is_abandoned_stopped_or_paused(
+    shaping, monkeypatch, chat_replied, ending
+):
+    shaping.save()
+    if ending == "stopped":
+        shaping.verdicts += [Termination(confirmed=False)]  # the challenger's end is not confirmed
+    acts = {
+        "abandoned": lambda: (owner_does(shaping, "abandon"), shaping.step()),
+        "stopped": shaping.step,
+        "paused": lambda: owner_does(shaping, "pause"),
+    }
+    chat, _ = chat_of(shaping, chat_replied, after=acts[ending])
+    monkeypatch.setattr(chat_client, "WAIT", 0)  # the deadline is the first read
+    out = chat.challenge_brief("c1", 1, [])
+    row = shaping.http.get("/api/next/changes").json()[0]
+    if ending == "abandoned":
+        told = {"next": "the Change is no longer being shaped"}
+    else:
+        assert (row["actor"], row["action"] is not None) == ("you", True)
+        told = {"owner_action": "Resume" if ending == "paused" else row["action"]}
+    assert out == {"requested": True, "running": False, "line": row["line"]} | told

@@ -77,7 +77,9 @@ _WHO = {
     Waiting.OWNER_ACTION: "your action in GitHub",
     Waiting.GITHUB: "GitHub",
 }
-APPROVE = "Approve brief"  # the action of a Change that waits for its shaping chat, which the chat tools read
+APPROVE = "Approve brief"  # the wait to approve a challenged brief version
+CONTINUE = "Continue in the shaping chat"  # a Change whose shaping chat acts next (D-01M6JY6QW936SGFAJ6W3DV48KA)
+_SAYS_CONTINUE = 6  # the chat contract from which a row may say CONTINUE; an earlier chat reads APPROVE there
 _ACTION = {Waiting.PERSON_CHECK: "Report result", Waiting.OWNER_ACTION: "Act in GitHub", Waiting.CHAT: APPROVE}
 RESUME = "Resume Delivery"
 _WORK = {
@@ -138,6 +140,17 @@ def stage(c: Change) -> str:
 def unloadable(stop: Stop) -> Status:
     """Status of a Change whose state cannot load, from the store error's stop (restore or upgrade)."""
     return Status(f"stopped: {stop.reason}", stop.action, stop.actor)
+
+
+def for_chat(row: dict[str, Any], contract: str | None) -> dict[str, Any]:
+    """A Change's row as a chat of *contract* (a served header, or None for a page) reads its action.
+
+    Before contract 6 every wait for the shaping chat said APPROVE, which such a chat's await_challenge reads as its
+    own.
+    """
+    if contract is not None and int(contract) < _SAYS_CONTINUE and row.get("action") == CONTINUE:
+        return row | {"action": APPROVE}
+    return row
 
 
 def _tool_at(c: Change, tool: dict[str, Any] | None) -> datetime | None:
@@ -285,7 +298,11 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
         return Status(f"{s} · stopped: {c.stop.reason}", c.stop.action, c.stop.actor)
     if o and o.exit == Exit.PENDING:
         if o.who == "you":
-            action = _ACTION.get(o.waiting) if o.waiting else None
+            action = (
+                CONTINUE  # the shaping chat acts next, unless the owner approves a challenged version
+                if o.waiting == Waiting.CHAT and not c.brief.challenged == c.brief.version != c.brief.approved_version
+                else _ACTION.get(o.waiting)
+            )
             return Status(f"{s} · waiting for you: {o.reason}", action, "you")
         if o.waiting == Waiting.REVIEWER:  # the reason names the reviewers
             return Status(f"{s} · {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)
