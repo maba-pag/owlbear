@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_memory import MemoryBusyError, MemoryState, storage, writer_lock
 
-from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.git.command_failure import failed, failure
 from owlbear_delivery_next.local_system import curation_apply
 from owlbear_delivery_next.local_system.data_place import HELD
 from owlbear_delivery_next.local_system.data_repo import CONFIG, MEMORY, DataRepoError
@@ -48,10 +48,10 @@ def _git(cwd: Path, *args: str, index: Path | None = None) -> str:
             check=False,
         )  # fmt: skip
     except (OSError, subprocess.TimeoutExpired) as exc:
-        msg = f"git {args[0]} failed: {exc}"
+        msg = f"git {args[0]} failed: {failure(exc)}"
         raise DataRepoError(msg) from exc
     if done.returncode:
-        msg = f"git {args[0]} failed: {done.stderr.strip()}"
+        msg = f"git {args[0]} failed: {failed(done)}"
         raise DataRepoError(msg)
     return done.stdout.strip()
 
@@ -290,7 +290,7 @@ def prune(shared: DataRepo) -> str:
         with shared.locked():
             _git(shared.root, "worktree", "prune")
     except DataRepoError as exc:
-        _log.warning("%s still lists a finished curation run's worktree: %s", shared.root, exc)
+        _log.warning("%s still lists a finished curation run's worktree: %s", shared.root, failure(exc))
         return LISTED
     return ""
 

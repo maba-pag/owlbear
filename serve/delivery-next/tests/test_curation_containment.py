@@ -222,17 +222,21 @@ def test_an_exception_after_an_edit_holds_it_and_the_failed_row_names_where(repo
     assert logged.exc_info is not None
 
 
-@pytest.mark.parametrize("ends", ["raised", "returned"])
+@pytest.mark.parametrize("case", ["raised/exited", "raised/timed-out", "returned/exited", "returned/timed-out"])
 def test_a_failed_run_that_cannot_be_held_shows_both_failures_in_full_in_its_row_and_log(
-    repo, monkeypatch, caplog, ends
+    repo, monkeypatch, caplog, case, whole_error
 ) -> None:
+    ends, git_ = case.split("/")
     entry = curated(repo / "shop" / "memory", "Lesson")
-    real = subprocess.run
-    said = f"fatal: {FULL} " * 9
+    real, ran_git = subprocess.run, []
+    printed = f"printed {whole_error}"
 
     def run_(argv, *args, **kw):
         if argv[:2] == ["git", "update-ref"]:
-            return subprocess.CompletedProcess(argv, 1, "", said)
+            ran_git.append(argv)
+            if git_ == "exited":
+                return subprocess.CompletedProcess(argv, 1, printed, whole_error)
+            raise subprocess.TimeoutExpired(argv, 60, output=printed.encode(), stderr=whole_error.encode())
         return real(argv, *args, **kw)
 
     broke = f"the session broke{' and said more' * 30}"
@@ -251,13 +255,21 @@ def test_a_failed_run_that_cannot_be_held_shows_both_failures_in_full_in_its_row
     row = drained(job)
 
     ran = f"RuntimeError: {WHOLE}\n{NOTE}" if ends == "raised" else f"ended error: {broke}"
-    failed = f"DataRepoError: git update-ref failed: {said.strip()}"
+    argv = ran_git[0]
+    assert ran_git == [argv] * (1 if ends == "raised" else 2)  # a refused run's hold, then the failure's
+    git_said = (
+        f"CalledProcessError: Command '{argv}' returned non-zero exit status 1."
+        if git_ == "exited" else f"TimeoutExpired: Command '{argv}' timed out after 60 seconds"
+    )  # fmt: skip
+    failed = f"DataRepoError: git update-ref failed: {git_said}\nstderr:\n{whole_error}\nstdout:\n{printed}"
     assert row.state == "failed"
-    assert f"{ran}; its edits are not held in a curation ref: {failed}" in row.reason
+    unheld = f"its edits are not held in a curation ref: {failed}"
     if ends == "raised":
-        assert row.reason == f"RuntimeError: {ran}; its edits are not held in a curation ref: {failed}"
+        assert row.reason == f"RuntimeError: {ran}; {unheld}"
+    else:
+        assert row.reason == f"RuntimeError: RuntimeError: {ran}; {unheld}; {unheld}"
     (logged,) = [r for r in caplog.records if r.name == curation.__name__]
-    assert (ran in caplog.text, said.strip() in caplog.text, logged.exc_info is not None) == (True, True, True)
+    assert (failed in caplog.text, logged.exc_info is not None) == (True, True)
 
 
 def test_a_run_whose_entry_changed_meanwhile_is_refused_whole_and_the_other_change_is_published(repo, remote) -> None:
@@ -436,14 +448,18 @@ LOCKED = "git worktree failed: locked"
 
 
 @pytest.mark.parametrize("raises", [False, True], ids=["refused", "raised"])
-def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(repo, monkeypatch, caplog, raises) -> None:
+def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(
+    repo, monkeypatch, caplog, raises, whole_error
+) -> None:
     entry = curated(repo / "shop" / "memory", "Lesson")
     pushed(repo, "a curated entry")
     real, failing = curation_tree._git, []  # noqa: SLF001
 
     def git_(cwd, *args, **kw):
         if failing and args == ("worktree", "prune"):
-            raise curation_tree.DataRepoError(LOCKED)
+            exc = curation_tree.DataRepoError(f"{LOCKED}\n{whole_error}")
+            exc.add_note(NOTE)
+            raise exc
         return real(cwd, *args, **kw)
 
     def run(cfg) -> Run:
@@ -466,7 +482,7 @@ def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(rep
         ran = f"RuntimeError: {WHOLE}\n{NOTE}"
         assert row.reason == f"RuntimeError: {curation_tree.LISTED}; RuntimeError: {where}; {ran}"
     assert [r.getMessage() for r in caplog.records if r.name == curation_tree.__name__] == [
-        f"{repo} still lists a finished curation run's worktree: {LOCKED}"
+        f"{repo} still lists a finished curation run's worktree: DataRepoError: {LOCKED}\n{whole_error}\n{NOTE}"
     ]
 
 

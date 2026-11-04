@@ -436,6 +436,31 @@ def test_a_record_that_cannot_be_opened_stops_the_restart_naming_it_and_the_way_
     assert "aside" in said
 
 
+def test_a_record_that_cannot_be_read_stops_the_restart_with_the_whole_failure(root, monkeypatch, whole_error) -> None:
+    """#971: the refusal carries the read's whole failure, its type and notes included, between its own words."""
+    path = local_home.root() / curation.STATE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{}\n")
+    note = "a note added on the way up"
+
+    def unreadable(_raw):
+        exc = ValueError(whole_error)
+        exc.add_note(note)
+        raise exc
+
+    monkeypatch.setattr(curation.Runs, "model_validate_json", unreadable)
+    with pytest.raises(maintenance.MaintenanceError) as refused:
+        curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    assert str(refused.value) == (
+        f"the memory curation ownership record {path} cannot be read:\nValueError: {whole_error}\n{note}\n"
+        "OwlBear can't tell whether a memory curation session it started still runs, so memory curation "
+        "doesn't go on. Stop OwlBear if it still runs, and make sure no copilot process that memory curation "
+        'started still runs: the PIDs under "left" are the ones it recorded, but a session that failed early '
+        f"recorded none. Then move {path} aside, for example to {path}.broken, and start OwlBear again; the "
+        "folders' last runs are forgotten and curate again when due."
+    )
+
+
 def test_pids_left_after_an_earlier_empty_import_are_held_before_they_can_be_cleared(root, monkeypatch) -> None:
     """Review F1: an import already recorded must not let a later host's PIDs be cleared as history."""
     monkeypatch.setattr(processes, "alive", lambda _pid, _created: False)
