@@ -734,13 +734,13 @@ def change_repo(tmp_path, monkeypatch, _change_template: Path) -> Path:
     return work
 
 
-def _settled(store: Store, command: str = "true") -> None:
-    prof = profile.confirm(store.read_profile() or Profile(), "check:.", command, datetime.now(UTC))
+def _settled(store: Store) -> None:
+    prof = profile.confirm(store.read_profile() or Profile(), "check:.", "true", datetime.now(UTC))
     store.write_profile(prof)
 
 
 @pytest.fixture
-def checks_settled() -> Callable[..., None]:
+def checks_settled() -> Callable[[Store], None]:
     """Record a confirmed root check command in a store's profile, so its plan steps start their sessions (#968)."""
     return _settled
 
