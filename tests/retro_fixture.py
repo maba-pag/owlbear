@@ -140,7 +140,6 @@ def install(spec: Mapping[str, Any]) -> dict[str, Any]:
         "gaps": units.session_gaps(sid, {"provisional": False}),
         "provenance": "synthetic",
         "assumptions": list(NEEDS),
-        "project": spec.get("project", ""),
     }
 
     def put(table: dict[str, Any]) -> None:

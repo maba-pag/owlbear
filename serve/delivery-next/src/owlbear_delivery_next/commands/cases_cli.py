@@ -156,9 +156,9 @@ def _retro(a: argparse.Namespace) -> None:
         if a.change:
             pid, _ = _project(_slash(a.change)[0])
             change = f"{pid}:{_slash(a.change)[1]}"
-        rids = [retro.request(BY, change, a.chat)]
+        rid = retro.request(BY, change, a.chat)
         said = "the machine host's Retro job runs it; `owlbear improvement retro status` shows its result"
-        _say(f"queued {', '.join(rids)}: {said}")
+        _say(f"queued {rid}: {said}")
     elif a.plan:
         uid, projects = _unit(a.plan)
         _say(json.dumps(retro_evidence.plan(uid, projects)))

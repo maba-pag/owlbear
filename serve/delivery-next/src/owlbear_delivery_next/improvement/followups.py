@@ -121,7 +121,6 @@ def save(subj: Mapping[str, Any], text: Mapping[str, str], backlogs: Backlogs) -
     Raises:
         RetroError: The text holds a credential, an email address or a home path; nothing was written.
     """
-    store.require_real(str(subj.get("provenance") or "real"))
     title, body = str(text.get("title") or "").strip(), str(text.get("body") or "").strip()
     if leaked := case_review.leaks([title, body]):
         msg = f"the follow-up text holds {', '.join(leaked)}: nothing was written"

@@ -118,10 +118,9 @@ def resolve(
         RetroError: A synthetic proposal, or a lesson too long for a memory.
     """
     kind, target = snap.get("kind", ""), str(snap.get("target") or "")
-    synthetic = snap.get("provenance") == "synthetic"
     store.require_real(str(snap.get("provenance") or "real"))
     if kind == "spotter-case":
-        return {"kind": "case", "record": snap.get("record", ""), "call": snap.get("call", ""), "synthetic": synthetic}
+        return {"kind": "case", "record": snap.get("record", ""), "call": snap.get("call", ""), "synthetic": False}
     pid = _one(projects(snap, places, units if units is not None else units_of()))
     place = places.get(pid)
     clone = place.clone if place else None
@@ -139,7 +138,7 @@ def resolve(
             "recommended": "project" if place else "global",
         }
     if target.startswith(OWN) or target.partition(":")[2] in shipped():
-        return {"kind": "issue", "repository": REPOSITORY, "synthetic": synthetic}
+        return {"kind": "issue", "repository": REPOSITORY, "synthetic": False}
     if place and in_clone(target, clone):
         return {"kind": "backlog", "project": pid, "folder": place.folder}
     return {"kind": "backlog", "project": "", "folder": ""}

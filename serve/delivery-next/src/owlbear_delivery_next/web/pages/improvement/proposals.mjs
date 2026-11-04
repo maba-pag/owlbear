@@ -48,7 +48,7 @@ const ACCEPT = {
   memory: ["OwlBear saves it as a pending memory, then shows it here as made.",
     "Nothing: a pending memory is used only once you approve it on the Memory page.",
     "Rejecting the memory there removes it; this proposal stays accepted."],
-  issue: ["OwlBear opens the issue on GitHub; a synthetic one it closes at once.",
+  issue: ["OwlBear opens the issue on GitHub.",
     "Nothing more: Delivery works on the issue only once you shape it into a Change.",
     "The issue stays on GitHub, public in a public repository; close it there."],
   backlog: ["OwlBear adds the entry to the backlog.", "Nothing more: the entry waits in the backlog.",

@@ -211,11 +211,10 @@ def _large_change(tmp_path):
     events, _ = syn.events(spec)
     log = "".join(json.dumps(event) + "\n" for event in events)
     (retro_units.folder("s-build") / "log.jsonl.gz").write_bytes(gzip.compress(log.encode()))
-    records = []
-    for r in syn.records(spec):
+    records = syn.records(spec)
+    for r in records:
         card = r.pop("card")
         r.update(session="s-build", step="build", project="p1", change="fix-it", provenance="real")
-        records.append(r)
         (spotter.root() / "cards" / f"{r['id']}.json.gz").write_bytes(gzip.compress(json.dumps(card).encode()))
     (spotter.root() / "records-2026-01-01.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
     return projects
@@ -229,11 +228,10 @@ def _large_chat(tmp_path, sid):
     log.write_text("".join(json.dumps(event) + "\n" for event in events))
     at = (datetime.now(UTC) - timedelta(days=2)).timestamp()
     os.utime(log, (at, at))
-    records = []
-    for r in syn.records(spec):
+    records = syn.records(spec)
+    for r in records:
         card = r.pop("card")
         r.update(session=sid, step="chat", provenance="real")
-        records.append(r)
         (spotter.root() / "cards" / f"{r['id']}.json.gz").write_bytes(gzip.compress(json.dumps(card).encode()))
     (spotter.root() / "records-2026-01-01.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
     retro_store.update(lambda t: t.update(watermark=(datetime.now(UTC) - timedelta(days=3)).isoformat()))

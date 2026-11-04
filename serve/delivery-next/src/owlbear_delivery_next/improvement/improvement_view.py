@@ -291,8 +291,7 @@ def proposals(projects: units.Projects, shared_root: Path | None) -> list[dict[s
     """
     where, known, redrafts, found = places(projects), targets.units_of(), _redrafts(), _found()
     open_, closed = [], []
-    listed = props.proposals(synthetic=True)
-    for snap in listed:
+    for snap in props.proposals(synthetic=True):
         if snap["state"] in props.CLOSED:
             closed.append(_shown(snap, snap["accepted"].get("destination") or {}, redrafts, found))
         elif shared_root is None:

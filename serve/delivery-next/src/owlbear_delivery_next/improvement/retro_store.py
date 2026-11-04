@@ -232,8 +232,7 @@ def request(
     Raises:
         RetroError: Not exactly one of them is named.
     """
-    named = {"change": change or "", "chat": chat or ""}
-    named |= {"redraft": redraft, "followup": followup}
+    named = {"change": change or "", "chat": chat or "", "redraft": redraft, "followup": followup}
     if sum(map(bool, named.values())) != 1:
         msg = "a Retro request names exactly one Change, one chat, one redraft or one follow-up"
         raise RetroError(msg)
