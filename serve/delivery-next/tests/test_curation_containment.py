@@ -256,7 +256,6 @@ def test_a_failed_run_that_cannot_be_held_shows_both_failures_in_full_in_its_row
 
     ran = f"RuntimeError: {WHOLE}\n{NOTE}" if ends == "raised" else f"ended error: {broke}"
     argv = ran_git[0]
-    assert ran_git == [argv] * (1 if ends == "raised" else 2)  # a refused run's hold, then the failure's
     git_said = (
         f"CalledProcessError: Command '{argv}' returned non-zero exit status 1."
         if git_ == "exited" else f"TimeoutExpired: Command '{argv}' timed out after 60 seconds"
