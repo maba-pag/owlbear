@@ -10,6 +10,7 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.runtimes import missing
 from owlbear_delivery_next.runtimes.sdk_usage import unexpected_models
 from owlbear_delivery_next.runtimes.session_result import limit_reached
@@ -23,8 +24,8 @@ if TYPE_CHECKING:
 
 
 def failed(exc: BaseException) -> str:
-    """An SDK request's failure whole: its type, its message and the data a JSON-RPC error carries beside it."""
-    return f"{type(exc).__name__}: {exc}" + (f" {data!r}" if (data := getattr(exc, "data", None)) else "")
+    """An SDK request's failure whole: `failure` and the data a JSON-RPC error carries beside its message."""
+    return failure(exc) + (f" {data!r}" if (data := getattr(exc, "data", None)) else "")
 
 
 async def meter(client: CopilotClient, st: _Step, sid: str, agent: str) -> None:

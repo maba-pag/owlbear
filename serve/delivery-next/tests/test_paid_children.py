@@ -483,15 +483,19 @@ def test_a_child_run_no_storage_keeps_is_printed_and_reported_never_claimed(tmp_
             raise OSError(msg)
         return real_write(self, lock, change)
 
+    refused = []
+
     def no_capture(path, _text):
-        msg = f"{path.name} refused"
-        raise OSError(msg)
+        refused.append(error := OSError(f"{path.name} refused"))
+        error.add_note("the capture's own note")
+        raise error
 
     monkeypatch.setattr(Store, "write", write)
     monkeypatch.setattr(pending_child, "atomic_write", no_capture)
     with pytest.raises(OSError, match="change refused") as failed:
         restart(tmp_path, change_repo)
-    assert any("could not be kept" in note for note in failed.value.__notes__)
+    lost = f"OSError: {refused[0]}\nthe capture's own note"  # #971: the capture's failure whole
+    assert f"the paid child's run could not be kept ({lost}); it is printed above" in failed.value.__notes__
     printed = [json.loads(line) for line in capsys.readouterr().out.splitlines() if "child-unkept" in line]
     assert [p["child"]["run"]["session_id"] for p in printed] == paid.children
     monkeypatch.setattr(Store, "write", real_write)
@@ -836,11 +840,16 @@ def test_a_kept_child_that_no_longer_loads_retries_with_its_whole_reason(
     paid = settlement_fails(tmp_path, change_repo, monkeypatch)
     paid.verdicts.append(passing())
 
+    trigger = "the connection timed out once the quota of credits was read"  # words retries classify (R7)
+
     def unloadable(_data):
-        raise ValueError(whole_error)
+        error = ValueError(whole_error)
+        error.add_note(trigger)
+        raise error
 
     monkeypatch.setattr(pending_child.held, "restored", unloadable)
     store = restart(tmp_path, change_repo)
-    expected = f"its kept result no longer loads: ValueError: {whole_error}"
-    assert (store.read("c1").outcome.exit, store.read("c1").outcome.reason) == (Exit.RETRY, expected)
+    expected = f"its kept result no longer loads: ValueError: {whole_error}\n{trigger}"
+    outcome = store.read("c1").outcome
+    assert (outcome.exit, outcome.reason, outcome.cause) == (Exit.RETRY, expected, "tooling:review:sdk")
     assert [e["detail"] for e in store.events("c1") if e.get("kind") == "plan-challenge"][-1] == expected

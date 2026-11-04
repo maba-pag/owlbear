@@ -68,6 +68,7 @@ class Run:
     payload: tools.Args | None = None
     first: tools.Args | None = None  # a judge's first look, before its final result (design judge, slice 5)
     detail: str = ""
+    classified: str = ""  # what retries classify when ``detail`` says more: the error as it read before #971 (R7)
     head: str | None = None
     changed: list[str] = field(default_factory=list)  # the paths the commits change at ``head``, as Delivery read them
     runtime_pid: int | None = None
@@ -268,7 +269,8 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
         case "missing-tool" if isinstance(p, tools.MissingTool):
             return missing.classify(run, p, enclosing, now)
         case "deadline":  # an unanswered runtime start is the environment's; the step's own deadline is liveness
-            env = transient(run.detail) if run.detail != "step deadline" else None
+            said = run.classified or run.detail
+            env = transient(said) if said != "step deadline" else None
             cause = cause_key(env, kind, "sdk") if env else cause_key(ErrorKind.LIVENESS, kind, "deadline")
             return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail or "deadline")
         case "missing":
@@ -278,10 +280,11 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
                 exit=Exit.RETRY, cause=cause_key(ErrorKind.LIVENESS, kind, "transcript"), reason=run.detail
             )
         case "error":
-            if transient(run.detail) == ErrorKind.CAPACITY and quota(run.detail):
+            said = run.classified or run.detail
+            if transient(said) == ErrorKind.CAPACITY and quota(said):
                 cause = cause_key(ErrorKind.CAPACITY, kind, QUOTA)
                 return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail, wake_at=run.quota_reset)
-            error = transient(run.detail) or ErrorKind.TOOLING
+            error = transient(said) or ErrorKind.TOOLING
             return StepResult(exit=Exit.RETRY, cause=cause_key(error, kind, "sdk"), reason=run.detail)
         case _:
             reason = f"no valid result: {run.detail}"

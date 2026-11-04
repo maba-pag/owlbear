@@ -46,17 +46,21 @@ class Gate:
         self._lock = threading.Lock()
         self._linting = threading.Lock()
 
-    def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "") -> bool:
-        """End the step once and close the gate; the first ending is kept. Return whether it had already ended."""
+    def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "", classified: str = "") -> bool:
+        """End the step once and close the gate; the first ending is kept. Return whether it had already ended.
+
+        *classified* is what retries classify when *detail* says more (``Run.classified``).
+        """
         with self._lock:
             was = self.done
-            self._finish(ending, payload, detail)
+            self._finish(ending, payload, detail, classified)
         self.ended()
         return was
 
-    def _finish(self, ending: Ending, payload: tools.Args | None, detail: str) -> None:
+    def _finish(self, ending: Ending, payload: tools.Args | None, detail: str, classified: str = "") -> None:
         if not self.done:
             self.done, self.run.ending, self.run.payload, self.run.detail = True, ending, payload, detail
+            self.run.classified = classified
 
     def _closed(self) -> bool:
         if self.stopped:
@@ -70,6 +74,7 @@ class Gate:
         with self._lock:
             self.done = True
             self.run.ending, self.run.payload, self.run.head, self.run.detail = "error", None, None, detail
+            self.run.classified = ""
             self.run.changed = []
             self.run.changed = []
         self.ended()

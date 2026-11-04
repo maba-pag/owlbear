@@ -1,3 +1,4 @@
+import subprocess
 from datetime import UTC, datetime, timedelta
 
 from owlbear_delivery_next.change_contracts import failures
@@ -20,6 +21,7 @@ from owlbear_delivery_next.change_flow import budgets, loop
 from owlbear_delivery_next.change_flow.budgets import EPISODE_ASK, PAUSE, PAUSE_CAP
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.change_flow.status import Activity, card, status
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import session_result
 
@@ -88,6 +90,22 @@ def test_the_same_delivery_defect_three_times_asks_with_the_error():
     assert c.outcome.exit == Exit.ASK
     assert "submit tool rejected payload" in q.text
     assert [o.id for o in q.options] == ["done", "pause"]
+
+
+def test_the_same_whole_failure_keeps_one_signature_and_its_count(whole_error):
+    """#971: a whole error, with its command's output and its notes, counts as the same failure each time; its
+    numbers, commit ids and temporary paths never split its signature."""
+    c, signatures = change(), set()
+    for n in range(1, 4):
+        error = subprocess.CalledProcessError(n, ["git", "push"], f"pushed {n:040x}\n", f"{whole_error}\n")
+        error.add_note(f"seen in /tmp/run-{n}/x after {n * 7} s")
+        said = failure(error)
+        c = loop.apply(c, retry(ErrorKind.TOOLING, said), NOW)
+        budget = c.budgets.causes[failures.cause_key(ErrorKind.TOOLING, K.BUILD, "sdk")]
+        signatures.add(budget.signature)
+        assert (budget.count, c.outcome.exit) == (n, Exit.ASK if n == 3 else Exit.RETRY)
+    assert len(signatures) == 1
+    assert loop.open_question(c).text == f"Delivery failed the same way 3 times (tooling:build:sdk): {said}"
 
 
 WRONG = "wrong model: a turn ran on gpt-6-sol, the step needs gpt-6-luna"

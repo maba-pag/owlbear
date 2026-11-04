@@ -862,6 +862,104 @@ def test_a_session_failure_keeps_its_whole_error_in_the_journal_and_status(world
     assert result.reason == f"RuntimeError: {whole_error}"
 
 
+TRIGGER = "the connection timed out once the quota of credits was read"  # words the retry classifiers match (R7)
+
+
+def _step_detail(run, tmp_path) -> str:
+    """The ``detail`` of the step event the run's accounting writes (#894), which Recent activity shows."""
+    store, change = Store(tmp_path / "store"), Change(slug="c1", brief=Brief(version=1))
+    store.write(Lock("c1"), change)
+    sessions.logged(store, Lock("c1"), change, run, {"kind": StepKind.BUILD, "exit": "retry"})
+    (step,) = [e for e in store.events("c1") if e.get("event") == "step"]
+    return step["detail"]
+
+
+@pytest.mark.parametrize("data", [{"marker": "DATA-MARK"}, None])
+def test_a_failed_sdk_request_keeps_its_notes_and_data_and_retries_as_before(world, monkeypatch, tmp_path, whole_error,
+                                                                             data):  # fmt: skip
+    """#971 R5/R7: the step's error keeps the request's notes and JSON-RPC data; retries classify what they did."""
+    error = JsonRpcError(-32603, whole_error, data)
+    error.add_note(TRIGGER)
+
+    async def broken(*_args, **_kw):
+        raise error
+
+    monkeypatch.setattr(sdk_adapter, "_open", broken)
+    run = asyncio.run(sdk_adapter.run(world.cfg))
+    want = f"JsonRpcError: JSON-RPC Error -32603: {whole_error}\n{TRIGGER}" + (f" {data!r}" if data else "")
+    assert _step_detail(run, tmp_path) == want
+    result = to_result(run, StepKind.BUILD, NOW)
+    assert (result.reason, result.exit, result.cause, result.wake_at) == (want, Exit.RETRY, "tooling:build:sdk", None)
+
+
+@pytest.mark.parametrize(
+    ("said", "cause"),
+    [
+        ("session create did not answer within 60 s", "liveness:build:deadline"),
+        ("runtime start did not answer within 60 s", "network:build:sdk"),  # an unanswered start stays the network's
+        ("", "liveness:build:deadline"),
+    ],
+)
+def test_a_timed_out_session_keeps_its_whole_error_and_retries_as_before(world, monkeypatch, tmp_path, said, cause):
+    """#971 R7: a timeout shows its type and notes, which never turn the step's own deadline into a network wait."""
+    error = TimeoutError(said)
+    error.add_note(TRIGGER)
+
+    async def late(*_args, **_kw):
+        raise error
+
+    monkeypatch.setattr(sdk_adapter, "_open", late)
+    run = asyncio.run(sdk_adapter.run(world.cfg))
+    want = f"TimeoutError: {said}\n{TRIGGER}" if said else "step deadline"
+    assert (run.ending, _step_detail(run, tmp_path)) == ("deadline", want)
+    result = to_result(run, StepKind.BUILD, NOW)
+    assert (result.reason, result.exit, result.cause, result.wake_at) == (want, Exit.RETRY, cause, None)
+
+
+def test_an_unread_transcript_keeps_its_whole_error(world, monkeypatch, tmp_path, whole_error):
+    """#971 R5: a resumed session's failed transcript read says the read's whole error, with its JSON-RPC data."""
+    error = JsonRpcError(-32603, whole_error, {"marker": "DATA-MARK"})
+    error.add_note(TRIGGER)
+
+    async def known(_sid):
+        return SimpleNamespace(session_id="synthetic")
+
+    async def resumed(_sid, **_kw):
+        return world.session
+
+    async def events():
+        raise error
+
+    world.get_session_metadata, world.resume_session, world.session.get_events = known, resumed, events
+    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
+    run = asyncio.run(sdk_adapter.run(dataclasses.replace(world.cfg, resume=True)))
+    failed = f"JsonRpcError: JSON-RPC Error -32603: {whole_error}\n{TRIGGER} {{'marker': 'DATA-MARK'}}"
+    want = f"transcript read failed ({failed}); the answer was not resent"
+    assert (run.ending, _step_detail(run, tmp_path)) == ("unread", want)
+    result = to_result(run, StepKind.BUILD, NOW)
+    assert (result.reason, result.cause, result.wake_at) == (want, "liveness:build:transcript", None)
+
+
+@pytest.mark.parametrize("unknown", [False, True])
+def test_a_missing_session_names_the_earlier_processes_not_observed_gone(world, monkeypatch, tmp_path, unknown):
+    """#971: the step says which recorded processes are still present and which are in an unknown state; once its
+    teardown confirmed them gone, the retry's reason is that detail (session_result's ``missing`` case)."""
+
+    async def missing(_sid):
+        return None
+
+    world.get_session_metadata = missing
+    world.live[CHILD] = world.births[CHILD]
+    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
+    previous = {ROOT: world.births[ROOT]} | ({CHILD: None} if unknown else {})
+    run = asyncio.run(sdk_adapter.run(dataclasses.replace(world.cfg, resume=True, previous=previous)))
+    seen = f"{ROOT} still present" + (f"; {CHILD} in an unknown state" if unknown else "")
+    want = f"session missing; earlier processes are not observed gone: {seen}"
+    assert (run.ending, _step_detail(run, tmp_path)) == ("missing", want)
+    reason = f"termination unverified: processes {CHILD} still present" if unknown else want  # unknown stays unknown
+    assert to_result(run, StepKind.BUILD, NOW).reason == reason
+
+
 class Host:
     maintenance = None
     wake = SimpleNamespace(set=lambda: None)
