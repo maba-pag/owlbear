@@ -108,7 +108,7 @@ def plan(c: Change) -> dict:
     live = plan_rounds.current(c)
     n = c.plan.version if live else 0
     running = n if c.step.kind == StepKind.PLAN and c.step.mode in _PLAN_MODES else 0
-    waits = n if plan_rounds.first(c) or plan_rounds.due(c) else 0
+    waits = n if plan_rounds.first(c) or plan_rounds.due(c) or plan_rounds.owned_open(c) else 0
     return {
         "versions": _versions(attempts, c.plan.version, running=running, waits=waits),
         "legacy": _legacy(attempts)[0],

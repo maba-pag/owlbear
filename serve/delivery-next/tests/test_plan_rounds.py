@@ -34,7 +34,7 @@ from owlbear_delivery_next.change_contracts.round_records import (
     Verdict,
 )
 from owlbear_delivery_next.change_contracts.tools import Worktree
-from owlbear_delivery_next.change_flow import disputes, loop, plan_rounds, round_flow, round_marks
+from owlbear_delivery_next.change_flow import disputes, loop, plan_rounds, round_flow, round_marks, versions
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
@@ -304,6 +304,7 @@ def test_after_the_last_round_the_owner_has_another_round_or_a_new_plan(store, c
     q = next(q for q in c.questions if q.answer is None)
     assert [o.id for o in q.options] == ["another", "retry"]
     assert "F1 rejected; the challenger accepted that (no)" in q.text
+    assert versions.plan(c)["versions"][-1]["state"] == "waits"  # the Change page marks the version the owner holds
     c = answer(store, "another")
     assert (c.step.mode, c.loops[PLAN].extra) == ("challenge", 1)
     c = step(store, change_repo)

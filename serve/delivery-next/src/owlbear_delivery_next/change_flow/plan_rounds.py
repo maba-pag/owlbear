@@ -256,6 +256,12 @@ def owned(q: Question) -> bool:
     return (q.cause or "").startswith((DISPUTE, ROUND))
 
 
+def owned_open(c: Change) -> bool:
+    """Whether the Change waits on one of the plan loop's questions."""
+    o = c.outcome
+    return any(q.id == o.question and owned(q) for q in c.questions) if o and o.exit == Exit.ASK else False
+
+
 def decided(c: Change, q: Question, target: str, note: str, now: datetime) -> None:
     """The owner's answer: a decision on one upheld finding, or another round or a new plan after the last round."""
     lp, cause = current(c), q.cause or ""
