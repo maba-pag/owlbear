@@ -84,7 +84,7 @@ class Access:
         if done.returncode:
             said = done.stderr.decode(errors="replace").strip() or f"exit {done.returncode}"
             msg = f"the push URLs of {remote} in {repository} could not be read: {said}"
-            raise RemoteGitError(msg, retry_safe=False)
+            raise RemoteGitError(msg, retry_safe=False, result=done)
         urls = done.stdout.decode(errors="replace").split()
         who = f"instead of {self.login}" if self.login else "instead of the account the setting names"
         fix = f"git -C {repository} remote set-url --push {remote} https://<host>/<owner>/<name>.git"
