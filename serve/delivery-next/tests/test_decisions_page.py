@@ -147,7 +147,8 @@ def test_a_linked_decision_opens_once_the_list_can_be_read(store, pds):
         page.unroute(listing)
         page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
         expect(page.locator(f'.entry[data-id="{rule.id}"] #detail')).to_be_visible()
-        expect(page.locator(f'.entry[data-id="{rule.id}"] .heading')).to_be_focused()
+        # no input reached the page, so the window may lack focus: the heading must be the active element
+        page.wait_for_function(f"document.activeElement?.matches('.entry[data-id=\"{rule.id}\"] .heading')")
 
 
 @pytest.mark.browser
