@@ -147,10 +147,10 @@ def test_a_two_size_model_switches_between_exactly_its_sizes_and_the_rates_follo
         shows(page, "builder", DEFAULT, caption("medium"))
         items.nth(1).click()
         shows(page, "builder", LONG, caption("medium"))
-        expect(page.locator("#pending")).to_contain_text("builder context: inherited \u2192 long")
+        expect(page.locator("#pending")).to_contain_text("builder · Context: inherited \u2192 long")
         items.nth(0).click()
         shows(page, "builder", DEFAULT, caption("medium"))
-        expect(page.locator("#pending")).to_contain_text("builder context: inherited \u2192 default")
+        expect(page.locator("#pending")).to_contain_text("builder · Context: inherited \u2192 default")
         shows(page, "test-curator", LONG, caption("high"))  # inherits the long tier
     assert not store.config_path.exists()
 
@@ -194,7 +194,7 @@ def test_the_rates_caption_names_the_effort_in_use_and_the_rates_never_move_with
         shows(page, "builder", DEFAULT, caption("low"))  # drafted
         pds.pick(page, "Effort for builder", "inherit")
         shows(page, "builder", DEFAULT, caption("medium"))  # cleared: inherited
-        expect(page.locator("#pending")).to_contain_text("builder effort: high \u2192 inherited")
+        expect(page.locator("#pending")).to_contain_text("builder · Effort: high \u2192 inherited")
         switch(page, "builder").locator("p-segmented-control-item[value=long]").click()
         shows(page, "builder", LONG, caption("medium"))
         shows(page, "design-judge", DEFAULT, caption("unset"))
