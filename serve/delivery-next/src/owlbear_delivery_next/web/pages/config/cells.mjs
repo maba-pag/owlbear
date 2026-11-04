@@ -76,8 +76,9 @@ export function setting(id, name, keys, ...cells) {
       return state.kept.has(pin);
     },
   }[state.filter]();
+  // Always a colour: removing the attribute sets p-text's to null, which PDS rejects once a set name stops being red.
   return html`<p-table-row id=${id} tabindex="-1" data-setting ?hidden=${!matches}>${cell(html`<p-text
-    color=${unset ? "error" : nothing}>${name}</p-text>`)}${cells}</p-table-row>`;
+    color=${unset ? "error" : "primary"}>${name}</p-text>`)}${cells}</p-table-row>`;
 }
 
 export function table(caption, heads, body, rows, { id, hidden = false } = {}) {

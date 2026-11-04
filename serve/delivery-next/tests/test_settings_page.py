@@ -890,6 +890,8 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
 
     monkeypatch.setattr(config, "BASE", None)
     with settings_page(store, pds) as page:
+        errors: list[str] = []
+        page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
         pds.group(page, "overview")
         expect(page.locator("#unset")).to_contain_text("settings are unset")
         agents, guardrails = _unset_count(page, "agents"), _unset_count(page, "guardrails")
@@ -915,6 +917,7 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
             expect(page.locator(f"#set-spotter-{key} p-text[color='error']")).to_have_count(1)
         pds.group(page, "agents")
         expect(page.locator("#set-agents-spotter p-text[color='error']")).to_have_count(0)
+        assert errors == []  # a name that stops being red keeps a valid colour
     assert store.read_config().sessions == 3
     spotter = store.settings().agent("spotter")  # a look needs only its model, effort and context
     assert (spotter.model, spotter.effort, spotter.context) == ("tiny", "medium", "default")
