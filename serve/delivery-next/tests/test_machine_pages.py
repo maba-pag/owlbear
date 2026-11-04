@@ -2437,8 +2437,6 @@ def test_an_error_no_machine_route_caught_shows_whole_on_its_page_and_in_the_hos
 ) -> None:
     """#971: the machine's held-sessions read failing with an error nothing catches, a command's with its output, says
     it whole on Maintenance, as the host log's traceback does."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     read, whole, logged_whole = uncaught(whole_error)
     monkeypatch.setattr(maintenance.Maintenance, "read", read)
     with browsing(monkeypatch, pds) as (page, base), logged(caplog):
@@ -2446,9 +2444,7 @@ def test_an_error_no_machine_route_caught_shows_whole_on_its_page_and_in_the_hos
         with page.expect_response("**/api/next/maintenance/sessions") as answered:
             page.goto(f"{base}/maintenance#token=t")
         assert (answered.value.status, answered.value.json()) == (500, {"detail": whole})
-        notice = page.locator("#sessions-error")
-        expect(notice).to_have_count(1)
-        assert notice.text_content().strip() == f"Could not read the held sessions: {whole}."
+        assert page.locator("#sessions-error").text_content().strip() == f"Could not read the held sessions: {whole}."
         assert traced(caplog, page) == {("Exception in ASGI application\n", logged_whole)}
         assert set(broke) == {FAILED_500}  # the browser's own line for the answer, no script error
 
