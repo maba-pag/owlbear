@@ -59,12 +59,12 @@ class Steps:
         """No update's steps yet."""
         self.say, self.lock = say, threading.Lock()
         self.version, self.steps, self.log = "", [], []
-        self.unwritten = ""  # the last write's failure, said once
+        self.unwritten = ""  # the last write's failure, said once per update
 
     def begin(self) -> None:
         """A new update: every step waits, the log is empty and the record is overwritten."""
         with self.lock:
-            self.version, self.log = "", []
+            self.version, self.log, self.unwritten = "", [], ""
             self.steps = [{"key": k, "label": label, "state": "pending", "started_at": None, "ended_at": None,
                            "line": ""} for k, label in STEPS]  # fmt: skip
             self._write()
