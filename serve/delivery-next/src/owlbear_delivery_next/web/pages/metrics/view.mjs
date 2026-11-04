@@ -99,8 +99,9 @@ function exactness(t, undated) {
     t.uncertain_time ? `${credits(t.uncertain_time)} credits were spent at a time known only roughly, so they may
       belong to a neighbouring day.` : "",
     t.uncertain_agent ? `${credits(t.uncertain_agent)} credits are not split between an agent and its subagents.` : "",
-    undated ? `Spend of ${runs(undated.runs)} may also lie in this period (${outside(undated)}): when it was spent is
-      not known closely enough to say, so it is not counted.` : "",
+    undated ? html`Spend of ${runs(undated.runs)} may also lie in this period (${outside(undated)}): when it was spent
+      is not known closely enough to say, so it is not counted.${why(undated.unknown_why)}${why(undated.failed_why)}`
+      : "",
   ].filter(Boolean);
   return html`<p-heading size="md"><h3 id="exact-title">How exact these totals are</h3></p-heading>
     <ul id="exact" class="notes" aria-labelledby="exact-title">${items.length ? items.map((i) => html`<li>${i}</li>`)

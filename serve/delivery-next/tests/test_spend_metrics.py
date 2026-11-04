@@ -97,6 +97,18 @@ def test_an_unread_baseline_spreads_a_runs_share_over_the_window_since_the_last_
     assert (both["totals"]["credits"], both["undated"]) == (6.0, None)
 
 
+def test_a_failed_read_of_spend_that_may_lie_in_the_period_says_its_whole_error(whole_error) -> None:
+    """#971 P14: a resume with no baseline spreads its spend across the filter's edge; its failed read says why."""
+    lines = [
+        start("r1", "2026-09-30T09:00:00+00:00", before={}),
+        end("r1", "2026-09-30T10:00:00+00:00", usage(2.0)),
+        start("r2", "2026-10-01T10:00:00+00:00", before=None),
+        end("r2", "2026-10-01T11:00:00+00:00", usage(6.0) | {"incomplete": whole_error}),
+    ]
+    undated = spend_metrics.query(spend_shares.derive(lines), tz=UTC, start=date(2026, 10, 1))["undated"]
+    assert (undated["failed"], undated.get("failed_why"), undated.get("unknown_why")) == (1, [whole_error], [])
+
+
 def test_re_splitting_earlier_credits_between_agents_never_creates_spend() -> None:
     """Sol's counterexample: an unsplit legacy total of 10, then the split cumulative total 11, made 13."""
     unsplit = usage(10.0)

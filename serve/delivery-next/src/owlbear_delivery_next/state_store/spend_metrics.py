@@ -166,7 +166,7 @@ def query(  # noqa: PLR0913 - one value per filter the page offers
     listed.sort(key=(lambda r: r["key"]) if by == "day" else (lambda r: (-r["credits"], r["label"])))
     return {
         "totals": _sum(inside) | _why(inside),
-        "undated": _sum(undated) if undated else None,
+        "undated": _sum(undated) | _why(undated) if undated else None,
         "rows": listed,
         "runs": _runs(inside, names, cursor),
         "choices": _choices(found, names, project),
