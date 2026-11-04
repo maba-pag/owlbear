@@ -155,23 +155,35 @@ def logged(caplog) -> Iterator[None]:
         server.removeHandler(caplog.handler)
 
 
-def uncaught(note: str, whole_error: str) -> Callable[..., Any]:
-    """A read that raises *whole_error* with *note* added on the way up, which no route catches."""
+COMMAND = ["git", "owlbear-test-read"]  # the failed command an uncaught read raises
+
+
+def uncaught(whole_error: str) -> tuple[Callable[..., Any], str, str]:
+    """A read no route catches: it raises *COMMAND*'s failure, long stderr and stdout with it, and a note added on
+    the way up. Also the error's whole text as a page says it, and as the host log's traceback ends."""
+    out = "\n".join(f"out {line}" for line in whole_error.splitlines())
+    note = "NOTE added on the way up"
 
     def read(*_args: object) -> Any:
-        exc = RuntimeError(whole_error)
+        exc = subprocess.CalledProcessError(1, COMMAND, output=out, stderr=whole_error)
         exc.add_note(note)
         raise exc
 
-    return read
+    head = f"CalledProcessError: Command '{COMMAND}' returned non-zero exit status 1."
+    said = f"stderr:\n{whole_error}\nstdout:\n{out}"
+    return read, f"{head}\n{said}\n{note}", f"subprocess.{head}\n{note}\n{said}\n"  # a traceback names its module
 
 
-def traced(caplog, page: Page, kind: type[BaseException]) -> set[tuple[str, str]]:
-    """What uvicorn logged into the host log about a *kind* error, once it did: each record's message and the
+def traced(caplog, page: Page) -> set[tuple[str, str]]:
+    """What uvicorn logged into the host log about *COMMAND*'s failure, once it did: each record's message and the
     exception its traceback ends with. A page's other reads may fail too, with other errors."""
 
     def ours() -> list[logging.LogRecord]:
-        return [r for r in caplog.records if r.name == "uvicorn.error" and r.exc_info and type(r.exc_info[1]) is kind]
+        return [
+            r
+            for r in caplog.records
+            if r.name == "uvicorn.error" and r.exc_info and getattr(r.exc_info[1], "cmd", None) == COMMAND
+        ]
 
     until(page, ours)
     return {(r.getMessage(), "".join(traceback.format_exception_only(r.exc_info[1]))) for r in ours()}
@@ -2423,22 +2435,21 @@ FAILED_500 = "Failed to load resource: the server responded with a status of 500
 def test_an_error_no_machine_route_caught_shows_whole_on_its_page_and_in_the_host_log(
     monkeypatch, pds, caplog, whole_error
 ) -> None:
-    """#971: the machine's held-sessions read failing with an error nothing catches says it whole on Maintenance, as
-    the host log's traceback does."""
+    """#971: the machine's held-sessions read failing with an error nothing catches, a command's with its output, says
+    it whole on Maintenance, as the host log's traceback does."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    note = "NOTE added on the way up"
-    monkeypatch.setattr(maintenance.Maintenance, "read", uncaught(note, whole_error))
-    whole = f"RuntimeError: {whole_error}\n{note}"
+    read, whole, logged_whole = uncaught(whole_error)
+    monkeypatch.setattr(maintenance.Maintenance, "read", read)
     with browsing(monkeypatch, pds) as (page, base), logged(caplog):
         broke = errors(page)
         with page.expect_response("**/api/next/maintenance/sessions") as answered:
             page.goto(f"{base}/maintenance#token=t")
-        assert answered.value.status == 500
+        assert (answered.value.status, answered.value.json()) == (500, {"detail": whole})
         notice = page.locator("#sessions-error")
         expect(notice).to_have_count(1)
         assert notice.text_content().strip() == f"Could not read the held sessions: {whole}."
-        assert traced(caplog, page, RuntimeError) == {("Exception in ASGI application\n", f"{whole}\n")}
+        assert traced(caplog, page) == {("Exception in ASGI application\n", logged_whole)}
         assert set(broke) == {FAILED_500}  # the browser's own line for the answer, no script error
 
 
@@ -2451,18 +2462,17 @@ def test_an_error_no_project_route_caught_shows_whole_on_its_page_and_in_the_hos
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     alpha = registry.register(clone(tmp_path / "alpha"))
-    note = "NOTE added on the way up"
-    monkeypatch.setattr(pack_routes, "overview", uncaught(note, whole_error))
-    whole = f"RuntimeError: {whole_error}\n{note}"
+    read, whole, logged_whole = uncaught(whole_error)
+    monkeypatch.setattr(pack_routes, "overview", read)
     with browsing(monkeypatch, pds) as (page, base), logged(caplog):
         broke = errors(page)
         with page.expect_response(f"**/p/{alpha.id}/api/next/maintenance") as answered:
             page.goto(f"{base}/maintenance?project={alpha.id}#token=t")
-        assert answered.value.status == 500
+        assert (answered.value.status, answered.value.json()) == (500, {"detail": whole})
         notice = page.locator("#error")
         expect(notice).to_be_visible()
         assert notice.text_content().strip() == whole
-        assert traced(caplog, page, RuntimeError) == {("Exception in ASGI application\n", f"{whole}\n")}
+        assert traced(caplog, page) == {("Exception in ASGI application\n", logged_whole)}
         assert set(broke) == {FAILED_500}
 
 
