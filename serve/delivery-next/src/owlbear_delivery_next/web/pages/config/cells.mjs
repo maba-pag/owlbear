@@ -1,5 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
+import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
 import { EFFORTS, INHERIT, SOURCES, state, shown } from "./state.mjs";
 import { own, inherited, edit, layerValue, preview, drafted } from "./layers.mjs";
 import { levels, arrows } from "./cost.mjs";
@@ -94,9 +95,11 @@ function choose(label, options, value, chosen, { key, disabled = false, filter =
   const changed = (e) => chosen(e.target.value);
   const items = options.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`);
   const checked = wrong === undefined ? nothing : wrong ? "error" : "none";
-  return html`<p-select label=${label} hide-label="true" data-key=${key ?? nothing}
-    filter=${filter ? "true" : nothing} state=${checked} message=${wrong || nothing} ?disabled=${disabled}
-    .value=${live(value)} @change=${changed}>${items}</p-select>`;
+  // PDS options can receive a queued slotchange after removal; replace their select as one subtree.
+  return repeat([options], (list) => JSON.stringify(list.map(([v]) => v)),
+    () => html`<p-select label=${label} hide-label="true" data-key=${key ?? nothing}
+      filter=${filter ? "true" : nothing} state=${checked} message=${wrong || nothing} ?disabled=${disabled}
+      .value=${live(value)} @change=${changed}>${items}</p-select>`);
 }
 
 function typed(label, value, onInput, { key, placeholder, inputmode, disabled = false } = {}) {

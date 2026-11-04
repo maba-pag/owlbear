@@ -122,6 +122,49 @@ def switch(page, role: str):
 
 
 @pytest.mark.browser
+def test_arriving_models_shrink_hydrated_effort_options_without_page_errors(store, monkeypatch, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    arrive = threading.Event()
+
+    def offered(_self):
+        arrive.wait()
+        return MODELS
+
+    monkeypatch.setattr(model_choices.Offered, "__call__", offered)
+    errors = []
+
+    def observe(page):
+        page.on("pageerror", lambda error: errors.append(str(error)))
+
+    try:
+        with settings_page(store, pds, wait_models=False, before_goto=observe) as page:
+            pds.settled(page)
+            effort = pds.select(page, "Effort for builder")
+            expect(effort.locator('p-select-option[value="max"]')).to_have_count(1)
+            removed = effort.locator('p-select-option[value="max"]').element_handle()
+            assert removed is not None
+            layer = pds.select(page, "Layer").get_by_role("combobox")
+            layer.focus()
+            arrive.set()
+            expect(page.locator("#models-note")).to_contain_text("as this machine's Copilot offers them")
+            pds.settled(page)
+            assert effort.locator("p-select-option").evaluate_all("(items) => items.map((item) => item.value)") == [
+                "inherit",
+                "low",
+                "medium",
+                "high",
+            ]
+            expect(effort).to_have_js_property("value", "inherit")
+            expect(layer).to_be_focused()
+            # A slotchange queued while this option was mounted can arrive after the offered efforts replace it.
+            removed.evaluate("e => e.shadowRoot.querySelector('slot').dispatchEvent(new Event('slotchange'))")
+            assert errors == []
+    finally:
+        arrive.set()
+
+
+@pytest.mark.browser
 def test_a_one_size_model_shows_its_size_and_rates_with_no_switch_or_select(store, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
