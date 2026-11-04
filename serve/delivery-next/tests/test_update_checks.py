@@ -462,7 +462,8 @@ def test_a_check_whose_record_cannot_be_written_still_ends_and_says_why(monkeypa
     checks = Checks(machine, Clock(), lambda work: work())
     assert checks.start("pds")
     assert (shown(checks, "pds")["state"], shown(checks, "pds")["checking"]) == ("newer", False)
-    assert any("could not be written: read-only" in line for line in said)
+    unkept = f"{checks.path} could not be written: OSError: read-only: {checks.path}"
+    assert (said, checks.read()["unkept"]) == ([f"update checks: {unkept}"], unkept)
 
 
 @pytest.fixture

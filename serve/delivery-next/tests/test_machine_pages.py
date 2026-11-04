@@ -900,6 +900,128 @@ def test_updates_say_update_checks_that_started_afresh_whole(monkeypatch, capsys
     assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [unrestored]
 
 
+def _checks_page(base: str, path: str, locator: str) -> tuple[str, list[str]]:
+    """The text of *locator* on the machine host's page at *path* once shown, and the page's errors."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    with sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        page = browser.new_page()
+        said = errors(page)
+        page.goto(f"{base}{path}#token=t")
+        shown = page.locator(locator)
+        expect(shown).to_be_visible()
+        text = shown.text_content()
+        browser.close()
+    return text, said
+
+
+def _tick_fails_once(monkeypatch, machine: Machine, error: Exception, released: threading.Event) -> None:
+    """Run *machine*'s update-check loop until its first look whether a check is due failed with *error*; its next
+    look waits for *released*, so nothing clears it."""
+    looks = []
+
+    def ticking() -> None:
+        looks.append(1)
+        if len(looks) == 1:
+            raise error
+        released.wait()
+
+    monkeypatch.setattr(update_checks, "TICK", 0.05)
+    monkeypatch.setattr(machine.checks, "start", lambda _name: False)
+    monkeypatch.setattr(machine.checks, "tick", ticking)
+    threading.Thread(target=machine.checks.loop, daemon=True).start()
+    for _ in range(200):
+        if len(looks) > 1:
+            return
+        time.sleep(0.05)
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("failing", ["unkept", "unsettled", "unticked"])
+def test_updates_say_update_checks_that_could_not_be_kept_set_or_looked_at_whole(
+    monkeypatch, capsys, whole_error, failing
+) -> None:
+    """#971: update checks whose results could not be written, whose machine settings could not be read, or whose
+    look whether one is due failed say why whole on Updates and in the host's log."""
+    error = OSError(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising(*_args, **_kwargs):
+        raise error
+
+    newer = {"newer": True, "current": "3.0.0", "latest": "999.0.0", "detail": ""}
+    monkeypatch.setitem(update_checks.CHECKS, "pds", lambda: newer)
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    released = threading.Event()
+    machine, server, base = serve()
+    try:
+        whole = f"OSError: {whole_error}\na note on the failure"
+        if failing == "unkept":
+            monkeypatch.setattr(update_checks, "atomic_write", raising)
+            assert machine.checks.start("pds")
+            assert machine.checks.drain(10)
+            told = f"The check results are not kept: {machine.checks.path} could not be written: {whole}."
+            logged = f"update checks: {machine.checks.path} could not be written: {whole}"
+        elif failing == "unsettled":
+            monkeypatch.setattr(update_checks, "machine_settings", SimpleNamespace(current=raising))
+            told = f"The machine settings could not be read, so no check runs at its interval: {whole}."
+            logged = f"update checks: the machine settings could not be read: {whole}"
+        else:
+            _tick_fails_once(monkeypatch, machine, error, released)
+            assert machine.checks.unticked == whole
+            told = f"The last look whether a check is due failed: {whole}."
+            logged = f"update checks failed: {whole}"
+        text, said = _checks_page(base, "/updates/owlbear", "#check-settings")
+    finally:
+        released.set()
+        server.should_exit = True
+        machine.stop_all()
+    lead = r"It looks [^\n]*\.\s+How often is set in Settings → This machine\. "
+    assert re.fullmatch(lead + re.escape(told), text)
+    assert said == []
+    line = r"^\d\d:\d\d:\d\dZ (update checks.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
+    lines = re.findall(line, capsys.readouterr().out, re.MULTILINE | re.DOTALL)
+    assert lines
+    assert set(lines) == {logged}
+
+
+@pytest.mark.browser
+def test_updates_pds_says_a_newer_release_whose_projects_runs_could_not_be_read_whole(
+    monkeypatch, capsys, whole_error
+) -> None:
+    """#971: a newer PDS whose projects' updates could not be read says why whole beside it on Updates ▸ PDS and in
+    the host's log."""
+    error = OSError(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising(*_args, **_kwargs):
+        raise error
+
+    newer = {"newer": True, "current": "3.0.0", "latest": "999.0.0", "detail": ""}
+    monkeypatch.setitem(update_checks.CHECKS, "pds", lambda: newer)
+    monkeypatch.setattr(update_checks, "_pds_runs", raising)  # the PDS page's own run list reads them apart
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    machine, server, base = serve()
+    try:
+        assert machine.checks.start("pds")
+        assert machine.checks.drain(10)
+        text, said = _checks_page(base, "/updates/pds", "#check-latest")
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    whole = f"OSError: {whole_error}\na note on the failure"
+    assert text == f"999.0.0 (whether a project already takes it could not be read: {whole})"
+    assert said == []
+    line = r"^\d\d:\d\d:\d\dZ (update checks.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
+    lines = re.findall(line, capsys.readouterr().out, re.MULTILINE | re.DOTALL)
+    assert lines
+    assert set(lines) == {f"update checks: the PDS updates could not be read: {whole}"}
+
+
 def targets(scope) -> list[str]:
     """WCAG 2.5.8: each shown control in *scope* still smaller than 24 by 24 pixels once the design system has laid it
     out (under load that takes a moment), by its text."""

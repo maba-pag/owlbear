@@ -47,9 +47,14 @@ export function settingsLink(label = "Settings → This machine") {
 function often(u) {
   const by = u.hours ? `every ${u.hours} hour${u.hours === 1 ? "" : "s"}` : "only when OwlBear starts and when you "
     + "search";
-  const lost = checks.all?.unrestored ? ` Earlier check results were lost: ${checks.all.unrestored}.` : "";
+  const all = checks.all ?? {};
+  const lost = all.unrestored ? ` Earlier check results were lost: ${all.unrestored}.` : "";
+  const unkept = all.unkept ? ` The check results are not kept: ${all.unkept}.` : "";
+  const unsettled = all.unsettled ? " The machine settings could not be read, so no check runs at its interval: "
+    + `${all.unsettled}.` : "";
+  const unticked = all.unticked ? ` The last look whether a check is due failed: ${all.unticked}.` : "";
   return html`<p-text id="check-settings" size="sm">It looks ${by}${u.next_at ? `; next ${when(u.next_at)}` : ""}.
-    How often is set in ${settingsLink()}.${lost}</p-text>`;
+    How often is set in ${settingsLink()}.${lost}${unkept}${unsettled}${unticked}</p-text>`;
 }
 
 // The state the page shows: once two failed checks are shown, the check could not answer, so it is never current
@@ -62,7 +67,10 @@ function newest(u) {
   // the host keeps a newer version it found through failed checks, until it is applied or found withdrawn
   if (u.latest && u.latest !== u.current) {
     const last = standing(u) === "newer" ? "" : ", found by the last successful check";
-    return `${u.latest}${u.detail ? ` (${u.detail})` : ""}${last}`;
+    const unread = u.name === "pds" && checks.all?.runs_unread
+      ? `whether a project already takes it could not be read: ${checks.all.runs_unread}` : "";
+    const said = [u.detail, unread].filter(Boolean).join("; ");
+    return `${u.latest}${said ? ` (${said})` : ""}${last}`;
   }
   if (standing(u) === "current") return `${u.latest || u.current}, the one in use`;
   return u.detail || "not known yet";
