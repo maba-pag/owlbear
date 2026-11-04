@@ -249,8 +249,9 @@ def counted(c: Change, found: list[str], upheld: Mapping[str, tuple[bool, str]],
     """Count one challenger verdict on the requested version; then the owner, the shaper or the approval."""
     lp, version = c.loops[BRIEF], c.brief.requested or c.brief.version
     recheck = c.step.mode == RECHECK
+    repair = lp.head != str(version)
     said = lp.verdict(found, upheld, str(version), f"v{version}", recheck=recheck)
-    lp.read(version, recheck=recheck, upheld=said)
+    lp.read(version, recheck=recheck, upheld=said, repair=repair)
     lp.reentry = False
     _mode(c, None)
     proceed(c, now)

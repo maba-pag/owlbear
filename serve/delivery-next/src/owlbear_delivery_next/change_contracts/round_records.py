@@ -76,6 +76,7 @@ class Verdict(_Record):
     version: int
     recheck: bool = False
     upheld: int = 0  # the rejections it did not accept
+    repair: bool = False  # a recheck of a revision no round had read: no earlier round can have read it
 
 
 class Completion(_Record):
@@ -171,9 +172,10 @@ class RoundLoop(_Record):
         self.count(len(self.raise_findings(found)), recheck=recheck)
         return upheld
 
-    def read(self, version: int, *, recheck: bool, upheld: int) -> None:
+    def read(self, version: int, *, recheck: bool, upheld: int, repair: bool) -> None:
         """Record which version the verdict just counted read, and how many rejections it did not accept."""
-        self.verdicts.append(Verdict(round=self.round, version=version, recheck=recheck, upheld=upheld))
+        v = Verdict(round=self.round, version=version, recheck=recheck, upheld=upheld, repair=recheck and repair)
+        self.verdicts.append(v)
 
 
 def parse(text: str) -> tuple[str, str] | None:

@@ -198,11 +198,24 @@ def test_a_rechecked_repair_stays_not_challenged_after_the_next_save():
     c = briefed(2, findings=[found(1, "rejected")], round=1, head="1", ended="")
     lp = c.loops[BRIEF]
     lp.verdict([], {"F1": (False, "fair")}, "2", "v2", recheck=True)
-    lp.read(2, recheck=True, upheld=0)
+    lp.read(2, recheck=True, upheld=0, repair=True)
     c.brief.version = 3
+    before = [(1, "unknown", [], []), (2, "unreviewed", ["Rejections checked after challenge 1"], [])]
 
-    assert lp.unreviewed == ["v2"]
-    assert shown(versions.brief(c))[:2] == [
+    assert (lp.unreviewed, shown(versions.brief(c))[:2]) == (["v2"], before)
+    lp.verdict([], {}, "3", "v3", recheck=False)  # a full challenge of v3 clears the repair marks
+    lp.read(3, recheck=False, upheld=0, repair=True)
+    assert (lp.unreviewed, shown(versions.brief(c))[:2]) == ([], before)
+
+
+def test_a_draft_saved_after_a_retry_of_a_legacy_attempt_is_not_challenged():
+    """The owner chose to shape the brief again after legacy rounds that ended on v3; the new attempt has no head."""
+    old = briefed(3, findings=[found(1), found(2, n=2)], round=2, head="3", ended="max").loops[BRIEF]
+    c = briefed(4, ended="", attempt=2, history=[old])
+
+    assert shown(versions.brief(c)) == [
         (1, "unknown", [], []),
-        (2, "unreviewed", ["Rejections checked after challenge 1"], []),
+        (2, "unknown", [], []),
+        (3, "unknown", [], []),
+        (4, "unreviewed", [], ["approve"]),
     ]

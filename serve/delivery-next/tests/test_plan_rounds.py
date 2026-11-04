@@ -233,7 +233,7 @@ def test_an_early_last_round_with_rejections_gets_a_check_outside_the_count(
         K.BUILD, 1, "count" if unreviewed else "clean", unreviewed, "standing"
     )  # fmt: skip
     assert c.plan.version == 2
-    assert lp.verdicts == [Verdict(round=1, version=1), Verdict(round=1, version=2, recheck=True)]
+    assert lp.verdicts == [Verdict(round=1, version=1), Verdict(round=1, version=2, recheck=True, repair=True)]
 
 
 def test_a_plan_resubmitted_unchanged_after_the_last_round_is_no_unreviewed_revision(store, change_repo, mp):

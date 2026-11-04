@@ -145,7 +145,8 @@ def test_the_shaper_asks_rejects_and_revises_until_the_owner_may_approve_the_ver
     said = shaping.told[-1].message
     assert ("Shaper's reason: the scope is the package" in said, "Judge only these rejections" in said) == (True, True)
     assert (shaping.told[-1].cap, c.outcome.exit, c.loops[BRIEF].findings[1].state) == (0, Exit.ASK, "escalated")
-    assert c.loops[BRIEF].verdicts[1:] == [Verdict(round=1, version=2, recheck=True, upheld=1)]  # outside the count
+    checked = Verdict(round=1, version=2, recheck=True, upheld=1, repair=True)
+    assert c.loops[BRIEF].verdicts[1:] == [checked]  # outside the count
     assert shaping.save(title="Add a farewell").get("errors")[0].startswith("change: a finding")
     c = shaping.answer("fix", "keep the package scope narrow")
     assert (c.loops[BRIEF].findings[1].state, c.outcome.waiting) == ("owner-fix", Waiting.CHAT)
