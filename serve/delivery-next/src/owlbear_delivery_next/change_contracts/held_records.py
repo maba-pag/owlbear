@@ -20,6 +20,7 @@ class HeldRun(BaseModel):
     session_id: str
     ending: str
     detail: str = ""
+    classified: str = ""  # what its retries classify when ``detail`` says more (#971 R7); an older record kept none
     head: str | None = None
     changed: list[str] = []  # the paths the commits change at head, as Delivery read them; empty in older holds
     payload: dict[str, Any] | None = None  # {"model": a result model's name, "args": its fields}
