@@ -122,7 +122,7 @@ def switch(page, role: str):
 
 
 @pytest.mark.browser
-def test_arriving_models_shrink_hydrated_effort_options_without_page_errors(store, monkeypatch, pds) -> None:
+def test_a_one_size_model_shows_its_size_and_rates_with_no_switch_or_select(store, monkeypatch, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     arrive = threading.Event()
@@ -159,21 +159,14 @@ def test_arriving_models_shrink_hydrated_effort_options_without_page_errors(stor
             expect(layer).to_be_focused()
             # A slotchange queued while this option was mounted can arrive after the offered efforts replace it.
             removed.evaluate("e => e.shadowRoot.querySelector('slot').dispatchEvent(new Event('slotchange'))")
+            context = cells(page, "reviewer").nth(3)  # inherits gpt-6.1-sol, effort xhigh
+            expect(context).to_contain_text("272k \u00b7 only tier")
+            expect(context.locator("p-segmented-control")).to_have_count(0)
+            expect(context.locator("p-select")).to_have_count(0)
+            shows(page, "reviewer", ONE, caption("xhigh"))  # no efforts: the same caption
             assert errors == []
     finally:
         arrive.set()
-
-
-@pytest.mark.browser
-def test_a_one_size_model_shows_its_size_and_rates_with_no_switch_or_select(store, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    with settings_page(store, pds) as page:
-        context = cells(page, "reviewer").nth(3)  # inherits gpt-6.1-sol, effort xhigh
-        expect(context).to_contain_text("272k \u00b7 only tier")
-        expect(context.locator("p-segmented-control")).to_have_count(0)
-        expect(context.locator("p-select")).to_have_count(0)
-        shows(page, "reviewer", ONE, caption("xhigh"))  # no efforts: the same caption
 
 
 @pytest.mark.browser
