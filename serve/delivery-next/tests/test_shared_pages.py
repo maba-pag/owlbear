@@ -717,6 +717,14 @@ async () => {
     wrong: keys.filter((k) => hasRow(k) || nameOf(k) !== k || document.getElementById(rowOf(k))) };
 }
 """
+# A change notice kept from an older version, for a setting since retired, as the read state keeps it until dismissed.
+RETIRED_NOTICE = """
+async (notices) => {
+  const { state, show } = await import("/assets/page/config/state.mjs");
+  state.reads = { ...(state.reads ?? {}), notices };
+  show();
+}
+"""
 SECTIONED = {"spotter.": "Spotter", "pr_labels": "Pull requests", "pr_marker": "Pull requests"}
 
 
@@ -724,6 +732,13 @@ def every_name_is_what_its_row_shows(page, pds) -> None:
     """The unset list's names are the page's own: each key's name is its row's visible name, behind its section's
     heading where the row means little alone, and its column's head in the agents and rounds tables (never built from
     the name table itself); the row sits in the group the list links to; a key with no row is named as written."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    retired = {"id": "n1", "key": "machine.spotter_budget", "old": "5", "new": None, "at": "2026-11-04T09:00:00Z"}
+    page.evaluate(RETIRED_NOTICE, [retired])  # it is shown as its key and can be dismissed, never a failure to draw
+    expect(page.locator("#reads-changed li")).to_contain_text("machine.spotter_budget: 5 → unset")
+    expect(page.get_by_role("button", name="Dismiss the change of machine.spotter_budget")).to_have_count(1)
+    page.evaluate(RETIRED_NOTICE, [])
     keys = page.evaluate(OVERVIEW_KEYS)
     assert (len(keys), sum(k["unset"] for k in keys)) == (149, 145)  # 131 + 14 unset, and four shown when set
     for group in dict.fromkeys(k["group"] for k in keys):
