@@ -442,12 +442,12 @@ def _noted(exc: Exception) -> Exception:
 @pytest.mark.parametrize(
     ("site", "ask"),
     [
-        ("retro", ("post", "/retro", {"change": "p1:fix"}, "Change p1:fix cannot be read: OSError: {w}\n{n}")),
-        ("followup", ("post", "/followups", {"finding": "f-1"}, "RetroError: {w}\n{n}")),
-        ("backlog", ("post", "/followups", {"finding": "f-1"}, "the backlog could not be reached: OSError: {w}\n{n}")),
-        ("decide", ("post", "/proposals/p-1/decide", {"state": "accepted", "token": "t"}, "RetroError: {w}\n{n}")),
-        ("apply", ("post", "/proposals/p-1/apply", None, "RetroError: {w}\n{n}")),
-        ("move", ("post", "/cases/c-1/move", {"stage": "candidate", "parent": 0}, "CaseError: {w}\n{n}")),
+        ("retro", ("/retro", {"change": "p1:fix"}, "Change p1:fix cannot be read: OSError: {w}\n{n}")),
+        ("followup", ("/followups", {"finding": "f-1"}, "RetroError: {w}\n{n}")),
+        ("backlog", ("/followups", {"finding": "f-1"}, "the backlog could not be reached: OSError: {w}\n{n}")),
+        ("decide", ("/proposals/p-1/decide", {"state": "accepted", "token": "t"}, "RetroError: {w}\n{n}")),
+        ("apply", ("/proposals/p-1/apply", None, "RetroError: {w}\n{n}")),
+        ("move", ("/cases/c-1/move", {"stage": "candidate", "parent": 0}, "CaseError: {w}\n{n}")),
     ],
 )
 def test_a_refused_act_keeps_its_whole_reason(world, monkeypatch, whole_error, site, ask) -> None:
@@ -468,9 +468,9 @@ def test_a_refused_act_keeps_its_whole_reason(world, monkeypatch, whole_error, s
         monkeypatch.setattr(proposal_apply, site, raising(store.RetroError(whole_error)))
     else:
         monkeypatch.setattr(case_edits, "move", raising(CaseError(whole_error)))
-    method, path, body, said = ask
+    path, body, said = ask
 
-    answer = getattr(world.http, method)(f"{API}{path}", json=body)
+    answer = world.http.post(f"{API}{path}", json=body)
 
     status = 422 if site == "move" else 409
     assert (answer.status_code, answer.json()["detail"]) == (status, said.format(w=whole_error, n=NOTE))
