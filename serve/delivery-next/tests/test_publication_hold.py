@@ -1521,3 +1521,21 @@ def test_a_failed_hold_probe_names_git_s_whole_stderr(held, monkeypatch, failing
     git = f"CalledProcessError: Command '{['git', *ran[-1]]}' returned non-zero exit status 128.\n{whole_error}"
     expected = f"nothing was pushed or rebased in {shared.root}: a held automatic change cannot be checked: {git}"
     assert said == expected
+
+
+def test_a_spent_decision_whose_hold_git_fails_is_refused_with_git_s_whole_words(picking, failing_git, whole_error):
+    """P21: spending an active project decision holds it first; a hold Git fails refuses the save, Git's words whole."""
+    from owlbear_decisions import State  # noqa: PLC0415
+    from owlbear_delivery_next.state_store import decision_store  # noqa: PLC0415
+
+    shared, rule = picking.shared, an_owned_decision(picking)
+    (saved,) = decision_store.save_all(shared, [(rule, None)], message="decisions: one")
+    assert saved.saved
+    ran: list[tuple[str, ...]] = []
+    hold_probe = ("ls-tree", publication_hold.UPSTREAM)
+    failing_git(whole_error, lambda args, _until: args[:2] == hold_probe and not ran.append(args))
+    spent = rule.model_copy(update={"state": State.SPENT})
+    with pytest.raises(decision_store.DecisionsUnavailable) as refused:
+        decision_store.save_all(shared, [(spent, saved.revision)], message="decisions: spent")
+    git = f"CalledProcessError: Command '{['git', *ran[-1]]}' returned non-zero exit status 128.\n{whole_error}"
+    assert str(refused.value) == f"DataRepoError: the automatic change was not written: {git}"

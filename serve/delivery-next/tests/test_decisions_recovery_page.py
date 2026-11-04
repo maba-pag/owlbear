@@ -343,7 +343,7 @@ def test_a_refused_recovery_answers_whole(picking, tmp_path, monkeypatch, whole_
         headers={"authorization": "Bearer tok"},
     )
     got = client.post("/api/next/decisions/recovery/finish", json={"generation": generation, "confirmed": True})
-    detail = f"{'JournalError: ' if exit_ == 'journal' else ''}{whole_error} ({decision_store.RECOVER})"
+    detail = f"{'JournalError' if exit_ == 'journal' else 'DataRepoError'}: {whole_error} ({decision_store.RECOVER})"
     assert (got.status_code, got.json()["detail"]) == (409, detail)
     assert logged(caplog) == [f"decision recovery refused: {detail}"]
 
@@ -419,12 +419,11 @@ def test_each_recovery_refusal_names_its_whole_error(picking, monkeypatch, whole
     generation = _interrupted_here(picking)
     shared = picking.shared
     if site == "not-published":
-        failing_git(whole_error, lambda args, _: "commit" in args[:3])
+        ran: list[tuple[str, ...]] = []
+        failing_git(whole_error, lambda args, _: "commit" in args[:3] and not ran.append(args))
         said = decision_recovery.finish(shared, generation)
-        assert (said.done, said.notice) == (
-            False,
-            f"not published, so it stays: saved, but not committed: {whole_error}",
-        )
+        git = f"CalledProcessError: Command '{['git', *ran[-1]]}' returned non-zero exit status 128.\n{whole_error}"
+        assert (said.done, said.notice) == (False, f"not published, so it stays: saved, but not committed: {git}")
         return
     if site == "unreadable":
 
@@ -432,7 +431,7 @@ def test_each_recovery_refusal_names_its_whole_error(picking, monkeypatch, whole
             raise decision_batch.JournalError(whole_error)
 
         monkeypatch.setattr(decision_batch, "pending", unreadable)
-        expected = whole_error
+        expected = f"JournalError: {whole_error}"
     elif site == "invalid":
         decision_id = decision_batch.pending(shared).ids[0]
         found = [Finding(f"{n}.md", "rule", whole_error, (decision_id,)) for n in range(4)]
@@ -445,7 +444,7 @@ def test_each_recovery_refusal_names_its_whole_error(picking, monkeypatch, whole
             raise OSError(whole_error)
 
         monkeypatch.setattr(decision_batch, "complete", unwritable)
-        expected = whole_error
+        expected = f"OSError: {whole_error}"
     act = decision_recovery.abandon if site == "abandon" else decision_recovery.finish
     with pytest.raises(decision_store.DecisionsUnavailable) as refused:
         act(shared, generation)

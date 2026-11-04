@@ -517,7 +517,13 @@ def test_each_git_failure_of_a_save_is_said_whole(shared, monkeypatch, whole_err
         "commit": lambda args, _: "commit" in args[:3],
         "fetch": lambda args, _: args[:1] == ("fetch",),
     }
-    failing_git(whole_error, picks.get(site, lambda args, _: args[:1] == ("push",)))
+    ran: list[tuple[str, ...]] = []
+    pick = picks.get(site, lambda args, _: args[:1] == ("push",))
+    failing_git(whole_error, lambda args, until: pick(args, until) and not ran.append(args))
+
+    def git() -> str:  # the failed command as `CalledProcessError` words it, then Git's whole stderr
+        return f"CalledProcessError: Command '{['git', *ran[-1]]}' returned non-zero exit status 128.\n{whole_error}"
+
     if site == "push-unflagged":  # the flags' round could not run: only the save's own notice is left
         monkeypatch.setattr(decision_store, "_reconcile", lambda *_args: None)
     elif site == "push-gone":  # the rebase removed the file just written
@@ -528,19 +534,20 @@ def test_each_git_failure_of_a_save_is_said_whole(shared, monkeypatch, whole_err
     if site == "head":
         with pytest.raises(DecisionsUnavailable) as refused:
             save(shared, make(), expected_revision=None, message="decisions: notes")
-        assert str(refused.value) == f"Git cannot read the shared data repository {root}: {whole_error}"
+        assert str(refused.value) == f"Git cannot read the shared data repository {root}: {git()}"
         return
     said = save(shared, make(), expected_revision=None, message="decisions: notes")
+    probe = f"DataRepoError: cannot tell whether a rebase is in progress in {root}: {git()}"
     expected = {
-        "rebase-probe": f"cannot tell whether a rebase is in progress in {root}: {whole_error}, so nothing was written",
-        "fetch": f"not checked against the remote: {whole_error}",
+        "rebase-probe": f"{probe}, so nothing was written",
+        "fetch": f"not checked against the remote: {git()}",
         "push-unflagged": pushed,
         "push-gone": f"{pushed}; the file is gone",
     }.get(site)
     if site == "commit":  # the batch stays interrupted for the owner
         generation = decision_batch.pending(shared).generation
         held = f"(interrupted batch {generation}: finish or abandon it in Decisions)"
-        expected = f"saved, but not committed: {whole_error} {held}"
+        expected = f"saved, but not committed: {git()} {held}"
     assert said.notice == expected
 
 
@@ -575,7 +582,7 @@ def test_each_journal_or_write_refusal_is_said_whole(shared, monkeypatch, whole_
             expected = f"the interrupted decision batch g1 ({whole_error}) must be finished or abandoned"
         else:
             monkeypatch.setattr(decision_batch, "stamp", broken)
-            expected = whole_error
+            expected = f"JournalError: {whole_error}"
         with pytest.raises(DecisionsUnavailable) as refused:
             load(set_up(shared), PROJECT)
         assert str(refused.value) == expected
@@ -584,7 +591,7 @@ def test_each_journal_or_write_refusal_is_said_whole(shared, monkeypatch, whole_
         monkeypatch.setattr(decision_batch, "begin", broken)
         with pytest.raises(DecisionsUnavailable) as refused:
             save(shared, decision, expected_revision=None, message="decisions: notes")
-        assert str(refused.value) == whole_error
+        assert str(refused.value) == f"JournalError: {whole_error}"
         return
     head = shared.git("rev-parse", "HEAD").stdout.strip()
     if site == "held":  # refused midway, and the files are not proved put back

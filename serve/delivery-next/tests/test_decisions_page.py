@@ -613,8 +613,9 @@ def test_a_refused_save_answers_its_whole_notice(store, monkeypatch, whole_error
     from owlbear_delivery_next.state_store import decision_batch  # noqa: PLC0415
 
     new = replaced(store)
+    probe = ("rev-parse", "--git-path", publication_hold.RECORD)
     if failure == "held":  # the held publication's probe fails before the push and again before the rebase
-        failing_git(whole_error, lambda args, _: args == ("rev-parse", "--git-path", publication_hold.RECORD))
+        failing_git(whole_error, lambda args, _: args == probe)
     else:
 
         def unreadable(_shared):
@@ -633,12 +634,13 @@ def test_a_refused_save_answers_its_whole_notice(store, monkeypatch, whole_error
         root = store.shared.root
         notice = (
             f"saved and committed in {root}, but it could not be rebased on the remote: nothing was pushed or "
-            f"rebased in {root}: a held automatic change cannot be checked: {whole_error}; push it by hand"
+            f"rebased in {root}: a held automatic change cannot be checked: CalledProcessError: Command "
+            f"'{['git', *probe]}' returned non-zero exit status 128.\n{whole_error}; push it by hand"
         )
         [receipt] = got.json()["receipts"]
         assert (got.status_code, receipt["saved"], receipt["notice"]) == (200, True, notice)
         assert logged(caplog) == [f"decision {receipt['id']} saved: {notice}"]
     else:
-        detail = f"{whole_error} ({decision_store.RECOVER})"
+        detail = f"JournalError: {whole_error} ({decision_store.RECOVER})"
         assert (got.status_code, got.json()["detail"]) == (409, detail)
         assert logged(caplog) == [f"decisions unavailable: {detail}"]

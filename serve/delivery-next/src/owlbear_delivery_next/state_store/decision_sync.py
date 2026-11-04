@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_decisions import DecisionFileError
 from owlbear_decisions.storage import DECISIONS_DIR, parse
+from owlbear_delivery_next.git import command_failure
 from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import Committed, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch
@@ -126,7 +127,7 @@ def catch_up(shared: DataRepo, until: float, guard: Callable[[], str] | None = N
     """Fetch, and when the checkout is behind its remote and clean, rebase on it; why it did not, else nothing."""
     fetched = shared.git("fetch", "-q", until=until)
     if fetched.returncode:
-        return fetched.stderr.strip() or "git fetch failed"
+        return command_failure.failed(fetched)
     behind = shared.git("rev-list", "--count", f"HEAD..{UPSTREAM}", until=until)
     if behind.returncode:
         return "the checkout's branch follows no remote branch"
@@ -168,7 +169,7 @@ def prepare(shared: DataRepo, until: float, cont: Continuation | None = None) ->
                 "a rebase is in progress in the checkout, so nothing was written; the owner finishes or aborts it",
             )
     except DataRepoError as exc:  # unknown is not "no rebase": nothing is written
-        return "", f"{exc}, so nothing was written"
+        return "", f"{command_failure.failure(exc)}, so nothing was written"
     notice, guard = "", (lambda: _stray(shared, cont, until)[1]) if cont else None
     for _ in range(PREPARE_TRIES):
         if guard and (stray := guard()):
@@ -213,7 +214,7 @@ def _ready(shared: DataRepo, until: float) -> tuple[str, Sent | None]:
         if shared.rebasing(until):
             return "", Sent(notice="a rebase is in progress, so nothing was rolled back", ambiguous=True)
     except DataRepoError as exc:
-        return "", Sent(notice=f"{exc}, so nothing was committed", ambiguous=True)
+        return "", Sent(notice=f"{command_failure.failure(exc)}, so nothing was committed", ambiguous=True)
     return head, None
 
 
@@ -372,7 +373,8 @@ def _rebase_failed(shared: DataRepo, where: str, failed: str, until: float) -> S
     try:
         left = shared.rebasing(until)
     except DataRepoError as exc:  # unknown whether Git is mid-rebase: ambiguous, never "no rebase"
-        return Sent(notice=f"{where}, but it could not be rebased on the remote: {failed}; {exc}", ambiguous=True)
+        why = f"{failed}; {command_failure.failure(exc)}"
+        return Sent(notice=f"{where}, but it could not be rebased on the remote: {why}", ambiguous=True)
     return Sent(notice=f"{where}, but it could not be rebased on the remote: {failed}; push it by hand", ambiguous=left)
 
 

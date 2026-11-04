@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 from owlbear_decisions import Decision, DecisionError, Link, LinkType, Origin, Scope, State, new_id, storage, write
 from owlbear_decisions.storage import serialize
 from owlbear_delivery_next.change_contracts import pick_tools
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import batch_journal, data_repo, publication_hold, storage_io
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.project_host import decision_recovery_routes
@@ -366,6 +367,47 @@ def test_finish_refuses_before_creating_any_folder_when_another_file_of_the_batc
         decision_recovery.finish(shared, pending.generation)
     assert not (shared.root / "new-site" / "decisions").exists()
     assert decision_batch.pending(shared).generation == pending.generation
+
+
+@pytest.mark.parametrize("fault", ["journal", "file", "folder"])
+def test_a_finish_that_cannot_read_its_journal_or_file_or_make_its_folder_says_the_whole_error(
+    picking, monkeypatch, whole_error, fault
+):
+    _seed(picking)
+    shared = picking.shared
+    _interrupt(picking, monkeypatch, [make(title="Use UTC", statement="All timestamps use UTC.")])
+    batch = decision_batch.pending(shared)
+    rel = batch.files[0][0]
+    path = shared.root / rel
+
+    def refused(*_args: object) -> None:
+        raise PermissionError(errno.EACCES, whole_error)
+
+    def unreadable(*_args: object) -> None:
+        raise decision_batch.JournalError(whole_error)
+
+    if fault == "journal":
+        monkeypatch.setattr(decision_batch, "pending", unreadable)
+    elif fault == "file":
+        path.write_bytes(b"the owner's bytes\n")
+        path.chmod(0)
+    else:
+        monkeypatch.setattr(decision_recovery.storage_io, "make_dirs", refused)
+    try:
+        with pytest.raises(decision_store.DecisionsUnavailable) as said:
+            decision_recovery.finish(shared, batch.generation)
+    finally:
+        if fault == "file":
+            path.chmod(0o600)
+    expected = {
+        "journal": f"JournalError: {whole_error}",
+        "file": f"{rel} cannot be read as a plain file ({failure(said.value.__cause__)}), "
+        f"so batch {batch.generation} is not changed",
+        "folder": f"PermissionError: [Errno 13] {whole_error}",
+    }[fault]
+    assert (str(said.value), said.value.action) == (expected, decision_store.RECOVER)
+    if fault == "file":
+        assert failure(said.value.__cause__).startswith("PermissionError: [Errno 13] ")
 
 
 def test_a_refused_put_back_unlink_is_fsynced_in_its_parent_before_the_refusal_returns(picking, monkeypatch):
@@ -826,8 +868,9 @@ def test_a_batch_a_reader_could_not_decode_is_never_journalled(picking, ids, fil
     shared = picking.shared
     head = shared.git("rev-parse", "HEAD").stdout.strip()
 
-    with pytest.raises(decision_batch.JournalError, match="cannot be journalled"):
+    with pytest.raises(decision_batch.JournalError) as refused:
         decision_batch.begin(shared, PROJECT, head, "decisions: unreadable", ids, files)
+    assert str(refused.value) == f"the decision batch cannot be journalled: ValueError: {refused.value.__cause__}"
 
     assert not decision_batch.journal_path(shared).exists()
     assert decision_batch.pending(shared) is None
@@ -2431,6 +2474,8 @@ def test_a_batch_lock_that_cannot_be_taken_is_an_actionable_refusal_and_changes_
     assert "batch lock" in shown["diagnosis"]
     assert str(path) in shown["diagnosis"]
     assert refused.value.action == decision_store.RECOVER
+    taken = refused.value.__cause__.__cause__  # the lock's own error, under the journal's
+    assert f"JournalError: the batch lock {path} cannot be taken ({failure(taken)});" in str(refused.value)
     assert decision_batch.journal_path(shared).read_bytes() == journal
     assert foreign.read_bytes() == b"foreign\n"
     assert _git_state(shared) == git
@@ -2476,6 +2521,26 @@ def test_a_damaged_completed_list_is_never_read_as_generations(listed):
 
     with pytest.raises(batch_journal.JournalError, match="completed decision batches"):
         batch_journal.generations(listed)
+
+
+def test_an_unreadable_journal_or_completed_list_says_its_whole_error(tmp_path, monkeypatch, whole_error):
+    with pytest.raises(batch_journal.JournalError) as listed:
+        batch_journal.generations(b"{not json")
+    with pytest.raises(batch_journal.JournalError) as decoded:
+        batch_journal.decode(b"{}")
+
+    def unreadable(_path: Path) -> bytes:
+        raise PermissionError(errno.EACCES, whole_error)
+
+    monkeypatch.setattr(batch_journal, "read_regular", unreadable)
+    with pytest.raises(batch_journal.JournalError) as read:
+        batch_journal.read(tmp_path / "journal.json")
+    assert [str(e.value) for e in (listed, decoded, read)] == [
+        f"the list of completed decision batches cannot be read: {failure(listed.value.__cause__)}",
+        f"the interrupted-batch journal cannot be read: {failure(decoded.value.__cause__)}",
+        f"the interrupted-batch journal journal.json cannot be read: PermissionError: [Errno 13] {whole_error}",
+    ]
+    assert failure(listed.value.__cause__).startswith("JSONDecodeError: ")
 
 
 @pytest.mark.parametrize("writer", ["save", "transaction"])

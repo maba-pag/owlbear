@@ -21,6 +21,7 @@ from owlbear_decisions import DecisionError, Scope, decision_path, snapshot, wri
 from owlbear_decisions.snapshot import CONFLICT
 from owlbear_decisions.storage import kind, serialize
 from owlbear_decisions.validate import collect, layers, project_folders
+from owlbear_delivery_next.git import command_failure
 from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch, decision_cache, decision_sync, decision_transaction
@@ -83,7 +84,7 @@ def _checkout(shared: DataRepo | None) -> DataRepo:
     except FileNotFoundError, NotADirectoryError:
         mode = 0
     except OSError as exc:
-        msg = f"the shared data repository {shared.root} cannot be read: {exc}"
+        msg = f"the shared data repository {shared.root} cannot be read: {command_failure.failure(exc)}"
         raise DecisionsUnavailable(msg, READ) from exc
     if not stat.S_ISDIR(mode):
         msg = f"the shared data repository {shared.root} is not a folder on this machine"
@@ -95,7 +96,8 @@ def _head(shared: DataRepo) -> str:
     said = shared.git("rev-parse", "--show-toplevel", "HEAD")
     lines = said.stdout.splitlines()
     if said.returncode or len(lines) != 2 or lines[0] != str(shared.root.resolve()):  # noqa: PLR2004 - top, HEAD
-        why = said.stderr.strip() or "it is not the top folder of a Git checkout with a commit"
+        top = "it is not the top folder of a Git checkout with a commit"
+        why = command_failure.failed(said) if said.returncode else top
         msg = f"Git cannot read the shared data repository {shared.root}: {why}"
         raise DecisionsUnavailable(msg)
     return lines[1]
@@ -107,7 +109,7 @@ def _project(shared: DataRepo, project: str) -> None:
     try:
         mode = kind(folder)
     except OSError as exc:
-        msg = f"{folder} cannot be read: {exc}"
+        msg = f"{folder} cannot be read: {command_failure.failure(exc)}"
         raise DecisionsUnavailable(msg, READ) from exc
     if mode is None:
         msg = f"the project {project} has no folder in {shared.root}, so its decisions cannot be told from none"
@@ -123,7 +125,7 @@ def _files(shared: DataRepo, project: str) -> Snapshot:
     try:
         seen = snapshot(shared.root, project)
     except OSError as exc:
-        msg = f"the decisions in {shared.root} cannot be read: {exc}"
+        msg = f"the decisions in {shared.root} cannot be read: {command_failure.failure(exc)}"
         raise DecisionsUnavailable(msg, READ) from exc
     return seen
 
@@ -146,7 +148,7 @@ def _interrupted(shared: DataRepo) -> None:
     try:
         batch = decision_batch.pending(shared)
     except decision_batch.JournalError as exc:
-        raise Unsettled(str(exc), RECOVER) from exc
+        raise Unsettled(command_failure.failure(exc), RECOVER) from exc
     if batch is not None:
         ids = ", ".join(batch.ids)
         msg = f"the interrupted decision batch {batch.generation} ({ids}) must be finished or abandoned"
@@ -169,7 +171,7 @@ def _stamp(shared: DataRepo) -> tuple[bytes | None, bytes | None]:
     try:
         return decision_batch.stamp(shared)
     except decision_batch.JournalError as exc:
-        raise Unsettled(str(exc), RECOVER) from exc
+        raise Unsettled(command_failure.failure(exc), RECOVER) from exc
 
 
 def _paired(shared: DataRepo, project: str) -> DataView:
@@ -217,13 +219,14 @@ def refresh(shared: DataRepo | None) -> str:
             _interrupted(shared)
             status = shared.git("status", "--porcelain", "--untracked-files=no")
             if status.returncode:
-                msg = f"Git cannot read the shared data repository {shared.root}: {status.stderr.strip()}"
+                why = command_failure.failed(status)
+                msg = f"Git cannot read the shared data repository {shared.root}: {why}"
                 raise DecisionsUnavailable(msg)
             if changed := status.stdout.splitlines():
                 return f"not refreshed: {len(changed)} uncommitted file(s) in {shared.root}; the next save publishes"
             failed = decision_sync.catch_up(shared, time.monotonic() + SAVE_SECONDS)
     except (DataRepoError, OSError) as exc:  # a lock or attributes file that cannot be opened too
-        raise DecisionsUnavailable(str(exc)) from exc
+        raise DecisionsUnavailable(command_failure.failure(exc)) from exc
     return f"not refreshed from the remote: {failed}" if failed else ""
 
 
@@ -259,11 +262,12 @@ def save_all(shared: DataRepo | None, items: Sequence[tuple[Decision, str | None
             _interrupted(shared)
             return _save_all(shared, [(d, _layer(shared.root, d), expected) for d, expected in items], message)
     except DataRepoError as exc:
-        raise DecisionsUnavailable(str(exc)) from exc
+        raise DecisionsUnavailable(command_failure.failure(exc)) from exc
     except decision_batch.JournalError as exc:  # the journal or its lock failed during the save: the batch is unknown
-        raise DecisionsUnavailable(str(exc), RECOVER) from exc
+        raise DecisionsUnavailable(command_failure.failure(exc), RECOVER) from exc
     except OSError as exc:
-        msg = f"{', '.join(d.id for d, _ in items)} could not be written in {shared.root}: {exc}"
+        ids = ", ".join(d.id for d, _ in items)
+        msg = f"{ids} could not be written in {shared.root}: {command_failure.failure(exc)}"
         raise DecisionsUnavailable(msg, READ) from exc
 
 
@@ -430,7 +434,7 @@ def whole(shared: DataRepo) -> tuple[dict[str, Entry], list[Finding]]:
     try:
         entries, findings = collect(layers(shared.root, project_folders(shared.root)))
     except OSError as exc:
-        msg = f"the decisions in {shared.root} cannot be read: {exc}"
+        msg = f"the decisions in {shared.root} cannot be read: {command_failure.failure(exc)}"
         raise DecisionsUnavailable(msg, READ) from exc
     return {e.decision.id: e for e in entries}, findings
 
