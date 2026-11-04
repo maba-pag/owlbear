@@ -18,7 +18,7 @@
         "Change Split by and Period; click a credits bar and a tool bar",
         "Switch the OS to dark mode and look again"
       ],
-      "expect": "In both modes: charts readable, colours distinguishable, exact values in tooltips, smooth transitions,…",
+      "expect": "In both modes: charts readable, colours distinguishable, exact values in tooltips, smooth…",
       "visual": true,
       "paths": [
         "serve/delivery-next/src/owlbear_delivery_next/machine_host/selfcheck.py",
@@ -59,7 +59,7 @@
     ],
     "non_goals": [
       "The context-at-start chart and its recording: Change B, shaped next, reusing this Change's chart code",
-      "Zoom and pan, save as image, linked charts, sorting, a stacked/side-by-side switch, row brush, row slider and the…",
+      "Zoom and pan, save as image, linked charts, sorting, a stacked/side-by-side switch, row brush, row slider and…",
       "A tool filter on the server or the page",
       "A chart for the runs list",
       "Any change to how spend, tool use or compaction is measured or counted",
@@ -1013,7 +1013,7 @@
       },
       {
         "id": "AC-2",
-        "text": "Metrics shows filters, totals with the 'How exact' notes, the credits, compaction and tool-use sections,…",
+        "text": "Metrics shows filters, totals with the 'How exact' notes, the credits, compaction and tool-use…",
         "version": 2
       },
       {
@@ -1023,7 +1023,7 @@
       },
       {
         "id": "AC-4",
-        "text": "Compaction chart: a row per table row with compacted sessions; a dot per compacted session with a timing…",
+        "text": "Compaction chart: a row per table row with compacted sessions; a dot per compacted session with a…",
         "version": 3
       },
       {
@@ -1033,7 +1033,7 @@
       },
       {
         "id": "AC-6",
-        "text": "Interactions: a relative-length switch on credits and tool charts shows parts as shares of full-length…",
+        "text": "Interactions: a relative-length switch on credits and tool charts shows parts as shares of…",
         "version": 2
       },
       {
@@ -1043,12 +1043,12 @@
       },
       {
         "id": "AC-8",
-        "text": "Colours: credits stacks and the 6 refusal kinds use Okabe-Ito (light: orange, sky blue, yellow darkened…",
+        "text": "Colours: credits stacks and the 6 refusal kinds use Okabe-Ito (light: orange, sky blue, yellow…",
         "version": 3
       },
       {
         "id": "AC-9",
-        "text": "Sections keep their 'none' texts under today's conditions, with no chart; readable sessions with none…",
+        "text": "Sections keep their 'none' texts under today's conditions, with no chart; readable sessions with…",
         "version": 3
       },
       {
@@ -1116,7 +1116,7 @@
         },
         {
           "id": "F2",
-          "text": "AC-9: Contradiction with the code: chart emptiness is not section emptiness. A readable session without…",
+          "text": "AC-9: Contradiction with the code: chart emptiness is not section emptiness. A readable session…",
           "raised": 1,
           "tasks": [],
           "state": "fixed",
@@ -1129,7 +1129,7 @@
         },
         {
           "id": "F3",
-          "text": "AC-8: Contradiction: AC-8 prescribes original Okabe-Ito colours in dark mode for every part, while AC-5…",
+          "text": "AC-8: Contradiction: AC-8 prescribes original Okabe-Ito colours in dark mode for every part, while…",
           "raised": 1,
           "tasks": [],
           "state": "fixed",
@@ -1142,7 +1142,7 @@
         },
         {
           "id": "F4",
-          "text": "Person-only checks: real-page-look / AC-7: Omission: the owner's screen-reader usability requirement…",
+          "text": "Person-only checks: real-page-look / AC-7: Omission: the owner's screen-reader usability…",
           "raised": 1,
           "tasks": [],
           "state": "fixed",
@@ -1168,7 +1168,7 @@
         },
         {
           "id": "F6",
-          "text": "Brief v3 input: AC-1, AC-3, AC-4, AC-6, AC-8, AC-9 and real-page-look: Unsafe ambiguity: these fields…",
+          "text": "Brief v3 input: AC-1, AC-3, AC-4, AC-6, AC-8, AC-9 and real-page-look: Unsafe ambiguity: these…",
           "raised": 2,
           "tasks": [],
           "state": "fixed",
