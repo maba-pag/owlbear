@@ -7,6 +7,7 @@ import { state, show, showIdle, notify, turns } from "./state.mjs";
 import { reload, readModels } from "./layers.mjs";
 import { readAcross } from "./machine.mjs";
 import { rowOf } from "./groups.mjs";
+import { nameOf } from "./names.mjs";
 import { button } from "./cells.mjs";
 import { unsaved } from "./sections.mjs";
 
@@ -145,9 +146,9 @@ function overrides(n) {
 }
 
 function notice(n) {
-  const aria = { "aria-label": `Dismiss the change of ${n.key}` };
+  const aria = { "aria-label": `Dismiss the change of ${nameOf(n.key)}` };
   return html`<li id=${`reads-${n.id}`}><p-text>${rowLink(n.key, state.loaded?.global_location ? "global"
-    : "project", n.key)}: ${value(n.old)} → ${value(n.new)} (found ${when(n.at)})
+    : "project", nameOf(n.key))}: ${value(n.old)} → ${value(n.new)} (found ${when(n.at)})
     ${overrides(n)}</p-text><p-button type="button" compact="true" variant="secondary" icon="close" .aria=${aria}
     @click=${() => dismiss(n.id)}>Dismiss</p-button></li>`;
 }

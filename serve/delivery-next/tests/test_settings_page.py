@@ -32,6 +32,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
+SESSIONS = "Agent sessions at once in one project"  # the row's name; its key is `sessions`
+
 MODELS = {
     "models": [
         {"id": "claude-opus-5.5", "name": "Opus", "efforts": ["low", "medium", "high"], "default_effort": "medium",
@@ -316,9 +318,9 @@ def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(store, p
     with settings_page(store, pds) as page:
         url = page.url.split("#")[0]
         pds.group(page, "overview")
-        expect(page.locator("#unset-agents")).to_have_text("Agents and runs, 1 unset: sessions")
+        expect(page.locator("#unset-agents")).to_have_text(f"Agents and runs, 1 unset: {SESSIONS}")
         expect(page.locator("#set-sessions p-text[color='error']")).to_have_count(0)  # not shown: another group
-        page.locator("#unset").get_by_role("link", name="sessions", exact=True).click()
+        page.locator("#unset").get_by_role("link", name=SESSIONS, exact=True).click()
         expect(page).to_have_url(f"{url}#agents")
         at_once = page.get_by_label("Agent sessions at once in one project")
         expect(at_once).to_be_focused()
@@ -423,7 +425,7 @@ def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row
         expect(none).to_have_text("This layer sets nothing in this group.")
         pds.pick(page, "Layer", "project")
         pds.group(page, "overview")
-        page.locator("#unset").get_by_role("link", name="sessions", exact=True).click()
+        page.locator("#unset").get_by_role("link", name=SESSIONS, exact=True).click()
         expect(page.locator("#set-sessions")).to_be_visible()
         expect(pds.select(page, "Show")).to_have_js_property("value", "all")
 
@@ -497,8 +499,7 @@ def test_the_overview_counts_each_group_s_unset_names_its_first_three_and_opens_
         agents = page.locator("#unset-agents")
         expect(agents).to_have_text(
             re.compile(
-                r"^Agents and runs, (\d+) unset: agents\.planner\.model, agents\.planner\.effort, "
-                r"agents\.planner\.context and \d+ more$"
+                r"^Agents and runs, (\d+) unset: planner · Model, planner · Effort, planner · Context and \d+ more$"
             )
         )
         total = sum(_unset_count(page, group) for group in ("agents", "guardrails", "memory", "checks"))
@@ -566,7 +567,7 @@ def test_the_owner_s_own_tab_after_an_unset_link_keeps_its_focus(store, pds, mon
         pds.group(page, "overview")
         # slow frames widen the time the page keeps the focus on the control, so a Tab lands inside it
         page.evaluate("window.requestAnimationFrame = (f) => setTimeout(() => f(performance.now()), 100)")
-        page.locator("#unset").get_by_role("link", name="sessions", exact=True).click()
+        page.locator("#unset").get_by_role("link", name=SESSIONS, exact=True).click()
         at_once = page.get_by_label("Agent sessions at once in one project")
         expect(at_once).to_be_focused()
         page.keyboard.press("Tab")
@@ -1397,6 +1398,9 @@ INSTRUCTIONS, SKILLS = "Your instructions in Delivery steps", "Your skills in De
 LABELS = "Labels, comma-separated; none for no labels"
 MEMORY = "Copilot Memory in Delivery sessions"
 USER_KEYS = ("load_user_instructions", "load_user_skills", "load_user_memory")
+USER_NAMES = (
+    "Your instructions in Delivery steps", "Your skills in Delivery steps", "Copilot Memory in Delivery sessions"
+)
 
 
 def _saved(page, pds, button: str, whose: str) -> None:
@@ -1448,7 +1452,7 @@ def test_the_user_config_switches_save_in_each_layer_reload_and_clear_back_to_in
     with settings_page(store, pds) as page:
         shown = page.locator("#user-config")
         pds.group(page, "overview")
-        expect(page.locator("#unset")).to_contain_text(", ".join(USER_KEYS))
+        expect(page.locator("#unset")).to_contain_text(", ".join(USER_NAMES))
         pds.group(page, "guardrails")
         for key in USER_KEYS:  # GW8RT6: a red name, no line saying it is unset
             expect(page.locator(f"#set-{key} p-text[color='error']")).to_have_count(1)
@@ -1511,7 +1515,7 @@ def test_the_guard_level_saves_in_each_layer_as_a_level_and_clears_back_to_inher
     with settings_page(store, pds) as page:
         row = page.locator("#set-guard_level")
         pds.group(page, "overview")
-        expect(page.locator("#unset")).to_contain_text("guard_level")
+        expect(page.locator("#unset")).to_contain_text("Shell guard level")
         pds.group(page, "guardrails")
         expect(row.locator("p-text[color='error']")).to_have_count(1)
         pds.pick(page, "Layer", "global")
@@ -1566,7 +1570,7 @@ def test_the_github_account_shows_the_account_it_resolves_to_in_each_layer(
     with settings_page(store, pds) as page:
         url, row = page.url.split("#")[0], page.locator("#set-github_account")
         pds.group(page, "overview")
-        page.locator("#unset").get_by_role("link", name="github_account", exact=True).click()
+        page.locator("#unset").get_by_role("link", name="GitHub account", exact=True).click()
         expect(page).to_have_url(f"{url}#checks")
         field = page.get_by_label(ACCOUNT)
         expect(field).to_be_focused()
@@ -2013,7 +2017,7 @@ def test_an_unset_memory_value_is_listed_by_the_overview_and_its_link_opens_the_
         url = page.url.split("#")[0]
         pds.group(page, "overview")
         assert _unset_count(page, "memory") == 10  # nine memory values and the curator's threshold
-        page.locator("#unset-memory").get_by_role("link", name="memory.outstanding_boost").click()
+        page.locator("#unset-memory").get_by_role("link", name="Points an outstanding rating adds", exact=True).click()
         expect(page).to_have_url(f"{url}#memory")
         expect(page.locator("#set-memory-outstanding_boost p-text[color='error']")).to_have_count(1)
         expect(page.get_by_label(MEMORY_LABELS["outstanding_boost"])).to_be_disabled()  # the project layer: read-only
