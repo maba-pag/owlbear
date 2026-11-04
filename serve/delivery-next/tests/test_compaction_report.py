@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-    from playwright.sync_api import Page
+    from playwright.sync_api import Locator, Page
 
 NOW = datetime.now(UTC).replace(microsecond=0) - timedelta(hours=1)
 OLD = NOW - timedelta(days=40)
@@ -388,10 +388,10 @@ def returned(page: Page, pds, left: str) -> None:
     expect(page.locator("#stopped")).to_have_js_property("checked", query.get("stopped") == "1")
 
 
-def unfold(page: Page, *folds: str) -> None:
-    """Open the folds below the charts, closed at each load, where a row's link or button is clicked."""
-    for fold in folds:
-        page.locator(f"#{fold}-fold > summary").click()
+def unfold(page: Page, fold: str) -> Locator:
+    """Open a fold below a chart, closed at each load, where a row's link or button is clicked; return it."""
+    page.locator(f"#{fold}-fold > summary").click()
+    return page.locator(f"#{fold}-fold")
 
 
 def setting_link(page: Page, row: str):
@@ -455,8 +455,7 @@ def test_metrics_shows_each_roles_compaction_and_its_setting_leads_back_with_the
         assert f"project={shop}&" in page.url
         setting_link(page, "builder").click()
         returned(page, pds, left)
-        unfold(page, "split")
-        page.locator("#split").get_by_role("button", name="Show only builder").click()  # the drill still filters
+        unfold(page, "split").get_by_role("button", name="Show only builder").click()  # the drill still filters
         expect(page).to_have_url(re.compile(r"agent=builder"))
         expect(page.locator("#compaction-table p-table-row")).to_have_count(3)  # explore is an agent of its own
 
