@@ -45,5 +45,5 @@ def _noted(curation: Curation, left: curation_tree.Resumed) -> None:
         row = runs.folders.get(left.folder, FolderRun(state="failed"))
         note = f"{curation_snapshots.RESUMED}{said}: {left.said}"
         reason = "; ".join(filter(None, (curation_snapshots.written(row.reason), note)))
-        runs.folders[left.folder] = row.model_copy(update={"reason": reason})
+        runs.folders[left.folder] = row.model_copy(update={"reason": reason, "reason_unset": 0})  # whole, with its note
         curation._write(runs)  # noqa: SLF001 - the job's own row file, under its lock

@@ -34,11 +34,6 @@ def unset_block(settings: Settings) -> work_block.Block:
     return work_block.Block()
 
 
-def unset(settings: Settings) -> str:
-    """Why a run cannot start for unset settings, in words; '' when none is."""
-    return unset_block(settings).text()
-
-
 def block(shared: DataRepo, folder: str, here: work_block.Block | None = None) -> work_block.Block:
     """What keeps *folder*'s curation from starting; falsy when it may. *here* is this machine's block, read now."""
     try:
@@ -50,11 +45,6 @@ def block(shared: DataRepo, folder: str, here: work_block.Block | None = None) -
     if not shared.project_path(folder).exists():
         return work_block.machine() if here is None else here
     return work_block.of_folder(shared, folder, here)
-
-
-def blocked(shared: DataRepo, folder: str, here: work_block.Block | None = None) -> str:
-    """Why *folder*'s curation may not start, in words; '' when it may."""
-    return block(shared, folder, here).text()
 
 
 def refusal(shared: DataRepo, folder: str, prior: FolderRun, started: datetime) -> FolderRun | None:

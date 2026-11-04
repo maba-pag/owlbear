@@ -34,8 +34,6 @@ if TYPE_CHECKING:
 
 SESSIONS = "Agent sessions at once in one project"  # the row's name; its key is `sessions`
 LOOKS = "Spotter · Looks (hand-off, plan, state-change, sample)"
-STALE = "Skipped ratings per other rating before an entry is stale"
-PURGE = "Days a deleted entry waits before its file can be removed"
 
 MODELS = {
     "models": [
@@ -1977,7 +1975,7 @@ def test_every_memory_value_is_saved_to_global_exactly_and_shown_again_after_a_r
             page.get_by_label(label).fill(str(MEMORY_VALUES[field]))
         expect(page.locator("#groups a[href='#memory'] p-tag")).to_have_text("9 unsaved")
         expect(page.locator("#groups a[href='#guardrails'] p-tag")).to_have_count(0)
-        expect(page.locator("#pending")).to_contain_text(f"{STALE}: unset → 7")
+        expect(page.locator("#pending")).to_contain_text(f"{MEMORY_LABELS['stale_factor']}: unset → 7")
         _saved(page, pds, "Save global defaults", "the global")
         assert json.loads(store.global_path.read_text())["memory"] == MEMORY_VALUES
 
@@ -1987,7 +1985,7 @@ def test_every_memory_value_is_saved_to_global_exactly_and_shown_again_after_a_r
 
         page.get_by_label(MEMORY_LABELS["purge_days"]).fill("0")  # zero is a value, not an unset one
         page.get_by_label(MEMORY_LABELS["explore_slots"]).fill("")  # blank clears it again
-        expect(page.locator("#pending")).to_contain_text(f"{PURGE}: 14 → 0")
+        expect(page.locator("#pending")).to_contain_text(f"{MEMORY_LABELS['purge_days']}: 14 → 0")
         expect(page.locator("#pending")).to_contain_text("Recall slots for the least-rated entries: 1 → unset")
         _saved(page, pds, "Save global defaults", "the global")
     assert json.loads(store.global_path.read_text())["memory"] == MEMORY_VALUES | {
