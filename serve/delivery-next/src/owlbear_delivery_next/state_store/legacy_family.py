@@ -76,7 +76,7 @@ IMPORTS = (
     ("state_store/project_home.py", "c79464a6139fe571efd600903aa848dc67c9673f016d12c093d7d6b94b74a681"),
     ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
 )
-CURRENT_FAMILY_AGGREGATE = "1a2ec3e060b795051ee274915459be7347e9f96ffb05cfc584161da1f7f5d4b3"
+CURRENT_FAMILY_AGGREGATE = "52d46eaf7d4aeb7ac02f8b6d8178d0640372c0eb8246bebc793037cebda152d6"
 CURRENT_FUNCTIONS = (
     ("commands/chat_client.py:Chat.call", "a3dae79af4df3874c83c2466621b379fc3e9fc3e670045c20a8e8fca44113250"),
     ("commands/chat_client.py:workspace", "4e1bd94f29805ab94eff49182ba65966b93988ce4a8e3f395576601499a4855d"),
@@ -100,7 +100,7 @@ CURRENT_FUNCTIONS = (
     ("state_store/registry.py:register", "79cb7840274422a93d94582da3f361fb56a1bbd3606dac3808d0cfdb035b255b"),
     ("state_store/registry.py:replaced", "5d48cb39f6ea67966760e0de397f920fd7d6ebf07f403f377fec1e56b0245231"),
     ("machine_host/selfcheck.py:_project", "b9bd170d392b1fb675466c5b68a46ad32987df9183c7ada36687b1eea99923a6"),
-    ("machine_host/selfcheck.py:_receipt", "3382afcf7cb9238e8d6d8bd0ad468bff4b075e4c83991ca132d889b23e2ef097"),
+    ("machine_host/selfcheck.py:_receipt", "8e8768f9f8bad33e8e1f7341ffa45db387794a601b8172c24e6351a7dcea3cd9"),
     ("project_host/host.py:running_at", "cc129de6cc691f64d6624765bcfa54fbf82b1e29531f65c8ff16ebf7f7370d00"),
     ("state_store/offline_protocol.py:prepare", "a1bf22be92d5aed9f9643abe143b0022e87d788705b4825bf0e9ceebcabeca71"),
     (
@@ -135,7 +135,7 @@ CURRENT_IMPORTS = (
     ("machine_host/machine.py", "0fee999e1fe246d3b69855a3b5def6958c99040eddb64512444d8f9eee351aea"),
     ("machine_host/project.py", "e70c0b45b6aa0df6787891d270927fdbf8c75d7e0d05db659d36cda43579020b"),
     ("state_store/registry.py", "31b8b0c0a1cb85b977952c0d28bf1e7cd8067ea7a057b999cf2a425fdc05b84a"),
-    ("machine_host/selfcheck.py", "823b37b5af0226ab73dd5b535f6fe5dcf5661f453a59c666034c584a6ed51db2"),
+    ("machine_host/selfcheck.py", "2f7bbb8a056729042ef4c3ee0dd2daf25d80b9116c548dab9c64e2ca635e73ea"),
     ("project_host/host.py", "04a1724b9c43aa86fa1d2619ba04f8aec267548971a3f2f8cee02655f45432d3"),
     ("state_store/project_home.py", "16a597223c63af3ad03bdd479d930d57050649c295c0f1d476f8113d42ede7d3"),
     ("state_store/store.py", "e7a34b523998cc7ab37a9380509d7ccb930847621e3692e54994d93c98f584e9"),

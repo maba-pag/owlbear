@@ -25,8 +25,8 @@ from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host import pages
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
-from owlbear_delivery_next.state_store import project_home, registry
-from owlbear_delivery_next.state_store.database import STORE_FORMAT
+from owlbear_delivery_next.state_store import project_home, registry, switched_authority
+from owlbear_delivery_next.state_store.database import STORE_FORMAT, StoreError
 
 
 def always(_older: str, _newer: str) -> bool:
@@ -573,6 +573,55 @@ def test_the_selfcheck_refuses_a_store_or_settings_newer_than_it_reads(tmp_path)
 
     assert f"{clone}: its store has format 99, newer than this version's {STORE_FORMAT}" in found
     assert any("have format 99, newer" in line for line in found)
+
+
+@pytest.mark.parametrize("fails", ["import", "machine", "marker", "receipt", "settings"])
+def test_the_selfcheck_says_each_failure_whole(tmp_path, monkeypatch, capsys, whole_error, fails):
+    """#971: a module that does not import, an unreadable ``machine.json``, store marker or settings layer, and an
+    unsound move receipt: each said with its type and notes, as the update's step line reads them."""
+    clone = registered(tmp_path, marker=STORE_FORMAT)
+    pid = registry.load().projects[0].id
+    marker, layer = project_home.home(pid) / "format", project_home.home(pid) / "config.json"
+    layer.write_text(json.dumps({"format": CONFIG_FORMAT}))
+    error = {"import": RuntimeError, "machine": ValueError, "marker": OSError, "receipt": StoreError,
+             "settings": OSError}[fails](whole_error)  # fmt: skip
+    error.add_note("a note on the failure")
+    whole = f"{type(error).__name__}: {whole_error}\na note on the failure"
+
+    def failing(*_args, **_kwargs):
+        raise error
+
+    importing, reading, read_text = selfcheck.import_module, selfcheck.read_regular, Path.read_text
+    if fails == "import":
+        monkeypatch.setattr(
+            selfcheck, "import_module", lambda name: failing() if name.endswith(".commands.runner") else importing(name)
+        )
+        said = f"commands.runner does not import: {whole}"
+    elif fails == "machine":
+        monkeypatch.setattr(registry.Machine, "model_validate_json", failing)
+        said = f"{local_home.root() / registry.MACHINE} is unreadable: {whole}"
+    elif fails == "marker":
+        monkeypatch.setattr(selfcheck, "read_regular", lambda path: failing() if path == marker else reading(path))
+        said = f"{clone}: {marker} is unreadable: {whole}"
+    elif fails == "receipt":
+        monkeypatch.setattr(switched_authority, "retained_target", failing)
+        said = f"{clone}: {whole}"
+    else:
+        monkeypatch.setattr(Path, "read_text", lambda path, **kw: failing() if path == layer else read_text(path, **kw))
+        said = f"{clone}: {layer} is unreadable: {whole}"
+
+    assert selfcheck.main() == 1
+
+    assert capsys.readouterr().out == f"{said}\n"
+
+
+def test_the_selfcheck_names_every_missing_page_asset(monkeypatch):
+    """#971: the list the owner reads is never cut to its first five."""
+    gone = [f"gone{n}.js" for n in range(7)]
+    monkeypatch.setattr(pages, "lit_files", lambda: {"lit-html.js": "x"} | dict.fromkeys(gone, "y"))
+
+    named = ", ".join(f"vendor/lit-html/{name}" for name in gone)
+    assert selfcheck.problems() == [f"the pages' assets are missing: {named}"]
 
 
 def test_the_selfcheck_runs_as_its_own_process_and_says_it_passed():
