@@ -1402,6 +1402,31 @@ def test_projects_says_why_the_shared_data_and_a_pass_loading_projects_again_fai
 
 
 @pytest.mark.browser
+def test_projects_says_why_adding_a_project_was_refused_whole(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """#971: the Projects page's alert after Add shows the registry's refusal whole, its note included."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    work = clone(tmp_path / "alpha")
+    refusal = registry.RegistryError(whole_error)
+    refusal.add_note("a note on the refusal")
+
+    def refusing(*_args):
+        raise refusal
+
+    monkeypatch.setattr(registry, "register", refusing)
+    with browsing(monkeypatch, pds) as (page, base):
+        said: list[str] = []  # the refusal's 409 is a console error too; the page itself must not fail
+        page.on("pageerror", lambda e: said.append(str(e)))
+        page.goto(f"{base}/projects#token=t")
+        page.get_by_label("Folder").fill(str(work))
+        page.get_by_role("button", name="Add", exact=True).click()
+        alert = page.locator("#page > [role=alert]")
+        expect(alert).to_be_visible()
+        shown = alert.text_content()
+    assert (shown, said) == (f"RegistryError: {whole_error}\na note on the refusal", [])
+
+
+@pytest.mark.browser
 def test_decisions_says_what_the_start_could_not_do_about_decisions_whole(monkeypatch, whole_error) -> None:
     """#971: a retired decision index file the start could not remove, and decisions it could not pre-load, say why
     whole in the Decisions page's error notice; a decision id or file in the text stays as written."""

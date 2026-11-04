@@ -911,7 +911,8 @@ def test_a_settings_carry_that_fails_is_kept_and_said_whole(machine, monkeypatch
     machine.carry()
     why = f"the settings carry failed: RuntimeError: {whole_error}\na note on the failure"
     assert registry.load().settings_pending == why
-    assert f" settings: {why}; tried again at the next start\n" in capsys.readouterr().out
+    said = re.escape(f"settings: {why}; tried again at the next start\n")
+    assert re.fullmatch(rf"\d\d:\d\d:\d\dZ {said}", capsys.readouterr().out)
 
 
 def test_a_failed_pass_loading_projects_again_is_kept_whole_until_one_passes(

@@ -960,7 +960,11 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
             every_name_is_what_its_row_shows(page, pds)
             pds.group(page, "this-machine")
             region = page.get_by_role("region", name="This machine")
-            assert f"is not done: {pending}. OwlBear tries" in page.locator("#machine-pending").text_content()
+            assert page.locator("#machine-pending").text_content() == (
+                "Moving this machine's settings into the global ones\n      is not done: "
+                f"{pending}. OwlBear tries again at its next start (owlbear restart); until then\n"
+                "      this machine keeps its own values."
+            )
             red = region.locator(".field > p-text[color='error']")  # GW8RT6: each unset setting's name is red
             expect(red).to_have_count(14)  # 3 update checks
             expect(region.locator("p-select[disabled], p-input-text[disabled]")).to_have_count(14)  # #809: a project
