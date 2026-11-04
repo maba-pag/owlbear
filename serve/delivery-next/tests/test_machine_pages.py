@@ -1022,6 +1022,51 @@ def test_updates_pds_says_a_newer_release_whose_projects_runs_could_not_be_read_
     assert set(lines) == {f"update checks: the PDS updates could not be read: {whole}"}
 
 
+@pytest.mark.browser
+def test_updates_owlbear_logs_update_steps_that_could_not_be_kept_whole(monkeypatch, capsys, whole_error) -> None:
+    """#971: an update whose steps could not be written logs why whole, once, under its step on Updates ▸ OwlBear and in
+    the host's log."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.machine_host import update_steps  # noqa: PLC0415
+
+    error = OSError(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(update_steps, "atomic_write", raising)
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    machine, server, base = serve()
+    path = local_home.root() / update_steps.RECORD
+    line = f"its steps could not be kept in {path}: OSError: {whole_error}\na note on the failure"
+    try:
+        machine.updater.steps.begin()
+        machine.updater.steps.mark("looking", "running", "fetching the versions")
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            said = errors(page)
+            page.goto(f"{base}/updates/owlbear#token=t")
+            page.locator("#owlbear-log-box summary").click()
+            shown = page.locator("#owlbear-log")
+            expect(shown).to_be_visible()
+            text = shown.text_content()
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    looking = r"[^\n]*? · Looking for a newer version: "
+    assert re.fullmatch(f"{looking}{re.escape(line)}\n{looking}fetching the versions", text)
+    assert said == []
+    logged = r"^\d\d:\d\d:\d\dZ update: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
+    assert re.findall(logged, capsys.readouterr().out, re.MULTILINE | re.DOTALL) == [line]
+
+
 def targets(scope) -> list[str]:
     """WCAG 2.5.8: each shown control in *scope* still smaller than 24 by 24 pixels once the design system has laid it
     out (under load that takes a moment), by its text."""
