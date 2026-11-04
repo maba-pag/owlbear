@@ -15,6 +15,8 @@ from owlbear_delivery_next.local_system import data_place, data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import open_lock
 from owlbear_delivery_next.machine_host import data_move
 
+processes = data_move._processes  # noqa: SLF001 - the real scan, which the source fixture stubs
+
 
 def git(cwd: Path, *args: str) -> str:
     who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
@@ -181,10 +183,10 @@ def _linked_source(tmp: Path, _monkeypatch) -> None:
     [
         (_held_host, "OwlBear is running"),
         (_live_process, "process 7: python -m owlbear_delivery_next mcp"),
-        (_unreadable_store, "/work/shop: its store cannot be read: denied"),
+        (_unreadable_store, "/work/shop: its store cannot be read: OSError: denied"),
         (_retained_runner, "a runner's record; start OwlBear, let it settle the step"),
         (_homed_runner, "fix-x/runner.json: a runner's record"),
-        (_unlistable_changes, "/work/shop: its store cannot be read: denied"),
+        (_unlistable_changes, "/work/shop: its store cannot be read: PermissionError: denied"),
         (_held_maintenance, "maintenance session curation in shop is held"),
         (_dest_exists, "exists; choose a new folder"),
         (_other_disk, "is on another disk"),
@@ -203,6 +205,48 @@ def test_a_refused_move_changes_nothing(tmp_path: Path, source: Path, monkeypatc
     assert any(reason in line for line in said), said
     assert (record(), state(source)) == (pointer, before)
     assert sorted(p.name for p in data_place.default().glob("*")) == (["mine"] if arrange is _dest_exists else [])
+
+
+@pytest.mark.parametrize("failing", ["process", "stores", "store", "changes", "maintenance", "pointer"])
+def test_a_refused_move_says_each_failure_whole(
+    tmp_path: Path, source: Path, monkeypatch, whole_error: str, failing: str
+) -> None:
+    """#971: a move refused because something could not be read says the error whole, its type and notes included."""
+    error = (data_repo.DataRepoError if failing == "pointer" else maintenance.MaintenanceError
+             if failing == "maintenance" else OSError)(whole_error)  # fmt: skip
+    error.add_note("a note on the failure")
+    whole = f"{type(error).__name__}: {whole_error}\na note on the failure"
+
+    def raising(*_args, **_kwargs):
+        raise error
+
+    if failing == "process":
+        proc = SimpleNamespace(pid=7, uids=raising, cmdline=list)
+        monkeypatch.setattr(data_move.psutil, "process_iter", lambda: [proc])
+        monkeypatch.setattr(data_move, "_processes", processes)  # the source fixture's stub put back
+        line = f"process 7 cannot be read: {whole}"
+    elif failing == "stores":
+        monkeypatch.setattr(data_move.registry, "load", raising)
+        line = f"the project stores cannot be listed: {whole}"
+    elif failing == "store":
+        _projects(monkeypatch, raising)
+        line = f"/work/shop: its store cannot be read: {whole}"
+    elif failing == "changes":
+        monkeypatch.setattr(data_move, "_records", raising)
+        _projects(monkeypatch, lambda _repo: tmp_path / "store")
+        line = f"/work/shop: its store cannot be read: {whole}"
+    elif failing == "maintenance":
+        monkeypatch.setattr(data_move.maintenance.Maintenance, "locked", raising)
+        line = whole
+    else:
+        monkeypatch.setattr(data_place, "settle", raising)
+    pointer, before, said = record(), state(source), []
+    assert data_move.main(["--move"], said.append) == 1
+    if failing == "pointer":
+        assert said == [f"not moved: {whole}"]
+    else:
+        assert said[-2:] == ["not moved, something may still write it; end it, then try again:", f"  {line}"]
+    assert (record(), state(source)) == (pointer, before)
 
 
 def test_a_writer_found_after_the_pointer_names_the_move_refuses_it_and_readers_meanwhile_resolve_nothing(

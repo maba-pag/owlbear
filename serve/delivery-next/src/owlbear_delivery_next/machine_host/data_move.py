@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 import psutil
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import data_place, data_repo, local_home, maintenance
 from owlbear_delivery_next.local_system.data_place import _origin, _write
 from owlbear_delivery_next.local_system.data_repo import _git, _top
@@ -50,7 +51,7 @@ def main(args: list[str], say: Callable[[str], None]) -> int:
         with data_place.pointer_lock():
             return move(dest, say)
     except data_repo.DataRepoError as exc:
-        say(f"not moved: {exc}")
+        say(f"not moved: {failure(exc)}")
         return 1
     finally:
         os.close(host)
@@ -160,7 +161,7 @@ def _processes() -> list[str]:
         except psutil.NoSuchProcess, psutil.ZombieProcess:
             continue
         except (psutil.Error, OSError) as exc:
-            found.append(f"process {proc.pid} cannot be read: {exc}")
+            found.append(f"process {proc.pid} cannot be read: {failure(exc)}")
             continue
         if any(_OWLBEAR.search(w) for w in words) or any(Path(w).name in _COMMANDS for w in words[:2]):
             found.append(f"process {proc.pid}: {' '.join(words)[:200]}")
@@ -174,12 +175,12 @@ def _runners() -> list[str]:
         stores = {folder.resolve(): str(folder) for folder in _children(local_home.root() / project_home.PROJECTS)}
         projects = registry.load().projects
     except (registry.RegistryError, OSError) as exc:
-        return [f"the project stores cannot be listed: {exc}"]
+        return [f"the project stores cannot be listed: {failure(exc)}"]
     for project in projects:
         try:
             store = project_home.current(Path(project.path))
         except Exception as exc:  # noqa: BLE001 - any failure to read a store refuses the move
-            found.append(f"{project.path}: its store cannot be read: {exc}")
+            found.append(f"{project.path}: its store cannot be read: {failure(exc)}")
             continue
         if store:
             stores.setdefault(store.resolve(), project.path)
@@ -187,7 +188,7 @@ def _runners() -> list[str]:
         try:
             records = _records(store / "changes")
         except OSError as exc:
-            found.append(f"{name}: its store cannot be read: {exc}")
+            found.append(f"{name}: its store cannot be read: {failure(exc)}")
             continue
         found += [
             f"{path}: a runner's record; start OwlBear, let it settle the step, stop it, then try again"
@@ -224,7 +225,7 @@ def _maintenance() -> list[str]:
         with maintenance.Maintenance.locked() as ledger:
             held = [s for s in ledger.sessions if s.state in maintenance.HELD]
     except maintenance.MaintenanceError as exc:
-        return [str(exc)]
+        return [failure(exc)]
     return [
         f"maintenance session {s.kind} in {s.project} is {s.state}; let it end, or recover it after a restart"
         for s in held

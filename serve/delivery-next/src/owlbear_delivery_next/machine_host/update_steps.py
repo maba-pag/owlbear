@@ -3,8 +3,9 @@
 Each step has a state, its start and end time and its line; a capped log keeps the lines in the order they came. A
 line is OwlBear's own words on one line, except a failed step's: its whole failure, a tool's output included. The
 current update's steps live in ``~/.owlbear/update-steps.json``, rewritten on every change and overwritten by the next
-update: no history. The version that takes over reads the record its old host wrote for it and adds its own last
-step; with no such record it shows its own step alone.
+update: no history. A failure to write them is logged whole, under the step running then, once until a write
+succeeds. The version that takes over reads the record its old host wrote for it and adds its own last step; with no
+such record it shows its own step alone.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
@@ -57,12 +59,12 @@ class Steps:
         """No update's steps yet."""
         self.say, self.lock = say, threading.Lock()
         self.version, self.steps, self.log = "", [], []
-        self.unwritten = ""  # the last write's failure, said once
+        self.unwritten = ""  # the last write's failure, said once per update
 
     def begin(self) -> None:
         """A new update: every step waits, the log is empty and the record is overwritten."""
         with self.lock:
-            self.version, self.log = "", []
+            self.version, self.log, self.unwritten = "", [], ""
             self.steps = [{"key": k, "label": label, "state": "pending", "started_at": None, "ended_at": None,
                            "line": ""} for k, label in STEPS]  # fmt: skip
             self._write()
@@ -134,9 +136,14 @@ class Steps:
             atomic_write(path, json.dumps(body))
             path.chmod(0o600)
         except OSError as exc:  # the update goes on; only the pages after a switch lose the steps before it
-            if str(exc) != self.unwritten:
-                self.say(f"update: its steps could not be kept in {path}: {exc}")
-            self.unwritten = str(exc)
+            unwritten = failure(exc)
+            if unwritten != self.unwritten:
+                line = f"its steps could not be kept in {path}: {unwritten}"
+                self.say(f"update: {line}")
+                running = [s["key"] for s in self.steps if s["state"] == "running"]
+                key = running[-1] if running else self.log[-1]["step"] if self.log else "looking"
+                self.log = [*self.log, {"at": _now(), "step": key, "line": line}][-LOG:]
+            self.unwritten = unwritten
         else:
             self.unwritten = ""
 

@@ -14,6 +14,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failed, failure
 from owlbear_delivery_next.local_system import data_place, data_repo, local_home, preload
 from owlbear_delivery_next.machine_host import control
 from owlbear_delivery_next.runtimes import copilot_cli, readiness
@@ -103,13 +104,12 @@ def uninstall(say: Say) -> int:
 
 
 def _fails(command: list[str]) -> str | None:
-    """None when *command* exits 0, else its first output line or the error."""
+    """None when *command* exits 0, else its whole failure: the error, or its exit status and all it printed."""
     try:
         done = subprocess.run(command, capture_output=True, text=True, timeout=60, check=False)  # noqa: S603
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return str(exc)
-    lines = (done.stdout + done.stderr).strip().splitlines()
-    return None if done.returncode == 0 else (lines or [f"exit {done.returncode}"])[0]
+        return failure(exc)
+    return None if done.returncode == 0 else failed(done)
 
 
 def _tools(say: Say) -> int:
@@ -177,7 +177,7 @@ def doctor(say: Say, dropped: list[str]) -> int:
         try:
             checks = readiness.ready(Store.open(Path(p.path)), Path(p.path))
         except (StoreError, OSError) as exc:
-            say(f"{p.path}: cannot be read: {exc}")
+            say(f"{p.path}: cannot be read: {failure(exc)}")
             failed += 1
             continue
         for c in checks:

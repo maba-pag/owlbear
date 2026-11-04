@@ -21,6 +21,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import Field
 
 from owlbear_delivery_next.change_contracts import chat_contract
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import codebase, data_repo, leases, local_home
 from owlbear_delivery_next.machine_host import control, impeccable, improvement_routes, update_routes, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
@@ -362,7 +363,7 @@ def _update_routes(routes: APIRouter, machine: Machine) -> None:
             try:
                 versions.keep_data(path)
             except versions.VersionError as exc:
-                raise HTTPException(409, str(exc)) from exc
+                raise HTTPException(409, failure(exc)) from exc
             shutil.rmtree(path)
         return machine_values(machine)
 

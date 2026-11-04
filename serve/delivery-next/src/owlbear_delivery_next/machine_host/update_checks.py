@@ -184,6 +184,9 @@ class Checks:
         self.workers: list[threading.Thread] = []  # the threads ``drain`` waits for
         self.path = local_home.root() / STATE  # a check ending after the home moved (a test's teardown) keeps it here
         self.unrestored = ""  # why the last checks' results could not be read at the start; said while the host runs
+        self.unkept = ""  # why the last checks' results could not be written, until a write succeeds
+        self.unsettled = ""  # why the machine settings could not be read at the last look
+        self.unticked = ""  # why the last look whether a check is due failed, until one succeeds
         self.kept: dict[str, dict[str, Any]] = self._restored()
 
     def _restored(self) -> dict[str, dict[str, Any]]:
@@ -202,7 +205,10 @@ class Checks:
             self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             atomic_write(self.path, json.dumps(self.kept, indent=2) + "\n")
         except OSError as exc:  # held until the host ends; the next check writes it again
-            self.machine.say(f"update checks: {self.path} could not be written: {exc}")
+            self.unkept = f"{self.path} could not be written: {command_failure.failure(exc)}"
+            self.machine.say(f"update checks: {self.unkept}")
+        else:
+            self.unkept = ""
 
     def start(self, name: str) -> bool:
         """Check *name* now, unless it is being checked or the machine is stopping; whether a check started."""
@@ -260,8 +266,10 @@ class Checks:
         try:
             resolved = machine_settings.current()
         except Exception as exc:  # noqa: BLE001 - unreadable settings: no timed check; the start's and by hand run
-            self.machine.say(f"update checks: the machine settings could not be read: {exc}")
+            self.unsettled = command_failure.failure(exc)
+            self.machine.say(f"update checks: the machine settings could not be read: {self.unsettled}")
             return dict.fromkeys(CHECKS), None
+        self.unsettled = ""
         return {n: getattr(resolved, f"update_check_hours_{n}") for n in CHECKS}, resolved.channel
 
     def _next(self, name: str, hours: int | None) -> datetime | None:
@@ -291,18 +299,26 @@ class Checks:
             try:
                 self.tick()
             except Exception as exc:  # noqa: BLE001 - the loop outlives one failed look
-                self.machine.say(f"update checks failed: {type(exc).__name__}: {exc}")
+                self.unticked = command_failure.failure(exc)
+                self.machine.say(f"update checks failed: {self.unticked}")
+            else:
+                self.unticked = ""
 
     def read(self) -> dict[str, Any]:
         """Each update's state and when it is next checked; ``available`` counts each runnable newer one once.
 
-        ``unrestored`` says why the results kept before the host started were lost, if they were.
+        ``unrestored`` says why the results kept before the host started were lost, if they were; ``unkept`` why the
+        last results could not be written, ``unsettled`` why the machine settings could not be read and ``unticked``
+        why the last look whether a check is due failed; ``runs_unread`` why the projects' PDS updates could not be
+        read, so a newer PDS shows offered whether or not a project already takes it.
         """
         (hours, channel), installed = self._settings(), {n: _installed(n) for n in CHECKS}
+        runs_unread = ""
         try:
             taken = _pds_runs()
         except Exception as exc:  # noqa: BLE001 - the checks still show; the page names the runs it cannot read
-            self.machine.say(f"update checks: the PDS updates could not be read: {exc}")
+            runs_unread = command_failure.failure(exc)
+            self.machine.say(f"update checks: the PDS updates could not be read: {runs_unread}")
             taken = {}
         with self.lock:
             shown = [self._shown(n, hours[n], installed[n], channel) for n in CHECKS]
@@ -310,7 +326,8 @@ class Checks:
             if u["name"] == "pds" and u["available"] and (state := taken.get(u["latest"])):
                 u.update({"state": state, "available": False} | ({"detail": MERGED} if state == "merged" else {}))
         available = sum(1 for u in shown if u["available"])
-        return {"updates": shown, "available": available, "unrestored": self.unrestored}
+        return {"updates": shown, "available": available, "unrestored": self.unrestored, "unkept": self.unkept,
+                "unsettled": self.unsettled, "unticked": self.unticked, "runs_unread": runs_unread}  # fmt: skip
 
     def _shown(self, name: str, hours: int | None, installed: str, channel: str | None) -> dict[str, Any]:
         kept = self.kept.get(name, {})

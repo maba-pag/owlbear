@@ -372,7 +372,7 @@ def _holds_data(path: Path) -> Path | None:
     try:
         return data_place.holds_data(path)
     except data_repo.DataRepoError as exc:
-        msg = f"nothing is removed while the shared data's pointer cannot be read: {exc}"
+        msg = f"nothing is removed while the shared data's pointer cannot be read: {failure(exc)}"
         raise VersionError(msg) from exc
 
 
@@ -434,7 +434,7 @@ def report(say: Callable[[str], None], *, prepare: bool = False) -> int:
     try:
         choice = target()
     except (VersionError, registry.RegistryError) as exc:
-        say(f"the versions could not be read: {exc}")
+        say(f"the versions could not be read: {failure(exc)}")
         return 1
     for note in choice.notes if choice else ():
         say(f"  {note}")
@@ -450,7 +450,7 @@ def report(say: Callable[[str], None], *, prepare: bool = False) -> int:
     try:
         folder = install(choice)
     except VersionError as exc:
-        say(str(exc))
+        say(failure(exc))
         return 1
     say(f"{choice.tag} is installed and checked in {folder}; nothing switched to it")
     return 0
