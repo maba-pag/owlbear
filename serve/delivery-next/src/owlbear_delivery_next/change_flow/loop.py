@@ -161,12 +161,6 @@ def owner_gated(c: Change) -> bool:
     return delivery_target.held(c) or bool(q and ({o.next for o in q.options} & DECISIONS or amending.owned(q)))
 
 
-def brief_ready(c: Change) -> bool:
-    """Planning starts only from the approved current brief version its challenge loop ended on (TD-249)."""
-    b = c.brief
-    return b.approved_version == b.version == b.challenged
-
-
 def next_step(c: Change, now: datetime) -> Step | None:
     """Return the step a runner should run now, or None while waiting, paused or finished."""
     o = c.outcome
@@ -448,7 +442,7 @@ def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901
     paths = r.paths if r else {}
     match s.kind:
         case StepKind.SHAPE | StepKind.PLAN:
-            if s.kind == StepKind.SHAPE and not brief_ready(c):
+            if s.kind == StepKind.SHAPE and not brief_rounds.ready(c):
                 return  # the shape step reviews the approved version first
             c.budgets.rounds.pop(str(s.kind), None)
             if s.kind == StepKind.PLAN and r and r.plan:
