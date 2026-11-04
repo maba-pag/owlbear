@@ -192,6 +192,7 @@ def test_the_project_api_serves_a_note_for_each_rule_github_does_not_require(tmp
         maintenance = None
         wake = SimpleNamespace(set=lambda: None)
         record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
+        failed = ""  # its last pass passed
 
     store = Store(tmp_path)
     store.write_profile(rules(strict, resolution))

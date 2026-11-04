@@ -66,6 +66,7 @@ def test_a_done_change_whose_pull_back_left_the_target_behind_says_so_and_offers
         "Done · merged PR #13 · local main is behind: main is checked out in 2 worktrees",
         "Pull on the Changes page",
         "you",
+        error=True,
     )
     pulled = done.model_copy(update={"pullback": Pullback(state="updated", at=NOW)})
     assert status(pulled, Activity(host_up=True), NOW) == Status("Done · merged PR #13", None, "delivery")
@@ -75,7 +76,11 @@ def test_a_done_change_whose_pull_back_left_the_target_behind_says_so_and_offers
     ("change", "activity", "expected"),
     [
         (ASKING, Activity(host_up=True), Status("Build 2/2 · waiting for you: which key?", "Answer", "you")),
-        (STOPPED, Activity(host_up=True), Status("Build 2/2 · stopped: model blocked", "Allow the model", "admin")),
+        (
+            STOPPED,
+            Activity(host_up=True),
+            Status("Build 2/2 · stopped: model blocked", "Allow the model", "admin", error=True),
+        ),
         (
             PUBLISHING,
             Activity(host_up=True),
@@ -109,7 +114,7 @@ def test_a_done_change_whose_pull_back_left_the_target_behind_says_so_and_offers
         (
             build(outcome=Outcome(exit=Exit.ASK, cause="liveness:build:usage-unread", reason="no usage", at=NOW)),
             Activity(host_up=True),
-            Status("Build 2/2 · stopped: no usage", "Run this step again", "you"),
+            Status("Build 2/2 · stopped: no usage", "Run this step again", "you", error=True),
         ),
     ],
 )

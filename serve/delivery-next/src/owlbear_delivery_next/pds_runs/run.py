@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import dispute_tools, tools
 from owlbear_delivery_next.change_contracts.round_records import PDS, RoundLoop
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files, pack_git
 from owlbear_delivery_next.impeccable_runs import pack_activation, pack_publish, pack_repair, pack_rounds, pack_run
 from owlbear_delivery_next.impeccable_runs.pack_run import Stopped
@@ -186,7 +187,7 @@ def _laid(job: Job, ctx: Context, lp: RoundLoop) -> bool:
     try:
         repair.lay(job, ctx)
     except pack_files.PackError as exc:
-        job.hold(ctx, f"the agent's repair {r.commit[:12]} could not be laid out for its check: {exc}")
+        job.hold(ctx, f"the agent's repair {r.commit[:12]} could not be laid out for its check: {failure(exc)}")
         return False
     note = f"Then an agent repaired the pull request's failed CI: {r.summary}"
     ctx.summary = ctx.summary if note in ctx.summary else f"{ctx.summary}\n\n{note}"

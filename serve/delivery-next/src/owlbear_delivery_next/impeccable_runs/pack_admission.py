@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_git
 from owlbear_delivery_next.state_store import pack_run_record, project_home, registry
 
@@ -117,7 +118,7 @@ def records(own: Path, name: str, kind: Kind = IMPECCABLE) -> list[Seen]:
     try:
         projects = registry.load().projects
     except registry.RegistryError as exc:
-        msg = f"the machine's registry cannot be read, so other projects' updates cannot be ruled out: {exc}"
+        msg = f"the machine's registry cannot be read, so other projects' updates cannot be ruled out: {failure(exc)}"
         raise Refused(msg) from None
     roots = {os.path.realpath(own): (name, own)}
     for p in projects:
@@ -130,7 +131,8 @@ def _seen(name: str, root: Path, kind: Kind = IMPECCABLE) -> Seen:
     try:
         got = kind.reader(root)
     except (OSError, ValueError) as exc:
-        msg = f"the {kind.title} run record of {name} cannot be read ({exc}); unreadable is never idle, repair it first"
+        why = failure(exc)
+        msg = f"the {kind.title} run record of {name} cannot be read ({why}); unreadable is never idle, repair it first"
         raise Refused(msg) from None
     return Seen(name, None, "absent") if got is None else Seen(name, *got)
 
@@ -144,6 +146,6 @@ def pulls(github: Provider, kind: Kind = IMPECCABLE) -> tuple[PullRequest, ...]:
     try:
         found = github.open_pull_requests(pack_git.REPOSITORY, kind.prefix)
     except Exception as exc:  # noqa: BLE001 - whatever stopped the lookup, it proves nothing
-        msg = f"OwlBear's open {kind.title} pull requests could not be read ({type(exc).__name__}: {exc}); try again"
+        msg = f"OwlBear's open {kind.title} pull requests could not be read ({failure(exc)}); try again"
         raise Refused(msg) from None
     return tuple(p for p in found if p.head_branch.startswith(kind.prefix))

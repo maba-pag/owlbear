@@ -32,6 +32,7 @@ from owlbear_memory import (
 from owlbear_memory import ValidationError as MemoryValidationError
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import curation_apply, data_repo
 from owlbear_delivery_next.state_store.database import StoreError
 
@@ -87,7 +88,7 @@ def _purge_age(store: Store) -> tuple[int | None, str]:
     try:
         days = store.settings().memory.purge_days
     except StoreError as exc:
-        return None, f"the settings can't be read: {exc}"
+        return None, f"the settings can't be read: {failure(exc)}"
     return days, "" if days is not None else UNSET_PURGE
 
 
@@ -218,9 +219,9 @@ def _relocate(
                 storage.write_entry(path, entry, memory_dir=source)
                 raise
     except ValueError as exc:  # the origin made it too large to store
-        raise HTTPException(422, f"{entry.title} cannot move: {exc}") from exc
+        raise HTTPException(422, f"{entry.title} cannot move: {failure(exc)}") from exc
     except OSError as exc:
-        raise HTTPException(409, f"{entry.title} could not move: {exc.strerror or exc}; try again") from exc
+        raise HTTPException(409, f"{entry.title} could not move: {failure(exc)}; try again") from exc
 
 
 def reorigin(shared: data_repo.DataRepo, old: str, new: str, until: float) -> str:

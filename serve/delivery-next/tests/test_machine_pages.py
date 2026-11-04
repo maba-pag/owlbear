@@ -17,7 +17,7 @@ import time
 import traceback
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,14 +30,19 @@ from copilot.generated import rpc
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.decision_records import Pick, PickedDecision
+from owlbear_delivery_next.change_contracts.failures import cause_key
+from owlbear_delivery_next.change_contracts.merge_records import Pullback
 from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     Brief,
     Change,
     Environment,
+    ErrorKind,
     Exit,
     Names,
+    Outcome,
     Plan,
+    Question,
     Step,
     StepKind,
     Task,
@@ -53,8 +58,10 @@ from owlbear_delivery_next.change_contracts.visual_records import (
     VisualResult,
     VisualRound,
 )
-from owlbear_delivery_next.change_flow import loop, round_flow
+from owlbear_delivery_next.change_flow import budgets, loop, moves, round_flow
+from owlbear_delivery_next.change_flow.budgets import DEFECT_LIMIT, RETRY_LIMIT
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import pack_files
@@ -71,7 +78,7 @@ from owlbear_delivery_next.machine_host import alias, app, project, update_check
 from owlbear_delivery_next.machine_host import impeccable as machine_impeccable
 from owlbear_delivery_next.machine_host import serve as host_start
 from owlbear_delivery_next.machine_host.machine import Machine
-from owlbear_delivery_next.project_host import api, pack_routes
+from owlbear_delivery_next.project_host import api, pack_routes, runner_end
 from owlbear_delivery_next.project_host import host as host_module
 from owlbear_delivery_next.project_host import leftovers as host_leftovers
 from owlbear_delivery_next.project_host.host import Host, HostRecord
@@ -81,7 +88,7 @@ from owlbear_delivery_next.runtimes.settings_seen import NAME as SEEN
 from owlbear_delivery_next.settings import carried, config, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
 from owlbear_delivery_next.state_store import decision_store, registry, watch_reports
-from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store
+from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store, StoreError
 from owlbear_delivery_next.workflow_steps import decision, design, judges, pick, publish, retry, visual
 from owlbear_delivery_next.workflow_steps.engine import Ctx
 
@@ -542,6 +549,150 @@ def test_a_shaping_chat_that_could_not_open_says_the_host_s_whole_error(
         expected = f"Could not open the chat to revise c1: {said}. Copy this command: {command.text_content()}"
         assert page.locator("#started").text_content() == expected
         assert broke == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)  # a real browser and the machine host; a loaded runner needs more than 30 s
+def test_a_failed_shaping_launch_shows_its_warning_whole(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """P19 (#971): what Delivery could not undo is said beside a failed launch too, whole."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    launched = chats(monkeypatch)
+    reason = "the Copilot chat did not start (unbound: x)"
+    launched.ending = {"state": "failed", "reason": reason, "warning": whole_error}
+    launched.release.set()
+    alpha = registry.register(clone(tmp_path / "alpha", "same"))
+    shaping(Path(alpha.path), "Alpha brief")
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        opened(page, base, alpha.id)
+        page.locator("#detail").get_by_role("button", name=REVISE).click()
+        pds.answer(page, "Open the chat")
+        started = page.locator("#started")
+        expect(started.locator("code")).to_have_count(1, timeout=15000)
+        command = started.locator("code").text_content()
+        assert started.text_content() == (
+            f"Could not open the chat to revise c1: {reason}. Note: {whole_error}. Copy this command: {command}"
+        )
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)  # a real browser and the machine host; a loaded runner needs more than 30 s
+def test_a_failed_host_pass_is_noted_whole_on_the_changes_page(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """P18 (#971): the project's scheduler pass that failed is noted above its Changes with its whole error."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    error = RuntimeError(whole_error)
+    error.add_note("a note added on the way up")
+
+    def failing(_self: Host, _slug: str, _now: object) -> bool:  # observing the project's Change
+        raise error
+
+    monkeypatch.setattr(Host, "_one", failing)
+    registry.register(clone(tmp_path / "alpha", "same"))
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/#token=t")
+        notes = page.locator("#notes p-text")
+        expect(notes).to_have_count(1, timeout=15000)
+        whole = f"RuntimeError: {whole_error}\na note added on the way up"
+        assert notes.all_text_contents() == [f"The host's last pass failed: {whole}"]
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)  # a real browser and the machine host; a loaded runner needs more than 30 s
+def test_a_blocked_or_unreadable_changes_card_shows_its_whole_error(
+    tmp_path: Path, monkeypatch, pds, whole_error
+) -> None:
+    """R1 (#971): a card that says why its Change stopped keeps every path and line of the error, unclipped."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "stuck"))
+    folder = f"{alpha.path}/.owlbear/changes"
+    now = datetime.now(UTC)
+    shaping(Path(alpha.path), "Stuck brief", "stuck", step=Step(kind=StepKind.SHAPE, started_at=now),
+            blocked=runner_end.block({9: ""}, now))  # fmt: skip
+    shaping(Path(alpha.path), "Broken brief", "broken")
+    pids = OSError(13, whole_error, f"{folder}/stuck/step-pids.json")
+    pids.add_note(f"a note naming {folder}/stuck")
+    broken = StoreError(f"{whole_error}\nunreadable: {folder}/broken/change.json")
+    broken.add_note("a note added on the way up")
+
+    def recorded(*_args: object) -> None:
+        raise pids
+
+    def read(self: Store, slug: str, *args: object, **kwargs: object) -> Change:
+        if slug == "broken":
+            raise broken
+        return reading(self, slug, *args, **kwargs)
+
+    reading = Store.read
+    monkeypatch.setattr(host_leftovers.step_pids, "recorded", recorded)
+    monkeypatch.setattr(Store, "read", read)
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/#token=t")
+        stuck = page.locator("li.card", has=page.locator('a[data-key$="stuck"]')).locator("p.says:not(.stage)")
+        unreadable = page.locator("li.card", has=page.locator('a[data-key$="broken"]')).locator("p.says")
+        expect(stuck).to_contain_text("could not be read", timeout=15000)
+        expect(unreadable).to_contain_text("StoreError")
+        assert stuck.text_content() == f"stopped: the step's recorded processes could not be read: {failure(pids)}"
+        assert unreadable.text_content() == f"stopped: {failure(broken)}"
+        for says in (stuck, unreadable):
+            expect(says).to_be_visible()
+            assert says.evaluate("e => e.scrollHeight <= e.clientHeight && getComputedStyle(e).overflow === 'visible'")
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("kind", ["retrying", "pulled-back", "exhausted", "asked"])
+def test_an_erring_changes_card_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, whole_error, kind) -> None:
+    """#971: a retry's reason, a failed pull-back and a question asked once retries ran out are errors too: the card
+    keeps every path and line, unclipped. An ordinary question stays compact."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", kind))
+    now, path = datetime.now(UTC), f"{alpha.path}/.owlbear/changes/{kind}/step-pids.json"
+    wake = now + timedelta(hours=1)
+    reason = f"OSError: [Errno 13] {whole_error}: '{path}'\na note naming {path}"
+    if kind == "retrying":
+        retrying = Outcome(exit=Exit.RETRY, cause="environment:network", reason=reason, wake_at=wake, at=now)
+        shaping(Path(alpha.path), "Retrying brief", kind, outcome=retrying)
+        line = f"retrying: environment:network (1 of {RETRY_LIMIT}) at {wake:%H:%M} · {reason}"
+    elif kind == "pulled-back":
+        behind = Pullback(state="behind", reason=f"local main is behind: {reason}", at=now)
+        shaping(
+            Path(alpha.path), "Pulled brief", kind, finished_at=now, names=Names(target="main", pr=13), pullback=behind
+        )
+        line = f"Done · merged PR #13 · local main is behind: {reason}"
+    elif kind == "exhausted":  # the same Delivery defect DEFECT_LIMIT times in a row asks with the error
+        c, cause = Change(slug=kind, handle="c1", step=Step(kind=StepKind.SHAPE)), "tooling:shape:adapter"
+        for _ in range(DEFECT_LIMIT):
+            budgets.retry(c, loop.StepResult(exit=Exit.RETRY, cause=cause, reason=reason), now)
+        shaping(Path(alpha.path), "Exhausted brief", kind, outcome=c.outcome, questions=c.questions, budgets=c.budgets)
+        line = f"waiting for you: Delivery failed the same way {DEFECT_LIMIT} times ({cause}): {reason}"
+    else:  # a question with a failure-kind cause key that no budget spent: compact
+        c = Change(slug=kind, handle="c1", step=Step(kind=StepKind.SHAPE))
+        dispute = cause_key(ErrorKind.REVIEW, StepKind.SHAPE, "dispute-t1")
+        moves.ask(c, Question(step=StepKind.SHAPE, text=f"Keep the finding? {reason}", cause=dispute), now)
+        shaping(Path(alpha.path), "Asked brief", kind, outcome=c.outcome, questions=c.questions)
+        line = None
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/#token=t")
+        page.locator("#machine").get_by_role("button", name="Resume").click()  # a paused Delivery says only that
+        says = page.locator("li.card", has=page.locator(f'a[data-key$="{kind}"]')).locator("p.says:not(.stage)")
+        expect(says).to_contain_text("a note naming", timeout=15000)
+        if line is None:
+            assert path not in says.text_content()
+            expect(says).not_to_have_class(re.compile(r"\bwhole\b"))
+        else:
+            assert says.text_content() == line
+            expect(says).to_be_visible()
+            assert says.evaluate("e => e.scrollHeight <= e.clientHeight && getComputedStyle(e).overflow === 'visible'")
+        assert said == []
 
 
 @pytest.mark.browser
@@ -3820,12 +3971,25 @@ def shown_texts(page: Page, base: str, of: str, section: str) -> list[str]:
 
 
 def refusing_pack(tmp_path: Path, text: str) -> tuple[Path, SimpleNamespace]:
-    """A file holding *text*, and an Impeccable pack whose engine fails with it as its stderr."""
-    said, engine = tmp_path / "said.txt", tmp_path / "engine"
+    """A file holding *text*, and an Impeccable pack whose engine fails with it as its stderr; each run's arguments
+    are a tab-separated line of ``calls.txt`` beside it."""
+    said, engine, calls = tmp_path / "said.txt", tmp_path / "engine", shlex.quote(str(tmp_path / "calls.txt"))
     said.write_text(text)
-    engine.write_text(f"#!/bin/sh\ncat {shlex.quote(str(said))} >&2\nexit 1\n")
+    engine.write_text(
+        f"#!/bin/sh\nprintf '%s\\t' \"$@\" >> {calls}\necho >> {calls}\ncat {shlex.quote(str(said))} >&2\nexit 1\n"
+    )
     engine.chmod(0o755)
     return said, SimpleNamespace(bundle="", verified_engine=lambda: engine)
+
+
+def engine_failures(tmp_path: Path, text: str) -> list[str]:
+    """What the design detector said of each run of *refusing_pack*'s engine, in order."""
+    engine, calls = str(tmp_path / "engine"), (tmp_path / "calls.txt").read_text().replace("\t\n", "\n")
+    return [
+        f"the design detector failed (1): CalledProcessError: Command '{[engine, *args.split(chr(9))]}' "
+        f"returned non-zero exit status 1.\n{text}"
+        for args in calls.splitlines()
+    ]
 
 
 def updated(store: Store, **update: object) -> None:
@@ -3837,7 +4001,8 @@ def updated(store: Store, **update: object) -> None:
 @pytest.mark.browser
 @pytest.mark.timeout(90)  # git, the before capture and a real browser over three renders
 def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, capsys, whole_error: str) -> None:
-    """#895 K4: a judge's whole error, the detector's whole refusals and the before capture's whole finding."""
+    """#895 K4: a judge's whole error, the detector's whole refusals and the before capture's whole finding; #971: the
+    detector's failure names its command."""
     said, pack = refusing_pack(tmp_path, whole_error)
     monkeypatch.setattr(design, "pack", lambda: pack)
     install = shlex.join(
@@ -3847,7 +4012,6 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
     with store.lock("c1") as lock:
         store.write(lock, c)
         runner._before(store, lock, c, Path(c.names.worktree))  # noqa: SLF001
-    failed = f"the design detector failed (1): {whole_error}"
     note = f"`{shlex.join(shlex.split(install))}` failed: {whole_error}"
     b = store.read("c1").before
 
@@ -3858,15 +4022,16 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
     after = design.rendered(
         page, pack, c.brief.visual[0], width=1280, url="http://127.0.0.1:9/", browser="", cwd=tmp_path
     )
+    sources, scanned = engine_failures(tmp_path, whole_error)  # the before capture's scan, then this one's
     why = (
         f"not scanned: DetectorError: the page refused the design detector: RuntimeError: {whole_error}; "
-        f"the engine's own browser: DetectorError: {failed}"
+        f"the engine's own browser: DetectorError: {scanned}"
     )
     out = capsys.readouterr().out  # an earlier test's machine may still say it stopped, between these lines too
     assert all(
         message in out
         for message in (
-            f"design detector: sources: {failed}\n",
+            f"design detector: sources: {sources}\n",
             f"before: 0 screenshots at {b.head[:7]}; {note}\n",
             f"design detector: home at 1280: {why}\n",
         )
@@ -3882,7 +4047,7 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
         number=1, head=head, tree="t", widths=[1280, 1920, 2400], verdicts=[correct, looked],
         detector=[after, unexplained, clean], outcome="ask", at=now,
     )  # fmt: skip
-    items = [f"home at 1280px: {why}", "home at 1920px: no reason given", f"before, changed sources: {failed}"]
+    items = [f"home at 1280px: {why}", "home at 1920px: no reason given", f"before, changed sources: {sources}"]
     line = f"The design detector could not scan: {'; '.join(items)}"
     with store.lock("c1") as lock:
         c = store.read("c1")
@@ -3899,7 +4064,7 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
         updated(store, visual_rounds=[])  # a failed shot is judged without a round: the capture keeps its scans
         assert line in shown_texts(page, url, of, "Before and after")
         updated(store, visual=None)
-        before_only = {f"Not available: {note}", f"The design detector could not scan: changed sources: {failed}"}
+        before_only = {f"Not available: {note}", f"The design detector could not scan: changed sources: {sources}"}
         assert before_only <= set(shown_texts(page, url, of, "Before and after"))
         updated(store, visual_rounds=[kept.model_copy(update={"outcome": None})])  # a judge failed: no judged capture
         assert f"The design detector could not scan round 1 at {head[:7]}: {'; '.join(items[:2])}" in shown_texts(

@@ -30,6 +30,7 @@ from owlbear_delivery_next.local_system import git_run, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.state_store import pack_run_record, registry
 from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
@@ -389,21 +390,26 @@ def test_a_ci_failed_publish_stop_fits_a_phone_and_says_no_calibration_evidence_
 def test_a_failed_pack_stage_shows_and_logs_its_whole_error(  # noqa: PLR0913, PLR0917 - its fixtures
     served, pds, tmp_path, checkout, clone, monkeypatch, whole_error
 ) -> None:
-    """A refused push holds the publication: git's whole words are its reason, its stage's and its log's (#895)."""
+    """A refused push holds the publication: git's whole words, both streams, are its reason, its stage's and its log's
+    (#895, #971)."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    real = subprocess.run
+    real, pushed, out = subprocess.run, [], "what git printed"
 
     def refusing(args, *rest, **kw):
         if "push" in args:  # after the account's -c options
-            return subprocess.CompletedProcess(args, 1, "", f"{whole_error}\n")
+            pushed.append(args)
+            return subprocess.CompletedProcess(args, 1, f"{out}\n", f"{whole_error}\n")
         return real(args, *rest, **kw)
 
     monkeypatch.setattr(git_run.subprocess, "run", refusing)
     job = pack_job.Job(Store(tmp_path / "store"), JOB.Fakes(clone).live(checkout))
     state = JOB.run(job)
 
-    said = f"git push failed: {whole_error}"
+    said = (
+        f"PackError: git push failed: CalledProcessError: Command '{pushed[0]}' returned non-zero exit status 1.\n"
+        f"stderr:\n{whole_error}\nstdout:\n{out}"
+    )
     assert (state["state"], state["reason"]) == ("waiting", said)
     assert next(s for s in state["stages"] if s["name"] == "push")["detail"] == said
     assert [i["detail"] for i in state["invocations"] if i["operation"] == "push"] == [said]
@@ -418,6 +424,76 @@ def test_a_failed_pack_stage_shows_and_logs_its_whole_error(  # noqa: PLR0913, P
         log = page.locator("#pack-log")
         expect(log).to_be_visible()
         assert log.text_content() == "\n".join(state["log"])
+
+
+@pytest.mark.browser
+def test_an_unreadable_registry_shows_whole_in_the_runs_and_in_a_refused_start(
+    served, pds, monkeypatch, whole_error
+) -> None:
+    """#971: the machine's registry error reaches the runs list and the start's refusal whole."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    job, base = served()
+    job.state |= {"state": "passed", "questions": [], "ended_at": NOW.isoformat()}
+    job._save()  # noqa: SLF001
+    error = registry.RegistryError(whole_error)
+    error.add_note("a note added on the way up")
+
+    def unreadable() -> registry.Machine:
+        raise error
+
+    monkeypatch.setattr(registry, "load", unreadable)
+    whole = f"RegistryError: {whole_error}\na note added on the way up"
+    with opened(base, pds) as page:
+        said: list[str] = []
+        page.on("console", lambda m: said.append(f"{m.text} {m.location['url']}") if m.type == "error" else None)
+        page.on("pageerror", lambda e: said.append(str(e)))
+        page.reload()
+        line = page.locator("#pack-runs > p-text")
+        expect(line).to_have_count(1)
+        assert (
+            line.text_content()
+            == f"The machine's registry cannot be read, so other projects' runs are not shown: {whole}."
+        )
+        page.get_by_role("button", name="Update Impeccable").click()
+        pds.answer(page, "Update")
+        refused = page.locator("#pack-error")
+        expect(refused).to_be_visible()
+        assert refused.text_content() == (
+            f"The machine's registry cannot be read, so other projects' updates cannot be ruled out: {whole}"
+        )
+        answered = "Failed to load resource: the server responded with a status of"
+        assert set(said) == {  # a project host alone lists no projects; the refused start
+            f"{answered} 404 (Not Found) {base}/api/next/projects",
+            f"{answered} 409 (Conflict) {base}/api/next/impeccable/update",
+        }
+
+
+@pytest.mark.browser
+def test_a_sole_unreadable_run_record_shows_whole_in_the_runs(served, pds, tmp_path, monkeypatch, whole_error) -> None:
+    """#971: a readable registry and one project whose run record cannot be read still list that project's error."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _job, base = served()
+    error = OSError(whole_error)
+    error.add_note("a note added on the way up")
+    real = pack_run_record.observed
+
+    def unreadable(root, *rest):
+        if os.path.realpath(root) != os.path.realpath(tmp_path):
+            return real(root, *rest)
+        raise error
+
+    monkeypatch.setattr(pack_run_record, "observed", unreadable)
+    with opened(base, pds) as page:
+        page.reload()
+        page.get_by_text("Each project's last Impeccable run").click()
+        listed = page.locator("#pack-runs li")
+        expect(listed).to_have_count(1)
+        expect(listed).to_be_visible()
+        assert listed.text_content() == (
+            f"{tmp_path.name}: Its run record cannot be read (OSError: {whole_error}\na note added on the way up)"
+        )
 
 
 @pytest.mark.browser

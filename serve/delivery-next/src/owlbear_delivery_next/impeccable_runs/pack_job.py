@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files, pack_git, pack_update
 from owlbear_delivery_next.impeccable_runs import (
     pack_activation,
@@ -436,7 +437,7 @@ class Job(Steps):
             self.log(exc.reason)
             self._end("up-to-date" if exc.current else "failed", exc.reason)
         except Exception as exc:  # noqa: BLE001 - the page must learn how the run ended
-            reason = f"{type(exc).__name__}: {exc}"
+            reason = failure(exc)
             self.log(reason)
             self._end("failed", reason)
         else:

@@ -69,7 +69,9 @@ function started() {
   if (!s) return html`<p-text id="started" aria-live="polite"></p-text>`;
   // a project whose settings block its work gets no command to run by hand (#808)
   const by = s.command ? html` Run this command instead:<pre><code>${s.command}</code></pre>` : "";
-  return html`<p-text id="started" aria-live="polite">${s.text ?? html`Could not open the chat: ${s.reason}.${by}`}
+  const note = s.warning ? ` Note: ${s.warning}.` : "";
+  return html`<p-text id="started" aria-live="polite">${s.text
+    ?? html`Could not open the chat: ${s.reason}.${note}${by}`}
     </p-text>`;
 }
 

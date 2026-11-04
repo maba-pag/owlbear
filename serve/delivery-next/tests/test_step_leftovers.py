@@ -183,10 +183,19 @@ def _no_group(_pid):
 @pytest.mark.parametrize(
     ("what", "detail"),
     [
-        ("table", "the step's processes could not be looked for: the process table could not be listed: AccessDenied"),
+        (
+            "table",
+            (
+                "the step's processes could not be looked for: UnlistedError: the process table could not be listed: "
+                "AccessDenied: "
+            ),
+        ),
         ("group", "its group or session could not be read: PermissionError: [Errno 1] Operation not permitted"),
-        ("marks", "the step's command marks could not be read: [Errno 21] Is a directory"),
-        ("pids", "the step's recorded processes could not be read: [Errno 21] Is a directory"),
+        ("marks", "the step's command marks could not be read: IsADirectoryError: [Errno 21] Is a directory: '{file}'"),
+        (
+            "pids",
+            "the step's recorded processes could not be read: IsADirectoryError: [Errno 21] Is a directory: '{file}'",
+        ),
     ],
 )
 def test_unreadable_marks_or_table_block_with_their_details(store, tmp_path, monkeypatch, what, detail) -> None:
@@ -205,8 +214,13 @@ def test_unreadable_marks_or_table_block_with_their_details(store, tmp_path, mon
         if what == "group":
             m.setattr(os, "getpgid", _no_group)
         assert host(store, tmp_path, said).tick() == []
-    assert detail in store.read("c1").blocked.reason
-    assert any(detail in line for line in said)
+    if what == "group":  # the process it stopped at is whichever the table lists first
+        assert detail in store.read("c1").blocked.reason
+        assert any(detail in line for line in said)
+        return
+    file = command_marks.folder(store, "c1") / (step_pids.FILE if what == "pids" else command_marks.FILE)
+    whole = detail.format(file=file)
+    assert (store.read("c1").blocked.reason, said) == (whole, [f"c1: no writer starts: {whole}"])
 
 
 def test_a_runner_runs_only_once_its_record_is_written(store, tmp_path, monkeypatch) -> None:

@@ -23,7 +23,7 @@ from owlbear_delivery_next.impeccable_runs import machine_lock, pack_job, pack_r
 from owlbear_delivery_next.impeccable_runs.pack_state import MACHINE_LOCK
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.pds_runs import audit, audit_markdown, browser, pin, sessions, tree
+from owlbear_delivery_next.pds_runs import audit, audit_markdown, browser, context, pin, sessions, tree
 from owlbear_delivery_next.pds_runs import job as pds_job
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import pds_run_record
@@ -357,6 +357,39 @@ def test_a_gate_that_cannot_judge_stops_the_update_with_its_reason_and_opens_not
     assert said in state["reason"]
     assert fakes.calls == calls
     assert (fakes.github.prs, fakes.github.calls) == ({}, [])
+
+
+@pytest.mark.parametrize("cause", ["metadata", "unusable", "tarball"])
+def test_a_release_npm_does_not_give_stops_the_candidate_with_its_whole_error(
+    tmp_path, checkout, monkeypatch, whole_error, cause
+):
+    """#971: npm's whole error, or the whole reason its metadata is unusable, is the run's reason, its candidate
+    stage's, its invocation's and its log's."""
+    fakes, error, loads = Fakes(checkout), (ValueError if cause == "unusable" else OSError)(whole_error), json.loads
+    error.add_note("a note added on the way up")
+    fetch, metadata, tarball = fakes.fetch, f"{pin.REGISTRY}/{NEW}", f"{pin.TARBALLS}components-js-{NEW}.tgz"
+
+    def failing(url: str, seconds: float) -> bytes:
+        if url == {"metadata": metadata, "tarball": tarball}.get(cause):
+            raise error
+        return b"unusable" if (cause, url) == ("unusable", metadata) else fetch(url, seconds)
+
+    def unusable(data: bytes | str, *args: object, **kwargs: object) -> object:
+        if data == b"unusable":
+            raise error
+        return loads(data, *args, **kwargs)
+
+    monkeypatch.setattr(pin.json, "loads", unusable)
+    fakes.fetch = failing
+    state = run(pds_job.Job(store(tmp_path), fakes.live(checkout)))
+
+    whole = f"{type(error).__name__}: {whole_error}\na note added on the way up"
+    said = {
+        "metadata": f"npm was not reached for {pin.NAME} {NEW}: {whole}",
+        "unusable": f"npm's metadata for {pin.NAME} {NEW} names no tarball and integrity: {whole}",
+        "tarball": f"the tarball {tarball} was not downloaded: {whole}",
+    }[cause]
+    PACK.stage_failed(state, "candidate", f"PinError: {said}")
 
 
 def test_a_failure_the_update_caused_goes_to_a_fresh_updater_and_both_gates_run_again(tmp_path, checkout):
@@ -745,23 +778,26 @@ def test_a_failed_reconsideration_keeps_and_logs_its_whole_error(tmp_path, check
     assert logged[-3:] == ["challenger: running", f"challenger: failed: {reason}", reason]
 
 
-@pytest.mark.parametrize("cause", ["repair-session", "repair-check", "repair-push"])
+@pytest.mark.parametrize("cause", ["repair-session", "repair-git", "repair-check", "repair-push"])
 def test_a_failed_ci_repair_keeps_and_logs_its_whole_error(tmp_path, checkout, whole_error, cause):
     """An agent's CI repair, the audit of its repair or its push fails: its whole words reach the run's reason, the
     stage, the invocation and the log (#895)."""
-    edits = {f"{REPO}{PAGE}": FIXED + "export const u = 1;\n"} if cause != "repair-session" else {}
+    edits = {f"{REPO}{PAGE}": FIXED + "export const u = 1;\n"} if cause not in {"repair-session", "repair-git"} else {}
     fakes, job, _state, _heads = ci_failed(tmp_path, checkout, edits)
     before, real, ended = pr_head(checkout, fakes), fakes.session, replace(ENDED, detail=whole_error)
     failing = (lambda cfg: cfg.submit is pack_repair.SUBMIT) if cause == "repair-session" else (
         lambda cfg: cfg.job == sessions.AUDIT
     )  # fmt: skip
     job.live.session = lambda store, cfg: ended if failing(cfg) else real(store, cfg)
-    if cause == "repair-push":
+    if cause in {"repair-push", "repair-git"}:
         job.live.session, git_run = real, job.live.git
+        refusal = pack_files.PackError(whole_error)
+        refusal.add_note("a note added on the way up")
+        refused_at = "push" if cause == "repair-push" else "fetch"  # its push, or the fetch of the failed head
 
         def refused(at, argv):
-            if argv[0] == "push" and any(i["operation"] == pack_repair.REPAIR for i in job.state["invocations"]):
-                raise pack_files.PackError(whole_error)
+            if argv[0] == refused_at and any(i["operation"] == pack_repair.REPAIR for i in job.state["invocations"]):
+                raise refusal
             return git_run(at, argv)
 
         job.live.git = refused
@@ -769,8 +805,14 @@ def test_a_failed_ci_repair_keeps_and_logs_its_whole_error(tmp_path, checkout, w
 
     logged = [line.split(" ", 1)[1] for line in state["log"]]
     again = "have an agent try again, or discard"
-    if cause == "repair-session":
-        detail = f"the agent's repair did not finish: PackError: the agent ended with error: {whole_error}"
+    if cause in {"repair-session", "repair-git"}:
+        detail = (
+            "the agent's repair did not finish: PackError: "
+            + {
+                "repair-session": f"the agent ended with error: {whole_error}",
+                "repair-git": f"{whole_error}\na note added on the way up",
+            }[cause]
+        )
         url = next(i["detail"] for i in state["invocations"] if i["operation"] == "pull-request")
         stage, op, reason = (
             "merge",
@@ -779,7 +821,7 @@ def test_a_failed_ci_repair_keeps_and_logs_its_whole_error(tmp_path, checkout, w
         )
     elif cause == "repair-push":
         made = re.search(r"the agent's repair (\w{12}) ", state["reason"])[1]
-        detail = f"the agent's repair {made} was not pushed: {whole_error}"
+        detail = f"the agent's repair {made} was not pushed: PackError: {whole_error}\na note added on the way up"
         url = next(i["detail"] for i in state["invocations"] if i["operation"] == "pull-request")
         stage, op = "merge", pack_repair.REPAIR
         reason = f"CI failed at {before[:12]} of {url}: CI; {detail}. Fix it and try again, {again}"
@@ -793,6 +835,30 @@ def test_a_failed_ci_repair_keeps_and_logs_its_whole_error(tmp_path, checkout, w
     assert next(s for s in state["stages"] if s["name"] == stage)["detail"] == reason
     assert [i["detail"] for i in state["invocations"] if i["operation"] == op][-1] == detail
     assert logged[-2:] == [f"{stage}: failed: {detail}", f"waiting for you: {reason}"]
+
+
+def test_a_ci_repair_that_cannot_be_laid_out_for_its_check_holds_with_its_whole_error(tmp_path, checkout, whole_error):
+    """#971: git's whole error laying out the agent's repair for its check holds the update: its reason, its question
+    and its log."""
+    _fakes, job, _state, _heads = ci_failed(tmp_path, checkout, {f"{REPO}{PAGE}": FIXED + "export const u = 1;\n"})
+    real, refusal = job.live.git, pack_files.PackError(whole_error)
+    refusal.add_note("a note added on the way up")
+
+    def refused(at: Path, argv: list[str]) -> str:
+        if argv[:2] == ["worktree", "add"] and argv[4] == str(job.workspace / context.HEAD):
+            raise refusal
+        return real(at, argv)
+
+    job.live.git = refused
+    state = PACK.answered(job, "repair")
+
+    made = state["repair"]["commit"][:12]
+    reason = f"the agent's repair {made} could not be laid out for its check: PackError: {whole_error}\n"
+    reason += "a note added on the way up"
+    (q,) = state["questions"]
+    url = next(i["detail"] for i in state["invocations"] if i["operation"] == "pull-request")
+    assert (state["state"], state["reason"], q["text"]) == ("waiting", reason, f"{reason} ({url})")
+    assert state["log"][-1].split(" ", 1)[1] == f"waiting for you: {reason}"
 
 
 FLAKY = "tests/test_visual.py::test_a_real_capture_of_a_local_page"

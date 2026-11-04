@@ -307,7 +307,7 @@ export function runPart(run) {
 
 export function others(r) {
   const listed = r.runs.filter((x) => x.state !== "idle" || x.error);
-  if (listed.length < 2 && !r.registry) return nothing;
+  if (listed.length < 2 && !r.registry && !listed.some((x) => x.error)) return nothing;
   return html`<details id="pack-runs"><summary>Each project's last ${own.kind.name} run</summary>
     ${r.registry ? html`<p-text size="sm">${sentence(r.registry)}.</p-text>` : nothing}
     <ul>${listed.map((x) => html`<li>${x.name}: ${x.error ? sentence(x.error) : `${x.state}${x.started_at

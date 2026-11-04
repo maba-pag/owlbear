@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 import uvicorn
-from owlbear_memory import MemoryCategory, MemoryEngine
+from owlbear_memory import MemoryCategory, MemoryEngine, storage
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
@@ -29,6 +29,7 @@ from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer
 from owlbear_delivery_next.state_store import backlog_issues, machine_settings, registry
 from owlbear_delivery_next.state_store.backlog import Backlog, Entry
+from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import Store, read_layer
 
 if TYPE_CHECKING:
@@ -64,10 +65,11 @@ class Host:
 class Launch:
     def __init__(self) -> None:
         self.prompts: list[str] = []
+        self.ending: dict[str, str] = {"state": "open"}
 
     def __call__(self, _repo, _role, prompt):
         self.prompts.append(prompt)
-        return {"state": "open"}
+        return self.ending
 
 
 def machine(tmp_path: Path, shared: Path) -> tuple[Starlette, dict[str, Launch]]:
@@ -184,6 +186,44 @@ def test_one_backlog_for_both_clones_triaged_by_project_and_a_change_started_in_
             expect(page.locator("#started")).to_contain_text("A chat opened in VS Code")
             assert (len(launches[DOCS].prompts), launches[SHOP].prompts) == (1, [])
             assert "Both sites" in launches[DOCS].prompts[0]
+            browser.close()
+    finally:
+        server.should_exit = True
+
+
+@pytest.mark.browser
+@pytest.mark.usefixtures("github")
+def test_a_failed_backlog_launch_shows_its_warning_whole(tmp_path: Path, shared_repo, pds, whole_error) -> None:
+    """R2 (#971): what Delivery could not undo is said beside a Backlog launch that failed too, whole."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    shop = Backlog(DataRepo(shared_repo[0]), "shop-site")
+    both = shop.add("Both sites", source="review")[0]
+    shop.update(both.id, {"kind": "improvement", "projects": ["shop-site", "docs-site"]})
+    app, launches = machine(tmp_path, shared_repo[0])
+    reason = "the Copilot chat did not start (unbound: x)"
+    launches[DOCS].ending = {"state": "failed", "reason": reason, "warning": whole_error}
+    server, base = serving(app)
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.goto(f"{base}/backlog?project={DOCS}#token=t")
+            page.get_by_label("Select Both sites").check()
+            page.get_by_role("button", name="Create Change from 1").click()
+            pds.pick(page.locator("#choose"), "Shape the Change in", DOCS)
+            page.get_by_role("button", name="Continue").click()
+            pds.answer(page, "Open the chat")
+            started = page.locator("#started")
+            expect(started.locator("code")).to_have_count(1, timeout=15000)
+            command = started.locator("code").text_content()
+            assert started.text_content().rstrip() == (  # the line's template ends in its own indent
+                f"Could not open the chat: {reason}. Note: {whole_error}. Run this command instead:{command}"
+            )
             browser.close()
     finally:
         server.should_exit = True
@@ -341,6 +381,73 @@ def test_memory_shows_each_folder_once_beside_global_and_makes_an_entry_global(
     assert {e.title: e.state for e in MemoryEngine(root / "shop-site" / "memory").get_entries()}["Read the twin"] == (
         "approved"
     )
+
+
+@pytest.mark.browser
+def test_memory_shows_unreadable_settings_and_a_failed_move_whole(
+    tmp_path: Path, shared_repo, pds, monkeypatch, whole_error
+) -> None:
+    """#971: the purge line says why the purge age is unknown, and a move that fails says why, each whole."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    folder = shared_repo[0] / "docs-site" / "memory"
+    curated(folder, "Pin the runtime")
+    curated(folder, "Old lesson")
+    engine = MemoryEngine(folder)
+    old = next(e for e in engine.get_entries() if e.title == "Old lesson")
+    engine.delete(old.id, engine.approve(old.id, old.updated_at).updated_at)
+    unread, refused = StoreError(whole_error), ValueError(whole_error)
+    for error in (unread, refused):
+        error.add_note("a note added on the way up")
+
+    def unreadable(_store):
+        raise unread
+
+    real = storage.write_entry
+
+    def refusing(path, written, *, memory_dir):  # only the moving entry's write, which names its origin, fails
+        if getattr(written, "origin", None):
+            raise refused
+        return real(path, written, memory_dir=memory_dir)
+
+    monkeypatch.setattr(Store, "settings", unreadable)
+    server, base = serving(machine(tmp_path, shared_repo[0])[0])
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            said: list[str] = []
+            page.on("console", lambda m: said.append(f"{m.text} {m.location['url']}") if m.type == "error" else None)
+            page.on("pageerror", lambda e: said.append(str(e)))
+            page.goto(f"{base}/memory?project={DOCS}#token=t")
+            pds.pick(page.locator("#filters"), "State", "any")
+            line = page.locator("section.quiet div.row > div > p-text")  # the purge line
+            expect(line).to_have_count(1)
+            assert line.text_content() == (
+                f"The settings can't be read: StoreError: {whole_error}\na note added on the way up."
+            )
+            monkeypatch.setattr(storage, "write_entry", refusing)
+            pinned = page.locator("li.entry").filter(has_text="Pin the runtime")
+            pinned.get_by_role("button", name="Make global").click()
+            pds.answer(page, "Make global")
+            expect(page.locator("#error")).to_be_visible()
+            assert page.locator("#error").text_content().strip() == (
+                f"Pin the runtime cannot move: ValueError: {whole_error}\na note added on the way up"
+            )
+            moved = next(e.id for e in engine.get_entries() if e.title == "Pin the runtime")
+            answered = "Failed to load resource: the server responded with a status of"
+            assert set(said) == {  # the test machine has no update checks or seen marks; the refused move
+                f"{answered} 404 (Not Found) {base}/api/next/updates",
+                f"{answered} 404 (Not Found) {base}/api/next/seen",
+                f"{answered} 422 (Unprocessable Content) {base}/p/{DOCS}/api/next/memory/{moved}/make-global",
+            }
+            browser.close()
+    finally:
+        server.should_exit = True
 
 
 def test_an_older_scope_label_without_its_project_label_means_the_project_it_was_found_in():

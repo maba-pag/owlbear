@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import re
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -46,11 +47,12 @@ from owlbear_delivery_next.local_system import codebase, processes
 from owlbear_delivery_next.local_system.storage_io import open_lock
 from owlbear_delivery_next.project_host import api, host
 from owlbear_delivery_next.project_host.host import Host, RunnerRecord
+from owlbear_delivery_next.runtimes import command_marks
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import Layer
-from owlbear_delivery_next.state_store import machine_settings, work_block
+from owlbear_delivery_next.state_store import machine_settings, step_pids, work_block
 from owlbear_delivery_next.state_store.database import put_record
-from owlbear_delivery_next.state_store.store import ACTIVITY_LIMIT, Store
+from owlbear_delivery_next.state_store.store import ACTIVITY_LIMIT, Store, StoreError
 from owlbear_delivery_next.workflow_steps import check, disposable, prepare
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -124,11 +126,95 @@ def test_no_writer_starts_until_the_former_runner_and_its_processes_are_gone(sto
     assert "4242 (sleep)" in status(store.read("c1"), Activity(host_up=True), NOW).line
     fake.tree = None
     assert fake.host.tick(NOW) == []
-    reason = "the step's processes could not be looked for: the process table could not be listed: denied"
+    reason = (
+        "the step's processes could not be looked for: UnlistedError: the process table could not be listed: denied"
+    )
     assert store.read("c1").blocked.reason == reason
     fake.tree = {}
     assert fake.host.tick(NOW) == ["c1"]
     assert store.read("c1").blocked is None
+
+
+def logged(out: str, prefix: str) -> list[str]:
+    """The host's log lines that start with *prefix*, each with every line of its text."""
+    return re.findall(
+        rf"^\d\d:\d\d:\d\dZ {re.escape(prefix)}(.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)", out, re.MULTILINE | re.DOTALL
+    )
+
+
+@pytest.mark.parametrize(
+    ("where", "said"),
+    [
+        ("pids", "the step's recorded processes could not be read: "),
+        ("marks", "the step's command marks could not be read: "),
+        ("table", "the step's processes could not be looked for: "),
+        ("clear", "the check environment's processes could not be looked for: "),
+        ("record", ""),
+    ],
+)
+def test_a_blocked_or_unloadable_change_keeps_its_whole_error(  # noqa: PLR0913, PLR0917 - its fixtures
+    store, tmp_path, monkeypatch, capsys, whole_error, where, said
+):
+    """Why no writer starts, or why a Change cannot be read, reaches its record and the host's log whole (#971)."""
+    error = {"table": processes.UnlistedError, "record": StoreError}.get(where, OSError)(whole_error)
+    error.add_note("a note added on the way up")
+
+    def failing(*_args: object) -> None:
+        raise error
+
+    fake = Fake(store, tmp_path)
+    if where == "clear":  # the environment is stopped before a stop when idle
+        paused(fake, [True])
+        environment(store, fake, monkeypatch, pids={900: 2.0}, pgid=900, ready_at=NOW, launched_at=NOW)
+        fake.host.draining = lambda: True
+        monkeypatch.setattr(check, "dispose", failing)
+    else:
+        save(store, asking(fake).model_copy(update={"outcome": None}))
+        assert fake.host.tick(NOW) == ["c1"]
+        fake.live.clear()  # the runner ended: what it left is looked for
+        seams = {"pids": (step_pids, "recorded"), "marks": (command_marks, "read"), "record": (store, "read")}
+        if where == "table":
+            fake.host.members = failing
+        else:
+            monkeypatch.setattr(*seams[where], failing)
+    capsys.readouterr()
+    assert fake.host.tick(NOW) == []
+    whole = f"{said}{type(error).__name__}: {whole_error}\na note added on the way up"
+    if where == "record":
+        assert logged(capsys.readouterr().out, "c1: ") == [whole]
+        c = client(store, fake)  # the Change's card and its refused detail say it whole too
+        assert c.get("/api/next/changes").json()[0]["line"] == f"stopped: {whole}"
+        detail = c.get("/api/next/changes/c1")
+        assert (detail.status_code, detail.json()["detail"]) == (409, whole)
+        return
+    assert store.read("c1").blocked.reason == whole
+    assert logged(capsys.readouterr().out, "c1: no writer starts: ") == [whole]
+
+
+def test_a_failed_pass_is_logged_and_noted_on_the_changes_page_whole_until_a_pass_succeeds(
+    store, tmp_path, capsys, whole_error
+):
+    """The scheduler's failed pass reaches its log and the project's notes whole, and a passing one clears it (#971)."""
+    fake = Fake(store, tmp_path)
+    c = client(store, fake)
+    error = RuntimeError(whole_error)
+    error.add_note("a note added on the way up")
+    seen = []
+
+    def probe(_now: datetime) -> None:  # the first thing a pass does
+        if not seen:
+            seen.append("failing")
+            fake.host.wake.set()
+            raise error
+        seen.append(c.get("/api/next/project").json())  # the next pass, before it ends
+        fake.host.stopped.set()
+
+    fake.host._probe = probe  # noqa: SLF001 - the pass's own first step fails
+    fake.host.run()
+    whole = f"RuntimeError: {whole_error}\na note added on the way up"
+    assert seen == ["failing", {"notes": [f"The host's last pass failed: {whole}"]}]
+    assert logged(capsys.readouterr().out, "pass failed: ") == [whole]
+    assert (fake.host.failed, c.get("/api/next/project").json()) == ("", {"notes": []})
 
 
 def test_recorded_pids_of_the_runner_block_until_gone(store, tmp_path):

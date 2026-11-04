@@ -658,6 +658,27 @@ def test_a_failed_follow_up_is_kept_whole_and_logged(caplog):
     assert (record.levelname, record.exc_info is not None) == ("ERROR", True)
 
 
+@pytest.mark.parametrize("where", ["launch", "follow-up"])
+def test_a_failed_launch_or_follow_up_keeps_its_whole_error(caplog, whole_error, where):
+    """What the page reads of a launch that raised, or of its follow-up, is the error whole, and it is logged (#971)."""
+    error = RuntimeError(whole_error)
+    error.add_note("a note added on the way up")
+
+    def failing(*_args: object) -> dict[str, str]:
+        raise error
+
+    kept = launches.Launches(0, time.monotonic)
+    work = failing if where == "launch" else lambda: {"state": "open"}
+    launch = kept.start(work, done=failing if where == "follow-up" else None)
+    end = time.monotonic() + 5
+    while (state := kept.state(launch))["state"] == "opening" and time.monotonic() < end:
+        time.sleep(0.01)
+    whole = f"RuntimeError: {whole_error}\na note added on the way up"
+    assert state == ({"state": "failed", "reason": whole} if where == "launch" else {"state": "open", "warning": whole})
+    [record] = [r for r in caplog.records if r.name == launches.__name__]
+    assert (record.levelname, record.exc_info[1]) == ("ERROR", error)
+
+
 DRAFT = {
     "change": "c1",
     "title": "Flip the hero",
