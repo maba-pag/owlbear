@@ -27,6 +27,7 @@ import uvicorn
 from copilot.generated import rpc
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.change_contracts.decision_records import Pick, PickedDecision
 from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     Brief,
@@ -3524,6 +3525,41 @@ def test_a_failed_pick_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, w
         shown = follows.locator("p-text")
         expect(shown).to_have_count(1)
         assert shown.text_content() == f"The pick failed: {failed}. The shaping chat can ask for it again."
+        assert said == []
+
+
+@pytest.mark.browser
+def test_a_picked_decision_opens_in_its_project_from_all_projects(
+    tmp_path: Path, monkeypatch, pds, shared_repo
+) -> None:
+    """#964: a picked decision followed from a Change opened under All projects opens in that Change's project."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    shared = shared_repo[0]
+    monkeypatch.setenv(data_place.VIEW, str(shared))
+    alpha, _beta = (registry.register(clone(tmp_path / n, "c1")) for n in ("alpha", "beta"))
+    store = Store.open(Path(alpha.path))
+    decided(shared, store.name, "Lint once.")
+    (rule,) = [
+        e.decision
+        for e in decision_store.load(store.shared, store.name).snapshot.entries
+        if e.decision.title == "Lint once."
+    ]
+    with store.lock("c1") as lock:
+        c = Change(slug="c1", brief=Brief(version=1, title="Notes"), step=Step(kind=StepKind.SHAPE))
+        c.brief.picked = Pick(
+            version=1,
+            status="ok",
+            decisions=[PickedDecision(id=rule.id, revision="r1", title="Lint once.", statement="Lint once.")],
+        )
+        store.write(lock, c)
+    with browsing(monkeypatch, pds, details=True) as (page, base):
+        said = errors(page)
+        opened(page, base, alpha.id, "c1")
+        page.get_by_text("Decisions this work follows (1)").click()
+        page.get_by_role("link", name="Lint once.").click()
+        expect(page).to_have_url(f"{base}/decisions?project={alpha.id}&decision={rule.id}")
+        expect(page.locator(f'.entry[data-id="{rule.id}"] .heading')).to_be_focused()
         assert said == []
 
 
