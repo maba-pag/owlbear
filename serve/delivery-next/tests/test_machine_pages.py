@@ -55,7 +55,7 @@ from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import pack_files
-from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home, processes
+from owlbear_delivery_next.local_system import codebase, data_place, data_repo, leases, local_home, processes
 from owlbear_delivery_next.machine_host import alias, app, project, update_checks, versions
 from owlbear_delivery_next.machine_host import impeccable as machine_impeccable
 from owlbear_delivery_next.machine_host import serve as host_start
@@ -1189,6 +1189,37 @@ def test_settings_say_a_failed_read_of_the_shared_repository_whole(
         why = f"{failed}\nstderr:\n{stderr}\nstdout:\n{stdout}"
         assert notice.text_content().strip() == f"The shared settings repository {shared} cannot be read: {why}"
         assert said == []
+
+
+@pytest.mark.browser
+def test_settings_say_why_the_old_runtime_stays_whole(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """#971: Remove the old runtime, refused because the folder may hold the shared data, says why whole in Settings'
+    notice."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    kept = local_home.root() / local_home.VERSIONS / "legacy-c1c1c1c1c1c1"
+    kept.mkdir(parents=True)
+    error = versions.VersionError(whole_error)
+    error.add_note("a note on the failure")
+
+    def refusing(_path):
+        raise error
+
+    monkeypatch.setattr(versions, "legacy", lambda: [kept])
+    monkeypatch.setattr(leases, "unpinned", list)
+    monkeypatch.setattr(versions, "keep_data", refusing)
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        pds.group(page, "this-machine")
+        page.get_by_role("button", name="Remove the old runtime").click()
+        pds.answer(page, "Remove it")
+        notice = page.locator("#error")
+        expect(notice).to_be_visible()
+        assert notice.text_content().strip() == f"VersionError: {whole_error}\na note on the failure"
+        assert said == ["Failed to load resource: the server responded with a status of 409 (Conflict)"]
+    assert kept.is_dir()
 
 
 @pytest.mark.browser

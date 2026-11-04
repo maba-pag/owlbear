@@ -701,6 +701,27 @@ def test_the_old_runtime_is_removed_only_on_the_owners_word():
     assert runtime.resolve().name == "v0.3"
 
 
+def test_the_old_runtime_stays_and_says_why_whole_when_its_data_cannot_be_ruled_out(monkeypatch, whole_error):
+    """#971: removing the old runtime refused because it may hold the shared data says why whole, notes included."""
+    legacy()
+    alias.activate(version("v0.3"), "v0.3")
+    monkeypatch.setattr(leases, "unpinned", list)
+    error = versions.VersionError(whole_error)
+    error.add_note("a note on the failure")
+
+    def refusing(_path):
+        raise error
+
+    monkeypatch.setattr(versions, "keep_data", refusing)
+    record = HostRecord(url="http://127.0.0.1:4321/", token=TOKEN, pid=1, started_at=datetime.now(UTC), code="c")
+    client = TestClient(app.create(Machine(record)), base_url="http://127.0.0.1")
+
+    said = client.post("/api/next/machine/legacy/remove", headers={"authorization": f"Bearer {TOKEN}"})
+
+    assert (said.status_code, said.json()) == (409, {"detail": f"VersionError: {whole_error}\na note on the failure"})
+    assert len(versions.legacy()) == 1
+
+
 def test_the_old_runtime_stays_while_a_process_still_runs_it(monkeypatch):
     legacy()
     alias.activate(version("v0.3"), "v0.3")
