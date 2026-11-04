@@ -22,7 +22,7 @@ export function spendLines(spend) {
   return toggle("spend", `Spent ${spentText(spend.credits, (spend.unread || []).length)}`, lines);
 }
 
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+export const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const SPLIT = [["invalid", "invalid arguments"], ["checks", "failed checks"], ["order", "at the wrong moment"]];
 const WRONG = [
   ["order", "call at the wrong moment", "calls at the wrong moment"],

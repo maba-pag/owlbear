@@ -104,7 +104,7 @@ def test_details_off_then_on(c1, pds) -> None:
         expect(detail.get_by_role("button", name=re.compile(r"^Approve v[1-3]$"))).to_have_count(0)  # past versions
         for hidden in ("Review rounds", "Decisions this work follows", "Recent activity"):
             expect(detail.get_by_role("heading", name=hidden)).to_have_count(0)
-        expect(detail.get_by_text("Repairs no round reviewed")).to_have_count(0)
+        expect(detail.locator(".actions")).not_to_contain_text("No review yet")  # v4 is named once, above
 
         pds.settled(page)
         switch = detail.locator("#details-switch")
