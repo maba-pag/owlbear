@@ -637,6 +637,60 @@ def test_a_retro_run_keeps_its_whole_reason(monkeypatch, whole_error, site, tmp_
     assert (lease["reason"], told) == (reason, [f"Retro: {reason}; no Retro call starts until Maintenance recovers it"])
 
 
+NOTE = "it was read while being rewritten"
+
+
+def _noted(exc: Exception) -> Exception:
+    exc.add_note(NOTE)
+    return exc
+
+
+@pytest.mark.parametrize("site", ["the Change", "the chat's log", "the due units", "Retro's manifest"])
+@pytest.mark.usefixtures("said")
+def test_a_button_run_whose_read_fails_keeps_the_whole_error_in_its_result(tmp_path, monkeypatch, whole_error, site):
+    whole = f"{whole_error}\n{NOTE}"
+    projects, request = _finished_change(tmp_path), {"change": "p1:fix-it"}
+    st = projects["p1"][0]
+    job = _job(Asker(), projects=projects)
+    if site == "the Change":
+        found = st.read
+        reads = iter([found, lambda _s: (_ for _ in ()).throw(_noted(ValueError(whole_error)))])
+
+        def read(slug):  # read once as due, then unreadable at the call
+            return next(reads)(slug)
+
+        st.read = read
+        expected = f"refused: it cannot be read (ValueError: {whole})"
+    elif site == "the chat's log":
+        monkeypatch.setattr(machine_settings.current(), "enrolled_chats", [_chat(tmp_path, "c1")])
+        request, log = {"chat": "c1"}, chatlogs.state() / "c1" / "events.jsonl"
+        assert job.slots.take("retro", "other", 1, 1) == 1
+        real = job.slots.take
+
+        def take(share, key, *args, **kwargs):
+            got = real(share, key, *args, **kwargs)
+            if key.startswith("retro:open") and not got:  # due, then its log went while the run waited for a slot
+                log.unlink()
+                job.slots.give("retro", "other")
+            return got
+
+        monkeypatch.setattr(job.slots, "take", take)
+        expected = f"refused: its log cannot be read (FileNotFoundError: [Errno 2] No such file or directory: '{log}')"
+    elif site == "the due units":
+        st.slugs = lambda: (_ for _ in ()).throw(_noted(OSError(whole_error)))
+        expected = f"refused: OSError: {whole}"
+    else:
+        manifest = chatlogs.root() / "manifest.jsonl"
+        manifest.unlink()
+        manifest.mkdir()  # a folder where the manifest's file belongs
+        error = f"IsADirectoryError: [Errno 21] Is a directory: '{manifest}'"
+        expected = f"failed: RetroError: Retro's manifest cannot be read: {error}"
+    retro_store.request("owner", **request)
+    job.tick(0.0)
+    [run] = _runs()
+    assert run["result"] == expected
+
+
 def test_the_machine_waits_for_retros_running_run():
     now = datetime.now(UTC)
     m = Machine(HostRecord(url="http://x/", token=uuid.uuid4().hex, pid=1, started_at=now, code=codebase.CURRENT))

@@ -29,6 +29,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import proposal_apply, retro_judge
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_units as units
@@ -96,6 +97,7 @@ class RetroJob:
         self.waiting: list[Running] = []
         self.checked, self.pruned_at = False, -PRUNE_EVERY
         self.skips = retro_block.Skips(self.seams.say, self.seams.blocked)
+        self.failed = ""  # the last pass's whole error, until a pass succeeds
 
     @classmethod
     def attach(cls, m: Machine, fenced: Callable[[], str]) -> RetroJob:
@@ -153,9 +155,11 @@ class RetroJob:
         while not stopping.wait(EVERY):
             try:
                 self.tick(clock())
+                self.failed = ""
             except Exception as exc:
                 LOG.exception("a Retro pass failed")
-                self.seams.say(f"Retro failed: {type(exc).__name__}: {exc}")
+                self.failed = failure(exc)  # the Improvement page's thread reads it
+                self.seams.say(f"Retro failed: {self.failed}")
 
     def tick(self, now: float) -> None:
         """One pass: restore once, then the button's requests, a waiting run, Changes, chats and the pruning."""
@@ -228,7 +232,7 @@ class RetroJob:
         try:
             item = self._due(uid, request)
         except (store.RetroError, OSError) as exc:
-            self._start(Running(uid, "button", by), f"refused: {exc}")
+            self._start(Running(uid, "button", by), f"refused: {failure(exc)}")
             return
         if item is None or item["rev"] in {i["rev"] for i in late}:  # that judged revision is graded now
             if not late:
@@ -298,7 +302,7 @@ class RetroJob:
             result = "stopped: OwlBear stopped"
         except Exception as exc:
             LOG.exception("a Retro run failed")
-            result = f"failed: {type(exc).__name__}: {exc}"
+            result = f"failed: {failure(exc)}"
         finally:
             self.running = ""
         self._ended(ctx, result, out)
