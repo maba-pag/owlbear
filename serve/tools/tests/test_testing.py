@@ -83,7 +83,7 @@ def test_a_delivery_next_change_testmon_cannot_see_runs_the_whole_package() -> N
     [
         ("pages/changes/forms.mjs", {"test_amendment_page.py", "test_spotter_question_page.py"}),
         ("pages/metrics/runs.mjs", {"test_assets.py"}),
-        ("config.html", {"test_machine_pages.py"}),
+        ("config.html", {"test_machine_pages.py", "test_config_api.py"}),
     ],
 )
 def test_a_page_change_runs_the_tests_that_load_pages(page: str, selected: set[str]) -> None:

@@ -26,6 +26,7 @@ _TESTMON_NAMESPACES = frozenset({"owlbear_delivery_next"})
 _TESTMON_DATA = ".owlbear/scratch"
 # A page file of the Delivery engine runs only the tests that load pages or name page files (#968).
 _PAGES = "serve/delivery-next/src/owlbear_delivery_next/web/"
+_PAGE_ROUTES = "serve/delivery-next/src/owlbear_delivery_next/project_host/pages.py"
 _PAGE_TESTS = re.compile(r"mark\.browser|\.mjs\b|\.html\b|\.css\b|/web/|[\"']web[\"']|\bWEB\b")
 
 
@@ -131,9 +132,18 @@ def _package_scope(package: _WorkspacePackage) -> list[str]:
     return _relative_paths([*_package_tests(package), *_neighbour_tests(package)])
 
 
+def _page_fetch() -> re.Pattern[str]:
+    """A GET of a page the host serves, at the machine host's root or under a project's /p/<id> prefix."""
+    served = (_REPOSITORY_ROOT / _PAGE_ROUTES).read_text(encoding="utf-8")
+    routes = "|".join(re.escape(route) for route in re.findall(r'\("(/[^"]*)", "[^"]*", "[\w-]+\.html"\)', served))
+    return re.compile(rf"\.get\(\s*f?[\"'](?:/p/[^\"'/]*)?(?:{routes})[\"'?]")
+
+
 def _page_scope(package: _WorkspacePackage) -> list[str]:
     tests = [*_package_tests(package), *_neighbour_tests(package)]
-    pages = [path for path in tests if _PAGE_TESTS.search(path.read_text(encoding="utf-8"))]
+    fetch = _page_fetch()
+    texts = {path: path.read_text(encoding="utf-8") for path in tests}
+    pages = [path for path, text in texts.items() if _PAGE_TESTS.search(text) or fetch.search(text)]
     return _relative_paths([*pages, *(_REPOSITORY_ROOT / path for path in _INVARIANT_TESTS)])
 
 
