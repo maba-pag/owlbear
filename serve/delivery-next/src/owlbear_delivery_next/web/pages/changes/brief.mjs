@@ -70,13 +70,12 @@ function checkSaid(c) {
 
 const SCOPES = [["global", "Global"], ["project", "This project"], ["change", "This Change"],
   [null, "Not in the current decisions"]];
-const NOT_IN_FORCE = { draft: "draft", replaced: "replaced", withdrawn: "withdrawn", spent: "spent" };
 
-// One picked decision, linked to its entry on the Decisions page; one no longer in force says what it is now.
-function pickedItem(x) {
-  const was = NOT_IN_FORCE[x.state];
+// One picked decision, linked to its entry on its project's Decisions page; one no longer in force says what it is now.
+function pickedItem(project, x) {
   if (!x.scope) return x.title;
-  return html`<a href=${here({ decision: x.id }, "/decisions")}>${x.title}</a>${was ? ` (${was})` : ""}`;
+  const was = x.state === "in_force" ? "" : ` (${x.state})`;
+  return html`<a href=${here({ project, decision: x.id }, "/decisions")}>${x.title}</a>${was}`;
 }
 
 // The decisions in force this version's work follows, as Delivery's picker chose them (TD-459). Without the details
@@ -93,7 +92,8 @@ function picked(d, on) {
   const items = d.brief.picked_items, why = d.brief.picked_unavailable;
   const groups = items ? SCOPES.map(([scope, name]) => {
     const held = items.filter((x) => x.scope === scope);
-    return held.length ? [hd(5, `${name} (${held.length})`, "xs"), list(held.map(pickedItem))] : nothing;
+    if (!held.length) return nothing;
+    return [hd(5, `${name} (${held.length})`, "xs"), list(held.map((x) => pickedItem(d.project, x)))];
   }) : [text(`They can't be grouped or linked: ${why}.`), list(p.decisions)];
   return html`<section>${toggle(`${d.key}:picked`, `${title} (${n})`, groups)}</section>`;
 }

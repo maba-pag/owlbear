@@ -206,7 +206,7 @@ def rule(title: str, scope: Scope, state: State = State.IN_FORCE) -> Decision:
 
 
 @pytest.fixture
-def shared_url(tmp_path: Path, shared_repo) -> Iterator[tuple[Store, str, dict[str, Decision]]]:
+def shared_url(tmp_path: Path, shared_repo) -> Iterator[tuple[str, dict[str, Decision]]]:
     """Change ``flip`` picking a Global, two project (one withdrawn since), a Change and an unknown decision."""
     import subprocess  # noqa: PLC0415
 
@@ -230,14 +230,14 @@ def shared_url(tmp_path: Path, shared_repo) -> Iterator[tuple[Store, str, dict[s
     c.brief.picked = Pick(version=2, status="ok", decisions=[*said, gone])
     store.write(Lock("flip"), c)
     with served(store) as base:
-        yield store, base, rules
+        yield base, rules
 
 
 @pytest.mark.browser
 def test_picked_decisions_group_by_scope_and_link(shared_url, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    _store, base, rules = shared_url
+    base, rules = shared_url
     with opened(base, "flip", pds) as page:
         expect(page.get_by_text("This version follows 5 decisions.")).to_be_visible()  # details off: one line
         page.locator("#details-switch").click()

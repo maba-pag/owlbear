@@ -51,7 +51,7 @@ export async function refresh() {
 export async function openLinked() {
   if (!linked || !state.loaded?.available) return;
   await open(linked, { address: state.loaded.address });
-  const card = [...document.querySelectorAll(".entry")].find((e) => e.dataset.id === linked);
+  const card = document.querySelector(`.entry[data-id="${CSS.escape(linked)}"]`);
   card?.scrollIntoView({ block: "start" });
   card?.querySelector(".heading")?.focus();
 }
