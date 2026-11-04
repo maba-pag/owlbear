@@ -63,7 +63,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.git.command_failure import failure, rpc_failure
 from owlbear_delivery_next.improvement import acts, card, cases, credit_meter
 from owlbear_delivery_next.improvement.events import Kept, as_dict, clip, kept_text
 from owlbear_delivery_next.improvement.spotter_store import (  # noqa: F401 - kept importable here
@@ -76,7 +76,6 @@ from owlbear_delivery_next.improvement.spotter_store import (  # noqa: F401 - ke
     root,
     store,
 )
-from owlbear_delivery_next.runtimes import sdk_spend
 from owlbear_delivery_next.settings.improvement import CATEGORIES
 from owlbear_delivery_next.state_store import spotter_test
 
@@ -476,7 +475,7 @@ class Spotter:
             try:
                 await ctx.act(record, act)
             except Exception as exc:  # noqa: BLE001 - kept on the act, whole; a look never reaches the step
-                error = sdk_spend.failed(exc)
+                error = rpc_failure(exc)
                 await offload(functools.partial(acts.update, self.folder, record.id, delivery="failed", error=error))
         if record.state_change:
             checking = acts.CHECKS.submit(acts.checked, self.folder, record.id, ctx.conflicts, record.state_change)

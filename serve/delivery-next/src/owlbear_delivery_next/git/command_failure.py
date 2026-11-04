@@ -31,6 +31,11 @@ def failure(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {exc}" + (f"\n{out}" if out else "") + notes
 
 
+def rpc_failure(exc: BaseException) -> str:
+    """`failure`, then the data a JSON-RPC error carries beside its message, which its ``str()`` leaves out."""
+    return failure(exc) + (f" {data!r}" if (data := getattr(exc, "data", None)) else "")
+
+
 def output(stderr: object, stdout: object) -> str:
     """What a command printed: the one stream that said something as it is, or both, labelled, stderr first."""
     err, out = _said(stderr), _said(stdout)
