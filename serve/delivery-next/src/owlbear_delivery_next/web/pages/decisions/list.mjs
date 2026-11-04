@@ -24,7 +24,7 @@ function query() {
   return q.toString();
 }
 
-let listTurn = 0;
+let listTurn = 0, unopened = linked;
 
 export async function refresh() {
   const turn = ++listTurn, where = filter.where;
@@ -44,12 +44,14 @@ export async function refresh() {
   }
   show();
   if (state.opened) await open(state.opened, { again: true });
+  await openLinked();
 }
 
-// Opens the linked decision in its card, scrolled into view with its heading focused; one the filters leave out (a
-// retired one) shows above the list. One that can't be read says why in the page's error notice.
-export async function openLinked() {
-  if (!linked || !state.loaded?.available) return;
+// Opens the linked decision once the list is read, in its card, scrolled into view with its heading focused; one the
+// filters leave out (a retired one) shows above the list. One that can't be read says why in the page's error notice.
+async function openLinked() {
+  if (!unopened || !state.loaded?.available) return;
+  unopened = "";
   await open(linked, { address: state.loaded.address });
   const card = document.querySelector(`.entry[data-id="${CSS.escape(linked)}"]`);
   card?.scrollIntoView({ block: "start" });

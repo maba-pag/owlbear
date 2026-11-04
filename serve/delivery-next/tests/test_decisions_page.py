@@ -132,6 +132,25 @@ def test_a_missing_linked_decision_is_said(store, pds):
 
 
 @pytest.mark.browser
+def test_a_linked_decision_opens_once_the_list_can_be_read(store, pds):
+    """#996 review: a first list read that fails keeps the linked decision waiting; the next read opens it."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    rule = in_force(store)["Notes live in one SQLite table."]
+    with decisions_page(store, pds) as page:
+        base = page.url.split("/decisions")[0]
+        listing = re.compile(r".*/api/next/decisions\?.*")
+        page.route(listing, lambda route: route.fulfill(status=503, body="down"))
+        page.goto(f"{base}/decisions?decision={rule.id}")
+        expect(page.locator("#error")).to_be_visible()
+        expect(page.locator("#detail")).to_have_count(0)
+        page.unroute(listing)
+        page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+        expect(page.locator(f'.entry[data-id="{rule.id}"] #detail')).to_be_visible()
+        expect(page.locator(f'.entry[data-id="{rule.id}"] .heading')).to_be_focused()
+
+
+@pytest.mark.browser
 def test_a_late_global_list_cannot_name_or_retarget_the_owlbear_list(store, pds):
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
