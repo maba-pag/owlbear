@@ -24,33 +24,42 @@ if TYPE_CHECKING:
 LABEL = "memory-curation"
 
 
-def unset(settings: Settings) -> str:
-    """Why a run cannot start for unset settings: the curator's role, its threshold or a user-config switch; else ''."""
+def unset_block(settings: Settings) -> work_block.Block:
+    """The unset settings a run cannot start for: the curator's role, its threshold or a user-config switch."""
     try:
-        agent = settings.agent(roles.SESSIONS[LABEL])
+        settings.agent(roles.SESSIONS[LABEL])  # its subagents are among the role's fields: unset, they are listed
         settings.need("curator_threshold", *roles.USER_CONFIG)
     except SettingsUnset as exc:
-        return str(exc)
-    if agent.subagents is None:  # set per role: a run never guesses whether its subagents may start
-        return f"agents.{roles.SESSIONS[LABEL]}.subagents is unset"
-    return ""
+        return work_block.Block(tuple(exc.keys))
+    return work_block.Block()
 
 
-def blocked(shared: DataRepo, folder: str, here: work_block.Block | None = None) -> str:
-    """Why *folder*'s curation may not start; '' when it may. *here* is this machine's block, read now unless given."""
+def block(shared: DataRepo, folder: str, here: work_block.Block | None = None) -> work_block.Block:
+    """What keeps *folder*'s curation from starting; falsy when it may. *here* is this machine's block, read now."""
     try:
-        own = unset(work_block.outside(shared))
+        own = unset_block(work_block.outside(shared))
     except StoreError as exc:
-        return f"{work_block.UNREADABLE}{exc}"
+        return work_block.Block(reason=str(exc))
     if own:
         return own
     if not shared.project_path(folder).exists():
-        return (work_block.machine() if here is None else here).text()
-    return work_block.of_folder(shared, folder, here).text()
+        return work_block.machine() if here is None else here
+    return work_block.of_folder(shared, folder, here)
 
 
 def refusal(shared: DataRepo, folder: str, prior: FolderRun, started: datetime) -> FolderRun | None:
     """*folder*'s refused row, keeping what *prior* left pending and skipped; None when its curation may start."""
-    if not (why := blocked(shared, folder)):
-        return None
-    return prior.model_copy(update={"state": "failed", "started_at": started, "ended_at": started, "reason": why})
+    return refused(prior, why, started) if (why := block(shared, folder)) else None
+
+
+def refused(prior: FolderRun, why: work_block.Block, started: datetime, ended: datetime | None = None) -> FolderRun:
+    """*prior* as a failed run for *why*, which it keeps in words and, when settings are unset, as their count."""
+    return prior.model_copy(
+        update={
+            "state": "failed",
+            "started_at": started,
+            "ended_at": ended or started,
+            "reason": why.text(),
+            "reason_unset": 0 if why.reason else len(why.keys),
+        }
+    )

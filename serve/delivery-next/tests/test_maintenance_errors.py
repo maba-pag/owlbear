@@ -64,6 +64,7 @@ def maintenance(tmp_path, pds):
                                 "folder": name,
                                 "state": "never",
                                 "entries": [],
+                                "unset": [],
                                 "summary": f"Read generation {state['reads']}",
                             }
                             for name in ("shop", "other")

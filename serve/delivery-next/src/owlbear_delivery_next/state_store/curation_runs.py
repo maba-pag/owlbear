@@ -23,6 +23,7 @@ class FolderRun(Record):
     ended_at: datetime | None = None
     summary: str = ""
     reason: str = ""
+    reason_unset: int = 0  # how many settings were unset when a run was refused for them; reason says so in keys
     key: str = ""  # the ledger's source for an uncertain run; empty when an older host ended it before the ledger
     entries: list[Judged] = Field(default_factory=list)
     skipped: dict[str, str] = Field(default_factory=dict)  # entry id: its revision when the curator skipped it

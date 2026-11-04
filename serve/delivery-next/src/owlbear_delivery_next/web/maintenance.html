@@ -36,7 +36,7 @@
 <!-- ask -->
 <script type="module">
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
-import { blockedOf, call, defined, here, project, shown } from "/assets/ui.mjs";
+import { blockedOf, call, defined, here, project, settingsWait, shown } from "/assets/ui.mjs";
 import { lastSaid, maintained } from "/assets/page/maintenance/overview.mjs";
 
 // Under the machine host with no project chosen, each project shows as a summary that opens it, beside the machine's
@@ -183,16 +183,18 @@ function folderRun(f) {
   const at = f.ended_at || f.started_at, when = at ? `, ${new Date(at).toLocaleString()}` : "";
   const said = f.state === "never" ? "Never curated." : `Last run: ${f.state}${when}`;
   const skipped = f.entries.filter((e) => e.action === "skipped");
+  const blocked = settingsWait(f.unset.length, f.unset_reason, f.blocked);
+  const reason = f.reason_unset ? settingsWait(f.reason_unset, "", f.reason) : f.reason;  // refused for unset settings
   return html`<li class="action">
     <div class="title"><p-heading size="md"><h3>${f.folder}</h3></p-heading>
       <p-button type="button" compact="true" variant="secondary" .loading=${state.curating === f.folder}
-        ?disabled=${["waiting", "running"].includes(f.state) || f.blocked} title=${f.blocked || nothing}
+        ?disabled=${["waiting", "running"].includes(f.state) || blocked} title=${blocked || nothing}
         @click=${() => curate(f.folder)} aria=${`{"aria-label": "Curate ${f.folder} now"}`}>Curate now</p-button></div>
-    ${f.blocked ? html`<p-text class="blocked" size="xs" color="contrast-medium">${sentence(f.blocked)}.</p-text>`
+    ${blocked ? html`<p-text class="blocked" size="xs" color="contrast-medium">${sentence(blocked)}.</p-text>`
       : nothing}
     <p-text size="sm">${said}</p-text>
     ${f.summary ? html`<p-text size="sm">${f.summary}</p-text>` : nothing}
-    ${f.reason ? html`<p-text size="xs" color="contrast-medium">${f.reason}</p-text>` : nothing}
+    ${reason ? html`<p-text size="xs" color="contrast-medium">${reason}</p-text>` : nothing}
     ${skipped.length ? html`<p-text size="xs">Left for you: ${skipped.map((e) => `${e.entry_id.slice(0, 8)} (${
       e.confidence}%${e.reason ? `: ${e.reason}` : ""})`).join("; ")}</p-text>` : nothing}
   </li>`;

@@ -138,7 +138,7 @@ class Curation:
         for name, r in runs.folders.items():
             if r.state not in {"waiting", "running"}:
                 continue
-            update: dict[str, object] = {"state": "failed", "reason": INTERRUPTED}
+            update: dict[str, object] = {"state": "failed", "reason": INTERRUPTED, "reason_unset": 0}
             if r.state == "waiting" and not r.key:  # judged: no uncertain session, so its copied times go with it
                 update |= {"started_at": None, "ended_at": None}
             runs.folders[name] = r.model_copy(update=update)
@@ -188,14 +188,11 @@ class Curation:
         if shared is None:
             return {"available": False, "reason": NO_SHARED, "folders": []}
         runs, here = self.load().folders, work_block.machine()
-        listed = [
-            {
-                "folder": f,
-                **runs.get(f, FolderRun()).model_dump(mode="json"),
-                "blocked": curation_block.blocked(shared, f, here),
-            }
-            for f in folders(shared.root)
-        ]
+        listed = []
+        for f in folders(shared.root):
+            block = curation_block.block(shared, f, here)
+            row = {"folder": f, **runs.get(f, FolderRun()).model_dump(mode="json")}
+            listed.append(row | {"blocked": block.text(), "unset": list(block.keys), "unset_reason": block.reason})
         return {"available": True, "folders": listed, "queue": list(self.queue)}
 
     def _pids(self, event: dict[str, Any]) -> None:
@@ -390,6 +387,7 @@ class Curation:
                 prior = self.load().folders.get(folder, FolderRun())  # keeps what the last finished run left pending
                 why = self._refusal(asked)
                 update = {"state": "failed", "started_at": started, "ended_at": started, "reason": why}
+                update["reason_unset"] = 0  # the earlier refusal's count belongs to its own reason
                 self._save(folder, prior.model_copy(update=update))
                 return True
             self._save(folder, FolderRun(state="running", started_at=started, key=key))
@@ -405,8 +403,8 @@ class Curation:
     def _session(self, shared: data_repo.DataRepo, folder: str, started: datetime, key: str) -> FolderRun:
         settings = lookup.machine(shared)
         # cleared just after the grant's check: the run never starts, its entries unseen
-        if why := curation_block.unset(settings):
-            return FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why)
+        if why := curation_block.unset_block(settings):
+            return curation_block.refused(FolderRun(), why, started, datetime.now(UTC))
         role = roles.chosen(settings, LABEL)
         with curation_tree.forgetting(shared), self.maintenance.workspace("owlbear-curation-") as at:
             tree = curation_tree.seed(shared, at / "data", folders(shared.root))
