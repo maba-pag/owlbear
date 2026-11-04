@@ -76,6 +76,7 @@ def test_the_plan_step_says_how_a_task_names_its_checks_and_carries_the_packages
     bare = step_input.plan(c, Profile(), Path("/w"), {})
     assert "so a check never starts with `cd`." in bare  # no package check listed: no example naming one
     assert "write `" not in bare
+    assert "ask the owner" not in bare  # the owner settled the checks before the planner starts (#968)
 
 
 def test_the_plan_step_s_gate_gives_the_hint():

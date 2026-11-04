@@ -378,7 +378,7 @@ def plan(change: Change, profile: Profile, worktree: Path, others: Mapping[str, 
         f"Scope: {', '.join(change.brief.scope) or 'not limited'}",
         "",
         "## Packages (project profile)",
-        *(_packages(profile) or ["- none known: ask the owner which commands install and check the code"]),
+        *(_packages(profile) or ["- none: no package has a confirmed check command"]),
         _alone(profile),
         *_others(others),
     ]
