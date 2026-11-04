@@ -111,6 +111,20 @@ def parse(text: str) -> Decision:
         raise _schema_error(exc) from exc
 
 
+def parse_named(text: str, name: str) -> Decision:
+    """Parse a decision under its file name, applying the same identity check as a filesystem read."""
+    decision = parse(text)
+    if name != f"{decision.id}.md":
+        msg = f"file name must be {decision.id}.md"
+        raise DecisionFileError(msg, ("id",))
+    return decision
+
+
+def ignored_name(name: str) -> bool:
+    """Whether a decision folder deliberately ignores this housekeeping or in-flight temporary entry."""
+    return name in _IGNORED or bool(_TEMPORARY.match(name))
+
+
 def read(path: Path) -> Decision:
     """Read one decision file; its name must be `<id>.md`.
 
@@ -125,11 +139,7 @@ def read(path: Path) -> Decision:
     except (OSError, UnicodeDecodeError) as exc:
         msg = f"unreadable: {type(exc).__name__}"
         raise DecisionFileError(msg) from exc
-    decision = parse(text)
-    if path.name != f"{decision.id}.md":
-        msg = f"file name must be {decision.id}.md"
-        raise DecisionFileError(msg, ("id",))
-    return decision
+    return parse_named(text, path.name)
 
 
 class NotRegularFileError(OSError):
@@ -185,7 +195,7 @@ def load_folder(folder: Path) -> Loaded:
         loaded.errors.append(FileError(directory, "not a folder: decisions must be a real folder"))
         return loaded
     for path in sorted(directory.iterdir()):
-        if path.name in _IGNORED or _TEMPORARY.match(path.name):
+        if ignored_name(path.name):
             continue
         mode = path.lstat().st_mode
         if path.suffix != ".md" or not (stat.S_ISREG(mode) or stat.S_ISLNK(mode)):

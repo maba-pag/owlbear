@@ -12,6 +12,8 @@ replaces one need a reason, recorded in the successor's (or withdrawn decision's
 never stored (TD-449): what he confirmed is `decided`, or `approved` when he took a chat's recommendation as shown,
 and its `read_back` is the day he confirmed it. A commit message
 names the action and the decisions' ids only, never text a person typed. An origin is corrected in `decision_origin`.
+Wholly finite administrative completion without changed intent is separate (`decision_completion`); it marks spent,
+never supplies a false owner confirmation to these withdrawal or replacement actions.
 """
 
 from __future__ import annotations

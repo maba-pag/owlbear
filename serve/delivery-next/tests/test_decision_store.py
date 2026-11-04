@@ -595,7 +595,7 @@ def test_each_journal_or_write_refusal_is_said_whole(shared, monkeypatch, whole_
         def refusing(*_args: object) -> None:
             raise DecisionError(whole_error)
 
-        monkeypatch.setattr(decision_store, "check_write", refusing)
+        monkeypatch.setattr(decision_store.decision_transaction, "check_write", refusing)
     said = save(shared, decision, expected_revision=None, message="decisions: notes")
     if site == "held":
         generation = decision_batch.pending(shared).generation

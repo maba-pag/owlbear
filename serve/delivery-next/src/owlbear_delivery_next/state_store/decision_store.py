@@ -17,7 +17,7 @@ import time
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
-from owlbear_decisions import DecisionError, Scope, check_write, decision_path, read, snapshot, write
+from owlbear_decisions import DecisionError, Scope, decision_path, snapshot, write
 from owlbear_decisions.snapshot import CONFLICT
 from owlbear_decisions.storage import kind, serialize
 from owlbear_decisions.validate import collect, layers, project_folders
@@ -285,7 +285,7 @@ def _journal(shared: DataRepo, items: list[Placed], message: str, head: str, beh
     decisions, paths = [d for d, _, _ in items], [decision_path(d, folder) for d, folder, _ in items]
     before = {path: _content(path) for path in paths}
     images = {path: (before[path], serialize(d).encode("utf-8")) for d, path in zip(decisions, paths, strict=True)}
-    if refused := _refusals(items):
+    if refused := decision_transaction.refusals(shared, items, until):
         return _refused(shared, decisions, refused, behind)
     decision_transaction.planned(shared, paths)  # the plan's reads, checked plain again before the journal
     generation, rows = _begin(shared, items, before, message, head)
@@ -315,8 +315,9 @@ def _journal(shared: DataRepo, items: list[Placed], message: str, head: str, beh
     held = [decision_sync.revision_at(shared, "HEAD", p.relative_to(shared.root).as_posix(), until) for p in paths]
     said = [sent.notice]
     view = _reconcile(shared, decisions, said, until, decision_sync.Continuation(sent.commit, sent.goal))
-    if view is None:  # saved and published; only the conflict flags are interrupted
-        return [Receipt(d.id, saved=True, commit=_head(shared), notice=_join(*said)) for d in decisions]
+    if view is None:  # the batch landed; later authority reconciliation could not finish
+        return [Receipt(d.id, saved=True, commit=sent.commit, committed=True, published=not sent.notice,
+                        notice=_join(*said)) for d in decisions]  # fmt: skip
     return [
         replace(_receipt(shared, view, d, _join(*said, behind), until), batch=revision == d.revision)
         for d, revision in zip(decisions, held, strict=True)
@@ -334,18 +335,6 @@ def _begin(
     project = next((d.project for d, _, _ in items if d.project), "")
     ids = [d.id for d, _, _ in items]
     return decision_batch.begin(shared, project, head, message, ids, rows, decision_batch.ADMIT_BY.get()), rows
-
-
-def _refusals(items: list[Placed]) -> dict[str, str]:
-    """Why each file of the batch would be refused, checked before any is written."""
-    found = {}
-    for decision, folder, expected in items:
-        path = decision_path(decision, folder)
-        try:
-            check_write(read(path) if path.exists() else None, decision, expected)
-        except DecisionError as exc:
-            found[decision.id] = str(exc)
-    return found
 
 
 def write_batch(
