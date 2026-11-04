@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from owlbear_decisions import DecisionError, Scope, State
 from owlbear_decisions.storage import ignored_name, parse_named
 from owlbear_decisions.validate import Entry, Layer, check
-from owlbear_delivery_next.git.command_failure import failed
+from owlbear_delivery_next.git.command_failure import failed, failure
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -95,7 +95,7 @@ def _entries(repo: DataRepo, commit: str, until: float | None) -> tuple[list[Ent
             text = contents[oid].decode("utf-8")
             decision = parse_named(StringIO(text, newline=None).read(), path.name)
         except (DecisionError, UnicodeDecodeError) as exc:
-            unreadable.append((layer, f"{str(path)!r} at {commit}: {exc}"))
+            unreadable.append((layer, f"{str(path)!r} at {commit}: {failure(exc)}"))
         else:
             entries.append(Entry(path, layer, decision))
     return entries, unreadable

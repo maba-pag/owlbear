@@ -14,6 +14,7 @@ import os
 import random
 from typing import TYPE_CHECKING, Literal, cast
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home, storage_io
 
 if TYPE_CHECKING:
@@ -47,7 +48,7 @@ def _kept_or_drawn(path: Path, unit: str, share: int) -> Arm:
     try:
         arms = json.loads(raw) if raw is not None else {}
     except ValueError as exc:
-        msg = f"the Spotter's arms in {path} cannot be read: {exc}"
+        msg = f"the Spotter's arms in {path} cannot be read: {failure(exc)}"
         raise ValueError(msg) from exc
     if unit in arms:
         return cast("Arm", arms[unit]["arm"])

@@ -6,6 +6,7 @@ import time
 from typing import TYPE_CHECKING, NamedTuple
 
 from owlbear_decisions import DecisionError, Scope, State, check_write, decision_path, read
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import publication_hold, storage_io
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch
@@ -234,12 +235,13 @@ def operation_idle(shared: DataRepo) -> bool:
         return False
 
 
-def rebasing(shared: DataRepo, unknown: Exception) -> bool:
-    """Whether a rebase is active; *unknown* when Git cannot tell, which no save leaves, so it isn't read again."""
+def rebasing(shared: DataRepo, unknown: store.DecisionsUnavailable) -> bool:
+    """Whether a rebase is active; *unknown*, with why, when Git cannot tell: no save leaves that, so not read again."""
     try:
         return shared.rebasing()
     except DataRepoError as exc:
-        raise unknown from exc
+        why = f"{unknown}: {failure(exc)}"
+        raise type(unknown)(why, unknown.action) from exc
 
 
 def head_commit(shared: DataRepo) -> str | None:

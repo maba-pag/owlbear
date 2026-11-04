@@ -123,6 +123,10 @@ def test_pinned_unreadable_authority_matches_snapshot_scope(authority, where, da
     refused = decision_authority.inactive(repo, commit, path.relative_to(repo.root).as_posix(), None)
     assert complete is (where == "foreign")
     assert bool(refused) is (not complete)
+    if damage == "invalid-utf8" and not complete:
+        with pytest.raises(UnicodeDecodeError) as cause:
+            b"unreadable \xff\n".decode("utf-8")
+        assert f"{str(broken)!r} at {commit}: UnicodeDecodeError: {cause.value}" in refused
 
 
 @pytest.mark.parametrize("ending", ["\r\n", "\r"])

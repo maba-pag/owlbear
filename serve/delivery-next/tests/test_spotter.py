@@ -7,6 +7,7 @@ import dataclasses
 import gzip
 import json
 import random
+import re
 import stat
 import threading
 import time
@@ -25,6 +26,7 @@ from owlbear_delivery_next.change_contracts.models import Brief, Change, Plan, S
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import ReviewResult, Worktree
 from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import (
     acts,
     card,
@@ -37,6 +39,7 @@ from owlbear_delivery_next.improvement import (
     spotter,
 )
 from owlbear_delivery_next.improvement.events import Kept
+from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import sdk_adapter, spend_reconcile, spotter_look, step_decisions
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -1304,6 +1307,19 @@ class Delivered:
     async def __call__(self, record: spotter.Record, act: acts.Act) -> None:
         self.sent.append((act.act, act.category, act.look))
         acts.update(spotter.place(), record.id, delivery="delivered")
+
+
+def test_unreadable_kept_arms_are_said_with_their_path_and_the_parser_s_whole_error() -> None:
+    kept = local_home.root() / "spotter" / spotter_arms.FILE
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    kept.write_text("{")
+    try:
+        json.loads("{")
+    except ValueError as exc:
+        whole = f"the Spotter's arms in {kept} cannot be read: {failure(exc)}"
+    with pytest.raises(ValueError, match=rf"^{re.escape(whole)}\Z"):
+        spotter_arms.arm("chat:s-1", 100)
+    assert kept.read_text() == "{"
 
 
 def test_acting_follows_arms_the_cap_per_owner_turn_repeats_and_a_rebuilt_spotter_keeps_its_counts() -> None:

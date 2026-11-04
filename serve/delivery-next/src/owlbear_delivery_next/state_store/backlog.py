@@ -21,7 +21,9 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.provider import ProviderError
+from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.state_store import backlog_issues
 from owlbear_delivery_next.state_store.backlog_issues import Issues
 
@@ -137,7 +139,9 @@ class Backlog:
         """The issues of ``shared``'s GitHub remote; ``project`` is where new findings are found."""
         try:
             self.issues = Issues(shared)
-        except ValueError as exc:
+        except DataRepoError as exc:
+            raise BacklogError(409, failure(exc)) from exc
+        except ValueError as exc:  # its origin names no GitHub repository: the owner's setup, said as it is
             raise BacklogError(409, str(exc)) from exc
         self.shared, self.project = shared, project
         self.clock = clock or (lambda: datetime.now(UTC))
@@ -353,13 +357,14 @@ class Backlog:
         except ProviderError as exc:
             self._forget()
             if what == "read":
-                text = f"the backlog could not be read from GitHub ({self.repository}): {exc}"
+                text = f"the backlog could not be read from GitHub ({self.repository}): {failure(exc)}"
             elif exc.operation == backlog_issues.VISIBILITY:
                 text = f"not saved to GitHub ({self.repository}): {exc}"
             elif exc.retry_safe:
-                text = f"not saved: GitHub ({self.repository}) could not be reached: {exc}"
+                text = f"not saved: GitHub ({self.repository}) could not be reached: {failure(exc)}"
             else:
-                text = f"GitHub ({self.repository}) did not confirm the save; check its issues before retrying: {exc}"
+                said = failure(exc)
+                text = f"GitHub ({self.repository}) did not confirm the save; check its issues before retrying: {said}"
             raise BacklogError(503, text) from exc
 
     def _apply[T](self, work: Callable[[dict[str, Entry], datetime], T]) -> T:

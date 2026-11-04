@@ -18,6 +18,7 @@ import stat
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.local_system.maintenance import Maintenance, MaintenanceError
@@ -84,7 +85,7 @@ def _durable_id(folder: Path, folder_fd: int) -> str | None:
     except FileNotFoundError:
         return None
     except OSError as exc:
-        msg = f"{path} is unreadable: {exc}; nothing was changed"
+        msg = f"{path} is unreadable: {failure(exc)}; nothing was changed"
         raise StoreError(msg) from exc
     try:
         if not stat.S_ISREG(os.fstat(fd).st_mode):
@@ -96,7 +97,7 @@ def _durable_id(folder: Path, folder_fd: int) -> str | None:
             os.fsync(fd)
             os.fsync(folder_fd)
         except (OSError, ValueError) as exc:
-            msg = f"{path} could not be made durable ({exc}): nothing was registered; it is kept"
+            msg = f"{path} could not be made durable ({failure(exc)}): nothing was registered; it is kept"
             raise StoreError(msg) from exc
     finally:
         os.close(fd)
@@ -392,7 +393,7 @@ def _settle_pack_run(folder: Path, folder_fd: int, proof: OfflineProof | None) -
     try:
         pack_run_record.settle(folder, receipted=receipted, folder_fd=folder_fd, guard=guard)
     except (OSError, ValueError, MaintenanceError) as exc:
-        msg = f"the Impeccable run record in {folder} could not be settled: {exc}; nothing was moved"
+        msg = f"the Impeccable run record in {folder} could not be settled: {failure(exc)}; nothing was moved"
         raise StoreError(msg) from exc
 
 

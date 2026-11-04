@@ -356,13 +356,16 @@ class FakeGitHub:
     def __init__(self, *, down: bool = False) -> None:
         self.issues, self.labels, self.comments, self.calls, self.hidden = {}, {}, [], [], set()
         self.down, self.fail_writes, self.tick, self.visibility = down, False, 0, "private"
+        self.said = ""  # what gh prints when GitHub is down or refuses a write, in place of its usual line
 
     def __call__(self, argv, data, _timeout, _cwd, _env):
         if self.down:
-            return subprocess.CompletedProcess(argv, 1, b"", b"error connecting to api.github.com\n")
+            said = self.said or "error connecting to api.github.com"
+            return subprocess.CompletedProcess(argv, 1, b"", f"{said}\n".encode())
         method, endpoint = argv[argv.index("--method") + 1], argv[10]
         if self.fail_writes and method != "GET":
-            return subprocess.CompletedProcess(argv, 1, b"", b"gh: Server Error (HTTP 502)\n")
+            said = self.said or "gh: Server Error (HTTP 502)"
+            return subprocess.CompletedProcess(argv, 1, b"", f"{said}\n".encode())
         body = json.loads(data) if data else None
         self.calls.append((method, endpoint, body))
         path, _, query = endpoint.partition("?")
@@ -1112,6 +1115,46 @@ def whole_error() -> str:
     words = [f"w{i:04d}" for i in range(700)]
     lines = [" ".join(words[i : i + 20]) for i in range(0, 700, 20)]
     return "\n".join(['BEGIN <a & "b">', *lines[:17], "MIDDLE", *lines[17:], "END"])
+
+
+@pytest.fixture
+def failing_rebase_probe(monkeypatch: pytest.MonkeyPatch, whole_error: str) -> SimpleNamespace:
+    """Git fails the rebase probe alone, printing *whole_error* to stderr and a long variant of it to stdout.
+
+    `arm(at)` fails the probes whose 1-based count *at* picks (every one by default) and returns the roots probed;
+    `said(root)` is the whole `DataRepoError` such a probe raises there, as `failure` renders it.
+    """
+    real_rebasing, real_git, inside = DataRepo.rebasing, data_repo._git, []  # noqa: SLF001 - the probe's own Git call
+    stdout = whole_error.replace("BEGIN", "OUT")
+
+    def arm(at: Callable[[int], bool] = lambda _: True, patch: pytest.MonkeyPatch = monkeypatch) -> list[Path]:
+        probed: list[Path] = []
+
+        def rebasing(self: DataRepo, *args: Any, **kwargs: Any) -> bool:
+            probed.append(self.root)
+            inside.append(at(len(probed)))
+            try:
+                return real_rebasing(self, *args, **kwargs)
+            finally:
+                inside.pop()
+
+        def git(cwd: Path, *args: str, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            if inside and inside[-1] and args == ("rev-parse", "--absolute-git-dir"):
+                return subprocess.CompletedProcess(["git", *args], 128, stdout, whole_error)
+            return real_git(cwd, *args, **kwargs)
+
+        patch.setattr(DataRepo, "rebasing", rebasing)
+        patch.setattr(data_repo, "_git", git)
+        return probed
+
+    def said(root: Path) -> str:
+        return (
+            f"DataRepoError: cannot tell whether a rebase is in progress in {root}: CalledProcessError: Command "
+            f"'['git', 'rev-parse', '--absolute-git-dir']' returned non-zero exit status 128.\nstderr:\n{whole_error}"
+            f"\nstdout:\n{stdout}"
+        )
+
+    return SimpleNamespace(arm=arm, said=said)
 
 
 @pytest.fixture

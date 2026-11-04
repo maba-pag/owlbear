@@ -12,12 +12,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.commands import cli
-from owlbear_delivery_next.local_system import codebase, data_place, data_repo, git_run, local_home
+from owlbear_delivery_next.local_system import codebase, data_place, data_repo, git_run, local_home, publication_hold
 from owlbear_delivery_next.local_system.storage_io import open_lock
 from owlbear_delivery_next.machine_host import app, project, serve
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.state_store import project_home, registry
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -166,6 +166,44 @@ def test_a_pointer_written_while_cloning_wins_and_the_clone_is_dropped(url: str,
     assert (record(), clones(), data_place.default().exists()) == ({"repository": "/elsewhere"}, [], False)
 
 
+@pytest.mark.parametrize("site", ["parse", "write", "move", "common"])
+def test_a_pointer_or_git_folder_that_cannot_be_read_or_written_says_the_whole_error(
+    tmp_path: Path, monkeypatch, whole_error: str, site: str
+) -> None:
+    def refused(*_args: object, **_kwargs: object) -> None:
+        raise OSError(whole_error)
+
+    monkeypatch.setattr(data_place, "atomic_write", refused)
+    path = data_place.pointer()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    old = path.with_name(data_place.OLD_POINTER)
+    done = subprocess.CompletedProcess(["git", "rev-parse"], 128, "", whole_error)
+    monkeypatch.setattr(data_place, "_top", lambda root: root)
+    monkeypatch.setattr(data_place, "_git", lambda *_args: done)
+    if site == "parse":
+        path.write_text("{")
+    if site == "move":
+        old.write_text("{}\n")
+    act = {
+        "parse": lambda: data_place._parse(path),  # noqa: SLF001 - the pointer's own read
+        "write": lambda: data_place._write({}),  # noqa: SLF001 - the pointer's own write
+        "move": lambda: data_place._move_old(path, held=True),  # noqa: SLF001 - the old pointer's move
+        "common": lambda: data_place._common(tmp_path),  # noqa: SLF001 - the Git folder lookup alone
+    }[site]
+    with pytest.raises(data_repo.DataRepoError) as raised:
+        act()
+    said = {
+        "parse": f"{path} names no repository: JSONDecodeError: {raised.value.__cause__}",
+        "write": f"the pointer {path} could not be written: OSError: {whole_error}",
+        "move": f"the pointer {old} could not be moved to {path}: OSError: {whole_error}",
+        "common": (
+            f"the Git folder of {tmp_path.resolve()} cannot be found: CalledProcessError: "
+            f"Command '['git', 'rev-parse']' returned non-zero exit status 128.\n{whole_error}"
+        ),
+    }[site]
+    assert str(raised.value) == said
+
+
 @pytest.mark.parametrize("where", ["mkdtemp", "rename", "lock"])
 def test_a_disk_failure_while_cloning_is_said_kept_and_retried(url: str, monkeypatch, where: str) -> None:
     home().mkdir(parents=True, exist_ok=True)
@@ -201,10 +239,11 @@ def test_a_disk_failure_while_cloning_is_said_kept_and_retried(url: str, monkeyp
     )
     serve._cloning(machine)  # noqa: SLF001
     why = {
-        "mkdtemp": f"no folder to clone into in {home()}: [Errno 13] denied",
-        "rename": f"the clone could not be renamed to {data_place.default()}: [Errno 13] denied",
+        "mkdtemp": f"no folder to clone into in {home()}: PermissionError: [Errno 13] denied",
+        "rename": f"the clone could not be renamed to {data_place.default()}: PermissionError: [Errno 13] denied",
     }.get(where)
-    shown = f"cloning {url} failed: {why}" if why else "the shared repository could not be set up: [Errno 13] denied"
+    unset = "the shared repository could not be set up: PermissionError: [Errno 13] denied"
+    shown = f"cloning {url} failed: {why}" if why else unset
     assert said == [
         f"shared data: {shown}; tried again every {serve.PROVISION_RETRY // 60} minutes",
         f"shared data: cloned {url} into {data_place.default()}",
@@ -367,13 +406,18 @@ def clone_fails_once(monkeypatch, stderr: str) -> list[tuple[str, ...]]:
     return ran
 
 
-def reason(tmp_path: Path, monkeypatch) -> str:
-    """The reason the machine's project list (the Projects page's API) gives for a project that cannot load."""
+def reason(tmp_path: Path, monkeypatch, before=None) -> str:
+    """The reason the machine's project list (the Projects page's API) gives for a project that cannot load.
+
+    *before* gets the registered project's path before the machine loads it.
+    """
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     path = tmp_path / "shop"
     git(tmp_path, "init", "-q", str(path))
     git(path, "commit", "-q", "--allow-empty", "-m", "i")
     registry.register(path.resolve())
+    if before:
+        before(path.resolve())
     at = datetime.now(UTC)
     machine = Machine(HostRecord(url="http://127.0.0.1:9/", token="t", pid=1, started_at=at, code=codebase.CURRENT))  # noqa: S106
     try:
@@ -408,7 +452,7 @@ def test_a_failed_clone_says_git_whole_in_the_projects_reason_and_the_host_log(
     every = serve.PROVISION_RETRY // 60
     assert said == [f"shared data: cloning {url} failed: {why}; tried again every {every} minutes"]
     assert reason(tmp_path, monkeypatch) == (
-        f"its Delivery state cannot be opened: the shared repository {url} is not cloned yet: {why}"
+        f"its Delivery state cannot be opened: DataRepoError: the shared repository {url} is not cloned yet: {why}"
     )
 
 
@@ -436,7 +480,7 @@ def test_a_failed_worktree_repair_says_git_whole_at_owlbear_data_host_start_and_
     assert (len(ran), record()["failed"]) == (2, why)
     unfinished = f"moving the shared repository from {source} to {dest} is not finished: {why}"
     unfinished += "; `owlbear data` finishes it"
-    assert reason(tmp_path, monkeypatch) == f"its Delivery state cannot be opened: {unfinished}"
+    assert reason(tmp_path, monkeypatch) == f"its Delivery state cannot be opened: DataRepoError: {unfinished}"
 
     monkeypatch.setattr(data_place, "_git", real)  # repaired: the next `owlbear data` finishes the move
     assert cli.main(["data"]) == 0
@@ -456,3 +500,28 @@ def test_an_unreadable_checkout_says_git_whole_in_owlbear_data_s_inventory(
 
     assert len(ran) == 1
     assert f"{root.resolve()} cannot be read: {git_whole(ran[0], whole_error)}" in capsys.readouterr().out
+
+
+def test_a_role_move_whose_publication_hold_git_fails_says_git_whole_in_the_projects_reason(
+    tmp_path: Path, url: str, monkeypatch, failing_git, whole_error
+) -> None:
+    """P21: opening a project moves its old profile's roles into the shared config; the hold that write needs is
+    refused by Git, and the Projects page's reason carries Git's words whole."""
+    home().mkdir(parents=True, exist_ok=True)
+    git(home(), "clone", "-q", url, "data")
+    git(home() / "data", "config", "user.name", "t")
+    git(home() / "data", "config", "user.email", "t@example.com")
+    ran: list[tuple[str, ...]] = []
+    hold_probe = ("ls-tree", publication_hold.UPSTREAM)
+    failing_git(whole_error, lambda args, _until: args[:2] == hold_probe and not ran.append(args))
+
+    def old_profile(path: Path) -> None:
+        raw = {"format": 1, "version": 3, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}, "runtime": "vscode"}
+        (project_home.located(path) / "profile.json").write_text(json.dumps(raw))
+
+    said = reason(tmp_path, monkeypatch, old_profile)
+    why = f"CalledProcessError: Command '{['git', *ran[-1]]}' returned non-zero exit status 128.\n{whole_error}"
+    assert said == (
+        "its Delivery state cannot be opened: the old profile's role overrides were not moved: "
+        f"DataRepoError: the automatic change was not written: {why}"
+    )

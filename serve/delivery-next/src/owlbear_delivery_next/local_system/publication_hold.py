@@ -25,6 +25,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failed, failure
 from owlbear_delivery_next.local_system import batch_journal, curation_apply, decision_authority
 from owlbear_delivery_next.local_system.storage_io import atomic_write, read_regular
 
@@ -64,13 +65,16 @@ class Requires:
 
 
 class _UnknownError(Exception):
-    """Git could not say what the checkout or the remote holds: nothing is pushed or rebased."""
+    """Git could not say what the checkout or the remote holds: nothing is pushed or rebased.
+
+    Its text is whole where it is raised, so it is said as it stands.
+    """
 
 
 def _run(repo: DataRepo, until: float | None, *args: str) -> str:
     said = repo.git(*args, until=until)
     if said.returncode:
-        raise _UnknownError(said.stderr.strip() or f"git {args[0]} failed")
+        raise _UnknownError(failed(said))
     return said.stdout
 
 
@@ -137,7 +141,7 @@ def _load(path: Path) -> dict[str, object] | None:
             return None
         data = json.loads(raw)
     except (OSError, ValueError) as exc:
-        msg = f"the held publication record {path} cannot be read ({exc}); check it before removing it"
+        msg = f"the held publication record {path} cannot be read ({failure(exc)}); check it before removing it"
         raise _UnknownError(msg) from exc
     if why := _malformed(data):
         msg = f"the held publication record {path} is malformed: {why}; check it before removing it"
@@ -222,7 +226,7 @@ def _lapsed(repo: DataRepo, held: Mapping[str, object], until: float | None) -> 
         try:
             batch = batch_journal.pending(repo, until)
         except batch_journal.JournalError as exc:
-            msg = f"the completion's pending journal cannot be checked: {exc}"
+            msg = f"the completion's pending journal cannot be checked: {failure(exc)}"
             raise _UnknownError(msg) from exc
         if batch is not None and any(rel == watch and before != after for rel, before, after in batch.files):
             return False
@@ -230,7 +234,7 @@ def _lapsed(repo: DataRepo, held: Mapping[str, object], until: float | None) -> 
         return False
     staged = repo.git("diff", "--cached", "--quiet", "HEAD", "--", watch, until=until)
     if staged.returncode not in (0, 1):
-        raise _UnknownError(staged.stderr.strip() or "git could not compare the index")
+        raise _UnknownError(failed(staged))
     return staged.returncode == 0 and _blob(repo, watch, until) == _blob_at(repo, "HEAD", watch, until)
 
 
@@ -244,7 +248,7 @@ def _unmet(repo: DataRepo, held: Mapping[str, object], until: float | None) -> s
     watch, rel, since = str(held["watch"]), held["file"], str(held["since"])
     kept = repo.git("merge-base", "--is-ancestor", since, UPSTREAM, until=until)
     if kept.returncode not in (0, 1):
-        raise _UnknownError(kept.stderr.strip() or "git could not compare the remote's history")
+        raise _UnknownError(failed(kept))
     if kept.returncode:
         return f"the shared remote's history no longer holds {since[:12]}, where the change was prepared"
     # every commit since, merges included: a file that changed and changed back still changed (no bytes-only proof)
@@ -256,7 +260,7 @@ def _unmet(repo: DataRepo, held: Mapping[str, object], until: float | None) -> s
         try:
             inactive = decision_authority.inactive(repo, UPSTREAM, watch, until)
         except (OSError, ValueError) as exc:
-            msg = f"the held decision's active authority cannot be checked: {exc}"
+            msg = f"the held decision's active authority cannot be checked: {failure(exc)}"
             raise _UnknownError(msg) from exc
         if inactive:
             return inactive
@@ -367,7 +371,8 @@ def _checked(repo: DataRepo, until: float | None, *, fetch: bool, push: tuple[st
         ahead = _changes(repo, str(held["watch"]), until)
         elsewhere, run = _target(repo, push, until, held=True) if push and not why else ("", push)
     except _UnknownError as exc:
-        return f"nothing was pushed or rebased in {repo.root}: a held automatic change cannot be checked: {exc}", ()
+        why = f"a held automatic change cannot be checked: {exc}"
+        return f"nothing was pushed or rebased in {repo.root}: {why}", ()
     if why != held["refused"]:
         atomic_write(path, json.dumps({**held, "refused": why}))
     if elsewhere:

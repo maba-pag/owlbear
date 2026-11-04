@@ -712,7 +712,7 @@ def test_a_change_record_failure_is_logged_whole(shared_repo, tmp_path, monkeypa
             raise decision_batch.JournalError(whole_error)
 
         monkeypatch.setattr(decision_batch, "pending", unreadable)
-        expected = f"the record of notes was not saved: Unsettled: {whole_error}"
+        expected = f"the record of notes was not saved: Unsettled: JournalError: {whole_error}"
     else:
 
         def unreadable_history(*_args):

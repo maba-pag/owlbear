@@ -56,8 +56,11 @@ def test_a_link_at_the_id_name_is_refused_and_its_target_is_untouched(store, tmp
     target = tmp_path / "foreign"
     target.write_text("keep me\n")
     (store / "clone-id").symlink_to(target)
-    with pytest.raises(StoreError, match="unreadable"):
+    with pytest.raises(StoreError, match="unreadable") as refused:
         project_home.ensure_id(store)
+    cause = refused.value.__cause__
+    said = f"{store / 'clone-id'} is unreadable: {type(cause).__name__}: {cause}"
+    assert str(refused.value) == f"{said}; nothing was changed"
     assert target.read_text() == "keep me\n"
     assert (store / "clone-id").is_symlink()
 
@@ -69,6 +72,21 @@ def test_a_cut_short_id_is_refused_and_kept(store):
         project_home.ensure_id(store)
     assert (store / "clone-id").read_text() == "abc"
     assert names(store) == ["clone-id"]
+
+
+def test_an_id_that_cannot_be_made_durable_says_the_whole_error_and_is_kept(store, monkeypatch):
+    store.mkdir()
+    (store / "clone-id").write_text("abc123\n")
+
+    def failing(_fd):
+        raise OSError(errno.EIO, "Input/output error")
+
+    monkeypatch.setattr(project_home.os, "fsync", failing)
+    with pytest.raises(StoreError) as refused:
+        project_home.ensure_id(store)
+    said = f"{store / 'clone-id'} could not be made durable (OSError: [Errno 5] Input/output error)"
+    assert str(refused.value) == f"{said}: nothing was registered; it is kept"
+    assert (store / "clone-id").read_text() == "abc123\n"
 
 
 def test_an_unfinished_create_is_kept_in_place_and_adopted_on_retry(store, monkeypatch):
