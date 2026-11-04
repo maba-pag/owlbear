@@ -92,8 +92,11 @@ def in_force(seen: Snapshot, c: Change) -> list[Decision]:
 
 
 def _attached(d: Decision, c: Change) -> bool:
-    """One of *c*'s own, pinned without a pick: a Change decision, or one its approval published (TD-453)."""
-    return d.scope is Scope.CHANGE or d.id in {p.id for p in c.decisions_published}
+    """One of *c*'s own, pinned without a pick: a Change decision, or one its approval published (TD-453).
+
+    A published one counts only as its approval saved it: changed elsewhere since, the picker judges it like any other.
+    """
+    return d.scope is Scope.CHANGE or any(p.id == d.id and p.revision == d.revision for p in c.decisions_published)
 
 
 def _picked(c: Change) -> dict[str, PickedDecision] | None:

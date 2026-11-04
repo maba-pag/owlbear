@@ -259,6 +259,42 @@ def test_an_approval_interrupted_after_its_commit_stays_and_its_next_step_saves(
     assert c.decisions_baseline.revisions[lasting.id] == rule.rule_revision
 
 
+def test_an_interrupted_later_approval_keeps_the_receipt_of_an_unchanged_own_decision(
+    picking, shared_repo, monkeypatch
+):
+    root, _ = shared_repo
+    (lasting,) = shape(picking, 1, LASTING).brief.decisions
+    assert picking.approve(1).status_code == 200
+    (v1,) = picking.approved().decisions_published
+    reshape(picking)
+    more = {"question": "How long is a note?", "answer": "A note is one paragraph.", "origin": "decided",
+            "scope": "project"}  # fmt: skip
+    added = shape(picking, 2, LASTING, more).brief.decisions[1]
+    real = decision_store.save_all
+
+    def crashed(*args, **kwargs):
+        real(*args, **kwargs)
+        raise Crash
+
+    monkeypatch.setattr(decision_store, "save_all", crashed)
+    with pytest.raises(Crash):
+        picking.approve(2)
+    monkeypatch.setattr(decision_store, "save_all", real)
+    picking.approved()
+    rule = read(root / rel(lasting.id))
+    write(rule.model_copy(update={"title": "Where notes are kept"}), root / PROJECT, rule.revision)  # Decisions page
+    ran: list[str] = []
+    monkeypatch.setattr(runner, "_run", lambda _s, _l, c, _st, _r: ran.append(c.slug))
+
+    c = stepped(picking, picking.slug)
+
+    kept = {p.id: p for p in c.decisions_published}
+    assert (kept[lasting.id].revision, kept[lasting.id].committed) == (v1.revision, True)
+    assert (kept[added.id].committed, kept[added.id].revision) == (True, read(root / rel(added.id)).revision)
+    assert f"changed: {lasting.id}" in loop.open_question(c).text
+    assert ran == []
+
+
 def test_a_recovery_that_fails_waits_with_its_reason_and_the_next_step_saves_before_work(
     picking, shared_repo, monkeypatch
 ):
@@ -347,6 +383,37 @@ def test_a_published_decision_withdrawn_outside_the_change_does_not_block_the_ne
 
     assert picking.approve(2).status_code == 200  # the next step's gate judges the withdrawal
     assert read(root / rel(first.id)).state == State.WITHDRAWN  # it stands
+
+
+def test_a_published_decision_changed_outside_the_change_stays_as_changed_and_goes_to_the_next_steps_picker(
+    picking, shared_repo, monkeypatch
+):
+    root, _ = shared_repo
+    (first,) = shape(picking, 1, LASTING).brief.decisions
+    assert picking.approve(1).status_code == 200
+    (v1,) = picking.approved().decisions_published
+    reshape(picking)
+    shape(picking, 2, LASTING, OWN)
+    rule = read(root / rel(first.id))
+    write(rule.model_copy(update={"title": "Where notes are kept"}), root / PROJECT, rule.revision)  # Decisions page
+    renamed = read(root / rel(first.id))
+
+    assert picking.approve(2).status_code == 200
+
+    a = picking.approved()
+    (p,) = [p for p in a.decisions_published if p.id == first.id]
+    assert (p.revision, p.committed) == (v1.revision, True)  # its receipt is the Change's own save, not the change
+    assert read(root / rel(first.id)).revision == renamed.revision
+    assert a.decisions_baseline.revisions.get(first.id) != renamed.rule_revision
+    monkeypatch.setattr(runner, "_run", lambda *_a: None)
+    picking.picks.append(pick_tools.PickResult(picked=[]))
+
+    c = stepped(picking, picking.slug)
+
+    assert (c.outcome, loop.open_question(c)) == (None, None)
+    assert first.id in picking.pickers()[-1].message.split("## Decisions")[1]
+    assert first.id not in c.decisions_baseline.said
+    assert c.decisions_baseline.revisions[first.id] == renamed.rule_revision
 
 
 @pytest.mark.parametrize("pr", [None, MERGED], ids=["abandoned", "merged"])
