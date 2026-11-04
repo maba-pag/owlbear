@@ -1022,6 +1022,7 @@ def test_a_missing_session_names_the_earlier_processes_not_observed_gone(world, 
 
 class Host:
     maintenance = None
+    failed = ""
     wake = SimpleNamespace(set=lambda: None)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
 

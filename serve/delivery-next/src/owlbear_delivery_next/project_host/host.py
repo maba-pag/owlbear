@@ -25,6 +25,7 @@ from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Recor
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import delivery_target, loop
 from owlbear_delivery_next.change_flow.status import Activity, passes
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import codebase, data_repo, maintenance, processes
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
@@ -176,6 +177,7 @@ class Host:
         self.offline: set[str] = set()  # Changes last seen waiting on the network
         self.back: dict[str, datetime] = {}  # those to wake, with when the probe saw the network return
         self.down, self.probe_at, self.clock = False, 0.0, time.monotonic
+        self.failed = ""  # the last pass's whole error until a pass succeeds; the Changes page notes it
         pid, started = os.getpid(), datetime.now(UTC)
         self.record = HostRecord(url="", token="", pid=pid, started_at=started, code=codebase.CURRENT)
 
@@ -226,7 +228,7 @@ class Host:
                 except LockHeldError:
                     continue
                 except StoreError as exc:
-                    self._unloadable(slug, str(exc))
+                    self._unloadable(slug, failure(exc))
         finally:  # who waits for a slot after this pass, even one that failed: no wait outlives its asking
             self.waiting, self.asked = self.asked, set()
             self.slots.keep(session_slots.project(self), self.waiting)
@@ -406,7 +408,7 @@ class Host:
                 e = check.recovered(e, self.store.root / "changes" / c.slug / check.PIDFILE)
             return check.dispose(e)
         except (OSError, ValueError, processes.UnlistedError) as exc:
-            return f"the check environment's processes could not be looked for: {exc}"
+            return f"the check environment's processes could not be looked for: {failure(exc)}"
 
     def _launch(self, slug: str) -> bool:
         if launch_gate.stale(self):
@@ -478,4 +480,7 @@ class Host:
             try:
                 self.tick()
             except Exception as exc:  # noqa: BLE001 - the scheduler outlives one failed pass
-                self.say(f"pass failed: {type(exc).__name__}: {exc}")
+                self.failed = failure(exc)
+                self.say(f"pass failed: {self.failed}")
+            else:
+                self.failed = ""

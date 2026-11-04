@@ -545,6 +545,56 @@ def test_a_shaping_chat_that_could_not_open_says_the_host_s_whole_error(
 
 
 @pytest.mark.browser
+@pytest.mark.timeout(90)  # a real browser and the machine host; a loaded runner needs more than 30 s
+def test_a_failed_shaping_launch_shows_its_warning_whole(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """P19 (#971): what Delivery could not undo is said beside a failed launch too, whole."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    launched = chats(monkeypatch)
+    reason = "the Copilot chat did not start (unbound: x)"
+    launched.ending = {"state": "failed", "reason": reason, "warning": whole_error}
+    launched.release.set()
+    alpha = registry.register(clone(tmp_path / "alpha", "same"))
+    shaping(Path(alpha.path), "Alpha brief")
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        opened(page, base, alpha.id)
+        page.locator("#detail").get_by_role("button", name=REVISE).click()
+        pds.answer(page, "Open the chat")
+        started = page.locator("#started")
+        expect(started.locator("code")).to_have_count(1, timeout=15000)
+        command = started.locator("code").text_content()
+        assert started.text_content() == (
+            f"Could not open the chat to revise c1: {reason}. Note: {whole_error}. Copy this command: {command}"
+        )
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)  # a real browser and the machine host; a loaded runner needs more than 30 s
+def test_a_failed_host_pass_is_noted_whole_on_the_changes_page(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """P18 (#971): the project's scheduler pass that failed is noted above its Changes with its whole error."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    error = RuntimeError(whole_error)
+    error.add_note("a note added on the way up")
+
+    def failing(_self: Host, _slug: str, _now: object) -> bool:  # observing the project's Change
+        raise error
+
+    monkeypatch.setattr(Host, "_one", failing)
+    registry.register(clone(tmp_path / "alpha", "same"))
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/#token=t")
+        notes = page.locator("#notes p-text")
+        expect(notes).to_have_count(1, timeout=15000)
+        whole = f"RuntimeError: {whole_error}\na note added on the way up"
+        assert notes.all_text_contents() == [f"The host's last pass failed: {whole}"]
+        assert said == []
+
+
+@pytest.mark.browser
 def test_a_brief_that_cannot_take_a_revision_shows_no_button(tmp_path: Path, monkeypatch, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 

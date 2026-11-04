@@ -24,6 +24,7 @@ class Host:
     """The project host's seam over the real store: its activity is the real ``host.activity``."""
 
     maintenance = None
+    failed = ""
     wake = type("W", (), {"set": staticmethod(lambda: None)})()
 
     def __init__(self, store: Store) -> None:

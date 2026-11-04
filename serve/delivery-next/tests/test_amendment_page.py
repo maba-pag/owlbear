@@ -34,6 +34,7 @@ DECLINED = "Newlines must stay trimmed too"
 
 class Host:
     maintenance = None
+    failed = ""
     wake = type("W", (), {"set": staticmethod(lambda: None)})()
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
 

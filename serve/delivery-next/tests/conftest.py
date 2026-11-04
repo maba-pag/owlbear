@@ -765,6 +765,7 @@ class Host:
     paused = staticmethod(lambda: False)
     draining = staticmethod(lambda: False)
     maintenance = None  # the real host's seam; None: no maintenance owns this fake's sessions
+    failed = ""  # the real host's last pass error; empty: the last pass succeeded
     repo = None  # no clone: the settings page shows TD-402's rule as unreadable
     started = datetime(2026, 10, 21, 9, tzinfo=UTC)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=started, code=CURRENT)  # noqa: S106
