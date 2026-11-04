@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -140,6 +141,21 @@ def test_every_decision_that_cannot_be_read_is_refused_with_the_whole_error(shar
     with pytest.raises(DecisionsUnavailable) as refused:
         decision_actions.every(shared)
     assert str(refused.value) == f"the decisions in {shared.root} cannot be read: OSError: {whole_error}"
+
+
+def test_a_commit_or_rebase_that_cannot_tell_a_rebase_is_ambiguous_and_says_why_whole(
+    shared, monkeypatch, whole_error
+) -> None:
+    def unknown(*_args: object) -> bool:
+        raise DataRepoError(whole_error)
+
+    monkeypatch.setattr(DataRepo, "rebasing", unknown)
+    until = time.monotonic() + 60
+    head, sent = decision_sync._ready(shared, until)  # noqa: SLF001
+    assert (head, sent.notice, sent.ambiguous) == ("", f"DataRepoError: {whole_error}, so nothing was committed", True)
+    sent = decision_sync._rebase_failed(shared, "saved", "the rebase stopped", until)  # noqa: SLF001
+    rebased = "saved, but it could not be rebased on the remote: the rebase stopped"
+    assert (sent.notice, sent.ambiguous) == (f"{rebased}; DataRepoError: {whole_error}", True)
 
 
 @pytest.mark.parametrize("broken", ["invalid", "unreadable"])

@@ -528,6 +528,19 @@ def test_a_healthy_unrelated_advance_at_the_first_push_is_checked_and_published(
     assert not publication_hold.recorded(winner.shared, None)  # the record lapsed with its publication
 
 
+def test_an_automatic_save_that_cannot_tell_a_rebase_says_why_whole(three, monkeypatch, whole_error):
+    winner = three[0]
+    basis = profile_share.config_digest(winner.config_path)
+
+    def unknown(*_args: object) -> bool:
+        raise DataRepoError(whole_error)
+
+    monkeypatch.setattr(DataRepo, "rebasing", unknown)
+    prepared = config_save.Prepared(basis, lambda cur: cur.model_copy(update={"widths": [1300]}))
+    assert winner.update_config(prepared, "automatic") == f"DataRepoError: {whole_error}"
+    assert not winner.config_path.exists()
+
+
 def test_an_owner_rebase_in_progress_is_left_alone_by_an_automatic_save(three):
     winner, other, _ = three
     root = winner.shared.root
