@@ -13,7 +13,7 @@ from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import ro_installs, sessions
+from owlbear_delivery_next.workflow_steps import check, ro_installs, sessions
 
 INSTALL = "sh -c 'mkdir -p node_modules && echo x >> node_modules/count'"
 
@@ -108,6 +108,29 @@ def test_a_failed_install_is_noted_for_the_session_and_tried_again_next_time(tmp
     assert first.fresh == first.message
     session(store, change, app)
     assert [e["ok"] for e in installs(store)] == [False, False]
+    assert installs(store)[0]["error"] == note.removeprefix("Dependencies could not be installed in app: ") + (
+        "tsc: command not found"
+    )
+
+
+def test_an_install_that_cannot_start_says_its_whole_error(tmp_path, app, monkeypatch, whole_error):
+    """#971 P17: the OS error that kept the command from starting reaches the session's note and its activity line."""
+    refused = PermissionError(13, whole_error)
+    refused.add_note("NOTE-MARK")
+
+    real = subprocess.Popen
+
+    def popen(argv, *a, **kw):
+        if argv[:2] != ("/bin/sh", "-c"):  # the worktree's own git commands still run
+            return real(argv, *a, **kw)
+        raise refused
+
+    monkeypatch.setattr(check.subprocess, "Popen", popen)
+    store, change = store_with(tmp_path, INSTALL)
+    first = session(store, change, app)
+    said = f"`{INSTALL}` did not start: PermissionError: [Errno 13] {whole_error}\nNOTE-MARK"
+    assert first.message == f"review\n\nDependencies could not be installed in app: {said}"
+    assert [(e["ok"], e["error"]) for e in installs(store)] == [(False, said)]
 
 
 def test_a_new_read_only_worktree_forgets_earlier_installs(tmp_path, app):

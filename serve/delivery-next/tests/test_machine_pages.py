@@ -3668,6 +3668,7 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
     refused = ["changed: /Users/o/app/src/main.py is outside the task", whole_error]
     lint = ["lint: ruff found problems in /Users/o/app/src/main.py", "lint: biome broke on web/app.json"]
     failed = f"RuntimeError: {whole_error}"
+    install = f"`npm ci` did not start: PermissionError: [Errno 13] {whole_error}\nNOTE-MARK"
     events = [
         {"event": "tool", "tool": "view", "summary": "Read /Users/o/app/src/main.py"},
         {"event": "workspace-kept", "path": "/Users/o/.owlbear/worktrees/app-c1", "reason": kept},
@@ -3679,6 +3680,7 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
         {"event": "tool", "tool": "submit_result", "accepted": False, "errors": refused},
         {"event": "lint-unresolved", "errors": lint},
         {"event": "request-failed", "operation": "tasks.list", "error": failed},
+        {"event": "ro-install", "package": "app", "command": "npm ci", "seconds": 0.1, "ok": False, "error": install},
     ]
     with store.lock("c1") as lock:
         for e in events:
@@ -3694,6 +3696,7 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
         "Submitted its result": f"Submitted its result (refused): {'; '.join(refused)}",
         "Lint problems": f"Lint problems left unresolved: {'; '.join(lint)}",
         "Request tasks.list": f"Request tasks.list failed ({failed})",
+        "npm ci in app": f"npm ci in app failed: {install}",
     }
     with browsing(monkeypatch, pds, details=True) as (page, url):
         said = errors(page)

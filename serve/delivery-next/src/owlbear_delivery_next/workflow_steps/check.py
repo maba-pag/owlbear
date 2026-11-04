@@ -19,6 +19,7 @@ import psutil
 from owlbear_delivery_next.change_contracts import evidence, failures
 from owlbear_delivery_next.change_contracts.models import VISUAL, ErrorKind, Exit, StepKind, Task, Waiting
 from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import processes
 
 if TYPE_CHECKING:
@@ -54,7 +55,7 @@ def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: 
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True, env=env,
         )  # fmt: skip
     except OSError as exc:
-        return f"`{cmd}` did not start: {exc}"
+        return f"`{cmd}` did not start: {failure(exc)}"
     born = created(proc.pid)
     try:
         journal(log, {proc.pid: born})
