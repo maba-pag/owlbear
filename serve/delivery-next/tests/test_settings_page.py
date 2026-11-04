@@ -645,6 +645,8 @@ def test_models_arriving_while_a_model_name_is_typed_wait_until_the_field_is_lef
             expect(chosen).to_have_js_property("value", "my-model-2")
             said = "my-model-2 (not offered here)"
             expect(chosen.get_by_role("option", name=said, selected=True, include_hidden=True)).to_have_count(1)
+            pds.pick(page, "Model for builder", "claude-opus-5.5")
+            expect(chosen.get_by_role("combobox")).to_be_focused()
             browser.close()
     finally:
         arrive.set()

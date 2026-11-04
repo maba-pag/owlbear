@@ -92,7 +92,17 @@ export function table(caption, heads, body, rows, { id, hidden = false } = {}) {
 // A table cell's choice: its column says what it is, so the label is for assistive technology only.
 // *wrong* says why the choice cannot run, for a choice that is checked (an effort); undefined for the others.
 function choose(label, options, value, chosen, { key, disabled = false, filter = false, wrong } = {}) {
-  const changed = (e) => chosen(e.target.value);
+  const changed = (e) => {
+    const control = e.currentTarget;
+    chosen(e.target.value);
+    if (!control.isConnected) {
+      const next = document.querySelector(`p-select[label="${CSS.escape(label)}"]`);
+      const focused = document.activeElement;
+      Promise.resolve(next?.componentOnReady?.()).then(() => {
+        if (next?.isConnected && document.activeElement === focused) next.focus({ preventScroll: true });
+      });
+    }
+  };
   const items = options.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`);
   const checked = wrong === undefined ? nothing : wrong ? "error" : "none";
   // PDS options can receive a queued slotchange after removal; replace their select as one subtree.
