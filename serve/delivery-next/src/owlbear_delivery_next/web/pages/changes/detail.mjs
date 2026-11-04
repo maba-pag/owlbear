@@ -5,12 +5,14 @@ import {
   questionForm, retryForm, criteriaPanel, checkForm, mergeForm, restartButton, pullbackNote, stopNotice,
 } from "./forms.mjs";
 import { decisionForm, visualSection, beforeSection, roundRefused } from "./visual.mjs";
-import { spendLines, toolLines, planList, roundsInfo, stepper } from "./progress.mjs";
+import { spendLines, toolLines, planInfo, roundsInfo, stepper } from "./progress.mjs";
 import { activityLog, split } from "./activity.mjs";
 import { approval, briefInfo } from "./brief.mjs";
 import { choose } from "./list.mjs";
 import { watcherSection } from "./watcher.mjs";
 import { improvementSection } from "./improvement.mjs";
+import { detailsOn, detailsSwitch } from "./details.mjs";
+import { actionItems } from "./actions.mjs";
 
 function detailHead(d) {
   const back = html`<p-button-pure type="button" icon="arrow-left" class="back" @click=${() => choose(null)}>All
@@ -31,7 +33,8 @@ function detailHead(d) {
   }
   const under = [d.brief.title && d.slug, several() && `in ${d.projectName}`].filter(Boolean).join(" \u00b7 ");
   return html`<div class="detail-head">${back}<div>${hd(2, d.brief.title || d.slug, "xl", { tabindex: "-1" })}${under
-    ? text(under, { size: "sm", color: "contrast-medium" }) : nothing}</div>${intent}</div>`;
+    ? text(under, { size: "sm", color: "contrast-medium" }) : nothing}</div><div class="row">${detailsSwitch()}${intent}
+    </div></div>`;
 }
 
 // The tag says the status; the line keeps its stage only where the stage says more than the tag.
@@ -52,8 +55,9 @@ export function badge(c) {
   return c.actor === "github" ? ["secondary", "GitHub"] : ["info", "Delivery"];
 }
 
+// What the owner needs to act always shows; the record behind it shows with the details (detailsOn).
 export function detailView(d) {
-  const [variant, label] = badge(d), forms = formsOf(d);
+  const [variant, label] = badge(d), forms = formsOf(d), on = detailsOn();
   const was = state.refused;
   if (was && was.forms !== forms) {  // #914: a refusal whose form went stays on top of its Change until he acts or goes
     state.refused = was.key !== d.key ? null : was.kept ? was
@@ -83,19 +87,20 @@ export function detailView(d) {
     ${question}
     ${d.merge ? mergeForm(d.merge, d) : nothing}
     ${d.checks.filter((c) => c.waiting).map((c) => checkForm(c, d))}
+    ${actionItems(d)}
     ${approvingNow ? approval(d) : nothing}
     ${pictures && !deciding ? info("Before and after", pictures.lines, unjudged,
       toggle("screenshots", `Screenshots (${pictures.count})`, pictures.shots))
       : unjudged !== nothing ? info("Before and after", unjudged) : nothing}
     ${d.owner_criteria.length ? criteriaPanel(d) : nothing}
     ${d.progress ? info("Progress", stepper(d.progress), d.restartable ? restartButton(d) : nothing) : nothing}
-    ${d.plan.length ? info("Plan", planList(d)) : nothing}
-    ${d.rounds ? roundsInfo(d.rounds, d) : nothing}
+    ${d.plan.length || d.plan_versions.versions.length ? planInfo(d) : nothing}
+    ${on && d.rounds ? roundsInfo(d.rounds) : nothing}
     ${!approvingNow && (d.brief.outcome || d.criteria.length) ? briefInfo(d) : nothing}
     ${d.pullback && !behind ? pullbackNote(d.pullback, d) : nothing}
-    ${watcherSection(d.watcher)}
+    ${on ? watcherSection(d.watcher) : nothing}
     ${improvementSection(d)}
-    ${info("Recent activity", activityLog(d.activity))}
+    ${on ? info("Recent activity", activityLog(d.activity)) : nothing}
     ${spendLines(d.spend)}
-    ${toolLines(d.tool_use)}`;
+    ${on ? toolLines(d.tool_use) : nothing}`;
 }

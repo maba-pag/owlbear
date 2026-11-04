@@ -29,6 +29,7 @@ def shown(store: Store, c: Change) -> dict[str, Any]:
         "ui": b.ui,
         "visual": [s.model_dump() for s in b.visual],
         "unapprovable": brief_rounds.approvable(c),  # TD-249: why the approve button is off
+        "revising": brief_rounds.revising(c),  # the findings the shaper revises this version for
         "unrevisable": unrevisable(c),  # why no new shaping chat may revise the saved brief
         "unreviewed": brief_rounds.unreviewed(c),  # TD-255: approving needs the owner's tick
         "read_backs": decisions_gate.checkpoint(store, c),  # TD-427: at most three, never blocking

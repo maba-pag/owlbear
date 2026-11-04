@@ -115,6 +115,7 @@ def opened(base: str, pds: Any) -> Iterator[Any]:
         page = browser.new_page()
         pds.only(page, base)
         page.add_init_script("sessionStorage.setItem('token', 'tok');")
+        page.add_init_script("localStorage.setItem('owlbear-improvement-detail', 'on');")  # the record behind the work
         page.goto(f"{base}/?change={SLUG}")
         yield page
         browser.close()
