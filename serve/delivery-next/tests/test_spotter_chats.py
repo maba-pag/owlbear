@@ -875,6 +875,7 @@ def test_a_lock_that_cannot_be_opened_is_told_whole(world, monkeypatch, whole_er
     said = f"PermissionError: {whole_error}\nthe Spotter's folder is read-only"
     assert (told, f.ended.is_set()) == ([f"chats follower: its lock cannot be opened ({said}); no chat is followed"],
                                         True)  # fmt: skip
+    assert (f.refused, f.failed) == (f"its lock cannot be opened: {said}", "")  # for the Improvement page
 
 
 def test_a_look_whose_runtime_ended_releases_its_lease(world):

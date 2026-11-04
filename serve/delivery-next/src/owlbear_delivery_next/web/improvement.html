@@ -16,10 +16,11 @@
   .filters > p-select { flex: 0 1 16rem; min-width: 0; }
   .proposal .actions, .followup { margin-block-start: var(--p-spacing-static-sm); }
   .from { color: var(--p-color-contrast-medium); }
-  .case, .look, #follower-failed, #cases-failed, #cases-unpublished, #retro-failed .meta, #cases .said {
+  .case, .look, #follower-refused, #follower-failed, #cases-failed, #cases-unpublished, #retro-failed .meta,
+  #cases .said {
     overflow-wrap: anywhere;  /* a note or an error can quote a long path or id */
   }
-  #follower-failed, #cases-failed, #cases-unpublished, #retro-failed .meta, #cases .said {
+  #follower-refused, #follower-failed, #cases-failed, #cases-unpublished, #retro-failed .meta, #cases .said {
     white-space: pre-wrap;  /* a multi-line error keeps its lines */
   }
   .cards ul.meta, .panel ul.meta, .panel ol.meta { margin: 0; padding-inline-start: 1.25rem; }

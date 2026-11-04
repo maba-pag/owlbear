@@ -19,6 +19,8 @@ Every ``POLL`` seconds, one pass:
    next read; one over ``LINE`` bytes is left out and said in the chat's cards from then on.
 
 A pass that fails is told in host.log, its whole error (``failed``) on the Improvement page until a pass does not fail.
+A follower that cannot open its lock follows no chat until OwlBear starts again: told in host.log, and its whole error
+(``refused``) on the Improvement page.
 
 Where a chat starts: one whose folder existed when the follower started following (at its start, when switched on and
 when the enrolled folders change: the baseline, by folder names alone) starts at its end then; one found later starts
@@ -144,6 +146,7 @@ class Follower:
         self.share = 0  # the steer share of the latest pass
         self.turns = 0
         self.said = self.failed = ""  # the line last told, and the last pass's whole error if it failed
+        self.refused = ""  # why the follower did not start, whole: no chat is followed until OwlBear starts again
         self.saved: dict[str, Any] = {}
 
     def start(self) -> None:
@@ -183,6 +186,7 @@ class Follower:
         try:
             fd = os.open(spotter.root() / LOCK, os.O_WRONLY | os.O_CREAT, 0o600)
         except OSError as exc:
+            self.refused = f"its lock cannot be opened: {failure(exc)}"  # the Improvement page's thread reads it
             self.say(f"chats follower: its lock cannot be opened ({failure(exc)}); no chat is followed")
             self.ended.set()
             return

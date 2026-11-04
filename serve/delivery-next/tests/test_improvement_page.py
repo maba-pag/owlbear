@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import socket
 import subprocess
@@ -43,6 +44,7 @@ from owlbear_delivery_next.machine_host import (
     cases_job,
     chat_acts,
     chat_settings,
+    chats,
     improvement_routes,
     project,
     retro_job,
@@ -932,6 +934,36 @@ def test_a_failed_chats_pass_shows_its_whole_error_until_a_pass_succeeds(
         page.reload()
         page.locator("#proposals").wait_for()
         expect(page.locator("#not-followed")).to_have_count(0)
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)
+def test_a_follower_that_cannot_open_its_lock_shows_its_whole_error_and_that_it_stopped(
+    tmp_path, monkeypatch, pds, whole_error
+) -> None:
+    error = f"{whole_error}\n/{'x' * 3000}"  # and an unbroken path component, wider than the page
+    opening = os.open
+
+    def refused(path: object, *args: Any) -> int:
+        if str(path).endswith(chats.LOCK):
+            raise _noted(PermissionError(error))
+        return opening(path, *args)
+
+    with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
+        follower, told = w.machine.chats, []
+        follower.say = told.append
+        with monkeypatch.context() as lock:
+            lock.setattr(chats.os, "open", refused)
+            follower.run()
+        assert follower.ended.is_set()
+        page = improvement(w, pds)
+        shown = page.locator("#not-followed #follower-refused")
+        said = (
+            "All enrolled chats: the follower did not start, and none is followed until OwlBear starts again: "
+            f"its lock cannot be opened: PermissionError: {error}\n{NOTE}"
+        )
+        assert shown.evaluate("e => e.innerText") == said  # as shown, its lines kept
+        assert shown.evaluate("e => e.scrollWidth <= e.clientWidth")  # wrapped, not cut off at the page's edge
 
 
 def _until(done: Callable[[], object]) -> None:
