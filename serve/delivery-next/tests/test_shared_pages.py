@@ -65,10 +65,11 @@ class Host:
 class Launch:
     def __init__(self) -> None:
         self.prompts: list[str] = []
+        self.ending: dict[str, str] = {"state": "open"}
 
     def __call__(self, _repo, _role, prompt):
         self.prompts.append(prompt)
-        return {"state": "open"}
+        return self.ending
 
 
 def machine(tmp_path: Path, shared: Path) -> tuple[Starlette, dict[str, Launch]]:
@@ -185,6 +186,44 @@ def test_one_backlog_for_both_clones_triaged_by_project_and_a_change_started_in_
             expect(page.locator("#started")).to_contain_text("A chat opened in VS Code")
             assert (len(launches[DOCS].prompts), launches[SHOP].prompts) == (1, [])
             assert "Both sites" in launches[DOCS].prompts[0]
+            browser.close()
+    finally:
+        server.should_exit = True
+
+
+@pytest.mark.browser
+@pytest.mark.usefixtures("github")
+def test_a_failed_backlog_launch_shows_its_warning_whole(tmp_path: Path, shared_repo, pds, whole_error) -> None:
+    """R2 (#971): what Delivery could not undo is said beside a Backlog launch that failed too, whole."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    shop = Backlog(DataRepo(shared_repo[0]), "shop-site")
+    both = shop.add("Both sites", source="review")[0]
+    shop.update(both.id, {"kind": "improvement", "projects": ["shop-site", "docs-site"]})
+    app, launches = machine(tmp_path, shared_repo[0])
+    reason = "the Copilot chat did not start (unbound: x)"
+    launches[DOCS].ending = {"state": "failed", "reason": reason, "warning": whole_error}
+    server, base = serving(app)
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.goto(f"{base}/backlog?project={DOCS}#token=t")
+            page.get_by_label("Select Both sites").check()
+            page.get_by_role("button", name="Create Change from 1").click()
+            pds.pick(page.locator("#choose"), "Shape the Change in", DOCS)
+            page.get_by_role("button", name="Continue").click()
+            pds.answer(page, "Open the chat")
+            started = page.locator("#started")
+            expect(started.locator("code")).to_have_count(1, timeout=15000)
+            command = started.locator("code").text_content()
+            assert started.text_content().rstrip() == (  # the line's template ends in its own indent
+                f"Could not open the chat: {reason}. Note: {whole_error}. Run this command instead:{command}"
+            )
             browser.close()
     finally:
         server.should_exit = True

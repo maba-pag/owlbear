@@ -88,7 +88,7 @@ async function shapeFrom(picked, of) {
     state.started = s.state === "open"
       ? { text: `A chat opened in VS Code to shape a Change from ${picked.length} entries.`
         + (s.warning ? ` Note: ${s.warning}.` : "") }
-      : { reason: s.reason, command: s.command };
+      : { reason: s.reason, warning: s.warning, command: s.command };
   } catch (e) {
     state.started = null;
     state.error = e.message.charAt(0).toUpperCase() + e.message.slice(1);
