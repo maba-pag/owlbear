@@ -501,6 +501,50 @@ def test_the_brief_offers_a_new_shaping_chat_and_says_how_it_went(tmp_path: Path
 
 
 @pytest.mark.browser
+def test_a_shaping_chat_that_could_not_open_says_the_host_s_whole_error(
+    tmp_path: Path, monkeypatch, pds, whole_error
+) -> None:
+    """#971: a refused upgrade of the published agent host reaches the shaping launch's line whole, its note too."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+    from websockets.exceptions import InvalidHandshake  # noqa: PLC0415 - the library's own error
+
+    from owlbear_delivery_next.runtimes import ahp, readiness, vscode_adapter  # noqa: PLC0415
+
+    refused = InvalidHandshake(whole_error)
+    refused.add_note("NOTE-MARK")
+
+    def upgrade(*_a: object, **_k: object) -> None:
+        raise refused
+
+    monkeypatch.setattr(api, "LAUNCH_GAP", 0)
+    monkeypatch.setattr(api, "create_app", partial(api.create_app, which=lambda _n: "/bin/code"))
+    monkeypatch.setattr(
+        ahp, "endpoint", lambda: {"endpoint": {"path": str(tmp_path / "h.sock")}, "connectionToken": "t"}
+    )
+    monkeypatch.setattr(ahp, "unix_connect", upgrade)
+    monkeypatch.setattr(readiness, "shaper_path", lambda _home: None)
+    monkeypatch.setattr(vscode_adapter, "launch_code_chat", lambda _args, _cwd: None)
+    monkeypatch.setattr(vscode_adapter, "START", 0.0)
+    alpha = registry.register(clone(tmp_path / "alpha", "same"))
+    shaping(Path(alpha.path), "Alpha brief")
+    detail = (
+        "HostError: VS Code published no agent host within 0 s; before that, the published agent host failed: "
+        f"HostError: upgrade refused: InvalidHandshake: {whole_error}\nNOTE-MARK"
+    )
+    with browsing(monkeypatch, pds) as (page, base):
+        broke = errors(page)
+        opened(page, base, alpha.id)
+        page.locator("#detail").get_by_role("button", name=REVISE).click()
+        pds.answer(page, "Open the chat")
+        command = page.locator("#started code")
+        expect(command).to_be_visible(timeout=15000)
+        said = f"the Copilot chat did not start (error: {detail}); run this in {alpha.path}"
+        expected = f"Could not open the chat to revise c1: {said}. Copy this command: {command.text_content()}"
+        assert page.locator("#started").text_content() == expected
+        assert broke == []
+
+
+@pytest.mark.browser
 def test_a_brief_that_cannot_take_a_revision_shows_no_button(tmp_path: Path, monkeypatch, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 

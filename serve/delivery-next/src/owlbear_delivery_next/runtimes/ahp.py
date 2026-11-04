@@ -24,6 +24,8 @@ from urllib.parse import quote
 from websockets.exceptions import ConnectionClosed, InvalidHandshake, WebSocketException
 from websockets.sync.client import unix_connect
 
+from owlbear_delivery_next.git.command_failure import failure
+
 PROTOCOL = "1.0.0"
 ROOT = "ahp-root://"
 ENTRIES = Path.home() / "Library/Application Support/Code/agent-host/local-endpoint/entries"
@@ -66,10 +68,10 @@ class HostRefusedError(HostError):
 
 
 def _ended(exc: BaseException) -> str:
-    """Why the connection ended, in a few words."""
+    """Why the connection ended, its error whole (#971): a close names its codes and reasons."""
     if isinstance(exc, ConnectionClosed):
-        return "server closed" if exc.rcvd is not None else f"closed: {exc}"
-    return str(exc) or type(exc).__name__
+        return f"{'server closed' if exc.rcvd is not None else 'closed'}: {failure(exc)}"
+    return failure(exc)
 
 
 class Connection:
@@ -85,7 +87,7 @@ class Connection:
                 user_agent_header=None, legacy=True,
             )  # fmt: skip
         except InvalidHandshake as exc:
-            raise HostError(f"upgrade refused: {exc}") from exc  # noqa: EM102, TRY003
+            raise HostError(f"upgrade refused: {failure(exc)}") from exc  # noqa: EM102, TRY003
         self._ids, self._seq = itertools.count(1), itertools.count(1)
         self._pending: dict[int, queue.Queue[Json]] = {}
         self._events: queue.Queue[Json] = queue.Queue()
@@ -155,7 +157,7 @@ class Connection:
             self._send({"jsonrpc": "2.0", "id": rid, "method": method, "params": params})
             msg = box.get(timeout=timeout)
         except HostError as exc:
-            raise HostError(f"{method}: {exc}") from exc  # noqa: EM102, TRY003
+            raise HostError(f"{method}: {failure(exc)}") from exc  # noqa: EM102, TRY003
         except queue.Empty:
             raise HostError(f"{method}: no answer in {timeout}s") from None  # noqa: EM102, TRY003
         finally:

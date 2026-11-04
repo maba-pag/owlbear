@@ -532,7 +532,8 @@ def test_a_server_close_is_answered_and_later_requests_fail_at_once() -> None:
             conn.request("listSessions", {}, timeout=5)
         assert type(closed.value) is ahp.HostError  # a disconnect is not the host's answer
         assert replies.get(timeout=5) == (8, b"\x03\xe8")
-        assert conn.next_event(1) == {"method": "closed", "params": {"error": "server closed"}}
+        closed = "server closed: ConnectionClosedOK: received 1000 (OK); then sent 1000 (OK)"  # #971: the codes too
+        assert conn.next_event(1) == {"method": "closed", "params": {"error": closed}}
         with pytest.raises(ahp.HostError, match="connection closed"):
             conn.request("listSessions", {}, timeout=30)
     finally:
@@ -741,6 +742,61 @@ def test_without_a_fresh_endpoint_the_timeout_names_why_the_published_one_failed
         "VS Code published no agent host within 0 s; before that, the published agent host failed: "
     )
     assert "FileNotFoundError" in str(failed.value)
+
+
+def _close_with_a_reason(conn: socket.socket) -> None:
+    _ws_recv(conn)
+    _ws_send(conn, b"\x03\xf3REASON-MARK", op=8)  # 1011, the host's internal error
+    _ws_frame(conn)
+
+
+@pytest.mark.parametrize("failing", ["upgrade refused", "server closed", "socket refused"])
+def test_a_stale_host_s_whole_error_reaches_the_shaping_outcome_and_host_log(
+    plain: Path, monkeypatch, caplog, whole_error: str, failing: str
+) -> None:
+    """#971: each way the published host fails says its error whole, notes and close reasons included."""
+    from websockets.exceptions import InvalidHandshake  # noqa: PLC0415 - only this test raises the library's own
+
+    servers: list[socket.socket] = []
+    if failing == "server closed":
+        path, server = _host(_close_with_a_reason)
+        servers.append(server)
+        inner = (
+            "HostError: initialize: connection closed: server closed: ConnectionClosedError: received 1011 (internal "
+            "error) REASON-MARK; then sent 1011 (internal error) REASON-MARK"
+        )
+    else:
+        path = Path(tempfile.mkdtemp(dir="/tmp")) / "gone.sock"
+        broke = InvalidHandshake(whole_error) if failing == "upgrade refused" else ConnectionRefusedError(whole_error)
+        broke.add_note("NOTE-MARK")
+
+        def refused(*_a: object, **_k: object) -> None:
+            raise broke
+
+        monkeypatch.setattr(ahp, "unix_connect", refused)
+        inner = f"{type(broke).__name__}: {whole_error}\nNOTE-MARK"
+        inner = f"HostError: upgrade refused: {inner}" if failing == "upgrade refused" else inner
+    monkeypatch.setattr(ahp, "endpoint", lambda: _entry(path))
+    monkeypatch.setattr(readiness, "shaper_path", lambda _home: None)
+    monkeypatch.setattr(vscode_adapter, "launch_code_chat", lambda _args, _cwd: None)
+    monkeypatch.setattr(vscode_adapter, "START", 0.0)
+    try:
+        out, _warning = vscode_adapter.open_chat(plain, SHAPER, "Shape a brief with me.")
+    finally:
+        for each in servers:
+            each.close()
+
+    stale = f"the published agent host failed: {inner}"
+    assert (out.end, out.detail) == (
+        "error",
+        f"HostError: VS Code published no agent host within 0 s; before that, {stale}",
+    )
+    own = [r for r in caplog.records if r.name == vscode_adapter.__name__]
+    assert [r.getMessage() for r in own] == [
+        f"{stale}; starting VS Code on {plain}",
+        f"the shaping chat in {plain} did not open",
+    ]
+    assert own[1].exc_info[1].__cause__ is not None  # the traceback in host.log goes on to the stale host's error
 
 
 def git(cwd: Path, *args: str) -> str:
