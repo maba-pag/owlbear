@@ -77,8 +77,7 @@ def _versions(attempts: list[RoundLoop], current: int, *, running: int, waits: i
         many = len(attempts) > 1
         out.append({
             "n": n, "state": state, "word": WORDS[state], "current": n == current, "approved": False, "actions": [],
-            "challenges": [{"round": v.round, "label": _label(v, x.attempt, many=many), "recheck": v.recheck}
-                           for x, v in mine],
+            "challenges": [{"label": _label(v, x.attempt, many=many)} for x, v in mine],
         })  # fmt: skip
     return out
 

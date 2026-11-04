@@ -8,14 +8,14 @@ import { show } from "./state.mjs";
 const DETAILS = "owlbear-improvement-detail";
 
 export const detailsOn = () => localStorage.getItem(DETAILS) === "on";
-for (const event of [DETAILS, "storage"]) addEventListener(event, () => show());
+addEventListener("storage", () => show());
 
 export function detailsSwitch() {
   const on = detailsOn();
   const set = (e) => {
     if (e.detail?.checked === undefined || e.detail.checked === on) return;
     localStorage.setItem(DETAILS, e.detail.checked ? "on" : "off");
-    dispatchEvent(new Event(DETAILS));
+    show();
   };
   return html`<p-switch id="details-switch" compact="true" .checked=${on} @change=${set} @update=${set}>Show
     details</p-switch>`;
