@@ -217,6 +217,18 @@ def test_one_more_challenge_with_findings_sends_the_version_to_the_shaper(pickin
     assert again(picking, 2).status_code == 409
 
 
+def test_one_more_challenge_of_a_version_without_a_pick_owes_it(picking):
+    """#1001 review: a version saved before per-version picking gets its pick with the challenge, as a request's."""
+    unreviewed(picking)
+    with picking.store.lock(picking.slug) as lock:
+        c = picking.store.read(picking.slug)
+        c.brief.picked = None
+        picking.store.write(lock, c)
+    assert again(picking, 2).status_code == 200
+    p = picking.change().brief.picked
+    assert (p.version, p.status) == (2, "owed")
+
+
 def test_a_stale_or_approved_version_is_refused_and_nothing_changes(picking):
     unreviewed(picking)
     before = picking.change().model_dump()

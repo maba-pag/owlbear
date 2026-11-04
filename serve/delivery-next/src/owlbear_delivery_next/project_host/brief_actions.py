@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next.change_flow import brief_rounds
+from owlbear_delivery_next.change_flow import brief_rounds, picks
 from owlbear_delivery_next.state_store.store import LockHeldError, StoreError
 
 if TYPE_CHECKING:
@@ -41,6 +41,8 @@ def router(store: Store, read: Callable[[str], Change], wake: Callable[[], None]
                 c = store.read(slug)
                 if why := brief_rounds.again(c, body.version):
                     raise HTTPException(409, why)
+                if store.shared is not None:  # as a request's, the challenge owes a version without a pick its pick
+                    picks.owe(c)
                 store.write(lock, c)
         except (LockHeldError, StoreError) as exc:
             raise HTTPException(409, f"change: {exc}; try again") from exc
