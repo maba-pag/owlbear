@@ -8,7 +8,6 @@ Pause, or with Pause and stop when idle (TD-288), which stops OwlBear once nothi
 from __future__ import annotations
 
 import contextlib
-import subprocess
 import sys
 import threading
 from datetime import UTC, datetime
@@ -16,17 +15,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_flow.status import RESUME, status
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import data_repo, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import cases_job, chats
 from owlbear_delivery_next.machine_host.cases_job import CasesJob
 from owlbear_delivery_next.machine_host.curation import Curation
-from owlbear_delivery_next.machine_host.project import Project
+from owlbear_delivery_next.machine_host.project import Project, recorded
 from owlbear_delivery_next.machine_host.retro_job import DRAIN, RetroJob
 from owlbear_delivery_next.project_host import session_slots
-from owlbear_delivery_next.project_host.host import RunnerRecord
 from owlbear_delivery_next.runtimes import settings_read
-from owlbear_delivery_next.state_store import machine_settings, project_home, registry, settings_carry
+from owlbear_delivery_next.state_store import machine_settings, registry, settings_carry
 from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
@@ -50,22 +49,6 @@ class MachineError(Exception):
         self.status, self.text = status, text
 
 
-def recorded(repo: Path) -> dict[str, int]:
-    """The sessions a project's runners hold, read from their records while no host serves it (TD-336).
-
-    A record goes only once a host confirms its runner and processes gone, so each one counts; a project whose
-    records cannot be read counts none.
-    """
-    held = {}
-    with contextlib.suppress(OSError, subprocess.CalledProcessError, StoreError):
-        found = project_home.current(repo)
-        for path in (found / "changes").glob("*/runner.json") if found else []:
-            with contextlib.suppress(OSError, ValueError):
-                if sessions := RunnerRecord.model_validate_json(path.read_text()).sessions:
-                    held[path.parent.name] = sessions
-    return held
-
-
 class Machine:
     """Every registered project, loaded once; requests about them are serialized by ``lock``."""
 
@@ -76,6 +59,9 @@ class Machine:
         self.updating = ""  # the update's fence (self-update §5.3): why nothing starts now
         self.handover: tuple[Any, Any] | None = None  # the standby and what it takes over, once the alias names it
         self.updated = ""  # the version this host took over as, said once on the pages (TD-299)
+        self.unretried = ""  # why the last pass loading the failed projects again failed, for the Projects page
+        self.unshared = ""  # why the shared data could not be set up or cloned, for the Projects page
+        self.undecided: list[str] = []  # what the start could not do about decisions, for the Decisions page
         self.projects: dict[str, Project] = {}
         self.lock = threading.RLock()
         self.stopping = threading.Event()
@@ -141,7 +127,7 @@ class Machine:
         try:
             why = _switched(self.say)
         except Exception as exc:  # noqa: BLE001 - the projects load either way; their steps say what is unset
-            why = f"the settings carry failed: {type(exc).__name__}: {exc}"
+            why = f"the settings carry failed: {failure(exc)}"
         if why:
             self._pending(why)
         else:
@@ -177,7 +163,7 @@ class Machine:
         try:
             p.load(self.record, lambda: self.paused or self.stopping.is_set(), bind)
         except Exception as exc:  # noqa: BLE001 - one project's failure never stops the machine
-            p.state, p.reason = "failed", f"it could not load: {type(exc).__name__}: {exc}"
+            p.state, p.reason = "failed", f"it could not load: {failure(exc)}"
         if p.state == "failed":
             self.slots.restore(entry.id, recorded(Path(entry.path)))  # its runners may live on without a host
             # read from its folder, never through a Job: the store may belong to another host that still runs (TD-242)
@@ -221,7 +207,10 @@ class Machine:
             try:
                 self.retry()
             except Exception as exc:  # noqa: BLE001 - the loop outlives one failed pass
-                self.say(f"loading projects again failed: {type(exc).__name__}: {exc}")
+                self.unretried = failure(exc)
+                self.say(f"loading projects again failed: {self.unretried}")
+            else:
+                self.unretried = ""
 
     def get(self, pid: str) -> Project:
         """The registered project *pid*."""
@@ -236,7 +225,7 @@ class Machine:
             try:
                 entry = registry.register(path)
             except registry.RegistryError as exc:
-                raise MachineError(409, str(exc)) from exc
+                raise MachineError(409, failure(exc)) from exc
             return self._load(entry)
 
     def remove(self, pid: str) -> None:
@@ -264,7 +253,7 @@ class Machine:
             try:
                 entry = registry.adopt(pid)
             except registry.RegistryError as exc:
-                raise MachineError(409, str(exc)) from exc
+                raise MachineError(409, failure(exc)) from exc
             del self.projects[pid]
             p = self._load(entry)
             self.slots.leave(pid)  # only once the clone now at its path counts its own runners: never a gap

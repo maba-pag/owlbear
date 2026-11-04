@@ -926,7 +926,7 @@ def every_name_is_what_its_row_shows(page, pds) -> None:
 
 @pytest.mark.browser
 def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_move(
-    tmp_path: Path, shared_repo, pds, monkeypatch
+    tmp_path: Path, shared_repo, pds, monkeypatch, whole_error
 ) -> None:
     """Code ships no defaults (2026-10-23): with no built-in layer, every unset machine setting is an error."""
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
@@ -936,7 +936,11 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
     monkeypatch.setattr(machine_settings, "BASE", None)
     monkeypatch.setattr(config, "BASE", None)
     with registry.locked():
-        registry.save(registry.Machine(settings_pending="the shared repository could not be brought current: offline"))
+        registry.save(  # #971: a failed carry's whole error
+            registry.Machine(
+                settings_pending=(pending := f"the settings carry failed: RuntimeError: {whole_error}\na note on it")
+            )
+        )
     server, base = serving(machine(tmp_path, shared_repo[0])[0])
     try:
         with sync_playwright() as pw:
@@ -956,7 +960,7 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
             every_name_is_what_its_row_shows(page, pds)
             pds.group(page, "this-machine")
             region = page.get_by_role("region", name="This machine")
-            expect(page.locator("#machine-pending")).to_contain_text("offline")
+            assert f"is not done: {pending}. OwlBear tries" in page.locator("#machine-pending").text_content()
             red = region.locator(".field > p-text[color='error']")  # GW8RT6: each unset setting's name is red
             expect(red).to_have_count(14)  # 3 update checks
             expect(region.locator("p-select[disabled], p-input-text[disabled]")).to_have_count(14)  # #809: a project

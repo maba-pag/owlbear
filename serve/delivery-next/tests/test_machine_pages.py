@@ -1379,6 +1379,74 @@ def targets(scope) -> list[str]:
 
 
 @pytest.mark.browser
+def test_projects_says_why_the_shared_data_and_a_pass_loading_projects_again_failed_whole(
+    monkeypatch, whole_error
+) -> None:
+    """#971: the shared data the start could not set up, and the last failed pass loading the failed projects again,
+    say why whole above the Projects list."""
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    machine, server, base = serve()
+    try:
+        unshared = f"DataRepoError: {whole_error}\na note on the clone; tried again every 5 minutes"
+        unretried = f"RuntimeError: {whole_error}\na note on the pass"
+        machine.unshared, machine.unretried = unshared, unretried  # as the start and the retry loop set them
+        shared, said = _checks_page(base, "/projects", "#unshared")
+        retried, broke = _checks_page(base, "/projects", "#unretried")
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    assert (shared, retried) == (
+        f"Shared data: {unshared}", f"Loading the failed projects again failed: {unretried}"
+    )  # fmt: skip
+    assert said == broke == []
+
+
+@pytest.mark.browser
+def test_decisions_says_what_the_start_could_not_do_about_decisions_whole(monkeypatch, whole_error) -> None:
+    """#971: a retired decision index file the start could not remove, and decisions it could not pre-load, say why
+    whole in the Decisions page's error notice; a decision id or file in the text stays as written."""
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    named = f"owlbear/decisions/D-01M5ZE13N37HZAGJ69VWW69X23.md: {whole_error}"
+    unremoved = OSError(named)
+    unremoved.add_note("a note on the removal")
+    unlocated = data_repo.DataRepoError(f"D-01M5ZE13N37HZAGJ69VWW69X23 {whole_error}")
+    unlocated.add_note("a note on the place")
+
+    def refusing(path: Path) -> None:
+        if path.name == "decisions.sqlite":
+            raise unremoved
+        raise FileNotFoundError(path)
+
+    def unplaced() -> Path:
+        raise unlocated
+
+    machine, server, base = serve()
+    try:
+        monkeypatch.setattr(Path, "unlink", refusing)
+        host_start._retired_index(machine, local_home.root())  # noqa: SLF001 - the start's own step
+        monkeypatch.undo()
+        monkeypatch.setattr(data_repo, "locate", unplaced)
+        host_start.warm(machine)
+        text, said = _checks_page(base, "/decisions", "#error")
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    lines = [
+        (
+            f"the retired decision index file decisions.sqlite could not be removed: OSError: {named}"
+            "\na note on the removal"
+        ),
+        (
+            f"decisions of owlbear not pre-loaded: DataRepoError: D-01M5ZE13N37HZAGJ69VWW69X23 {whole_error}"
+            "\na note on the place"
+        ),
+    ]
+    assert machine.undecided == lines
+    assert text == "".join(f"At this start, {line}." for line in lines) + "\n    "
+    assert said == []
+
+
+@pytest.mark.browser
 def test_settings_say_this_machine_s_settings_could_not_be_read_and_read_them_again(
     tmp_path: Path, monkeypatch, pds
 ) -> None:
@@ -1715,7 +1783,7 @@ def test_projects_says_why_a_move_of_the_shared_repository_stopped_whole(
         expect(shop.locator("p-tag")).to_have_text("failed")
         said = shop.locator("p-text").filter(has_text="is not finished")
         expect(said).to_have_count(1)
-        opened = f"its Delivery state cannot be opened: DataRepoError: {unfinished}"
+        opened = f"its Delivery state cannot be opened: StoreError: DataRepoError: {unfinished}"
         assert said.text_content() == f"{opened}; `owlbear data` finishes it"
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
         assert broke == []

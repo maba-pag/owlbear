@@ -235,7 +235,11 @@ def test_a_disk_failure_while_cloning_is_said_kept_and_retried(url: str, monkeyp
             return False
 
     machine = SimpleNamespace(
-        stopping=Stopping(), say=said.append, carry=lambda: done.append("carry"), retry=lambda: done.append("retry")
+        stopping=Stopping(),
+        say=said.append,
+        carry=lambda: done.append("carry"),
+        retry=lambda: done.append("retry"),
+        unshared="",
     )
     serve._cloning(machine)  # noqa: SLF001
     why = {
@@ -245,11 +249,11 @@ def test_a_disk_failure_while_cloning_is_said_kept_and_retried(url: str, monkeyp
     unset = "the shared repository could not be set up: PermissionError: [Errno 13] denied"
     shown = f"cloning {url} failed: {why}" if why else unset
     assert said == [
-        f"shared data: {shown}; tried again every {serve.PROVISION_RETRY // 60} minutes",
+        f"shared data: DataRepoError: {shown}; tried again every {serve.PROVISION_RETRY // 60} minutes",
         f"shared data: cloned {url} into {data_place.default()}",
     ]
     kept = {"remote": url, "failed": why} if why else {"remote": url}
-    assert (seen, done) == ([(kept, [], False)], ["carry", "retry"])
+    assert (seen, done, machine.unshared) == ([(kept, [], False)], ["carry", "retry"], "")  # cleared once cloned
 
 
 def test_a_checkout_named_like_a_clone_leftover_is_kept_when_the_pointer_names_it(url: str) -> None:
@@ -358,12 +362,16 @@ def test_the_host_clones_a_remote_only_pointer_in_the_background_then_loads_the_
             return False
 
     machine = SimpleNamespace(
-        stopping=Stopping(), say=said.append, carry=lambda: done.append("carry"), retry=lambda: done.append("retry")
+        stopping=Stopping(),
+        say=said.append,
+        carry=lambda: done.append("carry"),
+        retry=lambda: done.append("retry"),
+        unshared="",
     )
     assert serve._provisioned(machine) is True  # noqa: SLF001
     assert said == [f"shared data: the shared repository {gone} is not cloned yet"]
     serve._cloning(machine)  # noqa: SLF001
-    assert said[1].startswith(f"shared data: cloning {gone} failed")
+    assert said[1].startswith(f"shared data: DataRepoError: cloning {gone} failed")
     assert said[2:] == [f"shared data: cloned {gone} into {data_place.default()}"]
     assert done == ["carry", "retry"]
     assert record() == {"repository": str(data_place.default().resolve()), "remote": gone}
@@ -447,12 +455,15 @@ def test_a_failed_clone_says_git_whole_in_the_projects_reason_and_the_host_log(
     ran = clone_fails_once(monkeypatch, stderr)
     said = []
     stopping = SimpleNamespace(is_set=lambda: False, wait=lambda _seconds: True)
-    serve._cloning(SimpleNamespace(stopping=stopping, say=said.append))  # noqa: SLF001
+    machine = SimpleNamespace(stopping=stopping, say=said.append, unshared="")
+    serve._cloning(machine)  # noqa: SLF001
     why = git_whole(ran[0], stderr)
     every = serve.PROVISION_RETRY // 60
-    assert said == [f"shared data: cloning {url} failed: {why}; tried again every {every} minutes"]
+    unshared = f"DataRepoError: cloning {url} failed: {why}; tried again every {every} minutes"
+    assert (said, machine.unshared) == ([f"shared data: {unshared}"], unshared)
     assert reason(tmp_path, monkeypatch) == (
-        f"its Delivery state cannot be opened: DataRepoError: the shared repository {url} is not cloned yet: {why}"
+        "its Delivery state cannot be opened: StoreError: DataRepoError: "
+        f"the shared repository {url} is not cloned yet: {why}"
     )
 
 
@@ -474,13 +485,14 @@ def test_a_failed_worktree_repair_says_git_whole_at_owlbear_data_host_start_and_
     assert cli.main(["data"]) == 1
     assert capsys.readouterr().out == f"Shared data: problem: {moved}\n"
     said = []
-    unshared = SimpleNamespace(shared=lambda: None)  # no cut-short curation apply to finish
-    assert serve._provisioned(SimpleNamespace(say=said.append, curation=unshared)) is False  # noqa: SLF001
-    assert said == [f"shared data: {moved}"]
+    machine = SimpleNamespace(say=said.append, curation=SimpleNamespace(shared=lambda: None))  # no cut-short apply
+    assert serve._provisioned(machine) is False  # noqa: SLF001
+    assert (said, machine.unshared) == ([f"shared data: DataRepoError: {moved}"], f"DataRepoError: {moved}")
     assert (len(ran), record()["failed"]) == (2, why)
     unfinished = f"moving the shared repository from {source} to {dest} is not finished: {why}"
     unfinished += "; `owlbear data` finishes it"
-    assert reason(tmp_path, monkeypatch) == f"its Delivery state cannot be opened: DataRepoError: {unfinished}"
+    opened = f"its Delivery state cannot be opened: StoreError: DataRepoError: {unfinished}"
+    assert reason(tmp_path, monkeypatch) == opened
 
     monkeypatch.setattr(data_place, "_git", real)  # repaired: the next `owlbear data` finishes the move
     assert cli.main(["data"]) == 0
@@ -522,6 +534,6 @@ def test_a_role_move_whose_publication_hold_git_fails_says_git_whole_in_the_proj
     said = reason(tmp_path, monkeypatch, old_profile)
     why = f"CalledProcessError: Command '{['git', *ran[-1]]}' returned non-zero exit status 128.\n{whole_error}"
     assert said == (
-        "its Delivery state cannot be opened: the old profile's role overrides were not moved: "
+        "its Delivery state cannot be opened: StoreError: the old profile's role overrides were not moved: "
         f"DataRepoError: the automatic change was not written: {why}"
     )

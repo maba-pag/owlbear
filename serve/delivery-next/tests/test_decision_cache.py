@@ -279,9 +279,13 @@ def test_the_host_start_keeps_each_loaded_projects_decisions_and_says_a_view_it_
     said, store = [], SimpleNamespace(shared=seeded.shared, name=PROJECT)
     monkeypatch.setattr(data_repo, "locate", lambda: seeded.shared)
     decision_cache.clear()
-    serve.warm(SimpleNamespace(say=said.append, projects={"p": SimpleNamespace(store=store)}))
-    assert len(said) == 1
-    assert said[0].startswith("decisions of owlbear not pre-loaded: the project owlbear has no folder")
+    machine = SimpleNamespace(say=said.append, projects={"p": SimpleNamespace(store=store)}, undecided=[])
+    serve.warm(machine)
+    unavailable = (
+        f"DecisionsUnavailable: the project owlbear has no folder in {seeded.shared.root}, "
+        "so its decisions cannot be told from none"
+    )
+    assert said == machine.undecided == [f"decisions of owlbear not pre-loaded: {unavailable}"]  # also for the page
     parses.clear()
     assert decision_store.load(seeded.shared, PROJECT).snapshot.project == PROJECT
     assert parses == []

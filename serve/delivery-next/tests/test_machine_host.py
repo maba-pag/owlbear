@@ -28,11 +28,12 @@ from owlbear_delivery_next.improvement import improvement_view
 from owlbear_delivery_next.local_system import codebase, local_home, maintenance
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, project, serve
+from owlbear_delivery_next.machine_host import machine as machine_module
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import ENDING, Host, HostRecord, RunnerRecord, running
 from owlbear_delivery_next.state_store import decision_store, profile_share, project_home, registry, spotter_test
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store.store import Store, StoreError
 
 AUTH = {"authorization": "Bearer t"}
 
@@ -870,6 +871,95 @@ def test_a_project_that_fails_while_starting_releases_its_lock(tmp_path, machine
     unstarted = project.Project(entry)
     unstarted.scheduler = threading.Thread(target=lambda: None)
     assert (unstarted.stop(drain=0), unstarted.state) == ([], "stopped")
+
+
+@pytest.mark.parametrize("site", ["open", "lock", "start", "load"])
+def test_a_project_that_fails_to_load_says_why_whole_in_its_reason(  # noqa: PLR0913, PLR0917 - its fixtures
+    tmp_path, http, machine, monkeypatch, whole_error, site
+) -> None:
+    """#971: the Projects page shows why a project failed to load whole: its type, message and notes."""
+    error = (StoreError if site == "open" else OSError if site == "lock" else RuntimeError)(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising(*_args, **_kwargs):
+        raise error
+
+    target = {"open": (Store, "open"), "lock": (project, "open_lock"), "start": (project.api, "create_app")}
+    monkeypatch.setattr(*target.get(site, (project.Project, "load")), raising)
+    registry.register(clone(tmp_path / "bad"))
+    machine.load_all()
+    said = {
+        "open": "its Delivery state cannot be opened",
+        "lock": "its host lock cannot be taken",
+        "start": "it could not start",
+        "load": "it could not load",
+    }[site]
+    (shown,) = http.get("/api/next/projects").json()["projects"]
+    whole = f"{type(error).__name__}: {whole_error}\na note on the failure"
+    assert (shown["state"], shown["reason"]) == ("failed", f"{said}: {whole}")
+
+
+def test_a_settings_carry_that_fails_is_kept_and_said_whole(machine, monkeypatch, whole_error, capsys) -> None:
+    """#971: a failed settings carry is kept whole for the Settings page and said whole in the log."""
+    error = RuntimeError(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising(_say):
+        raise error
+
+    monkeypatch.setattr(machine_module, "_switched", raising)
+    machine.carry()
+    why = f"the settings carry failed: RuntimeError: {whole_error}\na note on the failure"
+    assert registry.load().settings_pending == why
+    assert f" settings: {why}; tried again at the next start\n" in capsys.readouterr().out
+
+
+def test_a_failed_pass_loading_projects_again_is_kept_whole_until_one_passes(
+    machine, http, monkeypatch, whole_error, capsys
+) -> None:
+    """#971: a failed pass of the retry loop is said whole, kept for the Projects page and cleared once one passes."""
+    error = RuntimeError(whole_error)
+    error.add_note("a note on the failure")
+    seen: list[str] = []
+
+    def retry() -> None:
+        if not seen:
+            seen.append("")
+            raise error
+        machine.stopping.set()  # set first, so the loop ends whatever this pass does
+        seen.append(http.get("/api/next/projects").json()["unretried"])
+
+    monkeypatch.setattr(machine_module, "RETRY", 0.0)
+    monkeypatch.setattr(machine, "retry", retry)
+    machine.retry_loop()
+    whole = f"RuntimeError: {whole_error}\na note on the failure"
+    assert seen == ["", whole]
+    assert f" loading projects again failed: {whole}\n" in capsys.readouterr().out
+    assert http.get("/api/next/projects").json()["unretried"] == ""
+
+
+@pytest.mark.parametrize("act", ["register", "adopt"])
+def test_a_refused_registration_answers_its_whole_reason(  # noqa: PLR0913, PLR0917 - its fixtures
+    tmp_path, http, machine, monkeypatch, whole_error, act
+) -> None:
+    """#971: the Projects page's alert after Add or Adopt shows the registry's refusal whole."""
+    work = clone(tmp_path / "a")
+    pid = add(http, work)["id"] if act == "adopt" else ""
+    if act == "adopt":
+        machine.projects[pid].state = "replaced"
+    error = registry.RegistryError(whole_error)
+    error.add_note("a note on the refusal")
+
+    def refusing(*_args):
+        raise error
+
+    monkeypatch.setattr(registry, act, refusing)
+    if act == "adopt":
+        refused = http.post(f"/api/next/projects/{pid}/adopt")
+    else:
+        refused = http.post("/api/next/projects", json={"path": str(work)})
+    whole = f"RegistryError: {whole_error}\na note on the refusal"
+    assert (refused.status_code, refused.json()["detail"]) == (409, whole)
 
 
 def test_malformed_or_unrelated_server_entries_never_count_as_setup(tmp_path):

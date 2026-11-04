@@ -136,8 +136,7 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
     machine.updater.unpruned, machine.updater.unmigrated = unpruned, unmigrated
     if pruned or unpruned:
         machine.say(f"removed old versions: {', '.join(pruned) if pruned else f'none: {unpruned}'}")
-    for line in _retired_index(home):
-        machine.say(line)
+    _retired_index(machine, home)
     cloning = _provisioned(machine)
     _load(machine, given)
     _fill(machine, cloning=cloning)
@@ -199,7 +198,8 @@ def _provisioned(machine: Machine) -> bool:
         if done:
             machine.say(f"shared data: {done}")
     except data_repo.DataRepoError as exc:
-        machine.say(f"shared data: {exc}")
+        machine.unshared = failure(exc)
+        machine.say(f"shared data: {machine.unshared}")
     try:
         record = data_place.stored() or {}
     except data_repo.DataRepoError:
@@ -215,17 +215,18 @@ def _cloning(machine: Machine) -> None:
 
     While it clones, a project fails to load with the reason, so nothing writes settings elsewhere meanwhile.
     """
-    said = ""
     while not machine.stopping.is_set():
         try:
             _, done = data_place.provision()
         except data_place.BusyError:
             pass  # an `owlbear data` clones it now; looked at again later
         except data_repo.DataRepoError as exc:
-            if str(exc) != said:
-                machine.say(f"shared data: {exc}; tried again every {PROVISION_RETRY // 60} minutes")
-                said = str(exc)
+            why = f"{failure(exc)}; tried again every {PROVISION_RETRY // 60} minutes"
+            if why != machine.unshared:
+                machine.unshared = why
+                machine.say(f"shared data: {why}")
         else:
+            machine.unshared = ""
             if done:
                 machine.say(f"shared data: {done}")
             machine.carry()
@@ -246,19 +247,23 @@ def _pruned() -> tuple[list[str], str]:
 RETIRED_INDEX = tuple(f"decisions.sqlite{end}" for end in ("", "-wal", "-shm", "-journal", ".lock"))
 
 
-def _retired_index(home: Path) -> list[str]:
-    """Remove the decision index the snapshot replaced (owlbear-data#16): one line per file removed or kept."""
-    said = []
+def _retired_index(machine: Machine, home: Path) -> None:
+    """Remove the decision index the snapshot replaced (owlbear-data#16): one line said per file removed or kept."""
     for name in RETIRED_INDEX:
         try:
             (home / name).unlink()
         except FileNotFoundError:
             continue
         except OSError as exc:
-            said.append(f"the retired decision index file {name} could not be removed: {exc}")
+            _undecided(machine, f"the retired decision index file {name} could not be removed: {failure(exc)}")
         else:
-            said.append(f"removed the retired decision index file {name}")
-    return said
+            machine.say(f"removed the retired decision index file {name}")
+
+
+def _undecided(machine: Machine, line: str) -> None:
+    """Say what the start could not do about decisions, and keep it for the Decisions page."""
+    machine.undecided.append(line)
+    machine.say(line)
 
 
 def warm(machine: Machine) -> None:
@@ -267,7 +272,7 @@ def warm(machine: Machine) -> None:
         views = [(data_repo.locate(), OWLBEAR)]
     except data_repo.DataRepoError as exc:
         views = []
-        machine.say(f"decisions of {OWLBEAR} not pre-loaded: {exc}")
+        _undecided(machine, f"decisions of {OWLBEAR} not pre-loaded: {failure(exc)}")
     views += [(p.store.shared, p.store.name) for p in list(machine.projects.values()) if p.store and p.store.shared]
     for shared, name in views:
         if shared is None:
@@ -275,7 +280,7 @@ def warm(machine: Machine) -> None:
         try:
             decision_store.load(shared, name)
         except (StoreError, data_repo.DataRepoError, OSError) as exc:
-            machine.say(f"decisions of {name} not pre-loaded: {exc}")
+            _undecided(machine, f"decisions of {name} not pre-loaded: {failure(exc)}")
 
 
 def _machine(home: Path, sock: socket.socket, given: handover.Handover | None, *, run: bool) -> Machine:
