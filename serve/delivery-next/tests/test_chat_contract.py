@@ -146,10 +146,11 @@ def hosted(monkeypatch, answers: dict[str, object], rec: HostRecord) -> tuple[ch
 def test_a_chat_works_whatever_code_its_host_runs_and_never_opens_the_state(monkeypatch):
     monkeypatch.setattr(Store, "open", lambda *_a, **_k: pytest.fail("a chat's server reads no state itself"))
     monkeypatch.setattr(chat_client, "_pause", lambda _s: None)
-    row = {"handle": "c1", "slug": "c1-shop"}
+    row = {"handle": "c1", "slug": "c1-shop", "step": "shape"}
     chat, host = hosted(monkeypatch, {
         "GET /chat/contract": SERVES, "GET /changes": [row], "GET /chat/brief/c1-shop": {"version": 2},
-        "POST /briefs/challenge": {"slug": "c1-shop", "attempt": 1}, "GET /chat/challenge/c1-shop": {"running": False},
+        "POST /briefs/challenge": {"slug": "c1-shop", "attempt": 1},
+        "GET /chat/challenge/c1-shop": {"running": False, "version": 2},
         "GET /decisions": {"available": True, "decisions": []}, "POST /decisions/lookup": {"decisions": []},
         "POST /changes/c1-shop/answers": (409, {"detail": "question q1 is not open"}),
     }, record(code="0" * 64))  # fmt: skip
@@ -160,11 +161,11 @@ def test_a_chat_works_whatever_code_its_host_runs_and_never_opens_the_state(monk
 
     assert [s.get("error") for s in said] == [None, None, None, "question: c1.q1 is not open", None, None, None]
     assert said[1]["brief"] == {"version": 2}
-    assert said[2] == {"requested": True}
+    assert said[2] == {"requested": True, "version": 2}
     assert [(m, p) for m, p, _ in host.got] == [
         ("GET", "/chat/contract"), ("POST", "/briefs"), ("GET", "/changes"), ("GET", "/chat/brief/c1-shop"),
         ("POST", "/briefs/challenge"), ("GET", "/chat/challenge/c1-shop?version=2&attempt=1"), ("GET", "/changes"),
-        ("POST", "/changes/c1-shop/answers"), ("GET", "/decisions?text=x&where=all&retired=false"),
+        ("GET", "/changes"), ("POST", "/changes/c1-shop/answers"), ("GET", "/decisions?text=x&where=all&retired=false"),
         ("POST", "/decisions/lookup"), ("POST", "/decisions/propose"),
     ]  # fmt: skip  # its contract asked once, before the first write
 
@@ -192,8 +193,10 @@ def test_a_chat_writes_nothing_to_a_host_older_than_its_contract_and_asks_again_
 
 def test_a_challenge_is_read_through_a_host_handover_and_never_asked_for_again(monkeypatch):
     monkeypatch.setattr(chat_client, "_pause", lambda _s: None)
-    answers = iter([(200, {"running": True}), (503, {"error": "down"}), (200, {"running": False, "verdict": "ok"})])
-    asked = {"GET /chat/contract": SERVES, "POST /briefs/challenge": {"slug": "c1-shop", "attempt": 2}}
+    answers = iter([(200, {"running": True, "version": 3}), (503, {"error": "down"}),
+                    (200, {"running": False, "version": 3, "verdict": "ok"})])  # fmt: skip
+    asked = {"GET /chat/contract": SERVES, "POST /briefs/challenge": {"slug": "c1-shop", "attempt": 2},
+             "GET /changes": [{"slug": "c1-shop", "step": "shape"}]}  # fmt: skip
     chat, host = hosted(monkeypatch, asked, record())
     reads = host.__call__
 
@@ -202,8 +205,9 @@ def test_a_challenge_is_read_through_a_host_handover_and_never_asked_for_again(m
         return next(answers) if "/chat/challenge/" in url else out
 
     monkeypatch.setattr(chat, "send", call)
-    assert chat.challenge_brief("c1", 3, []) == {"requested": True, "verdict": "ok"}
+    assert chat.challenge_brief("c1", 3, []) == {"requested": True, "version": 3, "verdict": "ok"}
     assert [m for m, p, _ in host.got if "challenge" in p] == ["POST", "GET", "GET", "GET"]
+    assert [p for _, p, _ in host.got].count("/changes") == 1  # the row read at the end of the wait
 
 
 class Lost:

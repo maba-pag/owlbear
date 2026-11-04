@@ -231,10 +231,10 @@ class Chat:
         if out.get("paused"):  # TD-283: recorded now, judged once the owner resumes Delivery
             return {"requested": True, "running": False, "next": PAUSED}
         code, now = self._wait(out["slug"], version, out["attempt"], start + WAIT)  # only its outcome is read
-        if code == OK and not now.get("running"):
-            return {"requested": True, **{k: v for k, v in now.items() if k != "running"}}
-        why = {} if code in {OK, 503} else {"error": now.get("error") or now.get("detail")}
-        return {"requested": True, "running": True, "next": STILL} | why
+        out = self._ended(out["slug"], version, out["attempt"], code, now)
+        if "version" in out:  # the verdict, as the host read it: its guidance kept
+            return {"requested": True, **{k: v for k, v in out.items() if k != "running"}}
+        return {"requested": True, **out}
 
     def await_challenge(self, change: str, version: int) -> dict[str, Any]:
         """Wait for the version's challenge, which is only read: its findings by ID, who must act, or that it runs."""
@@ -247,19 +247,20 @@ class Chat:
         if version != (current := brief["challenge"]["version"]):
             return {"error": f"brief v{version} is not the current draft v{current}"}
         slug, attempt = row["slug"], brief["challenge"]["attempt"]
-        code, now = self._wait(slug, version, attempt, start + WAIT)
-        if code == OK and now.get("version") == version:
-            return self._ended(slug, version, attempt, now)
-        return _told(version, code, now)
+        return self._ended(slug, version, attempt, *self._wait(slug, version, attempt, start + WAIT))
 
-    def _ended(self, slug: str, version: int, attempt: int, now: dict[str, Any]) -> dict[str, Any]:
-        """The wait ended on a read for this draft: what the Change's row adds to it, a verdict first.
+    def _ended(self, slug: str, version: int, attempt: int, code: int, now: dict[str, Any]) -> dict[str, Any]:
+        """How challenge_brief's and await_challenge's wait ended, from its last read.
 
+        It tells the verdict, who must act, why the Change is no longer shaped, that it still runs, or why the read
+        cannot be told as this draft's.
         The row is read before a running challenge's outcome, so a verdict that lands between the two reads is told as
         the verdict, not as an owner action (the Change then waits for the shaping chat, which its row shows as an
         action). A row that has left shaping says so whatever the read held: a recheck of the same draft that was
         abandoned reads as the previous round's findings.
         """
+        if code != OK or now.get("version") != version:
+            return _told(version, code, now)
         code, rows = self.call("GET", "/changes")
         if code != OK:
             return _told(version, code, rows)
@@ -273,9 +274,9 @@ class Chat:
             return {"running": False, "line": line, "next": "the Change is no longer being shaped"}
         if not now.get("running"):
             return now
-        if row.get("actor") != "delivery" and row.get("action") != APPROVE:
-            return {"running": False, "owner_action": row.get("action"), "line": line}
-        return {"running": True, "line": line, "next": STILL}
+        waits = row.get("actor") == "delivery" or row.get("action") == APPROVE  # no one else must act
+        told = {"running": True, "next": STILL} if waits else {"running": False, "owner_action": row.get("action")}
+        return told | {"line": line}
 
     def _read(self, slug: str, version: int, attempt: int) -> tuple[int, dict[str, Any]]:
         return self.call("GET", f"/chat/challenge/{urllib.parse.quote(slug)}?version={version}&attempt={attempt}")

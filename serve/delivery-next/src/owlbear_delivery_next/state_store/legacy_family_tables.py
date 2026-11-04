@@ -14,7 +14,7 @@ IMPORT_OVERRIDES_V151 = (
     ("state_store/store.py", "53a09113fdf49cb0dc838eb639c11bbc15b987aa91e00478bc697ccbeef5fbe7"),
 )
 CURRENT_MODULES = (
-    ("commands/chat_client.py", "7a214e03509c527dfd1babb2c4229f232056e8dee5608298dcd908345b2edd64"),
+    ("commands/chat_client.py", "617f50bb1ef430273765e4ceeca2145c1e8ebe5a3feece6229d4aa55bfa7a79e"),
     ("commands/cli.py", "ed09425188138edd6192a758e2dee9c307f92689eff7c9489e76d63288e25ced"),
     ("commands/dispatch.py", "8af7e2e296eae5cd7a70dd441af65472745988da535b558121d8ab3ccbc3851c"),
     ("commands/mcp_server.py", "df370422d0e6550146b9e14ae6b337e286c1d4b83c1ff24dc7870cd88dc130e3"),
