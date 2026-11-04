@@ -441,15 +441,7 @@ def test_the_remote_git_uses_chooses_the_account(args, fake_gh, git_runs, tmp_pa
     assert done.returncode == 0, done.stderr
     ((argv, environment),) = git_runs.seen
     assert argv[1:3] == ("-c", "credential.helper=")
-    assert _fill(root, _options(argv), environment) == "tok-boecht"
-
-
-def _options(argv):
-    """The account's ``-c credential…`` options between ``git`` and the command's own arguments."""
-    end = 1
-    while argv[end] == "-c" and argv[end + 1].startswith("credential"):
-        end += 2
-    return argv[1:end]
+    assert _fill(root, argv[1 : -len(args)], environment) == "tok-boecht"
 
 
 def test_a_push_over_ssh_through_git_run_is_a_failed_run_and_starts_no_push(fake_gh, git_runs, tmp_path):
