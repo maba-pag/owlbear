@@ -229,8 +229,7 @@ def fold(  # noqa: C901, PLR0912 - per item kind
     for item in items:
         match item:
             case BriefApproval(version=version) if version == c.brief.version == c.brief.challenged:
-                if c.brief.approved_version != version:  # a retry keeps the pin, its open question and its offer
-                    decision_baseline.approved(c, item.baseline, item.at if item.unpinned else None)
+                decision_baseline.approved(c, item.baseline, item.at if item.unpinned else None)
                 c.brief.approved_version, c.brief.approved_at, c.brief.reference = version, item.at, version
                 c.brief.picked = item.picked or c.brief.picked  # what the approval validated, not a later retry
                 held = {p.id: p for p in c.decisions_published} | {p.id: p for p in item.published}

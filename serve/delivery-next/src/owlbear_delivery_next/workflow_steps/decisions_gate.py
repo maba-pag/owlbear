@@ -150,7 +150,7 @@ def pinned(store: Store, c: Change, now: datetime, view: DataView | None) -> tup
     """The baseline a brief approval pins from *view* (`loaded`), and whether one is owed.
 
     None is owed without a data repository; one is owed when the decisions did not load. An approval pins afresh,
-    whatever an earlier approval pinned; a retried one of the approved version keeps what it holds (`loop.fold`).
+    whatever an earlier approval pinned; a retried one of the approved version keeps its pin (`decision_baseline`).
     """
     if view is None:
         return None, store.shared is not None
