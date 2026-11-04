@@ -64,12 +64,10 @@ CUT = (OSError, ValueError, http.client.HTTPException)  # no answer, or one cut 
 
 
 def _told(version: int, code: int, now: dict[str, Any]) -> dict[str, Any]:
-    """A challenge read as the chat tools tell it: *now* when it is *version*'s, else why not."""
+    """A challenge read that cannot be told as this version's: why not."""
     if code != OK:
         return {"error": now.get("error") or now.get("detail"), "next": UNKNOWN_OUTCOME}
-    if now.get("version") != version:
-        return {"error": f"brief v{version} was replaced: the host's current draft is v{now.get('version')}"}
-    return now
+    return {"error": f"brief v{version} was replaced: the host's current draft is v{now.get('version')}"}
 
 
 def done(code: int) -> bool | None:

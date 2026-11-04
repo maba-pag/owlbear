@@ -359,8 +359,7 @@ def test_the_brief_challenger_never_sees_the_owners_brief_decisions():
 
 def chat_of(shaping, chat_replied) -> tuple[chat_client.Chat, list[tuple[str, str]]]:
     """A chat whose host is *shaping*'s API, checked for what a chat reads of it; and each request it sends."""
-    chat, sent = chat_client.Chat.__new__(chat_client.Chat), []
-    chat.repo, chat.home = Path(), shaping.store.root
+    chat, sent = chat_client.Chat(Path(), shaping.store.root), []
 
     def call(method, path, body=None):
         sent.append((method, path))

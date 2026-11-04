@@ -438,12 +438,6 @@ class Landing(Answering):
         return out
 
 
-class Replacing(Landing):
-    """The same, but what lands is the next draft, which still runs (its decisions are being picked)."""
-
-    then = RUNNING | {"version": 3}
-
-
 def test_a_verdict_that_lands_after_the_last_running_read_is_told_as_the_verdict_not_as_an_owner_action(monkeypatch):
     slow = Slow(monkeypatch, WAITING | {"GET /changes": [ROW | {"actor": "you", "action": "Resume"}]}, Landing)
     out = slow.chat.await_challenge("c1", 2)
@@ -456,7 +450,8 @@ def test_a_draft_that_replaces_the_awaited_one_is_told_as_replaced_whether_its_c
     replaced = {"error": "brief v2 was replaced: the host's current draft is v3"}
     assert slow.chat.await_challenge("c1", 2) == replaced  # at its first read: the next draft's pick runs
     assert [p for _, p, _ in slow.host.got].count("/changes") == 1  # the wait ended there, with no owner-action read
-    slow = Slow(monkeypatch, WAITING | {"GET /changes": [ROW | {"actor": "you", "action": "Resume"}]}, Replacing)
+    slow = Slow(monkeypatch, WAITING | {"GET /changes": [ROW | {"actor": "you", "action": "Resume"}]}, Landing)
+    slow.host.then = RUNNING | {"version": 3}  # what lands is the next draft, which still runs
     assert slow.chat.await_challenge("c1", 2) == replaced  # at its last read, after the Change's row
 
 
