@@ -113,11 +113,15 @@ class Activity:
 
 @dataclass(frozen=True)
 class Status:
-    """One line, the one next action (None when nothing is needed) and who takes it."""
+    """One line, the one next action (None when nothing is needed) and who takes it.
+
+    *error* says the line carries an error (a stop, or a retry's reason), which a card shows whole (#971).
+    """
 
     line: str
     action: str | None
     actor: Actor
+    error: bool = False
 
 
 def _age(delta: timedelta) -> str:
@@ -139,7 +143,7 @@ def stage(c: Change) -> str:
 
 def unloadable(stop: Stop) -> Status:
     """Status of a Change whose state cannot load, from the store error's stop (restore or upgrade)."""
-    return Status(f"stopped: {stop.reason}", stop.action, stop.actor)
+    return Status(f"stopped: {stop.reason}", stop.action, stop.actor, error=True)
 
 
 def for_chat(row: dict[str, Any], contract: str | None) -> dict[str, Any]:
@@ -269,7 +273,7 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
     s, o, stop = stage(c), c.outcome, activity.start_failure
     if not activity.host_up and not c.finished_at:
         if stop:
-            return Status(f"{s} · stopped: {stop.reason}", stop.action, stop.actor)
+            return Status(f"{s} · stopped: {stop.reason}", stop.action, stop.actor, error=True)
         return Status(f"{s} · Delivery is not running", "Start Delivery", "you")
     if c.finished_at:
         if c.intent.abandoned_at:
@@ -283,7 +287,7 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
         return Status(f"Done · merged{pr}{saved}", None, "delivery")
     _, verb, role = _WORK[c.step.kind]
     if (b := c.blocked) and not activity.runner_alive:
-        return Status(f"{s} · stopped: {b.reason}", b.action, b.actor)
+        return Status(f"{s} · stopped: {b.reason}", b.action, b.actor, error=True)
     if c.intent.paused_at:
         if activity.runner_alive:
             return Status(f"{s} · pausing: finishing {c.step.kind}", None, "delivery")
@@ -291,11 +295,11 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
     if c.intent.hold and activity.runner_alive:
         return Status(f"{s} · holding for your change: finishing {c.step.kind}", None, "delivery")
     if loop.usage_gated(c):
-        return Status(f"{s} · stopped: {o.reason}", "Run this step again", "you")
+        return Status(f"{s} · stopped: {o.reason}", "Run this step again", "you", error=True)
     if o and o.exit == Exit.ASK:
         return Status(f"{s} · waiting for you: {o.reason}", "Approve merge" if o.cause == CONSENT else "Answer", "you")
     if o and o.exit == Exit.STOP and c.stop:
-        return Status(f"{s} · stopped: {c.stop.reason}", c.stop.action, c.stop.actor)
+        return Status(f"{s} · stopped: {c.stop.reason}", c.stop.action, c.stop.actor, error=True)
     if o and o.exit == Exit.PENDING:
         if o.who == "you":
             action = (
@@ -313,7 +317,7 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
         if failing := _episode(c, now)[0]:
             capacity = (o.cause or "").startswith(f"{ErrorKind.CAPACITY}:")
             used = f" · {c.spend.shown()} used" if capacity else ""
-            return Status(f"{s} · retrying: {o.reason} · {failing}{wake}{used}", None, o.who)
+            return Status(f"{s} · retrying: {o.reason} · {failing}{wake}{used}", None, o.who, error=bool(o.reason))
         who = _WHO.get(o.waiting, str(o.waiting)) if o.waiting else o.who
         return Status(f"{s} · waiting for {who}: {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)
     tried = f" · last try failed: {o.reason}" if o and o.exit == Exit.RETRY and o.reason else ""
@@ -332,14 +336,28 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
             return Status(f"{line} · no activity for {_age(gap)}", None, "delivery")
         if o and o.denial:
             return Status(f"{line} · last denied: {redact(o.denial)}", None, "delivery")
-        return Status(f"{line} · {role} active {_age(now - last) if last else '0 s'} ago{tried}", None, "delivery")
+        return Status(
+            f"{line} · {role} active {_age(now - last) if last else '0 s'} ago{tried}",
+            None,
+            "delivery",
+            error=bool(tried),
+        )
     if o and o.exit == Exit.RETRY and o.wake_at and o.wake_at > now and o.cause:
         k = c.budgets.causes[o.cause].count if o.cause in c.budgets.causes else 1
         limit = WRONG_MODEL_LIMIT if o.cause.endswith(f":{WRONG_MODEL}") else RETRY_LIMIT
         said = f" · {o.reason}" if o.reason else ""
-        return Status(f"{s} · retrying: {o.cause} ({k} of {limit}) at {o.wake_at:%H:%M}{said}", None, "delivery")
+        return Status(
+            f"{s} · retrying: {o.cause} ({k} of {limit}) at {o.wake_at:%H:%M}{said}", None, "delivery", error=bool(said)
+        )
     if activity.holder_pid:
-        return Status(f"{s} · not running: waiting for process {activity.holder_pid} to end{tried}", None, "delivery")
+        return Status(
+            f"{s} · not running: waiting for process {activity.holder_pid} to end{tried}",
+            None,
+            "delivery",
+            error=bool(tried),
+        )
     if activity.waiting_slot:
-        return Status(f"{s} · waiting for a session slot ({activity.waiting_slot}){tried}", None, "delivery")
-    return Status(f"{s} · not running: starting {role}{tried}", None, "delivery")
+        return Status(
+            f"{s} · waiting for a session slot ({activity.waiting_slot}){tried}", None, "delivery", error=bool(tried)
+        )
+    return Status(f"{s} · not running: starting {role}{tried}", None, "delivery", error=bool(tried))

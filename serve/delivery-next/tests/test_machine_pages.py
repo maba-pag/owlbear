@@ -17,7 +17,7 @@ import time
 import traceback
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
@@ -37,6 +37,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Environment,
     Exit,
     Names,
+    Outcome,
     Plan,
     Step,
     StepKind,
@@ -54,6 +55,7 @@ from owlbear_delivery_next.change_contracts.visual_records import (
     VisualRound,
 )
 from owlbear_delivery_next.change_flow import loop, round_flow
+from owlbear_delivery_next.change_flow.budgets import RETRY_LIMIT
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.gh import GhProvider
@@ -637,6 +639,29 @@ def test_a_blocked_or_unreadable_changes_card_shows_its_whole_error(
         for says in (stuck, unreadable):
             expect(says).to_be_visible()
             assert says.evaluate("e => e.scrollHeight <= e.clientHeight && getComputedStyle(e).overflow === 'visible'")
+        assert said == []
+
+
+@pytest.mark.browser
+def test_a_retrying_changes_card_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """#971: a retry's reason is an error too: its card keeps every path and line of it, unclipped."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "retrying"))
+    now, path = datetime.now(UTC), f"{alpha.path}/.owlbear/changes/retrying/step-pids.json"
+    wake = now + timedelta(hours=1)
+    reason = f"OSError: [Errno 13] {whole_error}: '{path}'\na note naming {path}"
+    retrying = Outcome(exit=Exit.RETRY, cause="environment:network", reason=reason, wake_at=wake, at=now)
+    shaping(Path(alpha.path), "Retrying brief", "retrying", outcome=retrying)
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/#token=t")
+        page.locator("#machine").get_by_role("button", name="Resume").click()  # a paused Delivery says only that
+        says = page.locator("li.card", has=page.locator('a[data-key$="retrying"]')).locator("p.says:not(.stage)")
+        expect(says).to_contain_text("retrying", timeout=15000)
+        assert says.text_content() == (f"retrying: environment:network (1 of {RETRY_LIMIT}) at {wake:%H:%M} · {reason}")
+        expect(says).to_be_visible()
+        assert says.evaluate("e => e.scrollHeight <= e.clientHeight && getComputedStyle(e).overflow === 'visible'")
         assert said == []
 
 
