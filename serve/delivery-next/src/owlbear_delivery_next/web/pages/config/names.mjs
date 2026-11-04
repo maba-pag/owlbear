@@ -8,10 +8,9 @@ export const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan
   ["builder", "Task reviews (builder)"], ["final_review", "Final review"],
   ["updater", "Impeccable updates (updater)"]];
 
-// The agents table's columns; the shaper's row says its model and effort are a recommendation (TD-328).
-export const AGENT_COLUMNS = [["model", "Model"], ["effort", "Effort"], ["context", "Context"],
-  ["subagents", "Subagents"], ["minutes", "Minutes per session"]];
-export const COLUMN = Object.fromEntries(AGENT_COLUMNS);
+// The agents table's columns, in order; the shaper's row says its model and effort are a recommendation (TD-328).
+export const COLUMN = { model: "Model", effort: "Effort", context: "Context", subagents: "Subagents",
+  minutes: "Minutes per session" };
 export const agentName = (role) => (role === "shaper" ? "shaper (a recommendation)" : role);
 
 // A Spotter row: its key, its name, its control's label.
@@ -51,9 +50,9 @@ export const RECALLS = [
 export const PURGE = [["purge_days", "Days a deleted entry waits before its file can be removed"]];
 
 // R15: the five merge and cleanup preferences.
-export const PREF_NAMES = { merge_method: "Merge method", delete_remote_branch: "Delete the remote branch after merging",
-  ci_poll_seconds: "CI poll interval (seconds)", ci_start_window_seconds: "CI start window (seconds)",
-  ask_before_merge: "Ask before merging" };
+export const PREF_NAMES = { merge_method: "Merge method",
+  delete_remote_branch: "Delete the remote branch after merging", ci_poll_seconds: "CI poll interval (seconds)",
+  ci_start_window_seconds: "CI start window (seconds)", ask_before_merge: "Ask before merging" };
 
 export const USER_NAMES = { load_user_instructions: "Your instructions in Delivery steps",
   load_user_skills: "Your skills in Delivery steps", load_user_memory: "Copilot Memory in Delivery sessions" };
@@ -84,18 +83,18 @@ export const PLAIN_NAMES = { sessions: "Agent sessions at once in one project", 
 // A row name that means little without the heading of its section, which the name then starts with.
 const SECTION = { spotter: "Spotter", pr_labels: "Pull requests", pr_marker: "Pull requests" };
 
-// Settings the page has no row for: test preparations and data permissions (project-only, with no editor yet), the
-// round values of a role that runs no challenge loop, and the Spotter's minutes and subagents (shown as n/a).
-const NO_ROW = ["data", "preparations"];
-
 // A setting's name in three parts: the section, the row and, in the agents and rounds tables, the column; null where
 // the page shows no row for it. A key the page knows nothing about is a defect, not a name to guess.
 function parts(key) {
   const [head, a, b] = key.split(".");
   const round = (f) => ROUNDS.find(([r]) => r === f);
-  if (NO_ROW.includes(key)) return null;
+  // no row: test preparations and data permissions (project-only, no editor yet), the round values of a role that runs
+  // no challenge loop, and the Spotter's minutes and subagents (shown as n/a)
+  if (["data", "preparations"].includes(key)) return null;
   if (head === "agents" && a && b) {
-    if (COLUMN[b]) return a === "spotter" && ["minutes", "subagents"].includes(b) ? null : ["", agentName(a), COLUMN[b]];
+    if (COLUMN[b]) {
+      return a === "spotter" && ["minutes", "subagents"].includes(b) ? null : ["", agentName(a), COLUMN[b]];
+    }
     const loop = LOOPS.find(([o]) => o === a);
     if (round(b)) return loop ? ["", loop[1], round(b)[1]] : null;
   } else if (head === "final_review" && round(a)) {
@@ -119,8 +118,8 @@ export function hasRow(key) {
   return parts(key) !== null;
 }
 
-// The words the owner finds on the page for *key*: "Spotter · On or off", "planner · Model", "Final review · Rounds at
-// most". A setting with no row is named as it is written.
+// The words the owner finds on the page for *key*: "Spotter · On or off", "planner · Model", "Final review · Rounds
+// at most". A setting with no row is named as it is written.
 export function nameOf(key) {
   const found = parts(key);
   return found ? found.filter(Boolean).join(" · ") : key;

@@ -10,7 +10,7 @@ import {
   guardLevel, githubAccount, more,
 } from "./cells.mjs";
 import {
-  AGENT_COLUMNS, COLUMN, LOOPS, PLAIN_NAMES, PURGE, RATINGS, RECALLS, ROUNDS, SPOTTER, USER_NAMES, agentName,
+  COLUMN, LOOPS, PLAIN_NAMES, PURGE, RATINGS, RECALLS, ROUNDS, SPOTTER, USER_NAMES, agentName,
 } from "./names.mjs";
 
 // The way to the role's compaction on Metrics: back to the filters a compaction row's link came from, else the
@@ -38,7 +38,7 @@ export function agentsGroup() {
     <section class="panel" aria-labelledby="agents-title">
       <p-heading size="lg"><h2 id="agents-title" tabindex="-1">Agents</h2></p-heading>
       ${table("Agents: they apply to the next session",
-        ["Agent", ...AGENT_COLUMNS.map(([, name]) => name)],
+        ["Agent", ...Object.values(COLUMN)],
         "agents-rows", Object.keys(state.loaded.settings.agents).map((role) => {
           const timed = role !== "spotter";  // the shaper's apply to its amendment sessions (TD-185)
           return setting(`set-agents-${role}`, html`${agentName(role)}${toMetrics(role)}`,

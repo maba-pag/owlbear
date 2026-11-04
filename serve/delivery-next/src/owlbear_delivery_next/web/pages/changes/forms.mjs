@@ -331,17 +331,12 @@ export function pullbackNote(p, d) {
     @action=${behind ? pull : nothing}>${p.reason || ""}</p-inline-notification>`;
 }
 
-// What keeps the rerun from starting: the unreadable settings in full, else how many are unset (never their keys).
-function recoveryWait(r) {
-  const words = settingsWait(r.settings.count, r.settings.reason, r.unset);
-  return r.settings.reason ? words : `${words} to run the step again`;
-}
-
 // A stop the owner may clear once he did what it asks (#754), so Delivery reruns its step; *d.recovery* has the stop,
 // as a paused Change's line describes its pause. Unset settings withhold the action (D-01M61SBWK4VE4MNTD35TR0VPS8).
 export function stopNotice(d) {
   const r = d.recovery, reason = r ? r.reason : d.line.replace(/^.*?stopped: /, ""), action = r ? r.action : d.action;
-  const wait = r?.unset ? recoveryWait(r) : "";
+  // what keeps the rerun from starting: the unreadable settings in full, else how many are unset (never their keys)
+  const wait = !r?.unset ? "" : r.settings.reason ? r.unset : `${settingsWait(r.settings.count)} to run the step again`;
   if (!r || wait) {
     return notice("error", "Stopped", `${reason}.`, action ? `What to do: ${action}.` : "", r ? `${wait}.` : "");
   }

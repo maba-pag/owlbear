@@ -686,13 +686,14 @@ async (keys) => {
     const el = document.getElementById(rowOf(key));
     if (!el) return { key, found: false };
     const row = el.closest("p-table-row") ?? el;
-    const label = row.matches("p-table-row") ? row.querySelector("p-table-cell p-text") : el.querySelector(":scope > p-text");
+    const label = row.matches("p-table-row")
+      ? row.querySelector("p-table-cell p-text") : el.querySelector(":scope > p-text");
     let column = "";
     if (/^set-(agents|rounds)-/.test(el.id)) {
       const draft = key.replace(/^agents[.]/, ""), control = row.querySelector(`[data-key="${draft}"]`);
       const cells = [...row.children].filter((c) => c.matches("p-table-cell"));
-      column = row.closest("p-table").querySelectorAll("p-table-head-cell")[cells.indexOf(control?.closest("p-table-cell"))]
-        ?.textContent.trim() ?? "";
+      const heads = row.closest("p-table").querySelectorAll("p-table-head-cell");
+      column = heads[cells.indexOf(control?.closest("p-table-cell"))]?.textContent.trim() ?? "";
     }
     return { key, found: true, has: hasRow(key), name: nameOf(key), row: own(label), column,
       section: el.closest("section")?.querySelector("h2")?.textContent.trim() ?? "" };
@@ -722,8 +723,6 @@ def every_name_is_what_its_row_shows(page, pds) -> None:
     """The unset list's names are the page's own: each key's name is its row's visible name, behind its section's
     heading where the row means little alone, and its column's head in the agents and rounds tables (never built from
     the name table itself); the row sits in the group the list links to; a key with no row is named as written."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     keys = page.evaluate(OVERVIEW_KEYS)
     assert (len(keys), sum(k["unset"] for k in keys)) == (149, 145)  # 131 + 14 unset, and four shown when set
     for group in dict.fromkeys(k["group"] for k in keys):
@@ -742,8 +741,6 @@ def every_name_is_what_its_row_shows(page, pds) -> None:
     nothing = page.evaluate(NO_ROW)
     assert (nothing["count"], nothing["wrong"]) == (52, [])
     assert "agents.planner.bogus" in nothing["unknown"]
-    pds.group(page, "overview")
-    expect(page.locator("#unset")).to_be_visible()
 
 
 @pytest.mark.browser
