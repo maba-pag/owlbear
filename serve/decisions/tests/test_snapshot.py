@@ -151,3 +151,21 @@ def test_a_readable_layer_beside_an_unreadable_one_still_counts(tmp_path, make):
 
     assert not seen.active(rule.id)  # shop's readable replacement of a Global rule is still a finding here
     assert "replace-scope" in {f.rule for f in seen.findings}
+
+
+def test_another_projects_unreadable_folder_keeps_its_whole_error(tmp_path, make, monkeypatch):
+    """#971: the finding says the error's type and every line of its message, never only its start."""
+    import importlib  # noqa: PLC0415 - the module, not the function the package exports under its name
+
+    module = importlib.import_module("owlbear_decisions.snapshot")
+    put(tmp_path, make, project="shop")
+    said = (
+        "BEGIN the folder could not be listed\n" + "\n".join(f"line {i:03d} of the reason" for i in range(60)) + "\nEND"
+    )
+
+    def unlistable(_folder):
+        raise OSError(said)
+
+    monkeypatch.setattr(module, "change_folders", unlistable)
+    [(_layer, finding)] = snapshot(tmp_path, "owlbear").outside
+    assert (finding.path, finding.message) == (str(tmp_path / "shop" / "changes"), f"cannot be read: OSError: {said}")

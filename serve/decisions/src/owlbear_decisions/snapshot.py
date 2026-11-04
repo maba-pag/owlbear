@@ -52,7 +52,7 @@ def read_repo(root: Path, project: str) -> Read:
 
 
 def _unreadable(layer: Layer, path: Path, exc: OSError) -> tuple[Layer, Finding]:
-    return layer, Finding(str(path), UNREADABLE, f"cannot be read: {exc}")
+    return layer, Finding(str(path), UNREADABLE, f"cannot be read: {type(exc).__name__}: {exc}")
 
 
 def _foreign(child: Path) -> tuple[list[Layer], list[Entry], list[tuple[Layer, Finding]], list[tuple[Layer, Finding]]]:
