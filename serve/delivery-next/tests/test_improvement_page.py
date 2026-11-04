@@ -973,16 +973,10 @@ def _until(done: Callable[[], object]) -> None:
         time.sleep(0.02)
 
 
-class _Passes(threading.Event):
-    """A loop's stop signal that lets *n* passes run, then stops it."""
-
-    def __init__(self, n: int) -> None:
-        super().__init__()
-        self.left = n
-
-    def wait(self, timeout: float | None = None) -> bool:  # noqa: ARG002 - no pass waits its interval here
-        self.left -= 1
-        return self.left < 0
+def _one_pass() -> SimpleNamespace:
+    """A loop's stop signal that lets one pass run, then stops it."""
+    passes = iter([False, True])
+    return SimpleNamespace(wait=lambda _s: next(passes))
 
 
 @pytest.mark.browser
@@ -1001,10 +995,10 @@ def test_a_failed_cases_or_retro_pass_and_an_unpublished_sync_show_their_whole_e
         monkeypatch.setattr(cases_job, "limits", lambda: raising(OSError(whole_error)))
         with monkeypatch.context() as due:  # a sync with work: it cannot read its limits
             due.setattr(case_review, "due", lambda: ({"c-1": "r"}, {}, []))
-            cases_now.loop(_Passes(1), lambda: 0.0)
+            cases_now.loop(_one_pass(), lambda: 0.0)
         with monkeypatch.context() as due:  # the next sync cannot read what is due
             due.setattr(case_review, "due", lambda: raising(cases.CaseError(whole_error)))
-            cases_now.loop(_Passes(1), lambda: cases_job.PUBLISH_EVERY)
+            cases_now.loop(_one_pass(), lambda: cases_job.PUBLISH_EVERY)
         loaded, broken = w.machine.retro.seams.projects, [True]
         slots = Slots(lambda: 1)
         slots.open()
@@ -1012,7 +1006,7 @@ def test_a_failed_cases_or_retro_pass_and_an_unpublished_sync_show_their_whole_e
             say=told.append, projects=lambda: raising(RuntimeError(whole_error)) if broken else loaded()
         )
         retro_now = retro_job.RetroJob(slots, seams, maintenance.Maintenance(slots))
-        retro_now.loop(_Passes(1), lambda: 0.0)  # the loaded projects cannot be read, for this pass only
+        retro_now.loop(_one_pass(), lambda: 0.0)  # the loaded projects cannot be read, for this pass only
         broken.clear()
         unpublished = f"the credit limits cannot be read: OSError: {whole_error}\n{NOTE}"
         failed = f"CaseError: {whole_error}\n{NOTE}"
