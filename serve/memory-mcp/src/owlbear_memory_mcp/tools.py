@@ -151,7 +151,7 @@ def _memory_values(ctx: Context, *names: str) -> dict[str, float]:
         except FileNotFoundError:
             pass  # no global settings yet: every value is unset
         except (OSError, ValueError) as exc:
-            msg = f"the global settings {path} can't be read, so no memory value is known: {exc}"
+            msg = f"the global settings {path} can't be read, so no memory value is known: {type(exc).__name__}: {exc}"
             raise ToolError(msg) from exc
     block = data.get("memory") if isinstance(data, dict) else None
     block = block if isinstance(block, dict) else {}

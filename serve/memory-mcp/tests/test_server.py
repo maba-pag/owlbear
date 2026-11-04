@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 import subprocess
 from pathlib import Path
 
@@ -12,6 +14,7 @@ from mcp.types import CallToolResult
 from owlbear_memory import MemoryCategory, MemoryEngine, MemoryEntry, MemoryState, storage
 from owlbear_memory.models import AssessmentReceipt
 
+from owlbear_memory_mcp import git as memory_git
 from owlbear_memory_mcp.server import mcp as memory_mcp
 
 _REVIEWED_MEMORY = """---
@@ -909,3 +912,72 @@ async def test_live_server_in_a_claimed_workspace_uses_its_shared_folder(
     (entry,) = (data / "shop" / "memory").iterdir()
     assert "title: Claimed store" in entry.read_text(encoding="utf-8")
     assert not (work / ".owlbear" / "memory").exists()
+
+
+def _whole_error() -> str:
+    """A long error with a distinct beginning, middle and end, as delivery-next's ``whole_error`` fixture builds it."""
+    words = [f"w{i:04d}" for i in range(700)]
+    lines = [" ".join(words[i : i + 20]) for i in range(0, 700, 20)]
+    return "\n".join(['BEGIN <a & "b">', *lines[:17], "MIDDLE", *lines[17:], "END"])
+
+
+def _refusal_logged(caplog: pytest.LogCaptureFixture, tool: str) -> list[str]:
+    """The MCP server's own log line for a tool's refusal: its answer, repr'd onto one line."""
+    prefix = f"Tool {tool!r} failed: "
+    return [record.getMessage() for record in caplog.records if record.getMessage().startswith(prefix)]
+
+
+@pytest.mark.asyncio
+async def test_unreadable_global_settings_reach_the_tool_answer_whole(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A settings read failing with a long error is answered with its type and every line of its message (#971)."""
+    store = _bound_store(monkeypatch, tmp_path)
+    config = store.parent.parent / "config.json"
+    error = _whole_error()
+    read_text = Path.read_text
+
+    def unreadable(path: Path, *args: object, **kwargs: object) -> str:
+        if path == config:
+            raise OSError(error)
+        return read_text(path, *args, **kwargs)
+
+    caplog.set_level(logging.INFO)
+    async with mcp.Client(memory_mcp) as client:
+        monkeypatch.setattr(Path, "read_text", unreadable)
+        result = await client.call_tool("recall_memory", {"agent": "builder", "limit": 5})
+
+    refusal = f"the global settings {config} can't be read, so no memory value is known: OSError: {error}"
+    expected = f"Error executing tool recall_memory: {refusal}"
+    assert result.is_error
+    assert _text(result) == expected
+    assert _refusal_logged(caplog, "recall_memory") == [f"Tool 'recall_memory' failed: {expected!r}"]
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_memory_file_reaches_the_batch_answer_whole(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A memory file whose read fails names the file, the validation and the read error whole in the answer (#971)."""
+    store = _bound_store(monkeypatch, tmp_path)
+    entry = _create_entry(store, title="Unreadable habit", state=MemoryState.APPROVED)
+    target = store / f"{entry.id}.md"
+    error = _whole_error()
+    opened = os.open
+
+    def refused(path: object, *args: object, **kwargs: object) -> int:
+        if Path(os.fsdecode(path)) == target:  # type: ignore[arg-type]
+            raise OSError(error)
+        return opened(path, *args, **kwargs)  # type: ignore[arg-type]
+
+    caplog.set_level(logging.INFO)
+    monkeypatch.setattr(memory_git.os, "open", refused)
+    async with mcp.Client(memory_mcp) as client:
+        result = await client.call_tool("commit_memory_batch", {"session_type": "review"})
+
+    inner = f"memory batch validation failed: unsafe or unreadable memory path {target.name}: OSError: {error}"
+    refusal = f"memory batch validation failed:\n- shop/memory/{target.name}: ValueError: {inner}"
+    expected = f"Error executing tool commit_memory_batch: {refusal}"
+    assert result.is_error
+    assert _text(result) == expected
+    assert _refusal_logged(caplog, "commit_memory_batch") == [f"Tool 'commit_memory_batch' failed: {expected!r}"]

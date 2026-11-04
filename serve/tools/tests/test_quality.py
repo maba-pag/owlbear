@@ -394,3 +394,24 @@ def test_unsafe_and_no_fix_are_mutually_exclusive(command: object) -> None:
         pytest.raises(SystemExit, match="2"),
     ):
         command()
+
+
+def test_text_check_prints_an_unreadable_file_with_its_whole_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A file whose read fails is printed with the error's type and every line of its message (#971)."""
+    path = tmp_path / "unreadable.md"
+    path.write_text("text\n", encoding="utf-8")
+    words = [f"w{i:04d}" for i in range(700)]
+    lines = [" ".join(words[i : i + 20]) for i in range(0, 700, 20)]
+    error = "\n".join(['BEGIN <a & "b">', *lines[:17], "MIDDLE", *lines[17:], "END"])
+
+    with (
+        patch.object(sys, "argv", ["format-eof", "--no-fix"]),
+        patch("owlbear_tools.quality_runtime.subprocess.check_output", return_value=f"{path}\0".encode()),
+        patch.object(Path, "read_bytes", side_effect=OSError(error)),
+        pytest.raises(SystemExit, match="1"),
+    ):
+        format_eof()
+
+    assert capsys.readouterr().out == f"{path}: unable to read: OSError: {error}\n"
