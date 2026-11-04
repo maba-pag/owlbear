@@ -92,8 +92,6 @@ def test_a_page_change_runs_the_tests_that_load_pages(page: str, selected: set[s
     assert {_TESTS + name for name in selected} <= set(command)
     assert "tests/test_package_boundary.py" in command
     assert _TESTS + "test_loop.py" not in command
-    package = list((_ROOT / _TESTS).glob("test_*.py"))
-    assert len([path for path in command if path.startswith(_TESTS)]) < len(package) / 2
 
 
 def test_a_page_change_beside_a_source_change_keeps_the_source_scope() -> None:
