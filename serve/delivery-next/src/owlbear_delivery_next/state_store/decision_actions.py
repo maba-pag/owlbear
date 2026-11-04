@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Literal
 from owlbear_decisions import Decision, Link, LinkType, Origin, ReadBackKind, Scope, State, new_id
 from owlbear_decisions.validate import layers, project_folders, read_layers
 from owlbear_delivery_next.change_contracts import decision_wording
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.state_store.decision_store import DecisionsUnavailable, Receipt
 
@@ -108,7 +109,7 @@ def every(shared: DataRepo | None) -> dict[str, Decision]:
     try:
         entries, _ = read_layers(layers(shared.root, project_folders(shared.root)))
     except OSError as exc:
-        msg = f"the decisions in {shared.root} cannot be read: {exc}"
+        msg = f"the decisions in {shared.root} cannot be read: {failure(exc)}"
         raise DecisionsUnavailable(msg, decision_store.READ) from exc
     return {e.decision.id: e.decision for e in entries}
 

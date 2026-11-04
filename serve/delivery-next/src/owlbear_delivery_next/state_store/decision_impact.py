@@ -16,6 +16,7 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_decisions import LinkType, Scope, State
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.state_store import decision_actions, decision_store
 from owlbear_delivery_next.state_store.decision_actions import EFFECT, EFFECTS, Refused
 from owlbear_delivery_next.state_store.decision_archive import CHANGES
@@ -117,7 +118,7 @@ def built(root: Path, project: str, old: Decision) -> tuple[list[dict[str, str]]
             merged, pr = record.get("outcome") == "merged", (record.get("pr") or {}).get("url") or ""
             slug, title = str(record.get("slug", path.stem)), str(brief.get("title", ""))
         except (OSError, ValueError, AttributeError, TypeError) as exc:
-            incomplete.append(f"{path.name}: cannot be read ({type(exc).__name__})")
+            incomplete.append(f"{path.name}: cannot be read ({failure(exc)})")
             continue
         if merged and (old.id in made or path.stem == old.change):
             found.append({"slug": slug, "title": title, "pr": str(pr), "from": "merged"})

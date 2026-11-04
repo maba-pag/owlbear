@@ -132,6 +132,16 @@ def test_an_unreadable_decisions_folder_stops_loading(shared, locked) -> None:
         folder.chmod(0o755)
 
 
+def test_every_decision_that_cannot_be_read_is_refused_with_the_whole_error(shared, monkeypatch, whole_error) -> None:
+    def unreadable(_layers: object) -> None:
+        raise OSError(whole_error)
+
+    monkeypatch.setattr(decision_actions, "read_layers", unreadable)
+    with pytest.raises(DecisionsUnavailable) as refused:
+        decision_actions.every(shared)
+    assert str(refused.value) == f"the decisions in {shared.root} cannot be read: OSError: {whole_error}"
+
+
 @pytest.mark.parametrize("broken", ["invalid", "unreadable"])
 def test_an_unusable_decision_file_stops_loading(shared, broken) -> None:
     kept, bad = make(), make()
