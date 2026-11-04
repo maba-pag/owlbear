@@ -63,6 +63,7 @@ def test_the_first_challenge_request_picks_from_the_complete_list_and_approval_p
     assert (p.status, p.version, [d.id for d in p.decisions]) == ("ok", 1, [rule.id, general.id])
     assert [d.revision for d in p.decisions] == [rule.rule_revision, general.rule_revision]
     assert p.dropped == ["D-NOTONTHELIST"]
+    assert p.read == {d.id: d.rule_revision for d in (rule, general, other)}  # what it judged, in force
     assert "D-NOTONTHELIST" in p.reason
     assert c.spend.credits == 6.0  # the pick's session counts like any other
     shown = picking.http.get(f"/api/next/changes/{picking.slug}").json()["brief"]["picked"]
@@ -114,11 +115,8 @@ def test_a_failed_pick_blocks_approval_until_a_retry_that_uses_no_round(picking)
     assert (c.brief.picked.status, c.loops[BRIEF].round, len(picking.told)) == ("ok", rounds, 3)  # no challenger
     assert (c.outcome.exit, c.outcome.waiting, c.outcome.reason) == (Exit.PENDING, Waiting.CHAT, "approve brief v1")
     picking.put(make(title="Pages load in 1 s", statement="Every page loads in under a second."))
-    assert "changed since they were picked" in picking.approve(1).json()["detail"]  # approval never picks
-    assert picking.ask(1, retry=True).status_code == 200
-    picking.picks.append(picked(rule.id))
-    picking.step()
-    assert picking.approve(1).status_code == 200
+    assert picking.approve(1).status_code == 200  # a decision since the pick waits for the next step's picker
+    assert len(picking.pickers()) == 2  # approval never picks
 
 
 def test_an_unreviewed_last_revision_is_picked_and_pinned_without_a_challenger(picking):

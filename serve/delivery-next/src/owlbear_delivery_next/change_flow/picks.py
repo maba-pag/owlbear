@@ -36,7 +36,7 @@ def owe(c: Change) -> None:
 
 
 def retry(c: Change, version: int) -> str:
-    """Pick *version* again after a failed pick or a changed list, without a challenge round; why not, or "".
+    """Pick *version* again after a failed pick, without a challenge round; why not, or "".
 
     The runner picks during the chat's wait, which stays (`loop.next_step`).
     """
