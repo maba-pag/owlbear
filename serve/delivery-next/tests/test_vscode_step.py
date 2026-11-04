@@ -755,7 +755,9 @@ def test_a_stale_host_s_whole_error_reaches_the_shaping_outcome_and_host_log(
     plain: Path, monkeypatch, caplog, whole_error: str, failing: str
 ) -> None:
     """#971: each way the published host fails says its error whole, notes and close reasons included."""
-    from websockets.exceptions import InvalidHandshake  # noqa: PLC0415 - only this test raises the library's own
+    from websockets.datastructures import Headers  # noqa: PLC0415 - only this test raises the library's own
+    from websockets.exceptions import InvalidStatus  # noqa: PLC0415
+    from websockets.http11 import Response  # noqa: PLC0415
 
     servers: list[socket.socket] = []
     if failing == "server closed":
@@ -767,15 +769,19 @@ def test_a_stale_host_s_whole_error_reaches_the_shaping_outcome_and_host_log(
         )
     else:
         path = Path(tempfile.mkdtemp(dir="/tmp")) / "gone.sock"
-        broke = InvalidHandshake(whole_error) if failing == "upgrade refused" else ConnectionRefusedError(whole_error)
+        if failing == "upgrade refused":  # the host's rejection page is the body of its answer
+            broke: Exception = InvalidStatus(Response(503, "Service Unavailable", Headers(), whole_error.encode()))
+            inner = "HostError: upgrade refused: InvalidStatus: server rejected WebSocket connection: HTTP 503\n"
+            inner += f"NOTE-MARK\n{whole_error}"
+        else:
+            broke = ConnectionRefusedError(whole_error)
+            inner = f"ConnectionRefusedError: {whole_error}\nNOTE-MARK"
         broke.add_note("NOTE-MARK")
 
         def refused(*_a: object, **_k: object) -> None:
             raise broke
 
         monkeypatch.setattr(ahp, "unix_connect", refused)
-        inner = f"{type(broke).__name__}: {whole_error}\nNOTE-MARK"
-        inner = f"HostError: upgrade refused: {inner}" if failing == "upgrade refused" else inner
     monkeypatch.setattr(ahp, "endpoint", lambda: _entry(path))
     monkeypatch.setattr(readiness, "shaper_path", lambda _home: None)
     monkeypatch.setattr(vscode_adapter, "launch_code_chat", lambda _args, _cwd: None)

@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote
 
-from websockets.exceptions import ConnectionClosed, InvalidHandshake, WebSocketException
+from websockets.exceptions import ConnectionClosed, InvalidHandshake, InvalidStatus, WebSocketException
 from websockets.sync.client import unix_connect
 
 from owlbear_delivery_next.git.command_failure import failure
@@ -87,6 +87,8 @@ class Connection:
                 user_agent_header=None, legacy=True,
             )  # fmt: skip
         except InvalidHandshake as exc:
+            if isinstance(exc, InvalidStatus) and (body := exc.response.body.decode(errors="replace").strip()):
+                exc.add_note(body)  # the host's rejection page, which the status line leaves out
             raise HostError(f"upgrade refused: {failure(exc)}") from exc  # noqa: EM102, TRY003
         self._ids, self._seq = itertools.count(1), itertools.count(1)
         self._pending: dict[int, queue.Queue[Json]] = {}
