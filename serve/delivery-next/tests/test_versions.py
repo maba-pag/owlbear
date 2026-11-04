@@ -19,7 +19,7 @@ import pytest
 
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home
-from owlbear_delivery_next.machine_host import environment, impeccable, selfcheck, update_checks, versions
+from owlbear_delivery_next.machine_host import command, environment, impeccable, selfcheck, update_checks, versions
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host import pages
@@ -472,6 +472,33 @@ def test_the_versions_command_says_what_runs_and_what_comes_next(origin):
 
     assert lines[0].startswith("running: no installed version at ")
     assert lines[1].startswith("next: v0.2 at ")
+
+
+@pytest.mark.parametrize("prepare", [False, True])
+def test_the_versions_command_says_versions_it_could_not_read_or_install_whole(
+    origin, monkeypatch, capsys, whole_error, prepare
+):
+    """#971: ``owlbear versions`` says a failed look, and with ``--prepare`` a failed install, whole."""
+    runtime_at(origin, git(origin, "rev-parse", "v0.1^{commit}"))
+    error = versions.VersionError(whole_error)
+    error.add_note("a note on the failure")
+
+    def failing(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(sys, "platform", "darwin")  # CI runs on Linux, which the command refuses
+    monkeypatch.setattr(versions, "install" if prepare else "target", failing)
+    tag, commit = versions.active()
+    running = f"running: {tag or 'no installed version'} at {commit[:12]}\n"
+    whole = f"VersionError: {whole_error}\na note on the failure"
+
+    assert command.main(["versions", "--prepare"] if prepare else ["versions"]) == 1
+
+    if prepare:
+        nxt = f"next: v0.2 at {git(origin, 'rev-parse', 'v0.2^{commit}')[:12]}\n"
+        assert capsys.readouterr().out == f"{running}{nxt}{whole}\n"
+    else:
+        assert capsys.readouterr().out == f"{running}the versions could not be read: {whole}\n"
 
 
 def registered(tmp_path: Path, marker: int | None = None, config: int | None = None) -> Path:

@@ -19,7 +19,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.impeccable import pack_files
-from owlbear_delivery_next.local_system import leases, local_home, processes
+from owlbear_delivery_next.local_system import data_place, data_repo, leases, local_home, processes
 from owlbear_delivery_next.machine_host import alias, app, control, handover, impeccable, serve, update, versions
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.machine_host.versions import Choice
@@ -134,6 +134,29 @@ def test_a_start_keeps_the_legacy_runtime_when_the_pointer_names_the_data_throug
     assert ((new / "data" / ".git").is_dir(), (local_home.root() / "data.json").read_text()) == (True, said)
     assert list((local_home.root() / local_home.VERSIONS).glob("legacy-*")) == []
     assert f"it holds the shared data at {new / 'data'}" in caplog.text
+
+
+def test_a_start_logs_a_shared_data_pointer_it_could_not_read_whole(caplog, monkeypatch, whole_error):
+    """#971: a legacy runtime left in place because the pointer could not be read is logged with the whole reason."""
+    runtime, folder = legacy(), version("v0.2")
+    new = local_home.root() / alias.NEW
+    new.symlink_to(folder)
+    alias._swap(new, runtime)  # noqa: SLF001 - an older update crashed right after the rename
+    error = data_repo.DataRepoError(whole_error)
+    error.add_note("a note on the failure")
+
+    def unreadable(_folder):
+        raise error
+
+    monkeypatch.setattr(data_place, "holds_data", unreadable)
+
+    alias.complete()
+
+    assert new.is_dir()
+    assert list((local_home.root() / local_home.VERSIONS).glob("legacy-*")) == []
+    reason = "nothing is removed while the shared data's pointer cannot be read: DataRepoError: "
+    said = [r.getMessage() for r in caplog.records if r.name == alias.__name__]
+    assert said == [f"VersionError: {reason}{whole_error}\na note on the failure"]
 
 
 def test_a_link_made_but_never_renamed_is_removed_and_the_old_runtime_stays():

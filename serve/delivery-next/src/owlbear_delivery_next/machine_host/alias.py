@@ -17,6 +17,7 @@ import subprocess
 import sys
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git import command_failure
 from owlbear_delivery_next.local_system import data_place, data_repo, local_home
 from owlbear_delivery_next.machine_host import versions
 from owlbear_delivery_next.state_store import registry
@@ -93,7 +94,7 @@ def _kept(new: Path) -> str:
         versions.keep_data(new)
         named = data_place.protected()
     except (versions.VersionError, data_repo.DataRepoError) as exc:
-        return str(exc)
+        return command_failure.failure(exc)
     runtime = local_home.root() / local_home.RUNTIME
     for path in named:
         if path.absolute() == runtime or runtime in path.absolute().parents:

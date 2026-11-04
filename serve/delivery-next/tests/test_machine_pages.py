@@ -765,6 +765,66 @@ def test_updates_impeccable_says_an_install_failure_it_could_not_keep_whole(
 
 
 @pytest.mark.browser
+@pytest.mark.parametrize("unread", ["versions", "pins"])
+def test_updates_say_a_release_look_that_could_not_read_the_versions_whole(
+    monkeypatch, capsys, pds, whole_error, unread
+) -> None:
+    """#971: the OwlBear check's look whose versions or newer pack could not be read says why whole on Updates ▸
+    Impeccable and Updates ▸ OwlBear, and in the host's log."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    error = versions.VersionError(whole_error)
+    error.add_note("a note on the failure")
+
+    def failing(*_args, **_kwargs):
+        raise error
+
+    if unread == "versions":
+        monkeypatch.setattr(versions, "target", failing)
+        detail = f"the versions could not be read: VersionError: {whole_error}\na note on the failure"
+    else:
+        monkeypatch.setattr(versions, "target", lambda _channel=None: versions.Choice("v9.9", "c" * 40))
+        monkeypatch.setattr(versions, "pins", failing)
+        detail = f"v9.9's Impeccable is unreadable: VersionError: {whole_error}\na note on the failure"
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    machine, server, base = serve()
+    for _ in range(2):  # a failure shows after two in a row
+        assert machine.checks.start("owlbear")
+        assert machine.checks.drain(10)
+    logged = capsys.readouterr().out
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            said = errors(page)
+            pds.only(page, base)
+            page.goto(f"{base}/updates/impeccable#token=t")
+            shown = page.locator("#pack-release")
+            expect(shown).to_be_visible()
+            assert shown.text_content() == f"Not known yet: {detail}."
+            page.goto(f"{base}/updates/owlbear#token=t")
+            if unread == "versions":
+                shown = page.locator("#check-failure")
+                expect(shown).to_be_visible()
+                told = r"The last\s+2 checks failed; the latest at [^\n]*?: "
+                assert re.fullmatch(told + re.escape(f"{detail}."), shown.text_content())
+            else:
+                shown = page.locator("#check-latest")
+                expect(shown).to_be_visible()
+                assert shown.text_content() == f"v9.9 ({detail})"
+            assert said == []
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    line = r"^\d\d:\d\d:\d\dZ update check of OwlBear failed: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
+    assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == ([detail] * 2 if unread == "versions" else [])
+
+
+@pytest.mark.browser
 def test_updates_say_update_checks_that_started_afresh_whole(monkeypatch, capsys, pds, whole_error) -> None:
     """#951: update checks whose earlier results could not be read at the start say why whole on Updates and in the
     host's log."""
