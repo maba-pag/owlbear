@@ -246,6 +246,10 @@ def test_a_picked_decision_changed_or_withdrawn_before_approval_asks_the_owner_a
     assert (f"changed: {rule.id} Pages are plain HTML files: was" if fate == "changed" else gone) in q.text
     assert rule.statement in q.text  # the wording the pick read
     assert (run.held, len(picking.pickers())) == ([], 1)
+    assert picking.approve(1).status_code == 200  # a retried approval keeps the question's offer
+    c, _ = loop.schedule(run.p.change(), [AnswerItem(at=AT, question=q.id, option="continue")], AT)
+    picking.store.write(Lock(picking.slug), c)
+    assert run.step().outcome is None  # Continue took the change in: not asked again
 
 
 def test_a_pick_saved_before_it_recorded_what_it_read_counts_only_its_picks_as_read(picking, monkeypatch):
