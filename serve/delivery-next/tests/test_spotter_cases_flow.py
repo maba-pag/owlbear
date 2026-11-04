@@ -750,6 +750,40 @@ def test_a_publication_failed_by_a_later_review_keeps_an_earlier_cases_reason(
     assert kept["result"] == f"failed: RuntimeError: {later}\ncase {first}, failed: DataRepoError: {whole_error}"
 
 
+def test_a_publication_failed_by_a_later_export_retry_keeps_an_earlier_cases_reason(
+    monkeypatch, shared_repo, whole_error
+) -> None:
+    first, second = sorted([reviewed(), reviewed()])  # retried in this order
+
+    def refused(_self: DataRepo, _path: Path, _message: str) -> str:
+        raise DataRepoError(whole_error)
+
+    monkeypatch.setattr(DataRepo, "publish", refused)
+    ask, _ = asker([GOOD, GOOD])
+    out = asyncio.run(case_review.sync(DataRepo(shared_repo[0]), ask, Meter(5, "retro-run")))
+    assert out["failed"] == [first, second]  # both reviewed and kept, neither written: both retried next
+    later = "\n".join(f"line {i:03d} of the second export's read error <&>" for i in range(60))
+    kept_export, written = case_review._kept, []  # noqa: SLF001 - the export's read is the boundary
+
+    def refused_again(_self: DataRepo, path: Path, _message: str) -> str:
+        written.append(path)
+        raise DataRepoError(whole_error)
+
+    def unreadable(cid: str, rev: str) -> str | None:
+        if cid == second and written:  # read once the first retry's write failed
+            raise RuntimeError(later)
+        return kept_export(cid, rev)
+
+    monkeypatch.setattr(DataRepo, "publish", refused_again)
+    monkeypatch.setattr(case_review, "_kept", unreadable)
+    j = Job(monkeypatch)
+    j.job.shared = lambda: DataRepo(shared_repo[0])
+    j.job.tick(1000)
+    assert j.asks == []
+    [kept] = [r for r in case_replay.results() if r["kind"] == "publication"]
+    assert kept["result"] == f"failed: RuntimeError: {later}\ncase {first}, failed: DataRepoError: {whole_error}"
+
+
 def test_the_job_counts_in_what_a_stop_waits_for(monkeypatch) -> None:
     j = Job(monkeypatch)
     queue_regression()

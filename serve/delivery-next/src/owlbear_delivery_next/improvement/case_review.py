@@ -281,14 +281,14 @@ async def sync(shared: DataRepo | None, ask: Ask, meter: Meter, halt: Callable[[
     if shared is None:
         out["stopped"] = "no shared repository on this machine" if review or write or gone else ""
         return out
-    for cid in gone:
-        committed, pushed, why = _write(shared, cid, None)
-        if committed:
-            _set(cid, remote="", pushed=pushed, why=why)
-        _told(out, cid, "removed" if committed and pushed else "pending" if committed else "failed", why)
-    for cid, rev in write.items():
-        _told(out, cid, *_place(shared, cid, rev, _kept(cid, rev) or ""))
     try:
+        for cid in gone:
+            committed, pushed, why = _write(shared, cid, None)
+            if committed:
+                _set(cid, remote="", pushed=pushed, why=why)
+            _told(out, cid, "removed" if committed and pushed else "pending" if committed else "failed", why)
+        for cid, rev in write.items():
+            _told(out, cid, *_place(shared, cid, rev, _kept(cid, rev) or ""))
         await _review(shared, review, ask, meter, halt, out)
     except asyncio.CancelledError:  # the host ended: the revision under review stays due
         out["stopped"] = "OwlBear stopped during a review"
