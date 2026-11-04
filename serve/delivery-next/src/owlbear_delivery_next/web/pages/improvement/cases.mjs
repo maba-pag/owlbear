@@ -106,6 +106,14 @@ function replay(r) {
     failedLooks(r)}</li>`;
 }
 
+// The cases job's own failures, whole, before its runs: its last pass, and a publication sync that could not start.
+function jobFailed(c) {
+  const pass = "The job's last pass failed, and the next one tries again: ";
+  const sync = "Not published, and the next sync tries again: ";
+  return html`${c.failed ? html`<li id="cases-failed">${pass}${c.failed}</li>` : nothing}${c.unpublished
+    ? html`<li id="cases-unpublished">${sync}${c.unpublished}</li>` : nothing}`;
+}
+
 export function casesSection(c) {
   const waiting = c.queued.length > 0;
   const asked = new Set(c.queued.filter((q) => q.kind === "check").flatMap((q) => Object.keys(q.ids ?? {})));
@@ -123,7 +131,8 @@ export function casesSection(c) {
       : empty(`No ${label.toLowerCase()}.`)}`)}
     <div class="panel">${heading(3, "Versions", "sm")}${c.versions.length
       ? html`<ol class="meta">${c.versions.map(version)}</ol>` : text("No version yet.", { size: "sm" })}</div>
-    <div class="panel">${heading(3, "Replay runs", "sm")}${c.runs.length
-      ? html`<ol class="meta">${c.runs.map(replay)}</ol>` : text("No replay run yet.", { size: "sm" })}</div>
+    <div class="panel">${heading(3, "Replay runs", "sm")}${c.runs.length || c.failed || c.unpublished
+      ? html`<ol class="meta">${jobFailed(c)}${c.runs.map(replay)}</ol>` : text("No replay run yet.", { size: "sm" })}
+    </div>
   </section>`;
 }

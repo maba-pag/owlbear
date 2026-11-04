@@ -365,7 +365,8 @@ def test_a_release_compares_once_claimed_before_its_first_look_even_if_it_stops(
     out = run(first, looker({}, cost=0.6), limit=0.5)
     assert out["result"].startswith("incomplete: stopped")
     assert case_replay.claimed(rid)
-    assert run(second, looker({}))["result"].startswith("incomplete: release")  # never a second use
+    said = f"incomplete: CaseError: release {rid} already used its one comparison on the reserve"
+    assert run(second, looker({}))["result"] == said  # never a second use
     with pytest.raises(CaseError, match="already used"):
         case_replay.comparison(rid, 0, 1, "owner")
 

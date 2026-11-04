@@ -26,6 +26,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import cases
 from owlbear_delivery_next.improvement.cases import CaseError
 from owlbear_delivery_next.improvement.events import EMAIL
@@ -85,7 +86,7 @@ async def check(request: dict[str, Any], ask: Ask, meter: Meter, halt: Callable[
     except asyncio.CancelledError:  # the host ended: the session's teardown and spend are done, the result is kept
         why = "stopped: OwlBear stopped during a review"
     except Exception as exc:  # noqa: BLE001 - a failed review ends the run; its result is kept, never rerun
-        why = f"failed: {type(exc).__name__}: {exc}"
+        why = f"failed: {failure(exc)}"
     out |= {"result": why or "checked", "credits": meter.report(), "ended": cases.now()}
     with cases.locked():
         cases.append("runs.jsonl", out)
@@ -116,7 +117,7 @@ def _promote(cid: str, wanted: str, note: str) -> str:
             cases.commit(cur["n"], {cid: {**entry, "stage": "test", "review": review}}, "retro-review",
                          f"check: the card supports {entry['call']}")  # fmt: skip
         except CaseError as exc:
-            return f"supported, but not promoted: {exc}"
+            return f"supported, but not promoted: {failure(exc)}"
         return "supported: now a test case"
 
 
@@ -135,7 +136,7 @@ def state() -> dict[str, dict[str, Any]]:
     except FileNotFoundError:
         return {}
     except ValueError as exc:
-        msg = f"published.json cannot be read: {exc}"
+        msg = f"published.json cannot be read: {failure(exc)}"
         raise CaseError(msg) from exc
 
 
@@ -266,7 +267,7 @@ def _write(shared: DataRepo, cid: str, text: str | None) -> tuple[bool, bool, st
                 atomic_write(path, text)
             said = shared.publish(path, message)
     except (DataRepoError, OSError) as exc:
-        return False, False, str(exc)
+        return False, False, failure(exc)
     if not said:
         return True, True, ""
     return ("committed" in said and "not committed" not in said), False, said
