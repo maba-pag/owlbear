@@ -3,8 +3,6 @@ import { LOOPS } from "./progress.mjs";
 import { reviseButton } from "./brief.mjs";
 import { info, list, row } from "./widgets.mjs";
 
-const short = (t) => (t.length > 100 ? `${t.slice(0, t.lastIndexOf(" ", 100))}\u2026` : t);
-
 // What stands open on this Change, one line each in plain words, whether or not the details are shown.
 export function actionItems(d) {
   const b = d.brief, shaping = d.step === "shape" && b.approved !== b.version, lines = [];
@@ -23,7 +21,7 @@ export function actionItems(d) {
   if (shaping && b.picked?.status === "failed") lines.push(`Picking the decisions failed: ${b.picked.reason}`);
   const r = d.rounds, repairs = (r?.unreviewed ?? []).filter((u) => !(shaping && b.unreviewed && u.loop === "brief"));
   for (const f of r?.standing ?? []) {
-    lines.push(`${LOOPS(f.loop)} ${f.id}, ${f.state}: ${short(f.text)}`);
+    lines.push(`${LOOPS(f.loop)} ${f.id}, ${f.state}: ${f.text}`);
   }
   for (const u of repairs) lines.push(`No review yet of ${u.title || u.id} (${LOOPS(u.loop)})`);
   if (!lines.length) return nothing;

@@ -210,14 +210,15 @@ def test_an_unreviewed_last_revision_is_approved_only_once_the_owner_ticks_that_
 
     store, base = page_url
     tail = change().model_copy(update={"slug": "tail"})
-    kept = RoundFinding(id="F4", text="AC-2: the empty state has no check", raised=3, state="rejected")
+    said = "AC-2: the empty state has no check, so a list that renders nothing at all would pass every check we run"
+    kept = RoundFinding(id="F4", text=said, raised=3, state="rejected")
     tail.loops["brief"] = RoundLoop(
         subject="brief", policy=RoundPolicy(), round=3, ended="max", unreviewed=["v2"], findings=[kept]
     )
     store.write(Lock("tail"), tail)
     with opened(base, "tail", pds) as page:
         items = page.locator(".actions")
-        expect(items).to_contain_text("brief challenge F4, rejection not reviewed: AC-2: the empty state has no check")
+        expect(items).to_contain_text(f"brief challenge F4, rejection not reviewed: {said}")  # whole, never cut
         expect(items).not_to_contain_text("No review yet")  # while shaping, the line on v2 says it
         page.get_by_role("button", name="Approve v2").click()
         dialog = pds.modal(page)
