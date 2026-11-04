@@ -7,6 +7,7 @@ and only the chat launch is recorded instead of opening VS Code.
 from __future__ import annotations
 
 import contextlib
+import json
 import subprocess
 import time
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ from typing import TYPE_CHECKING
 import pytest
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import codebase, local_home
 from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import Machine
@@ -121,8 +123,12 @@ def test_the_project_list_names_each_block_also_with_a_broken_layer_or_registry(
 
     host.store(a).config_path.write_text("{")
     listed = _listed(host.client)
-    assert (listed[a]["unset"], listed[a]["unset_reason"]) == ([], "state of config is unreadable")
-    assert listed[a]["blocked"] == "settings can't be read: state of config is unreadable"
+    try:
+        json.loads("{")
+    except ValueError as exc:
+        unreadable = f"state of config is unreadable: {failure(exc)}"
+    assert (listed[a]["unset"], listed[a]["unset_reason"]) == ([], unreadable)
+    assert listed[a]["blocked"] == f"settings can't be read: {unreadable}"
     assert (listed[b]["unset"], listed[b]["unset_reason"]) == ([], "")
 
     (local_home.root() / registry.MACHINE).write_text("{")

@@ -90,7 +90,7 @@ def _parse(path: Path) -> dict[str, str] | None:
     except FileNotFoundError:
         return None
     except (OSError, ValueError) as exc:
-        msg = f"{path} names no repository"
+        msg = f"{path} names no repository: {command_failure.failure(exc)}"
         raise DataRepoError(msg) from exc
     if not isinstance(data, dict) or not all(isinstance(v, str) for v in data.values()):
         msg = f"{path} names no repository"
@@ -103,7 +103,7 @@ def _write(record: dict[str, str]) -> None:
     try:
         atomic_write(pointer(), json.dumps(record) + "\n")
     except OSError as exc:
-        msg = f"the pointer {pointer()} could not be written: {exc}"
+        msg = f"the pointer {pointer()} could not be written: {command_failure.failure(exc)}"
         raise DataRepoError(msg) from exc
 
 
@@ -147,7 +147,7 @@ def _common(folder: Path) -> Path | None:
         return None
     said = _git(root, "rev-parse", "--path-format=absolute", "--git-common-dir")
     if said.returncode != 0:
-        msg = f"the Git folder of {root} cannot be found: {said.stderr.strip()}"
+        msg = f"the Git folder of {root} cannot be found: {command_failure.failed(said)}"
         raise DataRepoError(msg)
     return Path(said.stdout.strip())
 
@@ -188,7 +188,7 @@ def _move_old(path: Path, *, held: bool = False) -> None:
         atomic_write(path, old.read_text())
         old.unlink(missing_ok=True)
     except OSError as exc:
-        msg = f"the pointer {old} could not be moved to {path}: {exc}"
+        msg = f"the pointer {old} could not be moved to {path}: {command_failure.failure(exc)}"
         raise DataRepoError(msg) from exc
     _log.warning("moved the shared repository's pointer %s to %s", old, path)
 
@@ -297,7 +297,7 @@ def provision(url: str | None = None, *, clone: bool = True, show: bool = False)
                 _write({"remote": wanted})
             return _clone(wanted, place, show=show)
     except OSError as exc:  # a folder or file OwlBear could not use: said like any other failure, never a crash
-        msg = f"the shared repository could not be set up: {exc}"
+        msg = f"the shared repository could not be set up: {command_failure.failure(exc)}"
         raise DataRepoError(msg) from exc
 
 
@@ -345,7 +345,7 @@ def _clone(url: str, place: Path, *, show: bool) -> tuple[DataRepo, str]:
     try:
         temp = Path(tempfile.mkdtemp(prefix=CLONING, dir=home))
     except OSError as exc:
-        _failed(url, f"no folder to clone into in {home}: {exc}")
+        _failed(url, f"no folder to clone into in {home}: {command_failure.failure(exc)}")
     done = git_run.run(
         home, "clone", *([] if show else ["--quiet"]), "--", url, str(temp), until=None, cap=CLONE_SECONDS, show=show
     )
@@ -356,7 +356,7 @@ def _clone(url: str, place: Path, *, show: bool) -> tuple[DataRepo, str]:
         try:
             temp.rename(place)
         except OSError as exc:
-            why = f"the clone could not be renamed to {place}: {exc}"
+            why = f"the clone could not be renamed to {place}: {command_failure.failure(exc)}"
     if why:
         shutil.rmtree(temp, ignore_errors=True)
         _failed(url, why)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.state_store import profile_share
 from owlbear_delivery_next.state_store.pending_intents import pending_intents
@@ -65,7 +66,7 @@ def _caught_up(store: Store, until: float) -> str:
         if store.shared.rebasing(until):
             return REBASING
     except DataRepoError as exc:
-        return str(exc)
+        return failure(exc)
     return store.shared.pull(until)
 
 
@@ -134,7 +135,7 @@ def _automatic[T: Layer](
             if changed and held:
                 held()
         except DataRepoError as exc:
-            raise HeldByPendingError(str(exc)) from exc
+            raise HeldByPendingError(failure(exc)) from exc
         return new
 
     return guarded

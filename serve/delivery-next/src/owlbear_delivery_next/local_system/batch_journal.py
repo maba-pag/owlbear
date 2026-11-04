@@ -90,7 +90,7 @@ def locked(shared: DataRepo, until: float | None = None) -> Iterator[None]:
     try:
         dir_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
     except OSError as exc:
-        msg = f"the git folder {folder} cannot be opened for the batch lock: {exc}"
+        msg = f"the git folder {folder} cannot be opened for the batch lock: {command_failure.failure(exc)}"
         raise JournalError(msg) from exc
     try:
         try:
@@ -99,7 +99,8 @@ def locked(shared: DataRepo, until: float | None = None) -> Iterator[None]:
             msg = f"another save still holds the batch lock, so try again ({folder / LOCK})"
             raise JournalBusyError(msg) from None
         except (OSError, ValueError) as exc:
-            msg = f"the batch lock {folder / LOCK} cannot be taken ({exc}); make it a plain file the owner can open"
+            why = command_failure.failure(exc)
+            msg = f"the batch lock {folder / LOCK} cannot be taken ({why}); make it a plain file the owner can open"
             raise JournalError(msg) from exc
         try:
             yield
@@ -219,7 +220,7 @@ def decode(raw: bytes) -> Batch:
             files,
         )
     except (KeyError, TypeError, ValueError, binascii.Error) as exc:
-        msg = f"the interrupted-batch journal cannot be read: {exc}"
+        msg = f"the interrupted-batch journal cannot be read: {command_failure.failure(exc)}"
         raise JournalError(msg) from exc
 
 
@@ -230,7 +231,7 @@ def generations(raw: bytes | None) -> set[str]:
     try:
         listed = json.loads(raw)
     except ValueError as exc:
-        msg = f"the list of completed decision batches cannot be read: {exc}"
+        msg = f"the list of completed decision batches cannot be read: {command_failure.failure(exc)}"
         raise JournalError(msg) from exc
     if not isinstance(listed, list) or not all(isinstance(g, str) and GENERATION.fullmatch(g) for g in listed):
         msg = "the list of completed decision batches is not a list of generations"
@@ -266,7 +267,7 @@ def read(path: Path) -> bytes | None:
         msg = f"the interrupted-batch journal {path.name} is not a regular file"
         raise JournalError(msg) from exc
     except OSError as exc:
-        msg = f"the interrupted-batch journal {path.name} cannot be read: {exc}"
+        msg = f"the interrupted-batch journal {path.name} cannot be read: {command_failure.failure(exc)}"
         raise JournalError(msg) from exc
 
 

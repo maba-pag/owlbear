@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 import psutil
 
+from owlbear_delivery_next.git.command_failure import failure
+
 if TYPE_CHECKING:
     import signal
     from collections.abc import Callable, Mapping, Sequence
@@ -81,7 +83,7 @@ def _matches(ids: Pids) -> dict[int, list[int]]:
     try:
         table = psutil.pids()
     except (psutil.Error, OSError) as exc:
-        msg = f"the process table could not be listed: {exc}"
+        msg = f"the process table could not be listed: {failure(exc)}"
         raise UnlistedError(msg) from exc
     matched: dict[int, list[int]] = {}
     for p in table:
@@ -92,7 +94,7 @@ def _matches(ids: Pids) -> dict[int, list[int]]:
         except ProcessLookupError:
             continue
         except OSError as exc:
-            msg = f"process {p}: its group or session could not be read: {exc}"
+            msg = f"process {p}: its group or session could not be read: {failure(exc)}"
             raise UnlistedError(msg) from exc
         for key in keys & ids.keys():
             matched.setdefault(key, []).append(p)

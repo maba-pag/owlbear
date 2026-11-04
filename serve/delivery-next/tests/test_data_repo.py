@@ -759,23 +759,28 @@ def test_each_failed_git_step_says_its_whole_stderr(shared, failing_git, whole_e
         "rebase-probe": lambda args, until: args == ("rev-parse", "--absolute-git-dir") and until is not None,
         "rebase": lambda args, _: "rebase" in args[:3],
     }
-    failing_git(whole_error, picks[step])
+    ran: list[tuple[str, ...]] = []
+    failing_git(whole_error, lambda args, until: picks[step](args, until) and not ran.append(args))
+
+    def git() -> str:
+        return f"{git_failed(ran[-1])}\n{whole_error}"
+
     if step == "git-folder":
         with pytest.raises(data_repo.DataRepoError) as refused, data.locked():
             pass
-        assert str(refused.value) == f"the git folder of {root} cannot be found: {whole_error}"
+        assert str(refused.value) == f"the git folder of {root} cannot be found: {git()}"
     elif step == "rebase-probe":
         with pytest.raises(data_repo.DataRepoError) as refused:
             data.rebasing()
-        assert str(refused.value) == f"cannot tell whether a rebase is in progress in {root}: {whole_error}"
+        assert str(refused.value) == f"cannot tell whether a rebase is in progress in {root}: {git()}"
     elif step == "rebase":
         rebase = ("-c", "rebase.autoStash=false", "rebase", "-q", "@{upstream}")
         assert data.rebase() == f"git rebase failed: {git_failed(rebase)}\n{whole_error}"
     elif step == "tracked":
         said = data.commit(root / "gone.md", "notes")
-        assert said == f"saved, but not committed: git cannot tell whether gone.md is tracked: {whole_error}"
+        assert said == f"saved, but not committed: DataRepoError: git cannot tell whether gone.md is tracked: {git()}"
     else:
-        assert data.commit(root / "notes.md", "notes") == f"saved, but not committed: {whole_error}"
+        assert data.commit(root / "notes.md", "notes") == f"saved, but not committed: {git()}"
 
 
 OUT = "OUT begins\nwhat Git printed on stdout, in the middle\nOUT ends"
@@ -856,7 +861,7 @@ def test_each_failed_publication_step_says_git_whole_and_logs_it(shared, git_say
         assert said == f"saved and committed in {root}, but the push failed: {whole}"
     elif step == "journal-deadline":
         busy = f"this save's deadline passed before the git folder of {root} was found, so try again: {whole}"
-        unknown = f"whether a decision batch is interrupted is not known yet: {busy}"
+        unknown = f"whether a decision batch is interrupted is not known yet: JournalBusyError: {busy}"
         assert said == f"saved and committed in {root}, but not pushed: {unknown}"
     else:
         journal = f"JournalError: the git folder of {root} cannot be found: {whole}"
@@ -930,7 +935,9 @@ def test_a_timed_out_git_says_its_type_and_what_it_printed(shared, monkeypatch, 
 
     said = data_repo.DataRepo(root).publish(root / "notes.md", "notes")
 
-    timed_out = "saved, but not committed: TimeoutExpired: Command '['git', '-c', 'core.abbrev=no', 'commit'"
-    assert said.startswith(timed_out)
+    failed = "saved, but not committed: CalledProcessError: Command '['git', '-c', 'core.abbrev=no', 'commit'"
+    timed_out = "returned non-zero exit status 128.\nTimeoutExpired: Command '['git', '-c', 'core.abbrev=no', 'commit'"
+    assert said.startswith(failed)
+    assert timed_out in said
     assert said.endswith(f"timed out after 10 seconds\nstderr:\n{whole_error}\nstdout:\n{OUT}")
     assert logged(caplog) == [f"publishing 'notes' in {root}: {said}"]

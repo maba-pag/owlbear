@@ -1520,7 +1520,8 @@ def test_projects_says_why_a_move_of_the_shared_repository_stopped_whole(
         expect(shop.locator("p-tag")).to_have_text("failed")
         said = shop.locator("p-text").filter(has_text="is not finished")
         expect(said).to_have_count(1)
-        assert said.text_content() == f"its Delivery state cannot be opened: {unfinished}; `owlbear data` finishes it"
+        opened = f"its Delivery state cannot be opened: DataRepoError: {unfinished}"
+        assert said.text_content() == f"{opened}; `owlbear data` finishes it"
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
         assert broke == []
 

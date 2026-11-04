@@ -19,6 +19,7 @@ from pydantic import TypeAdapter, ValidationError
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, InboxItem, parse_rows
 from owlbear_delivery_next.change_contracts.models import FORMAT, Change, Record
 from owlbear_delivery_next.change_flow import answer_kinds, loop
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import migrations
@@ -112,7 +113,7 @@ def _load[T: Record](path: Path, model: type[T], current: int, forward: Migratio
     try:
         raw = path.read_text()
     except (OSError, ValueError) as exc:  # ValueError: bytes that are not UTF-8
-        msg = f"state of {name} is unreadable"
+        msg = f"state of {name} is unreadable: {failure(exc)}"
         raise StoreError(msg) from exc
     return _parse(raw, name, model, current, forward)
 
@@ -148,7 +149,7 @@ class Store:
             shared = data_repo.locate()
             name = data_repo.folder(shared, cwd) if shared else ""
         except data_repo.DataRepoError as exc:
-            raise StoreError(str(exc)) from exc
+            raise StoreError(failure(exc)) from exc
         store = cls(project_home.located(cwd), shared, name)
         if (found := store.db.marker()) > STORE_FORMAT:  # the database itself opens with the first operation
             msg = f"store format {found} is newer than {STORE_FORMAT}"
@@ -163,7 +164,7 @@ class Store:
                 store.deferred_roles = exc
             profile_share.adopt(store)
         except data_repo.DataRepoError as exc:
-            raise StoreError(str(exc)) from exc
+            raise StoreError(failure(exc)) from exc
         return store
 
     def adopt(self, identity: str) -> None:
@@ -206,7 +207,7 @@ class Store:
                 self, path, model, change, f"settings: {what}", until, owner=owner, on_written=on_written
             )
         except data_repo.DataRepoError as exc:
-            raise SharedError(str(exc)) from exc
+            raise SharedError(failure(exc)) from exc
 
     def read_config(self) -> Layer:
         """The project's settings layer."""
@@ -305,7 +306,7 @@ class Store:
         try:
             return profile_share.write(self, profile, replace_unreadable=replace_unreadable, basis=basis)
         except data_repo.DataRepoError as exc:
-            raise SharedError(str(exc)) from exc
+            raise SharedError(failure(exc)) from exc
 
     mark_prefs_import = profile_share.mark  # a method: profile_share.mark takes the store first
     retry_prefs_import = profile_share.retry

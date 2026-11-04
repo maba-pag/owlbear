@@ -24,6 +24,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import brief_rounds, brief_tools
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import identities
 from owlbear_delivery_next.state_store.store import LockHeldError, StoreError
@@ -177,8 +178,10 @@ def _revise(store: Store, draft: brief_tools.BriefDraft) -> tuple[int, dict[str,
                 return 409, {"errors": [f"change: {why}"]}
             c = drafted(old, draft, slug, old.handle, store.read_profile() or Profile())
             store.write(lock, c)
-    except (LockHeldError, StoreError) as exc:
+    except LockHeldError as exc:
         return 409, {"errors": [f"change: {exc}; try again"]}
+    except StoreError as exc:
+        return 409, {"errors": [f"change: {failure(exc)}; try again"]}
     return 200, {"change": c.handle, "version": c.brief.version, "slug": slug}
 
 
@@ -190,7 +193,7 @@ def _create(store: Store, draft: brief_tools.BriefDraft) -> tuple[int, dict[str,
             lambda number, taken: drafted(None, draft, new_slug(draft.title, taken), f"c{number}", prof),
         )
     except StoreError as exc:
-        return 409, {"errors": [f"change: {exc}; try again"]}
+        return 409, {"errors": [f"change: {failure(exc)}; try again"]}
     return 200, {"change": c.handle, "version": c.brief.version, "slug": c.slug}
 
 
@@ -204,7 +207,7 @@ def save_visual(store: Store, body: object) -> tuple[int, dict[str, Any]]:
     try:
         c = store.read(slug)
     except StoreError as exc:
-        return 409, {"errors": [f"change: {exc}"]}
+        return 409, {"errors": [f"change: {failure(exc)}"]}
     owner, placed = set(c.brief.specified), positions(c.brief)
     checks = [{"name": p.id, "steps": p.steps, "expect": p.expect, "covers": [placed.get(k, k) for k in p.criteria],
                "visual": p.visual, "owner": f"check:{p.id}" in owner} for p in c.checks]  # fmt: skip

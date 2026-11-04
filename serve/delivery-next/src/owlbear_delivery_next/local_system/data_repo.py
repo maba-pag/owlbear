@@ -138,7 +138,8 @@ class DataRepo:
         found = _git(self.root, "rev-parse", "--absolute-git-dir", until=until)
         admin = Path(found.stdout.strip())
         if found.returncode or not admin.is_dir():
-            msg = f"the git folder of {self.root} cannot be found: {found.stderr.strip()}"
+            why = command_failure.failed(found) if found.returncode else found.stderr.strip()
+            msg = f"the git folder of {self.root} cannot be found: {why}"
             raise DataRepoError(msg)
         return admin / LOCK
 
@@ -287,7 +288,7 @@ class DataRepo:
             return Committed(why)  # failed, or nothing changed: no commit was made
         made = _git(self.root, "-c", "core.abbrev=no", "commit", "-m", message, "--", *rels, until=until)
         if made.returncode:
-            return Committed(f"saved, but not committed: {made.stderr.strip()}")
+            return Committed(f"saved, but not committed: {command_failure.failed(made)}")
         named = _MADE.match(made.stdout.partition("\n")[0])
         oid = named.group(1) if named else ""
         known = _git(self.root, "rev-parse", "--verify", "-q", f"{oid}^{{commit}}", until=until) if oid else None
@@ -298,22 +299,21 @@ class DataRepo:
         try:
             rels = [r for r in rels if (self.root / r).exists() or self._tracked(r, until)]
         except DataRepoError as exc:
-            return f"saved, but not committed: {exc}", []
+            return f"saved, but not committed: {command_failure.failure(exc)}", []
         if not rels:
             return "", []  # removed before it was ever committed: nothing to commit
         if (added := _git(self.root, "add", "--", *rels, until=until)).returncode:
-            return f"saved, but not committed: {added.stderr.strip()}", []
+            return f"saved, but not committed: {command_failure.failed(added)}", []
         staged = _git(self.root, "diff", "--cached", "--quiet", "--", *rels, until=until)
         if staged.returncode not in (0, 1):
-            why = staged.stderr.strip() or "git could not read staged changes"
-            return f"saved, but not committed: {why}", []
+            return f"saved, but not committed: {command_failure.failed(staged)}", []
         return "", rels if staged.returncode == 1 else []
 
     def _tracked(self, rel: str, until: float) -> bool:
         """Whether the index holds ``rel``; a failed probe cannot establish absence."""
         probe = _git(self.root, "ls-files", "-z", "--", rel, until=until)
         if probe.returncode:
-            msg = f"git cannot tell whether {rel} is tracked: {probe.stderr.strip() or 'tracking probe failed'}"
+            msg = f"git cannot tell whether {rel} is tracked: {command_failure.failed(probe)}"
             raise DataRepoError(msg)
         return bool(probe.stdout)
 
@@ -358,9 +358,9 @@ class DataRepo:
         try:
             batch = batch_journal.pending(self, until)  # within the caller's deadline: a lock held past it is not free
         except batch_journal.JournalBusyError as exc:
-            return f"whether a decision batch is interrupted is not known yet: {exc}"
+            return f"whether a decision batch is interrupted is not known yet: {command_failure.failure(exc)}"
         except batch_journal.JournalError as exc:
-            return f"the decision batch journal cannot be read ({type(exc).__name__}: {exc}); repair it in Decisions"
+            return f"the decision batch journal cannot be read ({command_failure.failure(exc)}); repair it in Decisions"
         if batch is None:
             return ""
         return f"the decision batch {batch.generation} is interrupted; finish or abandon it in Decisions first"
@@ -387,7 +387,7 @@ class DataRepo:
             if self.rebasing(until):
                 return f"not rebased on the remote: a rebase is in progress in {self.root}; finish or abort it first"
         except DataRepoError as exc:
-            return f"not rebased on the remote: {exc}"
+            return f"not rebased on the remote: {command_failure.failure(exc)}"
         if held := publication_hold.check(self, until, fetch=True):
             return held
         done = _git(self.root, "-c", "rebase.autoStash=false", "rebase", "-q", "@{upstream}", until=until)
@@ -415,7 +415,7 @@ class DataRepo:
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         probe = _git(self.root, "rev-parse", "--absolute-git-dir", until=until)
         if probe.returncode or not probe.stdout.strip():
-            why = probe.stderr.strip() or "git named no git directory"
+            why = command_failure.failed(probe) if probe.returncode else "git named no git directory"
             msg = f"cannot tell whether a rebase is in progress in {self.root}: {why}"
             raise DataRepoError(msg)
         admin = Path(probe.stdout.strip())
@@ -429,7 +429,7 @@ class DataRepo:
         try:
             rebasing = self.rebasing(until)
         except DataRepoError as exc:
-            return f"{why}; {exc}, so it was left as it is for the owner to check"
+            return f"{why}; {command_failure.failure(exc)}, so it was left as it is for the owner to check"
         if rebasing:
             return f"{why}; a rebase is in progress in {self.root} and was left as it is for the owner to resolve"
         return why

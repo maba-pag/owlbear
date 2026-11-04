@@ -1515,8 +1515,9 @@ def test_a_failed_hold_probe_names_git_s_whole_stderr(held, monkeypatch, failing
     if probe == "index":  # with no unpushed change of the watched file, its staged copy is compared next
         monkeypatch.setattr(publication_hold, "_changes", lambda *_args: [])
     picked = ("diff", "--cached", "--quiet", "HEAD") if probe == "index" else ("merge-base", "--is-ancestor")
-    failing_git(whole_error, lambda args, _until: args[: len(picked)] == picked)
-    expected = (
-        f"nothing was pushed or rebased in {shared.root}: a held automatic change cannot be checked: {whole_error}"
-    )
-    assert shared.rebase() == expected
+    ran: list[tuple[str, ...]] = []
+    failing_git(whole_error, lambda args, _until: args[: len(picked)] == picked and not ran.append(args))
+    said = shared.rebase()
+    git = f"CalledProcessError: Command '{['git', *ran[-1]]}' returned non-zero exit status 128.\n{whole_error}"
+    expected = f"nothing was pushed or rebased in {shared.root}: a held automatic change cannot be checked: {git}"
+    assert said == expected
