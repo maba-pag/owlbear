@@ -14,7 +14,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.git.command_failure import failed, failure
+from owlbear_delivery_next.git.command_failure import failed, failure, streams
 from owlbear_delivery_next.impeccable.pack_files import PackError
 
 if TYPE_CHECKING:
@@ -105,12 +105,18 @@ def _engine(
     try:
         raw = json.loads(out)
     except ValueError as exc:
-        msg = f"the design detector's answer is not JSON: {failure(exc)}\nIt answered:\n{out}"
+        msg = f"the design detector's answer is not JSON: {failure(exc)}\n{_answered(command, code, out, err)}"
         raise DetectorError(msg) from exc
     if not isinstance(raw, list) or not all(isinstance(f, dict) for f in raw):
-        msg = "the design detector's answer is not a list of findings"
+        msg = f"the design detector's answer is not a list of findings\n{_answered(command, code, out, err)}"
         raise DetectorError(msg)
     return [_from_engine(f, by_file=by_file) for f in raw]
+
+
+def _answered(command: list[str], code: int, out: str, err: str) -> str:
+    """The command whose answer could not be used, its exit status and what it printed, both streams labelled."""
+    said = streams(subprocess.CalledProcessError(code, command, out, err))  # only its streams are read
+    return f"Command '{command}' exited {code}" + (f" and printed:\n{said}" if said else " and printed nothing")
 
 
 def scan_source(pack: Installed, paths: Sequence[Path], cwd: Path) -> list[Finding]:

@@ -184,16 +184,19 @@ def test_a_scan_that_hangs_ends(tmp_path, monkeypatch) -> None:
         detector.scan_source(fake_engine(tmp_path, 0, "[]", sleep=5), [tmp_path / "a.html"], tmp_path)
 
 
-@pytest.mark.parametrize("cause", ["unverified", "unstarted", "hung", "failed", "unreadable"])
+@pytest.mark.parametrize("cause", ["unverified", "unstarted", "hung", "failed", "unreadable", "shapeless"])
 def test_a_scan_that_did_not_complete_says_its_whole_error(tmp_path, monkeypatch, whole_error, cause) -> None:
     """#971: what the engine printed, and the whole error of a check, a start or a wait, is the scan's error."""
     (tmp_path / "said").write_text(whole_error)
     (tmp_path / "printed").write_text("what the engine printed")
-    engine = tmp_path / "impeccable"
+    logged, answer = f"the engine's log\n{whole_error}", json.dumps({"error": whole_error})
+    (tmp_path / "logged").write_text(logged)
+    (tmp_path / "answer").write_text(answer)
+    engine, replied = tmp_path / "impeccable", tmp_path / {"unreadable": "said", "shapeless": "answer"}.get(cause, "")
     engine.write_text(
-        f"#!/bin/sh\ncat {tmp_path / 'printed'}\ncat {tmp_path / 'said'} >&2\n"
-        if cause != "unreadable"
-        else f"#!/bin/sh\ncat {tmp_path / 'said'}\n"
+        f"#!/bin/sh\ncat {replied}\ncat {tmp_path / 'logged'} >&2\n"
+        if cause in {"unreadable", "shapeless"}
+        else f"#!/bin/sh\ncat {tmp_path / 'printed'}\ncat {tmp_path / 'said'} >&2\n"
     )
     engine.write_text(engine.read_text() + {"hung": "sleep 60\n", "failed": "exit 1\n"}.get(cause, ""))
     engine.chmod(engine.stat().st_mode | stat.S_IEXEC)
@@ -217,7 +220,9 @@ def test_a_scan_that_did_not_complete_says_its_whole_error(tmp_path, monkeypatch
         "failed": f"the design detector failed (1): CalledProcessError: "
         f"{subprocess.CalledProcessError(1, command)}\n{streams}",
         "unreadable": "the design detector's answer is not JSON: JSONDecodeError: Expecting value: line 1 column 1 "
-        f"(char 0)\nIt answered:\n{whole_error}",
+        f"(char 0)\nCommand '{command}' exited 0 and printed:\nstderr:\n{logged}\nstdout:\n{whole_error}",
+        "shapeless": "the design detector's answer is not a list of findings\n"
+        f"Command '{command}' exited 0 and printed:\nstderr:\n{logged}\nstdout:\n{answer}",
     }[cause]
     with pytest.raises(detector.DetectorError) as caught:
         detector.scan_source(pack, [tmp_path / "a.html"], tmp_path)
