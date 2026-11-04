@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from copilot._jsonrpc import JsonRpcError
 from copilot.generated.session_events import SessionEvent
 from copilot.session import AgentMessageSource
 
@@ -282,6 +283,28 @@ def test_a_failed_stop_and_resume_ends_the_step_with_a_question_naming_the_failu
     act = act_of(st)
     assert (act.act, act.delivery, act.error) == ("stop-and-resume", "failed", "ConnectionError: refused")
     assert (st.run.ending, st.run.detail, st.done) == ("spotter-ask", said, True)
+
+
+def test_a_failed_stop_and_resume_s_question_says_the_whole_sdk_error(tmp_path, whole_error) -> None:
+    """#971 R5: the step's question carries the abort's whole error, its notes and the JSON-RPC data beside it."""
+    refused = JsonRpcError(-32000, whole_error, {"DATA-MARK": 1})
+    refused.add_note("NOTE-MARK")
+
+    class Failing(Session):
+        async def abort(self) -> None:
+            await super().abort()
+            raise refused
+
+    async def main() -> sdk_adapter._Step:
+        st = stepped(tmp_path, Failing(), "outside-state-changes", **{"outside-state-changes": "stop-and-resume"})
+        st.feed.spotter.look("plan", 1.0, {"kind": "plan", "call": "c-1"})
+        await st.feed.spotter.drain()
+        return st
+
+    st = asyncio.run(main())
+    assert spotter.WORK.settled(5)
+    said = f"JsonRpcError: JSON-RPC Error -32000: {whole_error}\nNOTE-MARK {{'DATA-MARK': 1}}"
+    assert (st.run.ending, st.run.detail) == ("spotter-ask", spotter_act.UNRESUMED.format(error=said))
 
 
 class Held(Session):
