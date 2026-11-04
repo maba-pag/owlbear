@@ -193,6 +193,7 @@ class RetroJob:
                 continue
             ctx = Running.of(snap)
             if snap["unsettled"] or not snap["known"]:
+                ctx.known = False
                 self._ended(ctx, "stopped: unknown spend after an interruption")
             elif ctx.provenance == "synthetic" or ctx.uid.startswith("syn:"):
                 self._ended(ctx, f"refused: {store.SYNTHETIC_RETIRED}")
