@@ -6,8 +6,8 @@ import { detail, open } from "./entry.mjs";
 import { scopes, scopesView } from "./overview.mjs";
 import { queue } from "./queue.mjs";
 import { loadRecovery, recoveryView } from "./recovery.mjs";
-import { addressOf, cutOff, filter, readBack, ROOT, sameAddress, STATES, scopeOf, show, state, TAGS, VIEWS, wide }
-  from "./state.mjs";
+import { addressOf, cutOff, filter, linked, readBack, ROOT, sameAddress, STATES, scopeOf, show, state, TAGS, VIEWS,
+  wide } from "./state.mjs";
 import { field, select } from "./widgets.mjs";
 
 const WHERE = [["all", "This project and Global"], ["project", "This project"], ["global", "Global"],
@@ -44,6 +44,16 @@ export async function refresh() {
   }
   show();
   if (state.opened) await open(state.opened, { again: true });
+}
+
+// Opens the linked decision in its card, scrolled into view with its heading focused; one the filters leave out (a
+// retired one) shows above the list. One that can't be read says why in the page's error notice.
+export async function openLinked() {
+  if (!linked || !state.loaded?.available) return;
+  await open(linked, { address: state.loaded.address });
+  const card = [...document.querySelectorAll(".entry")].find((e) => e.dataset.id === linked);
+  card?.scrollIntoView({ block: "start" });
+  card?.querySelector(".heading")?.focus();
 }
 
 function chose(key) {
@@ -85,7 +95,7 @@ function card(d, address) {
   return html`<li class="entry" data-id=${d.id}>
     <p-accordion compact="true" background="surface" .open=${opened} @update=${() => open(d.id, { address })}>
       <div slot="summary" class="summary"><div class="named"><p-heading tag="h3" size="sm" weight="semibold"
-        class="heading">${once ? d.statement : d.title}</p-heading>
+        class="heading" tabindex=${d.id === linked ? "-1" : nothing}>${once ? d.statement : d.title}</p-heading>
         ${once ? nothing : html`<p-text class="said" size="sm">${d.statement}</p-text>`}</div>${tags(d)}</div>
       ${opened ? detail() : nothing}
     </p-accordion>
@@ -93,11 +103,14 @@ function card(d, address) {
 }
 
 function listView(loaded) {
-  const rows = loaded.decisions;
+  const rows = loaded.decisions, e = state.entry;
+  const apart = e && e.id === linked && state.opened === linked && sameAddress(state.address, loaded.address)
+    && !rows.some((d) => d.id === linked);
   const empty = loaded.total ? "No decision matches these filters." : "No decision is recorded yet.";
   return html`<section id="decisions" aria-labelledby="decisions-heading">
     <p-heading size="lg"><h2 id="decisions-heading">Recorded decisions</h2></p-heading>
     ${filters()}
+    ${apart ? html`<ul class="entries" id="linked">${card(e, loaded.address)}</ul>` : nothing}
     ${rows.length ? html`<ul class="entries" id="entries">${repeat(rows, (d) => d.id, (d) => card(d, loaded.address))}
       </ul>` : html`<p-text class="empty" color="contrast-medium">${empty}</p-text>`}
   </section>`;
