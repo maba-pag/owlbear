@@ -72,7 +72,7 @@ def big(control: Any) -> None:
 def revising(c: Change) -> None:
     """c1 back at brief v3, which the shaper revises for F5, which the owner kept, and F6, round 2's new finding."""
     lp = c.loops[BRIEF]
-    c.brief.version, c.brief.challenged = 3, None
+    c.brief.version, c.brief.challenged, c.brief.requested = 3, None, 3
     lp.ended, lp.head, lp.unreviewed = "", "3", []
     for f in lp.findings:
         f.state = {"F5": "owner-fix", "F6": "open"}.get(f.id, f.state)
