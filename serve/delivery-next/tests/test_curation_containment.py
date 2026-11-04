@@ -255,20 +255,23 @@ def test_a_failed_run_that_cannot_be_held_shows_both_failures_in_full_in_its_row
     row = drained(job)
 
     ran = f"RuntimeError: {WHOLE}\n{NOTE}" if ends == "raised" else f"ended error: {broke}"
-    argv = ran_git[0]
-    git_said = (
+    git_said = [
         f"CalledProcessError: Command '{argv}' returned non-zero exit status 1."
         if git_ == "exited" else f"TimeoutExpired: Command '{argv}' timed out after 60 seconds"
-    )  # fmt: skip
-    failed = f"DataRepoError: git update-ref failed: {git_said}\nstderr:\n{whole_error}\nstdout:\n{printed}"
+        for argv in ran_git  # each hold commits anew, so a later second gives it another SHA
+    ]  # fmt: skip
+    streams = f"\nstderr:\n{whole_error}\nstdout:\n{printed}"
+    failed = [f"DataRepoError: git update-ref failed: {s}{streams}" for s in git_said]
     assert row.state == "failed"
-    unheld = f"its edits are not held in a curation ref: {failed}"
+    unheld = [f"its edits are not held in a curation ref: {f}" for f in failed]
     if ends == "raised":
-        assert row.reason == f"RuntimeError: {ran}; {unheld}"
+        (only,) = unheld
+        assert row.reason == f"RuntimeError: {ran}; {only}"
     else:
-        assert row.reason == f"RuntimeError: RuntimeError: {ran}; {unheld}; {unheld}"
+        refused, failing = unheld  # a refused run's hold, then the failure's
+        assert row.reason == f"RuntimeError: RuntimeError: {ran}; {refused}; {failing}"
     (logged,) = [r for r in caplog.records if r.name == curation.__name__]
-    assert (failed in caplog.text, logged.exc_info is not None) == (True, True)
+    assert (all(f in caplog.text for f in failed), logged.exc_info is not None) == (True, True)
 
 
 def test_a_run_whose_entry_changed_meanwhile_is_refused_whole_and_the_other_change_is_published(repo, remote) -> None:
