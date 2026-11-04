@@ -14,10 +14,19 @@ from fastapi.testclient import TestClient
 from owlbear_memory.engine import MemoryEngine
 
 from owlbear_delivery_next.change_contracts import models as m
-from owlbear_delivery_next.improvement import case_edits, case_replay, cases, improvement_view, proposal_apply, spotter
+from owlbear_delivery_next.improvement import (
+    case_edits,
+    case_replay,
+    cases,
+    followups,
+    improvement_view,
+    proposal_apply,
+    spotter,
+)
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
+from owlbear_delivery_next.improvement.cases import CaseError
 from owlbear_delivery_next.improvement.credit_meter import Meter
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -25,7 +34,7 @@ from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import app, cases_job, improvement_routes
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import watch_reports
+from owlbear_delivery_next.state_store import machine_settings, registry, watch_reports
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.state_store.watch_reports import Report
 
@@ -50,9 +59,9 @@ def world(tmp_path, monkeypatch):
             st.write(Lock(slug), m.Change(slug=slug, step=m.Step(kind=m.StepKind.BUILD), finished_at=done))
         projects[pid] = (st, clone)
     machine = SimpleNamespace(
-        retro=SimpleNamespace(seams=SimpleNamespace(projects=lambda: projects)),
-        cases=SimpleNamespace(running=""),
-        chats=SimpleNamespace(not_followed=list, failed=""),
+        retro=SimpleNamespace(seams=SimpleNamespace(projects=lambda: projects), failed=""),
+        cases=SimpleNamespace(running="", failed="", unpublished=""),
+        chats=SimpleNamespace(not_followed=list, failed="", refused=""),
         projects=dict.fromkeys(projects),
         updating="",
         stopping=threading.Event(),
@@ -144,9 +153,9 @@ def test_historical_synthetic_actions_are_refused_at_the_routes(world) -> None:
     for state in ("accepted", "redirected", "rejected"):
         response = world.http.post(f"{API}/proposals/{pid}/decide",
                                    json={"state": state, "token": shown["token"], "direction": "change"})  # fmt: skip
-        assert (response.status_code, response.json()["detail"]) == (409, store.SYNTHETIC_RETIRED)
+        assert (response.status_code, response.json()["detail"]) == (409, f"RetroError: {store.SYNTHETIC_RETIRED}")
     response = world.http.post(f"{API}/followups", json={"finding": "f-old"})
-    assert (response.status_code, response.json()["detail"]) == (409, store.SYNTHETIC_RETIRED)
+    assert (response.status_code, response.json()["detail"]) == (409, f"RetroError: {store.SYNTHETIC_RETIRED}")
     assert (store.lines(props.FILE), store.queued()) == (before, [])
 
     props.transition(pid, "redirected", "owner", direction="old")
@@ -420,3 +429,61 @@ def test_a_checked_case_moves_into_the_examples_only_with_its_text_and_commits_o
     )
     stale = world.http.post(f"{API}/cases/{chosen}/move", json={"stage": "test", "parent": n})
     assert stale.status_code == 409
+
+
+NOTE = "the runtime said more after the error"
+
+
+def _noted(exc: Exception) -> Exception:
+    exc.add_note(NOTE)
+    return exc
+
+
+@pytest.mark.parametrize(
+    ("site", "ask"),
+    [
+        ("retro", ("/retro", {"change": "p1:fix"}, "Change p1:fix cannot be read: OSError: {w}\n{n}")),
+        ("followup", ("/followups", {"finding": "f-1"}, "RetroError: {w}\n{n}")),
+        ("backlog", ("/followups", {"finding": "f-1"}, "the backlog could not be reached: OSError: {w}\n{n}")),
+        ("decide", ("/proposals/p-1/decide", {"state": "accepted", "token": "t"}, "RetroError: {w}\n{n}")),
+        ("apply", ("/proposals/p-1/apply", None, "RetroError: {w}\n{n}")),
+        ("move", ("/cases/c-1/move", {"stage": "candidate", "parent": 0}, "CaseError: {w}\n{n}")),
+    ],
+)
+def test_a_refused_act_keeps_its_whole_reason(world, monkeypatch, whole_error, site, ask) -> None:
+    def raising(exc: Exception) -> Any:
+        def _raise(*_a: Any, **_kw: Any) -> Any:
+            raise _noted(exc)
+
+        return _raise
+
+    if site == "retro":
+        monkeypatch.setattr(world.projects["p1"][0], "read", raising(OSError(whole_error)))
+    elif site == "followup":
+        monkeypatch.setattr(followups, "request", raising(store.RetroError(whole_error)))
+    elif site == "backlog":
+        monkeypatch.setattr(followups, "request", raising(OSError(whole_error)))
+    elif site in {"decide", "apply"}:
+        world.shared.mkdir(exist_ok=True)
+        monkeypatch.setattr(proposal_apply, site, raising(store.RetroError(whole_error)))
+    else:
+        monkeypatch.setattr(case_edits, "move", raising(CaseError(whole_error)))
+    path, body, said = ask
+
+    answer = world.http.post(f"{API}{path}", json=body)
+
+    status = 422 if site == "move" else 409
+    assert (answer.status_code, answer.json()["detail"]) == (status, said.format(w=whole_error, n=NOTE))
+
+
+def test_machine_settings_that_cannot_be_read_are_shown_whole_on_the_retro_switches(
+    world, monkeypatch, whole_error
+) -> None:
+    def unreadable() -> Any:
+        raise _noted(registry.RegistryError(whole_error))
+
+    monkeypatch.setattr(machine_settings, "current", unreadable)
+
+    shown = world.http.get(API).json()["retro"]["switches"]
+
+    assert shown == {"error": f"the machine's settings cannot be read: RegistryError: {whole_error}\n{NOTE}"}

@@ -26,6 +26,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import cases
 from owlbear_delivery_next.improvement.cases import CaseError
 from owlbear_delivery_next.improvement.events import EMAIL
@@ -85,7 +86,7 @@ async def check(request: dict[str, Any], ask: Ask, meter: Meter, halt: Callable[
     except asyncio.CancelledError:  # the host ended: the session's teardown and spend are done, the result is kept
         why = "stopped: OwlBear stopped during a review"
     except Exception as exc:  # noqa: BLE001 - a failed review ends the run; its result is kept, never rerun
-        why = f"failed: {type(exc).__name__}: {exc}"
+        why = f"failed: {failure(exc)}"
     out |= {"result": why or "checked", "credits": meter.report(), "ended": cases.now()}
     with cases.locked():
         cases.append("runs.jsonl", out)
@@ -116,7 +117,7 @@ def _promote(cid: str, wanted: str, note: str) -> str:
             cases.commit(cur["n"], {cid: {**entry, "stage": "test", "review": review}}, "retro-review",
                          f"check: the card supports {entry['call']}")  # fmt: skip
         except CaseError as exc:
-            return f"supported, but not promoted: {exc}"
+            return f"supported, but not promoted: {failure(exc)}"
         return "supported: now a test case"
 
 
@@ -135,7 +136,7 @@ def state() -> dict[str, dict[str, Any]]:
     except FileNotFoundError:
         return {}
     except ValueError as exc:
-        msg = f"published.json cannot be read: {exc}"
+        msg = f"published.json cannot be read: {failure(exc)}"
         raise CaseError(msg) from exc
 
 
@@ -266,7 +267,7 @@ def _write(shared: DataRepo, cid: str, text: str | None) -> tuple[bool, bool, st
                 atomic_write(path, text)
             said = shared.publish(path, message)
     except (DataRepoError, OSError) as exc:
-        return False, False, str(exc)
+        return False, False, failure(exc)
     if not said:
         return True, True, ""
     return ("committed" in said and "not committed" not in said), False, said
@@ -280,17 +281,21 @@ async def sync(shared: DataRepo | None, ask: Ask, meter: Meter, halt: Callable[[
     if shared is None:
         out["stopped"] = "no shared repository on this machine" if review or write or gone else ""
         return out
-    for cid in gone:
-        committed, pushed, why = _write(shared, cid, None)
-        if committed:
-            _set(cid, remote="", pushed=pushed, why=why)
-        out["removed" if committed and pushed else "pending" if committed else "failed"].append(cid)
-    for cid, rev in write.items():
-        out[_place(shared, cid, rev, _kept(cid, rev) or "")].append(cid)
     try:
+        for cid in gone:
+            committed, pushed, why = _write(shared, cid, None)
+            if committed:
+                _set(cid, remote="", pushed=pushed, why=why)
+            _told(out, cid, "removed" if committed and pushed else "pending" if committed else "failed", why)
+        for cid, rev in write.items():
+            _told(out, cid, *_place(shared, cid, rev, _kept(cid, rev) or ""))
         await _review(shared, review, ask, meter, halt, out)
     except asyncio.CancelledError:  # the host ended: the revision under review stays due
         out["stopped"] = "OwlBear stopped during a review"
+    except Exception as exc:
+        if out.get("result"):  # earlier cases' reasons travel with the error into the run's result
+            exc.add_note(out["result"])
+        raise
     return out
 
 
@@ -323,7 +328,17 @@ async def _review(  # noqa: PLR0913, PLR0917 - the repository, what is due, the 
             continue
         _keep(cid, rev, made)
         _set(cid, review={"revision": rev, "outcome": "passed", "why": ""})
-        out[_place(shared, cid, rev, made)].append(cid)
+        _told(out, cid, *_place(shared, cid, rev, made))
+
+
+def _told(out: dict[str, Any], cid: str, state: str, why: str) -> None:
+    """Count case *cid* under *state*; a write or withdrawal that did not go through adds its whole reason.
+
+    The reason joins the run's result, one case to a line.
+    """
+    out[state].append(cid)
+    if why:
+        out["result"] = "\n".join(filter(None, (out.get("result", ""), f"case {cid}, {state}: {why}")))
 
 
 def _stopped(meter: Meter, halt: Callable[[], str]) -> str:
@@ -331,8 +346,8 @@ def _stopped(meter: Meter, halt: Callable[[], str]) -> str:
     return halt() or ("" if meter.admit() else f"the retro run's spend is {meter.report()['stopped']}")
 
 
-def _place(shared: DataRepo, cid: str, rev: str, text: str) -> str:
-    """Write the reviewed export, if the case is still exactly what was reviewed; what happened.
+def _place(shared: DataRepo, cid: str, rev: str, text: str) -> tuple[str, str]:
+    """Write the reviewed export, if the case is still exactly what was reviewed; what happened, and why not ("" if so).
 
     A case changed during its review is not written; one removed (or no longer published) meanwhile is withdrawn now
     if the shared repository holds an earlier revision of it, else by the next sync: what the repository holds is kept
@@ -342,15 +357,15 @@ def _place(shared: DataRepo, cid: str, rev: str, text: str) -> str:
         entry = cases.current()["cases"].get(cid)
         if entry is None or not eligible(cid, entry) or cases.content(cid, entry) != rev:
             _set(cid, review={"revision": rev, "outcome": "changed", "why": "changed or removed during its review"})
-            had = _get(cid)
+            had, why = _get(cid), ""
             if (entry is None or not eligible(cid, entry)) and (had["remote"] or not had["pushed"]):
                 committed, pushed, why = _write(shared, cid, None)
                 if committed:
                     _set(cid, remote="", pushed=pushed, why=why)
-            return "changed"
+            return "changed", why
         committed, pushed, why = _write(shared, cid, text)
         if committed:
             _set(cid, remote=rev, pushed=pushed, why=why)
-            return "published" if pushed else "pending"
+            return ("published" if pushed else "pending"), why
         _set(cid, pushed=False, why=why)  # the file may be in the checkout or its index: a withdrawal cleans it
-        return "failed"
+        return "failed", why

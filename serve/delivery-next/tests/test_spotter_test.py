@@ -282,3 +282,26 @@ def test_the_command_refuses_to_start_while_the_shared_repository_is_not_ready(l
     code = cases_cli.main(argparse.Namespace(command="improvement", action="test", test="start"))
 
     assert (code, capsys.readouterr().out.startswith("refused: ")) == (1, True)
+
+
+@pytest.mark.parametrize("broken", ["the prompt file", "the Spotter cases"])
+def test_a_start_whose_prompt_or_examples_cannot_be_read_is_refused_with_the_whole_reason(
+    layers, capsys, broken
+) -> None:
+    layers.set("gpt-6-luna", "medium", "long", "Judge the card.")
+    spotter_test.declare("fewer reworked hand-offs", "B", "10% fewer")
+    if broken == "the prompt file":
+        layers.prompt.unlink()
+        layers.prompt.mkdir()
+        why = f"the Spotter's prompt could not be read: IsADirectoryError: [Errno 21] Is a directory: '{layers.prompt}'"
+    else:
+        cases.place().mkdir(parents=True, exist_ok=True)
+        (cases.place() / "versions.jsonl").write_text("{not json\n")
+        why = (
+            "the Spotter cases could not be read, so no examples were shown (CaseError: versions.jsonl cannot be "
+            "read: JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1))"
+        )
+
+    code = cases_cli.main(argparse.Namespace(command="improvement", action="test", test="start"))
+
+    assert (code, capsys.readouterr().out) == (1, f"refused: the Spotter test cannot start: {why}\n")

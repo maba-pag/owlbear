@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.commands import cases_cli, cli
 from owlbear_delivery_next.improvement import (
     case_edits,
     case_intake,
@@ -21,12 +21,13 @@ from owlbear_delivery_next.improvement import (
     cases,
     chatlogs,
     pilot_seed,
+    retro_store,
     spotter,
 )
 from owlbear_delivery_next.improvement.cases import CaseError
 from owlbear_delivery_next.improvement.credit_meter import Meter
 from owlbear_delivery_next.local_system import maintenance
-from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import cases_job
 from owlbear_delivery_next.runtimes import retro_review, spotter_look
@@ -34,6 +35,10 @@ from owlbear_delivery_next.state_store import spend_ledger, spend_metrics, spend
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+
+NOTE = "the runtime said more after the error"  # a note an error carries, which its whole text keeps
+BAD = "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"  # "{x" as JSON
 
 
 def saved(mid: str, session: str, family: str, *, hand_off: bool = False, decisions: bool = False) -> dict[str, Any]:
@@ -709,14 +714,74 @@ def test_a_failed_publication_is_kept_with_its_spend(monkeypatch, shared_repo, w
 
     async def failing(_text, meter, _role) -> str:
         spend(meter, 0.2)
-        raise RuntimeError(whole_error)
+        exc = RuntimeError(whole_error)
+        exc.add_note(NOTE)
+        raise exc
 
     j.job.asked = failing
     reviewed()
     j.job.tick(1000)
     [kept] = [r for r in case_replay.results() if r["kind"] == "publication"]
-    assert kept["result"] == f"failed: RuntimeError: {whole_error}"
+    assert kept["result"] == f"failed: RuntimeError: {whole_error}\n{NOTE}"
     assert kept["credits"]["credits"] == pytest.approx(0.2)
+
+
+def test_a_publication_failed_by_a_later_review_keeps_an_earlier_cases_reason(
+    monkeypatch, shared_repo, whole_error
+) -> None:
+    j = Job(monkeypatch)
+    j.job.shared = lambda: DataRepo(shared_repo[0])
+    first = min(reviewed(), reviewed())  # reviewed first: its write fails, then the other's review
+    later = "\n".join(f"line {i:03d} of the second review's error <&>" for i in range(60))
+    answers = iter([GOOD])
+
+    async def answering(_text, _meter, _role) -> str:
+        if (said := next(answers, None)) is None:
+            raise RuntimeError(later)
+        return said
+
+    def refused(_self: DataRepo, _path: Path, _message: str) -> str:
+        raise DataRepoError(whole_error)
+
+    j.job.asked = answering
+    monkeypatch.setattr(DataRepo, "publish", refused)
+    j.job.tick(1000)
+    [kept] = [r for r in case_replay.results() if r["kind"] == "publication"]
+    assert kept["result"] == f"failed: RuntimeError: {later}\ncase {first}, failed: DataRepoError: {whole_error}"
+
+
+def test_a_publication_failed_by_a_later_export_retry_keeps_an_earlier_cases_reason(
+    monkeypatch, shared_repo, whole_error
+) -> None:
+    first, second = sorted([reviewed(), reviewed()])  # retried in this order
+
+    def refused(_self: DataRepo, _path: Path, _message: str) -> str:
+        raise DataRepoError(whole_error)
+
+    monkeypatch.setattr(DataRepo, "publish", refused)
+    ask, _ = asker([GOOD, GOOD])
+    out = asyncio.run(case_review.sync(DataRepo(shared_repo[0]), ask, Meter(5, "retro-run")))
+    assert out["failed"] == [first, second]  # both reviewed and kept, neither written: both retried next
+    later = "\n".join(f"line {i:03d} of the second export's read error <&>" for i in range(60))
+    kept_export, written = case_review._kept, []  # noqa: SLF001 - the export's read is the boundary
+
+    def refused_again(_self: DataRepo, path: Path, _message: str) -> str:
+        written.append(path)
+        raise DataRepoError(whole_error)
+
+    def unreadable(cid: str, rev: str) -> str | None:
+        if cid == second and written:  # read once the first retry's write failed
+            raise RuntimeError(later)
+        return kept_export(cid, rev)
+
+    monkeypatch.setattr(DataRepo, "publish", refused_again)
+    monkeypatch.setattr(case_review, "_kept", unreadable)
+    j = Job(monkeypatch)
+    j.job.shared = lambda: DataRepo(shared_repo[0])
+    j.job.tick(1000)
+    assert j.asks == []
+    [kept] = [r for r in case_replay.results() if r["kind"] == "publication"]
+    assert kept["result"] == f"failed: RuntimeError: {later}\ncase {first}, failed: DataRepoError: {whole_error}"
 
 
 def test_the_job_counts_in_what_a_stop_waits_for(monkeypatch) -> None:
@@ -830,7 +895,9 @@ def test_the_commands_write_moves_and_queue_a_paid_one(capsys) -> None:
     assert cli.main(["cases", "move", cid, "candidate"]) == 0
     assert cases.current()["cases"][cid]["stage"] == "candidate"
     assert cli.main(["cases", "rollback", "999"]) == 1
-    assert "refused: there is no version 999" in capsys.readouterr().out
+    assert (
+        capsys.readouterr().out.splitlines()[-1] == "refused: CaseError: there is no version 999 of the Spotter cases"
+    )
     assert cli.main(["cases", "check"]) == 0
     assert [r["kind"] for r in case_replay.queued()] == ["regression", "check"]
     assert cli.main(["cases", "list"]) == 0
@@ -862,7 +929,7 @@ def test_a_move_or_rollback_is_made_of_the_version_it_is_written_onto(monkeypatc
     cid = reviewed(call="none")
     racing(monkeypatch, lambda: cases.commit(cases.current()["n"], {cid: None}, "t", "removed meanwhile"))
     assert cli.main(["cases", "move", cid, "candidate"]) == 1
-    assert "refused: case" in capsys.readouterr().out
+    assert capsys.readouterr().out == f"refused: CaseError: case {cid} is not in version {cases.current()['n']}\n"
     assert cid not in cases.current()["cases"]  # never resurrected
     first = cases.current()["n"]
     other = reviewed(call="none")
@@ -1018,3 +1085,106 @@ def test_a_replayed_look_whose_meter_closed_before_an_answer_counts_as_failed(mo
     said = asyncio.run(cases_job.look({}, cases.snapshot(verbose=False), Meter(0.75, "look"),
                                       cases_job.RoleModel(model="m", effort="medium")))  # fmt: skip
     assert said["category"] == "failed"
+
+
+@pytest.mark.parametrize("unreadable", ["the pilot's split", "the families", "a case's fact", "a record's card",
+                                        "Retro's requests"])  # fmt: skip
+def test_a_command_whose_store_cannot_be_read_is_refused_with_the_whole_reason(tmp_path, capsys, unreadable) -> None:
+    folder = pilot(tmp_path)
+    calls = tmp_path / "calls.json"
+    calls.write_text(json.dumps(CALLS))
+    seed = SimpleNamespace(command="cases", action="seed", pilot=folder, calls=calls, synthetic=False)
+    if unreadable == "the pilot's split":
+        (folder / "split.json").unlink()
+        (folder / "split.json").mkdir()
+        why = (
+            "CaseError: the pilot's split.json cannot be read: "
+            f"IsADirectoryError: [Errno 21] Is a directory: '{folder}/split.json'"
+        )
+        asked = seed
+    elif unreadable == "the families":
+        cases.place().mkdir(parents=True, exist_ok=True)
+        (case_intake.place() / "families.json").write_text("{x")
+        why, asked = f"CaseError: families.json cannot be read: JSONDecodeError: {BAD}", seed
+    elif unreadable == "a case's fact":
+        cid = reviewed(call="none")
+        (cases.place() / f"{cid}.json").write_text("{x")
+        why = f"version {cases.current()['n']}\nrefused: CaseError: case {cid} cannot be read: JSONDecodeError: {BAD}"
+        asked = SimpleNamespace(command="cases", action="list", version=None)
+    elif unreadable == "a record's card":
+        spot = spotter.root()
+        (spot / "records-2026-10-24.jsonl").write_text(json.dumps({"id": "r-1", "session": "s"}) + "\n")
+        (spot / "cards").mkdir(parents=True, exist_ok=True)
+        (spot / "cards" / "r-1.json.gz").write_bytes(b"no")
+        why = "CaseError: the card of record r-1 cannot be read: BadGzipFile: Not a gzipped file (b'no')"
+        asked = SimpleNamespace(command="cases", action="add", record="r-1", call="none", why="w")
+    else:
+        retro_store.place().mkdir(parents=True, exist_ok=True)
+        (retro_store.place() / "requests.jsonl").write_text("{x\n")
+        why = f"RetroError: Retro's requests.jsonl cannot be read: JSONDecodeError: {BAD}"
+        asked = SimpleNamespace(command="improvement", action="retro", retro="status", last=5, plan=None)
+    capsys.readouterr()
+
+    code = cases_cli.main(asked)
+
+    assert (code, capsys.readouterr().out) == (1, f"{why if '\nrefused: ' in why else f'refused: {why}'}\n")
+
+
+@pytest.mark.parametrize("refusal", ["a case's card", "the run"])
+def test_a_replay_refused_by_its_run_or_its_job_keeps_the_whole_reason(monkeypatch, whole_error, refusal) -> None:
+    j = Job(monkeypatch)
+    rid = queue_regression()
+    if refusal == "a case's card":  # the run's own catcher
+        [cid, *_] = case_replay.queued()[0]["frozen"]
+        (cases.place() / "cards" / f"{cid}.json.gz").write_bytes(b"no")
+        why = f"CaseError: the card of case {cid} cannot be read: BadGzipFile: Not a gzipped file (b'no')"
+    else:  # the job's catcher, for a refusal the run raises before it keeps a result
+
+        async def refused(*_args: Any) -> None:
+            exc = CaseError(whole_error)
+            exc.add_note(NOTE)
+            raise exc
+
+        monkeypatch.setattr(case_replay, "run", refused)
+        why = f"CaseError: {whole_error}\n{NOTE}"
+
+    j.job.tick(0)
+
+    [kept] = [r for r in case_replay.results() if r["id"] == rid]
+    assert kept["result"] == f"refused: {why}"
+
+
+@pytest.mark.parametrize("broken", ["the reviewed case", "another case"])
+def test_a_check_whose_case_cannot_be_read_while_it_reviews_keeps_the_whole_reason(broken) -> None:
+    a, b = candidates(2)
+    gone = a if broken == "the reviewed case" else b
+    ask, _ = asker(
+        ['{"supported": true, "note": "fits"}'], during=lambda: (cases.place() / f"{gone}.json").write_text("{x")
+    )
+
+    out = asyncio.run(case_review.check(check_request([a]), ask, Meter(10, "retro-run")))
+
+    why = f"CaseError: case {gone} cannot be read: JSONDecodeError: {BAD}"
+    if broken == "the reviewed case":  # read again to promote it: the run fails
+        assert (out["reviews"], out["result"]) == ({}, f"failed: {why}")
+    else:  # read by the version the promotion writes
+        assert (out["reviews"][a]["result"], out["result"]) == (f"supported, but not promoted: {why}", "checked")
+
+
+def test_a_publication_the_shared_repository_refuses_keeps_the_whole_reason(
+    shared_repo, monkeypatch, whole_error
+) -> None:
+    root, _ = shared_repo
+    cid = reviewed()
+
+    def refused(_self: DataRepo, _path: Path, _message: str) -> str:
+        exc = DataRepoError(whole_error)
+        exc.add_note(NOTE)
+        raise exc
+
+    monkeypatch.setattr(DataRepo, "publish", refused)
+    ask, _ = asker([GOOD])
+
+    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
+
+    assert (out["failed"], case_review.state()[cid]["why"]) == ([cid], f"DataRepoError: {whole_error}\n{NOTE}")

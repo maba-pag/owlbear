@@ -64,11 +64,13 @@ function testLine(t) {
     : nothing}.${frozen}`);
 }
 
-// The enrolled chats it does not follow: all of them while the follower's last pass failed (its whole error), and a
-// terminal ``copilot`` session, which has no host it could act through.
-function notFollowed(chats, failed) {
-  if (!chats?.length && !failed) return nothing;
-  return html`<div id="not-followed">${heading(3, "Chats not followed", "md")}<ul class="meta">${failed ? html`<li
+// The enrolled chats it does not follow: all of them while the follower could not start or its last pass failed (each
+// its whole error), and a terminal ``copilot`` session, which has no host it could act through.
+function notFollowed(chats, failed, refused) {
+  if (!chats?.length && !failed && !refused) return nothing;
+  const stopped = "All enrolled chats: the follower did not start, and none is followed until OwlBear starts again: ";
+  return html`<div id="not-followed">${heading(3, "Chats not followed", "md")}<ul class="meta">${refused
+    ? html`<li id="follower-refused">${stopped}${refused}</li>` : nothing}${failed ? html`<li
     id="follower-failed">All enrolled chats: the last pass failed, and the next one tries again: ${failed}</li>`
     : nothing}${(chats ?? []).map((c) => html`<li>${c.workspace}: ${c.why} (session ${c.session})</li>`)}</ul></div>`;
 }
@@ -86,6 +88,6 @@ export function spotterSection(s) {
       { window, of: s.spend[pid] }))}</ul>` : empty("No project is loaded on this machine.")}
     ${elsewhere.map(([pid, of]) => quiet(`${pid ? `Project ${pid}, not loaded now` : "Outside a project"}, last `
       + `${window}: ${spent(of)}`))}
-    ${notFollowed(s.not_followed, s.follower_failed)}
+    ${notFollowed(s.not_followed, s.follower_failed, s.follower_refused)}
   </section>`;
 }

@@ -262,6 +262,54 @@ def test_a_steer_the_log_never_shows_is_withdrawn_and_unconfirmed(tmp_path, hold
     assert (act.delivery, act.error) == ("unconfirmed", said)
 
 
+def test_a_withdrawal_that_fails_keeps_its_whole_error_on_the_act(tmp_path, whole_error) -> None:
+    error = OSError(whole_error)
+    error.add_note("the host's socket closed mid-write")
+
+    class Refusing(Host):
+        def dispatch(self, channel: str, action: dict[str, Any]) -> int:
+            if action["type"] == "chat/pendingMessageRemoved":
+                raise error
+            return super().dispatch(channel, action)
+
+    async def main() -> acts.Act:
+        host, bound = Refusing(Clock()), Bound()
+        actor = chat(tmp_path, host, bound=bound)
+        *_, sending = await acted(actor)
+        await until(lambda: host.actions)
+        bound.up.set()
+        await sending
+        return act_of(actor)
+
+    act = asyncio.run(main())
+    assert (act.delivery, act.error) == ("unconfirmed", ("not taken within 60 s; its withdrawal failed: OSError: "
+                                         f"{whole_error}\nthe host's socket closed mid-write"))  # fmt: skip
+
+
+def test_an_act_on_a_host_whose_endpoint_fails_keeps_the_whole_error(tmp_path, monkeypatch, whole_error) -> None:
+    error = ConnectionRefusedError(whole_error)
+    error.add_note("the endpoint was published by a VS Code that quit")
+
+    def refused(_entry: object, _client: str) -> None:
+        raise error
+
+    monkeypatch.setattr(chat_acts.ahp, "endpoint", lambda: {"port": 1})
+    monkeypatch.setattr(chat_acts.ahp, "connect", refused)
+
+    async def main() -> acts.Act:
+        actor = chat(tmp_path, Host(Clock()))
+        actor.connect = None  # VS Code's own agent host, as the follower reaches it
+        actor.spot.look("plan", 1.0, {"kind": "plan", "call": "x"})
+        await until(lambda: acts.acts(actor.spot.folder) and act_of(actor).delivery == "failed")
+        await actor.spot.drain()
+        return act_of(actor)
+
+    act = asyncio.run(main())
+    assert (act.delivery, act.error) == ("failed", (f"HostError: {chat_acts.GONE}: its published endpoint failed: "
+                                         f"ConnectionRefusedError: {whole_error}\n"
+                                         "the endpoint was published by a VS Code that quit"))  # fmt: skip
+
+
 def test_a_note_whose_turn_was_superseded_or_ended_expires_unsent(tmp_path) -> None:
     async def main(*, newer: bool) -> tuple[Host, acts.Act]:
         host = Host(Clock(), active="" if not newer else "t-2")

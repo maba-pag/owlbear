@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.profile_record import RoleModel
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import case_replay, case_review, cases, spotter
 from owlbear_delivery_next.improvement.credit_meter import Meter
 from owlbear_delivery_next.local_system import data_repo, local_home, maintenance, processes
@@ -125,6 +126,7 @@ class CasesJob:
         self.maintenance = ownership or maintenance.Maintenance(slots)
         self.running, self.halting, self.meter, self.lock = "", "", None, threading.Lock()
         self.published_at, self.checked = -PUBLISH_EVERY, False
+        self.failed = self.unpublished = ""  # the last pass's whole error; why the last sync could not start
         self.task: tuple[asyncio.AbstractEventLoop, asyncio.Task[Any] | None] | None = None  # the running sessions
         self.unended: list[str] = []  # the running run's sessions whose runtime's end was not confirmed
         self.thread: threading.Thread | None = None
@@ -176,8 +178,10 @@ class CasesJob:
         while not stopping.wait(EVERY):
             try:
                 self.tick(clock())
+                self.failed = ""
             except Exception as exc:  # noqa: BLE001 - the loop outlives one failed pass
-                self.say(f"the Spotter cases job failed: {type(exc).__name__}: {exc}")
+                self.failed = failure(exc)  # the Improvement page's thread reads it
+                self.say(f"the Spotter cases job failed: {self.failed}")
 
     def tick(self, now: float) -> None:
         """One pass: each queued request in turn, then a publication sync when due; none if paused, fenced or held."""
@@ -301,12 +305,14 @@ class CasesJob:
                 self._run(case_review.check(request, asked, meter, self.halt))
             else:
                 self._ended(request, f"refused: unknown request {kind!r}")
-        except (SettingsUnset, cases.CaseError) as exc:
+        except SettingsUnset as exc:  # in OwlBear's own words
             self._ended(request, f"refused: {exc}", meter)
+        except cases.CaseError as exc:
+            self._ended(request, f"refused: {failure(exc)}", meter)
         except asyncio.CancelledError:  # the host ended before the run kept its own result
             self._ended(request, "stopped: OwlBear stopped", meter)
         except Exception as exc:  # noqa: BLE001 - a failed run is kept as failed with its spend, never rerun
-            self._ended(request, f"failed: {type(exc).__name__}: {exc}", meter)
+            self._ended(request, f"failed: {failure(exc)}", meter)
         finally:
             with self.lock:
                 self.meter = None
@@ -315,8 +321,10 @@ class CasesJob:
         try:
             lim = limits()
         except Exception as exc:  # noqa: BLE001 - said; the next sync tries again
-            self.say(f"the Spotter cases are not published: the credit limits cannot be read: {exc}")
+            self.unpublished = f"the credit limits cannot be read: {failure(exc)}"
+            self.say(f"the Spotter cases are not published: {self.unpublished}")
             return
+        self.unpublished = ""
         if lim["retro"] is None:
             self.say("the Spotter cases are not published: the Retro run credit limit is unset")
             return
@@ -332,7 +340,7 @@ class CasesJob:
         except asyncio.CancelledError:  # the host ended before the sync said what it did
             done = {"result": "stopped: OwlBear stopped"}
         except Exception as exc:  # noqa: BLE001 - kept as failed with its spend; the next sync takes what is due
-            done = {"result": f"failed: {type(exc).__name__}: {exc}"}
+            done = {"result": f"failed: {failure(exc)}"}
         finally:
             with self.lock:
                 self.meter = None

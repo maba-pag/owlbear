@@ -841,7 +841,9 @@ def test_a_failed_pass_is_told_whole(world, whole_error):
     told: list[str] = []
 
     def unreadable() -> chat_settings.Plan:
-        raise RuntimeError(whole_error)
+        exc = RuntimeError(whole_error)
+        exc.add_note("the chats' settings were being written")
+        raise exc
 
     f = chats.Follower(lambda: False, told.append, read=unreadable, judge=world.judge, poll=0.01,
                        sessions=world.state)  # fmt: skip
@@ -851,7 +853,29 @@ def test_a_failed_pass_is_told_whole(world, whole_error):
         time.sleep(0.02)
     f.close()
     assert f.join(chats.CLOSE)
-    assert told == [f"chats follower: a pass failed: RuntimeError: {whole_error}"]  # said once, while it repeats
+    said = f"RuntimeError: {whole_error}\nthe chats' settings were being written"
+    assert (told, f.failed) == ([f"chats follower: a pass failed: {said}"], said)  # said once, while it repeats
+
+
+def test_a_lock_that_cannot_be_opened_is_told_whole(world, monkeypatch, whole_error):
+    told: list[str] = []
+    error = PermissionError(whole_error)
+    error.add_note("the Spotter's folder is read-only")
+    opening = os.open
+
+    def refused(path: object, *args: Any) -> int:
+        if str(path).endswith(chats.LOCK):
+            raise error
+        return opening(path, *args)
+
+    monkeypatch.setattr(chats.os, "open", refused)
+    f = chats.Follower(lambda: False, told.append, read=world.read, judge=world.judge, poll=0.01,
+                       sessions=world.state)  # fmt: skip
+    f.run()
+    said = f"PermissionError: {whole_error}\nthe Spotter's folder is read-only"
+    assert (told, f.ended.is_set()) == ([f"chats follower: its lock cannot be opened ({said}); no chat is followed"],
+                                        True)  # fmt: skip
+    assert (f.refused, f.failed) == (f"its lock cannot be opened: {said}", "")  # for the Improvement page
 
 
 def test_a_look_whose_runtime_ended_releases_its_lease(world):
@@ -1157,6 +1181,14 @@ def test_a_look_admitted_before_a_reset_runs_to_its_end(world):
     assert [(r["look"], r["skipped"], r["category"]) for r in records()] == [("plan", "", "none")]
 
 
+def unread_rule(rule: str) -> str:
+    """Why a moment resting on *rule* is refused while the registry cannot be read: its read's whole error."""
+    with pytest.raises((OSError, ValueError)) as caught:
+        assumptions.ensure(rule)
+    error = f"{type(caught.value).__name__}: {caught.value}"
+    return f"the marked assumptions cannot be read ({error}), so its rule {rule} may be retired"
+
+
 @pytest.mark.parametrize("registry", ["{bad", "[]", "null", '{"chat-state-change-1": null}'])
 def test_an_unreadable_registry_refuses_its_rules_moments_and_the_chat_reads_on(world, registry):
     """Sol's counterexample: a registry that parsed into no object raised out of the follower, aborting its read: the
@@ -1176,12 +1208,12 @@ def test_an_unreadable_registry_refuses_its_rules_moments_and_the_chat_reads_on(
 
     asyncio.run(scenario())
     got = {r["look"]: r["skipped"] for r in records()}
-    refused = "the marked assumptions cannot be read ("
-    assert got["state-change"].startswith(refused)
+    assert got["state-change"] == unread_rule(assumptions.STATE_CHANGE)
     assert got["sample"] == ""  # the call's sample is still taken
     entry_only = registry.startswith('{"')
-    assert (got["plan"] == "") is entry_only  # a valid rule's moment is still looked at
-    assert entry_only or got["plan"].startswith(refused)
+    assert got["plan"] == (
+        "" if entry_only else unread_rule(assumptions.PLAN)
+    )  # a valid rule's moment is still looked at
     kept = assumptions.path().read_text()  # unreadable state is never replaced
     assert json.loads(kept)[assumptions.STATE_CHANGE] is None if entry_only else kept == registry
 
@@ -1201,7 +1233,7 @@ def test_a_rule_whose_entry_does_not_say_whether_it_was_retired_is_refused(world
 
     asyncio.run(scenario())
     got = {r["look"]: r["skipped"] for r in records()}
-    assert got["plan"].startswith("the marked assumptions cannot be read (")
+    assert got["plan"] == unread_rule(assumptions.PLAN)
     assert got["hand-off"] == ""
     assert json.loads(assumptions.path().read_text())[assumptions.PLAN] == entry  # never replaced
     with pytest.raises(ValueError, match="retired"):

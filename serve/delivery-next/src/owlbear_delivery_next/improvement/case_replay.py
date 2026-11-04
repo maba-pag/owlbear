@@ -27,6 +27,7 @@ import json
 import uuid
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import assumptions, cases
 from owlbear_delivery_next.improvement.cases import CaseError, Frozen, Prompt, Stale
 from owlbear_delivery_next.improvement.credit_meter import Meter
@@ -250,7 +251,7 @@ async def run(  # noqa: C901, PLR0912 - the run, its stop and its result
     except _Stopped as exc:
         why = f"stopped: {exc}"
     except CaseError as exc:
-        why = str(exc)
+        why = failure(exc)
     except asyncio.CancelledError:  # the host ended: the look's teardown and spend are done, the result is kept
         why = "stopped: OwlBear stopped during a look"
     why = why or _halted(halt) or _vetoed(meter, looks)
@@ -315,7 +316,7 @@ async def _once(  # noqa: PLR0913, PLR0917 - the card, its prompt and look, the 
         try:
             said = await look(the_card, prompt, meter)
         except Exception as exc:  # noqa: BLE001 - a failed look is retried once, then counted
-            said = {"category": "failed", "note": f"{type(exc).__name__}: {exc}"}
+            said = {"category": "failed", "note": failure(exc)}
         if said.get("category") in SILENT or said.get("category") in CATEGORIES:
             break
     looks.append(meter.report())
