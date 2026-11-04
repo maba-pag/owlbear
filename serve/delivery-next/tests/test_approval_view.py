@@ -165,7 +165,8 @@ def test_a_planned_change_folds_its_plan_with_the_current_task_outside(page_url,
     built.brief = built.brief.model_copy(update={"approved_version": 2, "approved_at": NOW})
     titles = ["Add the flip button", "Animate the hero", "Keep the caption readable"]
     tasks = [m.Task(id=f"t{n}", title=t, done=n == 1) for n, t in enumerate(titles, 1)]
-    built.plan = m.Plan(version=2, tasks=tasks)
+    part = m.Task(id="t4", title="Label the hero's controls", origin="review", fixes="t2")  # runs before t3
+    built.plan = m.Plan(version=2, tasks=[*tasks, part])
     found = RoundFinding(id="F1", text="t2: AC-1: no timing check - fix: measure it", raised=1, state="fixed")
     verdicts = [Verdict(round=1, version=1), Verdict(round=2, version=2)]
     built.loops["plan"] = RoundLoop(subject="plan", policy=RoundPolicy(), round=2, ended="clean", findings=[found],
@@ -178,9 +179,9 @@ def test_a_planned_change_folds_its_plan_with_the_current_task_outside(page_url,
         now = plan.locator(":scope > ol.plan > li")
         expect(now).to_have_count(1)  # the task at work, outside the fold
         expect(now).to_contain_text("now")
-        expect(now).to_contain_text("Animate the hero")
-        fold = plan.locator("details", has_text="Tasks: 1 of 3 done")
-        expect(fold.locator("summary")).to_have_text("Tasks: 1 of 3 done")
+        expect(now).to_contain_text("Label the hero's controls")  # the repair part the build works on
+        fold = plan.locator("details", has_text="Tasks: 1 of 4 done")
+        expect(fold.locator("summary")).to_have_text("Tasks: 1 of 4 done")
         expect(page.get_by_text("Keep the caption readable")).to_be_hidden()
         versions = plan.locator(".version-list > li")
         expect(versions).to_have_count(2)

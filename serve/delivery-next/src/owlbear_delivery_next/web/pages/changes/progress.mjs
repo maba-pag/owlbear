@@ -68,7 +68,7 @@ export function spentText(credits, unknown) {
 // review badges of each task show with the details.
 export function planInfo(d) {
   const working = ["build", "review", "integrate"].includes(d.step) && !d.line.startsWith("Done");
-  const now = working ? d.plan.find((t) => !t.done) : null, on = detailsOn();
+  const now = working ? d.plan.find((t) => t.id === d.open_task) : null, on = detailsOn();
   const item = (t, where = "") => {
     const [label, variant] = t.done ? ["done", "success"] : t === now ? ["now", "info"] : ["to do", "secondary"];
     return html`<li><p-tag variant=${variant} compact="true">${label}</p-tag><span>${t.title}${t.origin

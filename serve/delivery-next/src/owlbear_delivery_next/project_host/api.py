@@ -28,7 +28,7 @@ from owlbear_delivery_next.change_contracts.inbox import (
 )
 from owlbear_delivery_next.change_contracts.models import Change, Exit, PersonCheck, Waiting
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import loop, rebuilds, round_flow, round_marks, versions
+from owlbear_delivery_next.change_flow import loop, moves, rebuilds, round_flow, round_marks, versions
 from owlbear_delivery_next.change_flow.progress import progress
 from owlbear_delivery_next.change_flow.status import card, for_chat, status, unloadable
 from owlbear_delivery_next.impeccable_runs import pack_job
@@ -366,6 +366,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                 "criteria": [k.model_dump() for k in c.brief.criteria],
                 "plan": [t.model_dump() for t in c.plan.tasks] if c.plan else [],
                 "plan_versions": versions.plan(c),
+                "open_task": t.id if (t := moves.open_task(c)) else None,  # a repair part runs before later tasks
                 "handled": [
                     h.model_dump(mode="json", include={"item", "kind", "url", "how", "text", "resolved", "at"})
                     for h in c.handled
