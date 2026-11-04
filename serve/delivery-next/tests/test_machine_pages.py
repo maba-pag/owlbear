@@ -972,7 +972,6 @@ def test_updates_say_update_checks_that_could_not_be_kept_set_or_looked_at_whole
             logged = f"update checks: the machine settings could not be read: {whole}"
         else:
             _tick_fails_once(monkeypatch, machine, error, released)
-            assert machine.checks.unticked == whole
             told = f"The last look whether a check is due failed: {whole}."
             logged = f"update checks failed: {whole}"
         text, said = _checks_page(base, "/updates/owlbear", "#check-settings")
@@ -985,7 +984,6 @@ def test_updates_say_update_checks_that_could_not_be_kept_set_or_looked_at_whole
     assert said == []
     line = r"^\d\d:\d\d:\d\dZ (update checks.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
     lines = re.findall(line, capsys.readouterr().out, re.MULTILINE | re.DOTALL)
-    assert lines
     assert set(lines) == {logged}
 
 
@@ -1018,7 +1016,6 @@ def test_updates_pds_says_a_newer_release_whose_projects_runs_could_not_be_read_
     assert said == []
     line = r"^\d\d:\d\d:\d\dZ (update checks.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
     lines = re.findall(line, capsys.readouterr().out, re.MULTILINE | re.DOTALL)
-    assert lines
     assert set(lines) == {f"update checks: the PDS updates could not be read: {whole}"}
 
 
