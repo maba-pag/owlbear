@@ -185,8 +185,13 @@ def test_decisions_the_pick_did_not_read_pass_approval_and_go_to_the_next_steps_
     c = run.step()
 
     assert (c.outcome, loop.open_question(c)) == (None, None)
-    rows = picking.pickers()[-1].message.split("## Decisions")[1]
+    context, rows = picking.pickers()[-1].message.split("## Decisions")
     assert (len(picking.pickers()), new.id in rows, other.id in rows, rule.id in rows) == (2, True, True, False)
+    assert context.startswith(pick.LATER)
+    assert (
+        context.split("## The work's rules so far (context, not to judge)\n")[1].strip()
+        == f"{rule.id} | {rule.statement}"
+    )
     pin = c.decisions_baseline
     assert pin.revisions[other.id] == renamed.rule_revision  # considered at its new revision
     assert (new.id in pin.said, pin.revisions[new.id]) == (governs, new.rule_revision)

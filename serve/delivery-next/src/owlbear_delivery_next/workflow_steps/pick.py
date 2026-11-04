@@ -47,7 +47,8 @@ FINISH = "Call `submit_result` once with the id of every decision you pick. If i
 LATER = (
     "The rules of this work were picked earlier; these decisions came into force or changed since. Select every one "
     "the work must respect or that determines what it must do. When in doubt about a rule whose violation would "
-    "cause a wrong result, include it."
+    "cause a wrong result, include it. The work's rules so far are listed for context: choose only from the "
+    "decisions below them."
 )
 
 
@@ -142,15 +143,20 @@ def reassessed(store: Store, lock: Lock, c: Change, found: list[Decision], root:
     """Those of *found* the picker picks for *c*'s running work, or why its pick failed (TD-456).
 
     *found* holds only the decisions that came into force or changed since *c*'s pin, put to one session with its
-    brief and the correction logs in the data repository at *root*; its spend counts like any session's. A failure
-    is never an empty pick.
+    brief, the pinned rules' statements as context and the correction logs in the data repository at *root*; its
+    spend counts like any session's. A failure is never an empty pick.
     """
+    held = c.decisions_baseline
+    context = [
+        "",
+        "## The work's rules so far (context, not to judge)",
+        *(f"{k} | {_one(s.statement)}" for k, s in held.said.items()),
+    ]
     try:
         log = corrections(root, store.name)
-        message_text = message(c, found, log, LATER)
+        message_text = message(c, found, log, "\n".join([LATER, *context]))
     except (OSError, ValueError) as exc:
         return [], f"{type(exc).__name__}: {exc}"
-    held = c.decisions_baseline
     done = _session(store, lock, c, message_text, held)
     said = judged(done, found, Pick(version=c.brief.version))
     held.session = ""  # done: the next reassessment is a session of its own
