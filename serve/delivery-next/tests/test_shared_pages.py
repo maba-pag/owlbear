@@ -735,6 +735,7 @@ def every_name_is_what_its_row_shows(page, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     retired = {"id": "n1", "key": "machine.spotter_budget", "old": "5", "new": None, "at": "2026-11-04T09:00:00Z"}
+    expect(page.locator("#reads-status")).to_contain_text("Last read", timeout=30_000)  # none lands over the notice
     page.evaluate(RETIRED_NOTICE, [retired])  # it is shown as its key and can be dismissed, never a failure to draw
     expect(page.locator("#reads-changed li")).to_contain_text("machine.spotter_budget: 5 → unset")
     expect(page.get_by_role("button", name="Dismiss the change of machine.spotter_budget")).to_have_count(1)
