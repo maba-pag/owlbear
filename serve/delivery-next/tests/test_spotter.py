@@ -1393,7 +1393,10 @@ def test_an_act_is_written_before_it_is_dispatched_and_a_failed_dispatch_keeps_i
     assert acts.acts(spotter.root())[first.record].delivery == "pending"  # the actuator's own log confirms it
 
 
-def test_a_state_change_finding_asks_the_conflict_check_after_acting_and_its_answer_lands_on_the_act() -> None:
+@pytest.mark.parametrize("fails", [False, True], ids=["answers", "fails"])
+def test_a_state_change_finding_asks_the_conflict_check_after_acting_and_its_answer_lands_on_the_act(
+    fails, whole_error
+) -> None:
     order: list[str] = []
 
     async def dispatch(_record: spotter.Record, act: acts.Act) -> None:
@@ -1401,6 +1404,10 @@ def test_a_state_change_finding_asks_the_conflict_check_after_acting_and_its_ans
 
     def conflicts(change: str) -> str:
         order.append(f"check {change}")
+        if fails:
+            exc = RuntimeError(whole_error)
+            exc.add_note("the decisions lookup ended early")
+            raise exc
         return json.dumps({"decisions": [{"id": "D-1", "conflict": "none"}]})
 
     answer = json.dumps({"category": "irreversible-harm", "note": "Deletes the backups.", "evidence": ["e1"],
@@ -1416,32 +1423,9 @@ def test_a_state_change_finding_asks_the_conflict_check_after_acting_and_its_ans
     assert spotter.WORK.settled(5)
     assert order == ["act stop-and-ask", "check rm -rf ~/backups"]
     [act] = acts.acts(spotter.root()).values()
-    assert json.loads(act.conflict) == {"decisions": [{"id": "D-1", "conflict": "none"}]}
+    failed = {"failed": f"RuntimeError: {whole_error}\nthe decisions lookup ended early"}
+    assert json.loads(act.conflict) == (failed if fails else {"decisions": [{"id": "D-1", "conflict": "none"}]})
     assert act.harm
-
-
-def test_a_conflict_check_that_fails_keeps_its_whole_error_on_the_act(whole_error) -> None:
-    def conflicts(_change: str) -> str:
-        exc = RuntimeError(whole_error)
-        exc.add_note("the decisions lookup ended early")
-        raise exc
-
-    answer = json.dumps({"category": "irreversible-harm", "note": "Deletes the backups.", "evidence": ["e1"],
-                         "state_change": "rm -rf ~/backups"})  # fmt: skip
-
-    async def dispatch(_record: spotter.Record, _act: acts.Act) -> None:
-        return
-
-    async def main() -> None:
-        spot = spotter.Spotter(ctx(looks=("hand-off",), actions=STEERED, arm="silent", cap=2, act=dispatch,
-                                   conflicts=conflicts), lambda: "s-1", judge(answer))  # fmt: skip
-        spot.handed_off("call-1", {})
-        await spot.drain()
-
-    asyncio.run(main())
-    assert spotter.WORK.settled(5)
-    [act] = acts.acts(spotter.root()).values()
-    assert json.loads(act.conflict) == {"failed": f"RuntimeError: {whole_error}\nthe decisions lookup ended early"}
 
 
 class Transport:
