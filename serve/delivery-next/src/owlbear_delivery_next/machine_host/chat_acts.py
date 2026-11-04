@@ -45,6 +45,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
 from owlbear_delivery_next.commands import chat_client
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import acts, chatlogs, spotter
 from owlbear_delivery_next.improvement.events import NOTE, main_agent, requester
 from owlbear_delivery_next.runtimes import ahp
@@ -164,7 +165,7 @@ def opened() -> Transport:
     try:
         return ahp.connect(entry, f"owlbear-spotter-{uuid.uuid4().hex[:8]}")
     except OSError as exc:  # an endpoint left behind by a VS Code that quit
-        msg = f"{GONE}: its published endpoint failed: {type(exc).__name__}: {exc}"
+        msg = f"{GONE}: its published endpoint failed: {failure(exc)}"
         raise ahp.HostError(msg) from exc
 
 
@@ -333,7 +334,7 @@ class ChatActor:
             gone = await self._host(self._withdraw, kind, mid)
         except (ahp.HostError, OSError) as exc:
             await self._update(record, delivery="unconfirmed",
-                               error=f"{head}; its withdrawal failed: {type(exc).__name__}: {exc}")  # fmt: skip
+                               error=f"{head}; its withdrawal failed: {failure(exc)}")  # fmt: skip
             return
         why = {
             "taken": f"{SUPERSEDED}, but the host had taken it already" if superseded else

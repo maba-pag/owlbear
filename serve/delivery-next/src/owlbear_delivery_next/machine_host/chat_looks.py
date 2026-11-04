@@ -21,6 +21,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import assumptions, spotter
 from owlbear_delivery_next.local_system import maintenance, processes
 from owlbear_delivery_next.runtimes import spotter_look
@@ -50,7 +51,7 @@ def retired(rule: str) -> str:
     try:
         held = assumptions.ensure(rule)
     except (OSError, ValueError) as exc:  # fails closed: the rule may be retired
-        return f"the marked assumptions cannot be read ({type(exc).__name__}), so its rule {rule} may be retired"
+        return f"the marked assumptions cannot be read ({failure(exc)}), so its rule {rule} may be retired"
     return "" if held else f"retired: its rule, the marked assumption {rule}, was reset; a decided rule must replace it"
 
 

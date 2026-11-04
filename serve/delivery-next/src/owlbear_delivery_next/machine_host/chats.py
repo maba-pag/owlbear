@@ -61,6 +61,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import cases, chatlogs, spotter
 from owlbear_delivery_next.machine_host import chat_acts, chat_looks, chat_offsets
 from owlbear_delivery_next.machine_host.chat_settings import Plan, settings_now
@@ -182,7 +183,7 @@ class Follower:
         try:
             fd = os.open(spotter.root() / LOCK, os.O_WRONLY | os.O_CREAT, 0o600)
         except OSError as exc:
-            self.say(f"chats follower: its lock cannot be opened ({exc}); no chat is followed")
+            self.say(f"chats follower: its lock cannot be opened ({failure(exc)}); no chat is followed")
             self.ended.set()
             return
         try:
@@ -222,7 +223,7 @@ class Follower:
                 await self._pass()
                 self.failed = ""
             except Exception as exc:  # noqa: BLE001 - the follower outlives one failed pass
-                self.failed = f"{type(exc).__name__}: {exc}"  # the Improvement page's thread reads it
+                self.failed = failure(exc)  # the Improvement page's thread reads it
                 self._tell(f"chats follower: a pass failed: {self.failed}")
             await self._nap()
         await self._quit()
