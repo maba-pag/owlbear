@@ -153,8 +153,8 @@ proposes cases, lessons and fixes, each challenged before you see it. Its two sw
 curation's and work the same way: `retro_after_change` for a Change that ended, and `retro_when_idle`
 for chats in the folders listed in `enrolled_chats`, once a chat has been quiet for a day and only
 while OwlBear is idle. Each run stops at `retro_run_credit_limit`. `owlbear improvement retro run`
-with `--change PROJECT/SLUG`, `--chat SESSION` or `--synthetic [NAME]` queues a run for the machine
-host (one per synthetic unit), even while paused or switched off; `owlbear improvement retro status` lists the latest runs,
+with `--change PROJECT/SLUG` or `--chat SESSION` queues a run for the machine
+host, even while paused or switched off; `owlbear improvement retro status` lists the latest runs,
 and `--plan UNIT` shows how many judging calls a run would make, without spending credits.
 
 The **Improvement** page (menu, under Work) shows Retro's proposals waiting for you first, each with
@@ -163,8 +163,8 @@ memory, a candidate Spotter case, an entry in the project's backlog, or an issue
 to OwlBear itself; if making it fails, the card says why and **Apply again** retries. **Reject** closes
 it for good, **Later** sets it aside, and **Redirect** takes your direction: Retro redrafts it at once
 and it comes back as a new proposal; if no redraft is queued or running, **Redraft again** asks once
-more. Proposals from synthetic runs land only in the sandbox's places; one about OwlBear itself becomes
-a public issue marked `[synthetic]`, closed at once. Below them are the Spotter's test, its settings, where each
+more. Earlier synthetic Retro proposals remain as history and cannot be acted on. Below them are the Spotter's test,
+its settings, where each
 comes from, its spend over the last week and the enrolled chats it does not follow; its looks, each with what it did
 (its act, whether its Change or chat was drawn steered or silent, and whether the act was delivered or why not) and the outside writes the watcher saw, by
 project and Change; Retro's switches, runs and findings, with **Run Retro** on a finished Change; and

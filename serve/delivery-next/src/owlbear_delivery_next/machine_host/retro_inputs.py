@@ -16,7 +16,6 @@ from owlbear_delivery_next.improvement import assumptions, cases, chatlogs, retr
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
-from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.machine_host import cases_job
 from owlbear_delivery_next.settings.config import SettingsUnset
@@ -218,7 +217,7 @@ class Running:
     @property
     def needs(self) -> tuple[str, ...]:
         """The assumptions this run rests on."""
-        return (*NEEDS, *(syn.NEEDS if self.provenance == "synthetic" else ()))
+        return (*NEEDS, *((assumptions.RETRO_SYNTHETIC,) if self.provenance == "synthetic" else ()))
 
     def retired(self) -> str:
         """Why this run may not go on: the assumptions it rests on retired now; "" while none is."""

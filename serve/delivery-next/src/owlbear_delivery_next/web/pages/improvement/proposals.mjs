@@ -105,6 +105,7 @@ function redraftAgain(p) {
 }
 
 function actions(p) {
+  if (synthetic(p)) return nothing;
   const busy = (k) => state.busy === `${k}:${p.id}`, off = Boolean(state.busy);
   if (OPEN.has(p.state)) {
     const cannot = Boolean(p.destination?.error);
@@ -144,7 +145,7 @@ function outcome(p) {
     if (p.failures.length) lines.push(`Last failure${p.failures[0].step ? ` (${p.failures[0].step})` : ""}: `
       + p.failures[0].error);
   }
-  if (p.state === "redirected") {
+  if (p.state === "redirected" && !synthetic(p)) {
     lines.push(`Your direction: ${p.direction}`);
     const run = p.redraft_run ?? {};
     if (p.redraft && p.redraft_state !== "drafted") lines.push(`Redrafted as ${p.redraft}.`);
@@ -161,13 +162,14 @@ function outcome(p) {
 }
 
 function card(p) {
-  const [said, variant] = STATES[p.state] ?? [p.state, "secondary"], last = p.history.at(-1);
+  const [said, variant] = synthetic(p) ? ["Historical", "secondary"] : (STATES[p.state] ?? [p.state, "secondary"]);
+  const last = p.history.at(-1);
   const counts = [plural(p.findings.length, "finding"), plural(p.counterexamples?.count ?? 0, "counterexample")];
   return html`<li class="panel proposal" id=${`proposal-${p.id}`}>
     <div class="row">${tag(said, variant)}${tag(p.kind)}${synthetic(p) ? tag("Synthetic", "info") : nothing}
       ${quiet(html`${p.id} · ${when(last?.at)}`)}</div>
     ${heading(3, title(p), "md")}
-    ${p.state === "drafted" ? quiet("Retro reviews it before you can decide on it.") : nothing}
+    ${p.state === "drafted" && !synthetic(p) ? quiet("Retro reviews it before you can decide on it.") : nothing}
     ${text(html`<strong>Why:</strong> ${p.why || p.mechanism || "not said yet"} (${counts.join(", ")}).`)}
     ${p.seen?.length ? html`<ul class="meta">${p.seen.map((f) => html`<li>Seen in ${seenIn(f)}: ${
       f.what}${f.cost ? html` <strong>Cost:</strong> ${f.cost}` : nothing}</li>`)}</ul>` : nothing}
@@ -181,7 +183,7 @@ function card(p) {
 }
 
 export function proposalsSection(list) {
-  const waiting = list.filter((p) => ["waiting", "shown"].includes(p.state)).length;
+  const waiting = list.filter((p) => !synthetic(p) && ["waiting", "shown"].includes(p.state)).length;
   return html`<section id="proposals" aria-labelledby="proposals-title">
     ${heading(2, "Retro's proposals", "lg", "proposals-title")}
     ${quiet(waiting ? `${plural(waiting, "proposal")} ${waiting === 1 ? "waits" : "wait"} for you.`

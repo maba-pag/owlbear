@@ -31,7 +31,6 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.improvement import proposal_apply, retro_judge
 from owlbear_delivery_next.improvement import retro_store as store
-from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.credit_meter import Meter
 from owlbear_delivery_next.improvement.retro_calls import Paid, StoppedError, WaitingError, Work
@@ -195,6 +194,8 @@ class RetroJob:
             ctx = Running.of(snap)
             if snap["unsettled"] or not snap["known"]:
                 self._ended(ctx, "stopped: unknown spend after an interruption")
+            elif ctx.provenance == "synthetic" or ctx.uid.startswith("syn:"):
+                self._ended(ctx, f"refused: {store.SYNTHETIC_RETIRED}")
             elif ctx.limit - ctx.spent <= 0:
                 self._ended(ctx, "stopped: its credit limit is spent")
             else:
@@ -253,6 +254,8 @@ class RetroJob:
     def _start(self, ctx: Running, refused: str = "") -> None:
         """Open *ctx*, recorded, and run it; refused when its limit, a role or an assumption it needs is missing."""
         why, limit = refused, None
+        if ctx.provenance == "synthetic" or ctx.uid.startswith("syn:"):
+            why = f"refused: {store.SYNTHETIC_RETIRED}"
         if not why:
             try:
                 limit = cases_job.limits()["retro"]
@@ -321,11 +324,6 @@ class RetroJob:
             return retro_more.work(ctx, ask, projects)
         if ctx.rev and ctx.mode != "grade-only" and self._revision(ctx).get("run") != ctx.id:
             units.settle(ctx.uid, ctx.rev, "open", run=ctx.id)  # a retry owns the revision it takes again until it ends
-        if ctx.provenance == "synthetic":
-            spec = syn.specs(ctx.spec)[0]
-            if not ctx.rev:
-                self._frozen(ctx, syn.install(spec)["rev"])
-            return syn.work(spec, self._revision(ctx), ctx.id, ask)
         if not ctx.rev:
             self._frozen(ctx, units.freeze({"unit": ctx.uid, "rev": ""}, projects, units.records())["rev"])
         unit, rev = store.known()[ctx.uid], self._revision(ctx)

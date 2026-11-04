@@ -26,7 +26,6 @@ from owlbear_delivery_next.improvement import (
     spotter_test_run,
 )
 from owlbear_delivery_next.improvement import retro_store as retro
-from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.cases import CaseError
 from owlbear_delivery_next.local_system import data_repo
@@ -157,11 +156,7 @@ def _retro(a: argparse.Namespace) -> None:
         if a.change:
             pid, _ = _project(_slash(a.change)[0])
             change = f"{pid}:{_slash(a.change)[1]}"
-        if a.synthetic:  # one request per unit: a host that stops loses none still queued
-            named = a.synthetic if isinstance(a.synthetic, str) else ""
-            rids = [retro.request(BY, synthetic=s["name"]) for s in syn.specs(named)]
-        else:
-            rids = [retro.request(BY, change, a.chat)]
+        rids = [retro.request(BY, change, a.chat)]
         said = "the machine host's Retro job runs it; `owlbear improvement retro status` shows its result"
         _say(f"queued {', '.join(rids)}: {said}")
     elif a.plan:

@@ -1,20 +1,4 @@
-"""Retro's synthetic units (#715 gate G2, Improvement design §5): invented work for kinds no real unit shows.
-
-Each unit in ``retro_synthetic.json`` is one short builder session with the Spotter's records of it. ``install``
-writes its capture to Retro's own folder, never the chatlogs, and takes its revision in ``units.json`` marked
-``synthetic``; a button run (``owlbear improvement retro run --synthetic``) then judges it through the same phases as
-a real unit (``retro_judge.run``). Everything it yields carries provenance ``synthetic`` and the assumption
-``retro-synthetic-1``: the real reads never return it, and no read returns it once that assumption is retired.
-
-The ``demo`` set shows two lessons' worth of findings (a hand-off claiming tests never run) and two agent changes'
-worth (a skill silent that a file is generated), plus a finding resting on a removed output, and a Delivery change's
-worth (an edit the tool reported but never wrote) with a hand-off record graded wrong, for a Spotter case. Together,
-judged in a row, they also make the catchable share that reconsiders the Spotter's looks. ``large`` is sized for two
-judging batches at least, for the credit-stop check. ``acceptance`` holds two scouts listing functions from generated
-files their instructions never tell them to skip: one agent change for the Improvement page's acceptance (#716). A
-unit may name the ``project`` (a clone folder) its work stands for; its unit description keeps it. A text too long for
-one line of the file is a list of pieces, joined as read.
-"""
+"""Fixture captures used to exercise real Retro judging and interruption handling."""
 
 from __future__ import annotations
 
@@ -31,7 +15,7 @@ from owlbear_delivery_next.improvement.retro_calls import Ask, Work
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-DATA = Path(__file__).with_name("retro_synthetic.json")
+DATA = Path(__file__).with_name("retro_fixture.json")
 PREFIX = "syn:"  # a synthetic unit's id
 DEMO = "demo"
 NEEDS = (assumptions.RETRO_SYNTHETIC,)

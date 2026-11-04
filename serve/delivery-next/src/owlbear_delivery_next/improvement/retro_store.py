@@ -42,6 +42,15 @@ class RetroError(Exception):
     """Retro's state cannot be read or written as asked."""
 
 
+SYNTHETIC_RETIRED = "synthetic Retro is retired; its records are historical"
+
+
+def require_real(provenance: str) -> None:
+    """Refuse an action on historical synthetic Retro work."""
+    if provenance == "synthetic":
+        raise RetroError(SYNTHETIC_RETIRED)
+
+
 def place() -> Path:
     """Where Retro's judged state is kept; nothing is created."""
     return local_home.root() / "retro" / "judged"
@@ -206,29 +215,27 @@ def units(state: str | None = None, *, synthetic: bool = False) -> dict[str, dic
 # Button requests (the Improvement page's, or ``owlbear improvement retro run``)
 
 
-def request(  # noqa: PLR0913 - one keyword per thing a run may be about
+def request(
     by: str,
     change: str | None = None,
     chat: str | None = None,
     *,
-    synthetic: str = "",
     redraft: str = "",
     followup: str = "",
 ) -> str:
-    """Queue a run of one Change, chat, synthetic unit, redirected proposal's redraft or finding's follow-up; its id.
+    """Queue a run of one Change, chat, redirected proposal's redraft or finding's follow-up; its id.
 
-    A Change is named ``project:slug``, a synthetic unit by its name, a proposal and a finding by their ids.
+    A Change is named ``project:slug``, a proposal and a finding by their ids.
 
-    A request is taken before its run opens, so a host that stops in between loses it and never pays twice; the
-    synthetic set is queued one unit per request, so a stop loses none of its units still queued.
+    A request is taken before its run opens, so a host that stops in between loses it and never pays twice.
 
     Raises:
         RetroError: Not exactly one of them is named.
     """
-    named = {"change": change or "", "chat": chat or "", "synthetic": synthetic}
+    named = {"change": change or "", "chat": chat or ""}
     named |= {"redraft": redraft, "followup": followup}
     if sum(map(bool, named.values())) != 1:
-        msg = "a Retro request names exactly one Change, one chat, the synthetic units, one redraft or one follow-up"
+        msg = "a Retro request names exactly one Change, one chat, one redraft or one follow-up"
         raise RetroError(msg)
     rid = f"rq-{uuid.uuid4().hex[:12]}"
     with locked():

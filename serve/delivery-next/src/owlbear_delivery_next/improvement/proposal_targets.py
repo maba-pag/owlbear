@@ -1,8 +1,7 @@
 """Where an accepted proposal lands (#716, Improvement design §6): the destination shown before the owner confirms.
 
-A proposal's projects come from its findings' units: a Change unit (``chg:<project id>:<slug>``) names its project, a
-chat names none, a synthetic unit names the clone folder its spec stands for. ``resolve`` then reads the proposal's
-kind and target:
+A proposal's projects come from its findings' units: a Change unit (``chg:<project id>:<slug>``) names its project
+and a chat names none. ``resolve`` then reads the proposal's kind and target:
 
 - a Spotter case becomes a case;
 - a lesson becomes a pending memory in its one project's folder of the shared repository, or OwlBear's when its
@@ -11,8 +10,7 @@ kind and target:
   OwlBear's public repository; a name in the one project's clone becomes an entry in that project's backlog; anything
   else an entry in the backlog of no project.
 
-Synthetic proposals publish only to the sandbox (owlbear-sandbox): its memory folder and backlog, or an issue marked
-synthetic and closed at once. Without the sandbox registered they resolve to an error and cannot be accepted.
+Synthetic Retro proposals are historical and cannot be accepted.
 """
 
 from __future__ import annotations
@@ -28,7 +26,6 @@ from owlbear_delivery_next.local_system import codebase, preload
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-SANDBOX = "owlbear-sandbox"  # the clone folder synthetic proposals publish to
 OWLBEAR = "owlbear"  # OwlBear's own folder in the shared repository
 REPOSITORY = codebase.URL.removeprefix("https://github.com/").removesuffix(".git")
 MEMORY = 1_024  # characters a memory's content holds (owlbear_memory MemoryEntry)
@@ -49,25 +46,17 @@ def units_of() -> dict[str, str]:
     return found | {g["id"]: g.get("unit", "") for g in store.grades(synthetic=True)}
 
 
-def sandbox(places: Mapping[str, Place]) -> str:
-    """The registered sandbox project's id, or ``""``."""
-    return next((pid for pid, p in places.items() if p.clone is not None and p.clone.name == SANDBOX), "")
-
-
-def project(uid: str, places: Mapping[str, Place], known: Mapping[str, Any]) -> str:
+def project(uid: str, places: Mapping[str, Place]) -> str:
     """The registered project *uid* stands for, or ``""``."""
     if uid.startswith("chg:"):
         pid = uid.split(":")[1]
         return pid if pid in places else ""
-    if uid.startswith("syn:") and (name := (known.get(uid) or {}).get("project")):
-        return next((pid for pid, p in places.items() if p.clone is not None and p.clone.name == name), "")
     return ""
 
 
 def projects(snap: Mapping[str, Any], places: Mapping[str, Place], units: Mapping[str, str]) -> list[str]:
     """The registered projects each finding of *snap* stands for, ``""`` for one standing for none, in order."""
-    known = store.known()
-    return [project(units.get(f, ""), places, known) for f in snap["findings"]]
+    return [project(units.get(f, ""), places) for f in snap["findings"]]
 
 
 def _agents(folder: Path) -> dict[str, str]:
@@ -126,16 +115,14 @@ def resolve(
     """Where *snap* lands once accepted, by its kind and target; *units* from ``units_of``, read when not given.
 
     Raises:
-        RetroError: A synthetic proposal while the sandbox is not registered, or a lesson too long for a memory.
+        RetroError: A synthetic proposal, or a lesson too long for a memory.
     """
     kind, target = snap.get("kind", ""), str(snap.get("target") or "")
     synthetic = snap.get("provenance") == "synthetic"
+    store.require_real(str(snap.get("provenance") or "real"))
     if kind == "spotter-case":
         return {"kind": "case", "record": snap.get("record", ""), "call": snap.get("call", ""), "synthetic": synthetic}
-    pid = sandbox(places) if synthetic else _one(projects(snap, places, units if units is not None else units_of()))
-    if synthetic and not pid:
-        msg = f"synthetic proposals publish only to the sandbox; register ~/Projects/{SANDBOX}"
-        raise store.RetroError(msg)
+    pid = _one(projects(snap, places, units if units is not None else units_of()))
     place = places.get(pid)
     clone = place.clone if place else None
     if kind == "lesson":
@@ -153,8 +140,6 @@ def resolve(
         }
     if target.startswith(OWN) or target.partition(":")[2] in shipped():
         return {"kind": "issue", "repository": REPOSITORY, "synthetic": synthetic}
-    if synthetic:
-        return {"kind": "backlog", "project": pid, "folder": place.folder if place else "", "synthetic": True}
     if place and in_clone(target, clone):
         return {"kind": "backlog", "project": pid, "folder": place.folder}
     return {"kind": "backlog", "project": "", "folder": ""}

@@ -1,13 +1,15 @@
-"""Retro's synthetic units (#715 gate G2): marked work through the real phases, apart from every real read."""
+"""Retro's fixture units and the retirement of synthetic runs."""
 
 import json
 from types import SimpleNamespace
+
+import pytest
+from tests import retro_fixture as syn
 
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.improvement import assumptions, retro_evidence, retro_judge, retro_store
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
-from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.retro_calls import Paid
 from owlbear_delivery_next.improvement.retro_segments import REF
@@ -74,45 +76,63 @@ def ask(_key, message, agent):
     return Paid(json.dumps(said), 1.0, 1.0)
 
 
-def test_the_synthetic_units_yield_every_proposal_kind_reviewed_and_apart_from_every_real_read():
-    for n, spec in enumerate(syn.specs()):
-        rev = syn.install(spec)
-        retro_judge.run(syn.work(spec, rev, f"run-{n}", ask))
-        units.settle(syn.unit_id(spec), rev["rev"], "judged", run=f"run-{n}")
+def _real_fixture(spec, run, project="p1"):
+    """Use fixture evidence as separate real Change units, rather than running synthetic Retro."""
+    rev = syn.install(spec)
+    old, uid = syn.unit_id(spec), f"chg:{project}:{spec['name']}"
+    work = syn.work(spec, rev, run, ask)
 
-    shown = {p["kind"]: p for p in props.proposals(synthetic=True)}
+    def move(table):
+        unit = table["units"].pop(old)
+        unit.update(provenance="real", assumptions=[], family=uid)
+        table["units"][uid] = unit
+
+    retro_store.update(move)
+    work.uid, work.unit, work.provenance = uid, retro_store.known()[uid], "real"
+    for record in work.records:
+        record.update(project=project, change=spec["name"], step="build", provenance="real")
+    return work
+
+
+def test_real_fixture_units_yield_every_proposal_kind_reviewed_and_reset_hides_retired_findings():
+    for n, spec in enumerate(syn.specs()):
+        work = _real_fixture(spec, f"run-{n}")
+        retro_judge.run(work)
+        units.settle(work.uid, work.rev["rev"], "judged", run=f"run-{n}")
+
+    shown = {p["kind"]: p for p in props.proposals()}
     assert set(shown) == {"lesson", "agent-change", "delivery-change", "spotter-case", "look-reconsider"}
     assert all(p["verdict"] == "survive" and p["state"] == "waiting" for p in shown.values())
-    assert all(assumptions.RETRO_SYNTHETIC in p["assumptions"] for p in shown.values())
+    assert all(assumptions.RETRO_SYNTHETIC not in p["assumptions"] for p in shown.values())
     assert shown["agent-change"]["target"] == "skill:w-build"
     assert shown["delivery-change"]["target"] == "tool:edit"
     assert shown["spotter-case"]["record"] == "syn-edit-lost-2"
-    gap = retro_store.findings(synthetic=True, unit="syn:gap")
+    gap = retro_store.findings(unit="chg:p1:gap")
     assert [f["status"] for f in gap] == ["unknown"]
-    assert len(retro_store.grades(synthetic=True)) == sum(len(s["records"]) for s in syn.specs())
-    assert props.proposals() == []
-    assert retro_store.findings() == []
-    assert retro_store.class_grades() == {}
+    assert len(retro_store.grades()) == sum(len(s["records"]) for s in syn.specs())
 
     assumptions.reset()
 
-    assert props.proposals(synthetic=True) == []
-    assert retro_store.findings(synthetic=True) == []
-    assert retro_store.grades(synthetic=True) == []
+    assert props.proposals() == []
+    assert retro_store.findings() == []
+    assert retro_store.grades() == []
 
 
-def test_the_two_scouts_make_one_agent_change_that_lands_in_the_sandboxs_backlog(tmp_path):
+def test_two_real_scout_changes_make_one_agent_change_in_their_projects_backlog(tmp_path):
     for n, name in enumerate(("scout-a", "scout-b")):
         spec = syn.specs(name)[0]
-        rev = syn.install(spec)
-        retro_judge.run(syn.work(spec, rev, f"run-{n}", ask))
-        units.settle(syn.unit_id(spec), rev["rev"], "judged", run=f"run-{n}")
+        work = _real_fixture(spec, f"run-{n}", project="p2")
+        retro_judge.run(work)
+        units.settle(work.uid, work.rev["rev"], "judged", run=f"run-{n}")
 
-    (change,) = [p for p in props.proposals(synthetic=True) if p["kind"] == "agent-change"]
+    (change,) = [p for p in props.proposals() if p["kind"] == "agent-change"]
     assert (change["target"], change["state"]) == ("agent:scout", "waiting")
+    agents = tmp_path / "example" / ".github" / "agents"
+    agents.mkdir(parents=True)
+    (agents / "scout.agent.md").write_text("Scout")
     places = {
         "p1": targets.Place(folder="work", clone=tmp_path / "work"),
-        "p2": targets.Place(folder="sandbox", clone=tmp_path / targets.SANDBOX),
+        "p2": targets.Place(folder="example", clone=tmp_path / "example"),
     }
     assert targets.projects(change, places, targets.units_of()) == ["p2", "p2"]
     got = targets.resolve(change, places, tmp_path / "shared")
@@ -129,21 +149,16 @@ def test_the_large_unit_needs_two_judging_batches_and_an_unchanged_unit_keeps_it
     assert units.folder(syn.session(spec)).is_relative_to(retro_store.place())
 
 
-def test_the_command_queues_a_run_and_plans_one_without_asking(capsys):
-    assert cli.main(["improvement", "retro", "run", "--synthetic", "large"]) == 0
-    assert [q["synthetic"] for q in retro_store.queued()] == ["large"]
-    assert cli.main(["improvement", "retro", "run", "--synthetic"]) == 0
-    assert [q["synthetic"] for q in retro_store.queued()][1:] == [s["name"] for s in syn.specs()]
-    for q in retro_store.queued()[1:]:
-        retro_store.take(q["id"])
+def test_the_command_refuses_synthetic_runs_and_plans_without_queueing(capsys):
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["improvement", "retro", "run", "--synthetic", "large"])
+    assert exc.value.code != 0
     assert cli.main(["improvement", "retro", "run", "--change", "nowhere/x"]) == 1
     capsys.readouterr()
 
-    assert cli.main(["improvement", "retro", "status", "--plan", "syn:large"]) == 0
-
-    planned = json.loads(capsys.readouterr().out)
-    assert (planned["taken"], planned["judge_batches"], planned["saved"]) == (True, 2, 0)
-    assert len(retro_store.queued()) == 1
+    assert cli.main(["improvement", "retro", "status", "--plan", "syn:large"]) == 1
+    assert "synthetic Retro is retired" in capsys.readouterr().out
+    assert retro_store.queued() == []
 
 
 def test_a_change_named_by_its_folder_is_planned_under_its_projects_id_and_a_bad_name_is_refused(

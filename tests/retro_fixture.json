@@ -292,7 +292,7 @@
     "name": "scout-a",
     "set": "acceptance",
     "role": "scout",
-    "project": "owlbear-sandbox",
+    "project": "example",
     "outcome": "Redone: the planner was handed 214 functions, 190 of them from the generated api/client_gen.py.",
     "exposure": ["agent:scout", "tool:grep", "tool:view"],
     "turns": [
@@ -323,7 +323,7 @@
     "name": "scout-b",
     "set": "acceptance",
     "role": "scout",
-    "project": "owlbear-sandbox",
+    "project": "example",
     "outcome": "Redone: the map of the parser included 60 functions from the generated parser/tables_gen.py.",
     "exposure": ["agent:scout", "tool:grep", "tool:view"],
     "turns": [

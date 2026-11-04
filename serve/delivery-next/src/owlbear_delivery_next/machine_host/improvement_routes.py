@@ -87,6 +87,8 @@ def _redraft(pid: str) -> str:
     snap = props.folded().get(pid)
     if snap is None or snap["state"] != "redirected":
         raise HTTPException(409, f"proposal {pid} is {snap['state'] if snap else 'unknown'}, not redirected")
+    if snap.get("provenance") == "synthetic":
+        raise HTTPException(409, store.SYNTHETIC_RETIRED)
     if snap["redraft"] and snap["redraft_state"] != "drafted":  # one filed but not reviewed is reviewed again
         raise HTTPException(409, f"proposal {pid}'s redraft is filed already: {snap['redraft']}")
     if waiting := next((q["id"] for q in store.queued() if q.get("redraft") == pid), ""):

@@ -25,7 +25,6 @@ from owlbear_delivery_next.improvement import proposal_apply as act
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
-from owlbear_delivery_next.state_store import backlog
 
 UNITS = {"f-1": "chg:p1:fix", "f-2": "chg:p2:fix", "f-3": "syn:scout-a", "f-4": "chg:p1:other"}
 TEXT = {
@@ -83,7 +82,7 @@ class FakeBacklog:
 def world(tmp_path, monkeypatch):
     monkeypatch.setattr(targets, "units_of", lambda: UNITS)
     places = {}
-    for pid, name in (("p1", "alpha"), ("p2", "beta"), ("ps", targets.SANDBOX)):
+    for pid, name in (("p1", "alpha"), ("p2", "beta"), ("ps", "example")):
         (tmp_path / name).mkdir()
         places[pid] = targets.Place(folder=f"{name}-folder", clone=tmp_path / name)
     gh, entries, checks = FakeGitHub(), [], []
@@ -142,18 +141,27 @@ def test_a_backlog_entry_lands_in_the_project_its_change_unit_names_once(world):
     assert len(world.entries) == 1
 
 
-def test_a_synthetic_backlog_entry_is_marked_so_it_never_matches_a_real_one(world):
-    agents = world.places["ps"].clone / ".github" / "agents"
-    agents.mkdir(parents=True)
-    (agents / "exporter.agent.md").write_text("exports")
+def test_a_historical_synthetic_proposal_cannot_be_redirected_or_applied(world):
     pid = _waiting("agent-change", "agent:exporter", ["f-3"], provenance="synthetic")
+    with pytest.raises(store.RetroError, match=r"synthetic Retro.*retired"):
+        act.decide(pid, "redirected", _seen(pid, world), "owner", places=world.places, shared_root=world.shared,
+                   direction="change it")  # fmt: skip
 
-    done = _accept(pid, world)
+    snapshot = {"destination": {"kind": "backlog", "folder": "alpha-folder"},
+                "publishable": TEXT, "findings": ["f-3"], "provenance": "synthetic"}  # fmt: skip
+    props.transition(pid, "accepted", "owner", snapshot=snapshot)
+    with pytest.raises(store.RetroError, match=r"synthetic Retro.*retired"):
+        act.apply(pid, world.seams)
+    assert world.entries == []
 
-    assert done["apply_state"] == "done", done["failures"]
-    (entry,) = world.entries
-    assert (entry.folder, entry.title) == (f"{targets.SANDBOX}-folder", f"[synthetic] {TEXT['title']}")
-    assert backlog.key(entry.source, entry.title) != backlog.key("retro", TEXT["title"])
+
+def test_a_synthetic_proposal_remains_visible_but_cannot_be_accepted(world):
+    pid = _waiting("agent-change", "agent:exporter", ["f-3"], provenance="synthetic")
+    [shown] = improvement_view.proposals({}, world.shared)
+    assert shown["id"] == pid
+    with pytest.raises(store.RetroError, match=r"synthetic Retro.*retired"):
+        act.decide(pid, "accepted", _seen(pid, world), "owner", places=world.places, shared_root=world.shared)
+    assert world.entries == []
 
 
 def test_a_lesson_is_a_pending_memory_in_its_projects_folder_scoped_to_its_agent(world):
@@ -298,9 +306,12 @@ def test_a_case_whose_making_went_unrecorded_is_found_again_after_a_check_promot
     assert (list(cases.current()["cases"]), world.checks) == ([cid], [])
 
 
-def test_a_synthetic_case_rests_on_its_assumption_and_the_reset_leaves_it_out(world):
-    pid = _waiting("spotter-case", "look:sample", ["f-3"], provenance="synthetic", record="syn-scout-a-1", call="none")
-    cid = _accept(pid, world)["applied"][0]["artefact"]["ref"]
+def test_a_synthetic_case_rests_on_its_assumption_and_the_reset_leaves_it_out():
+    assumptions.ensure(assumptions.RETRO_SYNTHETIC)
+    cid = cases.freeze({"intent": {"task": "historical"}}, {"source": "synthetic",
+                       "assumption": assumptions.RETRO_SYNTHETIC})  # fmt: skip
+    cases.commit(cases.current()["n"], {cid: {"stage": "candidate", "call": "none", "why": "historical"}},
+                 "owner", "historical case")  # fmt: skip
     assert cases.fact(cid)["assumption"] == assumptions.RETRO_SYNTHETIC
     [shown] = [c for c in improvement_view.spotter_cases()["cases"] if c["id"] == cid]
     assert f"assumption {assumptions.RETRO_SYNTHETIC}" in shown["marks"]
@@ -332,44 +343,39 @@ def test_a_retry_after_a_lost_response_makes_nothing_twice_from_what_was_accepte
     assert [i["title"] for i in world.gh.issues if "pull_request" not in i] == [TEXT["title"]]
 
 
-def test_a_synthetic_issue_is_closed_on_retry_and_the_reset_lists_it_once(world, capsys):
+def test_a_historical_synthetic_issue_is_listed_by_reset_once_without_another_write(world, capsys):
     pid = _waiting("delivery-change", "delivery:hand-off", ["f-3"], provenance="synthetic")
-    world.gh.close_fails = 1
-
-    failed = _accept(pid, world)
-
-    assert failed["apply_state"] == "failed"
-    assert "ghp_" not in failed["failures"][0]["error"]
-    assert "502" in failed["failures"][0]["error"]
-    sent = len(world.gh.sent)
-    done = act.apply(pid, world.seams)
-    assert world.gh.sent[sent:] == [{"state": "closed", "state_reason": "not_planned"}]  # the issue made, not sought
-    made = [i for i in world.gh.issues if "pull_request" not in i]
-    assert [(i["title"], i["state"]) for i in made] == [(f"[synthetic] {TEXT['title']}", "closed")]
-    assert done["apply_state"] == "done"
-    assert act.apply(pid, world.seams)["applied"] == done["applied"]
+    snapshot = {"destination": {"kind": "issue", "synthetic": True}, "provenance": "synthetic"}
+    props.transition(pid, "accepted", "owner", snapshot=snapshot)
+    art = {"kind": "issue", "where": "o/r", "ref": "#2", "link": "https://github.com/o/r/issues/2"}
+    props.outcome(pid, "applied", step="created", artefact=art)
+    props.outcome(pid, "applied", step="closed", artefact=art)
+    with pytest.raises(store.RetroError, match=r"synthetic Retro.*retired"):
+        act.apply(pid, world.seams)
+    assert world.gh.sent == []
     assert cli.main(["improvement", "reset"]) == 0
     listed = capsys.readouterr().out
     assert listed.count("synthetic issue in o/r: #2 https://github.com/o/r/issues/2") == 1, listed
 
 
-def test_a_proposal_a_reset_retired_after_its_accept_makes_nothing_but_its_synthetic_issue_is_still_closed(world):
+def test_a_reset_retired_proposal_and_a_partial_synthetic_issue_make_nothing(world):
     real = _waiting("agent-change", "agent:exporter", ["f-1"], assumptions=[assumptions.RETRO_SEGMENTS])
     act.decide(real, "accepted", _seen(real, world), "owner", places=world.places, shared_root=world.shared)
     synthetic = _waiting("delivery-change", "delivery:hand-off", ["f-3"], provenance="synthetic",
                          assumptions=[assumptions.RETRO_SYNTHETIC])  # fmt: skip
-    world.gh.close_fails = 1
-    assert _accept(synthetic, world)["apply_state"] == "failed"  # made, its closing failed
+    snapshot = {"destination": {"kind": "issue", "synthetic": True}, "provenance": "synthetic"}
+    props.transition(synthetic, "accepted", "owner", snapshot=snapshot)
+    props.outcome(synthetic, "applied", step="created",
+                  artefact={"kind": "issue", "where": "o/r", "ref": "#2"})  # fmt: skip
 
     assumptions.reset()
 
-    shown = [(p["id"], p["apply_state"]) for p in improvement_view.proposals({}, world.shared)]
-    assert shown == [(synthetic, "failed")]  # its Apply again still closes the public issue
     with pytest.raises(store.RetroError, match="rests on a retired assumption"):
         act.apply(real, world.seams)
-    assert world.entries == []
-    assert act.apply(synthetic, world.seams)["apply_state"] == "done"
-    assert [i["state"] for i in world.gh.issues if "pull_request" not in i] == ["closed"]
+    with pytest.raises(store.RetroError, match=r"synthetic Retro.*retired"):
+        act.apply(synthetic, world.seams)
+    assert (world.entries, world.gh.sent) == ([], [])
+    assert props.folded()[synthetic]["applied"][0]["artefact"]["ref"] == "#2"
 
 
 def test_unsafe_text_fails_with_nothing_sent_or_written(world):
