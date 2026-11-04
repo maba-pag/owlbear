@@ -296,8 +296,9 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
         return Status(f"{s} · holding for your change: finishing {c.step.kind}", None, "delivery")
     if loop.usage_gated(c):
         return Status(f"{s} · stopped: {o.reason}", "Run this step again", "you", error=True)
-    if o and o.exit == Exit.ASK:
-        return Status(f"{s} · waiting for you: {o.reason}", "Approve merge" if o.cause == CONSENT else "Answer", "you")
+    if o and o.exit == Exit.ASK:  # a question its cause's spent retry budget asked carries that failure (#971)
+        action = "Approve merge" if o.cause == CONSENT else "Answer"
+        return Status(f"{s} · waiting for you: {o.reason}", action, "you", error=o.cause in c.budgets.causes)
     if o and o.exit == Exit.STOP and c.stop:
         return Status(f"{s} · stopped: {c.stop.reason}", c.stop.action, c.stop.actor, error=True)
     if o and o.exit == Exit.PENDING:

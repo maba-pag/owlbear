@@ -30,16 +30,19 @@ from copilot.generated import rpc
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.decision_records import Pick, PickedDecision
+from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.merge_records import Pullback
 from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     Brief,
     Change,
     Environment,
+    ErrorKind,
     Exit,
     Names,
     Outcome,
     Plan,
+    Question,
     Step,
     StepKind,
     Task,
@@ -55,8 +58,8 @@ from owlbear_delivery_next.change_contracts.visual_records import (
     VisualResult,
     VisualRound,
 )
-from owlbear_delivery_next.change_flow import loop, round_flow
-from owlbear_delivery_next.change_flow.budgets import RETRY_LIMIT
+from owlbear_delivery_next.change_flow import budgets, loop, moves, round_flow
+from owlbear_delivery_next.change_flow.budgets import DEFECT_LIMIT, RETRY_LIMIT
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.gh import GhProvider
@@ -644,9 +647,10 @@ def test_a_blocked_or_unreadable_changes_card_shows_its_whole_error(
 
 
 @pytest.mark.browser
-@pytest.mark.parametrize("kind", ["retrying", "pulled-back"])
+@pytest.mark.parametrize("kind", ["retrying", "pulled-back", "exhausted", "asked"])
 def test_an_erring_changes_card_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, whole_error, kind) -> None:
-    """#971: a retry's reason and a failed pull-back are errors too: the card keeps every path and line, unclipped."""
+    """#971: a retry's reason, a failed pull-back and a question asked once retries ran out are errors too: the card
+    keeps every path and line, unclipped. An ordinary question stays compact."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     alpha = registry.register(clone(tmp_path / "alpha", kind))
@@ -657,21 +661,37 @@ def test_an_erring_changes_card_shows_its_whole_error(tmp_path: Path, monkeypatc
         retrying = Outcome(exit=Exit.RETRY, cause="environment:network", reason=reason, wake_at=wake, at=now)
         shaping(Path(alpha.path), "Retrying brief", kind, outcome=retrying)
         line = f"retrying: environment:network (1 of {RETRY_LIMIT}) at {wake:%H:%M} · {reason}"
-    else:
+    elif kind == "pulled-back":
         behind = Pullback(state="behind", reason=f"local main is behind: {reason}", at=now)
         shaping(
             Path(alpha.path), "Pulled brief", kind, finished_at=now, names=Names(target="main", pr=13), pullback=behind
         )
         line = f"Done · merged PR #13 · local main is behind: {reason}"
+    elif kind == "exhausted":  # the same Delivery defect DEFECT_LIMIT times in a row asks with the error
+        c, cause = Change(slug=kind, handle="c1", step=Step(kind=StepKind.SHAPE)), "tooling:shape:adapter"
+        for _ in range(DEFECT_LIMIT):
+            budgets.retry(c, loop.StepResult(exit=Exit.RETRY, cause=cause, reason=reason), now)
+        shaping(Path(alpha.path), "Exhausted brief", kind, outcome=c.outcome, questions=c.questions, budgets=c.budgets)
+        line = f"waiting for you: Delivery failed the same way {DEFECT_LIMIT} times ({cause}): {reason}"
+    else:  # a question with a failure-kind cause key that no budget spent: compact
+        c = Change(slug=kind, handle="c1", step=Step(kind=StepKind.SHAPE))
+        dispute = cause_key(ErrorKind.REVIEW, StepKind.SHAPE, "dispute-t1")
+        moves.ask(c, Question(step=StepKind.SHAPE, text=f"Keep the finding? {reason}", cause=dispute), now)
+        shaping(Path(alpha.path), "Asked brief", kind, outcome=c.outcome, questions=c.questions)
+        line = None
     with browsing(monkeypatch, pds) as (page, base):
         said = errors(page)
         page.goto(f"{base}/#token=t")
         page.locator("#machine").get_by_role("button", name="Resume").click()  # a paused Delivery says only that
         says = page.locator("li.card", has=page.locator(f'a[data-key$="{kind}"]')).locator("p.says:not(.stage)")
         expect(says).to_contain_text("a note naming", timeout=15000)
-        assert says.text_content() == line
-        expect(says).to_be_visible()
-        assert says.evaluate("e => e.scrollHeight <= e.clientHeight && getComputedStyle(e).overflow === 'visible'")
+        if line is None:
+            assert path not in says.text_content()
+            expect(says).not_to_have_class(re.compile(r"\bwhole\b"))
+        else:
+            assert says.text_content() == line
+            expect(says).to_be_visible()
+            assert says.evaluate("e => e.scrollHeight <= e.clientHeight && getComputedStyle(e).overflow === 'visible'")
         assert said == []
 
 
