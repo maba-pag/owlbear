@@ -29,7 +29,6 @@ FILE = "proposals.jsonl"
 KINDS = ("lesson", "agent-change", "delivery-change", "look-reconsider", "spotter-case")
 CLOSED = frozenset({"accepted", "rejected", "redirected"})
 OWNER_STATES = frozenset({"shown", "accepted", "rejected", "redirected", "later"})
-ERROR = 2_000  # characters of a failure's message kept
 
 
 def steps(destination: Mapping[str, Any]) -> tuple[str, ...]:
@@ -309,7 +308,7 @@ def outcome(proposal: str, kind: str, **fields: object) -> None:
     if kind == "applied":
         eid = f"ap-{proposal}-{fields['step']}-{store.digest(fields['artefact'])}"
     else:
-        error = mask.redact(str(fields.get("error", "")))[:ERROR]
+        error = mask.redact(str(fields.get("error", "")))
         eid, fields = f"fa-{uuid.uuid4().hex[:12]}", fields | {"error": error}
     _event({"eid": eid, "proposal": proposal, "type": kind, **fields})
 

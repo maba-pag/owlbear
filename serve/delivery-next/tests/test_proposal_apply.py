@@ -25,6 +25,8 @@ from owlbear_delivery_next.improvement import proposal_apply as act
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
+from owlbear_delivery_next.state_store import backlog
+from owlbear_delivery_next.state_store.backlog import BacklogError
 
 UNITS = {"f-1": "chg:p1:fix", "f-2": "chg:p2:fix", "f-3": "syn:scout-a", "f-4": "chg:p1:other"}
 TEXT = {
@@ -209,6 +211,25 @@ def test_an_issue_search_that_reads_every_page_without_the_marker_makes_none(wor
     snap = props.folded()[pid]
     assert (snap["apply_state"], asked) == ("failed", ["GET"] * 10)  # unsure the issue is absent: none is made
     assert "find_issue" in snap["failures"][0]["error"]
+
+
+def test_a_failure_longer_than_any_cut_is_kept_whole_and_masked(world, whole_error):
+    token = "ghp_" + "a" * 36
+
+    class Unreachable(FakeBacklog):
+        def read(self, *, fresh=False):  # noqa: ARG002 - the backlog's signature
+            raise BacklogError(502, f"{whole_error}\n(token {token})")
+
+    agents = world.places["p2"].clone / ".github" / "agents"
+    agents.mkdir(parents=True)
+    (agents / "exporter.agent.md").write_text("exports")
+    pid = _waiting("agent-change", "agent:exporter", ["f-2"])
+    world.seams = dataclasses.replace(world.seams, backlog=lambda folder: Unreachable(folder, []))
+
+    done = _accept(pid, world)
+
+    assert done["apply_state"] == "failed"
+    assert [f["error"] for f in done["failures"]] == [f"BacklogError: {whole_error}\n(token ***)"]
 
 
 def test_a_spotter_case_becomes_a_candidate_with_its_check_queued(world):
