@@ -76,6 +76,7 @@ from owlbear_delivery_next.improvement.spotter_store import (  # noqa: F401 - ke
     root,
     store,
 )
+from owlbear_delivery_next.runtimes import sdk_spend
 from owlbear_delivery_next.settings.improvement import CATEGORIES
 from owlbear_delivery_next.state_store import spotter_test
 
@@ -475,7 +476,7 @@ class Spotter:
             try:
                 await ctx.act(record, act)
             except Exception as exc:  # noqa: BLE001 - kept on the act, whole; a look never reaches the step
-                error = failure(exc)
+                error = sdk_spend.failed(exc)
                 await offload(functools.partial(acts.update, self.folder, record.id, delivery="failed", error=error))
         if record.state_change:
             checking = acts.CHECKS.submit(acts.checked, self.folder, record.id, ctx.conflicts, record.state_change)
