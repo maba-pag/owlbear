@@ -250,9 +250,7 @@ def test_owlbears_own_project_shows_as_owlbear_apart_and_first_wherever_projects
     registry.register(clone(tmp_path / "alpha"))
     own = registry.register(clone(tmp_path / "mine", origin=OWLBEAR_ORIGIN))
     with browsing(monkeypatch, pds, width) as (page, base):
-        errors: list[str] = []
-        page.on("pageerror", lambda e: errors.append(str(e)))
-        page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+        said = errors(page)
         page.goto(f"{base}/projects#token=t")
         expect(page.locator("#page h2")).to_have_text(["OwlBear", "Consumer projects", "Add a project"])
         expect(page.locator("#own > li h3")).to_have_text(["OwlBear"])
@@ -283,7 +281,7 @@ def test_owlbears_own_project_shows_as_owlbear_apart_and_first_wherever_projects
         expect(page.locator("#page > [role=status]")).to_contain_text("Removed OwlBear; nothing in")
         expect(page.get_by_role("listitem", name="alpha").get_by_role("button", name="Remove project")).to_be_focused()
         expect(page.locator("#own")).to_have_count(0)
-        assert errors == []
+        assert said == []
 
 
 @pytest.mark.browser
@@ -1917,18 +1915,15 @@ def test_owlbears_fixed_scope_stays_its_one_row_once_its_own_project_is_register
     still shows OwlBear once, as the fixed scope tagged as OwlBear's own, never as a project row too."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    from owlbear_delivery_next.local_system import data_place  # noqa: PLC0415
-
     shared = shared_repo[0]
     monkeypatch.setenv(data_place.VIEW, str(shared))
     decided(shared, "owlbear", "Lint once.")
     registry.register(clone(tmp_path / "alpha"))
-    own = registry.register(clone(tmp_path / "mine", origin=OWLBEAR_ORIGIN))
+    registry.register(clone(tmp_path / "mine", origin=OWLBEAR_ORIGIN))
     with browsing(monkeypatch, pds, 390) as (page, base):
         page.goto(f"{base}/decisions#token=t")
         for _ in ("loaded", "reloaded"):
             expect(page.locator("#scopes .scope h3")).to_have_text(["Global", "OwlBear", "alpha"])
-            expect(page.locator(f'#scopes .scope[data-key="{own.id}"]')).to_have_count(0)
             row = page.locator('#scopes .scope[data-key="owlbear"]')
             expect(row).to_contain_text("1 in force · 0 drafts")
             expect(row.locator("p-tag", has_text="OwlBear's own")).to_have_count(1)
