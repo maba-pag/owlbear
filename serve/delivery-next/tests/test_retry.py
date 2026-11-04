@@ -80,19 +80,7 @@ def test_a_changed_failure_signature_restarts_the_episode():
     assert (budgets.episode(c).since, budgets.episode(c).attempts) == (NOW + EPISODE_ASK, 1)
 
 
-def test_the_same_delivery_defect_three_times_asks_with_the_error():
-    c = change()
-    for n in range(1, 3):
-        c = loop.apply(c, retry(ErrorKind.TOOLING, f"submit tool rejected payload {n}"), NOW)
-        assert c.outcome.exit == Exit.RETRY
-    c = loop.apply(c, retry(ErrorKind.TOOLING, "submit tool rejected payload 3"), NOW)
-    q = loop.open_question(c)
-    assert c.outcome.exit == Exit.ASK
-    assert "submit tool rejected payload" in q.text
-    assert [o.id for o in q.options] == ["done", "pause"]
-
-
-def test_the_same_whole_failure_keeps_one_signature_and_its_count(whole_error):
+def test_the_same_delivery_defect_three_times_asks_with_the_error(whole_error):
     """#971: a whole error, with its command's output and its notes, counts as the same failure each time; its
     numbers, commit ids and temporary paths never split its signature."""
     c, signatures = change(), set()
@@ -105,7 +93,9 @@ def test_the_same_whole_failure_keeps_one_signature_and_its_count(whole_error):
         signatures.add(budget.signature)
         assert (budget.count, c.outcome.exit) == (n, Exit.ASK if n == 3 else Exit.RETRY)
     assert len(signatures) == 1
-    assert loop.open_question(c).text == f"Delivery failed the same way 3 times (tooling:build:sdk): {said}"
+    q = loop.open_question(c)
+    assert q.text == f"Delivery failed the same way 3 times (tooling:build:sdk): {said}"
+    assert [o.id for o in q.options] == ["done", "pause"]
 
 
 WRONG = "wrong model: a turn ran on gpt-6-sol, the step needs gpt-6-luna"

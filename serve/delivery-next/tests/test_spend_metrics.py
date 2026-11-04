@@ -76,13 +76,14 @@ def test_a_missing_baseline_takes_the_growth_with_its_time_uncertain() -> None:
     assert said == [("r1", 2.0, ["agent", "at"]), ("r2", 4.0, ["at"])]  # r1's start, naming its agent, was lost
 
 
-def test_an_unread_baseline_spreads_a_runs_share_over_the_window_since_the_last_report() -> None:
-    """Sol's counterexample: 2 on Oct 1, then 6 on Oct 2 after an unread baseline put all 4 on Oct 2."""
+def test_an_unread_baseline_spreads_a_runs_share_over_the_window_since_the_last_report(whole_error) -> None:
+    """Sol's counterexample: 2 on Oct 1, then 6 on Oct 2 after an unread baseline put all 4 on Oct 2; #971 P14: the
+    spend that may lie in a filtered period says its failed read's whole error."""
     lines = [
         start("r1", "2026-10-01T09:00:00+00:00", before={}),
         end("r1", "2026-10-01T10:00:00+00:00", usage(2.0)),
         start("r2", "2026-10-02T10:00:00+00:00", before=None),
-        end("r2", "2026-10-02T11:00:00+00:00", usage(6.0)),
+        end("r2", "2026-10-02T11:00:00+00:00", usage(6.0) | {"incomplete": whole_error}),
     ]
     pieces = spend_shares.derive(lines)
     assert [(p["run"], p["credits"], p["lo"], p["hi"]) for p in pieces] == [
@@ -93,20 +94,10 @@ def test_an_unread_baseline_spreads_a_runs_share_over_the_window_since_the_last_
     assert [(r["key"], r["credits"]) for r in days["rows"]] == [("2026-10-01", 2.0), ("?", 4.0)]
     oct2 = spend_metrics.query(pieces, tz=UTC, start=date(2026, 10, 2), end=date(2026, 10, 3))
     assert (oct2["totals"]["credits"], oct2["undated"]["credits"]) == (0.0, 4.0)
+    undated = oct2["undated"]
+    assert (undated["failed"], undated.get("failed_why"), undated.get("unknown_why")) == (1, [whole_error], [])
     both = spend_metrics.query(pieces, tz=UTC, start=date(2026, 10, 1), end=date(2026, 10, 3))
     assert (both["totals"]["credits"], both["undated"]) == (6.0, None)
-
-
-def test_a_failed_read_of_spend_that_may_lie_in_the_period_says_its_whole_error(whole_error) -> None:
-    """#971 P14: a resume with no baseline spreads its spend across the filter's edge; its failed read says why."""
-    lines = [
-        start("r1", "2026-09-30T09:00:00+00:00", before={}),
-        end("r1", "2026-09-30T10:00:00+00:00", usage(2.0)),
-        start("r2", "2026-10-01T10:00:00+00:00", before=None),
-        end("r2", "2026-10-01T11:00:00+00:00", usage(6.0) | {"incomplete": whole_error}),
-    ]
-    undated = spend_metrics.query(spend_shares.derive(lines), tz=UTC, start=date(2026, 10, 1))["undated"]
-    assert (undated["failed"], undated.get("failed_why"), undated.get("unknown_why")) == (1, [whole_error], [])
 
 
 def test_re_splitting_earlier_credits_between_agents_never_creates_spend() -> None:
