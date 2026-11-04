@@ -272,26 +272,23 @@ def test_a_lead_chats_lookup_whose_processes_are_not_confirmed_gone_holds_the_ne
     assert len(picking.pickers()) == 2
 
 
-def test_a_started_lookup_reads_running_until_it_finishes_and_holds_the_slot(monkeypatch):
-    answers = [({"decisions": []}, None)]
-    monkeypatch.setattr(lookup, "chat", lambda *_a: answers.pop(0) if answers else pytest.fail("raised"))
-    monkeypatch.setattr(lookup, "SLOT_WAIT", 0.05)
-    chats = lookup.Chats()
-    first = chats.start()
-    assert (chats.read(first), chats.start()) == ({"running": True}, None)  # one at a time (TD-336)
-    chats.finish(first, None, PROJECT, QUESTION, None)
-    assert chats.read(first) == chats.read(first) == {"running": False, "answer": {"decisions": []}}
-    assert chats.read("nope") is None
+def test_a_started_lookup_that_raises_reads_the_whole_error_and_frees_the_slot(monkeypatch):
+    def broke(*_a):
+        msg = "the picker's folder went away"
+        raise OSError(msg)
 
+    monkeypatch.setattr(lookup, "chat", broke)
+    chats = lookup.Chats()
     raised = chats.start()
-    with pytest.raises(pytest.fail.Exception):
+    with pytest.raises(OSError, match="folder went away"):  # the host's log has it too
         chats.finish(raised, None, PROJECT, QUESTION, None)
-    assert chats.read(raised) == {"running": False, "answer": {"failed": lookup.RAISED}}  # never running forever
+    said = {"failed": "OSError: the picker's folder went away"}
+    assert chats.read(raised) == {"running": False, "answer": said}  # never running forever
     assert chats.start() is not None  # the slot is free
 
 
-def started(picking, question: str = QUESTION):
-    return picking.http.post("/api/next/decisions/lookups", json={"question": question})
+def started(picking):
+    return picking.http.post("/api/next/decisions/lookups", json={"question": QUESTION})
 
 
 def test_a_lead_chats_started_lookup_is_read_by_its_id_one_at_a_time_and_an_unknown_id_is_named(

@@ -66,7 +66,6 @@ ENDED = "the step has ended"
 BUSY = "another lookup is running; try again"
 LEFT = "a previous lookup's processes are not confirmed gone"
 SLOT_WAIT = 5.0  # seconds a lead chat's lookup waits for the host's running one
-RAISED = "the lookup raised an error; the host's log has it"
 KEPT = 16  # started lookups' answers a host keeps for their reads
 GONE = "this host has no lookup {}: it restarted or the answer was dropped; ask again"
 
@@ -208,14 +207,15 @@ class Chats:
         settings: Callable[[], Settings] | None,
     ) -> None:
         """Run the started lookup *lookup_id* and keep its answer, then free the slot."""
-        said = {"failed": RAISED}  # what a read gives if the run raises; the host logs the exception
         try:
             said = self._run(shared, project, question, settings)
+        except Exception as exc:
+            said = {"failed": failure(exc)}  # a read never says running forever; the host logs the exception
+            raise
         finally:
             with self.lock:
                 self.answers[lookup_id] = said
-                done = [k for k, v in self.answers.items() if v is not None]
-                for k in done[: max(0, len(done) - KEPT)]:
+                for k in list(self.answers)[:-KEPT]:  # this run held the slot, so every kept answer is finished
                     del self.answers[k]
             self.slot.release()
 
