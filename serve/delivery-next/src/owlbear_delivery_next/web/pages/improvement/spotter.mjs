@@ -1,5 +1,5 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
-import { here } from "/assets/ui.mjs";
+import { OWN_TAG, displayName, here, isOwn } from "/assets/ui.mjs";
 import { credits, empty, heading, plural, quiet, text, when } from "./widgets.mjs";
 
 // The Spotter (design §6): its test, each loaded project's settings and where each comes from, linked to Settings,
@@ -43,7 +43,8 @@ function project(pid, p, spend) {
       ${setting(p, "sample_rate", "Sample", (v) => `${v}% of completed actions`)}
       ${setting(p, "look_credit_limit", "Credit limit per look", (v) => `${v} credits`)}
       ${CATEGORIES.map(([key, label]) => setting(p, key, label))}${setting(p, "verbose", "Verbose")}${model(p)}</ul>`;
-  return html`<li class="panel" id=${`spotter-${pid}`}>${heading(3, p.name, "sm")}${settings}
+  return html`<li class="panel" id=${`spotter-${pid}`}>${heading(3, displayName(p), "sm")}
+    ${isOwn(p) ? html`<p-tag compact="true">${OWN_TAG}</p-tag>` : nothing}${settings}
     ${text(`Last ${spend.window}: ${spent(spend.of)}`, { size: "sm" })}
     <p-link-pure icon="arrow-right"><a href=${here({ project: pid }, p.link)}>Change the Spotter's settings</a>
     </p-link-pure></li>`;

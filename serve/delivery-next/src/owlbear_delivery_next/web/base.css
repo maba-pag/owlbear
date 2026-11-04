@@ -38,7 +38,7 @@ li { font-size: var(--p-typescale-sm); }
    row, a line of facts (.meta), a path (.path) and the lists of cards or timed rows keep their width; the text in a
    card is capped as text. Its last line keeps more than one word. */
 :is(p, p-text, dd, li):not(:is(p-table, p-inline-notification, p-banner, .bar, #machine) *, .meta, .path):not(
-  :is(.scopes, .cards, .entries, .actions, .log, #projects) > li) { max-inline-size: 47ch; text-wrap: pretty; }
+  :is(.scopes, .cards, .entries, .actions, .log, .projects) > li) { max-inline-size: 47ch; text-wrap: pretty; }
 p-text[size="xs"] { font-size: var(--p-typescale-xs); }  /* its ch follows its smaller text; PDS sizes the text */
 details > summary { cursor: pointer; font-size: var(--p-typescale-sm); padding-block: var(--p-spacing-static-xs); }
 :is(a, button, summary, input, select, textarea, [tabindex]):focus-visible {

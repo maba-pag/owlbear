@@ -187,6 +187,13 @@ export function loaded() {
   return bar.data ? bar.data.projects.filter((p) => p.state === "loaded") : null;
 }
 
+// OwlBear's own repository is a project of its own kind, shown as OwlBear with this tag and listed before consumer
+// projects (D-01M5ZGGSMKBZ830H8FQSPHH5BN); the machine host knows it by its shared-data folder.
+export const OWN_TAG = "OwlBear's own";
+export const isOwn = (p) => p.kind === "owlbear";
+export const displayName = (p) => (isOwn(p) ? "OwlBear" : p.name);
+export const ownFirst = (projects) => [...projects.filter(isOwn), ...projects.filter((p) => !isOwn(p))];
+
 // What a settings block says in words: its unreadable-settings *reason* in full and first (the host's *text* of it),
 // else how many settings are unset, never their keys; "" when nothing blocks.
 export function settingsWait(count, reason, text) {
@@ -243,8 +250,8 @@ function control(label, onclick, { variant = "secondary", busy = false, title } 
 }
 
 function chosen(p, all) {
-  const twin = all.some((o) => o !== p && o.name === p.name);
-  return `${p.name}${twin ? ` (${p.path})` : ""}${p.state === "loaded" ? "" : ` · ${p.state}`}`;
+  const twin = all.some((o) => o !== p && displayName(o) === displayName(p));
+  return `${displayName(p)}${twin ? ` (${p.path})` : ""}${p.state === "loaded" ? "" : ` · ${p.state}`}`;
 }
 
 // The top row's end: which project the page shows, or Add project while there is none, and Pause. Adding, removing
@@ -262,7 +269,7 @@ function controls() {
     ${projects.length ? html`<p-select label="Project" hide-label="true" compact="true" .value=${project}
       @change=${go}>
       ${scope === "all" ? html`<p-select-option value="">All projects</p-select-option>` : nothing}
-      ${projects.map((o) => html`<p-select-option value=${o.id}>${chosen(o, projects)}</p-select-option>`)}
+      ${ownFirst(projects).map((o) => html`<p-select-option value=${o.id}>${chosen(o, projects)}</p-select-option>`)}
     </p-select>` : html`<p-link compact="true" variant="primary"><a href=${location.pathname === "/projects" ? "#add"
       : here({}, "/projects")}>Add project</a></p-link>`}
     ${paused ? nothing : control("Pause Delivery", () => act("pause", () => call("/pause", { method: "POST",
@@ -273,9 +280,9 @@ function controls() {
 function notes() {
   if (!bar.data) return bar.error ? html`<p role="alert">${bar.error}</p>` : nothing;
   const { projects, paused, waiting, ending, left = [], update, updated, announce } = bar.data;
-  const p = projects.find((o) => o.id === project);
-  const trouble = location.pathname !== "/projects" && p && (p.state !== "loaded" ? `${p.name} is ${p.state}: ${
-    p.reason}` : p.setup ? `${p.name} needs setup before its chats reach Delivery.` : "");
+  const p = projects.find((o) => o.id === project), who = p && displayName(p);
+  const trouble = location.pathname !== "/projects" && p && (p.state !== "loaded" ? `${who} is ${p.state}: ${
+    p.reason}` : p.setup ? `${who} needs setup before its chats reach Delivery.` : "");
   return html`
     ${trouble ? html`<p role="status">${trouble} <a href=${here({}, "/projects")}>Open Projects</a></p>` : nothing}
     ${paused ? html`<p class="paused" role="status">${ending

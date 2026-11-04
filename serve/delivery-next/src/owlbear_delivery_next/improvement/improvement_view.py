@@ -105,8 +105,12 @@ def spotter(projects: units.Projects, records: list[dict[str, Any]], now: dateti
             s["credits"] += float(r.get("credits") or 0.0)
             s["unknown"] += not r.get("credits_known")
             s["stopped"] += r.get("stopped") == "reached"
-    return {
-        "projects": {pid: {"name": repo.name} | _settings(st) for pid, (st, repo) in projects.items()},
+    kinds = {pid: "owlbear" if st.name == targets.OWLBEAR else "consumer" for pid, (st, _repo) in projects.items()}
+    return {  # OwlBear's own project first (D-01M5ZGGSMKBZ830H8FQSPHH5BN), the others in their order
+        "projects": {
+            pid: {"name": repo.name, "kind": kinds[pid]} | _settings(st)
+            for pid, (st, repo) in sorted(projects.items(), key=lambda item: kinds[item[0]] != "owlbear")
+        },
         "window_days": WINDOW,
         "spend": spend,
         "test": spotter_test_run.show(),  # read-only: declared, started with its frozen versions, ended, or none
