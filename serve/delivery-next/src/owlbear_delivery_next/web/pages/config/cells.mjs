@@ -93,9 +93,8 @@ export function table(caption, heads, body, rows, { id, hidden = false } = {}) {
 // *wrong* says why the choice cannot run, for a choice that is checked (an effort); undefined for the others.
 function choose(label, options, value, chosen, { key, disabled = false, filter = false, wrong } = {}) {
   const changed = (e) => {
-    const control = e.currentTarget;
     chosen(e.target.value);
-    if (!control.isConnected) {
+    if (!e.currentTarget.isConnected) {
       const next = document.querySelector(`p-select[label="${CSS.escape(label)}"]`);
       const focused = document.activeElement;
       Promise.resolve(next?.componentOnReady?.()).then(() => {
