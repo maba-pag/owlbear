@@ -68,8 +68,8 @@ def _written(root: DataRepo, batch: decision_batch.Batch) -> None:
 
 def _idle(shared: DataRepo, batch: decision_batch.Batch) -> None:
     """Refuse while a rebase is active or unknown: it is read before any other Git read, restore or remote proof."""
-    if not decision_transaction.operation_idle(shared):
-        msg = f"a rebase is active or unknown, so batch {batch.generation} is not recovered; resolve it in Git first"
+    msg = f"a rebase is active or unknown, so batch {batch.generation} is not recovered; resolve it in Git first"
+    if decision_transaction.rebasing(shared, DecisionsUnavailable(msg, RECOVER)):
         raise DecisionsUnavailable(msg, RECOVER)
 
 

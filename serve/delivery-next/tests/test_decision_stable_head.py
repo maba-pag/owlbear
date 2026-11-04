@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, snapshot, write
-from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
+from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.state_store import (
     decision_batch,
     decision_cache,
@@ -425,22 +425,20 @@ def test_an_active_rebase_before_or_during_collection_refuses_both_readers(
     [(1, decision_store.load), (2, decision_store.file_snapshot)],
     ids=["before-load", "after_collection-file_only"],
 )
-def test_an_unknown_rebase_at_either_probe_refuses_both_readers(readable, monkeypatch, warmth, when, reader) -> None:
+def test_an_unknown_rebase_at_either_probe_refuses_both_readers(
+    readable, warmth, failing_rebase_probe, when, reader
+) -> None:
     warmth.ready(readable, PROJECT)
-    real, calls = DataRepo.rebasing, []
-
-    def rebasing(shared, *args, **kwargs):
-        calls.append(shared.root)
-        if len(calls) == when:
-            msg = "cannot tell whether a rebase is in progress"
-            raise DataRepoError(msg)
-        return real(shared, *args, **kwargs)
-
-    monkeypatch.setattr(DataRepo, "rebasing", rebasing)
+    calls = failing_rebase_probe.arm(lambda n: n == when)
     before = checkout_state(readable)
     with pytest.raises(DecisionsUnavailable) as raised:
         reader(readable, PROJECT)
-    assert raised.value.action == (decision_store.REPAIR if when == 1 else decision_store.READ)
+    first = "a rebase is active or unknown, so the decisions are unavailable; resolve it in Git first"
+    later = "the decisions or rebase state changed while they were read, so they are not settled; read them again"
+    said = failing_rebase_probe.said(readable.root)
+    assert (str(raised.value), raised.value.action) == (
+        (f"{first}: {said}", decision_store.REPAIR) if when == 1 else (f"{later}: {said}", decision_store.READ)
+    )
     assert len(calls) == when
     assert checkout_state(readable) == before
     assert warmth.parses == ([] if when == 1 else warmth.collected(PROJECT))

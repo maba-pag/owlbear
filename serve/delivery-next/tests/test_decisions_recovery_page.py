@@ -325,9 +325,12 @@ def test_a_recovery_notice_shows_whole(picking, tmp_path, pds, monkeypatch, whol
     assert [s for s in said if "/api/next/projects" not in s] == []  # a project host lists no projects (404)
 
 
-@pytest.mark.parametrize("exit_", ["data-repo", "journal"])
-def test_a_refused_recovery_answers_whole(picking, tmp_path, monkeypatch, whole_error, caplog, exit_):  # noqa: PLR0913, PLR0917 - its fixtures
-    """A finish refused by the data repository, or by the journal once the batch was read: its 409 and log line."""
+@pytest.mark.parametrize("exit_", ["data-repo", "journal", "rebase"])
+def test_a_refused_recovery_answers_whole(  # noqa: PLR0913, PLR0917 - its fixtures
+    picking, tmp_path, monkeypatch, whole_error, caplog, failing_rebase_probe, exit_
+):
+    """A finish refused by the data repository, by the journal once the batch was read, or by a rebase probe Git
+    failed: its 409 and log line."""
     from owlbear_delivery_next.local_system.data_repo import DataRepoError  # noqa: PLC0415
 
     generation = _interrupted_here(picking)
@@ -335,15 +338,24 @@ def test_a_refused_recovery_answers_whole(picking, tmp_path, monkeypatch, whole_
     def failing(*_args, **_kwargs):
         raise (DataRepoError if exit_ == "data-repo" else decision_batch.JournalError)(whole_error)
 
-    monkeypatch.setattr(*((decision_recovery.decision_sync, "publish") if exit_ == "data-repo"
-                          else (decision_batch, "complete")), failing)  # fmt: skip
+    if exit_ == "rebase":
+        failing_rebase_probe.arm()
+    else:
+        monkeypatch.setattr(*((decision_recovery.decision_sync, "publish") if exit_ == "data-repo"
+                              else (decision_batch, "complete")), failing)  # fmt: skip
     client = TestClient(
         api.create_app(_store(picking, tmp_path), "tok", Host()),
         base_url="http://127.0.0.1",
         headers={"authorization": "Bearer tok"},
     )
     got = client.post("/api/next/decisions/recovery/finish", json={"generation": generation, "confirmed": True})
-    detail = f"{'JournalError' if exit_ == 'journal' else 'DataRepoError'}: {whole_error} ({decision_store.RECOVER})"
+    why = {
+        "data-repo": f"DataRepoError: {whole_error}",
+        "journal": f"JournalError: {whole_error}",
+        "rebase": f"a rebase is active or unknown, so batch {generation} is not recovered; resolve it in Git first: "
+        f"{failing_rebase_probe.said(picking.shared.root)}",
+    }[exit_]
+    detail = f"{why} ({decision_store.RECOVER})"
     assert (got.status_code, got.json()["detail"]) == (409, detail)
     assert logged(caplog) == [f"decision recovery refused: {detail}"]
 

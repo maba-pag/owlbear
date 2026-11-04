@@ -1115,6 +1115,46 @@ def whole_error() -> str:
 
 
 @pytest.fixture
+def failing_rebase_probe(monkeypatch: pytest.MonkeyPatch, whole_error: str) -> SimpleNamespace:
+    """Git fails the rebase probe alone, printing *whole_error* to stderr and a long variant of it to stdout.
+
+    `arm(at)` fails the probes whose 1-based count *at* picks (every one by default) and returns the roots probed;
+    `said(root)` is the whole `DataRepoError` such a probe raises there, as `failure` renders it.
+    """
+    real_rebasing, real_git, inside = DataRepo.rebasing, data_repo._git, []  # noqa: SLF001 - the probe's own Git call
+    stdout = whole_error.replace("BEGIN", "OUT")
+
+    def arm(at: Callable[[int], bool] = lambda _: True, patch: pytest.MonkeyPatch = monkeypatch) -> list[Path]:
+        probed: list[Path] = []
+
+        def rebasing(self: DataRepo, *args: Any, **kwargs: Any) -> bool:
+            probed.append(self.root)
+            inside.append(at(len(probed)))
+            try:
+                return real_rebasing(self, *args, **kwargs)
+            finally:
+                inside.pop()
+
+        def git(cwd: Path, *args: str, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            if inside and inside[-1] and args == ("rev-parse", "--absolute-git-dir"):
+                return subprocess.CompletedProcess(["git", *args], 128, stdout, whole_error)
+            return real_git(cwd, *args, **kwargs)
+
+        patch.setattr(DataRepo, "rebasing", rebasing)
+        patch.setattr(data_repo, "_git", git)
+        return probed
+
+    def said(root: Path) -> str:
+        return (
+            f"DataRepoError: cannot tell whether a rebase is in progress in {root}: CalledProcessError: Command "
+            f"'['git', 'rev-parse', '--absolute-git-dir']' returned non-zero exit status 128.\nstderr:\n{whole_error}"
+            f"\nstdout:\n{stdout}"
+        )
+
+    return SimpleNamespace(arm=arm, said=said)
+
+
+@pytest.fixture
 def failed_shots(tmp_path: Path, whole_error: str) -> list:
     """The package's own capture of two states Playwright fails with *whole_error*: one that does not open, and one
     whose click step fails. Only Playwright's ``goto`` of ``/gone`` and its clicks raise, while the capture runs."""

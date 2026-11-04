@@ -30,7 +30,7 @@ from owlbear_decisions.storage import serialize
 from owlbear_delivery_next.change_contracts import pick_tools
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import batch_journal, data_repo, publication_hold, storage_io
-from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
+from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import decision_recovery_routes
 from owlbear_delivery_next.state_store import (
     decision_batch,
@@ -569,7 +569,7 @@ def test_an_owner_commit_between_two_writes_is_kept_and_the_batch_stays_pending(
 @pytest.mark.parametrize("state", ["active", "unknown"])
 @pytest.mark.parametrize("action", [decision_recovery.finish, decision_recovery.abandon])
 def test_finish_and_abandon_refuse_an_active_or_unknown_rebase_before_any_restore_or_remote_proof(
-    picking, monkeypatch, action, state
+    picking, monkeypatch, failing_rebase_probe, action, state
 ):
     _seed(picking)
     shared = picking.shared
@@ -592,16 +592,14 @@ def test_finish_and_abandon_refuse_an_active_or_unknown_rebase_before_any_restor
     with monkeypatch.context() as m:
         m.setattr(DataRepo, "git", recording_git)
         if state == "unknown":
-
-            def unreadable(*_args, **_kwargs):
-                msg = "the rebase state cannot be read"
-                raise DataRepoError(msg)
-
-            m.setattr(DataRepo, "rebasing", unreadable)
+            failing_rebase_probe.arm(patch=m)
         m.setattr(decision_sync, "behind_unproved", lambda *_a, **_k: pytest.fail("remote proof reached"))
-        with pytest.raises(decision_store.DecisionsUnavailable):
+        with pytest.raises(decision_store.DecisionsUnavailable) as refused:
             action(shared, generation)
 
+    msg = f"a rebase is active or unknown, so batch {generation} is not recovered; resolve it in Git first"
+    why = f"{msg}: {failing_rebase_probe.said(shared.root)}" if state == "unknown" else msg
+    assert (str(refused.value), refused.value.action) == (why, decision_store.RECOVER)
     assert not [args for args in seen if args and args[0] in {"fetch", "push", "pull", "rebase"}]
     assert rel.read_bytes() == written
     assert shared.git("rev-parse", "HEAD").stdout == head
