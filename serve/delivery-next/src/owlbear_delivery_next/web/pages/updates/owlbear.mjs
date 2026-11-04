@@ -53,13 +53,17 @@ async function start() {
   await readReport();
 }
 
-function stateLine(r) {
+function phaseLine(r) {
   const to = r.version ? ` to ${r.version}` : "", at = r.at ? ` (${when(r.at)})` : "";
   if (!r.phase || r.phase === "idle") return "No update has run since OwlBear started.";
   if (r.phase === "current") return `The last update found nothing newer${at}.`;
   if (r.phase === "failed") return `The update${to} failed${at}: ${r.detail}`;
   if (r.phase === "refused") return `The update${to} did not start${at}: ${r.detail}`;
   return `Updating${to}: ${r.phase}${r.detail ? `, ${r.detail}` : ""}.`;
+}
+
+function stateLine(r) {
+  return phaseLine(r) + (r.unpruned ? ` Old versions could not be removed at this start: ${r.unpruned}.` : "");
 }
 
 function step(s) {

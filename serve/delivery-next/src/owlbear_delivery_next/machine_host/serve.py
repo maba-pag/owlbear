@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 
 import uvicorn
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.machine_host import alias, app, curation_resume, environment, handover, versions
@@ -129,11 +130,12 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
         return 0
     given = handover.taken() if handing else None
     alias.complete()  # before any store opens: a half-done first migration, and the mark (§3, §4)
-    pruned = _pruned()
+    pruned, unpruned = _pruned()
     sock = _bind(given.port if given else 0)
     machine = _machine(home, sock, given, run=run)
-    if pruned:
-        machine.say(f"removed old versions: {', '.join(pruned)}")
+    machine.updater.unpruned = unpruned
+    if pruned or unpruned:
+        machine.say(f"removed old versions: {', '.join(pruned) if pruned else f'none: {unpruned}'}")
     for line in _retired_index(home):
         machine.say(line)
     cloning = _provisioned(machine)
@@ -233,12 +235,12 @@ def _cloning(machine: Machine) -> None:
             return
 
 
-def _pruned() -> list[str]:
-    """The old versions removed at this start (§3); a failure is said, never fatal."""
+def _pruned() -> tuple[list[str], str]:
+    """The old versions removed at this start (§3), and why none were: a failure is said, never fatal."""
     try:
-        return versions.prune()
+        return versions.prune(), ""
     except (OSError, versions.VersionError) as exc:
-        return [f"none: {exc}"]
+        return [], failure(exc)
 
 
 RETIRED_INDEX = tuple(f"decisions.sqlite{end}" for end in ("", "-wal", "-shm", "-journal", ".lock"))

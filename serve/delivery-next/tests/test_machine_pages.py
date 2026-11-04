@@ -1067,6 +1067,30 @@ def test_updates_owlbear_logs_update_steps_that_could_not_be_kept_whole(monkeypa
     assert re.findall(logged, capsys.readouterr().out, re.MULTILINE | re.DOTALL) == [line]
 
 
+@pytest.mark.browser
+def test_updates_owlbear_says_old_versions_it_could_not_remove_at_the_start_whole(monkeypatch, whole_error) -> None:
+    """#971: old versions the host's start could not remove say why whole on Updates ▸ OwlBear's update line."""
+    error = OSError(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising():
+        raise error
+
+    monkeypatch.setattr(versions, "prune", raising)
+    unpruned = f"OSError: {whole_error}\na note on the failure"
+    assert host_start._pruned() == ([], unpruned)  # noqa: SLF001 - the start's own step
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    machine, server, base = serve()
+    try:
+        machine.updater.unpruned = unpruned  # as the host's start sets it
+        text, said = _checks_page(base, "/updates/owlbear", "#owlbear-state")
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    told = f"No update has run since OwlBear started. Old versions could not be removed at this start: {unpruned}."
+    assert (text, said) == (told, [])
+
+
 def targets(scope) -> list[str]:
     """WCAG 2.5.8: each shown control in *scope* still smaller than 24 by 24 pixels once the design system has laid it
     out (under load that takes a moment), by its text."""
