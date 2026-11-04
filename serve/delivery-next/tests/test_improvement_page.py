@@ -274,6 +274,12 @@ def test_synthetic_retro_is_visible_as_history_without_action_buttons(tmp_path, 
         pid = props.file(props.open_key("synthetic", "lesson", "old"), ["f-history"], kind="lesson",
                          target="agent:builder", provenance="synthetic")  # fmt: skip
         props.reviewed(pid, props.folded()[pid]["evidence"], {"verdict": "survive", "publishable": TEXT})
+        redirected = props.file(props.open_key("synthetic", "agent-change", "old"), ["f-history"], kind="agent-change",
+                                target="agent:builder", provenance="synthetic")  # fmt: skip
+        props.reviewed(redirected, props.folded()[redirected]["evidence"], {"verdict": "survive", "publishable": TEXT})
+        props.transition(redirected, "redirected", "owner", direction="Keep the old direction")
+        child = props.redrafted(redirected, {"cause": "c", "target": "agent:builder", "mechanism": "m"}, "old")
+        props.reviewed(child, props.folded()[child]["evidence"], {"verdict": "survive", "publishable": TEXT})
         page = improvement(w, pds)
         old = card(page, pid)
         expect(old).to_contain_text("Historical")
@@ -283,6 +289,11 @@ def test_synthetic_retro_is_visible_as_history_without_action_buttons(tmp_path, 
         expect(page.locator("#finding-f-history")).to_contain_text("Synthetic finding: historical only.")
         expect(page.locator("#finding-f-history").get_by_role("button", name="Follow up")).to_have_count(0)
         expect(page.locator("#proposals")).to_contain_text("None waits for you.")
+        history = card(page, redirected)
+        expect(history).to_contain_text("Redirected")
+        expect(history).to_contain_text("Your direction: Keep the old direction")
+        expect(history).to_contain_text(f"Redrafted as {child}.")
+        expect(history.get_by_role("button")).to_have_count(0)
 
 
 @pytest.mark.browser

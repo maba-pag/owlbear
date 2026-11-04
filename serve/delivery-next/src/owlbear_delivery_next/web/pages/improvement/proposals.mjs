@@ -31,6 +31,7 @@ export function seenIn(f) {
 // Where the proposal lands once accepted, in words.
 function landing(d) {
   if (!d || d.error) return `It cannot be accepted: ${d?.error ?? "where it lands is not known"}.`;
+  if (!d.kind) return "No destination was recorded.";
   switch (d.kind) {
     case "memory": return `A pending memory in ${d.folder}, for ${d.roles?.length ? d.roles.join(", ") : "every "
       + "agent"}, recommended as a ${d.recommended} memory.`;
@@ -145,10 +146,12 @@ function outcome(p) {
     if (p.failures.length) lines.push(`Last failure${p.failures[0].step ? ` (${p.failures[0].step})` : ""}: `
       + p.failures[0].error);
   }
-  if (p.state === "redirected" && !synthetic(p)) {
+  if (p.state === "redirected") {
     lines.push(`Your direction: ${p.direction}`);
     const run = p.redraft_run ?? {};
     if (p.redraft && p.redraft_state !== "drafted") lines.push(`Redrafted as ${p.redraft}.`);
+    else if (synthetic(p) && p.redraft) lines.push(`Redrafted as ${p.redraft}; its review did not finish.`);
+    else if (synthetic(p)) lines.push("No redraft was completed.");
     else if (run.state === "queued") lines.push("Retro redrafts it on its next run.");
     else if (run.state && run.state !== "ended") lines.push("Retro is redrafting it.");
     else if (p.redraft) lines.push(`Redrafted as ${p.redraft}, but its run stopped before reviewing it: ask for it `
@@ -162,11 +165,12 @@ function outcome(p) {
 }
 
 function card(p) {
-  const [said, variant] = synthetic(p) ? ["Historical", "secondary"] : (STATES[p.state] ?? [p.state, "secondary"]);
+  const [said, variant] = STATES[p.state] ?? [p.state, "secondary"];
   const last = p.history.at(-1);
   const counts = [plural(p.findings.length, "finding"), plural(p.counterexamples?.count ?? 0, "counterexample")];
   return html`<li class="panel proposal" id=${`proposal-${p.id}`}>
-    <div class="row">${tag(said, variant)}${tag(p.kind)}${synthetic(p) ? tag("Synthetic", "info") : nothing}
+    <div class="row">${tag(synthetic(p) ? `Historical: ${said}` : said, variant)}${tag(p.kind)}
+      ${synthetic(p) ? tag("Synthetic", "info") : nothing}
       ${quiet(html`${p.id} · ${when(last?.at)}`)}</div>
     ${heading(3, title(p), "md")}
     ${p.state === "drafted" && !synthetic(p) ? quiet("Retro reviews it before you can decide on it.") : nothing}
