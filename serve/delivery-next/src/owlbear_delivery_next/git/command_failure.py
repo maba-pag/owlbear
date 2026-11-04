@@ -12,20 +12,26 @@ def _said(stream: object) -> str:
     return (stream.decode(errors="replace") if isinstance(stream, bytes) else str(stream)).strip()
 
 
-def failure(exc: BaseException) -> str:
-    """Its type and message, then what a command it carries printed, then its notes.
+def streams(exc: BaseException) -> str:
+    """What a command *exc* carries printed, or nothing when it carries none.
 
-    ``str()`` of a ``CalledProcessError`` or ``TimeoutExpired`` names the command but not what it said, so its output
-    follows on its own lines: the one stream that said something as it is, or both, labelled, stderr first. Notes
-    added on the way up (``add_note``, a cleanup that also failed) follow, each on its own line.
+    The one stream that said something as it is, or both, labelled, stderr first. ``str()`` of a
+    ``CalledProcessError`` or ``TimeoutExpired`` leaves it out.
     """
     stderr, stdout = _said(getattr(exc, "stderr", None)), _said(getattr(exc, "output", None))
-    head = f"{type(exc).__name__}: {exc}"
-    notes = "".join(f"\n{note}" for note in getattr(exc, "__notes__", ()))
     if stderr and stdout:
-        return f"{head}\nstderr:\n{stderr}\nstdout:\n{stdout}{notes}"
-    out = stderr or stdout
-    return head + (f"\n{out}" if out else "") + notes
+        return f"stderr:\n{stderr}\nstdout:\n{stdout}"
+    return stderr or stdout
+
+
+def failure(exc: BaseException) -> str:
+    """Its type and message, then what a command it carries printed (`streams`) on its own lines, then its notes.
+
+    Notes added on the way up (``add_note``, a cleanup that also failed) follow, each on its own line.
+    """
+    out = streams(exc)
+    notes = "".join(f"\n{note}" for note in getattr(exc, "__notes__", ()))
+    return f"{type(exc).__name__}: {exc}" + (f"\n{out}" if out else "") + notes
 
 
 def failed(done: subprocess.CompletedProcess) -> str:

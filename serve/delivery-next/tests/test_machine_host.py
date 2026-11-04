@@ -24,13 +24,14 @@ from owlbear_delivery_next.change_contracts.decision_records import DecisionBase
 from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
 from owlbear_delivery_next.commands import chat_client, cli, mcp_server, replay_client, setup
 from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay, pack_run
+from owlbear_delivery_next.improvement import improvement_view
 from owlbear_delivery_next.local_system import codebase, local_home, maintenance
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, project, serve
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import ENDING, Host, HostRecord, RunnerRecord, running
-from owlbear_delivery_next.state_store import decision_store, profile_share, project_home, registry
+from owlbear_delivery_next.state_store import decision_store, profile_share, project_home, registry, spotter_test
 from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -93,6 +94,64 @@ def test_one_host_serves_each_project_under_its_id_and_each_clone_finds_it(tmp_p
         f"another Delivery host (process {os.getpid()}) serves it; stop that one",
     )
     assert second.store is not None  # its layer still counts for this machine's settings (TD-336)
+
+
+@pytest.mark.parametrize(
+    ("seam", "name", "method", "path", "body"),
+    [
+        (maintenance.Maintenance, "read", "GET", "/maintenance/sessions", None),
+        (maintenance.Maintenance, "recover", "POST", "/maintenance/sessions/x/recover", {"rebooted": True}),
+        (spotter_test, "current", "GET", "/improvement", None),
+        (improvement_view, "looks", "GET", "/improvement/looks", None),
+        (improvement_view, "change_detail", "GET", "/improvement/change?project={id}&slug=a-1", None),
+    ],
+    ids=["sessions", "recover", "overview", "looks", "change"],
+)
+def test_an_error_no_machine_route_catches_answers_whole_to_the_token(  # noqa: PLR0913, PLR0917 - its fixtures
+    tmp_path, http, monkeypatch, whole_error, seam, name, method, path, body
+):
+    """#971: the machine's reads and the owner's recovery answer an error nothing catches whole, notes included."""
+    if "{id}" in path:
+        a = clone(tmp_path / "a")
+        store = Store.open(a)
+        with store.lock("a-1") as lock:
+            store.write(lock, Change(slug="a-1", step=Step(kind=StepKind.BUILD)))
+        path = path.format(id=add(http, a)["id"])
+    note = "NOTE added on the way up"
+
+    def fails(*_args: object, **_kwargs: object) -> None:
+        exc = RuntimeError(whole_error)
+        exc.add_note(note)
+        raise exc
+
+    monkeypatch.setattr(seam, name, fails)
+    got = TestClient(http.app, base_url="http://127.0.0.1", headers=AUTH, raise_server_exceptions=False).request(
+        method, f"/api/next{path}", json=body
+    )
+    assert (got.status_code, got.json()) == (500, {"detail": f"RuntimeError: {whole_error}\n{note}"})
+
+
+@pytest.mark.parametrize("project", [False, True], ids=["machine", "project"])
+def test_a_failing_asset_read_answers_the_generic_500_even_to_a_caller_with_the_token(
+    tmp_path, http, monkeypatch, whole_error, project
+):
+    """Pages and assets are served without the token, so an error reading one never shows: on the machine's app and on
+    a project's, through the dispatcher."""
+    at = f"/p/{add(http, clone(tmp_path / 'a'))['id']}" if project else ""
+    read = Path.read_bytes
+
+    def unread(self: Path) -> bytes:
+        if self.name == "ui.mjs":
+            raise OSError(whole_error)
+        return read(self)
+
+    monkeypatch.setattr(Path, "read_bytes", unread)
+    got = TestClient(http.app, base_url="http://127.0.0.1", headers=AUTH, raise_server_exceptions=False).get(
+        f"{at}/assets/ui.mjs"
+    )
+    assert (got.status_code, got.headers["content-type"], got.text) == (
+        500, "text/plain; charset=utf-8", "Internal Server Error"
+    )  # fmt: skip
 
 
 def test_the_chat_server_calls_its_projects_api_on_the_machine_host(tmp_path, http, monkeypatch):

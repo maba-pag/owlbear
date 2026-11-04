@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
-    from playwright.sync_api import Page
+    from playwright.sync_api import Locator, Page
 
 NOW = datetime(2026, 10, 1, 10, tzinfo=UTC)
 SLUG = "alpha-1"
@@ -662,6 +662,47 @@ def test_an_empty_machine_says_so_and_an_unread_one_says_why(tmp_path, monkeypat
         expect(page.locator("#page")).to_contain_text("The Improvement page could not be read")
         expect(page.locator("#proposals")).to_have_count(0)
         expect(page.locator("#looks")).to_contain_text("No look yet here")  # what was read still shows
+
+
+def failing(whole_error: str) -> Callable[..., Any]:
+    """A read that raises *whole_error*, which no route catches."""
+
+    def read(*_args: object, **_kwargs: object) -> Any:
+        raise RuntimeError(whole_error)
+
+    return read
+
+
+def described(notification: Locator) -> str:
+    """The description a notification shows, as its shadow tree renders it."""
+    return notification.evaluate("n => n.shadowRoot.querySelector('.notification p').textContent")
+
+
+@pytest.mark.browser
+def test_an_uncaught_read_shows_its_whole_error_on_the_improvement_page(
+    tmp_path, monkeypatch, pds, whole_error
+) -> None:
+    monkeypatch.setattr(spotter_test, "current", failing(whole_error))  # the overview's Spotter cases
+    monkeypatch.setattr(improvement_view, "looks", failing(whole_error))
+    with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
+        w.page.goto(f"{w.base}/improvement#token=t")
+        overview = w.page.locator('#page p-inline-notification[heading="The Improvement page could not be read"]')
+        looks = w.page.locator('#looks p-inline-notification[heading="The looks could not be read"]')
+        looks.wait_for()
+        pds.settled(w.page)
+        assert (described(overview), described(looks)) == (f"RuntimeError: {whole_error}",) * 2
+
+
+@pytest.mark.browser
+def test_an_uncaught_read_shows_its_whole_error_in_a_changes_detail(tmp_path, monkeypatch, pds, whole_error) -> None:
+    monkeypatch.setattr(improvement_view, "change_detail", failing(whole_error))
+    with machine_page(tmp_path, monkeypatch, pds) as w:
+        w.page.add_init_script("localStorage.setItem('owlbear-improvement-detail', 'on')")
+        w.page.goto(f"{w.base}/?project={w.pid}&change={w.pid}%2F{SLUG}#token=t")
+        shown = w.page.locator("#improvement-detail p-inline-notification")
+        shown.wait_for()
+        pds.settled(w.page)
+        assert described(shown) == f"RuntimeError: {whole_error}"
 
 
 @pytest.mark.browser
