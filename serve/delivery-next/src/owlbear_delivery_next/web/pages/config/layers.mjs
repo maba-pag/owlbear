@@ -3,6 +3,7 @@ import { CREDITS, INHERIT, LAYERS, NUMBERS, POINTS, WRITE, state, drafts, page, 
   turns } from "./state.mjs";
 import { USER_KEYS, mismatch, tierMismatch } from "./cells.mjs";
 import { draftGroup } from "./groups.mjs";
+import { nameOf } from "./names.mjs";
 import { readAcross } from "./machine.mjs";
 import { at, named } from "./sections.mjs";
 
@@ -130,12 +131,21 @@ export function drafted(path) {
   return dirty(state.layer).some(([draft]) => draft === key);
 }
 
-// Each unsaved edit of *layer* as "field: saved → new"; a blank value inherits, on Global it is unset.
+// The setting a draft key is for, as the server and the lists name it: the inverse of drafted()'s mapping
+// ("builder.model" is agents.builder.model, "spot.looks" is spotter.looks).
+function settingOf(draft) {
+  if (draft.startsWith("spot.")) return `spotter.${draft.slice(5)}`;
+  const own = !draft.includes(".") || ["final_review", "memory", "prefs", "machine"].includes(draft.split(".")[0]);
+  return own ? draft : `agents.${draft}`;
+}
+
+// Each unsaved edit of *layer* as "name: saved → new", by the words its row shows; a blank value inherits, on Global
+// it is unset.
 function changes(layer) {
   const blank = layer === "global" ? "unset" : "inherited";
   const said = (v) => (v === "" || v === null || v === undefined ? blank : v);
   return dirty(layer).map(([key, value]) =>
-    `${key.replace(".", " ").replaceAll("_", " ")}: ${said(saved(layer, key))} → ${said(value.trim())}`);
+    `${nameOf(settingOf(key))}: ${said(saved(layer, key))} → ${said(value.trim())}`);
 }
 
 // Confirms a pending legacy import's Merge and cleanup preferences as reviewed, with no edit: the saved values stand.

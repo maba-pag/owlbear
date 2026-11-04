@@ -440,7 +440,7 @@ def every_machine_s_settings_are_saved_with_the_global_layer(page, pds, shared: 
     page.get_by_label("Every machine: Agent sessions at once on this machine, across its projects").fill("5")
     page.get_by_label("Every machine: Hours between checks for a newer OwlBear (it also checks at launch)").fill("12")
     page.locator(".bar").get_by_role("button", name="Save global defaults").click()
-    expect(pds.modal(page)).to_contain_text("machine channel: unset → major")
+    expect(pds.modal(page)).to_contain_text("Versions this machine takes: unset → major")
     pds.answer(page, "Save global defaults")
     expect(page.locator("#status")).to_have_text("Saved the global settings. They apply to the next session.")
     glob = read_layer(shared.global_path, GlobalLayer).machine
@@ -517,7 +517,7 @@ def a_role_s_subagents_are_switched_off_and_saved(page, store: Store, pds) -> No
 
     pds.group(page, "agents")
     pds.pick(page, "Built-in subagents, reviewer", "false")
-    expect(page.locator("#pending")).to_contain_text("reviewer subagents: inherited → false")
+    expect(page.locator("#pending")).to_contain_text("reviewer · Subagents: inherited → false")
     page.locator(".bar").get_by_role("button", name="Save project settings").click()
     pds.answer(page, "Save project settings")
     expect(page.locator("#pending")).to_have_text("No unsaved edits.")

@@ -1960,7 +1960,7 @@ def alpha_answers_while_curation_runs(page, row, a: registry.Project) -> None:
     """While curation runs the page looks again every five seconds; a project read slower than that still shows."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    running = {"available": True, "folders": [{"folder": "alpha", "state": "running", "entries": []}]}
+    running = {"available": True, "folders": [{"folder": "alpha", "state": "running", "entries": [], "unset": []}]}
     page.route("**/api/next/curation", lambda route: route.fulfill(json=running))
     held: list = []
 

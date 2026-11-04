@@ -188,14 +188,18 @@ class Curation:
         if shared is None:
             return {"available": False, "reason": NO_SHARED, "folders": []}
         runs, here = self.load().folders, work_block.machine()
-        listed = [
-            {
-                "folder": f,
-                **runs.get(f, FolderRun()).model_dump(mode="json"),
-                "blocked": curation_block.blocked(shared, f, here),
-            }
-            for f in folders(shared.root)
-        ]
+        listed = []
+        for f in folders(shared.root):
+            block = curation_block.block(shared, f, here)
+            listed.append(
+                {
+                    "folder": f,
+                    **runs.get(f, FolderRun()).model_dump(mode="json"),
+                    "blocked": block.text(),
+                    "unset": list(block.keys),
+                    "unset_reason": block.reason,
+                }
+            )
         return {"available": True, "folders": listed, "queue": list(self.queue)}
 
     def _pids(self, event: dict[str, Any]) -> None:
@@ -405,8 +409,8 @@ class Curation:
     def _session(self, shared: data_repo.DataRepo, folder: str, started: datetime, key: str) -> FolderRun:
         settings = lookup.machine(shared)
         # cleared just after the grant's check: the run never starts, its entries unseen
-        if why := curation_block.unset(settings):
-            return FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why)
+        if why := curation_block.unset_block(settings):
+            return curation_block.refused(FolderRun(), why, started, datetime.now(UTC))
         role = roles.chosen(settings, LABEL)
         with curation_tree.forgetting(shared), self.maintenance.workspace("owlbear-curation-") as at:
             tree = curation_tree.seed(shared, at / "data", folders(shared.root))

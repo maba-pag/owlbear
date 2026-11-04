@@ -189,6 +189,7 @@ def test_curation_never_starts_with_its_threshold_or_role_unset(shared_repo):
     job = curation.Curation(Slots(lambda: 1), shared=lambda: shared, run=lambda _cfg: pytest.fail("never started"))
     ran = job._session(shared, "shop", datetime.now(UTC), "curate:shop")  # noqa: SLF001 - cleared while it waited
     assert (ran.state, "curator_threshold" in ran.reason, ran.seen) == ("failed", True, {})
+    assert ran.reason_unset == 1  # the threshold alone: the role is set
     agents = {r: a for r, a in glob.agents.items() if r != "curator"}
     shared.global_path.write_text(glob.model_copy(update={"agents": agents}).model_dump_json())
     assert "agents.curator.model" in curation_block.unset(lookup.machine(shared))

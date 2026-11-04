@@ -105,8 +105,10 @@ def test_only_the_unblocked_folder_curates_and_the_blocked_one_runs_once_its_set
     assert curator.folders == ["a", "b", "b", "b"]
     assert (a.state, a.reason, a.seen, a.ended_at == a.started_at) == ("failed", UNSET, seen, True)
     assert job.due("a")
-    blocked = {f["folder"]: f["blocked"] for f in job.read()["folders"]}
-    assert (blocked["a"], blocked["b"]) == (UNSET, "")
+    listed = {f["folder"]: f for f in job.read()["folders"]}
+    assert (listed["a"]["blocked"], listed["b"]["blocked"]) == (UNSET, "")
+    assert [(f["unset"], f["unset_reason"]) for f in listed.values()] == [([GAP], ""), ([], "")]  # the keys, for the page
+    assert (a.reason_unset, _row(job, "b").reason_unset) == (1, 0)  # the refusal's count, beside its recorded words
 
     _poll(shared, "a", 20)
     assert job.queue == []  # A's refused request has left; no manual request waits
@@ -139,7 +141,7 @@ def test_a_setting_cleared_while_the_request_waits_for_its_slot_refuses_it_at_th
     slots.give(HELD, "a-step")
     _drained(job)
     b = _row(job, "b")
-    assert (curator.folders, b.state, b.reason) == ([], "failed", UNSET)
+    assert (curator.folders, b.state, b.reason, b.reason_unset) == ([], "failed", UNSET, 1)
     assert slots.take(HELD, "after", 1, 1) == 1  # the refusal gave the slot back
 
 
@@ -173,6 +175,7 @@ def test_an_unreadable_global_refuses_every_folder_and_keeps_what_the_last_run_s
     b = _row(job, "b")
     assert curator.folders == ["b"]
     assert (b.state, b.reason.startswith(work_block.UNREADABLE), b.seen) == ("failed", True, seen)
+    assert b.reason_unset == 0  # unreadable settings are no count of unset ones: the reason stands whole
     assert (curation_snapshots.refused(b), b.ended_at == b.started_at) == (True, True)
     restarted = curation.Curation(Slots(lambda: 1), shared=lambda: shared, run=curator)
     assert (_row(restarted, "b").reason, restarted.lingering()) == (b.reason, False)
