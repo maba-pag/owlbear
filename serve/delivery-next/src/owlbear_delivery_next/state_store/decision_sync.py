@@ -130,11 +130,13 @@ def catch_up(shared: DataRepo, until: float, guard: Callable[[], str] | None = N
         return command_failure.failed(fetched)
     behind = shared.git("rev-list", "--count", f"HEAD..{UPSTREAM}", until=until)
     if behind.returncode:
-        return "the checkout's branch follows no remote branch"
+        return command_failure.failed(behind)
     if behind.stdout.strip() == "0":
         return ""
     status = shared.git("status", "--porcelain", "--untracked-files=no", until=until)
-    if status.returncode or status.stdout.strip():
+    if status.returncode:
+        return command_failure.failed(status)
+    if status.stdout.strip():
         return "the checkout has uncommitted files"
     return rebase(shared, until, guard)
 

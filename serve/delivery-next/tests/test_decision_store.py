@@ -499,11 +499,32 @@ def test_an_ambiguous_conflict_flag_publish_stays_interrupted(shared, monkeypatc
         load(shared, PROJECT)
 
 
-def test_refresh_reports_uncommitted_work_instead_of_pulling(shared) -> None:
-    decision = make()
-    save(shared, decision, expected_revision=None, message="m")
-    (shared.root / PROJECT / "decisions" / f"{decision.id}.md").write_text("edited\n")
-    assert refresh(shared).startswith("not refreshed: 1 uncommitted file(s)")
+@pytest.mark.parametrize("site", ["uncommitted", "rev-list", "status"])
+def test_refresh_reports_uncommitted_work_instead_of_pulling(  # noqa: PLR0913, PLR0917 - its fixtures
+    shared_repo, shared, tmp_path, whole_error, failing_git, site
+) -> None:
+    """Uncommitted work, or a count behind the remote or a status Git fails while catching up, said whole."""
+    decision, second = held(shared, shared_repo[1], tmp_path / "second")
+    if site == "uncommitted":
+        (shared.root / PROJECT / "decisions" / f"{decision.id}.md").write_text("edited\n")
+        assert refresh(shared) == f"not refreshed: 1 uncommitted file(s) in {shared.root}; the next save publishes"
+        return
+    assert save(second, make(), expected_revision=None, message="decisions: from the second checkout").published
+    seen: list[tuple[str, ...]] = []
+
+    def pick(args: tuple[str, ...], _until: float | None) -> bool:
+        if args[:1] != (site,):
+            return False
+        seen.append(args)
+        return site == "rev-list" or len(seen) == 2  # refresh's own status runs first; catch-up's is the second
+
+    failing_git(whole_error, pick)
+    said = refresh(shared)
+    assert said == (
+        f"not refreshed from the remote: CalledProcessError: Command '{['git', *seen[-1]]}' returned non-zero exit "
+        f"status 128.\n{whole_error}"
+    )
+    assert [args[0] for args in seen] == ([site] if site == "rev-list" else [site, site])
 
 
 def test_a_commit_a_hook_added_is_never_taken_back(shared_repo, shared, tmp_path, monkeypatch) -> None:
