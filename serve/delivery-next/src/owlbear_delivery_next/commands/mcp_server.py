@@ -179,7 +179,14 @@ def await_lookup(
 def record_decision(  # noqa: PLR0913 - the decision's fields
     *,
     title: Annotated[str, Field(description="Short name of the decision", max_length=200)],
-    statement: Annotated[str, Field(description="The rule in force, at most two lines", max_length=240)],
+    statement: Annotated[
+        str,
+        Field(
+            description="Whole rule, at most two lines; keep explicit finite bounds here, not only in rationale",
+            max_length=240,
+            examples=["Until the migration is verified, keep the old format readable."],
+        ),
+    ],
     rationale: Annotated[
         str,
         Field(
@@ -211,6 +218,8 @@ def record_decision(  # noqa: PLR0913 - the decision's fields
 ) -> dict[str, Any]:
     """Record a decision the owner confirmed (in force at once), or propose your own as a draft.
 
+    Keep implementation-only details in work evidence; do not record an unchanged rule again merely because it was used.
+    Preserve the owner's scope and mixed intent unless he confirms separation; if full binding cannot fit, ask.
     Read back free text and unclear answers at once; before the chat ends, run one closing check of everything you
     record. A replacement retires what it replaces; the reply shows its impact on existing work.
     """
