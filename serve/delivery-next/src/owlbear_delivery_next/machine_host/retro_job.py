@@ -37,7 +37,7 @@ from owlbear_delivery_next.improvement.credit_meter import Meter
 from owlbear_delivery_next.improvement.retro_calls import Paid, StoppedError, WaitingError, Work
 from owlbear_delivery_next.improvement.retro_evidence import evidence
 from owlbear_delivery_next.local_system import maintenance, processes
-from owlbear_delivery_next.machine_host import cases_job, retro_block, retro_more
+from owlbear_delivery_next.machine_host import cases_job, retro_block, retro_more, retro_restore
 from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR
 from owlbear_delivery_next.machine_host.retro_inputs import (
     Running,
@@ -45,7 +45,6 @@ from owlbear_delivery_next.machine_host.retro_inputs import (
     failed_grading,
     prune,
     session,
-    settle_open,
     unfinished,
     where,
 )
@@ -164,7 +163,7 @@ class RetroJob:
     def tick(self, now: float) -> None:
         """One pass: restore once, then the button's requests, a waiting run, Changes, chats and the pruning."""
         if not self.checked:
-            self._restore()
+            self.waiting += retro_restore.restored(self._ended)
             self.checked = True
         store.add_grades(units.gap_grades(units.records(), store.known(), store.graded()))  # no call needed
         for request in store.queued():
@@ -188,27 +187,6 @@ class RetroJob:
         return bool(self.seams.fenced() or self.halting or self.lingering())
 
     # Starting and ending runs
-
-    def _restore(self) -> None:
-        """Take up the runs this host's predecessor left open; end those whose spend is not known."""
-        live = set()
-        for snap in store.run_states().values():
-            if snap["state"] == "ended":
-                continue
-            ctx = Running.of(snap)
-            if snap["unsettled"] or not snap["known"]:
-                ctx.known = False
-                self._ended(ctx, "stopped: unknown spend after an interruption")
-            elif ctx.provenance == "synthetic" or ctx.uid.startswith("syn:"):
-                self._ended(ctx, f"refused: {store.SYNTHETIC_RETIRED}")
-            elif ctx.limit - ctx.spent <= 0:
-                self._ended(ctx, "stopped: its credit limit is spent")
-            else:
-                ctx.why = "OwlBear restarted"
-                store.run_event(ctx.id, "waiting", why=ctx.why)
-                self.waiting.append(ctx)
-                live.add((ctx.uid, ctx.rev))
-        settle_open(live)
 
     def _button(self, request: dict[str, Any]) -> None:
         by = request.get("by", "")

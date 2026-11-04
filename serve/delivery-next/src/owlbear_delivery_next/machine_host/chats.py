@@ -19,8 +19,7 @@ Every ``POLL`` seconds, one pass:
    next read; one over ``LINE`` bytes is left out and said in the chat's cards from then on.
 
 A pass that fails is told in host.log, its whole error (``failed``) on the Improvement page until a pass does not fail.
-A follower that cannot open its lock follows no chat until OwlBear starts again: told in host.log, and its whole error
-(``refused``) on the Improvement page.
+A lock that cannot be opened is told the same way (``refused``); no chat is followed then until OwlBear starts again.
 
 Where a chat starts: one whose folder existed when the follower started following (at its start, when switched on and
 when the enrolled folders change: the baseline, by folder names alone) starts at its end then; one found later starts
@@ -53,7 +52,6 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
-import fcntl
 import functools
 import json
 import os
@@ -65,7 +63,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import cases, chatlogs, spotter
-from owlbear_delivery_next.machine_host import chat_acts, chat_looks, chat_offsets
+from owlbear_delivery_next.machine_host import chat_acts, chat_lock, chat_looks, chat_offsets
 from owlbear_delivery_next.machine_host.chat_settings import Plan, settings_now
 from owlbear_delivery_next.runtimes import spotter_look
 from owlbear_delivery_next.runtimes.chat_moments import Moments
@@ -191,7 +189,7 @@ class Follower:
             self.ended.set()
             return
         try:
-            if not self._owned(fd):
+            if not chat_lock.held(fd, self.closed, self.poll, self.say):
                 return
             loop = asyncio.new_event_loop()
             try:
@@ -206,20 +204,6 @@ class Follower:
         finally:
             os.close(fd)
             self.ended.set()
-
-    def _owned(self, fd: int) -> bool:
-        waited = False
-        while True:
-            try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                if not waited:
-                    self.say("chats follower: waiting for the previous one to end; no chat is read meanwhile")
-                    waited = True
-                if self.closed.wait(self.poll):
-                    return False
-            else:
-                return True
 
     async def _main(self) -> None:
         while not self.closed.is_set():
