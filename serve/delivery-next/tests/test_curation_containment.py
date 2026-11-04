@@ -476,13 +476,17 @@ def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(
     job.start("shop")
 
     row = drained(job)
-    assert (row.state, curation_tree.LISTED in row.reason, bool(HELD.search(row.reason))) == ("failed", True, True)
+    pruning = f"DataRepoError: {LOCKED}\n{whole_error}\n{NOTE}"
+    listed = f"its worktree is still listed: {pruning}"
+    assert (row.state, bool(HELD.search(row.reason))) == ("failed", True)
+    where = f"its edits are held, never published, in {HELD.search(row.reason).group()}"
     if raises:  # each wrapper on the way up keeps the whole failure, note included
-        where = f"its edits are held, never published, in {HELD.search(row.reason).group()}"
         ran = f"RuntimeError: {WHOLE}\n{NOTE}"
-        assert row.reason == f"RuntimeError: {curation_tree.LISTED}; RuntimeError: {where}; {ran}"
+        assert row.reason == f"RuntimeError: {listed}; RuntimeError: {where}; {ran}"
+    else:
+        assert row.reason == f"ended result: the model is unknown: no tokens; {where}; {listed}"
     assert [r.getMessage() for r in caplog.records if r.name == curation_tree.__name__] == [
-        f"{repo} still lists a finished curation run's worktree: DataRepoError: {LOCKED}\n{whole_error}\n{NOTE}"
+        f"{repo} still lists a finished curation run's worktree: {pruning}"
     ]
 
 

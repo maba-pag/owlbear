@@ -664,26 +664,40 @@ def test_an_unverified_session_end_says_its_problems_whole(root, whole_error, ca
 
 
 @pytest.mark.browser
-def test_a_failed_folder_s_whole_reason_shows_on_maintenance(root, tmp_path, pds, whole_error) -> None:
+@pytest.mark.parametrize("unpruned", [False, True], ids=["raised", "unpruned"])
+def test_a_failed_folder_s_whole_reason_shows_on_maintenance(root, pds, whole_error, monkeypatch, unpruned) -> None:
     """#951: a folder's failed run, read as the host's route returns it, shows its whole reason in its Maintenance row;
-    every failed run's reason (raised, or ended unverified) goes through that one line."""
+    every failed run's reason (raised, ended unverified, or its worktree left listed) goes through that one line."""
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     note = f"the session's teardown also failed: OSError: {whole_error}"
+    real, failing = curation_tree._git, []  # noqa: SLF001
+    locked = curation_tree.DataRepoError(f"git worktree failed: locked\n{whole_error}")
+    locked.add_note(note)
+
+    def git_(cwd, *args, **kw):
+        if failing and args == ("worktree", "prune"):
+            raise locked
+        return real(cwd, *args, **kw)
 
     def run(_cfg) -> Run:
+        failing.extend([True] * unpruned)  # the seed's own prune ran
         broke = RuntimeError(whole_error)
         broke.add_note(note)  # as loop_owner.run adds it
         raise broke
 
+    monkeypatch.setattr(curation_tree, "_git", git_)
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
     job.start("owlbear")
     drained(job)
     read, reason = job.read(), f"RuntimeError: {whole_error}\n{note}"
+    if unpruned:
+        listed = f"{curation_tree.LISTED}: DataRepoError: git worktree failed: locked\n{whole_error}\n{note}"
+        reason = f"RuntimeError: {listed}; {reason}"
     assert {f["folder"]: f["reason"] for f in read["folders"]}["owlbear"] == reason
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
-    app = api.create_app(Store(tmp_path, name="shop"), "tok", None)
+    app = api.create_app(Store(root.parent, name="shop"), "tok", None)
     server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_keep_alive=60))
     threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
     while not server.started:

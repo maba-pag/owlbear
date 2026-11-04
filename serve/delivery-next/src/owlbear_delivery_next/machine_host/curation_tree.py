@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 NO_EDITS = "the run changed no memory, so nothing is held"
-LISTED = "its worktree is still listed (the log says why)"
+LISTED = "its worktree is still listed"
 MESSAGE = "chore: memory curation of {folder} (machine host)"
 
 _log = logging.getLogger(__name__)
@@ -284,14 +284,15 @@ def seed(shared: DataRepo, at: Path, folders: Sequence[str]) -> Tree:
 def prune(shared: DataRepo) -> str:
     """Forget the worktrees whose folder is gone, so the checkout lists none of a finished run; why that failed.
 
-    A failure changes nothing a run did, and the next run's seed prunes again, so it is logged and its row says so.
+    A failure changes nothing a run did, and the next run's seed prunes again, so it is logged and its row says why.
     """
     try:
         with shared.locked():
             _git(shared.root, "worktree", "prune")
     except DataRepoError as exc:
-        _log.warning("%s still lists a finished curation run's worktree: %s", shared.root, failure(exc))
-        return LISTED
+        why = failure(exc)
+        _log.warning("%s still lists a finished curation run's worktree: %s", shared.root, why)
+        return f"{LISTED}: {why}"
     return ""
 
 
