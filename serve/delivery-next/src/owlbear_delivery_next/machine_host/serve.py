@@ -129,11 +129,11 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
         sys.stdout.write(f"OwlBear is already running: {link(running()) or '(starting)'}\n")
         return 0
     given = handover.taken() if handing else None
-    alias.complete()  # before any store opens: a half-done first migration, and the mark (§3, §4)
+    unmigrated = alias.complete()  # before any store opens: a half-done first migration, and the mark (§3, §4)
     pruned, unpruned = _pruned()
     sock = _bind(given.port if given else 0)
     machine = _machine(home, sock, given, run=run)
-    machine.updater.unpruned = unpruned
+    machine.updater.unpruned, machine.updater.unmigrated = unpruned, unmigrated
     if pruned or unpruned:
         machine.say(f"removed old versions: {', '.join(pruned) if pruned else f'none: {unpruned}'}")
     for line in _retired_index(home):

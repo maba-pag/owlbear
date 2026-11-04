@@ -65,10 +65,14 @@ def activate(folder: Path, tag: str) -> None:
         _marked(tag)
 
 
-def complete() -> None:
-    """Finish a first migration a crash interrupted, and raise the mark to the alias's version; at every start."""
+def complete() -> str:
+    """Finish a first migration a crash interrupted, and raise the mark to the alias's version; at every start.
+
+    Returns why the legacy folder could not be put away, else ''.
+    """
     home = local_home.root()
     new = home / NEW
+    why = ""
     if new.is_symlink():
         new.unlink()  # made, never renamed: the old version stays
     elif new.is_dir():
@@ -83,6 +87,7 @@ def complete() -> None:
         with contextlib.suppress(OSError):
             (runtime.resolve() / versions.ACTIVATED).touch(exist_ok=True)
         _marked(runtime.resolve().name)
+    return why
 
 
 def _kept(new: Path) -> str:

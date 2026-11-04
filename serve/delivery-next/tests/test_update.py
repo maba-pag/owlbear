@@ -137,7 +137,8 @@ def test_a_start_keeps_the_legacy_runtime_when_the_pointer_names_the_data_throug
 
 
 def test_a_start_logs_a_shared_data_pointer_it_could_not_read_whole(caplog, monkeypatch, whole_error):
-    """#971: a legacy runtime left in place because the pointer could not be read is logged with the whole reason."""
+    """#971: a legacy runtime left in place because the pointer could not be read is logged with the whole reason, and
+    the start gets that reason for its page."""
     runtime, folder = legacy(), version("v0.2")
     new = local_home.root() / alias.NEW
     new.symlink_to(folder)
@@ -150,13 +151,14 @@ def test_a_start_logs_a_shared_data_pointer_it_could_not_read_whole(caplog, monk
 
     monkeypatch.setattr(data_place, "holds_data", unreadable)
 
-    alias.complete()
+    left = alias.complete()
 
     assert new.is_dir()
     assert list((local_home.root() / local_home.VERSIONS).glob("legacy-*")) == []
     reason = "nothing is removed while the shared data's pointer cannot be read: DataRepoError: "
+    whole = f"VersionError: {reason}{whole_error}\na note on the failure"
     said = [r.getMessage() for r in caplog.records if r.name == alias.__name__]
-    assert said == [f"VersionError: {reason}{whole_error}\na note on the failure"]
+    assert (left, said) == (whole, [whole])  # the start carries it to Updates ▸ OwlBear
 
 
 def test_a_link_made_but_never_renamed_is_removed_and_the_old_runtime_stays():

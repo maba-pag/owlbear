@@ -45,6 +45,7 @@ class Updater:
         self.state: dict[str, Any] = {"phase": "idle", "detail": "", "version": "", "at": None}
         self.steps = update_steps.Steps(machine.say)
         self.unpruned = ""  # why the old versions could not be removed at this host's start
+        self.unmigrated = ""  # why the runtime from before the first update could not be put away at this start
 
     def read(self) -> dict[str, Any]:
         """The update's state: its phase, what it says and the version it is about."""
@@ -54,10 +55,12 @@ class Updater:
     def report(self) -> dict[str, Any]:
         """The state with its steps and log, and whether Start update now may start one now, or why not.
 
-        ``unpruned`` says why the old versions could not be removed at this host's start.
+        ``unpruned`` says why the old versions could not be removed at this host's start, ``unmigrated`` why the runtime
+        from before the first update could not be put away then.
         """
         why = self.unstartable()
-        return self.read() | self.steps.read() | {"startable": not why, "reason": why, "unpruned": self.unpruned}
+        start = {"unpruned": self.unpruned, "unmigrated": self.unmigrated}
+        return self.read() | self.steps.read() | {"startable": not why, "reason": why} | start
 
     def unstartable(self) -> str:
         """Why Start update now refuses now (D-01M63CC7CYSMN156SJEBVFAXTQ): an update, a stop or work running."""

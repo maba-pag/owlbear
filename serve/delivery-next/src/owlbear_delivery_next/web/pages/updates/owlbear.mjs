@@ -63,7 +63,9 @@ function phaseLine(r) {
 }
 
 function stateLine(r) {
-  return phaseLine(r) + (r.unpruned ? ` Old versions could not be removed at this start: ${r.unpruned}.` : "");
+  const left = r.unmigrated
+    ? ` The runtime from before the first update could not be put away at this start: ${r.unmigrated}.` : "";
+  return phaseLine(r) + left + (r.unpruned ? ` Old versions could not be removed at this start: ${r.unpruned}.` : "");
 }
 
 function step(s) {

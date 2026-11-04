@@ -56,7 +56,7 @@ from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home, processes
-from owlbear_delivery_next.machine_host import app, project, update_checks, versions
+from owlbear_delivery_next.machine_host import alias, app, project, update_checks, versions
 from owlbear_delivery_next.machine_host import impeccable as machine_impeccable
 from owlbear_delivery_next.machine_host import serve as host_start
 from owlbear_delivery_next.machine_host.machine import Machine
@@ -1068,26 +1068,47 @@ def test_updates_owlbear_logs_update_steps_that_could_not_be_kept_whole(monkeypa
 
 
 @pytest.mark.browser
-def test_updates_owlbear_says_old_versions_it_could_not_remove_at_the_start_whole(monkeypatch, whole_error) -> None:
-    """#971: old versions the host's start could not remove say why whole on Updates ▸ OwlBear's update line."""
+@pytest.mark.parametrize("failing", ["prune", "migration", "both"])
+def test_updates_owlbear_says_old_versions_it_could_not_remove_at_the_start_whole(
+    monkeypatch, whole_error, failing
+) -> None:
+    """#971: old versions the host's start could not remove, and the runtime from before the first update it could not
+    put away, say why whole on Updates ▸ OwlBear's update line."""
     error = OSError(whole_error)
     error.add_note("a note on the failure")
 
-    def raising():
+    def raising(*_args):
         raise error
 
-    monkeypatch.setattr(versions, "prune", raising)
-    unpruned = f"OSError: {whole_error}\na note on the failure"
-    assert host_start._pruned() == ([], unpruned)  # noqa: SLF001 - the start's own step
+    refused = versions.VersionError(whole_error)
+    refused.add_note("a note on the refusal")
+
+    def refusing(_path):
+        raise refused
+
+    left = unpruned = ""
+    if failing != "migration":
+        monkeypatch.setattr(versions, "prune", raising)
+        unpruned = f"OSError: {whole_error}\na note on the failure"
+        assert host_start._pruned() == ([], unpruned)  # noqa: SLF001 - the start's own step
+    if failing != "prune":
+        (local_home.root() / alias.NEW).mkdir(parents=True)  # a first migration a crash interrupted
+        monkeypatch.setattr(versions, "keep_data", refusing)
+        left = alias.complete()
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     machine, server, base = serve()
     try:
-        machine.updater.unpruned = unpruned  # as the host's start sets it
+        machine.updater.unpruned, machine.updater.unmigrated = unpruned, left  # as the host's start sets them
         text, said = _checks_page(base, "/updates/owlbear", "#owlbear-state")
     finally:
         server.should_exit = True
         machine.stop_all()
-    told = f"No update has run since OwlBear started. Old versions could not be removed at this start: {unpruned}."
+    told = "No update has run since OwlBear started."
+    if failing != "prune":
+        told += (" The runtime from before the first update could not be put away at this start: "
+                 f"VersionError: {whole_error}\na note on the refusal.")  # fmt: skip
+    if failing != "migration":
+        told += f" Old versions could not be removed at this start: {unpruned}."
     assert (text, said) == (told, [])
 
 
