@@ -14,6 +14,7 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.state_store import (
     decision_actions,
     decision_batch,
+    decision_cache,
     decision_store,
     decision_sync,
 )
@@ -131,6 +132,48 @@ def test_an_unreadable_decisions_folder_stops_loading(shared, locked) -> None:
             load(shared, PROJECT)
     finally:
         folder.chmod(0o755)
+
+
+def test_a_checkout_folder_the_disk_refuses_says_the_whole_error(shared) -> None:
+    root = shared.root
+    assert save(shared, make(), expected_revision=None, message="m").saved
+    root.parent.chmod(0)
+    try:
+        with pytest.raises(DecisionsUnavailable) as raised:
+            load(shared, PROJECT)
+    finally:
+        root.parent.chmod(0o755)
+    cause = raised.value.__cause__
+    said = f"{type(cause).__name__}: {cause}"
+    assert str(raised.value) == f"the shared data repository {root} cannot be read: {said}"
+
+
+@pytest.mark.parametrize("site", ["folder", "files", "whole", "save"])
+def test_a_decisions_read_or_write_the_disk_refuses_says_the_whole_error(
+    shared, monkeypatch, whole_error, site
+) -> None:
+    root, decision = shared.root, make()
+    assert save(shared, decision, expected_revision=None, message="m").saved
+    decision_cache.clear()
+
+    def refused(*_args: object, **_kwargs: object) -> None:
+        raise OSError(whole_error)
+
+    patched = {"folder": "kind", "files": "snapshot", "whole": "collect", "save": "_save_all"}[site]
+    monkeypatch.setattr(decision_store, patched, refused)
+    act = {
+        "whole": lambda: decision_store.whole(shared),
+        "save": lambda: decision_store.save_all(shared, [(decision, decision.revision)], message="m"),
+    }.get(site, lambda: load(shared, PROJECT))
+    with pytest.raises(DecisionsUnavailable) as raised:
+        act()
+    where = {
+        "folder": f"{root / PROJECT} cannot be read",
+        "files": f"the decisions in {root} cannot be read",
+        "whole": f"the decisions in {root} cannot be read",
+        "save": f"{decision.id} could not be written in {root}",
+    }[site]
+    assert str(raised.value) == f"{where}: OSError: {whole_error}"
 
 
 def test_every_decision_that_cannot_be_read_is_refused_with_the_whole_error(shared, monkeypatch, whole_error) -> None:
