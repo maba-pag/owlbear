@@ -1,5 +1,7 @@
 """The brief's and the plan's versions on the Change page: which challenge read which version, and what it found."""
 
+from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Plan, Step, StepKind, Task
@@ -139,3 +141,30 @@ def test_plan_versions_and_a_legacy_plan_head():
 
     assert listed["legacy"] == LEGACY_2
     assert shown(listed) == [(1, "unknown", [], []), (2, "unknown", [], []), (3, "clean", ["Challenge 3"], [])]
+
+
+def test_a_legacy_challenge_then_a_rejections_only_check_stays_not_recorded():
+    """Round 1 read v1 before versions were recorded; the check of its rejection on unchanged v1 is no full read."""
+    c = briefed(1, Verdict(round=1, version=1, recheck=True), findings=[found(1, "standing")], round=1)
+
+    assert shown(versions.brief(c)) == [(1, "unknown", ["Rejections checked after challenge 1"], ["approve"])]
+
+
+def test_a_legacy_plan_revised_after_its_last_round_is_not_challenged():
+    """The plan loop marks the revision after round 1 r1; no verdict was recorded, yet v2 is known unchallenged."""
+    lp = RoundLoop(subject=PLAN, policy=RoundPolicy(), round=1, unreviewed=["r1"])
+    c = Change(slug="c1", plan=Plan(version=2, tasks=[Task(id="t1", title="part 1", scope=["src"])]))
+    c.loops[PLAN] = lp
+
+    assert shown(versions.plan(c)) == [(1, "unknown", [], []), (2, "unreviewed", [], [])]
+
+
+def test_after_the_last_round_the_revision_asked_for_waits_for_you():
+    """The last allowed round found many; the shaper's v2 for them puts another round or a new draft to the owner."""
+    policy = RoundPolicy(max_rounds=1, max_findings=5, last_round_at=0, ask_owner_at=1)
+    c = briefed(1, Verdict(round=1, version=1), findings=[found(1, "open")], head="1", ended="", last=True, found=1)
+    c.loops[BRIEF].policy, c.brief.version = policy, 2
+
+    assert brief_rounds.request(c, 2, {}, policy, datetime(2026, 11, 4, tzinfo=UTC)) == ""
+    assert c.outcome.question  # the owner's choice after the last round
+    assert shown(versions.brief(c)) == [(1, "findings", ["Challenge 1"], []), (2, "waits", [], ["approve"])]

@@ -57,7 +57,7 @@ def _versions(attempts: list[RoundLoop], current: int, *, running: int, waits: i
     """Versions 1 to *current* and the legacy line; *running* and *waits*: the version a challenge runs or waits on."""
     legacy = _legacy(attempts)
     read = [(x, v) for x in attempts for v in x.verdicts]
-    earliest = min((v.version for _, v in read), default=current + 1)
+    earliest = min((v.version for _, v in read if not v.recheck), default=current + 1)  # a full challenge's
     lp = attempts[-1] if attempts else None
     out = []
     for n in range(1, current + 1):
@@ -70,7 +70,7 @@ def _versions(attempts: list[RoundLoop], current: int, *, running: int, waits: i
         elif full:
             x, v = full[-1]
             state = "findings" if v.upheld or any(f.raised == v.round for f in x.findings) else "clean"
-        elif legacy and n < earliest and not (n == current and lp and f"v{n}" in lp.unreviewed):
+        elif legacy and n < earliest and not (n == current and lp and lp.unreviewed):  # a repair no round read
             state = "unknown"
         else:
             state = "unreviewed"
@@ -88,7 +88,7 @@ def brief(c: Change) -> dict:
     attempts = _attempts(lp, BRIEF)
     live = brief_rounds.current(c)
     asks = brief_rounds.first(c) or brief_rounds.due(c) or brief_rounds.owned_open(c)
-    waits = int(live.head) if live and live.head and asks else 0
+    waits = (b.requested or int(live.head)) if live and live.head and asks else 0  # the revision the choice is on
     on = c.step.kind == StepKind.SHAPE and c.step.mode in brief_rounds.MODES
     listed = _versions(attempts, b.version, running=(b.requested or b.version) if on else 0, waits=waits)
     approved = {b.approved_version, *(a.version for a in b.approved)}
