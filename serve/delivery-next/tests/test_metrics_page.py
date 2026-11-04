@@ -246,47 +246,8 @@ def test_a_fold_counts_changes_by_project_apart_from_runs_outside_one_and_its_ro
 
 
 @pytest.mark.browser
-def test_only_a_failed_read_is_said_to_have_failed(pds) -> None:
-    """#780: picker runs read while their turn ran were all said to have had their last read fail."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
-    now = datetime.now(UTC) - timedelta(hours=1)
-    place = {"project": "owlbear", "name": "owlbear", "change": "", "agent": "picker", "job": "decision-pick"}
-
-    def used(spent: float, **more: str) -> dict:
-        return {"credits": spent, "models": {"m1": {"credits": spent, "input": 100, "output": 10}}} | more
-
-    spend_ledger.append([
-        *run("exact", now, used(9.0), place),
-        *run("turn", now + timedelta(minutes=1), used(9.33, incomplete="turn running"), place),
-        *run("failed", now + timedelta(minutes=2), used(9.73, incomplete="TimeoutError"), place),
-    ])  # fmt: skip
-    machine, server, base = serve()
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            page.goto(f"{base}/metrics#token=t")
-            said = page.locator("#exact li")
-            expect(said).to_have_count(2)
-            texts = said.all_inner_texts()
-            assert [t.startswith("1 run ") for t in texts] == [True, True]
-            assert [("failed" in t) for t in texts].count(True) == 1
-            expect(page.locator("#lower-bound")).to_contain_text("spent at least this")
-            expect(page.locator("#lower-bound")).not_to_contain_text("failed")
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
-
-
-@pytest.mark.browser
-def test_each_unread_or_short_run_says_its_whole_error(pds, whole_error: str) -> None:
-    """#971 P14: the exactness notes named how many runs were unread or short, never the error that made them so."""
+def test_only_a_failed_read_is_said_to_have_failed(pds, whole_error: str) -> None:
+    """#780: reads while a turn ran are not failures; #971 P14: actual failures say their whole error."""
     from copilot._jsonrpc import JsonRpcError  # noqa: PLC0415 - the SDK's own error, as a request raises it
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
@@ -299,11 +260,16 @@ def test_each_unread_or_short_run_says_its_whole_error(pds, whole_error: str) ->
 
     unread, short = said(whole_error, "UNREAD"), said("SHORT-MARK", "SHORT")
     now = datetime.now(UTC) - timedelta(hours=1)
-    place = {"project": "shop", "name": "shop", "change": "c1", "agent": "builder"}
-    spent = {"credits": 9.0, "models": {"m1": {"credits": 9.0, "input": 100, "output": 10}}}
+    place = {"project": "owlbear", "name": "owlbear", "change": "", "agent": "picker", "job": "decision-pick"}
+
+    def used(spent: float, **more: str) -> dict:
+        return {"credits": spent, "models": {"m1": {"credits": spent, "input": 100, "output": 10}}} | more
+
     spend_ledger.append([
-        *run("unread", now, {"error": unread}, place),
-        *run("short", now + timedelta(minutes=1), spent | {"incomplete": short}, place),
+        *run("exact", now, used(9.0), place),
+        *run("turn", now + timedelta(minutes=1), used(9.33, incomplete="turn running"), place),
+        *run("failed", now + timedelta(minutes=2), used(9.73, incomplete=short), place),
+        *run("unread", now + timedelta(minutes=3), {"error": unread}, place),
     ])  # fmt: skip
     machine, server, base = serve()
     try:
@@ -317,12 +283,17 @@ def test_each_unread_or_short_run_says_its_whole_error(pds, whole_error: str) ->
             page.on("pageerror", lambda e: errors.append(str(e)))
             pds.only(page, base)
             page.goto(f"{base}/metrics#token=t")
-            said_li = page.locator("#exact li")
-            expect(said_li).to_have_count(2)
-            assert said_li.nth(0).locator(".why").all_text_contents() == [unread]
-            assert said_li.nth(1).locator(".why").all_text_contents() == [short]
-            expect(said_li.nth(0)).to_contain_text("1 run did not report its credits")
-            expect(said_li.nth(1)).to_contain_text("its last read failed")
+            notes = page.locator("#exact li")
+            expect(notes).to_have_count(3)
+            texts = notes.all_inner_texts()
+            assert [t.startswith("1 run ") for t in texts] == [True, True, True]
+            assert [("failed" in t) for t in texts].count(True) == 1
+            assert notes.nth(0).locator(".why").all_text_contents() == [unread]
+            assert notes.nth(1).locator(".why").all_text_contents() == [short]
+            expect(notes.nth(0)).to_contain_text("1 run did not report its credits")
+            expect(notes.nth(1)).to_contain_text("its last read failed")
+            expect(page.locator("#lower-bound")).to_contain_text("spent at least this")
+            expect(page.locator("#lower-bound")).not_to_contain_text("failed")
             assert errors == []
             browser.close()
     finally:

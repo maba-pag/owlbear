@@ -768,7 +768,7 @@ def test_a_stale_host_s_whole_error_reaches_the_shaping_outcome_and_host_log(
             "error) REASON-MARK; then sent 1011 (internal error) REASON-MARK"
         )
     else:
-        path = Path(tempfile.mkdtemp(dir="/tmp")) / "gone.sock"
+        path = plain / "gone.sock"
         if failing == "upgrade refused":  # the host's rejection page is the body of its answer
             broke: Exception = InvalidStatus(Response(503, "Service Unavailable", Headers(), whole_error.encode()))
             inner = "HostError: upgrade refused: InvalidStatus: server rejected WebSocket connection: HTTP 503\n"

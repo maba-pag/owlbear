@@ -423,8 +423,7 @@ def _save_global(store: Store, path: Path, host: Host, body: Save, reads: settin
 
     def own(before: GlobalLayer, after: GlobalLayer) -> None:
         # this machine's change of Global is never noticed as one from elsewhere; if it was not recorded, say so
-        if said := reads.ledger.own(before, after):
-            unrecorded.append(said)
+        unrecorded.append(reads.ledger.own(before, after))
 
     notice = _save(store, path, GlobalLayer, body, "global: from the settings page", host, written=own)
     return "; ".join(filter(None, [notice, *unrecorded]))
