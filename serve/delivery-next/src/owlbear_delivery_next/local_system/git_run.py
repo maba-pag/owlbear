@@ -23,13 +23,26 @@ EXPIRED = "the deadline passed before git could run"
 REMOTE = frozenset({"push", "fetch", "pull", "ls-remote", "clone"})
 
 
-def run(cwd: Path, *args: str, until: float | None, cap: float, show: bool = False) -> subprocess.CompletedProcess[str]:
+def _decoded(output: bytes | None) -> str | None:
+    """Decode captured bytes without translating their line endings."""
+    return None if output is None else output.decode("utf-8", "surrogateescape")
+
+
+def run(
+    cwd: Path,
+    *args: str,
+    until: float | None,
+    cap: float,
+    show: bool = False,
+    lossless: bool = False,
+) -> subprocess.CompletedProcess[str]:
     """One git command, ended by ``until`` (monotonic) at the latest and after *cap* seconds; never prompts.
 
     A command that times out or cannot start is a failed one (exit 128), and so is one whose deadline has already
     passed: Git is then never started. Without ``until`` it runs for *cap* seconds at most; that one deadline also
     bounds choosing the account a remote command runs as, and an account that can't be had or a push over SSH is a
     failed command with its reason. When *show*, Git writes to the terminal and only the exit code is returned.
+    *lossless* preserves UTF-8 bytes and line endings for callers that classify separate records in one output.
     """
     seconds = cap if until is None else min(cap, until - time.monotonic())
     deadline = time.monotonic() + seconds
@@ -43,19 +56,22 @@ def run(cwd: Path, *args: str, until: float | None, cap: float, show: bool = Fal
         return subprocess.CompletedProcess(["git", *args], 128, "", said)
     command = ["git", *access.options(), *args]
     try:
-        return subprocess.run(  # noqa: S603
+        done = subprocess.run(  # noqa: S603
             command,
             cwd=cwd,
             env=access.environment({**os.environ, "GIT_TERMINAL_PROMPT": "0"}),
             stdin=subprocess.DEVNULL,
             capture_output=not show,
-            text=True,
+            text=not lossless,
             timeout=seconds,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         # Exit 1 can mean no match or a difference; failure to run Git cannot answer either probe.
         return subprocess.CompletedProcess(command, 128, "", failure(exc))
+    if lossless:
+        return subprocess.CompletedProcess(done.args, done.returncode, _decoded(done.stdout), _decoded(done.stderr))
+    return done
 
 
 def _access(cwd: Path, args: tuple[str, ...], deadline: float) -> Access:

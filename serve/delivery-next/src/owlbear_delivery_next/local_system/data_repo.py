@@ -76,9 +76,9 @@ def _held(path: Path) -> str:
         return ""
 
 
-def _git(cwd: Path, *args: str, until: float | None = None) -> subprocess.CompletedProcess[str]:
+def _git(cwd: Path, *args: str, until: float | None = None, lossless: bool = False) -> subprocess.CompletedProcess[str]:
     """One git command, ended by ``until`` (monotonic) at the latest; never started once it passed (`git_run.run`)."""
-    return git_run.run(cwd, *args, until=until, cap=GIT_SECONDS)
+    return git_run.run(cwd, *args, until=until, cap=GIT_SECONDS, lossless=lossless)
 
 
 def _top(root: Path) -> Path | None:
@@ -106,7 +106,11 @@ class DataRepo:
         return self.root / name / MEMORY
 
     def git(
-        self, *args: str, until: float | None = None, guard: Callable[[], str] | None = None
+        self,
+        *args: str,
+        until: float | None = None,
+        guard: Callable[[], str] | None = None,
+        lossless: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         """One git command in the checkout; a timeout or a missing folder is a failed command.
 
@@ -115,6 +119,7 @@ class DataRepo:
         a held change that no longer meets the fetched remote sends nothing (`publication_hold.pushing`). A push's
         *guard*, an owned caller's final check, runs after those probes and immediately before Git starts the push:
         what it refuses, nothing is sent.
+        *lossless* preserves undecodable UTF-8 bytes for a caller's per-record validation; guards are unchanged.
         """
         pushing = args[:1] == ("push",)
         run = args
@@ -124,7 +129,7 @@ class DataRepo:
                 held = guard()
             if held:
                 return subprocess.CompletedProcess(["git", *args], 1, "", held)
-        done = _git(self.root, *run, until=until)
+        done = _git(self.root, *run, until=until, lossless=True) if lossless else _git(self.root, *run, until=until)
         if pushing and done.returncode == 0:
             publication_hold.settled(self, until)
         return done

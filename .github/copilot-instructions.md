@@ -48,13 +48,16 @@ what is wrong (TD-150). In OwlBear also:
   decision names the one it replaces. "Take your recommendation" records what the option showed as
   `approved` (`confirmed=true`, `origin="approved"`); details you add stay `autonomous` with their reason.
 - End the session with one check of everything you record (TD-448). At work completion, use that same check to
-  consider only decisions recorded or materially relied on in this work, not the whole inventory. Propose closeout
-  only for a finite instruction whose stated end condition demonstrably happened: show its ID, current revision,
-  completion evidence, continuing obligations and proposed withdrawal or replacement.
-  Earlier work or plan approval and a merged PR are not retirement consent. Use `retire_decision`, or a replacement
-  through `record_decision`, only after the owner's specific confirmation; a `decided` rule needs his re-decision.
-  Preserve continuing intent in any replacement; if a mixed rule's surviving intent is unclear, leave it unchanged.
-  Without approval, the record stays in force. If no candidate qualifies, add no closeout question or extra gate.
+  consider only decisions recorded or materially relied on in this work, not the whole inventory.
+  For a wholly finite OwlBear project instruction, verify its explicit end condition and every binding clause are
+  fulfilled with no continuing intent lost, then use `complete_decision` with the current revision, exact condition
+  quote and evidence. Retain history, verify the published receipt and report the completion; do not ask the owner
+  to verify historical engineering facts. Investigate uncertain facts and leave unresolved intent active.
+  Continuing or mixed rules are not administrative completions. Explain the effect of any proposed intent change:
+  `retire_decision` or a replacement through `record_decision` still needs the owner's specific confirmation, and
+  a `decided` rule his re-decision. Preserve continuing intent; ambiguity leaves the rule unchanged.
+  Do not fake those flags when the completion tool is unavailable: update the installed runtime first.
+  If no eligible completion or genuine intent question remains, add no closeout question or extra gate.
 
 ### Challenges Run by Hand
 

@@ -115,6 +115,16 @@ class _Reruns:
         if issue is not None and failures is not None and hasattr(item.config, "workerinput"):
             failures.set_test_reruns(_issue_key(item.nodeid), issue)
 
+    @pytest.hookimpl(tryfirst=True)
+    def pytest_runtest_setup(self, item: pytest.Item) -> None:
+        """Acknowledge native protocol counter writes before setup or the test body can crash.
+
+        The socket getter's reply follows those queued writes; a controller's direct read does not.
+        """
+        db = getattr(item.config, "failures_db", None)
+        if db is not None and hasattr(item.config, "workerinput") and _ISSUE_PROPERTY in dict(item.user_properties):
+            db.get_test_reruns(item.nodeid)
+
     @pytest.hookimpl(optionalhook=True, tryfirst=True)
     def pytest_handlecrashitem(self, crashitem: str, report: pytest.TestReport, sched: object) -> None:  # noqa: ARG002
         """Count re-runs after ordinary failures toward the crash budget, which pytest-rerunfailures keeps apart."""

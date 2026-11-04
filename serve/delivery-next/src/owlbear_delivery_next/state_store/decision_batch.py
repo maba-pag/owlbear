@@ -23,7 +23,7 @@ from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
 from owlbear_decisions.storage import bound, install, own_temporary
-from owlbear_delivery_next.local_system import storage_io
+from owlbear_delivery_next.local_system import publication_hold, storage_io
 from owlbear_delivery_next.local_system.batch_journal import (  # noqa: F401 - the store's journal API, read below it
     COMPLETED,
     GENERATION,
@@ -292,3 +292,4 @@ def complete(shared: DataRepo, generation: str) -> None:
         replace_file(admin / COMPLETED, json.dumps(sorted(listed), indent=1).encode("utf-8"))
         if journal is not None and journal.generation == generation:
             replace_file(admin / JOURNAL, None)
+    publication_hold.settled(shared, None)

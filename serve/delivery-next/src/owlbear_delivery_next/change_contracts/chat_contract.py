@@ -25,6 +25,10 @@ Contract 4: contract 3, and a person check in ``save_brief`` takes ``covers``, t
 redoes only the checks of the criteria it changes (TD-185, ``tests/fixtures/chat_contract_4.json``). A server of an
 earlier contract sends none, which covers them all.
 
+Contract 5: contract 4, and ``complete_decision`` marks a wholly finite OwlBear project instruction spent, with
+its expected revision, exact condition quote and evidence, sent to ``/decisions/{id}/complete``
+(``tests/fixtures/chat_contract_5.json``). Existing withdrawal and replacement contracts are unchanged.
+
 A host whose contract answer has ``"admit_by": true`` refuses a ``/decisions/propose`` save that starts after the
 time in the request's ``X-OwlBear-Admit-By`` header (#846); a chat whose host lacks it never takes a lost answer as
 not saved.
@@ -38,8 +42,8 @@ from pydantic import BaseModel, ConfigDict
 
 from owlbear_delivery_next.local_system import codebase
 
-CHAT = 4  # the contract this code's chat server speaks
-SUPPORTED = frozenset({1, 2, 3, 4})  # the contracts this code's host serves
+CHAT = 5  # the contract this code's chat server speaks
+SUPPORTED = frozenset({1, 2, 3, 4, 5})  # the contracts this code's host serves
 HEADER = "X-OwlBear-Chat"
 CAPABILITY = "/api/next/chat/contract"  # a host that has none predates the contract
 UNSUPPORTED = (
