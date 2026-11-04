@@ -280,7 +280,8 @@ def test_a_failed_stop_and_resume_ends_the_step_with_a_question_naming_the_failu
     assert spotter.WORK.settled(5)
     error = f"JsonRpcError: JSON-RPC Error -32000: {whole_error}" if fails == "abort" else "ConnectionError: refused"
     act = act_of(st)
-    assert (act.act, act.delivery, act.error) == ("stop-and-resume", "failed", error)
+    kept = f"{error}\nNOTE-MARK" if fails == "abort" else error  # the Spotter keeps the act's error with its notes
+    assert (act.act, act.delivery, act.error) == ("stop-and-resume", "failed", kept)
     detail = f"{error}\nNOTE-MARK {{'DATA-MARK': 1}}" if fails == "abort" else error
     said = spotter_act.UNRESUMED.format(error=detail)
     if category == "irreversible-harm":
