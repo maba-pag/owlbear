@@ -1887,6 +1887,26 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
 
 
 @pytest.mark.browser
+def test_the_spotter_lists_owlbears_own_project_first_as_owlbear_with_its_tag(
+    tmp_path: Path, monkeypatch, pds, shared_repo
+) -> None:
+    """D-01M6JZQEEAXBNNH9P05HT7JNH2: Improvement's Spotter cards, added after a consumer, list OwlBear first, tagged."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
+    alpha = registry.register(clone(tmp_path / "alpha"))
+    own = registry.register(clone(tmp_path / "mine", origin=OWLBEAR_ORIGIN))
+    with browsing(monkeypatch, pds, 1280) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/improvement#token=t")
+        cards = page.locator("#spotter li.panel")
+        expect(cards.locator("h3")).to_have_text(["OwlBear", "alpha"])
+        expect(page.locator(f"#spotter-{own.id} p-tag")).to_have_text(["OwlBear's own"])
+        expect(page.locator(f"#spotter-{alpha.id} p-tag")).to_have_count(0)
+        assert said == []
+
+
+@pytest.mark.browser
 def test_owlbears_fixed_scope_stays_its_one_row_once_its_own_project_is_registered(
     tmp_path: Path, monkeypatch, pds, shared_repo
 ) -> None:
