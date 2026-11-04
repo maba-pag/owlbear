@@ -994,7 +994,6 @@ def test_a_failed_cases_or_retro_pass_and_an_unpublished_sync_show_their_whole_e
         raise _noted(exc)
 
     told: list[str] = []
-    bad = "Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
         monkeypatch.setattr(cases_job.CasesJob, "tick", CASES_TICK)
         monkeypatch.setattr(retro_job.RetroJob, "tick", RETRO_TICK)
@@ -1003,9 +1002,9 @@ def test_a_failed_cases_or_retro_pass_and_an_unpublished_sync_show_their_whole_e
         with monkeypatch.context() as due:  # a sync with work: it cannot read its limits
             due.setattr(case_review, "due", lambda: ({"c-1": "r"}, {}, []))
             cases_now.loop(_Passes(1), lambda: 0.0)
-        cases.place().mkdir(parents=True, exist_ok=True)
-        (cases.place() / "published.json").write_text("{x")  # the next sync cannot read what was published
-        cases_now.loop(_Passes(1), lambda: cases_job.PUBLISH_EVERY)
+        with monkeypatch.context() as due:  # the next sync cannot read what is due
+            due.setattr(case_review, "due", lambda: raising(cases.CaseError(whole_error)))
+            cases_now.loop(_Passes(1), lambda: cases_job.PUBLISH_EVERY)
         loaded, broken = w.machine.retro.seams.projects, [True]
         slots = Slots(lambda: 1)
         slots.open()
@@ -1016,7 +1015,7 @@ def test_a_failed_cases_or_retro_pass_and_an_unpublished_sync_show_their_whole_e
         retro_now.loop(_Passes(1), lambda: 0.0)  # the loaded projects cannot be read, for this pass only
         broken.clear()
         unpublished = f"the credit limits cannot be read: OSError: {whole_error}\n{NOTE}"
-        failed = f"CaseError: published.json cannot be read: JSONDecodeError: {bad}"
+        failed = f"CaseError: {whole_error}\n{NOTE}"
         retro_failed = f"RuntimeError: {whole_error}\n{NOTE}"
         assert told == [
             f"the Spotter cases are not published: {unpublished}",
@@ -1032,6 +1031,7 @@ def test_a_failed_cases_or_retro_pass_and_an_unpublished_sync_show_their_whole_e
             f"The job's last pass failed, and the next one tries again: {failed}",
             f"Not published, and the next sync tries again: {unpublished}",
         ]
+        assert page.locator("#cases-failed").evaluate("e => e.scrollWidth <= e.clientWidth")
         said = page.locator("#retro #retro-failed .meta")
         assert (
             said.evaluate("e => e.textContent")
@@ -1084,3 +1084,122 @@ def test_a_publication_that_did_not_go_through_shows_each_cases_whole_reason(
         said = line.locator(".said")
         assert said.evaluate("e => e.innerText") == expected  # as shown, its lines kept
         assert said.evaluate("e => e.scrollWidth <= e.clientWidth")
+
+
+SAID = "e => e.shadowRoot.querySelector('p').textContent"  # a notification's description, as its shadow holds it
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_a_refusal_and_each_part_that_cannot_be_read_show_their_whole_error(
+    tmp_path, monkeypatch, pds, whole_error
+) -> None:
+    error = f"{whole_error}\n{NOTE}"
+    fact = cases.fact
+
+    def unread_case(cid: str) -> dict[str, Any]:
+        if cid == w.ids["checked"]:
+            raise _noted(cases.CaseError(whole_error))
+        return fact(cid)
+
+    def unread_settings() -> None:
+        raise _noted(registry.RegistryError(whole_error))
+
+    def refused(*_args: object) -> None:
+        raise _noted(store.RetroError(whole_error))
+
+    with machine_page(tmp_path, monkeypatch, pds) as w:
+        monkeypatch.setattr(cases, "fact", unread_case)
+        monkeypatch.setattr(improvement_routes.machine_settings, "current", unread_settings)
+        monkeypatch.setattr(followups, "request", refused)
+        failing = w.ids["backlog"]
+        props.transition(failing, "accepted", "owner")
+        props.outcome(failing, "failed", step="backlog", error=f"RetroError: {error}")
+        page = improvement(w, pds)
+        page.locator("#retro #finding-f-1").get_by_role("button", name="Follow up").click()
+        pds.answer(page, "Follow up")
+        page.locator("#notice").wait_for()
+        switches = '#retro p-inline-notification[heading="Retro\'s switches could not be read"]'
+        shown = (
+            page.locator("#notice").evaluate(SAID),
+            page.locator(switches).evaluate(SAID),
+            page.locator(f"#case-{w.ids['checked']} p-inline-notification").evaluate(SAID),
+            card(page, failing).locator("ul.meta > li", has_text="Last failure").evaluate(BARE),
+        )
+        assert shown == (
+            f"RetroError: {error}",
+            f"the machine's settings cannot be read: RegistryError: {error}",
+            f"CaseError: {error}",
+            f"Last failure (backlog): RetroError: {error}",
+        )
+
+
+def _judge(answer: str) -> spotter.Judge:
+    """A look that bills one confirmed call and answers *answer*."""
+
+    async def look(_card: object, _ctx: spotter.Context, spend: Any) -> str:
+        part = spend.part()
+        part.started(f"sdk-{spend.id}")
+        part.call(0.25)
+        part.ended(None, confirmed=True)
+        return answer
+
+    return look
+
+
+async def _failed_acts(pid: str, error: OSError) -> None:
+    """Two looks of *pid*'s Change: one whose act and conflict check raise *error*, one whose withdrawal does."""
+    steered = {"hand-off-fitness": "refuse-hand-off", "irreversible-harm": "stop-and-ask"}
+    harm = json.dumps({"category": "irreversible-harm", "note": "Deletes the backups.", "evidence": ["e1"],
+                       "state_change": "rm -rf ~/backups"})  # fmt: skip
+    unfit = json.dumps({"category": "hand-off-fitness", "note": "Done too early.", "evidence": ["e1"]})
+
+    async def dispatch(record: spotter.Record, _act: acts.Act) -> None:
+        if record.session == "s-harm":
+            raise error
+
+    def conflicts(_change: str) -> str:
+        raise error
+
+    def unreachable() -> None:
+        raise error
+
+    async def instant(_seconds: float) -> None:
+        return
+
+    for session, answer, arm in (("s-harm", harm, "silent"), ("s-unfit", unfit, "steered")):
+        ctx = spotter.Context(project=pid, change=SLUG, step="build", looks=("hand-off",), sample_rate=0,
+                              verbose=False, model="m", effort="medium", limit=0.75, actions=steered, arm=arm, cap=2,
+                              act=dispatch, conflicts=conflicts)  # fmt: skip
+        spot = spotter.Spotter(ctx, lambda s=session: s, _judge(answer))
+        spot.handed_off("call-1", {})
+        await spot.drain()
+    withdrawn = next(i for i, a in acts.acts(spotter.root()).items() if a.session == "s-unfit")
+    actor = chat_acts.ChatActor("s-unfit", spot, connect=unreachable, sleep=instant)
+    actor.chat = "chat-1"  # resolved already: the withdrawal's connection is what fails
+    await actor._confirmed(SimpleNamespace(id=withdrawn), "[t]", "steering", "m-1", yields=False)  # noqa: SLF001
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_a_failed_act_conflict_check_and_withdrawal_show_their_whole_error(
+    tmp_path, monkeypatch, pds, whole_error
+) -> None:
+    error = f"{whole_error}\n{NOTE}"
+    with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
+        aside(lambda: asyncio.run(_failed_acts(w.pid, _noted(OSError(whole_error)))))
+        assert spotter.WORK.settled(5)
+        by = {a.session: (rid, a) for rid, a in acts.acts(spotter.root()).items()}
+        (harmed, _), (withdrawn, act) = by["s-harm"], by["s-unfit"]
+        page = improvement(w, pds)
+
+        def line(rid: str, start: str) -> str:
+            return page.locator(f"#look-{rid} p.meta", has_text=start).evaluate(BARE)
+
+        shown = (line(harmed, "Its error:"), line(harmed, "Decision check:"), line(withdrawn, "Its act:"))
+        withdrawal = f"not taken within {chat_acts.BOUND:.0f} s; its withdrawal failed: OSError: {error}"
+        assert shown == (
+            f"Its error: OSError: {error}",
+            f"Decision check: failed: OSError: {error}",
+            f"Its act: {act.act}, steered arm, unconfirmed ({withdrawal})",
+        )
