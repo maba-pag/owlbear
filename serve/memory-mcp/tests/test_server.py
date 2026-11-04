@@ -933,7 +933,6 @@ async def test_unreadable_global_settings_reach_the_tool_answer_whole(
 ) -> None:
     """A settings read failing with a long error is answered with its type and every line of its message (#971)."""
     store = _bound_store(monkeypatch, tmp_path)
-    _create_entry(store, title="Known habit", state=MemoryState.APPROVED)
     config = store.parent.parent / "config.json"
     error = _whole_error()
     read_text = Path.read_text

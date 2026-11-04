@@ -405,17 +405,11 @@ def test_text_check_prints_an_unreadable_file_with_its_whole_error(
     words = [f"w{i:04d}" for i in range(700)]
     lines = [" ".join(words[i : i + 20]) for i in range(0, 700, 20)]
     error = "\n".join(['BEGIN <a & "b">', *lines[:17], "MIDDLE", *lines[17:], "END"])
-    read_bytes = Path.read_bytes
-
-    def unreadable(self: Path) -> bytes:
-        if self == path:
-            raise OSError(error)
-        return read_bytes(self)
 
     with (
         patch.object(sys, "argv", ["format-eof", "--no-fix"]),
         patch("owlbear_tools.quality_runtime.subprocess.check_output", return_value=f"{path}\0".encode()),
-        patch.object(Path, "read_bytes", unreadable),
+        patch.object(Path, "read_bytes", side_effect=OSError(error)),
         pytest.raises(SystemExit, match="1"),
     ):
         format_eof()
