@@ -233,10 +233,13 @@ sets shows as unset on the Settings page. While one of a project's settings is u
 settings can't be read, nothing starts for that project: no Change step runs, and New Change,
 Retro, curation of its memory folder and test review wait. On the Changes page the buttons that
 would start its work, such as Resume, Answer and the approvals, are disabled; Pause, Withdraw and
-Pull still work, and a draft answer stays. The page names each project that waits, with what is
-unset and a link to its settings, and shows an error once no project can start work. A
-step that already runs when one turns unset asks you to fill it in. Automatic memory curation also
-waits until its role and threshold are set; a memory folder with no project settings of its own
+Pull still work, and a draft answer stays. The page names each project that waits, with how many of its
+settings are unset (or why they can't be read) and a link to its settings, and shows an error once no
+project can start work. Wherever the pages tell you a setting is unset or changed elsewhere (the Unset
+settings list, Across projects, the change notices), they name it by the words its row on the Settings page
+shows, such as "planner · Model", so you can find it there; the technical keys stay in the CLI, logs and
+agent errors. A step that already runs when one turns unset asks you to fill it in. Automatic memory curation
+also waits until its role and threshold are set; a memory folder with no project settings of its own
 waits only for those and this machine's. A new machine that uses your
 shared repository takes its global settings; one without starts with every setting unset. Nothing
 lies under the global settings, so with the Global layer chosen the page names the choice that
