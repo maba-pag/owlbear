@@ -3,6 +3,7 @@ import io
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import threading
@@ -25,7 +26,7 @@ from owlbear_delivery_next.change_contracts.models import Change, Environment, S
 from owlbear_delivery_next.commands import chat_client, cli, mcp_server, replay_client, setup
 from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay, pack_run
 from owlbear_delivery_next.improvement import improvement_view
-from owlbear_delivery_next.local_system import codebase, local_home, maintenance
+from owlbear_delivery_next.local_system import codebase, data_place, local_home, maintenance
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, project, serve
 from owlbear_delivery_next.machine_host import machine as machine_module
@@ -913,6 +914,25 @@ def test_a_settings_carry_that_fails_is_kept_and_said_whole(machine, monkeypatch
     assert registry.load().settings_pending == why
     said = re.escape(f"settings: {why}; tried again at the next start\n")
     assert re.fullmatch(rf"\d\d:\d\d:\d\dZ {said}", capsys.readouterr().out)
+
+
+def test_a_start_s_shared_data_notice_clears_once_owlbear_data_finishes_the_move(tmp_path, http, machine) -> None:
+    """#971: shared data the start could not set up is said on Projects until `owlbear data` sets it right while the
+    host runs; the next pass loading the failed projects again then clears it, and the project loads."""
+    registry.register(clone(tmp_path / "shop"))
+    source, dest = clone(tmp_path / "old-data"), data_place.default()
+    subprocess.run(["git", "clone", "-q", str(source), str(dest)], check=True)  # noqa: S603, S607 - a move left both
+    data_place.pointer().write_text(json.dumps({"moving_from": str(source), "moving_to": str(dest)}))
+    serve._provisioned(machine)  # noqa: SLF001
+    machine.load_all()
+    both = f"an unfinished move left both {source} and {dest}; check which holds your data, remove the other, then run"
+    read = http.get("/api/next/projects").json()
+    assert (read["unshared"], read["projects"][0]["state"]) == (f"DataRepoError: {both} `owlbear data`", "failed")
+    shutil.rmtree(source)
+    assert cli.main(["data"]) == 0  # the owner finishes the move while the host runs
+    machine.retry()
+    read = http.get("/api/next/projects").json()
+    assert (read["unshared"], read["projects"][0]["state"]) == ("", "loaded")
 
 
 def test_a_failed_pass_loading_projects_again_is_kept_whole_until_one_passes(

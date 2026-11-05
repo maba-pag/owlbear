@@ -184,6 +184,7 @@ def _fill(machine: Machine, *, cloning: bool) -> None:
     """Start the threads that pre-load the decisions and, when *cloning*, clone the shared repository."""
     threading.Thread(target=warm, args=(machine,), daemon=True, name="decisions").start()
     if cloning:
+        machine.cloning = True
         threading.Thread(target=_cloning, args=(machine,), daemon=True, name="data-clone").start()
 
 
