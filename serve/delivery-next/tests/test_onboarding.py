@@ -366,7 +366,6 @@ def test_a_lost_create_answer_adopts_only_the_matching_empty_repository(hub, job
     monkeypatch.setattr(repo_target, "create", lost)
     info = run(jobs, plan_for(found, repository="ada/demo"))
     assert stage(info, "repository")["state"] == "failed"
-    info = run(jobs, plan_for(found, repository="ada/demo"))
     info = settle(jobs, jobs.resume(info["id"])["id"])
     assert stage(info, "repository")["result"]["adopted"] is True
 
@@ -880,3 +879,22 @@ def test_a_repository_other_than_the_folders_origin_stops_the_preflight(jobs, tm
     assert "repository" in found["stages"]
     problems = onboarding_probe.preflight(plan_for(found, repository="ada/other"))
     assert [p.split(":")[0] for p in problems] == ["origin"]
+
+
+def test_a_new_plan_for_an_unfinished_destination_runs_with_the_new_choices(hub, jobs, tmp_path, monkeypatch):
+    found = jobs.probe({"kind": "new", "name": "demo", "folder": str(tmp_path / "demo")})
+    real = onboarding_git.push_first
+
+    def once(_path: Path, _access: Access) -> None:
+        monkeypatch.setattr(onboarding_git, "push_first", real)
+        said = "the push failed"
+        raise RuntimeError(said)
+
+    monkeypatch.setattr(onboarding_git, "push_first", once)
+    first = run(jobs, plan_for(found, repository="ada/demo"))
+    assert stage(first, "push")["state"] == "failed"
+    again = jobs.probe({"kind": "folder", "folder": found["folder"]})
+    assert again["job"]["id"] == first["id"]
+    info = run(jobs, plan_for(again, protect=False))
+    assert (info["ended"], info["plan"]["protect"]) == ("done", False)
+    assert not hub.rulesets.get("ada/demo")

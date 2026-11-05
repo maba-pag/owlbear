@@ -76,7 +76,10 @@ class Onboarding:
         return found
 
     def start(self, plan: dict[str, Any]) -> dict[str, Any]:
-        """Run the approved plan; the same destination's unfinished job goes on instead of a second one."""
+        """Run the approved plan; it starts the same destination's unfinished run again unless that one is running.
+
+        The plan comes from a probe made since, so its stages are what is left now and its choices the owner's latest.
+        """
         if why := self._why():
             raise OnboardingError(503, why)
         if unknown := [s for s in plan.get("stages", []) if s not in STAGES]:
@@ -84,10 +87,10 @@ class Onboarding:
         receipt = onboarding_job.new_receipt(plan)
         with self.lock:
             self._load()
-            job = self.jobs.get(receipt["id"])
-            if job is None or job.receipt.get("ended"):
-                job = self.jobs[receipt["id"]] = self._job(receipt)
-                job.save()
+            if (old := self.jobs.get(receipt["id"])) and old.running():
+                raise OnboardingError(409, f"the run for {plan['folder']} is running: wait for it, then check again")
+            job = self.jobs[receipt["id"]] = self._job(receipt)
+            job.save()
             if plan.get("github"):  # Publish: the folder's local-only run is done with
                 for local in [j for j in self.jobs.values() if j.receipt.get("ended") == "local"]:
                     if local.plan["folder"] == plan["folder"]:
