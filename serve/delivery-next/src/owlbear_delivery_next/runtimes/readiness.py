@@ -105,17 +105,13 @@ def _first_commit(repo: dict[str, object], probe: Probe) -> Check:
         return Check("first commit", ok=True, detail=f"default branch {branch}")
     if remote:
         detail = f"{name} has commits on {branch}, but this clone has none"
-        fix = f"Fetch them: `git pull --set-upstream origin {branch}`, then run setup again"
+        command = f"git pull --set-upstream origin {branch}"
     elif local:
-        detail = f"{name} has no commits yet, but this clone has"
-        fix = "Push them: `git push -u origin HEAD`, then run setup again"
+        detail, command = f"{name} has no commits yet, but this clone has", "git push -u origin HEAD"
     else:
         detail = f"{name} has no commits yet, and neither has this clone"
-        fix = (
-            'Commit a first file and push it: `git add <file> && git commit -m "First commit" && '
-            "git push -u origin HEAD`, then run setup again"
-        )
-    return Check("first commit", ok=False, detail=detail, fix=fix)
+        command = 'git add <file> && git commit -m "First commit" && git push -u origin HEAD'
+    return Check("first commit", ok=False, detail=detail, fix=f"Run `{command}`, then run setup again")
 
 
 def _ssh(key: str, probe: Probe) -> Check:
