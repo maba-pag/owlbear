@@ -973,3 +973,13 @@ def test_choices_changed_during_the_check_are_checked_again(tmp_path, monkeypatc
         held[0].continue_()
         expect(modal).to_contain_text("The choices changed during the check: check them again.")
         expect(modal.get_by_role("button", name="Check and continue")).to_be_visible()
+
+
+def test_a_label_the_repository_has_in_another_case_is_not_created_again(monkeypatch):
+    made: list[str] = []
+    monkeypatch.setattr(repo_target, "labels", lambda _c, _r: {"bug"})
+    monkeypatch.setattr(repo_target, "create_label", lambda _c, _r, name: made.append(name))
+    plan = {"repository": "ada/demo", "labels": ["Bug", "release:minor"]}
+    job = onboarding_job.Job({"id": "j", "plan": plan, "stages": []}, [], lambda _t: None, lambda: "")
+    job.context["client"] = None
+    assert (onboarding_stages.labels(job), made) == ({"created": ["release:minor"]}, ["release:minor"])

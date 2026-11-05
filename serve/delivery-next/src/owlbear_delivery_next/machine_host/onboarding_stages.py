@@ -226,8 +226,8 @@ def labels(job: Job) -> dict[str, Any]:
     if not (wanted := plan.get("labels") or []):
         return {"created": []}
     client = _client(job)
-    have = repo_target.labels(client, plan["repository"])
-    made = [x for x in wanted if x not in have]
+    have = {x.casefold() for x in repo_target.labels(client, plan["repository"])}  # GitHub's names ignore case
+    made = [x for x in wanted if x.casefold() not in have]
     for label in made:
         repo_target.create_label(client, plan["repository"], label)
     return {"created": made}
