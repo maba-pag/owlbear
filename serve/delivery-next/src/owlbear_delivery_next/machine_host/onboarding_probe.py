@@ -159,7 +159,10 @@ def _target(start: dict[str, Any]) -> tuple[str, bool, str, Path, str]:
         name = slug(start.get("name", ""))
         folder = Path(start.get("folder") or projects() / name)
     else:
-        folder = Path(start.get("folder", ""))
+        if not str(start.get("folder") or "").strip():
+            msg = "name the folder on this Mac"
+            raise ValueError(msg)
+        folder = Path(start["folder"])
         name = folder.name
     return kind, github, repository, folder.expanduser().resolve(), name
 

@@ -853,3 +853,9 @@ def test_blank_author_fields_stop_the_preflight(hub, jobs, tmp_path):
     found = jobs.probe({"kind": "folder", "folder": str(folder)})
     problems = onboarding_probe.preflight(plan_for(found, author={"name": " ", "email": ""}))
     assert [p.split(":")[0] for p in problems] == ["git identity"]
+
+
+def test_a_folder_start_without_a_folder_is_refused(jobs):
+    for start in ({"kind": "folder"}, {"kind": "folder", "folder": "  "}):
+        with pytest.raises(OnboardingError, match="name the folder"):
+            jobs.probe(start)
