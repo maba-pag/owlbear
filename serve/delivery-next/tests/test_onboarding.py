@@ -534,8 +534,19 @@ def test_finish_setup_on_a_registered_clone_changes_its_ruleset_and_says_what_is
     registry.register(folder)
     with served(monkeypatch, pds) as (page, base, _machine):
         page.goto(f"{base}/projects#token=t")
+        held: list[Any] = []
+
+        def hold(route: Any) -> None:  # the probe answers once the dialog is seen open
+            held.append(route)
+
+        page.route("**/onboarding/probe", hold)
         page.get_by_role("listitem", name="proj").get_by_role("button", name="Finish setup").click()
         modal = pds.modal(page)
+        while not held:
+            page.wait_for_timeout(50)
+        expect(modal).to_be_visible()
+        page.unroute("**/onboarding/probe", hold)
+        held[0].continue_()
         expect(modal).to_contain_text("registered here")
         for _ in range(12):  # past the last control focus goes to the browser (body), never to the page behind
             page.keyboard.press("Tab")

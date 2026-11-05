@@ -54,9 +54,9 @@ export async function openAdd(opts = {}, onClose = () => {}) {
   modal.addEventListener("dismiss", close);
   document.body.append(modal);
   if (opts.job) follow(opts.job);
-  else if (opts.folder) await look();
   draw();
   modal.open = true;
+  if (opts.folder && !opts.job) await look();  // the open dialog keeps the page inert while the probe runs
 }
 
 function close() {
