@@ -269,9 +269,10 @@ def test_changes_of_all_projects_or_one_the_top_row_switches_and_resumes_and_pro
             page.get_by_role("button", name="Menu").click()  # Projects adds and removes (D-01M63C8DA1D95Z7M9ZYWVYYNF7)
             page.locator("p-drilldown").get_by_role("link", name="Projects").click()
             expect(page).to_have_url(f"{base}/projects?project={b.id}")
-            page.get_by_label("Folder").fill(str(third))
-            page.get_by_role("button", name="Add", exact=True).click()
-            expect(page.locator("#page > [role=status]")).to_have_text("Added gamma.")
+            page.request.post(
+                f"{base}/api/next/projects", data={"path": str(third)}, headers={"Authorization": "Bearer t"}
+            )  # Add a project's dialog has its own tests
+            page.reload()
             added = next(p for p in registry.load().projects if p.path == str(third))
             expect(pds.select(top, "Project").locator(f'p-select-option[value="{added.id}"]')).to_have_text("gamma")
             pds.pick(top, "Project", added.id)
@@ -1409,31 +1410,6 @@ def test_projects_says_why_the_shared_data_and_a_pass_loading_projects_again_fai
 
 
 @pytest.mark.browser
-def test_projects_says_why_adding_a_project_was_refused_whole(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
-    """#971: the Projects page's alert after Add shows the registry's refusal whole, its note included."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    work = clone(tmp_path / "alpha")
-    refusal = registry.RegistryError(whole_error)
-    refusal.add_note("a note on the refusal")
-
-    def refusing(*_args):
-        raise refusal
-
-    monkeypatch.setattr(registry, "register", refusing)
-    with browsing(monkeypatch, pds) as (page, base):
-        said: list[str] = []  # the refusal's 409 is a console error too; the page itself must not fail
-        page.on("pageerror", lambda e: said.append(str(e)))
-        page.goto(f"{base}/projects#token=t")
-        page.get_by_label("Folder").fill(str(work))
-        page.get_by_role("button", name="Add", exact=True).click()
-        alert = page.locator("#page > [role=alert]")
-        expect(alert).to_be_visible()
-        shown = alert.text_content()
-    assert (shown, said) == (f"RegistryError: {whole_error}\na note on the refusal", [])
-
-
-@pytest.mark.browser
 def test_decisions_says_what_the_start_could_not_do_about_decisions_whole(monkeypatch, whole_error) -> None:
     """#971: a retired decision index file the start could not remove, and decisions it could not pre-load, say why
     whole in the Decisions page's error notice; a decision id or file in the text stays as written."""
@@ -1992,7 +1968,7 @@ def test_a_crashed_runner_s_whole_error_shows_in_recent_activity(
 
 
 @pytest.mark.browser
-def test_projects_adopts_removes_and_adds_keeping_focus_and_the_next_folder(tmp_path: Path, monkeypatch, pds) -> None:
+def test_projects_adopts_removes_and_adds_keeping_focus(tmp_path: Path, monkeypatch, pds) -> None:
     """D-01M63C8DA1D95Z7M9ZYWVYYNF7: with no project shown each action stays on Projects, and focus stays on it; one
     action runs at a time; with no project left, the top row offers Add project."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
@@ -2012,28 +1988,13 @@ def test_projects_adopts_removes_and_adds_keeping_focus_and_the_next_folder(tmp_
         expect(alpha.get_by_role("button", name="Remove project")).to_be_focused()  # delta's went with it
         alpha.get_by_role("button", name="Remove project").click()
         pds.answer(page, "Remove project")
-        expect(page.get_by_label("Folder")).to_be_focused()
+        expect(page.get_by_role("button", name="Add a project")).to_be_focused()
         expect(page.locator("#page")).to_contain_text("No project yet")
         assert registry.load().projects == []
         add = page.locator("#top").get_by_role("link", name="Add project")
-        expect(add).to_have_attribute("href", "#add")  # Projects is where it leads, so it goes to the form
-        page.get_by_role("button", name="Add", exact=True).click()
-        expect(page.locator("#page > [role=alert]")).to_have_text("Name the folder of a clone first.")
-        posted = []
-        page.route(
-            f"{base}/api/next/projects", lambda r: posted.append(r) if r.request.method == "POST" else r.fallback()
-        )
-        page.get_by_label("Folder").fill(a.path)
-        page.locator("#add p-input-text").evaluate(  # Enter twice before Delivery answers adds it once
-            "e => { for (const _ of [1, 2]) e.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter'})) }"
-        )
-        until(page, lambda: posted)
-        page.get_by_label("Folder").fill("~/Projects/next")  # typed while Delivery adds the first
-        posted[0].fallback()
-        expect(page.locator("#page > [role=status]")).to_have_text("Added alpha.")
-        expect(page.locator("#page > [role=alert]")).to_have_count(0)
-        expect(page.get_by_label("Folder")).to_have_value("~/Projects/next")
-        assert len(posted) == 1
+        expect(add).to_have_attribute("href", "#add")  # Projects is where it leads, so it goes to Add a project
+        page.request.post(f"{base}/api/next/projects", data={"path": a.path}, headers={"Authorization": "Bearer t"})
+        page.reload()
         expect(add).to_have_count(0)
         expect(pds.select(page.locator("#top"), "Project")).to_be_visible()
         page.goto(f"{base}/backlog")
@@ -2185,10 +2146,10 @@ def test_focus_goes_to_the_same_place_after_remove_and_stays_where_the_owner_mov
         page.route(f"{base}/api/next/projects/*/adopt", hold)
         page.get_by_role("listitem", name="epsilon").get_by_role("button", name="Adopt the new clone").click()
         until(page, lambda: held)
-        page.get_by_label("Folder").focus()  # the owner moves on while Delivery adopts it
+        page.get_by_role("button", name="Add a project").focus()  # the owner moves on while Delivery adopts it
         held[0].fallback()
         expect(page.locator("#page > [role=status]")).to_contain_text("epsilon now serves the clone at")
-        expect(page.get_by_label("Folder")).to_be_focused()
+        expect(page.get_by_role("button", name="Add a project")).to_be_focused()
 
 
 @pytest.mark.browser

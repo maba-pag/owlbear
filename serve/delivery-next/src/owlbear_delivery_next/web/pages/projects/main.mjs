@@ -1,14 +1,15 @@
 // The Projects page (D-01M63C8DA1D95Z7M9ZYWVYYNF7): the clones this machine serves, each with its state, the setup it
-// still needs, Adopt for a replaced clone and Remove; and Add for the folder of an existing clone. New project, the
-// other way to add one (0ET1A6), will sit beside it.
+// still needs (Finish setup), Adopt for a replaced clone and Remove; Add a project's runs that are unfinished (Resume)
+// or local only (Publish); and Add a project, one dialog for a repository, a folder or a new project (item 15).
 
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
 import {
   OWN_TAG, Slow, call, defined, displayName, here, isOwn, machineState, ownFirst, project, reread, unread,
 } from "/assets/ui.mjs";
+import { openAdd } from "./onboarding.mjs";
 
-const state = { draft: "", busy: "", error: "", said: "" };
+const state = { busy: "", error: "", said: "", runs: [] };
 const TAG = { loading: "info", failed: "error", replaced: "warning", stopped: "info" };  // loaded needs no tag
 
 // One action at a time: its button shows it running; how it went is said under the page's heading until the next one.
@@ -33,16 +34,20 @@ function button(label, onclick, { variant = "secondary", busy = null } = {}) {
     @click=${onclick}>${label}</p-button>`;
 }
 
-function add() {
-  const path = state.draft.trim();
-  if (!path) {
-    state.error = "Name the folder of a clone first.";
-    return show();
+// The runs Add a project left unfinished or local only, read again whenever its dialog closes.
+async function runs() {
+  try {
+    state.runs = (await call("/onboarding/jobs", { machine: true })).jobs;
+  } catch (error) {
+    state.runs = [{ id: "", unreadable: `Add a project's runs could not be read: ${error.message}` }];
   }
-  return act("add", async () => {
-    const added = await call("/projects", { body: { path }, machine: true });
-    if (state.draft.trim() === path) state.draft = "";  // a folder typed in the meantime stays for the next Add
-    return `Added ${displayName(added)}.`;
+  show();
+}
+
+function adding(opts) {
+  return openAdd(opts, async () => {
+    await reread();
+    await runs();
   });
 }
 
@@ -74,7 +79,7 @@ async function remove(p) {
   await refocus(() => {  // the Remove button now in its place takes focus, or Folder when none is left
     const left = document.querySelectorAll(".projects > li");
     return left.length ? left[Math.max(0, Math.min(at, left.length - 1))].querySelector(".row p-button:last-child")
-      : document.querySelector("#add p-input-text");
+      : document.querySelector("#add p-button");
   });
 }
 
@@ -107,14 +112,30 @@ function entry(p, all) {
     ${p.ready?.length ? html`<ul class="ready" aria-label="Failed readiness checks">
       ${p.ready.map((failed) => html`<li>${failed}</li>`)}</ul>` : nothing}
     ${p.setup ? html`<p-inline-notification state="warning" dismiss-button="false" heading="Setup required"
-      heading-tag="h4">The chats of ${name} cannot reach Delivery yet. Run
-      <code>${p.setup}</code> in a terminal, then reload the project's VS Code window.</p-inline-notification>`
+      heading-tag="h4">The chats of ${name} cannot reach Delivery yet. Finish setup here, or run
+      <code>${p.setup}</code> in a terminal; then reload the project's VS Code window.</p-inline-notification>`
       : nothing}
     <div class="row">
+      ${p.setup ? button("Finish setup", () => adding({ kind: "folder", folder: p.path }),
+        { variant: "primary" }) : nothing}
       ${p.state === "replaced" ? button("Adopt the new clone", () => adopt(p),
         { variant: "primary", busy: `adopt ${p.id}` }) : nothing}
       ${button("Remove project", () => remove(p), { busy: `remove ${p.id}` })}
     </div>
+  </li>`;
+}
+
+// One run of Add a project: unfinished ones resume, a local-only one publishes to GitHub (E3b).
+function run(r) {
+  if (r.unreadable) return html`<li class="project"><p-text role="alert">${r.unreadable}</p-text></li>`;
+  const local = r.ended === "local", stuck = r.stages.find((x) => ["failed", "waiting", "held"].includes(x.state));
+  return html`<li class="project" aria-labelledby=${`r-${r.id}`}>
+    <div class="heading-row"><p-heading size="md"><h3 id=${`r-${r.id}`}>${r.plan.name}</h3></p-heading>
+      <p-tag compact="true" variant=${local ? "info" : "warning"}>${local ? "Local only: not on GitHub"
+        : stuck ? `${stuck.name}: ${stuck.state}` : "unfinished"}</p-tag></div>
+    <p-text size="sm" class="path"><code>${r.plan.folder}</code></p-text>
+    <div class="row">${local ? button("Publish", () => adding({ kind: "folder", folder: r.plan.folder, github: true }),
+      { variant: "primary" }) : button("Resume", () => adding({ job: r }), { variant: "primary" })}</div>
   </li>`;
 }
 
@@ -147,17 +168,15 @@ function view() {
     ${projects.length ? html`<section aria-labelledby="consumers-title">
       <p-heading size="lg"><h2 id="consumers-title">Consumer projects</h2></p-heading>
       ${consumers.length ? list("projects", "Consumer projects", consumers)
-        : html`<p-text class="empty">No consumer project yet: add the folder of a clone below.</p-text>`}</section>`
-      : html`<p-text class="empty">No project yet: add the folder of a clone below.</p-text>`}
+        : html`<p-text class="empty">No consumer project yet: add one below.</p-text>`}</section>`
+      : html`<p-text class="empty">No project yet: add one below.</p-text>`}
+    ${state.runs.length ? html`<section aria-labelledby="runs-title">
+      <p-heading size="lg"><h2 id="runs-title">Add a project: runs</h2></p-heading>
+      <ul class="projects" aria-label="Add a project's runs">${state.runs.map(run)}</ul></section>` : nothing}
     <section id="add" class="panel" aria-labelledby="add-title">
       <p-heading size="md"><h2 id="add-title">Add a project</h2></p-heading>
-      <p-text size="sm">An existing folder: a clone of the project's repository on this machine.</p-text>
-      <div class="row">
-        <p-input-text label="Folder" compact="true" placeholder="~/Projects/my-app" .value=${state.draft}
-          @input=${(e) => { state.draft = e.target.value ?? ""; }}
-          @keydown=${(e) => e.key === "Enter" && add()}></p-input-text>
-        ${button("Add", add, { variant: "primary", busy: "add" })}
-      </div>
+      <p-text size="sm">From a repository on GitHub, a folder on this Mac, or a new project.</p-text>
+      <div class="row">${button("Add a project", () => adding({}), { variant: "primary" })}</div>
     </section>`;
 }
 
@@ -165,6 +184,8 @@ function show() {
   render(view(), document.getElementById("page"));
 }
 
-await defined(["p-heading", "p-text", "p-button", "p-input-text", "p-tag", "p-inline-notification"]);
+await defined(["p-heading", "p-text", "p-button", "p-tag", "p-inline-notification"]);
 for (const kind of ["owlbear-machine", "owlbear-polled"]) document.addEventListener(kind, show);
 show();
+runs();
+if (new URLSearchParams(location.search).get("add")) adding({});  // `owlbear install`'s offer opens the dialog

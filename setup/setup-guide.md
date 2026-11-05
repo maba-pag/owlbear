@@ -91,15 +91,41 @@ OwlBear clones it into `~/.owlbear/data`, or adopts a checkout of it already the
 
 ### 4. Add your project
 
-On the page, open **Add project** in the bar at the top, enter the folder of your project's clone
-and press **Add**. Adding a project here is the only way OwlBear starts serving it; opening the
-project in VS Code never starts or changes OwlBear.
+On the page, open **Add project** in the bar at the top, or **Add a project** on the Projects page, and choose
+where you start:
 
-**Expected result:** the project appears in the project selector and its Changes page opens.
+- **A repository on GitHub:** OwlBear clones it into `~/Projects/<name>`, or the folder you name.
+- **A folder on this Mac:** an existing clone, a folder with files but no Git, or a clone without commits. Leave
+  **Put it on GitHub** ticked to publish it.
+- **A new project:** OwlBear creates the folder and its first commit, and, when ticked, its GitHub repository.
+
+OwlBear first looks at what exists and shows what is left to do. **Choices** then asks only what those steps need:
+
+- visibility, with Private preselected;
+- the repository's name and owner;
+- a Git author, if Git has none for it;
+- a CI workflow and branch protection;
+- the default branch's existing rules, if it has any;
+- the merge method, when the one it would use isn't allowed;
+- Global's labels;
+- the three chat-tool files.
+
+A folder's files are committed as they are, after a warning to check them for secrets. **Check and continue**
+checks the name, the GitHub account, commit signing and the network before anything is created. The confirmation
+lists every change before you start it.
+
+Adding a project here is the only way OwlBear starts serving it; opening the project in VS Code never starts or
+changes OwlBear.
+
+**Expected result:** the dialog ends with three facts, **Registered**, **Profile confirmed** and **Ready for
+Delivery**, and offers **New Change** when all three hold. A run that stopped stays on the Projects page with
+**Resume**; a project kept on this Mac only stays there with **Publish**.
 
 ### 5. Connect the project's chats
 
-If the page shows **Setup required**, run the command it names in a terminal, for example:
+The dialog's chat-tool files connect them; reload the project's VS Code window once it ends. For a project added
+earlier, the Projects page shows **Setup required** with **Finish setup**, which opens the same dialog on its
+folder. In a terminal, for repairs, the command it names does the same, for example:
 
 ```shell
 owlbear setup --repo ~/work/my-project
