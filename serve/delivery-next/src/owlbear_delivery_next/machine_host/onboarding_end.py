@@ -31,8 +31,7 @@ def facts(job: Job) -> dict[str, Any]:
     if info.get("blocked"):
         missing.append(f"settings: {info['blocked']}")
     missing += [f"readiness: {line}" for line in info.get("ready") or []]
-    if why := _method(job, store):
-        missing.append(why)
+    missing += _rules(job, store)
     if info.get("setup"):
         missing.append(f"chats can't reach Delivery: register its chat server; {' '.join(said)}")
     return {
@@ -46,23 +45,26 @@ def facts(job: Job) -> dict[str, Any]:
     }
 
 
-def _method(job: Job, store: Store) -> str:
-    """Why the project's merge method isn't one this repository allows, else nothing."""
+def _rules(job: Job, store: Store) -> list[str]:
+    """Why the project's merge method isn't allowed here, and each need its rules still miss, with its link."""
     method = store.settings().prefs.merge_method
     repository = job.plan["repository"]
     gh = probe.client(repository, probe.account(repository), Path(job.plan["folder"]))
-    remote = repo_target.view(gh, repository)
-    if remote is None:
-        return f"merge method: {repository} can't be read"
-    allowed = branch_rules.allowed_methods(
-        probe.method_settings(remote), branch_rules.read(gh, repository, remote.default_branch or "main")
-    )
+    if (remote := repo_target.view(gh, repository)) is None:
+        return [f"merge method: {repository} can't be read"]
+    rules = branch_rules.read(gh, repository, remote.default_branch or "main")
+    allowed = branch_rules.allowed_methods(probe.method_settings(remote), rules)
+    out = []
     if not allowed:
-        return "merge method: this repository and its rules allow none; change them on GitHub"
-    if method is None or method.value not in allowed:
+        out.append("merge method: this repository and its rules allow none; change them on GitHub")
+    elif method is None or method.value not in allowed:
         shown = method.value if method else "unset"
-        return f"merge method: {shown} is not allowed here ({', '.join(sorted(allowed))} are); set it on Settings"
-    return ""
+        out.append(f"merge method: {shown} is not allowed here ({', '.join(sorted(allowed))} are); set it on Settings")
+    if job.plan.get("protect") and job.result("protection").get("listed"):  # OwlBear could only list the changes
+        unmet = [i for i in branch_rules.compare(rules, "merge").needs if not i.holds]
+        out += [f"rules: {i.sentence}; change it on GitHub: {branch_rules.settings_url(repository, i.source)}"
+                for i in unmet]  # fmt: skip
+    return out
 
 
 def merge_allowed(found: dict[str, Any]) -> list[str]:

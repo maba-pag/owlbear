@@ -147,7 +147,9 @@ def keep(store: Store, prof: Profile, found: Saved, say: Callable[[str], object]
     _, unreadable, source, target = found
     if source:
         return publish_repair(store, profile_repair.stage(store, prof, source, target), say, resumed=False)
-    store.write_profile(prof, replace_unreadable=unreadable)
+    if notice := store.write_profile(prof, replace_unreadable=unreadable):  # saved here, not yet published
+        say(notice)
+        return False
     return True
 
 

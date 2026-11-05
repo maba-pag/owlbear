@@ -71,7 +71,7 @@ class Onboarding:
         with self.lock:
             self._load()
             job = self.jobs.get(onboarding_job.job_id(found["folder"], found.get("repository", "")))
-            if job and job.receipt.get("ended") != "done":
+            if job and not job.receipt.get("ended"):  # only an unfinished run resumes; a local-only one publishes
                 found["job"] = job.info()
         return found
 
@@ -92,6 +92,11 @@ class Onboarding:
             if job is None or job.receipt.get("ended"):
                 job = self.jobs[receipt["id"]] = self._job(receipt)
                 job.save()
+            if plan.get("github"):  # Publish: the folder's local-only run is done with
+                for local in [j for j in self.jobs.values() if j.receipt.get("ended") == "local"]:
+                    if local.plan["folder"] == plan["folder"]:
+                        local.receipt["ended"] = "published"
+                        local.save()
         job.go()
         return job.info()
 
@@ -124,7 +129,7 @@ class Onboarding:
         with self.lock:
             self._load()
             jobs = list(self.jobs.values())
-        out = [j.info() for j in jobs if j.receipt.get("ended") != "done"]
+        out = [j.info() for j in jobs if j.receipt.get("ended") in {"", "local"}]
         return out + [{"id": i, "unreadable": why} for i, why in self.unreadable.items()]
 
     def working(self) -> list[str]:

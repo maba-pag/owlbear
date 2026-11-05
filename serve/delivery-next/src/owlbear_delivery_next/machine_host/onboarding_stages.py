@@ -24,7 +24,6 @@ if TYPE_CHECKING:
 
 CI_WAIT = 600.0  # seconds a generated CI gets to report on the pushed commit
 CI_POLL = 10.0
-FIRST = "First commit"
 
 
 class StageError(RuntimeError):
@@ -80,15 +79,17 @@ def commit(job: Job) -> dict[str, Any]:
     """The first commit: the folder's files as they are, or the starter files; the CI file only where ticked."""
     path, plan = _folder(job), job.plan
     state = onboarding_git.folder_state(path)
-    if state.git == "commits":
-        return job.result("commit") or {"sha": "", "ci": False}
-    if state.has_files and not plan.get("files_warned"):
+    had_files = plan.get("had_files", state.has_files)  # what the probe found, not the starter files written since
+    ci = bool(plan.get("ci")) and not plan.get("had_workflows", state.has_workflows)
+    if state.git == "commits":  # a commit this run made before its result was recorded, else none of ours
+        mine = bool(job.record("commit").get("intent"))
+        return {"sha": onboarding_git.head(path) if mine else "", "ci": ci and mine}
+    if had_files and not plan.get("files_warned"):
         msg = "the folder's files are committed only after the secrets warning was shown and confirmed"
         raise StageError(msg)
-    ci = bool(plan.get("ci")) and not state.has_workflows
-    written = onboarding_git.starter_files(path, plan["name"], ci, readme=not state.has_files)
-    sha = onboarding_git.first_commit(path, FIRST)
-    return {"sha": sha, "ci": ci, "written": written}
+    job.intend("commit", "write the starter files and make the first commit")
+    written = onboarding_git.starter_files(path, plan["name"], ci, readme=not had_files)
+    return {"sha": onboarding_git.first_commit(path, "First commit"), "ci": ci, "written": written}
 
 
 def repository(job: Job) -> dict[str, Any]:
@@ -287,11 +288,10 @@ def profile(job: Job) -> dict[str, Any]:
             for k, e in sorted(prof.entries.items())
         ]
         kind = "profile"
-        raise Waiting(kind, {"entries": entries, "rendered": setup_profile.render(prof)})
+        raise Waiting(kind, {"entries": entries})
     said: list[str] = []
     prof = setup_profile.confirmed(prof, {k: v for k, v in values.items() if v}, by="Add project")
-    if not setup_profile.keep(_store(job), prof, job.context["saved"], said.append):
-        job.answers.pop("profile", None)
+    if not setup_profile.keep(_store(job), prof, job.context["saved"], said.append):  # Retry saves these answers
         raise StageError("\n".join(said))
     return {"version": prof.version}
 

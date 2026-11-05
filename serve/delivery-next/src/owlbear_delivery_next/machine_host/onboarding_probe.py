@@ -167,8 +167,8 @@ def _target(start: dict[str, Any]) -> tuple[str, bool, str, Path, str]:
 
 def probe(start: dict[str, Any]) -> dict[str, Any]:
     """What exists for the owner's start, the first missing stage onwards, or why it is refused."""
-    kind, github, repository, folder, name = _target(start)
-    state = onboarding_git.folder_state(folder)
+    kind, github, asked, folder, name = _target(start)
+    state, repository = onboarding_git.folder_state(folder), asked
     if state.origin:
         try:
             owner, name = split(state.origin)
@@ -186,13 +186,16 @@ def probe(start: dict[str, Any]) -> dict[str, Any]:
                             "or choose it explicitly as the folder")  # fmt: skip
     elif state.origin and not repository:
         found["refusal"] = f"origin {state.origin} is not a GitHub repository OwlBear can publish to"
+    elif asked and repository.casefold() != asked.casefold():
+        found["refusal"] = (f"{folder} is a clone of {repository}, not of {asked}: choose another folder for "
+                            f"{asked}, or start from that folder")  # fmt: skip
     elif github and repository:
         _remote(found, kind, repository, folder, has_origin=bool(state.origin))
     if found["refusal"]:
         return found
+    found["author_missing"] = _author_missing(folder, url(repository) if repository else "")
     found["stages"], found["entry"] = stages(found)
     found["refusal"] = _conflict(found) or ""
-    found["author_missing"] = _author_missing(folder, url(repository) if repository else "")
     return found
 
 
@@ -227,8 +230,8 @@ def stages(found: dict[str, Any]) -> tuple[list[str], str]:
     clone = remote_commits and (not st["exists"] or (st["empty"] and st["git"] == "none"))
     left: set[str] = {"folder"} if clone or not st["exists"] else set()
     if not clone:
-        if st["git"] == "none" or (github and not found["origin"]):
-            left.add("git")
+        if st["git"] == "none" or (github and not found["origin"]) or found["author_missing"]:
+            left.add("git")  # Git, origin before any commit, and a chosen author
         if not local_commits and not remote_commits:
             left |= {"commit", "ci"} if github else {"commit"}
     if github and not remote:

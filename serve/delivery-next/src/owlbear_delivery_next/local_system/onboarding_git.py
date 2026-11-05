@@ -201,6 +201,11 @@ def starter_files(path: Path, name: str, ci: bool, *, readme: bool = True) -> li
     return written
 
 
+def head(path: Path) -> str:
+    """The sha of *path*'s HEAD."""
+    return _git(path, "rev-parse", "HEAD").stdout.strip()
+
+
 def first_commit(path: Path, message: str) -> str:
     """Commit every file ``.gitignore`` doesn't exclude, from an emptied index, and return the commit's sha.
 

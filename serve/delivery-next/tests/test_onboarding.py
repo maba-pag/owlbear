@@ -159,6 +159,7 @@ def plan_for(found: dict[str, Any], **choices: Any) -> dict[str, Any]:
         "github": found["on_github"], "entry": found["entry"], "stages": found["stages"], "visibility": "private",
         "ci": True, "protect": True, "advice": [], "needs": [], "method": "merge", "labels": [],
         "consents": {"task": True, "server": True, "memory": True, "harness": True}, "files_warned": True,
+        "had_files": found["state"]["files"], "had_workflows": found["state"]["workflows"],
         "rules_items": rules.get("items"),
     }  # fmt: skip
     return plan | choices
@@ -574,3 +575,95 @@ def test_a_ruleset_write_whose_answer_was_lost_is_read_back_on_resume_and_not_se
     info = settle(jobs, jobs.resume(info["id"])["id"])
     assert stage(info, "protection")["result"] == {"ruleset": 1, "created": True, "read_back": True}
     assert [c[0] for c in hub.calls].count("ruleset") == 1
+
+
+def test_a_github_start_whose_folder_holds_another_repository_is_refused(hub, jobs, tmp_path):
+    hub.add("ada/other", commits=True)
+    hub.add("ada/wanted", commits=True)
+    onboarding_git.clone(tmp_path, "https://github.com/ada/other.git", "wanted", Access.LOCAL)
+    found = jobs.probe({"kind": "github", "repository": "ada/wanted", "folder": str(tmp_path / "wanted")})
+    assert found["refusal"].startswith(f"{tmp_path.resolve() / 'wanted'} is a clone of ada/other, not of ada/wanted")
+
+
+def test_a_first_commit_interrupted_on_either_side_of_the_commit_resumes_with_its_ci(hub, jobs, tmp_path, monkeypatch):
+    found = jobs.probe({"kind": "new", "name": "demo", "folder": str(tmp_path / "demo")})
+    real, calls = onboarding_git.first_commit, []
+
+    def interrupted(path: Path, message: str) -> str:
+        calls.append(path)
+        if len(calls) == 1:  # the starter files are written, the commit isn't
+            said = "killed before the commit"
+            raise RuntimeError(said)
+        real(path, message)
+        said = "killed after the commit, before its result was recorded"
+        raise RuntimeError(said)
+
+    monkeypatch.setattr(onboarding_git, "first_commit", interrupted)
+    info = run(jobs, plan_for(found, repository="ada/demo"))
+    assert stage(info, "commit")["detail"] == "RuntimeError: killed before the commit"
+    info = settle(jobs, jobs.resume(info["id"])["id"])
+    assert stage(info, "commit")["detail"] == "RuntimeError: killed after the commit, before its result was recorded"
+    info = settle(jobs, jobs.resume(info["id"])["id"])
+    assert stage(info, "commit")["result"] == {"sha": git(Path(found["folder"]), "rev-parse", "HEAD"), "ci": True}
+    checks = [r for r in hub.rulesets["ada/demo"][1]["rules"] if r["type"] == "required_status_checks"]
+    assert checks[0]["parameters"]["required_status_checks"] == [{"context": "CI"}]
+
+
+def test_a_profile_whose_publication_fails_fails_its_stage_and_retry_saves_it(hub, jobs, tmp_path, monkeypatch):
+    found = jobs.probe({"kind": "new", "name": "demo", "folder": str(tmp_path / "demo")})
+    notices = ["the shared settings could not be published: offline; kept here"]
+    real = Store.write_profile
+
+    def write(self: Store, *args: Any, **kwargs: Any) -> str:
+        said = real(self, *args, **kwargs)
+        return notices.pop() if notices else said
+
+    monkeypatch.setattr(Store, "write_profile", write)
+    info = run(jobs, plan_for(found, repository="ada/demo"))
+    assert (
+        stage(info, "profile")["detail"] == "StageError: the shared settings could not be published: offline; kept here"
+    )
+    info = settle(jobs, jobs.resume(info["id"])["id"])
+    assert stage(info, "profile")["state"] == "done"
+    assert hub.repos
+
+
+def test_an_author_chosen_for_an_unborn_clone_is_written_before_its_first_commit(hub, jobs, tmp_path):
+    hub.add("ada/ledger")
+    Path(os.environ["HOME"], ".gitconfig").write_text(
+        f'[url "{hub.remotes}/"]\n\tinsteadOf = https://github.com/\n'  # no [user]: Git has no author here
+    )
+    folder = tmp_path / "ledger"
+    folder.mkdir()
+    git(folder, "init", "-q", "-b", "main")
+    git(folder, "remote", "add", "origin", "https://github.com/ada/ledger.git")
+    found = jobs.probe({"kind": "folder", "folder": str(folder)})
+    assert found["author_missing"] is True
+    assert found["stages"][:2] == ["git", "commit"]
+    run(jobs, plan_for(found, author={"name": "Ada", "email": "ada@example.com"}))
+    assert git(folder, "log", "-1", "--format=%an <%ae>") == "Ada <ada@example.com>"
+
+
+def test_rules_only_listed_for_github_keep_the_project_from_being_ready_with_their_link(hub, jobs, tmp_path):
+    hub.add("ada/proj", commits=True)
+    hub.classic["ada/proj"] = {"required_linear_history": {"enabled": True}}
+    folder = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/proj.git", "proj", Access.LOCAL))
+    found = jobs.probe({"kind": "folder", "folder": str(folder)})
+    info = run(jobs, plan_for(found, method="squash"))
+    end = stage(info, "end")["result"]
+    assert end["ready"] is False
+    link = "https://github.com/ada/proj/settings/branches"
+    assert [m for m in end["missing"] if m.startswith("rules: ")] == [
+        f"rules: {i['sentence']}; change it on GitHub: {link}"
+        for i in found["rules"]["items"] if i["key"] in found["rules"]["needs"] and not i["holds"]
+    ]  # fmt: skip
+
+
+@pytest.mark.usefixtures("hub")
+def test_publishing_a_local_only_project_retires_its_local_entry(jobs, tmp_path):
+    found = jobs.probe({"kind": "new", "name": "notes", "github": False, "folder": str(tmp_path / "notes")})
+    local = run(jobs, plan_for(found, repository=""))
+    again = jobs.probe({"kind": "folder", "folder": found["folder"], "github": True})
+    assert "job" not in again  # a finished local-only run is no run to resume
+    run(jobs, plan_for(again, repository="ada/notes"))
+    assert local["id"] not in [j["id"] for j in jobs.listed()]
