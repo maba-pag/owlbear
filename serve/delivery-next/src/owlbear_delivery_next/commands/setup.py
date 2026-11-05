@@ -196,7 +196,7 @@ def registration(repo: Path) -> tuple[bool, list[str]]:
         except FileNotFoundError:
             continue
         except (OSError, ValueError) as exc:
-            problems.append(f"{path} cannot be read: {exc}")
+            problems.append(f"{path} cannot be read: {failure(exc)}")
             continue
         found = found or (isinstance(data, dict) and _serves(data.get(key), repo, own=own))
     return found, problems

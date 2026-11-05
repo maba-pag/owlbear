@@ -1079,7 +1079,7 @@ def test_an_unreadable_mcp_file_is_named_on_the_project_and_logged_when_it_chang
         said = sum(f"{path} cannot be read" in line for line in capsys.readouterr().out.splitlines())
         return p.get("reason"), "setup" in p, said
 
-    broken = f"{path} cannot be read: Expecting value: line 1 column 16 (char 15)"
+    broken = f"{path} cannot be read: JSONDecodeError: Expecting value: line 1 column 16 (char 15)"
     valid.write_text(json.dumps({key: setup.with_server({}, "/py", work)["mcpServers"]}))
     path.write_text('{"mcpServers": ')
     assert listed() == (broken, False, 1)  # registered in a readable file: no setup, the broken one still named
@@ -1087,13 +1087,42 @@ def test_an_unreadable_mcp_file_is_named_on_the_project_and_logged_when_it_chang
     valid.unlink()
     assert listed() == (broken, True, 0)
     path.write_text("{")
-    again = f"{path} cannot be read: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+    again = (
+        f"{path} cannot be read: JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 "
+        "(char 1)"
+    )
     assert listed() == (again, True, 1)
     path.write_text("{}")
     assert listed() == (None, True, 0)
     path.write_text('{"mcpServers": ')
     assert listed() == (broken, True, 1)  # it comes back: logged again
     assert listed() == (broken, True, 0)
+
+
+def test_an_unreadable_mcp_file_s_whole_error_is_the_project_s_reason_and_its_log_line(
+    tmp_path, http, monkeypatch, capsys, whole_error
+):
+    """#971: the error an MCP file could not be read with reaches the Projects reason and the host log whole."""
+    work = clone(tmp_path / "a")
+    path, _ = mcp_file("own", work, monkeypatch)
+    path.write_text("unread")
+    real, note = setup._loose_json, "a note added while reading END"  # noqa: SLF001 - the read is the boundary
+
+    def loose(text: str):
+        if text != "unread":
+            return real(text)
+        exc = ValueError(whole_error)
+        exc.add_note(note)
+        raise exc
+
+    monkeypatch.setattr(setup, "_loose_json", loose)
+    said = f"{path} cannot be read: ValueError: {whole_error}\n{note}"
+    assert add(http, work)["reason"] == said
+    assert http.get("/api/next/projects").json()["projects"][0]["reason"] == said
+    logged = re.findall(
+        r"^\d\d:\d\d:\d\dZ (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)", capsys.readouterr().out, re.MULTILINE | re.DOTALL
+    )
+    assert [line for line in logged if "cannot be read" in line] == [f"a: {said}"]  # once, not on every poll
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root reads files whatever their mode")
@@ -1104,7 +1133,7 @@ def test_a_mcp_file_that_cannot_be_opened_is_named(tmp_path, http, monkeypatch):
     shared.write_text(json.dumps({key: setup.with_server({}, "/py", work)["mcpServers"]}))
     shared.chmod(0)
     listed = add(http, work)
-    why = f"{shared} cannot be read: [Errno 13] Permission denied: '{shared}'"
+    why = f"{shared} cannot be read: PermissionError: [Errno 13] Permission denied: '{shared}'"
     assert (listed["reason"], listed["setup"]) == (why, f"owlbear setup --repo {work}")  # an unread entry counts not
 
 
