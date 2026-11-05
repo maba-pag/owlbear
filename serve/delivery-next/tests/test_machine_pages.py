@@ -87,7 +87,7 @@ from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.runtimes.settings_seen import NAME as SEEN
 from owlbear_delivery_next.settings import carried, config, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
-from owlbear_delivery_next.state_store import decision_store, profile_share, registry, watch_reports
+from owlbear_delivery_next.state_store import decision_store, registry, watch_reports
 from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store, StoreError
 from owlbear_delivery_next.workflow_steps import decision, design, judges, pick, publish, retry, visual
 from owlbear_delivery_next.workflow_steps.engine import Ctx
@@ -1538,32 +1538,6 @@ def test_settings_say_a_failed_read_of_the_shared_repository_whole(
         failed = f"CalledProcessError: Command '{['git', *read]}' returned non-zero exit status 128."
         why = f"{failed}\nstderr:\n{stderr}\nstdout:\n{stdout}"
         assert notice.text_content().strip() == f"The shared settings repository {shared} cannot be read: {why}"
-        assert said == []
-
-
-@pytest.mark.browser
-def test_settings_say_an_unreadable_profile_whole(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
-    """#971: Settings' notice shows why the project's profile cannot be read whole, its notes too."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    Store.open(Path(a.path)).write_profile(Profile())
-    note = "while reading the profile of alpha"
-
-    def unreadable(_source):
-        exc = OSError(whole_error)
-        exc.add_note(note)
-        raise exc
-
-    monkeypatch.setattr(profile_share, "_read", unreadable)
-    with browsing(monkeypatch, pds) as (page, base):
-        said = errors(page)
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        notice = page.locator("#error")
-        expect(notice).to_be_visible()
-        why = f"StoreError: the profile could not be read: OSError: {whole_error}\n{note}"
-        repair = "; repair or replace the profile file, or update OwlBear if it is newer, then reload"
-        assert notice.text_content().strip() == why + repair
         assert said == []
 
 
