@@ -138,6 +138,13 @@ def test_a_repository_and_clone_with_commits_pass_first_commit_naming_the_defaul
     assert [(c.ok, c.detail) for c in checks if c.name == "first commit"] == [(True, "default branch main")]
 
 
+def test_a_failing_head_probe_fails_first_commit_with_gits_error_whole():
+    fatal = "fatal: detected dubious ownership in repository at '/p'\nTo add an exception for this directory, call:"
+    probe = lambda argv, _env=None: (READY | {HEAD: (128, fatal)}).get(" ".join(argv), (0, ""))  # noqa: E731
+    checks = readiness.readiness("github.com", probe, None, "copilot", SIGNED)
+    assert [(c.name, c.detail) for c in checks if not c.ok] == [("first commit", fatal)]
+
+
 @pytest.mark.parametrize("error", [AccountMissing, StoreError])  # gh lacks it; the settings naming it can't be read
 def test_an_account_that_can_t_be_had_keeps_its_whole_reason_as_the_sign_in_detail(whole_error, error):
     assert failed({}, missing(whole_error, error)) == [("github sign-in", str(error(whole_error)))]
