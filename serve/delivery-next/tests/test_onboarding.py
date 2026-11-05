@@ -945,3 +945,31 @@ def test_a_folder_with_its_own_commits_and_no_origin_is_no_clone_of_a_repository
     git(folder, "commit", "-q", "--allow-empty", "-m", "mine")
     found = jobs.probe({"kind": "github", "repository": "ada/meter", "folder": str(folder)})
     assert "has commits of its own and no origin" in found["refusal"]
+
+
+@pytest.mark.browser
+@pytest.mark.usefixtures("hub")
+def test_choices_changed_during_the_check_are_checked_again(tmp_path, monkeypatch, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with served(monkeypatch, pds) as (page, base, _machine):
+        page.goto(f"{base}/projects#token=t")
+        page.get_by_role("button", name="Add a project").click()
+        modal = pds.modal(page)
+        modal.get_by_role("textbox", name="Name").fill("demo")
+        modal.get_by_role("textbox", name="Folder").fill(str(tmp_path / "demo"))
+        modal.get_by_role("button", name="Look").click()
+        modal.get_by_role("textbox", name="Owner").fill("ada")
+        held: list[Any] = []
+
+        def hold(route: Any) -> None:  # answered once Name changed
+            held.append(route)
+
+        page.route("**/onboarding/preflight", hold)
+        modal.get_by_role("button", name="Check and continue").click()
+        while not held:
+            page.wait_for_timeout(50)
+        modal.get_by_role("textbox", name="Name").fill("other")
+        held[0].continue_()
+        expect(modal).to_contain_text("The choices changed during the check: check them again.")
+        expect(modal.get_by_role("button", name="Check and continue")).to_be_visible()

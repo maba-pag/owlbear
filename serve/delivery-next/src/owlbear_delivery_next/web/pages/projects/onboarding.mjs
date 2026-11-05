@@ -167,9 +167,12 @@ async function check() {
     s.error = "Tick that you checked the folder for secrets first.";
     return draw();
   }
+  const sent = plan(), checked = JSON.stringify(sent);
   await busy("check", async () => {
-    s.problems = (await call("/onboarding/preflight", { body: plan(), machine: true, timeout: 60000 })).problems;
-    if (!s.problems.length) s.step = "confirm";
+    s.problems = (await call("/onboarding/preflight", { body: sent, machine: true, timeout: 60000 })).problems;
+    if (s.problems.length) return;
+    if (JSON.stringify(plan()) === checked) s.step = "confirm";
+    else s.error = "The choices changed during the check: check them again.";
   });
 }
 
