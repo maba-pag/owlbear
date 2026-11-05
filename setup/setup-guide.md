@@ -171,6 +171,7 @@ See [Delivery Workflow](operating-owlbear.md#delivery-workflow) for daily operat
 | `run this from the installed runtime` | `owlbear install` ran from another checkout | Run `~/.owlbear/runtime/.venv/bin/owlbear install` |
 | `OwlBear ended at once` or `did not answer` after `owlbear start` | The host failed to start | Read `owlbear logs` (the end of `~/.owlbear/host.log`) |
 | Setup prints a `FIX` line | A readiness check failed | Apply the fix on its `Next:` line, then run `owlbear setup --repo PATH` again |
+| Setup's `first commit` check fails | The GitHub repository or the clone has no commits yet, for example after `git init` and `git remote add` alone | Run the git commands its `Next:` line names for that state (commit and push a first file, pull the repository's commits, or push the clone's), then run `owlbear setup --repo PATH` again |
 | A project shows as failed on the page | Its folder or store could not be loaded | Read the reason shown beside it; `owlbear doctor` names each project's fix |
 | **New Change** opens no shaping chat | The shaping agent is not linked into `~/.copilot` | Run `owlbear install` again and answer yes to the shaping agent |
 | `owlbear install` says `not done, no terminal to answer` | It ran without a terminal, for example from an agent; nothing was linked or added | Run `owlbear install` yourself in a terminal |
