@@ -23,7 +23,14 @@ from pydantic import Field
 from owlbear_delivery_next.change_contracts import chat_contract
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import codebase, data_repo, leases, local_home
-from owlbear_delivery_next.machine_host import control, impeccable, improvement_routes, update_routes, versions
+from owlbear_delivery_next.machine_host import (
+    control,
+    impeccable,
+    improvement_routes,
+    onboarding_routes,
+    update_routes,
+    versions,
+)
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.project_host import (
     api,
@@ -227,6 +234,7 @@ def _routes(machine: Machine) -> APIRouter:
     _update_routes(routes, machine)
     routes.include_router(update_routes.router(machine))  # the update checks (D-01M63CCVRK8ZKFENY9F4A2K11A)
     _pack_routes(routes, machine)
+    routes.include_router(onboarding_routes.router(machine))  # Add project (item 15)
     return routes
 
 
