@@ -22,8 +22,7 @@ def facts(job: Job) -> dict[str, Any]:
         return {"local": True, "registered": False, "profile": False, "ready": False, "missing": [LOCAL], "files": said}
     machine, registered = job.context["machine"], job.result("register")
     p = machine.get(registered.get("id") or probe.registered_id(Path(plan["folder"])))
-    if registered.get("kept", True):  # kept: registered before this run, so the register stage didn't run
-        p._ready()  # noqa: SLF001 - readiness is cached when a project loads; the row must agree with the ending
+    p._ready()  # noqa: SLF001 - a host checks readiness in the background as it loads; the ending waits for a result
     info, missing = p.info(), []
     if info["state"] != "loaded":  # a host that failed to load serves nothing
         missing.append(f"project: {info['state']}" + (f": {info['reason']}" if info.get("reason") else ""))

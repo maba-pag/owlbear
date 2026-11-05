@@ -898,3 +898,24 @@ def test_a_new_plan_for_an_unfinished_destination_runs_with_the_new_choices(hub,
     info = run(jobs, plan_for(again, protect=False))
     assert (info["ended"], info["plan"]["protect"]) == ("done", False)
     assert not hub.rulesets.get("ada/demo")
+
+
+@pytest.mark.usefixtures("hub")
+def test_the_ending_waits_for_a_new_hosts_readiness(jobs, tmp_path, monkeypatch):
+    found = jobs.probe({"kind": "new", "name": "demo", "folder": str(tmp_path / "demo")})
+    register = jobs.machine.register
+
+    def checking(path: Path) -> Any:
+        project, ready = register(path), None  # its host's check still runs in the background
+
+        def checked() -> None:
+            nonlocal ready
+            ready = ["first commit: none yet"]
+
+        project._ready = checked  # noqa: SLF001
+        project.info = lambda: {"state": "loaded", "ready": ready, "blocked": "", "setup": ""}
+        return project
+
+    monkeypatch.setattr(jobs.machine, "register", checking)
+    end = stage(run(jobs, plan_for(found, repository="ada/demo")), "end")["result"]
+    assert (end["ready"], end["missing"]) == (False, ["readiness: first commit: none yet"])
