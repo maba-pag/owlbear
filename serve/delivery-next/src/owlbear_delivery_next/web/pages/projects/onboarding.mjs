@@ -18,7 +18,7 @@ const DOES = {
   git: (p) => `set up Git in ${p.folder}${p.github ? `, with origin ${p.repository}` : ""}`,
   commit: () => "commit the first files", repository: (p) => `create ${p.repository} on GitHub (${p.visibility})`,
   push: () => "push the first commit (or pull the repository's)", ci: () => "wait for CI on the pushed commit",
-  protection: (p) => p.protect ? "protect the default branch" : "", labels: (p) => p.labels.length
+  protection: () => "", labels: (p) => p.labels.length
     ? `create the labels ${p.labels.join(", ")}` : "",
   shared: () => "claim the project's shared settings folder", readiness: () => "check readiness",
   detect: () => "detect the project's profile", profile: () => "ask you to confirm the profile",
@@ -32,6 +32,7 @@ const CHANGE = {  // a ruleset change in the words of GitHub's settings
   no_force_push: "block force pushes",
   no_approvals: "require no approvals: 0 reviews, no code-owner review, no approval of the most recent push",
 };
+const TASK = ["task", "Remove the folder-open task an earlier setup wrote into .vscode/tasks.json"];
 const FILES = [["server", "Register Delivery's chat server in .mcp.json"],
   ["memory", "Register the memory server for the shaper"], ["harness", "Set the Copilot harness key"]];
 
@@ -123,7 +124,7 @@ function defaults(f) {
   return { owner, name: f.name, visibility: "private", ci: !f.state.workflows,
     protect: PUSH_FIRST.has(f.entry) && !unprotectable(f),
     needs: unmet.filter((i) => f.rules.needs.includes(i.key)).map((i) => i.key), advice: [],
-    labels: (f.labels ?? []).length > 0, consents: { task: true, server: true, memory: true, harness: true },
+    labels: (f.labels ?? []).length > 0, consents: { task: f.old_task, server: true, memory: true, harness: true },
     files_warned: false, author: { name: "", email: "" }, method: null };
 }
 
@@ -154,8 +155,8 @@ function plan() {
   const f = s.found, c = s.c, creating = f.stages.includes("repository");
   const repository = f.on_github ? (creating ? `${c.owner.trim()}/${c.name.trim()}` : f.repository) : "";
   return { folder: f.folder, name: c.name.trim() || f.name, repository, github: f.on_github, entry: f.entry,
-    stages: f.stages, visibility: c.visibility, ci: c.ci, protect: c.protect && !unprotectable(f),
-    advice: c.advice, needs: c.protect ? c.needs : [], method: method(f, c).write,
+    stages: f.stages, visibility: c.visibility, ci: c.ci && f.on_github, protect: c.protect && !unprotectable(f),
+    advice: c.protect ? c.advice : [], needs: c.protect ? c.needs : [], method: method(f, c).write,
     labels: c.labels ? f.labels : [], consents: c.consents, files_warned: c.files_warned,
     had_files: f.state.files, had_workflows: f.state.workflows,
     rules_items: f.rules?.items ?? null, author: f.author_missing ? c.author : null };
@@ -242,17 +243,19 @@ function describe(f) {
 function rulesView(f, c) {
   const r = f.rules;
   if (!r?.any) return nothing;
-  const one = r.one_ruleset !== null;
+  const one = r.one_ruleset !== null, changing = one && c.protect && !unprotectable(f);
   const flip = (key) => (e) => {
     c.advice = e.target.checked === true ? [...new Set([...c.advice, key])] : c.advice.filter((k) => k !== key);
   };
   const item = (i) => (!i.applicable || r.needs.includes(i.key) ? html`<li>${i.sentence}</li>`
-    : html`<li><p-checkbox label=${i.holds ? `${i.sentence} (already set)` : i.sentence} ?disabled=${!one || i.holds}
-      .checked=${live(i.holds || c.advice.includes(i.key))} @change=${flip(i.key)}></p-checkbox></li>`);
+    : html`<li><p-checkbox label=${i.holds ? `${i.sentence} (already set)` : i.sentence}
+      ?disabled=${!changing || i.holds} .checked=${live(i.holds || (changing && c.advice.includes(i.key)))}
+      @change=${flip(i.key)}></p-checkbox></li>`);
   const links = Object.entries(r.links).map(([source, url]) => html`<li><a href=${url} target="_blank"
     rel="noopener">Change ${source === "classic" ? "branch protection" : `ruleset ${source}`} on GitHub</a></li>`);
   return html`<section class="rules"><p-heading size="sm"><h3>The default branch's rules</h3></p-heading>
-    <p-text size="sm">${r.summary}${one ? "" : ". OwlBear changes no rule here: make these changes on GitHub."}</p-text>
+    <p-text size="sm">${r.summary}${one ? (changing ? "" : ". Tick Protect the default branch to change them.")
+      : ". OwlBear changes no rule here: make these changes on GitHub."}</p-text>
     <ul>${r.items.map(item)}</ul>${one ? nothing : html`<ul>${links}</ul>`}</section>`;
 }
 
@@ -283,7 +286,8 @@ function choicesView() {
       value=${x} label=${x}></p-radio-group-option>`)}</p-radio-group>` : nothing}
     ${f.on_github && f.labels?.length ? tick(`Create Global's labels: ${f.labels.join(", ")}`, "labels") : nothing}
     ${f.labels_error ? html`<p-text size="sm" role="alert">${f.labels_error}</p-text>` : nothing}
-    ${f.stages.includes("files") ? FILES.map(([key, label]) => tick(label, key, { into: c.consents })) : nothing}
+    ${f.stages.includes("files") ? [...(f.old_task ? [TASK] : []), ...FILES].map(([key, label]) => tick(label, key,
+      { into: c.consents })) : nothing}
     ${f.state.files && f.stages.includes("commit") ? html`<p-inline-notification state="warning"
       dismiss-button="false" heading="Every file in the folder is committed" heading-tag="h3">OwlBear commits the
       folder's files as they are, except what .gitignore excludes, and doesn't look inside them. Make sure no secret
@@ -302,6 +306,12 @@ function confirmView() {
   const now = p.stages.map((x) => DOES[x]?.(p)).filter(Boolean);
   const changes = [...p.needs, ...p.advice].map((k) => CHANGE[k] ?? k);
   if (changes.length) now.push(`change ruleset ${f.rules.one_ruleset} of the default branch: ${changes.join("; ")}`);
+  if (p.protect && !f.rules?.any) {  // OwlBear's own ruleset, on a branch without rules
+    const ci = p.ci && p.stages.includes("commit") && !p.had_workflows;
+    now.push("add a ruleset to the default branch: pull requests only, merge commits only, no deletion or force "
+      + `push, no approvals required; ${ci ? "required check: CI, once it reports on the first push"
+        : "required checks: none; existing workflows unchanged"}`);
+  }
   if (p.github) {
     now.push(m.write ? `save the merge method ${m.write} for this project`
       : m.keeps ? `keep the merge method ${m.keeps}, from the settings`
@@ -359,7 +369,9 @@ function profileView(w) {
     <p-text size="xs">${e.evidence}</p-text>`}</li>`;
   const part = (state, label) => group(state).length ? html`<p-heading size="sm"><h3>${label}</h3></p-heading>
     <ul>${group(state).map(row)}</ul>` : nothing;
-  return [html`<p-text>Check what OwlBear detected; give a value for an unknown entry you know.</p-text>
+  return [html`${(w.notes ?? []).map((n) => html`<p-inline-notification state="warning" dismiss-button="false"
+      heading="Before you confirm" heading-tag="h3">${n}</p-inline-notification>`)}
+    <p-text>Check what OwlBear detected; give a value for an unknown entry you know.</p-text>
     ${part("known", "Known")}${part("unknown", "Unknown")}${part("unsupported", "Unsupported")}`,
   button("Confirm profile", () => answer("profile", s.values), { variant: "primary", name: "profile" })];
 }
