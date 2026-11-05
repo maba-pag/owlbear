@@ -101,6 +101,13 @@ READS = {"gh --version", REPO_VIEW, HEAD, "copilot --version"}
             id="clone-empty",
         ),
         pytest.param(
+            ON_MAIN.replace('"main"', '"release/$USER;x"'),
+            (1, ""),
+            "o/r has commits on release/$USER;x, but this clone has none",
+            "git pull --set-upstream origin 'release/$USER;x'",
+            id="clone-empty-shell-branch",
+        ),
+        pytest.param(
             EMPTY,
             (0, "abc123"),
             "o/r has no commits yet, but this clone has",

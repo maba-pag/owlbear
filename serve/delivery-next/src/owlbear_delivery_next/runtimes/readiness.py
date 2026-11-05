@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import ssl
 import urllib.error
 import urllib.request
@@ -105,7 +106,7 @@ def _first_commit(repo: dict[str, object], probe: Probe) -> Check:
         return Check("first commit", ok=True, detail=f"default branch {branch}")
     if remote:
         detail = f"{name} has commits on {branch}, but this clone has none"
-        command = f"git pull --set-upstream origin {branch}"
+        command = f"git pull --set-upstream origin {shlex.quote(branch)}"  # a branch name may hold $ or ;
     elif local:
         detail, command = f"{name} has no commits yet, but this clone has", "git push -u origin HEAD"
     else:
