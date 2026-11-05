@@ -153,15 +153,36 @@ def protection(job: Job) -> dict[str, Any]:
     rules = branch_rules.read(client, plan["repository"], branch)
     if rules.plan_limit:
         return {"applied": False, "why": rules.plan_limit}
+    if (landed := _landed(job, client, rules)) is not None:
+        return landed
     if not (rules.rules or rules.classic):
         ran = job.result("ci")
         body = branch_rules.new_ruleset(
             branch, require_ci=bool(ran.get("generated") and ran.get("status") != "missing")
         )
-        job.intend("protection", f"create the ruleset {body['name']}")
+        _sending(job, None, body, f"create the ruleset {body['name']}")
         answer = branch_rules.create(client, plan["repository"], body)
         return _checked(body, answer, {"ruleset": answer.get("id"), "created": True})
     return _change(job, client, remote, rules)
+
+
+def _sending(job: Job, ident: int | None, body: dict[str, Any], what: str) -> None:
+    """Keep what a ruleset write sends before it goes, so a write whose answer was lost is read back on Resume."""
+    job.record("protection")["sent"] = {"id": ident, "body": body}
+    job.intend("protection", what)
+
+
+def _landed(job: Job, client: GhClient, rules: branch_rules.Rules) -> dict[str, Any] | None:
+    """An earlier write whose answer was lost, read back: done when GitHub holds what was sent, else nothing."""
+    if (sent := job.record("protection").get("sent")) is None:
+        return None
+    repository, body = job.plan["repository"], sent["body"]
+    ids = [sent["id"]] if sent["id"] is not None else sorted({r.get("ruleset_id") for r in rules.rules} - {None})
+    for ident in ids:
+        held = branch_rules.read_ruleset(client, repository, ident)
+        if held.get("name") == body["name"] and not branch_rules.differences(body, held):
+            return {"ruleset": ident, "created": sent["id"] is None, "read_back": True}
+    return None
 
 
 def _change(job: Job, client: GhClient, remote: repo_target.RepoState, rules: branch_rules.Rules) -> dict[str, Any]:
@@ -177,7 +198,7 @@ def _change(job: Job, client: GhClient, remote: repo_target.RepoState, rules: br
     body = branch_rules.changed(whole, plan.get("needs", []), plan.get("advice", []), "merge")
     if not (fields := branch_rules.differences(whole, body)):
         return {"applied": False, "why": branch_rules.NOTHING}
-    job.intend("protection", f"change ruleset {ident}: {'; '.join(fields)}")
+    _sending(job, ident, body, f"change ruleset {ident}: {'; '.join(fields)}")
     answer = branch_rules.replace(client, plan["repository"], ident, body)
     return _checked(body, answer, {"ruleset": ident, "changed": fields})
 

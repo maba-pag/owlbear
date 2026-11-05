@@ -557,3 +557,20 @@ def test_a_registered_clone_is_found_through_a_linked_path(hub, jobs, tmp_path):
     found = jobs.probe({"kind": "folder", "folder": str(tmp_path / "linked" / "proj")})
     assert found["registered"] == entry.id
     assert "register" not in found["stages"]
+
+
+def test_a_ruleset_write_whose_answer_was_lost_is_read_back_on_resume_and_not_sent_again(hub, jobs, tmp_path,
+                                                                                           monkeypatch):  # fmt: skip
+    found = jobs.probe({"kind": "new", "name": "demo", "folder": str(tmp_path / "demo")})
+
+    def lost(*args: Any) -> None:
+        hub.write(*args)
+        said = "gh timed out"
+        raise TimeoutError(said)
+
+    monkeypatch.setattr(branch_rules, "create", lost)
+    info = run(jobs, plan_for(found, repository="ada/demo"))
+    assert stage(info, "protection")["state"] == "failed"
+    info = settle(jobs, jobs.resume(info["id"])["id"])
+    assert stage(info, "protection")["result"] == {"ruleset": 1, "created": True, "read_back": True}
+    assert [c[0] for c in hub.calls].count("ruleset") == 1
