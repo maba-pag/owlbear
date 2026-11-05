@@ -184,7 +184,6 @@ def _fill(machine: Machine, *, cloning: bool) -> None:
     """Start the threads that pre-load the decisions and, when *cloning*, clone the shared repository."""
     threading.Thread(target=warm, args=(machine,), daemon=True, name="decisions").start()
     if cloning:
-        machine.cloning = True
         threading.Thread(target=_cloning, args=(machine,), daemon=True, name="data-clone").start()
 
 
@@ -199,8 +198,9 @@ def _provisioned(machine: Machine) -> bool:
         if done:
             machine.say(f"shared data: {done}")
     except data_repo.DataRepoError as exc:
-        machine.unshared = failure(exc)
-        machine.say(f"shared data: {machine.unshared}")
+        why = failure(exc)
+        machine.unshared = f"at this start, {why}; `owlbear restart` looks again"  # not looked at again until then
+        machine.say(f"shared data: {why}")
     try:
         record = data_place.stored() or {}
     except data_repo.DataRepoError:

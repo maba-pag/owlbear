@@ -1382,21 +1382,28 @@ def targets(scope) -> list[str]:
 def test_projects_says_why_the_shared_data_and_a_pass_loading_projects_again_failed_whole(
     monkeypatch, whole_error
 ) -> None:
-    """#971: the shared data the start could not set up, and the last failed pass loading the failed projects again,
-    say why whole above the Projects list."""
+    """#971: the shared data the start could not set up, said as that start's finding, and the last failed pass loading
+    the failed projects again, say why whole above the Projects list."""
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    unprovided = data_repo.DataRepoError(whole_error)
+    unprovided.add_note("a note on the place")
+
+    def provision(**_kwargs):
+        raise unprovided
+
+    monkeypatch.setattr(data_place, "provision", provision)
     machine, server, base = serve()
     try:
-        unshared = f"DataRepoError: {whole_error}\na note on the clone; tried again every 5 minutes"
-        unretried = f"RuntimeError: {whole_error}\na note on the pass"
-        machine.unshared, machine.unretried = unshared, unretried  # as the start and the retry loop set them
+        host_start._provisioned(machine)  # noqa: SLF001 - the start's own step
+        machine.unretried = unretried = f"RuntimeError: {whole_error}\na note on the pass"  # as the retry loop sets it
         shared, said = _checks_page(base, "/projects", "#unshared")
         retried, broke = _checks_page(base, "/projects", "#unretried")
     finally:
         server.should_exit = True
         machine.stop_all()
-    assert (shared, retried) == (
-        f"Shared data: {unshared}", f"Loading the failed projects again failed: {unretried}"
+    unshared = f"at this start, DataRepoError: {whole_error}\na note on the place; `owlbear restart` looks again"
+    assert (machine.unshared, shared, retried) == (
+        unshared, f"Shared data: {unshared}", f"Loading the failed projects again failed: {unretried}"
     )  # fmt: skip
     assert said == broke == []
 

@@ -487,7 +487,8 @@ def test_a_failed_worktree_repair_says_git_whole_at_owlbear_data_host_start_and_
     said = []
     machine = SimpleNamespace(say=said.append, curation=SimpleNamespace(shared=lambda: None))  # no cut-short apply
     assert serve._provisioned(machine) is False  # noqa: SLF001
-    assert (said, machine.unshared) == ([f"shared data: DataRepoError: {moved}"], f"DataRepoError: {moved}")
+    noticed = f"at this start, DataRepoError: {moved}; `owlbear restart` looks again"
+    assert (said, machine.unshared) == ([f"shared data: DataRepoError: {moved}"], noticed)
     assert (len(ran), record()["failed"]) == (2, why)
     unfinished = f"moving the shared repository from {source} to {dest} is not finished: {why}"
     unfinished += "; `owlbear data` finishes it"

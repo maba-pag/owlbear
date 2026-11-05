@@ -916,9 +916,12 @@ def test_a_settings_carry_that_fails_is_kept_and_said_whole(machine, monkeypatch
     assert re.fullmatch(rf"\d\d:\d\d:\d\dZ {said}", capsys.readouterr().out)
 
 
-def test_a_start_s_shared_data_notice_clears_once_owlbear_data_finishes_the_move(tmp_path, http, machine) -> None:
-    """#971: shared data the start could not set up is said on Projects until `owlbear data` sets it right while the
-    host runs; the next pass loading the failed projects again then clears it, and the project loads."""
+def test_a_start_s_shared_data_notice_stays_the_start_s_finding_after_owlbear_data_sets_it_right(
+    tmp_path, http, machine
+) -> None:
+    """#971: shared data the start could not set up is said on Projects as that start's finding, whole; once `owlbear
+    data` sets it right while the host runs and a pass loads the project again, the notice still says it is the
+    start's, until `owlbear restart` looks again."""
     registry.register(clone(tmp_path / "shop"))
     source, dest = clone(tmp_path / "old-data"), data_place.default()
     subprocess.run(["git", "clone", "-q", str(source), str(dest)], check=True)  # noqa: S603, S607 - a move left both
@@ -926,13 +929,14 @@ def test_a_start_s_shared_data_notice_clears_once_owlbear_data_finishes_the_move
     serve._provisioned(machine)  # noqa: SLF001
     machine.load_all()
     both = f"an unfinished move left both {source} and {dest}; check which holds your data, remove the other, then run"
+    noticed = f"at this start, DataRepoError: {both} `owlbear data`; `owlbear restart` looks again"
     read = http.get("/api/next/projects").json()
-    assert (read["unshared"], read["projects"][0]["state"]) == (f"DataRepoError: {both} `owlbear data`", "failed")
+    assert (read["unshared"], read["projects"][0]["state"]) == (noticed, "failed")
     shutil.rmtree(source)
     assert cli.main(["data"]) == 0  # the owner finishes the move while the host runs
     machine.retry()
     read = http.get("/api/next/projects").json()
-    assert (read["unshared"], read["projects"][0]["state"]) == ("", "loaded")
+    assert (read["unshared"], read["projects"][0]["state"]) == (noticed, "loaded")
 
 
 def test_a_failed_pass_loading_projects_again_is_kept_whole_until_one_passes(

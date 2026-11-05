@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_flow.status import RESUME, status
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.local_system import data_place, data_repo, maintenance
+from owlbear_delivery_next.local_system import data_repo, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import cases_job, chats
 from owlbear_delivery_next.machine_host.cases_job import CasesJob
@@ -61,7 +61,6 @@ class Machine:
         self.updated = ""  # the version this host took over as, said once on the pages (TD-299)
         self.unretried = ""  # why the last pass loading the failed projects again failed, for the Projects page
         self.unshared = ""  # why the shared data could not be set up or cloned, for the Projects page
-        self.cloning = False  # a thread clones the shared data: it says and clears `unshared` itself
         self.undecided: list[str] = []  # what the start could not do about decisions, for the Decisions page
         self.projects: dict[str, Project] = {}
         self.lock = threading.RLock()
@@ -196,12 +195,7 @@ class Machine:
         self.slots.open()  # a project that failed to load counts its live steps once it loads
 
     def retry(self) -> None:
-        """Load again each project that failed or was replaced; not while an update's fence holds.
-
-        Shared data the start could not set up is looked at again first: `owlbear data` may have set it right.
-        """
-        if self.unshared and not self.cloning and data_place.describe().kind != "problem":
-            self.unshared = ""
+        """Load again each project that failed or was replaced; not while an update's fence holds."""
         with self.lock:
             for p in [p for p in self.projects.values() if p.state in {"failed", "replaced"}]:
                 if not (self.stopping.is_set() or self.updating):
