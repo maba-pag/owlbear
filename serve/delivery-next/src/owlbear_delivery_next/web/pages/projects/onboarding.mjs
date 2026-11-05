@@ -60,6 +60,7 @@ export async function openAdd(opts = {}, onClose = () => {}) {
 }
 
 function close() {
+  s.closed = true;
   clearTimeout(poll);
   modal.open = false;
   const gone = modal;
@@ -186,17 +187,26 @@ function follow(job) {
   s.job = job;
   s.step = job.ended || (job.stages.find((x) => x.name === "end")?.state === "done") ? "ending" : "progress";
   clearTimeout(poll);
-  if (job.running) {
-    poll = setTimeout(async () => {
-      try {
-        follow(await call(`/onboarding/jobs/${job.id}`, { machine: true }));
-      } catch (error) {
-        s.error = error.message;
-        draw();
-      }
-    }, 1000);
-  }
+  if (job.running) watch(job.id, s);
   draw();
+}
+
+// Reads the run again each second while this dialog is open; a failed read shows and is tried again, and an answer
+// that arrives after the dialog closed or was replaced is dropped.
+function watch(id, mine) {
+  poll = setTimeout(async () => {
+    try {
+      const job = await call(`/onboarding/jobs/${id}`, { machine: true });
+      if (s !== mine || mine.closed) return;
+      s.error = "";
+      follow(job);
+    } catch (error) {
+      if (s !== mine || mine.closed) return;
+      s.error = error.message;
+      draw();
+      watch(id, mine);
+    }
+  }, 1000);
 }
 
 async function answer(kind, value) {

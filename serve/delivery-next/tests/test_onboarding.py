@@ -994,3 +994,36 @@ def test_a_label_the_repository_has_in_another_case_is_not_created_again(monkeyp
     job = onboarding_job.Job({"id": "j", "plan": plan, "stages": []}, [], lambda _t: None, lambda: "")
     job.context["client"] = None
     assert (onboarding_stages.labels(job), made) == ({"created": ["release:minor"]}, ["release:minor"])
+
+
+@pytest.mark.browser
+def test_a_failed_status_read_is_tried_again_while_the_dialog_is_open(tmp_path, monkeypatch, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    held, gone, real = threading.Event(), threading.Event(), onboarding_stages.STAGES["git"]
+    monkeypatch.setitem(onboarding_stages.STAGES, "git", lambda job: held.set() or (gone.wait(30) and real(job)))
+    with served(monkeypatch, pds) as (page, base, machine):
+        try:
+            found = machine.onboarding.probe(
+                {"kind": "new", "name": "demo", "github": False, "folder": str(tmp_path / "demo")}
+            )
+            machine.onboarding.start(plan_for(found, repository="", author={"name": "Ada", "email": "ada@example.com"}))
+            held.wait(30)
+            failed: list[Any] = []
+
+            def once(route: Any) -> None:  # the host doesn't answer the first read
+                if failed:
+                    route.fallback()
+                else:
+                    failed.append(route)
+                    route.abort()
+
+            page.route("**/onboarding/jobs/*", once)
+            page.goto(f"{base}/projects#token=t")
+            page.get_by_role("listitem", name="demo").get_by_role("button", name="Resume").click()
+            modal = pds.modal(page)
+            while not failed:
+                page.wait_for_timeout(50)
+        finally:
+            gone.set()
+        expect(modal).to_contain_text("Set up on this Mac only")
