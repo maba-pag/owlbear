@@ -81,3 +81,43 @@ def test_an_unreadable_profile_after_a_failed_detection_defers_the_host_checks(t
     assert [c.name for c in checks] == ["profile detection"]
     assert [c.ok for c in checks] == [False]
     assert reached == []  # no host is guessed while the profile cannot say which host it is
+
+
+@pytest.mark.usefixtures("reached")
+@pytest.mark.parametrize("refusal", ["returned", "raised", "config"])
+def test_a_detection_that_cannot_publish_says_the_whole_refusal(
+    shared_repo, tmp_path, monkeypatch, whole_error, refusal
+):
+    """#971: the data repository's whole refusal, its notes too, is the profile detection check's detail."""
+    root, _remote = shared_repo
+    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
+    store.write_profile(Profile(entries={profile.HOST: confirmed(ENTERPRISE), profile.POLL: confirmed("45")}))
+    done = "done" if refusal == "config" else ""
+    fresh = Profile(entries={profile.HOST: confirmed(ENTERPRISE), profile.POLL: confirmed("60")}, prefs_import=done)
+    monkeypatch.setattr(profile, "detect", lambda *_a: fresh)
+    note = "while publishing shop-site"
+    real = DataRepo.publish
+
+    def refuse(self, path, message, until=None):
+        if refusal == "config" and path == store.config_path:
+            exc = DataRepoError(whole_error)
+            exc.add_note(note)
+            raise exc
+        if refusal != "config" and path == profile_share.path(store) and message.endswith("detected in a clone"):
+            if refusal == "returned":
+                return whole_error
+            exc = DataRepoError(whole_error)
+            exc.add_note(note)
+            raise exc
+        return real(self, path, message, until)
+
+    monkeypatch.setattr(DataRepo, "publish", refuse)
+    checks = readiness.ready(store, root)
+
+    refused = {
+        "returned": f"DataRepoError: {whole_error}",
+        "raised": f"DataRepoError: {whole_error}\n{note}",
+        "config": f"DataRepoError: DataRepoError: {whole_error}\n{note}",
+    }[refusal]
+    detail = f"StoreError: the detected profile could not be published: {refused}"
+    assert [c.detail for c in checks if c.name == "profile detection"] == [detail]

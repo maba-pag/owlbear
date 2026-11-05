@@ -19,6 +19,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ValidationError
 
 from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github import account
 from owlbear_delivery_next.impeccable import calibration, pack_update
 from owlbear_delivery_next.local_system import data_repo
@@ -134,7 +135,8 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         prof = store.read_profile()
     except StoreError as exc:  # a profile this build cannot read is shown as its repair notice, never a 500
         prof = None
-        notice = notice or f"{exc}; repair or replace the profile file, or update OwlBear if it is newer, then reload"
+        why = failure(exc)
+        notice = notice or f"{why}; repair or replace the profile file, or update OwlBear if it is newer, then reload"
     if not notice and prof is not None and prof.prefs_import == "pending":
         notice = PREFS_REVIEW
     return {
@@ -375,7 +377,7 @@ def _intent_readable(store: Store) -> Profile | None:
     try:
         return store.read_profile()
     except StoreError as exc:
-        raise HTTPException(409, str(exc)) from exc
+        raise HTTPException(409, failure(exc)) from exc
 
 
 def _settle_prefs_import(store: Store, *, reviewed: bool) -> None:

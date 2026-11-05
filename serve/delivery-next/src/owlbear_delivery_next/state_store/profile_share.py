@@ -14,6 +14,7 @@ import os
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.impeccable.detector import DetectorError
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
@@ -151,7 +152,7 @@ def publish_config_unlocked(store: Store) -> str:
             f"settings: {store.name}: {'project layer' if store.config_path.exists() else 'project layer removed'}",
         )
     except DataRepoError as exc:
-        notice = str(exc)
+        notice = failure(exc)
     return settle_config(store, notice)
 
 
@@ -189,7 +190,7 @@ def settle_config(store: Store, notice: str, *, owner: bool = False) -> str:
             target, f"settings: {store.name}: project config {'pending' if want else 'published'}"
         )
     except DataRepoError as exc:
-        extra = str(exc)
+        extra = failure(exc)
     return "; ".join(dict.fromkeys(part for part in (notice, extra) if part))
 
 
@@ -331,7 +332,7 @@ def read(store: Store) -> Profile | None:
     except FileNotFoundError:
         return None
     except (DataRepoError, OSError, ValueError) as exc:
-        msg = f"the profile could not be read: {exc}"
+        msg = f"the profile could not be read: {failure(exc)}"
         raise StoreError(msg) from exc
 
 
@@ -363,7 +364,7 @@ def _present(source: Path) -> bool:
     except FileNotFoundError:
         return False
     except OSError as exc:
-        msg = f"the profile is unreadable: {source}"
+        msg = f"the profile is unreadable: {source}: {failure(exc)}"
         raise StoreError(msg) from exc
     return True
 
@@ -407,13 +408,13 @@ def _local(store: Store) -> dict[str, ProfileEntry]:
     except FileNotFoundError:
         return {}
     except OSError as exc:
-        msg = f"this clone's profile facts are unreadable: {overlay}"
+        msg = f"this clone's profile facts are unreadable: {overlay}: {failure(exc)}"
         raise StoreError(msg) from exc
     try:
         with os.fdopen(fd, encoding="utf-8") as source:
             local = _parse(source.read(), "profile.local", Profile, PROFILE_FORMAT, migrations.PROFILE)
     except (OSError, UnicodeError) as exc:
-        msg = f"this clone's profile facts are unreadable: {overlay}"
+        msg = f"this clone's profile facts are unreadable: {overlay}: {failure(exc)}"
         raise StoreError(msg) from exc
     if any(not profile.local_key(key) for key in local.entries):
         msg = "the clone's profile overlay contains non-local facts"
@@ -468,7 +469,7 @@ def checked(store: Store, repo: Path) -> Profile | None:
             return store.read_profile()  # a changed snapshot must be reconciled before detection is acknowledged
         fresh = kept
     except DataRepoError as exc:
-        msg = f"the detected profile could not be published: {exc}"
+        msg = f"the detected profile could not be published: {failure(exc)}"
         raise StoreError(msg) from exc
     atomic_write(mark, f"profile v{fresh.version} detected in this clone\n")
     return fresh

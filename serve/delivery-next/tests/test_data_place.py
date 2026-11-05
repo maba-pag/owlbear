@@ -89,7 +89,7 @@ def test_data_url_clones_into_the_default_place_through_a_hidden_sibling(url: st
 def test_a_failed_clone_is_kept_in_the_pointer_and_said_everywhere(tmp_path: Path, capsys) -> None:
     gone = (tmp_path / "gone.git").as_uri()
     assert cli.main(["data", gone]) == 1
-    assert "Not set: cloning" in capsys.readouterr().out
+    assert "Not set: DataRepoError: cloning" in capsys.readouterr().out
     kept = record()
     assert kept is not None
     assert (set(kept), kept["remote"], clones(), data_place.default().exists()) == (
@@ -483,7 +483,7 @@ def test_a_failed_worktree_repair_says_git_whole_at_owlbear_data_host_start_and_
     moved = f"the shared repository was moved to {dest}, but {why}; fix it, then run `owlbear data` again"
 
     assert cli.main(["data"]) == 1
-    assert capsys.readouterr().out == f"Shared data: problem: {moved}\n"
+    assert capsys.readouterr().out == f"Shared data: problem: DataRepoError: {moved}\n"
     said = []
     machine = SimpleNamespace(say=said.append, curation=SimpleNamespace(shared=lambda: None))  # no cut-short apply
     assert serve._provisioned(machine) is False  # noqa: SLF001
@@ -498,6 +498,34 @@ def test_a_failed_worktree_repair_says_git_whole_at_owlbear_data_host_start_and_
     monkeypatch.setattr(data_place, "_git", real)  # repaired: the next `owlbear data` finishes the move
     assert cli.main(["data"]) == 0
     assert record() == {"repository": str(dest), "remote": url, "moved_from": str(source)}
+
+
+@pytest.mark.parametrize(("clone_address", "words"), [(False, "Shared data: problem:"), (True, "Not set:")])
+def test_owlbear_data_prints_a_failed_move_whole_after_its_own_words(  # noqa: PLR0913, PLR0917 - fixtures
+    tmp_path: Path, url: str, monkeypatch, whole_error, capsys, clone_address, words
+) -> None:
+    """#971: `owlbear data`, with or without a clone address, prints why the move stopped whole: the error's type,
+    Git's streams and a note."""
+    source, dest = tmp_path / "old-data", data_place.default()
+    git(tmp_path, "clone", "-q", url, str(source))
+    home().mkdir(parents=True, exist_ok=True)
+    data_place.pointer().write_text(json.dumps({"remote": url, "moving_from": str(source), "moving_to": str(dest)}))
+    source.rename(dest)
+    git_fails(monkeypatch, whole_error, lambda args: args == ("worktree", "repair"))
+    real, note = data_place.recover, "a note added on the way END"
+
+    def recover() -> str:
+        try:
+            return real()
+        except data_repo.DataRepoError as exc:
+            exc.add_note(note)
+            raise
+
+    monkeypatch.setattr(data_place, "recover", recover)
+    why = git_whole(("worktree", "repair"), whole_error)
+    moved = f"the shared repository was moved to {dest}, but {why}; fix it, then run `owlbear data` again"
+    assert cli.main(["data", url] if clone_address else ["data"]) == 1
+    assert capsys.readouterr().out == f"{words} DataRepoError: {moved}\n{note}\n"
 
 
 def test_an_unreadable_checkout_says_git_whole_in_owlbear_data_s_inventory(

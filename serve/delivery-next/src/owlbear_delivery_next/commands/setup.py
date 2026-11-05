@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import data_repo, git_files, local_home, preload, text_files
 from owlbear_delivery_next.runtimes import readiness, window_files
@@ -195,7 +196,7 @@ def registration(repo: Path) -> tuple[bool, list[str]]:
         except FileNotFoundError:
             continue
         except (OSError, ValueError) as exc:
-            problems.append(f"{path} cannot be read: {exc}")
+            problems.append(f"{path} cannot be read: {failure(exc)}")
             continue
         found = found or (isinstance(data, dict) and _serves(data.get(key), repo, own=own))
     return found, problems
@@ -321,7 +322,8 @@ def _saved(store: Store, say: Callable[[str], object]) -> tuple[Profile | None, 
         if store.shared and digest == profile_share.ABSENT:  # the shared profile alone is unreadable
             return _shared_only(target, target_now, reason, say)
         if target_now is None:  # the destination reads now: the error came from elsewhere, so nothing is replaced
-            msg = f"the saved profile could not be read ({reason}) and reads now; nothing was replaced; run setup again"
+            why = failure(reason)
+            msg = f"the saved profile could not be read ({why}) and reads now; nothing was replaced; run setup again"
             raise StoreError(msg)
         if not target:
             raise target_now
@@ -342,7 +344,8 @@ def _shared_only(
     if target_now is None:  # it reads now: the new bytes were not what the owner was shown, so nothing is replaced
         if target == profile_share.ABSENT:
             raise reason
-        msg = "the shared profile can be read now; run setup again to review it"
+        why = failure(reason)
+        msg = f"the shared profile could not be read ({why}) and can be read now; run setup again to review it"
         raise StoreError(msg)
     if not target:
         raise target_now
@@ -351,7 +354,7 @@ def _shared_only(
 
 
 def _announce(cause: Exception, say: Callable[[str], object]) -> None:
-    say(f"The saved profile cannot be read ({cause}); detecting a new one.")
+    say(f"The saved profile cannot be read ({failure(cause)}); detecting a new one.")
     say(
         "Confirming replacement discards the unreadable profile, including any unrecoverable legacy role "
         "overrides; declining keeps it."

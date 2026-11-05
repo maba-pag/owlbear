@@ -3966,11 +3966,16 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
 
 @pytest.mark.browser
 def test_a_failed_pick_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, whole_error: str) -> None:
-    """#895 K3: a pick that cannot read the decisions shows why whole in the brief, and logs it."""
+    """#895 K3, #971: a pick that cannot read the decisions shows why whole, with its notes, in the brief and in
+    Recent activity."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
+    note = "while reading the decisions of project alpha"
+
     def unavailable(*_args, **_kwargs):
-        raise decision_store.DecisionsUnavailable(whole_error)
+        exc = decision_store.DecisionsUnavailable(whole_error)
+        exc.add_note(note)
+        raise exc
 
     alpha = registry.register(clone(tmp_path / "alpha", "c1"))
     store = Store.open(Path(alpha.path))
@@ -3979,7 +3984,7 @@ def test_a_failed_pick_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, w
         c = Change(slug="c1", brief=Brief(version=1, title="Notes"), step=Step(kind=StepKind.SHAPE))
         store.write(lock, c)
         pick.run(store, lock, c)
-    failed = f"DecisionsUnavailable: {whole_error}"
+    failed = f"DecisionsUnavailable: {whole_error}\n{note}"
     (event,) = [e for e in store.events("c1") if e["event"] == "pick-failed"]
     assert event["reason"] == failed
     with browsing(monkeypatch, pds, details=True) as (page, url):
@@ -3989,6 +3994,8 @@ def test_a_failed_pick_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, w
         shown = follows.locator("p-text")
         expect(shown).to_have_count(1)
         assert shown.text_content() == f"The pick failed: {failed}. Pick the decisions again under Open items."
+        line = page.locator("ol.log > li", has_text="Pick failed").locator(":scope > span")
+        expect(line).to_have_text(" ".join(f"Pick failed: {failed}".split()))
         assert said == []
 
 

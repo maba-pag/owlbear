@@ -712,6 +712,30 @@ def test_a_profile_this_build_cannot_read_is_a_repair_notice_on_settings_not_a_s
     assert "repair" in got.json()["notice"]
 
 
+def test_an_unreadable_profile_is_said_whole_in_the_notice_and_the_refused_save(store, monkeypatch, whole_error):
+    """#971: the read's whole error, its notes too, reaches the Settings notice and a refused project save."""
+    store.root.mkdir(parents=True)
+    (store.root / profile_share.PROFILE).write_text("{}")
+    note = "while reading the profile of shop"
+
+    def unreadable(_source):
+        exc = OSError(whole_error)
+        exc.add_note(note)
+        raise exc
+
+    monkeypatch.setattr(profile_share, "_read", unreadable)
+    c = client(store, headers=AUTH)
+    got = c.get("/api/next/config").json()
+    why = f"StoreError: the profile could not be read: OSError: {whole_error}\n{note}"
+    repair = "; repair or replace the profile file, or update OwlBear if it is newer, then reload"
+    assert got["notice"] == why + repair
+    refused = c.put(
+        "/api/next/config/project",
+        json={"rev": got["project_rev"], "layer": {"format": F, "agents": {"builder": {"effort": "high"}}}},
+    )
+    assert (refused.status_code, refused.json()["detail"]) == (409, why)
+
+
 def test_a_machine_save_with_an_unreadable_profile_applies_and_says_so_truthfully(store):
     store.root.mkdir(parents=True)
     (store.root / profile_share.PROFILE).write_text("{not json")
