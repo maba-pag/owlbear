@@ -156,7 +156,7 @@ def new_receipt(plan: dict[str, Any]) -> dict[str, Any]:
 def kept() -> list[dict[str, Any]]:
     """Every receipt on disk; one that can't be read is returned as its error, for the Projects page."""
     out = []
-    for path in sorted(receipts().glob("*.json")) if receipts().is_dir() else []:
+    for path in sorted(receipts().glob("*.json")):
         try:
             out.append(json.loads(path.read_text(encoding="utf-8")))
         except (OSError, ValueError) as exc:

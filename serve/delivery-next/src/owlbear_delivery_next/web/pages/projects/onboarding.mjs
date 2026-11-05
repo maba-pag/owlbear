@@ -38,17 +38,14 @@ const FILES = [["server", "Register Delivery's chat server in .mcp.json"],
 
 let s, modal, poll, done, back;
 
-function fresh(opts) {
-  return { step: "start", kind: opts.kind ?? "new", repository: "", folder: opts.folder ?? "", name: "",
-    github: opts.github ?? true, found: null, c: {}, problems: [], job: null, busy: "", error: "", folderName: "",
-    values: {}, started: "" };
-}
 
 // Opens the dialog; *opts* starts it on a folder (Finish setup, Publish) or on a run (Resume). *onClose* rereads.
 export async function openAdd(opts = {}, onClose = () => {}) {
   await defined(["p-modal", "p-radio-group", "p-radio-group-option", "p-checkbox", "p-input-text", "p-button",
     "p-heading", "p-text", "p-tag", "p-inline-notification"]);
-  s = fresh(opts);
+  s = { step: "start", kind: opts.kind ?? "new", repository: "", folder: opts.folder ?? "", name: "",
+    github: opts.github ?? true, found: null, c: {}, problems: [], job: null, busy: "", error: "", folderName: "",
+    values: {}, started: "" };
   done = onClose;
   back = document.activeElement;  // focus goes back to the opener when the dialog closes
   modal = document.createElement("p-modal");

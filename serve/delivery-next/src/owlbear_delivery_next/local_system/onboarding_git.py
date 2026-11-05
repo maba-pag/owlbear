@@ -217,7 +217,7 @@ def first_commit(path: Path, message: str) -> str:
     _git(path, "read-tree", "--empty")
     _git(path, "add", "-A")
     _git(path, "commit", "-m", message)
-    return _git(path, "rev-parse", "HEAD").stdout.strip()
+    return head(path)
 
 
 def _transfer_failed(what: str, done: subprocess.CompletedProcess[bytes]) -> NoReturn:
