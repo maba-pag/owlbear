@@ -908,6 +908,17 @@ def test_setup_replaces_a_saved_profile_it_cannot_read(repo, tmp_path_factory, m
     assert store.read_profile().confirmed_at is not None
 
 
+def test_setup_names_the_folder_its_fix_runs_in_when_started_from_another(repo, monkeypatch, capsys):
+    failed = readiness.Check("first commit", ok=False, detail="o/r has no commits yet", fix="Run `git push`")
+    monkeypatch.setattr(readiness, "check", lambda *_a: [failed])
+    monkeypatch.chdir(repo.parent)
+    assert setup.run(repo, [], yes=True, local_files="no") == 1
+    assert f"Next (in {repo}): Run `git push`" in capsys.readouterr().out
+    monkeypatch.chdir(repo)
+    assert setup.run(repo, [], yes=True, local_files="no") == 1
+    assert "Next: Run `git push`" in capsys.readouterr().out
+
+
 @pytest.mark.parametrize(
     ("title", "slug"),
     [
