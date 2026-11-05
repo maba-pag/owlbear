@@ -374,9 +374,10 @@ def test_a_host_running_without_this_project_says_so_and_owlbears_clone_is_never
     assert (own["error"], "add this project" in own["error"]) == (OWLBEAR_DOWN, False)
 
 
+REPO_VIEW = f"gh repo view --json {readiness.REPO_FIELDS}"
 READY = {
     "gh --version": (0, "gh version 2.102.0"),
-    "gh repo view --json nameWithOwner,viewerPermission": (0, '{"nameWithOwner": "o/r", "viewerPermission": "ADMIN"}'),
+    REPO_VIEW: (0, '{"nameWithOwner": "o/r", "viewerPermission": "ADMIN", "isEmpty": false}'),
     "copilot --version": (0, "1.0.95"),
     "git config user.name": (0, "Ada"),
     "git config user.email": (0, "ada@example.com"),
@@ -410,9 +411,7 @@ def test_readiness_gives_one_concrete_fix_per_failure():
     assert [n for n, _ in tls] == ["network"]
     assert "SSL_CERT_FILE" in tls[0][1]
     read_only = '{"nameWithOwner": "o/r", "viewerPermission": "READ"}'
-    assert [n for n, _ in failed(READY | {"gh repo view --json nameWithOwner,viewerPermission": (0, read_only)})] == [
-        "repository"
-    ]
+    assert [n for n, _ in failed(READY | {REPO_VIEW: (0, read_only)})] == ["repository"]
     locked = {"git config --bool commit.gpgsign": (0, "true"), "git config user.signingkey": (0, "ABC"), GPG: (2, "")}
     assert [n for n, _ in failed(READY | locked)] == ["commit signing"]
     assert failed(READY | locked | {GPG: (0, "")}) == []

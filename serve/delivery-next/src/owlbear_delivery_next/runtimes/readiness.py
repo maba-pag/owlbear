@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 
 SHAPER = "owlbear-shaper.agent.md"
 PUSH = frozenset({"WRITE", "MAINTAIN", "ADMIN"})
+REPO_FIELDS = "nameWithOwner,viewerPermission,isEmpty,defaultBranchRef"
 CONFIG_FIX = "Repair the git configuration as git's error says, then run setup again"
 SIGN_IN = "Sign that account in with `gh auth login --hostname {host}`, or name another as the GitHub account"
 
@@ -69,7 +70,7 @@ def _network(host: str, error: str | None) -> Check:
 
 
 def _github(host: str, probe: Probe, writer: Writer) -> list[Check]:
-    """The GitHub CLI, the account the project's writes are made by (TD-402), and that account's push permission."""
+    """The GitHub CLI, the account the project's writes are made by (TD-402), its push permission and first commits."""
     code, text = probe(["gh", "--version"])
     if code:
         return [Check("github cli", ok=False, detail=text, fix="Install the GitHub CLI: https://cli.github.com")]
@@ -83,14 +84,38 @@ def _github(host: str, probe: Probe, writer: Writer) -> list[Check]:
         return [*out, Check("github sign-in", ok=False, detail=str(exc), fix=fix)]
     rule = "; the GitHub account setting is unset, so TD-402's rule picked it" if writer.unset else ""
     out.append(Check("github sign-in", ok=True, detail=f"writes as {access.login or '-'} ({access.why}){rule}"))
-    code, text = probe(["gh", "repo", "view", "--json", "nameWithOwner,viewerPermission"], access.environment())
+    code, text = probe(["gh", "repo", "view", "--json", REPO_FIELDS], access.environment())
     try:
         repo = json.loads(text) if code == 0 else {}
     except ValueError:
         repo = {}
     detail = f"{repo.get('nameWithOwner')}: {repo.get('viewerPermission')}" if repo else text
     fix = "Point `origin` at a GitHub repository you can push to (check with `gh repo view`)"
-    return [*out, Check("repository", ok=repo.get("viewerPermission") in PUSH, detail=detail, fix=fix)]
+    out.append(Check("repository", ok=repo.get("viewerPermission") in PUSH, detail=detail, fix=fix))
+    return [*out, _first_commit(repo, probe)] if repo else out
+
+
+def _first_commit(repo: dict[str, object], probe: Probe) -> Check:
+    """Whether GitHub and this clone both hold commits; for each that holds none, the git commands that end it."""
+    name, ref = repo.get("nameWithOwner"), repo.get("defaultBranchRef")
+    branch = ref.get("name") if isinstance(ref, dict) else ""
+    remote = repo.get("isEmpty") is not True
+    local = probe(["git", "rev-parse", "--verify", "--quiet", "HEAD"])[0] == 0
+    if remote and local:
+        return Check("first commit", ok=True, detail=f"default branch {branch}")
+    if remote:
+        detail = f"{name} has commits on {branch}, but this clone has none"
+        fix = f"Fetch them: `git pull --set-upstream origin {branch}`, then run setup again"
+    elif local:
+        detail = f"{name} has no commits yet, but this clone has"
+        fix = "Push them: `git push -u origin HEAD`, then run setup again"
+    else:
+        detail = f"{name} has no commits yet, and neither has this clone"
+        fix = (
+            'Commit a first file and push it: `git add <file> && git commit -m "First commit" && '
+            "git push -u origin HEAD`, then run setup again"
+        )
+    return Check("first commit", ok=False, detail=detail, fix=fix)
 
 
 def _ssh(key: str, probe: Probe) -> Check:
