@@ -262,6 +262,13 @@ def _author_missing(folder: Path, target: str) -> bool:
     return not readiness.identity(onboarding_git.target_probe(onboarding_git.nearest_existing(folder), target)).ok
 
 
+def author(plan: dict[str, Any]) -> tuple[str, str] | None:
+    """The Git author Choices named, both fields; ``None`` when it named none or only half of one."""
+    given = plan.get("author") or {}
+    name, email = str(given.get("name") or "").strip(), str(given.get("email") or "").strip()
+    return (name, email) if name and email else None
+
+
 def preflight(plan: dict[str, Any]) -> list[str]:
     """What must hold before anything is created, each failure whole; empty when the run may start."""
     folder, repository = Path(plan["folder"]), plan.get("repository", "")
@@ -273,9 +280,10 @@ def preflight(plan: dict[str, Any]) -> list[str]:
     out = []
     if not (signing := readiness.signing(probe_git)).ok:
         out.append(f"commit signing: {signing.detail}. {signing.fix}")
-    author = plan.get("author") or {}
-    chosen = bool(str(author.get("name", "")).strip() and str(author.get("email", "")).strip())
-    if not chosen and not (who := readiness.identity(probe_git)).ok:
+    given = plan.get("author") or {}
+    if any(str(given.get(k) or "").strip() for k in ("name", "email")) and not author(plan):
+        out.append("git author: name both the author's name and email, or neither")
+    if not author(plan) and not (who := readiness.identity(probe_git)).ok:
         out.append(f"git identity: {who.detail}; name the Git author in Choices")
     if not plan.get("github"):
         return out

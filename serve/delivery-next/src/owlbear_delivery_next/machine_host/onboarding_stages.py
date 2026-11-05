@@ -77,8 +77,8 @@ def git(job: Job) -> dict[str, Any]:
         onboarding_git.init(path)
     if plan.get("github") and onboarding_git.folder_state(path).origin is None:
         onboarding_git.set_origin(path, probe.url(plan["repository"]))
-    if author := plan.get("author"):
-        onboarding_git.write_author(path, author["name"], author["email"])
+    if chosen := probe.author(plan):
+        onboarding_git.write_author(path, *chosen)
     return {}
 
 

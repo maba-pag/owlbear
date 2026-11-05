@@ -859,3 +859,12 @@ def test_a_folder_start_without_a_folder_is_refused(jobs):
     for start in ({"kind": "folder"}, {"kind": "folder", "folder": "  "}):
         with pytest.raises(OnboardingError, match="name the folder"):
             jobs.probe(start)
+
+
+@pytest.mark.usefixtures("hub")
+def test_a_blank_author_is_not_written_and_a_half_named_one_stops_the_preflight(jobs, tmp_path):
+    found = jobs.probe({"kind": "new", "name": "demo", "folder": str(tmp_path / "demo")})
+    half = plan_for(found, repository="ada/demo", author={"name": "Ada", "email": " "})
+    assert onboarding_probe.preflight(half) == ["git author: name both the author's name and email, or neither"]
+    info = run(jobs, plan_for(found, repository="ada/demo", author={"name": "", "email": ""}))
+    assert stage(info, "commit")["state"] == "done"
