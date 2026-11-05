@@ -75,10 +75,6 @@ class Onboarding:
                 found["job"] = job.info()
         return found
 
-    def preflight(self, plan: dict[str, Any]) -> list[str]:
-        """What must hold before anything is created; each failure whole."""
-        return onboarding_probe.preflight(plan)
-
     def start(self, plan: dict[str, Any]) -> dict[str, Any]:
         """Run the approved plan; the same destination's unfinished job goes on instead of a second one."""
         if why := self._why():

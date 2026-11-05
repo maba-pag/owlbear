@@ -140,7 +140,7 @@ function method(f, c) {
   if (allowed.length === 1) return { write: allowed[0] };
   if (allowed.length > 1) return { write: c.method ?? ["merge", "squash", "rebase"].find((m) => allowed.includes(m)),
     ask: true };
-  return { write: null, none: true };
+  return { write: null };
 }
 
 // Why OwlBear's protection can't be had here, else "".

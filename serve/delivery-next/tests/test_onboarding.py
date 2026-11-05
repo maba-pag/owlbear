@@ -198,7 +198,7 @@ def test_a_new_private_project_from_zero_is_published_protected_and_set_up(hub, 
     found = jobs.probe({"kind": "new", "name": "demo", "folder": str(tmp_path / "demo")})
     assert (found["entry"], found["refusal"]) == ("E5", "")
     plan = plan_for(found, repository="ada/demo")
-    assert jobs.preflight(plan) == []
+    assert onboarding_probe.preflight(plan) == []
     info = run(jobs, plan)
     assert [s["state"] for s in info["stages"]] == ["done"] * len(info["stages"]), info
     folder = Path(found["folder"])
@@ -309,9 +309,11 @@ def test_nothing_is_created_when_signing_fails_or_the_name_is_taken(hub, jobs, t
     locked = readiness.Check("commit signing", ok=False, detail="gpg key K locked", fix="Unlock")
     with monkeypatch.context() as m:
         m.setattr(readiness, "signing", lambda _p: locked)
-        assert jobs.preflight(plan_for(found, repository="ada/demo")) == ["commit signing: gpg key K locked. Unlock"]
+        assert onboarding_probe.preflight(plan_for(found, repository="ada/demo")) == [
+            "commit signing: gpg key K locked. Unlock"
+        ]
     hub.add("ada/taken")
-    taken = jobs.preflight(plan_for(found, repository="ada/taken"))
+    taken = onboarding_probe.preflight(plan_for(found, repository="ada/taken"))
     assert any("ada/taken already exists" in p for p in taken)
     assert not (tmp_path / "demo").exists()
     assert [c for c in hub.calls if c[0] == "create"] == []

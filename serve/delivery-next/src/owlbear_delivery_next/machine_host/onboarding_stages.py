@@ -11,6 +11,7 @@ from owlbear_delivery_next.commands import setup, setup_profile
 from owlbear_delivery_next.github import branch_rules, repo_target
 from owlbear_delivery_next.github.provider import MergeMethod
 from owlbear_delivery_next.local_system import local_home, onboarding_git
+from owlbear_delivery_next.machine_host import onboarding_end
 from owlbear_delivery_next.machine_host import onboarding_probe as probe
 from owlbear_delivery_next.machine_host.onboarding_job import Waiting
 from owlbear_delivery_next.runtimes import readiness
@@ -321,13 +322,6 @@ def register(job: Job) -> dict[str, Any]:
     return {"id": machine.register(_folder(job)).entry.id, "kept": False}
 
 
-def end(job: Job) -> dict[str, Any]:
-    """The ending's three facts; a kept registration's readiness is looked at again first."""
-    from owlbear_delivery_next.machine_host import onboarding_end  # noqa: PLC0415 - it reads the machine
-
-    return onboarding_end.facts(job)
-
-
 STAGES: dict[str, Stage] = {
     "folder": folder,
     "git": git,
@@ -344,5 +338,5 @@ STAGES: dict[str, Stage] = {
     "profile": profile,
     "files": files,
     "register": register,
-    "end": end,
+    "end": onboarding_end.facts,
 }

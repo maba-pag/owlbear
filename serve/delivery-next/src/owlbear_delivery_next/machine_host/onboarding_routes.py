@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from owlbear_delivery_next.machine_host import onboarding_probe
 from owlbear_delivery_next.machine_host.onboarding import OnboardingError
 
 if TYPE_CHECKING:
@@ -41,7 +42,7 @@ def router(machine: Machine) -> APIRouter:
     @routes.post("/preflight")
     def preflight(body: dict[str, Any]) -> dict[str, Any]:
         """What must hold before anything is created, for the chosen name and route."""
-        return {"problems": jobs.preflight(body)}
+        return {"problems": onboarding_probe.preflight(body)}
 
     @routes.post("/jobs")
     def start(body: dict[str, Any]) -> dict[str, Any]:
