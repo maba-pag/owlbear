@@ -868,3 +868,15 @@ def test_a_blank_author_is_not_written_and_a_half_named_one_stops_the_preflight(
     assert onboarding_probe.preflight(half) == ["git author: name both the author's name and email, or neither"]
     info = run(jobs, plan_for(found, repository="ada/demo", author={"name": "", "email": ""}))
     assert stage(info, "commit")["state"] == "done"
+
+
+@pytest.mark.usefixtures("hub")
+def test_a_repository_other_than_the_folders_origin_stops_the_preflight(jobs, tmp_path):
+    folder = tmp_path / "meter"
+    folder.mkdir()
+    git(folder, "init", "-q", "-b", "main")
+    git(folder, "remote", "add", "origin", "https://github.com/ada/meter.git")
+    found = jobs.probe({"kind": "folder", "folder": str(folder)})
+    assert "repository" in found["stages"]
+    problems = onboarding_probe.preflight(plan_for(found, repository="ada/other"))
+    assert [p.split(":")[0] for p in problems] == ["origin"]

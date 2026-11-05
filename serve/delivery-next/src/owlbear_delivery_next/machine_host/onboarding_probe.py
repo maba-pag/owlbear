@@ -269,6 +269,13 @@ def author(plan: dict[str, Any]) -> tuple[str, str] | None:
     return (name, email) if name and email else None
 
 
+def _named(origin: str) -> tuple[str, ...]:
+    try:
+        return split(origin)
+    except ValueError:
+        return (origin,)
+
+
 def preflight(plan: dict[str, Any]) -> list[str]:
     """What must hold before anything is created, each failure whole; empty when the run may start."""
     folder, repository = Path(plan["folder"]), plan.get("repository", "")
@@ -287,6 +294,8 @@ def preflight(plan: dict[str, Any]) -> list[str]:
         out.append(f"git identity: {who.detail}; name the Git author in Choices")
     if not plan.get("github"):
         return out
+    if own and "/".join(_named(own)).casefold() != repository.casefold():
+        out.append(f"origin: {folder}'s origin is {own}, not {repository}; keep its name, or change origin first")
     if not (setting := account(repository)):
         return [*out, f"the {ACCOUNT} setting is unset; set it on the Settings page, then try again"]
     gh = client(repository, setting, where)
