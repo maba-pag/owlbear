@@ -9,66 +9,34 @@ from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.commands.setup_profile import (
+    Ask,
+    confirm,
+    detect,
+    keep,
+    publish_repair,
+    recommendations,
+    render,
+    saved,
+)
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import data_repo, git_files, local_home, preload, text_files
 from owlbear_delivery_next.runtimes import readiness, window_files
 from owlbear_delivery_next.settings import profile, roles
-from owlbear_delivery_next.state_store import github_writer, prefs_import, profile_repair, profile_share, roles_move
-from owlbear_delivery_next.state_store.profile_errors import (
-    OldProfileUnreadableError,
-    SharedSyncError,
-    SourceChangedError,
-)
-from owlbear_delivery_next.state_store.store import RoleSourceError, Store, StoreError
+from owlbear_delivery_next.state_store import github_writer, prefs_import, profile_repair
+from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-type Ask = Callable[[str], str]
+    from owlbear_delivery_next.change_contracts.profile_record import Profile
+
+
 type Choice = Literal["yes", "no", "ask"]
 TASK = "OwlBear Delivery host"
 SERVER = "owlbear-delivery"
 ASKS = 3  # folder names setup asks for before it stops
-
-
-def recommendations(prof: Profile) -> list[str]:
-    """Branch rules worth turning on for automatic merging; advice only, never blocking."""
-    tips = {
-        profile.STRICT: "turn on 'Require branches to be up to date before merging' for the target branch",
-        profile.RESOLUTION: "turn on 'Require conversation resolution before merging' for the target branch",
-    }
-    return [tip for key, tip in tips.items() if profile.value(prof, key) == "no"]
-
-
-def render(prof: Profile) -> str:
-    """The profile grouped by known, unknown and unsupported, with evidence."""
-    lines = [f"Project profile v{prof.version}"]
-    for state in ("known", "unknown", "unsupported"):
-        found = [(k, e) for k, e in sorted(prof.entries.items()) if e.state == state]
-        lines += [f"  {state}:"] * bool(found)
-        lines += [f"    {k} = {e.value!r} ({e.evidence})" for k, e in found]
-    return "\n".join(lines)
-
-
-def confirm(prof: Profile, ask: Ask, *, yes: bool) -> tuple[Profile, list[str]]:
-    """Ask for unknown entries and record the owner's confirmation; ``--yes`` never confirms an unknown entry."""
-    now = datetime.now(UTC)
-    for key, e in sorted(prof.entries.items()):
-        if (
-            e.state == "unknown"
-            and key not in profile.SETTINGS
-            and not yes
-            and (value := ask(f"{key} is unknown ({e.evidence}). Value you confirm: "))
-        ):
-            prof = profile.confirm(prof, key, value, now)
-    unknown = [k for k, e in prof.entries.items() if e.state == "unknown" and k not in profile.SETTINGS]
-    if not (yes or ask("Confirm this profile? [y/N] ").lower().startswith("y")):
-        return prof.model_copy(update={"confirmed_at": None}), unknown
-    by = ProfileEntry(state="known", value="--yes" if yes else "prompt", evidence=f"owner confirmed {now:%Y-%m-%d}")
-    entries = {**prof.entries, "setup:confirmed-by": by}
-    return prof.model_copy(update={"entries": entries, "confirmed_at": now, "version": prof.version + 1}), unknown
 
 
 def without_task(data: dict[str, Any]) -> dict[str, Any]:
@@ -297,70 +265,6 @@ def project_folder(repo: Path, chosen: str, ask: Ask, say: Callable[[str], objec
     return False
 
 
-def _saved(store: Store, say: Callable[[str], object]) -> tuple[Profile | None, bool, str, str]:
-    """The saved profile setup may replace, as ``(prev, unreadable, source, target)``.
-
-    *source* is the digest of this clone's old profile file when its role overrides cannot be inspected, or ``absent``
-    when only the shared profile is unreadable; *target* is the digest of the shared profile it is confirmed against.
-    Readability and those digests come from one observation of the same bytes, taken now, so a stale open-time error
-    never offers a replacement for a file that reads. A readable profile is never replaced for its old roles.
-    """
-    reason: StoreError | None = None
-    try:
-        prev = store.read_profile()
-    except StoreError as exc:  # setup replaces a profile it cannot read; confirming saves the new one
-        prev, reason = None, exc
-    digest, now = roles_move.snapshot(store.root / profile_share.PROFILE)
-    # unshared: the shared profile is this same local file, so its target is the bytes just observed
-    target, target_now = roles_move.snapshot(profile_share.path(store)) if store.shared else (digest, now)
-    if now is None:
-        if store.deferred_roles is not None:
-            msg = "the old profile can be read now; run setup again to review it"
-            raise StoreError(msg)
-        if reason is None:
-            return prev, False, "", ""
-        if store.shared and digest == profile_share.ABSENT:  # the shared profile alone is unreadable
-            return _shared_only(target, target_now, reason, say)
-        if target_now is None:  # the destination reads now: the error came from elsewhere, so nothing is replaced
-            why = failure(reason)
-            msg = f"the saved profile could not be read ({why}) and reads now; nothing was replaced; run setup again"
-            raise StoreError(msg)
-        if not target:
-            raise target_now
-        _announce(reason, say)
-        return None, True, digest, target
-    if prev is not None or not digest:  # a readable shared profile with an unreadable clone file: open refuses it
-        raise now
-    if not target:  # the shared profile cannot be read to a digest: its own error is the explanation
-        raise target_now or now
-    _announce(reason or now, say)
-    return None, True, digest, target
-
-
-def _shared_only(
-    target: str, target_now: RoleSourceError | None, reason: StoreError, say: Callable[[str], object]
-) -> tuple[Profile | None, bool, str, str]:
-    """The replacement of a shared profile that is unreadable while the clone has no profile to bind."""
-    if target_now is None:  # it reads now: the new bytes were not what the owner was shown, so nothing is replaced
-        if target == profile_share.ABSENT:
-            raise reason
-        why = failure(reason)
-        msg = f"the shared profile could not be read ({why}) and can be read now; run setup again to review it"
-        raise StoreError(msg)
-    if not target:
-        raise target_now
-    _announce(reason, say)
-    return None, True, profile_share.ABSENT, target
-
-
-def _announce(cause: Exception, say: Callable[[str], object]) -> None:
-    say(f"The saved profile cannot be read ({failure(cause)}); detecting a new one.")
-    say(
-        "Confirming replacement discards the unreadable profile, including any unrecoverable legacy role "
-        "overrides; declining keeps it."
-    )
-
-
 def run(
     repo: Path,
     confirms: list[tuple[str, str]],
@@ -381,10 +285,11 @@ def run(
         lambda t: sys.stdout.write(t + "\n"),
     )
     if receipt := profile_repair.pending(store):  # an owner-confirmed replacement that was not yet published
-        if not _publish_repair(store, receipt, say, resumed=True):
+        if not publish_repair(store, receipt, say, resumed=True):
             return 1
         return _settle(store, receipt.profile, say, _project_files(repo, python, local_files, ask, say))
-    prev, unreadable, source, target = _saved(store, say)
+    found = saved(store, say)
+    prev = found[0]
     writer = github_writer.of(store, repo, detecting=True)
     checks = readiness.check(repo, prev, writer)
     say("Readiness")
@@ -393,7 +298,7 @@ def run(
         where = "" if repo == Path.cwd().resolve() else f" (in {repo})"  # git commands act on the folder they run in
         say(f"Next{where}: {failed[0].fix}")
         return 1
-    prof = profile.detect(repo, profile.provider(prev or Profile(), repo, writer), prev)
+    prof = detect(repo, prev, writer)
     for key, value in confirms:
         prof = profile.confirm(prof, key, value, datetime.now(UTC))
     say(render(prof))
@@ -408,12 +313,8 @@ def run(
     if prof.confirmed_at is None:
         say("Profile not confirmed; nothing was saved. Run setup again to confirm it.")
         return 1
-    if source:
-        receipt = profile_repair.stage(store, prof, source, target)
-        if not _publish_repair(store, receipt, say, resumed=False):
-            return 1
-    else:
-        store.write_profile(prof, replace_unreadable=unreadable)
+    if not keep(store, prof, found, say):
+        return 1
     return _settle(store, prof, say, _project_files(repo, python, local_files, ask, say))
 
 
@@ -422,22 +323,6 @@ def _project_files(
 ) -> Callable[[], None]:
     given, local_ask = local_files == "yes", ask if local_files == "ask" else lambda _q: ""
     return partial(write_project_files, repo, python, local_ask, say, given=given)
-
-
-def _publish_repair(
-    store: Store, receipt: profile_repair.Receipt, say: Callable[[str], object], *, resumed: bool
-) -> bool:
-    """Publish the owner's confirmed replacement of an unreadable old profile; False after saying why it did not."""
-    try:
-        notice = profile_repair.publish(store, receipt, resumed=resumed)
-    except (SourceChangedError, SharedSyncError, OldProfileUnreadableError) as exc:
-        say(str(exc))
-        return False
-    if notice:  # the replacement is staged and kept for the next setup: nothing is retired yet
-        say(notice)
-        say("The replacement is kept; run setup again to publish it.")
-        return False
-    return True
 
 
 def _settle(store: Store, prof: Profile, say: Callable[[str], object], project_files: Callable[[], None]) -> int:
@@ -449,8 +334,19 @@ def _settle(store: Store, prof: Profile, say: Callable[[str], object], project_f
     return 0
 
 
-def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], object], *, given: bool) -> None:
+def write_project_files(  # noqa: PLR0913 - the CLI's questions or the dialog's ticks
+    repo: Path,
+    python: str,
+    ask: Ask,
+    say: Callable[[str], object],
+    *,
+    given: bool,
+    agreed: dict[str, bool] | None = None,
+) -> None:
     """The chat server, the memory server and the harness key, each written only with its own consent.
+
+    *agreed* holds the dialog's answer for each file by key (``task``, ``server``, ``memory``, ``harness``); without
+    it each is asked, or given by *given*.
 
     The memory server is offered only once a shared folder holds the project: it keeps memory nowhere else.
 
@@ -462,11 +358,17 @@ def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], 
     tasks = repo / ".vscode" / "tasks.json"
     if has_task(tasks):
         question = f"Remove the folder-open task '{TASK}' an earlier setup wrote into .vscode/tasks.json?"
-        say(consent(repo, tasks, without_task, question, ask, yes=given).replace("written", "rewritten", 1))
+        say(
+            consent(repo, tasks, without_task, question, _asker(ask, agreed, "task"), yes=given).replace(
+                "written", "rewritten", 1
+            )
+        )
     say("Delivery runs in OwlBear: run `owlbear start`, then add this project on its page.")
     question = "Register the Delivery chat server in .mcp.json (kept out of git)?"
     local = portable(python)  # each client starts a project server in its repository
-    server = consent(repo, repo / ".mcp.json", lambda d: with_server(d, local), question, ask, yes=given)
+    server = consent(
+        repo, repo / ".mcp.json", lambda d: with_server(d, local), question, _asker(ask, agreed, "server"), yes=given
+    )
     say(server)
     if not server.startswith("written"):
         snippet = json.dumps(with_server({}, python, repo)["mcpServers"])
@@ -478,7 +380,14 @@ def write_project_files(repo: Path, python: str, ask: Ask, say: Callable[[str], 
         say(f"Memory server not registered: {why}")
     else:
         question = "Register the memory server in .mcp.json for New Change's shaper (kept out of git)?"
-        say(consent(repo, repo / ".mcp.json", lambda d: with_memory(d, local), question, ask, yes=given))
+        memory = _asker(ask, agreed, "memory")
+        say(consent(repo, repo / ".mcp.json", lambda d: with_memory(d, local), question, memory, yes=given))
     question = f"Set {window_files.HARNESS} in .vscode/settings.json for New Change's Copilot chat (kept out of git)?"
     settings = repo / window_files.SETTINGS  # the window reads the key only when it starts (TD-275)
-    say(consent(repo, settings, lambda d: {**d, window_files.HARNESS: True}, question, ask, yes=given))
+    harness = _asker(ask, agreed, "harness")
+    say(consent(repo, settings, lambda d: {**d, window_files.HARNESS: True}, question, harness, yes=given))
+
+
+def _asker(ask: Ask, agreed: dict[str, bool] | None, key: str) -> Ask:
+    """The CLI's *ask*, or the dialog's answer for *key* given as one."""
+    return ask if agreed is None else lambda _q: "y" if agreed.get(key) else ""

@@ -161,7 +161,8 @@ def _config(probe: Probe, *key: str) -> str:
     return "" if code else text.strip()
 
 
-def _signing(probe: Probe) -> Check:
+def signing(probe: Probe) -> Check:
+    """Whether commits can be signed as Git requires; a locked or missing key is the failure."""
     try:
         return _signed(probe)
     except _UnreadSettingError as exc:
@@ -212,10 +213,11 @@ def readiness(host: str, probe: Probe, network: str | None, copilot: str | None,
     said = text if code or not text else text.splitlines()[0]  # a failure whole; a version, its first line
     detail = f"{copilot}: {said}" if copilot else said
     out.append(Check("copilot cli", ok=code == 0, detail=detail, fix=copilot_cli.FIX))
-    return [*out, _identity(probe), _signing(probe)]
+    return [*out, identity(probe), signing(probe)]
 
 
-def _identity(probe: Probe) -> Check:
+def identity(probe: Probe) -> Check:
+    """Whether Git has an author name and email."""
     fix = 'Run `git config --global user.name "Your Name"` and `git config --global user.email you@example.com`'
     try:
         name, email = _config(probe, "user.name"), _config(probe, "user.email")
