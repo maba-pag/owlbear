@@ -223,6 +223,9 @@ def _conflict(found: dict[str, Any]) -> str:
     if remote and not remote["empty"] and git != "commits" and found["state"]["files"]:
         return (f"{found['folder']} has files but no commits, and {found['repository']} has commits: "
                 "pull them or move the files away first")  # fmt: skip
+    if remote and not remote["empty"] and git == "commits" and not found["origin"]:
+        return (f"{found['folder']} has commits of its own and no origin, so it is no clone of {found['repository']}: "
+                "choose another folder, or set its origin to that repository if it is a clone")  # fmt: skip
     return ""
 
 

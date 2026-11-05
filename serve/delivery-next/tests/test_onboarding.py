@@ -935,3 +935,13 @@ def test_a_push_that_landed_before_it_was_tracked_is_tracked_on_resume(jobs, tmp
     assert stage(info, "push")["state"] == "failed"
     settle(jobs, jobs.resume(info["id"])["id"])
     assert git(Path(found["folder"]), "rev-parse", "--abbrev-ref", "@{u}") == "origin/main"
+
+
+def test_a_folder_with_its_own_commits_and_no_origin_is_no_clone_of_a_repository(hub, jobs, tmp_path):
+    hub.add("ada/meter", commits=True)
+    folder = tmp_path / "meter"
+    folder.mkdir()
+    git(folder, "init", "-q", "-b", "main")
+    git(folder, "commit", "-q", "--allow-empty", "-m", "mine")
+    found = jobs.probe({"kind": "github", "repository": "ada/meter", "folder": str(folder)})
+    assert "has commits of its own and no origin" in found["refusal"]
