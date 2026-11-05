@@ -158,7 +158,7 @@ def _target(start: dict[str, Any]) -> tuple[str, bool, str, Path, str]:
     else:
         folder = Path(start.get("folder", ""))
         name = folder.name
-    return kind, github, repository, folder.expanduser().absolute(), name
+    return kind, github, repository, folder.expanduser().resolve(), name
 
 
 def probe(start: dict[str, Any]) -> dict[str, Any]:

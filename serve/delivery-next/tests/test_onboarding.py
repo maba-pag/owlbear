@@ -547,3 +547,13 @@ def test_finish_setup_on_a_registered_clone_changes_its_ruleset_and_says_what_is
         expect(modal.get_by_role("button", name="New Change")).to_have_count(0)
     pull = hub.rulesets["ada/proj"][7]["rules"][2]["parameters"]
     assert (sorted(pull["allowed_merge_methods"]), pull["required_approving_review_count"]) == (["merge", "squash"], 0)
+
+
+def test_a_registered_clone_is_found_through_a_linked_path(hub, jobs, tmp_path):
+    hub.add("ada/proj", commits=True)
+    folder = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/proj.git", "proj", Access.LOCAL))
+    entry = registry.register(folder)
+    (tmp_path / "linked").symlink_to(tmp_path)
+    found = jobs.probe({"kind": "folder", "folder": str(tmp_path / "linked" / "proj")})
+    assert found["registered"] == entry.id
+    assert "register" not in found["stages"]
