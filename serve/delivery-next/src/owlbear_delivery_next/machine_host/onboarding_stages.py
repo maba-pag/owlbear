@@ -88,8 +88,8 @@ def commit(job: Job) -> dict[str, Any]:
         msg = "the folder's files are committed only after the secrets warning was shown and confirmed"
         raise StageError(msg)
     job.intend("commit", "write the starter files and make the first commit")
-    written = onboarding_git.starter_files(path, plan["name"], ci, readme=not had_files)
-    return {"sha": onboarding_git.first_commit(path, "First commit"), "ci": ci, "written": written}
+    onboarding_git.starter_files(path, plan["name"], ci, readme=not had_files)
+    return {"sha": onboarding_git.first_commit(path, "First commit"), "ci": ci}
 
 
 def repository(job: Job) -> dict[str, Any]:
@@ -191,12 +191,12 @@ def _change(job: Job, client: GhClient, remote: repo_target.RepoState, rules: br
     plan = job.plan
     if (ident := branch_rules.one_ruleset(rules)) is None:
         return {"applied": False, "listed": True}
-    seen = probe.rules_view(plan["repository"], rules, probe.method_settings(remote))
+    seen = probe.rules_view(plan["repository"], rules, {m.value for m in remote.methods})
     if seen["items"] != plan.get("rules_items"):
         msg = f"the branch's rules changed since Choices.\nShown then: {plan.get('rules_items')}\nNow: {seen['items']}"
         raise StageError(msg)
     whole = branch_rules.read_ruleset(client, plan["repository"], ident)
-    body = branch_rules.changed(whole, plan.get("needs", []), plan.get("advice", []), "merge")
+    body = branch_rules.changed(whole, plan.get("needs", []), plan.get("advice", []))
     if not (fields := branch_rules.differences(whole, body)):
         return {"applied": False, "why": branch_rules.NOTHING}
     _sending(job, ident, body, f"change ruleset {ident}: {'; '.join(fields)}")

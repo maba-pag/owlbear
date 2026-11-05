@@ -146,10 +146,6 @@ def folder_state(path: Path) -> FolderState:
     )
 
 
-def _target(target_url: str) -> tuple[str, ...]:
-    return ("-c", f"remote.origin.url={target_url}") if target_url else ()
-
-
 def target_probe(path_or_parent: Path, target_url: str) -> Probe:
     """``probe_in`` the folder or its nearest existing parent, every ``git config`` reading *target_url* as ``origin``.
 
@@ -159,7 +155,7 @@ def target_probe(path_or_parent: Path, target_url: str) -> Probe:
 
     def run(argv: list[str], env: Mapping[str, str] | None = None, /) -> tuple[int, str]:
         if target_url and len(argv) > 1 and Path(argv[0]).name == "git" and argv[1] == "config":
-            argv = [argv[0], *_target(target_url), *argv[1:]]
+            argv = [argv[0], "-c", f"remote.origin.url={target_url}", *argv[1:]]
         return inner(argv, env)
 
     return run
@@ -183,22 +179,18 @@ def write_author(path: Path, name: str, email: str) -> None:
     _git(path, "config", "--local", "user.email", email)
 
 
-def starter_files(path: Path, name: str, ci: bool, *, readme: bool = True) -> list[str]:  # noqa: FBT001 - the tick
-    """Write a first commit's starter files and return their paths relative to *path*; never a ``.gitignore``.
+def starter_files(path: Path, name: str, ci: bool, *, readme: bool = True) -> None:  # noqa: FBT001 - the tick
+    """Write a first commit's starter files; never a ``.gitignore``.
 
     ``README.md`` holds ``# <name>`` (skipped with *readme* off, for a folder that has files); with *ci*, ``CI_PATH``
     holds one job ``CI`` run on ``push`` and ``pull_request``.
     """
-    written = []
     if readme:
         (path / "README.md").write_text(f"# {name}\n", encoding="utf-8")
-        written.append("README.md")
     if ci:
         workflow = path / CI_PATH
         workflow.parent.mkdir(parents=True, exist_ok=True)
         workflow.write_text(CI_WORKFLOW, encoding="utf-8")
-        written.append(CI_PATH)
-    return written
 
 
 def head(path: Path) -> str:

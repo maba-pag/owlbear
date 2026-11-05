@@ -15,10 +15,7 @@ from owlbear_delivery_next.github.provider import FailureCode, MergeMethod, Prov
 if TYPE_CHECKING:
     from owlbear_delivery_next.github.gh_client import GhClient, Json
 
-FIELDS = (
-    "nameWithOwner,isEmpty,defaultBranchRef,mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed,viewerPermission,"
-    "visibility,id"
-)
+FIELDS = "nameWithOwner,isEmpty,defaultBranchRef,mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed,visibility,id"
 _UNRESOLVED = "could not resolve to a repository"  # gh's answer for a repository that is absent or hidden from us
 
 
@@ -31,7 +28,6 @@ class RepoState:
     empty: bool
     default_branch: str  # "" while empty
     methods: frozenset[MergeMethod]  # the merge methods its settings allow
-    permission: str  # the account's: ADMIN, MAINTAIN, WRITE, TRIAGE or READ
     visibility: str  # private, public or internal
 
 
@@ -63,7 +59,6 @@ def view(client: GhClient, repository: str) -> RepoState | None:
             empty=r["isEmpty"] is True,
             default_branch=r["defaultBranchRef"]["name"],
             methods=frozenset(m for m, key in allowed if r[key] is True),
-            permission=r["viewerPermission"],
             visibility=r["visibility"].casefold(),
         )
     except (KeyError, TypeError, AttributeError) as exc:

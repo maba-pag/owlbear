@@ -184,7 +184,7 @@ function show() {
   render(view(), document.getElementById("page"));
 }
 
-await defined(["p-heading", "p-text", "p-button", "p-input-text", "p-tag", "p-inline-notification"]);
+await defined(["p-heading", "p-text", "p-button", "p-tag", "p-inline-notification"]);
 for (const kind of ["owlbear-machine", "owlbear-polled"]) document.addEventListener(kind, show);
 show();
 runs();

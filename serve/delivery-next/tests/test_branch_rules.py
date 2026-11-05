@@ -11,7 +11,7 @@ from owlbear_delivery_next.github.gh_client import GhClient
 from owlbear_delivery_next.github.provider import ProviderError
 
 REPO = "boecht/sandbox"
-ALL = {"merge": True, "squash": True, "rebase": True}
+ALL = {"merge", "squash", "rebase"}
 PLAN = "Upgrade to GitHub Pro or make this repository public to enable this feature."
 # The live ha-addon-virtual-meter ruleset (GET rulesets/11391913, 2026-11-05): it meets every need and every advice.
 HA = {
@@ -82,7 +82,7 @@ def body(whole):
 
 
 def advice(rules):
-    return {i.key: i for i in br.compare(rules, "merge").advice}
+    return {i.key: i for i in br.compare(rules).advice}
 
 
 def test_two_rulesets_allow_only_the_methods_both_pull_request_rules_allow():
@@ -91,8 +91,8 @@ def test_two_rulesets_allow_only_the_methods_both_pull_request_rules_allow():
         ruleset(pull(allowed_merge_methods=["merge", "rebase"]), ruleset_id=8),
     )
     assert br.allowed_methods(ALL, rules) == {"merge"}
-    assert br.allowed_methods({"merge": False, "squash": True, "rebase": True}, rules) == set()
-    assert br.allowed_methods({"merge": False, "squash": True, "rebase": True}, br.Rules()) == {"squash", "rebase"}
+    assert br.allowed_methods({"squash", "rebase"}, rules) == set()
+    assert br.allowed_methods({"squash", "rebase"}, br.Rules()) == {"squash", "rebase"}
 
 
 @pytest.mark.parametrize(
@@ -105,7 +105,7 @@ def test_two_rulesets_allow_only_the_methods_both_pull_request_rules_allow():
 )
 def test_linear_history_drops_merge_commits_and_conflicts(rules, where):
     assert br.allowed_methods(ALL, rules) == {"squash", "rebase"}
-    conflicts = [(i.key, i.sentence) for i in br.compare(rules, "merge").unmet if i.key in br.NEEDS]
+    conflicts = [(i.key, i.sentence) for i in br.compare(rules).unmet if i.key in br.NEEDS]
     assert conflicts == [
         ("linear_history", f"rule required_linear_history in {where} conflicts: Delivery needs merge commits")
     ]
@@ -118,7 +118,7 @@ def test_a_rule_excluding_merge_conflicts_and_ticking_changes_its_methods_only()
         {"type": "merge_queue", "parameters": {"merge_method": "SQUASH"}},
         {"type": "required_linear_history"},
     )
-    unmet = br.compare(effective(whole), "merge").unmet
+    unmet = br.compare(effective(whole)).unmet
     methods = "rule pull_request in ruleset 7 conflicts: Delivery needs merge among its allowed merge methods"
     assert [(i.key, i.source, i.sentence) for i in unmet if i.key in br.NEEDS] == [
         ("merge_method", 7, f"{methods}, now squash"),
@@ -126,10 +126,10 @@ def test_a_rule_excluding_merge_conflicts_and_ticking_changes_its_methods_only()
     ]
     expected = body(whole)
     expected["rules"][1]["parameters"]["allowed_merge_methods"] = ["squash", "merge"]
-    assert br.changed(whole, {"merge_method"}, set(), "merge") == expected
+    assert br.changed(whole, {"merge_method"}, set()) == expected
     del expected["rules"][3]
-    assert br.changed(whole, set(br.NEEDS), set(), "merge") == expected
-    assert [i for i in br.compare(effective(expected | {"id": 7}), "merge").needs if not i.holds] == []
+    assert br.changed(whole, set(br.NEEDS), set()) == expected
+    assert [i for i in br.compare(effective(expected | {"id": 7})).needs if not i.holds] == []
 
 
 @pytest.mark.parametrize(
@@ -155,9 +155,9 @@ def test_ticking_no_approvals_sets_all_three_fields_and_nothing_else():
         "require_code_owner_review": False,
         "require_last_push_approval": False,
     }
-    assert br.changed(whole, set(), {"no_approvals"}, "merge") == expected
+    assert br.changed(whole, set(), {"no_approvals"}) == expected
     assert advice(effective(expected | {"id": 7}))["no_approvals"].holds
-    assert br.changed(whole, set(), set(), "merge") == body(whole)
+    assert br.changed(whole, set(), set()) == body(whole)
 
 
 def checks(*contexts, strict):
@@ -174,26 +174,26 @@ def test_up_to_date_is_offered_only_with_a_required_check_and_never_invents_one(
         assert (item.applicable, item.holds) == (False, False)
         sentence = "Require branches to be up to date before merging: takes effect only with a required check"
         assert item.sentence == sentence
-        assert br.changed(without, set(), {"up_to_date"}, "merge") == body(without)
+        assert br.changed(without, set(), {"up_to_date"}) == body(without)
     loose = ruleset(pull(), checks("CI", strict=False))
     item = advice(effective(loose))["up_to_date"]
     assert (item.applicable, item.holds, item.source) == (True, False, 7)
     expected = body(loose)
     expected["rules"][1]["parameters"]["strict_required_status_checks_policy"] = True
-    assert br.changed(loose, set(), {"up_to_date"}, "merge") == expected
+    assert br.changed(loose, set(), {"up_to_date"}) == expected
 
 
 def test_rules_that_meet_every_need_and_advice_leave_nothing_to_change():
-    comparison = br.compare(effective(HA), "merge")
+    comparison = br.compare(effective(HA))
     assert (comparison.unmet, comparison.summary) == ((), "nothing to change")
-    assert br.changed(HA, set(), set(), "merge") == body(HA)
+    assert br.changed(HA, set(), set()) == body(HA)
 
 
 @pytest.mark.parametrize("require_ci", [True, False])
 def test_owlbears_new_ruleset_meets_every_need_and_advice(require_ci):
     new = br.new_ruleset("main", require_ci=require_ci)
     rules = effective(new | {"id": 1})
-    assert br.compare(rules, "merge").unmet == ()
+    assert br.compare(rules).unmet == ()
     assert br.allowed_methods(ALL, rules) == {"merge"}
     checks = [r["parameters"] for r in new["rules"] if r["type"] == "required_status_checks"]
     assert checks == (
@@ -205,7 +205,7 @@ def test_owlbears_new_ruleset_meets_every_need_and_advice(require_ci):
 
 
 def test_differences_name_a_changed_approval_count_and_bypass_actor_and_ignore_githubs_own_fields():
-    sent = br.changed(ruleset(pull(), {"type": "deletion"}), set(), set(), "merge")
+    sent = br.changed(ruleset(pull(), {"type": "deletion"}), set(), set())
     answer = copy.deepcopy(sent) | {"id": 7, "node_id": "RRS_x", "source": REPO, "updated_at": "now", "_links": {}}
     answer["rules"].reverse()
     answer["rules"][1]["parameters"]["dismiss_stale_reviews_on_push"] = False  # a default GitHub adds

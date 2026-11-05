@@ -145,11 +145,11 @@ class Job:
         }
 
 
-def new_receipt(plan: dict[str, Any], names: list[str]) -> dict[str, Any]:
+def new_receipt(plan: dict[str, Any]) -> dict[str, Any]:
     """A receipt for a job not started yet."""
     now = datetime.now(UTC).isoformat()
     ident = job_id(plan["folder"], plan.get("repository", ""))
-    stages = [{"name": n, "state": "pending", "detail": "", "result": {}} for n in names]
+    stages = [{"name": n, "state": "pending", "detail": "", "result": {}} for n in plan["stages"]]
     return {"id": ident, "plan": plan, "stages": stages, "created_at": now, "updated_at": now, "ended": ""}
 
 

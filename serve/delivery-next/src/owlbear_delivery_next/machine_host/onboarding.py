@@ -85,7 +85,7 @@ class Onboarding:
             raise OnboardingError(503, why)
         if unknown := [s for s in plan.get("stages", []) if s not in STAGES]:
             raise OnboardingError(422, f"unknown stages: {', '.join(unknown)}")
-        receipt = onboarding_job.new_receipt(plan, list(plan["stages"]))
+        receipt = onboarding_job.new_receipt(plan)
         with self.lock:
             self._load()
             job = self.jobs.get(receipt["id"])

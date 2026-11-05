@@ -43,7 +43,7 @@ def _client(tmp_path, *answers):
 def test_an_empty_repository_is_read_with_its_merge_settings(tmp_path):
     client, gh = _client(tmp_path, (0, json.dumps(EMPTY), ""))
     assert repo_target.view(client, "o/r") == repo_target.RepoState(
-        repository="o/r", id="R_kgDOabc", empty=True, default_branch="", visibility="private", permission="ADMIN",
+        repository="o/r", id="R_kgDOabc", empty=True, default_branch="", visibility="private",
         methods=frozenset({MergeMethod.MERGE, MergeMethod.REBASE}),
     )  # fmt: skip
     assert gh.calls == [("gh", "repo", "view", "o/r", "--json", repo_target.FIELDS)]

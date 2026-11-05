@@ -53,7 +53,7 @@ def _rules(job: Job, store: Store) -> list[str]:
     if (remote := repo_target.view(gh, repository)) is None:
         return [f"merge method: {repository} can't be read"]
     rules = branch_rules.read(gh, repository, remote.default_branch or "main")
-    allowed = branch_rules.allowed_methods(probe.method_settings(remote), rules)
+    allowed = branch_rules.allowed_methods({m.value for m in remote.methods}, rules)
     out = []
     if not allowed:
         out.append("merge method: this repository and its rules allow none; change them on GitHub")
@@ -61,7 +61,7 @@ def _rules(job: Job, store: Store) -> list[str]:
         shown = method.value if method else "unset"
         out.append(f"merge method: {shown} is not allowed here ({', '.join(sorted(allowed))} are); set it on Settings")
     if job.plan.get("protect") and job.result("protection").get("listed"):  # OwlBear could only list the changes
-        unmet = [i for i in branch_rules.compare(rules, "merge").needs if not i.holds]
+        unmet = [i for i in branch_rules.compare(rules).needs if not i.holds]
         out += [f"rules: {i.sentence}; change it on GitHub: {branch_rules.settings_url(repository, i.source)}"
                 for i in unmet]  # fmt: skip
     return out

@@ -110,8 +110,7 @@ def _github(found: dict[str, Any], repository: str, folder: Path) -> RepoState |
     if state is None:
         return None
     methods = {m.value for m in state.methods}
-    found["github"] = {"empty": state.empty, "default_branch": state.default_branch, "methods": sorted(methods),
-                       "visibility": state.visibility, "permission": state.permission}  # fmt: skip
+    found["github"] = {"empty": state.empty, "methods": sorted(methods)}
     branch = state.default_branch or "main"
     try:
         rules = branch_rules.read(client(repository, found["account"], onboarding_git.nearest_existing(folder)),
@@ -119,19 +118,14 @@ def _github(found: dict[str, Any], repository: str, folder: Path) -> RepoState |
     except (ProviderError, AccountMissing) as exc:
         found["refusal"] = f"the branch rules of {repository} could not be read: {failure(exc)}"
         return state
-    found["rules"] = rules_view(repository, rules, method_settings(state))
+    found["rules"] = rules_view(repository, rules, methods)
     return state
 
 
-def method_settings(state: RepoState) -> dict[str, bool]:
-    """Which merge methods the repository's settings allow, each named."""
-    return {m: any(x.value == m for x in state.methods) for m in branch_rules.METHODS}
-
-
-def rules_view(repository: str, rules: branch_rules.Rules, settings: dict[str, bool]) -> dict[str, Any]:
+def rules_view(repository: str, rules: branch_rules.Rules, methods: set[str]) -> dict[str, Any]:
     """What Choices shows of the branch's rules: the allowed methods, the sources, and the comparison."""
-    allowed = sorted(branch_rules.allowed_methods(settings, rules))
-    comparison = branch_rules.compare(rules, "merge")
+    allowed = sorted(branch_rules.allowed_methods(methods, rules))
+    comparison = branch_rules.compare(rules)
     links = {str(s): branch_rules.settings_url(repository, s) for s in branch_rules.sources(rules)}
     items = [
         {"key": i.key, "source": str(i.source), "sentence": i.sentence, "holds": i.holds, "applicable": i.applicable}
@@ -175,7 +169,7 @@ def probe(start: dict[str, Any]) -> dict[str, Any]:
             repository = f"{owner}/{name}"
         except ValueError:
             repository = ""
-    found: dict[str, Any] = {"kind": kind, "folder": str(folder), "name": name, "github": None, "rules": None,
+    found: dict[str, Any] = {"folder": str(folder), "name": name, "github": None, "rules": None,
                              "repository": repository, "origin": state.origin or "", "refusal": "",
                              "state": {"exists": state.exists, "empty": state.empty, "files": state.has_files,
                                        "git": state.git, "workflows": state.has_workflows},

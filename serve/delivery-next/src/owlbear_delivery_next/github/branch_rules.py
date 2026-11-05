@@ -13,7 +13,7 @@ from owlbear_delivery_next.github.gh_client import Json, Missing, invalid, repo
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Mapping
+    from collections.abc import Collection
 
     from owlbear_delivery_next.github.gh_client import GhClient
 
@@ -126,12 +126,12 @@ def _linear(rules: Rules) -> list[Source]:
     return found + ([CLASSIC] if rules.classic is not None and _on(rules.classic, "required_linear_history") else [])
 
 
-def allowed_methods(settings: Mapping[str, bool], rules: Rules) -> set[str]:
-    """The merge methods *settings* allow, limited by every pull-request rule, without ``merge`` under linear history.
+def allowed_methods(methods: Collection[str], rules: Rules) -> set[str]:
+    """The repository's *methods*, limited by every pull-request rule, without ``merge`` under linear history.
 
     A pull-request rule without ``allowed_merge_methods`` limits nothing.
     """
-    allowed = {m for m in METHODS if settings[m]}
+    allowed = set(methods)
     for r in rules.rules:
         if r["type"] == "pull_request" and (limit := _params(r).get("allowed_merge_methods")) is not None:
             allowed &= set(limit)
@@ -204,25 +204,25 @@ def _facts(rules: Rules) -> dict[Source, dict[str, bool]]:
     return facts | ({CLASSIC: _classic_facts(rules.classic)} if rules.classic is not None else {})
 
 
-def _needs(rules: Rules, method: str) -> list[Item]:
+def _needs(rules: Rules) -> list[Item]:
+    """What Delivery's merge commits need: merge allowed by every pull-request rule, and no linear history."""
     items = []
     for r in (r for r in rules.rules if r["type"] == "pull_request"):
         where, limit = _name(rules, r["ruleset_id"]), _params(r).get("allowed_merge_methods")
-        if limit is None or method in limit:
-            said = f"rule pull_request in {where} allows {method}"
+        if limit is None or "merge" in limit:
+            said = f"rule pull_request in {where} allows merge"
         else:
-            said = f"rule pull_request in {where} conflicts: Delivery needs {method} among its allowed merge methods"
+            said = f"rule pull_request in {where} conflicts: Delivery needs merge among its allowed merge methods"
             said += f", now {', '.join(limit) or 'none'}"
-        items.append(Item("merge_method", r["ruleset_id"], said, holds=limit is None or method in limit))
+        items.append(Item("merge_method", r["ruleset_id"], said, holds=limit is None or "merge" in limit))
     if not items:
         items.append(Item("merge_method", None, "no pull-request rule limits the merge method", holds=True))
     linear = _linear(rules)
-    for s in linear if method == "merge" else []:
+    for s in linear:
         said = f"rule required_linear_history in {_name(rules, s)} conflicts: Delivery needs merge commits"
         items.append(Item("linear_history", s, said, holds=False))
-    if not linear or method != "merge":
-        said = f"linear history allows {method}" if linear else "no linear history is required"
-        items.append(Item("linear_history", None, said, holds=True))
+    if not linear:
+        items.append(Item("linear_history", None, "no linear history is required", holds=True))
     return items
 
 
@@ -249,9 +249,9 @@ def _advice(rules: Rules) -> list[Item]:
     return items
 
 
-def compare(rules: Rules, method: str) -> Comparison:
-    """Compare the branch's rules with what merging by *method* needs and with OwlBear's advice."""
-    return Comparison(needs=tuple(_needs(rules, method)), advice=tuple(_advice(rules)))
+def compare(rules: Rules) -> Comparison:
+    """Compare the branch's rules with what Delivery's merge commits need and with OwlBear's advice."""
+    return Comparison(needs=tuple(_needs(rules)), advice=tuple(_advice(rules)))
 
 
 def _pull_request(methods: list[str], *, resolution: bool) -> Json:
@@ -282,19 +282,19 @@ def _typed(rules: list[Json], kind: str) -> list[Json]:
     return [r.setdefault("parameters", {}) for r in rules if r["type"] == kind]
 
 
-def _pull_requests(rules: list[Json], needs: Collection[str], advice: Collection[str], method: str) -> None:
+def _pull_requests(rules: list[Json], needs: Collection[str], advice: Collection[str]) -> None:
     """Change every pull-request rule's fields that the named *needs* and ticked *advice* name."""
     for p in _typed(rules, "pull_request"):
         limit = p.get("allowed_merge_methods")
-        if "merge_method" in needs and limit is not None and method not in limit:
-            limit.append(method)
+        if "merge_method" in needs and limit is not None and "merge" not in limit:
+            limit.append("merge")
         if "conversations" in advice:
             p["required_review_thread_resolution"] = True
         if "no_approvals" in advice:
             p.update(_NO_APPROVALS)
 
 
-def changed(ruleset: Json, needs: Collection[str], advice: Collection[str], method: str) -> Json:
+def changed(ruleset: Json, needs: Collection[str], advice: Collection[str]) -> Json:
     """The whole *ruleset* as a ``PUT`` body, changed only in the fields the named *needs* and ticked *advice* name.
 
     A pull-request rule is added, allowing every method, only where the advice needs one; a required check is never
@@ -306,7 +306,7 @@ def changed(ruleset: Json, needs: Collection[str], advice: Collection[str], meth
         rules[:] = [r for r in rules if r["type"] != "required_linear_history"]
     if not _typed(rules, "pull_request") and not {"pull_requests", "conversations"}.isdisjoint(advice):
         rules.append(_pull_request(list(METHODS), resolution=False))
-    _pull_requests(rules, needs, advice, method)
+    _pull_requests(rules, needs, advice)
     for p in _typed(rules, "required_status_checks") if "up_to_date" in advice else []:
         if p.get("required_status_checks"):
             p["strict_required_status_checks_policy"] = True

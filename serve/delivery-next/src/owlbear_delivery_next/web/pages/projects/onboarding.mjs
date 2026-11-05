@@ -95,8 +95,8 @@ function button(label, onclick, { variant = "secondary", name = "" } = {}) {
     @click=${onclick}>${label}</p-button>`;
 }
 
-function text(label, key, { into = s, hint = "", type = "text" } = {}) {
-  return html`<p-input-text label=${label} description=${hint || nothing} type=${type} .value=${live(into[key] ?? "")}
+function text(label, key, { into = s, hint = "" } = {}) {
+  return html`<p-input-text label=${label} description=${hint || nothing} .value=${live(into[key] ?? "")}
     @input=${(e) => { into[key] = e.target.value ?? ""; }}></p-input-text>`;
 }
 

@@ -84,14 +84,18 @@ def test_starter_files_are_a_readme_and_the_ci_workflow_only_when_asked(tmp_path
     plain, ci, only = tmp_path / "plain", tmp_path / "ci", tmp_path / "only"
     for path in (plain, ci, only):
         path.mkdir()
-    assert og.starter_files(plain, "Plain", ci=False) == ["README.md"]
+    og.starter_files(plain, "Plain", ci=False)
     assert (plain / "README.md").read_text() == "# Plain\n"
     assert not (plain / ".github").exists()
-    assert og.starter_files(ci, "Ci", ci=True) == ["README.md", ".github/workflows/ci.yml"]
+    og.starter_files(ci, "Ci", ci=True)
+    assert sorted(str(p.relative_to(ci)) for p in ci.rglob("*") if p.is_file()) == [
+        ".github/workflows/ci.yml",
+        "README.md",
+    ]
     workflow = (ci / og.CI_PATH).read_text()
     assert "on:\n  push:\n  pull_request:\n" in workflow
     assert "jobs:\n  CI:\n" in workflow
-    assert og.starter_files(only, "Only", ci=True, readme=False) == [".github/workflows/ci.yml"]
+    og.starter_files(only, "Only", ci=True, readme=False)
     assert sorted(p.name for p in only.iterdir()) == [".github"]
     assert not any(p.name == ".gitignore" for p in tmp_path.rglob("*"))
 

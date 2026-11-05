@@ -74,7 +74,7 @@ class Hub:
         bare = self.remotes / f"{repository}.git"
         empty = not git(bare, "for-each-ref", "refs/heads")
         methods = frozenset(MergeMethod(m) for m in r["methods"])
-        return repo_target.RepoState(repository, r["id"], empty, "" if empty else "main", methods, "ADMIN",
+        return repo_target.RepoState(repository, r["id"], empty, "" if empty else "main", methods,
                                      r["visibility"])  # fmt: skip
 
     def name_free(self, _client: object, owner: str, name: str) -> bool:
