@@ -309,7 +309,7 @@ def test_each_write_that_is_not_a_projects_runs_as_its_own_repositorys_account(
         assert environment["GH_TOKEN"] == f"tok-{owner}"
 
 
-REPO_VIEW = ["repo", "view", "--json", "nameWithOwner,viewerPermission"]
+REPO_VIEW = ["repo", "view", "--json", readiness.REPO_FIELDS]
 
 
 @pytest.mark.parametrize(("pushes", "ok"), [("maba-pag", False), ("octo-writer", True)])

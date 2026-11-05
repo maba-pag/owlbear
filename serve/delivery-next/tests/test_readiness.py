@@ -22,9 +22,14 @@ from owlbear_delivery_next.state_store import prefs_import, profile_share
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import Store
 
+REPO_VIEW = f"gh repo view --json {readiness.REPO_FIELDS}"
+HEAD = "git rev-parse --verify --quiet HEAD"
+ON_MAIN = (
+    '{"nameWithOwner": "o/r", "viewerPermission": "ADMIN", "isEmpty": false, "defaultBranchRef": {"name": "main"}}'
+)
 READY = {
     "gh --version": (0, "gh version 2.102.0"),
-    "gh repo view --json nameWithOwner,viewerPermission": (0, '{"nameWithOwner": "o/r", "viewerPermission": "ADMIN"}'),
+    REPO_VIEW: (0, ON_MAIN),
     "copilot --version": (0, "1.0.95"),
     "git config user.name": (0, "Ada"),
     "git config user.email": (0, "ada@example.com"),
@@ -57,9 +62,7 @@ def failed(table: dict[str, tuple[int, str]], writer: SimpleNamespace = SIGNED) 
     ("table", "name", "detail"),
     [
         pytest.param({"gh --version": (127, "{W}")}, "github cli", "{W}", id="gh-cli"),
-        pytest.param(
-            {"gh repo view --json nameWithOwner,viewerPermission": (1, "{W}")}, "repository", "{W}", id="repository"
-        ),
+        pytest.param({REPO_VIEW: (1, "{W}")}, "repository", "{W}", id="repository"),
         pytest.param({"copilot --version": (1, "{W}")}, "copilot cli", "copilot: {W}", id="copilot-cli"),
         pytest.param({"git config user.name": (128, "{W}")}, "git identity", "{W}", id="identity-unread"),
         pytest.param(
@@ -73,6 +76,74 @@ def failed(table: dict[str, tuple[int, str]], writer: SimpleNamespace = SIGNED) 
 def test_a_failed_command_s_whole_output_is_its_check_s_detail(table, name, detail, whole_error):
     filled = {argv: (code, said.format(W=whole_error)) for argv, (code, said) in table.items()}
     assert failed(filled) == [(name, detail.format(W=whole_error))]
+
+
+# `gh repo view` of an empty repository, as gh answered it on 2026-11-04
+EMPTY = '{"defaultBranchRef":{"name":""},"isEmpty":true,"nameWithOwner":"o/r","viewerPermission":"ADMIN"}'
+READS = {"gh --version", REPO_VIEW, HEAD, "copilot --version"}
+
+
+@pytest.mark.parametrize(
+    ("remote", "local", "detail", "command"),
+    [
+        pytest.param(
+            EMPTY,
+            (1, ""),
+            "o/r has no commits yet, and neither has this clone",
+            'git add <file> && git commit -m "First commit" && git push -u origin HEAD',
+            id="both-empty",
+        ),
+        pytest.param(
+            ON_MAIN,
+            (1, ""),
+            "o/r has commits on main, but this clone has none",
+            "git pull --set-upstream origin main",
+            id="clone-empty",
+        ),
+        pytest.param(
+            ON_MAIN.replace('"main"', '"release/$USER;x"'),
+            (1, ""),
+            "o/r has commits on release/$USER;x, but this clone has none",
+            "git pull --set-upstream origin 'release/$USER;x'",
+            id="clone-empty-shell-branch",
+        ),
+        pytest.param(
+            EMPTY,
+            (0, "abc123"),
+            "o/r has no commits yet, but this clone has",
+            "git push -u origin HEAD",
+            id="github-empty",
+        ),
+    ],
+)
+def test_a_repository_or_clone_without_commits_fails_first_commit_with_the_commands_that_end_it(
+    remote, local, detail, command
+):
+    ran: list[str] = []
+    said = READY | {REPO_VIEW: (0, remote), HEAD: local}
+
+    def probe(argv: list[str], _env: object = None) -> tuple[int, str]:
+        ran.append(" ".join(argv))
+        return said.get(ran[-1], (0, ""))
+
+    checks = readiness.readiness("github.com", probe, None, "copilot", SIGNED)
+    assert [(c.name, c.detail) for c in checks if not c.ok] == [("first commit", detail)]
+    assert f"`{command}`" in next(c.fix for c in checks if not c.ok)
+    assert {c for c in ran if not c.startswith("git config ")} <= READS  # each probe only reads
+
+
+def test_a_repository_and_clone_with_commits_pass_first_commit_naming_the_default_branch():
+    probe = lambda argv, _env=None: READY.get(" ".join(argv), (0, ""))  # noqa: E731
+    checks = readiness.readiness("github.com", probe, None, "copilot", SIGNED)
+    assert [(c.ok, c.detail) for c in checks if c.name == "first commit"] == [(True, "default branch main")]
+
+
+@pytest.mark.parametrize("code", [128, -15])  # a fatal git error; git killed by a signal
+def test_a_failing_head_probe_fails_first_commit_with_gits_error_whole(code):
+    fatal = "fatal: detected dubious ownership in repository at '/p'\nTo add an exception for this directory, call:"
+    probe = lambda argv, _env=None: (READY | {HEAD: (code, fatal)}).get(" ".join(argv), (0, ""))  # noqa: E731
+    checks = readiness.readiness("github.com", probe, None, "copilot", SIGNED)
+    assert [(c.name, c.detail) for c in checks if not c.ok] == [("first commit", fatal)]
 
 
 @pytest.mark.parametrize("error", [AccountMissing, StoreError])  # gh lacks it; the settings naming it can't be read
@@ -116,7 +187,7 @@ def test_a_probe_that_exits_non_zero_names_its_command_status_and_both_streams(t
 
     monkeypatch.setattr(git_files.subprocess, "run", refused)
     [repo] = [c for c in readiness.publishing("github.com", git_files.probe_in(tmp_path), None, SIGNED) if not c.ok]
-    command = f"CalledProcessError: Command '{['gh', 'repo', 'view', '--json', 'nameWithOwner,viewerPermission']}'"
+    command = f"CalledProcessError: Command '{['gh', 'repo', 'view', '--json', readiness.REPO_FIELDS]}'"
     said = f"{command} returned non-zero exit status 1.\nstderr:\n{whole_error}\nstdout:\n{OUT}"
     assert (repo.name, repo.detail) == ("repository", said)
 

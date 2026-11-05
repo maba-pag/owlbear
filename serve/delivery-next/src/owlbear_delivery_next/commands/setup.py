@@ -390,7 +390,8 @@ def run(
     say("Readiness")
     say("\n".join(f"  {'ok ' if c.ok else 'FIX'} {c.name}: {c.detail}" for c in checks))
     if failed := [c for c in checks if not c.ok]:
-        say(f"Next: {failed[0].fix}")
+        where = "" if repo == Path.cwd().resolve() else f" (in {repo})"  # git commands act on the folder they run in
+        say(f"Next{where}: {failed[0].fix}")
         return 1
     prof = profile.detect(repo, profile.provider(prev or Profile(), repo, writer), prev)
     for key, value in confirms:
