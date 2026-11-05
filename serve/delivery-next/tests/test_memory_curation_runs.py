@@ -436,6 +436,31 @@ def test_a_record_that_cannot_be_opened_stops_the_restart_naming_it_and_the_way_
     assert "aside" in said
 
 
+def test_a_record_that_cannot_be_read_stops_the_restart_with_the_whole_failure(root, monkeypatch, whole_error) -> None:
+    """#971: the refusal carries the read's whole failure, its type and notes included, between its own words."""
+    path = local_home.root() / curation.STATE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{}\n")
+    note = "a note added on the way up"
+
+    def unreadable(_raw):
+        exc = ValueError(whole_error)
+        exc.add_note(note)
+        raise exc
+
+    monkeypatch.setattr(curation.Runs, "model_validate_json", unreadable)
+    with pytest.raises(maintenance.MaintenanceError) as refused:
+        curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
+    assert str(refused.value) == (
+        f"the memory curation ownership record {path} cannot be read:\nValueError: {whole_error}\n{note}\n"
+        "OwlBear can't tell whether a memory curation session it started still runs, so memory curation "
+        "doesn't go on. Stop OwlBear if it still runs, and make sure no copilot process that memory curation "
+        'started still runs: the PIDs under "left" are the ones it recorded, but a session that failed early '
+        f"recorded none. Then move {path} aside, for example to {path}.broken, and start OwlBear again; the "
+        "folders' last runs are forgotten and curate again when due."
+    )
+
+
 def test_pids_left_after_an_earlier_empty_import_are_held_before_they_can_be_cleared(root, monkeypatch) -> None:
     """Review F1: an import already recorded must not let a later host's PIDs be cleared as history."""
     monkeypatch.setattr(processes, "alive", lambda _pid, _created: False)
@@ -639,26 +664,40 @@ def test_an_unverified_session_end_says_its_problems_whole(root, whole_error, ca
 
 
 @pytest.mark.browser
-def test_a_failed_folder_s_whole_reason_shows_on_maintenance(root, tmp_path, pds, whole_error) -> None:
+@pytest.mark.parametrize("unpruned", [False, True], ids=["raised", "unpruned"])
+def test_a_failed_folder_s_whole_reason_shows_on_maintenance(root, pds, whole_error, monkeypatch, unpruned) -> None:
     """#951: a folder's failed run, read as the host's route returns it, shows its whole reason in its Maintenance row;
-    every failed run's reason (raised, or ended unverified) goes through that one line."""
+    every failed run's reason (raised, ended unverified, or its worktree left listed) goes through that one line."""
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     note = f"the session's teardown also failed: OSError: {whole_error}"
+    real, failing = curation_tree._git, []  # noqa: SLF001
+    locked = curation_tree.DataRepoError(f"git worktree failed: locked\n{whole_error}")
+    locked.add_note(note)
+
+    def git_(cwd, *args, **kw):
+        if failing and args == ("worktree", "prune"):
+            raise locked
+        return real(cwd, *args, **kw)
 
     def run(_cfg) -> Run:
+        failing.extend([True] * unpruned)  # the seed's own prune ran
         broke = RuntimeError(whole_error)
         broke.add_note(note)  # as loop_owner.run adds it
         raise broke
 
+    monkeypatch.setattr(curation_tree, "_git", git_)
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
     job.start("owlbear")
     drained(job)
     read, reason = job.read(), f"RuntimeError: {whole_error}\n{note}"
+    if unpruned:
+        listed = f"{curation_tree.LISTED}: DataRepoError: git worktree failed: locked\n{whole_error}\n{note}"
+        reason = f"RuntimeError: {listed}; {reason}"
     assert {f["folder"]: f["reason"] for f in read["folders"]}["owlbear"] == reason
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
-    app = api.create_app(Store(tmp_path, name="shop"), "tok", None)
+    app = api.create_app(Store(root.parent, name="shop"), "tok", None)
     server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_keep_alive=60))
     threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
     while not server.started:

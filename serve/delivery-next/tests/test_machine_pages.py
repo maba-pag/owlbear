@@ -1379,6 +1379,106 @@ def targets(scope) -> list[str]:
 
 
 @pytest.mark.browser
+def test_projects_says_why_the_shared_data_and_a_pass_loading_projects_again_failed_whole(
+    monkeypatch, whole_error
+) -> None:
+    """#971: the shared data the start could not set up, said as that start's finding, and the last failed pass loading
+    the failed projects again, say why whole above the Projects list."""
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    unprovided = data_repo.DataRepoError(whole_error)
+    unprovided.add_note("a note on the place")
+
+    def provision(**_kwargs):
+        raise unprovided
+
+    monkeypatch.setattr(data_place, "provision", provision)
+    machine, server, base = serve()
+    try:
+        host_start._provisioned(machine)  # noqa: SLF001 - the start's own step
+        machine.unretried = unretried = f"RuntimeError: {whole_error}\na note on the pass"  # as the retry loop sets it
+        shared, said = _checks_page(base, "/projects", "#unshared")
+        retried, broke = _checks_page(base, "/projects", "#unretried")
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    unshared = f"at this start, DataRepoError: {whole_error}\na note on the place; `owlbear restart` looks again"
+    assert (machine.unshared, shared, retried) == (
+        unshared, f"Shared data: {unshared}", f"Loading the failed projects again failed: {unretried}"
+    )  # fmt: skip
+    assert said == broke == []
+
+
+@pytest.mark.browser
+def test_projects_says_why_adding_a_project_was_refused_whole(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """#971: the Projects page's alert after Add shows the registry's refusal whole, its note included."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    work = clone(tmp_path / "alpha")
+    refusal = registry.RegistryError(whole_error)
+    refusal.add_note("a note on the refusal")
+
+    def refusing(*_args):
+        raise refusal
+
+    monkeypatch.setattr(registry, "register", refusing)
+    with browsing(monkeypatch, pds) as (page, base):
+        said: list[str] = []  # the refusal's 409 is a console error too; the page itself must not fail
+        page.on("pageerror", lambda e: said.append(str(e)))
+        page.goto(f"{base}/projects#token=t")
+        page.get_by_label("Folder").fill(str(work))
+        page.get_by_role("button", name="Add", exact=True).click()
+        alert = page.locator("#page > [role=alert]")
+        expect(alert).to_be_visible()
+        shown = alert.text_content()
+    assert (shown, said) == (f"RegistryError: {whole_error}\na note on the refusal", [])
+
+
+@pytest.mark.browser
+def test_decisions_says_what_the_start_could_not_do_about_decisions_whole(monkeypatch, whole_error) -> None:
+    """#971: a retired decision index file the start could not remove, and decisions it could not pre-load, say why
+    whole in the Decisions page's error notice; a decision id or file in the text stays as written."""
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    named = f"owlbear/decisions/D-01M5ZE13N37HZAGJ69VWW69X23.md: {whole_error}"
+    unremoved = OSError(named)
+    unremoved.add_note("a note on the removal")
+    unlocated = data_repo.DataRepoError(f"D-01M5ZE13N37HZAGJ69VWW69X23 {whole_error}")
+    unlocated.add_note("a note on the place")
+
+    def refusing(path: Path) -> None:
+        if path.name == "decisions.sqlite":
+            raise unremoved
+        raise FileNotFoundError(path)
+
+    def unplaced() -> Path:
+        raise unlocated
+
+    machine, server, base = serve()
+    try:
+        with monkeypatch.context() as removing:  # only the removal refuses; the fixtures' overrides stay
+            removing.setattr(Path, "unlink", refusing)
+            host_start._retired_index(machine, local_home.root())  # noqa: SLF001 - the start's own step
+        monkeypatch.setattr(data_repo, "locate", unplaced)
+        host_start.warm(machine)
+        text, said = _checks_page(base, "/decisions", "#error")
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    lines = [
+        (
+            f"the retired decision index file decisions.sqlite could not be removed: OSError: {named}"
+            "\na note on the removal"
+        ),
+        (
+            f"decisions of owlbear not pre-loaded: DataRepoError: D-01M5ZE13N37HZAGJ69VWW69X23 {whole_error}"
+            "\na note on the place"
+        ),
+    ]
+    assert machine.undecided == lines
+    assert text == "".join(f"At this start, {line}." for line in lines) + "\n    "
+    assert said == []
+
+
+@pytest.mark.browser
 def test_settings_say_this_machine_s_settings_could_not_be_read_and_read_them_again(
     tmp_path: Path, monkeypatch, pds
 ) -> None:
@@ -1715,7 +1815,7 @@ def test_projects_says_why_a_move_of_the_shared_repository_stopped_whole(
         expect(shop.locator("p-tag")).to_have_text("failed")
         said = shop.locator("p-text").filter(has_text="is not finished")
         expect(said).to_have_count(1)
-        opened = f"its Delivery state cannot be opened: DataRepoError: {unfinished}"
+        opened = f"its Delivery state cannot be opened: StoreError: DataRepoError: {unfinished}"
         assert said.text_content() == f"{opened}; `owlbear data` finishes it"
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
         assert broke == []

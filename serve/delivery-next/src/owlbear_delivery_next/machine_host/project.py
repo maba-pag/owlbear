@@ -10,17 +10,19 @@ from __future__ import annotations
 import contextlib
 import os
 import shlex
+import subprocess
 import threading
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_delivery_next.commands import setup
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.project_host import api, session_slots
-from owlbear_delivery_next.project_host.host import Host, HostRecord, running
+from owlbear_delivery_next.project_host.host import Host, HostRecord, RunnerRecord, running
 from owlbear_delivery_next.runtimes import readiness
-from owlbear_delivery_next.state_store import registry, work_block
+from owlbear_delivery_next.state_store import project_home, registry, work_block
 from owlbear_delivery_next.state_store.decision_impact import OWLBEAR
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 
@@ -71,6 +73,22 @@ class ImportWaitingError(Exception):
     """The clone's file-format state cannot move to its database yet; loading again later retries."""
 
 
+def recorded(repo: Path) -> dict[str, int]:
+    """The sessions a project's runners hold, read from their records while no host serves it (TD-336).
+
+    A record goes only once a host confirms its runner and processes gone, so each one counts; a project whose
+    records cannot be read counts none.
+    """
+    held = {}
+    with contextlib.suppress(OSError, subprocess.CalledProcessError, StoreError):
+        found = project_home.current(repo)
+        for path in (found / "changes").glob("*/runner.json") if found else []:
+            with contextlib.suppress(OSError, ValueError):
+                if sessions := RunnerRecord.model_validate_json(path.read_text()).sessions:
+                    held[path.parent.name] = sessions
+    return held
+
+
 class Project:
     """A registered clone as the machine host serves it."""
 
@@ -106,7 +124,7 @@ class Project:
             store = Store.open(repo)
             fd = os.open(store.root, os.O_RDONLY | os.O_DIRECTORY)
         except (StoreError, OSError) as exc:
-            self.state, self.reason = "failed", f"its Delivery state cannot be opened: {exc}"
+            self.state, self.reason = "failed", f"its Delivery state cannot be opened: {failure(exc)}"
             return
         self.store = store  # readable even when another host serves it: this machine's layer must fit it (TD-336)
         try:
@@ -117,7 +135,7 @@ class Project:
             self.reason = f"another Delivery host (process {other.pid if other else '?'}) serves it; stop that one"
             return
         except (OSError, ValueError) as exc:  # a host.lock that is a link or no file
-            self.state, self.reason = "failed", f"its host lock cannot be taken: {exc}"
+            self.state, self.reason = "failed", f"its host lock cannot be taken: {failure(exc)}"
             return
         finally:
             os.close(fd)
@@ -128,7 +146,7 @@ class Project:
             self.state, self.reason = "failed", str(exc)
         except Exception as exc:  # noqa: BLE001 - one project's failure never stops the machine
             self.stop(drain=0)
-            self.state, self.reason = "failed", f"it could not start: {type(exc).__name__}: {exc}"
+            self.state, self.reason = "failed", f"it could not start: {failure(exc)}"
 
     def _start(
         self, store: Store, record: HostRecord, paused: Callable[[], bool], bind: Callable[[Host], None]

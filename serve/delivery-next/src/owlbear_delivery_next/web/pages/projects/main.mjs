@@ -138,6 +138,9 @@ function view() {
     ${state.error ? html`<p-text role="alert">${state.error}</p-text>` : nothing}
     ${state.said ? html`<p-text role="status">${state.said}</p-text>` : nothing}
     ${why ? html`<p-text role="alert">This list may be out of date: ${why}</p-text>` : nothing}
+    ${machine.unshared ? html`<p-text id="unshared" role="alert">Shared data: ${machine.unshared}</p-text>` : nothing}
+    ${machine.unretried ? html`<p-text id="unretried" role="alert"
+      >Loading the failed projects again failed: ${machine.unretried}</p-text>` : nothing}
     ${own.length ? html`<section aria-labelledby="own-title">
       <p-heading size="lg"><h2 id="own-title">OwlBear</h2></p-heading>${list("own", "OwlBear", own)}</section>`
       : nothing}

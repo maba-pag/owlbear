@@ -274,14 +274,34 @@ def test_first_readers_on_several_threads_parse_once(seeded, parses) -> None:
 
 
 def test_the_host_start_keeps_each_loaded_projects_decisions_and_says_a_view_it_could_not_read(
-    seeded, parses, monkeypatch
+    seeded, parses, monkeypatch, whole_error
 ) -> None:
     said, store = [], SimpleNamespace(shared=seeded.shared, name=PROJECT)
     monkeypatch.setattr(data_repo, "locate", lambda: seeded.shared)
     decision_cache.clear()
-    serve.warm(SimpleNamespace(say=said.append, projects={"p": SimpleNamespace(store=store)}))
-    assert len(said) == 1
-    assert said[0].startswith("decisions of owlbear not pre-loaded: the project owlbear has no folder")
+    machine = SimpleNamespace(say=said.append, projects={"p": SimpleNamespace(store=store)}, undecided=[])
+    serve.warm(machine)
+    unavailable = (
+        f"DecisionsUnavailable: the project owlbear has no folder in {seeded.shared.root}, "
+        "so its decisions cannot be told from none"
+    )
+    assert said == machine.undecided == [f"decisions of owlbear not pre-loaded: {unavailable}"]  # also for the page
     parses.clear()
     assert decision_store.load(seeded.shared, PROJECT).snapshot.project == PROJECT
     assert parses == []
+    broke, real = DecisionsUnavailable(whole_error), decision_store.load  # #971: a project's whole failed read
+    broke.add_note("a note on the read")
+
+    def load(shared, name):
+        if name == PROJECT:
+            raise broke
+        return real(shared, name)
+
+    monkeypatch.setattr(decision_store, "load", load)
+    said.clear()
+    machine.undecided = []
+    serve.warm(machine)
+    whole = f"DecisionsUnavailable: {whole_error}\na note on the read"
+    assert said == machine.undecided == [
+        f"decisions of owlbear not pre-loaded: {unavailable}", f"decisions of {PROJECT} not pre-loaded: {whole}"
+    ]  # fmt: skip

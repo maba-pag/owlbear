@@ -182,6 +182,7 @@ def _routes(machine: Machine) -> APIRouter:
             "update_while_paused": _update_while_paused(),
             "update": machine.updater.read(), "updated": machine.updated or versions.running(),
             "announce": machine.auto.read(), "pack": machine.impeccable.read(), "reads": machine.reads.polled(),
+            "unretried": machine.unretried, "unshared": machine.unshared, "undecided": list(machine.undecided),
         }  # fmt: skip
 
     @routes.post("/projects")

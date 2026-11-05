@@ -162,7 +162,7 @@ class Curation:
         except (OSError, ValueError) as exc:
             path = self.path()
             msg = (
-                f"the memory curation ownership record {path} cannot be read:\n{exc}\n"
+                f"the memory curation ownership record {path} cannot be read:\n{failure(exc)}\n"
                 "OwlBear can't tell whether a memory curation session it started still runs, so memory curation "
                 "doesn't go on. Stop OwlBear if it still runs, and make sure no copilot process that memory curation "
                 'started still runs: the PIDs under "left" are the ones it recorded, but a session that failed early '

@@ -1,6 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { call, defined, here } from "/assets/ui.mjs";
+import { call, defined, here, machineState } from "/assets/ui.mjs";
 import { receipts } from "./actions.mjs";
 import { detail, open } from "./entry.mjs";
 import { scopes, scopesView } from "./overview.mjs";
@@ -132,6 +132,7 @@ function back() {
 
 export function view() {
   const loaded = state.loaded, available = loaded?.available && wide !== "";
+  const undecided = machineState()?.undecided ?? [];  // what the machine host's start could not do about decisions
   // The total counts every decision the host reads, which for Global's or OwlBear's view holds the other's too.
   const shown = !available ? "" : wide ? `${VIEWS[wide].name} · ${loaded.decisions.length} shown`
     : `${loaded.decisions.length} of ${loaded.total} shown`;
@@ -139,7 +140,8 @@ export function view() {
   return html`
     ${back()}
     ${recoveryView()}
-    <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
+    <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error && !undecided.length}
+      >${state.error}${undecided.map((line) => html`<div class="said">At this start, ${line}.</div>`)}
     </p-inline-notification>
     <p-inline-notification id="unavailable" state="info" heading="Decisions cannot be read" heading-tag="h2"
       dismiss-button="false" ?hidden=${!loaded || available}>${loaded && !available ? loaded.reason : ""}
