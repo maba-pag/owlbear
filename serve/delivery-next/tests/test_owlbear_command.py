@@ -129,6 +129,19 @@ def test_install_writes_the_completion_and_asks_before_each_change(monkeypatch) 
     assert (install.uninstall(said.append), agent.is_symlink()) == (0, True)
 
 
+def test_install_offers_add_a_project_once_the_host_it_started_answers(monkeypatch) -> None:
+    monkeypatch.setattr(install, "runtime", lambda: Path(sys.executable).parent.parent)
+    monkeypatch.setattr(control, "autostart", lambda *_a, **_k: 0)
+    reads, opened = [], []
+    host = SimpleNamespace(url="http://127.0.0.1:1/", token="t")  # noqa: S106 - a test token
+    monkeypatch.setattr(control, "projects", lambda: reads.append(1) if len(reads) < 3 else {"paused": True})
+    monkeypatch.setattr(install.serve, "running", lambda: host if len(reads) >= 3 else None)  # launchd starts it
+    monkeypatch.setattr(install.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(install.webbrowser, "open", opened.append)
+    assert install.install(lambda _t: None, lambda _q: True, command.app) == 0
+    assert opened == ["http://127.0.0.1:1/projects?add=1#token=t"]
+
+
 def test_install_without_a_terminal_says_each_choice_was_not_done(monkeypatch, capsys) -> None:
     monkeypatch.setattr(install, "runtime", lambda: Path(sys.executable).parent.parent)
     monkeypatch.setattr(control, "autostart", lambda *_a, **_k: pytest.fail("the login item was touched"))

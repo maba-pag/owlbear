@@ -10,6 +10,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+import time
 import webbrowser
 from importlib.resources import files
 from pathlib import Path
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
     from cyclopts import App
 
     from owlbear_delivery_next.machine_host.control import Say
+    from owlbear_delivery_next.project_host.host import HostRecord
 
 COMPLETION = "completion.zsh"
 TOOLS = ("git", "gh", "uv")  # besides the Copilot CLI, which skips VS Code's shim
@@ -80,10 +82,22 @@ def install(say: Say, ask: Callable[[str], bool], app: App) -> int:
     if ask(f"Link the shaper and its skill into {Path.home() / '.copilot'}, so New Change finds them anywhere?"):
         for link, to in shaper_links():
             say(_link(link, to))
-    code = control.autostart(say, on=True) if ask("Start OwlBear at login, paused until you press Resume?") else 0
-    if code == 0 and (rec := serve.running()) and rec.token and ask("Open Add a project in your browser now?"):
+    started = ask("Start OwlBear at login, paused until you press Resume?")
+    code = control.autostart(say, on=True) if started else 0
+    rec = _answering(control.WAIT if started and code == 0 else 0.0)
+    if code == 0 and rec and rec.token and ask("Open Add a project in your browser now?"):
         webbrowser.open(f"{rec.url}projects?add=1#token={rec.token}")  # the page opens its dialog (item 15)
     return code
+
+
+def _answering(wait: float) -> HostRecord | None:
+    """The machine host's record once its API answers, waiting up to *wait* seconds for one the login item starts."""
+    deadline = time.monotonic() + wait
+    while control.projects() is None:
+        if time.monotonic() >= deadline:
+            return None
+        time.sleep(0.2)
+    return serve.running()
 
 
 def uninstall(say: Say) -> int:
