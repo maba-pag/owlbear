@@ -125,8 +125,10 @@ def push(job: Job) -> dict[str, Any]:
     if remote is None:
         msg = f"{job.plan['repository']} is not on GitHub"
         raise StageError(msg)
+    # a push that landed before ``-u`` tracked it: the pull checks the remote's history against ours and tracks it
     if not remote.empty and local:
-        return {"pushed": False}
+        onboarding_git.pull_default(path, remote.default_branch, _access(job))
+        return {"pushed": False, "tracked": remote.default_branch}
     if not remote.empty:
         onboarding_git.pull_default(path, remote.default_branch, _access(job))
         return {"pulled": remote.default_branch}

@@ -919,3 +919,19 @@ def test_the_ending_waits_for_a_new_hosts_readiness(jobs, tmp_path, monkeypatch)
     monkeypatch.setattr(jobs.machine, "register", checking)
     end = stage(run(jobs, plan_for(found, repository="ada/demo")), "end")["result"]
     assert (end["ready"], end["missing"]) == (False, ["readiness: first commit: none yet"])
+
+
+@pytest.mark.usefixtures("hub")
+def test_a_push_that_landed_before_it_was_tracked_is_tracked_on_resume(jobs, tmp_path, monkeypatch):
+    found = jobs.probe({"kind": "new", "name": "demo", "folder": str(tmp_path / "demo")})
+
+    def landed(path: Path, _access: Access) -> None:
+        git(path, "push", "origin", "HEAD")  # the remote took it; the process ended before -u saved the tracking
+        said = "the push was cut short"
+        raise RuntimeError(said)
+
+    monkeypatch.setattr(onboarding_git, "push_first", landed)
+    info = run(jobs, plan_for(found, repository="ada/demo"))
+    assert stage(info, "push")["state"] == "failed"
+    settle(jobs, jobs.resume(info["id"])["id"])
+    assert git(Path(found["folder"]), "rev-parse", "--abbrev-ref", "@{u}") == "origin/main"
