@@ -22,7 +22,14 @@
   .project .ready li { white-space: pre-wrap; }  /* a failed check's output keeps its lines */
   #unshared, #unretried { white-space: pre-wrap; }  /* so does a machine failure's */
   #add .row { align-items: end; }
-  #add p-input-text { flex: 1 1 18rem; min-width: 0; }
+  /* Add a project's dialog (item 15) */
+  p-modal.onboarding .body { display: grid; gap: var(--p-spacing-static-md); width: min(40rem, 86vw); }
+  p-modal.onboarding .body ul, p-modal.onboarding .body ol { margin: 0; padding-left: 1.25rem; }
+  p-modal.onboarding .stages li { display: flex; gap: var(--p-spacing-static-sm); align-items: center;
+    justify-content: space-between; padding: 2px 0; }
+  p-modal.onboarding pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  p-modal.onboarding .parts { display: grid; gap: var(--p-spacing-static-md); }
+  p-modal.onboarding .rules { display: grid; gap: var(--p-spacing-static-sm); }
 </style>
 </head>
 <body>

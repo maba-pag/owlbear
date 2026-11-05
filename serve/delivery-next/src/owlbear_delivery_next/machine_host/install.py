@@ -10,13 +10,14 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+import webbrowser
 from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.git.command_failure import failed, failure
 from owlbear_delivery_next.local_system import data_place, data_repo, local_home, preload
-from owlbear_delivery_next.machine_host import control
+from owlbear_delivery_next.machine_host import control, serve
 from owlbear_delivery_next.runtimes import copilot_cli, readiness
 from owlbear_delivery_next.state_store import registry
 
@@ -79,9 +80,10 @@ def install(say: Say, ask: Callable[[str], bool], app: App) -> int:
     if ask(f"Link the shaper and its skill into {Path.home() / '.copilot'}, so New Change finds them anywhere?"):
         for link, to in shaper_links():
             say(_link(link, to))
-    if ask("Start OwlBear at login, paused until you press Resume?"):
-        return control.autostart(say, on=True)
-    return 0
+    code = control.autostart(say, on=True) if ask("Start OwlBear at login, paused until you press Resume?") else 0
+    if code == 0 and (rec := serve.running()) and rec.token and ask("Open Add a project in your browser now?"):
+        webbrowser.open(f"{rec.url}projects?add=1#token={rec.token}")  # the page opens its dialog (item 15)
+    return code
 
 
 def uninstall(say: Say) -> int:

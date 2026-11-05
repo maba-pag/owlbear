@@ -63,6 +63,11 @@ class Onboarding:
             raise OnboardingError(422, str(exc)) from exc
         found["allowed"] = onboarding_end.merge_allowed(found)
         found["labels"], found["labels_error"] = _labels()
+        try:
+            method = onboarding_probe.resolved(found.get("repository", "")).prefs.merge_method
+        except (StoreError, data_repo.DataRepoError) as exc:
+            method, found["method_error"] = None, f"the merge method setting could not be read: {failure(exc)}"
+        found["resolved_method"] = method.value if method else None
         with self.lock:
             self._load()
             job = self.jobs.get(onboarding_job.job_id(found["folder"], found.get("repository", "")))

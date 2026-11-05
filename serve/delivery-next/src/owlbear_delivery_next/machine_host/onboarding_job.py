@@ -75,8 +75,9 @@ class Job:
         return next(s for s in self.receipt["stages"] if s["name"] == name)
 
     def result(self, name: str) -> dict[str, Any]:
-        """What stage *name* recorded when it was done."""
-        return self.record(name).get("result") or {}
+        """What stage *name* recorded when it was done; nothing for a stage this run doesn't have."""
+        found = next((s for s in self.receipt["stages"] if s["name"] == name), None)
+        return (found or {}).get("result") or {}
 
     def intend(self, name: str, what: str) -> None:
         """Record the intent before an effect, so a crash after it is known on Resume."""

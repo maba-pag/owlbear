@@ -24,6 +24,7 @@ from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, StoreError
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.github.repo_target import RepoState
+    from owlbear_delivery_next.settings.config import Settings
 
 HOST = "github.com"
 ACCOUNT = "GitHub account"  # the setting's row on the Settings page
@@ -72,16 +73,18 @@ def url(repository: str, host: str = HOST) -> str:
     return f"https://{host}/{repository}.git"
 
 
-def account(repository: str, host: str = HOST) -> str | None:
-    """The GitHub account setting for *repository*: Global, this machine and its claimed folder's layer, if any.
-
-    No store opens and nothing is claimed for it.
-    """
+def resolved(repository: str, host: str = HOST) -> Settings:
+    """*repository*'s settings: Global, this machine and its claimed folder's layer, if any; no store opens."""
     shared = data_repo.locate()
     claimed = shared.claimed(f"{host}/{repository}") if shared and repository else None
     config = shared.project_path(claimed) if shared and claimed else None
     glob = shared.global_path if shared else None
-    return layered(glob, config, local_home.root() / MACHINE_SETTINGS).github_account
+    return layered(glob, config, local_home.root() / MACHINE_SETTINGS)
+
+
+def account(repository: str, host: str = HOST) -> str | None:
+    """The GitHub account setting for *repository*."""
+    return resolved(repository, host).github_account
 
 
 def client(repository: str, setting: str | None, cwd: Path, host: str = HOST) -> GhClient:

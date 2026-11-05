@@ -114,7 +114,7 @@ Create it in your project root and keep it in source control.
 
 | Symptom | Resolution |
 | --- | --- |
-| A teammate's Changes page shows **Setup required** | Run the `owlbear setup --repo PATH` command it names on that teammate's Mac, then reload the project's VS Code window |
+| A teammate's Changes page shows **Setup required** | Press **Finish setup** on the project's row on that teammate's Projects page, or run the `owlbear setup --repo PATH` command it names, then reload the project's VS Code window |
 | Setup cannot claim the project's folder in the shared settings | Run `owlbear setup --repo PATH --folder NAME` with a folder name no other repository uses |
 | `uv` not found | Install uv using the [official installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
 | Different OwlBear versions between teammates | Compare `owlbear versions` on each Mac; `owlbear update` takes the newest ([Upgrading OwlBear](operating-owlbear.md#upgrading-owlbear)) |

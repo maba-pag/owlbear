@@ -30,6 +30,7 @@ OwlBear keeps everything it runs and records under `~/.owlbear/` on your Mac:
 | `worktrees/` | The worktrees OwlBear's agents work in |
 | `design-pack/` | Impeccable, the pinned design skills and detector Delivery's design checks use; the folder keeps its name from before the rename |
 | `machine.json` | The registered projects and the machine's settings |
+| `onboarding/<id>.json` | Each Add a project run's receipt: its approved choices and each step's result, so **Resume** never repeats a step |
 | `data/` | The [shared settings repository](#the-shared-settings-repository)'s checkout, unless you set one elsewhere; updates and uninstalling never delete it |
 | `data.json`, `data.lock` | Which shared settings repository OwlBear uses and where it is cloned from, and the lock held while that changes |
 | `host.log` | The running host's log; `owlbear logs` shows its end |
@@ -43,8 +44,8 @@ Only with your yes at `owlbear install`, OwlBear also adds:
 | `~/Library/LaunchAgents/com.owlbear.host.plist` | The login item; `owlbear autostart on` or `off` changes it |
 | `~/.owlbear/completion.zsh` | The zsh completion, always written; nothing edits `~/.zshrc` |
 
-In a project, `owlbear setup --repo PATH` writes only with your yes, and lists each file in the
-clone's `.git/info/exclude`:
+In a project, the **Add a project** dialog and `owlbear setup --repo PATH` write only with your yes, and list each
+file in the clone's `.git/info/exclude`:
 
 | File | Entry |
 | --- | --- |
@@ -73,7 +74,7 @@ project's Changes while that project's VS Code window is closed.
 | `owlbear versions [--prepare]` | The version it runs and the one it would take next; `--prepare` installs and checks that one without switching |
 | `owlbear impeccable [--install]` | Shows the Impeccable this version pins; `--install` downloads and verifies what is missing. `owlbear design-pack` is its old name, kept so versions from before the rename can install it |
 | `owlbear autostart on` or `off` | Starts OwlBear at login, or not; `on` saves this shell's PATH and `COPILOT_CLI_PATH` as they are now, so run it again after adding or removing a tool or Node version |
-| `owlbear setup --repo PATH` | Checks a project's readiness, confirms its profile and registers its chat server |
+| `owlbear setup --repo PATH` | Checks a project's readiness, confirms its profile and registers its chat server; the **Add a project** dialog does the same from the Projects page, and repairs use this command |
 | `owlbear data` | Shows the shared settings repository and what only this Mac's checkout of it holds |
 | `owlbear data URL` | Clones that repository into `~/.owlbear/data`, or adopts the checkout of it already in use or there |
 | `owlbear data PATH` | Uses a checkout you keep elsewhere instead of `~/.owlbear/data` |
