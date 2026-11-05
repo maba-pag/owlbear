@@ -823,3 +823,33 @@ def test_a_clone_stopped_before_its_checkout_gets_its_files_on_resume(hub, jobs,
         info = settle(jobs, jobs.answer(info["id"], "profile", {})["id"])
     assert (tmp_path / "meter" / "README.md").read_text() == "# seeded\n"
     assert git(tmp_path / "meter", "status", "--porcelain") == ""
+
+
+def test_a_starter_file_edited_before_a_retry_keeps_the_edit(hub, jobs, tmp_path, monkeypatch):
+    found = jobs.probe({"kind": "new", "name": "demo", "folder": str(tmp_path / "demo")})
+    real = onboarding_git.first_commit
+
+    def once(_path: Path, _message: str) -> str:
+        monkeypatch.setattr(onboarding_git, "first_commit", real)
+        said = "the commit failed"
+        raise RuntimeError(said)
+
+    monkeypatch.setattr(onboarding_git, "first_commit", once)
+    info = run(jobs, plan_for(found, repository="ada/demo"))
+    assert stage(info, "commit")["state"] == "failed"
+    (Path(found["folder"]) / "README.md").write_text("# demo\n\nWhat this project is for.\n")
+    settle(jobs, jobs.resume(info["id"])["id"])
+    readme = git(hub.remotes / "ada/demo.git", "show", "main:README.md")
+    assert readme == "# demo\n\nWhat this project is for."
+
+
+def test_blank_author_fields_stop_the_preflight(hub, jobs, tmp_path):
+    hub.add("ada/ledger")
+    Path(os.environ["HOME"], ".gitconfig").write_text(f'[url "{hub.remotes}/"]\n\tinsteadOf = https://github.com/\n')
+    folder = tmp_path / "ledger"
+    folder.mkdir()
+    git(folder, "init", "-q", "-b", "main")
+    git(folder, "remote", "add", "origin", "https://github.com/ada/ledger.git")
+    found = jobs.probe({"kind": "folder", "folder": str(folder)})
+    problems = onboarding_probe.preflight(plan_for(found, author={"name": " ", "email": ""}))
+    assert [p.split(":")[0] for p in problems] == ["git identity"]

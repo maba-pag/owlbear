@@ -270,7 +270,9 @@ def preflight(plan: dict[str, Any]) -> list[str]:
     out = []
     if not (signing := readiness.signing(probe_git)).ok:
         out.append(f"commit signing: {signing.detail}. {signing.fix}")
-    if not plan.get("author") and not (who := readiness.identity(probe_git)).ok:
+    author = plan.get("author") or {}
+    chosen = bool(str(author.get("name", "")).strip() and str(author.get("email", "")).strip())
+    if not chosen and not (who := readiness.identity(probe_git)).ok:
         out.append(f"git identity: {who.detail}; name the Git author in Choices")
     if not plan.get("github"):
         return out

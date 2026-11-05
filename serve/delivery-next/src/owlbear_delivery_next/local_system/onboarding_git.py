@@ -180,15 +180,15 @@ def write_author(path: Path, name: str, email: str) -> None:
 
 
 def starter_files(path: Path, name: str, ci: bool, *, readme: bool = True) -> None:  # noqa: FBT001 - the tick
-    """Write a first commit's starter files; never a ``.gitignore``.
+    """Write a first commit's starter files that aren't there yet; never a ``.gitignore``.
 
     ``README.md`` holds ``# <name>`` (skipped with *readme* off, for a folder that has files); with *ci*, ``CI_PATH``
-    holds one job ``CI`` run on ``push`` and ``pull_request``.
+    holds one job ``CI`` run on ``push`` and ``pull_request``. One already written, by an earlier try that stopped
+    before its commit, keeps what the owner may have changed in it since.
     """
-    if readme:
-        (path / "README.md").write_text(f"# {name}\n", encoding="utf-8")
-    if ci:
-        workflow = path / CI_PATH
+    if readme and not (readme_file := path / "README.md").exists():
+        readme_file.write_text(f"# {name}\n", encoding="utf-8")
+    if ci and not (workflow := path / CI_PATH).exists():
         workflow.parent.mkdir(parents=True, exist_ok=True)
         workflow.write_text(CI_WORKFLOW, encoding="utf-8")
 
