@@ -15,7 +15,7 @@ from owlbear_delivery_next.machine_host import onboarding_probe as probe
 from owlbear_delivery_next.machine_host.onboarding_job import Waiting
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings.config import Layer, Prefs
-from owlbear_delivery_next.state_store import github_writer
+from owlbear_delivery_next.state_store import github_writer, profile_repair
 from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
@@ -57,7 +57,11 @@ def folder(job: Job) -> dict[str, Any]:
         path.mkdir(parents=True, exist_ok=True)
         return {}
     if (path / ".git").exists():
-        return {"cloned": False}
+        if onboarding_git.folder_state(path).git == "commits":
+            return {"cloned": False}
+        remote = _remote(job)  # an interrupted clone: fetch what it lacks
+        onboarding_git.pull_default(path, remote.default_branch if remote else "main", _access(job))
+        return {"cloned": True}
     job.intend("folder", f"clone {job.plan['repository']} into {path}")
     onboarding_git.clone(path.parent, probe.url(job.plan["repository"]), path.name, _access(job))
     return {"cloned": True}
@@ -80,7 +84,7 @@ def commit(job: Job) -> dict[str, Any]:
     path, plan = _folder(job), job.plan
     state = onboarding_git.folder_state(path)
     had_files = plan.get("had_files", state.has_files)  # what the probe found, not the starter files written since
-    ci = bool(plan.get("ci")) and not plan.get("had_workflows", state.has_workflows)
+    ci = bool(plan.get("ci") and plan.get("github")) and not plan.get("had_workflows", state.has_workflows)
     if state.git == "commits":  # a commit this run made before its result was recorded, else none of ours
         mine = bool(job.record("commit").get("intent"))
         return {"sha": onboarding_git.head(path) if mine else "", "ci": ci and mine}
@@ -278,6 +282,11 @@ def detect(job: Job) -> dict[str, Any]:
 
 def profile(job: Job) -> dict[str, Any]:
     """Show the profile and wait for the owner's confirmation, then save it as setup does."""
+    said: list[str] = []
+    if receipt := profile_repair.pending(_store(job)):  # a confirmed replacement still to publish, as setup resumes it
+        if not setup_profile.publish_repair(_store(job), receipt, said.append, resumed=True):
+            raise StageError("\n".join(said))
+        return {"version": receipt.profile.version}
     if "profile" not in job.context:
         detect(job)
     prof = job.context["profile"]
@@ -288,8 +297,7 @@ def profile(job: Job) -> dict[str, Any]:
             for k, e in sorted(prof.entries.items())
         ]
         kind = "profile"
-        raise Waiting(kind, {"entries": entries})
-    said: list[str] = []
+        raise Waiting(kind, {"entries": entries, "notes": job.result("readiness").get("said", [])})
     prof = setup_profile.confirmed(prof, {k: v for k, v in values.items() if v}, by="Add project")
     if not setup_profile.keep(_store(job), prof, job.context["saved"], said.append):  # Retry saves these answers
         raise StageError("\n".join(said))

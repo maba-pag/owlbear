@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -138,7 +139,12 @@ class Machine:
     def register(self, path: Path) -> Any:
         project = SimpleNamespace(entry=SimpleNamespace(id=f"p{len(self.projects) + 1}", path=str(path)), readied=0)
         project._ready = lambda: setattr(project, "readied", project.readied + 1)  # noqa: SLF001
-        project.info = lambda: {"ready": [], "blocked": "", "setup": "" if setup.registered(path) else "setup"}
+        project.info = lambda: {
+            "state": "loaded",
+            "ready": [],
+            "blocked": "",
+            "setup": "" if setup.registered(path) else "setup",
+        }
         self.projects[project.entry.id] = project
         return project
 
@@ -217,6 +223,7 @@ def test_a_local_only_project_makes_no_github_effect_registers_nothing_and_stays
     assert info["ended"] == "local"
     assert hub.calls == []
     assert onboarding_git.folder_state(Path(found["folder"])).git == "commits"
+    assert not (Path(found["folder"]) / ".github").exists()  # a CI workflow only on GitHub, with its tick
     assert jobs.machine.projects == {}
     assert [j["id"] for j in jobs.listed()] == [info["id"]]
     again = jobs.probe({"kind": "folder", "folder": found["folder"], "github": True})
@@ -669,3 +676,102 @@ def test_publishing_a_local_only_project_retires_its_local_entry(jobs, tmp_path)
     assert "job" not in again  # a finished local-only run is no run to resume
     run(jobs, plan_for(again, repository="ada/notes"))
     assert local["id"] not in [j["id"] for j in jobs.listed()]
+
+
+@pytest.mark.usefixtures("hub")
+def test_a_project_whose_host_failed_to_load_is_not_ready(jobs, tmp_path, monkeypatch):
+    found = jobs.probe({"kind": "new", "name": "demo", "folder": str(tmp_path / "demo")})
+    register = jobs.machine.register
+
+    def failing(path: Path) -> Any:
+        project = register(path)
+        project.info = lambda: {"state": "failed", "reason": "another host holds its lock"}
+        return project
+
+    monkeypatch.setattr(jobs.machine, "register", failing)
+    end = stage(run(jobs, plan_for(found, repository="ada/demo")), "end")["result"]
+    assert (end["ready"], end["missing"][0]) == (False, "project: failed: another host holds its lock")
+
+
+def test_a_clone_gets_the_chosen_author_and_an_interrupted_clone_is_finished(hub, jobs, tmp_path, monkeypatch):
+    hub.add("ada/meter", commits=True)
+    Path(os.environ["HOME"], ".gitconfig").write_text(f'[url "{hub.remotes}/"]\n\tinsteadOf = https://github.com/\n')
+    real = onboarding_git.clone
+
+    def interrupted(parent: Path, url: str, name: str, _access: Access) -> Path:
+        (parent / name).mkdir()
+        git(parent / name, "init", "-q", "-b", "main")
+        git(parent / name, "remote", "add", "origin", url)
+        monkeypatch.setattr(onboarding_git, "clone", real)
+        said = "the clone was killed during its transfer"
+        raise RuntimeError(said)
+
+    monkeypatch.setattr(onboarding_git, "clone", interrupted)
+    found = jobs.probe({"kind": "github", "repository": "ada/meter", "folder": str(tmp_path / "meter")})
+    assert found["stages"][:2] == ["folder", "git"]
+    info = run(jobs, plan_for(found, protect=False, author={"name": "Ada", "email": "ada@example.com"}))
+    assert stage(info, "folder")["state"] == "failed"
+    info = settle(jobs, jobs.resume(info["id"])["id"])
+    if info["waiting"]:
+        info = settle(jobs, jobs.answer(info["id"], "profile", {})["id"])
+    folder = tmp_path / "meter"
+    assert git(folder, "rev-parse", "HEAD") == git(hub.remotes / "ada/meter.git", "rev-parse", "main")
+    assert git(folder, "config", "user.name") == "Ada"
+
+
+@pytest.mark.usefixtures("hub")
+def test_a_pending_profile_repair_is_published_on_retry(jobs, tmp_path, monkeypatch):
+    found = jobs.probe({"kind": "new", "name": "demo", "folder": str(tmp_path / "demo")})
+    published = []
+    pending = SimpleNamespace(profile=Profile(version=4))
+    monkeypatch.setattr(onboarding_stages.profile_repair, "pending", lambda _store: pending)
+    monkeypatch.setattr(setup_profile, "publish_repair", lambda _s, r, _say, *, resumed: published.append(
+        (r, resumed)) or True)  # fmt: skip
+    info = run(jobs, plan_for(found, repository="ada/demo"))
+    assert (stage(info, "profile")["result"], published) == ({"version": 4}, [(pending, True)])
+
+
+@pytest.mark.usefixtures("hub")
+def test_the_profile_step_shows_readinesss_notes_and_the_probe_reports_an_old_task(jobs, tmp_path, monkeypatch):
+    note = "The saved profile cannot be read (X); detecting a new one."
+    real = setup_profile.saved
+    monkeypatch.setattr(setup_profile, "saved", lambda store, say: say(note) or real(store, say))
+    folder = tmp_path / "demo"
+    (folder / ".vscode").mkdir(parents=True)
+    (folder / ".vscode" / "tasks.json").write_text(json.dumps({"tasks": [{"label": setup.TASK}]}))
+    found = jobs.probe({"kind": "folder", "folder": str(folder)})
+    assert found["old_task"] is True
+    info = settle(jobs, jobs.start(plan_for(found, repository="ada/demo"))["id"])
+    assert info["waiting"]["notes"] == [note]
+
+
+def test_github_launches_and_the_push_run_as_the_repositorys_account_with_its_token_kept_out(
+    fake_gh, git_launches, tmp_path
+):
+    """The account TD-402 names for boecht's repository writes it, though gh's active account is maba-pag."""
+    view = {"nameWithOwner": "boecht/demo", "isEmpty": True, "defaultBranchRef": {"name": ""},
+            "mergeCommitAllowed": True, "squashMergeAllowed": True, "rebaseMergeAllowed": True,
+            "visibility": "PRIVATE", "id": "R_1"}  # fmt: skip
+    body = branch_rules.new_ruleset("main", require_ci=False)
+    fake_gh.set({"github.com": {"maba-pag": "success", "boecht": "success"}}, {"github.com": "maba-pag"},
+                [{"has": ["repo", "create"], "out": ""}, {"has": ["repo", "view"], "out": view},
+                 {"has": ["rulesets"], "out": {**body, "id": 1}}])  # fmt: skip
+    remote, folder = tmp_path / "remote.git", tmp_path / "demo"
+    git(tmp_path, "init", "--bare", "-q", "-b", "main", str(remote))
+    folder.mkdir()
+    git(folder, "init", "-q", "-b", "main")
+    git(folder, "remote", "add", "origin", str(remote))
+    (folder / "README.md").write_text("# demo\n")
+    onboarding_git.write_author(folder, "Ada", "ada@example.com")
+    onboarding_git.first_commit(folder, "First commit")
+    job = onboarding_job.Job({"id": "j", "plan": {"repository": "boecht/demo", "folder": str(folder)}, "stages": []},
+                             [], lambda _t: None, lambda: "")  # fmt: skip
+    client = onboarding_stages._client(job)  # noqa: SLF001 - the stages' own client
+    assert repo_target.create(client, "boecht", "demo", "private").visibility == "private"
+    branch_rules.create(client, "boecht/demo", body)
+    onboarding_git.push_first(folder, onboarding_stages._access(job))  # noqa: SLF001
+    writes = [c for c in fake_gh.calls() if c["argv"][:1] != ["auth"]]
+    assert {c["GH_TOKEN"] for c in writes} == {"tok-boecht"}
+    assert [env.get("GH_TOKEN") for argv, env in git_launches.seen if "push" in argv] == ["tok-boecht"]
+    assert not any("tok-" in arg for c in fake_gh.calls() for arg in c["argv"])
+    assert not any("tok-" in arg for argv, _ in git_launches.seen for arg in argv)

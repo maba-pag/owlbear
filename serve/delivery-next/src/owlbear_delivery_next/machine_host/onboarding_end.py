@@ -24,10 +24,11 @@ def facts(job: Job) -> dict[str, Any]:
     p = machine.get(registered.get("id") or probe.registered_id(Path(plan["folder"])))
     if registered.get("kept", True):  # kept: registered before this run, so the register stage didn't run
         p._ready()  # noqa: SLF001 - readiness is cached when a project loads; the row must agree with the ending
-    info = p.info()
+    info, missing = p.info(), []
+    if info["state"] != "loaded":  # a host that failed to load serves nothing
+        missing.append(f"project: {info['state']}" + (f": {info['reason']}" if info.get("reason") else ""))
     store = job.context.get("store") or Store.open(Path(plan["folder"]), repair=True)
     prof = store.read_profile()
-    missing = []
     if info.get("blocked"):
         missing.append(f"settings: {info['blocked']}")
     missing += [f"readiness: {line}" for line in info.get("ready") or []]

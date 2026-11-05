@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.commands import setup
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github import branch_rules, repo_target
 from owlbear_delivery_next.github.account import REPOSITORY_OWNER, AccountMissing, Origin, Writer
@@ -188,6 +189,7 @@ def probe(start: dict[str, Any]) -> dict[str, Any]:
     if found["refusal"]:
         return found
     found["author_missing"] = _author_missing(folder, url(repository) if repository else "")
+    found["old_task"] = setup.has_task(folder / ".vscode" / "tasks.json")
     found["stages"], found["entry"] = stages(found)
     found["refusal"] = _conflict(found) or ""
     return found
@@ -223,11 +225,10 @@ def stages(found: dict[str, Any]) -> tuple[list[str], str]:
     remote_commits, local_commits = bool(remote) and not remote["empty"], st["git"] == "commits"
     clone = remote_commits and (not st["exists"] or (st["empty"] and st["git"] == "none"))
     left: set[str] = {"folder"} if clone or not st["exists"] else set()
-    if not clone:
-        if st["git"] == "none" or (github and not found["origin"]) or found["author_missing"]:
-            left.add("git")  # Git, origin before any commit, and a chosen author
-        if not local_commits and not remote_commits:
-            left |= {"commit", "ci"} if github else {"commit"}
+    if found["author_missing"] or (not clone and (st["git"] == "none" or (github and not found["origin"]))):
+        left.add("git")  # Git, origin before any commit, and a chosen author, after a clone too
+    if not (clone or local_commits or remote_commits):
+        left |= {"commit", "ci"} if github else {"commit"}
     if github and not remote:
         left.add("repository")
     if github and not clone and not (local_commits and remote_commits):

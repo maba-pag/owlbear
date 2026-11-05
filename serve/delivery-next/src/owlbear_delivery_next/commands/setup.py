@@ -328,6 +328,7 @@ def _project_files(
 def _settle(store: Store, prof: Profile, say: Callable[[str], object], project_files: Callable[[], None]) -> int:
     prefs_import.run(store)
     say(f"Profile v{prof.version} confirmed and saved in {store.root}")
+    say("Delivery runs in OwlBear: run `owlbear start`, then add this project on its page.")
     project_files()
     if not readiness.shaper_path(Path.home()).exists():
         say("New Change needs the shaper in ~/.copilot: run `owlbear install` and let it link the shaper (TD-335).")
@@ -363,7 +364,6 @@ def write_project_files(  # noqa: PLR0913 - the CLI's questions or the dialog's 
                 "written", "rewritten", 1
             )
         )
-    say("Delivery runs in OwlBear: run `owlbear start`, then add this project on its page.")
     question = "Register the Delivery chat server in .mcp.json (kept out of git)?"
     local = portable(python)  # each client starts a project server in its repository
     server = consent(
