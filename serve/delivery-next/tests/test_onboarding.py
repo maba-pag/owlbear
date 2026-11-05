@@ -489,7 +489,6 @@ def test_the_dialog_takes_a_new_project_from_zero_to_new_change(tmp_path, monkey
         modal.get_by_role("textbox", name="Folder").fill(str(folder))
         modal.get_by_role("button", name="Look").click()
         expect(modal).to_contain_text("Found nothing yet")
-        modal.get_by_role("button", name="Continue").click()
         modal.get_by_role("textbox", name="Owner").fill("ada")
         modal.get_by_role("button", name="Check and continue").click()
         expect(modal).to_contain_text("save the merge method merge for this project")
@@ -530,7 +529,6 @@ def test_finish_setup_on_a_registered_clone_changes_its_ruleset_and_says_what_is
         page.get_by_role("listitem", name="proj").get_by_role("button", name="Finish setup").click()
         modal = pds.modal(page)
         expect(modal).to_contain_text("registered here")
-        modal.get_by_role("button", name="Continue").click()
         for _ in range(12):  # past the last control focus goes to the browser (body), never to the page behind
             page.keyboard.press("Tab")
             assert modal.evaluate("m => m.contains(document.activeElement) || document.activeElement === document.body")
@@ -540,7 +538,10 @@ def test_finish_setup_on_a_registered_clone_changes_its_ruleset_and_says_what_is
         rules.get_by_role("checkbox", name=re.compile("approv")).check()
         modal.get_by_role("checkbox", name="Register Delivery's chat server in .mcp.json").uncheck()
         modal.get_by_role("button", name="Check and continue").click()
-        expect(modal).to_contain_text("change the ruleset: merge_method, no_approvals")
+        expect(modal).to_contain_text(
+            "change ruleset 7 of the default branch: allow merge commits in its pull-request rule; require no approvals"
+        )
+        expect(modal).to_contain_text("save the merge method merge for this project")
         modal.get_by_role("button", name="Create and set up proj").click()
         modal.get_by_role("button", name="Confirm profile").click()
         expect(modal.locator(".facts")).to_contain_text("Ready for Delivery: no")
@@ -548,6 +549,7 @@ def test_finish_setup_on_a_registered_clone_changes_its_ruleset_and_says_what_is
         expect(modal.get_by_role("button", name="New Change")).to_have_count(0)
     pull = hub.rulesets["ada/proj"][7]["rules"][2]["parameters"]
     assert (sorted(pull["allowed_merge_methods"]), pull["required_approving_review_count"]) == (["merge", "squash"], 0)
+    assert Store.open(folder).read_config().prefs.merge_method == MergeMethod.MERGE
 
 
 def test_a_registered_clone_is_found_through_a_linked_path(hub, jobs, tmp_path):

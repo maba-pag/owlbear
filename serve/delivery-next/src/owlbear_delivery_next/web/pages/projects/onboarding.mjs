@@ -24,6 +24,14 @@ const DOES = {
   detect: () => "detect the project's profile", profile: () => "ask you to confirm the profile",
   files: () => "write the chat-tool files you ticked", register: () => "register the project on this machine",
 };
+const CHANGE = {  // a ruleset change in the words of GitHub's settings
+  merge_method: "allow merge commits in its pull-request rule", linear_history: "stop requiring a linear history",
+  up_to_date: "require branches to be up to date before merging",
+  conversations: "require conversation resolution before merging",
+  pull_requests: "require a pull request before merging", no_deletion: "restrict deletions",
+  no_force_push: "block force pushes",
+  no_approvals: "require no approvals: 0 reviews, no code-owner review, no approval of the most recent push",
+};
 const FILES = [["server", "Register Delivery's chat server in .mcp.json"],
   ["memory", "Register the memory server for the shaper"], ["harness", "Set the Copilot harness key"]];
 
@@ -94,8 +102,8 @@ function text(label, key, { into = s, hint = "", type = "text" } = {}) {
 
 function tick(label, key, { into = s.c, disabled = false, why = "" } = {}) {
   return html`<p-checkbox label=${why ? `${label} (${why})` : label} ?disabled=${disabled}
-    .checked=${live(Boolean(into[key]))} @change=${(e) => { into[key] = e.target.checked === true; draw(); }}>
-    </p-checkbox>`;
+    .checked=${live(!disabled && Boolean(into[key]))}
+    @change=${(e) => { into[key] = e.target.checked === true; draw(); }}></p-checkbox>`;
 }
 
 async function look() {
@@ -105,14 +113,15 @@ async function look() {
   await busy("look", async () => {
     s.found = await call("/onboarding/probe", { body: start, machine: true, timeout: 60000 });
     if (!s.found.refusal) s.c = defaults(s.found);
-    s.step = "found";
+    s.step = s.found.refusal ? "start" : "choices";
   });
 }
 
 function defaults(f) {
   const [owner = ""] = (f.repository || "").split("/");
   const unmet = (f.rules?.items ?? []).filter((i) => !i.holds && i.applicable);
-  return { owner, name: f.name, visibility: "private", ci: !f.state.workflows, protect: PUSH_FIRST.has(f.entry),
+  return { owner, name: f.name, visibility: "private", ci: !f.state.workflows,
+    protect: PUSH_FIRST.has(f.entry) && !unprotectable(f),
     needs: unmet.filter((i) => f.rules.needs.includes(i.key)).map((i) => i.key), advice: [],
     labels: (f.labels ?? []).length > 0, consents: { task: true, server: true, memory: true, harness: true },
     files_warned: false, author: { name: "", email: "" }, method: null };
@@ -121,10 +130,11 @@ function defaults(f) {
 // The merge method the project ends with: merge where OwlBear publishes first or protects, else the resolved one when
 // allowed, else the one allowed method, else the owner's pick of several (preselected merge, squash, rebase).
 function method(f, c) {
-  const allowed = f.allowed ?? [];
-  if (allowed.includes("merge") && (PUSH_FIRST.has(f.entry) || (c.protect && !unprotectable(f)))) {
-    return { write: "merge" };
-  }
+  const allowed = f.allowed ?? [], protecting = c.protect && !unprotectable(f);
+  // protection makes merge allowed where OwlBear writes the rules: a new ruleset, or the change to the one there is
+  const fixed = protecting && (!f.github || f.github.methods.includes("merge"))
+    && (!f.rules?.any || f.rules.one_ruleset !== null);
+  if ((allowed.includes("merge") || fixed) && (PUSH_FIRST.has(f.entry) || protecting)) return { write: "merge" };
   if (f.resolved_method && allowed.includes(f.resolved_method)) return { write: null, keeps: f.resolved_method };
   if (allowed.length === 1) return { write: allowed[0] };
   if (allowed.length > 1) return { write: c.method ?? ["merge", "squash", "rebase"].find((m) => allowed.includes(m)),
@@ -147,6 +157,7 @@ function plan() {
     stages: f.stages, visibility: c.visibility, ci: c.ci, protect: c.protect && !unprotectable(f),
     advice: c.advice, needs: c.protect ? c.needs : [], method: method(f, c).write,
     labels: c.labels ? f.labels : [], consents: c.consents, files_warned: c.files_warned,
+    had_files: f.state.files, had_workflows: f.state.workflows,
     rules_items: f.rules?.items ?? null, author: f.author_missing ? c.author : null };
 }
 
@@ -209,26 +220,14 @@ function startView() {
     new: html`${text("Name", "name")}${text("Folder", "folder", { hint: "~/Projects/<name> when empty" })}
       ${tick("Put it on GitHub", "github", { into: s })}`,
   }[s.kind];
-  return [html`${kind}${inputs}`, button("Look", look, { variant: "primary", name: "look" })];
-}
-
-function foundView() {
-  const f = s.found;
-  if (f.refusal) {
-    const use = f.enclosing ? button(`Use ${f.enclosing}`, () => { Object.assign(s, { kind: "folder",
-      folder: f.enclosing }); look(); }, { variant: "primary", name: "look" }) : nothing;
-    return [html`<p-inline-notification state="error" dismiss-button="false" heading="OwlBear can't add this"
-      heading-tag="h3">${f.refusal}</p-inline-notification>`, html`${use}${button("Back", () => {
-      s.step = "start"; draw(); })}`];
-  }
-  const stages = f.stages.filter((x) => DOES[x]).map((x) => STAGE[x]).join(" → ");
-  const resumeRun = f.job ? html`<p-inline-notification state="info" dismiss-button="false"
-    heading="A run for this destination is unfinished" heading-tag="h3">Resume it instead of starting again.
-    </p-inline-notification>` : nothing;
-  return [html`<p-text>Found ${f.entry === "E5" ? "nothing yet" : describe(f)}. Left to do: ${stages}.</p-text>
-    ${resumeRun}`, html`${f.job ? button("Resume", () => follow(f.job), { variant: "primary" }) : nothing}
-    ${button("Continue", () => { s.step = "choices"; draw(); }, { variant: f.job ? "secondary" : "primary" })}
-    ${button("Back", () => { s.step = "start"; draw(); })}`];
+  const f = s.found?.refusal ? s.found : null;
+  const refused = f ? html`<p-inline-notification state="error" dismiss-button="false"
+    heading="OwlBear can't add this" heading-tag="h3">${f.refusal}</p-inline-notification>` : nothing;
+  const use = f?.enclosing ? button(`Use ${f.enclosing}`, () => {
+    Object.assign(s, { kind: "folder", folder: f.enclosing });
+    look();
+  }) : nothing;
+  return [html`${kind}${inputs}${refused}`, html`${button("Look", look, { variant: "primary", name: "look" })}${use}`];
 }
 
 function describe(f) {
@@ -260,7 +259,11 @@ function rulesView(f, c) {
 function choicesView() {
   const f = s.found, c = s.c, creating = f.stages.includes("repository"), m = method(f, c);
   const why = unprotectable(f), opt = !PUSH_FIRST.has(f.entry);
-  return [html`
+  const left = f.stages.filter((x) => DOES[x]).map((x) => STAGE[x]).join(" → ");
+  return [html`<p-text>Found ${f.entry === "E5" ? "nothing yet" : describe(f)}. Left to do: ${left}.</p-text>
+    ${f.job ? html`<p-inline-notification state="info" dismiss-button="false"
+      heading="A run for this destination is unfinished" heading-tag="h3">Resume it instead of starting again.
+      </p-inline-notification>` : nothing}
     ${creating ? html`<p-radio-group name="visibility" label="Visibility" .value=${live(c.visibility)}
       @change=${(e) => { c.visibility = e.target.value; }}>
       <p-radio-group-option value="private" label="Private"></p-radio-group-option>
@@ -280,7 +283,7 @@ function choicesView() {
       value=${x} label=${x}></p-radio-group-option>`)}</p-radio-group>` : nothing}
     ${f.on_github && f.labels?.length ? tick(`Create Global's labels: ${f.labels.join(", ")}`, "labels") : nothing}
     ${f.labels_error ? html`<p-text size="sm" role="alert">${f.labels_error}</p-text>` : nothing}
-    ${f.on_github ? FILES.map(([key, label]) => tick(label, key, { into: c.consents })) : nothing}
+    ${f.stages.includes("files") ? FILES.map(([key, label]) => tick(label, key, { into: c.consents })) : nothing}
     ${f.state.files && f.stages.includes("commit") ? html`<p-inline-notification state="warning"
       dismiss-button="false" heading="Every file in the folder is committed" heading-tag="h3">OwlBear commits the
       folder's files as they are, except what .gitignore excludes, and doesn't look inside them. Make sure no secret
@@ -289,23 +292,32 @@ function choicesView() {
     ${s.problems.length ? html`<p-inline-notification state="error" dismiss-button="false"
       heading="Nothing was created" heading-tag="h3"><ul>${s.problems.map((p) => html`<li>${p}</li>`)}</ul>
       </p-inline-notification>` : nothing}`,
-  html`${button("Check and continue", check, { variant: "primary", name: "check" })}
-    ${button("Back", () => { s.step = "found"; draw(); })}`];
+  html`${f.job ? button("Resume", () => follow(f.job), { variant: "primary" }) : nothing}
+    ${button("Check and continue", check, { variant: f.job ? "secondary" : "primary", name: "check" })}
+    ${button("Back", () => { s.step = "start"; draw(); })}`];
 }
 
 function confirmView() {
-  const p = plan(), m = method(s.found, s.c);
+  const f = s.found, p = plan(), m = method(f, s.c);
   const now = p.stages.map((x) => DOES[x]?.(p)).filter(Boolean);
-  if (m.write) now.push(`save the merge method ${m.write} for this project`);
-  if (p.needs.length || p.advice.length) now.push(`change the ruleset: ${[...p.needs, ...p.advice].join(", ")}`);
+  const changes = [...p.needs, ...p.advice].map((k) => CHANGE[k] ?? k);
+  if (changes.length) now.push(`change ruleset ${f.rules.one_ruleset} of the default branch: ${changes.join("; ")}`);
+  if (p.github) {
+    now.push(m.write ? `save the merge method ${m.write} for this project`
+      : m.keeps ? `keep the merge method ${m.keeps}, from the settings`
+        : "save no merge method: this repository and its rules allow none, so Delivery can't merge until they change");
+  }
   const name = p.name;
+  const then = p.github ? `Delivery serves ${name}: its work starts when you approve a Change's brief, and the `
+    + "watcher decides when a real project's work may run." : `Nothing: OwlBear doesn't serve ${name} until you `
+    + "publish it with Publish on the Projects page.";
+  const undo = p.github ? "A published repository and its commits stay on GitHub. Remove project on its row undoes "
+    + "the registration; the folder and the GitHub repository stay for you to delete."
+    : "Nothing is registered. The folder and its first commit stay on this Mac for you to delete.";
   return [html`<div class="parts">
     <div><p-text weight="semibold">Now</p-text><ul>${now.map((x) => html`<li>${x}</li>`)}</ul></div>
-    <div><p-text weight="semibold">Then, by itself</p-text><p-text>Delivery serves ${name}: its work starts when
-      you approve a Change's brief, and the watcher decides when a real project's work may run.</p-text></div>
-    <div><p-text weight="semibold">What can't be undone</p-text><p-text>${p.github ? "A published repository and its "
-      + "commits stay on GitHub. " : ""}Remove project on its row undoes the registration; the folder${p.github
-      ? " and the GitHub repository stay" : " stays"} for you to delete.</p-text></div>
+    <div><p-text weight="semibold">Then, by itself</p-text><p-text>${then}</p-text></div>
+    <div><p-text weight="semibold">What can't be undone</p-text><p-text>${undo}</p-text></div>
     <div><p-text weight="semibold">If you don't</p-text><p-text>Nothing is created or changed.</p-text></div>
     </div>`,
   html`${button(p.github ? `Create and set up ${name}` : `Set up ${name} on this Mac`, run,
@@ -315,9 +327,14 @@ function confirmView() {
 function progressView() {
   const j = s.job, failed = j.stages.find((x) => x.state === "failed" || x.state === "held");
   const w = j.waiting;
-  const list = html`<ol class="stages">${j.stages.map((x) => html`<li><span>${STAGE[x.name] ?? x.name}</span>
+  // a stage that found nothing to do (protection unavailable, no CI generated, no method to save) says so
+  const skipped = (x) => x.state === "done" && [x.result?.applied, x.result?.generated, x.result?.written]
+    .includes(false);
+  const shown = (x) => (skipped(x) ? "skipped" : x.state);
+  const list = html`<ol class="stages">${j.stages.map((x) => html`<li><span>${STAGE[x.name] ?? x.name}${skipped(x)
+    && x.result.why ? html`<p-text size="xs">${x.result.why}</p-text>` : nothing}</span>
     <p-tag compact="true" variant=${{ done: "success", failed: "error", waiting: "warning", held: "warning",
-      running: "info" }[x.state] ?? "secondary"}>${x.state}</p-tag></li>`)}</ol>`;
+      running: "info" }[shown(x)] ?? "secondary"}>${shown(x)}</p-tag></li>`)}</ol>`;
   let body = nothing, actions = nothing;
   if (failed) {
     body = html`<p-inline-notification state="error" dismiss-button="false" heading=${`${STAGE[failed.name]} failed`}
@@ -386,9 +403,9 @@ async function newChange(id) {
 
 function draw() {
   if (!modal) return;
-  const [body, actions] = { start: startView, found: foundView, choices: choicesView, confirm: confirmView,
+  const [body, actions] = { start: startView, choices: choicesView, confirm: confirmView,
     progress: progressView, ending: endingView }[s.step]();
-  const title = { start: "Add a project", found: "What OwlBear found", choices: "Choices", confirm: "Confirm",
+  const title = { start: "Add a project", choices: "Choices", confirm: "Confirm",
     progress: "Setting it up", ending: "Done" }[s.step];
   render(html`<p-heading slot="header" size="lg"><h2>${title}</h2></p-heading>
     <div class="body">${s.error ? html`<p-text role="alert">${s.error}</p-text>` : nothing}${body}</div>
