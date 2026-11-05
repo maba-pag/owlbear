@@ -503,7 +503,8 @@ def test_the_cli_records_the_shared_repository_and_refuses_a_plain_folder(tmp_pa
     git(tmp_path, "init", "-q", "-b", "main", str(local))
     assert cli.show_data(None)[0] == 0
     assert "No shared settings repository" in cli.show_data(None)[1]
-    assert cli.show_data(plain) == (1, f"Not set: {plain.resolve()} is not a git repository's top folder")
+    refused = f"Not set: DataRepoError: {plain.resolve()} is not a git repository's top folder"
+    assert cli.show_data(plain) == (1, refused)
     assert str(local) in cli.show_data(local)[1]
     assert Store.open(repo).global_path == local / "config.json"
     assert (local / "shop-site" / "repository").read_text() == "github.com/acme/shop-site\n"

@@ -28,6 +28,7 @@ from owlbear_delivery_next.change_contracts.profile_record import (
 from owlbear_delivery_next.change_flow.status import status, unloadable
 from owlbear_delivery_next.commands import cases_cli, project_commands, replay_client, setup
 from owlbear_delivery_next.commands.answer_console import answer, describe
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.impeccable.detector import DetectorError
 from owlbear_delivery_next.impeccable_runs import pack_replay
@@ -67,7 +68,7 @@ def show_data(target: str | Path | None) -> tuple[int, str]:
         else:
             shared, done = data_place.point(Path(target)), ""
     except data_repo.DataRepoError as exc:
-        return 1, f"Not set: {exc}"
+        return 1, f"Not set: {failure(exc)}"
     root = shared.root if shared else data_place.default()
     said = f"{done[:1].upper()}{done[1:]}. " if done else ""
     return 0, f"{said}Shared data repository: {root} (pointer {data_place.pointer()}). Run `owlbear restart` to use it."
@@ -81,7 +82,7 @@ def _shown() -> tuple[int, str]:
     except data_place.BusyError:
         pass
     except data_repo.DataRepoError as exc:
-        return 1, f"Shared data: problem: {exc}"
+        return 1, f"Shared data: problem: {failure(exc)}"
     found = data_place.describe()
     lines = [f"{finished[:1].upper()}{finished[1:]}."] if finished else []
     if found.kind == "none":
