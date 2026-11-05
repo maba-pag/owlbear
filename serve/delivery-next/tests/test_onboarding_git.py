@@ -170,11 +170,6 @@ def test_identity_and_signing_are_read_with_the_target_remote(tmp_path, monkeypa
     )
     (tmp_path / "Projects").mkdir()
     folder = tmp_path / "Projects" / "new"  # still to be made: read from its parent
-    assert og.target_config(folder, BOECHT) == {
-        "user.name": "boecht", "user.email": "b@example.com", "commit.gpgsign": "true", "gpg.format": "x509",
-        "user.signingkey": "boecht-key",
-    }  # fmt: skip
-    assert og.target_config(folder, "", "user.name", "commit.gpgsign") == {"user.name": "maba", "commit.gpgsign": ""}
     assert readiness.identity(og.target_probe(folder, BOECHT)).detail == "boecht <b@example.com>"
     assert readiness.signing(og.target_probe(folder, BOECHT)).detail == "x509: not verified by setup"
     assert readiness.identity(og.target_probe(folder, "")).detail == "maba <m@example.com>"

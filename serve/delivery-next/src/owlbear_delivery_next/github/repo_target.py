@@ -19,7 +19,6 @@ FIELDS = (
     "nameWithOwner,isEmpty,defaultBranchRef,mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed,viewerPermission,"
     "visibility,id"
 )
-CHECK = "CI"
 _UNRESOLVED = "could not resolve to a repository"  # gh's answer for a repository that is absent or hidden from us
 
 
@@ -44,15 +43,10 @@ def _api(client: GhClient, operation: str, method: str, endpoint: str, **kw: Any
     return client._api(operation, method, endpoint, **kw)  # noqa: SLF001 - as `_gh`
 
 
-def _named(client: GhClient, repository: str) -> str:
-    """*repository* as ``gh repo`` takes it: with its host, off github.com."""
-    return repository if client.host == "github.com" else f"{client.host}/{repository}"
-
-
 def view(client: GhClient, repository: str) -> RepoState | None:
     """Read *repository* (``owner/name``); ``None`` when it doesn't exist or the account can't see it."""
     try:
-        r = _gh(client, "view_repository", ("repo", "view", _named(client, repository), "--json", FIELDS))
+        r = _gh(client, "view_repository", ("repo", "view", repository, "--json", FIELDS))
     except ProviderError as exc:
         if _UNRESOLVED in str(exc).casefold():
             return None
@@ -83,7 +77,7 @@ def name_free(client: GhClient, owner: str, name: str) -> bool:
 
 def create(client: GhClient, owner: str, name: str, visibility: Literal["private", "public"]) -> RepoState:
     """Create ``owner/name`` with *visibility* and read it back; a lost answer raises for the caller to reconcile."""
-    args = ("repo", "create", _named(client, f"{owner}/{name}"), f"--{visibility}")
+    args = ("repo", "create", f"{owner}/{name}", f"--{visibility}")
     _gh(client, "create_repository", args, write=True, raw=True)
     if (state := view(client, f"{owner}/{name}")) is None:
         detail = f"gh created {owner}/{name}, but GitHub doesn't show it to the account"
@@ -93,7 +87,7 @@ def create(client: GhClient, owner: str, name: str, visibility: Literal["private
 
 def ci_status(client: GhClient, repository: str, sha: str) -> str:
     """The latest ``CI`` check run on *sha*: its conclusion when finished, else its status; ``missing`` when none."""
-    found = _api(client, "ci_status", "GET", f"{repo(repository)}/commits/{sha}/check-runs?check_name={CHECK}")
+    found = _api(client, "ci_status", "GET", f"{repo(repository)}/commits/{sha}/check-runs?check_name=CI")
     try:
         runs = found["check_runs"]
         return (runs[0]["conclusion"] or runs[0]["status"]) if runs else "missing"

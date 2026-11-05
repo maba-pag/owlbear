@@ -35,9 +35,9 @@ class Gh:
         return subprocess.CompletedProcess(argv, code, out.encode(), err.encode())
 
 
-def _client(tmp_path, *answers, host="github.com"):
+def _client(tmp_path, *answers):
     gh = Gh(*answers)
-    return GhClient(tmp_path, writer=None, host=host, runner=gh), gh
+    return GhClient(tmp_path, writer=None, runner=gh), gh
 
 
 def test_an_empty_repository_is_read_with_its_merge_settings(tmp_path):
@@ -47,9 +47,6 @@ def test_an_empty_repository_is_read_with_its_merge_settings(tmp_path):
         methods=frozenset({MergeMethod.MERGE, MergeMethod.REBASE}),
     )  # fmt: skip
     assert gh.calls == [("gh", "repo", "view", "o/r", "--json", repo_target.FIELDS)]
-    client, gh = _client(tmp_path, (0, json.dumps(EMPTY), ""), host="ghe.acme.test")
-    repo_target.view(client, "o/r")
-    assert gh.calls[0][3] == "ghe.acme.test/o/r"
 
 
 def test_a_missing_repository_is_none_and_any_other_failure_raises_whole(tmp_path):

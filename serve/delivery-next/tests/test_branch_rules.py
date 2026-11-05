@@ -168,12 +168,13 @@ def checks(*contexts, strict):
     }
 
 
-@pytest.mark.parametrize("without", [ruleset(pull()), ruleset(pull(), checks(strict=True))], ids=["no-rule", "strict"])
-def test_up_to_date_is_offered_only_with_a_required_check_and_never_invents_one(without):
-    item = advice(effective(without))["up_to_date"]
-    assert (item.applicable, item.holds) == (False, False)
-    assert item.sentence == "Require branches to be up to date before merging: takes effect only with a required check"
-    assert br.changed(without, set(), {"up_to_date"}, "merge") == body(without)
+def test_up_to_date_is_offered_only_with_a_required_check_and_never_invents_one():
+    for without in (ruleset(pull()), ruleset(pull(), checks(strict=True))):  # no check rule; strict but no check
+        item = advice(effective(without))["up_to_date"]
+        assert (item.applicable, item.holds) == (False, False)
+        sentence = "Require branches to be up to date before merging: takes effect only with a required check"
+        assert item.sentence == sentence
+        assert br.changed(without, set(), {"up_to_date"}, "merge") == body(without)
     loose = ruleset(pull(), checks("CI", strict=False))
     item = advice(effective(loose))["up_to_date"]
     assert (item.applicable, item.holds, item.source) == (True, False, 7)

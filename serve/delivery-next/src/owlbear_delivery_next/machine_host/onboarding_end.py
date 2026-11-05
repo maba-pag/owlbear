@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.commands import setup
 from owlbear_delivery_next.github import branch_rules, repo_target
 from owlbear_delivery_next.machine_host import onboarding_probe as probe
 from owlbear_delivery_next.state_store.store import Store
@@ -73,8 +72,3 @@ def merge_allowed(found: dict[str, Any]) -> list[str]:
     if (remote := found.get("github")) is not None:
         return remote["methods"]
     return list(branch_rules.METHODS)
-
-
-def registered(path: Path) -> bool:
-    """Whether chats in *path* reach Delivery: exactly the Projects row's "Setup required" check."""
-    return setup.registration(path)[0]

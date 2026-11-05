@@ -68,29 +68,29 @@ def split(repository: str) -> tuple[str, str]:
     return m.group(1), m.group(2)
 
 
-def url(repository: str, host: str = HOST) -> str:
+def url(repository: str) -> str:
     """The HTTPS URL a new clone's ``origin`` gets."""
-    return f"https://{host}/{repository}.git"
+    return f"https://{HOST}/{repository}.git"
 
 
-def resolved(repository: str, host: str = HOST) -> Settings:
+def resolved(repository: str) -> Settings:
     """*repository*'s settings: Global, this machine and its claimed folder's layer, if any; no store opens."""
     shared = data_repo.locate()
-    claimed = shared.claimed(f"{host}/{repository}") if shared and repository else None
+    claimed = shared.claimed(f"{HOST}/{repository}") if shared and repository else None
     config = shared.project_path(claimed) if shared and claimed else None
     glob = shared.global_path if shared else None
     return layered(glob, config, local_home.root() / MACHINE_SETTINGS)
 
 
-def account(repository: str, host: str = HOST) -> str | None:
+def account(repository: str) -> str | None:
     """The GitHub account setting for *repository*."""
-    return resolved(repository, host).github_account
+    return resolved(repository).github_account
 
 
-def client(repository: str, setting: str | None, cwd: Path, host: str = HOST) -> GhClient:
+def client(repository: str, setting: str | None, cwd: Path) -> GhClient:
     """A ``gh`` client acting as the account *setting* names on *repository* (TD-402's rule while it is unset)."""
     owner, name = split(repository)
-    return GhClient(cwd, writer=Writer(setting or REPOSITORY_OWNER, Origin(host, owner, name)), host=host)
+    return GhClient(cwd, writer=Writer(setting or REPOSITORY_OWNER, Origin(HOST, owner, name)), host=HOST)
 
 
 def registered_id(folder: Path) -> str:
@@ -131,18 +131,22 @@ def method_settings(state: RepoState) -> dict[str, bool]:
 def rules_view(repository: str, rules: branch_rules.Rules, settings: dict[str, bool]) -> dict[str, Any]:
     """What Choices shows of the branch's rules: the allowed methods, the sources, and the comparison."""
     allowed = sorted(branch_rules.allowed_methods(settings, rules))
-    method = "merge" if "merge" in allowed or not allowed else allowed[0]
     comparison = branch_rules.compare(rules, "merge")
     links = {str(s): branch_rules.settings_url(repository, s) for s in branch_rules.sources(rules)}
     items = [
         {"key": i.key, "source": str(i.source), "sentence": i.sentence, "holds": i.holds, "applicable": i.applicable}
         for i in (*comparison.needs, *comparison.advice)
     ]
-    return {"allowed": allowed, "method": method, "merge_allowed": settings.get("merge", False),
-            "plan_limit": rules.plan_limit, "sources": [str(s) for s in branch_rules.sources(rules)],
-            "one_ruleset": branch_rules.one_ruleset(rules), "links": links, "items": items,
-            "needs": [i.key for i in comparison.needs], "summary": comparison.summary,
-            "any": bool(rules.rules or rules.classic)}  # fmt: skip
+    return {
+        "allowed": allowed,
+        "plan_limit": rules.plan_limit,
+        "one_ruleset": branch_rules.one_ruleset(rules),
+        "links": links,
+        "items": items,
+        "needs": [i.key for i in comparison.needs],
+        "summary": comparison.summary,
+        "any": bool(rules.rules or rules.classic),
+    }
 
 
 def _target(start: dict[str, Any]) -> tuple[str, bool, str, Path, str]:

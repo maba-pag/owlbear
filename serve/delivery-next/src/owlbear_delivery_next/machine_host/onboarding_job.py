@@ -21,8 +21,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-FOLDER = "onboarding"
-
 
 class Waiting(Exception):  # noqa: N818 - not an error: the stage asks the owner and the job waits for his answer
     """A stage that needs the owner's answer; ``kind`` names the question and ``data`` what the dialog shows."""
@@ -43,7 +41,7 @@ def job_id(folder: str, repository: str) -> str:
 
 def receipts() -> Path:
     """The folder of the jobs' receipts."""
-    return local_home.root() / FOLDER
+    return local_home.root() / "onboarding"
 
 
 @dataclass

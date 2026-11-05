@@ -29,7 +29,6 @@ type History = Literal["none", "unborn", "commits"]
 
 TIMEOUT = 120.0  # a local command; `git add -A` in a large folder is the slowest
 TRANSFER_TIMEOUT = 600.0  # a clone, pull or first push carries the whole history
-TARGET_KEYS = ("user.name", "user.email", "commit.gpgsign", "gpg.format", "user.signingkey")
 CI_PATH = ".github/workflows/ci.yml"
 CI_WORKFLOW = """name: CI
 
@@ -47,7 +46,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - run: echo "Add this project's build and tests here."
 """
-_BOOLEAN = frozenset({"commit.gpgsign"})
 _UNSET = 1
 _NO_REPOSITORY = 128
 _REPOSITORY_VARIABLES = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
@@ -150,21 +148,6 @@ def folder_state(path: Path) -> FolderState:
 
 def _target(target_url: str) -> tuple[str, ...]:
     return ("-c", f"remote.origin.url={target_url}") if target_url else ()
-
-
-def target_config(path_or_parent: Path, target_url: str, *keys: str) -> dict[str, str]:
-    """Each of *keys* (``TARGET_KEYS`` when none) as Git resolves it with *target_url* as ``origin``; unset is ``""``.
-
-    It runs in the folder, or in its nearest existing parent for a folder still to be made. ``commit.gpgsign`` reads
-    as Git's ``true`` or ``false``. An empty *target_url* adds no remote.
-    """
-    cwd = nearest_existing(path_or_parent)
-    found = {}
-    for key in keys or TARGET_KEYS:
-        typed = ("--type=bool",) if key in _BOOLEAN else ()
-        done = _git(cwd, *_target(target_url), "config", *typed, "--get", key, ok=(0, _UNSET))
-        found[key] = "" if done.returncode else done.stdout.strip()
-    return found
 
 
 def target_probe(path_or_parent: Path, target_url: str) -> Probe:
