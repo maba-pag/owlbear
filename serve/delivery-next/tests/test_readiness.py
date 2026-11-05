@@ -138,9 +138,10 @@ def test_a_repository_and_clone_with_commits_pass_first_commit_naming_the_defaul
     assert [(c.ok, c.detail) for c in checks if c.name == "first commit"] == [(True, "default branch main")]
 
 
-def test_a_failing_head_probe_fails_first_commit_with_gits_error_whole():
+@pytest.mark.parametrize("code", [128, -15])  # a fatal git error; git killed by a signal
+def test_a_failing_head_probe_fails_first_commit_with_gits_error_whole(code):
     fatal = "fatal: detected dubious ownership in repository at '/p'\nTo add an exception for this directory, call:"
-    probe = lambda argv, _env=None: (READY | {HEAD: (128, fatal)}).get(" ".join(argv), (0, ""))  # noqa: E731
+    probe = lambda argv, _env=None: (READY | {HEAD: (code, fatal)}).get(" ".join(argv), (0, ""))  # noqa: E731
     checks = readiness.readiness("github.com", probe, None, "copilot", SIGNED)
     assert [(c.name, c.detail) for c in checks if not c.ok] == [("first commit", fatal)]
 

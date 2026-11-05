@@ -102,7 +102,7 @@ def _first_commit(repo: dict[str, object], probe: Probe) -> Check:
     branch = ref.get("name") if isinstance(ref, dict) else ""
     remote = repo.get("isEmpty") is not True
     code, said = probe(["git", "rev-parse", "--verify", "--quiet", "HEAD"])
-    if code > 1:  # git failed; exit 1 alone means a clone without commits
+    if code not in {0, 1}:  # git failed; exit 1 alone means a clone without commits
         return Check(
             "first commit", ok=False, detail=said, fix="Repair the clone as git's error says, then run setup again"
         )
