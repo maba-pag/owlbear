@@ -1078,19 +1078,25 @@ def test_shared_only_repair_declined_writes_nothing(repo: Path, shared_repo, mon
 
 
 def test_shared_only_target_readable_before_observation_is_not_treated_as_the_approved_bad_source(
-    repo: Path, shared_repo, monkeypatch
+    repo: Path, shared_repo, monkeypatch, whole_error
 ) -> None:
     store = shared_project(repo, shared_repo, monkeypatch)
     target = shared_only_damaged(store, UNREADABLE % "")
+    note = "while reading the shared profile END"
 
     def healed_then_unreadable(_self: Store) -> Profile:
         target.write_text(GOOD_ROLES)  # the open-time error is stale: the shared file reads by the time it is observed
-        msg = "the saved profile cannot be read"
-        raise StoreError(msg)
+        exc = StoreError(whole_error)
+        exc.add_note(note)
+        raise exc
 
     monkeypatch.setattr(Store, "read_profile", healed_then_unreadable)
-    with pytest.raises(StoreError, match="can be read now"):
+    with pytest.raises(StoreError) as refused:
         setup.run(repo, [], yes=True, local_files="no")
+    earlier = f"StoreError: {whole_error}\n{note}"
+    assert str(refused.value) == (
+        f"the shared profile could not be read ({earlier}) and can be read now; run setup again to review it"
+    )
     assert target.read_text() == GOOD_ROLES
     assert not (store.root / profile_repair.RECEIPT).exists()
     assert not store.config_path.exists()

@@ -344,7 +344,8 @@ def _shared_only(
     if target_now is None:  # it reads now: the new bytes were not what the owner was shown, so nothing is replaced
         if target == profile_share.ABSENT:
             raise reason
-        msg = "the shared profile can be read now; run setup again to review it"
+        why = failure(reason)
+        msg = f"the shared profile could not be read ({why}) and can be read now; run setup again to review it"
         raise StoreError(msg)
     if not target:
         raise target_now
