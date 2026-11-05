@@ -59,7 +59,9 @@ def folder(job: Job) -> dict[str, Any]:
         return {}
     if (path / ".git").exists():
         if onboarding_git.folder_state(path).git == "commits":
-            return {"cloned": False}
+            if job.record("folder").get("intent"):  # this run's clone, stopped before its checkout ended
+                onboarding_git.finish_checkout(path)
+            return {"cloned": bool(job.record("folder").get("intent"))}
         remote = _remote(job)  # an interrupted clone: fetch what it lacks
         onboarding_git.pull_default(path, remote.default_branch if remote else "main", _access(job))
         return {"cloned": True}

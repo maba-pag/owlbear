@@ -193,6 +193,13 @@ def starter_files(path: Path, name: str, ci: bool, *, readme: bool = True) -> No
         workflow.write_text(CI_WORKFLOW, encoding="utf-8")
 
 
+def finish_checkout(path: Path) -> None:
+    """Write the files a clone stopped before checking out, from HEAD; a file already there is never overwritten."""
+    _git(path, "read-tree", "HEAD")
+    if missing := [f for f in _git(path, "ls-files", "--deleted", "-z").stdout.split("\0") if f]:
+        _git(path, "checkout-index", "--", *missing)
+
+
 def head(path: Path) -> str:
     """The sha of *path*'s HEAD."""
     return _git(path, "rev-parse", "HEAD").stdout.strip()

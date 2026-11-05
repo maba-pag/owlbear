@@ -48,7 +48,11 @@ ORDER = (
     "end",
 )
 SETUP = ("shared", "merge_method", "readiness", "detect", "profile", "files", "register", "end")
-_REPO = re.compile(r"(?:https?://[^/]+/|git@[^:]+:)?([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?$")
+_REPO = re.compile(  # owner/name, or a github.com URL of it; another host is no GitHub repository
+    r"(?:https?://(?:www\.)?github\.com/|git@github\.com:|ssh://git@github\.com/)?"
+    r"([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?$",
+    re.IGNORECASE,
+)
 
 
 def projects() -> Path:
@@ -64,7 +68,7 @@ def slug(name: str) -> str:
 def split(repository: str) -> tuple[str, str]:
     """``owner/name`` from a name or a URL; raises ``ValueError`` on anything else."""
     if not (m := _REPO.fullmatch(repository.strip())):
-        msg = f"{repository!r} is not a GitHub repository: give owner/name or its URL"
+        msg = f"{repository!r} is not a repository on github.com: give owner/name or its github.com URL"
         raise ValueError(msg)
     return m.group(1), m.group(2)
 
@@ -188,7 +192,7 @@ def probe(start: dict[str, Any]) -> dict[str, Any]:
         _remote(found, kind, repository, folder, has_origin=bool(state.origin))
     if found["refusal"]:
         return found
-    found["author_missing"] = _author_missing(folder, url(repository) if repository else "")
+    found["author_missing"] = _author_missing(folder, state.origin or (url(repository) if repository else ""))
     found["old_task"] = setup.has_task(folder / ".vscode" / "tasks.json")
     found["stages"], found["entry"] = stages(found)
     found["refusal"] = _conflict(found) or ""
@@ -258,7 +262,9 @@ def _author_missing(folder: Path, target: str) -> bool:
 def preflight(plan: dict[str, Any]) -> list[str]:
     """What must hold before anything is created, each failure whole; empty when the run may start."""
     folder, repository = Path(plan["folder"]), plan.get("repository", "")
-    target = url(repository) if plan.get("github") and repository else ""
+    # the remote the first commit will see: the folder's own origin, else the one the Git stage sets
+    own = onboarding_git.folder_state(folder).origin if folder.exists() else None
+    target = own or (url(repository) if plan.get("github") and repository else "")
     where = onboarding_git.nearest_existing(folder)
     probe_git = onboarding_git.target_probe(where, target)
     out = []

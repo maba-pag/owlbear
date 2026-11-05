@@ -153,10 +153,12 @@ function unprotectable(f) {
 
 function plan() {
   const f = s.found, c = s.c, creating = f.stages.includes("repository");
+  const protecting = f.on_github && c.protect && !unprotectable(f);
+  const changing = protecting && f.rules?.any && f.rules.one_ruleset !== null;  // OwlBear writes only one ruleset
   const repository = f.on_github ? (creating ? `${c.owner.trim()}/${c.name.trim()}` : f.repository) : "";
   return { folder: f.folder, name: c.name.trim() || f.name, repository, github: f.on_github, entry: f.entry,
-    stages: f.stages, visibility: c.visibility, ci: c.ci && f.on_github, protect: c.protect && !unprotectable(f),
-    advice: c.protect ? c.advice : [], needs: c.protect ? c.needs : [], method: method(f, c).write,
+    stages: f.stages, visibility: c.visibility, ci: c.ci && f.on_github, protect: protecting,
+    advice: changing ? c.advice : [], needs: changing ? c.needs : [], method: method(f, c).write,
     labels: c.labels ? f.labels : [], consents: c.consents, files_warned: c.files_warned,
     had_files: f.state.files, had_workflows: f.state.workflows,
     rules_items: f.rules?.items ?? null, author: f.author_missing ? c.author : null };
@@ -308,9 +310,12 @@ function confirmView() {
   if (changes.length) now.push(`change ruleset ${f.rules.one_ruleset} of the default branch: ${changes.join("; ")}`);
   if (p.protect && !f.rules?.any) {  // OwlBear's own ruleset, on a branch without rules
     const ci = p.ci && p.stages.includes("commit") && !p.had_workflows;
-    now.push("add a ruleset to the default branch: pull requests only, merge commits only, no deletion or force "
-      + `push, no approvals required; ${ci ? "required check: CI, once it reports on the first push"
-        : "required checks: none; existing workflows unchanged"}`);
+    now.push("add a ruleset to the default branch: pull requests only, merge commits only, conversations resolved "
+      + "before merging, no deletion or force push, no approvals required; " + (ci ? "required check: CI, once it "
+        + "reports on the first push, with branches up to date before merging"
+        : "required checks: none; existing workflows unchanged"));
+  } else if (p.protect && f.rules.one_ruleset === null) {
+    now.push("change no rule: the rules above that need changing are yours to change on GitHub, by their links");
   }
   if (p.github) {
     now.push(m.write ? `save the merge method ${m.write} for this project`

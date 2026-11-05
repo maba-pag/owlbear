@@ -29,7 +29,7 @@ from owlbear_delivery_next.local_system import codebase, onboarding_git
 from owlbear_delivery_next.machine_host import app, onboarding_job, onboarding_probe, onboarding_stages, project
 from owlbear_delivery_next.machine_host import machine as machine_module
 from owlbear_delivery_next.machine_host.machine import MachineError
-from owlbear_delivery_next.machine_host.onboarding import Onboarding
+from owlbear_delivery_next.machine_host.onboarding import Onboarding, OnboardingError
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.state_store import registry
@@ -777,3 +777,49 @@ def test_github_launches_and_the_push_run_as_the_repositorys_account_with_its_to
     assert [env.get("GH_TOKEN") for argv, env in git_launches.seen if "push" in argv] == ["tok-boecht"]
     assert not any("tok-" in arg for c in fake_gh.calls() for arg in c["argv"])
     assert not any("tok-" in arg for argv, _ in git_launches.seen for arg in argv)
+
+
+def test_a_url_on_another_host_is_no_github_repository(jobs):
+    with pytest.raises(OnboardingError, match=r"not a repository on github\.com"):
+        jobs.probe({"kind": "github", "repository": "https://gitlab.com/ada/meter"})
+
+
+def test_the_preflight_reads_the_identity_the_first_commit_will_use(hub, jobs, tmp_path):
+    """Only the HTTPS URL picks boecht's identity here: with an SSH origin the first commit is the default one's,
+    which signs with a key that can't be read, so the preflight must stop on it."""
+    hub.add("boecht/ledger")
+    home = Path(os.environ["HOME"])
+    (home / ".gitconfig").write_text(
+        "[user]\n\tname = maba\n\temail = m@example.com\n\tsigningkey = /nonexistent/key.pub\n"
+        "[commit]\n\tgpgsign = true\n[gpg]\n\tformat = ssh\n"
+        '[includeIf "hasconfig:remote.*.url:https://github.com/boecht/**"]\n\tpath = id-boecht\n'
+    )
+    (home / "id-boecht").write_text("[user]\n\tname = boecht\n\temail = b@example.com\n[commit]\n\tgpgsign = false\n")
+    folder = tmp_path / "ledger"
+    folder.mkdir()
+    git(folder, "init", "-q", "-b", "main")
+    git(folder, "remote", "add", "origin", "git@github.com:boecht/ledger.git")
+    found = jobs.probe({"kind": "folder", "folder": str(folder)})
+    problems = onboarding_probe.preflight(plan_for(found))
+    assert [p.split(":")[0] for p in problems] == ["commit signing"]
+
+
+def test_a_clone_stopped_before_its_checkout_gets_its_files_on_resume(hub, jobs, tmp_path, monkeypatch):
+    hub.add("ada/meter", commits=True)
+    real = onboarding_git.clone
+
+    def no_checkout(parent: Path, url: str, name: str, _access: Access) -> Path:
+        git(parent, "clone", "-q", "--no-checkout", url, name)
+        monkeypatch.setattr(onboarding_git, "clone", real)
+        said = "the clone was killed during its checkout"
+        raise RuntimeError(said)
+
+    monkeypatch.setattr(onboarding_git, "clone", no_checkout)
+    found = jobs.probe({"kind": "github", "repository": "ada/meter", "folder": str(tmp_path / "meter")})
+    info = run(jobs, plan_for(found, protect=False))
+    assert stage(info, "folder")["state"] == "failed"
+    info = settle(jobs, jobs.resume(info["id"])["id"])
+    if info["waiting"]:
+        info = settle(jobs, jobs.answer(info["id"], "profile", {})["id"])
+    assert (tmp_path / "meter" / "README.md").read_text() == "# seeded\n"
+    assert git(tmp_path / "meter", "status", "--porcelain") == ""
