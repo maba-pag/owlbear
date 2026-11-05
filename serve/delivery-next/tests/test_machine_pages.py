@@ -1447,9 +1447,9 @@ def test_decisions_says_what_the_start_could_not_do_about_decisions_whole(monkey
 
     machine, server, base = serve()
     try:
-        monkeypatch.setattr(Path, "unlink", refusing)
-        host_start._retired_index(machine, local_home.root())  # noqa: SLF001 - the start's own step
-        monkeypatch.undo()
+        with monkeypatch.context() as removing:  # only the removal refuses; the fixtures' overrides stay
+            removing.setattr(Path, "unlink", refusing)
+            host_start._retired_index(machine, local_home.root())  # noqa: SLF001 - the start's own step
         monkeypatch.setattr(data_repo, "locate", unplaced)
         host_start.warm(machine)
         text, said = _checks_page(base, "/decisions", "#error")
