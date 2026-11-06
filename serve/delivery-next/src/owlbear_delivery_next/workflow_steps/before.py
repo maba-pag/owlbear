@@ -1,9 +1,11 @@
-"""TD-24 "before" screenshots: the brief's states rendered at the merge-base with the visual check's own recipe.
+"""The brief's states rendered at a commit in a throwaway worktree: "before" at the check, the current pages in shaping.
 
-Once per Change, after the preparing Builder returned the visual check's recipe and before the host launches it,
-a runner checks out the merge-base in a temporary detached worktree, runs the profile's install commands for the
-Change's scope, launches the same recipe there, captures every state and disposes of all it started. The card
-shows these beside the "after" screenshots. A failure is a note on the card (B25); it never gates.
+The visual check's "before" (TD-24): after the preparing Builder returned the check's recipe and before the host
+launches it, a runner checks out the merge-base, runs the profile's install commands for the Change's scope, launches
+the recipe there on the check's test copy, captures every state and disposes of all it started. The card shows these
+beside the "after" screenshots. The shaping capture (D-01M61V2GR0C6JV2R6KJ0WR4PNB) renders the target's tip the same
+way with the brief's recipe, on its own test copy, which ends in that checkout before it is removed. A failure is a
+note on the card (B25); neither gates.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.change_contracts.models import VISUAL, Environment, StepKind
+from owlbear_delivery_next.change_contracts.models import VISUAL, BriefRecipe, Environment, StepKind
 from owlbear_delivery_next.change_contracts.visual_records import VisualResult
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.workflow_steps import check, design, visual
@@ -25,7 +27,7 @@ from owlbear_delivery_next.workflow_steps import check, design, visual
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from owlbear_delivery_next.change_contracts.models import Change
+    from owlbear_delivery_next.change_contracts.models import Change, VisualState
     from owlbear_delivery_next.change_contracts.profile_record import Profile
     from owlbear_delivery_next.change_contracts.visual_records import DetectorScan
 
@@ -47,34 +49,38 @@ def _remove(repo: Path, tmp: Path) -> None:
             step()
 
 
-def _serve(  # noqa: PLR0913 - the widths come from the settings, the test copy from the check's preparation
-    c: Change,
+type Prepare = Callable[[Path], dict[str, str]]
+type Inside = Callable[[Path, list[str]], None]
+
+
+def _serve(  # noqa: PLR0913, PLR0917 - the recipe, its states and where they render; widths from the settings
+    recipe: Environment | BriefRecipe,
+    states: Sequence[VisualState],
     root: Path,
     out: Path,
     log: Callable[[dict[str, Any]], None],
     notes: list[str],
     *,
     widths: Sequence[int],
-    prepare: Callable[[Path], dict[str, str]] | None = None,
+    where: str,
+    prepare: Prepare | None = None,
 ) -> list[visual.Shot]:
-    """Prepare the test copy, launch the Change's recipe in *root*, capture its states, dispose of all it started."""
-    r = c.env
-    if r is None:
-        return []
+    """Prepare the test copy, launch *recipe* in *root*, capture its states, dispose of all it started."""
     e = Environment(
-        check=VISUAL, command=r.command, directory=r.directory, ready_url=r.ready_url, port=check.free_port()
-    )
+        check=VISUAL, command=recipe.command, directory=recipe.directory, ready_url=recipe.ready_url,
+        port=check.free_port(),
+    )  # fmt: skip
     if check.answers(check.url(e)):
         notes.append(f"something else already answers at {check.url(e)}")
         return []
     try:
         env = prepare(root) if prepare else None  # TD-96: the same frozen snapshot the "after" capture restores
-    except Exception as exc:  # noqa: BLE001 - the "before" capture never gates the Change (B25)
-        notes.append(f"the test copy at the merge-base: {worktree.failure(exc)}")
+    except Exception as exc:  # noqa: BLE001 - a capture never gates the Change (B25)
+        notes.append(f"the test copy at {where}: {worktree.failure(exc)}")
         return []
     proc = check.start(e, root, out / "preview.log", env)
     if proc is None:
-        notes.append(f"`{e.command}` did not start at the merge-base")
+        notes.append(f"`{e.command}` did not start at {where}")
         return []
     e = e.model_copy(update={"pgid": proc.pid, "pids": {proc.pid: check.created(proc.pid)}})
     try:
@@ -82,16 +88,76 @@ def _serve(  # noqa: PLR0913 - the widths come from the settings, the test copy 
         check.release(proc)
         if (pids := check.ready(e, proc)) is None:
             e = check.unready(e, proc)
-            notes.append(f"for the merge-base, {check.unanswered(e)}")
+            notes.append(f"for {where}, {check.unanswered(e)}")
             return []
         e = e.model_copy(update={"pids": pids})
         check.journal(log, pids)
-        states = [s for s in c.brief.visual if prepare or not s.steps]  # steps run only on a test copy (TD-96)
-        notes += [f"{s.name}: its steps need a test preparation" for s in c.brief.visual if s not in states]
-        return visual.CAPTURE(visual.root(check.url(e)), states, out, widths, pack=design.pack())
+        shown = [s for s in states if prepare or not s.steps]  # steps run only on a test copy (TD-96)
+        notes += [f"{s.name}: its steps need a test preparation" for s in states if s not in shown]
+        return visual.CAPTURE(visual.root(check.url(e)), shown, out, widths, pack=design.pack())
     finally:
         if left := check.dispose(e):
             notes.append(f"preview processes {sorted(left)} did not stop")
+
+
+def _render(  # noqa: PLR0913, PLR0917 - what is rendered where, and the hooks around it
+    repo: Path,
+    base: str,
+    recipe: Environment | BriefRecipe,
+    states: Sequence[VisualState],
+    out: Path,
+    log: Callable[[dict[str, Any]], None],
+    *,
+    installs: Sequence[tuple[str, str]],
+    widths: Sequence[int],
+    where: str,
+    prepare: Prepare | None = None,
+    inside: Inside | None = None,
+) -> tuple[list[visual.Shot], list[str]]:
+    """Render *states* at *base* in a throwaway worktree; *inside* runs in it, even after a failure, before removal."""
+    shots: list[visual.Shot] = []
+    notes: list[str] = []
+    tmp: Path | None = None
+    try:
+        out.mkdir(parents=True, exist_ok=True)
+        tmp = Path(tempfile.mkdtemp(prefix="owlbear-before-"))
+        worktree.git(repo, "worktree", "add", "--quiet", "--detach", str(tmp), base)
+        for package, command in installs:
+            if note := check.run(
+                shlex.split(command), tmp / package.strip("/") if package not in {"", "."} else tmp, log
+            ):
+                notes.append(note)
+                break
+        else:
+            shots = _serve(recipe, states, tmp, out, log, notes, widths=widths, where=where, prepare=prepare)
+    except Exception as exc:  # noqa: BLE001 - a capture never gates the Change (B25)
+        notes.append(worktree.failure(exc))
+    finally:
+        if tmp is not None:
+            if inside is not None:
+                try:
+                    inside(tmp, notes)
+                except Exception as exc:  # noqa: BLE001 - its error is the capture's note, whole
+                    notes.append(worktree.failure(exc))
+            _remove(repo, tmp)
+    return shots, notes + [f"{s.state} at {s.width}px: {s.error}" for s in shots if s.error]
+
+
+def _result(  # noqa: PLR0913, PLR0917 - one result from every captured input
+    c: Change, base: str, tree: str, shots: Sequence[visual.Shot], notes: list[str], widths: Sequence[int],
+    *, scans: Sequence[DetectorScan] = (), at: datetime,
+) -> VisualResult:  # fmt: skip
+    return VisualResult(
+        head=base,
+        tree=tree,
+        states={s.name: s.version for s in c.brief.visual},
+        files=[s.file for s in shots if s.file],
+        widths=list(widths),
+        errors=[e for s in shots for e in s.errors],
+        design=[s.design for s in shots if s.design] + list(scans),
+        findings=notes,
+        at=at,
+    )
 
 
 def capture(  # noqa: PLR0913 - the capture's widths come from the settings, like the visual check's
@@ -102,7 +168,7 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
     log: Callable[[dict[str, Any]], None],
     *,
     widths: Sequence[int],
-    prepare: Callable[[Path], dict[str, str]] | None = None,
+    prepare: Prepare | None = None,
 ) -> VisualResult:
     """Render the brief's states at the merge-base; the findings say why any state is missing (B25)."""
     path, now, e = Path(c.names.worktree), datetime.now(UTC), c.env
@@ -115,44 +181,49 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
         return VisualResult(
             head="", tree="", findings=[f"the merge-base could not be read: {worktree.failure(exc)}"], at=now
         )
-    shots: list[visual.Shot] = []
-    notes: list[str] = []
     sources: list[DetectorScan] = []
-    tmp: Path | None = None
+
+    def scan(tmp: Path, _notes: list[str]) -> None:  # the Change's UI paths in the merge-base's whole tree
+        if found := design.sources(tmp, visual.ui_paths(c, worktree.head(path)), design.pack()):
+            sources.append(found)
+
+    scope = sorted({p for t in (c.plan.tasks if c.plan else []) for p in t.scope} | set(c.brief.scope))
+    shots, notes = _render(
+        repo, base, e, c.brief.visual, out_for(base), log, installs=worktree.installs(profile, scope),
+        widths=widths, where="the merge-base", prepare=prepare, inside=scan,
+    )  # fmt: skip
+    return _result(c, base, tree, shots, notes, widths, scans=sources, at=now)
+
+
+def at_target(  # noqa: PLR0913 - the capture's widths come from the settings, its test copy from its preparation
+    c: Change,
+    repo: Path,
+    out: Path,
+    profile: Profile,
+    log: Callable[[dict[str, Any]], None],
+    *,
+    widths: Sequence[int],
+    fetch: Callable[[Path, str], None],
+    prepare: Prepare | None = None,
+    finish: Inside | None = None,
+) -> VisualResult:
+    """The shaping capture: the brief's states at the freshly fetched target, with the brief's recipe (B25).
+
+    *finish* ends its test copy in the throwaway checkout before it is removed; a fetch that fails ends it whole.
+    """
+    now, r, target = datetime.now(UTC), c.brief.recipe, c.names.target
+    if r is None:
+        return VisualResult(head="", tree="", findings=["the brief has no render recipe"], at=now)
     try:
-        out = out_for(base)
-        out.mkdir(parents=True, exist_ok=True)
-        tmp = Path(tempfile.mkdtemp(prefix="owlbear-before-"))
-        worktree.git(repo, "worktree", "add", "--quiet", "--detach", str(tmp), base)
-        scope = sorted({p for t in (c.plan.tasks if c.plan else []) for p in t.scope} | set(c.brief.scope))
-        for package, command in worktree.installs(profile, scope):
-            if note := check.run(
-                shlex.split(command), tmp / package.strip("/") if package not in {"", "."} else tmp, log
-            ):
-                notes.append(note)
-                break
-        else:
-            shots = _serve(c, tmp, out, log, notes, widths=widths, prepare=prepare)
-        if scan := design.sources(tmp, visual.ui_paths(c, worktree.head(path)), design.pack()):
-            sources.append(scan)  # the Change's UI paths in the merge-base's whole tree, after the screenshots
-    except Exception as exc:  # noqa: BLE001 - the "before" capture never gates the Change (B25)
-        notes.append(worktree.failure(exc))
-    finally:
-        if tmp is not None:
-            _remove(repo, tmp)
-    notes += [f"{s.state} at {s.width}px: {s.error}" for s in shots if s.error]
-    states = {s.name: s.version for s in c.brief.visual}
-    files = [s.file for s in shots if s.file]
-    errors = [e for s in shots for e in s.errors]
-    scans = [s.design for s in shots if s.design] + sources
-    return VisualResult(
-        head=base,
-        tree=tree,
-        states=states,
-        files=files,
-        widths=list(widths),
-        errors=errors,
-        design=scans,
-        findings=notes,
-        at=now,
-    )
+        fetch(repo, target)
+        base = worktree.git(repo, "rev-parse", f"{worktree.tracking(repo, target)}^{{commit}}").strip()
+        tree = visual.tree(repo, base)
+    except Exception as exc:  # noqa: BLE001 - a capture never gates; the owner reads its error whole
+        return VisualResult(
+            head="", tree="", findings=[f"the target {target} could not be read: {worktree.failure(exc)}"], at=now
+        )
+    shots, notes = _render(
+        repo, base, r, c.brief.visual, out, log, installs=worktree.installs(profile, sorted(c.brief.scope)),
+        widths=widths, where="the target", prepare=prepare, inside=finish,
+    )  # fmt: skip
+    return _result(c, base, tree, shots, notes, widths, at=now)

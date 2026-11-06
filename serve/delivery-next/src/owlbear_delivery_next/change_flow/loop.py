@@ -55,6 +55,7 @@ from owlbear_delivery_next.change_flow import (
     plan_rounds,
     rebuilds,
     round_flow,
+    shaping_capture,
 )
 from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go, open_task, resolved, resume
 
@@ -170,8 +171,8 @@ def next_step(c: Change, now: datetime) -> Step | None:
         return c.step
     if o.exit in {Exit.ASK, Exit.STOP}:
         return None
-    if o.who == "you":  # an owed pick runs while the chat revises or approves; the wait stays (TD-459)
-        return c.step if o.waiting == Waiting.CHAT and picks.owed(c) else None
+    if o.who == "you":  # an owed pick or the draft's capture runs while the chat revises or approves (TD-459)
+        return c.step if o.waiting == Waiting.CHAT and (picks.owed(c) or shaping_capture.owed(c)) else None
     return None if o.wake_at and o.wake_at > now else c.step
 
 

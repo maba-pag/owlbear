@@ -38,7 +38,7 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_contracts.preparation import BASE, Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_contracts.visual_records import VisualResult
+from owlbear_delivery_next.change_contracts.visual_records import ShapingCapture, VisualResult
 from owlbear_delivery_next.change_flow import brief_rounds, brief_starts, delivery_target, loop, worktree
 from owlbear_delivery_next.change_flow.brief_tools import BriefDraft
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
@@ -1086,15 +1086,21 @@ def test_a_paused_fold_still_takes_a_queued_pr_out_through_the_barrier(store, tm
 
 
 @pytest.mark.parametrize(
-    ("kind", "mode", "runs"),
-    [(StepKind.CLEANUP, None, True), (StepKind.SHAPE, "challenge", True), (StepKind.SHAPE, "planned", False),
-     (StepKind.BUILD, None, False)],
+    ("step", "shaped", "runs"),
+    [(Step(kind=StepKind.CLEANUP, task="t1"), None, True),
+     (Step(kind=StepKind.SHAPE, mode="challenge", task="t1"), None, True),
+     (Step(kind=StepKind.SHAPE, mode="planned", task="t1"), None, False),
+     (Step(kind=StepKind.SHAPE, task="t1"), ShapingCapture(key="k"), True),
+     (Step(kind=StepKind.BUILD, task="t1"), None, False)],
 )  # fmt: skip
-def test_while_paused_only_a_cleanup_or_the_owners_brief_challenge_starts(store, tmp_path, kind, mode, runs):
-    """TD-287, TD-303: never while OwlBear or the project stops, nor once the owner asked to stop when idle."""
+def test_while_paused_only_a_cleanup_or_the_owners_brief_challenge_starts(store, tmp_path, step, shaped, runs):
+    """TD-287, TD-303: never while OwlBear or the project stops, nor once the owner asked to stop when idle.
+
+    The draft's requested capture is shaping too (D-01M5DW3X0016A1M4CK96QKWM6Z).
+    """
     fake = Fake(store, tmp_path)
     paused(fake, [True])
-    c = asking(fake).model_copy(update={"outcome": None, "step": Step(kind=kind, mode=mode, task="t1")})
+    c = asking(fake).model_copy(update={"outcome": None, "step": step, "shaped": shaped})
     save(store, c)
     assert (status(c, fake.host.activity("c1"), NOW).action == "Resume Delivery") is not runs
     fake.host.draining = lambda: True

@@ -349,6 +349,18 @@ def test_one_frozen_snapshot_is_restored_separately_before_each_capture_and_ende
     assert (lines(log)[-1], snapshot.exists()) == ("cleanup", False)  # retention: deleted after the check
     assert prepare.left(store, c) == []
 
+    target = tmp / "target"  # the shaping capture's own checkout (D-01M6Q56RXK85C5T4AG7R051X6N)
+    target.mkdir()
+    where = f"{sys.executable} -c \"import os; open(os.environ['TEST_LOG'], 'a').write('cleanup ' + os.getcwd())\""
+    kept = settings(option(tmp, cleanup=where), retention="keep")
+    c.brief.preparation = "copy"
+    assert prepare.shaping(store, c, kept, events.append)(target)["TEST_DB"] == str(tmp / "test.db")
+    rec = prepare.read(store, "c1", prepare.SHAPING)
+    assert (rec.home, rec.open, (tmp / "test.db").read_text()) == (str(target), True, "user-1+seeded")
+    assert prepare.end(store, c, repo, kept, events.append) is None
+    assert log.read_text().splitlines()[-1] == f"cleanup {target.resolve()}"  # never the Change worktree
+    assert (Path(rec.snapshot).exists(), prepare.left(store, c)) == (False, [])  # never kept, whatever retention says
+
 
 def test_cleanup_runs_after_a_failed_restore_and_the_snapshot_may_be_kept(env):
     repo, store, log, tmp = env

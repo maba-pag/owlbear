@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_contracts.failures import QUOTA, WRONG_MODEL
 from owlbear_delivery_next.change_contracts.merge_records import QUEUE_UNSEEN
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind, Waiting
-from owlbear_delivery_next.change_flow import brief_starts, loop, picks, step_stages
+from owlbear_delivery_next.change_flow import brief_starts, loop, picks, shaping_capture, step_stages
 from owlbear_delivery_next.change_flow.brief_rounds import MODES
 from owlbear_delivery_next.change_flow.budgets import EPISODE_QUIET, RETRY_LIMIT, WRONG_MODEL_LIMIT, episode
 from owlbear_delivery_next.change_flow.loop import CONSENT
@@ -137,6 +137,8 @@ def _age(delta: timedelta) -> str:
 
 def stage(c: Change) -> str:
     """Return the stage shown for the current step, with the task position while building."""
+    if shaping_capture.owed(c):
+        return "Capturing pages"
     kind = StepKind(c.step.mode) if c.step.kind == StepKind.INTEGRATE and c.step.mode else c.step.kind
     if kind in {StepKind.BUILD, StepKind.REVIEW} and c.plan and c.plan.tasks:
         ids = [t.id for t in c.plan.tasks]
@@ -221,6 +223,8 @@ def _enqueue_error(c: Change, activity: Activity) -> bool:
 
 def _owned(c: Change, s: str, o: Outcome, activity: Activity) -> Status | None:
     """A wait the owner or his shaping chat ends, or the brief challenge Delivery starts by itself (#986); else None."""
+    if shaping_capture.owed(c):  # the chat's wait goes on, but Delivery works first
+        return Status(f"{s} · brief v{c.brief.version}'s states at {c.names.target}; approval waits", None, "delivery")
     if brief_starts.waiting(c):  # no chat needed: Delivery starts the version's challenge
         at = f" at {o.wake_at.astimezone():%H:%M}" if o.wake_at else " after the wait set in Settings"
         return Status(f"{s} · brief v{c.brief.version}'s challenge starts by itself{at}", None, "delivery")
@@ -308,11 +312,12 @@ def _left(events: list[dict[str, Any]], since: datetime | None) -> str:
 def passes(c: Change, now: datetime) -> bool:
     """Whether the next step runs while Delivery is paused (TD-287, TD-303).
 
-    A cleanup, or the brief challenge the owner's chat asked for and its decision pick; planning, building, publishing
-    and merging wait for Resume.
+    A cleanup, or the brief challenge the owner's chat asked for, its decision pick and the draft's capture: pause never
+    blocks shaping (D-01M5DW3X0016A1M4CK96QKWM6Z). Planning, building, publishing and merging wait for Resume.
     """
     step = loop.next_step(c, now)
-    shaping = step is not None and step.kind == StepKind.SHAPE and (step.mode in MODES or picks.owed(c))
+    owed = picks.owed(c) or shaping_capture.owed(c)
+    shaping = step is not None and step.kind == StepKind.SHAPE and (step.mode in MODES or owed)
     return step is not None and (step.kind == StepKind.CLEANUP or shaping)
 
 

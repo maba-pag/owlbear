@@ -26,11 +26,10 @@ from owlbear_delivery_next.change_contracts.preparation import Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.visual_records import PageError
 from owlbear_delivery_next.change_flow.status import Activity
-from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import before, check, prepare, visual
+from owlbear_delivery_next.workflow_steps import before, captures, check, prepare, visual
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 HOME = VisualState(name="home", path="/", expect="The greeting is centred")
@@ -261,7 +260,7 @@ def test_the_runner_records_the_before_capture_and_the_page_serves_it(ui, tmp_pa
         == ""
     )
     prepare._write(store, "c1", prepare.Prepared(check=VISUAL, option=none))  # noqa: SLF001 - as the preparer chose
-    runner._before(store, Lock("c1"), ui, Path(ui.names.worktree))  # noqa: SLF001
+    captures.at_merge_base(store, Lock("c1"), ui, Path(ui.names.worktree))
     c = store.read("c1")
     assert (c.before.files, c.before.findings, before.due(c)) == (
         ["home-1280.png", "home-1920.png", "home-2400.png"],
