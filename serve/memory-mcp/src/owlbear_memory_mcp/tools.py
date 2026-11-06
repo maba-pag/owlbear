@@ -548,26 +548,21 @@ async def read_memory(ctx: Context, *, entry_id: str, folder: str | None = None)
     engine = _engine_from_ctx(ctx)
     shared = _global_engine(ctx)
     read_errors: dict[str, str] = {}
-    where = "project"
-    try:
-        entry = engine.get_entry(entry_id)
-    except NotFoundError:
-        collect(engine, read_errors)
-        if shared is None:
-            msg = f"entry not found: {entry_id}"
-            if warning := read_warning(read_errors):
-                msg += f"\n{warning}"
-            raise ToolError(msg) from None
+    for candidate, where, label in ((engine, "project", "project"), (shared, "global", "Global")):
+        if candidate is None:
+            continue
         try:
-            entry, where = shared.get_entry(entry_id), "global"  # Global memory, read only
-        except NotFoundError as exc:
-            collect(shared, read_errors, "Global")
-            msg = f"entry not found: {entry_id}"
-            if warning := read_warning(read_errors):
-                msg += f"\n{warning}"
-            raise ToolError(msg) from exc
-        collect(shared, read_errors, "Global")
-    collect(engine, read_errors)
+            entry = candidate.get_entry(entry_id)
+        except NotFoundError:
+            continue
+        finally:
+            collect(candidate, read_errors, label)
+        break
+    else:
+        msg = f"entry not found: {entry_id}"
+        if warning := read_warning(read_errors):
+            msg += f"\n{warning}"
+        raise ToolError(msg)
     if entry.state == MemoryState.DELETED:
         msg = f"entry is deleted: {entry_id}"
         raise ToolError(msg)
