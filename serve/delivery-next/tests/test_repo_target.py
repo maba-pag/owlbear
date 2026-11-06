@@ -83,3 +83,25 @@ def test_ci_status_reads_the_ci_check_run_on_the_commit(tmp_path, runs, status):
     client, calls = _client(tmp_path, (0, json.dumps({"total_count": len(runs), "check_runs": runs}), ""))
     assert repo_target.ci_status(client, "o/r", "abc123") == status
     assert "repos/o/r/commits/abc123/check-runs?check_name=CI" in calls[0]
+
+
+ORG_404 = (1, '{"message":"Not Found"}', "gh: Not Found (HTTP 404)\n")
+
+
+@pytest.mark.parametrize(
+    ("answers", "limited"),
+    [
+        ([(0, json.dumps({"login": "acme", "plan": {"name": "free"}}), "")], True),  # an organisation on free
+        ([(0, json.dumps({"login": "acme", "plan": {"name": "team"}}), "")], False),
+        ([(0, json.dumps({"login": "acme"}), "")], False),  # a plan GitHub doesn't show this member
+        ([ORG_404, (0, json.dumps({"login": "Acme", "plan": {"name": "free"}}), "")], True),  # the user itself
+        ([ORG_404, (0, json.dumps({"login": "acme", "plan": {"name": "pro"}}), "")], False),
+        ([ORG_404, (0, json.dumps({"login": "someone", "plan": {"name": "free"}}), "")], False),
+    ],
+)
+def test_a_free_plan_allows_no_rules_on_a_private_repository(tmp_path, answers, limited):
+    client, calls = _client(tmp_path, *answers)
+    said = repo_target.private_rules_limit(client, "acme")
+    limit = "GitHub's free plan of acme allows no branch rules on a private repository: make it public, or upgrade"
+    assert said == (limit if limited else "")
+    assert [c[c.index("--method") + 1] for c in calls] == ["GET"] * len(answers)

@@ -41,8 +41,9 @@ def router(machine: Machine) -> APIRouter:
 
     @routes.post("/preflight")
     def preflight(body: dict[str, Any]) -> dict[str, Any]:
-        """What must hold before anything is created, for the chosen name and route."""
-        return {"problems": onboarding_probe.preflight(body)}
+        """What must hold before anything is created, for the chosen name and route, and why protection can't be."""
+        problems = onboarding_probe.preflight(body)
+        return {"problems": problems, "protect_limit": "" if problems else onboarding_probe.protect_limit(body)}
 
     @routes.post("/jobs")
     def start(body: dict[str, Any]) -> dict[str, Any]:

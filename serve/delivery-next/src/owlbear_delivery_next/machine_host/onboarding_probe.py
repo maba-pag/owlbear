@@ -291,6 +291,15 @@ def _named(origin: str) -> tuple[str, ...]:
         return (origin,)
 
 
+def protect_limit(plan: dict[str, Any]) -> str:
+    """Why the private repository the run creates can't be protected, read before it exists; empty when it can."""
+    if not (plan.get("protect") and "repository" in plan.get("stages", []) and plan.get("visibility") == "private"):
+        return ""
+    repository = plan["repository"]
+    gh = client(repository, account(repository), onboarding_git.nearest_existing(Path(plan["folder"])))
+    return repo_target.private_rules_limit(gh, split(repository)[0])
+
+
 def preflight(plan: dict[str, Any]) -> list[str]:
     """What must hold before anything is created, each failure whole; empty when the run may start."""
     folder, repository = Path(plan["folder"]), plan.get("repository", "")

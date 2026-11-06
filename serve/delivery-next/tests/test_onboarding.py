@@ -114,6 +114,7 @@ def hub(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Hub:
     monkeypatch.setattr(repo_target, "name_free", h.name_free)
     monkeypatch.setattr(repo_target, "create", h.create)
     monkeypatch.setattr(repo_target, "ci_status", lambda *_a: "success")
+    monkeypatch.setattr(repo_target, "private_rules_limit", lambda *_a: "")  # a plan that allows rules
     monkeypatch.setattr(branch_rules, "read", h.read)
     monkeypatch.setattr(branch_rules, "create", h.write)
     monkeypatch.setattr(branch_rules, "replace", h.write)
@@ -1175,3 +1176,40 @@ def test_a_folder_with_files_is_published_only_after_the_secrets_tick(hub, tmp_p
         expect(modal.locator(".facts")).to_contain_text("Registered: yes")
     pushed = git(hub.remotes / "ada/keep.git", "ls-tree", "-r", "--name-only", "main").split("\n")
     assert pushed == [".github/workflows/ci.yml", "app.py"]  # the folder's files as they are: no README added
+
+
+def test_only_a_new_private_protected_repository_is_checked_against_the_plan(jobs, hub, tmp_path, monkeypatch):
+    asked: list[str] = []
+    monkeypatch.setattr(repo_target, "private_rules_limit", lambda _c, owner: asked.append(owner) or "free plan")
+    found = jobs.probe({"kind": "new", "name": "demo", "folder": str(tmp_path / "demo")})
+    plan = plan_for(found, repository="ada/demo")
+    assert onboarding_probe.protect_limit(plan) == "free plan"
+    assert onboarding_probe.protect_limit(plan | {"visibility": "public"}) == ""
+    assert onboarding_probe.protect_limit(plan | {"protect": False}) == ""
+    hub.add("ada/meter", commits=True)
+    clone = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/meter.git", "meter", Access.LOCAL))
+    assert onboarding_probe.protect_limit(plan_for(jobs.probe({"kind": "folder", "folder": str(clone)}))) == ""
+    assert asked == ["ada"]
+    info = run(jobs, plan | {"protect": False, "protect_why": "free plan"})
+    assert stage(info, "protection")["result"] == {"applied": False, "why": "free plan"}
+    assert not hub.rulesets.get("ada/demo")
+
+
+@pytest.mark.browser
+@pytest.mark.usefixtures("hub")
+def test_a_new_private_repository_its_plan_cant_protect_is_confirmed_without_a_ruleset(tmp_path, monkeypatch, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    why = "GitHub's free plan of ada allows no branch rules on a private repository: make it public, or upgrade"
+    monkeypatch.setattr(repo_target, "private_rules_limit", lambda _c, _owner: why)
+    with served(monkeypatch, pds) as (page, base, _machine):
+        page.goto(f"{base}/projects#token=t")
+        page.get_by_role("button", name="Add a project").click()
+        modal = pds.modal(page)
+        modal.get_by_role("textbox", name="Name").fill("demo")
+        modal.get_by_role("textbox", name="Folder").fill(str(tmp_path / "demo"))
+        modal.get_by_role("button", name="Look").click()
+        modal.get_by_role("textbox", name="Owner").fill("ada")
+        modal.get_by_role("button", name="Check and continue").click()
+        expect(modal).to_contain_text(f"add no branch protection: {why}")
+        expect(modal).not_to_contain_text("add a ruleset")
