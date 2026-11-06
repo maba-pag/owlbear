@@ -213,22 +213,24 @@ def _neighbour_tests(package: _WorkspacePackage) -> list[Path]:
 def _unseen_by_testmon(path: Path, namespace: str) -> bool:
     """Whether a test module depends on code testmon cannot trace: the package in a child process, or read as data."""
     try:
-        nodes = list(ast.walk(ast.parse(path.read_text(encoding="utf-8"))))
+        tree = ast.parse(path.read_text(encoding="utf-8"))
     except OSError, SyntaxError:
         return True
 
-    def attribute(owner: str, name: str) -> bool:
-        return any(
-            isinstance(node, ast.Attribute)
-            and node.attr == name
-            and isinstance(node.value, ast.Name)
-            and node.value.id == owner
-            for node in nodes
-        )
-
-    texts = [node.value for node in nodes if isinstance(node, ast.Constant) and isinstance(node.value, str)]
-    child = attribute("sys", "executable") and any(namespace in text for text in texts)
-    return child or attribute("ast", "parse") or any(text.endswith("*.py") for text in texts)
+    executable = namespaced = False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            if node.value.id == "ast" and node.attr == "parse":
+                return True
+            if node.value.id == "sys" and node.attr == "executable":
+                executable = True
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if node.value.endswith("*.py"):
+                return True
+            namespaced = namespaced or namespace in node.value
+        if executable and namespaced:
+            return True
+    return False
 
 
 def _monitored_package(path: str) -> _WorkspacePackage | None:
