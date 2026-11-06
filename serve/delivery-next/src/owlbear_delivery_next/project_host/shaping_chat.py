@@ -45,7 +45,8 @@ def binding(repo: Path, tool: str, body: object) -> SavingChat:
         owner, chat = chat_contact.chat_of(session)
     except (OSError, ValueError, TypeError, sqlite3.Error, chat_contact.ChatError) as exc:
         reason = f"the saving chat for {tool} in {repo} could not be established: {failure(exc)}"
-        _log.warning("%s", reason)
+        if not isinstance(exc, chat_contact.ChatError):
+            _log.warning("%s", reason)
         return SavingChat(reason=reason)
     return SavingChat(session=session, call=call, owner=owner, chat=chat)
 
