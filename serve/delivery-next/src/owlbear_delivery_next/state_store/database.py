@@ -427,9 +427,8 @@ def append_activity(connection: sqlite3.Connection, slug: str, line: str, keep: 
                 "FROM activity WHERE slug = ?) DELETE FROM activity WHERE id IN (SELECT id FROM decoded "
                 "WHERE json_extract(body, '$.event') = ? AND json_extract(body, '$.reason') = ? "
                 "AND COALESCE(json_extract(body, '$.session'), '') = ? "
-                "AND COALESCE(json_extract(body, '$.step'), '') = ? "
-                "AND COALESCE(json_extract(body, '$.check'), '') = ?)",
-                (slug, kind, entry["reason"], *(entry.get(key) or "" for key in ("session", "step", "check"))),
+                "AND COALESCE(json_extract(body, '$.step'), '') = ?)",
+                (slug, kind, entry["reason"], *(entry.get(key) or "" for key in ("session", "step"))),
             )
     connection.execute("INSERT INTO activity(slug, at, event) VALUES (?, ?, ?)", (slug, str(at) if at else None, line))
     if keep is not None:
