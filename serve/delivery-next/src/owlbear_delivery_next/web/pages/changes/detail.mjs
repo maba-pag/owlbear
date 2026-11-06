@@ -79,10 +79,7 @@ export function detailView(d) {
       : d.retry ? retryForm(d.question, d.retry, d) : questionForm(d.question, d);
   }
   return html`${detailHead(d)}
-    <div class="row status"><p-tag variant=${variant} compact="true">${label}</p-tag>${text(said(d.line, label))}
-      ${d.diagnostics?.length ? html`<ul class="diagnostics">${d.diagnostics.map((e) => html`
-        <li>Recorded ${new Date(e.at).toLocaleString()}: ${e.reason}</li>`)}</ul>` : nothing}
-    </div>
+    <div class="row status"><p-tag variant=${variant} compact="true">${label}</p-tag>${text(said(d.line, label))}</div>
     ${d.now && label !== "Done" ? text(d.now, { size: "sm", color: "contrast-medium" }) : nothing}
     ${refusedTop}
     ${d.settings_fault ? notice("error", "Settings could not be read", d.settings_fault,
@@ -94,6 +91,8 @@ export function detailView(d) {
     ${d.checks.filter((c) => c.waiting).map((c) => checkForm(c, d))}
     ${actionItems(d)}
     ${approvingNow ? approval(d) : nothing}
+    ${d.diagnostics?.length ? html`<ul class="diagnostics">${d.diagnostics.map((e) => html`
+      <li>Recorded ${new Date(e.at).toLocaleString()}: ${e.reason}</li>`)}</ul>` : nothing}
     ${pictures && !deciding ? info("Before and after", pictures.lines, unjudged,
       toggle("screenshots", `Screenshots (${pictures.count})`, pictures.shots))
       : unjudged !== nothing ? info("Before and after", unjudged) : nothing}
