@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import logging
 import re
 import shlex
 import shutil
@@ -27,7 +26,6 @@ from owlbear_delivery_next.change_contracts.inbox import (
     WithdrawItem,
 )
 from owlbear_delivery_next.change_contracts.models import Change, Exit, PersonCheck, Waiting
-from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import loop, moves, rebuilds, round_flow, round_marks, versions
 from owlbear_delivery_next.change_flow.progress import progress
 from owlbear_delivery_next.change_flow.status import card, for_chat, status, unloadable
@@ -47,6 +45,7 @@ from owlbear_delivery_next.project_host import (
     pack_routes,
     pages,
     pds_routes,
+    project_notes,
     session_slots,
     stop_routes,
     token_guard,
@@ -56,7 +55,6 @@ from owlbear_delivery_next.project_host.launches import Launches, Refused
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.runtimes.vscode_adapter import open_chat
 from owlbear_delivery_next.runtimes.window_files import HARNESS
-from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import spend_ledger, tool_metrics, watch_reports, work_block
 from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
@@ -77,7 +75,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.settings.config import Effective
     from owlbear_delivery_next.state_store.store import Store
 
-_log = logging.getLogger(__name__)
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost"})
 START_PROMPT = "Start a new Delivery Change: use the owlbear-change-shaping skill to shape a brief with me."
@@ -338,23 +335,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     def changes(request: Request) -> list[dict[str, Any]]:
         return [for_chat(summary_of(slug), request.headers.get(chat_contract.HEADER)) for slug in store.slugs()]
 
-    profile_said = ""
-
-    @router.get("/project")
-    def project() -> dict[str, list[str]]:
-        nonlocal profile_said
-        failed = [f"The host's last pass failed: {host.failed}"] if host.failed else []
-        try:
-            notes = profile.notes(store.read_profile() or Profile())
-        except StoreError as exc:
-            why = failure(exc)
-            notes = [f"The project profile could not be read: {why}"]
-            if profile_said != why:
-                _log.warning("%s: project profile could not be read: %s", store.name or store.root, why)
-                profile_said = why
-        else:
-            profile_said = ""
-        return {"notes": [*notes, *failed]}
+    router.add_api_route("/project", project_notes.reader(store, host), methods=["GET"])
 
     @router.post("/new-change")
     def new_change() -> dict[str, Any]:

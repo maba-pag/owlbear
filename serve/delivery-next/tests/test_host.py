@@ -278,7 +278,7 @@ def test_a_profile_note_keeps_its_existing_log_once_per_changed_failure(store, t
         assert c.get("/api/next/project").json() == {"notes": [f"The project profile could not be read: {whole}"]}
 
     def messages():
-        return [r.getMessage() for r in caplog.records if r.name == "owlbear_delivery_next.project_host.api"]
+        return [r.getMessage() for r in caplog.records if r.name == "owlbear_delivery_next.project_host.project_notes"]
 
     assert messages() == [f"{store.root}: project profile could not be read: {whole}"]
     current[0] = changed
