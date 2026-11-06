@@ -455,6 +455,7 @@ def test_an_unreadable_registry_shows_whole_in_the_runs_and_in_a_refused_start(
             line.text_content()
             == f"The machine's registry cannot be read, so other projects' runs are not shown: {whole}."
         )
+        expect(page.locator("#pack-published")).to_contain_text("Not known across all projects.")
         page.get_by_role("button", name="Update Impeccable").click()
         pds.answer(page, "Update")
         refused = page.locator("#pack-error")

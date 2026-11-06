@@ -27,8 +27,11 @@ function released(bar) {
 function published(run) {
   const p = run?.published;
   const last = own.unread.runs && run ? "Last read: " : "";
+  if (!p?.commit && historyUnread()) return run
+    ? `Not known across all projects. The last readable update, run in ${run.name}, has no published commit.`
+    : "Not known: run history could not be read completely.";
   if (!p?.commit) return run ? `${last}Nothing yet from the last update, run in ${run.name}.`
-    : historyUnread() ? "Not known: run history could not be read completely." : "Nothing yet.";
+    : "Nothing yet.";
   const pr = p.url ? `pull request #${p.number}` : `commit ${p.commit.slice(0, 12)} on ${p.branch}`;
   return `${last}${sentence(pr)}${p.merged ? `, merged into main as ${p.merged.slice(0, 12)}`
     : p.url ? ", not merged yet" : ""}; a machine takes it with the OwlBear version that carries it.`;
