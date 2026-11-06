@@ -52,7 +52,7 @@ def read_part[T](name: str, unread: dict[str, list[str]], read: Callable[[], T])
     except READ_ERRORS as exc:
         detail = failure(exc)
         LOG.exception("Improvement's %s could not be read: %s", name, detail)
-        unread.setdefault(name, []).append(detail)
+        unread[name] = [detail]
         return None
 
 
