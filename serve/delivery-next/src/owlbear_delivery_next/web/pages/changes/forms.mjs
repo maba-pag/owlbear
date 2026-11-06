@@ -1,5 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { settingsWait } from "/assets/ui.mjs";
+import { questionText } from "/assets/page/config/unset.mjs";
 import { DIALOG, REVERT, state, show, draft, notify, send, starts } from "./state.mjs";
 import {
   button, external, field, choice, tick, hd, text, list, row, panel, info, notice, refusal,
@@ -46,7 +47,7 @@ export function questionForm(q, d) {
   };
   const clarifying = q.ordinary && mine.kind === "clarification";
   const confirm = (on) => { mine.confirmed = on; show(); };
-  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }), droppedLine(q),
+  return panel(`Question ${q.id}`, key, text(questionText(q), { weight: "semibold" }), droppedLine(q),
     q.options.length ? choice(key, "option", "Choose an option", q.options) : nothing,
     field(key, "text", "Your answer in words"),
     q.ordinary ? choice(key, "kind", "How your answer bears on the brief", CLASSES) : nothing,

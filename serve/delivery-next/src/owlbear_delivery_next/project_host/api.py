@@ -186,7 +186,8 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     if q := loop.open_question(c):
         options = [o.model_dump(include={"id", "label"}) for o in held.offered(store, c, q)]
         where = "chat" if loop.ordinary(q) else "changes-page"
-        out["question"] = {"id": f"{c.handle or slug}.{q.id}", "text": q.text, "options": options, "answer_in": where}
+        out["question"] = {"id": f"{c.handle or slug}.{q.id}", "text": q.text, "cause": q.cause,
+                           "options": options, "answer_in": where}  # fmt: skip
     return out
 
 
@@ -361,7 +362,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         merge = offer(c, events)
         q = loop.open_question(c) if not merge else None
         q = q.model_copy(update={"options": held.offered(store, c, q)}) if q else None
-        shown = q and q.model_dump(mode="json", include={"id", "text", "options"}) | answers.shown(q, events)
+        shown = q and q.model_dump(mode="json", include={"id", "text", "cause", "options"}) | answers.shown(q, events)
         waiting = o and o.exit == Exit.PENDING and o.waiting == Waiting.PERSON_CHECK and o.who == "you"
         unread = q and q.cause == failures.cause_key(ErrorKind.STATE, q.step, failures.READ_ONLY_UNREAD)
         checks = [

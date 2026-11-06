@@ -40,6 +40,7 @@
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { blockedOf, call, defined, here, project, settingsWait, shown } from "/assets/ui.mjs";
 import { lastSaid, maintained } from "/assets/page/maintenance/overview.mjs";
+import { curationReason } from "/assets/page/config/unset.mjs";
 
 // Under the machine host with no project chosen, each project shows as a summary that opens it, beside the machine's
 // own parts.
@@ -188,7 +189,7 @@ function folderRun(f) {
   const said = f.state === "never" ? "Never curated." : `Last run: ${f.state}${when}`;
   const skipped = f.entries.filter((e) => e.action === "skipped");
   const blocked = settingsWait(f.unset.length, f.unset_reason, f.blocked);
-  const reason = f.reason_unset ? settingsWait(f.reason_unset, "", f.reason) : f.reason;  // refused for unset settings
+  const reason = f.reason_unset ? settingsWait(f.reason_unset, "", f.reason) : curationReason(f.reason);
   return html`<li class="action">
     <div class="title"><p-heading size="md"><h3>${f.folder}</h3></p-heading>
       <p-button type="button" compact="true" variant="secondary" .loading=${state.curating === f.folder}
