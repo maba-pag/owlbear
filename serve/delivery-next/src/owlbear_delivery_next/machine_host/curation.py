@@ -27,6 +27,7 @@ from owlbear_delivery_next.local_system import data_repo, local_home, maintenanc
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import curation_block, curation_resume, curation_snapshots, curation_tree
 from owlbear_delivery_next.machine_host.curation_block import LABEL
+from owlbear_delivery_next.machine_host.curation_reads import folders
 from owlbear_delivery_next.machine_host.curation_reads import pending as _pending
 from owlbear_delivery_next.runtimes import loop_owner, maintained, sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
@@ -65,13 +66,6 @@ def message(folder: str) -> str:
         f"Curate: automatic. Your memory server is bound to the folder `{folder}` of the shared repository, with "
         "Global memory beside it. Curate it as your agent file says, then commit and submit your report."
     )
-
-
-def folders(root: Path) -> list[str]:
-    """The project folders of the shared repository that keep memory, Global's own folder never among them."""
-    found = (p for p in root.iterdir() if p.is_dir() and not p.is_symlink() and not p.name.startswith("."))
-    own = (p for p in found if p.name != "memory" and (p / "memory").is_dir() and not (p / "memory").is_symlink())
-    return sorted(p.name for p in own)  # a link never leads a run to Global or out of the repository
 
 
 def _run(cfg: sdk_adapter.Session) -> Run:
@@ -188,7 +182,7 @@ class Curation:
             return {"available": False, "reason": NO_SHARED, "folders": []}
         runs, here = self.load().folders, work_block.machine()
         listed = []
-        for f in folders(shared.root):
+        for f in folders(shared.root, include_invalid=True):
             block = curation_block.block(shared, f, here)
             row = {"folder": f, **runs.get(f, FolderRun()).model_dump(mode="json")}
             unread: dict[str, str] = {}
