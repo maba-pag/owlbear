@@ -47,11 +47,11 @@ def passed(store: Store, lock: Lock, c: Change, now: datetime, *, paused: bool) 
 def _approved(store: Store, lock: Lock, c: Change, now: datetime) -> Change:
     """The owner's approval, made as his Approve makes it; a refusal leaves the version waiting, its reason whole."""
     n = c.brief.version
-    c.brief.approve_if_clean = None  # spent either way, and never kept in the approved version's copy
-    store.write(lock, c)  # the approval reads the Change from the store
+    store.write(lock, c)  # the approval reads the Change from the store, and spends the owner's with its own write
     why = brief_routes.approved(store, lock, brief_routes.ApproveBody(version=n))
     c = store.read(lock.slug)
     if why:
+        c.brief.approve_if_clean = None
         reason = f"approve brief v{n}: the approval you asked for was refused: {why}"
         c.outcome = Outcome(
             exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", cause=brief_starts.REFUSED, reason=reason, at=now
