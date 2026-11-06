@@ -38,7 +38,7 @@ def verdict(recorded: Pids, alive: Observe, problems: Sequence[str] = ()) -> Ter
 
 
 def alive(pid: int, created: float | None) -> bool | None:
-    """Observe one recorded process: a zombie or a reused PID is gone; an unreadable one is unknown."""
+    """Observe identity: gone/zombie/reused is false, access denied is unknown; other errors raise with context."""
     try:
         p = psutil.Process(pid)
         if p.status() == psutil.STATUS_ZOMBIE:
