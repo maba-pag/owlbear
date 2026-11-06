@@ -20,6 +20,37 @@ if TYPE_CHECKING:
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 _DOCS_ONLY_PREFIXES = ("share/", ".owlbear/")
 _INVARIANT_TESTS = ("tests/test_package_boundary.py",)
+_CONFIG_TESTS = {
+    ".pre-commit-config.yaml": (
+        "tests/test_linter_formatter_policy.py",
+        "serve/tools/tests/test_quality.py",
+        "tests/test_dependency_verification_workflow.py",
+    ),
+    ".editorconfig": ("tests/test_linter_formatter_policy.py",),
+    "biome.json": ("tests/test_linter_formatter_policy.py",),
+    "package.json": ("tests/test_linter_formatter_policy.py", "tests/test_dependency_verification_workflow.py"),
+    "package-lock.json": ("tests/test_linter_formatter_policy.py",),
+    ".nvmrc": ("tests/test_linter_formatter_policy.py", "tests/test_dependency_verification_workflow.py"),
+    ".markdownlint-cli2.jsonc": ("tests/test_linter_formatter_policy.py",),
+    "renovate.json": ("tests/test_dependency_verification_workflow.py",),
+    ".github/workflows/agent-ecosystem.yml": (
+        "tests/test_ci_workflows.py",
+        "tests/test_agent_ecosystem_validation.py",
+        "serve/tools/tests/test_quality.py",
+    ),
+    ".github/workflows/ci.yml": ("tests/test_ci_workflows.py", "tests/test_snyk_findings.py"),
+    ".github/workflows/copilot-setup-steps.yml": (
+        "tests/test_ci_workflows.py",
+        "tests/test_dependency_verification_workflow.py",
+    ),
+    ".github/workflows/python.yml": ("tests/test_ci_workflows.py",),
+    ".github/workflows/python-browser.yml": ("tests/test_ci_workflows.py",),
+    ".github/workflows/static.yml": ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py"),
+    ".github/workflows/tooling.yml": ("tests/test_ci_workflows.py", "tests/test_dependency_verification_workflow.py"),
+    ".github/workflows/security.yml": ("tests/test_ci_workflows.py", "tests/test_snyk_findings.py"),
+    ".github/workflows/release.yml": ("tests/test_release.py",),
+    ".github/workflows/snyk-ignore.yml": ("tests/test_snyk_findings.py",),
+}
 # Packages whose own tests testmon selects for a Python source change; it needs the classic tracer on 3.14 and
 # --testmon-forceselect, because the configured -m otherwise turns its selection off.
 _TESTMON_NAMESPACES = frozenset({"owlbear_delivery_next"})
@@ -215,6 +246,8 @@ def _package_for_path(normalized: str) -> _WorkspacePackage | None:
 
 def _python_scope(path: str) -> list[str] | None:
     normalized = path.removeprefix("./")
+    if normalized in _CONFIG_TESTS:
+        return sorted({*_CONFIG_TESTS[normalized], *_INVARIANT_TESTS})
     scope: list[str] | None = None
     package = _package_for_path(normalized)
     if package is not None:

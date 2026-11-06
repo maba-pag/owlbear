@@ -108,7 +108,7 @@ Apply these only when the target is the OwlBear repository or matching configura
 | Command | Scope |
 | --- | --- |
 | `uv run test` or `uv run test --all` | Complete Python suite |
-| `uv run test --changed [--base REF]` | Changed Python packages, importing consumer tests, and invariants; for `serve/delivery-next` Python sources, the tests pytest-testmon saw executing the changed code plus those that start the package as a child process |
+| `uv run test --changed [--base REF]` | Changed Python packages, importing consumer tests, config consumers and invariants; for `serve/delivery-next` Python sources, testmon-selected and child-process tests; page-only changes run page-using tests |
 | `uv run test [PATH ...]` (also `uv run tests`) | Tests owning the explicit paths |
 | `uv run lint` | Normal local lint aggregate on the workspace, the same set CI's Static suite runs with `--no-fix`; `--staged` selects staged files |
 | `uv run lint-biome` | Biome lint, formatting, and Assist for repository JSON |

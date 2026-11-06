@@ -103,6 +103,98 @@ def test_a_page_change_beside_a_source_change_keeps_the_source_scope() -> None:
 
 
 @pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        (
+            ".pre-commit-config.yaml",
+            (
+                "tests/test_linter_formatter_policy.py",
+                "serve/tools/tests/test_quality.py",
+                "tests/test_dependency_verification_workflow.py",
+            ),
+        ),
+        (".editorconfig", ("tests/test_linter_formatter_policy.py",)),
+        ("./.editorconfig", ("tests/test_linter_formatter_policy.py",)),
+        ("biome.json", ("tests/test_linter_formatter_policy.py",)),
+        (
+            "package.json",
+            ("tests/test_linter_formatter_policy.py", "tests/test_dependency_verification_workflow.py"),
+        ),
+        ("package-lock.json", ("tests/test_linter_formatter_policy.py",)),
+        (".nvmrc", ("tests/test_linter_formatter_policy.py", "tests/test_dependency_verification_workflow.py")),
+        (".markdownlint-cli2.jsonc", ("tests/test_linter_formatter_policy.py",)),
+        ("renovate.json", ("tests/test_dependency_verification_workflow.py",)),
+        (
+            ".github/workflows/agent-ecosystem.yml",
+            (
+                "tests/test_ci_workflows.py",
+                "tests/test_agent_ecosystem_validation.py",
+                "serve/tools/tests/test_quality.py",
+            ),
+        ),
+        (".github/workflows/ci.yml", ("tests/test_ci_workflows.py", "tests/test_snyk_findings.py")),
+        (
+            ".github/workflows/copilot-setup-steps.yml",
+            ("tests/test_ci_workflows.py", "tests/test_dependency_verification_workflow.py"),
+        ),
+        (".github/workflows/python.yml", ("tests/test_ci_workflows.py",)),
+        (".github/workflows/python-browser.yml", ("tests/test_ci_workflows.py",)),
+        (".github/workflows/static.yml", ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py")),
+        (
+            ".github/workflows/tooling.yml",
+            ("tests/test_ci_workflows.py", "tests/test_dependency_verification_workflow.py"),
+        ),
+        (".github/workflows/security.yml", ("tests/test_ci_workflows.py", "tests/test_snyk_findings.py")),
+        (".github/workflows/release.yml", ("tests/test_release.py",)),
+        (".github/workflows/snyk-ignore.yml", ("tests/test_snyk_findings.py",)),
+    ],
+)
+def test_known_root_configs_run_their_consumers(config: str, expected: tuple[str, ...]) -> None:
+    (command,) = _routed(config)
+
+    assert command[:4] == ["uv", "run", "--locked", "pytest"]
+    assert set(command[4:]) == {*expected, "tests/test_package_boundary.py"}
+
+
+def test_config_and_source_scopes_are_combined() -> None:
+    plain, monitored = _routed(".pre-commit-config.yaml", _LOOP)
+
+    assert {
+        "tests/test_linter_formatter_policy.py",
+        "serve/tools/tests/test_quality.py",
+        "tests/test_dependency_verification_workflow.py",
+        "tests/test_package_boundary.py",
+        _TESTS + "test_dispatch.py",
+        _TESTS + "test_layers.py",
+        _TESTS + "test_module_rules.py",
+    } <= set(plain)
+    assert _TESTS + "test_loop.py" in monitored
+    assert not set(plain) & {path for path in monitored if path.endswith(".py")}
+
+
+def test_config_and_page_scopes_are_combined() -> None:
+    (command,) = _routed(".editorconfig", _WEB + "pages/metrics/runs.mjs")
+
+    assert "tests/test_linter_formatter_policy.py" in command
+    assert _TESTS + "test_assets.py" in command
+    assert _TESTS + "test_loop.py" not in command
+
+
+@pytest.mark.parametrize(
+    "config",
+    ["pyproject.toml", "uv.lock", ".python-version", "conftest.py", ".yamllint.yml", ".github/workflows/new.yml"],
+)
+@pytest.mark.parametrize("order", ["first", "last"])
+def test_unknown_config_keeps_full_scope(config: str, order: str) -> None:
+    paths = [".editorconfig", _LOOP]
+    paths.insert(0 if order == "first" else len(paths), config)
+
+    (command,) = _routed(*paths)
+
+    assert command == ["uv", "run", "--locked", "pytest", "tests", "serve"]
+
+
+@pytest.mark.parametrize(
     ("paths", "coverage"),
     [
         ((_LOOP,), True),

@@ -38,6 +38,14 @@ remain enforced; plain full-suite and explicit-path runs keep the limits in the 
 The runner supplies `-o session_timeout=` with an empty value: numeric zero expires after the first test
 and is not a disabling value.
 
+Known root tooling configs (pre-commit, EditorConfig, Biome, npm manifests, `.nvmrc`, Markdownlint and
+Renovate) and the existing CI workflow filenames run their config-consuming regression modules and
+invariants. Their scopes are combined with Python and page changes rather than replacing those scopes.
+The exact filename-to-test table is `_CONFIG_TESTS` in `src/owlbear_tools/testing.py`.
+Root Python dependency/pytest/workspace configuration (`pyproject.toml`, `uv.lock`, `.python-version`
+and `conftest.py`), unknown paths and unrecognised workflow filenames still select the full suite.
+The root npm routes apply to this checkout's tooling-only Node package, not arbitrary application packages.
+
 ### Dependency environment
 
 Use `uv run dep-sync` to reconcile the checked-out manifests and lockfiles with the local Python and root npm environments, after checking the running Node against `.nvmrc`. Use `uv run dep-status` for a read-only check; it also supports `--verbose` (`-v`) and `--json` (`-j`).
