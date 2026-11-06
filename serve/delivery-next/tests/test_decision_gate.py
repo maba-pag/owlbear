@@ -86,7 +86,7 @@ def replace(shared: DataRepo, old: Decision, statement: str) -> Decision:
 
 def change(kind: StepKind = K.BUILD, scope: tuple[str, ...] = ("web",), **fields) -> Change:
     brief = Brief(version=1, approved_version=1, challenged=1, approved_at=AT, title="Notes", scope=list(scope))
-    plan = Plan(tasks=[Task(id="t1", title="Show notes", scope=list(scope), checks=["true"])])
+    plan = Plan(tasks=[Task(id="t1", title="Show notes", scope=list(scope), checks=["cd . && true"])])
     names = Names(branch="owlbear/c1", target="main")
     return Change(slug="c1", brief=brief, plan=plan, names=names, step=Step(kind=kind, task="t1"), **fields)
 

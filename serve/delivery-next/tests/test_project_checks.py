@@ -26,6 +26,7 @@ from owlbear_delivery_next.github.provider import MergeMethod, Repository, Rules
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import answers
 from owlbear_delivery_next.project_host.host import Host
+from owlbear_delivery_next.runtimes import step_input
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
@@ -55,13 +56,17 @@ class Sessions:
 
     def __init__(self, checks: list[str]) -> None:
         self.checks, self.told = checks, []
+        self.scope = ["a.txt"]
 
     async def __call__(self, cfg):
         self.told.append(cfg)
         if cfg.submit is tools.PLAN:
-            payload = tools.PlanResult(
-                tasks=[{"title": "one", "goal": "AC-1", "scope": ["a.txt"], "checks": self.checks}]
-            )
+            checks = [
+                c
+                for c in cfg.checks
+                if c in self.checks or c.partition(" && {\n")[2].removesuffix("\n}") in self.checks
+            ]
+            payload = tools.PlanResult(tasks=[{"title": "one", "goal": "AC-1", "scope": self.scope, "checks": checks}])
         else:
             payload = tools.ReviewResult(verdict="pass")
         return Run(cfg.session_id, "result", payload, termination=Termination(confirmed=True))
@@ -185,9 +190,9 @@ def test_the_detected_commands_once_confirmed_are_the_plans_and_saved(store, cha
     answer(store, "detected")
     c = step(store, change_repo)
     (cfg,) = fake.planned()
-    assert (c.step.kind, cfg.checks) == (StepKind.BUILD, ("npm test",))
-    assert "`npm test`" in cfg.message
-    plan = tools.PlanResult(tasks=[{"title": "one", "goal": "AC-1", "scope": ["src"], "checks": ["npm test"]}])
+    assert (c.step.kind, cfg.checks) == (StepKind.BUILD, ("cd . && {\nnpm test\n}",))
+    assert f"`{cfg.checks[0]}`" in cfg.message
+    plan = tools.PlanResult(tasks=[{"title": "one", "goal": "AC-1", "scope": ["src"], "checks": list(cfg.checks)}])
     assert tools.check_plan(plan, tools.Worktree("a", "a"), cfg.checks, ["src"], cfg.packages) == []
     assert profile.is_confirmed(Store(tmp_path / "store").read_profile().entries["check:."])
     assert any(e.get("event") == "profile-confirmed" and e.get("key") == "check:." for e in store.events("c1"))
@@ -208,14 +213,50 @@ def test_one_question_settles_every_package_so_later_changes_plan_without_asking
 def test_a_confirmed_root_check_covers_a_package_and_its_own_unconfirmed_one_is_withheld(
     store, change_repo, monkeypatch
 ):
-    store.write_profile(confirmed(Profile(entries={f"check:{APP}": entry()}), ".", "true"))
-    fake = sessions(monkeypatch, ["true"])
+    (change_repo / APP).mkdir(parents=True)
+    committed(
+        change_repo,
+        {
+            "Makefile": "check:\n\t@pwd\n",
+            f"{APP}/package.json": json.dumps({"scripts": {"test": "vitest"}}),
+        },
+    )
+    prof = Profile(
+        entries={
+            f"check:{APP}": ProfileEntry(state="known", value="make check", evidence="detected package check"),
+            f"install:{APP}": ProfileEntry(state="known", value="npm install", evidence="package.json"),
+        }
+    )
+    store.write_profile(confirmed(prof, ".", "make check"))
+    fake = sessions(monkeypatch, ["make check"])
+    fake.scope = [APP]
     made(store, change_repo, [f"{APP}/x.ts"])
-    assert step(store, change_repo).step.kind == StepKind.BUILD
+    change = step(store, change_repo)
+    assert change.step.kind == StepKind.BUILD
     (cfg,) = fake.planned()
-    assert cfg.checks == ("true",)
-    plan = tools.PlanResult(tasks=[{"title": "one", "goal": "AC-1", "scope": [APP], "checks": ["npm test"]}])
+    assert cfg.checks == ("cd . && {\nmake check\n}",)
+    plan = tools.PlanResult(
+        tasks=[
+            {
+                "title": "one",
+                "goal": "AC-1",
+                "scope": [APP],
+                "checks": [f"cd {APP} && make check"],
+            }
+        ]
+    )
     assert tools.check_plan(plan, tools.Worktree("a", "a"), cfg.checks, [APP], cfg.packages)
+    parts = step_input.session(change, store.read_profile(), change_repo, {})
+    assert parts.checks == cfg.checks
+    assert f"- `{parts.checks[0]}`" in parts.message
+    ran = subprocess.run(  # noqa: S603 - the fixture's emitted make command
+        ["/bin/sh", "-c", parts.checks[0]],
+        cwd=change_repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert ran.stdout.strip() == str(change_repo)
 
 
 def test_typed_commands_are_read_back_and_saved_only_when_the_owner_saves_them(
@@ -243,7 +284,7 @@ def test_typed_commands_are_read_back_and_saved_only_when_the_owner_saves_them(
     answer(store, "save")
     assert step(store, change_repo).step.kind == StepKind.BUILD
     root = Store(tmp_path / "store").read_profile().entries["check:."]
-    assert (root.value, profile.is_confirmed(root), fake.planned()[0].checks) == ("b", True, ("b",))
+    assert (root.value, profile.is_confirmed(root), fake.planned()[0].checks) == ("b", True, ("cd . && {\nb\n}",))
     made(store, change_repo, [f"{LIB}/y.ts"], "c2")
     assert step(store, change_repo, "c2").step.kind == StepKind.BUILD
 

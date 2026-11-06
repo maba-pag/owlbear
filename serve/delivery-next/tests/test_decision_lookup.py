@@ -69,7 +69,7 @@ def building(picking, *chosen: Decision, **draft) -> None:
     picking.step()
     assert picking.approve(1).status_code == 200
     c = picking.approved()
-    c.plan = Plan(tasks=[Task(id="t1", title="Add farewell", scope=["packages/app"], checks=["true"])])
+    c.plan = Plan(tasks=[Task(id="t1", title="Add farewell", scope=["packages/app"], checks=["cd . && true"])])
     c.step = Step(kind=StepKind.BUILD, task="t1")
     picking.store.write(Lock(picking.slug), c)
 

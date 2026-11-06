@@ -77,7 +77,7 @@ class Asking:
         picking.step()
         assert picking.approve(1).status_code == 200
         c = picking.approved()
-        c.plan = Plan(tasks=[Task(id="t1", title="Add farewell", scope=["packages/app"], checks=["true"])])
+        c.plan = Plan(tasks=[Task(id="t1", title="Add farewell", scope=["packages/app"], checks=["cd . && true"])])
         c.step = Step(kind=StepKind.BUILD, task="t1", session=session or None)
         asked = Question(step=StepKind.BUILD, text=ASKED, options=list(options))
         c = loop.apply(c, loop.StepResult(exit=Exit.ASK, question=asked), AT)

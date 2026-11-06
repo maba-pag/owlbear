@@ -1,5 +1,6 @@
 import asyncio
 import dataclasses
+import json
 import shlex
 from datetime import UTC, datetime
 from pathlib import Path
@@ -57,10 +58,11 @@ def build(**changes) -> BuildResult:
 def test_the_plan_challenger_sees_where_each_check_runs() -> None:
     entry = ProfileEntry(state="known", value="npm test", evidence="packages/app/package.json")
     profile = Profile(entries={"check:packages/app": entry})
-    plan = Plan(tasks=[Task(id="t1", title="Add sign", scope=["packages/app"], checks=["npm test"])])
+    check = "cd ./packages/app && {\nnpm test\n}"
+    plan = Plan(tasks=[Task(id="t1", title="Add sign", scope=["packages/app"], checks=[check])])
     text = step_input.plan_challenge(Change(slug="s"), plan, profile, Path("/w"), {})
-    assert "- `packages/app`: install `none`, check `npm test`" in text
-    assert "runs each check from its package directory" in text
+    assert f"- `packages/app`: install `none`, check `{check}`" in text
+    assert text.count(check) == 2
 
 
 def test_the_plan_challenger_sees_the_whole_plan_and_a_cut_is_said() -> None:
@@ -153,7 +155,8 @@ LONG = "packages/frontend-components-library"
 def test_a_required_check_counts_only_as_that_command_or_that_command_run_in_a_directory(reported, required, missing):
     result = build(checks=[{"command": c, "exit_code": 0} for c in reported])
     assert tools.check_build(result, Worktree(HEAD, BASE), required) == [
-        f'checks: "{c}" missing - run it on your commit and report it, e.g. {{"command": "{c}", "exit_code": 0}}'
+        f'checks: "{c}" missing - run it on your commit and report it, '
+        f"e.g. {json.dumps({'command': c, 'exit_code': 0})}"
         for c in missing
     ]
 

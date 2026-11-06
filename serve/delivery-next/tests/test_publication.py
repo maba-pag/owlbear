@@ -219,7 +219,7 @@ def ctx(tmp_path, gh, p=None, repo=None):
 def change(kind=StepKind.MERGE, worktree="", head=A, **fields):
     if kind == StepKind.MERGE:
         fields.setdefault("reviews", [Review(commit=head, inputs=Inputs(), verdict="pass")])
-    plan = Plan(tasks=[Task(id="t1", title="one", scope=["src"], checks=["npm test"])])
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["src"], checks=["cd . && npm test"])])
     names = Names(branch="owlbear/c1", target="main", worktree=worktree, pr=7)
     return Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=kind), names=names, **fields)
 
