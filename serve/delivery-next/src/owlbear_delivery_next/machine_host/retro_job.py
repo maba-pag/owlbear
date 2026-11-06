@@ -52,7 +52,7 @@ from owlbear_delivery_next.machine_host.retro_inputs import (
 from owlbear_delivery_next.runtimes import retro_review, spotter_look
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.config import SettingsUnset
-from owlbear_delivery_next.state_store import machine_settings, spend_ledger
+from owlbear_delivery_next.state_store import machine_settings, registry, spend_ledger
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine
