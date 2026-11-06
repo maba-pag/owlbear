@@ -1098,3 +1098,25 @@ def test_a_registered_project_being_added_shows_once_on_its_row(hub, tmp_path, m
         expect(modal.locator(".facts")).to_contain_text("Registered: yes")
         modal.get_by_role("button", name="Close").click()
         expect(row.locator("p-tag", has_text="Not fully added")).to_have_count(0)
+
+
+@pytest.mark.browser
+def test_a_run_that_leaves_the_list_takes_no_focus_to_another(tmp_path, monkeypatch, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    author = {"name": "Ada", "email": "ada@example.com"}
+    with served(monkeypatch, pds) as (page, base, machine):
+        ids = []
+        for name in ("alpha", "beta"):
+            found = machine.onboarding.probe({"kind": "new", "name": name, "github": False,
+                                              "folder": str(tmp_path / name)})  # fmt: skip
+            ids.append(settle(machine.onboarding, machine.onboarding.start(plan_for(found, author=author))["id"])["id"])
+        page.goto(f"{base}/projects#token=t")
+        alpha = page.get_by_role("listitem", name="alpha").get_by_role("button", name="Publish")
+        alpha.focus()
+        gone = machine.onboarding.get(ids[0])
+        gone.receipt["ended"] = "published"  # published from another tab
+        gone.save()
+        expect(page.get_by_role("listitem", name="alpha")).to_have_count(0)  # the page's next poll
+        beta = page.get_by_role("listitem", name="beta")
+        assert not beta.evaluate("li => li.contains(document.activeElement)")

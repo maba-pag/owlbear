@@ -192,7 +192,7 @@ function view() {
       <p-heading size="lg"><h2 id="runs-title">Not added yet</h2></p-heading>
       <p-text size="sm">Folders whose setup stopped before OwlBear served them, and projects kept on this Mac only.
       </p-text>
-      <ul class="projects" aria-label="Not added yet">${apart.map(run)}</ul></section>` : nothing}
+      <ul class="projects" aria-label="Not added yet">${repeat(apart, (r) => r.id, run)}</ul></section>` : nothing}
     <section id="add" class="panel" aria-labelledby="add-title">
       <p-heading size="md"><h2 id="add-title">Add a project</h2></p-heading>
       <p-text size="sm">From a repository on GitHub, a folder on this Mac, or a new project.</p-text>
