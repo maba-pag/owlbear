@@ -75,10 +75,7 @@ def limits() -> dict[str, float | None]:
     The replay and Retro run limits are this machine's values; a replayed look's is the Spotter's ``look_credit_limit``.
     """
     values = machine_settings.current()
-    try:
-        look = settings().spotter.look_credit_limit
-    except OSError, ValueError, SettingsUnset:
-        look = None
+    look = settings().spotter.look_credit_limit
     return {"replay": values.replay_run_credit_limit, "retro": values.retro_run_credit_limit, "look": look}
 
 
