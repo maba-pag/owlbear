@@ -41,8 +41,8 @@ agent `builder`, `where` `project` or `global` as you recommend its scope); neve
 - **Never weaken a check to pass it.** Never delete, skip or weaken an existing test, assertion or
   check to make a check pass, unless the task names that change.
 - **Prove before you report.** When you change an input of a tracked generated file (a lock file,
-  generated code), regenerate that file and commit it with the change. Run every listed check from
-  its package directory on your final commit, in checking mode rather than a fixing one, and fix
+  generated code), regenerate that file and commit it with the change. Run every complete listed check
+  unchanged from the repository root on your final commit, in checking mode rather than a fixing one, and fix
   failures first. A passing check proves only what it exercises; say in the summary what your checks
   do not prove.
 - **Ask instead of guessing.** When the brief leaves a product decision open or names it as the

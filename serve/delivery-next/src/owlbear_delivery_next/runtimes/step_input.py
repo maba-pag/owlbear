@@ -5,12 +5,13 @@ from __future__ import annotations
 import shlex
 from typing import TYPE_CHECKING, NamedTuple
 
-from owlbear_delivery_next.change_contracts import evidence, pick_tools, preparation, tools
+from owlbear_delivery_next.change_contracts import check_hint, evidence, pick_tools, preparation, tools
 from owlbear_delivery_next.change_contracts.models import VISUAL, Exit, PersonCheck, StepKind
 from owlbear_delivery_next.change_contracts.preparation import Preparing
 from owlbear_delivery_next.change_flow import brief_rounds, disputes, plan_rounds, round_flow, shaping_capture
 from owlbear_delivery_next.change_flow import worktree as wt
 from owlbear_delivery_next.runtimes import step_answers, step_decisions
+from owlbear_delivery_next.settings import profile as project_profile
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -24,7 +25,6 @@ if TYPE_CHECKING:
 LIMIT = 1500
 DETAIL = 4000  # a task's details: review findings, CI log tail or review thread
 READ_ONLY = "Read files and run any read-only command; nothing you run may write files or change Git state."
-CD = "; one that starts with `cd` runs from the repository root, as written"  # a kept task's check (TD-246)
 FINISH = """\
 Call `submit_result` once with the summary and checks; Delivery reads your commit from the worktree HEAD,
 records the files it changes and lints them with the project's linters. If it is rejected, fix what each
@@ -136,7 +136,6 @@ def _prepare(worktree: Path, installs: Sequence[tuple[str, str]]) -> list[str]:
 
 def build(change: Change, task: Task, worktree: Path, installs: Sequence[tuple[str, str]]) -> str:
     """Return the first message of a build session."""
-    packages = [p for p, _ in installs]
     lines = [
         (
             f"You build one task of the Change `{change.slug}` in the worktree {worktree} "
@@ -156,7 +155,7 @@ def build(change: Change, task: Task, worktree: Path, installs: Sequence[tuple[s
         *_prepare(worktree, installs),
         "",
         "## Checks",
-        f"Run each from the package directory ({', '.join(packages) or 'repository root'}) on your final commit{CD}:",
+        "Run each complete command as listed from the repository root on your final commit:",
         *(f"- `{c}`" for c in task.checks),
         "",
         *([RESPOND.format(kind=task.item.kind, no_action=NO_ACTION if task.item.notice else "")] if task.item else []),
@@ -346,21 +345,8 @@ def _flat(text: str) -> str:
 
 def _packages(profile: Profile) -> list[str]:
     inst = {k.removeprefix("install:"): e.value for k, e in profile.entries.items() if k.startswith("install:")}
-    chk = dict(wt.checks(profile))
+    chk = {p: check_hint.qualified(p, c) for p, c in wt.checks(profile)}
     return [f"- `{p}`: install `{inst.get(p, 'none')}`, check `{chk.get(p, 'none')}`" for p in sorted({*inst, *chk})]
-
-
-def _alone(profile: Profile) -> str:
-    """How a task names its checks: the profile's commands as listed, never with a `cd` in front."""
-    inside = ((p, c) for p, c in wt.checks(profile) if p.strip("/") not in {"", "."})
-    rule = (
-        "A task's `checks` are these check commands exactly as listed. The Builder runs each from its package's "
-        "directory, so a check never starts with `cd`"
-    )
-    if (found := next(inside, None)) is None:  # no package check to show: an example would name one not listed
-        return f"{rule}."
-    package, command = found
-    return f"{rule}: write `{command}`, not `cd {package} && {command}`."
 
 
 def _others(others: Mapping[str, Sequence[str]]) -> list[str]:
@@ -381,7 +367,7 @@ def plan(change: Change, profile: Profile, worktree: Path, others: Mapping[str, 
         "",
         "## Packages (project profile)",
         *(_packages(profile) or ["- none: no package has a confirmed check command"]),
-        _alone(profile),
+        "Select each task's checks exactly as listed, including the directory prefix; do not alter the commands.",
         *_others(others),
     ]
     if change.checks:
@@ -407,7 +393,7 @@ def plan_challenge(
             "",
             *_brief(change, own=disputes.PLAN_FOUND, complete=True),
             "",
-            "## Packages (project profile; the Builder runs each check from its package directory)",
+            "## Packages (project profile; check choices are complete repository-root commands)",
             *(_packages(profile) or ["- none known"]),
             *_others(others),
             "",
@@ -482,7 +468,7 @@ def session(
     task = next((t for t in tasks if t.id == s.task), None)
     if s.kind == StepKind.PLAN:
         pairs, message = tuple(wt.checks(profile)), plan(change, profile, path, others)
-        checks = tuple(dict.fromkeys(c for _, c in pairs))
+        checks = tuple(dict.fromkeys(check_hint.qualified(p, c) for p, c in pairs))
         return Parts(message, write=False, checks=checks, submit=tools.PLAN, task=None, packages=pairs)
     if s.kind == StepKind.REVIEW:
         message = review(change, task, path, wt.observe(path, change.names.target, task.base if task else None))
@@ -496,5 +482,6 @@ def session(
         person = next((p for p in change.checks if p.id == s.task), None) or _visual_check(change)
         message = check(change, person, path, pairs, preparing)
         return Parts(message, write=True, checks=(), submit=tools.RECIPE, task=task)
-    message = build(change, task, path, pairs)
-    return Parts(message, write=True, checks=tuple(task.checks), submit=tools.SUBMIT, task=task)
+    checks = check_hint.resolve(task.checks, wt.checks(project_profile.vouched(profile)))
+    message = build(change, task.model_copy(update={"checks": checks}), path, pairs)
+    return Parts(message, write=True, checks=tuple(checks), submit=tools.SUBMIT, task=task)

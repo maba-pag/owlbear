@@ -489,8 +489,8 @@ def test_real_sdk_teardown_progresses_past_repeatedly_cancel_resistant_rpc(tmp_p
     monkeypatch.setattr(target, stage, resistant)
     monkeypatch.setattr(sdk_teardown, "STOP_CALL", 0.01)
     monkeypatch.setattr(step_budget, "Budget", _Issued)
-    # Two shutdown windows of 0.2 s stay inside the 1 s bound and give the second cancellation room on a loaded machine.
-    monkeypatch.setattr(loop_owner, "SHUTDOWN", 0.2)
+    # Two 50 ms shutdown windows leave scheduling headroom inside the unchanged 1 s bound.
+    monkeypatch.setattr(loop_owner, "SHUTDOWN", 0.05)
     monkeypatch.setattr(loop_owner, "RETRY", 0.001)
     started = time.monotonic()
     run = loop_owner.run(sdk_adapter.run(world.cfg))

@@ -8,6 +8,7 @@ from pathlib import Path
 from subprocess import CalledProcessError, TimeoutExpired
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.change_contracts import check_hint
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
     Change,
@@ -157,7 +158,7 @@ def _golden() -> int:
 
 
 def seed(store: Store, a: argparse.Namespace) -> None:
-    """Write a minimal confirmed profile and one Change whose approved brief and one-task plan start at build."""
+    """Write a dev Change at build; explicit check arguments run from the repository root."""
     now = datetime.now(UTC)
     entries = {f"install:{pkg}": ProfileEntry(state="known", value=cmd, evidence="dev seed") for pkg, cmd in a.install}
     old = store.read_profile() or Profile()
@@ -170,7 +171,16 @@ def seed(store: Store, a: argparse.Namespace) -> None:
         slug=a.change,
         profile_version=old.version + 1,
         brief=brief,
-        plan=Plan(tasks=[Task(id="t1", title=a.title, scope=a.scope, checks=a.check)]),
+        plan=Plan(
+            tasks=[
+                Task(
+                    id="t1",
+                    title=a.title,
+                    scope=a.scope,
+                    checks=[check_hint.qualified(".", command) for command in a.check],
+                )
+            ]
+        ),
         checks=[PersonCheck(id=i, criteria=[c.id for c in criteria], steps=[s]) for i, s in a.person_check],
         step=Step(kind=StepKind.BUILD, task="t1"),
         names=Names(branch=f"owlbear/{a.change}", target=a.target),

@@ -2,6 +2,7 @@ import argparse
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.runtimes import step_input
 from owlbear_delivery_next.state_store.store import Store
 
 
@@ -25,3 +26,6 @@ def test_seeding_replaces_only_its_own_profile_entries(tmp_path) -> None:
         "install:packages/app": "npm ci",
     }
     assert store.read_profile().version == 4
+    change = store.read("c1")
+    assert change.plan.tasks[0].checks == ["cd . && {\nnpm test\n}"]
+    assert step_input.session(change, store.read_profile(), tmp_path, {}).checks == ("cd . && {\nnpm test\n}",)
