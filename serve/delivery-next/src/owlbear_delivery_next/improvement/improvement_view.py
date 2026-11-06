@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import re
 import sqlite3
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -189,11 +190,8 @@ def _finished(projects: units.Projects, unread: list[str]) -> list[dict[str, Any
 
 
 def _unit_states() -> dict[str, int]:
-    by_state: dict[str, int] = {}
-    for u in store.units(synthetic=True).values():
-        state = (u.get("revisions") or [{}])[-1].get("state") or "new"
-        by_state[state] = by_state.get(state, 0) + 1
-    return by_state
+    states = ((u.get("revisions") or [{}])[-1].get("state") or "new" for u in store.units(synthetic=True).values())
+    return dict(Counter(states))
 
 
 def retro(projects: units.Projects, switches: Mapping[str, Any], failed: str = "") -> dict[str, Any]:
