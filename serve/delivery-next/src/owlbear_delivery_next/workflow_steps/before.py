@@ -96,17 +96,17 @@ def _serve(  # noqa: PLR0913, PLR0917 - the recipe, its states and where they re
 
     With *pack*, the design detector scans each page; only the check's "before" needs that.
     """
-    e = Environment(
-        check=VISUAL, command=recipe.command, directory=recipe.directory, ready_url=recipe.ready_url,
-        port=check.free_port(),
-    )  # fmt: skip
-    if check.answers(check.url(e)):
-        notes.append(f"something else already answers at {check.url(e)}")
-        return []
     try:
         env = prepare(root) if prepare else None  # TD-96: the same frozen snapshot the "after" capture restores
     except Exception as exc:  # noqa: BLE001 - a capture never gates the Change (B25)
         notes.append(f"the test copy at {where}: {worktree.failure(exc)}")
+        return []
+    e = Environment(
+        check=VISUAL, command=recipe.command, directory=recipe.directory, ready_url=recipe.ready_url,
+        port=check.free_port(),
+    )  # fmt: skip
+    if check.answers(check.url(e)):  # picked once the copy is ready, right before the launch takes it
+        notes.append(f"something else already answers at {check.url(e)}")
         return []
     since = check.size(log_file := out / "preview.log")
     proc = check.start(e, root, log_file, env)
