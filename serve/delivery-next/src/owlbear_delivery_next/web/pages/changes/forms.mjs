@@ -220,20 +220,23 @@ export function finale(d) {
     + `updates your local ${d.target} if that is safe.`;
 }
 
+// Withdraw one of the owner's visual criteria (TD-79), after he confirms what that ends.
+export function withdrawing(id, said, d) {
+  return async () => {
+    const stop = await ask({
+      title: `Stop checking ${id}?`, yes: "Stop checking", no: "Keep it", destructive: true,
+      now: `“${said}” is no longer checked in later visual rounds; it stays in this Change's history.`,
+      after: "There is no restore. A comment on a later Fail adds a new criterion.",
+      instead: "Every later visual round keeps checking it.",
+    });
+    if (stop) send(`/criteria/${encodeURIComponent(id)}/withdraw`, {}, d);
+  };
+}
+
 export function criteriaPanel(d) {
   return info("Your visual criteria", text("Every later visual round checks these until you withdraw them."),
-    d.owner_criteria.map((k) => {
-      const withdraw = async () => {
-        const stop = await ask({
-          title: `Stop checking ${k.id}?`, yes: "Stop checking", no: "Keep it", destructive: true,
-          now: `“${k.text}” is no longer checked in later visual rounds; it stays in this Change's history.`,
-          after: "There is no restore. A comment on a later Fail adds a new criterion.",
-          instead: "Every later visual round keeps checking it.",
-        });
-        if (stop) send(`/criteria/${encodeURIComponent(k.id)}/withdraw`, {}, d);
-      };
-      return row(text(`${k.id}: ${k.text}`), button("Withdraw", withdraw, { variant: "secondary", aria: DIALOG }));
-    }));
+    d.owner_criteria.map((k) => row(text(`${k.id}: ${k.text}`),
+      button("Withdraw", withdrawing(k.id, k.text, d), { variant: "secondary", aria: DIALOG }))));
 }
 
 export function checkForm(check, d) {

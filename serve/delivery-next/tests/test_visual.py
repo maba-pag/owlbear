@@ -37,6 +37,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.visual_records import (
     DetectorFinding,
     DetectorScan,
+    JudgeConflict,
     JudgeFinding,
     JudgeVerdict,
     PageError,
@@ -381,11 +382,13 @@ class FakeReview:
         return Run(cfg.session_id, ending="result", payload=payload, termination=self.termination)
 
 
-def designed(cfg, verdict="pass", findings=()):
+def designed(cfg, verdict="pass", findings=(), conflicts=()):
     """A verified two-phase design verdict over the session's images."""
     names = list(cfg.observe().changed)
     pairs = [{"pair": p, "better": "equal", "why": "same"} for p in design_tools.pairs(names)]
-    look = design_tools.DesignLook(verdict=verdict, findings=list(findings), preferences=pairs, covered_paths=names)
+    look = design_tools.DesignLook(
+        verdict=verdict, findings=list(findings), conflicts=list(conflicts), preferences=pairs, covered_paths=names
+    )
     final = design_tools.DesignResult(**look.model_dump())
     done = processes.Termination(confirmed=True)
     return Run(cfg.session_id, ending="result", payload=final, first=look, termination=done)
@@ -622,15 +625,18 @@ def test_a_judge_without_a_verdict_is_run_again_with_its_whole_reason(lens, whol
 
 
 @pytest.mark.parametrize(
-    ("correct", "setting", "step", "sent"),
+    ("correct", "setting", "conflicts", "ends"),
     [
-        ("pass", "back", StepKind.BUILD, ["design"]),  # back by the setting, with the design findings
-        ("pass", "ask", StepKind.CHECK, []),  # the owner decides
-        ("fix", "back", StepKind.BUILD, ["correctness", "design"]),
-        ("fix", "ask", StepKind.BUILD, ["correctness"]),  # the design fail waits for the next round
+        ("pass", "back", 0, (StepKind.BUILD, ["design"])),  # back by the setting, with the design findings
+        ("pass", "ask", 0, (StepKind.CHECK, [])),  # the owner decides
+        ("fix", "back", 0, (StepKind.BUILD, ["correctness", "design"])),
+        ("fix", "ask", 0, (StepKind.BUILD, ["correctness"])),  # the design fail waits for the next round
+        ("pass", "back", 2, (StepKind.CHECK, [])),  # a conflict with the brief is the owner's, never the builder's
+        ("fix", "back", 2, (StepKind.CHECK, [])),  # whatever the verdicts
     ],
 )
-def test_the_verdict_matrix_routes_a_design_fail_by_the_setting(flow, correct, setting, step, sent):
+def test_the_verdict_matrix_routes_a_design_fail_by_the_setting(flow, correct, setting, conflicts, ends):
+    step, sent = ends
     assert (
         flow.store.save(
             flow.store.config_path,
@@ -643,8 +649,12 @@ def test_the_verdict_matrix_routes_a_design_fail_by_the_setting(flow, correct, s
     )
     flow.review.verdict = correct
     problem = {"image": "home-1280-A.png", "problem": "cramped card", "rule": "Layout & Space", "severity": "P1"}
+    clash = [{"image": "home-1280-A.png", "rule": "Color", "departs": "home", "problem": f"clash {n}"} for n in (1, 2)]
     flow.review.design = lambda cfg: designed(
-        cfg, "fail", [problem] if "home-1280-A.png" in cfg.observe().changed else []
+        cfg,
+        "fail",
+        [problem] if "home-1280-A.png" in cfg.observe().changed else [],
+        clash[:conflicts] if "home-1280-A.png" in cfg.observe().changed else [],
     )
     runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
     after = flow.store.read("c1")
@@ -652,6 +662,13 @@ def test_the_verdict_matrix_routes_a_design_fail_by_the_setting(flow, correct, s
     detail = next((t.detail for t in after.plan.tasks if t.origin == "review"), "")
     has = {"correctness": "did not accept the screenshots" in detail, "design": "cramped card" in detail}
     assert [lens for lens, seen in has.items() if seen] == sent
+    if conflicts:  # the owner takes one of the two: its amendment cites that one alone
+        q, kept = loop.open_question(after), after.visual_rounds[-1]
+        assert [o.id for o in q.options] == ["pass", "fail", "amend", "pause"]
+        took = AnswerItem(at=NOW, question=q.id, option="amend", text="conflict-2", round=kept.number)
+        taken, _ = loop.schedule(after, [took], NOW)
+        [a] = taken.amendments
+        assert ("clash 2" in a.reason, "clash 1" in a.reason, taken.amending is not None) == (True, False, True)
 
 
 def test_a_fail_proposes_only_what_a_failing_judge_found_the_change_introduced_worth_a_fix() -> None:
@@ -680,6 +697,12 @@ def test_a_fail_proposes_only_what_a_failing_judge_found_the_change_introduced_w
     assert (route, [line.rsplit(": ", 1)[1] for line in sent]) == ("back", ["problem 1", "problem 4", "problem 5"])
     polish = kept.model_copy(update={"verdicts": [correct, design.model_copy(update={"findings": made[1:3]})]})
     assert decision.route(polish, [], passed, broken=False) == ("ask", [])  # nothing to fix: the owner looks
+    clash = JudgeConflict(id="conflict-1", state="home", rule="Color", departs="home", text="the brief's grey")
+    torn = kept.model_copy(update={"verdicts": [correct, design.model_copy(update={"conflicts": [clash]})]})
+    assert decision.route(torn, [], passed, broken=False) == ("ask", [])  # the owner settles a conflict
+    route, sent = decision.route(torn, ["home at 1280px: no screenshot"], passed, broken=True)
+    assert route == "back"
+    assert not any("the brief's grey" in line for line in sent)  # a broken round goes back without it
 
 
 def test_the_owner_decides_a_round_with_pass_or_fail_bound_to_its_capture(flow):

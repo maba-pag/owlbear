@@ -389,8 +389,13 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                 "visual": c.visual.model_dump(mode="json") if c.visual else None,
                 "visual_existing_errors": visual.existing(c),
                 "before": c.before.model_dump(mode="json") if c.before else None,
-                "visual_round": c.visual_rounds[-1].model_dump(mode="json")
-                | {"proposed": decision.proposed(c.visual_rounds[-1])}
+                "visual_round": (
+                    c.visual_rounds[-1].model_dump(mode="json")
+                    | {
+                        "proposed": decision.proposed(c.visual_rounds[-1]),
+                        "departs": decision.departs(c, c.visual_rounds[-1]),
+                    }
+                )
                 if c.visual_rounds
                 else None,
                 "owner_criteria": [k.model_dump(mode="json") for k in c.owner_criteria if k.withdrawn_at is None],

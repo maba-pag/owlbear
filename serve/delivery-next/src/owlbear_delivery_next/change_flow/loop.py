@@ -40,7 +40,6 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
     Waiting,
 )
-from owlbear_delivery_next.change_contracts.visual_records import OwnerDecision
 from owlbear_delivery_next.change_flow import (
     amend_apply,
     amending,
@@ -51,6 +50,7 @@ from owlbear_delivery_next.change_flow import (
     decision_baseline,
     delivery_target,
     disputes,
+    owner_answers,
     picks,
     plan_rounds,
     rebuilds,
@@ -287,14 +287,6 @@ def _intent(c: Change, item: IntentItem) -> None:
             c.intent.words, c.intent.hold = item.text, True
 
 
-def _visual_decision(c: Change, decision: str, item: AnswerItem) -> None:
-    """Record the owner's decision on the round it was about, while that round still waits for it (TD-79)."""
-    kept = c.visual_rounds[-1] if c.visual_rounds else None
-    if kept and kept.number == item.round and kept.outcome == "ask" and kept.decision is None:
-        outcome = "pass" if decision == "accept" else "fail"
-        kept.decision = OwnerDecision(outcome=outcome, findings=item.findings, comment=item.text, at=item.at)
-
-
 def _target(q: Question, option: str | None) -> str | None:
     """Where the chosen option leads; a question whose every option reruns the step does so on any answer."""
     if q.options and all(o.next == "retry" for o in q.options):
@@ -321,9 +313,8 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> str:
         return f"question {q.id} is settled only by one of its options, a reconsideration by a note"
     if gate and (target != "pause" or c.step.kind != StepKind.CLEANUP):
         c.outcome = None
-    if kind == "brief_change":  # never delivered: the brief's amendment runs first (TD-185)
-        amending.start(c, "answer", reason=item.text, now=now, question=q.id)
-        return ""
+    if (amended := owner_answers.amended(c, q, item, (kind, target), now)) is not None:
+        return amended
     if q.cause and kind_of(q.cause) in ENVIRONMENT | DEFECT and target != "pause":
         c.budgets.causes.pop(q.cause, None)  # "Done, continue" starts a new episode or streak
     if target in DECISIONS:
@@ -386,7 +377,7 @@ def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: boo
     elif target == "retry" or (q.cause or "").endswith(f":{UNREAD}"):  # an accepted hold is taken by the runner
         go(c, c.step.kind, c.step.task, c.step.mode)
     else:
-        _visual_decision(c, target, item)
+        owner_answers.decided(c, target, item)
 
 
 def answer_delivered(change: Change, question_id: str, now: datetime) -> Change:

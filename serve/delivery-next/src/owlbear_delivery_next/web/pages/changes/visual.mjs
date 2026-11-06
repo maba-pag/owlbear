@@ -2,7 +2,7 @@ import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { api, token } from "/assets/ui.mjs";
 import { DIALOG, REVERT, show, parts, draft, notify, send, starts } from "./state.mjs";
 import { disclosure, button, field, tick, hd, text, list, row, panel } from "./widgets.mjs";
-import { merging, finale, mergeSetting, droppedLine } from "./forms.mjs";
+import { merging, finale, mergeSetting, droppedLine, withdrawing } from "./forms.mjs";
 
 const JUDGE = { design: "Design judge", correctness: "Correctness judge" };
 const SEVERITY = { P0: ["Blocks the task", "error"], P1: ["Serious", "error"], P2: ["Annoying", "warning"],
@@ -87,8 +87,36 @@ function detectorLines(r) {
   });
 }
 
+// A design rule the brief or one of the owner's criteria rules out: never ticked, never sent to the builder. One with
+// a state or a brief criterion is taken by changing the brief; one with an owner's criterion by withdrawing it.
+function conflictRow(k, q, r, d, key) {
+  const said = r.departs?.[k.id] ?? "", owner = k.departs.startsWith("owner-");
+  const take = async () => {
+    const ok = await ask({
+      title: `Change the brief to take conflict ${k.id}?`, yes: "Change the brief", no: "Keep reviewing",
+      now: `The shaper drafts a brief amendment so that ${k.departs} allows what ${k.rule} asks: ${k.text}`,
+      then: "A challenger judges the amendment; once it applies, the visual check runs again on the new brief. This "
+        + "uses AI credits.",
+      after: "The round's other conflicts are not part of it.",
+      instead: "The round stays open; Pass keeps the brief as it is.",
+    });
+    if (ok) {
+      const round = { round: r.number, head: r.head, pack: r.pack };
+      send("/answers", { question: q.id, option: "amend", text: k.id, ...round, findings: [] }, d, key);
+    }
+  };
+  const action = owner
+    ? html`${text("Withdrawing it leaves this round to your Pass or Fail; later rounds no longer check it.",
+      { size: "xs" })}${button(`Withdraw ${k.departs}`, withdrawing(k.departs, said, d),
+      { variant: "secondary", aria: DIALOG })}`
+    : button("Change the brief to take this", take, { variant: "secondary", aria: DIALOG, ...starts(d) });
+  return html`<div class="finding">${text(`${where(k.state, k.width ? [k.width] : [])} · ${k.rule}: ${k.text}`)}
+    ${text(`Departs from ${k.departs}${said ? `: “${said}”` : ""}`, { size: "xs", color: "contrast-medium" })}
+    ${action}</div>`;
+}
+
 // The owner's decision on one visual round (TD-79): the screenshots, both verdicts, the problems he sends back,
-// a comment, Pass or Fail.
+// a comment, Pass or Fail; a conflict with the brief is his to settle, never the builder's.
 export function decisionForm(q, r, pictures, d) {
   const all = problems(r), key = `${d.key}:visual:${r.number}:${r.head}`;
   const proposed = r.proposed || [];
@@ -96,6 +124,7 @@ export function decisionForm(q, r, pictures, d) {
     .map((p) => p.key) }));
   const made = all.filter((p) => p.first.introduced !== false), old = all.filter((p) => p.first.introduced === false);
   const preferred = comparison(r), evidence = detectorLines(r);
+  const conflicts = r.verdicts.flatMap((v) => v.conflicts ?? []);
   const decide = async (option) => {
     const comment = (mine.text ?? "").trim(), chosen = made.filter((p) => mine.picked.includes(p.key));
     const findings = chosen.flatMap((p) => p.items.map((f) => f.id));
@@ -131,6 +160,9 @@ export function decisionForm(q, r, pictures, d) {
   };
   return panel(`Decide visual round ${r.number} of ${r.head.slice(0, 7)}`, key, droppedLine(q), pictures,
     hd(4, "Verdicts", "sm"), r.verdicts.map(verdictLine),
+    conflicts.length ? html`${hd(4, "Conflicts with the brief", "sm")}${text("The design judge found rules that the "
+      + "brief or your criteria rule out. They are never sent to the builder: Pass keeps the brief.")}${conflicts
+      .map((k) => conflictRow(k, q, r, d, key))}` : nothing,
     made.length ? html`${hd(4, "Problems this Change introduced", "sm")}${text("Blocking, serious and annoying "
       + "problems and any missed criterion of yours are ticked for you; a Fail sends the ticked ones to the "
       + "builder.")}${made.map((p) => problemRow(p, mine))}` : nothing,

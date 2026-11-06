@@ -31,6 +31,17 @@ class DesignFinding(Args):
     )
 
 
+class Conflict(Args):
+    """A design rule that the brief or an owner's criterion rules out: the owner decides it, never a fix task."""
+
+    image: str = bounded(80, "The image it is seen in", "home-1280-A.png")
+    rule: str = bounded(120, "The owlbear-interface-design section or detector rule id that asks for a change", "Color")
+    departs: str = bounded(
+        60, "What it departs from: a visual state's name, a brief criterion (AC-2) or an owner's criterion", "AC-2"
+    )
+    problem: str = bounded(500, "What the rule asks that it rules out", "The required grey on indigo is 2.5:1 contrast")
+
+
 class Preference(Args):
     """Which image of one blind pair is better, and why."""
 
@@ -59,7 +70,12 @@ class DesignLook(Args):
         default="",
         max_length=500,
         description="For unsure: what only the owner can decide; empty otherwise",
-        examples=["Is the brief's red meant to override the palette?"],
+        examples=["Is the brief's blank header meant to stay?"],
+    )
+    conflicts: list[Conflict] = Field(
+        default_factory=list,
+        max_length=10,
+        description="Each rule the brief, a state's expectation or an owner's criterion rules out; never a finding",
     )
     covered_paths: list[str] = Field(
         default_factory=list,
@@ -118,8 +134,11 @@ def pairs(images: Sequence[str]) -> list[str]:
     return sorted(s for s in stems if f"{s}-B.png" in images)
 
 
-def check(look: DesignLook, tree: Worktree) -> list[str]:
-    """Field errors of a verdict that does not match its findings, skips an image, or leaves a pair unjudged."""
+def check(look: DesignLook, tree: Worktree, targets: Sequence[str] = ()) -> list[str]:
+    """Field errors of a verdict that does not match its findings, skips an image, or leaves a pair unjudged.
+
+    A conflict departs from one of *targets*: the round's states, brief criteria and owner's criteria.
+    """
     images, errors = tree.changed, []
     if look.verdict == "fail" and not look.findings and all(p.better == "equal" for p in look.preferences):
         errors.append("findings: empty - a fail names each problem, or a pair whose one image is clearly worse")
@@ -130,6 +149,13 @@ def check(look: DesignLook, tree: Worktree) -> list[str]:
     if missing := sorted(set(images) - set(look.covered_paths)):
         errors.append(f"covered_paths: missing {', '.join(missing[:5])} - look at every image and list it")
     errors += [f"findings: {f.image} is not one of your images" for f in look.findings if f.image not in images]
+    errors += [f"conflicts: {k.image} is not one of your images" for k in look.conflicts if k.image not in images]
+    named = ", ".join(targets) or "none"
+    errors += [
+        f"conflicts: {k.departs} is no state, brief criterion or owner's criterion here - name one of {named}"
+        for k in look.conflicts
+        if k.departs not in targets
+    ]
     judged = [p.pair for p in look.preferences]
     if sorted(judged) != pairs(images):
         errors.append(f"preferences: name each pair once - {', '.join(pairs(images)) or 'none'}")

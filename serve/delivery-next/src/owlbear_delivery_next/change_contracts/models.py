@@ -37,7 +37,9 @@ type Role = Literal[
 ]  # fmt: skip
 type Effort = Literal["low", "medium", "high", "xhigh", "max"]
 type Context = Literal["default", "long"]  # the model's default context tier, or its long-context tier
-type Move = Literal["done", "pause", "abandon", "retry", "accept", "repair", "reconsider", "another", "rebuild"]
+type Move = Literal[
+    "done", "pause", "abandon", "retry", "accept", "repair", "reconsider", "another", "rebuild", "amend"
+]
 type AnswerKind = Literal["event", "clarification", "brief_change"]  # its relayer's class of a worker's answer
 
 

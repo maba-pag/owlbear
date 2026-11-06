@@ -43,12 +43,25 @@ class JudgeFinding(_Strict):
     introduced: bool | None = None  # by this Change; None when the judge could not tell
 
 
+class JudgeConflict(_Strict):
+    """A design rule the brief or an owner's criterion rules out: shown to the owner, never ticked or sent to a fix."""
+
+    id: str  # unique within its round, such as ``conflict-1``
+    state: str
+    width: int | None = None
+    image: str = ""
+    rule: str  # the design section or detector rule asking for the change
+    departs: str  # the state, brief criterion (``AC-N``) or owner's criterion (``owner-N``) it departs from
+    text: str
+
+
 class JudgeVerdict(_Strict):
     """One judge's verdict in one round; ``verdict`` is None until a verified result exists."""
 
     lens: Lens
     verdict: Verdict | None = None
     findings: list[JudgeFinding] = Field(default_factory=list)
+    conflicts: list[JudgeConflict] = Field(default_factory=list)  # the design judge's; the owner decides them
     reason: str = ""  # why unsure, or why no verified result
     model: str = ""
     effort: str = ""

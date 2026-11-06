@@ -481,6 +481,13 @@ def test_a_replay_rejudges_kept_rounds_with_their_exact_messages_and_screenshots
     assert [a["displayName"] for a in cfg.attachments] == ["home-1280-A.png", "home-1280-B.png"]
     assert cfg.observe().changed == ("home-1280-A.png", "home-1280-B.png")
     assert (cfg.policy.write, cfg.resume, cfg.session_id.startswith("replay-")) == (False, False, True)
+    clash = {"image": "home-1280-A.png", "rule": "Color", "problem": "the required grey is faint"}
+    said = {"verdict": "pass", "preferences": [{"pair": "home-1280", "better": "equal", "why": "same"}]}
+    said |= {"covered_paths": ["home-1280-A.png", "home-1280-B.png"]}
+    named = design_tools.DesignLook(**said, conflicts=[clash | {"departs": "home"}])  # the stored round's state
+    stray = design_tools.DesignLook(**said, conflicts=[clash | {"departs": "AC-1"}])  # a criterion it never had
+    assert design_tools.check(named, cfg.observe(), cfg.targets) == []
+    assert design_tools.check(stray, cfg.observe(), cfg.targets)[0].startswith("conflicts: AC-1 is no state")
 
 
 def test_a_replay_judge_left_running_stops_the_replay_before_another_starts(repo, tmp_path) -> None:

@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Literal
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.visual_records import (
     DesignInput,
+    JudgeConflict,
     JudgeFinding,
     JudgeVerdict,
     Verdict,
@@ -47,11 +48,13 @@ JUDGE = (
     "Use `owlbear-design-review`. Per blind pair, say which image is better (A, B or equal) and why; you are not told "
     "which is the Change, and Delivery maps your findings and preferences back. Judge each image against "
     "`owlbear-interface-design` and the owner's criteria. A finding names its image, the problem and why it matters, "
-    "the rule it breaks (an owner's criterion by its id) and its severity."
+    "the rule it breaks (an owner's criterion by its id) and its severity. A rule the brief, a state's expectation or "
+    "an owner's criterion rules out is no finding and no reason for unsure: name it in `conflicts`, with the state, "
+    "brief criterion (AC-N) or owner's criterion it departs from. The brief still wins; the owner decides each one."
 )
 FINISH = (
-    "First call `submit_first_look` with `verdict`, `findings`, `preferences` (one per pair) and `covered_paths` "
-    "(every image), from the images alone. Its reply carries the design detector's findings; then call "
+    "First call `submit_first_look` with `verdict`, `findings`, `preferences` (one per pair), `conflicts` and "
+    "`covered_paths` (every image), from the images alone. Its reply carries the design detector's findings; then call "
     "`submit_result` with your final verdict, the same fields, `agreed` (detector rule ids your findings share) and "
     "`false_positives` (detector rule ids that do not apply here). If a call is rejected, fix what each error names "
     "and call it again."
@@ -162,6 +165,8 @@ def sessions(  # noqa: PLR0913 - one session per batch, from the correctness jud
     scans: Sequence[DetectorScan],
 ) -> list[Session]:
     """The design judge's sessions: one per batch, each two-phase, its detector findings held back."""
+    owner = [k.id for k in c.owner_criteria if k.withdrawn_at is None]
+    allowed = targets([s.name for s in c.brief.visual], [k.id for k in c.brief.criteria], owner)
     return [
         _design_judge(
             base,
@@ -172,9 +177,15 @@ def sessions(  # noqa: PLR0913 - one session per batch, from the correctness jud
                 images=[i.name for i in batch],
             ),
             batch,
+            allowed,
         )
         for batch in batches(images)
     ]
+
+
+def targets(states: Iterable[str], criteria: Iterable[str], owner: Iterable[str]) -> tuple[str, ...]:
+    """What a design judge's conflict may depart from: the round's states, brief criteria and owner's criteria."""
+    return tuple(dict.fromkeys([*states, *criteria, *owner]))
 
 
 def given(cfg: Session) -> DesignInput:
@@ -195,13 +206,17 @@ def replayed(base: Session, kept: VisualRound, images: Sequence[Image]) -> list[
     ):
         msg = f"round {kept.number}'s design inputs do not show its {len(named)} images once each within the budget"
         raise ValueError(msg)
-    return [_design_judge(base, kept.head, sent, p) for sent, p in zip(kept.design_inputs, parts, strict=True)]
+    allowed = targets(kept.states, kept.criteria, kept.owner)  # as the round had them: replay has no Change
+    return [_design_judge(base, kept.head, sent, p, allowed) for sent, p in zip(kept.design_inputs, parts, strict=True)]
 
 
-def _design_judge(base: Session, head: str, sent: DesignInput, batch: Sequence[Image]) -> Session:
+def _design_judge(
+    base: Session, head: str, sent: DesignInput, batch: Sequence[Image], allowed: tuple[str, ...]
+) -> Session:
     return dataclasses.replace(
         base,
         role="design-judge",
+        targets=allowed,
         message=sent.message,
         submit=design_tools.FINAL,
         first_look=design_tools.FIRST,
@@ -344,6 +359,18 @@ def design(runs: Sequence[Run], images: Sequence[Image], role: RoleModel, now: d
         )
         for n, (f, look) in enumerate(((f, p) for p in finals for f in p.findings), 1)
     ]
+    conflicts = [
+        JudgeConflict(
+            id=f"conflict-{n}",
+            state=named[k.image].state,
+            width=named[k.image].width,
+            image=k.image,
+            rule=k.rule,
+            departs=k.departs,
+            text=k.problem,
+        )
+        for n, k in enumerate((k for p in finals for k in p.conflicts), 1)
+    ]
     better = {
         p.pair: "equal" if p.better == "equal" else named[f"{p.pair}-{p.better}.png"].side
         for r in finals
@@ -357,6 +384,7 @@ def design(runs: Sequence[Run], images: Sequence[Image], role: RoleModel, now: d
         verdict=_worst(derived),
         unanchored=_worst(_derived(p, named) for p in firsts),
         findings=found,
+        conflicts=conflicts,
         reason="; ".join(filter(None, reasons))[:800],
         usage_verified=all(verified(r) for r in runs),
         agreed=sorted({r for p in finals for r in p.agreed}),
