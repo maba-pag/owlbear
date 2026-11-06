@@ -548,11 +548,11 @@ async def read_memory(ctx: Context, *, entry_id: str, folder: str | None = None)
     engine = _engine_from_ctx(ctx)
     shared = _global_engine(ctx)
     read_errors: dict[str, str] = {}
-    for candidate, where, label in ((engine, "project", "project"), (shared, "global", "Global")):
+    for candidate, source, label in ((engine, "project", "project"), (shared, "global", "Global")):
         if candidate is None:
             continue
         try:
-            entry = candidate.get_entry(entry_id)
+            entry, where = candidate.get_entry(entry_id), source
         except NotFoundError:
             continue
         finally:
