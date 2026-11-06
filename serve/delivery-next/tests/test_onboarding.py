@@ -1081,16 +1081,20 @@ def test_a_registered_project_being_added_shows_once_on_its_row(hub, tmp_path, m
     folder = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/proj.git", "proj", Access.LOCAL))
     registry.register(folder)
     with served(monkeypatch, pds) as (page, base, machine):
+        failing = readiness.Check("first commit", ok=False, detail="none yet", fix="commit")
+        monkeypatch.setattr(project.readiness, "ready", lambda *_a, **_k: [failing])
+        next(p for p in machine.projects.values() if Path(p.entry.path) == folder)._ready()  # noqa: SLF001
         page.goto(f"{base}/projects#token=t")
         row = page.get_by_role("listitem", name="proj")
         expect(row.get_by_role("button", name="Finish setup")).to_be_visible()
+        expect(row.get_by_role("list", name="Failed readiness checks")).to_be_visible()
         found = machine.onboarding.probe({"kind": "folder", "folder": str(folder)})
         info = machine.onboarding.start(plan_for(found, protect=False))
         settle(machine.onboarding, info["id"])
         expect(row.locator("p-tag", has_text="Not fully added")).to_be_visible()  # the page's next poll
         expect(row).to_contain_text("Waits for you to confirm its profile")
         expect(row.get_by_role("button", name="Finish setup")).to_have_count(0)
-        expect(row.get_by_role("list", name="Failed readiness checks")).to_have_count(0)
+        assert row.get_by_role("list", name="Failed readiness checks").count() == 0  # drawn with the tag
         expect(page.get_by_role("heading", name="Not added yet")).to_have_count(0)
         row.get_by_role("button", name="Confirm profile").click()
         modal = pds.modal(page)
