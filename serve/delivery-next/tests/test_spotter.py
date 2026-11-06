@@ -41,7 +41,7 @@ from owlbear_delivery_next.improvement import (
 from owlbear_delivery_next.improvement.events import Kept
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import sdk_adapter, spend_reconcile, spotter_look, step_decisions
+from owlbear_delivery_next.runtimes import sdk_adapter, spend_reconcile, spotter_look, step_decisions, step_tools
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
 from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter
@@ -1687,8 +1687,6 @@ def test_a_submit_waits_for_a_hand_off_look_that_first_waited_for_a_slot_and_tak
     tmp_path, monkeypatch
 ) -> None:
     """One budget holds the submit: the look's wait for a slot, its answer and a teardown stage (#919)."""
-    from owlbear_delivery_next.runtimes import step_tools  # noqa: PLC0415 - the real submit's budget
-
     monkeypatch.setattr(spotter, "LOOK", 0.5)
     monkeypatch.setattr(spotter, "TEARDOWN", 0.05)
     ready, release, judged = asyncio.Barrier(3), asyncio.Event(), asyncio.Event()
