@@ -55,11 +55,12 @@ def capture(c: Change, folder: Path) -> dict[str, Any]:
         return out | {"running": False, "needed": False}
     if shaping_capture.waiting(c) or s is None or s.result is None:
         return out | {"running": True}
-    r, states = s.result, []
+    r, states, root = s.result, [], folder.resolve()
     width = r.widths[0] if r.widths else 0
     for v in b.visual:
         name = f"{v.name}-{width}.png"
-        data = (folder / name).read_bytes() if name in r.files else b""
+        path = (root / name).resolve()  # only a picture the capture lists, inside its own folder
+        data = path.read_bytes() if name in r.files and path.parent == root and path.is_file() else b""
         shown = base64.b64encode(data).decode() if data and len(data) <= INLINE else None
         states.append({"name": v.name, "width": width, "bytes": len(data), "png": shown})
     return out | {"running": False, "head": r.head, "at": r.at.isoformat(), "states": states, "findings": r.findings}
@@ -92,8 +93,8 @@ def router(read: Callable[[str], Change], folder: Callable[[str, ShapingCapture]
 
     @routes.get("/chat/capture/{slug}")
     def chat_capture(slug: str) -> dict[str, Any]:
-        c = read(slug)
-        return capture(c, folder(slug, c.shaped) if c.shaped and c.shaped.result else Path())
+        c = read(slug)  # one of the store's own Changes: its folder comes from the record
+        return capture(c, folder(c.slug, c.shaped) if c.shaped and c.shaped.result else Path())
 
     routes.add_api_route("/chat/contract", contract, methods=["GET"])
     return routes
