@@ -36,7 +36,7 @@ def amended(c: Change, q: Question, item: AnswerItem, how: tuple[str | None, str
         q.answer = None
         return f"question {q.id}: the last visual round has no conflict {ident} with the brief to take"
     where = f"{k.state}{f' at {k.width}px' if k.width else ''}"
-    said = f"The owner takes the design judge's conflict {k.id} ({where}, {k.rule}): {k.text}"
+    said = f"The owner takes the design judge's conflict {k.id} ({where}, {k.rule}): {k.text.rstrip('.')}"
     said += f". It departs from {k.departs}"
     amending.start(c, "answer", reason=said, evidence=[said], now=now, question=q.id)
     return ""

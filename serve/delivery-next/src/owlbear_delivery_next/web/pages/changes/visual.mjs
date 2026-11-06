@@ -282,10 +282,12 @@ function referenced(slug, r, name, at, width, gallery) {
     side: "reference", state: at, width, commit }, gallery));
 }
 
-// The screenshots of a visual check and what was found: its lines, and the gallery with its count.
-export function visualSection(slug, v, b, existing, deciding, r = null) {
+// The screenshots of a visual check and what was found: its lines, and the gallery with its count. While a brief
+// amendment is in progress (*amending*, such as a conflict the owner took), the check waits for it, not failed.
+export function visualSection(slug, v, b, existing, deciding, r = null, amending = null) {
   const open = deciding || v.doubts.length;
-  const [said, variant] = v.passed ? ["Passed", "success"] : open ? ["Undecided", "warning"] : ["Failed", "error"];
+  const [said, variant] = v.passed ? ["Passed", "success"] : amending ? ["Waiting for the brief amendment", "info"]
+    : open ? ["Undecided", "warning"] : ["Failed", "error"];
   const gallery = [], pairs = v.files.map((name) => {
     const [, at, width] = name.match(/^(.*)-(\d+)\.png$/);
     const kept = b && b.files.includes(name);
@@ -300,6 +302,8 @@ export function visualSection(slug, v, b, existing, deciding, r = null) {
   });
   const lines = html`${row(text(`Visual check of ${v.head.slice(0, 7)}`, { weight: "semibold" }),
     html`<p-tag variant=${variant} compact="true">${said}</p-tag>`)}
+    ${amending && !v.passed ? text(`Brief amendment ${amending.id} is in progress: ${amending.reason}. The visual `
+      + "check runs again once it applies.") : nothing}
     ${v.findings.length ? list(v.findings) : nothing}
     ${v.doubts.length ? html`${text("The judges could not decide:", { size: "xs" })}${list(v.doubts)}` : nothing}
     ${existing.length ? text(`Errors already there before the Change: ${existing.join("; ")}`, { size: "xs" })

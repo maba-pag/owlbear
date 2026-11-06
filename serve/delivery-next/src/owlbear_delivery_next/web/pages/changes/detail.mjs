@@ -67,7 +67,9 @@ export function detailView(d) {
     : nothing;
   const behind = d.pullback?.state === "behind";
   const r = d.visual_round, deciding = r && r.outcome === "ask" && d.question?.options.some((o) => o.id === "fail");
-  const pictures = d.visual ? visualSection(d.key, d.visual, d.before, d.visual_existing_errors, deciding, d.reference)
+  const amending = (d.amendments?.list ?? []).find((a) => a.state === "proposed");
+  const pictures = d.visual ? visualSection(d.key, d.visual, d.before, d.visual_existing_errors, deciding, d.reference,
+    amending)
     : d.before ? beforeSection(d.key, d.before, d.reference) : null;
   const unjudged = roundRefused(r, d.visual);
   const approvingNow = d.step === "shape" && d.brief.approved !== d.brief.version;
