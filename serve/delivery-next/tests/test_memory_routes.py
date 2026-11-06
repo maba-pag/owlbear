@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from owlbear_memory import MemoryBusyError, MemoryCategory, MemoryEngine, storage
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import curation_apply, data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.machine_host import curation
@@ -258,7 +259,57 @@ def test_memorys_last_run_is_the_later_of_a_curation_run_and_the_owners_action(s
     (local_home.root() / curation.STATE).write_text("{")
     got = last()
     assert (got["by"], got["action"]) == ("owner", "approve Run ruff first")
-    assert got["reason"].startswith("memory curation's runs could not be read, so they are not counted")
+    assert got["history_notice"].startswith("memory curation's runs could not be read, so they are not counted")
+
+
+@pytest.mark.parametrize(("broken", "state"), [("spawn", "running"), ("timeout", "failed"), ("exit", None)])
+def test_unreadable_owner_history_qualifies_the_readable_run_without_replacing_its_reason(
+    shared, monkeypatch, whole_error, broken, state
+):
+    _root, _, repo = shared
+    store = Store.open(repo)
+    if state:
+        run = curation.FolderRun(state=state, started_at=datetime.now(UTC), reason="curation's own detail")
+        (local_home.root() / curation.STATE).write_text(curation.Runs(folders={store.name: run}).model_dump_json())
+    command = ["git", "log"]
+    error = {
+        "spawn": OSError(whole_error),
+        "timeout": subprocess.TimeoutExpired(command, 10, output=whole_error.encode(), stderr=b"history stderr"),
+        "exit": subprocess.CalledProcessError(128, command, output=whole_error, stderr="history stderr"),
+    }[broken]
+    error.add_note("history command note")
+    real = subprocess.run
+
+    def unreadable(args, **kwargs):
+        if args[:2] != command:
+            return real(args, **kwargs)
+        if broken == "exit":
+            return subprocess.CompletedProcess(args, error.returncode, error.output, error.stderr)
+        raise error
+
+    monkeypatch.setattr(pack_routes.subprocess, "run", unreadable)
+    got = {a["name"]: a for a in client(store).get("/api/next/maintenance").json()}["Memory curation"]["last"]
+    if broken == "exit":
+        error = subprocess.CalledProcessError(
+            128,
+            [
+                "git",
+                "log",
+                "-1",
+                "--format=%cI%x00%s",
+                "--fixed-strings",
+                f"--grep=memory {store.name}: ",
+                "--",
+                str(store.shared.memory_path(store.name)),
+            ],
+            output=whole_error,
+            stderr="history stderr",
+        )
+    assert got["history_notice"] == (
+        f"the owner's memory history could not be read, so it is not counted: {failure(error)}"
+    )
+    assert (got["by"], got["state"]) == ("curation", state or "unknown")
+    assert got.get("reason", "") == ("curation's own detail" if state else "")
 
 
 def test_unreadable_curation_runs_qualify_memorys_last_run_whole(shared, monkeypatch, whole_error):
@@ -276,7 +327,21 @@ def test_unreadable_curation_runs_qualify_memorys_last_run_whole(shared, monkeyp
 
     why = f"ValueError: {whole_error}\na note added on the way up"
     unread = f"memory curation's runs could not be read, so they are not counted: {why}"
-    assert got == {"by": "curation", "state": "unknown", "reason": unread}
+    assert got == {"by": "curation", "state": "unknown", "history_notice": unread}
+    owner_error = OSError("the owner's history is unreadable too")
+    owner_error.add_note("owner history note")
+
+    def no_history(_store):
+        raise owner_error
+
+    monkeypatch.setattr(pack_routes, "owner_last", no_history)
+    got = pack_routes.memory_last(store)
+    assert got == {
+        "by": "curation",
+        "state": "unknown",
+        "history_notice": f"the owner's memory history could not be read, so it is not counted: "
+        f"{failure(owner_error)}\n{unread}",
+    }
 
 
 def test_refused_memory_actions_say_why(shared):

@@ -21,6 +21,7 @@
   }
   .action .title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
   .action a { font-size: var(--p-typescale-sm); color: inherit; }
+  .history-notice { white-space: pre-wrap; overflow-wrap: anywhere; }
   #tests { display: grid; gap: var(--p-spacing-static-xs); }
   #tests fieldset { display: grid; gap: var(--p-spacing-static-xs); margin: 0; padding: 0; border: 0; }
 </style>
@@ -60,7 +61,9 @@ function lastRun(a) {
   const tag = RESULTS[a.last.state];
   return html`<p-text size="sm">Last run${by}: ${what}</p-text>
     ${tag ? html`<p-tag variant=${tag} compact="true">${a.last.state}</p-tag>` : nothing}
-    ${a.last.reason ? html`<p-text size="xs" color="contrast-medium">${a.last.reason}</p-text>` : nothing}`;
+    ${a.last.reason ? html`<p-text size="xs" color="contrast-medium">${a.last.reason}</p-text>` : nothing}
+    ${a.last.history_notice ? html`<p-text class="history-notice" size="xs"
+      color="contrast-medium">${a.last.history_notice}</p-text>` : nothing}`;
 }
 
 function action(a) {
