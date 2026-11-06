@@ -153,7 +153,7 @@ def rotated(c: Change, lp: RoundLoop, undone: list[Task], profile: Profile) -> N
         fresh(c, t)
     if picked:
         last, others = picked[-1], [t for t in tasks if t.origin == "plan" and t is not picked[-1] and t.checks]
-        last.checks = list(dict.fromkeys([*_placed(profile, [last]), *_placed(profile, others)]))
+        last.checks = _placed(profile, [last, *others])
     lp.ended, lp.rebuild, lp.completion, c.consent = "retried", [], None, None
     if nxt := open_task(c):
         go(c, StepKind.BUILD, nxt.id)
@@ -163,5 +163,4 @@ def rotated(c: Change, lp: RoundLoop, undone: list[Task], profile: Profile) -> N
 
 def _placed(profile: Profile, tasks: Sequence[Task]) -> list[str]:
     """Preserve each task's selected execution identities, including checks outside its edit scope."""
-    known = worktree.checks(profile)
-    return [c for task in tasks for c in check_hint.resolve(task.checks, known)]
+    return check_hint.resolve([c for task in tasks for c in task.checks], worktree.checks(profile))
