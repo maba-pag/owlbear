@@ -385,10 +385,7 @@ def merge_base(store: Store, c: Change, settings: Settings, log: Log) -> Callabl
 
 
 def shaping(store: Store, c: Change, settings: Settings, log: Log) -> Callable[[Path], dict[str, str]]:
-    """The shaping capture's test copy: the brief's declared option, exported and restored in its own checkout.
-
-    It runs under the permissions a check's does, and asks nothing: a missing or refused option is the capture's reason.
-    """
+    """The shaping capture's test copy in its own checkout, under a check's permissions; a refusal is its reason."""
 
     def go(root: Path) -> dict[str, str]:
         option = next((o for o in settings.preparations if o.id == c.brief.preparation), None)
@@ -452,10 +449,12 @@ def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> lo
     for rec in left(store, c):
         stuck = note = ""
         if rec.home and not Path(rec.home).is_dir():  # a shaping copy's checkout is gone: its cleanup cannot run
-            snapshot_files.gone(rec.snapshot)
-            log({"event": "prepared-end", "at": datetime.now(UTC).isoformat(), "check": rec.check,
-                 "cleanup": f"its checkout {rec.home} is gone, so its cleanup did not run"})  # fmt: skip
-            _write(store, c.slug, rec.model_copy(update={"snapshot": "", "digest": "", "open": False}))
+            note = f"its checkout {rec.home} is gone, so its cleanup did not run"
+            if not (gone := snapshot_files.gone(rec.snapshot)):  # outstanding: the next end deletes it again
+                note += f"; the snapshot {rec.snapshot} could not be deleted"
+            log({"event": "prepared-end", "at": datetime.now(UTC).isoformat(), "check": rec.check, "cleanup": note}
+                | ({} if gone else {"outstanding": True}))  # fmt: skip
+            _write(store, c.slug, rec.model_copy(update={"snapshot": "", "digest": "", "open": False}) if gone else rec)
             continue
         worked = Path(c.names.worktree) if c.names.worktree and Path(c.names.worktree).is_dir() else repo
         home = Path(rec.home) if rec.home else worked
