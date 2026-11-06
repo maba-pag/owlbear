@@ -337,8 +337,7 @@ content, provenance, and scope. The canonical file keeps the original ID. If rep
 complete, `DuplicateEntryError` names the ID and relative paths and the triggering mutation
 does not run. A partial repair keeps any new entries already written and leaves remaining
 duplicate source files for a later retry. `repair_duplicate_ids(memory_dir)` is exported for
-batch operations; callers must hold `writer_lock` for that directory. Its optional keyword
-`read_errors` collects omissions from its preliminary scan without changing the repair strategy.
+batch operations; callers must hold `writer_lock` for that directory.
 
 ### Read freshness
 

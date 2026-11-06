@@ -272,10 +272,10 @@ def _delete_duplicate_sources(
                 raise DuplicateEntryError(entry_id, error_paths) from error
 
 
-def repair_duplicate_ids(memory_dir: Path | str, *, read_errors: dict[str, str] | None = None) -> None:
+def repair_duplicate_ids(memory_dir: Path | str) -> None:
     """Repair duplicate IDs; callers must hold writer_lock for ``memory_dir``."""
     directory = Path(memory_dir)
-    _, entries_by_id = _read_entries_by_id(directory, read_errors=read_errors)
+    _, entries_by_id = _read_entries_by_id(directory)
     if not any(len(copies) >= _DUPLICATE_COPY_THRESHOLD for copies in entries_by_id.values()):
         return
     plans = _prepare_duplicate_repairs(directory, entries_by_id)
