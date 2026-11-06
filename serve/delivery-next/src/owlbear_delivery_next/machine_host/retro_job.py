@@ -279,8 +279,9 @@ class RetroJob:
         except asyncio.CancelledError:
             result = "stopped: OwlBear stopped"
         except Exception as exc:
-            LOG.exception("a Retro run failed")
-            result = f"failed: {failure(exc)}"
+            detail = failure(exc)
+            LOG.exception("a Retro run failed: %s", detail)
+            result = f"failed: {detail}"
         finally:
             self.running = ""
         self._ended(ctx, result, out)
