@@ -39,7 +39,7 @@ a chat of an earlier contract, whose ``await_challenge`` reads only that label a
 Contract 7: contract 6, and ``save_visual_check`` takes a UI brief's render ``recipe`` and its ``preparation``
 option; a host requires the recipe for a UI brief with states only from a chat of this contract, whose draft it then
 captures (D-01M61V2GR0C6JV2R6KJ0WR4PNB). The ``await_capture`` tool reads that capture
-(``GET /briefs/capture?change=cN``, ``tests/fixtures/chat_contract_7.json``). A draft an earlier chat saves keeps no
+(``GET /chat/capture/{slug}``, ``tests/fixtures/chat_contract_7.json``). A draft an earlier chat saves keeps no
 recipe and gets no capture, as before.
 
 A host whose contract answer has ``"admit_by": true`` refuses a ``/decisions/propose`` save that starts after the

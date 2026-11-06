@@ -28,7 +28,9 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_contracts.preparation import Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_contracts.round_records import RoundFinding, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_contracts.visual_records import VisualResult
 from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow.shaping_capture import CAPTURING
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import chat_client, setup
 from owlbear_delivery_next.commands.chat_client import NOT_RUNNING, NOT_SERVED, OWLBEAR_DOWN, Chat, OwlBear
@@ -264,16 +266,26 @@ def test_what_the_owner_stated_himself_is_recorded_and_survives_a_visual_save_an
     assert unknown == ["person_checks[1].covers: AC-3 names no criterion of this brief - use one of AC-1, AC-2"]
 
 
-def test_a_brief_with_clicks_waits_for_a_declared_test_preparation_before_approval(tmp_path):
+def test_a_brief_with_clicks_waits_for_its_capture_and_a_declared_test_preparation_before_approval(tmp_path):
+    """D-01M61V2GR0C6JV2R6KJ0WR4PNB: the expectations are written against the current pages, so approval waits."""
     store = Store(tmp_path)
     c = client(store)
     states = [{"name": "dark", "path": "/", "expect": "Dark"}]
     steps = [{"state": "dark", "do": "click", "target": "Dark mode"}]
-    assert c.post("/api/next/briefs", json={**BRIEF, "ui": True, "visual": states, "steps": steps}).status_code == 200
+    recipe = {"command": "npm run preview -- --port {port}", "directory": ".", "ready_url": "http://127.0.0.1:{port}/"}
+    ui = {"ui": True, "visual": states, "steps": steps, "recipe": recipe}
+    assert c.post("/api/next/briefs", json=BRIEF | ui).status_code == 200
     slug = store.slugs()[0]
     with store.lock(slug) as lock:
         change = store.read(slug)
         change.brief.challenged = 1
+        store.write(lock, change)
+    capturing = c.post(f"/api/next/changes/{slug}/approve-brief", json={"version": 1})
+    assert (capturing.status_code, capturing.json()["detail"]) == (409, f"brief v1 cannot be approved yet: {CAPTURING}")
+    with store.lock(slug) as lock:  # the capture ended with its reason, as the runner writes it
+        change = store.read(slug)
+        ended = VisualResult(head="", tree="", findings=["dark: its steps need a test preparation"], at=NOW)
+        change.shaped = change.shaped.model_copy(update={"requested": False, "result": ended})
         store.write(lock, change)
     refused = c.post(f"/api/next/changes/{slug}/approve-brief", json={"version": 1})
     assert (refused.status_code, "dark" in refused.json()["detail"]) == (409, True)

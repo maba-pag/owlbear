@@ -229,6 +229,7 @@ def fold(  # noqa: C901, PLR0912 - per item kind
                 c.brief.approved_version, c.brief.approved_at, c.brief.reference = version, item.at, version
                 c.brief.approve_if_clean = None  # the owner's recorded approval is spent with this one (#986)
                 c.brief.picked = item.picked or c.brief.picked  # what the approval validated, not a later retry
+                c.reference = c.shaped  # its capture, ended before approval: the design reference
                 held = {p.id: p for p in c.decisions_published} | {p.id: p for p in item.published}
                 c.decisions_published = list(held.values())
                 if all(b.version != version for b in c.brief.approved):  # with its person checks (TD-185)

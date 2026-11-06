@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.change_contracts import chat_contract, evidence
@@ -46,6 +46,7 @@ from owlbear_delivery_next.project_host import (
     pages,
     pds_routes,
     project_notes,
+    screenshots,
     session_slots,
     shaping_chat,
     stop_routes,
@@ -60,7 +61,7 @@ from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import spend_ledger, tool_metrics, watch_reports, work_block
 from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
 from owlbear_delivery_next.state_store.store import StoreError
-from owlbear_delivery_next.workflow_steps import check, decision, held, visual
+from owlbear_delivery_next.workflow_steps import captures, check, decision, held, visual
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -68,7 +69,6 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.change_contracts.inbox import InboxItem
     from owlbear_delivery_next.change_contracts.models import Inputs
-    from owlbear_delivery_next.change_contracts.visual_records import VisualResult
     from owlbear_delivery_next.change_flow.status import Activity
     from owlbear_delivery_next.project_host.host import Host, HostRecord
     from owlbear_delivery_next.project_host.launches import Ended
@@ -79,6 +79,10 @@ if TYPE_CHECKING:
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost"})
 START_PROMPT = "Start a new Delivery Change: use the owlbear-change-shaping skill to shape a brief with me."
+CAPTURE = (  # D-01M61V2GR0C6JV2R6KJ0WR4PNB: the expectations are written against the current pages
+    "Delivery now captures the target's current pages: call await_capture (change {change}) and write each state's "
+    "expectation against its pictures with the owner, then save again. "
+)
 PICKER_NOTE = (  # the owner's typed messages run on the picker, not on the role's model (TD-277)
     '\n\nBegin your first message or question to the owner with this line: "Messages you type here run on this '
     "chat's model picker: set it to {model} at {effort} effort.\""
@@ -277,7 +281,8 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         if code == 200:  # noqa: PLR2004 - HTTP OK
             host.wake.set()  # a version saved after its loop ended gets its challenge's start time at once (#986)
             out["next"] = (
-                f"Once the draft is ready, ask for its challenge with challenge_brief (change {out['change']}, "
+                (CAPTURE.format(change=out["change"]) if out.get("capturing") else "")
+                + f"Once the draft is ready, ask for its challenge with challenge_brief (change {out['change']}, "
                 f"version {out['version']}); the owner approves it in the Changes page after: {link(host.record)}"
             )
         return code, out
@@ -407,23 +412,6 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
             }
         )
 
-    def png(shots: VisualResult | None, folder_of: Callable[[str], Path], name: str) -> FileResponse:
-        if not (shots and visual.FILE.fullmatch(name) and name in shots.files):
-            raise HTTPException(404, "no such screenshot")
-        folder = folder_of(shots.head).resolve()
-        path = (folder / name).resolve()
-        if path.parent != folder or not path.is_file():
-            raise HTTPException(404, "no such screenshot")
-        return FileResponse(path, media_type="image/png")
-
-    @router.get("/changes/{slug}/visual/{name}")
-    def screenshot(slug: str, name: str) -> FileResponse:
-        return png(read(slug).visual, lambda head: store.visual_dir(slug, head), name)
-
-    @router.get("/changes/{slug}/before/{name}")
-    def before_screenshot(slug: str, name: str) -> FileResponse:
-        return png(read(slug).before, lambda base: store.before_dir(slug, base), name)
-
     @router.post("/changes/{slug}/criteria/{criterion}/withdraw")
     def withdraw(slug: str, criterion: str) -> dict[str, str]:
         if not any(k.id == criterion and k.withdrawn_at is None for k in read(slug).owner_criteria):
@@ -473,7 +461,8 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     router.include_router(config_routes.router(store, host))
     router.include_router(answers.router(store, read, put))
     router.include_router(amendment_routes.router(read, put))
-    router.include_router(chat_routes.router(read))
+    router.include_router(chat_routes.router(read, lambda slug, key: captures.folder(store, slug, key)))
+    router.include_router(screenshots.router(store, read))
     wake, ending = lambda: host.wake.set(), lambda: host.draining()  # noqa: PLW0108 - read late
     router.include_router(brief_routes.router(store, read, wake, ending))
     router.include_router(brief_routes.revising(read, start_chat))

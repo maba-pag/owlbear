@@ -6,12 +6,13 @@ The workspace is told at start, before any state is made (``chat_client.workspac
 from __future__ import annotations
 
 import argparse
+import json
 import urllib.parse
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from mcp.server import MCPServer
-from mcp.types import ToolAnnotations
+from mcp.types import ImageContent, TextContent, ToolAnnotations
 from pydantic import Field
 
 from owlbear_decisions.models import ID_PATTERN
@@ -116,6 +117,25 @@ def await_challenge(
     While it says running, call it again at once.
     """
     return _STATE["chat"].await_challenge(change, version)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
+def await_capture(
+    change: Annotated[str, Field(description="Handle of the Change", examples=["c1"])],
+) -> list[TextContent | ImageContent]:
+    """Wait about 70 s for the draft's capture of the target's current pages; it asks for nothing.
+
+    Gives each state's picture at the first width and why any is missing, or running: then call it again at once.
+    """
+    out = _STATE["chat"].await_capture(change)
+    shown: list[TextContent | ImageContent] = []
+    for s in out.get("states", []):
+        data, said = s.pop("png", None), f"state {s['name']} at {s['width']}px"
+        if data:
+            shown += [TextContent(type="text", text=said), ImageContent(type="image", data=data, mime_type="image/png")]
+        elif s["bytes"]:
+            shown.append(TextContent(type="text", text=f"{said}: over 4 MB, open it on the Changes page"))
+    return [TextContent(type="text", text=json.dumps(out)), *shown]
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))

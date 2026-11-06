@@ -3,6 +3,7 @@
   "replies": {
     "GET /changes": ["[].handle", "[].slug", "[].step", "[].line", "[].action", "[].actor"],
     "GET /chat/brief/{slug}": ["challenge.version", "challenge.attempt"],
+    "GET /chat/capture/{slug}": ["running", "version"],
     "GET /chat/challenge/{slug}": ["running", "version"],
     "GET /chat/contract": ["supported"],
     "GET /decisions": [
@@ -38,6 +39,19 @@
       "parameters": []
     },
     "GET /chat/brief/{slug}": {
+      "body": null,
+      "parameters": [
+        {
+          "in": "path",
+          "name": "slug",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "GET /chat/capture/{slug}": {
       "body": null,
       "parameters": [
         {
@@ -1123,6 +1137,18 @@
         "additionalProperties": true,
         "type": "object"
       }
+    },
+    "await_capture": {
+      "input": {
+        "properties": {
+          "change": {
+            "type": "string"
+          }
+        },
+        "required": ["change"],
+        "type": "object"
+      },
+      "output": null
     },
     "await_challenge": {
       "input": {

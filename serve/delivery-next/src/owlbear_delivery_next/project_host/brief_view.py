@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.change_flow import brief_rounds, brief_starts, picks, versions
+from owlbear_delivery_next.change_flow import brief_rounds, brief_starts, picks, shaping_capture, versions
 from owlbear_delivery_next.project_host import shaping_chat
 from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.state_store.briefs import unrevisable
@@ -33,6 +33,7 @@ def shown(store: Store, c: Change, *, paused: bool = False) -> dict[str, Any]:
         "approved_at": b.approved_at.isoformat() if b.approved_at else None,
         "ui": b.ui,
         "visual": [s.model_dump() for s in b.visual],
+        "capture": captured(c),
         **approve(c),  # TD-249, #986: why Approve is off; the shaping chat reads brief_rounds.approvable as before
         "revising": brief_rounds.revising(c),  # the findings the shaper revises this version for
         "unrevisable": unrevisable(c),  # why no new shaping chat may revise the saved brief
@@ -47,7 +48,9 @@ def shown(store: Store, c: Change, *, paused: bool = False) -> dict[str, Any]:
 def approve(c: Change) -> dict[str, Any]:
     """Approve's state (#986): why it is off, a refusal of the approval the owner asked for, and the start time."""
     b, o, waits = c.brief, c.outcome, brief_starts.waiting(c)
-    if waits:
+    if capturing := shaping_capture.waiting(c):  # it holds the lock: an approval now could only say "try again"
+        off = capturing
+    elif waits:
         off = "this Change is paused: resume it to approve" if c.intent.paused_at else ""
     elif b.approve_if_clean == b.version and c.step.mode in brief_rounds.MODES:
         off = f"the challenge of brief v{b.version} is running; your approval takes effect if it is clean"
@@ -56,6 +59,21 @@ def approve(c: Change) -> dict[str, Any]:
     refused = o.reason if o and o.cause == brief_starts.REFUSED else ""
     starts = o.wake_at.isoformat() if waits and o and o.wake_at else None
     return {"approve_off": off, "approve_refused": refused, "challenge_waits": waits, "starts_at": starts}
+
+
+def captured(c: Change) -> dict[str, Any] | None:
+    """The draft's current pages as its shaping capture rendered them (D-01M61V2GR0C6JV2R6KJ0WR4PNB), or None.
+
+    While it runs, only that; then the commit, the time, the widths, the pictures and why any is missing.
+    """
+    s = c.shaped
+    if s is None or not shaping_capture.needed(c.brief):
+        return None
+    if shaping_capture.waiting(c) or s.result is None:
+        return {"running": True}
+    r = s.result
+    return {"running": False, "head": r.head, "at": r.at.isoformat(), "widths": r.widths, "files": r.files,
+            "findings": r.findings, "option": s.option}  # fmt: skip
 
 
 def placed(store: Store, c: Change) -> dict[str, Any]:

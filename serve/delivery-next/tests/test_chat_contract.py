@@ -36,7 +36,8 @@ AUTH = {"authorization": "Bearer " + "t"}  # the token of record()
 SERVES = {"supported": sorted(chat_contract.SUPPORTED), "admit_by": True}  # what a current host answers
 ROUTES = [  # what chat_client calls, under a project and (the decisions) under /owlbear
     ("post", "/briefs"), ("post", "/briefs/visual"), ("post", "/briefs/challenge"), ("get", "/changes"),
-    ("get", "/chat/brief/{slug}"), ("get", "/chat/challenge/{slug}"), ("post", "/changes/{slug}/answers"),
+    ("get", "/chat/brief/{slug}"), ("get", "/chat/challenge/{slug}"), ("get", "/chat/capture/{slug}"),
+    ("post", "/changes/{slug}/answers"),
     ("get", "/decisions"), ("get", "/decisions/{decision_id}"), ("post", "/decisions/lookup"),
     ("post", "/decisions/lookups"), ("get", "/decisions/lookups/{lookup_id}"),
     ("post", "/decisions/propose"),

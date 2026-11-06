@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_contracts import chat_contract, pick_tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_flow.status import APPROVE, CONTINUE
+from owlbear_delivery_next.commands import capture_wait
 from owlbear_delivery_next.local_system import codebase, data_repo, local_home
 from owlbear_delivery_next.project_host import answers, api, host
 from owlbear_delivery_next.state_store import project_home
@@ -249,6 +250,10 @@ class Chat:
             return {"error": f"brief v{version} is not the current draft v{current}"}
         slug, attempt = row["slug"], brief["challenge"]["attempt"]
         return self._ended(slug, version, attempt, *self._wait(slug, version, attempt, start + WAIT))
+
+    def await_capture(self, change: str) -> dict[str, Any]:
+        """Wait for the draft's capture of the current pages: each state's picture at the first width, or running."""
+        return capture_wait.wait(self, change, time.monotonic() + WAIT)
 
     def _ended(self, slug: str, version: int, attempt: int, code: int, now: dict[str, Any]) -> dict[str, Any]:
         """How challenge_brief's and await_challenge's wait ended, from its last read.

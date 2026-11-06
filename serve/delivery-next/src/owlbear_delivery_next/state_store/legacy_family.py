@@ -123,10 +123,10 @@ CURRENT_FUNCTIONS = (
     ("state_store/store.py:Store.open", "0a8d9833e2cfb2fd98f7aba9dd32398e4f7ccf4b1824d687062a637526a0f8c2"),
 )
 CURRENT_IMPORTS = (
-    ("commands/chat_client.py", "af396923535b3f9ba702493f7bbefe0c38470d2911d1f96d8651662464ce4fb1"),
+    ("commands/chat_client.py", "132093efab517ef5996db89f9ec3bbbdec6428dfb9f0ab8ded2013482b980ae6"),
     ("commands/cli.py", "03b53861277f43ece7314c15be5d5a5712b25fb541ee6e4f49ead07967dff905"),
     ("commands/dispatch.py", "326c281057f28ebdb70e9ddfb43e62ad0693957ce5cf2305201d67e7d4cba0e4"),
-    ("commands/mcp_server.py", "0bbf148875390e1cd91d58e4eb8e6f4a2ccbe0249324e8957de3c5cbce6bb8e9"),
+    ("commands/mcp_server.py", "d97982a3bf330ebeb8ae4b0b558b2187fa00611197682d33d2f54f70a9e67b8c"),
     ("commands/runner.py", "7503c631a6a0d9e896e473fd032632faa328420829617f14eeb593b635f9c1df"),
     ("commands/setup.py", "0ab35425da1b72b8fc98bb51a003e023a324ede750c5bc6d19bf288ed6cdd231"),
     ("machine_host/app.py", "84fc6692f7232e899db01848cbadb6738bcc4e54bcc85d8050571e3f1de57e5c"),

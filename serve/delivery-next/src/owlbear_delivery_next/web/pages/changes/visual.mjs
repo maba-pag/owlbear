@@ -194,9 +194,13 @@ function shot(change, kind, name, at) {
   return shots.get(key);
 }
 
+// Each side of a screenshot: the enlarged view's caption, and how its text alternative places it.
+const SIDES = { before: ["Before", "before the Change"], after: ["After", "with the Change"],
+  shaped: ["Current page", "as the target shows it now"], reference: ["Design reference", "as shaped"] };
+
 // One screenshot in a gallery: a button that enlarges it, in the order before then after at each width.
 function zoomable(entry, gallery) {
-  const index = gallery.push(entry) - 1, side = entry.side === "before" ? "before the Change" : "with the Change";
+  const index = gallery.push(entry) - 1, side = SIDES[entry.side][1];
   entry.alt = `${entry.state} at ${entry.width}px ${side}, at ${entry.commit}`;
   const s = shot(entry.slug, entry.kind, entry.name, entry.at);
   return html`<button type="button" class="zoom" aria-haspopup="dialog" @click=${() => lightbox(gallery, index)}>
@@ -217,7 +221,7 @@ function lightbox(gallery, start) {
     render(html`${row(
       button("Previous", () => go(-1), { icon: "arrow-left", variant: "secondary", keys: "ArrowLeft",
         title: "Previous screenshot (left arrow)" }),
-      html`<p class="caption" aria-live="polite"><strong>${e.side === "before" ? "Before" : "After"}</strong> at
+      html`<p class="caption" aria-live="polite"><strong>${SIDES[e.side][0]}</strong> at
         ${e.commit} \u00b7 ${e.state} \u00b7 ${e.width} px wide \u00b7 ${at + 1} of ${gallery.length}${s.failed
         ? " \u00b7 not available" : ""}${size}</p>`,
       button("Next", () => go(1), { icon: "arrow-right", variant: "secondary", keys: "ArrowRight",
@@ -313,4 +317,25 @@ export function beforeSection(slug, b) {
     ${b.errors.length ? text(`Errors before the Change: ${seen.join("; ")}`, { size: "xs" }) : nothing}
     ${refusedLine(refused(b.design))}`;
   return { lines, shots: html`<div class="shots">${cells}</div>`, count: gallery.length };
+}
+
+// The draft's current pages as its shaping capture rendered them at the target (D-01M61V2GR0C6JV2R6KJ0WR4PNB): each
+// state's pictures per width, or why it has none. The shaper and the owner write the expectations against them.
+export function currentPages(slug, c, states) {
+  if (!c) return nothing;
+  if (c.running) return text("Capturing the current pages\u2026 Approval waits until they are captured.");
+  const gallery = [], commit = (c.head || "").slice(0, 7), mine = (s, f) => f.startsWith(`${s.name} at `)
+    || f.startsWith(`${s.name}:`);
+  const figures = states.map((s) => {
+    const why = c.findings.filter((f) => mine(s, f)), cells = c.widths.map((w) => [w, `${s.name}-${w}.png`])
+      .filter(([, name]) => c.files.includes(name)).map(([w, name]) => side(`${w} px`, zoomable({ slug,
+        kind: "shaped", name, at: c.at, side: "shaped", state: s.name, width: w, commit }, gallery)));
+    return html`<figure class="pair"><figcaption>${s.name}</figcaption>${cells}${why.length || !cells.length
+      ? html`<span class="missing">Not captured${why.length ? `: ${why.join("; ")}` : ""}</span>` : nothing}</figure>`;
+  });
+  const rest = c.findings.filter((f) => !states.some((s) => mine(s, f)));
+  const when = new Date(c.at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+  return html`<section>${hd(4, "The current pages", "sm")}${text(commit ? `The target at ${commit}, captured ${when}`
+    : `Not captured, ${when}`, { size: "xs", color: "contrast-medium" })}${rest.length
+    ? text(`Not captured: ${rest.join("; ")}`) : nothing}<div class="shots">${figures}</div></section>`;
 }
