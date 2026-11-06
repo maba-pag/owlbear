@@ -113,10 +113,10 @@ def registered(session: str, who: dict[str, Any]) -> bool:
     The chats follower never reads a session the manifest names (design §4: provenance before any read), so a session
     whose line was not written, or cannot be read back, must not start.
     """
-    if session in (own() or set()):  # ``around`` noted it already
+    if session in own():  # ``around`` noted it already
         return True
     note({"event": "started", "session": session, **who})
-    return session in (own() or set())
+    return session in own()
 
 
 UNNOTED = "the session could not be noted as OwlBear's own in Retro's manifest, so it was not created"
@@ -146,18 +146,20 @@ def owner(kind: str, role: str, job: str, worktree: Path) -> dict[str, str]:
 
 
 def sessions() -> set[str]:
-    """Every session id the manifest names: OwlBear's own sessions, never taken for a chat; none when unreadable."""
-    return own() or set()
+    """Every session id the manifest names: OwlBear's own sessions, never taken for a chat."""
+    return own()
 
 
-def own() -> set[str] | None:
-    """Every session id the manifest names; None when it exists but cannot be read, so a reader fails closed."""
+def own() -> set[str]:
+    """Every session id the manifest names; an unreadable manifest raises before any chat is admitted."""
+    path = root() / "manifest.jsonl"
     try:
-        lines = (root() / "manifest.jsonl").read_text().splitlines()
+        lines = path.read_text().splitlines()
     except FileNotFoundError:
         return set()
-    except OSError, ValueError:
-        return None
+    except (OSError, ValueError) as exc:
+        exc.add_note(f"reading Retro's ownership manifest {path}")
+        raise
     found = set()
     for line in lines:
         with suppress(ValueError, AttributeError, KeyError, TypeError):
@@ -456,8 +458,9 @@ def finished_chats(folders: list[str], now: datetime, records: Path | None = Non
     kind that does not, such as a Spotter look, notes itself there too) and any in its own folder (worktrees).
     """
     records = records or state()
-    if not folders or not records.is_dir() or (ours := own()) is None:  # an unreadable manifest reads no chat
+    if not folders or not records.is_dir():
         return
+    ours = own()
     for folder in sorted(p for p in records.iterdir() if p.is_dir()):
         if not chat(folder, folders, ours):
             continue

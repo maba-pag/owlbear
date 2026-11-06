@@ -145,6 +145,9 @@ def block(role: str, memory: Path) -> tuple[str, Exposure]:
         return f"{HEADING}\n{UNREAD.format(why=why, role=role)}", Exposure(role, "unread", failed=why)
     if missing := own.unreadable + common.unreadable:
         why = f"{missing} unreadable {'entry' if missing == 1 else 'entries'}"
+        diagnostics = own.read_errors | common.read_errors
+        if diagnostics:
+            why += "\n" + "\n".join(f"{path}: {error}" for path, error in diagnostics.items())
         return f"{HEADING}\n{UNREAD.format(why=why, role=role)}", Exposure(role, "incomplete", failed=why)
     found = selection.readable(own.entries, common.entries)
     head, room = [HEADING, FRAME, SHOWN, OPEN], budget - len(f"{HEADING}\n{FRAME}\n{SHOWN}\n{OPEN}\n{CLOSE}")

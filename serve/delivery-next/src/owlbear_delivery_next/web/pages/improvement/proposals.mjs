@@ -136,7 +136,10 @@ function made(a) {
   const { kind, where, ref, link } = a.artefact ?? {};
   const said = `${kind ?? a.step} ${ref ?? ""}${where ? ` in ${where}` : ""}`.trim();
   const verb = a.step === "closed" ? "Closed" : "Made";
-  return link ? html`${verb}: <a href=${link} target="_blank" rel="noopener">${said}</a>` : `${verb}: ${said}`;
+  const made = link ? html`${verb}: <a href=${link} target="_blank" rel="noopener">${said}</a>` : `${verb}: ${said}`;
+  const errors = Object.entries(a.artefact?.read_errors ?? {});
+  return errors.length ? html`${made}<p class="meta">Some memory files could not be read:
+    ${errors.map(([path, error]) => `${path}: ${error}`).join("\n")}</p>` : made;
 }
 
 function outcome(p) {

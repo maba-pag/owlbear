@@ -29,6 +29,7 @@ import os
 import threading
 import time
 import uuid
+import zlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -203,10 +204,12 @@ def card(cid: str) -> dict[str, Any]:
     Raises:
         CaseError: It is missing, unreadable or not the card frozen.
     """
+    path = place() / "cards" / f"{cid}.json.gz"
     try:
-        with gzip.open(place() / "cards" / f"{cid}.json.gz", "rt") as fh:
+        with gzip.open(path, "rt") as fh:
             the_card = json.load(fh)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, EOFError, zlib.error) as exc:
+        exc.add_note(f"reading case {cid}'s card {path}")
         msg = f"the card of case {cid} cannot be read: {failure(exc)}"
         raise CaseError(msg) from exc
     if digest(the_card) != fact(cid)["card"]:

@@ -43,6 +43,7 @@ class MemoryHealth(BaseModel):
 
     unreadable_paths: list[str] = Field(default_factory=list)
     duplicate_paths: dict[str, list[str]] = Field(default_factory=dict)
+    read_errors: dict[str, str] = Field(default_factory=dict)
 
     @property
     def healthy(self) -> bool:

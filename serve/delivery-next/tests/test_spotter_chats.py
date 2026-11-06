@@ -388,7 +388,14 @@ def test_provenance_and_enrolment_come_before_any_read_and_fail_closed(world, mo
     opened: list[str] = []
     real, own, unreadable = os.open, chatlogs.own, [False]
     monkeypatch.setattr(chats.os, "open", lambda p, *a, **k: opened.append(str(p)) or real(p, *a, **k))
-    monkeypatch.setattr(chatlogs, "own", lambda: None if unreadable[0] else own())
+
+    def ownership() -> set[str]:
+        if unreadable[0]:
+            msg = "fixture manifest unreadable"
+            raise PermissionError(msg)
+        return own()
+
+    monkeypatch.setattr(chatlogs, "own", ownership)
     world.folders = (str(world.work), str(local_home.root()))  # OwlBear's own folder is never a chat, even enrolled
 
     async def scenario() -> None:
@@ -404,7 +411,8 @@ def test_provenance_and_enrolment_come_before_any_read_and_fail_closed(world, mo
         assert not [p for p in opened if "events.jsonl" in p]
         (bare / "workspace.yaml").write_text(f"cwd: {world.work}\nclient_name: {VSCODE}\n")  # appears later: read now
         unreadable[0] = True  # the manifest cannot be read: nothing is
-        await world.passes()
+        with pytest.raises(PermissionError, match="fixture manifest unreadable"):
+            await world.passes()
         assert not [p for p in opened if "events.jsonl" in p]
         unreadable[0] = False
         await world.passes()

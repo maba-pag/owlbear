@@ -24,7 +24,7 @@ nobody has assessed it yet; recency follows the entry's last update, whatever ch
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from stat import S_ISDIR
 from typing import TYPE_CHECKING, Literal
@@ -54,6 +54,7 @@ class Read:
 
     entries: list[MemoryEntry]
     unreadable: int = 0
+    read_errors: dict[str, str] = field(default_factory=dict)
 
     @property
     def complete(self) -> bool:
@@ -77,7 +78,7 @@ def stored(folder: Path) -> Read:
         pass
     engine = MemoryEngine(folder)
     entries = engine.load()
-    return Read(entries, engine.parse_errors)
+    return Read(entries, engine.parse_errors, engine.read_errors)
 
 
 def readable(project: Iterable[MemoryEntry], shared: Iterable[MemoryEntry]) -> list[tuple[MemoryEntry, Where]]:

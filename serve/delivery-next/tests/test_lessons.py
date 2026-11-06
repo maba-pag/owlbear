@@ -271,11 +271,14 @@ def test_entries_the_real_reader_skips_make_an_incomplete_read_that_falls_back_t
         text, log = told("builder", memory)
     finally:
         (common / f"{entry(2).id}.md").chmod(0o600)
-    assert (
-        text
-        == f"{lessons.HEADING}\n{lessons.UNREAD.format(why='2 unreadable entries', role='builder')}\n\n## Task\nDo it."
+    path = common / f"{entry(2).id}.md"
+    why = (
+        f"2 unreadable entries\n{memory / 'broken.md'}: ValueError: YAML frontmatter is missing\n"
+        f"{path}: ValueError: file read failed for {path}: "
+        f"PermissionError: [Errno 13] Permission denied: '{path}'"
     )
-    assert log == [selected(status="incomplete", failed="2 unreadable entries")]
+    assert text == f"{lessons.HEADING}\n{lessons.UNREAD.format(why=why, role='builder')}\n\n## Task\nDo it."
+    assert log == [selected(status="incomplete", failed=why)]
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root lists folders whatever their mode")

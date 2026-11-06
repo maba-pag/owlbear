@@ -51,12 +51,15 @@ function body(d, r) {
   if (!r.data) return r.error ? notice("error", "The Spotter's and Retro's detail could not be read", r.error)
     : text("Reading\u2026", { size: "sm" });
   const { looks, findings } = r.data, last = outcome.get(d.key);
+  const missing = r.data.record_unread ?? [];
   return html`${last ? notice(...last) : nothing}
     ${r.error ? notice("error", "The newest detail could not be read", r.error) : nothing}
     ${text("The Spotter's looks", { weight: "semibold" })}
+    ${missing.length ? notice("error", "Some Spotter records could not be read", missing.join("\n")) : nothing}
     ${looks.length ? html`<ul class="cards">${repeat(looks, (l) => l.id, (l) => look(l, {}, followupLine(l,
       () => followUp(d, l, "look"), { busy: busy === l.id, disabled: !!busy })))}</ul>`
-      : text("No look at this Change.", { size: "sm", color: "contrast-medium" })}
+      : text(missing.length ? "No readable look at this Change; some records could not be read."
+        : "No look at this Change.", { size: "sm", color: "contrast-medium" })}
     ${text("Retro's findings", { weight: "semibold" })}
     ${findings.length ? html`<ul class="cards">${repeat(findings, (f) => f.id, (f) => shownFinding(d, f))}</ul>`
       : text("Retro has found nothing in this Change.", { size: "sm", color: "contrast-medium" })}`;

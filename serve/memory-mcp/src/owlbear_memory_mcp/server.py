@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -10,8 +11,9 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context  # noqa: TC002 - MCPServer evaluates tool annotations at registration.
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from owlbear_memory import MemoryCategory, MemoryEngine, MemoryState, Where
+from owlbear_memory.errors import read_warning
 from pydantic import Field, StrictStr
 
 from owlbear_memory_mcp.store import shared_stores
@@ -187,15 +189,21 @@ async def list_memories(
     categories: Annotated[list[MemoryCategory] | None, Field(min_length=1)] = None,
     scope_agents: list[str] | None = None,
     folder: _Folder = None,
-) -> list[dict[str, Any]]:  # pragma: no cover
+) -> Annotated[CallToolResult, list[dict[str, Any]]]:  # pragma: no cover
     """List memory metadata sorted by curation priority."""
-    return await list_memories_impl(
+    read_errors: dict[str, str] = {}
+    rows = await list_memories_impl(
         ctx,
         states=states,
         categories=categories,
         scope_agents=scope_agents,
         folder=folder,
+        read_errors=read_errors,
     )
+    content = [TextContent(type="text", text=json.dumps(row, indent=2)) for row in rows]
+    if warning := read_warning(read_errors):
+        content.append(TextContent(type="text", text=warning))
+    return CallToolResult(content=content, structured_content={"result": rows})
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))

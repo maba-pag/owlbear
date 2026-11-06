@@ -24,6 +24,7 @@
   .history-notice { white-space: pre-wrap; overflow-wrap: anywhere; }
   #tests { display: grid; gap: var(--p-spacing-static-xs); }
   #tests fieldset { display: grid; gap: var(--p-spacing-static-xs); margin: 0; padding: 0; border: 0; }
+  .read-errors { white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -196,6 +197,9 @@ function folderRun(f) {
     ${blocked ? html`<p-text class="blocked" size="xs" color="contrast-medium">${sentence(blocked)}.</p-text>`
       : nothing}
     <p-text size="sm">${said}</p-text>
+    ${Object.keys(f.read_errors ?? {}).length ? html`<p-text class="read-errors" size="xs">${
+      "Some memory files could not be read; automatic curation considers only readable pending entries:\n"}${
+      Object.entries(f.read_errors).map(([path, error]) => `${path}: ${error}`).join("\n")}</p-text>` : nothing}
     ${f.summary ? html`<p-text size="sm">${f.summary}</p-text>` : nothing}
     ${reason ? html`<p-text size="xs" color="contrast-medium">${reason}</p-text>` : nothing}
     ${skipped.length ? html`<p-text size="xs">Left for you: ${skipped.map((e) => `${e.entry_id.slice(0, 8)} (${

@@ -89,7 +89,6 @@ class Prepared:
 
     parts: list[Part] = field(default_factory=list)
     earlier: str = ""
-    gaps: list[str] = field(default_factory=list)
     activity: str = ""  # a Change's last activity events, supplementary
 
 
@@ -170,7 +169,7 @@ def _say(d: Mapping[str, Any], calls: dict[str, str], said: Mapping[str, Any], s
     return line, brief
 
 
-def _lines(sessions: Iterable[str], high: int, *, per_turn: bool, gaps: list[str]) -> list[_Line]:
+def _lines(sessions: Iterable[str], high: int, *, per_turn: bool) -> list[_Line]:
     found: list[_Line] = []
     segment = 0
     for session in sessions:
@@ -189,8 +188,11 @@ def _lines(sessions: Iterable[str], high: int, *, per_turn: bool, gaps: list[str
                 if text:
                     found.append(_Line(n, session, segment, text, brief, _at(d)))
                     fresh = False
+        except FileNotFoundError:
+            continue
         except OSError as exc:
-            gaps.append(f"session {session}'s capture cannot be read ({type(exc).__name__})")
+            exc.add_note(f"preparing session {session}'s capture")
+            raise
     return found
 
 
@@ -202,7 +204,7 @@ def prepare(sessions: list[str], outcome: str, *, low: int = 0, high: int = 0, p
     later is told in that order, and a part ends where another session's events came in between (a resumed session).
     """
     out, outcome = Prepared(), cut(mask.redact(outcome), OUTCOME)
-    lines = _lines(sessions, high, per_turn=per_turn, gaps=out.gaps)
+    lines = _lines(sessions, high, per_turn=per_turn)
     before = [x for x in lines if x.n <= low]
     lines = [x for x in lines if x.n > low]
     out.earlier = cut(mask.redact("\n".join(x.brief for x in before if x.brief)), LATER)

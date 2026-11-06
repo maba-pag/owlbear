@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_memory.errors import ConcurrencyError, DuplicateEntryError, ValidationError
 from owlbear_memory.models import MemoryCategory
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.improvement import case_intake, case_replay, case_review, cases
 from owlbear_delivery_next.improvement import proposal_targets as targets
@@ -180,7 +181,7 @@ def apply(pid: str, seams: Seams, gate: Callable[[], None] = lambda: None) -> di
         try:
             act(pid, accepted, (title, body), done, seams)
         except (*FAILURES, store.RetroError, cases.CaseError) as exc:
-            props.outcome(pid, "failed", step="", error=f"{type(exc).__name__}: {exc}")
+            props.outcome(pid, "failed", step="", error=failure(exc))
         return props.folded()[pid]
 
 
@@ -201,8 +202,10 @@ def _backlog(pid: str, accepted: Mapping[str, Any], text: Text, _done: Done, sea
 def _memory(pid: str, accepted: Mapping[str, Any], text: Text, _done: Done, seams: Seams) -> None:
     dest, (title, body) = accepted["destination"], text
     engine = seams.memory(Path(dest["folder"]))
+    entries = engine.get_entries()
+    unread = dict(engine.read_errors)
     made = next(
-        (e for e in engine.get_entries() if (e.title, e.source_agent, e.content) == (title, "retro", body)), None
+        (e for e in entries if (e.title, e.source_agent, e.content) == (title, "retro", body)), None
     ) or engine.save(
         title=title,
         content=body,
@@ -212,7 +215,11 @@ def _memory(pid: str, accepted: Mapping[str, Any], text: Text, _done: Done, seam
         scope_agents=list(dest["roles"]),
         recommended=dest["recommended"],
     )
-    props.outcome(pid, "applied", step="created", artefact=_artefact("memory", dest["folder"], made.id))
+    unread.update(engine.read_errors)
+    artefact = _artefact("memory", dest["folder"], made.id)
+    if unread:
+        artefact["read_errors"] = unread
+    props.outcome(pid, "applied", step="created", artefact=artefact)
 
 
 def _issue(pid: str, _accepted: Mapping[str, Any], text: Text, _done: Done, seams: Seams) -> None:
