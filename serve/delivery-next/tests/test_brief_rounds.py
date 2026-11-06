@@ -207,26 +207,18 @@ def test_a_version_saved_after_the_loop_ended_waits_for_the_challenge_delivery_s
 
 
 def test_the_owners_approval_holds_only_through_a_clean_verdict_on_its_version(shaping):
-    def approves(version: int) -> None:  # what the owner's Approve records before it asks for the round (#986)
-        with shaping.store.lock(shaping.slug) as lock:
-            c = shaping.store.read(shaping.slug)
-            c.brief.approve_if_clean = version
-            shaping.store.write(lock, c)
-
     shaping.save()
     shaping.ask_challenge(1)
     shaping.verdicts += [verdict()]
     shaping.step()
     shaping.save(title="Add a farewell")
-    approves(2)
-    shaping.ask_challenge(2)
+    assert shaping.approve(2).json() == {"accepted": "brief-challenge"}  # the round now, his approval if clean (#986)
     shaping.verdicts += [verdict()]
     c = shaping.step()
     assert (c.brief.approve_if_clean, brief_starts.approving(c)) == (2, True)
     shaping.save(title="Add a farewell, kindly")
     assert not brief_starts.approving(shaping.change())  # a later save leaves it on its own version
-    approves(3)
-    shaping.ask_challenge(3)
+    assert shaping.approve(3).json() == {"accepted": "brief-challenge"}
     shaping.verdicts += [verdict("AC-1")]
     c = shaping.step()
     assert (c.brief.approve_if_clean, brief_starts.approving(c)) == (None, False)  # findings: the shaper revises
