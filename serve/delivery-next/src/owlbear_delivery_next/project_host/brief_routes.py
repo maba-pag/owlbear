@@ -118,16 +118,24 @@ def asked(store: Store, c: Change, body: ChallengeBody) -> str:
     return ""
 
 
-def challenged(store: Store, c: Change, version: int) -> str:
-    """The owner's Approve on a version saved after its loop ended (#986): its challenge now, his approval once clean.
+def answered(store: Store, lock: Lock, body: ApproveBody) -> tuple[str, str]:
+    """The owner's Approve under *lock*: his approval, or on a version saved after its loop ended its challenge (#986).
+
+    On such a version his approval follows once the challenge raises nothing; the host makes it.
 
     Returns:
-        Why it is refused, or "".
+        Why it is refused, or "", and what was accepted.
     """
+    c = store.read(lock.slug)
+    if not brief_starts.waiting(c):
+        return approved(store, lock, body), "brief-approval"
     if c.intent.paused_at:  # its round could not run, yet it would hold every save
-        return "this Change is paused: resume it to approve"
-    c.brief.approve_if_clean = version
-    return asked(store, c, ChallengeBody(change=c.handle, version=version))
+        return "this Change is paused: resume it to approve", ""
+    c.brief.approve_if_clean = body.version
+    if why := asked(store, c, ChallengeBody(change=c.handle, version=body.version)):
+        return why, ""
+    store.write(lock, c)
+    return "", "brief-challenge"
 
 
 def router(
@@ -149,13 +157,8 @@ def router(
         read(slug)
         try:
             with store.lock(slug) as lock:
-                c, accepted = store.read(slug), "brief-approval"
-                if brief_starts.waiting(c):
-                    if why := challenged(store, c, body.version):
-                        raise HTTPException(409, why)
-                    store.write(lock, c)
-                    accepted = "brief-challenge"
-                elif why := approved(store, lock, body):
+                why, accepted = answered(store, lock, body)
+                if why:
                     raise HTTPException(409, why)
         except (LockHeldError, StoreError) as exc:
             raise HTTPException(409, f"change: {exc}; try again") from exc
