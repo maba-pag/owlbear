@@ -119,6 +119,7 @@ class Session:
     changed: tuple[str, ...] = ()  # the files an Impeccable challenger judges one by one (TD-194)
     settled: tuple[str, ...] = ()  # finding keys the owner decided to fix: never rejected (TD-193)
     amendable: tuple[str, ...] = ()  # the brief items a premise may name in an amendment, as field:key (TD-185)
+    targets: tuple[str, ...] = ()  # what a design judge's conflict may depart from: its round's states and criteria
     skills: Path | None = None  # the skill folder this session loads instead of the package's: a pack candidate's
     pds: pds_skill.Choice | None = None  # the project's PDS knowledge skill; when None, chosen from the worktree (#777)
     subagents: bool = False  # its role's setting: it may start built-in subagents (TD-374, TD-376)

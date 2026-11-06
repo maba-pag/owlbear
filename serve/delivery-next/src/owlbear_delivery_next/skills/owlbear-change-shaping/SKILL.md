@@ -38,6 +38,10 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    control or types into a field, named exactly as the page shows it. Steps run only on a
    test copy the project's declared preparation options prepare. If the project has no preview to render, offer three choices: add
    one in this Change, declare a person-only visual check, or change the scope.
+   Establish the render recipe from the repository's own scripts and docs: the `command` that starts its
+   preview, passing `{port}` to the server (Delivery picks the port), the `directory` it runs in, and the
+   `ready_url` with `{port}` that answers once it is up. Name the `preparation` when the project declares
+   several. The states' first expectations may be provisional: you write them against the pictures.
 5. Propose a split when the idea is more than one reviewable pull request.
 6. Run the closing check before saving for approval (see Read-Back below).
 7. Call `save_brief` with title, outcome, criteria, scope, non-goals (what the owner agreed is out),
@@ -53,8 +57,14 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    is the first); a state or person check he stated himself gets `owner: true`. Everything else is
    your proposal, and the approval page shows it as such. Leave `change` empty for a new Change; pass its handle
    (`c3`) to revise. For a UI change then call
-   `save_visual_check` with that handle, `ui`, the states and their steps. If either returns
-   errors, each names a field: fix those and call again. Never invent a handle.
+   `save_visual_check` with that handle, `ui`, the states, their steps, the `recipe` and the `preparation`. If
+   either returns errors, each names a field: fix those and call again. Never invent a handle.
+   Delivery then captures the target's current pages. Call `await_capture` with the handle: it waits about 70 s
+   and returns each state's picture, or why a state has none; while it says `running`, call it again at once.
+   Look at the pictures with the owner (his link to the Changes page shows them too) and write each
+   expectation against what they show, then save the states again: changed expectations capture nothing
+   again. A capture that ended with reasons leads to the three choices above; saving again after fixing the
+   cause captures again. Approval waits until the capture has ended.
 8. Once the draft is ready, call `challenge_brief` with the handle and the saved version. A challenger
    judges that version; the tool waits about 70 s for its verdict and returns the findings by ID. A challenge
    takes minutes: while a reply says `running`, call `await_challenge` with the handle and the version at once,

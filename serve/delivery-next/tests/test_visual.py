@@ -37,6 +37,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.visual_records import (
     DetectorFinding,
     DetectorScan,
+    JudgeConflict,
     JudgeFinding,
     JudgeVerdict,
     PageError,
@@ -54,7 +55,7 @@ from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import carried, config
 from owlbear_delivery_next.state_store import briefs
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import check, decision, held, judges, merge, sessions, visual
+from owlbear_delivery_next.workflow_steps import before, check, decision, held, judges, merge, sessions, visual
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -123,7 +124,13 @@ def test_a_ui_brief_needs_states_or_a_person_check_and_states_stay_under_the_pre
     person = {"name": "look", "steps": ["Open the page"], "expect": "Hallo"}
     assert any("visual: true" in e for e in check_brief(draft(ui=True, person_checks=[person])))
     assert check_brief(draft(ui=True, person_checks=[person | {"visual": True}])) == []
-    assert check_brief(draft(ui=True, visual=[HOME.model_dump(exclude={"version", "steps"})])) == []
+    home = [HOME.model_dump(exclude={"version", "steps"})]
+    assert check_brief(draft(ui=True, visual=home), recipe=False) == []  # an earlier chat sends no recipe
+    assert check_brief(draft(ui=True, visual=home))[0].startswith("recipe: empty for a UI brief with states")
+    recipe = {"command": "npm run dev -- --port {port}", "directory": ".", "ready_url": "http://127.0.0.1:{port}/"}
+    assert check_brief(draft(ui=True, visual=home, recipe=recipe)) == []
+    fixed = recipe | {"command": "npm run dev -- --port 5173"}  # TD-40: the capture would wait on another port
+    assert check_brief(draft(ui=True, visual=home, recipe=fixed))[0].startswith("recipe.command: no `{port}`")
     bad = [{"name": "a", "path": "/../x", "expect": "e"}, {"name": "a", "path": "//evil", "expect": "e"}]
     errors = check_brief(draft(visual=bad))
     assert sum("must stay under the preview root" in e for e in errors) == 2
@@ -381,11 +388,13 @@ class FakeReview:
         return Run(cfg.session_id, ending="result", payload=payload, termination=self.termination)
 
 
-def designed(cfg, verdict="pass", findings=()):
+def designed(cfg, verdict="pass", findings=(), conflicts=()):
     """A verified two-phase design verdict over the session's images."""
     names = list(cfg.observe().changed)
     pairs = [{"pair": p, "better": "equal", "why": "same"} for p in design_tools.pairs(names)]
-    look = design_tools.DesignLook(verdict=verdict, findings=list(findings), preferences=pairs, covered_paths=names)
+    look = design_tools.DesignLook(
+        verdict=verdict, findings=list(findings), conflicts=list(conflicts), preferences=pairs, covered_paths=names
+    )
     final = design_tools.DesignResult(**look.model_dump())
     done = processes.Termination(confirmed=True)
     return Run(cfg.session_id, ending="result", payload=final, first=look, termination=done)
@@ -622,15 +631,18 @@ def test_a_judge_without_a_verdict_is_run_again_with_its_whole_reason(lens, whol
 
 
 @pytest.mark.parametrize(
-    ("correct", "setting", "step", "sent"),
+    ("correct", "setting", "conflicts", "ends"),
     [
-        ("pass", "back", StepKind.BUILD, ["design"]),  # back by the setting, with the design findings
-        ("pass", "ask", StepKind.CHECK, []),  # the owner decides
-        ("fix", "back", StepKind.BUILD, ["correctness", "design"]),
-        ("fix", "ask", StepKind.BUILD, ["correctness"]),  # the design fail waits for the next round
+        ("pass", "back", 0, (StepKind.BUILD, ["design"])),  # back by the setting, with the design findings
+        ("pass", "ask", 0, (StepKind.CHECK, [])),  # the owner decides
+        ("fix", "back", 0, (StepKind.BUILD, ["correctness", "design"])),
+        ("fix", "ask", 0, (StepKind.BUILD, ["correctness"])),  # the design fail waits for the next round
+        ("pass", "back", 2, (StepKind.CHECK, [])),  # a conflict with the brief is the owner's, never the builder's
+        ("fix", "back", 2, (StepKind.CHECK, [])),  # whatever the verdicts
     ],
 )
-def test_the_verdict_matrix_routes_a_design_fail_by_the_setting(flow, correct, setting, step, sent):
+def test_the_verdict_matrix_routes_a_design_fail_by_the_setting(flow, correct, setting, conflicts, ends):
+    step, sent = ends
     assert (
         flow.store.save(
             flow.store.config_path,
@@ -643,8 +655,12 @@ def test_the_verdict_matrix_routes_a_design_fail_by_the_setting(flow, correct, s
     )
     flow.review.verdict = correct
     problem = {"image": "home-1280-A.png", "problem": "cramped card", "rule": "Layout & Space", "severity": "P1"}
+    clash = [{"image": "home-1280-A.png", "rule": "Color", "departs": "home", "problem": f"clash {n}"} for n in (1, 2)]
     flow.review.design = lambda cfg: designed(
-        cfg, "fail", [problem] if "home-1280-A.png" in cfg.observe().changed else []
+        cfg,
+        "fail",
+        [problem] if "home-1280-A.png" in cfg.observe().changed else [],
+        clash[:conflicts] if "home-1280-A.png" in cfg.observe().changed else [],
     )
     runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
     after = flow.store.read("c1")
@@ -652,6 +668,19 @@ def test_the_verdict_matrix_routes_a_design_fail_by_the_setting(flow, correct, s
     detail = next((t.detail for t in after.plan.tasks if t.origin == "review"), "")
     has = {"correctness": "did not accept the screenshots" in detail, "design": "cramped card" in detail}
     assert [lens for lens, seen in has.items() if seen] == sent
+    if conflicts:  # the owner takes one of the two: its amendment cites that one alone
+        q, kept = loop.open_question(after), after.visual_rounds[-1]
+        assert [o.id for o in q.options] == ["pass", "fail", "amend", "pause"]
+        took = AnswerItem(at=NOW, question=q.id, option="amend", text="conflict-2", round=kept.number)
+        moved = after.model_copy(deep=True)  # a reshape since: the Change no longer waits on the round's question
+        moved.outcome = None
+        dropped: list = []
+        stale, _ = loop.schedule(moved, [took], NOW, dropped=dropped)
+        moved_on = f"the Change moved on since question {q.id} asked"
+        assert (stale.amendments, [why for _i, why in dropped]) == ([], [moved_on])
+        taken, _ = loop.schedule(after, [took], NOW)
+        [a] = taken.amendments
+        assert ("clash 2" in a.reason, "clash 1" in a.reason, taken.amending is not None) == (True, False, True)
 
 
 def test_a_fail_proposes_only_what_a_failing_judge_found_the_change_introduced_worth_a_fix() -> None:
@@ -680,6 +709,12 @@ def test_a_fail_proposes_only_what_a_failing_judge_found_the_change_introduced_w
     assert (route, [line.rsplit(": ", 1)[1] for line in sent]) == ("back", ["problem 1", "problem 4", "problem 5"])
     polish = kept.model_copy(update={"verdicts": [correct, design.model_copy(update={"findings": made[1:3]})]})
     assert decision.route(polish, [], passed, broken=False) == ("ask", [])  # nothing to fix: the owner looks
+    clash = JudgeConflict(id="conflict-1", state="home", rule="Color", departs="home", text="the brief's grey")
+    torn = kept.model_copy(update={"verdicts": [correct, design.model_copy(update={"conflicts": [clash]})]})
+    assert decision.route(torn, [], passed, broken=False) == ("ask", [])  # the owner settles a conflict
+    route, sent = decision.route(torn, ["home at 1280px: no screenshot"], passed, broken=True)
+    assert route == "back"
+    assert not any("the brief's grey" in line for line in sent)  # a broken round goes back without it
 
 
 def test_the_owner_decides_a_round_with_pass_or_fail_bound_to_its_capture(flow):
@@ -888,7 +923,10 @@ def test_a_capture_is_judged_from_png_blob_attachments_and_passes(flow):
 
 
 def test_a_round_whose_judge_model_is_unknown_is_accepted_whole_or_run_again(flow):
+    """D-01M6Q4B6VV4Z05WFQ1BD4X95HJ: the environment created again keeps the round's "before" only for the waiver."""
     c = checking(flow.store, flow.clone)
+    c.before = VisualResult(head="base", tree="t", at=NOW)  # the round's "before", without pictures
+    flow.store.write(Lock("c1"), c)
     plain = flow.review.__call__
 
     async def unread(cfg):
@@ -913,6 +951,10 @@ def test_a_round_whose_judge_model_is_unknown_is_accepted_whole_or_run_again(flo
     assert [o.id for o in held.offered(flow.store, asked, q)] == ["accept", "retry"]
     accepted, _ = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="accept")], NOW)
     assert accepted.visual_rounds[-1].model_waived
+    again, _ = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="retry")], NOW)
+    for answered, kept in ((again, False), (accepted, True)):  # its environment, created again after the disposal
+        before.reset(answered, git(flow.clone, "rev-parse", "HEAD"))
+        assert (answered.before == asked.before, answered.before is None) == (kept, not kept)
     flow.store.write(Lock("c1"), accepted)
     runner._visual(flow.store, Lock("c1"), accepted, flow.clone)  # noqa: SLF001
     done = flow.store.read("c1")
@@ -1038,13 +1080,14 @@ def test_a_capture_over_one_reviews_budget_is_judged_in_batches_by_both_judges(f
 
 def test_the_launch_recipe_needs_a_clean_worktree_directory_and_a_local_url(tmp_path):
     def errors(dirty=(), **fields):
-        base = {"directory": ".", "command": "npm run x", "ready_url": "http://127.0.0.1:4173/", "summary": "ran"}
+        base = {"directory": ".", "command": "npm run x", "ready_url": "http://127.0.0.1:{port}/", "summary": "ran"}
         return tools.check_recipe(tools.CheckRecipe(**base | fields), tools.Worktree("h", "h", dirty), tmp_path)
 
     assert errors(command="npm run preview --prefix /outside") == []
     assert errors(("a",))[0].startswith("changes: a edited; you may edit nothing without")
     assert errors(directory="../")[0].startswith("directory: ../ is not a directory in the worktree")
     assert errors(ready_url="https://example.com/")[0].startswith("ready_url: must be local")
+    assert errors(ready_url="http://127.0.0.1:4173/")[0].startswith("ready_url: must be local with the `{port}`")
 
 
 def test_a_visual_environment_is_disposed_on_stop_or_abandon_and_its_runner_crash_is_charged(flow):

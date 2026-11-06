@@ -13,7 +13,16 @@ from owlbear_delivery_next.change_contracts import permissions, tools
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import VISUAL, Environment, ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import amending, budgets, disputes, loop, plan_rounds, repairs, worktree
+from owlbear_delivery_next.change_flow import (
+    amending,
+    budgets,
+    disputes,
+    loop,
+    plan_rounds,
+    repairs,
+    shaping_capture,
+    worktree,
+)
 from owlbear_delivery_next.change_flow.curation_flow import CURATE
 from owlbear_delivery_next.commands.cli import describe
 from owlbear_delivery_next.git.command_failure import failure
@@ -40,6 +49,7 @@ from owlbear_delivery_next.workflow_steps import (
     amendment,
     before,
     brief_round,
+    captures,
     check,
     clarification,
     cleanup,
@@ -209,6 +219,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
         result = prepare.chosen(post, lock, change, path, run.payload, ctx, result)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
+        before.reset(change, worktree.head(path))  # each new environment's capture gets its own "before"
     if isinstance(p := run.payload, tools.WrongPremise) and p.stage == "brief" and result.exit == Exit.BACK:
         amending.premised(change, p, run.session_id, end)  # TD-185: run before this step goes on; a stop wins
     final = change if change.amending is not None else loop.apply(change, result, end)
@@ -239,7 +250,7 @@ def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list
 
 def _captured(change: Change, path: Path, head: str, out: Path, widths: list[int]) -> tuple[list[Any], list[Any]]:
     """The states to redo captured at *widths* from the ready environment, and the design scans they and the UI hold."""
-    pack, url = design.pack(), change.env.ready_url if change.env else ""
+    pack, url = design.pack(), check.url(change.env) if change.env else ""
     redo = visual.redone(change, head, visual.tree(path, head))
     shots = visual.oversize(out, visual.CAPTURE(visual.root(url), redo, out, widths, pack=pack))
     states = {s.name: s.version for s in change.brief.visual}
@@ -318,23 +329,6 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         sessions.log_held(store, lock, [label for label, _ in [*mine, *theirs]], [run for _, run in ran])
 
 
-def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None:
-    """TD-24: render the brief's states at the merge-base once, before the visual check's own preview starts."""
-    settings, log = store.settings(), lambda e: store.log(lock, change.slug, e)
-    settings.need("widths")
-    change.before = shots = before.capture(
-        change,
-        repo,
-        lambda base: store.before_dir(change.slug, base),
-        store.read_profile() or Profile(),
-        log,
-        widths=settings.widths,
-        prepare=prepare.merge_base(store, change, settings, log),
-    )
-    store.write(lock, change)
-    _out("; ".join([f"before: {len(shots.files)} screenshots at {shots.head[:7]}", *shots.findings]))
-
-
 def _ready(prof: Profile, path: Path, now: datetime, writer: Writer) -> Result | None:
     """DR2 before publishing: the publishing readiness facts, their first failure as its exit."""
     host = profile.value(prof, profile.HOST, "github.com")
@@ -380,6 +374,7 @@ def _reused(store: Store, lock: Lock, change: Change) -> bool:
         store.write(lock, change)
         return False
     change.env = Environment(check=r.check, command=r.command, directory=r.directory, ready_url=r.ready_url)
+    before.reset(change, worktree.head(root))
     reason = f"starting `{r.command}` for the check, as it last launched"
     result = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK, reason=reason)
     event = {"event": "step", "at": now.isoformat(timespec="seconds"), "kind": StepKind.CHECK, "exit": result.exit}
@@ -457,15 +452,15 @@ def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Pat
         unset_settings.asked(store, lock, exc)
 
 
-def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None:  # noqa: C901 - per phase
-    """The step's phase: a test copy's end, the visual capture, "before", a test review, an agent or engine step."""
+def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None:  # noqa: C901, PLR0912
+    """The step's phase: a test copy's end, a capture, a test review, an agent, a brief challenge or an engine step."""
     try:
         if prepare.ran(store, lock, change, repo, runnable=step is not None):  # a gone check's end; a test copy
             _out(f"{change.slug}: test preparation ran")
         elif step is not None and check.capturing(change):
             _visual(store, lock, change, repo)
         elif step is not None and before.due(change):
-            _before(store, lock, change, repo)
+            _out(captures.at_merge_base(store, lock, change, repo))
         elif step is None or change.env is not None:
             _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
         elif step.kind == StepKind.TESTS or change.amending is not None:
@@ -475,6 +470,8 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
             agent = agent or prepare.refused(store, lock, change) or review.completed(store, lock, change, repo)
             agent = agent or plan_round.continued(store, lock, change, repo)
             agent or _agent(store, lock, change, repo)
+        elif shaping_capture.owed(change):  # the draft's pages, before its challenge and the chat's wait
+            _out(f"{change.slug}: {captures.at_target(store, lock, change, repo)}")
         elif step.kind == StepKind.SHAPE and brief_round.due(change):  # TD-221: before approval
             brief_round.run(store, lock, change, repo)
         else:

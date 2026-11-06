@@ -40,7 +40,6 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
     Waiting,
 )
-from owlbear_delivery_next.change_contracts.visual_records import OwnerDecision
 from owlbear_delivery_next.change_flow import (
     amend_apply,
     amending,
@@ -51,10 +50,12 @@ from owlbear_delivery_next.change_flow import (
     decision_baseline,
     delivery_target,
     disputes,
+    owner_answers,
     picks,
     plan_rounds,
     rebuilds,
     round_flow,
+    shaping_capture,
 )
 from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go, open_task, resolved, resume
 
@@ -170,8 +171,8 @@ def next_step(c: Change, now: datetime) -> Step | None:
         return c.step
     if o.exit in {Exit.ASK, Exit.STOP}:
         return None
-    if o.who == "you":  # an owed pick runs while the chat revises or approves; the wait stays (TD-459)
-        return c.step if o.waiting == Waiting.CHAT and picks.owed(c) else None
+    if o.who == "you":  # an owed pick or the draft's capture runs while the chat revises or approves (TD-459)
+        return c.step if o.waiting == Waiting.CHAT and (picks.owed(c) or shaping_capture.owed(c)) else None
     return None if o.wake_at and o.wake_at > now else c.step
 
 
@@ -228,6 +229,7 @@ def fold(  # noqa: C901, PLR0912 - per item kind
                 c.brief.approved_version, c.brief.approved_at, c.brief.reference = version, item.at, version
                 c.brief.approve_if_clean = None  # the owner's recorded approval is spent with this one (#986)
                 c.brief.picked = item.picked or c.brief.picked  # what the approval validated, not a later retry
+                c.reference = c.shaped  # its capture, ended before approval: the design reference
                 held = {p.id: p for p in c.decisions_published} | {p.id: p for p in item.published}
                 c.decisions_published = list(held.values())
                 if all(b.version != version for b in c.brief.approved):  # with its person checks (TD-185)
@@ -287,14 +289,6 @@ def _intent(c: Change, item: IntentItem) -> None:
             c.intent.words, c.intent.hold = item.text, True
 
 
-def _visual_decision(c: Change, decision: str, item: AnswerItem) -> None:
-    """Record the owner's decision on the round it was about, while that round still waits for it (TD-79)."""
-    kept = c.visual_rounds[-1] if c.visual_rounds else None
-    if kept and kept.number == item.round and kept.outcome == "ask" and kept.decision is None:
-        outcome = "pass" if decision == "accept" else "fail"
-        kept.decision = OwnerDecision(outcome=outcome, findings=item.findings, comment=item.text, at=item.at)
-
-
 def _target(q: Question, option: str | None) -> str | None:
     """Where the chosen option leads; a question whose every option reruns the step does so on any answer."""
     if q.options and all(o.next == "retry" for o in q.options):
@@ -321,9 +315,8 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> str:
         return f"question {q.id} is settled only by one of its options, a reconsideration by a note"
     if gate and (target != "pause" or c.step.kind != StepKind.CLEANUP):
         c.outcome = None
-    if kind == "brief_change":  # never delivered: the brief's amendment runs first (TD-185)
-        amending.start(c, "answer", reason=item.text, now=now, question=q.id)
-        return ""
+    if (amended := owner_answers.amended(c, q, item, (kind, target, gate), now)) is not None:
+        return amended
     if q.cause and kind_of(q.cause) in ENVIRONMENT | DEFECT and target != "pause":
         c.budgets.causes.pop(q.cause, None)  # "Done, continue" starts a new episode or streak
     if target in DECISIONS:
@@ -386,7 +379,7 @@ def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: boo
     elif target == "retry" or (q.cause or "").endswith(f":{UNREAD}"):  # an accepted hold is taken by the runner
         go(c, c.step.kind, c.step.task, c.step.mode)
     else:
-        _visual_decision(c, target, item)
+        owner_answers.decided(c, target, item)
 
 
 def answer_delivered(change: Change, question_id: str, now: datetime) -> Change:

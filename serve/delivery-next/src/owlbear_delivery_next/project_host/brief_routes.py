@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.inbox import BriefApproval
 from owlbear_delivery_next.change_contracts.round_records import BRIEF
-from owlbear_delivery_next.change_flow import brief_rounds, brief_starts, picks
+from owlbear_delivery_next.change_flow import brief_rounds, brief_starts, picks, shaping_capture
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store.briefs import unrevisable
@@ -70,7 +70,9 @@ def refused(store: Store, c: Change, body: ApproveBody, view: DataView | None) -
     brief = c.brief
     if body.version != brief.version:
         return f"brief version {body.version} is not the current draft"
-    if why := brief_rounds.approvable(c):  # TD-249: only a version its challenge loop ended on
+    # its current pages first, which the expectations are written against (D-01M61V2GR0C6JV2R6KJ0WR4PNB); then
+    # TD-249: only a version its challenge loop ended on
+    if why := shaping_capture.waiting(c) or brief_rounds.approvable(c):
         return f"brief v{brief.version} cannot be approved yet: {why}"
     if brief_rounds.unreviewed(c) and not body.unreviewed:  # TD-255: the owner ticks that he accepts it
         return f"brief v{brief.version}'s last revision was not reviewed; accept that to approve"

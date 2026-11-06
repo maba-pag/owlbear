@@ -36,6 +36,12 @@ whose shaping chat acts next shows ``Continue in the shaping chat`` (#960); a ho
 a chat of an earlier contract, whose ``await_challenge`` reads only that label as the shaping chat's own wait
 (``own_waits`` in ``tests/fixtures/chat_contract_6.json``).
 
+Contract 7: contract 6, and ``save_visual_check`` takes a UI brief's render ``recipe`` and its ``preparation``
+option; a host requires the recipe for a UI brief with states only from a chat of this contract, whose draft it then
+captures (D-01M61V2GR0C6JV2R6KJ0WR4PNB). The ``await_capture`` tool reads that capture
+(``GET /chat/capture/{slug}``, ``tests/fixtures/chat_contract_7.json``). A draft an earlier chat saves keeps no
+recipe and gets no capture, as before.
+
 A host whose contract answer has ``"admit_by": true`` refuses a ``/decisions/propose`` save that starts after the
 time in the request's ``X-OwlBear-Admit-By`` header (#846); a chat whose host lacks it never takes a lost answer as
 not saved.
@@ -49,8 +55,9 @@ from pydantic import BaseModel, ConfigDict
 
 from owlbear_delivery_next.local_system import codebase
 
-CHAT = 6  # the contract this code's chat server speaks
-SUPPORTED = frozenset({1, 2, 3, 4, 5, 6})  # the contracts this code's host serves
+CHAT = 7  # the contract this code's chat server speaks
+SUPPORTED = frozenset({1, 2, 3, 4, 5, 6, 7})  # the contracts this code's host serves
+CAPTURES = 7  # from this contract a chat sends a UI brief's render recipe, and its draft's pages are captured
 HEADER = "X-OwlBear-Chat"
 CAPABILITY = "/api/next/chat/contract"  # a host that has none predates the contract
 UNSUPPORTED = (
@@ -63,6 +70,11 @@ def refusal(sent: str) -> dict[str, object]:
     """The answer to a request whose contract this host does not serve."""
     served = ", ".join(str(n) for n in sorted(SUPPORTED))
     return {"detail": UNSUPPORTED.format(sent=sent or "none", served=served), "contract": "unsupported"}
+
+
+def captures(sent: str | None) -> bool:
+    """Whether a chat that names *sent* sends a UI brief's render recipe; a page or an older server sends none."""
+    return sent is not None and sent.isdigit() and int(sent) >= CAPTURES
 
 
 def served(sent: str | None) -> bool:

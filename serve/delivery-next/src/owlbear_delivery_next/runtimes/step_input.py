@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, NamedTuple
 from owlbear_delivery_next.change_contracts import evidence, pick_tools, preparation, tools
 from owlbear_delivery_next.change_contracts.models import VISUAL, Exit, PersonCheck, StepKind
 from owlbear_delivery_next.change_contracts.preparation import Preparing
-from owlbear_delivery_next.change_flow import brief_rounds, disputes, plan_rounds, round_flow
+from owlbear_delivery_next.change_flow import brief_rounds, disputes, plan_rounds, round_flow, shaping_capture
 from owlbear_delivery_next.change_flow import worktree as wt
 from owlbear_delivery_next.runtimes import step_answers, step_decisions
 
@@ -187,9 +187,10 @@ NO_OPTIONS = (
 )
 CHECK_FINISH = (
     "Call `submit_result` once with `command`, `directory` (repository-relative), `ready_url` "
-    "(http://127.0.0.1:<port>/...), `summary`, and `preparation` (an option id) with its `reason`. If no listed "
-    "option is permitted or fits the data the check needs, call `ask_question` instead. If it is rejected, fix "
-    "what each error names and call again."
+    "(http://127.0.0.1:{port}/...), `summary`, and `preparation` (an option id) with its `reason`. Delivery picks a "
+    "free port for each launch: `ready_url` holds `{port}` and the command passes `{port}` to the server, never a "
+    "fixed port. If no listed option is permitted or fits the data the check needs, call `ask_question` instead. If "
+    "it is rejected, fix what each error names and call again."
 )
 
 
@@ -267,6 +268,7 @@ def check(
             "",
             "## Launch recipe",
             "Find the command that serves this check in the project's files (scripts, package manifests).",
+            *shaping_capture.starting(change.brief),
             SOURCE_ONLY,
             "",
             "## Finish",

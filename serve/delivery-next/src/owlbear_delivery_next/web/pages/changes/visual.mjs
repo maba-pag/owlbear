@@ -2,7 +2,7 @@ import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { api, token } from "/assets/ui.mjs";
 import { DIALOG, REVERT, show, parts, draft, notify, send, starts } from "./state.mjs";
 import { disclosure, button, field, tick, hd, text, list, row, panel } from "./widgets.mjs";
-import { merging, finale, mergeSetting, droppedLine } from "./forms.mjs";
+import { merging, finale, mergeSetting, droppedLine, withdrawing } from "./forms.mjs";
 
 const JUDGE = { design: "Design judge", correctness: "Correctness judge" };
 const SEVERITY = { P0: ["Blocks the task", "error"], P1: ["Serious", "error"], P2: ["Annoying", "warning"],
@@ -87,8 +87,40 @@ function detectorLines(r) {
   });
 }
 
+// A design rule the brief or one of the owner's criteria rules out: never ticked, never sent to the builder. One with
+// a state or a brief criterion is taken by changing the brief; one with an owner's criterion by withdrawing it. The
+// round names the owner's criteria it was judged by; a state may be named like one.
+function conflictRow(k, q, r, d, key) {
+  const said = r.departs?.[k.id] ?? "", owner = (r.owner ?? []).includes(k.departs);
+  const inForce = (d.owner_criteria ?? []).some((c) => c.id === k.departs);
+  const take = async () => {
+    const ok = await ask({
+      title: `Change the brief to take ${k.id}?`, yes: "Change the brief", no: "Keep reviewing",
+      now: `The shaper drafts a brief amendment so that ${k.departs} allows what the design rule "${k.rule}" asks. `
+        + `The judge said: ${k.text}`,
+      then: "A challenger judges the amendment; once it applies, the visual check runs again on the new brief. This "
+        + "uses AI credits.",
+      after: "The round's other conflicts are not part of it.",
+      instead: "The round stays open; Pass keeps the brief as it is.",
+    });
+    if (ok) {
+      const round = { round: r.number, head: r.head, pack: r.pack };
+      send("/answers", { question: q.id, option: "amend", text: k.id, ...round, findings: [] }, d, key);
+    }
+  };
+  const action = owner && !inForce
+    ? text(`You withdrew ${k.departs}: decide this round with Pass or Fail.`, { size: "xs" })
+    : owner ? html`${text("Withdrawing it leaves this round to your Pass or Fail; later rounds no longer check it.",
+      { size: "xs" })}${button(`Withdraw ${k.departs}`, withdrawing(k.departs, said, d),
+      { variant: "secondary", aria: DIALOG })}`
+    : button("Change the brief to take this", take, { variant: "secondary", aria: DIALOG, ...starts(d) });
+  return html`<div class="finding">${text(`${where(k.state, k.width ? [k.width] : [])} · ${k.rule}: ${k.text}`)}
+    ${text(`Departs from ${k.departs}${said ? `: “${said}”` : ""}`, { size: "xs", color: "contrast-medium" })}
+    ${action}</div>`;
+}
+
 // The owner's decision on one visual round (TD-79): the screenshots, both verdicts, the problems he sends back,
-// a comment, Pass or Fail.
+// a comment, Pass or Fail; a conflict with the brief is his to settle, never the builder's.
 export function decisionForm(q, r, pictures, d) {
   const all = problems(r), key = `${d.key}:visual:${r.number}:${r.head}`;
   const proposed = r.proposed || [];
@@ -96,6 +128,7 @@ export function decisionForm(q, r, pictures, d) {
     .map((p) => p.key) }));
   const made = all.filter((p) => p.first.introduced !== false), old = all.filter((p) => p.first.introduced === false);
   const preferred = comparison(r), evidence = detectorLines(r);
+  const conflicts = r.verdicts.flatMap((v) => v.conflicts ?? []);
   const decide = async (option) => {
     const comment = (mine.text ?? "").trim(), chosen = made.filter((p) => mine.picked.includes(p.key));
     const findings = chosen.flatMap((p) => p.items.map((f) => f.id));
@@ -131,6 +164,9 @@ export function decisionForm(q, r, pictures, d) {
   };
   return panel(`Decide visual round ${r.number} of ${r.head.slice(0, 7)}`, key, droppedLine(q), pictures,
     hd(4, "Verdicts", "sm"), r.verdicts.map(verdictLine),
+    conflicts.length ? html`${hd(4, "Conflicts with the brief", "sm")}${text("The design judge found rules that the "
+      + "brief or your criteria rule out. They are never sent to the builder: Pass keeps the brief.")}${conflicts
+      .map((k) => conflictRow(k, q, r, d, key))}` : nothing,
     made.length ? html`${hd(4, "Problems this Change introduced", "sm")}${text("Blocking, serious and annoying "
       + "problems and any missed criterion of yours are ticked for you; a Fail sends the ticked ones to the "
       + "builder.")}${made.map((p) => problemRow(p, mine))}` : nothing,
@@ -162,9 +198,13 @@ function shot(change, kind, name, at) {
   return shots.get(key);
 }
 
+// Each side of a screenshot: the enlarged view's caption, and how its text alternative places it.
+const SIDES = { before: ["Before", "before the Change"], after: ["After", "with the Change"],
+  shaped: ["Current page", "as the target shows it now"], reference: ["Design reference", "as shaped"] };
+
 // One screenshot in a gallery: a button that enlarges it, in the order before then after at each width.
 function zoomable(entry, gallery) {
-  const index = gallery.push(entry) - 1, side = entry.side === "before" ? "before the Change" : "with the Change";
+  const index = gallery.push(entry) - 1, side = SIDES[entry.side][1];
   entry.alt = `${entry.state} at ${entry.width}px ${side}, at ${entry.commit}`;
   const s = shot(entry.slug, entry.kind, entry.name, entry.at);
   return html`<button type="button" class="zoom" aria-haspopup="dialog" @click=${() => lightbox(gallery, index)}>
@@ -185,7 +225,7 @@ function lightbox(gallery, start) {
     render(html`${row(
       button("Previous", () => go(-1), { icon: "arrow-left", variant: "secondary", keys: "ArrowLeft",
         title: "Previous screenshot (left arrow)" }),
-      html`<p class="caption" aria-live="polite"><strong>${e.side === "before" ? "Before" : "After"}</strong> at
+      html`<p class="caption" aria-live="polite"><strong>${SIDES[e.side][0]}</strong> at
         ${e.commit} \u00b7 ${e.state} \u00b7 ${e.width} px wide \u00b7 ${at + 1} of ${gallery.length}${s.failed
         ? " \u00b7 not available" : ""}${size}</p>`,
       button("Next", () => go(1), { icon: "arrow-right", variant: "secondary", keys: "ArrowRight",
@@ -233,23 +273,37 @@ function refused(scans, prefix = "") {
   return (scans ?? []).filter((s) => !s.scanned).map((s) => `${prefix}${refusedScan(s)}`);
 }
 
-// The screenshots of a visual check and what was found: its lines, and the gallery with its count.
-export function visualSection(slug, v, b, existing, deciding) {
+// The design reference's picture of a state at a width, first in the gallery (D-01M6Q4B6VV4Z05WFQ1BD4X95HJ): the
+// target's page as shaping captured it, which the expectations were written against; none where it has no such state.
+function referenced(slug, r, name, at, width, gallery) {
+  if (!r || !r.files.includes(name)) return null;
+  const commit = (r.head || "").slice(0, 7), when = new Date(r.at).toLocaleDateString("en-GB", { dateStyle: "medium" });
+  return side(`Design reference (shaping, ${commit}, ${when})`, zoomable({ slug, kind: "reference", name, at: r.at,
+    side: "reference", state: at, width, commit }, gallery));
+}
+
+// The screenshots of a visual check and what was found: its lines, and the gallery with its count. While a brief
+// amendment is in progress (*amending*, such as a conflict the owner took), the check waits for it, not failed.
+export function visualSection(slug, v, b, existing, deciding, r = null, amending = null) {
   const open = deciding || v.doubts.length;
-  const [said, variant] = v.passed ? ["Passed", "success"] : open ? ["Undecided", "warning"] : ["Failed", "error"];
+  const [said, variant] = v.passed ? ["Passed", "success"] : amending ? ["Waiting for the brief amendment", "info"]
+    : open ? ["Undecided", "warning"] : ["Failed", "error"];
   const gallery = [], pairs = v.files.map((name) => {
     const [, at, width] = name.match(/^(.*)-(\d+)\.png$/);
     const kept = b && b.files.includes(name);
     const comparable = kept && b.states[at] === v.states[at];  // a revised state's old shot is no baseline
     const one = (kind, s, when, head) => zoomable(
       { slug, kind, name, at: when, side: s, state: at, width, commit: head.slice(0, 7) }, gallery);
+    const shaped = referenced(slug, r, name, at, width, gallery);
     const before = comparable ? one("before", "before", b.at, b.head)
       : html`<span class="missing">${kept ? "Not comparable: the state changed since" : "Not available"}</span>`;
-    return html`<figure class="pair"><figcaption>${at} \u00b7 ${width} px</figcaption>${side("Before", before)}
-      ${side("After", one("visual", "after", v.at, v.head))}</figure>`;
+    return html`<figure class=${shaped ? "pair three" : "pair"}><figcaption>${at} \u00b7 ${width} px</figcaption>${
+      shaped ?? nothing}${side("Before", before)}${side("After", one("visual", "after", v.at, v.head))}</figure>`;
   });
   const lines = html`${row(text(`Visual check of ${v.head.slice(0, 7)}`, { weight: "semibold" }),
     html`<p-tag variant=${variant} compact="true">${said}</p-tag>`)}
+    ${amending && !v.passed ? text(`Brief amendment ${amending.id} is in progress: ${amending.reason}. The visual `
+      + "check runs again once it applies.") : nothing}
     ${v.findings.length ? list(v.findings) : nothing}
     ${v.doubts.length ? html`${text("The judges could not decide:", { size: "xs" })}${list(v.doubts)}` : nothing}
     ${existing.length ? text(`Errors already there before the Change: ${existing.join("; ")}`, { size: "xs" })
@@ -269,11 +323,13 @@ export function roundRefused(r, v) {
     items.join("; ")}`, { size: "xs" }) : nothing;
 }
 
-export function beforeSection(slug, b) {
+export function beforeSection(slug, b, r = null) {
   const gallery = [], cells = b.files.map((name) => {
     const [, at, width] = name.match(/^(.*)-(\d+)\.png$/);
-    return side(`${at} \u00b7 ${width} px`, zoomable({ slug, kind: "before", name, at: b.at, side: "before",
+    const shaped = referenced(slug, r, name, at, width, gallery);
+    const before = side(`${at} \u00b7 ${width} px`, zoomable({ slug, kind: "before", name, at: b.at, side: "before",
       state: at, width, commit: (b.head || "").slice(0, 7) }, gallery));
+    return shaped ? html`${shaped}${before}` : before;
   });
   const seen = b.errors.map((e) => `${e.state} at ${e.width}px, ${e.kind} error: ${e.text}`);
   const lines = html`${text(`Before the Change${b.head ? `, at ${b.head.slice(0, 7)}` : ""}`, { weight: "semibold" })}
@@ -281,4 +337,25 @@ export function beforeSection(slug, b) {
     ${b.errors.length ? text(`Errors before the Change: ${seen.join("; ")}`, { size: "xs" }) : nothing}
     ${refusedLine(refused(b.design))}`;
   return { lines, shots: html`<div class="shots">${cells}</div>`, count: gallery.length };
+}
+
+// The draft's current pages as its shaping capture rendered them at the target (D-01M61V2GR0C6JV2R6KJ0WR4PNB): each
+// state's pictures per width, or why it has none. The shaper and the owner write the expectations against them.
+export function currentPages(slug, c, states) {
+  if (!c) return nothing;
+  if (c.running) return text("Capturing the current pages\u2026 Approval waits until they are captured.");
+  const gallery = [], commit = (c.head || "").slice(0, 7), mine = (s, f) => f.startsWith(`${s.name} at `)
+    || f.startsWith(`${s.name}:`);
+  const figures = states.map((s) => {
+    const why = c.findings.filter((f) => mine(s, f)), cells = c.widths.map((w) => [w, `${s.name}-${w}.png`])
+      .filter(([, name]) => c.files.includes(name)).map(([w, name]) => side(`${w} px`, zoomable({ slug,
+        kind: "shaped", name, at: c.at, side: "shaped", state: s.name, width: w, commit }, gallery)));
+    return html`<figure class="pair"><figcaption>${s.name}</figcaption>${cells}${why.length || !cells.length
+      ? html`<span class="missing">Not captured${why.length ? `: ${why.join("; ")}` : ""}</span>` : nothing}</figure>`;
+  });
+  const rest = c.findings.filter((f) => !states.some((s) => mine(s, f)));
+  const when = new Date(c.at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+  return html`<section>${hd(4, "The current pages", "sm")}${text(commit ? `The target at ${commit}, captured ${when}`
+    : `Not captured, ${when}`, { size: "xs", color: "contrast-medium" })}${rest.length
+    ? text(`Not captured: ${rest.join("; ")}`) : nothing}<div class="shots">${figures}</div></section>`;
 }

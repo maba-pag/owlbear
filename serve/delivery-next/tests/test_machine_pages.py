@@ -90,7 +90,7 @@ from owlbear_delivery_next.settings import carried, config, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
 from owlbear_delivery_next.state_store import curation_runs, decision_store, registry, watch_reports
 from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store, StoreError
-from owlbear_delivery_next.workflow_steps import decision, design, judges, pick, publish, retry, visual
+from owlbear_delivery_next.workflow_steps import captures, decision, design, judges, pick, publish, retry, visual
 from owlbear_delivery_next.workflow_steps.engine import Ctx
 
 if TYPE_CHECKING:
@@ -4238,7 +4238,7 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
     store, c, of = ui_change(tmp_path, install)
     with store.lock("c1") as lock:
         store.write(lock, c)
-        runner._before(store, lock, c, Path(c.names.worktree))  # noqa: SLF001
+        runner._out(captures.at_merge_base(store, lock, c, Path(c.names.worktree)))  # noqa: SLF001 - as it prints
     note = f"`{shlex.join(shlex.split(install))}` failed: {whole_error}"
     b = store.read("c1").before
 
