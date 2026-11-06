@@ -46,9 +46,6 @@ def at_merge_base(store: Store, lock: Lock, change: Change, repo: Path) -> str:
     return "; ".join([f"before: {len(shots.files)} screenshots at {shots.head[:7]}", *shots.findings])
 
 
-owed = shaping_capture.owed
-
-
 def at_target(store: Store, lock: Lock, change: Change, repo: Path) -> str:
     """Capture the draft's pages and record them. The runner's lock holds the draft unchanged meanwhile."""
     settings, log, key = store.settings(), lambda e: store.log(lock, change.slug, e), shaping_capture.key(change.brief)

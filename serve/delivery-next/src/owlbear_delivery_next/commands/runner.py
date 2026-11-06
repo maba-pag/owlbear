@@ -13,7 +13,16 @@ from owlbear_delivery_next.change_contracts import permissions, tools
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import VISUAL, Environment, ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import amending, budgets, disputes, loop, plan_rounds, repairs, worktree
+from owlbear_delivery_next.change_flow import (
+    amending,
+    budgets,
+    disputes,
+    loop,
+    plan_rounds,
+    repairs,
+    shaping_capture,
+    worktree,
+)
 from owlbear_delivery_next.change_flow.curation_flow import CURATE
 from owlbear_delivery_next.commands.cli import describe
 from owlbear_delivery_next.git.command_failure import failure
@@ -461,7 +470,7 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
             agent = agent or prepare.refused(store, lock, change) or review.completed(store, lock, change, repo)
             agent = agent or plan_round.continued(store, lock, change, repo)
             agent or _agent(store, lock, change, repo)
-        elif captures.owed(change):  # the draft's pages, before its challenge and the chat's wait
+        elif shaping_capture.owed(change):  # the draft's pages, before its challenge and the chat's wait
             _out(f"{change.slug}: {captures.at_target(store, lock, change, repo)}")
         elif step.kind == StepKind.SHAPE and brief_round.due(change):  # TD-221: before approval
             brief_round.run(store, lock, change, repo)
