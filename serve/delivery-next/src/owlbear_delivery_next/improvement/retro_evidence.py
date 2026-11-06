@@ -75,7 +75,7 @@ def activity(uid: str, projects: units.Projects) -> str:
 def last_said(sid: str) -> str:
     """A chat's outcome: what its main agent said last in its capture."""
     said = ""
-    with contextlib.suppress(OSError):
+    with contextlib.suppress(FileNotFoundError):
         for d in units.events(sid):
             if d.get("type") == "assistant.message" and ev.main_agent(d) and d["data"].get("content"):
                 said = str(d["data"]["content"])

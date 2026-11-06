@@ -257,9 +257,6 @@ class Follower:
         except OSError:
             listed = []
         ours = chatlogs.own()
-        if ours is None:
-            self._tell("chats follower: the manifest of OwlBear's own sessions cannot be read; no chat is read")
-            return
         self._tell("")
         self.share = plan.share
         found = self._found(listed, ours, plan.folders)
