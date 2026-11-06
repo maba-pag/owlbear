@@ -1318,19 +1318,15 @@ def test_an_abandonment_queued_during_the_challenge_publishes_nothing(store, tmp
     assert (called, c.decisions_published) == ([], [])
 
 
-class Killed(BaseException):
-    """The host process, killed in the middle of its pass."""
-
-
 def test_an_approval_killed_before_it_is_written_is_made_by_the_next_pass(store, tmp_path, monkeypatch):
     fake, real = Fake(store, tmp_path), brief_routes.approved
     save(store, briefed(fake, approving=True))
 
     def killed(*_a: object) -> str:
-        raise Killed
+        raise KeyboardInterrupt  # the host process, killed in the middle of its pass
 
     monkeypatch.setattr(brief_routes, "approved", killed)
-    with pytest.raises(Killed):
+    with pytest.raises(KeyboardInterrupt):
         fake.host.tick(NOW)
     assert store.read("c1").brief.approve_if_clean == 2  # still the owner's: no press is lost
     monkeypatch.setattr(brief_routes, "approved", real)
