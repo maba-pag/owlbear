@@ -30,10 +30,11 @@ from owlbear_delivery_next.local_system import codebase, data_repo, maintenance,
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.project_host import brief_timer, environment, launch_gate, leftovers, session_slots
+from owlbear_delivery_next.project_host import shaping_chat
 from owlbear_delivery_next.project_host.runner_end import Found, disappeared, gone
 from owlbear_delivery_next.project_host.runner_end import block as _block
 from owlbear_delivery_next.project_host.runner_end import unverified as _unverified
-from owlbear_delivery_next.runtimes import readiness
+from owlbear_delivery_next.runtimes import chat_contact, readiness
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import github_writer
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
@@ -154,6 +155,7 @@ class Host:
     ) -> None:
         self.store, self.repo, self.members, self.alive = store, repo, members, alive
         self.spawn, self.code, self.reach, self.paused = spawn or self._spawn, code, reach, paused
+        self.post = chat_contact.post
         self.peers: Callable[[], list[Host]] = list  # the machine's other clones sharing this folder
         self.machine: Callable[[], list[Store]] = lambda: [self.store]  # every project store on this machine (TD-336)
         self.draining: Callable[[], bool] = lambda: False  # the owner's stop when idle: environments go too
@@ -319,6 +321,7 @@ class Host:
                 runs = check.capturing(c) or before.due(c) or prepare.due(self.store, c)
                 step = loop.next_step(c, now) if runs else None
             self.store.write(lock, c)
+            shaping_chat.dispatch(self, lock, c, now)
             self.wants[slug] = session_slots.wanted(c, step)
             return step is not None or bool(not c.stop and prepare.left(self.store, c))  # a gone check's end
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_flow import brief_rounds, brief_starts, picks, versions
+from owlbear_delivery_next.project_host import shaping_chat
 from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.state_store.briefs import unrevisable
 from owlbear_delivery_next.workflow_steps import decisions_gate
@@ -16,11 +17,12 @@ if TYPE_CHECKING:
 PICK_AGAIN = "use Pick the decisions again under Open items"  # the page's way to the chat's retry_pick
 
 
-def shown(store: Store, c: Change) -> dict[str, Any]:
+def shown(store: Store, c: Change, *, paused: bool = False) -> dict[str, Any]:
     """The detail's ``brief`` block."""
     b = c.brief
     return {
         "version": b.version,
+        "chat": shaping_chat.shown(c, paused=paused),
         "approved": b.approved_version,
         "title": b.title,
         "outcome": b.outcome,

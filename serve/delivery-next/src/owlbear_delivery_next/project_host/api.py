@@ -364,7 +364,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         return (
             summary_of(slug)
             | {
-                "brief": brief_view.shown(store, c),
+                "brief": brief_view.shown(store, c, paused=host.activity(slug).paused),
                 "criteria": [k.model_dump() for k in c.brief.criteria],
                 "plan": [t.model_dump() for t in c.plan.tasks] if c.plan else [],
                 "plan_versions": versions.plan(c),
