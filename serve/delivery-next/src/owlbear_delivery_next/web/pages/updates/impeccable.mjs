@@ -30,8 +30,8 @@ function published(run) {
   if (!p?.commit) return run ? `${last}Nothing yet from the last update, run in ${run.name}.`
     : historyUnread() ? "Not known: run history could not be read completely." : "Nothing yet.";
   const pr = p.url ? `pull request #${p.number}` : `commit ${p.commit.slice(0, 12)} on ${p.branch}`;
-  return `${last}${sentence(pr)}${p.merged ? `, merged into main as ${p.merged.slice(0, 12)}` : p.url ? ", not merged yet"
-    : ""}; a machine takes it with the OwlBear version that carries it.`;
+  return `${last}${sentence(pr)}${p.merged ? `, merged into main as ${p.merged.slice(0, 12)}`
+    : p.url ? ", not merged yet" : ""}; a machine takes it with the OwlBear version that carries it.`;
 }
 
 function candidate(run) {

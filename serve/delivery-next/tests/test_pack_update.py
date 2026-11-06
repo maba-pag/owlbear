@@ -159,7 +159,9 @@ def test_the_notice_says_known_stale_unknown_or_error_and_a_failed_check_keeps_t
     assert (stale["state"], stale["behind"], stale["checked_at"]) == ("stale", 2, old)
     error = pack_update.notice(refresh=True, fetch=refused)
     assert (error["state"], error["behind"], error["detail"]) == (
-        "error", None, "GitHub answered 403 rate limited: HTTPError: HTTP Error 403: rate limited",
+        "error",
+        None,
+        "GitHub answered 403 rate limited: HTTPError: HTTP Error 403: rate limited",
     )
     assert pack_update.said(error) == "Impeccable (impeccable-4.5.2.1): releases upstream unknown"
     assert pack_update.notice(refresh=False, force=True, fetch=lambda _u: b"{}")["state"] == "error"
