@@ -87,9 +87,7 @@ def opened() -> Transport:
         raise ahp.HostError(msg) from exc
 
 
-def saving_call(
-    workspace: Path, tool: str, body: object, normalize: Callable[[object], object]
-) -> tuple[str, str]:
+def saving_call(workspace: Path, tool: str, body: object, normalize: Callable[[object], object]) -> tuple[str, str]:
     """Find one open save invocation, checking workspace/client metadata before reading its events."""
     wanted, matches = normalize(body), []
     root = chatlogs.state()
