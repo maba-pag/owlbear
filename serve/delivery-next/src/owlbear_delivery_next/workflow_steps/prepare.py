@@ -236,7 +236,7 @@ def unsafe(settings: Settings, live: Mapping[str, str] | None = None) -> loop.St
         "the project's preparation options or data permissions in its settings, then continue."
     )
     cause = cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, "preparation-unsafe")
-    return engine.ask(StepKind.CHECK, text[:1500], cause, engine.continue_or_pause(StepKind.CHECK))
+    return engine.ask(StepKind.CHECK, text, cause, engine.continue_or_pause(StepKind.CHECK))
 
 
 def refused(store: Store, lock: Lock, c: Change) -> bool:
