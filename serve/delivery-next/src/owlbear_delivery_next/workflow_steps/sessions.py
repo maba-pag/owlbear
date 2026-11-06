@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
+import subprocess
 import sys
 import uuid
 from datetime import UTC, datetime
@@ -14,6 +15,7 @@ from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind, Stop
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
@@ -118,11 +120,11 @@ def log_held(store: Store, lock: Lock, labels: list[str], runs: list[session_res
 def unread(done: session_result.Run) -> bool:
     """Its model is unknown while its processes are confirmed gone; else the termination stop wins.
 
-    A voided read-only run is not: its violation decides the step, its usage is logged as it is. A known wrong model
-    is not either: it reruns once after a wait (TD-94).
+    A voided read-only run is not: its violation or unread inspection decides the step, its usage is logged as it is.
+    A known wrong model is not either: it reruns once after a wait (TD-94).
     """
     confirmed = done.termination and done.termination.confirmed
-    voided = done.ending in {"read-only-write", "shared-git-changed"} or done.model_check == "mismatch"
+    voided = done.ending in {"read-only-write", "shared-git-changed", "read-only-unread"} or done.model_check == "mismatch"
     return bool(done.usage_unread and confirmed and not voided)
 
 
@@ -334,23 +336,29 @@ def _within(  # noqa: PLR0913, PLR0917 - the sessions run in the prepared copy
 def _closed(  # noqa: PLR0913, PLR0917 - the copy its runs ran in, and who keeps them before the cleanup
     store: Store, lock: Lock, change: Change, copy: disposable.Copy, runs: list[session_result.Run], keep: Keep | None
 ) -> None:
-    """Void the runs that changed the repository or its shared Git settings, then clean up after them.
+    """Void runs whose inspection failed or changed the repository or its shared Git settings, then clean up.
 
     The runs as checked go to *keep* first, so a log or cleanup that fails afterwards never loses a paid run; that
     failure is raised as it is.
     """
     at, ids = datetime.now(UTC).isoformat(timespec="seconds"), [r.session_id for r in runs]
     events = []
-    if changes := disposable.tampered(copy):
-        reason = f"a read-only step changed shared Git settings: {'; '.join(changes)}"
-        events.append({"event": "read-only-tampered", "at": at, "changes": changes, "sessions": ids})
+    ending: session_result.Ending | None = None
+    try:
+        changes = disposable.tampered(copy)
+    except (OSError, subprocess.SubprocessError) as exc:
+        ending, reason = "read-only-unread", f"the shared Git config and hooks could not be read: {failure(exc)}"
+        events.append({"event": "read-only-unread", "at": at, "reason": reason, "sessions": ids})
+    else:
+        if changes:
+            ending, reason = "shared-git-changed", f"a read-only step changed shared Git settings: {'; '.join(changes)}"
+            events.append({"event": "read-only-tampered", "at": at, "changes": changes, "sessions": ids})
+        elif moved := disposable.changed(copy):
+            ending, reason = "read-only-write", f"a read-only step changed the repository: {', '.join(moved)}"
+            events.append({"event": "read-only-violation", "at": at, "refs": moved, "sessions": ids})
+    if ending is not None:
         for r in runs:
-            r.ending, r.payload, r.first, r.head, r.detail = "shared-git-changed", None, None, None, reason
-    elif moved := disposable.changed(copy):
-        reason = f"a read-only step changed the repository: {', '.join(moved)}"
-        events.append({"event": "read-only-violation", "at": at, "refs": moved, "sessions": ids})
-        for r in runs:
-            r.ending, r.payload, r.first, r.head, r.detail = "read-only-write", None, None, None, reason
+            r.ending, r.payload, r.first, r.head, r.detail = ending, None, None, None, reason
     try:
         if keep is not None:
             keep(runs)

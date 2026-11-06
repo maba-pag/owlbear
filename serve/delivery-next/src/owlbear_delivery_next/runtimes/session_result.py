@@ -10,6 +10,7 @@ from owlbear_delivery_next.change_contracts import amend_tools, curation_tools, 
 from owlbear_delivery_next.change_contracts.failures import (
     QUOTA,
     READ_ONLY,
+    READ_ONLY_UNREAD,
     RO_WORKTREE,
     UNREAD,
     WRONG_MODEL,
@@ -51,6 +52,7 @@ type Ending = Literal[
     "read-only-write",
     "read-only-refused",
     "shared-git-changed",
+    "read-only-unread",
     "credit-limit",
     "spotter-ask",
 ]
@@ -183,8 +185,19 @@ def unverified(t: Termination | None) -> str:
 def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
     run: Run, kind: StepKind, now: datetime, enclosing: StepKind
 ) -> StepResult:
-    """One exit per ending; unverified termination stops whatever the session reported; the host scans after."""
+    """One exit per ending; unread inspection keeps its question while the host scans for surviving processes."""
     t = run.termination or Termination(confirmed=False, problems=("termination did not run",))
+    if run.ending == "read-only-unread":
+        text = f"{run.detail}\nThe result was voided; no shared Git setting was restored. "
+        text += "Resolve the inspection problem and check the repository's shared Git config and hooks before rerunning."
+        if not t.confirmed:
+            text += f"\n{unverified(t)}. A rerun waits until the previous processes are confirmed gone."
+        cause = cause_key(ErrorKind.STATE, enclosing, READ_ONLY_UNREAD)
+        question = Question(
+            step=enclosing, text=text, cause=cause,
+            options=[Option(id="retry", label="Resolved: rerun this step", next="retry")],
+        )
+        return StepResult(exit=Exit.ASK, reason=run.detail, question=question)
     if not t.confirmed:
         pids = ", ".join(str(p) for p in sorted({*t.survivors, *t.unknown}))
         stop = Stop(

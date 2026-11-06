@@ -547,10 +547,10 @@ def test_a_read_only_check_that_cannot_read_says_git_s_whole_error(store, change
         f"CalledProcessError: Command '['git', 'config']' returned non-zero exit status 128.\n{whole_error}\nNOTE-MARK"
     )
     if read == "_shared":
-        reason = (
-            f"a read-only step changed shared Git settings: the shared Git config and hooks could not be read: {said}"
-        )
-        assert (c.outcome.exit, c.stop.reason) == (Exit.STOP, reason)
+        reason = f"the shared Git config and hooks could not be read: {said}"
+        assert c.outcome.exit == Exit.ASK
+        assert c.outcome.reason.startswith(f"{reason}\n")
+        assert reason in loop.open_question(c).text
     else:
         reason = f"a read-only step changed the repository: its refs could not be read: {said}"
         assert (c.outcome.exit, c.outcome.reason) == (Exit.RETRY, reason)
