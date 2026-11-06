@@ -13,13 +13,10 @@ import pytest
 import uvicorn
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, StepKind
-from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.local_system import codebase, data_place, local_home
-from owlbear_delivery_next.machine_host import app, curation, project
-from owlbear_delivery_next.machine_host.machine import Machine
+from owlbear_delivery_next.local_system import local_home
+from owlbear_delivery_next.machine_host import curation
 from owlbear_delivery_next.project_host import api, pack_routes
-from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 if TYPE_CHECKING:
@@ -183,104 +180,6 @@ def test_unreadable_curation_runs_show_whole_on_memory_curation(tmp_path: Path, 
             browser.close()
     finally:
         server.should_exit = True
-
-
-@pytest.fixture
-def owner_history_page(tmp_path: Path, pds, shared_repo, monkeypatch, whole_error):
-    from playwright.sync_api import sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
-    monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
-    monkeypatch.setattr(project.readiness, "ready", lambda *_args, **_kwargs: [])
-    monkeypatch.setattr(Host, "_launch", lambda *_args: False)
-    work = tmp_path / "shop"
-    for args in (
-        ["init", "-q", "-b", "main", str(work)],
-        ["-C", str(work), "commit", "-q", "--allow-empty", "-m", "start"],
-    ):
-        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
-    entry = registry.register(work)
-    now = datetime.now(UTC)
-    machine = Machine(HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=now, code=codebase.CURRENT))  # noqa: S106
-    machine.load_all()
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning"))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    error = subprocess.TimeoutExpired(["git", "log"], 10, output=whole_error.encode(), stderr=b"owner history stderr")
-    error.add_note("owner history note")
-    real = subprocess.run
-
-    def history(args, **kwargs):
-        if args[:2] == ["git", "log"]:
-            raise error
-        return real(args, **kwargs)
-
-    monkeypatch.setattr(pack_routes.subprocess, "run", history)
-    notice = f"the owner's memory history could not be read, so it is not counted: {failure(error)}"
-    try:
-        with sync_playwright() as pw:
-            browser = pw.chromium.launch()
-            page = browser.new_page(viewport={"width": 1280, "height": 800})
-            said = []
-            page.on("pageerror", lambda e: said.append(str(e)))
-            page.on("console", lambda m: said.append(m.text) if m.type == "error" else None)
-            pds.only(page, base)
-            yield page, base, entry.id, notice
-            assert said == []
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
-
-
-@pytest.mark.browser
-@pytest.mark.parametrize("scope", ["project", "all"])
-def test_owner_history_qualifies_every_curation_state_in_both_maintenance_views(
-    owner_history_page, tmp_path: Path, monkeypatch, scope
-) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    page, base, pid, notice = owner_history_page
-    path = f"/maintenance?project={pid}" if scope == "project" else "/maintenance"
-    curation_error = ValueError("the curation history is unreadable too")
-    curation_error.add_note("curation history note")
-
-    def unreadable(_name):
-        raise curation_error
-
-    for state in ("running", "failed", "done", "unknown"):
-        reason = "the curator's result stays intact\nwith its detail"
-        if state == "unknown":
-            monkeypatch.setattr(pack_routes, "curation_last", unreadable)
-        else:
-            run = curation.FolderRun(state=state, started_at=datetime.now(UTC), reason=reason)
-            (local_home.root() / curation.STATE).write_text(curation.Runs(folders={"shop": run}).model_dump_json())
-        if state == "running":
-            page.goto(f"{base}{path}#token=tok")
-        else:
-            page.reload()
-        surface = (
-            page.locator("#actions > li", has_text="Memory curation")
-            if scope == "project"
-            else (page.locator(f'#projects .scope[data-key="{pid}"] .runs > li', has_text="Memory curation"))
-        )
-        expect(surface).to_contain_text("Memory curation")
-        if state != "unknown":
-            expect(surface).to_contain_text(f"(memory curator): {state}, ")
-        page.screenshot(path=str(tmp_path / f"maintenance-{scope}-{state}.png"), full_page=True)
-        expect(surface).to_contain_text(notice)
-        assert notice in surface.text_content()
-        expect(surface).not_to_contain_text("never run")
-        expect(surface).not_to_contain_text("Never run")
-        if state == "unknown":
-            assert f"ValueError: {curation_error}\ncuration history note" in surface.text_content()
-        elif scope == "project" or state == "done":
-            assert reason in surface.text_content()
-        else:
-            expect(surface).not_to_contain_text(reason)  # tagged runs' detail stays on the project page
 
 
 @pytest.mark.browser

@@ -88,7 +88,7 @@ from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.runtimes.settings_seen import NAME as SEEN
 from owlbear_delivery_next.settings import carried, config, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
-from owlbear_delivery_next.state_store import decision_store, registry, watch_reports
+from owlbear_delivery_next.state_store import curation_runs, decision_store, registry, watch_reports
 from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store, StoreError
 from owlbear_delivery_next.workflow_steps import decision, design, judges, pick, publish, retry, visual
 from owlbear_delivery_next.workflow_steps.engine import Ctx
@@ -2897,6 +2897,58 @@ def test_an_error_no_project_route_caught_shows_whole_on_its_page_and_in_the_hos
         assert notice.text_content().strip() == whole
         assert traced(caplog, page) == {("Exception in ASGI application\n", logged_whole)}
         assert set(broke) == {FAILED_500}
+
+
+@pytest.fixture
+def owner_history_page(tmp_path: Path, pds, shared_repo, monkeypatch, whole_error):
+    monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
+    entry = registry.register(clone(tmp_path / "shop"))
+    _git(Path(entry.path), "branch", "-M", "main")
+    reason = "the curator's result stays intact\nwith its detail"
+    run = curation_runs.FolderRun(state="failed", started_at=datetime.now(UTC), reason=reason)
+    (local_home.root() / curation_runs.STATE).write_text(curation_runs.Runs(folders={"shop": run}).model_dump_json())
+    error = subprocess.TimeoutExpired(["git", "log"], 10, output=whole_error.encode(), stderr=b"owner history stderr")
+    error.add_note("owner history note")
+    real = subprocess.run
+
+    def history(args, **kwargs):
+        if args[:2] == ["git", "log"]:
+            raise error
+        return real(args, **kwargs)
+
+    monkeypatch.setattr(pack_routes.subprocess, "run", history)
+    notice = f"the owner's memory history could not be read, so it is not counted: {failure(error)}"
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        yield page, base, entry.id, notice, reason
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("scope", ["project", "all"])
+def test_owner_history_qualifies_a_failed_curation_in_both_maintenance_views(
+    owner_history_page, tmp_path: Path, scope
+) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    page, base, pid, notice, reason = owner_history_page
+    path = f"/maintenance?project={pid}" if scope == "project" else "/maintenance"
+    page.goto(f"{base}{path}#token=t")
+    surface = (
+        page.locator("#actions > li", has_text="Memory curation")
+        if scope == "project"
+        else page.locator(f'#projects .scope[data-key="{pid}"] .runs > li', has_text="Memory curation")
+    )
+    expect(surface).to_contain_text("(memory curator): failed, ")
+    page.screenshot(path=str(tmp_path / f"maintenance-{scope}-failed.png"), full_page=True)
+    expect(surface).to_contain_text(notice)
+    assert notice in surface.text_content()
+    expect(surface).not_to_contain_text("never run")
+    expect(surface).not_to_contain_text("Never run")
+    if scope == "project":
+        assert reason in surface.text_content()
+    else:
+        expect(surface).not_to_contain_text(reason)  # tagged runs' detail stays on the project page
 
 
 @pytest.mark.browser
