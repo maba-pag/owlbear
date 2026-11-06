@@ -49,9 +49,10 @@ def test_a_setting_no_layer_sets_is_unset_and_listed_never_filled_from_code():
     assert {"agents.builder.model", "agents.spotter.effort", "sessions", "spotter.switch"} <= set(empty.missing)
     assert {"spotter.hand_off_fitness", "spotter.irreversible_harm"} <= set(empty.missing)
     assert {"agents.retro.model", "agents.retro-review.minutes", "spotter.looks"} <= set(empty.missing)
+    assert "agents.shaper.challenge_wait" in empty.missing
     inactive = {"agents.spotter.minutes", "spotter.sample_rate"}
     inactive |= {"spotter.verbose_until"}
-    inactive |= {"agents.picker.max_rounds"}
+    inactive |= {"agents.picker.max_rounds", "agents.planner.challenge_wait"}
     assert not inactive & set(empty.missing)  # nothing reads them, and the page edits none of them
     assert empty.page()["agents"]["builder"]["model"] is None
     assert "sessions" not in empty.sources
@@ -136,6 +137,7 @@ def test_a_carried_global_resolves_every_setting(shared_repo):
     later |= set(roles.USER_CONFIG)  # the owner sets them; never carried (2026-10-27)
     later |= {f"memory.{name}" for name in config.MemoryValues.model_fields}  # the owner's numbers: saved once by him
     later.add("github_account")  # TD-402: set through "Use recommended" or by hand, never carried
+    later.add("agents.shaper.challenge_wait")  # D-01M6P1685N1R5W2PPV5SHKR2H0: added after the carry, never carried
     assert set(resolve(read_layer(shared.global_path, GlobalLayer), Layer()).missing) == prefs | later
 
 
@@ -144,6 +146,7 @@ def test_a_role_needs_only_the_fields_its_work_reads():
     fields = ("model", "effort", "context")
     spotter = carried.layer().agents["spotter"].model_dump(include=set(fields))
     shaper = carried.layer().agents["shaper"].model_dump(include={*fields, *config.RoundPolicy.model_fields})
+    shaper["challenge_wait"] = 15  # the brief loop's wait before Delivery starts a missing challenge
     agents = {"spotter": config.Agent.model_validate(spotter), "shaper": config.Agent.model_validate(shaper)}
     some = resolve(GlobalLayer(agents=agents), Layer())
     assert (some.agent("spotter").model, some.agent("spotter").minutes) == (carried.MODELS["spotter"].model, None)
@@ -155,7 +158,8 @@ def test_a_role_needs_only_the_fields_its_work_reads():
     picker = carried.layer().agents["picker"].model_dump(include=set(fields))
     with pytest.raises(SettingsUnset, match=r"agents\.picker\.minutes"):  # a picker session has a time limit
         resolve(GlobalLayer(agents={"picker": config.Agent.model_validate(picker)}), Layer()).agent("picker")
-    assert set(config.used("builder")) == set(config.Effective.model_fields)
+    assert set(config.used("builder")) == set(config.Effective.model_fields) - {"challenge_wait"}
+    assert "challenge_wait" in config.used("shaper")
 
 
 def test_the_decision_gate_asking_for_an_unset_setting_asks_the_owner(monkeypatch, tmp_path):

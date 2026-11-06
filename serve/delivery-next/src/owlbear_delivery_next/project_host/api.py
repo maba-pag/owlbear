@@ -276,6 +276,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     ) -> tuple[int, dict[str, Any]]:
         code, out = write(store, body)
         if code == 200:  # noqa: PLR2004 - HTTP OK
+            host.wake.set()  # a version saved after its loop ended gets its challenge's start time at once (#986)
             out["next"] = (
                 f"Once the draft is ready, ask for its challenge with challenge_brief (change {out['change']}, "
                 f"version {out['version']}); the owner approves it in the Changes page after: {link(host.record)}"

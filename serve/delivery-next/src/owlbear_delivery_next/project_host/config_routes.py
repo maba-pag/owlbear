@@ -60,6 +60,7 @@ APPLIED = [
     "agents.shaper.max_findings",
     "agents.shaper.last_round_at",
     "agents.shaper.ask_owner_at",
+    "agents.shaper.challenge_wait",
     "final_review",
     *(f"agents.{role}.minutes" for role in ("planner", "builder", "reviewer", "challenger", "design-judge")),
     "agents.preparer.minutes",

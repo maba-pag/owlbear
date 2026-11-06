@@ -107,7 +107,7 @@ def test_a_failed_pick_blocks_approval_until_a_retry_that_uses_no_round(picking)
     refused = picking.approve(1).json()["detail"]
     assert "the picker failed" in refused
     assert "retry_pick" in refused
-    shown = picking.http.get(f"/api/next/changes/{picking.slug}").json()["brief"]["unapprovable"]
+    shown = picking.http.get(f"/api/next/changes/{picking.slug}").json()["brief"]["approve_off"]
     assert shown.endswith("; use Pick the decisions again under Open items")  # the page's own way to retry
     assert "the picker failed" in picking.ask(1).json()["detail"]  # a challenge request does not pick again
     assert picking.ask(1, {"F1": "no"}, retry=True).status_code == 422
@@ -197,7 +197,7 @@ def test_one_more_challenge_with_a_clean_verdict_clears_the_mark_and_approves_wi
     assert "## Focus" in picking.told[-1].message  # the whole brief, focused on what changed
     assert len(picking.pickers()) == 2  # v2's pick stands
     b = shown(picking)
-    assert (b["unreviewed"], b["unapprovable"], b["versions"]["versions"][1]["actions"]) == (False, "", ["approve"])
+    assert (b["unreviewed"], b["approve_off"], b["versions"]["versions"][1]["actions"]) == (False, "", ["approve"])
     assert picking.approve(2).json() == {"accepted": "brief-approval"}  # no tick
     assert picking.approved().brief.approved_version == 2
 
@@ -211,7 +211,7 @@ def test_one_more_challenge_with_findings_sends_the_version_to_the_shaper(pickin
         "the shaper revises brief v2 for F2", status.CONTINUE
     )  # fmt: skip
     b = shown(picking)
-    assert (b["revising"], b["unapprovable"], b["versions"]["versions"][1]["state"]) == (
+    assert (b["revising"], b["approve_off"], b["versions"]["versions"][1]["state"]) == (
         ["F2"], "the shaper revises brief v2 for F2", "findings"
     )  # fmt: skip
     assert again(picking, 2).status_code == 409

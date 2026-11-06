@@ -49,7 +49,7 @@ def test_c1_lists_v2_and_v3_challenged_and_v4_not(c1):
         (3, "findings", ["Challenge 2"], []),
         (4, "unreviewed", [], ["approve", "challenge"]),
     ]
-    assert (d["brief"]["versions"]["legacy"], d["brief"]["unreviewed"], d["brief"]["unapprovable"]) == ("", True, "")
+    assert (d["brief"]["versions"]["legacy"], d["brief"]["unreviewed"], d["brief"]["approve_off"]) == ("", True, "")
     assert [v["word"] for v in d["brief"]["versions"]["versions"]][1:] == ["findings", "findings", "not challenged"]
     assert d["plan_versions"] == {"versions": [], "legacy": ""}
 

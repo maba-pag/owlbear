@@ -39,23 +39,28 @@ from owlbear_delivery_next.change_contracts.preparation import BASE, Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_contracts.visual_records import VisualResult
-from owlbear_delivery_next.change_flow import brief_rounds, delivery_target, loop, worktree
+from owlbear_delivery_next.change_flow import brief_rounds, brief_starts, delivery_target, loop, worktree
+from owlbear_delivery_next.change_flow.brief_tools import BriefDraft
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity, status
 from owlbear_delivery_next.commands import cli, runner
 from owlbear_delivery_next.local_system import codebase, processes
 from owlbear_delivery_next.local_system.storage_io import open_lock
-from owlbear_delivery_next.project_host import api, host
+from owlbear_delivery_next.project_host import api, brief_routes, host
 from owlbear_delivery_next.project_host.host import Host, RunnerRecord
 from owlbear_delivery_next.runtimes import command_marks
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import Layer
-from owlbear_delivery_next.state_store import machine_settings, step_pids, work_block
+from owlbear_delivery_next.state_store import briefs, machine_settings, step_pids, work_block
 from owlbear_delivery_next.state_store.database import put_record
 from owlbear_delivery_next.state_store.store import ACTIVITY_LIMIT, Store, StoreError
 from owlbear_delivery_next.workflow_steps import check, disposable, prepare
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
+DRAFT = {
+    "title": "Greet", "outcome": "greet(name) says hello in the app package.",
+    "criteria": ["greet('Ada') returns 'Hello, Ada!'"], "scope": ["packages/app"],
+}  # fmt: skip
 
 
 @pytest.fixture
@@ -1226,3 +1231,106 @@ def test_a_running_steps_stage_reaches_the_status_and_owlbear_status_from_the_st
             assert f"c1: {line}" in cli.show_status(store, now).splitlines()
     finally:
         os.close(host_fd)
+
+
+def briefed(fake, *, approving: bool = False) -> Change:
+    """Brief v2 saved after its loop ended on v1 (#986); *approving*: its round ended clean, the owner approving."""
+    policy = RoundPolicy(max_rounds=3, max_findings=10, last_round_at=4, ask_owner_at=7)
+    head, reason = ("2", "approve brief v2") if approving else ("1", "challenge brief v2, then approve it")
+    ended = RoundLoop(subject=BRIEF, policy=policy, round=2, ended="clean", head=head)
+    brief = Brief(version=2, challenged=int(head), requested=int(head), approve_if_clean=2 if approving else None)
+    return Change(
+        slug="c1", handle="c1", brief=brief, loops={BRIEF: ended}, step=Step(kind=StepKind.SHAPE),
+        outcome=Outcome(exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", reason=reason, at=NOW),
+        names=Names(worktree=fake.worktree),
+    )  # fmt: skip
+
+
+def test_a_brief_version_saved_after_its_loop_ended_has_its_challenge_started_after_the_shapers_wait(store, tmp_path):
+    fake = Fake(store, tmp_path)
+    save(store, briefed(fake))
+    assert fake.host.tick(NOW) == []
+    assert store.read("c1").outcome.wake_at == NOW + timedelta(minutes=15)  # the save's time and the shaper's wait
+    with store.lock("c1") as lock:  # a new save restarts the wait
+        store.write(lock, briefs.drafted(store.read("c1"), BriefDraft.model_validate(DRAFT), "c1", "c1", Profile()))
+    saved = store.read("c1").outcome
+    assert (saved.wake_at, saved.at > NOW) == (None, True)
+    assert fake.host.tick(NOW) == []
+    assert store.read("c1").outcome.wake_at == saved.at + timedelta(minutes=15)
+    assert fake.host.tick(saved.at + timedelta(minutes=14)) == []
+    assert fake.host.tick(saved.at + timedelta(minutes=15)) == ["c1"]
+    c = store.read("c1")
+    assert (c.step.mode, c.brief.requested, c.loops[BRIEF].ended, c.outcome) == ("challenge", 3, "", None)
+
+
+@pytest.mark.parametrize("pause", ["delivery", "change"])
+def test_no_brief_challenge_starts_by_itself_while_delivery_or_the_change_is_paused(store, tmp_path, pause):
+    fake, flag, later = Fake(store, tmp_path), [True], NOW + timedelta(minutes=16)
+    save(store, briefed(fake))
+    if pause == "delivery":
+        paused(fake, flag)
+    else:
+        store.put_inbox("c1", IntentItem(at=NOW, intent="pause"))
+    assert fake.host.tick(later) == []
+    c = store.read("c1")
+    assert (c.step.mode, c.brief.requested, c.outcome.wake_at) == (None, 1, NOW + timedelta(minutes=15))
+    if pause == "delivery":
+        flag[0] = False
+    else:
+        store.put_inbox("c1", IntentItem(at=later, intent="resume"))
+    assert fake.host.tick(later) == ["c1"]
+    assert store.read("c1").step.mode == "challenge"
+
+
+def test_no_start_time_is_set_while_the_shapers_wait_is_unset(store, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.BASE.agents["shaper"], "challenge_wait", None)
+    fake = Fake(store, tmp_path)
+    save(store, briefed(fake))
+    assert fake.host.tick(NOW + timedelta(days=1)) == []
+    assert store.read("c1").outcome.wake_at is None
+
+
+def test_a_refused_approval_the_owner_asked_for_waits_for_him_with_its_whole_reason(store, tmp_path, monkeypatch):
+    why = "brief v2 cannot be approved yet: the decision list could not be read: OSError: [Errno 5] /data: offline"
+    monkeypatch.setattr(brief_routes, "approved", lambda *_a: why)
+    fake = Fake(store, tmp_path)
+    save(store, briefed(fake, approving=True))
+    assert fake.host.tick(NOW) == []
+    c = store.read("c1")
+    assert (c.brief.approve_if_clean, c.brief.approved_version, c.outcome.cause) == (None, None, brief_starts.REFUSED)
+    assert c.outcome.reason == f"approve brief v2: the approval you asked for was refused: {why}"
+    http = client(store, fake)  # where it surfaces: the approval panel, Approve usable again, and the list, whole
+    brief = http.get("/api/next/changes/c1").json()["brief"]
+    assert (brief["approve_refused"], brief["approve_off"]) == (c.outcome.reason, "")
+    (row,) = http.get("/api/next/changes").json()
+    assert (row["error"], row["line"].endswith(why)) == (True, True)
+
+
+def test_an_abandonment_queued_during_the_challenge_publishes_nothing(store, tmp_path, monkeypatch):
+    called = []
+    monkeypatch.setattr(brief_routes, "approved", lambda *a: called.append(a) or "")
+    fake = Fake(store, tmp_path)
+    save(store, briefed(fake, approving=True))
+    store.put_inbox("c1", IntentItem(at=NOW, intent="abandon"))  # pressed while the round ran
+    fake.host.tick(NOW)
+    c = store.read("c1")
+    assert (c.step.kind, c.brief.approved_version) == (StepKind.CLEANUP, None)
+    assert (called, c.decisions_published) == ([], [])
+
+
+def test_an_approval_killed_before_it_is_written_is_made_by_the_next_pass(store, tmp_path, monkeypatch):
+    fake, real = Fake(store, tmp_path), brief_routes.approved
+    save(store, briefed(fake, approving=True))
+
+    def killed(*_a: object) -> str:
+        raise KeyboardInterrupt  # the host process, killed in the middle of its pass
+
+    monkeypatch.setattr(brief_routes, "approved", killed)
+    with pytest.raises(KeyboardInterrupt):
+        fake.host.tick(NOW)
+    assert store.read("c1").brief.approve_if_clean == 2  # still the owner's: no press is lost
+    monkeypatch.setattr(brief_routes, "approved", real)
+    fake.host.tick(NOW)
+    c = store.read("c1")
+    assert (c.brief.approved_version, c.brief.approve_if_clean, c.step.kind) == (2, None, StepKind.PLAN)
+    assert c.brief.approved[-1].approve_if_clean is None  # consumed with the approval, never kept in its copy

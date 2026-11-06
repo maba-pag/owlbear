@@ -1,7 +1,7 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
-import { here } from "/assets/ui.mjs";
+import { here, machineState } from "/assets/ui.mjs";
 import { DIALOG, state, send, starts, draft } from "./state.mjs";
-import { button, field, hd, text, list, panel, info, row, toggle } from "./widgets.mjs";
+import { button, field, hd, text, list, panel, info, refusal, row, toggle } from "./widgets.mjs";
 import { merging } from "./forms.mjs";
 import { reviseBrief } from "./shaping.mjs";
 import { detailsOn } from "./details.mjs";
@@ -165,12 +165,39 @@ export function reviseButton(d) {
 function approveButton(d) {
   const version = d.brief.version, key = `${d.key}:approve:${version}`;
   const start = async () => {
-    if (await ask(approving(d))) {
+    if (await ask(d.brief.challenge_waits ? challengeFirst(d) : approving(d))) {
       send("/approve-brief", { version, unreviewed: Boolean(d.brief.unreviewed) }, d, key);
     }
   };
   return button(`Approve v${version}`, start,
-    { icon: "check", aria: DIALOG, disabled: Boolean(d.brief.unapprovable), ...starts(d) });
+    { icon: "check", aria: DIALOG, disabled: Boolean(d.brief.approve_off), ...starts(d) });
+}
+
+// When Delivery starts a waiting version's challenge, in the owner's time; a pause of Delivery holds it until Resume.
+function startsWhen(d) {
+  const at = d.brief.starts_at  // HH:MM in the owner's time, as the status line says it
+    ? `at ${new Date(d.brief.starts_at).toLocaleTimeString("en-GB", { timeStyle: "short" })}`
+    : "after the wait set in Settings";
+  return machineState()?.paused ? `${at}, after you resume` : at;
+}
+
+// #986: a version saved after its loop ended waits for the challenge Delivery starts; Approve starts it now.
+function waitLine(d) {
+  const v = d.brief.version;
+  if (d.paused) return `Brief v${v}'s challenge starts by itself after you resume this Change; resume it to approve`;
+  return `Brief v${v}'s challenge starts by itself ${startsWhen(d)}; Approve starts it now and approves it if it is `
+    + "clean";
+}
+
+// Approve on such a version: its challenge first, then the approval today's dialog describes, if nothing was found.
+function challengeFirst(d) {
+  const v = d.brief.version, base = approving(d);
+  return { ...base, title: `Approve brief v${v} once its challenge is clean?`, yes: "Challenge and approve",
+    now: `A challenger reads brief v${v} at once, even while paused, using AI credits. Nothing is approved yet.`,
+    then: `If it finds nothing: ${base.now} That happens without another step from you, even while paused. `
+      + `${base.then} If it finds something, the shaper revises the brief in the shaping chat and v${v} stays `
+      + "unapproved.",
+    instead: `The challenge starts by itself ${startsWhen(d)}; you approve after it.` };
 }
 
 // One more challenge of the current version, whose revision after its last challenge no challenger read (#966).
@@ -196,7 +223,7 @@ function challengeButton(d) {
 
 export function approval(d) {
   const version = d.brief.version, key = `${d.key}:approve:${version}`, on = detailsOn();
-  const why = d.brief.unapprovable;  // TD-249: off until its challenge loop ended on this version
+  const why = d.brief.challenge_waits ? "" : d.brief.approve_off;  // TD-249: off until its loop ended on this version
   const act = (v) => [v.actions.includes("approve") ? approveButton(d) : nothing,
     v.actions.includes("challenge") ? challengeButton(d) : nothing];
   return panel(`Brief v${version}${d.brief.title ? `: ${d.brief.title}` : ""}`, key,
@@ -206,7 +233,9 @@ export function approval(d) {
       + "details; your own choices stay yours to change. Approval authorises work within this brief, not new "
       + `product commitments. To change the brief before approving, ${d.brief.unrevisable === ""
         ? "revise it in a new chat or in the shaping chat" : "return to the shaping chat"}.`),
+    d.brief.challenge_waits ? text(`${waitLine(d)}.`, { weight: "semibold" }) : nothing,
     why ? text(`Not yet: ${why}.`, { weight: "semibold" }) : nothing,
+    d.brief.approve_refused ? refusal(d.brief.approve_refused) : nothing,
     versionList(d.brief.versions, "Versions", act),
     d.brief.revising.length ? nothing : row(reviseButton(d)));  // while the shaper revises, Open items offers it
 }

@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.decision_records import Pick
 from owlbear_delivery_next.change_contracts.dispute_tools import ReconsiderResult
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
 from owlbear_delivery_next.change_contracts.models import (
     Answer,
     Brief,
@@ -26,7 +26,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK, RoundLoop, RoundPolicy, Verdict
-from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop, plan_rounds, status
+from owlbear_delivery_next.change_flow import brief_rounds, brief_starts, brief_tools, loop, plan_rounds, status
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import chat_client, runner
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -176,12 +176,41 @@ def test_a_save_after_the_loop_ended_needs_one_more_round_on_the_changes(shaping
     assert shaping.step().brief.challenged == 1
     assert "challenged already" in shaping.ask_challenge(1).json()["detail"]
     assert shaping.save(title="Add a farewell")["version"] == 2
-    assert shaping.approve(2).status_code == 409
-    shaping.ask_challenge(2)
+    for intent in ("pause", "resume"):  # a paused Change's round could not run, so its Approve waits for Resume
+        if intent == "resume":
+            assert shaping.approve(2).json()["detail"] == "this Change is paused: resume it to approve"
+        shaping.store.put_inbox(shaping.slug, IntentItem(at=datetime.now(UTC), intent=intent))
+        shaping.store.fold(Lock(shaping.slug), shaping.slug, datetime.now(UTC))
+    assert shaping.approve(2).json() == {"accepted": "brief-challenge"}  # the owner's Approve starts the round (#986)
     c = shaping.step()
     assert "## Focus" in shaping.told[-1].message
     assert (c.brief.challenged, c.loops[BRIEF].round, c.loops[BRIEF].ended) == (2, 2, "clean")
+    assert (c.brief.approve_if_clean, c.brief.approved_version) == (2, None)  # the host approves it on its next pass
     assert c.loops[BRIEF].verdicts == [Verdict(round=1, version=1), Verdict(round=2, version=2)]
+    assert brief_starts.approving(c)
+    shaping.save(title="Add a farewell, kindly")
+    assert not brief_starts.approving(shaping.change())  # a later save leaves it on its own version
+    assert shaping.approve(3).json() == {"accepted": "brief-challenge"}
+    shaping.verdicts += [verdict("AC-1")]
+    c = shaping.step()
+    assert (c.brief.approve_if_clean, brief_starts.approving(c)) == (None, False)  # findings: the shaper revises
+
+
+def test_a_version_saved_after_the_loop_ended_waits_for_the_challenge_delivery_starts(shaping):
+    shaping.save()
+    assert not brief_starts.waiting(shaping.change())  # a first draft: no loop ended yet, the shaper asks
+    shaping.ask_challenge(1)
+    assert not brief_starts.waiting(shaping.change())  # its challenge runs
+    shaping.verdicts += [verdict("AC-1")]
+    shaping.step()
+    shaping.save(title="Add a farewell")
+    assert not brief_starts.waiting(shaping.change())  # the loop goes on: the shaper revises for F1
+    shaping.ask_challenge(2)
+    shaping.verdicts += [verdict()]
+    assert shaping.step().brief.challenged == 2
+    assert not brief_starts.waiting(shaping.change())  # the loop ended on this version: approvable
+    shaping.save(title="Add a farewell, kindly")
+    assert brief_starts.waiting(shaping.change())
 
 
 def test_the_last_allowed_round_with_many_findings_asks_the_owner(shaping):

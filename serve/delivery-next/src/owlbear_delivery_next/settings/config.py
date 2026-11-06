@@ -27,7 +27,7 @@ from owlbear_delivery_next.github.provider import MergeMethod  # noqa: TC001 - p
 from owlbear_delivery_next.settings import improvement
 from owlbear_delivery_next.settings.improvement import Spotter
 
-CONFIG_FORMAT = 22  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
+CONFIG_FORMAT = 23  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
 # 8 the test reviewer and curator roles; 9 the watcher's role and switch; 10 no code defaults; 11 Global's machine part;
 # 12 the watcher became the Spotter (role and settings), with the retro roles (2026-10-25);
 # 13 the five unset-by-default preferences and their one-time import marker;
@@ -39,7 +39,8 @@ CONFIG_FORMAT = 22  # 3 renamed the designer to design-judge (TD-169); 4 minutes
 # 19 Copilot Memory in Delivery's sessions (D-01M69EBRBBW97001KZ43C0BJM1);
 # 20 the shell guard's level (D-01M6DX04FRP680Z4GGHK5B9VRC);
 # 21 the memory values Global holds: the ratings' points, the stale factor, the purge age and the recall limits;
-# 22 the account a project's GitHub writes are made by (TD-402)
+# 22 the account a project's GitHub writes are made by (TD-402);
+# 23 the shaper's wait before Delivery starts a missing brief challenge (D-01M6P1685N1R5W2PPV5SHKR2H0)
 CARRIED_FORMAT = 10  # a Global layer below it has not had the built-in values carried in (``settings_carry.carry``)
 ROLES: tuple[Role, ...] = get_args(Role.__value__)
 type Source = Literal["default", "global", "machine", "project", "builder"]
@@ -48,6 +49,7 @@ type Curate = Literal["off", "on", "paused"]  # an automatic curation trigger: o
 HOURS = 720  # the longest update check interval: 30 days
 WIDTHS = (1280, 2400)  # the allowed screenshot width range (R7)
 MINUTES = (1, 480)  # the allowed session time limit range (TD-286)
+DAY = 1440  # the longest wait, in minutes, before Delivery starts a missing brief challenge
 LABEL = 50  # GitHub's longest label name
 PURGE_DAYS = 3650  # the longest wait before a deleted memory entry's files are purged: ten years
 type Worth = Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)]  # what a memory rating is worth
@@ -67,6 +69,7 @@ class Agent(Record):
     ask_owner_at: int | None = None
     minutes: int | None = None  # TD-286: one session's total running time
     subagents: bool | None = None  # TD-374, TD-376: its sessions may start built-in subagents
+    challenge_wait: int | None = Field(default=None, ge=1, le=DAY)  # the shaper's: minutes before a brief challenge
 
     @field_validator("model")
     @classmethod
@@ -261,6 +264,7 @@ class Effective(Record):
     ask_owner_at: int | None
     minutes: int | None
     subagents: bool | None
+    challenge_wait: int | None
 
     @model_validator(mode="after")
     def _rounds(self) -> Effective:
@@ -278,7 +282,8 @@ TIMED = ("minutes", "subagents")
 def used(role: Role) -> tuple[str, ...]:
     """The fields *role*'s work reads and needs set."""
     timed = () if role in UNTIMED else TIMED
-    return ("model", "effort", "context", *timed, *(tuple(RoundPolicy.model_fields) if role in LOOPED else ()))
+    rounds = tuple(RoundPolicy.model_fields) if role in LOOPED else ()
+    return ("model", "effort", "context", *timed, *rounds, *(("challenge_wait",) if role == "shaper" else ()))
 
 
 def settable(role: Role) -> tuple[str, ...]:

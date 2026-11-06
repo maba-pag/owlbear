@@ -387,6 +387,9 @@ def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(store, p
             expect(page.locator("#unset")).to_be_visible()
 
 
+WAIT = "Challenge starts by itself after (minutes), shaper"  # the shaper's wait's cell (#986)
+
+
 @pytest.mark.browser
 def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row_shows_every_row(
     store, pds, monkeypatch
@@ -422,9 +425,12 @@ def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row
         )
         pds.group(page, "agents")
         page.get_by_label("Rounds at most, builder").fill("4")
+        page.get_by_label(WAIT).fill("20")  # the shaper's row alone has the cell; the others say n/a
+        assert min(page.get_by_label(WAIT).bounding_box()[side] for side in ("width", "height")) >= 24  # WCAG 2.5.8
+        expect(page.locator("#set-rounds-planner")).to_contain_text("n/a")
         pds.pick(page, "Show", "unsaved")
-        expect(rows).to_have_count(2)  # the final review follows the builder's rounds, so it changes too
-        expect(page.locator("#set-rounds-builder, #set-rounds-final_review")).to_have_count(2)
+        expect(rows).to_have_count(3)  # the final review follows the builder's rounds, so it changes too
+        expect(page.locator("#set-rounds-builder, #set-rounds-final_review, #set-rounds-shaper")).to_have_count(3)
         pds.group(page, "checks")
         expect(none).to_have_text("No unsaved edits in this group.")
         pds.group(page, "agents")
@@ -433,8 +439,8 @@ def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         expect(rows).to_have_count(0)  # saved: no longer an edit
         pds.pick(page, "Show", "set")
-        expect(rows).to_have_count(1)  # this project sets the builder's rounds, nothing else
-        expect(page.locator("#set-rounds-builder")).to_be_visible()
+        expect(rows).to_have_count(2)  # this project sets the builder's rounds and the shaper's wait, nothing else
+        expect(page.locator("#set-rounds-builder, #set-rounds-shaper")).to_have_count(2)
         pds.pick(page, "Layer", "global")
         expect(rows).to_have_count(0)
         expect(none).to_have_text("This layer sets nothing in this group.")

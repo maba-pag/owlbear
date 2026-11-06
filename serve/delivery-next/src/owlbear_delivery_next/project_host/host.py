@@ -29,7 +29,7 @@ from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import codebase, data_repo, maintenance, processes
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.project_host import environment, launch_gate, leftovers, session_slots
+from owlbear_delivery_next.project_host import brief_timer, environment, launch_gate, leftovers, session_slots
 from owlbear_delivery_next.project_host.runner_end import Found, disappeared, gone
 from owlbear_delivery_next.project_host.runner_end import block as _block
 from owlbear_delivery_next.project_host.runner_end import unverified as _unverified
@@ -291,6 +291,7 @@ class Host:
         with self.store.lock(slug) as lock:
             c = self._folded(lock, slug, rec, now, paused=paused)
             settle_checks(self.store, c, now)  # another Change's answer settled the project's checks (#968)
+            c = brief_timer.passed(self.store, lock, c, now, paused=paused)  # #986, before the pause decides
             if paused:
                 if not (self.owner_runs() and passes(c, now)):
                     return self._ended(lock, c, rec, now)
