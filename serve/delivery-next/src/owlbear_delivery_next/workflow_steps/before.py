@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change, VisualState
     from owlbear_delivery_next.change_contracts.profile_record import Profile
     from owlbear_delivery_next.change_contracts.visual_records import DetectorScan
+    from owlbear_delivery_next.impeccable.pack_files import Installed
 
 
 def due(c: Change) -> bool:
@@ -82,8 +83,12 @@ def _serve(  # noqa: PLR0913, PLR0917 - the recipe, its states and where they re
     widths: Sequence[int],
     where: str,
     prepare: Prepare | None = None,
+    pack: Installed | None = None,
 ) -> list[visual.Shot]:
-    """Prepare the test copy, launch *recipe* in *root*, capture its states, dispose of all it started."""
+    """Prepare the test copy, launch *recipe* in *root*, capture its states, dispose of all it started.
+
+    With *pack*, the design detector scans each page; only the check's "before" needs that.
+    """
     e = Environment(
         check=VISUAL, command=recipe.command, directory=recipe.directory, ready_url=recipe.ready_url,
         port=check.free_port(),
@@ -112,7 +117,7 @@ def _serve(  # noqa: PLR0913, PLR0917 - the recipe, its states and where they re
         check.journal(log, pids)
         shown = [s for s in states if prepare or not s.steps]  # steps run only on a test copy (TD-96)
         notes += [f"{s.name}: its steps need a test preparation" for s in states if s not in shown]
-        return visual.CAPTURE(visual.root(check.url(e)), shown, out, widths, pack=design.pack())
+        return visual.CAPTURE(visual.root(check.url(e)), shown, out, widths, pack=pack)
     finally:
         if left := check.dispose(e):
             notes.append(f"preview processes {sorted(left)} did not stop")
@@ -131,6 +136,7 @@ def _render(  # noqa: PLR0913, PLR0917 - what is rendered where, and the hooks a
     where: str,
     prepare: Prepare | None = None,
     inside: Inside | None = None,
+    pack: Installed | None = None,
 ) -> tuple[list[visual.Shot], list[str]]:
     """Render *states* at *base* in a throwaway worktree; *inside* runs in it, even after a failure, before removal."""
     shots: list[visual.Shot] = []
@@ -147,7 +153,7 @@ def _render(  # noqa: PLR0913, PLR0917 - what is rendered where, and the hooks a
                 notes.append(note)
                 break
         else:
-            shots = _serve(recipe, states, tmp, out, log, notes, widths=widths, where=where, prepare=prepare)
+            shots = _serve(recipe, states, tmp, out, log, notes, widths=widths, where=where, prepare=prepare, pack=pack)
     except Exception as exc:  # noqa: BLE001 - a capture never gates the Change (B25)
         notes.append(worktree.failure(exc))
     finally:
@@ -212,7 +218,7 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
     scope = sorted({p for t in (c.plan.tasks if c.plan else []) for p in t.scope} | set(c.brief.scope))
     shots, notes = _render(
         repo, base, c.brief.recipe or e, c.brief.visual, out_for(base), log, installs=worktree.installs(profile, scope),
-        widths=widths, where="the merge-base", prepare=prepare, inside=scan,
+        widths=widths, where="the merge-base", prepare=prepare, inside=scan, pack=design.pack(),
     )  # fmt: skip
     return _result(c, base, tree, shots, notes, widths, scans=sources, at=now)
 
