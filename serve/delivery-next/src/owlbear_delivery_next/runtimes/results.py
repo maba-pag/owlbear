@@ -77,7 +77,6 @@ class Gate:
             self.run.ending, self.run.payload, self.run.head, self.run.detail = "error", None, None, detail
             self.run.classified = ""
             self.run.changed = []
-            self.run.changed = []
         self.ended()
 
     def wrong_model(self, detail: str) -> None:
