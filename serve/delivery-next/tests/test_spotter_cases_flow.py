@@ -1136,8 +1136,12 @@ def test_a_replay_refused_by_its_run_or_its_job_keeps_the_whole_reason(monkeypat
     rid = queue_regression()
     if refusal == "a case's card":  # the run's own catcher
         [cid, *_] = case_replay.queued()[0]["frozen"]
-        (cases.place() / "cards" / f"{cid}.json.gz").write_bytes(b"no")
-        why = f"CaseError: the card of case {cid} cannot be read: BadGzipFile: Not a gzipped file (b'no')"
+        card = cases.place() / "cards" / f"{cid}.json.gz"
+        card.write_bytes(b"no")
+        why = (
+            f"CaseError: the card of case {cid} cannot be read: BadGzipFile: Not a gzipped file (b'no')\n"
+            f"reading case {cid}'s card {card}"
+        )
     else:  # the job's catcher, for a refusal the run raises before it keeps a result
 
         async def refused(*_args: Any) -> None:
