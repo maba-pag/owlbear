@@ -150,7 +150,9 @@ Never raises on malformed input (lenient read contract).
 When supplied, `read_errors` collects each skipped file's safe typed diagnostic, keyed by the
 supplied path. Valid reads leave the collector unchanged. Validation details include parser kind
 and position or schema location and error code, never private YAML snippets, invalid values or
-Pydantic input/context. Operational read failures retain their type, message, path and notes.
+Pydantic input/context. YAML constructor failures retain their kind, not rejected scalars;
+unknown property names and raw validation exception chains are omitted too.
+Operational read failures retain their type, message, path and notes.
 
 ### `read_entry_strict(path: Path) -> MemoryEntry`
 

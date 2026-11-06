@@ -34,12 +34,15 @@ def _yaml() -> YAML:
 def _pydantic_error_detail(error: PydanticValidationError) -> str:
     fields: list[str] = []
     for item in error.errors(include_url=False, include_context=False, include_input=False):
-        location = ".".join(str(part) for part in item.get("loc", ())) or "entry"
+        parts = item.get("loc", ())
+        if item.get("type") in {"extra_forbidden", "invalid_key"}:
+            parts = parts[:-1]  # An unknown mapping key is input, not a schema field.
+        location = ".".join(str(part) for part in parts) or "entry"
         fields.append(f"{location} ({item.get('type', 'invalid')})")
     return f"schema validation failed ({type(error).__name__}): " + ", ".join(fields)
 
 
-def _yaml_error_detail(error: YAMLError) -> str:
+def _yaml_error_detail(error: Exception) -> str:
     positions = [
         f"{label}: line {mark.line + 1}, column {mark.column + 1}"
         for label in ("context_mark", "problem_mark")
@@ -74,7 +77,10 @@ def read_entry(path: Path, *, read_errors: dict[str, str] | None = None) -> Memo
 
 
 def _parse_frontmatter(frontmatter_raw: str) -> dict[str, Any]:
-    data = _yaml().load(frontmatter_raw)
+    try:
+        data = _yaml().load(frontmatter_raw)
+    except (YAMLError, ValueError, TypeError, KeyError, OverflowError) as exc:
+        raise ValueError(_yaml_error_detail(exc)) from None
     if data is None:
         return {}
     if not isinstance(data, dict):
@@ -126,14 +132,12 @@ def read_entry_bytes_strict(raw: bytes) -> MemoryEntry:
         return _read_entry_bytes(raw)
     except UnicodeDecodeError as exc:
         msg = f"file is not valid UTF-8 ({type(exc).__name__} at byte {exc.start})"
-        raise ValueError(msg) from exc
-    except YAMLError as exc:
-        raise ValueError(_yaml_error_detail(exc)) from exc
+        raise ValueError(msg) from None
     except TypeError as exc:
         msg = diagnostic(exc)
-        raise ValueError(msg) from exc
+        raise ValueError(msg) from None
     except PydanticValidationError as exc:
-        raise ValueError(_pydantic_error_detail(exc)) from exc
+        raise ValueError(_pydantic_error_detail(exc)) from None
 
 
 def _serialize_entry(entry: MemoryEntry) -> bytes:
