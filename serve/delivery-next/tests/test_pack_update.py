@@ -665,10 +665,7 @@ def test_the_cli_replay_reaches_a_host_from_before_the_impeccable_rename_once_by
     assert len(_Answers.seen) == 1  # only a 404 means the route is missing; a refusal is never sent again
 
 
-@pytest.mark.parametrize("failure_kind", ["timeout", "failed", "noted"])
-def test_the_cli_runs_each_update_tool_and_reports_failures(
-    repo, capsys, monkeypatch, whole_error, failure_kind
-) -> None:
+def test_the_cli_runs_each_update_tool_and_reports_failures(repo, capsys, monkeypatch) -> None:
     assert cli.main(["--repo", str(repo), "impeccable", "--check"]) == 0
     assert capsys.readouterr().out == f"Impeccable ({pack_files.manifest()['pack']}): releases upstream unknown\n"
     assert cli.main(["--repo", str(repo), "impeccable", "--golden"]) == 1
@@ -682,6 +679,11 @@ def test_the_cli_runs_each_update_tool_and_reports_failures(
     assert "CalledProcessError" in capsys.readouterr().out
     with pytest.raises(SystemExit):
         cli.main(["--repo", str(repo), "impeccable", "--diff", str(repo)])
+
+
+@pytest.mark.parametrize("failure_kind", ["timeout", "failed", "noted"])
+def test_the_cli_reports_each_diff_failure_whole(repo, capsys, monkeypatch, whole_error, failure_kind) -> None:
+    pin(monkeypatch, git(repo, "rev-parse", "HEAD"))
     real = subprocess.run
     seen = []
 
