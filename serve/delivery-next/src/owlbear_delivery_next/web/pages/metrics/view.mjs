@@ -87,6 +87,12 @@ function exactness(t, undated) {
   const runs = (n) => `${count(n)} run${n === 1 ? "" : "s"}`;
   // each failed read's error, whole, after the item that counts its run (#971)
   const why = (errors) => (errors || []).map((e) => html`<span class="why">${e}</span>`);
+  const shown = new Set([
+    ...(t.unknown_why || []), ...(t.failed_why || []),
+    ...(undated?.unknown_why || []), ...(undated?.failed_why || []),
+  ]);
+  const earlier = [...new Set([...(t.read_errors || []), ...(undated?.read_errors || [])])]
+    .filter((error) => !shown.has(error));
   const items = [
     t.unknown ? html`${runs(t.unknown)} did not report ${t.unknown === 1 ? "its" : "their"} credits: they count as
       unknown, never as zero, so the total is a lower bound.${why(t.unknown_why)}` : "",
@@ -102,6 +108,8 @@ function exactness(t, undated) {
     undated ? html`Spend of ${runs(undated.runs)} may also lie in this period (${outside(undated)}): when it was spent
       is not known closely enough to say, so it is not counted.${why(undated.unknown_why)}${why(undated.failed_why)}`
       : "",
+    earlier.length ? html`Earlier usage reads failed. The totals use the latest accounting; these errors do not
+      add spend.${why(earlier)}` : "",
   ].filter(Boolean);
   return html`<p-heading size="md"><h3 id="exact-title">How exact these totals are</h3></p-heading>
     <ul id="exact" class="notes" aria-labelledby="exact-title">${items.length ? items.map((i) => html`<li>${i}</li>`)

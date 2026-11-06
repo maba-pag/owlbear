@@ -73,7 +73,7 @@ class Reader:
             try:
                 self.read()
             except Exception as exc:  # noqa: BLE001 - a failed pass is said; the next hour reads again
-                self.say(f"settings read: the read failed: {type(exc).__name__}: {exc}")
+                self.say(f"settings read: the read failed: {failure(exc)}")
             if self.pause(stopping, EVERY):
                 return
 

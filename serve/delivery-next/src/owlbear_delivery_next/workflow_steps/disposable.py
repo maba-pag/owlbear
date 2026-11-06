@@ -115,10 +115,7 @@ def _hook(p: Path) -> str:
 
 def tampered(copy: Copy) -> list[str]:
     """Shared config entries and hooks added, changed or removed since the copy was made (TD-146)."""
-    try:
-        now = _shared(copy.source)
-    except (OSError, subprocess.SubprocessError) as exc:
-        return [f"the shared Git config and hooks could not be read: {worktree.failure(exc)}"]
+    now = _shared(copy.source)
     added, removed = Counter(now) - Counter(copy.shared), Counter(copy.shared) - Counter(now)
     found = [f"added {e}" for e in sorted(added.elements())] + [f"removed {e}" for e in sorted(removed.elements())]
     return found or (["reordered shared config entries"] if now != copy.shared else [])

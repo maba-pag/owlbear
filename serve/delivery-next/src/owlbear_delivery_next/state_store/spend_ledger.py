@@ -123,16 +123,19 @@ def started(  # noqa: PLR0913 - the run, its session and what it is
 def ended(  # noqa: PLR0913 - the run, its session and how it ended
     run: str, session: str, *, usage: dict[str, Any], ending: str, limit: float | None = None, stopped: str = "",
           stopped_by: str = "", subagents: int = 0, place: Where | None = None, look: str = "",
-          tools: dict[str, dict[str, int]] | None = None, wrong: dict[str, int] | None = None) -> None:  # fmt: skip
+          tools: dict[str, dict[str, int]] | None = None, wrong: dict[str, int] | None = None,
+          read_error: str = "") -> None:  # fmt: skip
     """A run's lifecycle ended: its session's cumulative *usage* (``{"error": …}`` unread), how and why it stopped.
 
     *stopped* is one of ``STOPS``; *stopped_by* names the limit's scope that stopped it, as the credit meter does.
     A run Delivery's gate measured carries its *tools* tally and *wrong* tool choices, even empty (C-28 T8).
+    A failed usage read's *read_error* remains history when reconciliation replaces its accounting.
     """
     measured = {"tools": tools, "wrong": wrong} if tools is not None and wrong is not None else {}
+    history = {"read_error": read_error} if read_error else {}
     put({"id": f"end:{run}", "type": "end", "run": run, "at": _now(), "session": session, "usage": usage,
          "ending": ending, "limit": limit, "stopped": stopped, "stopped_by": stopped_by, "subagents": subagents,
-         **_placed(place)} | {"job": ""} | ({"look": look} if look else {}) | measured)  # fmt: skip
+         **_placed(place)} | {"job": ""} | ({"look": look} if look else {}) | measured | history)  # fmt: skip
 
 
 class _Writer:

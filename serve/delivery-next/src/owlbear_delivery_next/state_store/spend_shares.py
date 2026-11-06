@@ -278,6 +278,7 @@ def _base(run: dict[str, Any]) -> dict[str, Any]:
         "incomplete": incomplete,
         "failed": failed,
         "why": str(usage.get("error", why if failed else "")),  # the failed read's error (#971)
+        **({"read_error": run["read_error"]} if run.get("read_error") else {}),
     }
 
 

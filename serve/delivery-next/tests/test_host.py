@@ -507,7 +507,7 @@ def environment(store, fake, monkeypatch, **env):
         calls["dispose"].append(dict(e.pids))
         return calls["left"].pop(0) if calls["left"] else {}
 
-    def ready(e, _proc):
+    def ready(e, _proc, **_kw):
         calls["durable"] = store.read("c1").env  # the group is recorded before readiness is awaited
         return e.pids | {901: 2.0}
 
@@ -623,7 +623,7 @@ def test_a_failed_launch_forgets_the_recipe_so_an_agent_prepares_again(store, tm
     c = store.read("c1")
     c.recipe = RECIPE
     save(store, c)
-    monkeypatch.setattr(check, "ready", lambda _e, _proc: None)
+    monkeypatch.setattr(check, "ready", lambda _e, _proc, **_kw: None)
     assert fake.host.tick(NOW) == []
     after = store.read("c1")
     assert (after.recipe, after.env, after.outcome.exit) == (None, None, Exit.RETRY)
@@ -633,7 +633,7 @@ def test_a_leader_gone_before_readiness_leaves_its_members_recorded_for_disposal
     fake = Fake(store, tmp_path)
     calls = environment(store, fake, monkeypatch)
     calls["left"] = [{}, {902: "node"}]  # the launch's own clearing, then the failed launch's
-    monkeypatch.setattr(check, "ready", lambda _e, _proc: None)
+    monkeypatch.setattr(check, "ready", lambda _e, _proc, **_kw: None)
     monkeypatch.setattr(check, "taken", lambda e, leader: e.pids | ({902: 3.0} if leader == Proc.pid else {}))
     fake.host.tick(NOW)
     assert calls["dispose"][-1] == {900: 2.0, 902: 3.0}

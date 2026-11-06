@@ -21,7 +21,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.state_store.database import RETRY, BusyError, StoreError
+from owlbear_delivery_next.state_store.database import RETRY, BusyError, StoreError, append_activity
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -47,6 +47,12 @@ READ = (
 )
 
 type Operation = Callable[[sqlite3.Connection], None]
+
+
+def activity(slug: str, event: dict[str, Any]) -> Operation:
+    """Queue an activity diagnostic on the same writer, without a second database transaction."""
+    line = json.dumps(event, default=str, sort_keys=True)
+    return lambda connection: append_activity(connection, slug, line)
 
 
 @dataclass(frozen=True)

@@ -26,7 +26,7 @@ from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import acts, chatlogs, retro_store, spotter
 from owlbear_delivery_next.local_system.git_files import git_common_dir
-from owlbear_delivery_next.state_store.database import StoreError
+from owlbear_delivery_next.state_store.database import DIAGNOSTIC_EVENTS, StoreError
 from owlbear_delivery_next.state_store.store import ACTIVITY_LIMIT
 
 if TYPE_CHECKING:
@@ -234,8 +234,11 @@ def describe_change(uid: str, st: Store, repo: Path | None) -> dict[str, Any]:
         except OSError as exc:
             gaps.append(f"session {session}'s capture cannot be read ({type(exc).__name__})")
     with contextlib.suppress(*UNREADABLE):
-        if len(st.events(slug)) >= ACTIVITY_LIMIT:
-            gaps.append(f"the Change's activity keeps only its last {ACTIVITY_LIMIT} events")
+        if sum(e.get("event") not in DIAGNOSTIC_EVENTS for e in st.events(slug)) >= ACTIVITY_LIMIT:
+            gaps.append(
+                f"the Change's activity keeps only its last {ACTIVITY_LIMIT} ordinary events; "
+                "diagnostics are retained separately"
+            )
     return {
         "kind": "change",
         "family": uid,
