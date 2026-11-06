@@ -522,8 +522,8 @@ def test_an_unreadable_decision_set_stops_with_its_whole_error(tmp_path, shared,
 
     c = step(store, tmp_path)
 
-    assert (ran, c.stop.reason) == ([], whole_error)
-    assert gate_event(store, K.BUILD)["reason"] == whole_error
+    assert (ran, c.stop.reason) == ([], f"Unsettled: {whole_error}")
+    assert gate_event(store, K.BUILD)["reason"] == f"Unsettled: {whole_error}"
 
 
 def test_a_refresh_git_cannot_read_stops_an_irreversible_step_with_its_whole_error(
