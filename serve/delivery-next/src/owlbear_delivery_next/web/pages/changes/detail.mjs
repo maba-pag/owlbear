@@ -46,7 +46,7 @@ function said(line, label) {
 const PAUSED = /· paused by you/;
 
 export function badge(c) {
-  if (/(^|· )stopped:/.test(c.line)) return ["error", "Stopped"];
+  if (c.stopped) return ["error", "Stopped"];
   if (PAUSED.test(c.line)) return ["secondary", "Paused"];
   if (c.actor === "you") return ["warning", "Your turn"];
   if (c.actor === "admin") return ["warning", "Admin"];

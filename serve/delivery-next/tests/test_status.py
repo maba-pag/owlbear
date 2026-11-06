@@ -79,7 +79,7 @@ def test_a_done_change_whose_pull_back_left_the_target_behind_says_so_and_offers
         (
             STOPPED,
             Activity(host_up=True),
-            Status("Build 2/2 · stopped: model blocked", "Allow the model", "admin", error=True),
+            Status("Build 2/2 · stopped: model blocked", "Allow the model", "admin", error=True, stopped=True),
         ),
         (
             PUBLISHING,
@@ -114,7 +114,7 @@ def test_a_done_change_whose_pull_back_left_the_target_behind_says_so_and_offers
         (
             build(outcome=Outcome(exit=Exit.ASK, cause="liveness:build:usage-unread", reason="no usage", at=NOW)),
             Activity(host_up=True),
-            Status("Build 2/2 · stopped: no usage", "Run this step again", "you", error=True),
+            Status("Build 2/2 · stopped: no usage", "Run this step again", "you", error=True, stopped=True),
         ),
     ],
 )
