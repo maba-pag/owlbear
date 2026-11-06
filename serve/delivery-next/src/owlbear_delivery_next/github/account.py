@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, ClassVar
 from urllib.parse import urlsplit
 
 from owlbear_delivery_next.git.access import TOKENS, Access, is_local
+from owlbear_delivery_next.git.command_failure import failed, failure, output
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 
@@ -78,10 +79,10 @@ class Origin:
                 command, capture_output=True, env=environment, timeout=timeout, check=False
             )
         except subprocess.TimeoutExpired as exc:
-            msg = f"the URL of {repository}'s remote {remote} could not be read in {timeout:g} s"
+            msg = f"the URL of {repository}'s remote {remote} could not be read in {timeout:g} s: {failure(exc)}"
             raise AccountMissing(msg) from exc
         if done.returncode:
-            said = done.stderr.decode(errors="replace").strip() or "it is not set"
+            said = failed(done)
             msg = f"{repository} has no URL for the remote {remote}, so no account can be chosen for it: {said}"
             raise AccountMissing(msg)
         return cls.url(done.stdout.decode(errors="replace").strip())
@@ -113,7 +114,12 @@ def _gh(gh: str, args: tuple[str, ...], until: float | None, doing: str) -> subp
             (gh, *args), capture_output=True, env=environment, timeout=timeout, check=False, stdin=subprocess.DEVNULL
         )
     except subprocess.TimeoutExpired as exc:
-        msg = f"gh did not answer in {timeout:g} s while it was asked to {doing}"
+        shown = exc
+        if args[:2] == ("auth", "token"):  # partial stdout can already hold the credential
+            shown = subprocess.TimeoutExpired(exc.cmd, exc.timeout, stderr=exc.stderr)
+            for note in getattr(exc, "__notes__", ()):
+                shown.add_note(note)
+        msg = f"gh did not answer in {timeout:g} s while it was asked to {doing}: {failure(shown)}"
         raise AccountMissing(msg) from exc
 
 
@@ -124,7 +130,8 @@ def _token(gh: str, host: str, login: str, until: float | None) -> str | None:
     if done.returncode:
         if "no oauth token found" in said:
             return None
-        msg = f"gh could not read {login}'s token on {host} (exit {done.returncode}): {said or 'no message'}"
+        shown = subprocess.CompletedProcess(done.args, done.returncode, stderr=done.stderr)
+        msg = f"gh could not read {login}'s token on {host} (exit {done.returncode}): {failed(shown)}"
         raise AccountMissing(msg)
     return done.stdout.decode(errors="replace").strip() or None
 
@@ -136,7 +143,7 @@ def _logins(gh: str, host: str, until: float | None) -> list[str]:
         hosts = json.loads(done.stdout)["hosts"]
         return [entry["login"] for entry in hosts.get(host, [])]
     except (ValueError, KeyError, TypeError) as exc:
-        said = done.stderr.decode(errors="replace").strip() or done.stdout.decode(errors="replace").strip()
+        said = failed(done) if done.returncode else f"{failure(exc)}\n{output(done.stderr, done.stdout)}"
         msg = f"gh's accounts on {host} could not be read (exit {done.returncode}): {said or 'no message'}"
         raise AccountMissing(msg) from exc
 
