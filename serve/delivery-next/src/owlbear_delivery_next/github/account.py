@@ -144,7 +144,7 @@ def _logins(gh: str, host: str, until: float | None) -> list[str]:
         return [entry["login"] for entry in hosts.get(host, [])]
     except (ValueError, KeyError, TypeError) as exc:
         said = failed(done) if done.returncode else f"{failure(exc)}\n{output(done.stderr, done.stdout)}"
-        msg = f"gh's accounts on {host} could not be read (exit {done.returncode}): {said or 'no message'}"
+        msg = f"gh's accounts on {host} could not be read (exit {done.returncode}): {said}"
         raise AccountMissing(msg) from exc
 
 
