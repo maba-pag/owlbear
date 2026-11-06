@@ -216,7 +216,7 @@ function progress(u) {
     return html`<ol id="pack-stages" aria-label="Update stages">${(u.stages ?? []).map((s) => html`<li
       class="pack-step"><span class="pack-step-head"><span>${s.label}</span> <p-tag variant=${TAGS[s.result]
         ?? "secondary"} compact="true">${RESULTS[s.result] ?? s.result}</p-tag></span>${s.detail
-        ? html`<p-text size="xs" color="contrast-medium">${detailOf({ operation: s.name, detail: s.detail })}</p-text>`
+        ? html`<pre class="pack-detail">${detailOf({ operation: s.name, detail: s.detail })}</pre>`
         : nothing}</li>`)}</ol>`;
   }
   return html`<div id="pack-progress">

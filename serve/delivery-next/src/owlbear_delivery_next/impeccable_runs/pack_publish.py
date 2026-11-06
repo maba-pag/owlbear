@@ -117,7 +117,14 @@ def _done(job: Job, gh: Provider, pub: Publication, merged: str, head: str) -> s
     try:
         retired = gh.delete_branch(pub.repository, pub.branch, head)
     except ProviderError as exc:
-        job.log(f"could not confirm retirement of {pub.branch} at {head[:12]}: {exc}; inspect the remote branch")
+        detail = (
+            f"could not confirm retirement of {pub.branch} at {head[:12]}: {failure(exc)}; inspect the remote branch"
+        )
+        if job.state.get("invocations") is None:
+            job.stage("merge", "passed", f"merged as {merged[:12]}\n{detail}")
+        else:
+            job.note("merge", "retirement", "completed", detail, head, at="publish")
+            job.log(detail)
     else:
         if retired.state is BranchState.MOVED:
             job.log(f"kept {pub.branch}: it now points to {retired.head}, not its merged head {head}")
