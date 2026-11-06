@@ -1,4 +1,5 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
+import { statusLine } from "/assets/page/config/unset.mjs";
 import { state, show, several, formsOf, send, starts } from "./state.mjs";
 import { toggle, button, hd, text, info, notice, refusal } from "./widgets.mjs";
 import {
@@ -79,7 +80,8 @@ export function detailView(d) {
       : d.retry ? retryForm(d.question, d.retry, d) : questionForm(d.question, d);
   }
   return html`${detailHead(d)}
-    <div class="row status"><p-tag variant=${variant} compact="true">${label}</p-tag>${text(said(d.line, label))}</div>
+    <div class="row status"><p-tag variant=${variant} compact="true">${label}</p-tag>${
+      text(said(statusLine(d), label))}</div>
     ${d.now && label !== "Done" ? text(d.now, { size: "sm", color: "contrast-medium" }) : nothing}
     ${refusedTop}
     ${d.settings_fault ? notice("error", "Settings could not be read", d.settings_fault,

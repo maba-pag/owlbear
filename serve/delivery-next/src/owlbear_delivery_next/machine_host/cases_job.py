@@ -75,10 +75,7 @@ def limits() -> dict[str, float | None]:
     The replay and Retro run limits are this machine's values; a replayed look's is the Spotter's ``look_credit_limit``.
     """
     values = machine_settings.current()
-    try:
-        look = settings().spotter.look_credit_limit
-    except OSError, ValueError, SettingsUnset:
-        look = None
+    look = settings().spotter.look_credit_limit
     return {"replay": values.replay_run_credit_limit, "retro": values.retro_run_credit_limit, "look": look}
 
 
@@ -262,7 +259,9 @@ class CasesJob:
             self.meter = Meter(limit, scope)
             return self.meter
 
-    def _ended(self, request: dict[str, Any], why: str, meter: Meter | None = None) -> None:
+    def _ended(
+        self, request: dict[str, Any], why: str, meter: Meter | None = None, *, settings_unset: tuple[str, ...] = ()
+    ) -> None:
         """Keep *request*'s result as *why*, with what it spent and the cases it named, unless a result is kept."""
         with cases.locked():
             if any(r.get("id") == request["id"] and "result" in r for r in case_replay.results()):
@@ -272,6 +271,8 @@ class CasesJob:
                     "result": why, "ended": cases.now()}  # fmt: skip
             if meter is not None:
                 line["credits"] = meter.report()
+            if settings_unset:
+                line["settings_unset"] = list(settings_unset)
             cases.append("runs.jsonl", line)
 
     def _taken(self, request: dict[str, Any]) -> None:
@@ -289,7 +290,17 @@ class CasesJob:
             lim = limits()
             if kind in {"regression", "compare"}:
                 if lim["replay"] is None or lim["look"] is None:
-                    self._ended(request, "refused: the replay run's or a look's credit limit is unset")
+                    keys = tuple(
+                        key
+                        for name, key in (
+                            ("replay", "machine.replay_run_credit_limit"),
+                            ("look", "spotter.look_credit_limit"),
+                        )
+                        if lim[name] is None
+                    )
+                    self._ended(
+                        request, "refused: the replay run's or a look's credit limit is unset", settings_unset=keys
+                    )
                     return
                 spot = role("spotter")
                 meter = self._metered(lim["replay"], "replay-run")
@@ -297,7 +308,11 @@ class CasesJob:
                 self._run(case_replay.run(request, looked, meter, lim["look"], self.halt))
             elif kind == "check":
                 if lim["retro"] is None:
-                    self._ended(request, "refused: the Retro run credit limit is unset")
+                    self._ended(
+                        request,
+                        "refused: the Retro run credit limit is unset",
+                        settings_unset=("machine.retro_run_credit_limit",),
+                    )
                     return
                 reviewer = role("retro-review")
                 meter = self._metered(lim["retro"], "retro-run")
@@ -306,7 +321,7 @@ class CasesJob:
             else:
                 self._ended(request, f"refused: unknown request {kind!r}")
         except SettingsUnset as exc:  # in OwlBear's own words
-            self._ended(request, f"refused: {exc}", meter)
+            self._ended(request, f"refused: {exc}", meter, settings_unset=tuple(exc.keys))
         except cases.CaseError as exc:
             self._ended(request, f"refused: {failure(exc)}", meter)
         except asyncio.CancelledError:  # the host ended before the run kept its own result

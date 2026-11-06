@@ -1,5 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
+import { statusLine } from "/assets/page/config/unset.mjs";
 import {
   OWN_TAG, blockedOf, displayName, here, HostDown, isOwn, loaded, project, Restarted, Slow, shown,
 } from "/assets/ui.mjs";
@@ -20,8 +21,8 @@ function groupOf(label) {
 }
 
 function card([c, label, variant]) {
-  const whole = c.error;  // a line that carries an error says it whole: every path, unclamped (#971)
-  const current = c.key === state.selected, [stage, rest] = split(whole ? c.line : short(c.line));
+  const line = statusLine(c), whole = c.error || line !== c.line;
+  const current = c.key === state.selected, [stage, rest] = split(whole ? line : short(line));
   const step = c.progress?.line;
   const open = (event) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

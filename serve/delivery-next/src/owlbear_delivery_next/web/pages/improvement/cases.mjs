@@ -67,7 +67,7 @@ function chooser(n, c, waiting) {
 // this case), then its check, asked already or to be asked.
 function onward(c, asked) {
   const run = c.last_check;
-  const last = run ? text(html`Its last check (${run.id}, ${when(run.at)}): ${run.result}.${
+  const last = run ? text(html`Its last check (${run.id}, ${when(run.at)}): ${runResult(run)}.${
     run.note ? ` ${run.note}` : ""}`, { size: "sm" }) : nothing;
   return html`${last}${asked.has(c.id)
     ? html`<p class="meta">Its paid check is asked: a case it supports moves to the tests.</p>`
@@ -100,10 +100,11 @@ function failedLooks(r) {
 }
 
 function replay(r) {
-  if ("applied" in r && !("result" in r)) return html`<li>${when(r.at)} \u00b7 run ${r.id}: ${r.applied === null
+  if ("applied" in r && !("result" in r)) return html`<li class=${r.applied === null ? "failure-detail" : nothing}>${
+    when(r.at)} \u00b7 run ${r.id}: ${r.applied === null
     ? r.why : `wrote version ${r.applied}`}</li>`;
   return html`<li>${when(r.ended ?? r.at)} \u00b7 ${r.kind ?? "run"} ${r.id}: <span class="said">${
-    r.result ?? "no result"}</span>${failedLooks(r)}</li>`;
+    runResult(r) ?? "no result"}</span>${failedLooks(r)}</li>`;
 }
 
 // The cases job's own failures, whole, before its runs: its last pass, and a publication sync that could not start.
@@ -136,3 +137,4 @@ export function casesSection(c) {
     </div>
   </section>`;
 }
+import { runResult } from "/assets/page/config/unset.mjs";

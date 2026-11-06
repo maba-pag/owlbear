@@ -37,17 +37,24 @@ class Paid:
 type Ask = Callable[[str, str, str], Paid]  # (batch key, message, agent) -> the paid call's answer
 
 
+@dataclass(frozen=True)
+class Refusal:
+    """A technical refusal and the actual unset keys, empty for an unreadable or non-settings reason."""
+
+    text: str = ""
+    keys: tuple[str, ...] = ()
+
+    def __bool__(self) -> bool:
+        return bool(self.text)
+
+
 class StoppedError(Exception):
     """The run ends now with *result* (``stopped: ...``); what it did is kept and its unit's work stays due."""
 
-    def __init__(self, result: str, *, held: bool = False) -> None:
+    def __init__(self, result: str, *, held: bool = False, settings_unset: tuple[str, ...] = ()) -> None:
         super().__init__(result)
         self.result, self.held = result, held
-
-    @classmethod
-    def unset(cls, why: str) -> StoppedError:
-        """Refused before any work because *why* blocks its settings (#808): held, not failed."""
-        return cls(f"refused: {why}", held=True)
+        self.settings_unset = settings_unset
 
 
 class WaitingError(Exception):

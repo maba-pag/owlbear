@@ -175,7 +175,11 @@ def _reads(routes: APIRouter, m: _Machine) -> None:
         shown = {
             "spotter": spotted,
             "retro": improvement_view.read_part(
-                "retro", unread, lambda: improvement_view.retro(loaded, _switches(), m.machine.retro.failed)
+                "retro",
+                unread,
+                lambda: improvement_view.retro(
+                    loaded, _switches(), m.machine.retro.failed, m.machine.retro.prune_failed
+                ),
             ),
             "cases": improvement_view.read_part(
                 "cases",

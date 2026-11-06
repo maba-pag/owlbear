@@ -34,10 +34,10 @@ from owlbear_delivery_next.improvement import proposal_apply, retro_judge
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.credit_meter import Meter
-from owlbear_delivery_next.improvement.retro_calls import Paid, StoppedError, WaitingError, Work
+from owlbear_delivery_next.improvement.retro_calls import Paid, Refusal, StoppedError, WaitingError, Work
 from owlbear_delivery_next.improvement.retro_evidence import evidence
 from owlbear_delivery_next.local_system import maintenance, processes
-from owlbear_delivery_next.machine_host import cases_job, retro_block, retro_more, retro_restore
+from owlbear_delivery_next.machine_host import retro_block, retro_more, retro_restore
 from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR
 from owlbear_delivery_next.machine_host.retro_inputs import (
     Running,
@@ -45,6 +45,7 @@ from owlbear_delivery_next.machine_host.retro_inputs import (
     failed_grading,
     prune,
     session,
+    start_settings,
     unfinished,
     where,
 )
@@ -80,7 +81,7 @@ class Seams:
     asked: Callable[..., Any] = retro_review.asked
     idle: Callable[[], bool] = bool
     projects: Callable[[], units.Projects] = dict
-    blocked: Callable[[str], str] = lambda _uid: ""  # why a unit may not start; ``attach`` reads ``retro_block``
+    blocked: Callable[[str], Refusal] = lambda _uid: Refusal()
 
 
 class RetroJob:
@@ -95,8 +96,9 @@ class RetroJob:
         self.thread: threading.Thread | None = None
         self.waiting: list[Running] = []
         self.checked, self.pruned_at = False, -PRUNE_EVERY
-        self.skips = retro_block.Skips(self.seams.say, self.seams.blocked)
+        self.skips = retro_block.Skips(self.seams.say, lambda uid: self.seams.blocked(uid).text)
         self.failed = ""  # the last pass's whole error, until a pass succeeds
+        self.prune_failed = ""
 
     @classmethod
     def attach(cls, m: Machine, fenced: Callable[[], str]) -> RetroJob:
@@ -181,7 +183,7 @@ class RetroJob:
         self._chats()
         if now - self.pruned_at >= PRUNE_EVERY and not self.waiting:
             self.pruned_at = now
-            prune(self.seams.say)
+            self.prune_failed = prune(self.seams.say)
 
     def _closed(self) -> bool:
         return bool(self.seams.fenced() or self.halting or self.lingering())
@@ -192,14 +194,15 @@ class RetroJob:
         by = request.get("by", "")
         if (more := retro_more.running(request)) is not None:  # a synthetic unit, a redraft or a follow-up
             if not self._took(more.uid, by):
-                self._start(more, f"refused: {why}" if (why := self.seams.blocked(more.uid)) else "")
+                why = self.seams.blocked(more.uid)
+                self._start(more, f"refused: {why.text}" if why else "", settings_unset=why.keys)
             return
         change, chat = request.get("change"), request.get("chat", "")
         uid = units.change_id(*change.split(":", 1)) if change else units.chat_id(chat)
         if self._took(uid, by):
             return
         if why := self.seams.blocked(uid):  # before the grade-only runs, so a refusal is a plain run of its own
-            self._start(Running(uid, "button", by), f"refused: {why}")
+            self._start(Running(uid, "button", by), f"refused: {why.text}", settings_unset=why.keys)
             return
         late = [i for i in units.late(units.records(), store.known(), store.graded()) if i["unit"] == uid]
         late += unfinished(uid)  # with records written after a judged revision, grade-only runs that stopped
@@ -234,27 +237,22 @@ class RetroJob:
             found = units.due_chats(enrolled(), datetime.now(UTC), chat=request["chat"])
         return next((i for i in found if i["unit"] == uid), None)
 
-    def _start(self, ctx: Running, refused: str = "") -> None:
+    def _start(self, ctx: Running, refused: str = "", *, settings_unset: tuple[str, ...] = ()) -> None:
         """Open *ctx*, recorded, and run it; refused when its limit, a role or an assumption it needs is missing."""
         why, limit = refused, None
         if ctx.provenance == "synthetic" or ctx.uid.startswith("syn:"):
             why = f"refused: {store.SYNTHETIC_RETIRED}"
+            settings_unset = ()
         if not why:
-            try:
-                limit = cases_job.limits()["retro"]
-                for agent in ("retro", "retro-review"):
-                    session(agent)
-            except (SettingsUnset, registry.RegistryError, OSError, ValueError) as exc:
-                why = f"refused: {type(exc).__name__}: {exc}"
-        if not why and limit is None:
-            why = "refused: the Retro run credit limit is unset"
+            limit, unmet = start_settings()
+            why, settings_unset = (f"refused: {unmet.text}" if unmet else ""), unmet.keys
         why = why or ctx.retired()
         ctx.limit, ctx.new = limit or 0.0, True
         keep = {"trigger": ctx.trigger, "by": ctx.by, "rev": ctx.rev, "mode": ctx.mode, "records": ctx.records}
         store.run_event(ctx.id, "opened", unit=ctx.uid, provenance=ctx.provenance, spec=ctx.spec, limit=ctx.limit,
                         assumptions=list(ctx.needs), new=True, **keep)  # fmt: skip
         if why:
-            self._ended(ctx, why)
+            self._ended(ctx, why, {"settings_unset": list(settings_unset)} if settings_unset else None)
         else:
             self._go(ctx)
 
@@ -276,6 +274,8 @@ class RetroJob:
             return
         except StoppedError as exc:
             result, out = exc.result, {"held": True} if exc.held else None
+            if exc.settings_unset:
+                out = (out or {}) | {"settings_unset": list(exc.settings_unset)}
         except asyncio.CancelledError:
             result = "stopped: OwlBear stopped"
         except Exception as exc:
@@ -370,7 +370,8 @@ class RetroJob:
                 if why := ctx.retired() or (f"refused: {why}" if why else ""):
                     raise StoppedError(why)
                 if ctx.new and (why := self.seams.blocked(ctx.uid)):  # set when it opened, unset since? (#808)
-                    raise StoppedError.unset(why)
+                    msg = f"refused: {why.text}"
+                    raise StoppedError(msg, held=True, settings_unset=why.keys)
                 ctx.admit()  # rechecked once, by the first admission that gets this far
                 if lease:
                     begun = self.maintenance.begin(SLOT, key, KIND, "")  # durable before the session starts
@@ -402,7 +403,7 @@ class RetroJob:
             role, seconds = session(agent)
         except SettingsUnset as exc:
             msg = f"refused: {exc}"
-            raise StoppedError(msg) from exc
+            raise StoppedError(msg, settings_unset=tuple(exc.keys)) from exc
 
         def call(_key: str) -> Paid:
             store.run_event(ctx.id, "inflight", batch=batch)

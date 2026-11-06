@@ -194,10 +194,12 @@ def _unit_states() -> dict[str, int]:
     return dict(Counter(states))
 
 
-def retro(projects: units.Projects, switches: Mapping[str, Any], failed: str = "") -> dict[str, Any]:
+def retro(
+    projects: units.Projects, switches: Mapping[str, Any], failed: str = "", prune_failed: str = ""
+) -> dict[str, Any]:
     """Retro's queue, newest runs and findings, units by state, switches and the finished Changes it may run on.
 
-    *failed* is the Retro job's last pass's whole error, "" once a pass succeeded.
+    *failed* is the last pass's error; *prune_failed* stays until pruning, not merely a pass, succeeds.
 
     Each finding carries its follow-up, a chat's too: a chat has no Change page to follow it up on.
     """
@@ -227,6 +229,7 @@ def retro(projects: units.Projects, switches: Mapping[str, Any], failed: str = "
         "switches": dict(switches),
         "finished": finished,
         "failed": failed,
+        "prune_failed": prune_failed,
     }
     return shown | ({"unread": unread} if unread else {})
 
@@ -277,6 +280,8 @@ def spotter_cases(failed: str = "", unpublished: str = "") -> dict[str, Any]:
             said = reviews.get(cid) or {"result": r.get("result")}
             last[cid] = {"id": r["id"], "at": r.get("ended") or r.get("asked"), "result": said.get("result"),
                          "note": said.get("note", "")}  # fmt: skip
+            if not reviews.get(cid) and "settings_unset" in r:
+                last[cid]["settings_unset"] = r["settings_unset"]
     return {
         "n": cur["n"],
         "cases": [{**_case(cid, e), "last_check": last.get(cid)} for cid, e in sorted(cur["cases"].items())],
@@ -304,7 +309,10 @@ def _redrafts() -> dict[str, dict[str, Any]]:
     found: dict[str, dict[str, Any]] = {}
     for r in store.runs(ALL_RUNS, synthetic=True):
         if (unit := str(r.get("unit") or "")).startswith("proposal:"):
-            found.setdefault(unit.removeprefix("proposal:"), {k: r.get(k) for k in ("state", "result", "why")})
+            found.setdefault(
+                unit.removeprefix("proposal:"),
+                {k: r[k] for k in ("state", "result", "why", "settings_unset") if k in r},
+            )
     return found | {q["redraft"]: {"state": "queued"} for q in store.queued() if q.get("redraft")}
 
 
@@ -382,7 +390,12 @@ def followup(
         return {"state": ""}
     if run.get("followup"):
         return {"state": "saved", "entry": run["followup"]}
-    return {"state": run.get("state") or "", "result": run.get("result") or "", "why": run.get("why") or ""}
+    return {
+        "state": run.get("state") or "",
+        "result": run.get("result") or "",
+        "why": run.get("why") or "",
+        **{k: run[k] for k in ("settings_unset",) if k in run},
+    }
 
 
 def change_detail(pid: str, slug: str, records: list[dict[str, Any]], grades: list[dict[str, Any]]) -> dict[str, Any]:

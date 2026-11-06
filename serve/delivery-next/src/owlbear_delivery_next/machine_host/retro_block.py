@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.improvement import chatlogs
+from owlbear_delivery_next.improvement.retro_calls import Refusal
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.machine_host import retro_inputs
 from owlbear_delivery_next.settings.config import SettingsUnset
@@ -25,46 +26,50 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Store
 
 
-def block(uid: str, projects: Mapping[str, Project]) -> str:
+def block(uid: str, projects: Mapping[str, Project]) -> Refusal:
     """Why *uid* may not start now under a machine's registered *projects*; empty when it may."""
     registered = [(i, Path(p.entry.path), p.state, p.store) for i, p in list(projects.items())]
     if uid.startswith("chg:"):
         pid = uid.split(":", 2)[1]
         found = next((r for r in registered if r[0] == pid), None)
-        return _project(found[2], found[3]) if found else "its project is not registered"
+        return _project(found[2], found[3]) if found else Refusal("its project is not registered")
     if uid.startswith("chat:"):
         cwd = chatlogs.workspace(chatlogs.state() / uid.removeprefix("chat:"))
         if not cwd:
-            return f"{work_block.UNREADABLE}its chat's workspace is unknown"
+            return Refusal(f"{work_block.UNREADABLE}its chat's workspace is unknown")
         if inside := [r for r in registered if chatlogs.enrolled(cwd, [str(r[1])])]:
             _, _, state, store = max(inside, key=lambda r: len(r[1].resolve().parts))  # enrolled resolved them
             return _project(state, store)
     return _outside()
 
 
-def _project(state: str, store: Store | None) -> str:
+def _settings(why: work_block.Block) -> Refusal:
+    return Refusal(why.text(), () if why.reason else why.keys)
+
+
+def _project(state: str, store: Store | None) -> Refusal:
     if state != "loaded" or store is None:
-        return f"its project is {state}"
-    return work_block.of_store(store).text() or _roles()
+        return Refusal(f"its project is {state}")
+    return _settings(work_block.of_store(store)) or _roles()
 
 
-def _roles() -> str:
+def _roles() -> Refusal:
     """Retro's own roles, read outside any project as its sessions read them: a project's layer doesn't set them."""
     try:
         for agent in ("retro", "retro-review"):
             retro_inputs.session(agent)
     except SettingsUnset as exc:
-        return str(exc)
+        return Refusal(str(exc), tuple(exc.keys))
     except (data_repo.DataRepoError, StoreError, registry.RegistryError, OSError, ValueError) as exc:
-        return f"{work_block.UNREADABLE}{exc}"
-    return ""
+        return Refusal(f"{work_block.UNREADABLE}{exc}")
+    return Refusal()
 
 
-def _outside() -> str:
+def _outside() -> Refusal:
     try:
-        return work_block.of_settings(work_block.outside(data_repo.locate())).text()
+        return _settings(work_block.of_settings(work_block.outside(data_repo.locate())))
     except (data_repo.DataRepoError, StoreError) as exc:
-        return f"{work_block.UNREADABLE}{exc}"
+        return Refusal(f"{work_block.UNREADABLE}{exc}")
 
 
 class Skips:

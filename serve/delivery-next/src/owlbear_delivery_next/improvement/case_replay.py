@@ -266,9 +266,12 @@ async def run(  # noqa: C901, PLR0912 - the run, its stop and its result
             try:
                 n = cases.commit(request["parent"], request["edits"], request["by"], request["reason"], out["id"])
                 cases.append("runs.jsonl", {"id": out["id"], "applied": n, "at": cases.now()})
-            except (Stale, Frozen) as exc:
-                said = "refused as stale" if isinstance(exc, Stale) else "refused while a Spotter test is active"
-                note = f"{said}: {exc}; nothing is rerun"
+            except CaseError as exc:
+                if isinstance(exc, (Stale, Frozen)):
+                    said = "refused as stale" if isinstance(exc, Stale) else "refused while a Spotter test is active"
+                    note = f"{said}: {exc}; nothing is rerun"
+                else:
+                    note = f"refused: {failure(exc)}; nothing is rerun"
                 cases.append("runs.jsonl", {"id": out["id"], "applied": None, "why": note, "at": cases.now()})
                 out["applied"] = note
             else:

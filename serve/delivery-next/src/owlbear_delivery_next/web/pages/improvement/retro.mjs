@@ -2,6 +2,7 @@ import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { here } from "/assets/ui.mjs";
+import { runResult } from "/assets/page/config/unset.mjs";
 import { askFollowup, followupLine, said, send } from "./followup.mjs";
 import { seenIn } from "./proposals.mjs";
 import { finding } from "./record.mjs";
@@ -31,7 +32,7 @@ function made(r) {
 function run(r) {
   const [said, variant] = RUNS[r.state] ?? [r.state, "secondary"];
   const parts = [r.unit, r.trigger && `by ${r.trigger}`, plural(r.calls ?? 0, "call"),
-    credits(r.spent, r.known !== false), r.result, made(r)];
+    credits(r.spent, r.known !== false), runResult(r), made(r)];
   return html`<li class="panel" id=${`run-${r.id}`}><div class="row">${tag(said, variant)}<span class="meta">${
     when(r.at)}${r.ended ? html` to ${when(r.ended)}` : nothing}</span></div>
     <p class="meta">${parts.filter(Boolean).join(" \u00b7 ")}</p>${r.why ? html`<p class="meta">${r.why}</p>`
@@ -43,6 +44,11 @@ function passFailed(failed) {
   if (!failed) return nothing;
   return html`<li class="panel" id="retro-failed"><div class="row">${tag("Pass failed", "warning")}</div>
     <p class="meta">Retro's last pass failed, and the next one tries again: ${failed}</p></li>`;
+}
+
+function pruningFailed(failed) {
+  return failed ? html`<li class="panel" id="retro-prune-failed"><div class="row">${tag("Pruning failed", "warning")}
+    </div><p class="meta failure-detail">${failed}</p></li>` : nothing;
 }
 
 async function followUp(f) {
@@ -119,7 +125,8 @@ export function retroSection(r) {
         : empty("Retro has found nothing yet.")}
     ${heading(3, "Runs", "md")}
     ${r.runs === null ? unread("Retro's runs", errors("runs")) : nothing}
-    ${r.runs?.length || r.failed ? html`<ul class="cards">${passFailed(r.failed)}${(r.runs ?? []).map(run)}</ul>`
+    ${r.runs?.length || r.failed || r.prune_failed ? html`<ul class="cards">${passFailed(r.failed)}${
+      pruningFailed(r.prune_failed)}${(r.runs ?? []).map(run)}</ul>`
       : r.runs === null ? nothing : empty("No Retro run yet.")}
   </section>`;
 }

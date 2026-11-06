@@ -160,7 +160,7 @@ function outcome(p) {
     else if (run.state && run.state !== "ended") lines.push("Retro is redrafting it.");
     else if (p.redraft) lines.push(`Redrafted as ${p.redraft}, but its run stopped before reviewing it: ask for it `
       + "again; the review is made from the redraft already paid for.");
-    else if (run.state === "ended") lines.push(`The redraft run ended without one: ${run.result || "no result"}`
+    else if (run.state === "ended") lines.push(`The redraft run ended without one: ${runResult(run) || "no result"}`
       + `${run.why ? `, ${run.why}` : ""}.`);
     else lines.push("No redraft is queued or running: ask for it again.");
   }
@@ -200,3 +200,4 @@ export function proposalsSection(list) {
       : empty("Retro has proposed nothing yet.")}
   </section>`;
 }
+import { runResult } from "/assets/page/config/unset.mjs";

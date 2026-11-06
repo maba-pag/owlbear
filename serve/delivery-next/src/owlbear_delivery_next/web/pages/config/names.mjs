@@ -13,7 +13,16 @@ export const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan
 // The agents table's columns, in order; the shaper's row says its model and effort are a recommendation (TD-328).
 export const COLUMN = { model: "Model", effort: "Effort", context: "Context", subagents: "Subagents",
   minutes: "Minutes per session" };
-export const agentName = (role) => (role === "shaper" ? "shaper (a recommendation)" : role);
+const AGENT_NAMES = {
+  planner: "planner", builder: "builder", reviewer: "reviewer", challenger: "challenger",
+  "design-judge": "design-judge", preparer: "preparer", shaper: "shaper (a recommendation)", updater: "updater",
+  "test-reviewer": "test-reviewer", "test-curator": "test-curator", picker: "picker", curator: "curator",
+  spotter: "spotter", retro: "retro", "retro-review": "retro-review", auditor: "auditor",
+};
+export function agentName(role) {
+  if (!Object.hasOwn(AGENT_NAMES, role)) throw new Error(`No Settings name is known for the agent "${role}"`);
+  return AGENT_NAMES[role];
+}
 
 // A Spotter row: its key, its name, its control's label.
 export const SPOTTER = [
@@ -93,7 +102,7 @@ function parts(key) {
   // no row: test preparations and data permissions (project-only, no editor yet), the round values of a role that runs
   // no challenge loop, and the Spotter's minutes and subagents (shown as n/a)
   if (["data", "preparations"].includes(key)) return null;
-  if (head === "agents" && a && b) {
+  if (head === "agents" && Object.hasOwn(AGENT_NAMES, a) && b) {
     if (COLUMN[b]) {
       return a === "spotter" && ["minutes", "subagents"].includes(b) ? null : ["", agentName(a), COLUMN[b]];
     }

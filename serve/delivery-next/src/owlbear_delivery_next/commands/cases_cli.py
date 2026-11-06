@@ -101,7 +101,11 @@ def _cases(a: argparse.Namespace) -> int:  # noqa: C901, PLR0912 - one branch pe
         _say(QUEUED.format(case_replay.ask(case_replay.comparison(rid, a.a, a.b, BY))))
     elif a.action == "runs":
         for r in case_replay.results()[-a.last :]:
-            _say(json.dumps({k: r.get(k) for k in ("id", "kind", "result", "applied", "counts", "credits") if k in r}))
+            _say(
+                json.dumps(
+                    {k: r.get(k) for k in ("id", "kind", "result", "applied", "why", "counts", "credits") if k in r}
+                )
+            )
     return 0
 
 
