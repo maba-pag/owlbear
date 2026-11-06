@@ -273,16 +273,13 @@ def _base(run: dict[str, Any]) -> dict[str, Any]:
     why = usage.get("incomplete")
     incomplete = bool(why) and not run.get("settled")  # a lower bound
     failed = incomplete and str(why) not in LOWER_BOUNDS
-    return (
-        {k: run.get(k) or ("" if k != "limit" else None) for k in keys}
-        | {
-            "role": run.get("agent") or "",
-            "incomplete": incomplete,
-            "failed": failed,
-            "why": str(usage.get("error", why if failed else "")),  # the failed read's error (#971)
-        }
-        | ({"read_error": run["read_error"]} if run.get("read_error") else {})
-    )
+    return {k: run.get(k) or ("" if k != "limit" else None) for k in keys} | {
+        "role": run.get("agent") or "",
+        "incomplete": incomplete,
+        "failed": failed,
+        "why": str(usage.get("error", why if failed else "")),  # the failed read's error (#971)
+        **({"read_error": run["read_error"]} if run.get("read_error") else {}),
+    }
 
 
 def _piece(  # noqa: PLR0913, PLR0917 - the run and each part of its piece
