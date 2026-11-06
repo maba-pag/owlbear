@@ -18,7 +18,7 @@ from owlbear_delivery_next.change_flow.status import RESUME, status
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import data_repo, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import cases_job, chats
+from owlbear_delivery_next.machine_host import cases_job, chats, idle_loops
 from owlbear_delivery_next.machine_host.cases_job import CasesJob
 from owlbear_delivery_next.machine_host.curation import Curation
 from owlbear_delivery_next.machine_host.project import Project, recorded
@@ -61,6 +61,7 @@ class Machine:
         self.updated = ""  # the version this host took over as, said once on the pages (TD-299)
         self.unretried = ""  # why the last pass loading the failed projects again failed, for the Projects page
         self.unshared = ""  # why the shared data could not be set up or cloned, for the Projects page
+        self.uncurated = self.unstopped = ""
         self.undecided: list[str] = []  # what the start could not do about decisions, for the Decisions page
         self.projects: dict[str, Project] = {}
         self.lock = threading.RLock()
@@ -267,6 +268,7 @@ class Machine:
         registry.resumed(datetime.now(UTC))
         with self.lock:
             self.paused = self.ending = False
+            self.unstopped = ""
         self.say("resumed by you")
         self._wake()
 
@@ -279,6 +281,7 @@ class Machine:
         """Pause and stop when idle (TD-288): nothing starts, check environments go, then OwlBear stops."""
         with self.lock:  # idle_stop waits for the barrier too, so nothing admitted before it goes uncounted
             self.paused = self.ending = True
+            self.unstopped = ""
             for p in list(self.projects.values()):
                 if p.host:
                     with p.host.launching:  # a launch admitted before the intent is counted from now on
@@ -348,7 +351,11 @@ class Machine:
     def idle_stop(self) -> bool:
         """Stop OwlBear when a stop when idle is asked for and nothing runs; whether it stopped."""
         with self.lock:  # a Resume in between cancels it
-            if not self.ending or self.stopping.is_set() or self.left():
+            if not self.ending or self.stopping.is_set():
+                return False
+            left = self.left()
+            self.unstopped = ""
+            if left:
                 return False
             self.say("stopping: nothing runs")
             self.on_stop()
@@ -356,23 +363,11 @@ class Machine:
 
     def curation_loop(self) -> None:
         """Thread: once OwlBear is idle, curate each memory folder holding pending entries no run has seen."""
-        from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR  # noqa: PLC0415 - it names this class
-
-        while not self.stopping.wait(CURATE_EVERY):
-            try:
-                idle = self.auto.mono() - self.auto.last_use >= IDLE_FOR
-                if idle and not (self.updating or self.ending or self.busy()):
-                    self.curation.nudge(None, "idle")
-            except Exception as exc:  # noqa: BLE001 - the loop outlives one failed look
-                self.say(f"looking whether to curate memory failed: {type(exc).__name__}: {exc}")
+        idle_loops.curate(self, CURATE_EVERY)
 
     def idle_loop(self) -> None:
         """Thread: look every ``IDLE`` seconds whether a stop when idle may stop OwlBear."""
-        while not self.stopping.wait(IDLE):
-            try:
-                self.idle_stop()
-            except Exception as exc:  # noqa: BLE001 - the loop outlives one failed look
-                self.say(f"looking whether OwlBear may stop failed: {type(exc).__name__}: {exc}")
+        idle_loops.stop(self, IDLE)
 
     def waiting(self) -> int:
         """How many Changes would continue on Resume."""

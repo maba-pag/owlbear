@@ -279,14 +279,15 @@ function controls() {
 // What the owner should know under the top row: the shown project's trouble, the pause, updates and errors.
 function notes() {
   if (!bar.data) return bar.error ? html`<p role="alert">${bar.error}</p>` : nothing;
-  const { projects, paused, waiting, ending, left = [], update, updated, announce } = bar.data;
+  const { projects, paused, waiting, ending, left = [], stop_error, update, updated, announce } = bar.data;
   const p = projects.find((o) => o.id === project), who = p && displayName(p);
   const trouble = location.pathname !== "/projects" && p && (p.state !== "loaded" ? `${who} is ${p.state}: ${
     p.reason}` : p.setup ? `${who} needs setup before its chats reach Delivery.` : "");
   return html`
     ${trouble ? html`<p role="status">${trouble} <a href=${here({}, "/projects")}>Open Projects</a></p>` : nothing}
     ${paused ? html`<p class="paused" role="status">${ending
-        ? `OwlBear stops once nothing runs${left.length ? `; it waits for ${left.join("; ")}` : ""}.`
+        ? stop_error ? html`OwlBear could not inspect the work it waits for: <span class="failure-detail">${stop_error}
+            </span>` : `OwlBear stops once nothing runs${left?.length ? `; it waits for ${left.join("; ")}` : ""}.`
         : `Delivery is paused: ${waiting} Change${waiting === 1 ? "" : "s"} would continue.`}
       ${control("Resume", () => act("resume", () => call("/resume", { method: "POST", machine: true })),
         { variant: "primary", busy: bar.busy === "resume" })}
