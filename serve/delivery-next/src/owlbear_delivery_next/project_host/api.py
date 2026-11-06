@@ -270,10 +270,10 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         host.wake.set()
         return {"accepted": item.kind}
 
-    def save(body: object, *, visual: bool = False) -> tuple[int, dict[str, Any]]:
+    def save(body: object, contract: str | None, *, visual: bool = False) -> tuple[int, dict[str, Any]]:
         write = save_visual if visual else save_brief
         tool = "save_visual_check" if write is save_visual else "save_brief"
-        code, out = write(store, body, binding=lambda: shaping_chat.binding(host.repo, tool, body))
+        code, out = write(store, body, contract, binding=lambda: shaping_chat.binding(host.repo, tool, body))
         if code == 200:  # noqa: PLR2004 - HTTP OK
             host.wake.set()  # a version saved after its loop ended gets its challenge's start time at once (#986)
             out["next"] = (
@@ -319,7 +319,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
             body = await request.json()
         except ValueError:
             body = ""
-        code, out = save(body)
+        code, out = save(body, request.headers.get(chat_contract.HEADER))
         return JSONResponse(out, status_code=code)
 
     @router.post("/briefs/visual")
@@ -328,7 +328,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
             body = await request.json()
         except ValueError:
             body = ""
-        code, out = save(body, visual=True)
+        code, out = save(body, request.headers.get(chat_contract.HEADER), visual=True)
         return JSONResponse(out, status_code=code)
 
     @router.get("/changes")

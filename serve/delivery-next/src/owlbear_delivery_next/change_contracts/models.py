@@ -24,7 +24,13 @@ from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_contracts.shaper_records import SavingChat, ShaperNotice
 from owlbear_delivery_next.change_contracts.spend import Spend
 from owlbear_delivery_next.change_contracts.tool_use import ToolUse
-from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion, VisualResult, VisualRound, VisualStep
+from owlbear_delivery_next.change_contracts.visual_records import (
+    OwnerCriterion,
+    ShapingCapture,
+    VisualResult,
+    VisualRound,
+    VisualStep,
+)
 
 FORMAT = 9
 DETAIL = 60000  # one review batch: up to 20 new and 20 owner-decided findings of about 1,300 characters
@@ -130,6 +136,17 @@ class VisualState(Record):
     version: int = 1
 
 
+class BriefRecipe(Record):
+    """How shaping and the visual check start the target's preview: the command, where, and the URL that answers.
+
+    ``command`` passes ``{port}`` to its server and ``ready_url`` holds ``{port}``: Delivery picks it per launch.
+    """
+
+    command: str
+    directory: str
+    ready_url: str
+
+
 class Brief(Record):
     """The user's brief: the current draft, the approved version, and each approved version's content."""
 
@@ -149,6 +166,8 @@ class Brief(Record):
     criteria: list[Criterion] = Field(default_factory=list)
     ui: bool = False
     visual: list[VisualState] = Field(default_factory=list)
+    recipe: BriefRecipe | None = None  # how the target's pages render, established in shaping
+    preparation: str = ""  # the declared test preparation option the shaping capture runs on
     specified: list[str] = Field(default_factory=list)  # criteria, states and checks the owner stated (TD-179)
     approved: list[Brief] = Field(default_factory=list)
     checks: list[PersonCheck] = Field(default_factory=list)  # an approved version's person checks (TD-185)
@@ -456,7 +475,9 @@ class Change(Record):
     env: Environment | None = None
     recipe: Recipe | None = None
     visual: VisualResult | None = None
-    before: VisualResult | None = None  # TD-24: the states at the merge-base, captured once; never gates
+    before: VisualResult | None = None  # the states at the merge-base, captured by each visual check; never gates
+    shaped: ShapingCapture | None = None  # the current draft's pages, captured in shaping; approval waits for it
+    reference: ShapingCapture | None = None  # the approved version's shaping pictures: the design reference
     visual_rounds: list[VisualRound] = Field(default_factory=list)  # TD-78: two judges per round
     owner_criteria: list[OwnerCriterion] = Field(default_factory=list)  # TD-79: checked by every later round
     waived: dict[str, str] = Field(default_factory=dict)  # TD-341: criteria the owner accepted unmet, by their text

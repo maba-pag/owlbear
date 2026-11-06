@@ -124,7 +124,11 @@ def test_a_ui_brief_needs_states_or_a_person_check_and_states_stay_under_the_pre
     person = {"name": "look", "steps": ["Open the page"], "expect": "Hallo"}
     assert any("visual: true" in e for e in check_brief(draft(ui=True, person_checks=[person])))
     assert check_brief(draft(ui=True, person_checks=[person | {"visual": True}])) == []
-    assert check_brief(draft(ui=True, visual=[HOME.model_dump(exclude={"version", "steps"})])) == []
+    home = [HOME.model_dump(exclude={"version", "steps"})]
+    assert check_brief(draft(ui=True, visual=home), recipe=False) == []  # an earlier chat sends no recipe
+    assert check_brief(draft(ui=True, visual=home))[0].startswith("recipe: empty for a UI brief with states")
+    recipe = {"command": "npm run dev -- --port {port}", "directory": ".", "ready_url": "http://127.0.0.1:{port}/"}
+    assert check_brief(draft(ui=True, visual=home, recipe=recipe)) == []
     bad = [{"name": "a", "path": "/../x", "expect": "e"}, {"name": "a", "path": "//evil", "expect": "e"}]
     errors = check_brief(draft(visual=bad))
     assert sum("must stay under the preview root" in e for e in errors) == 2

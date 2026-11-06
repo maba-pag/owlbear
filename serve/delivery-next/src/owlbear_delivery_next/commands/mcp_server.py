@@ -61,14 +61,20 @@ def save_brief(  # noqa: PLR0913 - the brief's nine fields
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
-def save_visual_check(
+def save_visual_check(  # noqa: PLR0913, PLR0917 - the visual check's six fields
     change: Annotated[str, _d("change", brief_tools.VisualDraft)],
     ui: Annotated[bool, _d("ui", brief_tools.VisualDraft)],
     states: Annotated[list[brief_tools.VisualStateDraft] | None, _d("states", brief_tools.VisualDraft)] = None,
     steps: Annotated[list[brief_tools.VisualStepDraft] | None, _d("steps", brief_tools.VisualDraft)] = None,
+    recipe: Annotated[brief_tools.RecipeDraft | None, _d("recipe", brief_tools.VisualDraft)] = None,
+    preparation: Annotated[str, _d("preparation", brief_tools.VisualDraft)] = "",
 ) -> dict[str, Any]:
-    """Set a Change's UI flag, the page states Delivery screenshots, and the clicks or typing before each."""
+    """Set a Change's UI flag, page states, their clicks or typing, and the recipe that renders the current pages.
+
+    Delivery then captures the target's current pages; call await_capture for the pictures.
+    """
     body = {"change": change, "ui": ui, "states": [s.model_dump() for s in states or []]}
+    body |= {"recipe": recipe.model_dump() if recipe else None, "preparation": preparation}
     return _STATE["chat"].save_brief(body | {"steps": [s.model_dump() for s in steps or []]}, "/briefs/visual")
 
 

@@ -195,3 +195,12 @@ class VisualResult(_Strict):
     def identity(self) -> str:
         """This capture among others of the same head: a recapture is another one."""
         return f"{self.head}@{self.at.isoformat()}"
+
+
+class ShapingCapture(_Strict):
+    """The capture of a shaping draft's current pages (D-01M61V2GR0C6JV2R6KJ0WR4PNB); its files live under its key."""
+
+    key: str  # what it renders: the brief's recipe, preparation option and states' paths and steps
+    requested: bool = True  # a runner captures it; done once its result is written
+    option: str = ""  # the declared preparation option it runs on
+    result: VisualResult | None = None  # the pictures, or why a state has none

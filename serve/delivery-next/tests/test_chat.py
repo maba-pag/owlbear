@@ -200,7 +200,8 @@ def test_a_saved_brief_reaches_the_workers_whole(repo):
     checks = [{"name": "walk", "steps": steps, "expect": "Walk ends"}]
     states = [{"name": "home", "path": "/", "expect": "Bye"}]
     body = {**BRIEF, "outcome": outcome, "criteria": [criterion], "non_goals": [non_goal], "decisions": decided}
-    saved = hosted(store).save_brief(body | {"person_checks": checks, "ui": True, "visual": states})
+    recipe = {"command": "npm run dev -- --port {port}", "directory": ".", "ready_url": "http://127.0.0.1:{port}/"}
+    saved = hosted(store).save_brief(body | {"person_checks": checks, "ui": True, "visual": states, "recipe": recipe})
     assert saved["saved"] is True
     change = store.read(store.slugs()[0])
 
