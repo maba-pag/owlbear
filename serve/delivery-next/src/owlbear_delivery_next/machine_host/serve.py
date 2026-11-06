@@ -193,22 +193,32 @@ def _provisioned(machine: Machine) -> bool:
     A failure is said and the projects load without the shared data, each saying why; never fatal. Then an accepted
     curation run's apply that a stop cut short is finished (`curation_resume`), unless the checkout is not cloned yet.
     """
+    problems: list[str] = []
     try:
         _, done = data_place.provision(clone=False)
         if done:
             machine.say(f"shared data: {done}")
     except data_repo.DataRepoError as exc:
-        why = failure(exc)
-        machine.unshared = f"at this start, {why}; `owlbear restart` looks again"  # not looked at again until then
-        machine.say(f"shared data: {why}")
+        problems.append(failure(exc))
     try:
         record = data_place.stored() or {}
-    except data_repo.DataRepoError:
+    except data_repo.DataRepoError as exc:
+        problems.append(failure(exc))
+        _unshared(machine, problems)
         return False
+    _unshared(machine, problems)
     cloning = bool(record.get("remote")) and not record.get("repository") and not record.get("moving_to")
     if not cloning:  # a checkout still to be cloned holds no cut-short apply
         curation_resume.recover(machine.curation)
     return cloning
+
+
+def _unshared(machine: Machine, problems: list[str]) -> None:
+    for why in dict.fromkeys(problems):
+        machine.say(f"shared data: {why}")
+    if problems:
+        why = "\n".join(dict.fromkeys(problems))
+        machine.unshared = f"at this start, {why}; `owlbear restart` looks again"
 
 
 def _cloning(machine: Machine) -> None:

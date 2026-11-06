@@ -229,8 +229,11 @@ def install(choice: Choice, report: Report = _quiet) -> Path:
         _build(choice, folder, report)
     except PackInstallError:
         raise
-    except VersionError:
-        remove(folder)
+    except VersionError as exc:
+        try:
+            remove(folder)
+        except (OSError, VersionError) as cleanup:
+            exc.add_note(f"removing the failed install also failed: {failure(cleanup)}")
         raise
     return folder
 
@@ -251,14 +254,14 @@ def _build(choice: Choice, folder: Path, report: Report) -> None:
     try:
         _git(_bare(repo()), "worktree", "add", "--quiet", "--detach", str(folder), choice.commit)
     except VersionError as exc:
-        report("getting", "failed", str(exc))
+        report("getting", "failed", failure(exc))
         raise
     report("getting", "done", f"{choice.tag} at {choice.commit[:12]}")
     report("building", "running", "uv sync --locked")
     try:
         _sync(folder)
     except VersionError as exc:
-        report("building", "failed", str(exc))
+        report("building", "failed", failure(exc))
         raise
     report("building", "done", "its environment is in place")
     _checked(choice, folder, report)
@@ -386,11 +389,14 @@ def keep_data(path: Path) -> None:
 def remove(folder: Path) -> None:
     """Remove an installed version's worktree and folder, if there is one; never one holding the shared data."""
     keep_data(folder)
-    with contextlib.suppress(VersionError):
-        _git(_bare(local_home.root() / REPO), "worktree", "remove", "--force", str(folder))
-    shutil.rmtree(folder, ignore_errors=True)
-    with contextlib.suppress(VersionError):
-        _git(_bare(local_home.root() / REPO), "worktree", "prune")
+    with contextlib.suppress(FileNotFoundError):
+        shutil.rmtree(folder)
+    bare = local_home.root() / REPO
+    try:
+        (bare / "HEAD").stat()
+    except FileNotFoundError:
+        return
+    _git(_bare(bare), "worktree", "prune")
 
 
 def prune() -> list[str]:
