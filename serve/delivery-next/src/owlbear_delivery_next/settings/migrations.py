@@ -356,6 +356,11 @@ def held_records_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def shaping_chat_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Change format 8 to 9: saving-chat bindings and one-shot hand-offs; old answers have no provenance."""
+    return data
+
+
 CHANGE: Migrations = {
     1: brief_challenged,
     2: visual_decided,
@@ -364,6 +369,7 @@ CHANGE: Migrations = {
     5: tests_added,
     6: waivers_added,
     7: held_records_added,
+    8: shaping_chat_added,
 }
 PROFILE: Migrations = {1: roles_moved, 2: prefs_import_added, 3: prefs_basis_added, 4: runtime_switch_dropped}
 CONFIG: Migrations = {

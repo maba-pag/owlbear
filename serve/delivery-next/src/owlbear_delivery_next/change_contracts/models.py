@@ -21,11 +21,12 @@ from owlbear_delivery_next.change_contracts.env_records import Environment, Reci
 from owlbear_delivery_next.change_contracts.held_records import HeldRecord, PendingChild
 from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
+from owlbear_delivery_next.change_contracts.shaper_records import SavingChat, ShaperNotice
 from owlbear_delivery_next.change_contracts.spend import Spend
 from owlbear_delivery_next.change_contracts.tool_use import ToolUse
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion, VisualResult, VisualRound, VisualStep
 
-FORMAT = 8
+FORMAT = 9
 DETAIL = 60000  # one review batch: up to 20 new and 20 owner-decided findings of about 1,300 characters
 
 type Actor = Literal["you", "admin", "delivery", "github"]
@@ -131,6 +132,7 @@ class Brief(Record):
     """The user's brief: the current draft, the approved version, and each approved version's content."""
 
     version: int = 0
+    saving_chat: SavingChat | None = None
     approved_version: int | None = None
     approved_at: datetime | None = None
     challenged: int | None = None  # the version its challenge loop ended on: approvable (TD-249, TD-208)
@@ -219,6 +221,7 @@ class Question(Record):
     answer: Answer | None = None
     delivered_at: datetime | None = None
     effect_observed_at: datetime | None = None
+    shaping_version: int | None = None
 
 
 class ItemRef(Record):
@@ -426,6 +429,7 @@ class Change(Record):
     profile_version: int = 0
     intent: Intent = Field(default_factory=Intent)
     brief: Brief = Field(default_factory=Brief)
+    shaper_notice: ShaperNotice | None = None
     checks: list[PersonCheck] = Field(default_factory=list)
     decisions: list[Decision] = Field(default_factory=list)
     questions: list[Question] = Field(default_factory=list)

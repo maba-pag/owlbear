@@ -47,6 +47,7 @@ from owlbear_delivery_next.project_host import (
     pds_routes,
     project_notes,
     session_slots,
+    shaping_chat,
     stop_routes,
     token_guard,
 )
@@ -270,10 +271,10 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         host.wake.set()
         return {"accepted": item.kind}
 
-    def save(
-        body: object, write: Callable[[Store, object], tuple[int, dict[str, Any]]] = save_brief
-    ) -> tuple[int, dict[str, Any]]:
-        code, out = write(store, body)
+    def save(body: object, *, visual: bool = False) -> tuple[int, dict[str, Any]]:
+        write = save_visual if visual else save_brief
+        tool = "save_visual_check" if write is save_visual else "save_brief"
+        code, out = write(store, body, binding=lambda: shaping_chat.binding(host.repo, tool, body))
         if code == 200:  # noqa: PLR2004 - HTTP OK
             host.wake.set()  # a version saved after its loop ended gets its challenge's start time at once (#986)
             out["next"] = (
@@ -328,7 +329,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
             body = await request.json()
         except ValueError:
             body = ""
-        code, out = save(body, save_visual)
+        code, out = save(body, visual=True)
         return JSONResponse(out, status_code=code)
 
     @router.get("/changes")

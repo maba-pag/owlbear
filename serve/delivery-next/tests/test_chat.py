@@ -69,7 +69,9 @@ class Host:
 
 
 def client(store):
-    app = api.create_app(store, "t", Host())
+    host = Host()
+    host.repo = store.root
+    app = api.create_app(store, "t", host)
     return TestClient(app, base_url="http://127.0.0.1", headers={"authorization": "Bearer t"})
 
 
