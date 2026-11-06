@@ -78,7 +78,7 @@ def stored(folder: Path) -> Read:
         pass
     engine = MemoryEngine(folder)
     entries = engine.load()
-    return Read(entries, engine.parse_errors, dict(engine.read_errors))
+    return Read(entries, engine.parse_errors, engine.read_errors)
 
 
 def readable(project: Iterable[MemoryEntry], shared: Iterable[MemoryEntry]) -> list[tuple[MemoryEntry, Where]]:

@@ -128,7 +128,7 @@ def collect(engine: MemoryEngine, read_errors: dict[str, str] | None, where: str
 
 def with_read_errors(data: dict[str, Any], read_errors: dict[str, str]) -> dict[str, Any]:
     """Leave healthy result shapes unchanged."""
-    return data | {"read_errors": dict(read_errors)} if read_errors else data
+    return data | {"read_errors": read_errors} if read_errors else data
 
 
 def _readable(ctx: Context, *, read_errors: dict[str, str] | None = None) -> list[MemoryEntry]:
