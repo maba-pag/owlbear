@@ -61,7 +61,7 @@ async def owned_call[T](st: _Step, operation: Callable[[], Awaitable[T]], what: 
 async def settle(recorded: Pids, problems: list[str], limit: float | None = None) -> Termination:
     """Wait until the recorded processes are gone, or the limit passes."""
     end = time.monotonic() + (SETTLE if limit is None else limit)
-    seen = partial(processes.observed, seen=processes.alive, problems=problems)
+    seen = partial(processes.observed, problems=problems)
     # Polls the OS process table; there is no event to wait on.
     while (  # noqa: ASYNC110
         ((result := verdict(recorded, seen, problems)).survivors or result.unknown) and time.monotonic() < end
@@ -86,7 +86,7 @@ async def force(st: _Step, why: str, problems: list[str]) -> None:
     _guard(problems, "force-stop log", st.log, event="force-stop", reason=why, runtime_pid=st.run.runtime_pid)
     with contextlib.suppress(OSError, AttributeError):
         st.proc.terminate()
-    seen = partial(processes.observed, seen=processes.alive, problems=problems)
+    seen = partial(processes.observed, problems=problems)
     processes.kill(st.run.pids, signal.SIGTERM, seen=seen)
     await settle(st.run.pids, problems, GRACE)
     with contextlib.suppress(OSError, AttributeError):
@@ -151,7 +151,7 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
     rt = st.run.runtime_pid
     if rt is None:
         problems.append("runtime PID unknown")
-    elif processes.observed(rt, st.run.pids.get(rt), seen=processes.alive, problems=problems) is not False:
+    elif processes.observed(rt, st.run.pids.get(rt), problems=problems) is not False:
         await force(st, "runtime still present after stop", problems)
     return await _last(st, problems)
 

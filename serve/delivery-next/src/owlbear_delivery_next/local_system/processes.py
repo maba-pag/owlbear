@@ -53,10 +53,10 @@ def alive(pid: int, created: float | None) -> bool | None:
         raise
 
 
-def observed(pid: int, created: float | None, *, seen: Observe, problems: list[str]) -> bool | None:
+def observed(pid: int, created: float | None, *, problems: list[str]) -> bool | None:
     """Observe during cleanup: retain an unexpected failure without abandoning other processes."""
     try:
-        return seen(pid, created)
+        return alive(pid, created)
     except (psutil.Error, OSError) as exc:
         why = f"process {pid} could not be observed: {failure(exc)}"
         if why not in problems:

@@ -234,7 +234,7 @@ class Chats:
     ) -> dict[str, Any]:
         if self.left:
             problems: list[str] = []
-            seen = partial(processes.observed, seen=processes.alive, problems=problems)
+            seen = partial(processes.observed, problems=problems)
             prior = processes.verdict(self.left, seen, problems)
             if not prior.confirmed:
                 states = ((prior.survivors, "still present"), (prior.unknown, "in an unknown state"))
