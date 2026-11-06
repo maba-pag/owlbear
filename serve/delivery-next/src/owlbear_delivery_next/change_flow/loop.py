@@ -315,7 +315,7 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> str:
         return f"question {q.id} is settled only by one of its options, a reconsideration by a note"
     if gate and (target != "pause" or c.step.kind != StepKind.CLEANUP):
         c.outcome = None
-    if (amended := owner_answers.amended(c, q, item, (kind, target), now)) is not None:
+    if (amended := owner_answers.amended(c, q, item, (kind, target, gate), now)) is not None:
         return amended
     if q.cause and kind_of(q.cause) in ENVIRONMENT | DEFECT and target != "pause":
         c.budgets.causes.pop(q.cause, None)  # "Done, continue" starts a new episode or streak

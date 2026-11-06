@@ -18,18 +18,23 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change, Question
 
 
-def amended(c: Change, q: Question, item: AnswerItem, how: tuple[str | None, str | None], now: datetime) -> str | None:
+def amended(
+    c: Change, q: Question, item: AnswerItem, how: tuple[str | None, str | None, bool], now: datetime
+) -> str | None:
     """An answer that changes the brief is never delivered: its amendment runs first (TD-185); None for others.
 
     A worker's question answered as a brief change starts it with the owner's words; a visual round's taken conflict
-    with that conflict alone, or says why not.
+    with that conflict alone, while the Change waits on that round (*how*'s last part), or says why not.
     """
-    kind, target = how
+    kind, target, waits = how
     if kind == "brief_change":
         amending.start(c, "answer", reason=item.text, now=now, question=q.id)
         return ""
     if target != "amend":
         return None
+    if not waits:  # a reshape since left the round's question behind: its conflicts are not this brief's
+        q.answer = None
+        return f"the Change moved on since question {q.id} asked"
     ident, kept = item.text.strip(), c.visual_rounds[-1] if c.visual_rounds else None
     k = next((k for v in (kept.verdicts if kept else []) for k in v.conflicts if k.id == ident), None)
     if k is None or k.departs in kept.owner:  # an owner's criterion is withdrawn, not amended

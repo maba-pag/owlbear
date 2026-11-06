@@ -672,6 +672,12 @@ def test_the_verdict_matrix_routes_a_design_fail_by_the_setting(flow, correct, s
         q, kept = loop.open_question(after), after.visual_rounds[-1]
         assert [o.id for o in q.options] == ["pass", "fail", "amend", "pause"]
         took = AnswerItem(at=NOW, question=q.id, option="amend", text="conflict-2", round=kept.number)
+        moved = after.model_copy(deep=True)  # a reshape since: the Change no longer waits on the round's question
+        moved.outcome = None
+        dropped: list = []
+        stale, _ = loop.schedule(moved, [took], NOW, dropped=dropped)
+        moved_on = f"the Change moved on since question {q.id} asked"
+        assert (stale.amendments, [why for _i, why in dropped]) == ([], [moved_on])
         taken, _ = loop.schedule(after, [took], NOW)
         [a] = taken.amendments
         assert ("clash 2" in a.reason, "clash 1" in a.reason, taken.amending is not None) == (True, False, True)
