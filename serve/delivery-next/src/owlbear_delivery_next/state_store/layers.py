@@ -41,7 +41,10 @@ def _parse[T: Record](raw: str, name: str, model: type[T], current: int, forward
         msg = f"{name} has format {version}, newer than {current}"
         raise FormatTooNewError(msg)
     if version < current and version not in forward:
-        msg = f"state of {name} has unsupported format {version}; restore a versioned state file"
+        msg = (
+            f"state of {name} cannot be migrated to format {current}: unsupported format {version}; "
+            "restore a versioned state file"
+        )
         raise StoreError(msg)
     written = version
     try:
