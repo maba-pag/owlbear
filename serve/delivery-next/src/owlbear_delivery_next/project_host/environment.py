@@ -29,7 +29,7 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
         h.mark(c, left, now)  # never a second group beside one that may still run
         return c
     # after disposal: a stop or question holds only the launch; a setting unset holds it before the gate's fetch
-    c, going = (c, False) if launch_gate.blocked(h) else decisions_gate.launch(h.store, c, now)
+    c, going = (c, False) if launch_gate.blocked(h) else decisions_gate.launch(h.store, c, now, lock=lock)
     if not going:
         return c
     root = Path(c.names.worktree)
