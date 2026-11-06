@@ -98,6 +98,7 @@ class RetroJob:
         self.checked, self.pruned_at = False, -PRUNE_EVERY
         self.skips = retro_block.Skips(self.seams.say, lambda uid: self.seams.blocked(uid).text)
         self.failed = ""  # the last pass's whole error, until a pass succeeds
+        self.prune_failed = ""
 
     @classmethod
     def attach(cls, m: Machine, fenced: Callable[[], str]) -> RetroJob:
@@ -182,7 +183,7 @@ class RetroJob:
         self._chats()
         if now - self.pruned_at >= PRUNE_EVERY and not self.waiting:
             self.pruned_at = now
-            prune(self.seams.say)
+            self.prune_failed = prune(self.seams.say)
 
     def _closed(self) -> bool:
         return bool(self.seams.fenced() or self.halting or self.lingering())

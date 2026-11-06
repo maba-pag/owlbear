@@ -194,10 +194,12 @@ def _unit_states() -> dict[str, int]:
     return dict(Counter(states))
 
 
-def retro(projects: units.Projects, switches: Mapping[str, Any], failed: str = "") -> dict[str, Any]:
+def retro(
+    projects: units.Projects, switches: Mapping[str, Any], failed: str = "", prune_failed: str = ""
+) -> dict[str, Any]:
     """Retro's queue, newest runs and findings, units by state, switches and the finished Changes it may run on.
 
-    *failed* is the Retro job's last pass's whole error, "" once a pass succeeded.
+    *failed* is the last pass's error; *prune_failed* stays until pruning, not merely a pass, succeeds.
 
     Each finding carries its follow-up, a chat's too: a chat has no Change page to follow it up on.
     """
@@ -227,6 +229,7 @@ def retro(projects: units.Projects, switches: Mapping[str, Any], failed: str = "
         "switches": dict(switches),
         "finished": finished,
         "failed": failed,
+        "prune_failed": prune_failed,
     }
     return shown | ({"unread": unread} if unread else {})
 

@@ -178,15 +178,17 @@ def pinned() -> set[str]:
     return pins - {""}
 
 
-def prune(say: Callable[[str], None]) -> None:
+def prune(say: Callable[[str], None]) -> str:
     """Remove the captures of judged chats nothing pins, saying how many or why it could not."""
     try:
         gone = chatlogs.prune(datetime.now(UTC), judged_sessions(), pinned())
     except (store.RetroError, OSError, ValueError) as exc:
-        say(f"Retro could not prune judged captures: {type(exc).__name__}: {exc}")
-        return
+        why = f"Retro could not prune judged captures: {failure(exc)}"
+        say(why)
+        return why
     if gone:
         say(f"Retro pruned the captures of {len(gone)} judged sessions")
+    return ""
 
 
 NEEDS = (*retro_judge.NEEDS, assumptions.RETRO_LESSON_BAR, assumptions.RETRO_CATCHABLE)  # what every run rests on

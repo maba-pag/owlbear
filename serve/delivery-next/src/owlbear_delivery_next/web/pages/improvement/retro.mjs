@@ -46,6 +46,11 @@ function passFailed(failed) {
     <p class="meta">Retro's last pass failed, and the next one tries again: ${failed}</p></li>`;
 }
 
+function pruningFailed(failed) {
+  return failed ? html`<li class="panel" id="retro-prune-failed"><div class="row">${tag("Pruning failed", "warning")}
+    </div><p class="meta">${failed}</p></li>` : nothing;
+}
+
 async function followUp(f) {
   if (state.busy || !(await askFollowup(f, "finding"))) return;
   await act(`followup:${f.id}`, () => send(f), said);
@@ -120,7 +125,8 @@ export function retroSection(r) {
         : empty("Retro has found nothing yet.")}
     ${heading(3, "Runs", "md")}
     ${r.runs === null ? unread("Retro's runs", errors("runs")) : nothing}
-    ${r.runs?.length || r.failed ? html`<ul class="cards">${passFailed(r.failed)}${(r.runs ?? []).map(run)}</ul>`
+    ${r.runs?.length || r.failed || r.prune_failed ? html`<ul class="cards">${passFailed(r.failed)}${
+      pruningFailed(r.prune_failed)}${(r.runs ?? []).map(run)}</ul>`
       : r.runs === null ? nothing : empty("No Retro run yet.")}
   </section>`;
 }
