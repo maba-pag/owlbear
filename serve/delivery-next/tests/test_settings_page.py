@@ -1621,7 +1621,8 @@ def test_the_github_account_shows_the_account_it_resolves_to_in_each_layer(
         page.reload()
         opened(page, pds, "checks")
         expect(_in_use(page, "set-github_account")).to_contain_text(
-            "in use: repository-owner: github account: gh holds no account acme or maba-pag on github.com"
+            "in use: repository-owner: AccountMissing: github account: "
+            "gh holds no account acme or maba-pag on github.com"
         )
     layers = (store.read_config(), read_layer(store.global_path, config.GlobalLayer))
     assert [layer.github_account for layer in layers] == [None, "repository-owner"]

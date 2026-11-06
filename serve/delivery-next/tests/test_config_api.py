@@ -211,6 +211,7 @@ def test_the_account_row_keeps_a_failed_origin_command_whole(store, monkeypatch,
     def origin(*_args, **_kwargs):
         raise expired
 
+    monkeypatch.setattr(config_routes, "time", SimpleNamespace(monotonic=lambda: 0.0))
     monkeypatch.setattr(account.subprocess, "run", origin)
     got = client(store, headers=AUTH).get("/api/next/config")
     assert got.status_code == 200
