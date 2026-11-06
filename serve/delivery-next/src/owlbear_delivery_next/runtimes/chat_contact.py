@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import quote, unquote
 
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.improvement import chatlogs
+from owlbear_delivery_next.improvement import chatlogs, events
 from owlbear_delivery_next.runtimes import ahp, readiness, vscode_message
 from owlbear_delivery_next.runtimes.vscode_contract import StepSpec
 
@@ -121,7 +121,7 @@ def _calls(path: Path, tool: str) -> dict[str, Any]:
             event = json.loads(line)
             data, kind = event.get("data") or {}, event.get("type")
             cid = str(data.get("toolCallId") or "")
-            if kind in {"abort", "session.abort", "session.shutdown", "user.message"}:
+            if kind in events.STOPS or (events.main_agent(event) and events.requester(event)):
                 calls.clear()
             elif kind == "tool.execution_complete":
                 calls.pop(cid, None)
