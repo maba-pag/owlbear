@@ -1038,6 +1038,26 @@ def test_a_failed_status_read_is_tried_again_while_the_dialog_is_open(tmp_path, 
         expect(modal).to_contain_text("Set up on this Mac only")
 
 
+@pytest.mark.usefixtures("hub")
+def test_a_new_run_for_a_folder_replaces_its_unfinished_one(jobs, tmp_path, monkeypatch):
+    found = jobs.probe({"kind": "new", "name": "demo", "github": False, "folder": str(tmp_path / "demo")})
+    real = onboarding_git.first_commit
+
+    def once(_path: Path, _message: str) -> str:
+        monkeypatch.setattr(onboarding_git, "first_commit", real)
+        said = "the commit failed"
+        raise RuntimeError(said)
+
+    monkeypatch.setattr(onboarding_git, "first_commit", once)
+    local = run(jobs, plan_for(found, repository=""))
+    assert stage(local, "commit")["state"] == "failed"
+    again = jobs.probe({"kind": "folder", "folder": found["folder"], "github": True})
+    published = run(jobs, plan_for(again, repository="ada/demo"))
+    assert published["ended"] == "done"
+    assert jobs.get(local["id"]).receipt["ended"] == "replaced"
+    assert jobs.listed() == []
+
+
 def test_a_file_two_consents_write_is_said_once(tmp_path, monkeypatch):
     def writing(*_a: Any, **_k: Any) -> None:
         for line in ("written: .mcp.json", "written: .mcp.json", "written: .vscode/settings.json"):
