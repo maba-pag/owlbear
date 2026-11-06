@@ -182,14 +182,14 @@ def _gone(done: Run) -> str:
 
 def _unended(done: Run, result: audit_tools.AuditResult | None) -> str:
     gone = _gone(done)
+    usage = f"the auditor's model is unknown: {done.usage_unread}" if done.usage_unread else ""
     if done.ending != "result" or result is None:
-        detail = "\n".join(dict.fromkeys(filter(None, (done.detail, done.audit_rejection))))
+        detail = "\n".join(dict.fromkeys(filter(None, (done.detail, done.audit_rejection, usage))))
         return f"no usable audit report was accepted: ended {done.ending}; {detail}{gone}"
     if gone:
-        return f"the auditor's processes are not proven ended; recover the session on the Maintenance page{gone}"
-    if done.usage_unread:
-        return f"the auditor's model is unknown: {done.usage_unread}"
-    return ""
+        reason = f"the auditor's processes are not proven ended; recover the session on the Maintenance page{gone}"
+        return "\n".join(filter(None, (reason, usage)))
+    return usage
 
 
 def judge(report: object, *, schema: dict[str, Any], version: str, at: Path | None = None) -> Verdict:
