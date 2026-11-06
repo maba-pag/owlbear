@@ -137,7 +137,7 @@ but remove receipts for the previous revision.
 All storage functions enforce path containment (resolved path must be within
 `memory_dir`) and symlink rejection before any I/O.
 
-### `read_entry(path: Path) -> MemoryEntry | None`
+### `read_entry(path: Path, *, read_errors: dict[str, str] | None = None) -> MemoryEntry | None`
 
 Reads one memory entry file. Returns `None` for any of:
 
@@ -147,6 +147,10 @@ Reads one memory entry file. Returns `None` for any of:
 - Pydantic validation failure
 
 Never raises on malformed input (lenient read contract).
+When supplied, `read_errors` collects each skipped file's safe typed diagnostic, keyed by the
+supplied path. Valid reads leave the collector unchanged. Validation details include parser kind
+and position or schema location and error code, never private YAML snippets, invalid values or
+Pydantic input/context. Operational read failures retain their type, message, path and notes.
 
 ### `read_entry_strict(path: Path) -> MemoryEntry`
 
@@ -311,7 +315,18 @@ do not acquire this lock. No lock file or second locking protocol is used.
 #### Lenient Read
 
 `get_entries()` and `load()` skip unparseable files and track the count of skipped
-files in `engine.parse_errors`. When duplicate UUIDs are found across files, the entry
+files in `engine.parse_errors` and their safe diagnostics in `engine.read_errors`, keyed by file
+path. Entries, count and diagnostics describe the same loaded snapshot: cached reads retain the
+diagnostics, and a successful fresh load clears resolved errors. `get_entry()` includes these
+diagnostics when an entry cannot be found in an incomplete read.
+
+`health()` independently returns `MemoryHealth.unreadable_paths`, `duplicate_paths` and
+`read_errors` (keyed by relative filename), without changing the engine's cache, parse count,
+diagnostics or files. `selection.stored(folder)` returns `Read.entries`, `unreadable` and
+`read_errors`; `complete` remains false when any entry was unreadable. A missing folder remains
+complete and empty without being created.
+
+When duplicate UUIDs are found across files, the entry
 with the latest `updated_at` is canonical. Ties prefer `<id>.md`, then the lexicographically
 first relative path. Reads and `health()` report or select duplicates without writing.
 
@@ -322,7 +337,8 @@ content, provenance, and scope. The canonical file keeps the original ID. If rep
 complete, `DuplicateEntryError` names the ID and relative paths and the triggering mutation
 does not run. A partial repair keeps any new entries already written and leaves remaining
 duplicate source files for a later retry. `repair_duplicate_ids(memory_dir)` is exported for
-batch operations; callers must hold `writer_lock` for that directory.
+batch operations; callers must hold `writer_lock` for that directory. Its optional keyword
+`read_errors` collects omissions from its preliminary scan without changing the repair strategy.
 
 ### Read freshness
 

@@ -19,6 +19,7 @@ from owlbear_memory.errors import (
     NotFoundError,
     TransitionError,
     ValidationError,
+    read_warning,
 )
 from owlbear_memory.models import (
     AssessmentReceipt,
@@ -60,11 +61,13 @@ class _DuplicateRepairContext:
     existing_ids: set[str]
 
 
-def _read_entries_by_id(memory_dir: Path) -> tuple[int, dict[str, list[tuple[Path, MemoryEntry]]]]:
+def _read_entries_by_id(
+    memory_dir: Path, *, read_errors: dict[str, str] | None = None
+) -> tuple[int, dict[str, list[tuple[Path, MemoryEntry]]]]:
     parse_errors = 0
     entries_by_id: dict[str, list[tuple[Path, MemoryEntry]]] = {}
     for file_path in sorted(memory_dir.glob("*.md")):
-        entry = storage.read_entry(file_path)
+        entry = storage.read_entry(file_path, read_errors=read_errors)
         if entry is None:
             parse_errors += 1
             continue
@@ -269,10 +272,10 @@ def _delete_duplicate_sources(
                 raise DuplicateEntryError(entry_id, error_paths) from error
 
 
-def repair_duplicate_ids(memory_dir: Path | str) -> None:
+def repair_duplicate_ids(memory_dir: Path | str, *, read_errors: dict[str, str] | None = None) -> None:
     """Repair duplicate IDs; callers must hold writer_lock for ``memory_dir``."""
     directory = Path(memory_dir)
-    _, entries_by_id = _read_entries_by_id(directory)
+    _, entries_by_id = _read_entries_by_id(directory, read_errors=read_errors)
     if not any(len(copies) >= _DUPLICATE_COPY_THRESHOLD for copies in entries_by_id.values()):
         return
     plans = _prepare_duplicate_repairs(directory, entries_by_id)
@@ -355,6 +358,7 @@ class MemoryEngine:
         self._lock = RLock()
         self._writer_lock_timeout = writer_lock_timeout
         self.parse_errors = 0
+        self.read_errors: dict[str, str] = {}
 
     @contextmanager
     def _writer(self) -> Iterator[None]:
@@ -380,7 +384,8 @@ class MemoryEngine:
         return self._load_from_disk()
 
     def _load_from_disk(self) -> list[MemoryEntry]:
-        self.parse_errors, entries_by_id = _read_entries_by_id(self._memory_dir)
+        read_errors: dict[str, str] = {}
+        parse_errors, entries_by_id = _read_entries_by_id(self._memory_dir, read_errors=read_errors)
         by_id: dict[str, MemoryEntry] = {}
         id_to_path: dict[str, Path] = {}
 
@@ -395,6 +400,8 @@ class MemoryEngine:
 
         self._entries = list(by_id.values())
         self._id_to_path = id_to_path
+        self.parse_errors = parse_errors
+        self.read_errors = read_errors
         return list(self._entries)
 
     def get_entries(self) -> list[MemoryEntry]:
@@ -447,9 +454,10 @@ class MemoryEngine:
         with self._lock:
             paths_by_id: dict[str, list[str]] = {}
             unreadable_paths: list[str] = []
+            read_errors: dict[str, str] = {}
 
             for file_path in sorted(self._memory_dir.glob("*.md")):
-                entry = storage.read_entry(file_path)
+                entry = storage.read_entry(file_path, read_errors=read_errors)
                 relative_path = str(file_path.relative_to(self._memory_dir))
                 if entry is None:
                     unreadable_paths.append(relative_path)
@@ -457,7 +465,13 @@ class MemoryEngine:
                 paths_by_id.setdefault(entry.id, []).append(relative_path)
 
             duplicate_paths = {entry_id: paths for entry_id, paths in paths_by_id.items() if len(paths) > 1}
-            return MemoryHealth(unreadable_paths=unreadable_paths, duplicate_paths=duplicate_paths)
+            return MemoryHealth(
+                unreadable_paths=unreadable_paths,
+                duplicate_paths=duplicate_paths,
+                read_errors={
+                    str(Path(path).relative_to(self._memory_dir)): detail for path, detail in read_errors.items()
+                },
+            )
 
     def get_entry(self, entry_id: str) -> MemoryEntry:
         """Return one entry by ID or raise NotFoundError."""
@@ -465,6 +479,8 @@ class MemoryEngine:
             if entry.id == entry_id:
                 return entry
         msg = f"Entry not found: {entry_id}"
+        if warning := read_warning(self.read_errors):
+            msg += f"\n{warning}"
         raise NotFoundError(msg)
 
     def approve(
