@@ -125,8 +125,8 @@ class _World:
             return False
         return None if created is None else self.live[pid] == created
 
-    def kill(self, recorded, sig):
-        targets, _ = processes.targets(recorded, self.alive, lambda _: -1, -2)
+    def kill(self, recorded, sig, *, seen=None):
+        targets, _ = processes.targets(recorded, seen or self.alive, lambda _: -1, -2)
         self.signals.append((sig, targets))
         for pid in targets:
             self.live.pop(pid, None)

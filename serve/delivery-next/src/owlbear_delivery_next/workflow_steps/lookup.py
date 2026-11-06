@@ -20,6 +20,7 @@ import tempfile
 import threading
 import uuid
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -175,6 +176,7 @@ class Chats:
         """No lookup runs yet and none was left."""
         self.slot = threading.BoundedSemaphore(1)  # a semaphore, so the thread that finishes a started one releases it
         self.left: dict[int, float | None] = {}  # an unconfirmed run's processes, until a rescan sees them gone
+        self.left_problems: tuple[str, ...] = ()
         self.lock = threading.Lock()
         self.answers: dict[str, dict[str, Any] | None] = {}  # a started lookup's answer by id; None while it runs
 
@@ -230,14 +232,23 @@ class Chats:
     def _run(
         self, shared: DataRepo | None, project: str, question: str, settings: Callable[[], Settings] | None
     ) -> dict[str, Any]:
-        if self.left and not processes.verdict(self.left, processes.alive).confirmed:
-            return {"failed": LEFT}
+        if self.left:
+            problems: list[str] = []
+            seen = partial(processes.observed, seen=processes.alive, problems=problems)
+            prior = processes.verdict(self.left, seen, problems)
+            if not prior.confirmed:
+                states = ((prior.survivors, "still present"), (prior.unknown, "in an unknown state"))
+                detail = [f"processes {', '.join(map(str, pids))} {state}" for pids, state in states if pids]
+                detail += list(dict.fromkeys((*self.left_problems, *prior.problems)))
+                return {"failed": f"{LEFT}: " + "\n".join(detail)}
+            self.left, self.left_problems = {}, ()
         with spend_ledger.at(spend_ledger.Where(project=project, name=project, job=CHAT)):  # never the chat's
             said, done = chat(shared, project, question, settings)
         t = done.termination if done else None
         gone = done is None or (t is not None and t.confirmed)
         left = dict.fromkeys((*t.survivors, *t.unknown) if t else ()) | (done.pids if done else {})
         self.left = {} if gone else left
+        self.left_problems = t.problems if t is not None and not gone else ()
         return said
 
 

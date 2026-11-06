@@ -354,10 +354,10 @@ class _Step(StepTools):
 
     def replace(self) -> str | None:
         """The resumed session is absent: replace it only once every earlier recorded process is observed gone."""
+        self.run.pids = dict(self.cfg.previous) | self.run.pids
         prior = verdict(self.cfg.previous, processes.alive)
         self.log(event="session-missing", previous=sorted(self.cfg.previous), gone=prior.confirmed)
         if not prior.confirmed:
-            self.run.pids.update(self.cfg.previous)
             states = ((prior.survivors, "still present"), (prior.unknown, "in an unknown state"))
             seen = "; ".join(f"{', '.join(map(str, pids))} {state}" for pids, state in states if pids)
             self.finish("missing", detail=f"session missing; earlier processes are not observed gone: {seen}")
