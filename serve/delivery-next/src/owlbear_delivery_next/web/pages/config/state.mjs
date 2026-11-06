@@ -7,8 +7,8 @@ export const INHERIT = "inherit";  // the option that clears the layer's own val
 export const SOURCES = { default: "built-in default", global: "global", machine: "this machine",
   project: "this project", builder: "the builder's value" };
 export const LAYERS = { project: "This project", machine: "This machine", global: "All projects" };
-export const NUMBERS = [...ROUNDS.map(([f]) => f), "minutes", "sessions", "curator_threshold", "steer_share",
-  "intervention_cap", "sample_rate", "update_check_hours_owlbear", "update_check_hours_pds",
+export const NUMBERS = [...ROUNDS.map(([f]) => f), "challenge_wait", "minutes", "sessions", "curator_threshold",
+  "steer_share", "intervention_cap", "sample_rate", "update_check_hours_owlbear", "update_check_hours_pds",
   "update_check_hours_impeccable", "stale_factor", "purge_days", "preflight_cap", "preflight_budget", "recall_limit",
   "explore_slots", "challenge_slots"];  // whole numbers
 // Credit limits (D-01M5XCD49YHHR1NQKKY8TQD0C3): credit amounts, a fraction allowed.

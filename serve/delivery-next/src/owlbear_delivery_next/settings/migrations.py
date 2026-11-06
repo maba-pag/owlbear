@@ -306,6 +306,14 @@ def github_account_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def challenge_wait_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Settings format 22 to 23: the shaper's wait before Delivery starts a missing brief challenge.
+
+    It starts unset in every layer (D-01M6P1685N1R5W2PPV5SHKR2H0); older runtimes refuse format 23.
+    """
+    return data
+
+
 def credit_limits_written(data: dict[str, Any]) -> dict[str, Any]:
     """Global's format 15 to 16: the credit limits are written into Global once (D-01M5XCD49YHHR1NQKKY8TQD0C3).
 
@@ -380,5 +388,6 @@ CONFIG: Migrations = {
     19: guard_level_added,
     20: memory_values_added,
     21: github_account_added,
+    22: challenge_wait_added,
 }
 GLOBAL: Migrations = CONFIG | {15: credit_limits_written}  # the Global layer's: only it is written the limits

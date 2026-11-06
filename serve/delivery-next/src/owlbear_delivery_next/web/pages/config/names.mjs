@@ -4,6 +4,8 @@
 // TD-209: a loop's round values, as the challenge rounds table names its rows and columns.
 export const ROUNDS = [["max_rounds", "Rounds at most"], ["max_findings", "New findings per round at most"],
   ["last_round_at", "Last round at or below"], ["ask_owner_at", "Ask you at or above"]];
+// D-01M6P1685N1R5W2PPV5SHKR2H0: the brief loop's wait before Delivery starts a missing challenge, the shaper's only.
+export const WAIT = ["challenge_wait", "Challenge starts by itself after (minutes)"];
 export const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan challenges (planner)"],
   ["builder", "Task reviews (builder)"], ["final_review", "Final review"],
   ["updater", "Impeccable updates (updater)"]];
@@ -96,6 +98,7 @@ function parts(key) {
       return a === "spotter" && ["minutes", "subagents"].includes(b) ? null : ["", agentName(a), COLUMN[b]];
     }
     const loop = LOOPS.find(([o]) => o === a);
+    if (b === WAIT[0]) return a === "shaper" ? ["", loop[1], WAIT[1]] : null;
     if (round(b)) return loop ? ["", loop[1], round(b)[1]] : null;
   } else if (head === "final_review" && round(a)) {
     return ["", LOOPS.find(([o]) => o === "final_review")[1], round(a)[1]];
