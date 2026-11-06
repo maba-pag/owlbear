@@ -35,21 +35,43 @@ _CONFIG_TESTS = {
     "renovate.json": ("tests/test_dependency_verification_workflow.py",),
     ".github/workflows/agent-ecosystem.yml": (
         "tests/test_ci_workflows.py",
+        "tests/test_linter_formatter_policy.py",
         "tests/test_agent_ecosystem_validation.py",
         "serve/tools/tests/test_quality.py",
     ),
-    ".github/workflows/ci.yml": ("tests/test_ci_workflows.py", "tests/test_snyk_findings.py"),
+    ".github/workflows/ci.yml": (
+        "tests/test_ci_workflows.py",
+        "tests/test_linter_formatter_policy.py",
+        "tests/test_snyk_findings.py",
+    ),
     ".github/workflows/copilot-setup-steps.yml": (
         "tests/test_ci_workflows.py",
+        "tests/test_linter_formatter_policy.py",
         "tests/test_dependency_verification_workflow.py",
     ),
-    ".github/workflows/python.yml": ("tests/test_ci_workflows.py",),
-    ".github/workflows/python-browser.yml": ("tests/test_ci_workflows.py",),
+    ".github/workflows/python.yml": ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py"),
+    ".github/workflows/python-browser.yml": ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py"),
     ".github/workflows/static.yml": ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py"),
-    ".github/workflows/tooling.yml": ("tests/test_ci_workflows.py", "tests/test_dependency_verification_workflow.py"),
-    ".github/workflows/security.yml": ("tests/test_ci_workflows.py", "tests/test_snyk_findings.py"),
-    ".github/workflows/release.yml": ("tests/test_release.py",),
-    ".github/workflows/snyk-ignore.yml": ("tests/test_snyk_findings.py",),
+    ".github/workflows/tooling.yml": (
+        "tests/test_ci_workflows.py",
+        "tests/test_linter_formatter_policy.py",
+        "tests/test_dependency_verification_workflow.py",
+    ),
+    ".github/workflows/security.yml": (
+        "tests/test_ci_workflows.py",
+        "tests/test_linter_formatter_policy.py",
+        "tests/test_snyk_findings.py",
+    ),
+    ".github/workflows/release.yml": (
+        "tests/test_ci_workflows.py",
+        "tests/test_linter_formatter_policy.py",
+        "tests/test_release.py",
+    ),
+    ".github/workflows/snyk-ignore.yml": (
+        "tests/test_ci_workflows.py",
+        "tests/test_linter_formatter_policy.py",
+        "tests/test_snyk_findings.py",
+    ),
 }
 # Packages whose own tests testmon selects for a Python source change; it needs the classic tracer on 3.14 and
 # --testmon-forceselect, because the configured -m otherwise turns its selection off.

@@ -128,25 +128,49 @@ def test_a_page_change_beside_a_source_change_keeps_the_source_scope() -> None:
             ".github/workflows/agent-ecosystem.yml",
             (
                 "tests/test_ci_workflows.py",
+                "tests/test_linter_formatter_policy.py",
                 "tests/test_agent_ecosystem_validation.py",
                 "serve/tools/tests/test_quality.py",
             ),
         ),
-        (".github/workflows/ci.yml", ("tests/test_ci_workflows.py", "tests/test_snyk_findings.py")),
+        (
+            ".github/workflows/ci.yml",
+            ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py", "tests/test_snyk_findings.py"),
+        ),
         (
             ".github/workflows/copilot-setup-steps.yml",
-            ("tests/test_ci_workflows.py", "tests/test_dependency_verification_workflow.py"),
+            (
+                "tests/test_ci_workflows.py",
+                "tests/test_linter_formatter_policy.py",
+                "tests/test_dependency_verification_workflow.py",
+            ),
         ),
-        (".github/workflows/python.yml", ("tests/test_ci_workflows.py",)),
-        (".github/workflows/python-browser.yml", ("tests/test_ci_workflows.py",)),
+        (".github/workflows/python.yml", ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py")),
+        (
+            ".github/workflows/python-browser.yml",
+            ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py"),
+        ),
         (".github/workflows/static.yml", ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py")),
         (
             ".github/workflows/tooling.yml",
-            ("tests/test_ci_workflows.py", "tests/test_dependency_verification_workflow.py"),
+            (
+                "tests/test_ci_workflows.py",
+                "tests/test_linter_formatter_policy.py",
+                "tests/test_dependency_verification_workflow.py",
+            ),
         ),
-        (".github/workflows/security.yml", ("tests/test_ci_workflows.py", "tests/test_snyk_findings.py")),
-        (".github/workflows/release.yml", ("tests/test_release.py",)),
-        (".github/workflows/snyk-ignore.yml", ("tests/test_snyk_findings.py",)),
+        (
+            ".github/workflows/security.yml",
+            ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py", "tests/test_snyk_findings.py"),
+        ),
+        (
+            ".github/workflows/release.yml",
+            ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py", "tests/test_release.py"),
+        ),
+        (
+            ".github/workflows/snyk-ignore.yml",
+            ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py", "tests/test_snyk_findings.py"),
+        ),
     ],
 )
 def test_known_root_configs_run_their_consumers(config: str, expected: tuple[str, ...]) -> None:
