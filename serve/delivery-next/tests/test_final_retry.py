@@ -504,9 +504,11 @@ def test_a_kept_check_runs_from_each_package_of_its_task(change_repo, monkeypatc
     ]
     t4 = Task(id="t4", title="four", scope=["my app/q.ts"], checks=["cd 'my app' && npm test"])
     spaced = Profile(entries={"check:my app": ProfileEntry(state="known", value="npm test")})
-    assert rebuilds._placed(spaced, [t4]) == ["cd 'my app' && npm test"]  # noqa: SLF001
+    c.plan = Plan(tasks=[t4])
+    assert rebuilds.checks(c, ["t4"], spaced) == ["cd 'my app' && npm test"]
     t5 = Task(id="t5", title="five", scope=["packages/ab/z.ts"], checks=["cd . && npm test"])
-    assert rebuilds._placed(profile, [t5]) == ["cd . && npm test"]  # noqa: SLF001 - never relocate a selected check
+    c.plan = Plan(tasks=[t5])
+    assert rebuilds.checks(c, ["t5"], profile) == ["cd . && npm test"]  # never relocate a selected check
     both = ["cd packages/b && npm test", "cd packages/b && npm test:unit"]
     ran = tools.BuildResult(summary="b", checks=[{"command": k, "exit_code": 0} for k in both])
     assert [e for e in tools.check_build(ran, tree, both) if "missing" in e] == []

@@ -145,7 +145,7 @@ def checks(c: Change, rebuild: Sequence[str], profile: Profile) -> list[str]:
         return []
     last = picked[-1]
     others = [t for t in tasks if t.origin == "plan" and t is not last and t.checks]
-    return _placed(profile, [last, *others])
+    return check_hint.resolve([check for task in (last, *others) for check in task.checks], worktree.checks(profile))
 
 
 def rotated(c: Change, lp: RoundLoop, undone: list[Task], required: Sequence[str]) -> None:
@@ -169,8 +169,3 @@ def rotated(c: Change, lp: RoundLoop, undone: list[Task], required: Sequence[str
         go(c, StepKind.BUILD, nxt.id)
     else:
         go(c, StepKind.REVIEW, mode="final")
-
-
-def _placed(profile: Profile, tasks: Sequence[Task]) -> list[str]:
-    """Preserve each task's selected execution identities, including checks outside its edit scope."""
-    return check_hint.resolve([c for task in tasks for c in task.checks], worktree.checks(profile))
