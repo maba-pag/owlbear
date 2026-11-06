@@ -378,6 +378,9 @@ def test_main() -> None:
             paths = []
             all_tests = True
     commands = _commands_for_paths(paths, all_tests=all_tests, coverage=args.coverage)
+    if args.changed:
+        for command, _cwd in commands:
+            command.extend(["-o", "session_timeout="])
     if not commands:
         print("No test scope matched the selected paths.")  # noqa: T201
         raise SystemExit(0)

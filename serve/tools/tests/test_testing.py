@@ -218,21 +218,28 @@ def test_no_paths_runs_the_full_suite() -> None:
     call.assert_called_once_with(["uv", "run", "--locked", "pytest", "tests", "serve"], cwd=_ROOT)
 
 
-def test_changed_runs_git_scope_and_accepts_explicit_base() -> None:
+@pytest.mark.parametrize("options", [[], ["--coverage"]], ids=["plain-and-testmon", "coverage"])
+def test_changed_runs_git_scope_and_accepts_explicit_base(options: list[str]) -> None:
     with (
-        patch.object(sys, "argv", ["test", "--changed", "--base", "origin/dev"]),
-        patch(
-            "owlbear_tools.testing._changed_paths", return_value=["serve/tools/src/owlbear_tools/commands.py"]
-        ) as changed_paths,
+        patch.object(sys, "argv", ["test", "--changed", "--base", "origin/dev", *options]),
+        patch("owlbear_tools.testing._changed_paths", return_value=[_LOOP]) as changed_paths,
         patch("owlbear_tools.testing.subprocess.call", return_value=0) as call,
         pytest.raises(SystemExit, match="0"),
     ):
         run_test()
 
     changed_paths.assert_called_once_with("origin/dev")
-    command = call.call_args.args[0]
-    assert command[:4] == ["uv", "run", "--locked", "pytest"]
-    assert "tests/test_package_boundary.py" in command
+    commands = [item.args[0] for item in call.call_args_list]
+    assert len(commands) == (1 if options else 2)
+    assert commands[0][:4] == ["uv", "run", "--locked", "pytest"]
+    assert "tests/test_package_boundary.py" in commands[0]
+    assert all(command[-2:] == ["-o", "session_timeout="] for command in commands)
+    if options:
+        assert "--cov" in commands[0]
+        assert "--testmon" not in commands[0]
+    else:
+        assert commands[1][0] == "env"
+        assert "--testmon" in commands[1]
 
 
 def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() -> None:
@@ -247,13 +254,14 @@ def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() 
     ):
         run_test()
 
-    assert call.call_args.args[0] == ["uv", "run", "--locked", "pytest", "tests", "serve"]
+    assert call.call_args.args[0] == ["uv", "run", "--locked", "pytest", "tests", "serve", "-o", "session_timeout="]
 
 
 def test_failures_are_aggregated_across_all_commands() -> None:
     commands = [(["uv", "run", "pytest", "a"], _ROOT), (["uv", "run", "pytest", "b"], _ROOT)]
     with (
-        patch.object(sys, "argv", ["test", "--all"]),
+        patch.object(sys, "argv", ["test", "--changed"]),
+        patch("owlbear_tools.testing._changed_paths", return_value=[]),
         patch("owlbear_tools.testing._commands_for_paths", return_value=commands),
         patch("owlbear_tools.testing.subprocess.call", side_effect=[1, 0]) as call,
         pytest.raises(SystemExit, match="1"),

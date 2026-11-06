@@ -141,7 +141,9 @@ Explicit routine `-m` expressions must include `not model` because they replace 
 - **Coverage.** Bare `--cov` reads `source_pkgs` from `pyproject.toml`. Locally observed explicit
   module/path forms can conflict with Pydantic instrumentation or report misleading zero coverage.
 - **Timeouts.** `pytest-timeout` uses the values configured in OwlBear's `pyproject.toml`; inspect the
-  current file rather than copying numeric limits.
+  current file rather than copying numeric limits. Only `uv run test --changed` disables the aggregate
+  session timer, including changed coverage and full fallback; individual-test timeouts and failures stay.
+  The runner supplies the empty ini override `-o session_timeout=`. Numeric zero expires after the first test.
 - **Plugin auto-loading disabled.** Some VS Code terminal sessions export
   `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`. This hides `pytest-xdist`, `pytest-cov`, `pytest-asyncio`, and
   `pytest-timeout`, breaking configured plugin flags. Use the workspace interpreter and explicitly
