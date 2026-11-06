@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.git.command_failure import failure
@@ -124,11 +125,15 @@ class Onboarding:
         return job.info()
 
     def listed(self) -> list[dict[str, Any]]:
-        """The runs the Projects page shows: unfinished ones with Resume, local-only ones with Publish."""
+        """The runs the Projects page shows, unfinished or local only, each with the project registered at its folder.
+
+        A registered project's run shows on that project's row; the others are listed apart.
+        """
         with self.lock:
             self._load()
             jobs = list(self.jobs.values())
-        out = [j.info() for j in jobs if j.receipt.get("ended") in {"", "local"}]
+        out = [j.info() | {"project": onboarding_probe.registered_id(Path(j.plan["folder"]))} for j in jobs
+               if j.receipt.get("ended") in {"", "local"}]  # fmt: skip
         return out + [{"id": i, "unreadable": why} for i, why in self.unreadable.items()]
 
     def working(self) -> list[str]:

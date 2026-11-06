@@ -225,7 +225,7 @@ def test_a_local_only_project_makes_no_github_effect_registers_nothing_and_stays
     assert onboarding_git.folder_state(Path(found["folder"])).git == "commits"
     assert not (Path(found["folder"]) / ".github").exists()  # a CI workflow only on GitHub, with its tick
     assert jobs.machine.projects == {}
-    assert [j["id"] for j in jobs.listed()] == [info["id"]]
+    assert [(j["id"], j["project"]) for j in jobs.listed()] == [(info["id"], "")]
     again = jobs.probe({"kind": "folder", "folder": found["folder"], "github": True})
     assert again["entry"] == "E3b"
     assert "repository" in again["stages"]
@@ -1029,7 +1029,7 @@ def test_a_failed_status_read_is_tried_again_while_the_dialog_is_open(tmp_path, 
 
             page.route("**/onboarding/jobs/*", once)
             page.goto(f"{base}/projects#token=t")
-            page.get_by_role("listitem", name="demo").get_by_role("button", name="Resume").click()
+            page.get_by_role("listitem", name="demo").get_by_role("button", name="Show progress").click()
             modal = pds.modal(page)
             while not failed:
                 page.wait_for_timeout(50)
@@ -1047,3 +1047,32 @@ def test_a_file_two_consents_write_is_said_once(tmp_path, monkeypatch):
     job = onboarding_job.Job({"id": "j", "plan": {"folder": str(tmp_path)}, "stages": []}, [], lambda _t: None,
                              lambda: "")  # fmt: skip
     assert onboarding_stages.files(job) == {"said": ["written: .mcp.json", "written: .vscode/settings.json"]}
+
+
+@pytest.mark.browser
+def test_a_registered_project_being_added_shows_once_on_its_row(hub, tmp_path, monkeypatch, pds):
+    """Its row says where the run stands and goes on with it; the run shows without a reload, and the row is the
+    project's own again once the run is done."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    hub.add("ada/proj", commits=True)
+    folder = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/proj.git", "proj", Access.LOCAL))
+    registry.register(folder)
+    with served(monkeypatch, pds) as (page, base, machine):
+        page.goto(f"{base}/projects#token=t")
+        row = page.get_by_role("listitem", name="proj")
+        expect(row.get_by_role("button", name="Finish setup")).to_be_visible()
+        found = machine.onboarding.probe({"kind": "folder", "folder": str(folder)})
+        info = machine.onboarding.start(plan_for(found, protect=False))
+        settle(machine.onboarding, info["id"])
+        expect(row.locator("p-tag", has_text="Not fully added")).to_be_visible()  # the page's next poll
+        expect(row).to_contain_text("Waits for you to confirm its profile")
+        expect(row.get_by_role("button", name="Finish setup")).to_have_count(0)
+        expect(row.get_by_role("list", name="Failed readiness checks")).to_have_count(0)
+        expect(page.get_by_role("heading", name="Not added yet")).to_have_count(0)
+        row.get_by_role("button", name="Confirm profile").click()
+        modal = pds.modal(page)
+        modal.get_by_role("button", name="Confirm profile").click()
+        expect(modal.locator(".facts")).to_contain_text("Registered: yes")
+        modal.get_by_role("button", name="Close").click()
+        expect(row.locator("p-tag", has_text="Not fully added")).to_have_count(0)
