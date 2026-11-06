@@ -120,7 +120,8 @@ def change(repo: Path, check: str = "visual") -> Change:
 
 def recipe(name: str = "copy", reason: str = "orders need live data") -> tools.CheckRecipe:
     return tools.CheckRecipe(
-        command="npm run preview", directory=".", ready_url="http://127.0.0.1:{port}/", summary="from the scripts",
+        command="npm run preview -- --port {port}", directory=".", ready_url="http://127.0.0.1:{port}/",
+        summary="from the scripts",
         preparation=name, reason=reason,
     )  # fmt: skip
 
@@ -275,6 +276,8 @@ def test_a_recipe_names_a_declared_permitted_option_and_edits_only_its_setup_fil
     assert errors(recipe("nope"))[0] == "preparation: nope is not a declared option - use one of copy"
     assert errors(recipe(""))[0].startswith("preparation: empty - pick one of copy; a check never runs on live")
     assert errors(recipe(reason=""))[0].startswith("reason: empty")
+    fixed = recipe().model_copy(update={"command": "npm run preview -- --port 4173"})  # TD-40: it would answer there
+    assert errors(fixed)[0].startswith("command: no `{port}` - pass the port Delivery picks")
     assert errors(recipe(), ["src/app.py"]) == [
         "changes: src/app.py edited; you may edit only the setup files fixtures/** and no Change code - revert them"
     ]

@@ -129,6 +129,8 @@ def test_a_ui_brief_needs_states_or_a_person_check_and_states_stay_under_the_pre
     assert check_brief(draft(ui=True, visual=home))[0].startswith("recipe: empty for a UI brief with states")
     recipe = {"command": "npm run dev -- --port {port}", "directory": ".", "ready_url": "http://127.0.0.1:{port}/"}
     assert check_brief(draft(ui=True, visual=home, recipe=recipe)) == []
+    fixed = recipe | {"command": "npm run dev -- --port 5173"}  # TD-40: the capture would wait on another port
+    assert check_brief(draft(ui=True, visual=home, recipe=fixed))[0].startswith("recipe.command: no `{port}`")
     bad = [{"name": "a", "path": "/../x", "expect": "e"}, {"name": "a", "path": "//evil", "expect": "e"}]
     errors = check_brief(draft(visual=bad))
     assert sum("must stay under the preview root" in e for e in errors) == 2

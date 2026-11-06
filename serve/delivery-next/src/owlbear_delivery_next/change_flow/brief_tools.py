@@ -283,4 +283,6 @@ def _recipe(brief: BriefDraft) -> list[str]:
     errors = [] if relative(r.directory) else [f'recipe.directory: {r.directory} is not repository-relative - e.g. "."']
     if not LOCAL_URL.fullmatch(r.ready_url):
         errors.append('recipe.ready_url: must be local with the `{port}` placeholder, e.g. "http://127.0.0.1:{port}/"')
+    if "{port}" not in r.command:  # TD-40: the capture gets no PORT variable; without it the server answers elsewhere
+        errors.append('recipe.command: no `{port}` - pass the port Delivery picks, e.g. "npm run dev -- --port {port}"')
     return errors
