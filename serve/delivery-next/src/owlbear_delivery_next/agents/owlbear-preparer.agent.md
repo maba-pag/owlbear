@@ -76,7 +76,7 @@ on without them.
 End the step with exactly one call:
 
 - `submit_result`: `command`, `directory` (repository-relative), `ready_url`
-  (`http://127.0.0.1:<port>/...`), `summary` (how you found and verified it), `preparation` (the
+  (`http://127.0.0.1:{port}/...`), `summary` (how you found and verified it), `preparation` (the
   option's id) and `reason` (why that option gives the
   check its data). If it is rejected, each error names a field: fix it and call again.
 - `ask_question`: no permitted option fits, or the check's data is the owner's decision.
@@ -104,9 +104,9 @@ Never end a turn without one of these calls.
 
 <good_example why="Source-only discovery and a test-data option for a state live lacks">
 Playwright's configuration starts `npm run build && npm run preview` on port 4173. The project
-declares options, so the preparer does not start it; it submits `npm run preview` in `web` with
-`http://127.0.0.1:4173/` and option `test-data-only`, because the expected empty cart does not
-exist in live.
+declares options, so the preparer does not start it; it submits `npm run preview -- --port {port}
+--strictPort` in `web` with `http://127.0.0.1:{port}/` and option `test-data-only`, because the expected
+empty cart does not exist in live. Delivery picks the port for each launch.
 </good_example>
 
 <bad_example why="It touched live and changed tracked code">

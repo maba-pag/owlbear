@@ -36,7 +36,8 @@ AUTH = {"authorization": "Bearer " + "t"}  # the token of record()
 SERVES = {"supported": sorted(chat_contract.SUPPORTED), "admit_by": True}  # what a current host answers
 ROUTES = [  # what chat_client calls, under a project and (the decisions) under /owlbear
     ("post", "/briefs"), ("post", "/briefs/visual"), ("post", "/briefs/challenge"), ("get", "/changes"),
-    ("get", "/chat/brief/{slug}"), ("get", "/chat/challenge/{slug}"), ("post", "/changes/{slug}/answers"),
+    ("get", "/chat/brief/{slug}"), ("get", "/chat/challenge/{slug}"), ("get", "/chat/capture/{slug}"),
+    ("post", "/changes/{slug}/answers"),
     ("get", "/decisions"), ("get", "/decisions/{decision_id}"), ("post", "/decisions/lookup"),
     ("post", "/decisions/lookups"), ("get", "/decisions/lookups/{lookup_id}"),
     ("post", "/decisions/propose"),
@@ -325,7 +326,7 @@ def http(monkeypatch):
     m.stop_all()
 
 
-@pytest.mark.parametrize("sent", ["7", "", "01", "²", "1" * 5000])
+@pytest.mark.parametrize("sent", ["8", "", "01", "²", "1" * 5000])
 def test_a_host_refuses_a_contract_it_does_not_serve_before_any_route_runs(tmp_path, http, shared_repo, monkeypatch,
                                                                            sent):  # fmt: skip
     monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
@@ -348,7 +349,7 @@ def test_a_host_refuses_a_contract_it_does_not_serve_before_any_route_runs(tmp_p
                            capture_output=True, text=True, check=True).stdout  # fmt: skip
     assert after == head
     served = http.get("/api/next/chat/contract", headers={chat_contract.HEADER: "1"}).json()
-    assert served == {"supported": [1, 2, 3, 4, 5, 6], "admit_by": True}
+    assert served == {"supported": [1, 2, 3, 4, 5, 6, 7], "admit_by": True}
 
 
 def test_a_host_reply_without_what_a_chat_reads_breaks_the_contract(chat_replied):

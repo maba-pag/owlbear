@@ -6,6 +6,7 @@ import { merging } from "./forms.mjs";
 import { reviseBrief } from "./shaping.mjs";
 import { detailsOn } from "./details.mjs";
 import { versionList } from "./versions.mjs";
+import { currentPages } from "./visual.mjs";
 
 function screen(s) {
   const steps = s.steps.map((x) => (x.do === "type" ? `type "${x.text}" into ${x.target}` : `click ${x.target}`));
@@ -229,12 +230,14 @@ function chatReceipt(d) {
 
 export function approval(d) {
   const version = d.brief.version, key = `${d.key}:approve:${version}`, on = detailsOn();
-  const why = d.brief.challenge_waits ? "" : d.brief.approve_off;  // TD-249: off until its loop ended on this version
+  // TD-249: off until its loop ended on this version; the wait line says the rest while its challenge waits
+  const why = d.brief.challenge_waits && !d.brief.capture?.running ? "" : d.brief.approve_off;
   const act = (v) => [v.actions.includes("approve") ? approveButton(d) : nothing,
     v.actions.includes("challenge") ? challengeButton(d) : nothing];
   return panel(`Brief v${version}${d.brief.title ? `: ${d.brief.title}` : ""}`, key,
     html`<div class="brief">${d.brief.outcome ? text(d.brief.outcome, { size: "md" }) : nothing}${agreement(d)}
-      ${picked(d, on)}${technical(d)}${on ? readBacks(d) : nothing}</div>`,
+      ${picked(d, on)}${technical(d)}${currentPages(d.key, d.brief.capture, d.brief.visual)}${on ? readBacks(d)
+        : nothing}</div>`,
     text("Nothing is built until you approve. You approve the whole brief, including the collapsed technical "
       + "details; your own choices stay yours to change. Approval authorises work within this brief, not new "
       + `product commitments. To change the brief before approving, ${d.brief.unrevisable === ""

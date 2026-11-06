@@ -14,12 +14,16 @@ class Record(BaseModel):
 
 
 class Environment(Record):
-    """A person-only check's environment: the Builder's launch recipe and the PIDs the host started from it."""
+    """A check's environment: the recipe it launches, the port Delivery picked for it, and the PIDs it started.
+
+    ``command`` and ``ready_url`` keep the recipe's ``{port}``; each launch takes a fresh ``port`` (TD-40).
+    """
 
     check: str
     command: str
     directory: str
     ready_url: str
+    port: int | None = None
     pids: dict[int, float | None] = Field(default_factory=dict)
     pgid: int | None = None
     launched_at: datetime | None = None  # set before spawning; without ``pgid`` the launch is uncertain

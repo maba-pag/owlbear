@@ -226,5 +226,6 @@ def test_the_before_capture_renders_only_static_states_without_a_test_copy(monke
     )
     c.env = c.env or before.Environment(check="visual", command="serve", directory=".", ready_url="http://127.0.0.1:1/")
     notes: list[str] = []
-    before._serve(c, tmp_path, tmp_path, lambda _e: None, notes, widths=[1280])  # noqa: SLF001
+    states = c.brief.visual
+    before._serve(c.env, states, tmp_path, tmp_path, lambda _e: None, notes, widths=[1280], where="here")  # noqa: SLF001
     assert (rendered, notes) == (["home"], ["search: its steps need a test preparation"])

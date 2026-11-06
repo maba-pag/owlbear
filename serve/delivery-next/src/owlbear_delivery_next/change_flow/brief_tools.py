@@ -12,7 +12,7 @@ from pydantic import Field, field_validator
 
 from owlbear_delivery_next.change_contracts import evidence
 from owlbear_delivery_next.change_contracts.models import VISUAL
-from owlbear_delivery_next.change_contracts.tools import Args, bounded, relative
+from owlbear_delivery_next.change_contracts.tools import LOCAL_URL, Args, bounded, relative
 
 type Criterion = Annotated[str, Field(min_length=10, max_length=500)]
 NAME = r"^[a-z0-9][a-z0-9-]{0,39}$"
@@ -51,6 +51,20 @@ class VisualStepDraft(Args):
 
 
 STEPS = 10  # steps per state, so one state stays one short interaction
+
+
+class RecipeDraft(Args):
+    """How Delivery starts the target's preview to capture its pages; it picks the port for each launch (TD-40)."""
+
+    command: str = bounded(
+        200, "The command that starts it, passing `{port}` to its server", "npm run dev -- --port {port}"
+    )
+    directory: str = bounded(300, "Repository-relative directory to run it in", "packages/app")
+    ready_url: str = bounded(300, "Local URL that answers once it is ready, with `{port}`", "http://127.0.0.1:{port}/")
+
+
+RECIPE = "the render recipe that starts the target's preview"
+PREPARATION = "The id of the project's declared test preparation the capture runs on; needed when it declares several"
 
 
 class DecisionDraft(Args):
@@ -114,6 +128,14 @@ class VisualDraft(Args):
         description="Clicks and typing before a state's screenshot, in order; needs a declared test preparation",
         examples=[[{"state": "search", "do": "type", "target": "Search", "text": "Ada"}]],
     )
+    recipe: RecipeDraft | None = Field(
+        default=None,
+        description=f"With states: {RECIPE}; Delivery captures the current pages with it before approval",
+        examples=[
+            {"command": "npm run dev -- --port {port}", "directory": "web", "ready_url": "http://127.0.0.1:{port}/"}
+        ],
+    )
+    preparation: str = Field(default="", max_length=40, description=PREPARATION, examples=["test-data-only"])
 
 
 class BriefDraft(Args):
@@ -163,6 +185,8 @@ class BriefDraft(Args):
         description="Clicks and typing before a state's screenshot, in order",
         examples=[[{"state": "search", "do": "type", "target": "Search", "text": "Ada"}]],
     )
+    recipe: RecipeDraft | None = Field(default=None, description=RECIPE)
+    preparation: str = Field(default="", max_length=40, description=PREPARATION)
     specified: list[str] = Field(
         default_factory=list,
         max_length=10,
@@ -193,8 +217,11 @@ def question_key(question: str) -> str:
     return " ".join(question.split()).casefold()
 
 
-def check_brief(brief: BriefDraft) -> list[str]:
-    """Return field errors the schema cannot express: paths outside the repository, repeated entries."""
+def check_brief(brief: BriefDraft, *, recipe: bool = True) -> list[str]:
+    """Return field errors the schema cannot express: paths outside the repository, repeated entries.
+
+    *recipe* asks a UI brief with states for its render recipe: a chat of an earlier contract sends none.
+    """
     errors = [
         f'scope[{i}]: {p} is not repository-relative - e.g. "packages/app"'
         for i, p in enumerate(brief.scope)
@@ -241,4 +268,21 @@ def check_brief(brief: BriefDraft) -> list[str]:
         for k in p.covers
         if k not in known
     ]
-    return errors + _steps(brief)
+    return errors + _steps(brief) + (_recipe(brief) if recipe or brief.recipe else [])
+
+
+def _recipe(brief: BriefDraft) -> list[str]:
+    """A UI brief with states has its render recipe: a local URL with `{port}`, run inside the repository."""
+    r = brief.recipe
+    if r is None:
+        needs = brief.ui and brief.visual
+        example = (
+            '{"command": "npm run dev -- --port {port}", "directory": ".", "ready_url": "http://127.0.0.1:{port}/"}'
+        )
+        return [f"recipe: empty for a UI brief with states - give {RECIPE}, e.g. {example}"] if needs else []
+    errors = [] if relative(r.directory) else [f'recipe.directory: {r.directory} is not repository-relative - e.g. "."']
+    if not LOCAL_URL.fullmatch(r.ready_url):
+        errors.append('recipe.ready_url: must be local with the `{port}` placeholder, e.g. "http://127.0.0.1:{port}/"')
+    if "{port}" not in r.command:  # TD-40: the capture gets no PORT variable; without it the server answers elsewhere
+        errors.append('recipe.command: no `{port}` - pass the port Delivery picks, e.g. "npm run dev -- --port {port}"')
+    return errors

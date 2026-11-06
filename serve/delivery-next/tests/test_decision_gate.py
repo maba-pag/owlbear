@@ -393,7 +393,7 @@ def test_a_long_answer_reaches_the_step_whole(shared):
 
 
 def checking(**fields) -> Change:
-    env = Environment(check="preview", command="npm run preview", directory=".", ready_url="http://127.0.0.1:4173/")
+    env = Environment(check="preview", command="npm run preview", directory=".", ready_url="http://127.0.0.1:{port}/")
     c = change(K.CHECK, checks=[PersonCheck(id="preview", steps=["open the preview"])], env=env, **fields)
     return c.model_copy(update={"step": Step(kind=K.CHECK, task="preview")})
 

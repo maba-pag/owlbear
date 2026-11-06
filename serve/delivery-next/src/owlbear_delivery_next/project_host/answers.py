@@ -151,19 +151,22 @@ def classed(q: Question, body: AnswerBody) -> str:
 
 def refused(c: Change, q: Question, body: AnswerBody) -> tuple[int, str] | None:
     """The status and reason a Changes-page answer is refused with, or None."""
-    if q.cause == decision.CAUSE and body.option in {"pass", "fail"}:
+    if q.cause == decision.CAUSE and body.option in {"pass", "fail", decision.AMEND}:
         return _visual(c, body)
     return rebuilds.refused(c, q, body.option, body.tasks, (body.attempt, body.head))
 
 
 def _visual(c: Change, body: AnswerBody) -> tuple[int, str] | None:
-    """Why a Pass or Fail is refused: its round, capture or pack changed since the page showed them, or it is empty."""
+    """Why a Pass, Fail or taken conflict is refused: its round, capture or pack changed, or it names nothing."""
     kept = c.visual_rounds[-1] if c.visual_rounds else None
     shown = (body.round, body.head, body.pack)
     if kept is None or kept.outcome != "ask" or kept.decision or shown != (kept.number, kept.head, kept.pack):
         return 409, "the capture or Impeccable changed since the page was shown; reload"
     if unknown := sorted(set(body.findings) - {f.id for v in kept.verdicts for f in v.findings}):
         return 422, f"findings {unknown} are not in round {kept.number}"
+    taken = {k.id for v in kept.verdicts for k in v.conflicts if k.departs not in kept.owner}
+    if body.option == decision.AMEND and body.text.strip() not in taken:
+        return 422, f"name one of round {kept.number}'s conflicts with the brief: {', '.join(sorted(taken)) or 'none'}"
     if body.option == "fail" and not body.findings and not body.text.strip():
         return 422, "a Fail ticks a finding or says what is wrong"
     return None

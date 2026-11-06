@@ -1147,3 +1147,31 @@ def test_a_run_that_leaves_the_list_takes_no_focus_to_another(tmp_path, monkeypa
         expect(page.get_by_role("listitem", name="alpha")).to_have_count(0)  # the page's next poll
         beta = page.get_by_role("listitem", name="beta")
         assert not beta.evaluate("li => li.contains(document.activeElement)")
+
+
+@pytest.mark.browser
+def test_a_folder_with_files_is_published_only_after_the_secrets_tick(hub, tmp_path, monkeypatch, pds):
+    """E3 through the dialog: the warning shows, Check and continue waits for its tick, and the files are published."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    folder = tmp_path / "keep"
+    folder.mkdir()
+    (folder / "app.py").write_text("print(1)\n")
+    with served(monkeypatch, pds) as (page, base, _machine):
+        page.goto(f"{base}/projects#token=t")
+        page.get_by_role("button", name="Add a project").click()
+        modal = pds.modal(page)
+        modal.get_by_role("radio", name="A folder on this Mac").check()
+        modal.get_by_role("textbox", name="Folder").fill(str(folder))
+        modal.get_by_role("button", name="Look").click()
+        expect(modal).to_contain_text("Every file in the folder is committed")
+        modal.get_by_role("textbox", name="Owner").fill("ada")
+        modal.get_by_role("button", name="Check and continue").click()
+        expect(modal).to_contain_text("Tick that you checked the folder for secrets first.")
+        modal.get_by_role("checkbox", name="I checked the folder: no secrets in it").check()
+        modal.get_by_role("button", name="Check and continue").click()
+        modal.get_by_role("button", name="Create and set up keep").click()
+        modal.get_by_role("button", name="Confirm profile").click()
+        expect(modal.locator(".facts")).to_contain_text("Registered: yes")
+    pushed = git(hub.remotes / "ada/keep.git", "ls-tree", "-r", "--name-only", "main").split("\n")
+    assert pushed == [".github/workflows/ci.yml", "app.py"]  # the folder's files as they are: no README added

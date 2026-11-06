@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     Pairs = Sequence[tuple[str, str]]  # the profile's (package, check) pairs
 
 INVALID_LIMIT = 3
-LOCAL_URL = re.compile(r"http://(127\.0\.0\.1|localhost):\d{1,5}(/\S*)?")
+LOCAL_URL = re.compile(r"http://(127\.0\.0\.1|localhost):\{port\}(/\S*)?")  # Delivery picks the port (TD-40)
 
 
 class Args(BaseModel):
@@ -212,9 +212,11 @@ class VisualReviewResult(ReviewResult):
 class CheckRecipe(Args):
     """``submit_result`` for check preparation: how the host starts the environment the owner checks."""
 
-    command: str = _f(200, "The command that starts it", "npm run preview")
+    command: str = _f(
+        200, "The command that starts it, passing `{port}` to its server", "npm run preview -- --port {port}"
+    )
     directory: str = _f(300, "Repository-relative directory to run it in", "packages/app")
-    ready_url: str = _f(300, "Local URL that answers once the environment is ready", "http://127.0.0.1:4173/")
+    ready_url: str = _f(300, "Local URL that answers once it is ready, with `{port}`", "http://127.0.0.1:{port}/")
     summary: str = _f(1000, "How you verified it", "Ran it, fetched the page, stopped it")
     preparation: str = Field(
         default="",
@@ -470,7 +472,7 @@ def check_recipe(recipe: CheckRecipe, tree: Worktree, root: Path, setup: Sequenc
     if not (where.is_relative_to(root.resolve()) and where.is_dir()):
         errors.append(f'directory: {recipe.directory} is not a directory in the worktree - e.g. "packages/app"')
     if not LOCAL_URL.fullmatch(recipe.ready_url):
-        errors.append('ready_url: must be local with a port, e.g. "http://127.0.0.1:4173/"')
+        errors.append('ready_url: must be local with the `{port}` placeholder, e.g. "http://127.0.0.1:{port}/"')
     return errors
 
 

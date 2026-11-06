@@ -113,14 +113,15 @@ def settings(*options: Preparation, **rules):
 
 def change(repo: Path, check: str = "visual") -> Change:
     c = Change(slug="c1", step=Step(kind=StepKind.CHECK, task=check))
-    c.env = Environment(check=check, command="serve", directory=".", ready_url="http://127.0.0.1:1/")
+    c.env = Environment(check=check, command="serve", directory=".", ready_url="http://127.0.0.1:{port}/")
     c.names.worktree = str(repo)
     return c
 
 
 def recipe(name: str = "copy", reason: str = "orders need live data") -> tools.CheckRecipe:
     return tools.CheckRecipe(
-        command="npm run preview", directory=".", ready_url="http://127.0.0.1:4173/", summary="from the scripts",
+        command="npm run preview -- --port {port}", directory=".", ready_url="http://127.0.0.1:{port}/",
+        summary="from the scripts",
         preparation=name, reason=reason,
     )  # fmt: skip
 
@@ -275,6 +276,8 @@ def test_a_recipe_names_a_declared_permitted_option_and_edits_only_its_setup_fil
     assert errors(recipe("nope"))[0] == "preparation: nope is not a declared option - use one of copy"
     assert errors(recipe(""))[0].startswith("preparation: empty - pick one of copy; a check never runs on live")
     assert errors(recipe(reason=""))[0].startswith("reason: empty")
+    fixed = recipe().model_copy(update={"command": "npm run preview -- --port 4173"})  # TD-40: it would answer there
+    assert errors(fixed)[0].startswith("command: no `{port}` - pass the port Delivery picks")
     assert errors(recipe(), ["src/app.py"]) == [
         "changes: src/app.py edited; you may edit only the setup files fixtures/** and no Change code - revert them"
     ]
@@ -348,6 +351,18 @@ def test_one_frozen_snapshot_is_restored_separately_before_each_capture_and_ende
     assert prepare.end(store, c, repo, s, events.append) is None
     assert (lines(log)[-1], snapshot.exists()) == ("cleanup", False)  # retention: deleted after the check
     assert prepare.left(store, c) == []
+
+    target = tmp / "target"  # the shaping capture's own checkout (D-01M6Q56RXK85C5T4AG7R051X6N)
+    target.mkdir()
+    where = f"{sys.executable} -c \"import os; open(os.environ['TEST_LOG'], 'a').write('cleanup ' + os.getcwd())\""
+    kept = settings(option(tmp, cleanup=where), retention="keep")
+    c.brief.preparation = "copy"
+    assert prepare.shaping(store, c, kept, events.append)(target)["TEST_DB"] == str(tmp / "test.db")
+    rec = prepare.read(store, "c1", prepare.SHAPING)
+    assert (rec.home, rec.open, (tmp / "test.db").read_text()) == (str(target), True, "user-1+seeded")
+    assert prepare.end(store, c, repo, kept, events.append) is None
+    assert log.read_text().splitlines()[-1] == f"cleanup {target.resolve()}"  # never the Change worktree
+    assert (Path(rec.snapshot).exists(), prepare.left(store, c)) == (False, [])  # never kept, whatever retention says
 
 
 def test_cleanup_runs_after_a_failed_restore_and_the_snapshot_may_be_kept(env):

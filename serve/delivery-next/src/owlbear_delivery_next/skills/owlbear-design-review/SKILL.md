@@ -66,6 +66,8 @@ You judge the images; Delivery maps A and B back and decides what the Change did
 - **Fail:** an image has a P0 or P1 problem or misses one of the owner's criteria, or one image of a pair is
   clearly worse than the other on a cited rule.
 - **Pass:** nothing above.
-- **Unsure:** the evidence cannot decide: a state cannot be compared and the rubric alone is not enough, images
-  are unreadable, or the brief and a rule conflict in a way only the owner can settle. Say exactly what would
-  decide it.
+- **Unsure:** the evidence cannot decide: a state cannot be compared and the rubric alone is not enough, or images
+  are unreadable. Say exactly what would decide it.
+- **Conflicts:** a rule that the brief, a state's expectation or one of the owner's criteria rules out is neither a
+  finding nor a reason for unsure. Name it in `conflicts` with the state, brief criterion (AC-N) or owner's
+  criterion it departs from, and judge the rest; the owner decides each conflict.

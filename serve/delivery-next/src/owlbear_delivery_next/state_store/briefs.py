@@ -8,9 +8,10 @@ from itertools import count
 from typing import TYPE_CHECKING, Any
 
 from owlbear_decisions import new_id
-from owlbear_delivery_next.change_contracts import evidence, tool_schema
+from owlbear_delivery_next.change_contracts import chat_contract, evidence, tool_schema
 from owlbear_delivery_next.change_contracts.models import (
     BriefDecision,
+    BriefRecipe,
     Change,
     Criterion,
     Exit,
@@ -23,7 +24,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import brief_rounds, brief_tools
+from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, shaping_capture
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import identities
@@ -73,8 +74,10 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
     owner = [*(placed.get(k, k) for k in d.specified), *(f"screen:{s.name}" for s in d.visual if s.owner)]
     owner += [f"check:{p.name}" for p in d.person_checks if p.owner]
     fields |= {"ui": d.ui, "visual": visual, "non_goals": d.non_goals, "specified": list(dict.fromkeys(owner))}
+    fields |= {"recipe": BriefRecipe(**d.recipe.model_dump()) if d.recipe else None, "preparation": d.preparation}
     fields["decisions"] = _decisions(c, d)
     c.brief = c.brief.model_copy(update=fields)
+    c.shaped = shaping_capture.requested(c)  # its current pages are captured before approval
     if c.step.mode == brief_rounds.PLANNED:  # a new version waits for its own challenge and approval
         c.step = c.step.model_copy(update={"mode": None})
     ids, paths, shown = [k.id for k in criteria], evidence.coverage(c), {p.id: p for p in c.checks}
@@ -149,7 +152,8 @@ def _visual_of(c: Change) -> dict[str, Any]:
     states = [{"name": s.name, "path": s.path, "expect": s.expect, "owner": f"screen:{s.name}" in c.brief.specified}
               for s in c.brief.visual]  # fmt: skip
     steps = [{"state": s.name} | x.model_dump() for s in c.brief.visual for x in s.steps]
-    return {"ui": c.brief.ui, "visual": states, "steps": steps}
+    recipe = c.brief.recipe.model_dump() if c.brief.recipe else None
+    return {"ui": c.brief.ui, "visual": states, "steps": steps, "recipe": recipe, "preparation": c.brief.preparation}
 
 
 def _kept(store: Store, body: object) -> object:
@@ -164,14 +168,36 @@ def _kept(store: Store, body: object) -> object:
 
 
 def save_brief(
-    store: Store, body: object, *, binding: Callable[[], SavingChat] | None = None
+    store: Store, body: object, contract: str | None = None, *, binding: Callable[[], SavingChat] | None = None
 ) -> tuple[int, dict[str, Any]]:
-    """Validate a brief draft and write a new Change, or a new version of a shaping one, awaiting approval."""
+    """Validate a brief draft and write a new Change, or a new version of a shaping one, awaiting approval.
+
+    A chat of an earlier *contract* than ``chat_contract.CAPTURES`` sends no render recipe; its draft gets no capture.
+    """
     draft, errors = tool_schema.parse(brief_tools.BriefDraft, _kept(store, body))
-    errors = brief_tools.check_brief(draft) if draft else errors
+    errors = brief_tools.check_brief(draft, recipe=chat_contract.captures(contract)) if draft else errors
     if draft is None or errors:
         return 422, {"errors": errors}
+    draft, errors = _prepared(store, draft)
+    if errors:
+        return 422, {"errors": errors}
     return _revise(store, draft, binding) if draft.change else _create(store, draft, binding)
+
+
+def _prepared(store: Store, d: brief_tools.BriefDraft) -> tuple[brief_tools.BriefDraft, list[str]]:
+    """The draft with the test preparation its capture runs on: the one named, else the project's only one.
+
+    Without a declared option the draft keeps none, and its capture ends saying so (D-01M6Q56RXK85C5T4AG7R051X6N).
+    """
+    if not (d.ui and d.visual and d.recipe):
+        return d, []
+    declared = [o.id for o in store.settings().preparations]
+    if d.preparation:
+        known = d.preparation in declared
+        return d, [] if known else [f"preparation: {d.preparation} is not declared - use one of {declared or 'none'}"]
+    if len(declared) > 1:
+        return d, [f"preparation: empty while the project declares several - name one of {', '.join(declared)}"]
+    return d.model_copy(update={"preparation": declared[0] if declared else ""}), []
 
 
 def unrevisable(c: Change) -> str:
@@ -198,7 +224,8 @@ def _revise(
         return 409, {"errors": [f"change: {exc}; try again"]}
     except StoreError as exc:
         return 409, {"errors": [f"change: {failure(exc)}; try again"]}
-    return 200, {"change": c.handle, "version": c.brief.version, "slug": slug}
+    capturing = {"capturing": True} if c.shaped and c.shaped.result is None else {}
+    return 200, {"change": c.handle, "version": c.brief.version, "slug": slug} | capturing
 
 
 def _create(
@@ -220,7 +247,7 @@ def _create(
 
 
 def save_visual(
-    store: Store, body: object, *, binding: Callable[[], SavingChat] | None = None
+    store: Store, body: object, contract: str | None = None, *, binding: Callable[[], SavingChat] | None = None
 ) -> tuple[int, dict[str, Any]]:
     """Set a shaping Change's UI flag, states and steps as a new brief version; the rest of its brief stays."""
     draft, errors = tool_schema.parse(brief_tools.VisualDraft, body)
@@ -243,4 +270,5 @@ def save_visual(
     }
     brief |= {"specified": [placed[k.id] for k in c.brief.criteria if k.id in owner]}
     brief |= {"visual": [s.model_dump() for s in draft.states], "steps": [s.model_dump() for s in draft.steps]}
-    return save_brief(store, brief, binding=binding)
+    brief |= {"recipe": draft.recipe.model_dump() if draft.recipe else None, "preparation": draft.preparation}
+    return save_brief(store, brief, contract, binding=binding)
