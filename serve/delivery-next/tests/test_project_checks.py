@@ -9,7 +9,16 @@ import pytest
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
-from owlbear_delivery_next.change_contracts.models import Brief, Change, ErrorKind, Exit, Names, Step, StepKind
+from owlbear_delivery_next.change_contracts.models import (
+    Brief,
+    Change,
+    ErrorKind,
+    Exit,
+    Names,
+    Question,
+    Step,
+    StepKind,
+)
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.commands import runner
@@ -296,6 +305,33 @@ def test_the_question_is_an_engine_decision_the_changes_page_answers(store, chan
     assert ("every task" in labels, "before anything is saved" in labels) == (True, True)
 
 
+@pytest.mark.parametrize("question", ["absent", "unrelated", "checks"])
+def test_only_a_real_checks_question_needs_the_profile_to_settle(store, change_repo, question):
+    store.write_profile(Profile(entries={"check:.": entry()}))
+    made(store, change_repo, ["src"])
+    c = store.read("c1")
+    if question == "checks":
+        c = step(store, change_repo)  # the real planner prerequisite asks, even without a PR
+        asked(c)
+    elif question == "unrelated":
+        c = loop.apply(
+            c,
+            loop.StepResult(exit=Exit.ASK, question=Question(step=StepKind.PLAN, text="Which language?")),
+            datetime.now(UTC),
+        )
+    before = c.model_copy(deep=True)
+    malformed = '{"format": 5, "entries":'
+    (store.root / "profile.json").write_text(malformed)
+    assert c.names.pr is None
+    if question == "checks":
+        with pytest.raises(StoreError):
+            project_checks.settle(store, c, datetime.now(UTC))
+    else:
+        project_checks.settle(store, c, datetime.now(UTC))
+    assert c == before
+    assert (store.root / "profile.json").read_text() == malformed
+
+
 def test_a_change_already_asking_plans_once_another_change_s_answer_settles_the_checks(
     store, change_repo, monkeypatch, tmp_path
 ):
@@ -307,7 +343,6 @@ def test_a_change_already_asking_plans_once_another_change_s_answer_settles_the_
     answer(store, "detected")
     step(store, change_repo)
     host = Host(store, tmp_path, spawn=lambda _slug: None)
-    host.observe_pr = lambda _slug: (None, False)
     assert host._one("c2", datetime.now(UTC))  # noqa: SLF001 - one pass: planning is due without another answer
     c = store.read("c2")
     q = c.questions[-1]

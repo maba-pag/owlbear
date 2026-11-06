@@ -242,7 +242,11 @@ def test_a_shared_profile_is_detected_once_in_each_clone_and_again_after_a_failu
 
     monkeypatch.setattr(profile_share.profile, "detect", detect)
     monkeypatch.setattr(profile_share.profile, "provider", lambda *_a: None)
-    assert [profile_share.checked(store, repo).version for _ in range(2)] == [2, 5]
+    with pytest.raises(StoreError, match="ProviderError: repo view: offline"):
+        profile_share.checked(store, repo)
+    assert store.read_profile().version == 2
+    assert not (store.root / profile_share.DETECTED).exists()
+    assert profile_share.checked(store, repo).version == 5
     assert [profile_share.checked(store, repo).version for _ in range(2)] == [6, 6]
     assert (seen, Store.open(repo).read_profile().version) == ([2, 2, 5], 6)
 

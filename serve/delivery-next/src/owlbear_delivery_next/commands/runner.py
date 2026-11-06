@@ -435,7 +435,7 @@ def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Pat
             store.settings()
         except StoreError as exc:  # damaged settings stop the Change once, not every runner the host starts
             now = datetime.now(UTC)
-            stop = loop.StepResult(exit=Exit.STOP, reason=str(exc), stop=exc.stop(now))
+            stop = loop.StepResult(exit=Exit.STOP, reason=failure(exc), stop=exc.stop(now))
             store.write(lock, loop.apply(change, stop, now))
             return
         try:

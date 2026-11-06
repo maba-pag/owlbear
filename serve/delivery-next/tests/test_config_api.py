@@ -1,5 +1,7 @@
+import contextlib
 import json
 import subprocess
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,17 +10,19 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.github import account
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import api, config_routes
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices
 from owlbear_delivery_next.settings import carried, roles
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT as F
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store import profile_share, project_home, roles_move
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store.store import Store, StoreError
 
 AUTH = {"authorization": "Bearer t"}
 
@@ -154,6 +158,67 @@ def test_the_settings_say_which_account_td_402_s_rule_gives_on_the_project_s_ori
     fake_gh.set({"github.com": {"boecht": "success"}}, {"github.com": "boecht"})
     error = client(store, headers=AUTH).get("/api/next/config").json()["github_rule"]["error"]
     assert "gh holds no account acme or maba-pag on github.com" in error
+
+
+@pytest.mark.parametrize("state_seconds", [2.0, 3.0])
+@pytest.mark.usefixtures("fake_gh")
+def test_the_account_row_shares_its_deadline_with_the_settings_read(store, monkeypatch, state_seconds):
+    clock, seen = SimpleNamespace(now=100.0), []
+    real_resolve = account.resolve
+
+    def agreement(_store):
+        clock.now += state_seconds
+        return []
+
+    def origin(_repo, *, timeout=account.TIMEOUT):
+        seen.append(("origin", timeout))
+        clock.now += 0.25
+        return account.Origin("github.com", "acme", "tools")
+
+    def resolve(setting, origin, *, until):
+        seen.append(("resolve", until))
+        return real_resolve(setting, origin, until=until)
+
+    def gh(argv, **kwargs):
+        seen.append(("gh", kwargs["timeout"]))
+        return subprocess.CompletedProcess(argv, 0, b"fixture-token", b"")
+
+    monkeypatch.setattr(config_routes, "time", SimpleNamespace(monotonic=lambda: clock.now))
+    monkeypatch.setattr(account, "time", SimpleNamespace(monotonic=lambda: clock.now))
+    monkeypatch.setattr(config_routes, "_agreement", agreement)
+    monkeypatch.setattr(account.Origin, "of", origin)
+    monkeypatch.setattr(account, "resolve", resolve)
+    monkeypatch.setattr(account.subprocess, "run", gh)
+    got = client(store, headers=AUTH).get("/api/next/config")
+    assert got.status_code == 200
+    assert got.json()["project"]["format"] == F
+    rule = got.json()["github_rule"]
+    if state_seconds == 2:
+        assert seen == [("origin", 1.0), ("resolve", 103.0), ("gh", 0.75)]
+        assert rule == {"login": "acme", "why": "the repository owner"}
+    else:
+        assert seen == []
+        assert "AccountMissing: github account: no time was left" in rule["error"]
+
+
+def test_the_account_row_keeps_a_failed_origin_command_whole(store, monkeypatch, whole_error):
+    command = ["git", "config", "--get", "remote.origin.url"]
+    expired = subprocess.TimeoutExpired(
+        command, 1, output=f"OUT:{whole_error}".encode(), stderr=f"ERR:{whole_error}".encode()
+    )
+    expired.add_note("origin read note")
+
+    def origin(*_args, **_kwargs):
+        raise expired
+
+    monkeypatch.setattr(config_routes, "time", SimpleNamespace(monotonic=lambda: 0.0))
+    monkeypatch.setattr(account.subprocess, "run", origin)
+    got = client(store, headers=AUTH).get("/api/next/config")
+    assert got.status_code == 200
+    error = got.json()["github_rule"]["error"]
+    assert error.startswith("AccountMissing: github account:")
+    assert f"TimeoutExpired: Command '{command}' timed out after 1 seconds" in error
+    assert f"stderr:\nERR:{whole_error}\nstdout:\nOUT:{whole_error}\norigin read note" in error
 
 
 def test_the_challenge_round_values_are_saved_per_loop(store):
@@ -396,9 +461,12 @@ def test_a_global_save_must_suit_every_project_sharing_it(tmp_path):
         assert (r.status_code, (root / "config.json").exists()) == (422, False)  # b's last round at 6 needs more
 
 
-def test_a_storage_failure_on_save_is_a_readable_error(store, monkeypatch):
+def test_a_storage_failure_on_save_is_a_readable_error(store, monkeypatch, whole_error):
+    denied = PermissionError(13, whole_error, str(store.config_path))
+    denied.add_note("settings write note")
+
     def full(*_a: object, **_k: object) -> None:
-        raise OSError(28, "No space left on device")
+        raise denied
 
     monkeypatch.setattr("owlbear_delivery_next.state_store.store.update_layer", full)
     c = client(store, headers=AUTH)
@@ -406,7 +474,72 @@ def test_a_storage_failure_on_save_is_a_readable_error(store, monkeypatch):
     r = c.put("/api/next/config/project", json={"rev": rev, "layer": {"format": F}})
 
     assert r.status_code == 503
-    assert r.json()["detail"] == "the settings could not be saved: No space left on device"
+    assert r.json()["detail"] == f"the settings could not be saved: PermissionError: {denied}\nsettings write note"
+    assert not store.config_path.exists()
+
+
+@pytest.mark.parametrize("site", ["read", "combined", "save", "completion"])
+def test_settings_storage_refusals_keep_their_type_and_notes(store, monkeypatch, whole_error, site):
+    if site == "completion":
+        store.write_profile(Profile())
+    c = client(store, headers=AUTH)
+    first = c.get("/api/next/config").json()
+    refused = StoreError(whole_error)
+    refused.add_note("settings storage note")
+
+    def failing(*_args, **_kwargs):
+        raise refused
+
+    if site in ("read", "combined"):
+        monkeypatch.setattr(config_routes, "read_layer_bytes", failing)
+    elif site == "save":
+        monkeypatch.setattr("owlbear_delivery_next.state_store.store.update_layer", failing)
+    else:
+        monkeypatch.setattr(config_routes.prefs_import, "republish", failing)
+    got = (
+        c.get("/api/next/config")
+        if site == "read"
+        else c.put(
+            "/api/next/config/project", json={"rev": first["project_rev"], "layer": {"format": F, "pr_marker": False}}
+        )
+    )
+    assert (got.status_code, got.json()["detail"]) == (
+        503 if site == "completion" else 409,
+        f"StoreError: {whole_error}\nsettings storage note",
+    )
+    assert store.config_path.exists() is (site == "completion")
+    if site == "completion":
+        assert store.read_config().pr_marker is False
+
+
+@pytest.mark.parametrize("kind", ["data-repo", "permission"])
+def test_a_refused_folder_rename_keeps_the_whole_failure_and_releases_the_launch_lock(
+    store, shared_repo, monkeypatch, whole_error, kind
+):
+    store.shared, store.name = data_repo.DataRepo(shared_repo[0]), "shop"
+    lock = threading.Lock()
+    monkeypatch.setattr(Host, "store", store, raising=False)
+    monkeypatch.setattr(Host, "launching", lock, raising=False)
+    monkeypatch.setattr(Host, "peers", lambda _: [], raising=False)
+    monkeypatch.setattr(Host, "curating", lambda _self, _name: contextlib.nullcontext(""), raising=False)
+    refused = (
+        data_repo.DataRepoError(whole_error)
+        if kind == "data-repo"
+        else PermissionError(13, whole_error, str(store.shared.root / "shop"))
+    )
+    refused.add_note("folder rename note")
+
+    def rename(*_args, **_kwargs):
+        raise refused
+
+    monkeypatch.setattr(data_repo.DataRepo, "rename", rename)
+    got = client(store, headers=AUTH).put("/api/next/config/folder", json={"name": "new-shop"})
+    prefix = "" if kind == "data-repo" else "the folder could not be renamed: "
+    assert (got.status_code, got.json()["detail"]) == (
+        409 if kind == "data-repo" else 503,
+        f"{prefix}{type(refused).__name__}: {refused}\nfolder rename note",
+    )
+    assert (store.name, lock.locked()) == ("shop", False)
 
 
 def prices(

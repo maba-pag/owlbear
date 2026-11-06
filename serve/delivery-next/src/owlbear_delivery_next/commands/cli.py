@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from subprocess import CalledProcessError
+from subprocess import CalledProcessError, TimeoutExpired
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.models import (
@@ -134,10 +134,11 @@ def update_pack(a: argparse.Namespace, repo: Path) -> int:
         DetectorError,
         data_repo.DataRepoError,
         CalledProcessError,
+        TimeoutExpired,
         OSError,
         ValueError,
     ) as exc:
-        sys.stdout.write(f"Impeccable: {type(exc).__name__}: {exc}\n")
+        sys.stdout.write(f"Impeccable: {failure(exc)}\n")
         return 1
     return 0
 

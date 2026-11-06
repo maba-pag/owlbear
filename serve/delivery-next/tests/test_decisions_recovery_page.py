@@ -336,7 +336,10 @@ def test_a_refused_recovery_answers_whole(  # noqa: PLR0913, PLR0917 - its fixtu
     generation = _interrupted_here(picking)
 
     def failing(*_args, **_kwargs):
-        raise (DataRepoError if exit_ == "data-repo" else decision_batch.JournalError)(whole_error)
+        exc = (DataRepoError if exit_ == "data-repo" else decision_batch.JournalError)(whole_error)
+        if exit_ == "journal":
+            exc.add_note("journal completion note")
+        raise exc
 
     if exit_ == "rebase":
         failing_rebase_probe.arm()
@@ -351,13 +354,41 @@ def test_a_refused_recovery_answers_whole(  # noqa: PLR0913, PLR0917 - its fixtu
     got = client.post("/api/next/decisions/recovery/finish", json={"generation": generation, "confirmed": True})
     why = {
         "data-repo": f"DataRepoError: {whole_error}",
-        "journal": f"JournalError: {whole_error}",
+        "journal": f"JournalError: {whole_error}\njournal completion note",
         "rebase": f"a rebase is active or unknown, so batch {generation} is not recovered; resolve it in Git first: "
         f"{failing_rebase_probe.said(picking.shared.root)}",
     }[exit_]
     detail = f"{why} ({decision_store.RECOVER})"
     assert (got.status_code, got.json()["detail"]) == (409, detail)
     assert logged(caplog) == [f"decision recovery refused: {detail}"]
+
+
+def test_a_corrupt_recovery_diagnosis_keeps_the_journal_error_notes(picking, tmp_path, monkeypatch, whole_error):
+    generation = _interrupted_here(picking)
+    journal = decision_batch.journal_path(picking.shared)
+    before = journal.read_bytes()
+
+    def unreadable(_shared):
+        exc = decision_batch.JournalError(whole_error)
+        exc.add_note("journal read note")
+        raise exc
+
+    with monkeypatch.context() as patch:
+        patch.setattr(decision_batch, "pending", unreadable)
+        client = TestClient(
+            api.create_app(_store(picking, tmp_path), "tok", Host()),
+            base_url="http://127.0.0.1",
+            headers={"authorization": f"Bearer {Host.record.token}"},
+        )
+        shown = client.get("/api/next/decisions/recovery").json()
+        assert shown == {
+            "interrupted": True,
+            "corrupt": True,
+            "diagnosis": f"JournalError: {whole_error}\njournal read note",
+            "generation": "",
+        }
+    assert journal.read_bytes() == before
+    assert decision_batch.pending(picking.shared).generation == generation
 
 
 # Each Recovery and list read is sent at once and answered by the host then, but handed to the page only when the test

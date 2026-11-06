@@ -30,6 +30,7 @@ def clone_profile(remote: Path, tmp_path: Path) -> tuple[Store, Profile]:
 @pytest.fixture
 def no_network(monkeypatch) -> None:
     monkeypatch.setattr(config, "BASE", None)
+    monkeypatch.setattr(profile, "detect", lambda _repo, _gh, previous: previous or Profile())
     monkeypatch.setattr(readiness, "check", lambda *_a, **_k: [])  # the network checks are not under test here
 
 

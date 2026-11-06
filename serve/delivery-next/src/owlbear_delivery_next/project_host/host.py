@@ -177,6 +177,7 @@ class Host:
         self.offline: set[str] = set()  # Changes last seen waiting on the network
         self.back: dict[str, datetime] = {}  # those to wake, with when the probe saw the network return
         self.down, self.probe_at, self.clock = False, 0.0, time.monotonic
+        self.probe_said: str | None = None  # the last failed profile read the probe logged
         self.failed = ""  # the last pass's whole error until a pass succeeds; the Changes page notes it
         pid, started = os.getpid(), datetime.now(UTC)
         self.record = HostRecord(url="", token="", pid=pid, started_at=started, code=codebase.CURRENT)
@@ -248,8 +249,13 @@ class Host:
         self.probe_at = self.clock() + PROBE.total_seconds()
         try:
             name = profile.value(self.store.read_profile() or Profile(), profile.HOST, "github.com")
-        except StoreError:
-            name = "github.com"
+        except StoreError as exc:
+            said = f"network probe skipped: {failure(exc)}"
+            if self.probe_said != said:
+                self.say(said)
+                self.probe_said = said
+            return
+        self.probe_said = None
         up = self.reach(name) is None
         if up and self.down:  # only a return wakes them: a probe that never failed says nothing about their failure
             self.back |= dict.fromkeys(self.offline, now)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failed
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 
 if TYPE_CHECKING:
@@ -33,23 +34,23 @@ def remote_pending(store: Store) -> str:
     """The pending record on the shared remote, read after a fetch that leaves the checkout alone; else ``""``."""
     fetched = store.shared.git("fetch", "-q")
     if fetched.returncode:
-        msg = f"the shared repository could not be fetched to read the pending settings: {fetched.stderr.strip()[:200]}"
+        msg = f"the shared repository could not be fetched to read the pending settings: {failed(fetched)}"
         raise DataRepoError(msg)
     rel = f"{store.name}/{CONFIG_PENDING}"
     head = store.shared.git("rev-parse", "--verify", "-q", "@{upstream}")
     if head.returncode:
-        msg = "the shared repository has no upstream to read the pending settings from"
+        msg = f"the shared repository's upstream for the pending settings could not be read: {failed(head)}"
         raise DataRepoError(msg)
     upstream = head.stdout.strip()
     listed = store.shared.git("ls-tree", upstream, "--", rel)
     if listed.returncode:
-        msg = f"the pending settings on the shared remote could not be looked up: {listed.stderr.strip()[:200]}"
+        msg = f"the pending settings on the shared remote could not be looked up: {failed(listed)}"
         raise DataRepoError(msg)
     if not listed.stdout.strip():
         return ""  # proven absent: the upstream lists no record
     shown = store.shared.git("show", f"{upstream}:{rel}")
     if shown.returncode:
-        msg = f"the pending settings on the shared remote could not be read: {shown.stderr.strip()[:200]}"
+        msg = f"the pending settings on the shared remote could not be read: {failed(shown)}"
         raise DataRepoError(msg)
     return shown.stdout.strip()
 

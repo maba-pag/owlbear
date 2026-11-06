@@ -256,7 +256,10 @@ def pr_state(gh: Provider, repository: str, c: Change, offered: str | None = Non
 
 def observe(store: Store, repo: Path, slug: str) -> Seen:
     """The PR's terminal state of one Change, read from GitHub with the profile's provider."""
+    c = store.read(slug)
+    if c.names.pr is None:
+        return None, False
     prof = store.read_profile() or Profile()
     offered = next((e.get("head") for e in reversed(store.events(slug)) if e.get("event") == "merge-offer"), None)
     gh = profile.provider(prof, repo, github_writer.of(store, repo))
-    return pr_state(gh, profile.value(prof, profile.REPO), store.read(slug), offered)
+    return pr_state(gh, profile.value(prof, profile.REPO), c, offered)

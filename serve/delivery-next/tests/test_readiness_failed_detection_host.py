@@ -1,6 +1,8 @@
 import pytest
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.github.provider import FailureCode, ProviderError
+from owlbear_delivery_next.impeccable.detector import DetectorError
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import profile
@@ -115,9 +117,40 @@ def test_a_detection_that_cannot_publish_says_the_whole_refusal(
     checks = readiness.ready(store, root)
 
     refused = {
-        "returned": f"DataRepoError: {whole_error}",
+        "returned": whole_error,
         "raised": f"DataRepoError: {whole_error}\n{note}",
-        "config": f"DataRepoError: DataRepoError: {whole_error}\n{note}",
+        "config": f"DataRepoError: {whole_error}\n{note}",
     }[refusal]
     detail = f"StoreError: the detected profile could not be published: {refused}"
     assert [c.detail for c in checks if c.name == "profile detection"] == [detail]
+
+
+@pytest.mark.parametrize("kind", ["provider", "detector"])
+def test_a_detection_read_failure_is_a_failed_check_with_its_details_and_retry(
+    shared_repo, tmp_path, monkeypatch, reached, kind
+):
+    store = Store(tmp_path / "store", DataRepo(shared_repo[0]), "shop-site")
+    store.write_profile(Profile(entries={profile.HOST: confirmed(ENTERPRISE)}))
+    saved = profile_share.path(store).read_bytes()
+    error = (
+        ProviderError(FailureCode.UNAVAILABLE, "read repository", "not reachable", retry_safe=True)
+        if kind == "provider"
+        else DetectorError("detector refused")
+    )
+    error.add_note("the detection read did not finish")
+
+    def fail(*_args):
+        raise error
+
+    monkeypatch.setattr(profile, "detect", fail)
+    checks = readiness.ready(store, shared_repo[0])
+    failed = next(c for c in checks if c.name == "profile detection")
+    assert not failed.ok
+    assert f"{type(error).__name__}: {error}\nthe detection read did not finish" in failed.detail
+    assert failed.fix == "Resolve the profile detection or publication error reported above, then restart Delivery"
+    assert profile_share.path(store).read_bytes() == saved
+    assert not (store.root / profile_share.DETECTED).exists()
+    assert reached == [ENTERPRISE]
+    monkeypatch.setattr(profile, "detect", lambda *_a: store.read_profile())
+    readiness.ready(store, shared_repo[0])
+    assert (store.root / profile_share.DETECTED).exists()

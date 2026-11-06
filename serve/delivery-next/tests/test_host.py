@@ -44,6 +44,7 @@ from owlbear_delivery_next.change_flow.brief_tools import BriefDraft
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity, status
 from owlbear_delivery_next.commands import cli, runner
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import codebase, processes
 from owlbear_delivery_next.local_system.storage_io import open_lock
 from owlbear_delivery_next.project_host import api, brief_routes, host
@@ -54,7 +55,7 @@ from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store import briefs, machine_settings, step_pids, work_block
 from owlbear_delivery_next.state_store.database import put_record
 from owlbear_delivery_next.state_store.store import ACTIVITY_LIMIT, Store, StoreError
-from owlbear_delivery_next.workflow_steps import check, disposable, prepare
+from owlbear_delivery_next.workflow_steps import check, disposable, engine, prepare, queue
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 DRAFT = {
@@ -222,6 +223,74 @@ def test_a_failed_pass_is_logged_and_noted_on_the_changes_page_whole_until_a_pas
     assert (fake.host.failed, c.get("/api/next/project").json()) == ("", {"notes": []})
 
 
+def test_a_settings_read_stop_keeps_both_persisted_reasons_and_their_http_views_whole(
+    store, tmp_path, monkeypatch, capsys, whole_error
+):
+    fake = Fake(store, tmp_path)
+    save(store, asking(fake).model_copy(update={"outcome": None}))
+    error = StoreError(whole_error)
+    error.add_note("a note added on the way up")
+
+    def unreadable():
+        raise error
+
+    monkeypatch.setattr(store, "settings", unreadable)
+    started = datetime.now(UTC)
+    with store.lock("c1") as lock:
+        c = store.read("c1")
+        runner._step(store, lock, c, c.step, tmp_path)  # noqa: SLF001 - the real caught settings-read stop
+    ended = datetime.now(UTC)
+    c = store.read("c1")
+    whole = f"StoreError: {whole_error}\na note added on the way up"
+    assert (c.stop.reason, c.outcome.reason) == (whole, whole)
+    assert (c.stop.kind, c.stop.action, c.stop.resume) == (ErrorKind.STATE, error.action, error.resume)
+    assert c.outcome.exit == Exit.STOP
+    assert started <= c.stop.at == c.outcome.at <= ended
+    assert (store.events("c1"), capsys.readouterr().out) == ([], "")  # this caught stop emits no activity
+    http = client(store, fake)
+    listed, detail = http.get("/api/next/changes"), http.get("/api/next/changes/c1")
+    assert (listed.status_code, detail.status_code) == (200, 200)
+    assert listed.json()[0]["line"] == detail.json()["line"] == f"Build 1/1 · stopped: {whole}"
+    assert listed.json()[0]["error"] is True
+    assert detail.json()["recovery"]["reason"] == whole
+    assert detail.json()["recovery"]["action"] == error.action
+    assert detail.json()["recovery"]["at"] == c.stop.at.isoformat().replace("+00:00", "Z")
+    assert detail.json()["activity"] == []
+
+
+def test_a_profile_note_keeps_its_existing_log_once_per_changed_failure(store, tmp_path, monkeypatch, caplog):
+    fake = Fake(store, tmp_path)
+    paused(fake, [True])
+    c = client(store, fake)
+    first, changed = StoreError("profile unreadable"), StoreError("profile changed and remains unreadable")
+    for error in (first, changed):
+        error.add_note("profile read context")
+    current = [first]
+
+    def read():
+        if current[0] is not None:
+            raise current[0]
+        return Profile()
+
+    monkeypatch.setattr(store, "read_profile", read)
+    whole = f"StoreError: {first}\nprofile read context"
+    for _ in range(2):
+        assert c.get("/api/next/project").json() == {"notes": [f"The project profile could not be read: {whole}"]}
+
+    def messages():
+        return [r.getMessage() for r in caplog.records if r.name == "owlbear_delivery_next.project_host.project_notes"]
+
+    assert messages() == [f"{store.root}: project profile could not be read: {whole}"]
+    current[0] = changed
+    c.get("/api/next/project").raise_for_status()
+    current[0] = None
+    assert c.get("/api/next/project").json() == {"notes": []}
+    current[0] = changed
+    c.get("/api/next/project").raise_for_status()
+    assert messages()[1:] == [f"{store.root}: project profile could not be read: {failure(changed)}"] * 2
+    assert store.slugs() == []  # logging does not depend on a probe or any Change being present
+
+
 def test_recorded_pids_of_the_runner_block_until_gone(store, tmp_path):
     fake = Fake(store, tmp_path)
     save(store, asking(fake).model_copy(update={"outcome": None}))
@@ -318,10 +387,10 @@ def test_an_unloadable_change_is_reported_once_until_its_record_changes(store, t
     raw(store, "c1", '{"format": 0, "slug": 5}')
     for _ in range(3):
         assert fake.host.tick(NOW) == []
-    assert capsys.readouterr().out.count("cannot be migrated") == 1
+    assert capsys.readouterr().out.count("unsupported format 0; restore a versioned state file") == 1
     raw(store, "c1", '{"format": 0, "slug": 6, "x": 1}')
     fake.host.tick(NOW)
-    assert capsys.readouterr().out.count("cannot be migrated") == 1
+    assert capsys.readouterr().out.count("unsupported format 0; restore a versioned state file") == 1
 
 
 def checking(**env):
@@ -793,6 +862,97 @@ def at(seconds):
 def tick(fake, seconds):
     fake.host.clock = lambda: float(seconds)
     return fake.host.tick(at(seconds))
+
+
+def test_a_malformed_profile_skips_the_probe_but_still_folds_an_unrelated_no_pr_answer(store, tmp_path, capsys):
+    fake = Fake(store, tmp_path)
+    probes = probing(fake, None)
+    save(store, waiting_on(fake, ErrorKind.NETWORK))
+    assert tick(fake, 0) == []
+    waiting = store.read("c1").outcome
+    save(store, asking(fake).model_copy(update={"slug": "c2"}))
+    store.put_inbox("c2", AnswerItem(at=NOW, question="q1", text="German"))
+    malformed = '{"format": 5, "entries":'
+    path = store.root / "profile.json"
+    path.write_text(malformed)
+    with pytest.raises(StoreError) as caught:
+        store.read_profile()
+    whole = failure(caught.value)
+    fake.host.down = True
+    assert tick(fake, 1) == ["c2"]
+    assert (path.read_text(), store.read("c1").outcome) == (malformed, waiting)
+    assert (probes, fake.host.down, fake.host.back) == ([], True, {})
+    assert (fake.host.offline, fake.host.probe_at, fake.host.failed) == ({"c1"}, 11.0, "")
+    answered = store.read("c2")
+    assert (answered.questions[0].answer.text, answered.outcome, answered.names.pr) == ("German", None, None)
+    with store.db.read() as db:
+        assert db.execute("SELECT count(*) FROM inbox WHERE slug = 'c2'").fetchone() == (0,)
+    assert logged(capsys.readouterr().out, "network probe skipped: ") == [whole]
+    fake.host.failed = "an independent pass failure"
+    http = client(store, fake)
+    response = http.get("/api/next/project")
+    assert (response.status_code, response.json()) == (
+        200,
+        {
+            "notes": [
+                f"The project profile could not be read: {whole}",
+                "The host's last pass failed: an independent pass failure",
+            ]
+        },
+    )
+    assert len(http.get("/api/next/changes").json()) == 2
+    assert capsys.readouterr().out == ""  # rendering the note adds no log
+
+
+def test_a_failed_probe_logs_only_changed_errors_and_a_real_success_resets_it(
+    store, tmp_path, monkeypatch, capsys, whole_error
+):
+    fake = Fake(store, tmp_path)
+    probes = probing(fake, "unreachable")
+    save(store, waiting_on(fake, ErrorKind.NETWORK))
+    store.write_profile(Profile())
+    assert tick(fake, 0) == []
+    first, changed = StoreError(whole_error), StoreError(f"{whole_error}\na changed diagnostic")
+    for error in (first, changed):
+        error.add_note("a note added on the way up")
+    current = [first]
+    read = store.read_profile
+
+    def reading():
+        if current[0] is not None:
+            raise current[0]
+        return read()
+
+    monkeypatch.setattr(store, "read_profile", reading)
+    for seconds in (1, 5, 11):
+        assert tick(fake, seconds) == []
+    assert logged(capsys.readouterr().out, "network probe skipped: ") == [failure(first)]
+    current[0] = changed
+    assert tick(fake, 21) == []
+    assert logged(capsys.readouterr().out, "network probe skipped: ") == [failure(changed)]
+    current[0] = None
+    assert tick(fake, 31) == []
+    assert (probes, fake.host.down, fake.host.back) == (["github.com"], True, {})
+    assert capsys.readouterr().out == ""
+    current[0] = changed
+    assert tick(fake, 41) == []
+    assert logged(capsys.readouterr().out, "network probe skipped: ") == [failure(changed)]
+
+
+@pytest.mark.parametrize("operation", ["observe", "barrier"])
+def test_a_real_pr_needs_its_profile_for_observation_and_the_fold_barrier(store, tmp_path, monkeypatch, operation):
+    c = Change(slug="c1", step=Step(kind=StepKind.MERGE), names=Names(pr=7))
+    save(store, c)
+    after = c.model_copy(deep=True)
+    after.intent.paused_at = NOW
+
+    def unreadable():
+        msg = "the real PR's profile is unreadable"
+        raise StoreError(msg)
+
+    monkeypatch.setattr(store, "read_profile", unreadable)
+    with pytest.raises(StoreError, match="the real PR's profile is unreadable"):
+        engine.observe(store, tmp_path, "c1") if operation == "observe" else queue.barrier(store, tmp_path)(c, after)
 
 
 def test_a_change_waiting_on_the_network_wakes_once_the_probe_sees_the_network_return(store, tmp_path):

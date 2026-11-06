@@ -161,6 +161,21 @@ def test_a_later_machine_copies_nothing_and_a_value_the_owner_cleared_stays_clea
     assert (registry.load().settings, _done(), machine_settings.current().sessions) == (registry.Settings(), True, None)
 
 
+@pytest.mark.usefixtures("no_base")
+def test_an_unversioned_empty_seed_refuses_the_carry_without_an_internal_key_error(shared_repo, monkeypatch):
+    shared = DataRepo(shared_repo[0])
+    _committed(shared, {})
+    head = _git(shared.root, "rev-parse", "HEAD")
+    _local()
+    _carry(monkeypatch, shared)
+    why = registry.load().settings_pending
+    assert "unsupported format 0" in why
+    assert "KeyError" not in why
+    assert shared.global_path.read_text() == "{}"
+    assert _git(shared.root, "rev-parse", "HEAD") == head
+    assert not registry.load().settings_moved
+
+
 def test_without_a_shared_repository_this_machine_keeps_its_own(monkeypatch):
     _local()
     assert _carry(monkeypatch, None) == []
