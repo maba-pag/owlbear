@@ -46,6 +46,7 @@ class Updater:
         self.steps = update_steps.Steps(machine.say)
         self.unpruned = ""  # why the old versions could not be removed at this host's start
         self.unmigrated = ""  # why the runtime from before the first update could not be put away at this start
+        self.uninspected = ""
 
     def read(self) -> dict[str, Any]:
         """The update's state: its phase, what it says and the version it is about."""
@@ -83,7 +84,12 @@ class Updater:
         try:
             left = self.machine.busy()
         except Exception as exc:  # noqa: BLE001 - a failed inspection is a visible refusal, never permission
-            return f"Work could not be inspected: {failure(exc)}"
+            why = failure(exc)
+            if why != self.uninspected:
+                self.machine.say(f"update: work could not be inspected: {why}")
+            self.uninspected = why
+            return f"Work could not be inspected: {why}"
+        self.uninspected = ""
         if left:
             more = f" and {len(left) - SHOWN} more" if len(left) > SHOWN else ""
             return f"Work runs now: {'; '.join(left[:SHOWN])}{more}"
