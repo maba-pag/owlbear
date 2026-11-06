@@ -45,7 +45,7 @@ def session(agent: str) -> tuple[RoleModel, float]:
     minutes = cases_job.settings().agent(agent).minutes
     if minutes is None:
         msg = f"agents.{agent}.minutes"
-        raise SettingsUnset(msg)
+        raise SettingsUnset([msg])
     return cases_job.role(agent), minutes * 60.0
 
 
