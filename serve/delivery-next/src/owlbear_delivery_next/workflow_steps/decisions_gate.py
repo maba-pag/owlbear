@@ -310,7 +310,11 @@ def check_step(store: Store, c: Change, now: datetime, lock: Lock | None = None)
     stale = _refresh(store) if store.shared is not None else ""
     if stale and c.step.kind in IRREVERSIBLE:
         reason = f"the decisions were not refreshed before {c.step.kind}, which cannot be undone: {stale}"
-        return Gate(c, _stopped(ErrorKind.STATE, reason, STALE, "The decisions refresh from the remote", now))
+        return Gate(
+            c,
+            _stopped(ErrorKind.STATE, reason, STALE, "The decisions refresh from the remote", now),
+            refresh_error=stale,
+        )
     try:
         view = decision_store.load(store.shared, store.name)
     except decision_store.DecisionsUnavailable as exc:
