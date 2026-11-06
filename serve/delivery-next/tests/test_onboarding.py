@@ -794,6 +794,14 @@ def test_a_url_on_another_host_is_no_github_repository(jobs):
         jobs.probe({"kind": "github", "repository": "https://gitlab.com/ada/meter"})
 
 
+def test_a_clone_whose_origin_names_a_user_is_that_repositorys_clone(hub, jobs, tmp_path):
+    hub.add("ada/meter", commits=True)
+    folder = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/meter.git", "meter", Access.LOCAL))
+    git(folder, "remote", "set-url", "origin", "https://ada@github.com/ada/meter.git")
+    found = jobs.probe({"kind": "folder", "folder": str(folder)})
+    assert (found["refusal"], found["repository"], found["entry"]) == ("", "ada/meter", "E2")
+
+
 def test_the_preflight_reads_the_identity_the_first_commit_will_use(hub, jobs, tmp_path):
     """Only the HTTPS URL picks boecht's identity here: with an SSH origin the first commit is the default one's,
     which signs with a key that can't be read, so the preflight must stop on it."""
