@@ -18,7 +18,7 @@ from owlbear_delivery_next.change_flow.status import RESUME, status
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import data_repo, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import cases_job, chats, idle_loops
+from owlbear_delivery_next.machine_host import cases_job, chats
 from owlbear_delivery_next.machine_host.cases_job import CasesJob
 from owlbear_delivery_next.machine_host.curation import Curation
 from owlbear_delivery_next.machine_host.project import Project, recorded
@@ -360,14 +360,6 @@ class Machine:
             self.say("stopping: nothing runs")
             self.on_stop()
             return True
-
-    def curation_loop(self) -> None:
-        """Thread: once OwlBear is idle, curate each memory folder holding pending entries no run has seen."""
-        idle_loops.curate(self, CURATE_EVERY)
-
-    def idle_loop(self) -> None:
-        """Thread: look every ``IDLE`` seconds whether a stop when idle may stop OwlBear."""
-        idle_loops.stop(self, IDLE)
 
     def waiting(self) -> int:
         """How many Changes would continue on Resume."""

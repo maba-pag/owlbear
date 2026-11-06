@@ -28,8 +28,8 @@ import uvicorn
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
-from owlbear_delivery_next.machine_host import alias, app, curation_resume, environment, handover, versions
-from owlbear_delivery_next.machine_host.machine import Machine
+from owlbear_delivery_next.machine_host import alias, app, curation_resume, environment, handover, idle_loops, versions
+from owlbear_delivery_next.machine_host.machine import CURATE_EVERY, IDLE, Machine
 from owlbear_delivery_next.project_host.api import link
 from owlbear_delivery_next.project_host.decision_routes import OWLBEAR
 from owlbear_delivery_next.project_host.host import HostRecord, running_at
@@ -141,11 +141,11 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
     _load(machine, given)
     _fill(machine, cloning=cloning)
     threading.Thread(target=machine.retry_loop, daemon=True, name="projects").start()
-    threading.Thread(target=machine.idle_loop, daemon=True, name="idle-stop").start()
+    threading.Thread(target=idle_loops.stop, args=(machine, IDLE), daemon=True, name="idle-stop").start()
     threading.Thread(target=machine.auto.loop, daemon=True, name="idle-update").start()
     threading.Thread(target=machine.checks.loop, daemon=True, name="update-checks").start()
     threading.Thread(target=machine.reads.loop, args=(machine.stopping,), daemon=True, name="settings-read").start()
-    threading.Thread(target=machine.curation_loop, daemon=True, name="idle-curation").start()
+    threading.Thread(target=idle_loops.curate, args=(machine, CURATE_EVERY), daemon=True, name="idle-curation").start()
     machine.cases.start(machine.stopping, time.monotonic)  # drained when the host ends (``Machine.stop_all``)
     machine.retro.start(machine.stopping, time.monotonic)  # drained when the host ends, too
     machine.chats.start()  # the Spotter's looks at enrolled chats (Improvement design §4)
