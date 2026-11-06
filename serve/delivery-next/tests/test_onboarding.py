@@ -790,8 +790,9 @@ def test_github_launches_and_the_push_run_as_the_repositorys_account_with_its_to
 
 
 def test_a_url_on_another_host_is_no_github_repository(jobs):
-    with pytest.raises(OnboardingError, match=r"not a repository on github\.com"):
-        jobs.probe({"kind": "github", "repository": "https://gitlab.com/ada/meter"})
+    for other in ("https://gitlab.com/ada/meter", "https://gitlab.com?@github.com/ada/meter"):
+        with pytest.raises(OnboardingError, match=r"not a repository on github\.com"):
+            jobs.probe({"kind": "github", "repository": other})
 
 
 def test_a_clone_whose_origin_names_a_user_is_that_repositorys_clone(hub, jobs, tmp_path):

@@ -49,7 +49,7 @@ ORDER = (
 )
 SETUP = ("shared", "merge_method", "readiness", "detect", "profile", "files", "register", "end")
 _REPO = re.compile(  # owner/name, or a github.com URL of it (with a user name too); no other host
-    r"(?:https?://(?:[^@/\s]+@)?(?:www\.)?github\.com/|git@github\.com:|ssh://git@github\.com/)?"
+    r"(?:https?://(?:[^@/?#\s]+@)?(?:www\.)?github\.com/|git@github\.com:|ssh://git@github\.com/)?"
     r"([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?$",
     re.IGNORECASE,
 )
