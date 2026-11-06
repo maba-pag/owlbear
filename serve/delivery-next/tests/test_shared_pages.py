@@ -18,6 +18,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
 from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryCurationResult
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
@@ -129,6 +130,59 @@ def serving(app: Starlette) -> tuple[uvicorn.Server, str]:
     while not server.started:
         time.sleep(0.05)
     return server, f"http://127.0.0.1:{sock.getsockname()[1]}"
+
+
+@pytest.mark.browser
+def test_changes_show_the_current_unreadable_profile_note_beside_fresh_cards(c1, tmp_path: Path, pds) -> None:
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    store, app = c1
+    server, base = serving(app)
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page(viewport={"width": 1440, "height": 1000})
+            pds.only(page, base)
+            errors: list[str] = []
+            page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/#token=tok")
+            expect(page.locator("#changes li.card")).to_have_count(1)
+            existing_errors = set(errors)
+            change = store.read(store.slugs()[0]).model_copy(deep=True)
+            change.brief.title = "Fresh readable card"
+            with store.lock(change.slug) as lock:
+                store.write(lock, change)
+            extra = change.model_copy(update={"slug": "fresh-change", "handle": ""}, deep=True)
+            extra.brief.title = "Another fresh card"
+            with store.lock(extra.slug) as lock:
+                store.write(lock, extra)
+            path = store.root / "profile.json"
+            path.write_text('{"format": 5, "entries":')
+            with pytest.raises(StoreError) as caught:
+                store.read_profile()
+            whole = failure(caught.value)
+            page.reload()
+            page.locator("#notes:not([hidden]), #error:not([hidden])").first.wait_for(state="visible")
+            pds.settled(page)
+            page.screenshot(path=str(tmp_path / "profile-read.png"), full_page=True)
+            notes = page.locator("#notes")
+            expect(notes).to_be_visible()
+            assert notes.text_content().strip() == f"The project profile could not be read: {whole}"
+            expect(page.locator("#changes li.card .open")).to_have_text(["Fresh readable card", "Another fresh card"])
+            expect(page.locator("#list")).not_to_have_class("stale")
+            expect(page.locator("#error")).to_be_hidden()
+            assert set(errors) == existing_errors
+            path.unlink()  # the same host reports only the current failure, not a retained probe notice
+            page.reload()
+            expect(page.locator("#notes")).to_be_hidden()
+            expect(page.locator("#changes li.card")).to_have_count(2)
+            browser.close()
+    finally:
+        server.should_exit = True
 
 
 @pytest.mark.browser

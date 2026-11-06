@@ -320,9 +320,11 @@ def barrier(store: Store, repo: Path) -> Leave:
     """
 
     def leave(before: Change, after: Change) -> Change | None:  # noqa: PLR0911 - one exit per observation
+        if not before.names.pr:
+            return after
         prof = store.read_profile()
         queued = before.queue is not None or bool(prof and profile.value(prof, profile.QUEUE) == "yes")
-        if not (queued and leaving(before, after) and before.names.pr and prof):
+        if not (queued and leaving(before, after) and prof):
             return after
         gh: Provider = profile.provider(prof, repo, github_writer.of(store, repo))
         repository = profile.value(prof, profile.REPO)

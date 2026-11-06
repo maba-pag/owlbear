@@ -339,7 +339,11 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     @router.get("/project")
     def project() -> dict[str, list[str]]:
         failed = [f"The host's last pass failed: {host.failed}"] if host.failed else []
-        return {"notes": [*profile.notes(store.read_profile() or Profile()), *failed]}
+        try:
+            notes = profile.notes(store.read_profile() or Profile())
+        except StoreError as exc:
+            notes = [f"The project profile could not be read: {failure(exc)}"]
+        return {"notes": [*notes, *failed]}
 
     @router.post("/new-change")
     def new_change() -> dict[str, Any]:
