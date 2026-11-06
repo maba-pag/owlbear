@@ -15,12 +15,13 @@ if TYPE_CHECKING:
 
 def folders(root: Path, *, include_invalid: bool = False) -> list[str]:
     """Nonlinked project memory paths; the page also reports existing paths of the wrong type."""
-    found = (p for p in root.iterdir() if p.is_dir() and not p.is_symlink() and not p.name.startswith("."))
     own = []
-    for project in found:
-        if project.name == "memory":
+    for project in root.iterdir():
+        if project.name == "memory" or project.name.startswith("."):
             continue
         try:
+            if not S_ISDIR(project.lstat().st_mode):
+                continue
             mode = (project / "memory").lstat().st_mode
         except FileNotFoundError:
             continue
