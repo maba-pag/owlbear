@@ -305,6 +305,10 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     # Its own patcher, so a test's monkeypatch.undo(), which also puts the real HOME back, leaves it in place.
     # The shared patcher is undone inside it: undone later, it would put back the rule over what a test removed.
     with pytest.MonkeyPatch.context() as rule:
+        # Track even inactive entries: tests may scrub every Git selector.
+        for name in tuple(os.environ):
+            if name.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")):
+                rule.delenv(name)
         rule.setenv("GIT_CONFIG_COUNT", "1")
         rule.setenv("GIT_CONFIG_KEY_0", f"url.{offline}.insteadOf")
         rule.setenv("GIT_CONFIG_VALUE_0", github)
