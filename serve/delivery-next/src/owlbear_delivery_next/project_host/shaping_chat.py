@@ -56,26 +56,29 @@ def dispatch(host: Host, lock: Lock, c: Change) -> None:
     n = c.shaper_notice
     if not n or n.state != "pending" or not shaper_wake.current(c):
         return
-    if (
-        host.paused()
-        or c.intent.paused_at
-        or not host.owner_runs()
-        or host.updating()
-        or host.code() != host.record.code
-        or work_block.of_store(host.store)
-    ):
-        return
-    n.state = "attempted"
-    host.store.write(lock, c)
-    try:
-        role = host.store.settings().agent("shaper")
-        caller = c.brief.saving_chat or SavingChat(reason="the brief's saving chat was not recorded")
-        result = host.post(host.repo, role, caller, n.message, shaper_wake.prompt(c, host.store.name or host.repo.name))
-        n.state, n.detail = result.state, result.detail
-    except (SettingsUnset, StoreError) as exc:
-        n.state, n.detail = "failed", failure(exc)
-    host.store.write(lock, c)
-    host.say(f"{c.slug}: shaping message for brief v{n.version} {n.state}: {n.detail}".rstrip())
+    with host.launching:
+        if (
+            host.paused()
+            or c.intent.paused_at
+            or not host.owner_runs()
+            or host.updating()
+            or host.code() != host.record.code
+            or work_block.of_store(host.store)
+        ):
+            return
+        n.state = "attempted"
+        host.store.write(lock, c)
+        try:
+            role = host.store.settings().agent("shaper")
+            caller = c.brief.saving_chat or SavingChat(reason="the brief's saving chat was not recorded")
+            result = host.post(
+                host.repo, role, caller, n.message, shaper_wake.prompt(c, host.store.name or host.repo.name)
+            )
+            n.state, n.detail = result.state, result.detail
+        except (SettingsUnset, StoreError) as exc:
+            n.state, n.detail = "failed", failure(exc)
+        host.store.write(lock, c)
+        host.say(f"{c.slug}: shaping message for brief v{n.version} {n.state}: {n.detail}".rstrip())
 
 
 def shown(c: Change, *, paused: bool) -> dict[str, str] | None:
