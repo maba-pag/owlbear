@@ -219,7 +219,7 @@ def test_the_before_capture_renders_only_static_states_without_a_test_copy(monke
     rendered: list[str] = []
     monkeypatch.setattr(before.check, "answers", lambda _u: False)
     monkeypatch.setattr(before.check, "start", lambda *_a: subprocess.Popen([sys.executable, "-c", "pass"]))
-    monkeypatch.setattr(before.check, "ready", lambda *_a: {})
+    monkeypatch.setattr(before.check, "ready", lambda *_a, **_kw: {})
     monkeypatch.setattr(before.check, "dispose", lambda _e: {})
     monkeypatch.setattr(
         before.visual, "CAPTURE", lambda _u, states, *_a, **_k: rendered.extend(s.name for s in states) or []
