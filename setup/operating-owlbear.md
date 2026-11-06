@@ -434,6 +434,18 @@ OwlBear's pages run Changes; open them at the address `owlbear status` prints.
 4. Once the pull request's checks and your branch rules pass, OwlBear merges it and the Change
    shows as done.
 
+When your answer on Changes leaves brief work for the shaper, Delivery posts one continuation
+to the chat that saved that brief version. The brief panel says whether it posted, waits for
+Resume, failed, or could not be confirmed, with the whole available error. Posting means the
+editor accepted the message, not that the shaper finished. A running turn and your draft stay
+intact; the editor queues the message.
+
+Delivery contacts only an editor already running; it never starts VS Code for this hand-off.
+If the saving chat is unknown or posting fails, use **Continue in the shaping chat** yourself.
+Delivery never automatically resends a consumed attempt, including one whose outcome is
+uncertain after a disconnect or restart. Pause prevents a new post, not a message the editor
+already accepted.
+
 Cleanup verifies the preservation of work held only in a Change's worktree before removing it.
 Archives retain regular-file permissions and symbolic links, including dangling links, without
 following their targets. If an entry cannot be represented safely, such as a nested Git
