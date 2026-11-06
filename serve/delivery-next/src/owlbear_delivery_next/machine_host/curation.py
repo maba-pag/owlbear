@@ -19,8 +19,6 @@ from contextlib import AbstractContextManager, contextmanager, nullcontext
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
-from owlbear_memory import MemoryEngine, MemoryState
-
 from owlbear_delivery_next.change_contracts import memory_curation_tools, tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
@@ -29,6 +27,7 @@ from owlbear_delivery_next.local_system import data_repo, local_home, maintenanc
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import curation_block, curation_resume, curation_snapshots, curation_tree
 from owlbear_delivery_next.machine_host.curation_block import LABEL
+from owlbear_delivery_next.machine_host.curation_reads import pending as _pending
 from owlbear_delivery_next.runtimes import loop_owner, maintained, sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.state_store import machine_settings, registry, spend_ledger, work_block
@@ -192,6 +191,10 @@ class Curation:
         for f in folders(shared.root):
             block = curation_block.block(shared, f, here)
             row = {"folder": f, **runs.get(f, FolderRun()).model_dump(mode="json")}
+            unread: dict[str, str] = {}
+            _pending(shared.root / f / "memory", read_errors=unread)
+            if unread:
+                row["read_errors"] = unread
             listed.append(row | {"blocked": block.text(), "unset": list(block.keys), "unset_reason": block.reason})
         return {"available": True, "folders": listed, "queue": list(self.queue)}
 
@@ -469,13 +472,6 @@ class Curation:
             state="done", started_at=started, ended_at=ended, summary=report.summary, reason=notice,
             entries=report.entries,
         )  # fmt: skip
-
-
-def _pending(store: Path) -> list[Any]:
-    """The folder's pending entries; none when it has no memory yet."""
-    if not store.is_dir():
-        return []
-    return [e for e in MemoryEngine(store).get_entries() if e.state == MemoryState.PENDING]
 
 
 def legacy_uncertain(run: FolderRun) -> bool:

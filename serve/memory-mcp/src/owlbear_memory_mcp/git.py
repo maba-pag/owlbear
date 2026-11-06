@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_memory import MemoryEntry, MemoryState, repair_duplicate_ids, storage, writer_lock
-from owlbear_memory.errors import DuplicateEntryError, MemoryBusyError
+from owlbear_memory.errors import DuplicateEntryError, MemoryBusyError, diagnostic
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -147,10 +147,7 @@ def _read_snapshot_file(file_path: Path, memory_dir: Path) -> bytes:
             descriptor = None
             return snapshot_file.read()
     except OSError as exc:
-        msg = (
-            "memory batch validation failed: unsafe or unreadable memory path "
-            f"{relative_path}: {type(exc).__name__}: {exc}"
-        )
+        msg = f"memory batch validation failed: unsafe or unreadable memory path {relative_path}: {diagnostic(exc)}"
         raise ValueError(msg) from exc
     finally:
         if descriptor is not None:
@@ -167,7 +164,7 @@ def _load_snapshot(memory_dir: Path, repo_dir: Path) -> dict[str, tuple[MemoryEn
             raw = _read_snapshot_file(file_path, memory_dir)
             entry = storage.read_entry_bytes_strict(raw)
         except ValueError as exc:
-            failures.append(f"{relative_path}: {type(exc).__name__}: {exc}")
+            failures.append(f"{relative_path}: {diagnostic(exc)}")
             continue
         entries[relative_path] = (entry, raw)
 
@@ -200,7 +197,7 @@ def _validate_deleted_entries(
         try:
             entry = storage.read_entry_bytes_strict(raw)
         except ValueError as exc:
-            message = f"memory batch validation failed: invalid deleted entry {relative_path}: {exc}"
+            message = f"memory batch validation failed: invalid deleted entry {relative_path}: {diagnostic(exc)}"
             raise ValueError(message) from exc
         survivor = entries_by_id.get(entry.id)
         if survivor is not None:
@@ -230,7 +227,7 @@ def _reject_staged_pending_entries(
             try:
                 staged_entry = storage.read_entry_bytes_strict(raw)
             except ValueError as exc:
-                message = f"memory batch validation failed: invalid staged entry {relative_path}: {exc}"
+                message = f"memory batch validation failed: invalid staged entry {relative_path}: {diagnostic(exc)}"
                 raise ValueError(message) from exc
         elif not file_path.is_file():
             continue
@@ -378,14 +375,14 @@ def _verify_committed_change_set(
     previous_head: str | None,
     new_head: str,
     intended_paths: set[str],
-    entries: dict[str, tuple[MemoryEntry, bytes]],
+    snapshots: dict[str, bytes],
 ) -> None:
     changed_paths = _committed_change_paths(repo_dir, previous_head, new_head)
     invalid_paths = changed_paths.symmetric_difference(intended_paths)
     for relative_path in changed_paths.intersection(intended_paths):
-        snapshot = entries.get(relative_path)
+        snapshot = snapshots.get(relative_path)
         committed_blob = _git_object_id(repo_dir, f"{new_head}:{relative_path}")
-        expected_blob = _git_blob_id(repo_dir, snapshot[1]) if snapshot is not None else None
+        expected_blob = _git_blob_id(repo_dir, snapshot) if snapshot is not None else None
         if committed_blob != expected_blob:
             invalid_paths.add(relative_path)
 
@@ -439,7 +436,9 @@ def _commit_batch_locked(memory_dir: Path, repo_dir: Path, *, session_type: str)
     previous_head = _git_object_id(repo_dir, "HEAD")
     _git(repo_dir, "commit", "-m", message, "--", *sorted(commit_paths))
     new_head = _git(repo_dir, "rev-parse", "HEAD")
-    _verify_committed_change_set(repo_dir, previous_head, new_head, intended_paths, entries)
+    _verify_committed_change_set(
+        repo_dir, previous_head, new_head, intended_paths, {path: raw for path, (_, raw) in entries.items()}
+    )
     return BatchCommitResult(new_head, tuple(sorted(deferred_paths)))
 
 

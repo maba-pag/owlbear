@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_memory import storage, writer_lock
-from owlbear_memory.errors import MemoryBusyError
+from owlbear_memory.errors import MemoryBusyError, diagnostic, read_warning
 
 from owlbear_memory_mcp.git import (
     _git,
@@ -24,7 +24,14 @@ if TYPE_CHECKING:
 
 
 @contextlib.contextmanager
-def committed(root: Path | None, memory_dir: Path | None, entry_ids: Collection[str], task_id: str) -> Iterator[None]:
+def committed(
+    root: Path | None,
+    memory_dir: Path | None,
+    entry_ids: Collection[str],
+    task_id: str,
+    *,
+    read_errors: dict[str, str] | None = None,
+) -> Iterator[None]:
     """Around one assess_memories batch: commit the receipts it writes to entry files committed before it.
 
     Unbound (*root* None) nothing else happens. Bound to the shared repository, the batch runs under
@@ -39,11 +46,15 @@ def committed(root: Path | None, memory_dir: Path | None, entry_ids: Collection[
         try:
             held.enter_context(repo_locked(root))
             held.enter_context(writer_lock(memory_dir))
-            clean = [path for path in _batch_files(memory_dir, set(entry_ids)) if not _changed(path)]
+            clean = [
+                path for path in _batch_files(memory_dir, set(entry_ids), read_errors=read_errors) if not _changed(path)
+            ]
         except (MemoryBusyError, TimeoutError) as exc:
             raise ToolError(str(exc)) from exc
         except (subprocess.CalledProcessError, OSError) as exc:
             msg = f"nothing was assessed: the shared repository {root} could not be read: {_detail(exc)}"
+            if warning := read_warning(read_errors or {}):
+                msg += f"\n{warning}"
             raise ToolError(msg) from exc
         try:
             yield
@@ -53,7 +64,13 @@ def committed(root: Path | None, memory_dir: Path | None, entry_ids: Collection[
             except ToolError as uncommitted:
                 failure.add_note(str(uncommitted))
             raise
-        _commit(clean, memory_dir, task_id)
+        try:
+            _commit(clean, memory_dir, task_id)
+        except ToolError as exc:
+            if warning := read_warning(read_errors or {}):
+                msg = f"{exc}\n{warning}"
+                raise ToolError(msg) from exc
+            raise
 
 
 def _commit(clean: list[Path], memory_dir: Path, task_id: str) -> None:
@@ -62,10 +79,7 @@ def _commit(clean: list[Path], memory_dir: Path, task_id: str) -> None:
         written = [path for path in clean if path.exists() and _changed(path)]
         if written:
             repo = Path(_git(memory_dir, "rev-parse", "--show-toplevel")).resolve()
-            receipts = {
-                (p.parent.resolve() / p.name).relative_to(repo).as_posix(): (storage.read_entry(p), p.read_bytes())
-                for p in written
-            }
+            receipts = {(p.parent.resolve() / p.name).relative_to(repo).as_posix(): p.read_bytes() for p in written}
             after = commit_move(written, f"chore: memory assessments ({task_id}, memory-mcp)")
             # A hook may have swept other files in: pending memory must never pass as a receipt. Only this commit is
             # checked, since other writers commit other folders without the repository lock.
@@ -83,9 +97,13 @@ def _commit(clean: list[Path], memory_dir: Path, task_id: str) -> None:
         raise ToolError(msg) from exc
 
 
-def _batch_files(memory_dir: Path, ids: set[str]) -> list[Path]:
+def _batch_files(memory_dir: Path, ids: set[str], *, read_errors: dict[str, str] | None = None) -> list[Path]:
     """The batch's entry files, found by the id they hold: a file's name need not be its id."""
-    return [path for path in sorted(memory_dir.glob("*.md")) if getattr(storage.read_entry(path), "id", None) in ids]
+    return [
+        path
+        for path in sorted(memory_dir.glob("*.md"))
+        if getattr(storage.read_entry(path, read_errors=read_errors), "id", None) in ids
+    ]
 
 
 def _changed(path: Path) -> bool:
@@ -94,4 +112,4 @@ def _changed(path: Path) -> bool:
 
 
 def _detail(exc: BaseException) -> str:
-    return format_git_failure(exc) if isinstance(exc, subprocess.CalledProcessError) else str(exc)
+    return format_git_failure(exc) if isinstance(exc, subprocess.CalledProcessError) else diagnostic(exc)

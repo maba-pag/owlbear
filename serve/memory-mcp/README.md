@@ -76,6 +76,23 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 
 All mutating tools return a `hint` field describing the transition or action taken.
 
+### Partial reads
+
+Readable entries remain available when another entry file cannot be read. Dict-returning entry
+reads and mutations add an optional `read_errors` map for encountered omissions; paths identify the
+files and safe typed details explain the failure. Project and Global reads retain their context,
+including curator folder selection and a project lookup followed by a Global lookup. A not-found
+answer includes relevant read warnings rather than hiding an unreadable candidate.
+
+`list_memories` keeps its structured `{"result": [...]}` rows and one JSON text block per entry,
+adding a labelled **Memory read warnings** text block when partial. It never fabricates a memory
+row for an error. Direct Python callers of `tools.list_memories` still receive a list, with an
+optional internal `read_errors` collector; that collector is not an MCP argument.
+`recall_memory` appends the same labelled diagnostic block even when no eligible entry was selected.
+Validation diagnostics omit private YAML snippets, invalid values and Pydantic input/context;
+operational errors keep their type, message, path and notes. Warnings do not block healthy entry
+mutations, receipt commits or moves; their existing safety and revision checks still apply.
+
 ## Revision-bound mutations
 
 `approve_memory`, `curate_memory`, and `delete_memory` require a `revision` from the current

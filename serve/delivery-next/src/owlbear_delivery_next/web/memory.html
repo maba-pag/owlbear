@@ -360,8 +360,10 @@ function entries(shown) {
       <ul class="entries">${repeat(mine, (m) => m.key, (m, i) => card(m, leads && i === 0))}</ul>
       </section>`;
   });
-  const empty = state.loaded.entries.length ? "No memory matches these filters."
-    : "Agents have not remembered anything yet.";
+  const empty = state.loaded.parse_errors ? (state.loaded.entries.length
+    ? "No readable memory matches these filters; some files could not be read."
+    : "No readable memory is available; some files could not be read.")
+    : state.loaded.entries.length ? "No memory matches these filters." : "Agents have not remembered anything yet.";
   return shown.length ? sections : html`<p-text color="contrast-medium" class="empty">${empty}</p-text>`;
 }
 
@@ -370,7 +372,8 @@ function view() {
   const parts = available ? choices() : [];
   const shown = available ? loaded.entries.filter(matches).sort((a, b) => ORDER.indexOf(a.state)
     - ORDER.indexOf(b.state) || b.updated_at.localeCompare(a.updated_at)) : [];
-  document.getElementById("shown").textContent = available ? `${shown.length} of ${loaded.entries.length} shown` : "";
+  document.getElementById("shown").textContent = available ? `${shown.length} of ${loaded.entries.length} ${
+    loaded.parse_errors ? "readable entries shown" : "shown"}` : "";
   const errors = loaded?.parse_errors ? ` ${loaded.parse_errors} file(s) could not be read.` : "";
   return html`
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
@@ -387,7 +390,9 @@ function view() {
     ${available ? html`<p-text id="where" size="xs" color="contrast-medium"
       title=${loaded.places.map((p) => p.folder).join("\n")}>Kept in
       ${loaded.places.map((p) => p.folder.split("/").slice(-2).join("/")).join(", ")} of the shared
-      repository.${errors}</p-text>` : nothing}`;
+      repository.${errors}</p-text>` : nothing}
+    ${Object.keys(loaded?.read_errors ?? {}).length ? html`<p-text id="memory-read-errors" class="said" size="sm">${
+      Object.entries(loaded.read_errors).map(([path, error]) => `${path}: ${error}`).join("\n")}</p-text>` : nothing}`;
 }
 
 // What the page reads (TD-241): each shown project's memory and its shared repository's Global memory, each
@@ -401,7 +406,7 @@ function sources() {
 // an entry keeps its place, so an action goes through the project that read it. A project that failed this time
 // stands for its folder only when no other project read it now.
 function gather(wanted, fresher) {
-  const places = new Map(), entries = [], said = wanted.map((s) => answers.get(`${s.of}|${s.where}`));
+  const places = new Map(), entries = [], readErrors = {}, said = wanted.map((s) => answers.get(`${s.of}|${s.where}`));
   let errors = 0;
   const fresh = (i) => (fresher.has(`${wanted[i].of}|${wanted[i].where}`) ? 0 : 1);
   [...wanted.keys()].sort((i, j) => fresh(i) - fresh(j)).forEach((i) => {  // this refresh's answers before older ones
@@ -412,13 +417,14 @@ function gather(wanted, fresher) {
       name: s.where === "global" ? "Global" : a.project, purge_days: a.purge_days ?? null, purge_why: a.purge_why };
     places.set(key, place);
     errors += a.parse_errors;
+    Object.assign(readErrors, a.read_errors ?? {});
     entries.push(...a.entries.map((m) => ({ ...m, key: `${key}/${m.id}`, place })));
   });
   const shape = said.find((a) => a?.available), first = said.find(Boolean);
   if (!first) return null;
   const several = new Set([...places.values()].map((p) => p.repository)).size > 1;
   for (const p of places.values()) p.label = several ? `${p.name} (${p.repository.split("/").pop()})` : p.name;
-  return { available: Boolean(shape), reason: first.reason, entries, parse_errors: errors,
+  return { available: Boolean(shape), reason: first.reason, entries, parse_errors: errors, read_errors: readErrors,
     states: shape?.states ?? [], categories: shape?.categories ?? [], places: [...places.values()] };
 }
 
