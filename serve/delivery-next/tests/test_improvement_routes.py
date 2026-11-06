@@ -59,7 +59,7 @@ def world(tmp_path, monkeypatch):
             st.write(Lock(slug), m.Change(slug=slug, step=m.Step(kind=m.StepKind.BUILD), finished_at=done))
         projects[pid] = (st, clone)
     machine = SimpleNamespace(
-        retro=SimpleNamespace(seams=SimpleNamespace(projects=lambda: projects), failed=""),
+        retro=SimpleNamespace(seams=SimpleNamespace(projects=lambda: projects), failed="", prune_failed=""),
         cases=SimpleNamespace(running="", failed="", unpublished=""),
         chats=SimpleNamespace(not_followed=list, failed="", refused="", owned=None),
         projects=dict.fromkeys(projects),
