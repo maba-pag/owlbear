@@ -389,14 +389,18 @@ def keep_data(path: Path) -> None:
 def remove(folder: Path) -> None:
     """Remove an installed version's worktree and folder, if there is one; never one holding the shared data."""
     keep_data(folder)
-    with contextlib.suppress(FileNotFoundError):
-        shutil.rmtree(folder)
-    bare = local_home.root() / REPO
     try:
-        (bare / "HEAD").stat()
-    except FileNotFoundError:
-        return
-    _git(_bare(bare), "worktree", "prune")
+        with contextlib.suppress(FileNotFoundError):
+            shutil.rmtree(folder)
+        bare = local_home.root() / REPO
+        try:
+            (bare / "HEAD").stat()
+        except FileNotFoundError:
+            return
+        _git(_bare(bare), "worktree", "prune")
+    except OSError as exc:
+        msg = f"removing {folder} failed: {failure(exc)}"
+        raise VersionError(msg) from exc
 
 
 def prune() -> list[str]:
