@@ -402,8 +402,10 @@ function progressView() {
 
 function profileView(w) {
   const group = (state) => w.entries.filter((e) => e.state === state);
+  // an unknown entry shows what was found of it and why it isn't known, above the field for the whole value
   const row = (e) => html`<li><code>${e.key}</code> = ${e.state === "unknown" && e.settable
-    ? text(e.key, e.key, { into: s.values, hint: e.evidence }) : html`${JSON.stringify(e.value)}
+    ? html`<p-text size="xs">${e.value ? `Found so far: ${e.value}. ` : ""}${e.evidence}</p-text>
+      ${text(e.key, e.key, { into: s.values })}` : html`${JSON.stringify(e.value)}
     <p-text size="xs">${e.evidence}</p-text>`}</li>`;
   const part = (state, label) => group(state).length ? html`<p-heading size="sm"><h3>${label}</h3></p-heading>
     <ul>${group(state).map(row)}</ul>` : nothing;

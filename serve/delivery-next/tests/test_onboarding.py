@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 import uvicorn
 
-from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.commands import setup, setup_profile
 from owlbear_delivery_next.git.access import Access
 from owlbear_delivery_next.github import branch_rules, repo_target
@@ -32,6 +32,7 @@ from owlbear_delivery_next.machine_host.machine import MachineError
 from owlbear_delivery_next.machine_host.onboarding import Onboarding, OnboardingError
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.runtimes import readiness
+from owlbear_delivery_next.settings.profile import DECLARED
 from owlbear_delivery_next.state_store import registry
 from owlbear_delivery_next.state_store.store import Store
 
@@ -535,6 +536,8 @@ def test_finish_setup_on_a_registered_clone_changes_its_ruleset_and_says_what_is
     hub.rulesets["ada/proj"] = {7: body}
     folder = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/proj.git", "proj", Access.LOCAL))
     registry.register(folder)
+    partial = ProfileEntry(state="unknown", value="Lint", evidence="unresolved check names: codeql.yml")
+    monkeypatch.setattr(setup_profile.profile, "detect", lambda *_a: Profile(version=1, entries={DECLARED: partial}))
     with served(monkeypatch, pds) as (page, base, _machine):
         page.goto(f"{base}/projects#token=t")
         held: list[Any] = []
@@ -566,6 +569,7 @@ def test_finish_setup_on_a_registered_clone_changes_its_ruleset_and_says_what_is
         expect(modal).to_contain_text("save the merge method merge for this project")
         expect(modal).to_contain_text("Nothing is published.")  # an existing clone: nothing is created or published
         modal.get_by_role("button", name="Set up proj", exact=True).click()
+        expect(modal).to_contain_text("Found so far: Lint. unresolved check names: codeql.yml")
         modal.get_by_role("button", name="Confirm profile").click()
         expect(modal.locator(".facts")).to_contain_text("Ready for Delivery: no")
         expect(modal).to_contain_text("chats can't reach Delivery")
