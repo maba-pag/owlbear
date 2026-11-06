@@ -79,7 +79,7 @@ def read_entry(path: Path, *, read_errors: dict[str, str] | None = None) -> Memo
 def _parse_frontmatter(frontmatter_raw: str) -> dict[str, Any]:
     try:
         data = _yaml().load(frontmatter_raw)
-    except (YAMLError, ValueError, TypeError, KeyError, OverflowError) as exc:
+    except (YAMLError, ValueError, TypeError, KeyError, IndexError, OverflowError) as exc:
         raise ValueError(_yaml_error_detail(exc)) from None
     if data is None:
         return {}
