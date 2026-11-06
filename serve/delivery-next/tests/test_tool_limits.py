@@ -53,13 +53,13 @@ def test_each_recorded_oversized_goal_now_passes_or_says_what_to_cut(session, le
         ),
         (
             tools.BuildResult,
-            {"summary": "s", "checks": [{"command": "npm test", "exit_code": 0}] * 21},
-            "checks: 21 items, at most 20 - report each task check once, as it last ran",
+            {"summary": "s", "checks": [{"command": "npm test", "exit_code": 0}] * 101},
+            "checks: 101 items, at most 100 - report each task check once, as it last ran",
         ),
         (
             tools.BuildResult,
-            {"summary": "s", "checks": [{"command": "x" * 301, "exit_code": 0}]},
-            "checks[0].command: 301 characters, at most 300 - shorten it",
+            {"summary": "s", "checks": [{"command": "x" * 1001, "exit_code": 0}]},
+            "checks[0].command: 1001 characters, at most 1000 - shorten it",
         ),
         (
             tools.BuildResult,

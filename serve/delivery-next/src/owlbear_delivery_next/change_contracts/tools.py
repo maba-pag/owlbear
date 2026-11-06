@@ -41,7 +41,7 @@ bounded = _f  # the same helper for the owner chat's brief schema (brief_tools)
 class CheckRun(Args):
     """One check command the agent ran and its exit code."""
 
-    command: str = _f(300, "The complete command as listed in the task", EXAMPLE_CHECK)
+    command: str = _f(1000, "The complete command as listed in the task", EXAMPLE_CHECK)
     exit_code: int = Field(description="Its exit code; 0 means it passed", examples=[0])
 
 
@@ -68,7 +68,7 @@ class BuildResult(Args):
 
     summary: str = _f(2000, "What you changed and why, in a few sentences", "Added greet(name), with a test.")
     checks: list[CheckRun] = _f(
-        20, "Every task check you ran on your final commit", [{"command": EXAMPLE_CHECK, "exit_code": 0}], least=0
+        100, "Every task check you ran on your final commit", [{"command": EXAMPLE_CHECK, "exit_code": 0}], least=0
     )
     response: Response | None = Field(
         default=None,
@@ -239,7 +239,7 @@ class PlanTask(Args):
     title: str = _f(200, "What the task delivers", "Add farewell(name) with a test")
     goal: str = _f(3000, "The criteria it meets and how the Builder knows it is done", "AC-1: farewell('Ada')")
     scope: list[str] = _f(20, "Repository-relative paths or directories it may change", ["packages/app"])
-    checks: list[str] = _f(5, "Complete check commands exactly as listed for their packages", [EXAMPLE_CHECK])
+    checks: list[str] = _f(100, "Complete check commands exactly as listed for their packages", [EXAMPLE_CHECK])
 
 
 class PlanResult(Args):
