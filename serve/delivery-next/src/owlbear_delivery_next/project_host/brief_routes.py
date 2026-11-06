@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.inbox import BriefApproval
 from owlbear_delivery_next.change_contracts.round_records import BRIEF
-from owlbear_delivery_next.change_flow import brief_rounds, picks
+from owlbear_delivery_next.change_flow import brief_rounds, brief_starts, picks
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store.briefs import unrevisable
@@ -118,6 +118,18 @@ def asked(store: Store, c: Change, body: ChallengeBody) -> str:
     return ""
 
 
+def challenged(store: Store, c: Change, version: int) -> str:
+    """The owner's Approve on a version saved after its loop ended (#986): its challenge now, his approval once clean.
+
+    Returns:
+        Why it is refused, or "".
+    """
+    if c.intent.paused_at:  # its round could not run, yet it would hold every save
+        return "this Change is paused: resume it to approve"
+    c.brief.approve_if_clean = version
+    return asked(store, c, ChallengeBody(change=c.handle, version=version))
+
+
 def router(
     store: Store,
     read: Callable[[str], Change],
@@ -127,7 +139,8 @@ def router(
     """POST /briefs/challenge records the shaper's request; POST /changes/{slug}/approve-brief the owner's approval.
 
     Both are checked and recorded under the Change's lock, so the brief cannot change in between. The challenge runs
-    at once, even while Delivery is paused (TD-287); *held* says a stop when idle keeps it until Resume.
+    at once, even while Delivery is paused (TD-287); *held* says a stop when idle keeps it until Resume. On a version
+    saved after its loop ended, the approval starts its challenge and takes effect once that is clean (#986).
     """
     routes = APIRouter()
 
@@ -136,12 +149,18 @@ def router(
         read(slug)
         try:
             with store.lock(slug) as lock:
-                if why := approved(store, lock, body):
+                c, accepted = store.read(slug), "brief-approval"
+                if brief_starts.waiting(c):
+                    if why := challenged(store, c, body.version):
+                        raise HTTPException(409, why)
+                    store.write(lock, c)
+                    accepted = "brief-challenge"
+                elif why := approved(store, lock, body):
                     raise HTTPException(409, why)
         except (LockHeldError, StoreError) as exc:
             raise HTTPException(409, f"change: {exc}; try again") from exc
         wake()
-        return {"accepted": "brief-approval"}
+        return {"accepted": accepted}
 
     @routes.post("/briefs/challenge")
     def challenge(body: ChallengeBody) -> dict[str, Any]:

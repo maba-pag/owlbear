@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.decision_records import Pick
 from owlbear_delivery_next.change_contracts.dispute_tools import ReconsiderResult
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
 from owlbear_delivery_next.change_contracts.models import (
     Answer,
     Brief,
@@ -176,11 +176,16 @@ def test_a_save_after_the_loop_ended_needs_one_more_round_on_the_changes(shaping
     assert shaping.step().brief.challenged == 1
     assert "challenged already" in shaping.ask_challenge(1).json()["detail"]
     assert shaping.save(title="Add a farewell")["version"] == 2
-    assert shaping.approve(2).status_code == 409
-    shaping.ask_challenge(2)
+    for intent in ("pause", "resume"):  # a paused Change's round could not run, so its Approve waits for Resume
+        if intent == "resume":
+            assert shaping.approve(2).json()["detail"] == "this Change is paused: resume it to approve"
+        shaping.store.put_inbox(shaping.slug, IntentItem(at=datetime.now(UTC), intent=intent))
+        shaping.store.fold(Lock(shaping.slug), shaping.slug, datetime.now(UTC))
+    assert shaping.approve(2).json() == {"accepted": "brief-challenge"}  # the owner's Approve starts the round (#986)
     c = shaping.step()
     assert "## Focus" in shaping.told[-1].message
     assert (c.brief.challenged, c.loops[BRIEF].round, c.loops[BRIEF].ended) == (2, 2, "clean")
+    assert (c.brief.approve_if_clean, c.brief.approved_version) == (2, None)  # the host approves it on its next pass
     assert c.loops[BRIEF].verdicts == [Verdict(round=1, version=1), Verdict(round=2, version=2)]
 
 
