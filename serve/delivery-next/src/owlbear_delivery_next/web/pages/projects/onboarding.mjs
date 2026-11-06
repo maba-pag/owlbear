@@ -352,16 +352,23 @@ function confirmView() {
   const then = p.github ? `Delivery serves ${name}: its work starts when you approve a Change's brief, and the `
     + "watcher decides when a real project's work may run." : `Nothing: OwlBear doesn't serve ${name} until you `
     + "publish it with Publish on the Projects page.";
-  const undo = p.github ? "A published repository and its commits stay on GitHub. Remove project on its row undoes "
-    + "the registration; the folder and the GitHub repository stay for you to delete."
-    : "Nothing is registered. The folder and its first commit stay on this Mac for you to delete.";
+  const publishes = p.stages.includes("repository") || p.stages.includes("push");
+  const kept = p.entry === "E1" ? "the clone stays" : "the folder stays";
+  const undo = !p.github ? "Nothing is registered. The folder and its first commit stay on this Mac for you to delete."
+    : publishes ? "A published repository and its commits stay on GitHub. Remove project on its row undoes the "
+      + "registration; the folder and the GitHub repository stay for you to delete."
+      : `Nothing is published. Remove project on its row undoes the registration; ${kept} for you to delete.`;
+  // what the button does: clone a repository, create what is missing, or only set up what is there
+  const verb = p.entry === "E1" ? "Clone and set up"
+    : ["folder", "git", "commit", "repository", "push"].some((x) => p.stages.includes(x)) ? "Create and set up"
+      : "Set up";
   return [html`<div class="parts">
     <div><p-text weight="semibold">Now</p-text><ul>${now.map((x) => html`<li>${x}</li>`)}</ul></div>
     <div><p-text weight="semibold">Then, by itself</p-text><p-text>${then}</p-text></div>
     <div><p-text weight="semibold">What can't be undone</p-text><p-text>${undo}</p-text></div>
     <div><p-text weight="semibold">If you don't</p-text><p-text>Nothing is created or changed.</p-text></div>
     </div>`,
-  html`${button(p.github ? `Create and set up ${name}` : `Set up ${name} on this Mac`, run,
+  html`${button(p.github ? `${verb} ${name}` : `Set up ${name} on this Mac`, run,
     { variant: "primary", name: "run" })}${button("Back", () => { s.step = "choices"; draw(); })}`];
 }
 

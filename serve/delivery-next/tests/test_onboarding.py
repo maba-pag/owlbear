@@ -564,7 +564,8 @@ def test_finish_setup_on_a_registered_clone_changes_its_ruleset_and_says_what_is
             "change ruleset 7 of the default branch: allow merge commits in its pull-request rule; require no approvals"
         )
         expect(modal).to_contain_text("save the merge method merge for this project")
-        modal.get_by_role("button", name="Create and set up proj").click()
+        expect(modal).to_contain_text("Nothing is published.")  # an existing clone: nothing is created or published
+        modal.get_by_role("button", name="Set up proj", exact=True).click()
         modal.get_by_role("button", name="Confirm profile").click()
         expect(modal.locator(".facts")).to_contain_text("Ready for Delivery: no")
         expect(modal).to_contain_text("chats can't reach Delivery")
