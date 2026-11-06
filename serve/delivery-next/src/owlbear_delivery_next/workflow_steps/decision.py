@@ -128,7 +128,7 @@ def ask(head: str, kept: VisualRound) -> StepResult:
     """
     said = [f"{v.lens} {v.verdict}" + (f" ({v.reason[:300]})" if v.reason else "") for v in kept.verdicts]
     every = [k for v in kept.verdicts for k in v.conflicts]
-    taken = [k for k in every if not k.departs.startswith(OWNER)]  # an owner's criterion is withdrawn instead
+    taken = [k for k in every if k.departs not in kept.owner]  # an owner's criterion is withdrawn instead
     said += [f"{len(every)} conflicts with the brief"] if every else []
     text = f"Decide the visual review of {head[:7]} (round {kept.number}): {'; '.join(said)}"
     options = [

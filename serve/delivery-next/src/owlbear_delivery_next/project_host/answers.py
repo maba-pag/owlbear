@@ -164,7 +164,7 @@ def _visual(c: Change, body: AnswerBody) -> tuple[int, str] | None:
         return 409, "the capture or Impeccable changed since the page was shown; reload"
     if unknown := sorted(set(body.findings) - {f.id for v in kept.verdicts for f in v.findings}):
         return 422, f"findings {unknown} are not in round {kept.number}"
-    taken = {k.id for v in kept.verdicts for k in v.conflicts if not k.departs.startswith(decision.OWNER)}
+    taken = {k.id for v in kept.verdicts for k in v.conflicts if k.departs not in kept.owner}
     if body.option == decision.AMEND and body.text.strip() not in taken:
         return 422, f"name one of round {kept.number}'s conflicts with the brief: {', '.join(sorted(taken)) or 'none'}"
     if body.option == "fail" and not body.findings and not body.text.strip():

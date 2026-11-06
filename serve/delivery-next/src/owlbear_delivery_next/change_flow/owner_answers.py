@@ -39,7 +39,7 @@ def taken(c: Change, q: Question, ident: str, now: datetime) -> str:
     """Start the amendment that takes the conflict *ident* of the last visual round, only that one; or say why not."""
     kept = c.visual_rounds[-1] if c.visual_rounds else None
     k = next((k for v in (kept.verdicts if kept else []) for k in v.conflicts if k.id == ident), None)
-    if k is None or k.departs.startswith("owner-"):  # an owner's criterion is withdrawn, not amended
+    if k is None or k.departs in kept.owner:  # an owner's criterion is withdrawn, not amended
         return f"question {q.id}: the last visual round has no conflict {ident} with the brief to take"
     where = f"{k.state}{f' at {k.width}px' if k.width else ''}"
     said = f"The owner takes the design judge's conflict {k.id} ({where}, {k.rule}): {k.text}"

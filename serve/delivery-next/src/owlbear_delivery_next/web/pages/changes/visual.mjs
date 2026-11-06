@@ -88,9 +88,11 @@ function detectorLines(r) {
 }
 
 // A design rule the brief or one of the owner's criteria rules out: never ticked, never sent to the builder. One with
-// a state or a brief criterion is taken by changing the brief; one with an owner's criterion by withdrawing it.
+// a state or a brief criterion is taken by changing the brief; one with an owner's criterion by withdrawing it. The
+// round names the owner's criteria it was judged by; a state may be named like one.
 function conflictRow(k, q, r, d, key) {
-  const said = r.departs?.[k.id] ?? "", owner = k.departs.startsWith("owner-");
+  const said = r.departs?.[k.id] ?? "", owner = (r.owner ?? []).includes(k.departs);
+  const inForce = (d.owner_criteria ?? []).some((c) => c.id === k.departs);
   const take = async () => {
     const ok = await ask({
       title: `Change the brief to take ${k.id}?`, yes: "Change the brief", no: "Keep reviewing",
@@ -106,8 +108,9 @@ function conflictRow(k, q, r, d, key) {
       send("/answers", { question: q.id, option: "amend", text: k.id, ...round, findings: [] }, d, key);
     }
   };
-  const action = owner
-    ? html`${text("Withdrawing it leaves this round to your Pass or Fail; later rounds no longer check it.",
+  const action = owner && !inForce
+    ? text(`You withdrew ${k.departs}: decide this round with Pass or Fail.`, { size: "xs" })
+    : owner ? html`${text("Withdrawing it leaves this round to your Pass or Fail; later rounds no longer check it.",
       { size: "xs" })}${button(`Withdraw ${k.departs}`, withdrawing(k.departs, said, d),
       { variant: "secondary", aria: DIALOG })}`
     : button("Change the brief to take this", take, { variant: "secondary", aria: DIALOG, ...starts(d) });
