@@ -9,7 +9,7 @@ design reference does not use are deleted.
 from __future__ import annotations
 
 import shutil
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.visual_records import ShapingCapture
@@ -56,7 +56,18 @@ def at_target(store: Store, lock: Lock, change: Change, repo: Path) -> str:
     writer = github_writer.of(store, repo)
 
     def finish(_tmp: Path, notes: list[str]) -> None:
-        if (r := prepare.end(store, change, repo, settings, log)) is not None:
+        """End the test copy in its checkout; a cleanup that failed is the capture's finding, whole.
+
+        Its checkout goes with the capture, so it is not run again: the next test copy of the option runs it on the
+        same resources.
+        """
+
+        def told(e: dict[str, Any]) -> None:
+            log(e)
+            if e.get("event") == "prepared-end" and e.get("outstanding"):
+                notes.append(f"the test copy's cleanup did not finish: {e['cleanup']}")
+
+        if (r := prepare.end(store, change, repo, settings, told)) is not None:
             notes.append(r.reason)
 
     out = folder(store, change.slug, key)
@@ -65,7 +76,7 @@ def at_target(store: Store, lock: Lock, change: Change, repo: Path) -> str:
         fetch=lambda path, target: engine.fetch(path, target, writer.access()),
         prepare=prepare.shaping(store, change, settings, log), finish=finish,
     )  # fmt: skip
-    change.shaped = ShapingCapture(key=key, requested=False, option=change.brief.preparation, result=result)
+    change.shaped = ShapingCapture(key=key, result=result)
     store.write(lock, change)
     kept = {folder(store, change.slug, s.key).name for s in (change.shaped, change.reference) if s}
     for old in out.parent.iterdir() if out.parent.is_dir() else ():  # a failed fetch made none
