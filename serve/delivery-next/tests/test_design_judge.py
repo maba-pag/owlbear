@@ -107,8 +107,7 @@ def test_a_design_verdict_must_match_its_findings_and_judge_every_image_and_pair
     gate = Gate(session(targets=("home", "AC-2")), Run("s1"), lambda **_e: None, lambda: None)
     text, ok = gate.call(design_tools.FIRST, args)
     assert (ok, error in text) == (False, True), text
-    named = Gate(session(targets=("home", "AC-2")), Run("s1"), lambda **_e: None, lambda: None)
-    assert named.call(design_tools.FIRST, look(conflicts=[conflict()]))[1]  # a real brief criterion is accepted
+    assert gate.call(design_tools.FIRST, look(conflicts=[conflict()]))[1]  # a real brief criterion is accepted
 
 
 def test_only_the_first_look_lets_the_sdk_turn_go_on() -> None:
