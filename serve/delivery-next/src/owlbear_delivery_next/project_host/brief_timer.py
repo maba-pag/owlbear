@@ -25,9 +25,7 @@ if TYPE_CHECKING:
 
 def passed(store: Store, lock: Lock, c: Change, now: datetime, *, paused: bool) -> Change:
     """*c* after this pass's part; the host's own write keeps it, and only an approval writes here, as the owner's."""
-    if brief_starts.expired(c):
-        c.brief.approve_if_clean = None
-    if brief_starts.approving(c):
+    if brief_starts.approving(c):  # only while the Change is shaped: an abandoned one never approves
         return _approved(store, lock, c, now)
     o = c.outcome
     if not brief_starts.waiting(c) or o is None:

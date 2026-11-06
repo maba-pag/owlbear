@@ -40,8 +40,3 @@ def approving(c: Change) -> bool:
     """Whether the owner's recorded approval takes effect now: the loop ended on its version and nothing was raised."""
     b = c.brief
     return _shaped(c) and b.approve_if_clean == b.version == b.challenged != b.approved_version
-
-
-def expired(c: Change) -> bool:
-    """Whether the owner's recorded approval can no longer take effect: the Change has left shaping."""
-    return c.brief.approve_if_clean is not None and not _shaped(c)

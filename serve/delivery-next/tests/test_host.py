@@ -1316,7 +1316,7 @@ def test_an_abandonment_queued_during_the_challenge_publishes_nothing(store, tmp
     store.put_inbox("c1", IntentItem(at=NOW, intent="abandon"))  # pressed while the round ran
     fake.host.tick(NOW)
     c = store.read("c1")
-    assert (c.step.kind, c.brief.approve_if_clean, c.brief.approved_version) == (StepKind.CLEANUP, None, None)
+    assert (c.step.kind, c.brief.approved_version) == (StepKind.CLEANUP, None)
     assert (called, c.decisions_published) == ([], [])
 
 
