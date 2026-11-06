@@ -83,10 +83,6 @@ def _parse_frontmatter(frontmatter_raw: str) -> dict[str, Any]:
     return data
 
 
-def _read_entry_file(path: Path) -> MemoryEntry:
-    return _read_entry_bytes(path.read_bytes())
-
-
 def _read_entry_bytes(raw: bytes) -> MemoryEntry:
     if len(raw) > MAX_ENTRY_FILE_SIZE_BYTES:
         msg = f"file exceeds {MAX_ENTRY_FILE_SIZE_BYTES} bytes"
@@ -118,20 +114,10 @@ def read_entry_strict(path: Path) -> MemoryEntry:
         if not S_ISREG(metadata.st_mode):
             msg = "memory entry file is missing"
             raise ValueError(msg)
-        return _read_entry_file(path)
+        return read_entry_bytes_strict(path.read_bytes())
     except OSError as exc:
         msg = f"file read failed for {path}: {diagnostic(exc)}"
         raise ValueError(msg) from exc
-    except UnicodeDecodeError as exc:
-        msg = f"file is not valid UTF-8 ({type(exc).__name__} at byte {exc.start})"
-        raise ValueError(msg) from exc
-    except YAMLError as exc:
-        raise ValueError(_yaml_error_detail(exc)) from exc
-    except TypeError as exc:
-        msg = diagnostic(exc)
-        raise ValueError(msg) from exc
-    except PydanticValidationError as exc:
-        raise ValueError(_pydantic_error_detail(exc)) from exc
 
 
 def read_entry_bytes_strict(raw: bytes) -> MemoryEntry:
