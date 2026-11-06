@@ -26,7 +26,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK, RoundLoop, RoundPolicy, Verdict
-from owlbear_delivery_next.change_flow import brief_rounds, brief_tools, loop, plan_rounds, status
+from owlbear_delivery_next.change_flow import brief_rounds, brief_starts, brief_tools, loop, plan_rounds, status
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import chat_client, runner
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -182,6 +182,49 @@ def test_a_save_after_the_loop_ended_needs_one_more_round_on_the_changes(shaping
     assert "## Focus" in shaping.told[-1].message
     assert (c.brief.challenged, c.loops[BRIEF].round, c.loops[BRIEF].ended) == (2, 2, "clean")
     assert c.loops[BRIEF].verdicts == [Verdict(round=1, version=1), Verdict(round=2, version=2)]
+
+
+def test_a_version_saved_after_the_loop_ended_waits_for_the_challenge_delivery_starts(shaping):
+    shaping.save()
+    assert not brief_starts.waiting(shaping.change())  # a first draft: no loop ended yet, the shaper asks
+    shaping.ask_challenge(1)
+    assert not brief_starts.waiting(shaping.change())  # its challenge runs
+    shaping.verdicts += [verdict("AC-1")]
+    shaping.step()
+    shaping.save(title="Add a farewell")
+    assert not brief_starts.waiting(shaping.change())  # the loop goes on: the shaper revises for F1
+    shaping.ask_challenge(2)
+    shaping.verdicts += [verdict()]
+    assert shaping.step().brief.challenged == 2
+    assert not brief_starts.waiting(shaping.change())  # the loop ended on this version: approvable
+    shaping.save(title="Add a farewell, kindly")
+    assert brief_starts.waiting(shaping.change())
+
+
+def test_the_owners_approval_holds_only_through_a_clean_verdict_on_its_version(shaping):
+    def approves(version: int) -> None:  # what the owner's Approve records before it asks for the round (#986)
+        with shaping.store.lock(shaping.slug) as lock:
+            c = shaping.store.read(shaping.slug)
+            c.brief.approve_if_clean = version
+            shaping.store.write(lock, c)
+
+    shaping.save()
+    shaping.ask_challenge(1)
+    shaping.verdicts += [verdict()]
+    shaping.step()
+    shaping.save(title="Add a farewell")
+    approves(2)
+    shaping.ask_challenge(2)
+    shaping.verdicts += [verdict()]
+    c = shaping.step()
+    assert (c.brief.approve_if_clean, brief_starts.approving(c)) == (2, True)
+    shaping.save(title="Add a farewell, kindly")
+    assert not brief_starts.approving(shaping.change())  # a later save leaves it on its own version
+    approves(3)
+    shaping.ask_challenge(3)
+    shaping.verdicts += [verdict("AC-1")]
+    c = shaping.step()
+    assert (c.brief.approve_if_clean, brief_starts.approving(c)) == (None, False)  # findings: the shaper revises
 
 
 def test_the_last_allowed_round_with_many_findings_asks_the_owner(shaping):
