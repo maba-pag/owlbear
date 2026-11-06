@@ -95,16 +95,24 @@ def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: 
         journal(log, {proc.pid: born})
         release(proc)
         out, _ = proc.communicate(timeout=within)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        _diagnostic(log, "check-command-failed", f"`{cmd}` in {cwd}", exc)
         return f"`{cmd}` took over {within:.0f} s"
     finally:  # timed out, interrupted or done: nothing of its group outlives the command
-        _end(proc, born)
+        _end(proc, born, log, f"`{cmd}` in {cwd}")
     if proc.returncode:
         return f"`{cmd}` failed: {out.decode(errors='replace').strip()}"
     return ""
 
 
-def _end(proc: subprocess.Popen[bytes], born: float | None) -> None:
+def _diagnostic(log: Callable[[dict[str, Any]], None], kind: str, where: str, exc: Exception) -> None:
+    log({"event": kind, "at": datetime.now(UTC).isoformat(timespec="milliseconds"),
+         "reason": f"{where}: {failure(exc)}"})  # fmt: skip
+
+
+def _end(
+    proc: subprocess.Popen[bytes], born: float | None, log: Callable[[dict[str, Any]], None], where: str
+) -> None:
     """Kill the command's group unless its id may name a newer one, then collect its output.
 
     An unreaped leader still holds its id, so a command over time or interrupted is killed without a lookup. Once it is
@@ -112,8 +120,10 @@ def _end(proc: subprocess.Popen[bytes], born: float | None) -> None:
     """
     ours = proc.returncode is None
     if not ours:
-        with contextlib.suppress(processes.UnlistedError):
+        try:
             ours = bool(members(proc.pid, born))
+        except processes.UnlistedError as exc:
+            _diagnostic(log, "check-observation-failed", f"looking for processes of {where}", exc)
     if ours:
         with contextlib.suppress(OSError):
             os.killpg(proc.pid, signal.SIGKILL)
@@ -207,14 +217,18 @@ def taken(e: Environment, leader: int) -> Pids:
     return e.pids | {p: created(p) for p in members(leader, e.pids.get(leader))}
 
 
-def unready(e: Environment, proc: subprocess.Popen[bytes] | None) -> Environment:
+def unready(
+    e: Environment, proc: subprocess.Popen[bytes] | None, *, log: Callable[[dict[str, Any]], None]
+) -> Environment:
     """A launch that never answered, with its group's members recorded for disposal to prove them its own.
 
     Its leader is gone at most a moment ago, too soon for the group's or session's id to be another's.
     """
     if proc is not None and e.pgid:
-        with contextlib.suppress(processes.UnlistedError):
+        try:
             return e.model_copy(update={"pids": taken(e, e.pgid)})
+        except processes.UnlistedError as exc:
+            _diagnostic(log, "check-observation-failed", f"check {e.check} after {url(e)}, group {e.pgid}", exc)
     return e
 
 
@@ -313,13 +327,17 @@ def recovered(e: Environment, pidfile: Path) -> Environment:
     return e.model_copy(update={"pgid": pid, "pids": e.pids | {pid: st.st_mtime}})
 
 
-def ready(e: Environment, proc: subprocess.Popen[bytes]) -> Pids | None:
+def ready(
+    e: Environment, proc: subprocess.Popen[bytes], *, log: Callable[[dict[str, Any]], None]
+) -> Pids | None:
     """Wait for the readiness URL; return the group's PIDs once it answers, else None."""
     end = time.monotonic() + READY_WITHIN
     while time.monotonic() < end and proc.returncode is None:
         if answers(url(e)):
-            with contextlib.suppress(processes.UnlistedError):  # unlisted now: poll again; the deadline ends the wait
+            try:
                 return taken(e, proc.pid)
+            except processes.UnlistedError as exc:
+                _diagnostic(log, "check-observation-failed", f"check {e.check} at {url(e)}, group {proc.pid}", exc)
         time.sleep(0.5)
     return None
 

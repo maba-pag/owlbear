@@ -99,7 +99,7 @@ def started(monkeypatch) -> list[str]:
 
     monkeypatch.setattr(check, "dispose", lambda _e: {})
     monkeypatch.setattr(check, "start", start)
-    monkeypatch.setattr(check, "ready", lambda e, _proc: e.pids | {901: 2.0})
+    monkeypatch.setattr(check, "ready", lambda e, _proc, **_kw: e.pids | {901: 2.0})
     monkeypatch.setattr(check, "created", lambda _pid: 2.0)
     return roots
 

@@ -13,6 +13,8 @@ from owlbear_delivery_next.project_host import launch_gate
 from owlbear_delivery_next.workflow_steps import before, check, decisions_gate, prepare
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.project_host.host import Host
     from owlbear_delivery_next.state_store.store import Lock
@@ -51,9 +53,12 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
             c.env = e = e.model_copy(update={"pgid": proc.pid, "pids": {proc.pid: check.created(proc.pid)}})
             h.store.write(lock, c)
             check.release(proc)
-    pids = check.ready(e, proc) if proc else None
+    def record(event: dict[str, Any]) -> None:
+        h.store.log(lock, c.slug, event)
+
+    pids = check.ready(e, proc, log=record) if proc else None
     if pids is None:
-        c.env = e = check.unready(e, proc)
+        c.env = e = check.unready(e, proc, log=record)
         why = check.unanswered(e, proc, log, since)  # before the clearing ends the process: its own exit, or none
         if left := h.clear(c, e):
             h.mark(c, left, now)
