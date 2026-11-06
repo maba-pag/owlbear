@@ -1977,8 +1977,8 @@ def test_a_long_unverified_session_end_shows_whole_on_changes(tmp_path: Path, mo
         runner._step(store, lock, c, c.step, path)  # noqa: SLF001
     why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
     said = [
-        " ".join(f"Building stopped: {why}; the session failed".split()),  # #971: and the session's own error
-        " ".join(f"Tried to force the session to stop: {stopped}".split()),
+        f"Building stopped: {why}; the session failed",  # #971: and the session's own error
+        f"Tried to force the session to stop: {stopped}",
     ]
     present = [True]  # the host finds process 9 until the owner ends it
     monkeypatch.setattr(host_leftovers, "survivors", lambda *_a: {9: ""} if present[0] else {})
@@ -1989,7 +1989,7 @@ def test_a_long_unverified_session_end_shows_whole_on_changes(tmp_path: Path, mo
         lines = page.locator("#detail .log li > span")
         expect(page.locator("#detail")).to_contain_text("stopped: processes still present: 9")
         expect(lines).to_have_count(2)
-        assert lines.all_text_contents() == said  # Recent activity collapses whitespace
+        assert lines.all_text_contents() == said
         assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
         present[0] = False
         expect(page.locator("#detail").get_by_text("Stopped", exact=True)).to_have_count(0, timeout=15000)

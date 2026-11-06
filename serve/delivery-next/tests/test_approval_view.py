@@ -724,7 +724,7 @@ def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_coun
         lines = page.locator("#detail .log li")
         expect(lines).to_have_count(11)
         said = lines.nth(0).locator(":scope > span")
-        assert said.text_content() == " ".join(f"Tried to force the session to stop: {stopped}".split())  # one line
+        assert said.text_content() == f"Tried to force the session to stop: {stopped}"
         expect(lines.nth(1)).to_contain_text("Lint incomplete (ruff, mypy could not run)")
         expect(lines.nth(2)).to_contain_text("Clean-up waiting: waiting for checks")
         expect(lines.nth(3)).to_have_text(re.compile(r"Undid task t1, attempt 2$"))  # not counted with the failure
