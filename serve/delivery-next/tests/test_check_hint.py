@@ -14,7 +14,7 @@ from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.session_result import Run
 
 APP = (("packages/app", "npm test"),)
-CHOICE = "cd packages/app && npm test"
+CHOICE = "cd ./packages/app && npm test"
 PROFILE = f'use one of "{CHOICE}"'
 
 
@@ -54,7 +54,7 @@ def test_the_hint_names_the_profile_s_command_as_written():
     task = {"title": "t", "goal": "AC-1", "scope": ["packages/app"], "checks": [CHOICE]}
     plan, _ = tool_schema.parse(PlanResult, {"tasks": [task]})
     spaced = (("packages/app", "npm  test"),)
-    offered = "cd packages/app && npm  test"
+    offered = "cd ./packages/app && npm  test"
     found = tools.check_plan(plan, Worktree("a", "a"), [offered], (), spaced)
     assert found[0].endswith(f'use one of "{offered}"')
     plan.tasks[0].checks = [offered]

@@ -41,7 +41,10 @@ def ran(check: str, command: str, checks: Sequence[str]) -> bool:
 
 def qualified(package: str, command: str) -> str:
     """A confirmed check as a complete command run from the repository root."""
-    return f"cd {shlex.quote(_package(package))} && {command}"
+    directory = _package(package)
+    if directory != ".":
+        directory = f"./{directory}"
+    return f"cd {shlex.quote(directory)} && {command}"
 
 
 def resolve(checks: Sequence[str], packages: Sequence[tuple[str, str]]) -> list[str]:

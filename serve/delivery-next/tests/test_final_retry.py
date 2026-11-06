@@ -452,7 +452,7 @@ def test_a_plan_on_the_existing_code_keeps_the_branch_as_it_is(tmp_path, clone):
     assert "on the existing code" in c.outcome.reason
 
 
-def test_a_kept_check_runs_from_each_package_of_its_task(change_repo):
+def test_a_kept_check_runs_from_each_package_of_its_task(change_repo, monkeypatch):
     entries = {f"check:{p}": ProfileEntry(state="known", value="npm test") for p in ("packages/a", "packages/b", ".")}
     profile = Profile(
         entries=entries
@@ -510,9 +510,16 @@ def test_a_kept_check_runs_from_each_package_of_its_task(change_repo):
     both = ["cd packages/b && npm test", "cd packages/b && npm test:unit"]
     ran = tools.BuildResult(summary="b", checks=[{"command": k, "exit_code": 0} for k in both])
     assert [e for e in tools.check_build(ran, tree, both) if "missing" in e] == []
+    checks_run_in_confirmed_folders(change_repo, monkeypatch)
+
+
+def checks_run_in_confirmed_folders(change_repo, monkeypatch):
     package = change_repo / "packages/app"
     package.mkdir(parents=True)
-    for home in (change_repo, package):
+    elsewhere = change_repo.parent / "elsewhere"
+    other = elsewhere / "packages/app"
+    other.mkdir(parents=True)
+    for home in (change_repo, package, other):
         (home / "Makefile").write_text("check:\n\t@pwd\n")
     (package / "package.json").write_text('{"scripts":{"test":"make check"}}\n')
     git(change_repo, "add", "Makefile", "packages/app")
@@ -520,11 +527,12 @@ def test_a_kept_check_runs_from_each_package_of_its_task(change_repo):
     profile = confirm(confirm(Profile(), "check:.", "make check", NOW), "check:packages/app", "make check", NOW)
     c = Change(slug="c1", brief=Brief(version=1), step=Step(kind=K.PLAN))
     choices = step_input.session(c, profile, change_repo, {})
-    assert choices.checks == ("cd . && make check", "cd packages/app && make check")
+    assert choices.checks == ("cd . && make check", "cd ./packages/app && make check")
     task = Task(id="t1", title="one", scope=["packages/app"], checks=list(choices.checks))
     c.plan, c.step = Plan(tasks=[task]), Step(kind=K.BUILD, task="t1")
     parts = step_input.session(c, profile, change_repo, {})
     assert parts.checks == choices.checks
+    monkeypatch.setenv("CDPATH", str(elsewhere))
     reports = []
     for command, home in zip(parts.checks, (change_repo, package), strict=True):
         done = subprocess.run(  # noqa: S603 - emitted commands of the fixture's confirmed checks

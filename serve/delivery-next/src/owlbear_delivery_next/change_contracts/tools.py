@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 INVALID_LIMIT = 3
 LOCAL_URL = re.compile(r"http://(127\.0\.0\.1|localhost):\{port\}(/\S*)?")  # Delivery picks the port (TD-40)
-EXAMPLE_CHECK = "cd packages/app && npm test"
+EXAMPLE_CHECK = "cd ./packages/app && npm test"
 
 
 class Args(BaseModel):

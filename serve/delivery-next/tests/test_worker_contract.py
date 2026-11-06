@@ -57,10 +57,12 @@ def build(**changes) -> BuildResult:
 def test_the_plan_challenger_sees_where_each_check_runs() -> None:
     entry = ProfileEntry(state="known", value="npm test", evidence="packages/app/package.json")
     profile = Profile(entries={"check:packages/app": entry})
-    plan = Plan(tasks=[Task(id="t1", title="Add sign", scope=["packages/app"], checks=["cd packages/app && npm test"])])
+    plan = Plan(
+        tasks=[Task(id="t1", title="Add sign", scope=["packages/app"], checks=["cd ./packages/app && npm test"])]
+    )
     text = step_input.plan_challenge(Change(slug="s"), plan, profile, Path("/w"), {})
-    assert "- `packages/app`: install `none`, check `cd packages/app && npm test`" in text
-    assert text.count("cd packages/app && npm test") == 2
+    assert "- `packages/app`: install `none`, check `cd ./packages/app && npm test`" in text
+    assert text.count("cd ./packages/app && npm test") == 2
 
 
 def test_the_plan_challenger_sees_the_whole_plan_and_a_cut_is_said() -> None:
