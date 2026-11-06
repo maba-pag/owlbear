@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import shlex
 import shutil
@@ -76,6 +77,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.settings.config import Effective
     from owlbear_delivery_next.state_store.store import Store
 
+_log = logging.getLogger(__name__)
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost"})
 START_PROMPT = "Start a new Delivery Change: use the owlbear-change-shaping skill to shape a brief with me."
@@ -336,13 +338,22 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     def changes(request: Request) -> list[dict[str, Any]]:
         return [for_chat(summary_of(slug), request.headers.get(chat_contract.HEADER)) for slug in store.slugs()]
 
+    profile_said = ""
+
     @router.get("/project")
     def project() -> dict[str, list[str]]:
+        nonlocal profile_said
         failed = [f"The host's last pass failed: {host.failed}"] if host.failed else []
         try:
             notes = profile.notes(store.read_profile() or Profile())
         except StoreError as exc:
-            notes = [f"The project profile could not be read: {failure(exc)}"]
+            why = failure(exc)
+            notes = [f"The project profile could not be read: {why}"]
+            if profile_said != why:
+                _log.warning("%s: project profile could not be read: %s", store.name or store.root, why)
+                profile_said = why
+        else:
+            profile_said = ""
         return {"notes": [*notes, *failed]}
 
     @router.post("/new-change")

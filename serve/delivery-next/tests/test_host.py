@@ -258,6 +258,39 @@ def test_a_settings_read_stop_keeps_both_persisted_reasons_and_their_http_views_
     assert detail.json()["activity"] == []
 
 
+def test_a_profile_note_keeps_its_existing_log_once_per_changed_failure(store, tmp_path, monkeypatch, caplog):
+    fake = Fake(store, tmp_path)
+    paused(fake, [True])
+    c = client(store, fake)
+    first, changed = StoreError("profile unreadable"), StoreError("profile changed and remains unreadable")
+    for error in (first, changed):
+        error.add_note("profile read context")
+    current = [first]
+
+    def read():
+        if current[0] is not None:
+            raise current[0]
+        return Profile()
+
+    monkeypatch.setattr(store, "read_profile", read)
+    whole = f"StoreError: {first}\nprofile read context"
+    for _ in range(2):
+        assert c.get("/api/next/project").json() == {"notes": [f"The project profile could not be read: {whole}"]}
+
+    def messages():
+        return [r.getMessage() for r in caplog.records if r.name == "owlbear_delivery_next.project_host.api"]
+
+    assert messages() == [f"{store.root}: project profile could not be read: {whole}"]
+    current[0] = changed
+    c.get("/api/next/project").raise_for_status()
+    current[0] = None
+    assert c.get("/api/next/project").json() == {"notes": []}
+    current[0] = changed
+    c.get("/api/next/project").raise_for_status()
+    assert messages()[1:] == [f"{store.root}: project profile could not be read: {failure(changed)}"] * 2
+    assert store.slugs() == []  # logging does not depend on a probe or any Change being present
+
+
 def test_recorded_pids_of_the_runner_block_until_gone(store, tmp_path):
     fake = Fake(store, tmp_path)
     save(store, asking(fake).model_copy(update={"outcome": None}))
