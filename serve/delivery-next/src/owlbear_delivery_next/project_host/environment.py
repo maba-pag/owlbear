@@ -54,11 +54,11 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
     pids = check.ready(e, proc) if proc else None
     if pids is None:
         c.env = e = check.unready(e, proc)
+        why = check.unanswered(e, proc, log, since)  # before the clearing ends the process: its own exit, or none
         if left := h.clear(c, e):
             h.mark(c, left, now)
             return c
         c.env = c.recipe = None
-        why = check.unanswered(e, proc, log, since)
         h.say(f"{c.slug}: check environment failed: {why}")
         return loop.apply(c, check.failed(why), now)
     c.env = e.model_copy(update={"pids": pids, "ready_at": datetime.now(UTC)})
