@@ -473,7 +473,7 @@ def test_a_kept_check_runs_from_each_package_of_its_task(change_repo):
     t3 = Task(id="t3", title="three", scope=["docs/z.md"], checks=["cd docs && make docs"])
     c = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[t1, t2, t3]))
     lp = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"])
-    rebuilds.rotated(c, lp, [], profile)
+    rebuilds.rotated(c, lp, [], rebuilds.checks(c, lp.rebuild, profile))
     assert t1.checks == [
         "cd packages/a && npm test",  # its own too: a report from another package never stands in for it
         "cd packages/b && npm test",
@@ -484,7 +484,12 @@ def test_a_kept_check_runs_from_each_package_of_its_task(change_repo):
     a = Task(id="t1", title="one", scope=["src/a.ts"], checks=["cd . && npm test"])
     twice = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[a, Task(**t2.model_dump())]))
     for _ in range(2):  # a second retry places the checks as the first did
-        rebuilds.rotated(twice, RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"]), [], profile)
+        rebuilds.rotated(
+            twice,
+            RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"]),
+            [],
+            rebuilds.checks(twice, ["t1"], profile),
+        )
         assert a.checks == ["cd . && npm test", "cd packages/b && npm test", "cd packages/c && uv run pytest"]
     ran = tools.BuildResult(summary="b", checks=[{"command": "cd packages/b && npm test", "exit_code": 0}])
     tree = tools.Worktree(head="b", base="a")

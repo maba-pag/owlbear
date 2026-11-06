@@ -137,7 +137,18 @@ def fresh(c: Change, task: Task) -> None:
     task.done, task.base, task.spans, task.built_by, task.earlier = False, None, [], "", ""
 
 
-def rotated(c: Change, lp: RoundLoop, undone: list[Task], profile: Profile) -> None:
+def checks(c: Change, rebuild: Sequence[str], profile: Profile) -> list[str]:
+    """Resolve the last rebuilt task's complete check set before any Git undo or task mutation."""
+    tasks = c.plan.tasks if c.plan else []
+    picked = [t for t in tasks if t.id in rebuild]
+    if not picked:
+        return []
+    last = picked[-1]
+    others = [t for t in tasks if t.origin == "plan" and t is not last and t.checks]
+    return _placed(profile, [last, *others])
+
+
+def rotated(c: Change, lp: RoundLoop, undone: list[Task], required: Sequence[str]) -> None:
     """After the undo the ticked tasks are built again in plan order, then the final loop goes on (TD-235).
 
     The last rebuilt task then runs its own and every other plan task's checks on the rebuilt code, each placed in its
@@ -152,8 +163,7 @@ def rotated(c: Change, lp: RoundLoop, undone: list[Task], profile: Profile) -> N
     for t in picked:
         fresh(c, t)
     if picked:
-        last, others = picked[-1], [t for t in tasks if t.origin == "plan" and t is not picked[-1] and t.checks]
-        last.checks = _placed(profile, [last, *others])
+        picked[-1].checks = list(required)
     lp.ended, lp.rebuild, lp.completion, c.consent = "retried", [], None, None
     if nxt := open_task(c):
         go(c, StepKind.BUILD, nxt.id)

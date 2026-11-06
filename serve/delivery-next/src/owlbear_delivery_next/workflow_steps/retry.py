@@ -195,8 +195,9 @@ def _question(c: Change, task: Task, lp: RoundLoop, why: str) -> Question:
 def _final(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
     """Undo the ticked tasks' work before their fresh builds, or all the Change's work before a clean plan."""
     lp, clean = change.loops[FINAL], change.step.mode == CLEAN
-    path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
     undo, why = ([], "") if clean else rebuilds.undoing(change, lp)
+    required = [] if clean or why else rebuilds.checks(change, lp.rebuild, vouched(store.read_profile() or Profile()))
+    path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
     try:
         if not why:
             start = _start(store, lock, change, lp, path)
@@ -218,7 +219,7 @@ def _final(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
         how = "from a clean state: Delivery undid the Change's earlier work, which stays archived on a branch"
         round_flow.replan(change, lp, round_flow.why(lp, how), now)
     else:
-        rebuilds.rotated(change, lp, undo, vouched(store.read_profile() or Profile()))
+        rebuilds.rotated(change, lp, undo, required)
     store.write(lock, change)
     return True
 
