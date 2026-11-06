@@ -48,7 +48,7 @@ function passFailed(failed) {
 
 function pruningFailed(failed) {
   return failed ? html`<li class="panel" id="retro-prune-failed"><div class="row">${tag("Pruning failed", "warning")}
-    </div><p class="meta">${failed}</p></li>` : nothing;
+    </div><p class="meta failure-detail">${failed}</p></li>` : nothing;
 }
 
 async function followUp(f) {
