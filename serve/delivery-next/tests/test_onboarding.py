@@ -1068,6 +1068,21 @@ def test_a_new_run_for_a_folder_replaces_its_unfinished_one(jobs, tmp_path, monk
         jobs.resume(local["id"])
 
 
+@pytest.mark.parametrize(
+    ("left", "git", "entry", "said"),
+    [
+        (["folder", "git", "commit", "repository", "push", "ci"], "none", "E5", (True, True)),
+        (["git", "protection"], "commits", "E2", (False, False)),  # only the author is written
+        (["git", "push", "protection"], "unborn", "E4b", (False, False)),  # the push stage pulls
+        (["git", "commit", "push"], "unborn", "E4a", (True, True)),
+        (["repository", "push"], "commits", "E3b", (True, True)),
+        (["folder", "protection"], "none", "E1", (True, False)),
+    ],
+)
+def test_the_start_button_names_what_the_stages_create_and_publish(left, git, entry, said):
+    assert onboarding_probe.effects(left, git, entry) == said
+
+
 def test_a_file_two_consents_write_is_said_once(tmp_path, monkeypatch):
     def writing(*_a: Any, **_k: Any) -> None:
         for line in ("written: .mcp.json", "written: .mcp.json", "written: .vscode/settings.json"):

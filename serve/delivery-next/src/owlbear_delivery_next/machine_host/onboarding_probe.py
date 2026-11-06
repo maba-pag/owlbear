@@ -198,6 +198,7 @@ def probe(start: dict[str, Any]) -> dict[str, Any]:
     found["author_missing"] = _author_missing(folder, state.origin or (url(repository) if repository else ""))
     found["old_task"] = setup.has_task(folder / ".vscode" / "tasks.json")
     found["stages"], found["entry"] = stages(found)
+    found["creates"], found["publishes"] = effects(found["stages"], found["state"]["git"], found["entry"])
     found["refusal"] = _conflict(found) or ""
     return found
 
@@ -247,6 +248,17 @@ def stages(found: dict[str, Any]) -> tuple[list[str], str]:
     if found["registered"]:
         left.discard("register")
     return [s for s in ORDER if s in left], _entry(st, remote, github=github, clone=clone)
+
+
+def effects(left: list[str], git: str, entry: str) -> tuple[bool, bool]:
+    """Whether the stages *left* create something, and whether they publish commits.
+
+    Something is a folder (a clone's too), a Git repository, a commit or a GitHub repository; the Git stage creates
+    only where there is no Git, otherwise it sets ``origin`` or the author. An unborn clone's pull (E4b) publishes
+    nothing.
+    """
+    creates = bool({"folder", "commit", "repository"} & set(left)) or ("git" in left and git == "none")
+    return creates, "repository" in left or ("push" in left and entry != "E4b")
 
 
 def _entry(st: dict[str, Any], remote: dict[str, Any] | None, *, github: bool, clone: bool) -> str:
