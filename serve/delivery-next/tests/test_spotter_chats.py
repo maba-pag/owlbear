@@ -391,7 +391,8 @@ def test_provenance_and_enrolment_come_before_any_read_and_fail_closed(world, mo
 
     def ownership() -> set[str]:
         if unreadable[0]:
-            raise PermissionError("fixture manifest unreadable")
+            msg = "fixture manifest unreadable"
+            raise PermissionError(msg)
         return own()
 
     monkeypatch.setattr(chatlogs, "own", ownership)
