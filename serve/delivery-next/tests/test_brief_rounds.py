@@ -65,6 +65,7 @@ class Shaping:
     def __init__(self, tmp_path: Path, repo: Path, monkeypatch) -> None:
         self.store, self.repo = Store(tmp_path / "store"), repo
         self.host = Host()
+        self.host.repo = repo
         self.http = TestClient(api.create_app(self.store, "t", self.host), base_url="http://127.0.0.1",
                                headers={"authorization": "Bearer t"})  # fmt: skip
         self.verdicts: list[tools.ReviewResult] = []

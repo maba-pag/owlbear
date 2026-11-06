@@ -26,6 +26,8 @@ p-inline-notification { overflow-wrap: anywhere; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
 /* A long status line, such as a whole error, keeps its tag beside its first line. */
 .row.status { align-items: flex-start; }
+.shaping-chat-state { display: grid; gap: var(--p-spacing-static-sm); }
+.shaping-chat-state p-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .heading-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--p-spacing-static-sm); }
 .empty {
   padding: var(--p-spacing-static-lg) var(--p-spacing-static-md); text-align: center;

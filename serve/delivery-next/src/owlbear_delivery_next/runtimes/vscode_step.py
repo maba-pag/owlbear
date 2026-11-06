@@ -5,7 +5,8 @@ before launch and binds only the session it launched (nonce and folder; R2). The
 ``!echo`` that calls no model (TD-48); Delivery confirms only that echo, waits for it to end and waits until the host
 lists the chat's model, since a new window may start with none and resolve Auto (P14). The first turn names an explicit
 model, effort and agent file (TD-27, TD-32); the host ignores an agent it does not list, so the chat starts no turn
-unless its session lists the agent file. Nothing follows that turn or cancels it: the owner takes the chat from there.
+unless its session lists the agent file. The owner takes the chat from there; later ready owner answers may post
+one queued continuation through ``chat_contact``, without cancelling a turn or changing the owner's draft.
 Delivery steps never run in a window (D-01M5WG8RGCBKADW6XPGP0E2FAP). When the host rejects the chat's own settings or
 first turn, matched by client id and sequence, the chat ends at once with its reason.
 """
@@ -19,8 +20,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from urllib.parse import unquote
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.runtimes.ahp import ROOT, HostError
 from owlbear_delivery_next.runtimes.vscode_contract import End, Hooks, Outcome, StepSpec
+from owlbear_delivery_next.runtimes.vscode_message import build
+from owlbear_delivery_next.runtimes.vscode_message import rejection as _rejection
 from owlbear_delivery_next.runtimes.window_files import SettingsError
 
 if TYPE_CHECKING:
@@ -39,17 +43,6 @@ def _action_in(ev: Json | None, chat: str) -> Json:
     if not ev or ev.get("method") != "action" or (ev.get("params") or {}).get("channel") != chat:
         return {}
     return ev["params"].get("action") or {}
-
-
-def _rejection(ev: Json | None, client: str, seq: int) -> str | None:
-    """The host's reason when ``ev`` rejects the action ``client`` sent as ``seq``; None for anything else."""
-    if not ev or ev.get("method") != "action":
-        return None
-    params = ev.get("params") or {}
-    origin = params.get("origin") or {}
-    if "rejectionReason" not in params or (origin.get("clientId"), origin.get("clientSeq")) != (client, seq):
-        return None
-    return str(params["rejectionReason"]) or "no reason given"
 
 
 def shell_command(tool_input: object) -> str:
@@ -117,7 +110,7 @@ class Step:
         try:
             self.settings(self.spec.folder, self.spec.model)
         except SettingsError as exc:
-            return Outcome("settings-refused", str(exc)), None
+            return Outcome("settings-refused", failure(exc)), None
         before = self._sessions()
         self.launch(["code", "chat", "-m", self.spec.picker, self.spec.bootstrap], self.spec.folder)
         bound = self._bind(before, self.clock() + bind_limit)
@@ -275,34 +268,9 @@ class Step:
             "a managed policy that forces the Copilot harness or blocks Allow All may be why"
         )
 
-    def _config(self) -> Json:
-        """The effort, unless the listed model takes none, and its context size: the default tier unless long.
-
-        The host's own default can be the long tier (1M for Claude Opus 5.5, live), so the size is always sent.
-        """
-        props = self.schema
-        config: Json = {} if props is not None and "thinkingLevel" not in props else {"thinkingLevel": self.spec.effort}
-        sizes = ((props or {}).get("contextSize") or {}).get("enum") or []
-        if sizes:
-            labels = (props or {})["contextSize"].get("enumDescriptions") or []
-            default = next((s for s, d in zip(sizes, labels, strict=False) if d == "Default"), min(sizes))
-            config["contextSize"] = max(sizes) if self.spec.context == "long" else default
-        return config
-
-    def _message(self, text: str, agent: Json | None) -> Json:
-        """Every message Delivery sends names the chat's model, effort and agent, so none falls back to Auto."""
-        message: Json = {
-            "text": text,
-            "origin": {"kind": "user"},
-            "model": {"id": self.spec.model, "config": self._config()},
-        }
-        if agent:
-            message["agent"] = agent
-        return message
-
     def _start(self, out: Outcome, agent: Json | None, text: str) -> int:
         turn = str(uuid.uuid4())
-        message = self._message(text, agent)
+        message = build(self.spec, self.schema, agent) | {"text": text}
         stamp = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
         seq = self.conn.dispatch(
             out.chat or "", {"type": "chat/turnStarted", "turnId": turn, "startedAt": stamp, "message": message}

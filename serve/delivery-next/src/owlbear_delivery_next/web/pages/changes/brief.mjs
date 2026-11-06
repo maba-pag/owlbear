@@ -221,6 +221,12 @@ function challengeButton(d) {
   return button(`Challenge v${version}`, start, { variant: "secondary", aria: DIALOG, ...starts(d) });
 }
 
+function chatReceipt(d) {
+  const c = d.brief.chat;
+  return c ? html`<div class="shaping-chat-state">${text(c.text, { weight: "semibold" })}
+    ${c.detail ? text(c.detail) : nothing}</div>` : nothing;
+}
+
 export function approval(d) {
   const version = d.brief.version, key = `${d.key}:approve:${version}`, on = detailsOn();
   const why = d.brief.challenge_waits ? "" : d.brief.approve_off;  // TD-249: off until its loop ended on this version
@@ -236,6 +242,7 @@ export function approval(d) {
     d.brief.challenge_waits ? text(`${waitLine(d)}.`, { weight: "semibold" }) : nothing,
     why ? text(`Not yet: ${why}.`, { weight: "semibold" }) : nothing,
     d.brief.approve_refused ? refusal(d.brief.approve_refused) : nothing,
+    chatReceipt(d),
     versionList(d.brief.versions, "Versions", act),
     d.brief.revising.length ? nothing : row(reviseButton(d)));  // while the shaper revises, Open items offers it
 }
@@ -275,7 +282,8 @@ export function briefInfo(d) {
   const added = (d.owner_criteria || []).map((k) => [`You added in visual round ${k.round}`, k.text]);
   const on = detailsOn();
   return info(`Brief v${v}${at ? `, approved ${at}` : ""}`, html`<div class="brief">
-    ${d.brief.outcome ? text(d.brief.outcome) : nothing}${agreement(d, true)}${picked(d, on)}${technical(d)}
+    ${d.brief.outcome ? text(d.brief.outcome) : nothing}${chatReceipt(d)}
+    ${agreement(d, true)}${picked(d, on)}${technical(d)}
     ${on ? part("Changes since you approved", added.length ? saidList(added)
       : text("None besides the amendments below.")) : nothing}
     ${on ? amendmentsPart(d) : nothing}${versionList(d.brief.versions, "Versions")}</div>

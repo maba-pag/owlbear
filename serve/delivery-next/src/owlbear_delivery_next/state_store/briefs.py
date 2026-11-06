@@ -30,7 +30,10 @@ from owlbear_delivery_next.state_store import identities
 from owlbear_delivery_next.state_store.store import LockHeldError, StoreError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from owlbear_delivery_next.change_contracts.models import Brief
+    from owlbear_delivery_next.change_contracts.shaper_records import SavingChat
     from owlbear_delivery_next.state_store.store import Store
 
 SLUG = 40
@@ -58,7 +61,15 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
         visual.append(
             VisualState(name=s.name, path=s.path, expect=s.expect, steps=steps, version=prev.version if same else v)
         )
-    fields = {"version": v, "title": d.title, "outcome": d.outcome, "scope": d.scope, "criteria": criteria}
+    fields = {
+        "version": v,
+        "title": d.title,
+        "outcome": d.outcome,
+        "scope": d.scope,
+        "criteria": criteria,
+        "saving_chat": None,
+    }
+    c.shaper_notice = None
     owner = [*(placed.get(k, k) for k in d.specified), *(f"screen:{s.name}" for s in d.visual if s.owner)]
     owner += [f"check:{p.name}" for p in d.person_checks if p.owner]
     fields |= {"ui": d.ui, "visual": visual, "non_goals": d.non_goals, "specified": list(dict.fromkeys(owner))}
@@ -152,13 +163,15 @@ def _kept(store: Store, body: object) -> object:
         return body
 
 
-def save_brief(store: Store, body: object) -> tuple[int, dict[str, Any]]:
+def save_brief(
+    store: Store, body: object, *, binding: Callable[[], SavingChat] | None = None
+) -> tuple[int, dict[str, Any]]:
     """Validate a brief draft and write a new Change, or a new version of a shaping one, awaiting approval."""
     draft, errors = tool_schema.parse(brief_tools.BriefDraft, _kept(store, body))
     errors = brief_tools.check_brief(draft) if draft else errors
     if draft is None or errors:
         return 422, {"errors": errors}
-    return _revise(store, draft) if draft.change else _create(store, draft)
+    return _revise(store, draft, binding) if draft.change else _create(store, draft, binding)
 
 
 def unrevisable(c: Change) -> str:
@@ -168,7 +181,9 @@ def unrevisable(c: Change) -> str:
     return brief_rounds.saving(c)
 
 
-def _revise(store: Store, draft: brief_tools.BriefDraft) -> tuple[int, dict[str, Any]]:
+def _revise(
+    store: Store, draft: brief_tools.BriefDraft, binding: Callable[[], SavingChat] | None = None
+) -> tuple[int, dict[str, Any]]:
     if (slug := identities.handles(store).get(draft.change)) is None:
         return 422, {"errors": [f"change: {draft.change} is not a Change here - leave it empty for a new one"]}
     try:
@@ -177,6 +192,7 @@ def _revise(store: Store, draft: brief_tools.BriefDraft) -> tuple[int, dict[str,
             if why := unrevisable(old):
                 return 409, {"errors": [f"change: {why}"]}
             c = drafted(old, draft, slug, old.handle, store.read_profile() or Profile())
+            c.brief.saving_chat = binding() if binding else None
             store.write(lock, c)
     except LockHeldError as exc:
         return 409, {"errors": [f"change: {exc}; try again"]}
@@ -185,19 +201,27 @@ def _revise(store: Store, draft: brief_tools.BriefDraft) -> tuple[int, dict[str,
     return 200, {"change": c.handle, "version": c.brief.version, "slug": slug}
 
 
-def _create(store: Store, draft: brief_tools.BriefDraft) -> tuple[int, dict[str, Any]]:
+def _create(
+    store: Store, draft: brief_tools.BriefDraft, binding: Callable[[], SavingChat] | None = None
+) -> tuple[int, dict[str, Any]]:
     try:
         prof = store.read_profile() or Profile()
-        c = identities.publish_new(
-            store,
-            lambda number, taken: drafted(None, draft, new_slug(draft.title, taken), f"c{number}", prof),
-        )
+        caller = binding() if binding else None
+
+        def made(number: int, taken: list[str]) -> Change:
+            c = drafted(None, draft, new_slug(draft.title, taken), f"c{number}", prof)
+            c.brief.saving_chat = caller
+            return c
+
+        c = identities.publish_new(store, made)
     except StoreError as exc:
         return 409, {"errors": [f"change: {failure(exc)}; try again"]}
     return 200, {"change": c.handle, "version": c.brief.version, "slug": c.slug}
 
 
-def save_visual(store: Store, body: object) -> tuple[int, dict[str, Any]]:
+def save_visual(
+    store: Store, body: object, *, binding: Callable[[], SavingChat] | None = None
+) -> tuple[int, dict[str, Any]]:
     """Set a shaping Change's UI flag, states and steps as a new brief version; the rest of its brief stays."""
     draft, errors = tool_schema.parse(brief_tools.VisualDraft, body)
     if draft is None:
@@ -219,4 +243,4 @@ def save_visual(store: Store, body: object) -> tuple[int, dict[str, Any]]:
     }
     brief |= {"specified": [placed[k.id] for k in c.brief.criteria if k.id in owner]}
     brief |= {"visual": [s.model_dump() for s in draft.states], "steps": [s.model_dump() for s in draft.steps]}
-    return save_brief(store, brief)
+    return save_brief(store, brief, binding=binding)
