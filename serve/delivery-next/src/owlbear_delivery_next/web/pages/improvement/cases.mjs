@@ -100,7 +100,8 @@ function failedLooks(r) {
 }
 
 function replay(r) {
-  if ("applied" in r && !("result" in r)) return html`<li>${when(r.at)} \u00b7 run ${r.id}: ${r.applied === null
+  if ("applied" in r && !("result" in r)) return html`<li class=${r.applied === null ? "failure-detail" : nothing}>${
+    when(r.at)} \u00b7 run ${r.id}: ${r.applied === null
     ? r.why : `wrote version ${r.applied}`}</li>`;
   return html`<li>${when(r.ended ?? r.at)} \u00b7 ${r.kind ?? "run"} ${r.id}: <span class="said">${
     runResult(r) ?? "no result"}</span>${failedLooks(r)}</li>`;
