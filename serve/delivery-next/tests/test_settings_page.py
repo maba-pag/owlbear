@@ -485,7 +485,7 @@ def test_the_unsaved_filter_keeps_a_row_whose_edit_is_undone_until_the_filter_ch
         sessions.fill("3")
         pds.pick(page, "Show", "unsaved")
         expect(row).to_be_visible()
-        sessions.press("End")
+        sessions.press("ArrowRight")  # one character; End scrolls rather than moving the caret on macOS
         sessions.press("Backspace")
         expect(page.locator("#pending")).to_have_text("No unsaved edits.")
         expect(row).to_be_visible()
