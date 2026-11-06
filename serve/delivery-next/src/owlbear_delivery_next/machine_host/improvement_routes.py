@@ -160,6 +160,7 @@ def _reads(routes: APIRouter, m: _Machine) -> None:
             "not_followed": chats.not_followed(),
             "follower_failed": chats.failed,
             "follower_refused": chats.refused,
+            "chat_looks_unread": chats.owned.unread if chats.owned is not None else "",
         }
         return {
             "spotter": spotted | followed,
