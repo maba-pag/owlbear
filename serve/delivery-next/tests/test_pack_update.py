@@ -665,7 +665,10 @@ def test_the_cli_replay_reaches_a_host_from_before_the_impeccable_rename_once_by
     assert len(_Answers.seen) == 1  # only a 404 means the route is missing; a refusal is never sent again
 
 
-def test_the_cli_runs_each_update_tool_and_reports_failures(repo, capsys, monkeypatch) -> None:
+@pytest.mark.parametrize("failure_kind", ["timeout", "failed", "noted"])
+def test_the_cli_runs_each_update_tool_and_reports_failures(
+    repo, capsys, monkeypatch, whole_error, failure_kind
+) -> None:
     assert cli.main(["--repo", str(repo), "impeccable", "--check"]) == 0
     assert capsys.readouterr().out == f"Impeccable ({pack_files.manifest()['pack']}): releases upstream unknown\n"
     assert cli.main(["--repo", str(repo), "impeccable", "--golden"]) == 1
@@ -679,3 +682,34 @@ def test_the_cli_runs_each_update_tool_and_reports_failures(repo, capsys, monkey
     assert "CalledProcessError" in capsys.readouterr().out
     with pytest.raises(SystemExit):
         cli.main(["--repo", str(repo), "impeccable", "--diff", str(repo)])
+    real = subprocess.run
+    seen = []
+
+    def run(argv, **kwargs):
+        if argv[1:2] != ["diff"]:
+            return real(argv, **kwargs)
+        seen.append((argv, kwargs["timeout"]))
+        out, err = f"OUT:{whole_error}".encode(), f"ERR:{whole_error}".encode()
+        if failure_kind == "timeout":
+            exc = subprocess.TimeoutExpired(argv, kwargs["timeout"], output=out, stderr=err)
+        elif failure_kind == "failed":
+            exc = subprocess.CalledProcessError(2, argv, output=out, stderr=err)
+        else:
+            exc = OSError(whole_error)
+        exc.add_note("Impeccable diff note")
+        raise exc
+
+    monkeypatch.setattr(pack_update.subprocess, "run", run)
+    monkeypatch.setattr(pack_update, "rules", lambda *_args: {})
+    assert cli.main(["--repo", str(repo), "impeccable", "--diff", str(repo), "--to", "HEAD"]) == 1
+    [(argv, timeout)] = seen
+    assert timeout == 60
+    if failure_kind == "timeout":
+        expected = f"TimeoutExpired: Command '{argv}' timed out after 60 seconds"
+    elif failure_kind == "failed":
+        expected = f"CalledProcessError: Command '{argv}' returned non-zero exit status 2."
+    else:
+        expected = f"OSError: {whole_error}"
+    if failure_kind != "noted":
+        expected += f"\nstderr:\nERR:{whole_error}\nstdout:\nOUT:{whole_error}"
+    assert capsys.readouterr().out == f"Impeccable: {expected}\nImpeccable diff note\n"
