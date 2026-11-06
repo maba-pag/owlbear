@@ -239,7 +239,7 @@ def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list
 
 def _captured(change: Change, path: Path, head: str, out: Path, widths: list[int]) -> tuple[list[Any], list[Any]]:
     """The states to redo captured at *widths* from the ready environment, and the design scans they and the UI hold."""
-    pack, url = design.pack(), change.env.ready_url if change.env else ""
+    pack, url = design.pack(), check.url(change.env) if change.env else ""
     redo = visual.redone(change, head, visual.tree(path, head))
     shots = visual.oversize(out, visual.CAPTURE(visual.root(url), redo, out, widths, pack=pack))
     states = {s.name: s.version for s in change.brief.visual}

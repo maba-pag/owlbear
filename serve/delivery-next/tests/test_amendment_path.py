@@ -916,7 +916,7 @@ def test_a_check_answer_never_settles_past_his_open_objection():
     c.step = Step(kind=K.CHECK, task="check-1")
     p = c.checks[0]
     p.answer = Answer(at=NOW, passed=True, inputs=evidence.check_inputs(c, p, {}))
-    c.env = Environment(check="check-1", command="npm run x", directory=".", ready_url="http://127.0.0.1:4173/")
+    c.env = Environment(check="check-1", command="npm run x", directory=".", ready_url="http://127.0.0.1:{port}/")
     assert check.action(c, live=True, paths={}) == "settle"
 
     amending.objected(c, ObjectionItem(amendment="A1", at=NOW), NOW)

@@ -1038,13 +1038,14 @@ def test_a_capture_over_one_reviews_budget_is_judged_in_batches_by_both_judges(f
 
 def test_the_launch_recipe_needs_a_clean_worktree_directory_and_a_local_url(tmp_path):
     def errors(dirty=(), **fields):
-        base = {"directory": ".", "command": "npm run x", "ready_url": "http://127.0.0.1:4173/", "summary": "ran"}
+        base = {"directory": ".", "command": "npm run x", "ready_url": "http://127.0.0.1:{port}/", "summary": "ran"}
         return tools.check_recipe(tools.CheckRecipe(**base | fields), tools.Worktree("h", "h", dirty), tmp_path)
 
     assert errors(command="npm run preview --prefix /outside") == []
     assert errors(("a",))[0].startswith("changes: a edited; you may edit nothing without")
     assert errors(directory="../")[0].startswith("directory: ../ is not a directory in the worktree")
     assert errors(ready_url="https://example.com/")[0].startswith("ready_url: must be local")
+    assert errors(ready_url="http://127.0.0.1:4173/")[0].startswith("ready_url: must be local with the `{port}`")
 
 
 def test_a_visual_environment_is_disposed_on_stop_or_abandon_and_its_runner_crash_is_charged(flow):

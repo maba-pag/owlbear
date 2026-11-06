@@ -6,6 +6,7 @@ import contextlib
 import os
 import shlex
 import signal
+import socket
 import subprocess
 import threading
 import time
@@ -31,10 +32,28 @@ READY_WITHIN = 60.0
 GRACE = 5.0
 WITHIN = 600.0  # seconds per install or preparation command
 PIDFILE = "env.pid"  # the launched recipe's pid, written by its wrapper before the recipe runs
+PORT = "{port}"  # a recipe's placeholder for the port Delivery picks per launch (TD-40)
 type Action = Literal["launch", "keep", "dispose", "settle"]
 type Pids = dict[int, float | None]
 type Found = dict[int, str]
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
+
+
+def free_port() -> int:
+    """A port no local listener holds now, as the kernel hands it out; the launch takes it right away (TD-40)."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
+
+
+def url(e: Environment) -> str:
+    """The launch's readiness URL: the recipe's ``ready_url`` with its picked port."""
+    return e.ready_url.replace(PORT, str(e.port)) if e.port is not None else e.ready_url
+
+
+def unanswered(e: Environment) -> str:
+    """Why a launch failed when nothing answered at its URL: a server ignoring its port names that cause."""
+    return f"the preview did not answer on its assigned port {e.port} at {url(e)}; it may use a fixed port"
 
 
 def journal(log: Callable[[dict[str, Any]], None], pids: Pids) -> None:
@@ -227,10 +246,11 @@ def start(
     """Spawn the recipe as leader of its own session and group; *env* is a test copy's isolated environment.
 
     Its leader, a shell, waits on its stdin: it becomes the recipe only once ``release`` says the group is recorded, so
-    a host or runner that stops in between leaves no recipe. With *pidfile*, the shell first writes its pid there.
+    a host or runner that stops in between leaves no recipe. With *pidfile*, the shell first writes its pid there. The
+    recipe's ``{port}`` becomes the launch's picked port.
     """
     try:
-        argv = shlex.split(e.command)
+        argv = [a.replace(PORT, str(e.port)) if e.port is not None else a for a in shlex.split(e.command)]
         if pidfile is not None:
             pidfile.unlink(missing_ok=True)
         record = 'echo $$ > "$0" && ' if pidfile is not None else ""
@@ -282,7 +302,7 @@ def ready(e: Environment, proc: subprocess.Popen[bytes]) -> Pids | None:
     """Wait for the readiness URL; return the group's PIDs once it answers, else None."""
     end = time.monotonic() + READY_WITHIN
     while time.monotonic() < end and proc.returncode is None:
-        if answers(e.ready_url):
+        if answers(url(e)):
             with contextlib.suppress(processes.UnlistedError):  # unlisted now: poll again; the deadline ends the wait
                 return taken(e, proc.pid)
         time.sleep(0.5)
@@ -292,10 +312,10 @@ def ready(e: Environment, proc: subprocess.Popen[bytes]) -> Pids | None:
 def pending(c: Change, e: Environment) -> loop.StepResult:
     """The check waits on the owner once its environment answers; the visual check waits on its capture."""
     if e.check == VISUAL:
-        reason = f"capturing {len(c.brief.visual)} visual states at {e.ready_url}"
+        reason = f"capturing {len(c.brief.visual)} visual states at {url(e)}"
         return loop.StepResult(exit=Exit.PENDING, waiting=Waiting.REVIEWER, reason=reason)
     person = next(p for p in c.checks if p.id == e.check)
-    reason = f"{'; '.join(person.steps) or person.id} · {e.ready_url}"
+    reason = f"{'; '.join(person.steps) or person.id} · {url(e)}"
     a = person.answer
     if a and a.inputs and (what := evidence.changed(a.inputs, evidence.check_inputs(c, person, declared(c)))):
         reason += f" · asked again: changed {', '.join(what)}"

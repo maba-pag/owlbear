@@ -76,8 +76,9 @@ def ui(tmp_path, monkeypatch):
     git(work, "switch", "-q", "-c", "owlbear/c1")
     commit(work, "site/index.html", "after")
     port = free_port()
-    command = f"{sys.executable} -m http.server {port} --bind 127.0.0.1"
-    env = Environment(check=VISUAL, command=command, directory="site", ready_url=f"http://127.0.0.1:{port}/")
+    monkeypatch.setattr(check, "free_port", lambda: port)  # the port Delivery picks, known to the test
+    command = f"{sys.executable} -m http.server {{port}} --bind 127.0.0.1"
+    env = Environment(check=VISUAL, command=command, directory="site", ready_url="http://127.0.0.1:{port}/")
     plan = Plan(tasks=[Task(id="t1", title="greet", scope=["site"])])
     names = Names(branch="owlbear/c1", target="main", worktree=str(work))
     brief = Brief(version=1, ui=True, visual=[HOME])
@@ -97,6 +98,11 @@ def fetching(base, states, out, widths, **_k):
             seen = (PageError(state=s.name, version=s.version, width=w, kind="console", text="old"),)
             shots.append(visual.Shot(s.name, w, f"{s.name}-{w}.png", errors=seen))
     return shots
+
+
+def served(c):
+    """The URL the recipe answered at, with the port the fixture made Delivery pick."""
+    return check.url(c.env.model_copy(update={"port": check.free_port()}))
 
 
 def run(c, tmp_path, events, profile=None, widths=(1280, 1920)):
@@ -139,7 +145,7 @@ def test_the_states_are_rendered_at_the_merge_base_with_the_same_recipe_and_ever
     pids = [int(p) for e in events if e["event"] == "pids" for p in e["pids"]]
     assert pids
     assert not any(psutil.pid_exists(p) and psutil.Process(p).status() != psutil.STATUS_ZOMBIE for p in pids)
-    assert (check.answers(ui.env.ready_url), worktrees(ui)) == (False, 1)
+    assert (check.answers(served(ui)), worktrees(ui)) == (False, 1)
 
 
 def test_a_failing_install_is_a_note_and_nothing_is_launched(ui, tmp_path, monkeypatch):
@@ -155,7 +161,7 @@ def test_a_port_already_answering_is_a_note_and_nothing_is_launched(ui, tmp_path
     import http.server  # noqa: PLC0415
     import threading  # noqa: PLC0415
 
-    port = int(ui.env.ready_url.rsplit(":", 1)[1].strip("/"))
+    port = check.free_port()  # the port Delivery picks is taken by another server meanwhile
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), http.server.SimpleHTTPRequestHandler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
@@ -163,19 +169,18 @@ def test_a_port_already_answering_is_a_note_and_nothing_is_launched(ui, tmp_path
         shots = run(ui, tmp_path, events)
     finally:
         server.shutdown()
-    assert (shots.files, shots.findings, events) == ([], [f"something else already answers at {ui.env.ready_url}"], [])
+    assert (shots.files, shots.findings, events) == ([], [f"something else already answers at {served(ui)}"], [])
 
 
-def test_a_recipe_that_never_answers_is_a_note_and_its_processes_are_stopped(ui, tmp_path, monkeypatch):
+def test_a_recipe_ignoring_its_port_is_a_note_and_its_processes_are_stopped(ui, tmp_path, monkeypatch):
     monkeypatch.setattr(check, "READY_WITHIN", 1.0)
-    command = f"{sys.executable} -c 'import time; time.sleep(60)'"
+    command = f"{sys.executable} -m http.server {free_port()} --bind 127.0.0.1"  # a fixed port, not the assigned one
     ui.env = ui.env.model_copy(update={"command": command})
     events = []
     shots = run(ui, tmp_path, events)
-    assert (shots.files, shots.findings) == (
-        [],
-        [f"the recipe did not answer at {ui.env.ready_url} for the merge-base"],
-    )
+    assigned = check.free_port()
+    why = f"the preview did not answer on its assigned port {assigned} at http://127.0.0.1:{assigned}/"
+    assert (shots.files, shots.findings) == ([], [f"for the merge-base, {why}; it may use a fixed port"])
     pid = int(next(iter(events[0]["pids"])))
     assert not (psutil.pid_exists(pid) and psutil.Process(pid).status() != psutil.STATUS_ZOMBIE)
     assert worktrees(ui) == 1
@@ -195,7 +200,8 @@ def test_a_recipe_whose_leader_exits_leaving_a_child_has_the_child_stopped(ui, t
     )
     ui.env = ui.env.model_copy(update={"command": f"{sys.executable} -c {shlex.quote(spawn)}"})
     shots = run(ui, tmp_path, [])
-    assert shots.findings == [f"the recipe did not answer at {ui.env.ready_url} for the merge-base"]
+    pinned = ui.env.model_copy(update={"port": check.free_port()})
+    assert shots.findings == [f"for the merge-base, {check.unanswered(pinned)}"]
     assert gone(int(child.read_text()))
 
 
@@ -209,7 +215,7 @@ def test_a_capture_that_raises_still_stops_the_preview_and_removes_the_worktree(
     shots = run(ui, tmp_path, events)
     assert (shots.files, shots.findings) == ([], ["RuntimeError: no Chromium"])
     assert all(gone(int(p)) for e in events for p in e["pids"])
-    assert (check.answers(ui.env.ready_url), worktrees(ui)) == (False, 1)
+    assert (check.answers(served(ui)), worktrees(ui)) == (False, 1)
 
 
 def test_an_unwritable_screenshot_folder_is_a_note_not_a_crash(ui, tmp_path):

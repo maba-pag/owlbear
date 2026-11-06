@@ -395,7 +395,7 @@ def test_an_unloadable_change_is_reported_once_until_its_record_changes(store, t
 
 def checking(**env):
     person = PersonCheck(id="preview", steps=["open the preview"])
-    e = Environment(check="preview", command="npm run preview", directory=".", ready_url="http://127.0.0.1:4173/")
+    e = Environment(check="preview", command="npm run preview", directory=".", ready_url="http://127.0.0.1:{port}/")
     plan = Plan(tasks=[Task(id="t1", title="greet", done=True)])
     step = Step(kind=StepKind.CHECK, task="preview")
     return Change(slug="c1", plan=plan, checks=[person], step=step, env=e.model_copy(update=env))
@@ -529,7 +529,7 @@ class Proc:
     stdin = None
 
 
-RECIPE = Recipe(check="preview", command="npm run preview", directory=".", ready_url="http://127.0.0.1:4173/")
+RECIPE = Recipe(check="preview", command="npm run preview", directory=".", ready_url="http://127.0.0.1:{port}/")
 
 
 @pytest.fixture

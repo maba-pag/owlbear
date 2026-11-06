@@ -113,14 +113,14 @@ def settings(*options: Preparation, **rules):
 
 def change(repo: Path, check: str = "visual") -> Change:
     c = Change(slug="c1", step=Step(kind=StepKind.CHECK, task=check))
-    c.env = Environment(check=check, command="serve", directory=".", ready_url="http://127.0.0.1:1/")
+    c.env = Environment(check=check, command="serve", directory=".", ready_url="http://127.0.0.1:{port}/")
     c.names.worktree = str(repo)
     return c
 
 
 def recipe(name: str = "copy", reason: str = "orders need live data") -> tools.CheckRecipe:
     return tools.CheckRecipe(
-        command="npm run preview", directory=".", ready_url="http://127.0.0.1:4173/", summary="from the scripts",
+        command="npm run preview", directory=".", ready_url="http://127.0.0.1:{port}/", summary="from the scripts",
         preparation=name, reason=reason,
     )  # fmt: skip
 

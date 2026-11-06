@@ -147,7 +147,7 @@ def person_check(c: Change, p: PersonCheck, *, inputs: Inputs, waiting: bool) ->
         "expect": p.expect,
         "passed": True if held else (False if a and a.passed is False else None),
         "waiting": waiting,
-        "url": c.env.ready_url if c.env and c.env.check == p.id and c.env.ready_at else None,
+        "url": check.url(c.env) if c.env and c.env.check == p.id and c.env.ready_at else None,
         "inputs": snapshot(inputs, p),
     }
 

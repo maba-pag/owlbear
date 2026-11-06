@@ -61,9 +61,11 @@ def _serve(  # noqa: PLR0913 - the widths come from the settings, the test copy 
     r = c.env
     if r is None:
         return []
-    e = Environment(check=VISUAL, command=r.command, directory=r.directory, ready_url=r.ready_url)
-    if check.answers(e.ready_url):
-        notes.append(f"something else already answers at {e.ready_url}")
+    e = Environment(
+        check=VISUAL, command=r.command, directory=r.directory, ready_url=r.ready_url, port=check.free_port()
+    )
+    if check.answers(check.url(e)):
+        notes.append(f"something else already answers at {check.url(e)}")
         return []
     try:
         env = prepare(root) if prepare else None  # TD-96: the same frozen snapshot the "after" capture restores
@@ -80,13 +82,13 @@ def _serve(  # noqa: PLR0913 - the widths come from the settings, the test copy 
         check.release(proc)
         if (pids := check.ready(e, proc)) is None:
             e = check.unready(e, proc)
-            notes.append(f"the recipe did not answer at {e.ready_url} for the merge-base")
+            notes.append(f"for the merge-base, {check.unanswered(e)}")
             return []
         e = e.model_copy(update={"pids": pids})
         check.journal(log, pids)
         states = [s for s in c.brief.visual if prepare or not s.steps]  # steps run only on a test copy (TD-96)
         notes += [f"{s.name}: its steps need a test preparation" for s in c.brief.visual if s not in states]
-        return visual.CAPTURE(visual.root(e.ready_url), states, out, widths, pack=design.pack())
+        return visual.CAPTURE(visual.root(check.url(e)), states, out, widths, pack=design.pack())
     finally:
         if left := check.dispose(e):
             notes.append(f"preview processes {sorted(left)} did not stop")
