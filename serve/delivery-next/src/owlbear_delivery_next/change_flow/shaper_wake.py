@@ -33,11 +33,7 @@ def ready(c: Change) -> bool:
 
 
 def _belongs(q: Question, attempt: int) -> bool:
-    cause = q.cause or ""
-    for prefix in (brief_rounds.DISPUTE, brief_rounds.ROUND):
-        if cause.startswith(prefix):
-            return cause.removeprefix(prefix).split(" ", 1)[0] == str(attempt)
-    return False
+    return brief_rounds.owned(q) and (q.cause or "").split(" ", 2)[1] == str(attempt)
 
 
 def source(c: Change) -> Question | None:
