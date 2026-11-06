@@ -741,7 +741,7 @@ def test_the_visual_launch_waits_for_one_before_capture_and_its_runner_is_not_ch
     prepared(store, VISUAL)
     assert (fake.host.tick(NOW), calls["start"]) == (["c1"], [])  # a runner renders the "before" states first
     c = store.read("c1")
-    c.before = VisualResult(head="b" * 40, tree="t", at=NOW)
+    c.before = VisualResult(head="b" * 40, tree="t", states={"home": 1}, at=NOW)  # as the runner records it
     save(store, c)
     fake.live.clear()
     assert fake.host.tick(NOW) == ["c1"]  # then the preview starts and the capture runner follows

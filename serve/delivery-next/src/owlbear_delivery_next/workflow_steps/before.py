@@ -35,19 +35,24 @@ if TYPE_CHECKING:
 
 
 def due(c: Change) -> bool:
-    """The visual check's recipe is known and not yet launched, and this Change has no "before" capture yet."""
+    """The visual check's recipe is known and not yet launched, and a state has no "before" of its version yet."""
     e = c.env
     at_check = (c.step.kind, c.step.task) == (StepKind.CHECK, VISUAL)
-    return bool(e and e.check == VISUAL and e.launched_at is None and c.before is None and c.brief.visual) and at_check
+    missing = c.before is None or any(c.before.states.get(s.name) != s.version for s in c.brief.visual)
+    return bool(e and e.check == VISUAL and e.launched_at is None and missing and c.brief.visual) and at_check
 
 
 def reset(c: Change, head: str) -> None:
     """A new visual check environment gets its own "before" on its own snapshot (D-01M6Q4B6VV4Z05WFQ1BD4X95HJ).
 
     The last round's "before" stays only while the owner's answer settles that round (his decision, or his waiver of
-    the model check) for the same head and brief version, which captures nothing again.
+    the model check) for the same head and brief version, which captures nothing again. After an amendment that
+    voided some states of a passed check, the states it keeps keep their "after" and so their "before"
+    (D-01M6GBBY578CY7F5N863EXHYEQ); only the voided ones are captured again, on both sides.
     """
     if c.env is None or c.env.check != VISUAL:  # a person check's environment leaves the visual check's evidence
+        return
+    if c.before is not None and (r := c.visual) and len(visual.redone(c, head, r.tree)) < len(c.brief.visual):
         return
     kept = c.visual_rounds[-1] if c.visual_rounds else None
     if kept is None or c.before is None:
@@ -217,11 +222,21 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
             sources.append(found)
 
     scope = sorted({p for t in (c.plan.tasks if c.plan else []) for p in t.scope} | set(c.brief.scope))
+    old = c.before if c.before is not None and c.before.head == base else None  # kept for the states it still holds
+    states = [s for s in c.brief.visual if old is None or old.states.get(s.name) != s.version]
     shots, notes = _render(
-        repo, base, c.brief.recipe or e, c.brief.visual, out_for(base), log, installs=worktree.installs(profile, scope),
+        repo, base, c.brief.recipe or e, states, out_for(base), log, installs=worktree.installs(profile, scope),
         widths=widths, where="the merge-base", prepare=prepare, inside=scan, pack=design.pack(),
     )  # fmt: skip
-    return _result(c, base, tree, shots, notes, widths, scans=sources, at=now)
+    new = _result(c, base, tree, shots, notes, widths, scans=sources, at=now)
+    if old is None:
+        return new
+    kept = {s.name for s in c.brief.visual} - {s.name for s in states}
+    return new.model_copy(update={
+        "files": [f for f in old.files if f.rsplit("-", 1)[0] in kept] + new.files,
+        "errors": [x for x in old.errors if x.state in kept] + new.errors,
+        "design": [d for d in old.design if d.kind != "source" and d.state in kept] + new.design,
+    })  # fmt: skip
 
 
 def at_target(  # noqa: PLR0913 - the capture's widths come from the settings, its test copy from its preparation
