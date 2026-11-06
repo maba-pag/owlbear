@@ -357,9 +357,11 @@ def decided(c: Change, q: Question, target: str, note: str, now: datetime) -> No
         return
     if cause.startswith(ROUND):
         if target == "another":
+            q.shaping_version = c.brief.version
             lp.extra += 1
             _mode(c, CHALLENGE)
         elif target == "retry":
+            q.shaping_version = c.brief.version
             old = lp.model_copy(update={"history": [], "ended": "retried"})
             history = [*lp.history, old]
             c.loops[BRIEF] = RoundLoop(subject=BRIEF, attempt=lp.attempt + 1, policy=lp.policy, history=history)
@@ -377,6 +379,7 @@ def decided(c: Change, q: Question, target: str, note: str, now: datetime) -> No
         f.state, f.note, f.reconsider = ("owner-fix" if target == "repair" else "owner-drop"), _flat(note, 2000), ""
     else:
         return
+    q.shaping_version = c.brief.version
     proceed(c, now)
 
 

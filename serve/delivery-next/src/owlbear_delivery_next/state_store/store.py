@@ -18,7 +18,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, InboxItem, parse_rows
 from owlbear_delivery_next.change_contracts.models import FORMAT, Change, Record
-from owlbear_delivery_next.change_flow import answer_kinds, loop
+from owlbear_delivery_next.change_flow import answer_kinds, loop, shaper_wake
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
@@ -316,7 +316,7 @@ class Store:
         lock.check(change.slug)
         self._dir(change.slug)
         with self.db.write() as db:
-            put_record(db, change.slug, change.model_dump_json(indent=1))
+            put_record(db, change.slug, shaper_wake.capture(change).model_dump_json(indent=1))
 
     def slugs(self) -> list[str]:
         """Return every Change of this clone."""
@@ -462,7 +462,7 @@ class Store:
             {"event": "answer-not-applied", "at": at, "question": i.question, "reason": why} for i, why in dropped
         ]
         with self.db.write() as db:
-            put_record(db, change.slug, change.model_dump_json(indent=1))
+            put_record(db, change.slug, shaper_wake.capture(change).model_dump_json(indent=1))
             db.executemany("DELETE FROM inbox WHERE id = ?", [(row[0],) for row in rows])
             for event in events:
                 append_activity(db, slug, json.dumps(event, default=str, sort_keys=True), ACTIVITY_LIMIT)
