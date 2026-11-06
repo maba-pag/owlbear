@@ -1036,3 +1036,14 @@ def test_a_failed_status_read_is_tried_again_while_the_dialog_is_open(tmp_path, 
         finally:
             gone.set()
         expect(modal).to_contain_text("Set up on this Mac only")
+
+
+def test_a_file_two_consents_write_is_said_once(tmp_path, monkeypatch):
+    def writing(*_a: Any, **_k: Any) -> None:
+        for line in ("written: .mcp.json", "written: .mcp.json", "written: .vscode/settings.json"):
+            _a[3](line)
+
+    monkeypatch.setattr(setup, "write_project_files", writing)
+    job = onboarding_job.Job({"id": "j", "plan": {"folder": str(tmp_path)}, "stages": []}, [], lambda _t: None,
+                             lambda: "")  # fmt: skip
+    assert onboarding_stages.files(job) == {"said": ["written: .mcp.json", "written: .vscode/settings.json"]}
