@@ -28,7 +28,7 @@ from owlbear_delivery_next.improvement import (
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.local_system import codebase, maintenance, processes
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import cases_job, retro_job
+from owlbear_delivery_next.machine_host import cases_job, retro_inputs, retro_job
 from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.machine_host.retro_inputs import pinned
@@ -623,7 +623,7 @@ def test_an_unconfirmed_runtime_end_keeps_its_lease_and_ends_the_run_stopped(uni
 def test_a_retro_run_keeps_its_whole_reason(monkeypatch, whole_error, site, tmp_path):
     names, told = whole_error.splitlines(), []
     if site == "a role cannot be read":
-        monkeypatch.setattr(retro_job, "session", lambda _agent: (_ for _ in ()).throw(ValueError(whole_error)))
+        monkeypatch.setattr(retro_inputs, "session", lambda _agent: (_ for _ in ()).throw(ValueError(whole_error)))
     job = _job(Asker(during=lambda _n: spotter_look.UNENDED.get().extend(names)), projects=_finished_change(tmp_path))
     job.seams = dataclasses.replace(job.seams, say=told.append)
     retro_store.request("owner", change="p1:fix-it")
