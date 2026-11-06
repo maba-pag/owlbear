@@ -106,13 +106,16 @@ def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: 
 
 
 def _diagnostic(log: Callable[[dict[str, Any]], None], kind: str, where: str, exc: Exception) -> None:
-    log({"event": kind, "at": datetime.now(UTC).isoformat(timespec="milliseconds"),
-         "reason": f"{where}: {failure(exc)}"})  # fmt: skip
+    log(
+        {
+            "event": kind,
+            "at": datetime.now(UTC).isoformat(timespec="milliseconds"),
+            "reason": f"{where}: {failure(exc)}",
+        }
+    )
 
 
-def _end(
-    proc: subprocess.Popen[bytes], born: float | None, log: Callable[[dict[str, Any]], None], where: str
-) -> None:
+def _end(proc: subprocess.Popen[bytes], born: float | None, log: Callable[[dict[str, Any]], None], where: str) -> None:
     """Kill the command's group unless its id may name a newer one, then collect its output.
 
     An unreaped leader still holds its id, so a command over time or interrupted is killed without a lookup. Once it is
@@ -327,9 +330,7 @@ def recovered(e: Environment, pidfile: Path) -> Environment:
     return e.model_copy(update={"pgid": pid, "pids": e.pids | {pid: st.st_mtime}})
 
 
-def ready(
-    e: Environment, proc: subprocess.Popen[bytes], *, log: Callable[[dict[str, Any]], None]
-) -> Pids | None:
+def ready(e: Environment, proc: subprocess.Popen[bytes], *, log: Callable[[dict[str, Any]], None]) -> Pids | None:
     """Wait for the readiness URL; return the group's PIDs once it answers, else None."""
     end = time.monotonic() + READY_WITHIN
     while time.monotonic() < end and proc.returncode is None:

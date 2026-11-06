@@ -287,19 +287,26 @@ def spotted(feed: Feed | None, act: Callable[[spotter.Spotter], None]) -> None:
             feed.failed(exc)
 
 
-def _failure(
-    watching: Watching, session: str, who: str, exc: Exception, *, starting: bool = False
-) -> dict[str, Any]:
+def _failure(watching: Watching, session: str, who: str, exc: Exception, *, starting: bool = False) -> dict[str, Any]:
     detail = f"not started ({failure(exc)})" if starting else failure(exc)
     reason = f"{who} {watching.slug}: {detail}"
     sys.stderr.write(f"{reason}\n")
-    return {"event": f"{who}-failed", "at": datetime.now(UTC).isoformat(timespec="milliseconds"),
-            "step": watching.step, "session": session, "reason": reason}  # fmt: skip
+    return {
+        "event": f"{who}-failed",
+        "at": datetime.now(UTC).isoformat(timespec="milliseconds"),
+        "step": watching.step,
+        "session": session,
+        "reason": reason,
+    }
 
 
 def opened(
-    watching: Watching | None, own: Path, session: Callable[[], str], agents: Watch,
-    *, log: Callable[[dict[str, Any]], None],
+    watching: Watching | None,
+    own: Path,
+    session: Callable[[], str],
+    agents: Watch,
+    *,
+    log: Callable[[dict[str, Any]], None],
 ) -> Feed | None:
     """The session's watcher; None when the master switch is off, or when it cannot start: the step goes on."""
     if watching is None:

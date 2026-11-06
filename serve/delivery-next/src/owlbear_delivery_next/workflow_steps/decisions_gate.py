@@ -435,10 +435,16 @@ def _reassessed(
 def _record(store: Store, lock: Lock, gate: Gate, now: datetime) -> None:
     if gate.refresh_error:
         c = gate.change
-        store.log(lock, c.slug, {
-            "event": "decisions-refresh-failed", "at": now.isoformat(timespec="milliseconds"),
-            "step": f"{c.step.kind}:{c.step.task}", "reason": gate.refresh_error,
-        })
+        store.log(
+            lock,
+            c.slug,
+            {
+                "event": "decisions-refresh-failed",
+                "at": now.isoformat(timespec="milliseconds"),
+                "step": f"{c.step.kind}:{c.step.task}",
+                "reason": gate.refresh_error,
+            },
+        )
 
 
 def launch(store: Store, c: Change, now: datetime, *, lock: Lock) -> tuple[Change, bool]:

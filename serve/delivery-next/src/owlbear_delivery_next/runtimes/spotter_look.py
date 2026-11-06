@@ -141,8 +141,11 @@ class Spent:
                 usage = {"error": read_error}
         if (not usage or "error" in usage) and part.calls:  # unread: its calls' sum, until the runtime's log says
             spent = part.calls_sum / credit_meter.NANO
-            usage = {"credits": spent, "models": {self.model: {"credits": spent}},
-                     "incomplete": read_error or "not read"}  # fmt: skip
+            usage = {
+                "credits": spent,
+                "models": {self.model: {"credits": spent}},
+                "incomplete": read_error or "not read",
+            }
         elif not usage:
             usage = {"error": "not read"}
         if not confirmed and "error" not in usage:

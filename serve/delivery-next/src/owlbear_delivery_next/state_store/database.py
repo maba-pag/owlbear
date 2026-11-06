@@ -55,11 +55,15 @@ WATCH = (  # the watcher's reports (W1a): added to any database on open, which o
     "CREATE INDEX IF NOT EXISTS watch_slug ON watch(slug, id)",
 )
 RETRY = 0.05  # seconds between tries of a bounded write's fence
-DIAGNOSTIC_EVENTS = frozenset({
-    "watcher-failed", "spotter-failed", "check-command-failed",
-    "check-observation-failed", "decisions-refresh-failed",
-})
-_ACTIVITY_JSON = "CASE WHEN json_valid(event) THEN event ELSE '{}' END"
+DIAGNOSTIC_EVENTS = frozenset(
+    {
+        "watcher-failed",
+        "spotter-failed",
+        "check-command-failed",
+        "check-observation-failed",
+        "decisions-refresh-failed",
+    }
+)
 _local_devices: set[int] = set()
 
 
@@ -419,20 +423,21 @@ def append_activity(connection: sqlite3.Connection, slug: str, line: str, keep: 
         kind = entry.get("event")
         if isinstance(kind, str) and kind in DIAGNOSTIC_EVENTS:
             connection.execute(
-                f"DELETE FROM activity WHERE slug = ? AND json_extract({_ACTIVITY_JSON}, '$.event') = ? "
-                f"AND json_extract({_ACTIVITY_JSON}, '$.reason') = ? "
-                f"AND COALESCE(json_extract({_ACTIVITY_JSON}, '$.session'), '') = ? "
-                f"AND COALESCE(json_extract({_ACTIVITY_JSON}, '$.step'), '') = ? "
-                f"AND COALESCE(json_extract({_ACTIVITY_JSON}, '$.check'), '') = ?",
+                "WITH decoded AS (SELECT id, CASE WHEN json_valid(event) THEN event ELSE '{}' END AS body "
+                "FROM activity WHERE slug = ?) DELETE FROM activity WHERE id IN (SELECT id FROM decoded "
+                "WHERE json_extract(body, '$.event') = ? AND json_extract(body, '$.reason') = ? "
+                "AND COALESCE(json_extract(body, '$.session'), '') = ? "
+                "AND COALESCE(json_extract(body, '$.step'), '') = ? "
+                "AND COALESCE(json_extract(body, '$.check'), '') = ?)",
                 (slug, kind, entry["reason"], *(entry.get(key) or "" for key in ("session", "step", "check"))),
             )
     connection.execute("INSERT INTO activity(slug, at, event) VALUES (?, ?, ?)", (slug, str(at) if at else None, line))
     if keep is not None:
-        kinds = tuple(DIAGNOSTIC_EVENTS)
-        marks = ", ".join("?" for _ in kinds)
-        ordinary = f"COALESCE(json_extract({_ACTIVITY_JSON}, '$.event'), '') NOT IN ({marks})"
         connection.execute(
-            f"DELETE FROM activity WHERE slug = ? AND {ordinary} AND id NOT IN "
-            f"(SELECT id FROM activity WHERE slug = ? AND {ordinary} ORDER BY id DESC LIMIT ?)",
-            (slug, *kinds, slug, *kinds, keep),
+            "WITH ordinary AS (SELECT id FROM activity WHERE slug = ? AND "
+            "COALESCE(json_extract(CASE WHEN json_valid(event) THEN event ELSE '{}' END, '$.event'), '') "
+            "NOT IN (SELECT value FROM json_each(?))) "
+            "DELETE FROM activity WHERE id IN (SELECT id FROM ordinary) AND id NOT IN "
+            "(SELECT id FROM ordinary ORDER BY id DESC LIMIT ?)",
+            (slug, json.dumps(sorted(DIAGNOSTIC_EVENTS)), keep),
         )

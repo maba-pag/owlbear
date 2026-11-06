@@ -124,7 +124,9 @@ def unread(done: session_result.Run) -> bool:
     A known wrong model is not either: it reruns once after a wait (TD-94).
     """
     confirmed = done.termination and done.termination.confirmed
-    voided = done.ending in {"read-only-write", "shared-git-changed", "read-only-unread"} or done.model_check == "mismatch"
+    voided = (
+        done.ending in {"read-only-write", "shared-git-changed", "read-only-unread"} or done.model_check == "mismatch"
+    )
     return bool(done.usage_unread and confirmed and not voided)
 
 

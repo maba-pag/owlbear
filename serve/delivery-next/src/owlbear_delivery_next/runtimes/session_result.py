@@ -189,12 +189,16 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
     t = run.termination or Termination(confirmed=False, problems=("termination did not run",))
     if run.ending == "read-only-unread":
         text = f"{run.detail}\nThe result was voided; no shared Git setting was restored. "
-        text += "Resolve the inspection problem and check the repository's shared Git config and hooks before rerunning."
+        text += (
+            "Resolve the inspection problem and check the repository's shared Git config and hooks before rerunning."
+        )
         if not t.confirmed:
             text += f"\n{unverified(t)}. A rerun waits until the previous processes are confirmed gone."
         cause = cause_key(ErrorKind.STATE, enclosing, READ_ONLY_UNREAD)
         question = Question(
-            step=enclosing, text=text, cause=cause,
+            step=enclosing,
+            text=text,
+            cause=cause,
             options=[Option(id="retry", label="Resolved: rerun this step", next="retry")],
         )
         return StepResult(exit=Exit.ASK, reason=run.detail, question=question)

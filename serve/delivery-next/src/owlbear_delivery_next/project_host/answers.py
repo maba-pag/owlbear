@@ -127,7 +127,8 @@ def _checked(store: Store, c: Change, q: Question, body: AnswerBody) -> tuple[in
     if q.repair and ((now_open := loop.open_question(c)) is None or now_open.id != q.id):
         return 409, "the Change moved on since this round gate asked; reload"
     anyway = (
-        bool(q.options) and all(o.next == "retry" for o in q.options)
+        bool(q.options)
+        and all(o.next == "retry" for o in q.options)
         and q.cause != failures.cause_key(ErrorKind.STATE, q.step, failures.READ_ONLY_UNREAD)
     )
     # Delivery's own questions are settled by an option; a worker's question also takes the owner's own words
