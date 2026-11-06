@@ -224,7 +224,7 @@ def _revise(
         return 409, {"errors": [f"change: {exc}; try again"]}
     except StoreError as exc:
         return 409, {"errors": [f"change: {failure(exc)}; try again"]}
-    capturing = {"capturing": True} if c.shaped and c.shaped.requested else {}
+    capturing = {"capturing": True} if c.shaped and c.shaped.result is None else {}
     return 200, {"change": c.handle, "version": c.brief.version, "slug": slug} | capturing
 
 

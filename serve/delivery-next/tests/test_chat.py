@@ -285,7 +285,7 @@ def test_a_brief_with_clicks_waits_for_its_capture_and_a_declared_test_preparati
     with store.lock(slug) as lock:  # the capture ended with its reason, as the runner writes it
         change = store.read(slug)
         ended = VisualResult(head="", tree="", findings=["dark: its steps need a test preparation"], at=NOW)
-        change.shaped = change.shaped.model_copy(update={"requested": False, "result": ended})
+        change.shaped = change.shaped.model_copy(update={"result": ended})
         store.write(lock, change)
     refused = c.post(f"/api/next/changes/{slug}/approve-brief", json={"version": 1})
     assert (refused.status_code, "dark" in refused.json()["detail"]) == (409, True)

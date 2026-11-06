@@ -49,7 +49,6 @@ class JudgeConflict(_Strict):
     id: str  # unique within its round, such as ``conflict-1``
     state: str
     width: int | None = None
-    image: str = ""
     rule: str  # the design section or detector rule asking for the change
     departs: str  # the state, brief criterion (``AC-N``) or owner's criterion (``owner-N``) it departs from
     text: str
@@ -201,6 +200,4 @@ class ShapingCapture(_Strict):
     """The capture of a shaping draft's current pages (D-01M61V2GR0C6JV2R6KJ0WR4PNB); its files live under its key."""
 
     key: str  # what it renders: the brief's recipe, preparation option and states' paths and steps
-    requested: bool = True  # a runner captures it; done once its result is written
-    option: str = ""  # the declared preparation option it runs on
-    result: VisualResult | None = None  # the pictures, or why a state has none
+    result: VisualResult | None = None  # the pictures, or why a state has none; None while a runner captures it

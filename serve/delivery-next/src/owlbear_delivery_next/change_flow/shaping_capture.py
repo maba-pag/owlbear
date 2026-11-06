@@ -42,9 +42,9 @@ def requested(c: Change) -> ShapingCapture | None:
     if not needed(b):
         return None
     k = key(b)
-    if s is not None and s.key == k and (s.requested or (s.result is not None and not s.result.findings)):
+    if s is not None and s.key == k and (s.result is None or not s.result.findings):
         return s  # still capturing, or captured whole: the same pictures
-    return ShapingCapture(key=k, option=b.preparation)
+    return ShapingCapture(key=k)
 
 
 def starting(b: Brief) -> list[str]:
@@ -61,7 +61,7 @@ def starting(b: Brief) -> list[str]:
 
 def owed(c: Change) -> bool:
     """Whether a runner captures the draft's pages now: requested while the Change is shaped."""
-    return c.step.kind == StepKind.SHAPE and not c.finished_at and c.shaped is not None and c.shaped.requested
+    return c.step.kind == StepKind.SHAPE and not c.finished_at and c.shaped is not None and c.shaped.result is None
 
 
 def waiting(c: Change) -> str:
@@ -69,4 +69,4 @@ def waiting(c: Change) -> str:
     b, s = c.brief, c.shaped
     if not needed(b):
         return ""
-    return CAPTURING if s is None or s.key != key(b) or s.requested else ""
+    return CAPTURING if s is None or s.key != key(b) or s.result is None else ""

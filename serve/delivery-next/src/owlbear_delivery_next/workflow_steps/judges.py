@@ -364,7 +364,6 @@ def design(runs: Sequence[Run], images: Sequence[Image], role: RoleModel, now: d
             id=f"conflict-{n}",
             state=named[k.image].state,
             width=named[k.image].width,
-            image=k.image,
             rule=k.rule,
             departs=k.departs,
             text=k.problem,

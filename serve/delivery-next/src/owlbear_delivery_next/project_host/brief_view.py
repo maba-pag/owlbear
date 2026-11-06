@@ -69,11 +69,10 @@ def captured(c: Change) -> dict[str, Any] | None:
     s = c.shaped
     if s is None or not shaping_capture.needed(c.brief):
         return None
-    if shaping_capture.waiting(c) or s.result is None:
+    if shaping_capture.waiting(c) or (r := s.result) is None:
         return {"running": True}
-    r = s.result
     return {"running": False, "head": r.head, "at": r.at.isoformat(), "widths": r.widths, "files": r.files,
-            "findings": r.findings, "option": s.option}  # fmt: skip
+            "findings": r.findings}  # fmt: skip
 
 
 def placed(store: Store, c: Change) -> dict[str, Any]:
