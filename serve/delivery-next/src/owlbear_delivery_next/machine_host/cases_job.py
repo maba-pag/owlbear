@@ -290,11 +290,17 @@ class CasesJob:
             lim = limits()
             if kind in {"regression", "compare"}:
                 if lim["replay"] is None or lim["look"] is None:
-                    keys = tuple(key for name, key in (
-                        ("replay", "machine.replay_run_credit_limit"), ("look", "spotter.look_credit_limit")
-                    ) if lim[name] is None)
-                    self._ended(request, "refused: the replay run's or a look's credit limit is unset",
-                                settings_unset=keys)  # fmt: skip
+                    keys = tuple(
+                        key
+                        for name, key in (
+                            ("replay", "machine.replay_run_credit_limit"),
+                            ("look", "spotter.look_credit_limit"),
+                        )
+                        if lim[name] is None
+                    )
+                    self._ended(
+                        request, "refused: the replay run's or a look's credit limit is unset", settings_unset=keys
+                    )
                     return
                 spot = role("spotter")
                 meter = self._metered(lim["replay"], "replay-run")
@@ -302,8 +308,11 @@ class CasesJob:
                 self._run(case_replay.run(request, looked, meter, lim["look"], self.halt))
             elif kind == "check":
                 if lim["retro"] is None:
-                    self._ended(request, "refused: the Retro run credit limit is unset",
-                                settings_unset=("machine.retro_run_credit_limit",))  # fmt: skip
+                    self._ended(
+                        request,
+                        "refused: the Retro run credit limit is unset",
+                        settings_unset=("machine.retro_run_credit_limit",),
+                    )
                     return
                 reviewer = role("retro-review")
                 meter = self._metered(lim["retro"], "retro-run")

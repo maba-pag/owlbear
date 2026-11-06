@@ -370,7 +370,8 @@ class RetroJob:
                 if why := ctx.retired() or (f"refused: {why}" if why else ""):
                     raise StoppedError(why)
                 if ctx.new and (why := self.seams.blocked(ctx.uid)):  # set when it opened, unset since? (#808)
-                    raise StoppedError(f"refused: {why.text}", held=True, settings_unset=why.keys)
+                    msg = f"refused: {why.text}"
+                    raise StoppedError(msg, held=True, settings_unset=why.keys)
                 ctx.admit()  # rechecked once, by the first admission that gets this far
                 if lease:
                     begun = self.maintenance.begin(SLOT, key, KIND, "")  # durable before the session starts

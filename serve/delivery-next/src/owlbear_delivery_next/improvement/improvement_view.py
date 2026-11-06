@@ -309,8 +309,10 @@ def _redrafts() -> dict[str, dict[str, Any]]:
     found: dict[str, dict[str, Any]] = {}
     for r in store.runs(ALL_RUNS, synthetic=True):
         if (unit := str(r.get("unit") or "")).startswith("proposal:"):
-            found.setdefault(unit.removeprefix("proposal:"),
-                             {k: r[k] for k in ("state", "result", "why", "settings_unset") if k in r})  # fmt: skip
+            found.setdefault(
+                unit.removeprefix("proposal:"),
+                {k: r[k] for k in ("state", "result", "why", "settings_unset") if k in r},
+            )
     return found | {q["redraft"]: {"state": "queued"} for q in store.queued() if q.get("redraft")}
 
 
@@ -388,8 +390,12 @@ def followup(
         return {"state": ""}
     if run.get("followup"):
         return {"state": "saved", "entry": run["followup"]}
-    return {"state": run.get("state") or "", "result": run.get("result") or "", "why": run.get("why") or "",
-            **{k: run[k] for k in ("settings_unset",) if k in run}}  # fmt: skip
+    return {
+        "state": run.get("state") or "",
+        "result": run.get("result") or "",
+        "why": run.get("why") or "",
+        **{k: run[k] for k in ("settings_unset",) if k in run},
+    }
 
 
 def change_detail(pid: str, slug: str, records: list[dict[str, Any]], grades: list[dict[str, Any]]) -> dict[str, Any]:

@@ -56,6 +56,7 @@ class StoppedError(Exception):
         self.result, self.held = result, held
         self.settings_unset = settings_unset
 
+
 class WaitingError(Exception):
     """No call may start now (pause, fence, stop): the run waits at its cursor with *why*."""
 

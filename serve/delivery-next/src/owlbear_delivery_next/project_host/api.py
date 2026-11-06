@@ -186,8 +186,13 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     if q := loop.open_question(c):
         options = [o.model_dump(include={"id", "label"}) for o in held.offered(store, c, q)]
         where = "chat" if loop.ordinary(q) else "changes-page"
-        out["question"] = {"id": f"{c.handle or slug}.{q.id}", "text": q.text, "cause": q.cause,
-                           "options": options, "answer_in": where}  # fmt: skip
+        out["question"] = {
+            "id": f"{c.handle or slug}.{q.id}",
+            "text": q.text,
+            "cause": q.cause,
+            "options": options,
+            "answer_in": where,
+        }
     return out
 
 
