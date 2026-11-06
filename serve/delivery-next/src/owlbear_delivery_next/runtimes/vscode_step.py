@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from urllib.parse import unquote
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.runtimes.ahp import ROOT, HostError
 from owlbear_delivery_next.runtimes.vscode_contract import End, Hooks, Outcome, StepSpec
 from owlbear_delivery_next.runtimes.window_files import SettingsError
@@ -117,7 +118,7 @@ class Step:
         try:
             self.settings(self.spec.folder, self.spec.model)
         except SettingsError as exc:
-            return Outcome("settings-refused", str(exc)), None
+            return Outcome("settings-refused", failure(exc)), None
         before = self._sessions()
         self.launch(["code", "chat", "-m", self.spec.picker, self.spec.bootstrap], self.spec.folder)
         bound = self._bind(before, self.clock() + bind_limit)
