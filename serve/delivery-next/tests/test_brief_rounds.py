@@ -187,6 +187,13 @@ def test_a_save_after_the_loop_ended_needs_one_more_round_on_the_changes(shaping
     assert (c.brief.challenged, c.loops[BRIEF].round, c.loops[BRIEF].ended) == (2, 2, "clean")
     assert (c.brief.approve_if_clean, c.brief.approved_version) == (2, None)  # the host approves it on its next pass
     assert c.loops[BRIEF].verdicts == [Verdict(round=1, version=1), Verdict(round=2, version=2)]
+    assert brief_starts.approving(c)
+    shaping.save(title="Add a farewell, kindly")
+    assert not brief_starts.approving(shaping.change())  # a later save leaves it on its own version
+    assert shaping.approve(3).json() == {"accepted": "brief-challenge"}
+    shaping.verdicts += [verdict("AC-1")]
+    c = shaping.step()
+    assert (c.brief.approve_if_clean, brief_starts.approving(c)) == (None, False)  # findings: the shaper revises
 
 
 def test_a_version_saved_after_the_loop_ended_waits_for_the_challenge_delivery_starts(shaping):
@@ -204,24 +211,6 @@ def test_a_version_saved_after_the_loop_ended_waits_for_the_challenge_delivery_s
     assert not brief_starts.waiting(shaping.change())  # the loop ended on this version: approvable
     shaping.save(title="Add a farewell, kindly")
     assert brief_starts.waiting(shaping.change())
-
-
-def test_the_owners_approval_holds_only_through_a_clean_verdict_on_its_version(shaping):
-    shaping.save()
-    shaping.ask_challenge(1)
-    shaping.verdicts += [verdict()]
-    shaping.step()
-    shaping.save(title="Add a farewell")
-    assert shaping.approve(2).json() == {"accepted": "brief-challenge"}  # the round now, his approval if clean (#986)
-    shaping.verdicts += [verdict()]
-    c = shaping.step()
-    assert (c.brief.approve_if_clean, brief_starts.approving(c)) == (2, True)
-    shaping.save(title="Add a farewell, kindly")
-    assert not brief_starts.approving(shaping.change())  # a later save leaves it on its own version
-    assert shaping.approve(3).json() == {"accepted": "brief-challenge"}
-    shaping.verdicts += [verdict("AC-1")]
-    c = shaping.step()
-    assert (c.brief.approve_if_clean, brief_starts.approving(c)) == (None, False)  # findings: the shaper revises
 
 
 def test_the_last_allowed_round_with_many_findings_asks_the_owner(shaping):
