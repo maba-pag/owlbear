@@ -1977,8 +1977,8 @@ def test_a_long_unverified_session_end_shows_whole_on_changes(tmp_path: Path, mo
         runner._step(store, lock, c, c.step, path)  # noqa: SLF001
     why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
     said = [
-        " ".join(f"Building stopped: {why}; the session failed".split()),  # #971: and the session's own error
-        " ".join(f"Tried to force the session to stop: {stopped}".split()),
+        f"Building stopped: {why}; the session failed",  # #971: and the session's own error
+        f"Tried to force the session to stop: {stopped}",
     ]
     present = [True]  # the host finds process 9 until the owner ends it
     monkeypatch.setattr(host_leftovers, "survivors", lambda *_a: {9: ""} if present[0] else {})
@@ -1989,7 +1989,7 @@ def test_a_long_unverified_session_end_shows_whole_on_changes(tmp_path: Path, mo
         lines = page.locator("#detail .log li > span")
         expect(page.locator("#detail")).to_contain_text("stopped: processes still present: 9")
         expect(lines).to_have_count(2)
-        assert lines.all_text_contents() == said  # Recent activity collapses whitespace
+        assert lines.all_text_contents() == said
         assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
         present[0] = False
         expect(page.locator("#detail").get_by_text("Stopped", exact=True)).to_have_count(0, timeout=15000)
@@ -2032,7 +2032,7 @@ def test_a_failed_sdk_step_s_whole_error_shows_in_recent_activity(
         opened(page, base, alpha.id, "flip")
         lines = page.locator("#detail .log li > span")
         expect(lines.first).to_contain_text("DATA-MARK")
-        assert lines.all_text_contents() == [" ".join(f"Building will try again: {detail}".split())]
+        assert lines.all_text_contents() == [f"Building will try again: {detail}"]
         assert broke == []
 
 
@@ -2073,7 +2073,7 @@ def test_a_crashed_runner_s_whole_error_shows_in_recent_activity(
         expect(page.locator("#detail")).to_contain_text("Recent activity")
         expect(page.locator("#detail")).to_contain_text("Build 1/1 · the runner failed")
         lines = page.locator("#detail .log li > span")
-        assert lines.all_text_contents() == [" ".join(f"Runner failed: {reason}".split())]  # whitespace collapsed
+        assert lines.all_text_contents() == [f"Runner failed: {reason}"]
         assert broke == []
     assert [e["reason"] for e in store.events("flip") if e.get("event") == "runner-failed"] == [reason]
 
@@ -3995,8 +3995,6 @@ def test_a_long_undo_failure_is_asked_whole(tmp_path: Path, monkeypatch, pds, wh
 @pytest.mark.browser
 def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monkeypatch, pds, whole_error: str) -> None:
     """#895 K2: a labelling failure, gh's whole multiline stderr, reads whole in the Change's recent activity."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     alpha = registry.register(clone(tmp_path / "alpha", "c1"))
     store = Store.open(Path(alpha.path))
     ran = []
@@ -4028,7 +4026,7 @@ def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monk
         said = errors(page)
         opened(page, url, alpha.id, "c1")
         line = page.locator("ol.log > li", has_text="Could not label PR #7").locator(":scope > span")
-        expect(line).to_have_text(" ".join(f"Could not label PR #7 with owlbear: {reason}".split()))
+        assert line.text_content() == f"Could not label PR #7 with owlbear: {reason}"
         assert said == []
 
 
@@ -4036,8 +4034,6 @@ def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monk
 def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
     """#921: a recorded reason, message, cleanup, error or notice shows whole with its paths; the log's own wording
     names a file."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     alpha = registry.register(clone(tmp_path / "alpha", "c1"))
     store = Store.open(Path(alpha.path))
     kept = f"{whole_error}\nkept /Users/o/app/big/data.bin beside big/cache.db"
@@ -4084,7 +4080,7 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
         opened(page, url, alpha.id, "c1")
         for start, line in lines.items():
             shown = page.locator("ol.log > li", has_text=start).locator(":scope > span")
-            expect(shown).to_have_text(" ".join(line.split()))
+            assert shown.text_content() == line
         assert said == []
 
 
