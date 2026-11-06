@@ -60,7 +60,16 @@ class Updater:
         """
         why = self.unstartable()
         start = {"unpruned": self.unpruned, "unmigrated": self.unmigrated}
-        return self.read() | self.steps.read() | {"startable": not why, "reason": why} | start
+        return (
+            self.read()
+            | self.steps.read()
+            | {
+                "startable": not why,
+                "reason": why,
+                "automatic_errors": self.machine.auto.problems(),
+            }
+            | start
+        )
 
     def unstartable(self) -> str:
         """Why Start update now refuses now (D-01M63CC7CYSMN156SJEBVFAXTQ): an update, a stop or work running."""
@@ -71,7 +80,11 @@ class Updater:
             return "OwlBear is stopping"
         if self.machine.ending:
             return "OwlBear stops once the running steps end"
-        if left := self.machine.busy():
+        try:
+            left = self.machine.busy()
+        except Exception as exc:  # noqa: BLE001 - a failed inspection is a visible refusal, never permission
+            return f"Work could not be inspected: {failure(exc)}"
+        if left:
             more = f" and {len(left) - SHOWN} more" if len(left) > SHOWN else ""
             return f"Work runs now: {'; '.join(left[:SHOWN])}{more}"
         return ""
@@ -117,6 +130,8 @@ class Updater:
         if self.auto and self.machine.auto.uses != self.uses:
             return "postponed: you used OwlBear"
         if self.auto and not self.machine.auto.permitted():
+            if problems := self.machine.auto.problems():
+                return "postponed: automatic updating cannot continue: " + "; ".join(problems)
             return "postponed: updating by itself is off now"
         return "postponed: work started" if self.auto and working else ""
 
