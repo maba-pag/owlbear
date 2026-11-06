@@ -31,8 +31,7 @@ def shown(store: Store, c: Change) -> dict[str, Any]:
         "approved_at": b.approved_at.isoformat() if b.approved_at else None,
         "ui": b.ui,
         "visual": [s.model_dump() for s in b.visual],
-        "unapprovable": brief_rounds.approvable(c).replace(picks.RETRY, PICK_AGAIN),  # TD-249: why approve is off
-        **approve(c),  # #986: Approve's own state on the page; the chat reads approvable as before
+        **approve(c),  # TD-249, #986: why Approve is off; the shaping chat reads brief_rounds.approvable as before
         "revising": brief_rounds.revising(c),  # the findings the shaper revises this version for
         "unrevisable": unrevisable(c),  # why no new shaping chat may revise the saved brief
         "unreviewed": brief_rounds.unreviewed(c),  # TD-255: approving needs the owner's tick
