@@ -85,6 +85,7 @@ class Run:
     model_check: ModelCheck = "unknown"  # only usage metrics prove the model; a mismatch reruns once after a wait
     tool_calls: dict[str, dict[str, int]] = field(default_factory=dict)  # each tool's tally fields (C-28 T8)
     wrong: dict[str, int] = field(default_factory=dict)  # its wrong tool choices by kind (``tool_use.WRONG``)
+    audit_rejection: str = ""  # the last refused audit submission, independent of how the session later ends
 
     def count(self, kind: str) -> None:
         """Count one wrong tool choice of *kind*."""

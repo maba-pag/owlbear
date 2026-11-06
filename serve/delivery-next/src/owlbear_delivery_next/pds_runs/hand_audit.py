@@ -74,12 +74,18 @@ class Hand:
     def read(self) -> dict[str, Any]:
         """The last hand audit: ``none``, ``running``, ``done`` or ``failed``; one lost while running failed."""
         try:
-            kept = json.loads(self.path.read_text(encoding="utf-8"))
+            raw = self.path.read_bytes()
         except FileNotFoundError:
             return {"state": "none"}
+        try:
+            kept = json.loads(raw.decode("utf-8"))
         except ValueError as exc:
             return _failed(
-                {"state": "failed", "reason": f"the saved audit cannot be read: {type(exc).__name__}: {exc}"}
+                {
+                    "state": "failed",
+                    "reason": f"the saved audit {self.path} cannot be read: {failure(exc)}\n"
+                    f"saved audit:\n{raw.decode(errors='replace')}",
+                }
             )
         if kept.get("state") == "running" and not self.busy():
             return _failed({**kept, "state": "failed", "reason": INTERRUPTED})

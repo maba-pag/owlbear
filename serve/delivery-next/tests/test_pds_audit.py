@@ -394,7 +394,7 @@ UNENDED += "termination unverified: "
     [
         (
             {"ending": "error", "payload": None, "detail": "quota"},
-            "the auditor submitted no report: ended error; quota",
+            "no usable audit report was accepted: ended error; quota",
         ),
         ({"termination": Termination(confirmed=False, survivors=(4242,))}, f"{UNENDED}processes 4242 still present"),
         ({"termination": None}, f"{UNENDED}termination did not run"),
@@ -464,7 +464,10 @@ def test_a_report_refused_until_the_limit_ends_the_session_with_its_whole_errors
     gate = Gate(cfg, run := Run("s"), lambda **_e: None, lambda: None)
     for _ in range(3):
         text, ok = gate.call(audit_tools.SUBMIT, AuditResult(report=json.dumps(report(result=whole_error))))
-    expected = f"report: summary/result: {whole_error!r} is not one of ['completed', 'partial', 'failed']"
+    expected = (
+        f"report: summary/result: {whole_error!r} is not one of ['completed', 'partial', 'failed']\n"
+        f"submitted audit report:\n{json.dumps(report(result=whole_error))}"
+    )
     assert (ok, run.ending, run.detail) == (False, "invalid", expected)
     assert text == f"Rejected. Fix each field, then call again:\n- {expected}"
 
@@ -631,10 +634,10 @@ def test_a_stopped_audit_keeps_its_whole_reason(sources, whole_error, cause):
         try:
             json.loads(whole_error)
         except ValueError as exc:
-            why = f"the audit report is not JSON: {type(exc).__name__}: {exc}"
+            why = f"the audit report is not JSON: {type(exc).__name__}: {exc}\nsubmitted audit report:\n{whole_error}"
     elif cause == "ended":
         run = {"ending": "error", "payload": None, "detail": whole_error}
-        why = f"the auditor submitted no report: ended error; {whole_error}"
+        why = f"no usable audit report was accepted: ended error; {whole_error}"
     elif cause == "usage":
         run = {"usage_unread": whole_error}
         why = f"the auditor's model is unknown: {whole_error}"
@@ -648,7 +651,10 @@ def test_a_stopped_audit_keeps_its_whole_reason(sources, whole_error, cause):
     else:
         body = {**report(), "summary": {"result": whole_error}}
         [error] = jsonschema.Draft202012Validator(SCHEMA).iter_errors(body)
-        why = f"the audit report breaks its schema at summary/result: {error.message}"
+        why = (
+            f"the audit report breaks its schema at summary/result: {error.message}\n"
+            f"submitted audit report:\n{json.dumps(body)}"
+        )
         assert len(why) > 300  # longer than the cut it had
     verdict = audited(sources, body, **run).verdict
     assert (verdict.outcome, verdict.reason) == ("stop", why)
@@ -713,7 +719,7 @@ def test_an_unreadable_saved_audit_answers_and_logs_its_whole_reason(tmp_path, c
     try:
         json.loads(whole_error)
     except ValueError as exc:
-        reason = f"the saved audit cannot be read: {type(exc).__name__}: {exc}"
+        reason = f"the saved audit {h.path} cannot be read: {type(exc).__name__}: {exc}\nsaved audit:\n{whole_error}"
     caplog.set_level(logging.WARNING, logger=hand_audit.__name__)
 
     assert http.get("/pds/audit").json() == {"state": "failed", "reason": reason}
