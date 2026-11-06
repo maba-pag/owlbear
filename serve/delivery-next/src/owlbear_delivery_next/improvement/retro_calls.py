@@ -56,12 +56,6 @@ class StoppedError(Exception):
         self.result, self.held = result, held
         self.settings_unset = settings_unset
 
-    @classmethod
-    def unset(cls, why: Refusal) -> StoppedError:
-        """Refused before any work because *why* blocks its settings (#808): held, not failed."""
-        return cls(f"refused: {why.text}", held=True, settings_unset=why.keys)
-
-
 class WaitingError(Exception):
     """No call may start now (pause, fence, stop): the run waits at its cursor with *why*."""
 
