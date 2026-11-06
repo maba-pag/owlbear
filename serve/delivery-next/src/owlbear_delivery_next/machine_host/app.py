@@ -344,7 +344,11 @@ def _stop_state(machine: Machine) -> dict[str, Any]:
     try:
         left = machine.left()
     except Exception as exc:  # noqa: BLE001 - presentation must not turn a failed inspection into empty work
-        why = "\n".join(dict.fromkeys(filter(None, (machine.unstopped, failure(exc)))))
+        fresh = failure(exc)
+        why = "\n".join(dict.fromkeys(filter(None, (machine.unstopped, fresh))))
+        if fresh != machine.unstopped:
+            machine.say(f"looking whether OwlBear may stop failed: {fresh}")
+        machine.unstopped = fresh
         return {"left": None, "stop_error": why}
     return {"left": left, "stop_error": machine.unstopped}
 
