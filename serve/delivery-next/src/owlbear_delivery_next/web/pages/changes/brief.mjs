@@ -175,8 +175,8 @@ function approveButton(d) {
 
 // When Delivery starts a waiting version's challenge, in the owner's time; a pause of Delivery holds it until Resume.
 function startsWhen(d) {
-  const t = d.brief.starts_at ? new Date(d.brief.starts_at) : null;
-  const at = t ? `at ${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`
+  const at = d.brief.starts_at  // HH:MM in the owner's time, as the status line says it
+    ? `at ${new Date(d.brief.starts_at).toLocaleTimeString("en-GB", { timeStyle: "short" })}`
     : "after the wait set in Settings";
   return machineState()?.paused ? `${at}, after you resume` : at;
 }
