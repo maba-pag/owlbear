@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_contracts.models import VISUAL, BriefRecipe, Environment, StepKind
 from owlbear_delivery_next.change_contracts.visual_records import VisualResult
 from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.change_flow.amend_apply import STALE
 from owlbear_delivery_next.workflow_steps import check, design, visual
 
 if TYPE_CHECKING:
@@ -48,11 +49,12 @@ def reset(c: Change, head: str) -> None:
     The last round's "before" stays only while the owner's answer settles that round (his decision, or his waiver of
     the model check) for the same head and brief version, which captures nothing again. After an amendment that
     voided some states of a passed check, the states it keeps keep their "after" and so their "before"
-    (D-01M6GBBY578CY7F5N863EXHYEQ); only the voided ones are captured again, on both sides.
+    (D-01M6GBBY578CY7F5N863EXHYEQ); the voided ones, as the "after" capture takes them, are marked for both sides.
     """
     if c.env is None or c.env.check != VISUAL:  # a person check's environment leaves the visual check's evidence
         return
-    if c.before is not None and (r := c.visual) and len(visual.redone(c, head, r.tree)) < len(c.brief.visual):
+    if c.before is not None and (r := c.visual) and len(redo := visual.redone(c, head, r.tree)) < len(c.brief.visual):
+        c.before = c.before.model_copy(update={"states": c.before.states | {s.name: STALE for s in redo}})
         return
     kept = c.visual_rounds[-1] if c.visual_rounds else None
     if kept is None or c.before is None:

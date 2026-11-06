@@ -147,13 +147,18 @@ def test_due_once_per_visual_check_environment_unless_the_owners_answer_settles_
         c = ui.model_copy(update={"before": taken, "visual_rounds": rounds, "env": env})
         before.reset(c, head)
         assert (c.before is None) is due
-    about = VisualState(name="about", path="/about.html", expect="About us", version=2)  # an amendment voided it
+    about = VisualState(name="about", path="/about.html", expect="About us")
     amended = ui.model_copy(update={"brief": ui.brief.model_copy(update={"visual": [HOME, about]})})
-    amended.before = held = taken.model_copy(update={"states": {"home": 1, "about": 1}})
-    amended.visual = VisualResult(head="h", tree="t", states={"home": 1, "about": 1}, passed=True, at=NOW,
+    amended.before = taken.model_copy(update={"states": {"home": 1, "about": 1}})
+    # an amendment voided about's "after", its wording unchanged: the challenger named it
+    amended.visual = VisualResult(head="h", tree="t", states={"home": 1, "about": 0}, passed=True, at=NOW,
                                   criteria=evidence.criteria(amended))  # fmt: skip
     before.reset(amended, "h")  # D-01M6GBBY578CY7F5N863EXHYEQ: home keeps its "after" and its "before"
-    assert (amended.before, before.due(amended)) == (held, True)  # only about is captured again
+    assert (amended.before.identity(), amended.before.states, before.due(amended)) == (
+        taken.identity(),
+        {"home": 1, "about": 0},
+        True,
+    )  # only about is captured again, on both sides
 
 
 def test_the_states_are_rendered_at_the_merge_base_with_the_same_recipe_and_everything_is_removed(ui, tmp_path):
