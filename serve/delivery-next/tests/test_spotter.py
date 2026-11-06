@@ -41,7 +41,7 @@ from owlbear_delivery_next.improvement import (
 from owlbear_delivery_next.improvement.events import Kept
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import sdk_adapter, spend_reconcile, spotter_look, step_decisions
+from owlbear_delivery_next.runtimes import sdk_adapter, spend_reconcile, spotter_look, step_decisions, step_tools
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
 from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter
@@ -1689,9 +1689,23 @@ def test_a_submit_waits_for_a_hand_off_look_that_first_waited_for_a_slot_and_tak
     """One budget holds the submit: the look's wait for a slot, its answer and a teardown stage (#919)."""
     monkeypatch.setattr(spotter, "LOOK", 0.5)
     monkeypatch.setattr(spotter, "TEARDOWN", 0.05)
+    ready, release, judged = asyncio.Barrier(3), asyncio.Event(), asyncio.Event()
+    budgets: list[float] = []
+    real_wait = step_tools.wait
+
+    def wait() -> float:
+        seconds = real_wait()
+        budgets.append(seconds)
+        return seconds
+
+    monkeypatch.setattr(step_tools, "wait", wait)
 
     async def look(the_card: dict[str, Any], _ctx: spotter.Context, spend: credit_meter.Meter) -> str:
-        await asyncio.sleep(0.35)  # the running looks free their slots after this; the hand-off's then answers after it
+        if the_card["moment"]["call"] == "call-1":
+            judged.set()
+        else:
+            await ready.wait()
+            await release.wait()
         spend.part().ended(None, confirmed=True)
         return finding("hand-off-fitness") if the_card["moment"]["call"] == "call-1" else '{"category": "none"}'
 
@@ -1700,12 +1714,19 @@ def test_a_submit_waits_for_a_hand_off_look_that_first_waited_for_a_slot_and_tak
         st = handing_off(tmp_path, spot)
         for i in range(2):
             spot.look("plan", 1.0, {"kind": "a running look", "call": f"p{i}"})  # neither gives its slot
-        result = await submitted(st, "call-1")
+        await ready.wait()
+        submitting = asyncio.create_task(submitted(st, "call-1"))
+        await asyncio.sleep(0)
+        assert not submitting.done()
+        assert not judged.is_set()
+        release.set()
+        result = await submitting
         await spot.drain()
         return result
 
     result = asyncio.run(main())
     assert spotter.WORK.settled(5)
+    assert budgets == [pytest.approx(2 * spotter.LOOK + spotter.TEARDOWN)]
     assert (result.result_type, result.text_result_for_llm.endswith("] About hand-off-fitness.")) == ("failure", True)
 
 
