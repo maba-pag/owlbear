@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 import uvicorn
 
-from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.commands import setup, setup_profile
 from owlbear_delivery_next.git.access import Access
 from owlbear_delivery_next.github import branch_rules, repo_target
@@ -32,6 +32,7 @@ from owlbear_delivery_next.machine_host.machine import MachineError
 from owlbear_delivery_next.machine_host.onboarding import Onboarding, OnboardingError
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.runtimes import readiness
+from owlbear_delivery_next.settings.profile import DECLARED
 from owlbear_delivery_next.state_store import registry
 from owlbear_delivery_next.state_store.store import Store
 
@@ -535,6 +536,8 @@ def test_finish_setup_on_a_registered_clone_changes_its_ruleset_and_says_what_is
     hub.rulesets["ada/proj"] = {7: body}
     folder = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/proj.git", "proj", Access.LOCAL))
     registry.register(folder)
+    partial = ProfileEntry(state="unknown", value="Lint", evidence="unresolved check names: codeql.yml")
+    monkeypatch.setattr(setup_profile.profile, "detect", lambda *_a: Profile(version=1, entries={DECLARED: partial}))
     with served(monkeypatch, pds) as (page, base, _machine):
         page.goto(f"{base}/projects#token=t")
         held: list[Any] = []
@@ -564,7 +567,9 @@ def test_finish_setup_on_a_registered_clone_changes_its_ruleset_and_says_what_is
             "change ruleset 7 of the default branch: allow merge commits in its pull-request rule; require no approvals"
         )
         expect(modal).to_contain_text("save the merge method merge for this project")
-        modal.get_by_role("button", name="Create and set up proj").click()
+        expect(modal).to_contain_text("Nothing is published.")  # an existing clone: nothing is created or published
+        modal.get_by_role("button", name="Set up proj", exact=True).click()
+        expect(modal).to_contain_text("Found so far: Lint. unresolved check names: codeql.yml")
         modal.get_by_role("button", name="Confirm profile").click()
         expect(modal.locator(".facts")).to_contain_text("Ready for Delivery: no")
         expect(modal).to_contain_text("chats can't reach Delivery")
@@ -1061,6 +1066,21 @@ def test_a_new_run_for_a_folder_replaces_its_unfinished_one(jobs, tmp_path, monk
     assert jobs.listed() == []
     with pytest.raises(OnboardingError, match="replaced by a newer one"):  # a dialog still open on the old run
         jobs.resume(local["id"])
+
+
+@pytest.mark.parametrize(
+    ("left", "git", "entry", "said"),
+    [
+        (["folder", "git", "commit", "repository", "push", "ci"], "none", "E5", (True, True)),
+        (["git", "protection"], "commits", "E2", (False, False)),  # only the author is written
+        (["git", "push", "protection"], "unborn", "E4b", (False, False)),  # the push stage pulls
+        (["git", "commit", "push"], "unborn", "E4a", (True, True)),
+        (["repository", "push"], "commits", "E3b", (True, True)),
+        (["folder", "protection"], "none", "E1", (True, False)),
+    ],
+)
+def test_the_start_button_names_what_the_stages_create_and_publish(left, git, entry, said):
+    assert onboarding_probe.effects(left, git, entry) == said
 
 
 def test_a_file_two_consents_write_is_said_once(tmp_path, monkeypatch):
