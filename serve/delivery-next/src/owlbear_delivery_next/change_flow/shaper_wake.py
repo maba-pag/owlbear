@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.models import Exit, StepKind, Waiting
@@ -74,7 +73,6 @@ def capture(c: Change) -> Change:
             version=c.brief.version,
             attempt=key[2],
             message=str(uuid.uuid4()),
-            at=datetime.now(UTC),
         )
     return c
 

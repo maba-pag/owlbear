@@ -15,7 +15,6 @@ from owlbear_delivery_next.state_store import work_block
 from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
-    from datetime import datetime
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.models import Change
@@ -51,7 +50,7 @@ def binding(repo: Path, tool: str, body: object) -> SavingChat:
     return SavingChat(session=session, call=call, owner=owner, chat=chat)
 
 
-def dispatch(host: Host, lock: Lock, c: Change, now: datetime) -> None:
+def dispatch(host: Host, lock: Lock, c: Change) -> None:
     """Consume one eligible attempt before editor I/O, then save its full receipt without an automatic retry."""
     n = c.shaper_notice
     if not n or n.state != "pending" or not shaper_wake.current(c):
@@ -65,7 +64,7 @@ def dispatch(host: Host, lock: Lock, c: Change, now: datetime) -> None:
         or work_block.of_store(host.store)
     ):
         return
-    n.state, n.at = "attempted", now
+    n.state = "attempted"
     host.store.write(lock, c)
     try:
         role = host.store.settings().agent("shaper")

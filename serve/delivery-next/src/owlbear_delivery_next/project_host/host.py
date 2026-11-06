@@ -321,7 +321,7 @@ class Host:
                 runs = check.capturing(c) or before.due(c) or prepare.due(self.store, c)
                 step = loop.next_step(c, now) if runs else None
             self.store.write(lock, c)
-            shaping_chat.dispatch(self, lock, c, now)
+            shaping_chat.dispatch(self, lock, c)
             self.wants[slug] = session_slots.wanted(c, step)
             return step is not None or bool(not c.stop and prepare.left(self.store, c))  # a gone check's end
 

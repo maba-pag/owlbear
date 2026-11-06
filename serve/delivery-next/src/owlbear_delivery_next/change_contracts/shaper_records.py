@@ -1,6 +1,5 @@
 """The saved shaping chat and its one owner-directed hand-off."""
 
-from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -27,6 +26,5 @@ class ShaperNotice(BaseModel):
     version: int
     attempt: int
     message: str
-    at: datetime
     state: Literal["pending", "attempted", "posted", "failed"] = "pending"
     detail: str = ""

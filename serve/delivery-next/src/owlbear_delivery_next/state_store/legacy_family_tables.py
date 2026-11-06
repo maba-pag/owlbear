@@ -36,7 +36,7 @@ CURRENT_MODULES = (
     ("state_store/registry.py", "a9f9d19675a89dc3b0494520bd2c77fcecba41e9bd682952b6d00c66ba80daea"),
     ("machine_host/selfcheck.py", "3b1ceedd24b863b1ab2419455ee748ade1e2aa34f62e9f748dae12277cdd4cbd"),
     ("impeccable_runs/pack_state.py", "40301bffd38974df0455ff3b4231cf3ff2b8824bdee11fbc18bbc1d49b3b05f0"),
-    ("project_host/host.py", "e1d75027b3b711ba3ea98a2278c416bee7580e7e88a643895638f6c433527f02"),
+    ("project_host/host.py", "92579dd2c718de8458083254e14ef589dc2796c7e2c4822fed5b57c4c93f89c0"),
     ("state_store/database.py", "e4a2657ff04a4e9f7ec04f7ccb55c0a0649d4452c8cf396abff29b6e54946533"),
     ("state_store/fd_tree.py", "1c18c4551d606cf311408badf4ce3b6d41606a7ce2fdd635907cf15ef8cebc64"),
     ("state_store/format_marker.py", "5a396d9d875098b975d3f75b9d47267a163661667c8344c258004b47668a0fec"),
