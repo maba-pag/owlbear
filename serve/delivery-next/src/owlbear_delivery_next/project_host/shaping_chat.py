@@ -84,7 +84,7 @@ def dispatch(host: Host, lock: Lock, c: Change) -> None:
 def shown(c: Change, *, paused: bool) -> dict[str, str] | None:
     """A current brief's receipt; rendering performs no editor contact or dispatch."""
     n = c.shaper_notice
-    if n is None or n.version != c.brief.version:
+    if n is None or n.version != c.brief.version or (n.state == "pending" and not shaper_wake.current(c)):
         return None
     said = {
         "pending": "The message waits for Resume."
