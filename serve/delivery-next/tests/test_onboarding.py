@@ -1056,6 +1056,8 @@ def test_a_new_run_for_a_folder_replaces_its_unfinished_one(jobs, tmp_path, monk
     assert published["ended"] == "done"
     assert jobs.get(local["id"]).receipt["ended"] == "replaced"
     assert jobs.listed() == []
+    with pytest.raises(OnboardingError, match="replaced by a newer one"):  # a dialog still open on the old run
+        jobs.resume(local["id"])
 
 
 def test_a_file_two_consents_write_is_said_once(tmp_path, monkeypatch):

@@ -112,7 +112,7 @@ class Onboarding:
 
     def answer(self, ident: str, kind: str, value: Any) -> dict[str, Any]:  # noqa: ANN401 - the dialog's answer
         """The owner's answer to what the job waits for; it goes on from there."""
-        job = self.get(ident)
+        job = self._current(ident)
         if job.waiting is None or job.waiting[0] != kind:
             raise OnboardingError(409, f"the run waits for {job.waiting[0] if job.waiting else 'nothing'}, not {kind}")
         job.go((kind, value))
@@ -122,9 +122,18 @@ class Onboarding:
         """Resume or Retry: the stages not done, from the first."""
         if why := self._why():
             raise OnboardingError(503, why)
-        job = self.get(ident)
+        job = self._current(ident)
         job.go()
         return job.info()
+
+    def _current(self, ident: str) -> Job:
+        """The job *ident*, unless a newer run for its folder replaced it: a dialog still open on it can't revive it."""
+        job = self.get(ident)
+        if (ended := job.receipt.get("ended")) in {"replaced", "published"}:
+            raise OnboardingError(
+                409, f"this run was {ended} by a newer one for {job.plan['folder']}: close and look again"
+            )
+        return job
 
     def listed(self) -> list[dict[str, Any]]:
         """The runs the Projects page shows, unfinished or local only, each with the project registered at its folder.
