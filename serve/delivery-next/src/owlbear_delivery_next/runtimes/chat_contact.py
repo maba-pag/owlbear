@@ -88,11 +88,11 @@ def opened() -> Transport:
 
 
 def saving_call(
-    workspace: Path, tool: str, body: object, normalize: Callable[[object], object], *, sessions: Path | None = None
+    workspace: Path, tool: str, body: object, normalize: Callable[[object], object]
 ) -> tuple[str, str]:
     """Find one open save invocation, checking workspace/client metadata before reading its events."""
     wanted, matches = normalize(body), []
-    root = sessions or chatlogs.state()
+    root = chatlogs.state()
     for folder in root.iterdir() if root.is_dir() else ():
         if not folder.is_dir():
             continue
