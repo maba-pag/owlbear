@@ -24,7 +24,7 @@ from owlbear_delivery_next.change_contracts.models import VISUAL, BriefRecipe, E
 from owlbear_delivery_next.change_contracts.visual_records import VisualResult
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.amend_apply import STALE
-from owlbear_delivery_next.workflow_steps import check, design, visual
+from owlbear_delivery_next.workflow_steps import check, decision, design, visual
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -60,8 +60,9 @@ def reset(c: Change, head: str) -> None:
     if kept is None or c.before is None:
         c.before = None
         return
-    settles = (kept.outcome == "ask" and kept.decision is not None) or (kept.outcome == "model" and kept.model_waived)
-    if not (settles and (kept.head, kept.brief, kept.before) == (head, c.brief.version, c.before.identity())):
+    decided = kept.outcome == "ask" and kept.decision is not None and (kept.head, kept.brief) == (head, c.brief.version)
+    waived = kept.outcome == "model" and kept.model_waived and decision.matches(c, kept, head, kept.widths)
+    if not ((decided or waived) and kept.before == c.before.identity()):  # as decision.decided and .waived settle it
         c.before = None
 
 

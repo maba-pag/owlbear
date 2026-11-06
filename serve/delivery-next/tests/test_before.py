@@ -27,6 +27,7 @@ from owlbear_delivery_next.change_contracts.preparation import Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.visual_records import PageError, VisualResult, VisualRound
 from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store.store import Lock, Store
@@ -136,12 +137,14 @@ def test_due_once_per_visual_check_environment_unless_the_owners_answer_settles_
     assert not before.due(ui.model_copy(update={"brief": Brief(version=1, ui=True)}))
     taken = VisualResult(head="base", tree="t", at=NOW)
     waived = VisualRound(number=1, head="h", tree="t", brief=ui.brief.version, before=taken.identity(), outcome="model",
-                         model_waived=True, at=NOW)  # fmt: skip
+                         model_waived=True, states={"home": 1}, criteria=evidence.criteria(ui),
+                         pack=pack_files.identity(), at=NOW)  # fmt: skip
     for rounds, head, env, due in (
         ([], "h", ui.env, True),  # a new environment, no round to settle
         ([waived.model_copy(update={"model_waived": False})], "h", ui.env, True),  # a round judged again
         ([waived], "moved", ui.env, True),  # his waiver no longer matches the head
         ([waived], "h", ui.env, False),  # his waiver settles the round on the capture it judged
+        ([waived.model_copy(update={"owner": ["owner-1"]})], "h", ui.env, True),  # a criterion withdrawn since
         ([], "h", ui.env.model_copy(update={"check": "look"}), False),  # a person check keeps the visual evidence
     ):
         c = ui.model_copy(update={"before": taken, "visual_rounds": rounds, "env": env})
