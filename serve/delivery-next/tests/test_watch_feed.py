@@ -83,6 +83,7 @@ def config(place, *, watch: bool = True, **kw: Any) -> sdk_adapter.Session:
         StepKind.BUILD, place.own, "s1", "m", resume=False, policy=Policy(place.own),
         observe=lambda: Worktree("a", "a"), checks=(), subagents=True, model="gpt-6-luna",
         watch=place.watching if watch else None,
+        journal=sdk_adapter.Journal(lambda event: place.store.log(Lock("c1"), "c1", event)),
     )  # fmt: skip
     return dataclasses.replace(made, **kw)
 
@@ -91,7 +92,8 @@ def stepped(place, *events: SessionEvent, close: bool = True, **kw: Any) -> sdk_
     """A step's event handler with its watcher, opened as ``sdk_adapter.run`` opens it."""
     cfg = config(place, **kw)
     st = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
-    st.feed = watch_feed.opened(cfg.watch, cfg.worktree, lambda: st.run.session_id, st.watch)
+    st.feed = watch_feed.opened(cfg.watch, cfg.worktree, lambda: st.run.session_id, st.watch,
+                               log=lambda event: st.log(**event))
     for ev in events:
         st.on_event(ev)
     if close and st.feed is not None:
