@@ -193,7 +193,8 @@ def test_a_recipe_ignoring_its_port_is_a_note_and_its_processes_are_stopped(ui, 
     shots = run(ui, tmp_path, events)
     assigned = check.free_port()
     why = f"the preview did not answer on its assigned port {assigned} at http://127.0.0.1:{assigned}/"
-    assert (shots.files, shots.findings) == ([], [f"for the merge-base, {why}; it may use a fixed port"])
+    assert (shots.files, len(shots.findings)) == ([], 1)
+    assert shots.findings[0].startswith(f"for the merge-base, {why}; it may use a fixed port; it printed: ")
     pid = int(next(iter(events[0]["pids"])))
     assert not (psutil.pid_exists(pid) and psutil.Process(pid).status() != psutil.STATUS_ZOMBIE)
     assert worktrees(ui) == 1
@@ -204,17 +205,18 @@ def gone(pid):
 
 
 def test_a_recipe_whose_leader_exits_leaving_a_child_has_the_child_stopped(ui, tmp_path, monkeypatch):
-    monkeypatch.setattr(check, "READY_WITHIN", 1.0)
+    monkeypatch.setattr(check, "READY_WITHIN", 20.0)  # its leader's exit ends the wait
     child = tmp_path / "child.pid"
     spawn = (
         "import subprocess, sys; "
         "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
-        f"open({str(child)!r}, 'w').write(str(p.pid))"
+        f"open({str(child)!r}, 'w').write(str(p.pid)); print('no database at TEST_DB')"
     )
     ui.env = ui.env.model_copy(update={"command": f"{sys.executable} -c {shlex.quote(spawn)}"})
     shots = run(ui, tmp_path, [])
-    pinned = ui.env.model_copy(update={"port": check.free_port()})
-    assert shots.findings == [f"for the merge-base, {check.unanswered(pinned)}"]
+    url = check.url(ui.env.model_copy(update={"port": check.free_port()}))
+    said = f"the preview exited with status 0 before it answered at {url}; it printed: no database at TEST_DB"
+    assert shots.findings == [f"for the merge-base, {said}"]  # D-01M64TXG1P1HMPQH7Q9CWAYSSW: what it said, whole
     assert gone(int(child.read_text()))
 
 

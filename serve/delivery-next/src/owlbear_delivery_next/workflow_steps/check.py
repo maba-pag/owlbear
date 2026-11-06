@@ -51,9 +51,24 @@ def url(e: Environment) -> str:
     return e.ready_url.replace(PORT, str(e.port)) if e.port is not None else e.ready_url
 
 
-def unanswered(e: Environment) -> str:
-    """Why a launch failed when nothing answered at its URL: a server ignoring its port names that cause."""
-    return f"the preview did not answer on its assigned port {e.port} at {url(e)}; it may use a fixed port"
+def unanswered(e: Environment, proc: subprocess.Popen[bytes] | None, log: Path, since: int) -> str:
+    """Why a launch failed when nothing answered at its URL, with all it wrote to *log* past its size *since*.
+
+    One that exited says so with its status; one still running may ignore its assigned port.
+    """
+    try:
+        said = log.read_bytes()[since:].decode(errors="replace").strip() or "nothing"
+    except FileNotFoundError:
+        said = "nothing"
+    if proc is not None and proc.returncode is not None:
+        return f"the preview exited with status {proc.returncode} before it answered at {url(e)}; it printed: {said}"
+    why = f"the preview did not answer on its assigned port {e.port} at {url(e)}; it may use a fixed port"
+    return f"{why}; it printed: {said}"
+
+
+def size(log: Path) -> int:
+    """The bytes *log* holds before a launch appends to it."""
+    return log.stat().st_size if log.is_file() else 0
 
 
 def journal(log: Callable[[dict[str, Any]], None], pids: Pids) -> None:

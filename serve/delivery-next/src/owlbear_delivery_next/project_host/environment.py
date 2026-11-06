@@ -46,6 +46,7 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
         launched = {"pids": {}, "pgid": None, "ready_at": None, "launched_at": datetime.now(UTC)}
         c.env = e = e.model_copy(update=launched | {"port": check.free_port()})  # fresh on every launch (TD-40)
         h.store.write(lock, c)
+        since = check.size(log)
         if proc := check.start(e, root, log, env, log.with_name(check.PIDFILE)):
             c.env = e = e.model_copy(update={"pgid": proc.pid, "pids": {proc.pid: check.created(proc.pid)}})
             h.store.write(lock, c)
@@ -57,7 +58,7 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
             h.mark(c, left, now)
             return c
         c.env = c.recipe = None
-        why = check.unanswered(e)
+        why = check.unanswered(e, proc, log, since)
         h.say(f"{c.slug}: check environment failed: {why}")
         return loop.apply(c, check.failed(why), now)
     c.env = e.model_copy(update={"pids": pids, "ready_at": datetime.now(UTC)})

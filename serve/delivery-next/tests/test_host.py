@@ -527,6 +527,7 @@ def environment(store, fake, monkeypatch, **env):
 class Proc:
     pid = 900
     stdin = None
+    returncode = None  # still running when its readiness wait ends
 
 
 RECIPE = Recipe(check="preview", command="npm run preview", directory=".", ready_url="http://127.0.0.1:{port}/")

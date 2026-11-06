@@ -101,7 +101,8 @@ def _serve(  # noqa: PLR0913, PLR0917 - the recipe, its states and where they re
     except Exception as exc:  # noqa: BLE001 - a capture never gates the Change (B25)
         notes.append(f"the test copy at {where}: {worktree.failure(exc)}")
         return []
-    proc = check.start(e, root, out / "preview.log", env)
+    since = check.size(log_file := out / "preview.log")
+    proc = check.start(e, root, log_file, env)
     if proc is None:
         notes.append(f"`{e.command}` did not start at {where}")
         return []
@@ -111,7 +112,7 @@ def _serve(  # noqa: PLR0913, PLR0917 - the recipe, its states and where they re
         check.release(proc)
         if (pids := check.ready(e, proc)) is None:
             e = check.unready(e, proc)
-            notes.append(f"for {where}, {check.unanswered(e)}")
+            notes.append(f"for {where}, {check.unanswered(e, proc, log_file, since)}")
             return []
         e = e.model_copy(update={"pids": pids})
         check.journal(log, pids)
