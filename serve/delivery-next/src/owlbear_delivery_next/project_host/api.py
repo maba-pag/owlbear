@@ -462,7 +462,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     router.include_router(config_routes.router(store, host))
     router.include_router(answers.router(store, read, put))
     router.include_router(amendment_routes.router(read, put))
-    router.include_router(chat_routes.router(read, lambda slug, key: captures.folder(store, slug, key)))
+    router.include_router(chat_routes.router(read, lambda slug, s: captures.folder(store, slug, s)))
     router.include_router(screenshots.router(store, read))
     wake, ending = lambda: host.wake.set(), lambda: host.draining()  # noqa: PLW0108 - read late
     router.include_router(brief_routes.router(store, read, wake, ending))

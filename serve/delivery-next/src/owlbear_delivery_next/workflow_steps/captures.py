@@ -2,8 +2,9 @@
 
 "before" renders the merge-base once the visual check's recipe is known (TD-24). The shaping capture
 (D-01M61V2GR0C6JV2R6KJ0WR4PNB, D-01M6Q56RXK85C5T4AG7R051X6N) fetches the target, renders the brief's states there with
-its recipe on its declared test copy, ends that copy in the throwaway checkout and writes the result; earlier sets the
-design reference does not use are deleted.
+its recipe on its declared test copy, ends that copy in the throwaway checkout and writes the result. Each attempt
+keeps its own folder, so the approved design reference never changes; sets neither the draft nor the reference uses
+are deleted.
 """
 
 from __future__ import annotations
@@ -24,9 +25,9 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 
-def folder(store: Store, slug: str, key: str) -> Path:
-    """Where the capture of *key* keeps its pictures."""
-    return store.root / "changes" / slug / "shaped" / key[:16]
+def folder(store: Store, slug: str, s: ShapingCapture) -> Path:
+    """Where the ended capture *s* keeps its pictures: one folder per attempt, by its key and time."""
+    return store.root / "changes" / slug / "shaped" / f"{s.key[:16]}-{s.result.at:%Y%m%dT%H%M%S%f}"
 
 
 def at_merge_base(store: Store, lock: Lock, change: Change, repo: Path) -> str:
@@ -67,16 +68,19 @@ def at_target(store: Store, lock: Lock, change: Change, repo: Path) -> str:
         if (r := prepare.end(store, change, repo, settings, told)) is not None:
             notes.append(r.reason)
 
-    out = folder(store, change.slug, key)
+    out = store.root / "changes" / change.slug / "shaped" / f".capturing-{key[:16]}"
+    shutil.rmtree(out, ignore_errors=True)  # a killed attempt's leftovers
     result = before.at_target(
         change, repo, out, store.read_profile() or Profile(), log, widths=settings.widths,
         fetch=lambda path, target: engine.fetch(path, target, writer.access()),
         prepare=prepare.shaping(store, change, settings, log), finish=finish,
     )  # fmt: skip
     change.shaped = ShapingCapture(key=key, result=result)
+    if out.is_dir():  # a failed fetch made none
+        out.rename(folder(store, change.slug, change.shaped))
     store.write(lock, change)
-    kept = {folder(store, change.slug, s.key).name for s in (change.shaped, change.reference) if s}
-    for old in out.parent.iterdir() if out.parent.is_dir() else ():  # a failed fetch made none
+    kept = {folder(store, change.slug, s).name for s in (change.shaped, change.reference) if s}
+    for old in out.parent.iterdir() if out.parent.is_dir() else ():
         if old.name not in kept:
             shutil.rmtree(old, ignore_errors=True)
     return "; ".join([f"shaping capture: {len(result.files)} screenshots at {result.head[:7]}", *result.findings])

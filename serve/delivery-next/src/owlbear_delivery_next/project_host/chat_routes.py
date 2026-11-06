@@ -9,6 +9,7 @@ from the store is answered here, by the host's own code, in the shape contract 1
 from __future__ import annotations
 
 import base64
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Query
@@ -19,9 +20,9 @@ from owlbear_delivery_next.state_store import briefs
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.models import Change
+    from owlbear_delivery_next.change_contracts.visual_records import ShapingCapture
 
 INLINE = 4 * 1024 * 1024  # bytes of one picture the chat gets inline; a larger one it opens on the Changes page
 
@@ -69,10 +70,10 @@ def contract() -> dict[str, Any]:
     return {"supported": sorted(chat_contract.SUPPORTED), "admit_by": True}
 
 
-def router(read: Callable[[str], Change], folder: Callable[[str, str], Path]) -> APIRouter:
+def router(read: Callable[[str], Change], folder: Callable[[str, ShapingCapture], Path]) -> APIRouter:
     """GET /chat/brief|challenge|capture/{slug}: what a chat reads, answered from the host's state.
 
-    *folder* is where a Change's shaping capture of a key keeps its pictures.
+    *folder* is where a Change's ended shaping capture keeps its pictures.
     """
     routes = APIRouter()
 
@@ -92,7 +93,7 @@ def router(read: Callable[[str], Change], folder: Callable[[str, str], Path]) ->
     @routes.get("/chat/capture/{slug}")
     def chat_capture(slug: str) -> dict[str, Any]:
         c = read(slug)
-        return capture(c, folder(slug, c.shaped.key if c.shaped else ""))
+        return capture(c, folder(slug, c.shaped) if c.shaped and c.shaped.result else Path())
 
     routes.add_api_route("/chat/contract", contract, methods=["GET"])
     return routes

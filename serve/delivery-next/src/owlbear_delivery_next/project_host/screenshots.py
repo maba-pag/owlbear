@@ -37,7 +37,7 @@ def router(store: Store, read: Callable[[str], Change]) -> APIRouter:
     routes = APIRouter()
 
     def shaping(s: ShapingCapture | None, slug: str, name: str) -> FileResponse:
-        return png(s and s.result, lambda _head: captures.folder(store, slug, s.key if s else ""), name)
+        return png(s and s.result, lambda _head: captures.folder(store, slug, s), name)
 
     @routes.get("/changes/{slug}/visual/{name}")
     def screenshot(slug: str, name: str) -> FileResponse:
