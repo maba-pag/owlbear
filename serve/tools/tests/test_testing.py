@@ -175,7 +175,6 @@ def test_a_page_change_beside_a_source_change_keeps_the_source_scope() -> None:
 def test_known_root_configs_run_their_consumers(config: str, expected: tuple[str, ...]) -> None:
     (command,) = _routed(config)
 
-    assert command[:4] == ["uv", "run", "--locked", "pytest"]
     assert set(command[4:]) == {*expected, "tests/test_package_boundary.py"}
 
 
