@@ -133,7 +133,7 @@ def preflight(gh: Provider, repository: str) -> str:
     try:
         found = gh.read_repository()
     except ProviderError as exc:
-        msg = f"gh cannot read {repository} ({exc}); sign in with `gh auth login` and run the update again"
+        msg = f"gh cannot read {repository} ({failure(exc)}); sign in with `gh auth login` and run the update again"
         raise Held(msg) from exc
     if found.repository.casefold() != repository.casefold() or not found.can_push:
         msg = f"gh on this machine cannot push to {repository}; sign in as an account that can, then run it again"

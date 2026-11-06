@@ -338,7 +338,7 @@ def test_an_up_to_date_pin_ends_up_to_date_with_nothing_downloaded(tmp_path, che
 @pytest.mark.parametrize(
     ("plan", "said", "calls"),
     [
-        ({"offline": True}, "npm was not reached for @porsche-design-system/components-js", []),
+        ({"offline": True}, "npm release lookup failed for @porsche-design-system/components-js", []),
         ({"ending": "error"}, "audit: the auditor submitted no report: ended error", ["audit"]),
         ({"browsers": [browser.Unrunnable("the PDS CDN did not answer, so the browser tests prove nothing")]},
          "the PDS CDN did not answer", ["audit", "update", "audit", "browser"]),
@@ -385,7 +385,7 @@ def test_a_release_npm_does_not_give_stops_the_candidate_with_its_whole_error(
 
     whole = f"{type(error).__name__}: {whole_error}\na note added on the way up"
     said = {
-        "metadata": f"npm was not reached for {pin.NAME} {NEW}: {whole}",
+        "metadata": f"npm metadata lookup failed for {pin.NAME} {NEW}: {whole}",
         "unusable": f"npm's metadata for {pin.NAME} {NEW} names no tarball and integrity: {whole}",
         "tarball": f"the tarball {tarball} was not downloaded: {whole}",
     }[cause]

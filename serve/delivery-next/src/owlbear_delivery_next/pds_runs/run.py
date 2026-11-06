@@ -43,18 +43,23 @@ def notice(job: Job) -> str:
     """The latest release on npm, when newer than the installed pin.
 
     Raises:
-        Stopped: npm was not reached or named no version, or the pin is current.
+        Stopped: The npm lookup failed or named no version, or the pin is current.
     """
     try:
-        latest = json.loads(job.live.fetch(f"{pin.REGISTRY}/latest", pin.SECONDS))["version"]
+        response = job.live.fetch(f"{pin.REGISTRY}/latest", pin.SECONDS)
     except OSError as exc:
-        msg = f"npm was not reached for {pin.NAME}: {exc}; try again when online"
+        msg = f"npm release lookup failed for {pin.NAME}: {failure(exc)}"
         raise Stopped(msg) from exc
+    try:
+        latest = json.loads(response)["version"]
     except (ValueError, KeyError, TypeError) as exc:
-        msg = f"npm's answer for {pin.NAME} names no version"
+        msg = (
+            f"npm's answer for {pin.NAME} names no version: {failure(exc)}\n"
+            f"response:\n{response.decode(errors='replace')}"
+        )
         raise Stopped(msg) from exc
     if not (isinstance(latest, str) and pin.VERSION.fullmatch(latest)):
-        msg = f"npm's answer names no version: {str(latest)[:60]}"
+        msg = f"npm's answer names no version: {latest}"
         raise Stopped(msg)
     installed = pin.read(job.live.package.resolve()).version
     if diff.number(latest) <= diff.number(installed):

@@ -89,7 +89,7 @@ def releases(fetch: Callable[[str], bytes] | None = None) -> list[str]:
     try:
         raw = fetch(url) if fetch else pack_files.fetch(url, SECONDS)
     except HTTPError as exc:
-        msg = f"GitHub answered {exc.code} {exc.reason}"
+        msg = f"GitHub answered {exc.code} {exc.reason}: {failure(exc)}"
         raise Unread(msg, offline=False) from exc
     except (OSError, HTTPException) as exc:
         msg = f"GitHub was not reached: {failure(exc)}"
