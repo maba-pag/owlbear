@@ -167,19 +167,10 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
         c = store.read(slug)
     except StoreError as exc:
         s = unloadable(exc.stop(now).model_copy(update={"reason": failure(exc)}))
-        return {
-            "slug": slug,
-            "line": s.line,
-            "action": s.action,
-            "actor": s.actor,
-            "error": s.error,
-            "stopped": s.stopped,
-        }
+        return {"slug": slug, **asdict(s)}
     tool = store.now(slug)
     s = status(c, act, now, tool)
-    out = {"slug": slug, "handle": c.handle, "step": c.step.kind, "line": s.line, "action": s.action, "actor": s.actor}
-    out["error"] = s.error  # the line carries an error: the card shows it whole (#971)
-    out["stopped"] = s.stopped
+    out = {"slug": slug, "handle": c.handle, "step": c.step.kind, **asdict(s)}
     out["title"] = c.brief.title
     out |= card(c, act, store.events(slug), now, tool, pending=store.shared.pending if store.shared else None)
     out["progress"] = asdict(progress(c))
