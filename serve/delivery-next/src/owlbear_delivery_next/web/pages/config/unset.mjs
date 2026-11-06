@@ -33,3 +33,8 @@ export function curationReason(reason) {
   if (own === "agents.curator.subagents is unset") return `${names(["agents.curator.subagents"])} is unset${suffix}`;
   return reason;
 }
+
+export function runResult(run) {
+  return run.settings_unset?.length
+    ? `refused: ${UNSET[0]}${names(run.settings_unset)}${UNSET[1]}` : run.result;
+}

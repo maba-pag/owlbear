@@ -1,5 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { call } from "/assets/ui.mjs";
+import { runResult } from "/assets/page/config/unset.mjs";
 import { DIALOG, button } from "./widgets.mjs";
 
 // A Retro finding's or a Spotter record's follow-up, shared by the Improvement page and a Change's page: what this
@@ -16,7 +17,7 @@ function followupState(item) {
   const f = item.followup ?? { state: "" };
   if (f.state === "saved") return html`Followed up: ${entryLink(f.entry)}`;
   if (RUNNING[f.state]) return `Follow-up ${RUNNING[f.state]}: Retro writes its backlog entry, then it shows here.`;
-  if (f.state === "ended") return `The follow-up run ended without an entry: ${f.result || "no result"}`
+  if (f.state === "ended") return `The follow-up run ended without an entry: ${runResult(f) || "no result"}`
     + `${f.why ? `, ${f.why}` : ""}.`;
   return "";
 }

@@ -12,11 +12,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import assumptions, cases, chatlogs, retro_judge
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_units as units
+from owlbear_delivery_next.improvement.retro_calls import Refusal
 from owlbear_delivery_next.machine_host import cases_job
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import machine_settings, registry, spend_ledger
@@ -47,6 +49,20 @@ def session(agent: str) -> tuple[RoleModel, float]:
         msg = f"agents.{agent}.minutes"
         raise SettingsUnset([msg])
     return cases_job.role(agent), minutes * 60.0
+
+
+def start_settings() -> tuple[float | None, Refusal]:
+    """The startup allowance and technical refusal, with identity only for genuinely absent settings."""
+    limit = None
+    try:
+        limit = cases_job.limits()["retro"]
+        for agent in ("retro", "retro-review"):
+            session(agent)
+    except (SettingsUnset, registry.RegistryError, OSError, ValueError) as exc:
+        return limit, Refusal(failure(exc), tuple(exc.keys) if isinstance(exc, SettingsUnset) else ())
+    if limit is None:
+        return None, Refusal("the Retro run credit limit is unset", ("machine.retro_run_credit_limit",))
+    return limit, Refusal()
 
 
 def _changes(uid: str) -> set[tuple[str, str]]:
