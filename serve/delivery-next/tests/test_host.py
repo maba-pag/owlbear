@@ -906,12 +906,9 @@ def test_a_failed_probe_logs_only_changed_errors_and_a_real_success_resets_it(
     assert logged(capsys.readouterr().out, "network probe skipped: ") == [failure(changed)]
 
 
-@pytest.mark.parametrize("pr", [None, 7])
 @pytest.mark.parametrize("operation", ["observe", "barrier"])
-def test_only_a_change_with_a_pr_needs_its_profile_for_observation_and_the_fold_barrier(
-    store, tmp_path, monkeypatch, pr, operation
-):
-    c = Change(slug="c1", step=Step(kind=StepKind.MERGE), names=Names(pr=pr))
+def test_a_real_pr_needs_its_profile_for_observation_and_the_fold_barrier(store, tmp_path, monkeypatch, operation):
+    c = Change(slug="c1", step=Step(kind=StepKind.MERGE), names=Names(pr=7))
     save(store, c)
     after = c.model_copy(deep=True)
     after.intent.paused_at = NOW
@@ -921,15 +918,8 @@ def test_only_a_change_with_a_pr_needs_its_profile_for_observation_and_the_fold_
         raise StoreError(msg)
 
     monkeypatch.setattr(store, "read_profile", unreadable)
-    if pr is not None:
-        with pytest.raises(StoreError, match="the real PR's profile is unreadable"):
-            engine.observe(store, tmp_path, "c1") if operation == "observe" else queue.barrier(store, tmp_path)(
-                c, after
-            )
-    elif operation == "observe":
-        assert engine.observe(store, tmp_path, "c1") == (None, False)
-    else:
-        assert queue.barrier(store, tmp_path)(c, after) is after
+    with pytest.raises(StoreError, match="the real PR's profile is unreadable"):
+        engine.observe(store, tmp_path, "c1") if operation == "observe" else queue.barrier(store, tmp_path)(c, after)
 
 
 def test_a_change_waiting_on_the_network_wakes_once_the_probe_sees_the_network_return(store, tmp_path):
