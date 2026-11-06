@@ -93,8 +93,9 @@ function conflictRow(k, q, r, d, key) {
   const said = r.departs?.[k.id] ?? "", owner = k.departs.startsWith("owner-");
   const take = async () => {
     const ok = await ask({
-      title: `Change the brief to take conflict ${k.id}?`, yes: "Change the brief", no: "Keep reviewing",
-      now: `The shaper drafts a brief amendment so that ${k.departs} allows what ${k.rule} asks: ${k.text}`,
+      title: `Change the brief to take ${k.id}?`, yes: "Change the brief", no: "Keep reviewing",
+      now: `The shaper drafts a brief amendment so that ${k.departs} allows what the design rule "${k.rule}" asks. `
+        + `The judge said: ${k.text}`,
       then: "A challenger judges the amendment; once it applies, the visual check runs again on the new brief. This "
         + "uses AI credits.",
       after: "The round's other conflicts are not part of it.",
