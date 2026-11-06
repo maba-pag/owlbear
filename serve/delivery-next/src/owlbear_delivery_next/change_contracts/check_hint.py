@@ -48,7 +48,7 @@ def missing(command: str) -> str:
 
 def qualified(package: str, command: str) -> str:
     """A confirmed check as a complete command run from the repository root."""
-    directory = _package(package)
+    directory = PurePosixPath(package.strip("/") or ".").as_posix()
     if directory != ".":
         directory = f"./{directory}"
     return f"cd {shlex.quote(directory)} && {{\n{command}\n}}"
@@ -71,7 +71,3 @@ def resolve(checks: Sequence[str], packages: Sequence[tuple[str, str]]) -> list[
             raise ValueError(msg)
         resolved.extend(matches)
     return list(dict.fromkeys(resolved))
-
-
-def _package(path: str) -> str:
-    return PurePosixPath(path.strip("/") or ".").as_posix()
