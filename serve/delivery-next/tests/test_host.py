@@ -1283,9 +1283,7 @@ def test_no_brief_challenge_starts_by_itself_while_delivery_or_the_change_is_pau
 
 
 def test_no_start_time_is_set_while_the_shapers_wait_is_unset(store, tmp_path, monkeypatch):
-    shaper = config.BASE.agents["shaper"].model_copy(update={"challenge_wait": None})
-    agents = config.BASE.agents | {"shaper": shaper}
-    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"agents": agents}))
+    monkeypatch.setattr(config.BASE.agents["shaper"], "challenge_wait", None)
     fake = Fake(store, tmp_path)
     save(store, briefed(fake))
     assert fake.host.tick(NOW + timedelta(days=1)) == []
