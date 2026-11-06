@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import jsonschema
 
 from owlbear_delivery_next.change_contracts import audit_tools
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.pds_runs import audit_markdown, pin
 from owlbear_delivery_next.runtimes import session_result
 
@@ -146,7 +147,12 @@ def audit(
     except ValueError as exc:
         return Audit(Verdict("stop", str(exc)), ident)
     before = digests(at)
-    done = session(at, skills, message(version, ident))
+    try:
+        done = session(at, skills, message(version, ident))
+    except session_result.ReturnedRunError as exc:
+        if not isinstance(exc.run.payload, audit_tools.AuditResult):
+            exc.add_note(_unended(exc.run, None))
+        raise
     if moved := changed(before, digests(at)):  # first: a changed copy voids whatever the report says
         return Audit(Verdict("stop", f"the auditor changed its copy: {', '.join(moved[:5])}{_gone(done)}"), ident)
     result = done.payload if isinstance(done.payload, audit_tools.AuditResult) else None
@@ -157,11 +163,12 @@ def audit(
         report = json.loads(result.report)
     except ValueError as exc:
         return Audit(
-            Verdict("stop", f"the audit report is not JSON: {type(exc).__name__}: {exc}"),
+            Verdict("stop", f"the audit report is not JSON: {failure(exc)}\nsubmitted audit report:\n{result.report}"),
             ident,
         )
     kept = report if isinstance(report, dict) else None
     if why := _schema_error(report, schema):
+        why = f"{why}\nsubmitted audit report:\n{result.report}"
         return Audit(Verdict("stop", why), ident, kept, result.report if kept is not None else "")
     verdict = _judge(report, version=version, at=at)
     return Audit(verdict, ident, report, result.report, audit_markdown.render(report, template))
@@ -175,13 +182,14 @@ def _gone(done: Run) -> str:
 
 def _unended(done: Run, result: audit_tools.AuditResult | None) -> str:
     gone = _gone(done)
+    usage = f"the auditor's model is unknown: {done.usage_unread}" if done.usage_unread else ""
     if done.ending != "result" or result is None:
-        return f"the auditor submitted no report: ended {done.ending}; {done.detail}{gone}"
+        detail = "\n".join(dict.fromkeys(filter(None, (done.detail, done.audit_rejection, usage))))
+        return f"no usable audit report was accepted: ended {done.ending}; {detail}{gone}"
     if gone:
-        return f"the auditor's processes are not proven ended; recover the session on the Maintenance page{gone}"
-    if done.usage_unread:
-        return f"the auditor's model is unknown: {done.usage_unread}"
-    return ""
+        reason = f"the auditor's processes are not proven ended; recover the session on the Maintenance page{gone}"
+        return "\n".join(filter(None, (reason, usage)))
+    return usage
 
 
 def judge(report: object, *, schema: dict[str, Any], version: str, at: Path | None = None) -> Verdict:

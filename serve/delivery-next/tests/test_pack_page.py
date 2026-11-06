@@ -455,6 +455,7 @@ def test_an_unreadable_registry_shows_whole_in_the_runs_and_in_a_refused_start(
             line.text_content()
             == f"The machine's registry cannot be read, so other projects' runs are not shown: {whole}."
         )
+        expect(page.locator("#pack-published")).to_contain_text("Not known across all projects.")
         page.get_by_role("button", name="Update Impeccable").click()
         pds.answer(page, "Update")
         refused = page.locator("#pack-error")
@@ -491,6 +492,7 @@ def test_a_sole_unreadable_run_record_shows_whole_in_the_runs(served, pds, tmp_p
         listed = page.locator("#pack-runs li")
         expect(listed).to_have_count(1)
         expect(listed).to_be_visible()
+        expect(page.locator("#pack-state")).not_to_contain_text("No project has run")
         assert listed.text_content() == (
             f"{tmp_path.name}: Its run record cannot be read (OSError: {whole_error}\na note added on the way up)"
         )

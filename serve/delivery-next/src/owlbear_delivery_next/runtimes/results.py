@@ -153,6 +153,11 @@ class Gate:
     def _check(self, spec: tools.Spec, arguments: Any) -> Checked:  # noqa: ANN401 - the agent's JSON arguments
         args, errors = tool_schema.parse(spec.model, arguments)
         if args is None:
+            if spec is audit_tools.SUBMIT:
+                report = arguments.get("report") if isinstance(arguments, dict) else None
+                label = "report" if isinstance(report, str) else "arguments"
+                submitted = report if isinstance(report, str) else arguments
+                errors = [*errors, f"submitted audit {label}:\n{submitted}"]
             return None, errors, None, "invalid"
         errors, tree = tools.check_question(args) if isinstance(args, tools.AskQuestion) else [], None
         errors += amendments.check(args, self.cfg.amendable)  # a premise's brief items (TD-185)
@@ -192,6 +197,8 @@ class Gate:
         self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors, **({"read": read} if read else {}))
         if self._closed():
             return self._late(spec)
+        if spec is audit_tools.SUBMIT:
+            self.run.audit_rejection = "; ".join(errors)
         if tree is not None:
             self.run.head, self.run.changed = (None, []) if errors else (tree.head, list(tree.changed))
         linted = bool(errors) and all(e.startswith("lint: ") for e in errors)

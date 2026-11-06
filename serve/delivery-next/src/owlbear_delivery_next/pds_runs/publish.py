@@ -54,11 +54,13 @@ def publish(job: Job, ctx: Context, lp: RoundLoop) -> str | None:
         job.keep(ctx, lp)
     edited = job.live.git(at, ["diff", "--name-only", ctx.checkout["base"], "--", *tree.SCOPE]).split()
     raw = tree.protected(at) | {p: (at / p).read_bytes() for p in edited}
-    try:
-        files: dict[str, str | None] = {p: d.decode("utf-8") for p, d in raw.items()}
-    except UnicodeDecodeError as exc:
-        msg = f"a file to commit is not UTF-8 text: {exc}; run the update again"
-        raise Stopped(msg) from exc
+    files: dict[str, str | None] = {}
+    for path, data in raw.items():
+        try:
+            files[path] = data.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            msg = f"a file to commit is not UTF-8 text ({path}): {failure(exc)}; run the update again"
+            raise Stopped(msg) from exc
     return _published(job, ctx, lp, files | dict.fromkeys(ctx.removed))
 
 
@@ -89,7 +91,7 @@ def _repaired(job: Job, ctx: Context, lp: RoundLoop, pages: str) -> str | None:
     try:
         differ = repair.unlike(job, ctx)
     except pack_files.PackError as exc:
-        differ = [str(exc)]
+        differ = [failure(exc)]
     if differ:
         r.laid = ""  # trying again lays it out and checks it again
         job.hold(ctx, f"the checked candidate is not the agent's repair {r.commit[:12]}: {', '.join(differ[:10])}")

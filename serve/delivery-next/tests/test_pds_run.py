@@ -338,8 +338,8 @@ def test_an_up_to_date_pin_ends_up_to_date_with_nothing_downloaded(tmp_path, che
 @pytest.mark.parametrize(
     ("plan", "said", "calls"),
     [
-        ({"offline": True}, "npm was not reached for @porsche-design-system/components-js", []),
-        ({"ending": "error"}, "audit: the auditor submitted no report: ended error", ["audit"]),
+        ({"offline": True}, "npm release lookup failed for @porsche-design-system/components-js", []),
+        ({"ending": "error"}, "audit: no usable audit report was accepted: ended error", ["audit"]),
         ({"browsers": [browser.Unrunnable("the PDS CDN did not answer, so the browser tests prove nothing")]},
          "the PDS CDN did not answer", ["audit", "update", "audit", "browser"]),
         ({"browsers": [browser.Result(0, 0, 0, 0, (), 5, "no tests ran")]},
@@ -385,7 +385,7 @@ def test_a_release_npm_does_not_give_stops_the_candidate_with_its_whole_error(
 
     whole = f"{type(error).__name__}: {whole_error}\na note added on the way up"
     said = {
-        "metadata": f"npm was not reached for {pin.NAME} {NEW}: {whole}",
+        "metadata": f"npm metadata lookup failed for {pin.NAME} {NEW}: {whole}",
         "unusable": f"npm's metadata for {pin.NAME} {NEW} names no tarball and integrity: {whole}",
         "tarball": f"the tarball {tarball} was not downloaded: {whole}",
     }[cause]
@@ -727,7 +727,11 @@ def test_a_failed_pds_stage_keeps_and_logs_its_whole_error(tmp_path, checkout, w
         assert logged[-3:] == ["update: running", f"update: failed: {reason}", reason]
         return
     if cause == "merge-audit":
-        said, gate, op = f"the auditor submitted no report: ended error; {whole_error}", "deprecation audit", "audit"
+        said, gate, op = (
+            f"no usable audit report was accepted: ended error; {whole_error}",
+            "deprecation audit",
+            "audit",
+        )
     else:  # a finding's whitespace collapses into one line (pack_run._verdict)
         said = "; ".join(" ".join(f"{PAGE}:2: {p} - fix: s".split()) for p in problems)
         gate, op = "challenger", "pds-challenge"
@@ -828,7 +832,7 @@ def test_a_failed_ci_repair_keeps_and_logs_its_whole_error(tmp_path, checkout, w
     else:
         checking = next(i["detail"] for i in state["invocations"] if i["result"] == "checking")
         made = re.match(r"the agent's repair (\w{12}) ", checking)[1]
-        detail = f"audit: the auditor submitted no report: ended error; {whole_error}"
+        detail = f"audit: no usable audit report was accepted: ended error; {whole_error}"
         said = f"the agent's repair {made} failed its check and was not pushed: {detail}"
         stage, op, reason = "audit", "audit", f"CI failed at {before[:12]}: CI; {said}. Try again, {again}"
     assert (state["state"], state["reason"]) == ("waiting", reason)
@@ -1073,7 +1077,7 @@ def test_an_unverified_session_end_says_its_problems_whole(tmp_path, checkout, w
         "updater": ("update", still),
         "challenger": ("challenger", still),
         "audit": ("audit", "the auditor's processes are not proven ended; recover the session on the Maintenance page"),
-        "audit-no-report": ("audit", "the auditor submitted no report: ended error; the model stopped"),
+        "audit-no-report": ("audit", "no usable audit report was accepted: ended error; the model stopped"),
     }[role]
     reason = f"{name}: {said}; termination unverified: processes 9 still present; disconnect failed: RuntimeError: "
     reason += whole_error

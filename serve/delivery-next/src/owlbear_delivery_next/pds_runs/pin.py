@@ -122,7 +122,7 @@ def release(version: str, fetch: Callable[[str, float], bytes] | None = None) ->
     """Download, verify and pick release ``version``: npm's metadata, then its tarball, checked before extraction.
 
     Raises:
-        PinError: npm was not reached or answered unusably, the tarball's sha512 differs, or it is unsafe or incomplete.
+        PinError: The npm lookup failed or answered unusably, or the tarball is unsafe, incomplete or has another hash.
     """
     if not VERSION.fullmatch(version):
         msg = f"{version!r} is not a release version"
@@ -132,7 +132,7 @@ def release(version: str, fetch: Callable[[str, float], bytes] | None = None) ->
         meta = json.loads(get(f"{REGISTRY}/{version}", SECONDS))
         url, integrity = meta["dist"]["tarball"], meta["dist"]["integrity"]
     except OSError as exc:
-        msg = f"npm was not reached for {NAME} {version}: {failure(exc)}"
+        msg = f"npm metadata lookup failed for {NAME} {version}: {failure(exc)}"
         raise PinError(msg) from exc
     except (ValueError, KeyError, TypeError) as exc:
         msg = f"npm's metadata for {NAME} {version} names no tarball and integrity: {failure(exc)}"

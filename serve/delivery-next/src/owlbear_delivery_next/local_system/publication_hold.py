@@ -21,6 +21,7 @@ Its pending journal keeps that condition alive before the first file write; jour
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -41,6 +42,7 @@ UPSTREAM = "@{upstream}"
 _RECORD_KEYS = frozenset(("watch", "base", "since", "file", "fields", "what", "refused"))
 _EXPLICIT = 2  # an explicit push: one remote and one source:destination
 _BLOB = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+_log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -387,13 +389,14 @@ def _checked(repo: DataRepo, until: float | None, *, fetch: bool, push: tuple[st
 
 
 def settled(repo: DataRepo, until: float | None) -> None:
-    """Remove the record once a push gave the remote the held change, or left the checkout without one; never checks."""
+    """Retire a lapsed hold after successful work; a failed cleanup is logged and leaves the next push's check."""
     try:
         path = _path(repo, until)
         held = _load(path)
         if held is not None and _lapsed(repo, held, until):
             path.unlink(missing_ok=True)
-    except _UnknownError:
+    except _UnknownError as exc:
+        _log.warning("could not settle held publication in %s: %s", repo.root, failure(exc))
         return  # the record stays, and the next push or rebase checks it again
 
 

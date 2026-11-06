@@ -14,9 +14,11 @@ import ssl
 import tempfile
 import urllib.request
 from dataclasses import dataclass
+from http.client import HTTPException, IncompleteRead
 from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.error import HTTPError
 
 import truststore
 
@@ -126,10 +128,22 @@ def installed(pins: dict[str, Any] | None = None) -> Installed | None:
 
 
 def fetch(url: str, seconds: float = SECONDS) -> bytes:
-    """One HTTPS download through the system's trust store, bounded in time."""
+    """One bounded HTTPS download; a refused response keeps its body in the raised error's notes."""
     https = urllib.request.HTTPSHandler(context=truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT))
-    with urllib.request.build_opener(https).open(url, timeout=seconds) as response:
-        return response.read()
+    try:
+        with urllib.request.build_opener(https).open(url, timeout=seconds) as response:
+            return response.read()
+    except HTTPError as exc:
+        try:
+            with exc:
+                body = exc.read()
+        except (HTTPException, OSError) as unread:
+            exc.add_note(f"could not read the response body from {url}: {failure(unread)}")
+            if isinstance(unread, IncompleteRead) and unread.partial:
+                exc.add_note(f"partial response body:\n{unread.partial.decode(errors='replace')}")
+        else:
+            exc.add_note(f"response from {url}:\n{body.decode(errors='replace')}")
+        raise
 
 
 def _keep(target: Path, name: str, data: bytes) -> None:

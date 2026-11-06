@@ -96,7 +96,7 @@ def pds(fetch: Callable[[str, float], bytes] | None = None) -> dict[str, Any]:
     try:
         latest = json.loads((fetch or pack_files.fetch)(PDS, SECONDS))["version"]
     except HTTPError as exc:
-        msg = f"npm answered {exc.code} {exc.reason}"
+        msg = f"npm answered {exc.code} {exc.reason}: {command_failure.failure(exc)}"
         raise Failed(msg) from exc
     except (OSError, HTTPException) as exc:
         msg = f"npm was not reached: {command_failure.failure(exc)}"
