@@ -9,7 +9,7 @@ import re
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Annotated, Any, Literal, Unpack, cast
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict, Unpack, cast
 
 from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_memory import (
@@ -37,15 +37,12 @@ from owlbear_memory.errors import diagnostic, read_warning
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError, field_validator
 
 from owlbear_memory_mcp import receipts
-from owlbear_memory_mcp.diagnostics import collect, with_read_errors
 from owlbear_memory_mcp.git import commit_batch, commit_move, cut_short, format_git_failure, repo_locked
 from owlbear_memory_mcp.store import StoreError
 from owlbear_memory_mcp.store import shared_root as machine_shared_root
 
 if TYPE_CHECKING:
     from mcp.server.mcpserver import Context
-
-    from owlbear_memory_mcp.diagnostics import ReadDiagnostics
 
 __all__ = [
     "approve_memory",
@@ -70,6 +67,12 @@ _INTEGER_VALUES = frozenset({"stale_factor", "recall_limit", "explore_slots", "c
 _LEAST = {"stale_factor": 1, "recall_limit": 1}  # the settings' own lower bounds; every other value may be 0
 _WITNESSES = frozenset({MemoryState.CURATED, MemoryState.APPROVED})  # entries whose scope vouches for a named agent
 AssessmentTaskId = Annotated[StrictStr, Field(pattern=r"^[\x21-\x7e]{1,128}$")]
+
+
+class ReadDiagnostics(TypedDict, total=False):
+    """Optional internal collectors, never agent-facing tool arguments."""
+
+    read_errors: dict[str, str]
 
 
 class AssessmentItem(BaseModel):
@@ -115,6 +118,17 @@ def _global_engine(ctx: Context) -> MemoryEngine | None:
     if engine is None and folder is not None and folder.is_dir():
         engine = context.global_engine = MemoryEngine(folder)
     return engine
+
+
+def collect(engine: MemoryEngine, read_errors: dict[str, str] | None, where: str = "project") -> None:
+    """Keep the loaded snapshot's safe errors, including the folder's reading context."""
+    if read_errors is not None:
+        read_errors.update({path: f"{where}: {detail}" for path, detail in engine.read_errors.items()})
+
+
+def with_read_errors(data: dict[str, Any], read_errors: dict[str, str]) -> dict[str, Any]:
+    """Leave healthy result shapes unchanged."""
+    return data | {"read_errors": dict(read_errors)} if read_errors else data
 
 
 def _readable(ctx: Context, *, read_errors: dict[str, str] | None = None) -> list[MemoryEntry]:
