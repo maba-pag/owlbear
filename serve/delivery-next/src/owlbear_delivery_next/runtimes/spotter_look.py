@@ -31,6 +31,7 @@ from typing import Any
 from copilot import CopilotClient, RuntimeConnection
 from copilot.rpc import PermissionDecisionReject
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import cases, chatlogs, credit_meter, spotter
 from owlbear_delivery_next.improvement.events import as_dict
 from owlbear_delivery_next.runtimes import sdk_usage
@@ -131,14 +132,17 @@ class Spent:
         if not self.sid:
             return  # no session: nothing was billed, nothing to record
         usage: dict[str, Any] = {}
+        read_error = ""
         if self.read:
             try:
                 usage = sdk_usage.parsed(self.read[-1], self.model)
             except Exception as exc:  # noqa: BLE001 - an odd read never holds the teardown
-                usage = {"error": type(exc).__name__}
+                read_error = failure(exc)
+                usage = {"error": read_error}
         if (not usage or "error" in usage) and part.calls:  # unread: its calls' sum, until the runtime's log says
             spent = part.calls_sum / credit_meter.NANO
-            usage = {"credits": spent, "models": {self.model: {"credits": spent}}, "incomplete": "not read"}
+            usage = {"credits": spent, "models": {self.model: {"credits": spent}},
+                     "incomplete": read_error or "not read"}  # fmt: skip
         elif not usage:
             usage = {"error": "not read"}
         if not confirmed and "error" not in usage:
@@ -146,7 +150,7 @@ class Spent:
         stop = self.meter.report()
         spend_ledger.ended(self.run, self.sid, usage=usage, ending="finished" if confirmed else "unconfirmed",
                            limit=stop["limit"], stopped=stop["stopped"], stopped_by=stop["stopped_by"],
-                           place=self.place, look=self.look)  # fmt: skip
+                           place=self.place, look=self.look, read_error=read_error)  # fmt: skip
 
 
 async def _end(client: Any, session: Any, limit: Limit, spent: Spent, *, confirmed: bool) -> None:  # noqa: ANN401
