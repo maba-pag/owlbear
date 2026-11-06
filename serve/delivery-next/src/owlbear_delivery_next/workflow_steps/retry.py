@@ -25,6 +25,7 @@ from owlbear_delivery_next.change_flow import rebuilds, round_flow, worktree
 from owlbear_delivery_next.change_flow.moves import ask, go, open_task, subject_of
 from owlbear_delivery_next.change_flow.round_flow import CLEAN, PREFIX, RETRY
 from owlbear_delivery_next.local_system.git_files import git_common_dir
+from owlbear_delivery_next.settings.profile import vouched
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -217,7 +218,7 @@ def _final(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
         how = "from a clean state: Delivery undid the Change's earlier work, which stays archived on a branch"
         round_flow.replan(change, lp, round_flow.why(lp, how), now)
     else:
-        rebuilds.rotated(change, lp, undo, store.read_profile() or Profile())
+        rebuilds.rotated(change, lp, undo, vouched(store.read_profile() or Profile()))
     store.write(lock, change)
     return True
 

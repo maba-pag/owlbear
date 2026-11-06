@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 INVALID_LIMIT = 3
 LOCAL_URL = re.compile(r"http://(127\.0\.0\.1|localhost):\{port\}(/\S*)?")  # Delivery picks the port (TD-40)
+EXAMPLE_CHECK = "cd packages/app && npm test"
 
 
 class Args(BaseModel):
@@ -40,7 +41,7 @@ bounded = _f  # the same helper for the owner chat's brief schema (brief_tools)
 class CheckRun(Args):
     """One check command the agent ran and its exit code."""
 
-    command: str = _f(300, "The command as listed in the task", "npm test")
+    command: str = _f(300, "The complete command as listed in the task", EXAMPLE_CHECK)
     exit_code: int = Field(description="Its exit code; 0 means it passed", examples=[0])
 
 
@@ -67,7 +68,7 @@ class BuildResult(Args):
 
     summary: str = _f(2000, "What you changed and why, in a few sentences", "Added greet(name), with a test.")
     checks: list[CheckRun] = _f(
-        20, "Every task check you ran on your final commit", [{"command": "npm test", "exit_code": 0}], least=0
+        20, "Every task check you ran on your final commit", [{"command": EXAMPLE_CHECK, "exit_code": 0}], least=0
     )
     response: Response | None = Field(
         default=None,
@@ -238,7 +239,7 @@ class PlanTask(Args):
     title: str = _f(200, "What the task delivers", "Add farewell(name) with a test")
     goal: str = _f(3000, "The criteria it meets and how the Builder knows it is done", "AC-1: farewell('Ada')")
     scope: list[str] = _f(20, "Repository-relative paths or directories it may change", ["packages/app"])
-    checks: list[str] = _f(5, "Check commands from the project profile the Builder runs", ["npm test"])
+    checks: list[str] = _f(5, "Complete check commands exactly as listed for their packages", [EXAMPLE_CHECK])
 
 
 class PlanResult(Args):
@@ -247,7 +248,7 @@ class PlanResult(Args):
     tasks: list[PlanTask] = _f(
         8,
         "Ordered tasks, each small enough for one Builder session",
-        [{"title": "Add farewell", "goal": "AC-1", "scope": ["packages/app"], "checks": ["npm test"]}],
+        [{"title": "Add farewell", "goal": "AC-1", "scope": ["packages/app"], "checks": [EXAMPLE_CHECK]}],
     )
     rejected: list[Rejection] = Field(
         default_factory=list,
@@ -271,16 +272,15 @@ def within(path: str, scope: Sequence[str]) -> bool:
 
 
 def check_plan(
-    plan: PlanResult, tree: Worktree, checks: Sequence[str], scope: Sequence[str] = (), packages: Pairs = ()
+    plan: PlanResult, tree: Worktree, checks: Sequence[str], scope: Sequence[str] = (), _packages: Pairs = ()
 ) -> list[str]:
-    """Return field errors for task checks outside the profile (*packages* word the hint) and scopes outside."""
+    """Return field errors for selections outside the offered check commands and scopes outside the brief."""
     errors = [f"changes: uncommitted files ({_few(tree.dirty)}); planning changes nothing"] if tree.dirty else []
     listed = ", ".join(f'"{c}"' for c in checks) or "none - the owner confirmed no check command for this package"
     brief = ", ".join(scope)
     for i, task in enumerate(plan.tasks):
         errors += [
-            f'tasks[{i}].checks: "{c}" is not a check of the project profile - '
-            + (check_hint.alone(c, packages) or f"use one of {listed}")
+            f'tasks[{i}].checks: "{c}" is not a check of the project profile - ' + f"use one of {listed}"
             for c in task.checks
             if c not in checks
         ]

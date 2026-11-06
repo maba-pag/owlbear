@@ -101,14 +101,14 @@ def test_a_limit_error_names_the_path_the_length_the_limit_and_what_to_cut(model
 
 def test_other_errors_give_the_nested_field_s_own_example():
     _, errors = tool_schema.parse(tools.PlanResult, {"tasks": [{"title": "t", "goal": "g", "scope": ["a"]}]})
-    assert errors == ['tasks[0].checks: Field required - e.g. ["npm test"]']
+    assert errors == ['tasks[0].checks: Field required - e.g. ["cd packages/app && npm test"]']
     _, errors = tool_schema.parse(tools.BuildResult, {"summary": "s", "checks": [{"command": "npm test"}]})
     assert errors == ["checks[0].exit_code: Field required - e.g. 0"]
     _, errors = tool_schema.parse(tools.PlanResult, {"tasks": "[]"})  # the recorded wrong type
     assert errors == [
         (
             'tasks: Input should be a valid list - e.g. [{"title": "Add farewell", "goal": "AC-1", "scope": '
-            '["packages/app"], "checks": ["npm test"]}]'
+            '["packages/app"], "checks": ["cd packages/app && npm test"]}]'
         )
     ]
     _, errors = tool_schema.parse(tools.PlanResult, {"tasks": ["t1"]})

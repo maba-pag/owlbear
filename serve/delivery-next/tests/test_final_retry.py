@@ -34,6 +34,7 @@ from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.runtimes import step_input
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings.profile import confirm
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import held, publish, retry, review
 
@@ -89,9 +90,9 @@ def asked(clone: Path) -> Change:
 
     The last round's open F3 names t2; the reviews of t1 and t2 both covered x.txt.
     """
-    t1 = build(clone, Task(id="t1", title="one", scope=["x.txt"], checks=["check one"]), "x.txt", "1\n")
+    t1 = build(clone, Task(id="t1", title="one", scope=["x.txt"], checks=["cd . && check one"]), "x.txt", "1\n")
     t3 = build(clone, Task(id="t3", title="fix", origin="review", fixes="t1"), "x.txt", "1b\n")
-    t2 = build(clone, Task(id="t2", title="two", scope=["y.txt"], checks=["check two"]), "y.txt", "2\n")
+    t2 = build(clone, Task(id="t2", title="two", scope=["y.txt"], checks=["cd . && check two"]), "y.txt", "2\n")
     t4 = build(clone, Task(id="t4", title="fix final", origin="review", fixes=FINAL), "x.txt", "1c\n")
     t5 = build(clone, Task(id="t5", title="fix final", origin="review", fixes=FINAL), "y.txt", "2b\n")
     findings = [
@@ -275,7 +276,7 @@ def test_a_rebuild_undoes_the_ticked_tasks_own_work_and_builds_them_again(tmp_pa
     t1, t2, t3, t4, t5 = c.plan.tasks
     assert [(t.done, t.base, t.spans) for t in (t1, t3, t4)] == [(False, None, [])] + [(True, None, [])] * 2
     assert (end(t2), end(t5)) == (git(clone, "rev-parse", "HEAD~3"), archived)  # kept work keeps its spans
-    assert t1.checks == ["check one", "check two"]  # the last rebuilt task runs every other plan task's checks
+    assert t1.checks == ["cd . && check one", "cd . && check two"]  # the last rebuilt task runs all kept checks
     assert t1.scope == ["x.txt"]  # its planned scope stays
     lp = c.loops[FINAL]
     assert (lp.ended, lp.rebuild, lp.completion, lp.undo, c.consent) == ("retried", [], None, "", None)
@@ -451,12 +452,25 @@ def test_a_plan_on_the_existing_code_keeps_the_branch_as_it_is(tmp_path, clone):
     assert "on the existing code" in c.outcome.reason
 
 
-def test_a_kept_check_runs_from_each_package_of_its_task():
+def test_a_kept_check_runs_from_each_package_of_its_task(change_repo):
     entries = {f"check:{p}": ProfileEntry(state="known", value="npm test") for p in ("packages/a", "packages/b", ".")}
-    profile = Profile(entries=entries | {"check:packages/c": ProfileEntry(state="known", value="uv run pytest")})
-    t1 = Task(id="t1", title="one", scope=["packages/a/x.ts"], checks=["npm test"])
-    t2 = Task(id="t2", title="two", scope=["packages/b/y.ts", "packages/c"], checks=["npm test", "uv run pytest"])
-    t3 = Task(id="t3", title="three", scope=["docs/z.md"], checks=["make docs"])
+    profile = Profile(
+        entries=entries
+        | {
+            "check:packages/c": ProfileEntry(state="known", value="uv run pytest"),
+            "check:docs": ProfileEntry(state="known", value="make docs"),
+        }
+    )
+    for key, value in profile.entries.items():
+        profile = confirm(profile, key, value.value, NOW)
+    t1 = Task(id="t1", title="one", scope=["packages/a/x.ts"], checks=["cd packages/a && npm test"])
+    t2 = Task(
+        id="t2",
+        title="two",
+        scope=["packages/b/y.ts", "packages/c"],
+        checks=["cd packages/b && npm test", "cd packages/c && uv run pytest"],
+    )
+    t3 = Task(id="t3", title="three", scope=["docs/z.md"], checks=["cd docs && make docs"])
     c = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[t1, t2, t3]))
     lp = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"])
     rebuilds.rotated(c, lp, [], profile)
@@ -464,29 +478,70 @@ def test_a_kept_check_runs_from_each_package_of_its_task():
         "cd packages/a && npm test",  # its own too: a report from another package never stands in for it
         "cd packages/b && npm test",
         "cd packages/c && uv run pytest",
-        "make docs",
+        "cd docs && make docs",
     ]
     assert t1.scope == ["packages/a/x.ts"]
-    root = Profile(entries=entries)  # npm test also runs at the repository root
-    a = Task(id="t1", title="one", scope=["src/a.ts"], checks=["npm test"])
+    a = Task(id="t1", title="one", scope=["src/a.ts"], checks=["cd . && npm test"])
     twice = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[a, Task(**t2.model_dump())]))
     for _ in range(2):  # a second retry places the checks as the first did
-        rebuilds.rotated(twice, RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"]), [], root)
-        assert a.checks == ["npm test", "cd packages/b && npm test", "uv run pytest"]
+        rebuilds.rotated(twice, RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"]), [], profile)
+        assert a.checks == ["cd . && npm test", "cd packages/b && npm test", "cd packages/c && uv run pytest"]
     ran = tools.BuildResult(summary="b", checks=[{"command": "cd packages/b && npm test", "exit_code": 0}])
     tree = tools.Worktree(head="b", base="a")
-    missing = [e for e in tools.check_build(ran, tree, ["npm test", "cd packages/b && npm test"]) if "missing" in e]
-    assert missing == [
-        'checks: "npm test" missing - run it on your commit and report it, e.g. {"command": "npm test", "exit_code": 0}'
+    missing = [
+        e for e in tools.check_build(ran, tree, ["cd . && npm test", "cd packages/b && npm test"]) if "missing" in e
     ]
-    t4 = Task(id="t4", title="four", scope=["my app/q.ts"], checks=["npm test"])
+    assert missing == [
+        (
+            'checks: "cd . && npm test" missing - run it on your commit and report it, '
+            'e.g. {"command": "cd . && npm test", "exit_code": 0}'
+        )
+    ]
+    t4 = Task(id="t4", title="four", scope=["my app/q.ts"], checks=["cd 'my app' && npm test"])
     spaced = Profile(entries={"check:my app": ProfileEntry(state="known", value="npm test")})
     assert rebuilds._placed(spaced, [t4]) == ["cd 'my app' && npm test"]  # noqa: SLF001
-    t5 = Task(id="t5", title="five", scope=["packages/ab/z.ts"], checks=["npm test"])
-    assert rebuilds._placed(profile, [t5]) == ["npm test"]  # noqa: SLF001 - packages/a holds nothing of packages/ab
+    t5 = Task(id="t5", title="five", scope=["packages/ab/z.ts"], checks=["cd . && npm test"])
+    assert rebuilds._placed(profile, [t5]) == ["cd . && npm test"]  # noqa: SLF001 - never relocate a selected check
     both = ["cd packages/b && npm test", "cd packages/b && npm test:unit"]
     ran = tools.BuildResult(summary="b", checks=[{"command": k, "exit_code": 0} for k in both])
     assert [e for e in tools.check_build(ran, tree, both) if "missing" in e] == []
+    package = change_repo / "packages/app"
+    package.mkdir(parents=True)
+    for home in (change_repo, package):
+        (home / "Makefile").write_text("check:\n\t@pwd\n")
+    (package / "package.json").write_text('{"scripts":{"test":"make check"}}\n')
+    git(change_repo, "add", "Makefile", "packages/app")
+    git(change_repo, "commit", "-qm", "root and package check targets")
+    profile = confirm(confirm(Profile(), "check:.", "make check", NOW), "check:packages/app", "make check", NOW)
+    c = Change(slug="c1", brief=Brief(version=1), step=Step(kind=K.PLAN))
+    choices = step_input.session(c, profile, change_repo, {})
+    assert choices.checks == ("cd . && make check", "cd packages/app && make check")
+    task = Task(id="t1", title="one", scope=["packages/app"], checks=list(choices.checks))
+    c.plan, c.step = Plan(tasks=[task]), Step(kind=K.BUILD, task="t1")
+    parts = step_input.session(c, profile, change_repo, {})
+    assert parts.checks == choices.checks
+    reports = []
+    for command, home in zip(parts.checks, (change_repo, package), strict=True):
+        done = subprocess.run(  # noqa: S603 - emitted commands of the fixture's confirmed checks
+            ["/bin/sh", "-c", command],
+            cwd=change_repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert done.stdout.strip() == str(home)
+        reports.append({"command": command, "exit_code": done.returncode})
+    tree = runner.worktree.observe(change_repo, "main")
+    assert tools.check_build(tools.BuildResult(summary="checked", checks=reports), tree, parts.checks) == []
+    for omitted in reports:
+        result = tools.BuildResult(summary="checked", checks=[r for r in reports if r is not omitted])
+        errors = tools.check_build(result, tree, parts.checks)
+        assert errors == [
+            (
+                f'checks: "{omitted["command"]}" missing - run it on your commit and report it, '
+                f'e.g. {{"command": "{omitted["command"]}", "exit_code": 0}}'
+            )
+        ]
 
 
 def test_each_build_session_records_its_own_span(tmp_path, clone):

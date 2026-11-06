@@ -1,9 +1,4 @@
-"""The `cd <dir> && <check>` form: the planner's hint to name a check alone, and which reported command ran a check.
-
-The Builder runs each task check from its package's directory, so a plan check is the profile's command as listed;
-there the form is never accepted and its error only says what to write instead. A retried task's checks carry it
-(TD-246), and a Builder may report a bare check it ran from a package directory in it.
-"""
+"""Directory-qualified check choices, legacy placement and reported execution identities."""
 
 from __future__ import annotations
 
@@ -44,14 +39,28 @@ def ran(check: str, command: str, checks: Sequence[str]) -> bool:
     return got == want or (want[0] is None and got[1] == want[1] and got not in {_form(c) for c in checks})
 
 
-def alone(check: str, packages: Sequence[tuple[str, str]]) -> str:
-    """For `cd <dir> && <cmd>` where <cmd> is the profile check of the package in <dir>: write <cmd> alone; else "".
+def qualified(package: str, command: str) -> str:
+    """A confirmed check as a complete command run from the repository root."""
+    return f"cd {shlex.quote(_package(package))} && {command}"
 
-    Only a hint, so it forgives whitespace; check_plan then admits the profile's command as written and no other.
-    """
-    where, command = _form(check)
-    said = [c for p, c in packages if where is not None and (_package(p), c.split()) == (where, command.split())]
-    return f'write the command alone: "{said[0]}"; the Builder runs it from that package\'s directory' if said else ""
+
+def resolve(checks: Sequence[str], packages: Sequence[tuple[str, str]]) -> list[str]:
+    """Keep selected identities; qualify an old bare check only when its confirmed owner is unique."""
+    resolved = []
+    for check in checks:
+        if _form(check)[0] is not None:
+            resolved.append(check)
+            continue
+        matches = {qualified(p, c) for p, c in packages if c == check}
+        if len(matches) != 1:
+            available = ", ".join(qualified(p, c) for p, c in packages) or "none"
+            msg = (
+                f"Cannot place legacy check {check!r}: expected one confirmed package, found {len(matches)}; "
+                f"available qualified checks: {available}"
+            )
+            raise ValueError(msg)
+        resolved.extend(matches)
+    return list(dict.fromkeys(resolved))
 
 
 def _package(path: str) -> str:
