@@ -133,8 +133,7 @@ const SAID = {
   "request-failed": (e) => `Request ${e.operation} failed (${e.error})`,
 };
 
-const said = (e) => (SAID[e.event] ?? ((x) => `${words(x.event)}${why(x.reason || x.notice || x.why)}`))(e)
-  .replaceAll(/\s+/g, " ").trim();
+const said = (e) => (SAID[e.event] ?? ((x) => `${words(x.event)}${why(x.reason || x.notice || x.why)}`))(e);
 
 // A merge is recorded three times (its request, the merge, the merge step); it reads once, as the merge.
 function oneMerge(events) {
