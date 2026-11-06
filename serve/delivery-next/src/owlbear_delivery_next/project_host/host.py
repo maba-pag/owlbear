@@ -29,7 +29,7 @@ from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import codebase, data_repo, maintenance, processes
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.project_host import environment, launch_gate, leftovers, session_slots
+from owlbear_delivery_next.project_host import brief_timer, environment, launch_gate, leftovers, session_slots
 from owlbear_delivery_next.project_host.runner_end import Found, disappeared, gone
 from owlbear_delivery_next.project_host.runner_end import block as _block
 from owlbear_delivery_next.project_host.runner_end import unverified as _unverified
@@ -177,6 +177,7 @@ class Host:
         self.offline: set[str] = set()  # Changes last seen waiting on the network
         self.back: dict[str, datetime] = {}  # those to wake, with when the probe saw the network return
         self.down, self.probe_at, self.clock = False, 0.0, time.monotonic
+        self.probe_said: str | None = None  # the last failed profile read the probe logged
         self.failed = ""  # the last pass's whole error until a pass succeeds; the Changes page notes it
         pid, started = os.getpid(), datetime.now(UTC)
         self.record = HostRecord(url="", token="", pid=pid, started_at=started, code=codebase.CURRENT)
@@ -248,8 +249,13 @@ class Host:
         self.probe_at = self.clock() + PROBE.total_seconds()
         try:
             name = profile.value(self.store.read_profile() or Profile(), profile.HOST, "github.com")
-        except StoreError:
-            name = "github.com"
+        except StoreError as exc:
+            said = f"network probe skipped: {failure(exc)}"
+            if self.probe_said != said:
+                self.say(said)
+                self.probe_said = said
+            return
+        self.probe_said = None
         up = self.reach(name) is None
         if up and self.down:  # only a return wakes them: a probe that never failed says nothing about their failure
             self.back |= dict.fromkeys(self.offline, now)
@@ -291,6 +297,7 @@ class Host:
         with self.store.lock(slug) as lock:
             c = self._folded(lock, slug, rec, now, paused=paused)
             settle_checks(self.store, c, now)  # another Change's answer settled the project's checks (#968)
+            c = brief_timer.passed(self.store, lock, c, now, paused=paused)  # #986, before the pause decides
             if paused:
                 if not (self.owner_runs() and passes(c, now)):
                     return self._ended(lock, c, rec, now)

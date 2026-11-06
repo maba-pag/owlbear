@@ -293,6 +293,8 @@ def counted(c: Change, found: list[str], upheld: Mapping[str, tuple[bool, str]],
     recheck = c.step.mode == RECHECK
     repair = lp.head != str(version)
     said = lp.verdict(found, upheld, str(version), f"v{version}", recheck=recheck)
+    if found or said:  # the owner's approval waits only for a verdict that raises nothing (#986)
+        c.brief.approve_if_clean = None
     lp.read(version, recheck=recheck, upheld=said, repair=repair)
     lp.reentry = False
     _mode(c, None)

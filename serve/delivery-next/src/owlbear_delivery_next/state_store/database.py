@@ -66,7 +66,7 @@ class StoreError(Exception):
 
     def stop(self, now: datetime) -> Stop:
         """Return the stop record for this error."""
-        return Stop(kind=ErrorKind.STATE, reason=str(self), action=self.action, resume=self.resume, at=now)
+        return Stop(kind=ErrorKind.STATE, reason=failure(self), action=self.action, resume=self.resume, at=now)
 
 
 class FormatTooNewError(StoreError):

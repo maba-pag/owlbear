@@ -312,7 +312,7 @@ def check_step(store: Store, c: Change, now: datetime, lock: Lock | None = None)
     try:
         view = decision_store.load(store.shared, store.name)
     except decision_store.DecisionsUnavailable as exc:
-        return Gate(c, StepResult(exit=Exit.STOP, reason=str(exc), stop=exc.stop(now)))
+        return Gate(c, StepResult(exit=Exit.STOP, reason=failure(exc), stop=exc.stop(now)))
     return _wording_faults(view, c, now) or _judged(view, c, now, store, lock)
 
 

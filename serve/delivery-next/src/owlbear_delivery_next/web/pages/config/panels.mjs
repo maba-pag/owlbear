@@ -10,7 +10,7 @@ import {
   guardLevel, githubAccount, more,
 } from "./cells.mjs";
 import {
-  COLUMN, LOOPS, PLAIN_NAMES, PURGE, RATINGS, RECALLS, ROUNDS, SPOTTER, USER_NAMES, agentName,
+  COLUMN, LOOPS, PLAIN_NAMES, PURGE, RATINGS, RECALLS, ROUNDS, SPOTTER, USER_NAMES, WAIT, agentName,
 } from "./names.mjs";
 
 // The way to the role's compaction on Metrics: back to the filters a compaction row's link came from, else the
@@ -64,12 +64,19 @@ export function agentsGroup() {
       <p-heading size="lg"><h2 id="rounds-title" tabindex="-1">Challenge rounds</h2></p-heading>
       <p-text>A reviewer and the worker go back and forth in rounds. A round with few new findings is the last; after
         the last allowed round with many, Delivery asks you. A loop keeps the values it started with.</p-text>
-      ${table("Challenge rounds: they apply to loops that start after a save", ["Loop", ...ROUNDS.map(([, l]) => l)],
-        "rounds", LOOPS.map(([owner, said]) => setting(`set-rounds-${owner}`, said, loop(owner),
-          ...ROUNDS.map(([field, label]) => numberCell(owner, field, label)))))}
+      ${table("Challenge rounds: they apply to loops that start after a save",
+        ["Loop", ...ROUNDS.map(([, l]) => l), WAIT[1]], "rounds", LOOPS.map(([owner, said]) => {
+          const waits = owner === "shaper";
+          return setting(`set-rounds-${owner}`, said, [...loop(owner), ...(waits ? [`agents.shaper.${WAIT[0]}`] : [])],
+            ...ROUNDS.map(([field, label]) => numberCell(owner, field, label)),
+            waits ? numberCell(owner, WAIT[0], WAIT[1]) : none());
+        }))}
       <p-text size="xs" color="contrast-medium">Findings per round: 1 to 20. "Last round at or below" must be lower
         than "ask you at or above", which may not exceed the findings per round. The final review inherits the
         builder's values.</p-text>
+      <p-text size="xs" color="contrast-medium">Challenge starts by itself after, brief challenges only, 1 to 1440:
+        when a brief version is saved after its challenge loop ended, Delivery starts its challenge this many minutes
+        after the latest save, unless the shaper asked first.</p-text>
     </section>
     <section class="panel" aria-labelledby="at-once-title">
       <p-heading size="lg"><h2 id="at-once-title" tabindex="-1">Sessions at once</h2></p-heading>

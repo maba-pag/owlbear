@@ -60,11 +60,12 @@ from owlbear_delivery_next.change_contracts.visual_records import (
 )
 from owlbear_delivery_next.change_flow import budgets, loop, moves, round_flow
 from owlbear_delivery_next.change_flow.budgets import DEFECT_LIMIT, RETRY_LIMIT
-from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.commands import cli, runner
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import pack_files
+from owlbear_delivery_next.impeccable.detector import DetectorError
 from owlbear_delivery_next.local_system import (
     codebase,
     data_place,
@@ -82,12 +83,12 @@ from owlbear_delivery_next.project_host import api, pack_routes, runner_end
 from owlbear_delivery_next.project_host import host as host_module
 from owlbear_delivery_next.project_host import leftovers as host_leftovers
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.runtimes import copilot_cli, model_choices
+from owlbear_delivery_next.runtimes import copilot_cli, model_choices, readiness
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.runtimes.settings_seen import NAME as SEEN
 from owlbear_delivery_next.settings import carried, config, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
-from owlbear_delivery_next.state_store import decision_store, registry, watch_reports
+from owlbear_delivery_next.state_store import curation_runs, decision_store, registry, watch_reports
 from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store, StoreError
 from owlbear_delivery_next.workflow_steps import decision, design, judges, pick, publish, retry, visual
 from owlbear_delivery_next.workflow_steps.engine import Ctx
@@ -503,7 +504,7 @@ def test_the_brief_offers_a_new_shaping_chat_and_says_how_it_went(tmp_path: Path
         expect(again).to_be_disabled(timeout=15000)
         expect(page.locator("#detail section.info p-button", has_text=REVISE)).to_have_attribute(
             "title",
-            "7 settings are unset; set them on the Settings page",  # the shaper's model, effort, context, loop
+            "8 settings are unset; set them on the Settings page",  # the shaper's model, effort, context, loop, wait
         )
         assert len(launched.calls) == 2
 
@@ -1410,6 +1411,56 @@ def test_projects_says_why_the_shared_data_and_a_pass_loading_projects_again_fai
 
 
 @pytest.mark.browser
+def test_projects_refresh_after_the_data_command_repairs_the_pointer_without_restarting(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
+    from playwright.sync_api import expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    monkeypatch.setattr(project.readiness, "ready", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(Host, "_launch", lambda *_args: False)
+    entry = registry.register(clone(tmp_path / "shop"))
+    source, dest = clone(tmp_path / "old-data"), data_place.default()
+    subprocess.run(["git", "clone", "-q", str(source), str(dest)], check=True)  # noqa: S603, S607
+    data_place.pointer().write_text(json.dumps({"moving_from": str(source), "moving_to": str(dest)}))
+    machine, server, base = serve()
+    try:
+        host_start._provisioned(machine)  # noqa: SLF001 - the real startup failure, not a supplied UI notice
+        original = machine.unshared
+        assert original
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            page = browser.new_page(viewport={"width": 1280, "height": 800})
+            said = errors(page)
+            pds.only(page, base)
+            page.goto(f"{base}/projects#token=t")
+            expect(page.locator("#unshared")).to_have_text(f"Shared data: {original}")
+            page.screenshot(path=str(tmp_path / "projects-before-data-repair.png"), full_page=True)
+            assert cli.main(["data"]) == 1
+            page.reload()
+            expect(page.locator("#unshared")).to_have_text(f"Shared data: {original}")
+            shutil.rmtree(source)
+            assert cli.main(["data"]) == 0
+            machine.retry()
+            loaded = machine.projects[entry.id].store
+            assert loaded is not None
+            assert loaded.shared.root == dest
+            page.reload()  # the same server and Machine reread the actual repaired pointer
+            row = page.locator("#projects > li", has_text="shop")
+            expect(row.get_by_role("heading", name="shop", exact=True)).to_be_visible()
+            expect(row.locator("p-tag", has_text="failed")).to_have_count(0)
+            page.screenshot(path=str(tmp_path / "projects-after-data-repair.png"), full_page=True)
+            expect(page.locator("#unshared")).to_be_hidden()
+            assert machine.unshared == ""
+            assert machine.projects[entry.id].store is loaded
+            assert targets(page.locator("#projects a, #projects button")) == []
+            assert said == []
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
+@pytest.mark.browser
 def test_decisions_says_what_the_start_could_not_do_about_decisions_whole(monkeypatch, whole_error) -> None:
     """#971: a retired decision index file the start could not remove, and decisions it could not pre-load, say why
     whole in the Decisions page's error notice; a decision id or file in the text stays as written."""
@@ -1835,6 +1886,66 @@ def test_projects_lists_a_host_s_failed_readiness_checks_whole_under_its_reason(
         page.set_viewport_size({"width": 375, "height": 800})
         assert page.evaluate("document.documentElement.scrollWidth") <= 375
         assert broke == []
+
+
+@pytest.mark.browser
+def test_projects_lists_a_detection_read_failure_from_the_real_readiness_pass(
+    tmp_path: Path, monkeypatch, pds, shared_repo, whole_error
+) -> None:
+    """#1007: a failed detector read reaches Project._ready and its real Projects readiness line."""
+    from playwright.sync_api import expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
+    entry = registry.register(clone(tmp_path / "shop"))
+    store = Store.open(Path(entry.path))
+    store.write_profile(
+        Profile(
+            entries={
+                profile.HOST: ProfileEntry(
+                    state="known", value="git.enterprise.invalid", evidence=f"{profile.CONFIRMED}; owner"
+                ),
+            }
+        )
+    )
+    error = DetectorError(whole_error)
+    error.add_note("the detector's source could not be read")
+
+    def detect(*_args):
+        raise error
+
+    monkeypatch.setattr(profile, "detect", detect)
+    monkeypatch.setattr(readiness, "reach", lambda *_args: "fixture network unavailable")
+    monkeypatch.setattr(readiness, "probe_in", lambda _repo: lambda _cmd: (1, "fixture probe not checked"))
+    monkeypatch.setattr(readiness.pack_update, "notice", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(readiness.pack_update, "said", lambda _notice: "fixture packs not checked")
+    monkeypatch.setattr(Host, "_launch", lambda *_args: False)
+    machine, server, base = serve()  # actual readiness.ready → Project._ready → HostRecord.ready
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            page = browser.new_page(viewport={"width": 1280, "height": 800})
+            said = errors(page)
+            pds.only(page, base)
+            page.goto(f"{base}/projects#token=t")
+            row = page.get_by_role("listitem", name="shop")
+            checks = row.get_by_role("list", name="Failed readiness checks")
+            expect(checks).to_be_visible()
+            page.screenshot(path=str(tmp_path / "projects-detection.png"), full_page=True)
+            detected = checks.get_by_role("listitem").filter(has_text="profile detection:")
+            assert detected.count() == 1  # the visible list is the completed readiness pass
+            assert detected.text_content() == (
+                f"profile detection: StoreError: the project profile could not be detected: {failure(error)} · fix: "
+                "Resolve the profile detection or publication error reported above, then restart Delivery"
+            )
+            assert detected.evaluate("e => getComputedStyle(e).whiteSpace") == "pre-wrap"
+            assert store.read_profile().entries[profile.HOST].value == "git.enterprise.invalid"
+            page.set_viewport_size({"width": 375, "height": 800})
+            assert page.evaluate("document.documentElement.scrollWidth") <= 375
+            assert said == []
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
 
 
 @pytest.mark.browser
@@ -2786,6 +2897,58 @@ def test_an_error_no_project_route_caught_shows_whole_on_its_page_and_in_the_hos
         assert notice.text_content().strip() == whole
         assert traced(caplog, page) == {("Exception in ASGI application\n", logged_whole)}
         assert set(broke) == {FAILED_500}
+
+
+@pytest.fixture
+def owner_history_page(tmp_path: Path, pds, shared_repo, monkeypatch, whole_error):
+    monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
+    entry = registry.register(clone(tmp_path / "shop"))
+    _git(Path(entry.path), "branch", "-M", "main")
+    reason = "the curator's result stays intact\nwith its detail"
+    run = curation_runs.FolderRun(state="failed", started_at=datetime.now(UTC), reason=reason)
+    (local_home.root() / curation_runs.STATE).write_text(curation_runs.Runs(folders={"shop": run}).model_dump_json())
+    error = subprocess.TimeoutExpired(["git", "log"], 10, output=whole_error.encode(), stderr=b"owner history stderr")
+    error.add_note("owner history note")
+    real = subprocess.run
+
+    def history(args, **kwargs):
+        if args[:2] == ["git", "log"]:
+            raise error
+        return real(args, **kwargs)
+
+    monkeypatch.setattr(pack_routes.subprocess, "run", history)
+    notice = f"the owner's memory history could not be read, so it is not counted: {failure(error)}"
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        yield page, base, entry.id, notice, reason
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("scope", ["project", "all"])
+def test_owner_history_qualifies_a_failed_curation_in_both_maintenance_views(
+    owner_history_page, tmp_path: Path, scope
+) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    page, base, pid, notice, reason = owner_history_page
+    path = f"/maintenance?project={pid}" if scope == "project" else "/maintenance"
+    page.goto(f"{base}{path}#token=t")
+    surface = (
+        page.locator("#actions > li", has_text="Memory curation")
+        if scope == "project"
+        else page.locator(f'#projects .scope[data-key="{pid}"] .runs > li', has_text="Memory curation")
+    )
+    expect(surface).to_contain_text("(memory curator): failed, ")
+    page.screenshot(path=str(tmp_path / f"maintenance-{scope}-failed.png"), full_page=True)
+    expect(surface).to_contain_text(notice)
+    assert notice in surface.text_content()
+    expect(surface).not_to_contain_text("never run")
+    expect(surface).not_to_contain_text("Never run")
+    if scope == "project":
+        assert reason in surface.text_content()
+    else:
+        expect(surface).not_to_contain_text(reason)  # tagged runs' detail stays on the project page
 
 
 @pytest.mark.browser

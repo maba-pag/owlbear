@@ -159,6 +159,63 @@ def test_an_expired_deadline_starts_no_gh_call(fake_gh):
     assert fake_gh.calls() == []
 
 
+@pytest.mark.parametrize("timed_out", [False, True])
+def test_an_origin_read_failure_keeps_both_streams_and_notes(repo, monkeypatch, whole_error, timed_out):
+    def run(argv, **_kwargs):
+        if timed_out:
+            exc = subprocess.TimeoutExpired(
+                argv, 2, output=f"OUT:{whole_error}".encode(), stderr=f"ERR:{whole_error}".encode()
+            )
+            exc.add_note("origin command note")
+            raise exc
+        return subprocess.CompletedProcess(argv, 2, f"OUT:{whole_error}".encode(), f"ERR:{whole_error}".encode())
+
+    monkeypatch.setattr(account.subprocess, "run", run)
+    with pytest.raises(AccountMissing) as raised:
+        Origin.of(repo, timeout=2)
+    said = str(raised.value)
+    assert ("TimeoutExpired:" if timed_out else "CalledProcessError:") in said
+    assert f"stderr:\nERR:{whole_error}\nstdout:\nOUT:{whole_error}" in said
+    if timed_out:
+        assert said.endswith("\norigin command note")
+
+
+@pytest.mark.parametrize(
+    ("operation", "outcome"),
+    [("token", "timeout"), ("token", "failed"), ("status", "timeout"), ("status", "failed"), ("status", "invalid")],
+)
+@pytest.mark.usefixtures("fake_gh")
+def test_an_account_read_failure_is_whole_without_disclosing_token_stdout(monkeypatch, whole_error, operation, outcome):
+    output = "credential-output-never-shown" if operation == "token" else f"OUT:{whole_error}"
+
+    def run(argv, **_kwargs):
+        if argv[1:3] != ("auth", operation):
+            return subprocess.CompletedProcess(argv, 1, b"", b"no oauth token found")
+        if outcome == "timeout":
+            exc = subprocess.TimeoutExpired(argv, 2, output=output.encode(), stderr=f"ERR:{whole_error}".encode())
+            exc.add_note("account command note")
+            raise exc
+        return subprocess.CompletedProcess(
+            argv, 0 if outcome == "invalid" else 2, output.encode(), f"ERR:{whole_error}".encode()
+        )
+
+    monkeypatch.setattr(account.subprocess, "run", run)
+    with pytest.raises(AccountMissing) as raised:
+        resolve("acme", Origin("github.com", "acme", "tools"))
+    said = str(raised.value)
+    assert f"ERR:{whole_error}" in said
+    if outcome == "timeout":
+        assert "TimeoutExpired:" in said
+        assert said.endswith("\naccount command note")
+    elif outcome == "failed":
+        assert "CalledProcessError:" in said
+    else:
+        assert "JSONDecodeError:" in said
+    if operation == "status":
+        assert f"OUT:{whole_error}" in said
+    assert "credential-output-never-shown" not in said
+
+
 @pytest.mark.parametrize(
     ("host", "name"),
     [("github.com", "GH_TOKEN"), ("acme.ghe.com", "GH_TOKEN"), ("ghe.acme.test", "GH_ENTERPRISE_TOKEN")],

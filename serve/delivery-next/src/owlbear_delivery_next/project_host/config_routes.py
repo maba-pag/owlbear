@@ -60,6 +60,7 @@ APPLIED = [
     "agents.shaper.max_findings",
     "agents.shaper.last_round_at",
     "agents.shaper.ask_owner_at",
+    "agents.shaper.challenge_wait",
     "final_review",
     *(f"agents.{role}.minutes" for role in ("planner", "builder", "reviewer", "challenger", "design-judge")),
     "agents.preparer.minutes",
@@ -119,7 +120,7 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         machine, machine_raw = read_layer_bytes(store.machine_path, MachineLayer)
         project, project_raw = read_layer_bytes(store.config_path, Layer)
     except StoreError as exc:
-        raise HTTPException(409, str(exc)) from exc
+        raise HTTPException(409, failure(exc)) from exc
     here, alone = list[str](), list[str]()
     settings, below = resolved(glob, project, machine, here), resolved(glob, Layer(), machine, alone)
     if here:
@@ -163,14 +164,17 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
     }
 
 
-def _github_rule(repo: Path) -> dict[str, str]:
+def _github_rule(repo: Path, until: float) -> dict[str, str]:
     """What ``repository-owner`` resolves to on the project's origin now: the account and why, never a token."""
+    remaining = until - time.monotonic()
+    if remaining <= 0:
+        exc = account.AccountMissing("no time was left to read the project's origin and choose its GitHub account")
+        return {"error": failure(exc)}
     try:
-        chosen = account.resolve(
-            account.REPOSITORY_OWNER, account.Origin.of(repo), until=time.monotonic() + RULE_SECONDS
-        )
+        origin = account.Origin.of(repo, timeout=remaining)
+        chosen = account.resolve(account.REPOSITORY_OWNER, origin, until=until)
     except account.AccountMissing as exc:
-        return {"error": str(exc)}
+        return {"error": failure(exc)}
     return {"login": chosen.login, "why": chosen.why}
 
 
@@ -276,7 +280,7 @@ def _save[T: Layer](  # noqa: PLR0913, PLR0917 - the host names this machine's p
     except ValidationError as exc:
         raise HTTPException(422, exc.errors(include_url=False, include_context=False)) from exc
     except StoreError as exc:
-        raise HTTPException(409, str(exc)) from exc
+        raise HTTPException(409, failure(exc)) from exc
 
     pair: list[T] = []
 
@@ -294,9 +298,9 @@ def _save[T: Layer](  # noqa: PLR0913, PLR0917 - the host names this machine's p
             return ""
         return store.save(path, model, change, what, owner=True, on_written=hook)
     except StoreError as exc:
-        raise HTTPException(409, str(exc)) from exc
+        raise HTTPException(409, failure(exc)) from exc
     except OSError as exc:
-        raise HTTPException(503, f"the settings could not be saved: {exc.strerror or exc}") from exc
+        raise HTTPException(503, f"the settings could not be saved: {failure(exc)}") from exc
 
 
 def _working(store: Store, host: Host) -> list[str]:
@@ -337,9 +341,9 @@ def _rename(store: Store, host: Host, name: str) -> str:
                     h.store.name = name
                 notice = notice or memory_routes.reorigin(store.shared, old, name, until)  # Global keeps its way home
     except DataRepoError as exc:
-        raise HTTPException(409, str(exc)) from exc
+        raise HTTPException(409, failure(exc)) from exc
     except OSError as exc:
-        raise HTTPException(503, f"the folder could not be renamed: {exc.strerror or exc}") from exc
+        raise HTTPException(503, f"the folder could not be renamed: {failure(exc)}") from exc
     finally:
         for h in held:
             h.launching.release()
@@ -392,7 +396,7 @@ def _settle_prefs_import(store: Store, *, reviewed: bool) -> None:
     try:
         prefs_import.republish(store)
     except StoreError as exc:
-        raise HTTPException(503, str(exc)) from exc
+        raise HTTPException(503, failure(exc)) from exc
 
 
 def _reader(store: Store, host: Host) -> Callable[[], settings_read.Reader]:
@@ -437,7 +441,8 @@ def router(store: Store, host: Host) -> APIRouter:
     _read_routes(routes, reads)
 
     def state(notice: str = "") -> dict[str, Any]:
-        return _state(store, notice) | {"github_rule": _github_rule(host.repo)}
+        until = time.monotonic() + RULE_SECONDS
+        return _state(store, notice) | {"github_rule": _github_rule(host.repo, until)}
 
     @routes.get("/config")
     def read() -> dict[str, Any]:

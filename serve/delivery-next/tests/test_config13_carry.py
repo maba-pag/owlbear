@@ -58,6 +58,7 @@ class Host:
 @pytest.fixture
 def no_network(monkeypatch) -> None:
     monkeypatch.setattr(config, "BASE", None)
+    monkeypatch.setattr(profile, "detect", lambda _repo, _gh, previous: previous or Profile())
     monkeypatch.setattr(readiness, "check", lambda *_a, **_k: [])
 
 

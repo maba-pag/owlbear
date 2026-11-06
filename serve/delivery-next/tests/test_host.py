@@ -39,23 +39,29 @@ from owlbear_delivery_next.change_contracts.preparation import BASE, Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_contracts.visual_records import VisualResult
-from owlbear_delivery_next.change_flow import brief_rounds, delivery_target, loop, worktree
+from owlbear_delivery_next.change_flow import brief_rounds, brief_starts, delivery_target, loop, worktree
+from owlbear_delivery_next.change_flow.brief_tools import BriefDraft
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity, status
 from owlbear_delivery_next.commands import cli, runner
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import codebase, processes
 from owlbear_delivery_next.local_system.storage_io import open_lock
-from owlbear_delivery_next.project_host import api, host
+from owlbear_delivery_next.project_host import api, brief_routes, host
 from owlbear_delivery_next.project_host.host import Host, RunnerRecord
 from owlbear_delivery_next.runtimes import command_marks
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import Layer
-from owlbear_delivery_next.state_store import machine_settings, step_pids, work_block
+from owlbear_delivery_next.state_store import briefs, machine_settings, step_pids, work_block
 from owlbear_delivery_next.state_store.database import put_record
 from owlbear_delivery_next.state_store.store import ACTIVITY_LIMIT, Store, StoreError
-from owlbear_delivery_next.workflow_steps import check, disposable, prepare
+from owlbear_delivery_next.workflow_steps import check, disposable, engine, prepare, queue
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
+DRAFT = {
+    "title": "Greet", "outcome": "greet(name) says hello in the app package.",
+    "criteria": ["greet('Ada') returns 'Hello, Ada!'"], "scope": ["packages/app"],
+}  # fmt: skip
 
 
 @pytest.fixture
@@ -217,6 +223,74 @@ def test_a_failed_pass_is_logged_and_noted_on_the_changes_page_whole_until_a_pas
     assert (fake.host.failed, c.get("/api/next/project").json()) == ("", {"notes": []})
 
 
+def test_a_settings_read_stop_keeps_both_persisted_reasons_and_their_http_views_whole(
+    store, tmp_path, monkeypatch, capsys, whole_error
+):
+    fake = Fake(store, tmp_path)
+    save(store, asking(fake).model_copy(update={"outcome": None}))
+    error = StoreError(whole_error)
+    error.add_note("a note added on the way up")
+
+    def unreadable():
+        raise error
+
+    monkeypatch.setattr(store, "settings", unreadable)
+    started = datetime.now(UTC)
+    with store.lock("c1") as lock:
+        c = store.read("c1")
+        runner._step(store, lock, c, c.step, tmp_path)  # noqa: SLF001 - the real caught settings-read stop
+    ended = datetime.now(UTC)
+    c = store.read("c1")
+    whole = f"StoreError: {whole_error}\na note added on the way up"
+    assert (c.stop.reason, c.outcome.reason) == (whole, whole)
+    assert (c.stop.kind, c.stop.action, c.stop.resume) == (ErrorKind.STATE, error.action, error.resume)
+    assert c.outcome.exit == Exit.STOP
+    assert started <= c.stop.at == c.outcome.at <= ended
+    assert (store.events("c1"), capsys.readouterr().out) == ([], "")  # this caught stop emits no activity
+    http = client(store, fake)
+    listed, detail = http.get("/api/next/changes"), http.get("/api/next/changes/c1")
+    assert (listed.status_code, detail.status_code) == (200, 200)
+    assert listed.json()[0]["line"] == detail.json()["line"] == f"Build 1/1 · stopped: {whole}"
+    assert listed.json()[0]["error"] is True
+    assert detail.json()["recovery"]["reason"] == whole
+    assert detail.json()["recovery"]["action"] == error.action
+    assert detail.json()["recovery"]["at"] == c.stop.at.isoformat().replace("+00:00", "Z")
+    assert detail.json()["activity"] == []
+
+
+def test_a_profile_note_keeps_its_existing_log_once_per_changed_failure(store, tmp_path, monkeypatch, caplog):
+    fake = Fake(store, tmp_path)
+    paused(fake, [True])
+    c = client(store, fake)
+    first, changed = StoreError("profile unreadable"), StoreError("profile changed and remains unreadable")
+    for error in (first, changed):
+        error.add_note("profile read context")
+    current = [first]
+
+    def read():
+        if current[0] is not None:
+            raise current[0]
+        return Profile()
+
+    monkeypatch.setattr(store, "read_profile", read)
+    whole = f"StoreError: {first}\nprofile read context"
+    for _ in range(2):
+        assert c.get("/api/next/project").json() == {"notes": [f"The project profile could not be read: {whole}"]}
+
+    def messages():
+        return [r.getMessage() for r in caplog.records if r.name == "owlbear_delivery_next.project_host.project_notes"]
+
+    assert messages() == [f"{store.root}: project profile could not be read: {whole}"]
+    current[0] = changed
+    c.get("/api/next/project").raise_for_status()
+    current[0] = None
+    assert c.get("/api/next/project").json() == {"notes": []}
+    current[0] = changed
+    c.get("/api/next/project").raise_for_status()
+    assert messages()[1:] == [f"{store.root}: project profile could not be read: {failure(changed)}"] * 2
+    assert store.slugs() == []  # logging does not depend on a probe or any Change being present
+
+
 def test_recorded_pids_of_the_runner_block_until_gone(store, tmp_path):
     fake = Fake(store, tmp_path)
     save(store, asking(fake).model_copy(update={"outcome": None}))
@@ -313,10 +387,10 @@ def test_an_unloadable_change_is_reported_once_until_its_record_changes(store, t
     raw(store, "c1", '{"format": 0, "slug": 5}')
     for _ in range(3):
         assert fake.host.tick(NOW) == []
-    assert capsys.readouterr().out.count("cannot be migrated") == 1
+    assert capsys.readouterr().out.count("unsupported format 0; restore a versioned state file") == 1
     raw(store, "c1", '{"format": 0, "slug": 6, "x": 1}')
     fake.host.tick(NOW)
-    assert capsys.readouterr().out.count("cannot be migrated") == 1
+    assert capsys.readouterr().out.count("unsupported format 0; restore a versioned state file") == 1
 
 
 def checking(**env):
@@ -790,6 +864,97 @@ def tick(fake, seconds):
     return fake.host.tick(at(seconds))
 
 
+def test_a_malformed_profile_skips_the_probe_but_still_folds_an_unrelated_no_pr_answer(store, tmp_path, capsys):
+    fake = Fake(store, tmp_path)
+    probes = probing(fake, None)
+    save(store, waiting_on(fake, ErrorKind.NETWORK))
+    assert tick(fake, 0) == []
+    waiting = store.read("c1").outcome
+    save(store, asking(fake).model_copy(update={"slug": "c2"}))
+    store.put_inbox("c2", AnswerItem(at=NOW, question="q1", text="German"))
+    malformed = '{"format": 5, "entries":'
+    path = store.root / "profile.json"
+    path.write_text(malformed)
+    with pytest.raises(StoreError) as caught:
+        store.read_profile()
+    whole = failure(caught.value)
+    fake.host.down = True
+    assert tick(fake, 1) == ["c2"]
+    assert (path.read_text(), store.read("c1").outcome) == (malformed, waiting)
+    assert (probes, fake.host.down, fake.host.back) == ([], True, {})
+    assert (fake.host.offline, fake.host.probe_at, fake.host.failed) == ({"c1"}, 11.0, "")
+    answered = store.read("c2")
+    assert (answered.questions[0].answer.text, answered.outcome, answered.names.pr) == ("German", None, None)
+    with store.db.read() as db:
+        assert db.execute("SELECT count(*) FROM inbox WHERE slug = 'c2'").fetchone() == (0,)
+    assert logged(capsys.readouterr().out, "network probe skipped: ") == [whole]
+    fake.host.failed = "an independent pass failure"
+    http = client(store, fake)
+    response = http.get("/api/next/project")
+    assert (response.status_code, response.json()) == (
+        200,
+        {
+            "notes": [
+                f"The project profile could not be read: {whole}",
+                "The host's last pass failed: an independent pass failure",
+            ]
+        },
+    )
+    assert len(http.get("/api/next/changes").json()) == 2
+    assert capsys.readouterr().out == ""  # rendering the note adds no log
+
+
+def test_a_failed_probe_logs_only_changed_errors_and_a_real_success_resets_it(
+    store, tmp_path, monkeypatch, capsys, whole_error
+):
+    fake = Fake(store, tmp_path)
+    probes = probing(fake, "unreachable")
+    save(store, waiting_on(fake, ErrorKind.NETWORK))
+    store.write_profile(Profile())
+    assert tick(fake, 0) == []
+    first, changed = StoreError(whole_error), StoreError(f"{whole_error}\na changed diagnostic")
+    for error in (first, changed):
+        error.add_note("a note added on the way up")
+    current = [first]
+    read = store.read_profile
+
+    def reading():
+        if current[0] is not None:
+            raise current[0]
+        return read()
+
+    monkeypatch.setattr(store, "read_profile", reading)
+    for seconds in (1, 5, 11):
+        assert tick(fake, seconds) == []
+    assert logged(capsys.readouterr().out, "network probe skipped: ") == [failure(first)]
+    current[0] = changed
+    assert tick(fake, 21) == []
+    assert logged(capsys.readouterr().out, "network probe skipped: ") == [failure(changed)]
+    current[0] = None
+    assert tick(fake, 31) == []
+    assert (probes, fake.host.down, fake.host.back) == (["github.com"], True, {})
+    assert capsys.readouterr().out == ""
+    current[0] = changed
+    assert tick(fake, 41) == []
+    assert logged(capsys.readouterr().out, "network probe skipped: ") == [failure(changed)]
+
+
+@pytest.mark.parametrize("operation", ["observe", "barrier"])
+def test_a_real_pr_needs_its_profile_for_observation_and_the_fold_barrier(store, tmp_path, monkeypatch, operation):
+    c = Change(slug="c1", step=Step(kind=StepKind.MERGE), names=Names(pr=7))
+    save(store, c)
+    after = c.model_copy(deep=True)
+    after.intent.paused_at = NOW
+
+    def unreadable():
+        msg = "the real PR's profile is unreadable"
+        raise StoreError(msg)
+
+    monkeypatch.setattr(store, "read_profile", unreadable)
+    with pytest.raises(StoreError, match="the real PR's profile is unreadable"):
+        engine.observe(store, tmp_path, "c1") if operation == "observe" else queue.barrier(store, tmp_path)(c, after)
+
+
 def test_a_change_waiting_on_the_network_wakes_once_the_probe_sees_the_network_return(store, tmp_path):
     fake = Fake(store, tmp_path)
     probes = probing(fake, "unreachable", None)
@@ -1226,3 +1391,106 @@ def test_a_running_steps_stage_reaches_the_status_and_owlbear_status_from_the_st
             assert f"c1: {line}" in cli.show_status(store, now).splitlines()
     finally:
         os.close(host_fd)
+
+
+def briefed(fake, *, approving: bool = False) -> Change:
+    """Brief v2 saved after its loop ended on v1 (#986); *approving*: its round ended clean, the owner approving."""
+    policy = RoundPolicy(max_rounds=3, max_findings=10, last_round_at=4, ask_owner_at=7)
+    head, reason = ("2", "approve brief v2") if approving else ("1", "challenge brief v2, then approve it")
+    ended = RoundLoop(subject=BRIEF, policy=policy, round=2, ended="clean", head=head)
+    brief = Brief(version=2, challenged=int(head), requested=int(head), approve_if_clean=2 if approving else None)
+    return Change(
+        slug="c1", handle="c1", brief=brief, loops={BRIEF: ended}, step=Step(kind=StepKind.SHAPE),
+        outcome=Outcome(exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", reason=reason, at=NOW),
+        names=Names(worktree=fake.worktree),
+    )  # fmt: skip
+
+
+def test_a_brief_version_saved_after_its_loop_ended_has_its_challenge_started_after_the_shapers_wait(store, tmp_path):
+    fake = Fake(store, tmp_path)
+    save(store, briefed(fake))
+    assert fake.host.tick(NOW) == []
+    assert store.read("c1").outcome.wake_at == NOW + timedelta(minutes=15)  # the save's time and the shaper's wait
+    with store.lock("c1") as lock:  # a new save restarts the wait
+        store.write(lock, briefs.drafted(store.read("c1"), BriefDraft.model_validate(DRAFT), "c1", "c1", Profile()))
+    saved = store.read("c1").outcome
+    assert (saved.wake_at, saved.at > NOW) == (None, True)
+    assert fake.host.tick(NOW) == []
+    assert store.read("c1").outcome.wake_at == saved.at + timedelta(minutes=15)
+    assert fake.host.tick(saved.at + timedelta(minutes=14)) == []
+    assert fake.host.tick(saved.at + timedelta(minutes=15)) == ["c1"]
+    c = store.read("c1")
+    assert (c.step.mode, c.brief.requested, c.loops[BRIEF].ended, c.outcome) == ("challenge", 3, "", None)
+
+
+@pytest.mark.parametrize("pause", ["delivery", "change"])
+def test_no_brief_challenge_starts_by_itself_while_delivery_or_the_change_is_paused(store, tmp_path, pause):
+    fake, flag, later = Fake(store, tmp_path), [True], NOW + timedelta(minutes=16)
+    save(store, briefed(fake))
+    if pause == "delivery":
+        paused(fake, flag)
+    else:
+        store.put_inbox("c1", IntentItem(at=NOW, intent="pause"))
+    assert fake.host.tick(later) == []
+    c = store.read("c1")
+    assert (c.step.mode, c.brief.requested, c.outcome.wake_at) == (None, 1, NOW + timedelta(minutes=15))
+    if pause == "delivery":
+        flag[0] = False
+    else:
+        store.put_inbox("c1", IntentItem(at=later, intent="resume"))
+    assert fake.host.tick(later) == ["c1"]
+    assert store.read("c1").step.mode == "challenge"
+
+
+def test_no_start_time_is_set_while_the_shapers_wait_is_unset(store, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.BASE.agents["shaper"], "challenge_wait", None)
+    fake = Fake(store, tmp_path)
+    save(store, briefed(fake))
+    assert fake.host.tick(NOW + timedelta(days=1)) == []
+    assert store.read("c1").outcome.wake_at is None
+
+
+def test_a_refused_approval_the_owner_asked_for_waits_for_him_with_its_whole_reason(store, tmp_path, monkeypatch):
+    why = "brief v2 cannot be approved yet: the decision list could not be read: OSError: [Errno 5] /data: offline"
+    monkeypatch.setattr(brief_routes, "approved", lambda *_a: why)
+    fake = Fake(store, tmp_path)
+    save(store, briefed(fake, approving=True))
+    assert fake.host.tick(NOW) == []
+    c = store.read("c1")
+    assert (c.brief.approve_if_clean, c.brief.approved_version, c.outcome.cause) == (None, None, brief_starts.REFUSED)
+    assert c.outcome.reason == f"approve brief v2: the approval you asked for was refused: {why}"
+    http = client(store, fake)  # where it surfaces: the approval panel, Approve usable again, and the list, whole
+    brief = http.get("/api/next/changes/c1").json()["brief"]
+    assert (brief["approve_refused"], brief["approve_off"]) == (c.outcome.reason, "")
+    (row,) = http.get("/api/next/changes").json()
+    assert (row["error"], row["line"].endswith(why)) == (True, True)
+
+
+def test_an_abandonment_queued_during_the_challenge_publishes_nothing(store, tmp_path, monkeypatch):
+    called = []
+    monkeypatch.setattr(brief_routes, "approved", lambda *a: called.append(a) or "")
+    fake = Fake(store, tmp_path)
+    save(store, briefed(fake, approving=True))
+    store.put_inbox("c1", IntentItem(at=NOW, intent="abandon"))  # pressed while the round ran
+    fake.host.tick(NOW)
+    c = store.read("c1")
+    assert (c.step.kind, c.brief.approved_version) == (StepKind.CLEANUP, None)
+    assert (called, c.decisions_published) == ([], [])
+
+
+def test_an_approval_killed_before_it_is_written_is_made_by_the_next_pass(store, tmp_path, monkeypatch):
+    fake, real = Fake(store, tmp_path), brief_routes.approved
+    save(store, briefed(fake, approving=True))
+
+    def killed(*_a: object) -> str:
+        raise KeyboardInterrupt  # the host process, killed in the middle of its pass
+
+    monkeypatch.setattr(brief_routes, "approved", killed)
+    with pytest.raises(KeyboardInterrupt):
+        fake.host.tick(NOW)
+    assert store.read("c1").brief.approve_if_clean == 2  # still the owner's: no press is lost
+    monkeypatch.setattr(brief_routes, "approved", real)
+    fake.host.tick(NOW)
+    c = store.read("c1")
+    assert (c.brief.approved_version, c.brief.approve_if_clean, c.step.kind) == (2, None, StepKind.PLAN)
+    assert c.brief.approved[-1].approve_if_clean is None  # consumed with the approval, never kept in its copy

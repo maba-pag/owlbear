@@ -135,6 +135,7 @@ class Brief(Record):
     approved_at: datetime | None = None
     challenged: int | None = None  # the version its challenge loop ended on: approvable (TD-249, TD-208)
     requested: int | None = None  # the version the shaper asked to be challenged (TD-249)
+    approve_if_clean: int | None = None  # the version the owner approves once its challenge raises nothing (#986)
     title: str = ""
     outcome: str = ""
     scope: list[str] = Field(default_factory=list)

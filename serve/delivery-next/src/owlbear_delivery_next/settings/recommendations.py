@@ -56,6 +56,7 @@ def page() -> dict[str, object]:
             context="long" if role in ("design-judge", "shaper") else "default",  # the owner chose the long tier
             minutes=minutes if "minutes" in settable(role) else None,
             subagents=True if "subagents" in settable(role) else None,
+            challenge_wait=15 if "challenge_wait" in settable(role) else None,
             **(rounds if role in LOOPED else {}),
         )
         for role, (model, effort, minutes) in AGENTS.items()

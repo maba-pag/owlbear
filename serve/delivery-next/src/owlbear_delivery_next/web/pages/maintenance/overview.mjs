@@ -20,9 +20,10 @@ function said(actions) {
   const run = (a) => {
     if (!a.last) return `${a.name}: never run`;
     const [by, what] = lastSaid(a.last);
-    // A qualification of what it shows stays; a tagged run's reason waits on the project's own page.
+    // History qualifies every state; a tagged run's own reason waits on the project's page.
     const note = a.last.reason && !TAGS[a.last.state] ? ` — ${a.last.reason}` : "";
-    return `${a.name}${by}: ${what}${note}`;
+    return html`${a.name}${by}: ${what}${note}${a.last.history_notice
+      ? html`<span class="history-notice"> — ${a.last.history_notice}</span>` : nothing}`;
   };
   return [tags.length ? tags : nothing, html`<ul class="runs">${recorded.map((a) => html`<li>${run(a)}</li>`)}</ul>`];
 }

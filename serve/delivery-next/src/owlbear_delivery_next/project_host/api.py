@@ -26,7 +26,6 @@ from owlbear_delivery_next.change_contracts.inbox import (
     WithdrawItem,
 )
 from owlbear_delivery_next.change_contracts.models import Change, Exit, PersonCheck, Waiting
-from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import loop, moves, rebuilds, round_flow, round_marks, versions
 from owlbear_delivery_next.change_flow.progress import progress
 from owlbear_delivery_next.change_flow.status import card, for_chat, status, unloadable
@@ -46,6 +45,7 @@ from owlbear_delivery_next.project_host import (
     pack_routes,
     pages,
     pds_routes,
+    project_notes,
     session_slots,
     stop_routes,
     token_guard,
@@ -55,7 +55,6 @@ from owlbear_delivery_next.project_host.launches import Launches, Refused
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.runtimes.vscode_adapter import open_chat
 from owlbear_delivery_next.runtimes.window_files import HARNESS
-from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import spend_ledger, tool_metrics, watch_reports, work_block
 from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
@@ -276,6 +275,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     ) -> tuple[int, dict[str, Any]]:
         code, out = write(store, body)
         if code == 200:  # noqa: PLR2004 - HTTP OK
+            host.wake.set()  # a version saved after its loop ended gets its challenge's start time at once (#986)
             out["next"] = (
                 f"Once the draft is ready, ask for its challenge with challenge_brief (change {out['change']}, "
                 f"version {out['version']}); the owner approves it in the Changes page after: {link(host.record)}"
@@ -335,10 +335,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     def changes(request: Request) -> list[dict[str, Any]]:
         return [for_chat(summary_of(slug), request.headers.get(chat_contract.HEADER)) for slug in store.slugs()]
 
-    @router.get("/project")
-    def project() -> dict[str, list[str]]:
-        failed = [f"The host's last pass failed: {host.failed}"] if host.failed else []
-        return {"notes": [*profile.notes(store.read_profile() or Profile()), *failed]}
+    router.add_api_route("/project", project_notes.reader(store, host), methods=["GET"])
 
     @router.post("/new-change")
     def new_change() -> dict[str, Any]:

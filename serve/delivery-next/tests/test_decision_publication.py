@@ -29,7 +29,9 @@ from owlbear_delivery_next.change_flow.budgets import EPISODE_ASK
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.github.provider import PullRequest
+from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host.host import Host, RunnerRecord
 from owlbear_delivery_next.state_store import change_record, decision_batch, decision_store
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate
@@ -185,6 +187,31 @@ def test_a_failed_push_lets_approval_proceed_shows_on_the_card_and_the_next_save
 
     assert commits(remote, rel(lasting.id)) == [APPROVED.format(1)]
     assert api.summary(picking.store, picking.slug, Activity(host_up=True), AT)["decisions"] == []
+
+
+def test_approve_on_a_version_saved_after_its_loop_ended_challenges_it_then_the_host_approves_it(picking, monkeypatch):
+    """#986: Approve starts the round of a version saved after its loop ended, its decisions picked first; once the
+    round raised nothing, the host's next pass approves it as the owner's Approve would, even while paused."""
+    shape(picking, 1)
+    assert picking.save(decisions=[LASTING])["version"] == 2  # the loop ended on v1: v2 waits for one more round
+    (lasting,) = picking.change().brief.decisions
+    assert picking.approve(2).json() == {"accepted": "brief-challenge"}
+    c = picking.change()
+    assert (c.brief.approve_if_clean, c.brief.approved_version, c.brief.picked.status) == (2, None, "owed")
+    picking.verdicts.append(tools.ReviewResult(verdict="pass", findings=[]))
+    assert picking.step().brief.challenged == 2
+    spawned: list[str] = []
+    monkeypatch.setattr(data_repo, "folder", lambda *_a: picking.PROJECT)  # the test clone has no claimed remote
+    host = Host(picking.store, picking.repo, spawn=lambda slug: spawned.append(slug) or RunnerRecord(
+        pid=9, created=1.0, started_at=AT), members=lambda _ids: {})  # fmt: skip
+    host.paused = lambda: True
+    assert host.tick(datetime.now(UTC)) == []
+    a = picking.store.read(picking.slug)
+    assert (a.brief.approved_version, a.brief.approve_if_clean, a.step.kind, spawned) == (2, None, StepKind.PLAN, [])
+    assert (a.decisions_baseline is not None, a.decisions_unpinned_at) == (True, None)  # pinned as the owner's
+    (p,) = a.decisions_published
+    assert (p.id, p.published) == (lasting.id, True)
+    assert loop.next_step(a, datetime.now(UTC)).kind == StepKind.PLAN  # planning waits only for Resume
 
 
 def test_approving_the_same_version_again_rewrites_the_same_file_without_a_commit(picking, shared_repo):
