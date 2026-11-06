@@ -67,7 +67,7 @@ def write(store: Store, prof: Profile, *, replace_unreadable: bool = False, basi
             try:
                 why = store.shared.pull()
             except (DataRepoError, OSError) as exc:
-                why = str(exc) or type(exc).__name__
+                why = failure(exc)
             if why:
                 raise SharedSyncError(why)
         if basis and basis.source and config_digest(store.root / PROFILE) != basis.source:
@@ -141,8 +141,8 @@ def publish_config_unlocked(store: Store) -> str:
         return ""
     try:
         intents = pending_intents(store)
-    except DataRepoError:
-        return CONFIG_WAITING  # the shared record cannot be read, so the config is not published
+    except DataRepoError as exc:
+        return f"{CONFIG_WAITING}: {failure(exc)}"
     current = config_digest(store.config_path)
     if any(pending != current for pending in intents):
         return CONFIG_WAITING
@@ -207,7 +207,7 @@ def publish_layer(store: Store, path: Path, message: str, until: float, *, owner
     except DataRepoError as exc:
         if path != store.config_path:
             raise
-        raise SharedError(settle_config(store, str(exc), owner=owner)) from exc
+        raise SharedError(settle_config(store, failure(exc), owner=owner)) from exc
     return settle_config(store, notice, owner=owner) if path == store.config_path else notice
 
 
@@ -252,8 +252,8 @@ def _publish_mark(store: Store, prof: Profile, message: str, *, claimed: bool) -
         return _publish_locked(store, prof, message)
     except DataRepoError as exc:
         if claimed:
-            _settle_claim(store, str(exc), prof.prefs_claim or "")
-        raise SharedError(str(exc)) from exc
+            _settle_claim(store, failure(exc), prof.prefs_claim or "")
+        raise SharedError(failure(exc)) from exc
 
 
 def claim_unconfirmed(store: Store, prof: Profile) -> bool:
@@ -298,7 +298,7 @@ def retry(store: Store) -> str:
         try:
             return _publish_locked(store, prof, f"settings: {store.name}: legacy preference import done")
         except DataRepoError as exc:
-            return str(exc)
+            return failure(exc)
 
 
 @contextlib.contextmanager
@@ -461,8 +461,9 @@ def checked(store: Store, repo: Path) -> Profile | None:
         return prof
     try:
         fresh = profile.detect(repo, profile.provider(prof, repo, github_writer.of(store, repo, detecting=True)), prof)
-    except DetectorError, ProviderError:
-        return prof
+    except (DetectorError, ProviderError) as exc:
+        msg = f"the project profile could not be detected: {failure(exc)}"
+        raise StoreError(msg) from exc
     try:
         kept = _replaced(store, prof, fresh)
         if kept is None:
@@ -477,6 +478,8 @@ def checked(store: Store, repo: Path) -> Profile | None:
 
 def _replaced(store: Store, old: Profile, new: Profile) -> Profile | None:
     """Keep concurrent local intent; publish fresh shared facts only against the snapshot they observed."""
+    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
+
     with _writer(store):
         current = _read_unlocked(store)
         before, now = _local_part(old), _local_part(current) if current is not None else _local(store)
@@ -492,5 +495,6 @@ def _replaced(store: Store, old: Profile, new: Profile) -> Profile | None:
             return None
         notice = _publish_locked(store, kept, f"settings: {store.name}: project profile detected in a clone")
         if notice:
-            raise DataRepoError(notice)
+            msg = f"the detected profile could not be published: {notice}"
+            raise StoreError(msg)
     return None if now != before else kept

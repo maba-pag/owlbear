@@ -236,7 +236,7 @@ def ready(store: Store, repo: Path, *, carry: bool = False) -> list[Check]:
     try:
         prof = profile_share.checked(store, repo)
     except StoreError as exc:
-        fix = "Restore the shared profile repository's write access, then restart Delivery"
+        fix = "Resolve the profile detection or publication error reported above, then restart Delivery"
         failed = Check("profile detection", ok=False, detail=failure(exc), fix=fix)
         return [failed, *_host_checks(store, repo)]
     carried = _carried(store) if carry else []
