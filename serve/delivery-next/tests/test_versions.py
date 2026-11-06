@@ -329,7 +329,8 @@ def test_a_failing_build_step_says_both_its_streams_whole_on_the_page_and_in_the
 
     detail, line, logged = ended(updating.machine, step)
     kind = "PackInstallError" if word == "design-pack" else "VersionError"
-    assert (detail, line, logged[-1]) == (f"{kind}: {lead}{whole}", whole, whole)
+    reported = f"VersionError: {whole}" if step in {"getting", "building"} else whole
+    assert (detail, line, logged[-1]) == (f"{kind}: {lead}{whole}", reported, reported)
     assert f"update: failed v0.2: {detail}" in updating.said
     if word == "design-pack":
         assert updating.machine.impeccable.read()["install"]["detail"] == detail  # every page's banner
@@ -379,7 +380,8 @@ def test_a_command_of_an_update_timing_out_says_what_it_printed_whole(updating, 
     )
     detail, line, logged = ended(updating.machine, step)
     kind = "PackInstallError" if word == "design-pack" else "VersionError"
-    assert (detail, line, logged[-1]) == (f"{kind}: {lead}{whole}", whole, whole)
+    reported = f"VersionError: {whole}" if step in {"getting", "building"} else whole
+    assert (detail, line, logged[-1]) == (f"{kind}: {lead}{whole}", reported, reported)
     assert f"update: failed v0.2: {detail}" in updating.said
 
 

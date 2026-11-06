@@ -69,13 +69,20 @@ class Owned:
 
     def __init__(self, ownership: maintenance.Maintenance, say: Callable[[str], None]) -> None:
         self.ownership, self.say = ownership, say
+        self.unread = ""
 
     def lingering(self) -> bool:
         """Whether a look's lease is held, so its runtime may still run; an unreadable ledger counts as held."""
         try:
-            return PROJECT in self.ownership.holding(KIND)
-        except maintenance.MaintenanceError:
+            held = PROJECT in self.ownership.holding(KIND)
+        except (maintenance.MaintenanceError, OSError) as exc:
+            why = failure(exc)
+            if why != self.unread:
+                self.say(f"chat looks: ownership cannot be inspected: {why}")
+            self.unread = why
             return True
+        self.unread = ""
+        return held
 
     async def judged(self, judge: spotter.Judge, the_card: dict[str, Any], ctx: spotter.Context, meter: Meter) -> str:
         """*judge*'s look under a lease begun before its session and ended with what its teardown confirmed."""
@@ -116,7 +123,11 @@ class Gate:
             if self.admitted >= LOOKS:
                 return CAPACITY
         if self.owned is not None and self.owned.lingering():
-            return HELD
+            return (
+                f"held: chat ownership cannot be inspected; no new look starts: {self.owned.unread}"
+                if self.owned.unread
+                else HELD
+            )
         with self.admission():  # a fence or stop taken before this keeps it out; one taken after counts it
             if self.fenced():
                 return FENCED
@@ -136,4 +147,11 @@ class Gate:
         with self.lock:
             n = self.admitted
         running = [f"Spotter chats: {n} look running"] if n else []
-        return running + ([LINGERING] if self.owned is not None and self.owned.lingering() else [])
+        if self.owned is not None and self.owned.lingering():
+            return [
+                *running,
+                f"Spotter chats: ownership cannot be inspected; no new look starts: {self.owned.unread}"
+                if self.owned.unread
+                else LINGERING,
+            ]
+        return running

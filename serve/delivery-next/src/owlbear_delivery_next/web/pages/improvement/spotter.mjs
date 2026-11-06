@@ -80,9 +80,10 @@ export function spotterSection(s) {
   const elsewhere = Object.entries(s.spend).filter(([pid]) => !s.projects[pid]);
   return html`<section id="spotter" aria-labelledby="spotter-title">
     ${heading(2, "The Spotter", "lg", "spotter-title")}
-    ${quiet("It looks at agents' work at the moments its settings name, records what it sees and acts as its "
+    ${quiet(html`${"It looks at agents' work at the moments its settings name, records what it sees and acts as its "
       + "settings say, in Delivery's steps and in enrolled VS Code chats. A look stopped at its credit limit stops "
-      + "only that look.")}
+      + "only that look."}${s.chat_looks_unread ? html` New chat looks cannot start because ownership cannot be
+        inspected: <span class="failure-detail">${s.chat_looks_unread}</span>` : nothing}`)}
     ${testLine(s.test)}
     ${ids.length ? html`<ul class="cards">${ids.map((pid) => project(pid, s.projects[pid],
       { window, of: s.spend[pid] }))}</ul>` : empty("No project is loaded on this machine.")}

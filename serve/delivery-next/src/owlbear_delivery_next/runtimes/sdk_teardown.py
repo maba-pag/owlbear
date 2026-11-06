@@ -61,9 +61,10 @@ async def owned_call[T](st: _Step, operation: Callable[[], Awaitable[T]], what: 
 async def settle(recorded: Pids, problems: list[str], limit: float | None = None) -> Termination:
     """Wait until the recorded processes are gone, or the limit passes."""
     end = time.monotonic() + (SETTLE if limit is None else limit)
+    seen = partial(processes.observed, problems=problems)
     # Polls the OS process table; there is no event to wait on.
     while (  # noqa: ASYNC110
-        not (result := verdict(recorded, processes.alive, problems)).confirmed and time.monotonic() < end
+        ((result := verdict(recorded, seen, problems)).survivors or result.unknown) and time.monotonic() < end
     ):
         await asyncio.sleep(0.5)
     return result
@@ -85,11 +86,12 @@ async def force(st: _Step, why: str, problems: list[str]) -> None:
     _guard(problems, "force-stop log", st.log, event="force-stop", reason=why, runtime_pid=st.run.runtime_pid)
     with contextlib.suppress(OSError, AttributeError):
         st.proc.terminate()
-    processes.kill(st.run.pids, signal.SIGTERM)
-    await settle(st.run.pids, [], GRACE)
+    seen = partial(processes.observed, problems=problems)
+    processes.kill(st.run.pids, signal.SIGTERM, seen=seen)
+    await settle(st.run.pids, problems, GRACE)
     with contextlib.suppress(OSError, AttributeError):
         st.proc.kill()
-    processes.kill(st.run.pids, signal.SIGKILL)
+    processes.kill(st.run.pids, signal.SIGKILL, seen=seen)
 
 
 async def teardown(client: CopilotClient, session: CopilotSession | None, st: _Step) -> Termination:  # noqa: C901
@@ -128,7 +130,9 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
         failed = any(p.startswith(("tasks.list ", "tasks.cancel ")) for p in problems[unverified:])
         _guard(problems, "task tree record", st.record_tree)
         _guard(problems, "tasks log", st.log, event="tasks", listed=sorted(listed), problems=list(problems))
-        settled = (await settle(listed, [])).confirmed and not failed
+        task_problems: list[str] = []
+        settled = (await settle(listed, task_problems)).confirmed and not failed
+        problems.extend(p for p in task_problems if p not in problems)
         if st.metered:  # what it spent once its tasks settled: once, bounded, before the disconnect (``sdk_spend``)
             await _idle(st)
             try:
@@ -147,7 +151,7 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
     rt = st.run.runtime_pid
     if rt is None:
         problems.append("runtime PID unknown")
-    elif processes.alive(rt, st.run.pids.get(rt)) is not False:
+    elif processes.observed(rt, st.run.pids.get(rt), problems=problems) is not False:
         await force(st, "runtime still present after stop", problems)
     return await _last(st, problems)
 

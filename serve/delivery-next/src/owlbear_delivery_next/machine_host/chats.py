@@ -237,7 +237,14 @@ class Follower:
         return self.sessions or chatlogs.state()
 
     async def _pass(self) -> None:
-        plan = self.read()
+        try:
+            plan = self.read()
+        except Exception as exc:
+            try:
+                self._off(f"chats follower: a pass failed: {failure(exc)}")
+            except Exception as cleanup:  # noqa: BLE001 - retain both failures at the pass boundary
+                exc.add_note(f"dropping chat intake failed: {failure(cleanup)}")
+            raise
         if isinstance(plan, str):
             self._off(f"chats follower: {plan}; no chat is read")
             return

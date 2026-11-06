@@ -13,7 +13,6 @@ from owlbear_delivery_next.improvement import spotter
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import machine_settings
-from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import lookup, watched
 
 CHAT = (
@@ -45,8 +44,6 @@ def settings_now() -> Plan | str:
         s, role = settings.spotter, settings.agent("spotter")
     except SettingsUnset as exc:
         return f"the Spotter's settings are not complete ({exc})"
-    except (StoreError, data_repo.DataRepoError, OSError, ValueError) as exc:
-        return f"the Spotter's settings cannot be read ({type(exc).__name__}: {exc})"
     if not folders:
         return "no chats are enrolled"
     ctx = spotter.Context(

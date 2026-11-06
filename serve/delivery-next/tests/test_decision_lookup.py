@@ -267,7 +267,7 @@ def test_a_lead_chats_lookup_whose_processes_are_not_confirmed_gone_holds_the_ne
     rescanned = host_lookup(picking)
 
     assert first["failed"].startswith("its pick cannot be trusted")
-    assert held == {"failed": lookup.LEFT}
+    assert held == {"failed": f"{lookup.LEFT}: processes 4242 still present"}
     assert rescanned["failed"].startswith("its pick cannot be trusted")  # it ran: the processes were seen gone
     assert len(picking.pickers()) == 2
 

@@ -191,9 +191,10 @@ def _routes(machine: Machine) -> APIRouter:
     def projects() -> dict[str, Any]:
         here = work_block.machine()
         listed = [p.info(here) for p in list(machine.projects.values())]
+        stop = _stop_state(machine)
         return {
             "paused": machine.paused, "waiting": machine.waiting(), "projects": listed, "ending": machine.ending,
-            "left": machine.left() if machine.ending else [],
+            **stop,
             "update_while_paused": _update_while_paused(),
             "update": machine.updater.read(), "updated": machine.updated or versions.running(),
             "announce": machine.auto.read(), "pack": machine.impeccable.read(), "reads": machine.reads.polled(),
@@ -285,7 +286,7 @@ def _machine_routes(routes: APIRouter, machine: Machine) -> None:
         try:
             registry.configure(body.settings, body.rev)
         except registry.RegistryError as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise HTTPException(409, str(exc) if str(exc) == registry.STALE else failure(exc)) from exc
         return values()
 
     @routes.post("/settings-read/dismiss")
@@ -321,7 +322,7 @@ def _curation_routes(routes: APIRouter, machine: Machine) -> None:
     @routes.get("/curation")
     def curation() -> dict[str, Any]:
         """Each memory folder's last automatic curation, and what waits (item 5 slice 4)."""
-        return machine.curation.read()
+        return machine.curation.read() | {"inspection_error": machine.uncurated}
 
     @routes.post("/curation")
     def curate(body: CurateBody) -> dict[str, Any]:
@@ -330,9 +331,26 @@ def _curation_routes(routes: APIRouter, machine: Machine) -> None:
             raise HTTPException(503, why)
         try:
             started = machine.curation.start(body.folder)
+        except data_repo.DataRepoError as exc:
+            raise HTTPException(409, failure(exc)) from exc
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         return machine.curation.read() | {"started": started}
+
+
+def _stop_state(machine: Machine) -> dict[str, Any]:
+    if not machine.ending:
+        return {"left": [], "stop_error": ""}
+    try:
+        left = machine.left()
+    except Exception as exc:  # noqa: BLE001 - presentation must not turn a failed inspection into empty work
+        fresh = failure(exc)
+        why = "\n".join(dict.fromkeys(filter(None, (machine.unstopped, fresh))))
+        if fresh != machine.unstopped:
+            machine.say(f"looking whether OwlBear may stop failed: {fresh}")
+        machine.unstopped = fresh
+        return {"left": None, "stop_error": why}
+    return {"left": left, "stop_error": machine.unstopped}
 
 
 def machine_values(machine: Machine) -> dict[str, Any]:

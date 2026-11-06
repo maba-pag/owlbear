@@ -134,9 +134,10 @@ def test_a_failed_environment_fails_building_with_uvs_whole_output(stepping, who
 
     report = m.updater.report()
     said = f"its environment could not be made: {whole_error}"
+    reported = f"VersionError: {said}"
     building = next(s for s in report["steps"] if s["key"] == "building")
-    assert (building["state"], building["line"]) == ("failed", said)
-    assert {"step": "building", "line": said} in [{"step": e["step"], "line": e["line"]} for e in report["log"]]
+    assert (building["state"], building["line"]) == ("failed", reported)
+    assert {"step": "building", "line": reported} in [{"step": e["step"], "line": e["line"]} for e in report["log"]]
     assert report["detail"] == f"VersionError: {said}"
 
 

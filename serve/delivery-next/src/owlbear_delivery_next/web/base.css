@@ -17,6 +17,7 @@ header {
 section { display: grid; gap: var(--p-spacing-static-md); }
 /* A long path or command in a notice wraps instead of widening the page. */
 p-inline-notification { overflow-wrap: anywhere; }
+.failure-detail { white-space: pre-wrap; overflow-wrap: anywhere; }
 /* A section heading sits closer to what it heads than to the block before it (B2). */
 :is(main, #page) > :is(section, details) + :is(section, details) { margin-block-start: var(--p-spacing-fluid-md); }
 .panel {

@@ -66,6 +66,7 @@ function stateLine(r) {
   const notes = [
     r.unmigrated && `The runtime from before the first update could not be put away at this start: ${r.unmigrated}.`,
     r.unpruned && `Old versions could not be removed at this start: ${r.unpruned}.`,
+    ...(r.automatic_errors ?? []).map((why) => `Automatic updating: ${why}`),
   ].filter(Boolean);
   const phase = phaseLine(r);  // a failed or refused update ends with its error, unpunctuated
   return [notes.length && !phase.endsWith(".") ? `${phase}.` : phase, ...notes].join(" ");
@@ -104,7 +105,8 @@ function updatePart() {
   const refused = !r.startable && !own.busy;
   return html`<section id="owlbear" class="panel" aria-labelledby="owlbear-title">
     <p-heading size="lg"><h2 id="owlbear-title">Update</h2></p-heading>
-    <p-text id="owlbear-state" size="sm" role="status" aria-live="polite">${stateLine(r)}</p-text>
+    <p-text id="owlbear-state" class="failure-detail" size="sm" role="status" aria-live="polite"
+      >${stateLine(r)}</p-text>
     ${own.unread ? html`<p-text id="owlbear-unread" size="sm" role="alert">This may be out of date: ${own.unread}
       </p-text>` : nothing}
     <div class="row">

@@ -8,9 +8,9 @@ starting on a line of its own.
 
 from __future__ import annotations
 
-import contextlib
 import json
 import re
+import subprocess
 import sys
 from importlib import import_module
 from importlib.resources import files
@@ -105,9 +105,12 @@ def _project(pid: str, path: Path) -> list[str]:
     from owlbear_delivery_next.state_store import project_home  # noqa: PLC0415
 
     clone = None
+    problems = []
     if path.is_dir():
-        with contextlib.suppress(Exception):  # a clone that is gone fails to load as before; not this check's
+        try:
             clone = project_home.clone_dir(path)
+        except (OSError, subprocess.SubprocessError) as exc:
+            problems.append(f"its clone could not be inspected: {failure(exc)}")
     found: list[str] | None = None
 
     def inspect(retained: Path) -> None:
@@ -117,7 +120,7 @@ def _project(pid: str, path: Path) -> list[str]:
     retained, problem = _receipt(pid, clone, inspect=inspect) if clone is not None else (None, None)
     if found is None:
         found = _project_formats(pid, path, clone, retained, problem)
-    return ([problem] if problem is not None else []) + found
+    return problems + ([problem] if problem is not None else []) + found
 
 
 def _project_formats(pid: str, path: Path, clone: Path | None, retained: Path | None, problem: str | None) -> list[str]:
@@ -149,8 +152,9 @@ def _project_formats(pid: str, path: Path, clone: Path | None, retained: Path | 
             found.append(f"its store has format {value}, newer than this version's {STORE_FORMAT}")
     # a validated switch leaves the source's config as a retained copy: the target's config is the one that counts
     own = [clone / "config.json"] if clone and retained is None else []
-    layers = [project_home.home(pid) / "config.json", *own, *_shared(path)]
-    return found + _formats("its settings", layers)
+    shared, problems = _shared(path)
+    layers = [project_home.home(pid) / "config.json", *own, *shared]
+    return found + problems + _formats("its settings", layers)
 
 
 def _receipt(pid: str, clone: Path, *, inspect: Callable[[Path], None] | None = None) -> tuple[Path | None, str | None]:
@@ -164,15 +168,17 @@ def _receipt(pid: str, clone: Path, *, inspect: Callable[[Path], None] | None = 
         return None, failure(exc)
 
 
-def _shared(path: Path) -> list[Path]:
+def _shared(path: Path) -> tuple[list[Path], list[str]]:
     """The shared repository's global layer and the project's layer there, found without moving anything."""
     from owlbear_delivery_next.local_system import data_place, data_repo  # noqa: PLC0415
 
-    with contextlib.suppress(Exception):  # no shared repository, or one that cannot be read: the host says so
+    try:
         if (root := data_place.configured_root()) is not None:
             shared = data_repo.DataRepo(root)
-            return [shared.global_path, shared.project_path(data_repo.folder(shared, path))]
-    return []
+            return [shared.global_path, shared.project_path(data_repo.folder(shared, path))], []
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        return [], [f"its shared settings could not be inspected: {failure(exc)}"]
+    return [], []
 
 
 def _formats(what: str, layers: list[Path]) -> list[str]:

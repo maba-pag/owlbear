@@ -116,7 +116,7 @@ def test_with_its_settings_unset_nothing_that_needs_them_runs(monkeypatch):
     assert not job.allowed("merge")
     assert not job.allowed("idle")
     assert Machine._sessions(SimpleNamespace(total=4)) == 0  # noqa: SLF001 - no session starts
-    assert not Auto.permitted(SimpleNamespace(machine=SimpleNamespace(paused=False)))  # never updates by itself
+    assert not Auto(SimpleNamespace(paused=False, say=lambda _line: None)).permitted()  # never updates by itself
 
 
 @pytest.mark.usefixtures("no_base")
