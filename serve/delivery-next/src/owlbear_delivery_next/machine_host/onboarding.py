@@ -138,13 +138,17 @@ class Onboarding:
     def listed(self) -> list[dict[str, Any]]:
         """The runs the Projects page shows, unfinished or local only, each with the project registered at its folder.
 
-        A registered project's run shows on that project's row; the others are listed apart.
+        A registered project's unfinished run shows on that project's row; the others are listed apart. A local-only
+        run whose folder got registered since is done with: the project is served.
         """
         with self.lock:
             self._load()
             jobs = list(self.jobs.values())
-        out = [j.info() | {"project": onboarding_probe.registered_id(Path(j.plan["folder"]))} for j in jobs
-               if j.receipt.get("ended") in {"", "local"}]  # fmt: skip
+        out = []
+        for job in [j for j in jobs if j.receipt.get("ended") in {"", "local"}]:
+            pid = onboarding_probe.registered_id(Path(job.plan["folder"]))
+            if not (pid and job.receipt.get("ended") == "local"):
+                out.append(job.info() | {"project": pid})
         return out + [{"id": i, "unreadable": why} for i, why in self.unreadable.items()]
 
     def working(self) -> list[str]:

@@ -226,6 +226,9 @@ def test_a_local_only_project_makes_no_github_effect_registers_nothing_and_stays
     assert not (Path(found["folder"]) / ".github").exists()  # a CI workflow only on GitHub, with its tick
     assert jobs.machine.projects == {}
     assert [(j["id"], j["project"]) for j in jobs.listed()] == [(info["id"], "")]
+    served = registry.register(Path(found["folder"]))  # served since, as owlbear setup in a terminal would leave it
+    assert jobs.listed() == []
+    registry.remove(served.id)
     again = jobs.probe({"kind": "folder", "folder": found["folder"], "github": True})
     assert again["entry"] == "E3b"
     assert "repository" in again["stages"]
