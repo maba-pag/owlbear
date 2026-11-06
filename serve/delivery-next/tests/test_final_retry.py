@@ -1,5 +1,6 @@
 """TD-210, TD-214, TD-217: the final review's retry: the owner's task list, the undo of the ticked tasks, a new plan."""
 
+import json
 import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -526,10 +527,11 @@ def checks_run_in_confirmed_folders(change_repo, monkeypatch):
     (package / "package.json").write_text('{"scripts":{"test":"make check"}}\n')
     git(change_repo, "add", "Makefile", "packages/app")
     git(change_repo, "commit", "-qm", "root and package check targets")
-    profile = confirm(confirm(Profile(), "check:.", "make check", NOW), "check:packages/app", "make check", NOW)
+    command = "make check & make check; wait # both in this package"
+    profile = confirm(confirm(Profile(), "check:.", command, NOW), "check:packages/app", command, NOW)
     c = Change(slug="c1", brief=Brief(version=1), step=Step(kind=K.PLAN))
     choices = step_input.session(c, profile, change_repo, {})
-    assert choices.checks == ("cd . && make check", "cd ./packages/app && make check")
+    assert choices.checks == (f"cd . && {{\n{command}\n}}", f"cd ./packages/app && {{\n{command}\n}}")
     task = Task(id="t1", title="one", scope=["packages/app"], checks=list(choices.checks))
     c.plan, c.step = Plan(tasks=[task]), Step(kind=K.BUILD, task="t1")
     parts = step_input.session(c, profile, change_repo, {})
@@ -544,7 +546,7 @@ def checks_run_in_confirmed_folders(change_repo, monkeypatch):
             capture_output=True,
             text=True,
         )
-        assert done.stdout.strip() == str(home)
+        assert done.stdout.splitlines() == [str(home), str(home)]
         reports.append({"command": command, "exit_code": done.returncode})
     tree = runner.worktree.observe(change_repo, "main")
     assert tools.check_build(tools.BuildResult(summary="checked", checks=reports), tree, parts.checks) == []
@@ -554,7 +556,7 @@ def checks_run_in_confirmed_folders(change_repo, monkeypatch):
         assert errors == [
             (
                 f'checks: "{omitted["command"]}" missing - run it on your commit and report it, '
-                f'e.g. {{"command": "{omitted["command"]}", "exit_code": 0}}'
+                f"e.g. {json.dumps(omitted)}"
             )
         ]
 

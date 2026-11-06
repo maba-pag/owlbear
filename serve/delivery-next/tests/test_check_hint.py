@@ -14,7 +14,7 @@ from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.session_result import Run
 
 APP = (("packages/app", "npm test"),)
-CHOICE = "cd ./packages/app && npm test"
+CHOICE = "cd ./packages/app && {\nnpm test\n}"
 PROFILE = f'use one of "{CHOICE}"'
 
 
@@ -54,7 +54,7 @@ def test_the_hint_names_the_profile_s_command_as_written():
     task = {"title": "t", "goal": "AC-1", "scope": ["packages/app"], "checks": [CHOICE]}
     plan, _ = tool_schema.parse(PlanResult, {"tasks": [task]})
     spaced = (("packages/app", "npm  test"),)
-    offered = "cd ./packages/app && npm  test"
+    offered = "cd ./packages/app && {\nnpm  test\n}"
     found = tools.check_plan(plan, Worktree("a", "a"), [offered], (), spaced)
     assert found[0].endswith(f'use one of "{offered}"')
     plan.tasks[0].checks = [offered]
@@ -69,7 +69,7 @@ def test_the_plan_step_says_how_a_task_names_its_checks_and_carries_the_packages
     c = Change(slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.PLAN))
     parts = step_input.session(c, Profile(entries=entries), Path("/w"), {})
     assert parts.packages == ((".", "make check"), ("packages/app", "npm test"))
-    assert parts.checks == ("cd . && make check", CHOICE)
+    assert parts.checks == ("cd . && {\nmake check\n}", CHOICE)
     assert all(f"check `{command}`" in parts.message for command in parts.checks)
     bare = step_input.session(c, Profile(), Path("/w"), {})
     assert (bare.checks, bare.packages) == ((), ())

@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 INVALID_LIMIT = 3
 LOCAL_URL = re.compile(r"http://(127\.0\.0\.1|localhost):\{port\}(/\S*)?")  # Delivery picks the port (TD-40)
-EXAMPLE_CHECK = "cd ./packages/app && npm test"
+EXAMPLE_CHECK = "cd ./packages/app && {\nnpm test\n}"
 
 
 class Args(BaseModel):
@@ -426,7 +426,7 @@ def check_build(result: BuildResult, tree: Worktree, checks: Sequence[str], item
         if c.exit_code != 0
     )
     errors.extend(
-        f'checks: "{cmd}" missing - run it on your commit and report it, e.g. {{"command": "{cmd}", "exit_code": 0}}'
+        check_hint.missing(cmd)
         for cmd in checks
         if not any(check_hint.ran(cmd, c.command, checks) for c in result.checks)
     )

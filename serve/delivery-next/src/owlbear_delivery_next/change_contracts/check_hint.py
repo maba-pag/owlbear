@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import shlex
 from pathlib import PurePosixPath
@@ -39,12 +40,18 @@ def ran(check: str, command: str, checks: Sequence[str]) -> bool:
     return got == want or (want[0] is None and got[1] == want[1] and got not in {_form(c) for c in checks})
 
 
+def missing(command: str) -> str:
+    """Name a missing execution with a copyable result example, including multiline command bodies."""
+    example = json.dumps({"command": command, "exit_code": 0})
+    return f'checks: "{command}" missing - run it on your commit and report it, e.g. {example}'
+
+
 def qualified(package: str, command: str) -> str:
     """A confirmed check as a complete command run from the repository root."""
     directory = _package(package)
     if directory != ".":
         directory = f"./{directory}"
-    return f"cd {shlex.quote(directory)} && {command}"
+    return f"cd {shlex.quote(directory)} && {{\n{command}\n}}"
 
 
 def resolve(checks: Sequence[str], packages: Sequence[tuple[str, str]]) -> list[str]:

@@ -27,5 +27,5 @@ def test_seeding_replaces_only_its_own_profile_entries(tmp_path) -> None:
     }
     assert store.read_profile().version == 4
     change = store.read("c1")
-    assert change.plan.tasks[0].checks == ["cd . && npm test"]
-    assert step_input.session(change, store.read_profile(), tmp_path, {}).checks == ("cd . && npm test",)
+    assert change.plan.tasks[0].checks == ["cd . && {\nnpm test\n}"]
+    assert step_input.session(change, store.read_profile(), tmp_path, {}).checks == ("cd . && {\nnpm test\n}",)

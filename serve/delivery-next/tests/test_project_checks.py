@@ -61,7 +61,11 @@ class Sessions:
     async def __call__(self, cfg):
         self.told.append(cfg)
         if cfg.submit is tools.PLAN:
-            checks = [c for c in cfg.checks if c in self.checks or c.partition(" && ")[2] in self.checks]
+            checks = [
+                c
+                for c in cfg.checks
+                if c in self.checks or c.partition(" && {\n")[2].removesuffix("\n}") in self.checks
+            ]
             payload = tools.PlanResult(tasks=[{"title": "one", "goal": "AC-1", "scope": self.scope, "checks": checks}])
         else:
             payload = tools.ReviewResult(verdict="pass")
@@ -186,7 +190,7 @@ def test_the_detected_commands_once_confirmed_are_the_plans_and_saved(store, cha
     answer(store, "detected")
     c = step(store, change_repo)
     (cfg,) = fake.planned()
-    assert (c.step.kind, cfg.checks) == (StepKind.BUILD, ("cd . && npm test",))
+    assert (c.step.kind, cfg.checks) == (StepKind.BUILD, ("cd . && {\nnpm test\n}",))
     assert f"`{cfg.checks[0]}`" in cfg.message
     plan = tools.PlanResult(tasks=[{"title": "one", "goal": "AC-1", "scope": ["src"], "checks": list(cfg.checks)}])
     assert tools.check_plan(plan, tools.Worktree("a", "a"), cfg.checks, ["src"], cfg.packages) == []
@@ -230,7 +234,7 @@ def test_a_confirmed_root_check_covers_a_package_and_its_own_unconfirmed_one_is_
     change = step(store, change_repo)
     assert change.step.kind == StepKind.BUILD
     (cfg,) = fake.planned()
-    assert cfg.checks == ("cd . && make check",)
+    assert cfg.checks == ("cd . && {\nmake check\n}",)
     plan = tools.PlanResult(
         tasks=[
             {
@@ -280,7 +284,7 @@ def test_typed_commands_are_read_back_and_saved_only_when_the_owner_saves_them(
     answer(store, "save")
     assert step(store, change_repo).step.kind == StepKind.BUILD
     root = Store(tmp_path / "store").read_profile().entries["check:."]
-    assert (root.value, profile.is_confirmed(root), fake.planned()[0].checks) == ("b", True, ("cd . && b",))
+    assert (root.value, profile.is_confirmed(root), fake.planned()[0].checks) == ("b", True, ("cd . && {\nb\n}",))
     made(store, change_repo, [f"{LIB}/y.ts"], "c2")
     assert step(store, change_repo, "c2").step.kind == StepKind.BUILD
 
