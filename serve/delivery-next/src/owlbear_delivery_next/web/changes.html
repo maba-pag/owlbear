@@ -27,7 +27,10 @@
   /* The list: one card per Change, grouped by who acts next. */
   .group { display: grid; gap: var(--p-spacing-static-sm); }
   .group > summary { font-size: var(--p-typescale-md); }
-  .cards { display: grid; align-items: start; gap: var(--p-spacing-static-sm); margin: 0; padding: 0; list-style: none; }
+  .cards {
+    display: grid; align-items: start; gap: var(--p-spacing-static-sm);
+    margin: 0; padding: 0; list-style: none;
+  }
   .card {
     position: relative; display: grid; gap: var(--p-spacing-static-xs); align-content: start;
     padding: var(--p-spacing-static-sm) var(--p-spacing-static-md);
