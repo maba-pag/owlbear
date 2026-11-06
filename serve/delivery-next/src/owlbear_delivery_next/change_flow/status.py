@@ -201,18 +201,17 @@ def _direct_error(cause: str | None) -> bool:
 
 def _enqueue_error(c: Change, activity: Activity) -> bool:
     """The refused enqueue of the current completed attempt, never an older refusal behind another step."""
-    o, events = c.outcome, activity.events
+    o, events = c.outcome, reversed(activity.events)
     if c.step.kind != StepKind.MERGE or not o or o.waiting != Waiting.OWNER_ACTION:
         return False
-    latest = next((i for i in reversed(range(len(events))) if events[i].get("event") == "step"), None)
-    if latest is None:
+    step = next((event for event in events if event.get("event") == "step"), None)
+    if step is None:
         return False
-    step = events[latest]
     if (step.get("kind"), step.get("exit")) != (StepKind.MERGE, Exit.PENDING) or (
         datetime.fromisoformat(step["at"]).replace(microsecond=0) != o.at.replace(microsecond=0)
     ):
         return False
-    for event in reversed(events[:latest]):
+    for event in events:
         if event.get("event") == "step":
             break
         if event.get("event") == "merge-enqueue":
