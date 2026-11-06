@@ -35,7 +35,11 @@ function runLine(u) {
   if (u.state === "running") return `Running since ${when(u.started_at)}.`;
   let line = ENDINGS[u.state] ?? sentence(u.state);
   if (u.started_at) line += ` Started ${when(u.started_at)}` + (u.ended_at ? `, ended ${when(u.ended_at)}.` : ".");
-  return line;
+  return own.unread.runs ? `Last read: ${line}` : line;
+}
+
+export function historyUnread() {
+  return Boolean(own.unread.runs || own.runs?.registry || own.runs?.runs.some((r) => r.error));
 }
 
 // What runs now, from the run's invocations, or from its stage list in a record from before them.
@@ -68,7 +72,8 @@ function summary(u, questions, to) {
     ? null : u.progress?.next;
   return html`<div id="pack-summary" class="pack-summary">
     <div class="heading-row">
-      <p-heading size="md"><h3 id="pack-run-title">${open ? "Current update" : "Last update"}</h3></p-heading>
+      <p-heading size="md"><h3 id="pack-run-title">${own.unread.runs ? "Last read update"
+        : open ? "Current update" : "Last update"}</h3></p-heading>
       <p-tag id="pack-tag" variant=${tone} compact="true">${word}</p-tag>
     </div>
     <p-text id="pack-project" size="sm">${open ? "Started" : "Run"} in <strong>${u.name}</strong>: it uses that
@@ -270,7 +275,9 @@ export function startPart() {
 
 export function runPart(run) {
   if (!run) {
-    return html`<p-text id="pack-state" size="sm">No project has run ${article(own.kind.name)} update yet.</p-text>`;
+    return html`<p-text id="pack-state" size="sm">${historyUnread()
+      ? `The last ${own.kind.name} update is not known because run history could not be read completely.`
+      : `No project has run ${article(own.kind.name)} update yet.`}</p-text>`;
   }
   const to = reach(run), questions = run.state === "waiting" ? run.questions ?? [] : [];
   const p = run.published, found = run.loop?.findings ?? [], d = discarding(run, questions);
