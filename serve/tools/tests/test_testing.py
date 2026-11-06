@@ -103,6 +103,120 @@ def test_a_page_change_beside_a_source_change_keeps_the_source_scope() -> None:
 
 
 @pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        (
+            ".pre-commit-config.yaml",
+            (
+                "tests/test_linter_formatter_policy.py",
+                "serve/tools/tests/test_quality.py",
+                "tests/test_dependency_verification_workflow.py",
+            ),
+        ),
+        ("./.editorconfig", ("tests/test_linter_formatter_policy.py",)),
+        ("biome.json", ("tests/test_linter_formatter_policy.py",)),
+        (
+            "package.json",
+            ("tests/test_linter_formatter_policy.py", "tests/test_dependency_verification_workflow.py"),
+        ),
+        ("package-lock.json", ("tests/test_linter_formatter_policy.py",)),
+        (".nvmrc", ("tests/test_linter_formatter_policy.py", "tests/test_dependency_verification_workflow.py")),
+        (".markdownlint-cli2.jsonc", ("tests/test_linter_formatter_policy.py",)),
+        ("renovate.json", ("tests/test_dependency_verification_workflow.py",)),
+        (
+            ".github/workflows/agent-ecosystem.yml",
+            (
+                "tests/test_ci_workflows.py",
+                "tests/test_linter_formatter_policy.py",
+                "tests/test_agent_ecosystem_validation.py",
+                "serve/tools/tests/test_quality.py",
+            ),
+        ),
+        (
+            ".github/workflows/ci.yml",
+            ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py", "tests/test_snyk_findings.py"),
+        ),
+        (
+            ".github/workflows/copilot-setup-steps.yml",
+            (
+                "tests/test_ci_workflows.py",
+                "tests/test_linter_formatter_policy.py",
+                "tests/test_dependency_verification_workflow.py",
+            ),
+        ),
+        (".github/workflows/python.yml", ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py")),
+        (
+            ".github/workflows/python-browser.yml",
+            ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py"),
+        ),
+        (".github/workflows/static.yml", ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py")),
+        (
+            ".github/workflows/tooling.yml",
+            (
+                "tests/test_ci_workflows.py",
+                "tests/test_linter_formatter_policy.py",
+                "tests/test_dependency_verification_workflow.py",
+            ),
+        ),
+        (
+            ".github/workflows/security.yml",
+            ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py", "tests/test_snyk_findings.py"),
+        ),
+        (
+            ".github/workflows/release.yml",
+            ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py", "tests/test_release.py"),
+        ),
+        (
+            ".github/workflows/snyk-ignore.yml",
+            ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py", "tests/test_snyk_findings.py"),
+        ),
+    ],
+)
+def test_known_root_configs_run_their_consumers(config: str, expected: tuple[str, ...]) -> None:
+    (command,) = _routed(config)
+
+    assert set(command[4:]) == {*expected, "tests/test_package_boundary.py"}
+
+
+def test_config_and_source_scopes_are_combined() -> None:
+    plain, monitored = _routed(".pre-commit-config.yaml", _LOOP)
+
+    assert {
+        "tests/test_linter_formatter_policy.py",
+        "serve/tools/tests/test_quality.py",
+        "tests/test_dependency_verification_workflow.py",
+        "tests/test_package_boundary.py",
+        _TESTS + "test_dispatch.py",
+        _TESTS + "test_layers.py",
+        _TESTS + "test_module_rules.py",
+    } <= set(plain)
+    assert _TESTS + "test_loop.py" in monitored
+    assert not set(plain) & {path for path in monitored if path.endswith(".py")}
+
+
+def test_config_and_page_scopes_are_combined() -> None:
+    (command,) = _routed(".editorconfig", _WEB + "pages/metrics/runs.mjs")
+
+    assert "tests/test_linter_formatter_policy.py" in command
+    assert _TESTS + "test_assets.py" in command
+    assert _TESTS + "test_loop.py" not in command
+
+
+@pytest.mark.parametrize(
+    "config",
+    ["pyproject.toml", "uv.lock", ".python-version", "conftest.py", ".yamllint.yml", ".github/workflows/new.yml"],
+)
+@pytest.mark.parametrize("order", ["first", "last"])
+def test_unknown_config_keeps_full_scope(config: str, order: str) -> None:
+    paths = [".editorconfig", _LOOP]
+    paths.insert(0 if order == "first" else len(paths), config)
+
+    (command,) = _routed(*paths)
+
+    assert command == ["uv", "run", "--locked", "pytest", "tests", "serve"]
+
+
+@pytest.mark.parametrize(
     ("paths", "coverage"),
     [
         ((_LOOP,), True),
@@ -218,21 +332,28 @@ def test_no_paths_runs_the_full_suite() -> None:
     call.assert_called_once_with(["uv", "run", "--locked", "pytest", "tests", "serve"], cwd=_ROOT)
 
 
-def test_changed_runs_git_scope_and_accepts_explicit_base() -> None:
+@pytest.mark.parametrize("options", [[], ["--coverage"]], ids=["plain-and-testmon", "coverage"])
+def test_changed_runs_git_scope_and_accepts_explicit_base(options: list[str]) -> None:
     with (
-        patch.object(sys, "argv", ["test", "--changed", "--base", "origin/dev"]),
-        patch(
-            "owlbear_tools.testing._changed_paths", return_value=["serve/tools/src/owlbear_tools/commands.py"]
-        ) as changed_paths,
+        patch.object(sys, "argv", ["test", "--changed", "--base", "origin/dev", *options]),
+        patch("owlbear_tools.testing._changed_paths", return_value=[_LOOP]) as changed_paths,
         patch("owlbear_tools.testing.subprocess.call", return_value=0) as call,
         pytest.raises(SystemExit, match="0"),
     ):
         run_test()
 
     changed_paths.assert_called_once_with("origin/dev")
-    command = call.call_args.args[0]
-    assert command[:4] == ["uv", "run", "--locked", "pytest"]
-    assert "tests/test_package_boundary.py" in command
+    commands = [item.args[0] for item in call.call_args_list]
+    assert len(commands) == (1 if options else 2)
+    assert commands[0][:4] == ["uv", "run", "--locked", "pytest"]
+    assert "tests/test_package_boundary.py" in commands[0]
+    assert all(command[-2:] == ["-o", "session_timeout="] for command in commands)
+    if options:
+        assert "--cov" in commands[0]
+        assert "--testmon" not in commands[0]
+    else:
+        assert commands[1][0] == "env"
+        assert "--testmon" in commands[1]
 
 
 def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() -> None:
@@ -247,13 +368,14 @@ def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() 
     ):
         run_test()
 
-    assert call.call_args.args[0] == ["uv", "run", "--locked", "pytest", "tests", "serve"]
+    assert call.call_args.args[0] == ["uv", "run", "--locked", "pytest", "tests", "serve", "-o", "session_timeout="]
 
 
 def test_failures_are_aggregated_across_all_commands() -> None:
     commands = [(["uv", "run", "pytest", "a"], _ROOT), (["uv", "run", "pytest", "b"], _ROOT)]
     with (
-        patch.object(sys, "argv", ["test", "--all"]),
+        patch.object(sys, "argv", ["test", "--changed"]),
+        patch("owlbear_tools.testing._changed_paths", return_value=[]),
         patch("owlbear_tools.testing._commands_for_paths", return_value=commands),
         patch("owlbear_tools.testing.subprocess.call", side_effect=[1, 0]) as call,
         pytest.raises(SystemExit, match="1"),

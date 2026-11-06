@@ -120,10 +120,23 @@ quality-runner `mode=full` with `changed_paths`.
 | Source prefix | Test scope | Toolchain |
 | --- | --- | --- |
 | `serve/*/src/`, `serve/*/tests/`, `tests/` | `uv run test --changed` | manifest- and import-aware pytest scope plus invariant tests |
+| (known root tooling config or CI workflow filename) | config-consuming tests plus invariant tests | unioned with source/page scopes |
 | `share/` `.owlbear/` | skip (docs/config only, except executable hooks/scripts) | — |
 | (unsafe or unknown path) | full Python suite fallback | pytest |
 
-`uv run test` remains the complete Python suite. Use `uv run test --changed` for the agent inner loop; it includes direct consumer tests discovered from workspace manifests and imports, plus cross-cutting invariants. For changed Python sources of `serve/delivery-next`, pytest-testmon picks the package's tests that executed the changed code (its data stays in `.owlbear/scratch/`; the first run records it over the whole package), and tests that start the package in a child process always run. A change to a page (`.mjs`, `.html` or `.css` under its `web/`) runs the tests that load pages, the package's and its consumers'; other changes there (skills, fixtures) run the whole package. Unknown or unsafe Git scope falls back to the full Python suite.
+`uv run test` remains the complete Python suite. Use `uv run test --changed` for the agent inner loop;
+it includes direct consumer tests discovered from workspace manifests and imports, plus cross-cutting invariants.
+For changed Python sources of `serve/delivery-next`, pytest-testmon picks the package's tests that executed the
+changed code (its data stays in `.owlbear/scratch/`; the first run records it over the whole package), and tests
+that start the package in a child process always run. A change to a page (`.mjs`, `.html` or `.css` under its
+`web/`) runs the tests that load pages, the package's and its consumers'; other changes there (skills, fixtures)
+run the whole package. Unknown or unsafe Git scope falls back to the full Python suite.
+Known tooling configs and workflow filenames add their actual test consumers; root Python-wide configs
+and unrecognised paths keep full-suite coverage. No filename-extension rule skips config tests.
+
+Only `--changed` disables pytest's aggregate session timer, including coverage and full fallback; individual-test
+timeouts and failures stay enforced. Ordinary full-suite and explicit-path runs keep their configured limits.
+See the [tools guide](../serve/tools/README.md#test-selection-and-limits) for selection and timeout details.
 
 For local development, prefer `uv run test` for the complete Python suite and
 `uv run test [PATH ...]` to apply this routing table to explicit paths. Direct pytest commands remain valid

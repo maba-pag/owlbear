@@ -20,6 +20,59 @@ if TYPE_CHECKING:
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 _DOCS_ONLY_PREFIXES = ("share/", ".owlbear/")
 _INVARIANT_TESTS = ("tests/test_package_boundary.py",)
+_CONFIG_TESTS = {
+    ".pre-commit-config.yaml": (
+        "tests/test_linter_formatter_policy.py",
+        "serve/tools/tests/test_quality.py",
+        "tests/test_dependency_verification_workflow.py",
+    ),
+    ".editorconfig": ("tests/test_linter_formatter_policy.py",),
+    "biome.json": ("tests/test_linter_formatter_policy.py",),
+    "package.json": ("tests/test_linter_formatter_policy.py", "tests/test_dependency_verification_workflow.py"),
+    "package-lock.json": ("tests/test_linter_formatter_policy.py",),
+    ".nvmrc": ("tests/test_linter_formatter_policy.py", "tests/test_dependency_verification_workflow.py"),
+    ".markdownlint-cli2.jsonc": ("tests/test_linter_formatter_policy.py",),
+    "renovate.json": ("tests/test_dependency_verification_workflow.py",),
+    ".github/workflows/agent-ecosystem.yml": (
+        "tests/test_ci_workflows.py",
+        "tests/test_linter_formatter_policy.py",
+        "tests/test_agent_ecosystem_validation.py",
+        "serve/tools/tests/test_quality.py",
+    ),
+    ".github/workflows/ci.yml": (
+        "tests/test_ci_workflows.py",
+        "tests/test_linter_formatter_policy.py",
+        "tests/test_snyk_findings.py",
+    ),
+    ".github/workflows/copilot-setup-steps.yml": (
+        "tests/test_ci_workflows.py",
+        "tests/test_linter_formatter_policy.py",
+        "tests/test_dependency_verification_workflow.py",
+    ),
+    ".github/workflows/python.yml": ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py"),
+    ".github/workflows/python-browser.yml": ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py"),
+    ".github/workflows/static.yml": ("tests/test_ci_workflows.py", "tests/test_linter_formatter_policy.py"),
+    ".github/workflows/tooling.yml": (
+        "tests/test_ci_workflows.py",
+        "tests/test_linter_formatter_policy.py",
+        "tests/test_dependency_verification_workflow.py",
+    ),
+    ".github/workflows/security.yml": (
+        "tests/test_ci_workflows.py",
+        "tests/test_linter_formatter_policy.py",
+        "tests/test_snyk_findings.py",
+    ),
+    ".github/workflows/release.yml": (
+        "tests/test_ci_workflows.py",
+        "tests/test_linter_formatter_policy.py",
+        "tests/test_release.py",
+    ),
+    ".github/workflows/snyk-ignore.yml": (
+        "tests/test_ci_workflows.py",
+        "tests/test_linter_formatter_policy.py",
+        "tests/test_snyk_findings.py",
+    ),
+}
 # Packages whose own tests testmon selects for a Python source change; it needs the classic tracer on 3.14 and
 # --testmon-forceselect, because the configured -m otherwise turns its selection off.
 _TESTMON_NAMESPACES = frozenset({"owlbear_delivery_next"})
@@ -160,22 +213,24 @@ def _neighbour_tests(package: _WorkspacePackage) -> list[Path]:
 def _unseen_by_testmon(path: Path, namespace: str) -> bool:
     """Whether a test module depends on code testmon cannot trace: the package in a child process, or read as data."""
     try:
-        nodes = list(ast.walk(ast.parse(path.read_text(encoding="utf-8"))))
+        tree = ast.parse(path.read_text(encoding="utf-8"))
     except OSError, SyntaxError:
         return True
 
-    def attribute(owner: str, name: str) -> bool:
-        return any(
-            isinstance(node, ast.Attribute)
-            and node.attr == name
-            and isinstance(node.value, ast.Name)
-            and node.value.id == owner
-            for node in nodes
-        )
-
-    texts = [node.value for node in nodes if isinstance(node, ast.Constant) and isinstance(node.value, str)]
-    child = attribute("sys", "executable") and any(namespace in text for text in texts)
-    return child or attribute("ast", "parse") or any(text.endswith("*.py") for text in texts)
+    executable = namespaced = False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            if node.value.id == "ast" and node.attr == "parse":
+                return True
+            if node.value.id == "sys" and node.attr == "executable":
+                executable = True
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if node.value.endswith("*.py"):
+                return True
+            namespaced = namespaced or namespace in node.value
+        if executable and namespaced:
+            return True
+    return False
 
 
 def _monitored_package(path: str) -> _WorkspacePackage | None:
@@ -215,6 +270,8 @@ def _package_for_path(normalized: str) -> _WorkspacePackage | None:
 
 def _python_scope(path: str) -> list[str] | None:
     normalized = path.removeprefix("./")
+    if normalized in _CONFIG_TESTS:
+        return sorted({*_CONFIG_TESTS[normalized], *_INVARIANT_TESTS})
     scope: list[str] | None = None
     package = _package_for_path(normalized)
     if package is not None:
@@ -378,6 +435,9 @@ def test_main() -> None:
             paths = []
             all_tests = True
     commands = _commands_for_paths(paths, all_tests=all_tests, coverage=args.coverage)
+    if args.changed:
+        for command, _cwd in commands:
+            command.extend(["-o", "session_timeout="])
     if not commands:
         print("No test scope matched the selected paths.")  # noqa: T201
         raise SystemExit(0)
