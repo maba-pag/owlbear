@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next.change_contracts import chat_contract, evidence
+from owlbear_delivery_next.change_contracts import chat_contract, evidence, failures
 from owlbear_delivery_next.change_contracts.inbox import (
     AnswerItem,
     CheckResult,
@@ -25,7 +25,7 @@ from owlbear_delivery_next.change_contracts.inbox import (
     RestartItem,
     WithdrawItem,
 )
-from owlbear_delivery_next.change_contracts.models import Change, Exit, PersonCheck, Waiting
+from owlbear_delivery_next.change_contracts.models import Change, ErrorKind, Exit, PersonCheck, Waiting
 from owlbear_delivery_next.change_flow import loop, moves, rebuilds, round_flow, round_marks, versions
 from owlbear_delivery_next.change_flow.progress import progress
 from owlbear_delivery_next.change_flow.status import card, for_chat, status, unloadable
@@ -142,10 +142,10 @@ def snapshot(inputs: Inputs, person: PersonCheck) -> str:
     return hashlib.sha256(shown.encode()).hexdigest()
 
 
-def person_check(c: Change, p: PersonCheck, *, inputs: Inputs, waiting: bool) -> dict[str, Any]:
-    """One person-only check as the page shows it; a pass its inputs no longer match counts as open (None)."""
+def person_check(c: Change, p: PersonCheck, *, inputs: Inputs | None, waiting: bool) -> dict[str, Any]:
+    """A check as shown; a pass with unmatched or unavailable current inputs counts as open (None)."""
     a = p.answer
-    held = bool(a and a.passed and a.inputs and evidence.check_valid(a.inputs, inputs))
+    held = bool(inputs is not None and a and a.passed and a.inputs and evidence.check_valid(a.inputs, inputs))
     return {
         "id": p.id,
         "steps": p.steps,
@@ -153,7 +153,7 @@ def person_check(c: Change, p: PersonCheck, *, inputs: Inputs, waiting: bool) ->
         "passed": True if held else (False if a and a.passed is False else None),
         "waiting": waiting,
         "url": check.url(c.env) if c.env and c.env.check == p.id and c.env.ready_at else None,
-        "inputs": snapshot(inputs, p),
+        "inputs": snapshot(inputs, p) if inputs is not None else None,
     }
 
 
@@ -363,8 +363,16 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         q = q.model_copy(update={"options": held.offered(store, c, q)}) if q else None
         shown = q and q.model_dump(mode="json", include={"id", "text", "options"}) | answers.shown(q, events)
         waiting = o and o.exit == Exit.PENDING and o.waiting == Waiting.PERSON_CHECK and o.who == "you"
-        checks = [person_check(c, p, inputs=evidence.check_inputs(c, p, check.fingerprints(c, p)), waiting=bool(
-            waiting and c.step.task == p.id)) for p in c.checks]  # fmt: skip
+        unread = q and q.cause == failures.cause_key(ErrorKind.STATE, q.step, failures.READ_ONLY_UNREAD)
+        checks = [
+            person_check(
+                c,
+                p,
+                inputs=None if unread else evidence.check_inputs(c, p, check.fingerprints(c, p)),
+                waiting=bool(waiting and c.step.task == p.id),
+            )
+            for p in c.checks
+        ]
         prefs, fault = display_prefs(store)
         return (
             summary_of(slug)
