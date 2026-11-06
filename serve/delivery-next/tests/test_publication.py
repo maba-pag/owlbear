@@ -1136,8 +1136,10 @@ def test_a_check_result_is_accepted_only_for_the_inputs_the_page_showed(tmp_path
 
 def test_a_saved_person_check_is_voided_by_revised_steps_or_a_commit_in_its_scope(clone, tmp_path):
     store, url = Store(tmp_path / "store"), "http://127.0.0.1:4173/"
+    host = Host()
+    host.repo = clone
     client = TestClient(
-        api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
+        api.create_app(store, "t", host), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
     )
     steps = {"name": "preview", "steps": ["Open the preview"], "expect": "Hallo, Ada!"}
     brief = {"title": "Greet", "outcome": "The preview greets the owner.", "criteria": ["The page greets Ada"]}
