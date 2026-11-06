@@ -210,6 +210,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
         result = prepare.chosen(post, lock, change, path, run.payload, ctx, result)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
+        before.reset(change, worktree.head(path))  # each new environment's capture gets its own "before"
     if isinstance(p := run.payload, tools.WrongPremise) and p.stage == "brief" and result.exit == Exit.BACK:
         amending.premised(change, p, run.session_id, end)  # TD-185: run before this step goes on; a stop wins
     final = change if change.amending is not None else loop.apply(change, result, end)
@@ -364,6 +365,7 @@ def _reused(store: Store, lock: Lock, change: Change) -> bool:
         store.write(lock, change)
         return False
     change.env = Environment(check=r.check, command=r.command, directory=r.directory, ready_url=r.ready_url)
+    before.reset(change, worktree.head(root))
     reason = f"starting `{r.command}` for the check, as it last launched"
     result = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK, reason=reason)
     event = {"event": "step", "at": now.isoformat(timespec="seconds"), "kind": StepKind.CHECK, "exit": result.exit}

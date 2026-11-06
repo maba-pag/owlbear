@@ -24,7 +24,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.preparation import Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_contracts.visual_records import PageError
+from owlbear_delivery_next.change_contracts.visual_records import PageError, VisualResult, VisualRound
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.settings.config import Layer
@@ -127,11 +127,25 @@ class Host:
         return Activity(host_up=True)
 
 
-def test_due_only_once_before_the_visual_preview_starts(ui):
+def test_due_once_per_visual_check_environment_unless_the_owners_answer_settles_its_round(ui):
+    """D-01M6Q4B6VV4Z05WFQ1BD4X95HJ: each new environment's capture gets its own "before"; settling needs none."""
     assert before.due(ui)
     assert not before.due(ui.model_copy(update={"env": ui.env.model_copy(update={"launched_at": NOW})}))
     assert not before.due(ui.model_copy(update={"step": Step(kind=StepKind.CHECK, task="look")}))
     assert not before.due(ui.model_copy(update={"brief": Brief(version=1, ui=True)}))
+    taken = VisualResult(head="base", tree="t", at=NOW)
+    waived = VisualRound(number=1, head="h", tree="t", brief=ui.brief.version, before=taken.identity(), outcome="model",
+                         model_waived=True, at=NOW)  # fmt: skip
+    for rounds, head, env, due in (
+        ([], "h", ui.env, True),  # a new environment, no round to settle
+        ([waived.model_copy(update={"model_waived": False})], "h", ui.env, True),  # a round judged again
+        ([waived], "moved", ui.env, True),  # his waiver no longer matches the head
+        ([waived], "h", ui.env, False),  # his waiver settles the round on the capture it judged
+        ([], "h", ui.env.model_copy(update={"check": "look"}), False),  # a person check keeps the visual evidence
+    ):
+        c = ui.model_copy(update={"before": taken, "visual_rounds": rounds, "env": env})
+        before.reset(c, head)
+        assert (c.before is None) is due
 
 
 def test_the_states_are_rendered_at_the_merge_base_with_the_same_recipe_and_everything_is_removed(ui, tmp_path):

@@ -394,6 +394,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                 "visual": c.visual.model_dump(mode="json") if c.visual else None,
                 "visual_existing_errors": visual.existing(c),
                 "before": c.before.model_dump(mode="json") if c.before else None,
+                "reference": c.reference.result.model_dump(mode="json") if c.reference and c.reference.result else None,
                 "visual_round": (
                     c.visual_rounds[-1].model_dump(mode="json")
                     | {

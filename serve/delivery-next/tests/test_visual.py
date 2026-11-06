@@ -55,7 +55,7 @@ from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import carried, config
 from owlbear_delivery_next.state_store import briefs
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import check, decision, held, judges, merge, sessions, visual
+from owlbear_delivery_next.workflow_steps import before, check, decision, held, judges, merge, sessions, visual
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -915,7 +915,10 @@ def test_a_capture_is_judged_from_png_blob_attachments_and_passes(flow):
 
 
 def test_a_round_whose_judge_model_is_unknown_is_accepted_whole_or_run_again(flow):
+    """D-01M6Q4B6VV4Z05WFQ1BD4X95HJ: the environment created again keeps the round's "before" only for the waiver."""
     c = checking(flow.store, flow.clone)
+    c.before = VisualResult(head="base", tree="t", at=NOW)  # the round's "before", without pictures
+    flow.store.write(Lock("c1"), c)
     plain = flow.review.__call__
 
     async def unread(cfg):
@@ -940,6 +943,10 @@ def test_a_round_whose_judge_model_is_unknown_is_accepted_whole_or_run_again(flo
     assert [o.id for o in held.offered(flow.store, asked, q)] == ["accept", "retry"]
     accepted, _ = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="accept")], NOW)
     assert accepted.visual_rounds[-1].model_waived
+    again, _ = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="retry")], NOW)
+    for answered, kept in ((again, False), (accepted, True)):  # its environment, created again after the disposal
+        before.reset(answered, git(flow.clone, "rev-parse", "HEAD"))
+        assert (answered.before == asked.before, answered.before is None) == (kept, not kept)
     flow.store.write(Lock("c1"), accepted)
     runner._visual(flow.store, Lock("c1"), accepted, flow.clone)  # noqa: SLF001
     done = flow.store.read("c1")

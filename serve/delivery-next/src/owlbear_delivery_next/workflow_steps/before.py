@@ -2,7 +2,8 @@
 
 The visual check's "before" (TD-24): after the preparing Builder returned the check's recipe and before the host
 launches it, a runner checks out the merge-base, runs the profile's install commands for the Change's scope, launches
-the recipe there on the check's test copy, captures every state and disposes of all it started. The card shows these
+the brief's recipe (else the check's) there on the check's test copy, captures every state and disposes of all it
+started. Each new check environment gets its own (D-01M6Q4B6VV4Z05WFQ1BD4X95HJ). The card shows these
 beside the "after" screenshots. The shaping capture (D-01M61V2GR0C6JV2R6KJ0WR4PNB) renders the target's tip the same
 way with the brief's recipe, on its own test copy, which ends in that checkout before it is removed. A failure is a
 note on the card (B25); neither gates.
@@ -37,6 +38,23 @@ def due(c: Change) -> bool:
     e = c.env
     at_check = (c.step.kind, c.step.task) == (StepKind.CHECK, VISUAL)
     return bool(e and e.check == VISUAL and e.launched_at is None and c.before is None and c.brief.visual) and at_check
+
+
+def reset(c: Change, head: str) -> None:
+    """A new visual check environment gets its own "before" on its own snapshot (D-01M6Q4B6VV4Z05WFQ1BD4X95HJ).
+
+    The last round's "before" stays only while the owner's answer settles that round (his decision, or his waiver of
+    the model check) for the same head and brief version, which captures nothing again.
+    """
+    if c.env is None or c.env.check != VISUAL:  # a person check's environment leaves the visual check's evidence
+        return
+    kept = c.visual_rounds[-1] if c.visual_rounds else None
+    if kept is None or c.before is None:
+        c.before = None
+        return
+    settles = (kept.outcome == "ask" and kept.decision is not None) or (kept.outcome == "model" and kept.model_waived)
+    if not (settles and (kept.head, kept.brief, kept.before) == (head, c.brief.version, c.before.identity())):
+        c.before = None
 
 
 def _remove(repo: Path, tmp: Path) -> None:
@@ -170,7 +188,11 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
     widths: Sequence[int],
     prepare: Prepare | None = None,
 ) -> VisualResult:
-    """Render the brief's states at the merge-base; the findings say why any state is missing (B25)."""
+    """Render the brief's states at the merge-base; the findings say why any state is missing (B25).
+
+    The merge-base is read again at each capture, so a moved target is captured anew. The brief's recipe renders it
+    when the brief has one (it rendered the target in shaping), else the check's.
+    """
     path, now, e = Path(c.names.worktree), datetime.now(UTC), c.env
     if e is None:
         return VisualResult(head="", tree="", findings=["no recipe to render"], at=now)
@@ -189,7 +211,7 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
 
     scope = sorted({p for t in (c.plan.tasks if c.plan else []) for p in t.scope} | set(c.brief.scope))
     shots, notes = _render(
-        repo, base, e, c.brief.visual, out_for(base), log, installs=worktree.installs(profile, scope),
+        repo, base, c.brief.recipe or e, c.brief.visual, out_for(base), log, installs=worktree.installs(profile, scope),
         widths=widths, where="the merge-base", prepare=prepare, inside=scan,
     )  # fmt: skip
     return _result(c, base, tree, shots, notes, widths, scans=sources, at=now)

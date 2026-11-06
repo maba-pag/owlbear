@@ -269,8 +269,17 @@ function refused(scans, prefix = "") {
   return (scans ?? []).filter((s) => !s.scanned).map((s) => `${prefix}${refusedScan(s)}`);
 }
 
+// The design reference's picture of a state at a width, first in the gallery (D-01M6Q4B6VV4Z05WFQ1BD4X95HJ): the
+// target's page as shaping captured it, which the expectations were written against; none where it has no such state.
+function referenced(slug, r, name, at, width, gallery) {
+  if (!r || !r.files.includes(name)) return null;
+  const commit = (r.head || "").slice(0, 7), when = new Date(r.at).toLocaleDateString("en-GB", { dateStyle: "medium" });
+  return side(`Design reference (shaping, ${commit}, ${when})`, zoomable({ slug, kind: "reference", name, at: r.at,
+    side: "reference", state: at, width, commit }, gallery));
+}
+
 // The screenshots of a visual check and what was found: its lines, and the gallery with its count.
-export function visualSection(slug, v, b, existing, deciding) {
+export function visualSection(slug, v, b, existing, deciding, r = null) {
   const open = deciding || v.doubts.length;
   const [said, variant] = v.passed ? ["Passed", "success"] : open ? ["Undecided", "warning"] : ["Failed", "error"];
   const gallery = [], pairs = v.files.map((name) => {
@@ -279,10 +288,11 @@ export function visualSection(slug, v, b, existing, deciding) {
     const comparable = kept && b.states[at] === v.states[at];  // a revised state's old shot is no baseline
     const one = (kind, s, when, head) => zoomable(
       { slug, kind, name, at: when, side: s, state: at, width, commit: head.slice(0, 7) }, gallery);
+    const shaped = referenced(slug, r, name, at, width, gallery);
     const before = comparable ? one("before", "before", b.at, b.head)
       : html`<span class="missing">${kept ? "Not comparable: the state changed since" : "Not available"}</span>`;
-    return html`<figure class="pair"><figcaption>${at} \u00b7 ${width} px</figcaption>${side("Before", before)}
-      ${side("After", one("visual", "after", v.at, v.head))}</figure>`;
+    return html`<figure class=${shaped ? "pair three" : "pair"}><figcaption>${at} \u00b7 ${width} px</figcaption>${
+      shaped ?? nothing}${side("Before", before)}${side("After", one("visual", "after", v.at, v.head))}</figure>`;
   });
   const lines = html`${row(text(`Visual check of ${v.head.slice(0, 7)}`, { weight: "semibold" }),
     html`<p-tag variant=${variant} compact="true">${said}</p-tag>`)}
@@ -305,11 +315,13 @@ export function roundRefused(r, v) {
     items.join("; ")}`, { size: "xs" }) : nothing;
 }
 
-export function beforeSection(slug, b) {
+export function beforeSection(slug, b, r = null) {
   const gallery = [], cells = b.files.map((name) => {
     const [, at, width] = name.match(/^(.*)-(\d+)\.png$/);
-    return side(`${at} \u00b7 ${width} px`, zoomable({ slug, kind: "before", name, at: b.at, side: "before",
+    const shaped = referenced(slug, r, name, at, width, gallery);
+    const before = side(`${at} \u00b7 ${width} px`, zoomable({ slug, kind: "before", name, at: b.at, side: "before",
       state: at, width, commit: (b.head || "").slice(0, 7) }, gallery));
+    return shaped ? html`${shaped}${before}` : before;
   });
   const seen = b.errors.map((e) => `${e.state} at ${e.width}px, ${e.kind} error: ${e.text}`);
   const lines = html`${text(`Before the Change${b.head ? `, at ${b.head.slice(0, 7)}` : ""}`, { weight: "semibold" })}

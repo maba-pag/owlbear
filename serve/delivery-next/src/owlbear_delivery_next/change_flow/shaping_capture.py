@@ -47,6 +47,18 @@ def requested(c: Change) -> ShapingCapture | None:
     return ShapingCapture(key=k, option=b.preparation)
 
 
+def starting(b: Brief) -> list[str]:
+    """The preparer's starting recipe: the one the brief's current pages were captured with, if any."""
+    if (r := b.recipe) is None:
+        return []
+    said = (
+        f"Start from the recipe the brief's current pages were captured with: command `{r.command}`, directory "
+        f"`{r.directory}`, ready_url `{r.ready_url}`. Verify it in this worktree; return it, or adjusted if this "
+        "Change renamed what it runs, keeping `{port}`."
+    )
+    return [said]
+
+
 def owed(c: Change) -> bool:
     """Whether a runner captures the draft's pages now: requested while the Change is shaped."""
     return c.step.kind == StepKind.SHAPE and not c.finished_at and c.shaped is not None and c.shaped.requested
