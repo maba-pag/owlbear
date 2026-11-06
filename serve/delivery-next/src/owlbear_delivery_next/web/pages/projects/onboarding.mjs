@@ -61,7 +61,7 @@ export async function openAdd(opts = {}, onClose = () => {}) {
     "p-heading", "p-text", "p-tag", "p-inline-notification"]);
   s = { step: "start", kind: opts.kind ?? "new", repository: "", folder: opts.folder ?? "", name: "",
     github: opts.github ?? true, found: null, c: {}, problems: [], job: null, busy: "", error: "", folderName: "",
-    values: {}, started: "" };
+    values: {}, started: "", limit: "" };
   done = onClose;
   back = document.activeElement;  // focus goes back to the opener when the dialog closes
   modal = document.createElement("p-modal");
@@ -186,16 +186,26 @@ async function check() {
   }
   const sent = plan(), checked = JSON.stringify(sent);
   await busy("check", async () => {
-    s.problems = (await call("/onboarding/preflight", { body: sent, machine: true, timeout: 60000 })).problems;
+    const found = await call("/onboarding/preflight", { body: sent, machine: true, timeout: 60000 });
+    s.problems = found.problems;
     if (s.problems.length) return;
-    if (JSON.stringify(plan()) === checked) s.step = "confirm";
-    else s.error = "The choices changed during the check: check them again.";
+    if (JSON.stringify(plan()) !== checked) {
+      s.error = "The choices changed during the check: check them again.";
+      return;
+    }
+    s.limit = found.protect_limit ?? "";
+    s.step = "confirm";
   });
+}
+
+// The plan as confirmed: protection the checked plan can't have is left out, with GitHub's reason.
+function approved() {
+  return s.limit ? { ...plan(), protect: false, protect_why: s.limit } : plan();
 }
 
 async function run() {
   await busy("run", async () => {
-    follow(await call("/onboarding/jobs", { body: plan(), machine: true, timeout: 30000 }));
+    follow(await call("/onboarding/jobs", { body: approved(), machine: true, timeout: 30000 }));
   });
 }
 
@@ -330,7 +340,7 @@ function choicesView() {
 }
 
 function confirmView() {
-  const f = s.found, p = plan(), m = method(f, s.c);
+  const f = s.found, p = approved(), m = method(f, s.c);
   const now = p.stages.map((x) => DOES[x]?.(p)).filter(Boolean);
   const changes = [...p.needs, ...p.advice].map((k) => CHANGE[k] ?? k);
   if (changes.length) now.push(`change ruleset ${f.rules.one_ruleset} of the default branch: ${changes.join("; ")}`);
@@ -343,6 +353,7 @@ function confirmView() {
   } else if (p.protect && f.rules.one_ruleset === null) {
     now.push("change no rule: the rules above that need changing are yours to change on GitHub, by their links");
   }
+  if (p.protect_why) now.push(`add no branch protection: ${p.protect_why}`);
   if (p.github) {
     now.push(m.write ? `save the merge method ${m.write} for this project`
       : m.keeps ? `keep the merge method ${m.keeps}, from the settings`
@@ -366,7 +377,8 @@ function confirmView() {
     <div><p-text weight="semibold">If you don't</p-text><p-text>Nothing is created or changed.</p-text></div>
     </div>`,
   html`${button(p.github ? `${verb} ${name}` : `Set up ${name} on this Mac`, run,
-    { variant: "primary", name: "run" })}${button("Back", () => { s.step = "choices"; draw(); })}`];
+    { variant: "primary", name: "run" })}${button("Back", () => { Object.assign(s, { step: "choices", limit: "" });
+    draw(); })}`];
 }
 
 function progressView() {
