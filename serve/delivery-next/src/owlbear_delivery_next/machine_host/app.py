@@ -22,7 +22,7 @@ from pydantic import Field
 
 from owlbear_delivery_next.change_contracts import chat_contract
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.local_system import codebase, data_repo, leases, local_home
+from owlbear_delivery_next.local_system import codebase, data_place, data_repo, leases, local_home
 from owlbear_delivery_next.machine_host import (
     control,
     impeccable,
@@ -170,6 +170,14 @@ def _update_while_paused() -> bool:
         return False
 
 
+def _shared_notice(machine: Machine) -> str:
+    if machine.unshared:
+        place = data_place.describe()  # may migrate the legacy pointer; never rebinds loaded Stores
+        if place.root is not None and place.kind in {"default", "override"} and not place.problem:
+            machine.unshared = ""
+    return machine.unshared
+
+
 def _routes(machine: Machine) -> APIRouter:
     routes = APIRouter(prefix="/api/next")
 
@@ -189,7 +197,7 @@ def _routes(machine: Machine) -> APIRouter:
             "update_while_paused": _update_while_paused(),
             "update": machine.updater.read(), "updated": machine.updated or versions.running(),
             "announce": machine.auto.read(), "pack": machine.impeccable.read(), "reads": machine.reads.polled(),
-            "unretried": machine.unretried, "unshared": machine.unshared, "undecided": list(machine.undecided),
+            "unretried": machine.unretried, "unshared": _shared_notice(machine), "undecided": list(machine.undecided),
         }  # fmt: skip
 
     @routes.post("/projects")

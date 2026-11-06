@@ -916,12 +916,8 @@ def test_a_settings_carry_that_fails_is_kept_and_said_whole(machine, monkeypatch
     assert re.fullmatch(rf"\d\d:\d\d:\d\dZ {said}", capsys.readouterr().out)
 
 
-def test_a_start_s_shared_data_notice_stays_the_start_s_finding_after_owlbear_data_sets_it_right(
-    tmp_path, http, machine
-) -> None:
-    """#971: shared data the start could not set up is said on Projects as that start's finding, whole; once `owlbear
-    data` sets it right while the host runs and a pass loads the project again, the notice still says it is the
-    start's, until `owlbear restart` looks again."""
+def test_a_start_s_shared_data_notice_clears_after_owlbear_data_sets_it_right(tmp_path, http, machine) -> None:
+    """#1007: the same host verifies the actual data command's repair without restarting or rebinding Stores."""
     registry.register(clone(tmp_path / "shop"))
     source, dest = clone(tmp_path / "old-data"), data_place.default()
     subprocess.run(["git", "clone", "-q", str(source), str(dest)], check=True)  # noqa: S603, S607 - a move left both
@@ -932,11 +928,39 @@ def test_a_start_s_shared_data_notice_stays_the_start_s_finding_after_owlbear_da
     noticed = f"at this start, DataRepoError: {both} `owlbear data`; `owlbear restart` looks again"
     read = http.get("/api/next/projects").json()
     assert (read["unshared"], read["projects"][0]["state"]) == (noticed, "failed")
+    assert cli.main(["data"]) == 1  # both checkouts still exist: neither the command nor an HTTP read repairs it
+    assert http.get("/api/next/projects").json()["unshared"] == noticed
     shutil.rmtree(source)
     assert cli.main(["data"]) == 0  # the owner finishes the move while the host runs
     machine.retry()
     read = http.get("/api/next/projects").json()
-    assert (read["unshared"], read["projects"][0]["state"]) == (noticed, "loaded")
+    assert (read["unshared"], read["projects"][0]["state"]) == ("", "loaded")
+    loaded = next(iter(machine.projects.values())).store
+    assert loaded.shared.root == dest
+    http.get("/api/next/projects").raise_for_status()
+    assert next(iter(machine.projects.values())).store is loaded
+
+
+def test_shared_data_notice_needs_a_usable_configured_checkout_not_absence_or_a_problem(
+    tmp_path, http, machine
+) -> None:
+    data_place.pointer().write_text("{")
+    serve._provisioned(machine)  # noqa: SLF001
+    noticed = machine.unshared
+    assert noticed
+    assert http.get("/api/next/projects").json()["unshared"] == noticed
+    data_place.pointer().unlink()
+    assert data_place.describe().kind == "none"
+    assert http.get("/api/next/projects").json()["unshared"] == noticed
+    data_place.pointer().write_text(json.dumps({"repository": str(tmp_path / "missing")}))
+    assert data_place.describe().kind == "problem"
+    assert http.get("/api/next/projects").json()["unshared"] == noticed
+    data_place.pointer().unlink()
+    legacy = data_place.pointer().with_name(data_place.OLD_POINTER)
+    legacy.write_text(json.dumps({"repository": str(clone(tmp_path / "data"))}))
+    assert http.get("/api/next/projects").json()["unshared"] == ""
+    assert data_place.pointer().is_file()
+    assert not legacy.exists()  # describe retains its one-time migration
 
 
 def test_a_failed_pass_loading_projects_again_is_kept_whole_until_one_passes(
