@@ -30,10 +30,10 @@ from owlbear_delivery_next.local_system import codebase, data_repo, maintenance,
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.project_host import brief_timer, environment, launch_gate, leftovers, session_slots
-from owlbear_delivery_next.project_host import shaping_chat
 from owlbear_delivery_next.project_host.runner_end import Found, disappeared, gone
 from owlbear_delivery_next.project_host.runner_end import block as _block
 from owlbear_delivery_next.project_host.runner_end import unverified as _unverified
+from owlbear_delivery_next.project_host.shaping_chat import dispatch as shape_dispatch
 from owlbear_delivery_next.runtimes import chat_contact, readiness
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import github_writer
@@ -321,7 +321,7 @@ class Host:
                 runs = check.capturing(c) or before.due(c) or prepare.due(self.store, c)
                 step = loop.next_step(c, now) if runs else None
             self.store.write(lock, c)
-            shaping_chat.dispatch(self, lock, c)
+            shape_dispatch(self, lock, c)
             self.wants[slug] = session_slots.wanted(c, step)
             return step is not None or bool(not c.stop and prepare.left(self.store, c))  # a gone check's end
 
