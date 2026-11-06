@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.change_flow import brief_rounds, picks, versions
+from owlbear_delivery_next.change_flow import brief_rounds, brief_starts, picks, versions
 from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.state_store.briefs import unrevisable
 from owlbear_delivery_next.workflow_steps import decisions_gate
@@ -32,6 +32,7 @@ def shown(store: Store, c: Change) -> dict[str, Any]:
         "ui": b.ui,
         "visual": [s.model_dump() for s in b.visual],
         "unapprovable": brief_rounds.approvable(c).replace(picks.RETRY, PICK_AGAIN),  # TD-249: why approve is off
+        **approve(c),  # #986: Approve's own state on the page; the chat reads approvable as before
         "revising": brief_rounds.revising(c),  # the findings the shaper revises this version for
         "unrevisable": unrevisable(c),  # why no new shaping chat may revise the saved brief
         "unreviewed": brief_rounds.unreviewed(c),  # TD-255: approving needs the owner's tick
@@ -40,6 +41,20 @@ def shown(store: Store, c: Change) -> dict[str, Any]:
         **placed(store, c),  # where each picked decision applies, for the page's grouped list
         "versions": versions.brief(c),  # each version's state and the challenges that read it
     }
+
+
+def approve(c: Change) -> dict[str, Any]:
+    """Approve's state (#986): why it is off, a refusal of the approval the owner asked for, and the start time."""
+    b, o, waits = c.brief, c.outcome, brief_starts.waiting(c)
+    if waits:
+        off = "this Change is paused: resume it to approve" if c.intent.paused_at else ""
+    elif b.approve_if_clean == b.version and c.step.mode in brief_rounds.MODES:
+        off = f"the challenge of brief v{b.version} is running; your approval takes effect if it is clean"
+    else:
+        off = brief_rounds.approvable(c).replace(picks.RETRY, PICK_AGAIN)
+    refused = o.reason if o and o.cause == brief_starts.REFUSED else ""
+    starts = o.wake_at.isoformat() if waits and o and o.wake_at else None
+    return {"approve_off": off, "approve_refused": refused, "challenge_waits": waits, "starts_at": starts}
 
 
 def placed(store: Store, c: Change) -> dict[str, Any]:

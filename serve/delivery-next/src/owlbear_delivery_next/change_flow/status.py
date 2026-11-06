@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.failures import QUOTA, WRONG_MODEL
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind, Waiting
-from owlbear_delivery_next.change_flow import loop, picks, step_stages
+from owlbear_delivery_next.change_flow import brief_starts, loop, picks, step_stages
 from owlbear_delivery_next.change_flow.brief_rounds import MODES
 from owlbear_delivery_next.change_flow.budgets import EPISODE_QUIET, RETRY_LIMIT, WRONG_MODEL_LIMIT, episode
 from owlbear_delivery_next.change_flow.loop import CONSENT
@@ -17,7 +17,7 @@ from owlbear_delivery_next.local_system.mask import redact
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from owlbear_delivery_next.change_contracts.models import Actor, Change, Stop
+    from owlbear_delivery_next.change_contracts.models import Actor, Change, Outcome, Stop
 
 _AGENT, _ENGINE = timedelta(minutes=10), timedelta(minutes=2)
 QUIET: dict[StepKind, timedelta] = {
@@ -171,6 +171,22 @@ def silent(c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | 
     return now - since
 
 
+def _owned(c: Change, s: str, o: Outcome) -> Status | None:
+    """A wait the owner or his shaping chat ends, or the brief challenge Delivery starts by itself (#986); else None."""
+    if brief_starts.waiting(c):  # no chat needed: Delivery starts the version's challenge
+        at = f" at {o.wake_at.astimezone():%H:%M}" if o.wake_at else " after the wait set in Settings"
+        return Status(f"{s} · brief v{c.brief.version}'s challenge starts by itself{at}", None, "delivery")
+    if o.who != "you":
+        return None
+    action = (
+        CONTINUE  # the shaping chat acts next, unless the owner approves a challenged version
+        if o.waiting == Waiting.CHAT and not c.brief.challenged == c.brief.version != c.brief.approved_version
+        else _ACTION.get(o.waiting)
+    )
+    refused = o.cause == brief_starts.REFUSED  # the approval he asked for, refused: its reason whole (#986)
+    return Status(f"{s} · waiting for you: {o.reason}", action, "you", error=refused)
+
+
 def _episode(c: Change, now: datetime) -> tuple[str, bool]:
     """The environment failure being waited out, as ``failing for <age>, attempt <n>``, and whether it is quiet."""
     if not (b := episode(c)) or not b.since:
@@ -302,13 +318,8 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
     if o and o.exit == Exit.STOP and c.stop:
         return Status(f"{s} · stopped: {c.stop.reason}", c.stop.action, c.stop.actor, error=True)
     if o and o.exit == Exit.PENDING:
-        if o.who == "you":
-            action = (
-                CONTINUE  # the shaping chat acts next, unless the owner approves a challenged version
-                if o.waiting == Waiting.CHAT and not c.brief.challenged == c.brief.version != c.brief.approved_version
-                else _ACTION.get(o.waiting)
-            )
-            return Status(f"{s} · waiting for you: {o.reason}", action, "you")
+        if (yours := _owned(c, s, o)) is not None:
+            return yours
         if o.waiting == Waiting.REVIEWER:  # the reason names the reviewers
             return Status(f"{s} · {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)
         wake = f", next try at {o.wake_at:%H:%M}" if o.wake_at else ""

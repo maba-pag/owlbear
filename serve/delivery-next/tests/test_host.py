@@ -1301,6 +1301,11 @@ def test_a_refused_approval_the_owner_asked_for_waits_for_him_with_its_whole_rea
     c = store.read("c1")
     assert (c.brief.approve_if_clean, c.brief.approved_version, c.outcome.cause) == (None, None, brief_starts.REFUSED)
     assert c.outcome.reason == f"approve brief v2: the approval you asked for was refused: {why}"
+    http = client(store, fake)  # where it surfaces: the approval panel, Approve usable again, and the list, whole
+    brief = http.get("/api/next/changes/c1").json()["brief"]
+    assert (brief["approve_refused"], brief["approve_off"]) == (c.outcome.reason, "")
+    (row,) = http.get("/api/next/changes").json()
+    assert (row["error"], row["line"].endswith(why)) == (True, True)
 
 
 def test_an_abandonment_queued_during_the_challenge_publishes_nothing(store, tmp_path, monkeypatch):

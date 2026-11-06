@@ -7,13 +7,16 @@ import re
 import socket
 import threading
 import time
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import pytest
 import uvicorn
+from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.decision_records import Pick
 from owlbear_delivery_next.change_contracts.round_records import BRIEF
+from owlbear_delivery_next.project_host import brief_timer
 from owlbear_delivery_next.state_store.store import Lock
 
 if TYPE_CHECKING:
@@ -219,6 +222,58 @@ def test_one_more_challenge_confirms_keeps_focus_and_runs(c1, pds) -> None:
         expect(page.locator("#detail .actions")).not_to_contain_text(UNREVIEWED)
     c = store.read(SLUG)
     assert (c.step.mode, c.brief.requested, c.brief.challenged, c.loops[BRIEF].reentry) == ("challenge", 4, None, True)
+
+
+@pytest.mark.browser
+def test_a_version_saved_after_its_loop_ended_says_when_its_challenge_starts_and_approve_starts_it(c1, pds) -> None:
+    """#986: c1's loop ended on v4; the shaper saves v5 as a chat does, sending back what it read. The page says when
+    Delivery starts v5's challenge, and Approve starts it now, approving v5 once the round raises nothing."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, app = c1
+    http = TestClient(app, base_url="http://127.0.0.1", headers={"authorization": "Bearer tok"})
+    said = http.get(f"/api/next/chat/brief/{SLUG}").json()
+    fields = ("title", "outcome", "scope", "non_goals", "decisions", "criteria", "specified")
+    held = {p.id: p for p in store.read(SLUG).checks}  # what the chat keeps of its checks beyond the read-back
+    checks = [k | {"steps": held[k["name"]].steps, "expect": held[k["name"]].expect, "visual": held[k["name"]].visual}
+              for k in said["person_checks"]]  # fmt: skip
+    body = {k: said[k] for k in fields} | {"change": "c1", "person_checks": checks}
+    assert http.post("/api/next/briefs", json=body).json()["version"] == 5
+    with store.lock(SLUG) as lock:  # the host's next pass, which the save woke
+        store.write(lock, brief_timer.passed(store, lock, store.read(SLUG), datetime.now(UTC), paused=False))
+    at = f"{store.read(SLUG).outcome.wake_at.astimezone():%H:%M}"
+    with opened(c1, pds) as page:
+        row = page.locator(f"#changes .card:has(a[data-key='{SLUG}'])")
+        expect(row).to_contain_text(f"brief v5's challenge starts by itself at {at}")
+        expect(row.locator("p.next")).to_have_count(0)  # not "Continue in the shaping chat": Delivery acts next
+        detail = page.locator("#detail")
+        expect(detail).to_contain_text(
+            f"Brief v5's challenge starts by itself at {at}; Approve starts it now and approves it if it is clean"
+        )
+        approve = detail.get_by_role("button", name="Approve v5")
+        expect(approve).to_be_enabled()
+        pds.settled(page)
+        big(approve)
+        approve.click()
+        expect(pds.modal(page)).to_contain_text("Approve brief v5 once its challenge is clean?")
+        expect(pds.modal(page)).to_contain_text("Nothing is approved yet")
+        pds.settled(page)
+        for key in ["Shift+Tab"] * 3 + ["Tab"] * 3:  # the dialog keeps focus at both ends
+            page.keyboard.press(key)
+            assert page.evaluate(pds.INSIDE), key
+        page.keyboard.press("Escape")
+        page.wait_for_function("() => document.activeElement?.textContent?.trim() === 'Approve v5'")
+        assert store.read(SLUG).brief.approve_if_clean is None  # declined: nothing asked
+        approve.click()
+        pds.answer(page, "Challenge and approve")
+        current = detail.locator(".version-list > li").nth(4)
+        expect(current).to_contain_text("v5 challenge running, current")
+        expect(current.locator(".dot.running")).to_have_count(1)
+        expect(page.get_by_text(
+            "Not yet: the challenge of brief v5 is running; your approval takes effect if it is clean."
+        )).to_be_visible()  # fmt: skip
+    c = store.read(SLUG)
+    assert (c.brief.approve_if_clean, c.step.mode, c.brief.requested) == (5, "challenge", 5)
 
 
 def failed(c: Change) -> None:
