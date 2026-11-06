@@ -208,15 +208,15 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
     when the brief has one (it rendered the target in shaping), else the check's.
     """
     path, now, e = Path(c.names.worktree), datetime.now(UTC), c.env
+    tried = {s.name: s.version for s in c.brief.visual}  # a failed attempt is one too: it is not due again (B25)
     if e is None:
-        return VisualResult(head="", tree="", findings=["no recipe to render"], at=now)
+        return VisualResult(head="", tree="", states=tried, findings=["no recipe to render"], at=now)
     try:
         base = worktree.git(path, "merge-base", "HEAD", worktree.tracking(path, c.names.target)).strip()
         tree = visual.tree(path, base)
     except (subprocess.SubprocessError, OSError) as exc:
-        return VisualResult(
-            head="", tree="", findings=[f"the merge-base could not be read: {worktree.failure(exc)}"], at=now
-        )
+        why = f"the merge-base could not be read: {worktree.failure(exc)}"
+        return VisualResult(head="", tree="", states=tried, findings=[why], at=now)
     sources: list[DetectorScan] = []
 
     def scan(tmp: Path, _notes: list[str]) -> None:  # the Change's UI paths in the merge-base's whole tree
