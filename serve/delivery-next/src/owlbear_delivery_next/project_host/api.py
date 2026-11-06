@@ -60,6 +60,7 @@ from owlbear_delivery_next.runtimes.window_files import HARNESS
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import spend_ledger, tool_metrics, watch_reports, work_block
 from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
+from owlbear_delivery_next.state_store.database import DIAGNOSTIC_EVENTS
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import captures, check, decision, held, visual
 
@@ -409,6 +410,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                 "restartable": not round_flow.restartable(c),
                 "recovery": stop_routes.shown(c, store),  # #754: the stop the owner may clear, or None
                 "activity": events[-20:],
+                "diagnostics": [e for e in events if e.get("event") in DIAGNOSTIC_EVENTS],
                 "watcher": watcher(store, slug),
             }
         )

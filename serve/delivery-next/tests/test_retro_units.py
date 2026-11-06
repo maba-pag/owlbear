@@ -80,7 +80,7 @@ def test_a_changes_sessions_reviewers_and_replacements_are_its_own_and_each_gap_
         "output copilot-tool-output-1.txt of session s-build: missing",
         "session s-rev has no capture",
         "session s-new's end was not confirmed; its capture may be incomplete",
-        "the Change's activity keeps only its last 200 events",
+        "the Change's activity keeps only its last 200 ordinary events; diagnostics are retained separately",
         "record rec-1's card is missing",
     ]
     assert (rev["rev"], rev["records"], unit["family"]) == ("r1", ["rec-1"], "chg:p1:fix-it")

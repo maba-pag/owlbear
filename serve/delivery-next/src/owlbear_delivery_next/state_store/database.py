@@ -55,6 +55,11 @@ WATCH = (  # the watcher's reports (W1a): added to any database on open, which o
     "CREATE INDEX IF NOT EXISTS watch_slug ON watch(slug, id)",
 )
 RETRY = 0.05  # seconds between tries of a bounded write's fence
+DIAGNOSTIC_EVENTS = frozenset({
+    "watcher-failed", "spotter-failed", "check-command-failed",
+    "check-observation-failed", "decisions-refresh-failed",
+})
+_ACTIVITY_JSON = "CASE WHEN json_valid(event) THEN event ELSE '{}' END"
 _local_devices: set[int] = set()
 
 
@@ -406,14 +411,28 @@ def put_record(connection: sqlite3.Connection, slug: str, text: str) -> None:
 
 
 def append_activity(connection: sqlite3.Connection, slug: str, line: str, keep: int | None = None) -> None:
-    """Append one activity event (a JSON line) in the open transaction; with *keep*, drop all but the last ones."""
+    """Append activity, retaining whole diagnostics apart from the last *keep* ordinary events."""
     at: Any = None
     with contextlib.suppress(AttributeError, ValueError):
-        at = json.loads(line).get("at")
+        entry = json.loads(line)
+        at = entry.get("at")
+        kind = entry.get("event")
+        if isinstance(kind, str) and kind in DIAGNOSTIC_EVENTS:
+            connection.execute(
+                f"DELETE FROM activity WHERE slug = ? AND json_extract({_ACTIVITY_JSON}, '$.event') = ? "
+                f"AND json_extract({_ACTIVITY_JSON}, '$.reason') = ? "
+                f"AND COALESCE(json_extract({_ACTIVITY_JSON}, '$.session'), '') = ? "
+                f"AND COALESCE(json_extract({_ACTIVITY_JSON}, '$.step'), '') = ? "
+                f"AND COALESCE(json_extract({_ACTIVITY_JSON}, '$.check'), '') = ?",
+                (slug, kind, entry["reason"], *(entry.get(key) or "" for key in ("session", "step", "check"))),
+            )
     connection.execute("INSERT INTO activity(slug, at, event) VALUES (?, ?, ?)", (slug, str(at) if at else None, line))
     if keep is not None:
+        kinds = tuple(DIAGNOSTIC_EVENTS)
+        marks = ", ".join("?" for _ in kinds)
+        ordinary = f"COALESCE(json_extract({_ACTIVITY_JSON}, '$.event'), '') NOT IN ({marks})"
         connection.execute(
-            "DELETE FROM activity WHERE slug = ? AND id NOT IN "
-            "(SELECT id FROM activity WHERE slug = ? ORDER BY id DESC LIMIT ?)",
-            (slug, slug, keep),
+            f"DELETE FROM activity WHERE slug = ? AND {ordinary} AND id NOT IN "
+            f"(SELECT id FROM activity WHERE slug = ? AND {ordinary} ORDER BY id DESC LIMIT ?)",
+            (slug, *kinds, slug, *kinds, keep),
         )
