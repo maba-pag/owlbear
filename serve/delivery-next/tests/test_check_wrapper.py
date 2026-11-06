@@ -123,7 +123,7 @@ def test_an_unlisted_table_while_awaiting_readiness_is_polled_again(monkeypatch)
     monkeypatch.setattr(check, "members", members)
     monkeypatch.setattr(check, "created", lambda _pid: 2.0)
     proc = SimpleNamespace(pid=900, returncode=None)
-    assert check.ready(env("sleep 300"), proc) == {900: 2.0}
+    assert check.ready(env("sleep 300"), proc, log=lambda _event: None) == {900: 2.0}
     assert calls == [900, 900]
 
 

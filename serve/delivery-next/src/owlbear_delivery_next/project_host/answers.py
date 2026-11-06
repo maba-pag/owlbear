@@ -18,8 +18,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_decisions.models import STATEMENT_LIMIT
+from owlbear_delivery_next.change_contracts import failures
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
-from owlbear_delivery_next.change_contracts.models import AnswerKind
+from owlbear_delivery_next.change_contracts.models import AnswerKind, ErrorKind
 from owlbear_delivery_next.change_flow import amending, answer_kinds, loop, rebuilds
 from owlbear_delivery_next.workflow_steps import decision, held
 
@@ -125,7 +126,11 @@ def _checked(store: Store, c: Change, q: Question, body: AnswerBody) -> tuple[in
         return 422, f"option {body.option} is not one of {[o.id for o in q.options]}"
     if q.repair and ((now_open := loop.open_question(c)) is None or now_open.id != q.id):
         return 409, "the Change moved on since this round gate asked; reload"
-    anyway = bool(q.options) and all(o.next == "retry" for o in q.options)  # the fold reruns the step on any answer
+    anyway = (
+        bool(q.options)
+        and all(o.next == "retry" for o in q.options)
+        and q.cause != failures.cause_key(ErrorKind.STATE, q.step, failures.READ_ONLY_UNREAD)
+    )
     # Delivery's own questions are settled by an option; a worker's question also takes the owner's own words
     chosen = (not anyway and bool((q.cause and q.options) or q.repair)) or answer_kinds.owned(q)
     if body.option is None and chosen:

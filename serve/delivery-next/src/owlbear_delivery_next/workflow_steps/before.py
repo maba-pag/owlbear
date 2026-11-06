@@ -118,8 +118,8 @@ def _serve(  # noqa: PLR0913, PLR0917 - the recipe, its states and where they re
     try:
         check.journal(log, e.pids)
         check.release(proc)
-        if (pids := check.ready(e, proc)) is None:
-            e = check.unready(e, proc)
+        if (pids := check.ready(e, proc, log=log)) is None:
+            e = check.unready(e, proc, log=log)
             notes.append(f"for {where}, {check.unanswered(e, proc, log_file, since)}")
             return []
         e = e.model_copy(update={"pids": pids})

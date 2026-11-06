@@ -136,10 +136,11 @@ def _sum(group: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _why(group: list[dict[str, Any]]) -> dict[str, list[str]]:
     """Why runs count as unknown or only up to an earlier read: each failed read's error, once (#971)."""
+    history = list(dict.fromkeys(p["read_error"] for p in group if p.get("read_error")))
     return {
         "unknown_why": list(dict.fromkeys(p["why"] for p in group if p["credits"] is None and p["why"])),
         "failed_why": list(dict.fromkeys(p["why"] for p in group if p["failed"] and p["why"])),
-    }
+    } | ({"read_errors": history} if history else {})
 
 
 def query(  # noqa: PLR0913 - one value per filter the page offers

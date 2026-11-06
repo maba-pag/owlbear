@@ -156,7 +156,7 @@ def protection(job: Job) -> dict[str, Any]:
     plan = job.plan
     remote = _remote(job) if plan.get("protect") else None
     if not plan.get("protect"):
-        return {"applied": False, "why": "not ticked"}
+        return {"applied": False, "why": plan.get("protect_why") or "not ticked"}
     if remote is None or MergeMethod.MERGE not in remote.methods:
         return {"applied": False, "why": "this repository doesn't allow merge commits; OwlBear's protection needs them"}
     branch, client = remote.default_branch or "main", _client(job)

@@ -438,7 +438,9 @@ def test_a_steps_first_reply_is_its_plan_look_and_a_course_finding_steers_the_ru
             observe=lambda: tools.Worktree("a", "a"), checks=(), model="gpt-6-luna", watch=watching,
         )  # fmt: skip
         st = sdk_adapter._Step(cfg, asyncio.get_running_loop())  # noqa: SLF001 - the real step, its feed and Spotter
-        st.feed = watch_feed.opened(cfg.watch, cfg.worktree, lambda: st.run.session_id, st.watch)
+        st.feed = watch_feed.opened(
+            cfg.watch, cfg.worktree, lambda: st.run.session_id, st.watch, log=lambda event: st.log(**event)
+        )
         spot = st.feed.spotter
         spot.judge = answering("course-and-constraints")
         spotter_act.bind(st, session)

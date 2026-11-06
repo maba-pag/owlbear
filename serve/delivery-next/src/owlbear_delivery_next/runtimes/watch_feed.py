@@ -90,13 +90,18 @@ class Feed:
         self.calls: dict[tuple[str, str], _Seen] = {}
         self.launched: dict[str, str] = {}  # launcher call id to the subagent it started, as this feed saw it
         self.open = True
+        self.writer = watching.writer()
         self.spotter: spotter.Spotter | None = None
         if watching.spot is not None:
             try:
                 self.spotter = spotter.Spotter(watching.spot, session, spotter_look.judged)
             except Exception as exc:  # noqa: BLE001 - without its Spotter the watcher still watches
-                sys.stderr.write(f"spotter {watching.slug}: not started ({type(exc).__name__}: {exc})\n")
-        self.writer = watching.writer()
+                self.failed(exc, starting=True)
+
+    def failed(self, exc: Exception, *, starting: bool = False) -> None:
+        """Tell the Spotter's failure whole; the callback only queues its activity record."""
+        event = _failure(self.watching, self.session(), "spotter", exc, starting=starting)
+        self.writer.put(watch_reports.activity(self.watching.slug, event))
 
     def seen(self, kind: str, ev: Any) -> None:  # noqa: ANN401 - an SDK session event
         """Observe one event; a start or a permission request updates its call's report; the Spotter takes it in."""
@@ -104,7 +109,7 @@ class Feed:
             try:
                 self._spotted(self.spotter, kind, ev)
             except Exception as exc:  # noqa: BLE001 - a look never ends the step
-                sys.stderr.write(f"spotter {self.watching.slug}: {type(exc).__name__}: {exc}\n")
+                self.failed(exc)
         if kind == LAUNCHED:
             self._launched(ev)
             return
@@ -279,15 +284,35 @@ def spotted(feed: Feed | None, act: Callable[[spotter.Spotter], None]) -> None:
         try:
             act(feed.spotter)
         except Exception as exc:  # noqa: BLE001 - a look never ends the step
-            sys.stderr.write(f"spotter {feed.watching.slug}: {type(exc).__name__}: {exc}\n")
+            feed.failed(exc)
 
 
-def opened(watching: Watching | None, own: Path, session: Callable[[], str], agents: Watch) -> Feed | None:
+def _failure(watching: Watching, session: str, who: str, exc: Exception, *, starting: bool = False) -> dict[str, Any]:
+    detail = f"not started ({failure(exc)})" if starting else failure(exc)
+    reason = f"{who} {watching.slug}: {detail}"
+    sys.stderr.write(f"{reason}\n")
+    return {
+        "event": f"{who}-failed",
+        "at": datetime.now(UTC).isoformat(timespec="milliseconds"),
+        "step": watching.step,
+        "session": session,
+        "reason": reason,
+    }
+
+
+def opened(
+    watching: Watching | None,
+    own: Path,
+    session: Callable[[], str],
+    agents: Watch,
+    *,
+    log: Callable[[dict[str, Any]], None],
+) -> Feed | None:
     """The session's watcher; None when the master switch is off, or when it cannot start: the step goes on."""
     if watching is None:
         return None
     try:
         return Feed(watching, own, session, agents)
     except Exception as exc:  # noqa: BLE001 - a watcher that cannot start never ends the step
-        sys.stderr.write(f"watcher {watching.slug}: not started ({type(exc).__name__}: {exc})\n")  # the runner's log
+        log(_failure(watching, session(), "watcher", exc, starting=True))
         return None

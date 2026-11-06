@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -75,6 +75,7 @@ class Gate:
     lines: list[str] | None = None
     others: list[str] | None = None  # the complete list a challenger reads besides *lines* (TD-452)
     pinned: bool = False
+    refresh_error: str = ""
 
 
 def stem(c: Change) -> str:
@@ -306,14 +307,21 @@ def check_step(store: Store, c: Change, now: datetime, lock: Lock | None = None)
         return Gate(c)
     if store.shared is None and c.decisions_baseline is None and c.decisions_unpinned_at is None:
         return Gate(c, lines=[step_decisions.HEAD, step_decisions.NONE])
-    if store.shared is not None and (stale := _refresh(store)) and c.step.kind in IRREVERSIBLE:
+    stale = _refresh(store) if store.shared is not None else ""
+    if stale and c.step.kind in IRREVERSIBLE:
         reason = f"the decisions were not refreshed before {c.step.kind}, which cannot be undone: {stale}"
-        return Gate(c, _stopped(ErrorKind.STATE, reason, STALE, "The decisions refresh from the remote", now))
+        return Gate(
+            c,
+            _stopped(ErrorKind.STATE, reason, STALE, "The decisions refresh from the remote", now),
+            refresh_error=stale,
+        )
     try:
         view = decision_store.load(store.shared, store.name)
     except decision_store.DecisionsUnavailable as exc:
-        return Gate(c, StepResult(exit=Exit.STOP, reason=failure(exc), stop=exc.stop(now)))
-    return _wording_faults(view, c, now) or _judged(view, c, now, store, lock)
+        gate = Gate(c, StepResult(exit=Exit.STOP, reason=failure(exc), stop=exc.stop(now)))
+    else:
+        gate = _wording_faults(view, c, now) or _judged(view, c, now, store, lock)
+    return replace(gate, refresh_error=stale)
 
 
 def _refresh(store: Store) -> str:
@@ -428,9 +436,25 @@ def _reassessed(
     return c, None
 
 
-def launch(store: Store, c: Change, now: datetime) -> tuple[Change, bool]:
+def _record(store: Store, lock: Lock, gate: Gate, now: datetime) -> None:
+    if gate.refresh_error:
+        c = gate.change
+        store.log(
+            lock,
+            c.slug,
+            {
+                "event": "decisions-refresh-failed",
+                "at": now.isoformat(timespec="milliseconds"),
+                "step": f"{c.step.kind}:{c.step.task}",
+                "reason": gate.refresh_error,
+            },
+        )
+
+
+def launch(store: Store, c: Change, now: datetime, *, lock: Lock) -> tuple[Change, bool]:
     """The gate before the host launches a check environment: the Change as it goes on, and whether it launches."""
     gate = check_step(store, c, now)
+    _record(store, lock, gate, now)
     if gate.result is None:
         return gate.change, True
     if c.stop is not None and c.stop.reason == gate.result.reason:
@@ -447,6 +471,7 @@ def gated(store: Store, lock: Lock, c: Change, step: Step | None) -> Iterator[Ch
         return
     now = datetime.now(UTC)
     gate = check_step(store, c, now, lock)
+    _record(store, lock, gate, now)
     if gate.result is not None:
         event = {"event": "step", "at": now.isoformat(timespec="seconds"), "kind": step.kind}
         store.log(lock, c.slug, event | {"exit": gate.result.exit, "reason": gate.result.reason})

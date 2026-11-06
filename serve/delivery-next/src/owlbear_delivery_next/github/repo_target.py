@@ -70,6 +70,22 @@ def name_free(client: GhClient, owner: str, name: str) -> bool:
     return isinstance(_api(client, "name_free", "GET", repo(f"{owner}/{name}"), absent=(404,)), Missing)
 
 
+def private_rules_limit(client: GhClient, owner: str) -> str:
+    """Why a private repository *owner* creates can have no branch rules: its GitHub plan is free; empty otherwise.
+
+    An organisation's plan is read from the organisation, a user's from the account acting for it; a plan GitHub doesn't
+    show (an organisation's to a member who isn't its owner) leaves the run to find out, as it does for an existing one.
+    """
+    found = _api(client, "read the organisation's plan", "GET", f"orgs/{owner}", absent=(404,))
+    if isinstance(found, Missing):
+        found = _api(client, "read the account's plan", "GET", "user")
+        if str(found.get("login", "")).casefold() != owner.casefold():
+            return ""
+    if (found.get("plan") or {}).get("name") != "free":
+        return ""
+    return f"GitHub's free plan of {owner} allows no branch rules on a private repository: make it public, or upgrade"
+
+
 def create(client: GhClient, owner: str, name: str, visibility: Literal["private", "public"]) -> RepoState:
     """Create ``owner/name`` with *visibility* and read it back; a lost answer raises for the caller to reconcile."""
     args = ("repo", "create", f"{owner}/{name}", f"--{visibility}")

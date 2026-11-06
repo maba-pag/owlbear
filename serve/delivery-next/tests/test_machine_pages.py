@@ -3286,6 +3286,9 @@ def test_an_older_read_s_other_projects_answered_last_never_replace_a_newer_read
     second's, are not shown."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
+    def read_finished(response) -> bool:
+        return response.request.method == "POST" and response.url.endswith("/config/read")
+
     a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
     outside.push("beta/config.json", agents={"builder": {"minutes": 20}})
     with browsing(monkeypatch, pds) as (page, base):
@@ -3303,11 +3306,13 @@ def test_an_older_read_s_other_projects_answered_last_never_replace_a_newer_read
             held.append((route, route.fetch()))  # beta's settings as the first read's refresh has them
 
         page.route(f"**/p/{b.id}/api/next/config", hold)
-        page.locator("#read-again").click()
+        again = page.get_by_role("button", name="Read again", exact=True)
+        with page.expect_response(read_finished, timeout=READS_TIME * 1000):
+            again.click()
         until(page, lambda: held, READS_TIME)
         outside.push("beta/config.json", agents={"builder": {"minutes": 45}})
-        with page.expect_request("**/config/models", timeout=READS_TIME * 1000):  # the second refresh has shown all
-            page.locator("#read-again").click()
+        with page.expect_response(read_finished, timeout=READS_TIME * 1000):
+            again.click()
         expect(across).to_contain_text("beta: 45")
         route, before = held[0]
         with page.expect_request("**/config/models"):  # the first refresh goes on past what it read

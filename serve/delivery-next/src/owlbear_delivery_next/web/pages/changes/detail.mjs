@@ -91,6 +91,8 @@ export function detailView(d) {
     ${d.checks.filter((c) => c.waiting).map((c) => checkForm(c, d))}
     ${actionItems(d)}
     ${approvingNow ? approval(d) : nothing}
+    ${d.diagnostics?.length ? html`<ul class="diagnostics">${d.diagnostics.map((e) => html`
+      <li>Recorded ${new Date(e.at).toLocaleString()}: ${e.reason}</li>`)}</ul>` : nothing}
     ${pictures && !deciding ? info("Before and after", pictures.lines, unjudged,
       toggle("screenshots", `Screenshots (${pictures.count})`, pictures.shots))
       : unjudged !== nothing ? info("Before and after", unjudged) : nothing}
