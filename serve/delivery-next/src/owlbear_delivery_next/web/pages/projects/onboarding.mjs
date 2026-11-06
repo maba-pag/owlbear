@@ -38,6 +38,22 @@ const FILES = [["server", "Register Delivery's chat server in .mcp.json"],
 
 let s, modal, poll, done, back;
 
+// Where an unfinished or local-only run stands, in words, and the label of the one button that goes on with it.
+export function standing(r) {
+  if (r.ended === "local") return { text: "Set up on this Mac only, not on GitHub", action: "Publish" };
+  const at = r.stages.find((x) => x.state !== "done"), name = STAGE[at?.name] ?? at?.name ?? "Ending";
+  if (r.running) return { text: `${name}: running`, action: "Show progress" };
+  if (at?.state === "waiting" && r.waiting?.kind === "profile") {
+    return { text: "Waits for you to confirm its profile", action: "Confirm profile" };
+  }
+  if (at?.state === "waiting" && r.waiting?.kind === "shared_folder") {
+    return { text: "Waits for you to name its shared settings folder", action: "Name the folder" };
+  }
+  if (at?.state === "failed") return { text: `${name} failed`, action: "Retry" };
+  if (at?.state === "held") return { text: `${name} held: ${at.detail}`, action: "Resume" };
+  return { text: `Stopped before ${name}`, action: "Resume" };
+}
+
 
 // Opens the dialog; *opts* starts it on a folder (Finish setup, Publish) or on a run (Resume). *onClose* rereads.
 export async function openAdd(opts = {}, onClose = () => {}) {

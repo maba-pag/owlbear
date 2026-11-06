@@ -315,7 +315,7 @@ def files(job: Job) -> dict[str, Any]:
     python = str(local_home.stable(Path(sys.executable)))
     agreed = job.plan.get("consents") or {}
     setup.write_project_files(_folder(job), python, lambda _q: "", said.append, given=False, agreed=agreed)
-    return {"said": said}
+    return {"said": list(dict.fromkeys(said))}  # two consents can write one file: it is said once
 
 
 def register(job: Job) -> dict[str, Any]:

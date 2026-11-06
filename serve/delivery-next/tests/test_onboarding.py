@@ -225,7 +225,10 @@ def test_a_local_only_project_makes_no_github_effect_registers_nothing_and_stays
     assert onboarding_git.folder_state(Path(found["folder"])).git == "commits"
     assert not (Path(found["folder"]) / ".github").exists()  # a CI workflow only on GitHub, with its tick
     assert jobs.machine.projects == {}
-    assert [j["id"] for j in jobs.listed()] == [info["id"]]
+    assert [(j["id"], j["project"]) for j in jobs.listed()] == [(info["id"], "")]
+    served = registry.register(Path(found["folder"]))  # served since, as owlbear setup in a terminal would leave it
+    assert jobs.listed() == []
+    registry.remove(served.id)
     again = jobs.probe({"kind": "folder", "folder": found["folder"], "github": True})
     assert again["entry"] == "E3b"
     assert "repository" in again["stages"]
@@ -1029,10 +1032,98 @@ def test_a_failed_status_read_is_tried_again_while_the_dialog_is_open(tmp_path, 
 
             page.route("**/onboarding/jobs/*", once)
             page.goto(f"{base}/projects#token=t")
-            page.get_by_role("listitem", name="demo").get_by_role("button", name="Resume").click()
+            page.get_by_role("listitem", name="demo").get_by_role("button", name="Show progress").click()
             modal = pds.modal(page)
             while not failed:
                 page.wait_for_timeout(50)
         finally:
             gone.set()
         expect(modal).to_contain_text("Set up on this Mac only")
+
+
+@pytest.mark.usefixtures("hub")
+def test_a_new_run_for_a_folder_replaces_its_unfinished_one(jobs, tmp_path, monkeypatch):
+    found = jobs.probe({"kind": "new", "name": "demo", "github": False, "folder": str(tmp_path / "demo")})
+    real = onboarding_git.first_commit
+
+    def once(_path: Path, _message: str) -> str:
+        monkeypatch.setattr(onboarding_git, "first_commit", real)
+        said = "the commit failed"
+        raise RuntimeError(said)
+
+    monkeypatch.setattr(onboarding_git, "first_commit", once)
+    local = run(jobs, plan_for(found, repository=""))
+    assert stage(local, "commit")["state"] == "failed"
+    again = jobs.probe({"kind": "folder", "folder": found["folder"], "github": True})
+    published = run(jobs, plan_for(again, repository="ada/demo"))
+    assert published["ended"] == "done"
+    assert jobs.get(local["id"]).receipt["ended"] == "replaced"
+    assert jobs.listed() == []
+    with pytest.raises(OnboardingError, match="replaced by a newer one"):  # a dialog still open on the old run
+        jobs.resume(local["id"])
+
+
+def test_a_file_two_consents_write_is_said_once(tmp_path, monkeypatch):
+    def writing(*_a: Any, **_k: Any) -> None:
+        for line in ("written: .mcp.json", "written: .mcp.json", "written: .vscode/settings.json"):
+            _a[3](line)
+
+    monkeypatch.setattr(setup, "write_project_files", writing)
+    job = onboarding_job.Job({"id": "j", "plan": {"folder": str(tmp_path)}, "stages": []}, [], lambda _t: None,
+                             lambda: "")  # fmt: skip
+    assert onboarding_stages.files(job) == {"said": ["written: .mcp.json", "written: .vscode/settings.json"]}
+
+
+@pytest.mark.browser
+def test_a_registered_project_being_added_shows_once_on_its_row(hub, tmp_path, monkeypatch, pds):
+    """Its row says where the run stands and goes on with it; the run shows without a reload, and the row is the
+    project's own again once the run is done."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    hub.add("ada/proj", commits=True)
+    folder = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/proj.git", "proj", Access.LOCAL))
+    registry.register(folder)
+    with served(monkeypatch, pds) as (page, base, machine):
+        failing = readiness.Check("first commit", ok=False, detail="none yet", fix="commit")
+        monkeypatch.setattr(project.readiness, "ready", lambda *_a, **_k: [failing])
+        next(p for p in machine.projects.values() if Path(p.entry.path) == folder)._ready()  # noqa: SLF001
+        page.goto(f"{base}/projects#token=t")
+        row = page.get_by_role("listitem", name="proj")
+        expect(row.get_by_role("button", name="Finish setup")).to_be_visible()
+        expect(row.get_by_role("list", name="Failed readiness checks")).to_be_visible()
+        found = machine.onboarding.probe({"kind": "folder", "folder": str(folder)})
+        info = machine.onboarding.start(plan_for(found, protect=False))
+        settle(machine.onboarding, info["id"])
+        expect(row.locator("p-tag", has_text="Not fully added")).to_be_visible()  # the page's next poll
+        expect(row).to_contain_text("Waits for you to confirm its profile")
+        expect(row.get_by_role("button", name="Finish setup")).to_have_count(0)
+        assert row.get_by_role("list", name="Failed readiness checks").count() == 0  # drawn with the tag
+        expect(page.get_by_role("heading", name="Not added yet")).to_have_count(0)
+        row.get_by_role("button", name="Confirm profile").click()
+        modal = pds.modal(page)
+        modal.get_by_role("button", name="Confirm profile").click()
+        expect(modal.locator(".facts")).to_contain_text("Registered: yes")
+        modal.get_by_role("button", name="Close").click()
+        expect(row.locator("p-tag", has_text="Not fully added")).to_have_count(0)
+
+
+@pytest.mark.browser
+def test_a_run_that_leaves_the_list_takes_no_focus_to_another(tmp_path, monkeypatch, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    author = {"name": "Ada", "email": "ada@example.com"}
+    with served(monkeypatch, pds) as (page, base, machine):
+        ids = []
+        for name in ("alpha", "beta"):
+            found = machine.onboarding.probe({"kind": "new", "name": name, "github": False,
+                                              "folder": str(tmp_path / name)})  # fmt: skip
+            ids.append(settle(machine.onboarding, machine.onboarding.start(plan_for(found, author=author))["id"])["id"])
+        page.goto(f"{base}/projects#token=t")
+        alpha = page.get_by_role("listitem", name="alpha").get_by_role("button", name="Publish")
+        alpha.focus()
+        gone = machine.onboarding.get(ids[0])
+        gone.receipt["ended"] = "published"  # published from another tab
+        gone.save()
+        expect(page.get_by_role("listitem", name="alpha")).to_have_count(0)  # the page's next poll
+        beta = page.get_by_role("listitem", name="beta")
+        assert not beta.evaluate("li => li.contains(document.activeElement)")

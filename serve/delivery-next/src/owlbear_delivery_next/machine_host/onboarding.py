@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.git.command_failure import failure
@@ -76,9 +77,11 @@ class Onboarding:
         return found
 
     def start(self, plan: dict[str, Any]) -> dict[str, Any]:
-        """Run the approved plan; it starts the same destination's unfinished run again unless that one is running.
+        """Run the approved plan in place of every earlier run for its folder, refused while one of them runs.
 
         The plan comes from a probe made since, so its stages are what is left now and its choices the owner's latest.
+        An earlier run ends there: a local-only one as published when this one goes to GitHub, any other as replaced,
+        so a folder has one run the Projects page shows.
         """
         if why := self._why():
             raise OnboardingError(503, why)
@@ -87,15 +90,15 @@ class Onboarding:
         receipt = onboarding_job.new_receipt(plan)
         with self.lock:
             self._load()
-            if (old := self.jobs.get(receipt["id"])) and old.running():
+            earlier = [j for j in self.jobs.values() if j.plan["folder"] == plan["folder"]]
+            if any(j.running() for j in earlier):
                 raise OnboardingError(409, f"the run for {plan['folder']} is running: wait for it, then check again")
             job = self.jobs[receipt["id"]] = self._job(receipt)
             job.save()
-            if plan.get("github"):  # Publish: the folder's local-only run is done with
-                for local in [j for j in self.jobs.values() if j.receipt.get("ended") == "local"]:
-                    if local.plan["folder"] == plan["folder"]:
-                        local.receipt["ended"] = "published"
-                        local.save()
+            for old in [j for j in earlier if j.id != job.id and j.receipt.get("ended") in {"", "local"}]:
+                local = old.receipt.get("ended") == "local"
+                old.receipt["ended"] = "published" if local and plan.get("github") else "replaced"
+                old.save()
         job.go()
         return job.info()
 
@@ -109,7 +112,7 @@ class Onboarding:
 
     def answer(self, ident: str, kind: str, value: Any) -> dict[str, Any]:  # noqa: ANN401 - the dialog's answer
         """The owner's answer to what the job waits for; it goes on from there."""
-        job = self.get(ident)
+        job = self._current(ident)
         if job.waiting is None or job.waiting[0] != kind:
             raise OnboardingError(409, f"the run waits for {job.waiting[0] if job.waiting else 'nothing'}, not {kind}")
         job.go((kind, value))
@@ -119,16 +122,33 @@ class Onboarding:
         """Resume or Retry: the stages not done, from the first."""
         if why := self._why():
             raise OnboardingError(503, why)
-        job = self.get(ident)
+        job = self._current(ident)
         job.go()
         return job.info()
 
+    def _current(self, ident: str) -> Job:
+        """The job *ident*, unless a newer run for its folder replaced it: a dialog still open on it can't revive it."""
+        job = self.get(ident)
+        if (ended := job.receipt.get("ended")) in {"replaced", "published"}:
+            raise OnboardingError(
+                409, f"this run was {ended} by a newer one for {job.plan['folder']}: close and look again"
+            )
+        return job
+
     def listed(self) -> list[dict[str, Any]]:
-        """The runs the Projects page shows: unfinished ones with Resume, local-only ones with Publish."""
+        """The runs the Projects page shows, unfinished or local only, each with the project registered at its folder.
+
+        A registered project's unfinished run shows on that project's row; the others are listed apart. A local-only
+        run whose folder got registered since is done with: the project is served.
+        """
         with self.lock:
             self._load()
             jobs = list(self.jobs.values())
-        out = [j.info() for j in jobs if j.receipt.get("ended") in {"", "local"}]
+        out = []
+        for job in [j for j in jobs if j.receipt.get("ended") in {"", "local"}]:
+            pid = onboarding_probe.registered_id(Path(job.plan["folder"]))
+            if not (pid and job.receipt.get("ended") == "local"):
+                out.append(job.info() | {"project": pid})
         return out + [{"id": i, "unreadable": why} for i, why in self.unreadable.items()]
 
     def working(self) -> list[str]:
