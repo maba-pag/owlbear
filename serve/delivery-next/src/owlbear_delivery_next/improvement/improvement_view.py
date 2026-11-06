@@ -6,13 +6,14 @@ Nothing here writes or spends.
 
 from __future__ import annotations
 
-import contextlib
+import logging
 import re
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.improvement import case_replay, cases, followups, proposal_apply, spotter_test_run
+from owlbear_delivery_next.improvement import case_replay, cases, chatlogs, followups, proposal_apply, spotter_test_run
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -22,7 +23,7 @@ from owlbear_delivery_next.state_store import watch_reports
 from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
     from pathlib import Path
 
     from owlbear_delivery_next.state_store.store import Store
@@ -38,7 +39,20 @@ VERSIONS = 20  # case versions and case runs shown, newest first
 SEEN = 3  # a proposal's findings its card shows
 OPEN = {"waiting": 0, "shown": 0, "later": 1, "drafted": 2}  # the order open proposals are listed in
 UNREADABLE = (StoreError, OSError, ValueError)
+READ_ERRORS = (*UNREADABLE, sqlite3.Error, CaseError, store.RetroError)
 NO_SHARED = {"error": "there is no shared repository: a proposal lands in or through it"}
+LOG = logging.getLogger(__name__)
+
+
+def read_part[T](name: str, unread: dict[str, list[str]], read: Callable[[], T]) -> T | None:
+    """Keep a known read failure local to the part it prevented, without pretending it was empty."""
+    try:
+        return read()
+    except READ_ERRORS as exc:
+        detail = failure(exc)
+        LOG.exception("Improvement's %s could not be read: %s", name, detail)
+        unread.setdefault(name, []).append(detail)
+        return None
 
 
 def _when(text: object) -> datetime:
@@ -81,7 +95,7 @@ def _settings(st: Store) -> dict[str, Any]:
     try:
         s = st.settings()
     except UNREADABLE as exc:
-        return {"error": f"the settings cannot be read: {type(exc).__name__}: {exc}", "link": SETTINGS}
+        return {"error": f"the settings cannot be read: {failure(exc)}", "link": SETTINGS}
     sources = {k: v for k, v in s.sources.items() if k.startswith(("spotter.", "agents.spotter."))}
     return {"spotter": s.spotter.model_dump(mode="json"), "model": s.roles.get("spotter"), "sources": sources,
             "link": SETTINGS}  # fmt: skip
@@ -144,7 +158,7 @@ def looks(  # noqa: PLR0913 - what is read, and the filter
                 rows = watch_reports.reports(st.db, slug, limit)
                 outside += [r | {"project": pid, "change": slug} for r in rows if r["targets"]]
         except UNREADABLE as exc:
-            unread.append(f"{pid}: {type(exc).__name__}: {exc}")
+            unread.append(f"{pid}: {failure(exc)}")
     known = _followups()
     shown = [r | {"followup": followup(r["id"], *known)} for r in _graded(picked, grades)[:limit]]
     return {"looks": shown, "outside": _newest(outside)[:limit], "unread": unread}
@@ -153,17 +167,33 @@ def looks(  # noqa: PLR0913 - what is read, and the filter
 # Retro
 
 
-def _finished(projects: units.Projects) -> list[dict[str, Any]]:
+def _finished(projects: units.Projects, unread: list[str]) -> list[dict[str, Any]]:
     """Every finished Change of the loaded projects, newest first: what the Run Retro picker offers."""
     found = []
     for pid, (st, repo) in projects.items():
-        with contextlib.suppress(*UNREADABLE):
-            for slug in st.slugs():
-                with contextlib.suppress(*UNREADABLE):
-                    if (done := st.read(slug).finished_at) is not None:
-                        found.append({"change": f"{pid}:{slug}", "project": repo.name, "slug": slug,
-                                      "at": done.isoformat()})  # fmt: skip
+        try:
+            slugs = st.slugs()
+        except units.UNREADABLE as exc:
+            unread.append(f"{pid}: {failure(exc)}")
+            continue
+        for slug in slugs:
+            try:
+                done = st.read(slug).finished_at
+            except units.UNREADABLE as exc:
+                unread.append(f"{pid}:{slug}: {failure(exc)}")
+                continue
+            if done is not None:
+                found.append({"change": f"{pid}:{slug}", "project": repo.name, "slug": slug,
+                              "at": done.isoformat()})  # fmt: skip
     return _newest(found)
+
+
+def _unit_states() -> dict[str, int]:
+    by_state: dict[str, int] = {}
+    for u in store.units(synthetic=True).values():
+        state = (u.get("revisions") or [{}])[-1].get("state") or "new"
+        by_state[state] = by_state.get(state, 0) + 1
+    return by_state
 
 
 def retro(projects: units.Projects, switches: Mapping[str, Any], failed: str = "") -> dict[str, Any]:
@@ -173,20 +203,34 @@ def retro(projects: units.Projects, switches: Mapping[str, Any], failed: str = "
 
     Each finding carries its follow-up, a chat's too: a chat has no Change page to follow it up on.
     """
-    by_state: dict[str, int] = {}
-    for u in store.units(synthetic=True).values():
-        state = (u.get("revisions") or [{}])[-1].get("state") or "new"
-        by_state[state] = by_state.get(state, 0) + 1
-    known, newest = _followups(), store.findings(synthetic=True)[::-1][:FINDINGS]
-    return {
-        "queued": known[0],
-        "findings": [f | {"followup": followup(f["id"], *known)} for f in newest],
-        "runs": [{k: v for k, v in r.items() if k != "unsettled"} for r in store.runs(RUNS, synthetic=True)],
-        "units": by_state,
+    unread: dict[str, list[str]] = {}
+    states = read_part("units", unread, _unit_states)
+    if switches.get("retro_when_idle") in {"on", "paused"} and switches.get("chats_enrolled"):
+        try:
+            chatlogs.own()
+        except (OSError, ValueError) as exc:
+            unread["ownership"] = [failure(exc)]
+    known = read_part("followups", unread, _followups)
+    newest = read_part("findings", unread, lambda: store.findings(synthetic=True)[::-1][:FINDINGS])
+    runs = read_part("runs", unread, lambda: store.runs(RUNS, synthetic=True))
+    missing: list[str] = []
+    finished = _finished(projects, missing)[:LOOKS]
+    if missing:
+        unread["finished"] = missing
+    shown = {
+        "queued": known[0] if known is not None else None,
+        "findings": (
+            [f | {"followup": followup(f["id"], *known)} for f in newest]
+            if newest is not None and known is not None
+            else None
+        ),
+        "runs": ([{k: v for k, v in r.items() if k != "unsettled"} for r in runs] if runs is not None else None),
+        "units": states,
         "switches": dict(switches),
-        "finished": _finished(projects)[:LOOKS],
+        "finished": finished,
         "failed": failed,
     }
+    return shown | ({"unread": unread} if unread else {})
 
 
 # The Spotter cases
@@ -197,10 +241,7 @@ def prefill(cid: str) -> str:
 
     The case's own example text is empty for a case checked the ordinary way, and its record's turn is an event id.
     """
-    try:
-        card = cases.card(cid)
-    except CaseError:
-        return ""
+    card = cases.card(cid)
     parts = [str((card.get("intent") or {}).get("task") or "")]
     if recent := card.get("recent"):
         last = recent[-1]
@@ -211,13 +252,14 @@ def prefill(cid: str) -> str:
 def _case(cid: str, entry: Mapping[str, Any]) -> dict[str, Any]:
     try:
         fact = cases.fact(cid)
+        example = prefill(cid)
     except CaseError as exc:
         return {"id": cid, **entry, "marks": [], "error": failure(exc)}
     marks = [m for m, on in (("reserve", fact.get("reserve")), ("synthetic", fact.get("source") == "synthetic"),
                              ("unscored", fact.get("unscored"))) if on]  # fmt: skip
     if fact.get("assumption"):
         marks.append(f"assumption {fact['assumption']}")
-    return {"id": cid, **entry, "source": fact.get("source"), "marks": marks, "prefill": prefill(cid)}
+    return {"id": cid, **entry, "source": fact.get("source"), "marks": marks, "prefill": example}
 
 
 def spotter_cases(failed: str = "", unpublished: str = "") -> dict[str, Any]:

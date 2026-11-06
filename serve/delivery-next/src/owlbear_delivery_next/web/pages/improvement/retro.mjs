@@ -6,7 +6,7 @@ import { askFollowup, followupLine, said, send } from "./followup.mjs";
 import { seenIn } from "./proposals.mjs";
 import { finding } from "./record.mjs";
 import { act, post, show, state } from "./state.mjs";
-import { DIALOG, button, credits, empty, heading, plural, quiet, tag, text, when } from "./widgets.mjs";
+import { DIALOG, button, credits, empty, heading, plural, quiet, tag, text, unread, when } from "./widgets.mjs";
 
 // Retro (design §6): its switches, what is queued, its units by state, its newest findings with their follow-ups, its
 // newest runs, and a run on one finished Change at the owner's word.
@@ -83,8 +83,9 @@ async function runRetro(finished) {
     (a) => `Retro run of ${chosen.slug} queued as ${a.queued}.`);
 }
 
-function runner(finished) {
-  if (!finished.length) return empty("No finished Change to run Retro on.");
+function runner(finished, partial) {
+  if (!finished.length) return empty(partial ? "No readable finished Change to run Retro on."
+    : "No finished Change to run Retro on.");
   if (!finished.some((f) => f.change === state.retroOn)) state.retroOn = finished[0].change;
   return html`<div class="row"><p-select id="retro-change" label="Finished Change" compact="true"
       .value=${live(state.retroOn)} @change=${(e) => { state.retroOn = e.target.value; show(); }}>
@@ -95,21 +96,30 @@ function runner(finished) {
 }
 
 export function retroSection(r) {
-  const units = Object.entries(r.units);
+  const units = r.units === null ? null : Object.entries(r.units);
+  const errors = (...keys) => keys.flatMap((k) => r.unread?.[k] ?? []).join("\n");
+  const ownership = errors("ownership"), finished = errors("finished");
   return html`<section id="retro" aria-labelledby="retro-title">${heading(2, "Retro", "lg", "retro-title")}
     ${quiet("It judges finished work after the fact, grades the Spotter's looks and proposes what to change.")}
     <div class="panel">${heading(3, "Switches", "sm")}${switches(r.switches)}</div>
-    <div class="panel">${heading(3, "Run Retro now", "sm")}${runner(r.finished)}</div>
-    <div class="panel">${heading(3, "Queued", "sm")}${r.queued.length
-      ? html`<ol class="meta">${r.queued.map(asked)}</ol>` : text("Nothing is queued.", { size: "sm" })}</div>
-    <div class="panel">${heading(3, "Units by state", "sm")}${units.length
-      ? html`<ul class="meta">${units.map(([s, n]) => html`<li>${s}: ${n}</li>`)}</ul>`
-      : text("No unit judged yet.", { size: "sm" })}</div>
+    ${ownership ? html`<ul class="cards"><li id="retro-ownership">${
+      unread("Retro's chat ownership manifest", ownership)}</li></ul>` : nothing}
+    <div class="panel">${heading(3, "Run Retro now", "sm")}
+      ${finished ? unread("Some finished Changes", finished) : nothing}${runner(r.finished, !!finished)}</div>
+    <div class="panel">${heading(3, "Queued", "sm")}${r.queued === null
+      ? unread("Retro's queue", errors("followups")) : r.queued.length
+        ? html`<ol class="meta">${r.queued.map(asked)}</ol>` : text("Nothing is queued.", { size: "sm" })}</div>
+    <div class="panel">${heading(3, "Units by state", "sm")}${units === null
+      ? unread("Retro's units", errors("units")) : units.length
+        ? html`<ul class="meta">${units.map(([s, n]) => html`<li>${s}: ${n}</li>`)}</ul>`
+        : text("No unit judged yet.", { size: "sm" })}</div>
     ${heading(3, "Findings", "md")}
-    ${r.findings.length ? html`<ul class="cards">${repeat(r.findings, (f) => f.id, shownFinding)}</ul>`
-      : empty("Retro has found nothing yet.")}
+    ${r.findings === null ? unread("Retro's findings", errors("findings", "followups"))
+      : r.findings.length ? html`<ul class="cards">${repeat(r.findings, (f) => f.id, shownFinding)}</ul>`
+        : empty("Retro has found nothing yet.")}
     ${heading(3, "Runs", "md")}
-    ${r.runs.length || r.failed ? html`<ul class="cards">${passFailed(r.failed)}${r.runs.map(run)}</ul>`
-      : empty("No Retro run yet.")}
+    ${r.runs === null ? unread("Retro's runs", errors("runs")) : nothing}
+    ${r.runs?.length || r.failed ? html`<ul class="cards">${passFailed(r.failed)}${(r.runs ?? []).map(run)}</ul>`
+      : r.runs === null ? nothing : empty("No Retro run yet.")}
   </section>`;
 }

@@ -102,7 +102,8 @@ def _switches() -> dict[str, Any]:
         s = machine_settings.current()
     except registry.RegistryError as exc:
         return {"error": f"the machine's settings cannot be read: {failure(exc)}"}
-    return {"retro_after_change": s.retro_after_change, "retro_when_idle": s.retro_when_idle}
+    return {"retro_after_change": s.retro_after_change, "retro_when_idle": s.retro_when_idle,
+            "chats_enrolled": bool(s.enrolled_chats)}  # fmt: skip
 
 
 @dataclass(frozen=True)
@@ -154,7 +155,12 @@ def _reads(routes: APIRouter, m: _Machine) -> None:
     def overview() -> dict[str, Any]:
         """The Spotter (with chats not followed, the follower's failed pass or start), Retro, cases and proposals."""
         loaded = m.projects()
-        spotted = improvement_view.spotter(loaded, units.records(), datetime.now(UTC))
+        unread: dict[str, list[str]] = {}
+        missing: list[str] = []
+        found = units.records(unread=missing)
+        spotted = improvement_view.read_part(
+            "spotter", unread, lambda: improvement_view.spotter(loaded, found, datetime.now(UTC))
+        )
         chats = m.machine.chats
         followed = {
             "not_followed": chats.not_followed(),
@@ -162,12 +168,25 @@ def _reads(routes: APIRouter, m: _Machine) -> None:
             "follower_refused": chats.refused,
             "chat_looks_unread": chats.owned.unread if chats.owned is not None else "",
         }
-        return {
-            "spotter": spotted | followed,
-            "retro": improvement_view.retro(loaded, _switches(), m.machine.retro.failed),
-            "cases": improvement_view.spotter_cases(m.machine.cases.failed, m.machine.cases.unpublished),
-            "proposals": improvement_view.proposals(loaded, m.root()),
+        if spotted is not None:
+            spotted |= followed
+            if missing:
+                spotted["unread"] = {"records": missing}
+        shown = {
+            "spotter": spotted,
+            "retro": improvement_view.read_part(
+                "retro", unread, lambda: improvement_view.retro(loaded, _switches(), m.machine.retro.failed)
+            ),
+            "cases": improvement_view.read_part(
+                "cases",
+                unread,
+                lambda: improvement_view.spotter_cases(m.machine.cases.failed, m.machine.cases.unpublished),
+            ),
+            "proposals": improvement_view.read_part(
+                "proposals", unread, lambda: improvement_view.proposals(loaded, m.root())
+            ),
         }
+        return shown | ({"unread": unread} if unread else {})
 
     @routes.get("/looks")
     def looks(
@@ -178,8 +197,10 @@ def _reads(routes: APIRouter, m: _Machine) -> None:
         """The Spotter's looks and the outside writes, of one project or Change when named."""
         if project:
             m.registered(project)
-        return improvement_view.looks(m.projects(), units.records(), store.grades(), project=project, change=change,
-                                      limit=limit)  # fmt: skip
+        missing: list[str] = []
+        shown = improvement_view.looks(m.projects(), units.records(unread=missing), store.grades(), project=project,
+                                       change=change, limit=limit)  # fmt: skip
+        return shown | ({"record_unread": missing} if missing else {})
 
     @routes.get("/change")
     def change(
@@ -191,7 +212,9 @@ def _reads(routes: APIRouter, m: _Machine) -> None:
         loaded = m.projects().get(project)
         if loaded is not None and slug not in loaded[0].slugs():
             raise HTTPException(404, f"project {project} has no Change {slug!r}")
-        return improvement_view.change_detail(project, slug, units.records(), store.grades())
+        missing: list[str] = []
+        shown = improvement_view.change_detail(project, slug, units.records(unread=missing), store.grades())
+        return shown | ({"record_unread": missing} if missing else {})
 
 
 def _retro(routes: APIRouter, m: _Machine) -> None:

@@ -174,6 +174,11 @@ finding can be followed up as one backlog entry. A Change page's switch **Show d
 Change of every project, adds a Change's looks and findings to its page, with its review rounds and the rest of its
 record.
 
+An unreadable Improvement input says where and why beside the affected content; independent sections and readable
+looks still show. Counts based on skipped records are marked partial. Memory likewise keeps readable entries and
+names files it could not read; Maintenance shows those diagnostics beside the memory folder even when no curation
+has run. These notices do not change which work is admitted or repair the files.
+
 The **Metrics** page shows every credit OwlBear spent on this Mac: every agent session it ran
 (Delivery's workers, judges, picker and lookups, the curator, Impeccable runs, Spotter looks, Retro),
 summed, split by project, agent (subagents included), model, day, Change or step, and filtered by
