@@ -89,7 +89,8 @@ export function spotterSection(s) {
     ${missing.length ? html`${unread("Some Spotter records", missing.join("\n"))}
       ${quiet("Counts and spend include only the records that could be read.")}` : nothing}
     ${ids.length ? html`<ul class="cards">${ids.map((pid) => project(pid, s.projects[pid],
-      { window, of: s.spend[pid], partial: missing.length > 0 }))}</ul>` : empty("No project is loaded on this machine.")}
+      { window, of: s.spend[pid], partial: missing.length > 0 }))}</ul>`
+      : empty("No project is loaded on this machine.")}
     ${elsewhere.map(([pid, of]) => quiet(`${pid ? `Project ${pid}, not loaded now` : "Outside a project"}, last `
       + `${window}: ${spent(of)}`))}
     ${notFollowed(s.not_followed, s.follower_failed, s.follower_refused)}
