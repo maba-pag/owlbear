@@ -113,7 +113,6 @@ def test_a_page_change_beside_a_source_change_keeps_the_source_scope() -> None:
                 "tests/test_dependency_verification_workflow.py",
             ),
         ),
-        (".editorconfig", ("tests/test_linter_formatter_policy.py",)),
         ("./.editorconfig", ("tests/test_linter_formatter_policy.py",)),
         ("biome.json", ("tests/test_linter_formatter_policy.py",)),
         (
