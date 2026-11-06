@@ -1691,8 +1691,7 @@ def test_a_submit_waits_for_a_hand_off_look_that_first_waited_for_a_slot_and_tak
 
     monkeypatch.setattr(spotter, "LOOK", 0.5)
     monkeypatch.setattr(spotter, "TEARDOWN", 0.05)
-    ready, release, judged = asyncio.Event(), asyncio.Event(), asyncio.Event()
-    entered: set[str] = set()
+    ready, release, judged = asyncio.Barrier(3), asyncio.Event(), asyncio.Event()
     budgets: list[float] = []
     real_wait = step_tools.wait
 
@@ -1707,9 +1706,7 @@ def test_a_submit_waits_for_a_hand_off_look_that_first_waited_for_a_slot_and_tak
         if the_card["moment"]["call"] == "call-1":
             judged.set()
         else:
-            entered.add(the_card["moment"]["call"])
-            if len(entered) == 2:
-                ready.set()
+            await ready.wait()
             await release.wait()
         spend.part().ended(None, confirmed=True)
         return finding("hand-off-fitness") if the_card["moment"]["call"] == "call-1" else '{"category": "none"}'
