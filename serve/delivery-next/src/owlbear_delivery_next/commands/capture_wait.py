@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 
 POLL = 5.0  # seconds between reads
 STILL = "the capture still runs: call await_capture again at once"
-_pause = time.sleep
 
 
 def wait(chat: Chat, change: str, deadline: float) -> dict[str, Any]:
@@ -34,7 +33,7 @@ def wait(chat: Chat, change: str, deadline: float) -> dict[str, Any]:
         ended = code == HTTPStatus.OK and not now.get("running")
         if ended or code not in {HTTPStatus.OK, HTTPStatus.SERVICE_UNAVAILABLE} or time.monotonic() >= deadline:
             break
-        _pause(POLL)  # 503: the host is handing over
+        time.sleep(POLL)  # 503: the host is handing over
     if code != HTTPStatus.OK:
         return {"error": now.get("error") or now.get("detail"), "next": STILL}
     if now.get("running"):
