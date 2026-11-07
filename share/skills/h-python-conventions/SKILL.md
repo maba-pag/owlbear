@@ -60,8 +60,7 @@ keeps only security and data-loss guards, incident regressions and public contra
 - Exercise meaningful input and assert observable output, state, error, or side effect.
 - Ask which plausible regression would make the test fail. If there is no behavioral answer, choose
   another proof mode or remove the test.
-- No case matrix: one test, with the assertions that distinguish the contract from a common incorrect
-  implementation.
+- One test, with the assertions that distinguish the contract from a common incorrect implementation.
 - Test through the same public boundary callers use. Mocks and fakes may replace lower external
   dependencies, but not the function, command, endpoint, workflow, or assembly being claimed.
 - For small tools and CLIs, prefer command or public-function input/output tests with temporary

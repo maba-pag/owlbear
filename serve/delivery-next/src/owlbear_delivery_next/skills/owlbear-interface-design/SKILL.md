@@ -67,8 +67,7 @@ Use the project's accessibility target; without one, WCAG 2.2 AA. Check it for w
   target's bounding box overlaps no other target and no other undersized target's circle (WCAG 2.5.8). Exceptions: an equivalent control of that size on the same page, a target inline in
   text, a size the browser sets, or a size that is essential or legally required.
 - A modal keeps focus inside while it is open and returns it to the control that opened it when it closes.
-  For a modal the change adds or alters, check both with the keyboard in that page's browser look; a screenshot
-  cannot show either.
+  Check both with the keyboard in the page's browser look; a screenshot cannot show either.
 
 ## Refuse unless the brief asks for it
 
