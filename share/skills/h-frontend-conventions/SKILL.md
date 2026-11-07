@@ -105,7 +105,10 @@ need rather than treating a generic checklist as proof of usability.
 
 ## Testing and Proof
 
-Use the project's own test, lint and browser tools. Match proof to the claim:
+Proof is the project's existing tests plus one real run of the changed behaviour: for UI, one browser
+look at each page where something becomes visible, covering partial state, target size and modal focus
+for what the change adds or alters. Say what that leaves unproven. Use the project's own test, lint and
+browser tools; each shows only its kind of claim:
 
 - Unit/component tests protect observable behavior, public component contracts, and meaningful state
   transitions supported by their runtime environment.
@@ -113,10 +116,8 @@ Use the project's own test, lint and browser tools. Match proof to the claim:
 - Real-browser tests prove browser APIs, assembled workflows, focus behavior, geometry, viewport
   behavior, and screenshots.
 
-Do not add durable tests for internal DOM shape, source strings, removed files/components, generated
-compiler branches, or configuration presence unless those artifacts are maintained public contracts.
-A durable test must name a plausible user-visible, state, or API regression that would make it fail.
-Use task-local search, diff, lint, typecheck, build, or inspection for one-time structural proof.
+Add a new test only for a bug that came back, or one per new security or data-loss boundary, at that
+boundary; no case matrix. Use task-local search, diff, lint, typecheck, build, or inspection for one-time structural proof.
 
 Automated accessibility checks can identify classes of violations but do not prove workflow usability.
 Use exact values and discriminating cases for bounded option or event contracts; DOM presence alone

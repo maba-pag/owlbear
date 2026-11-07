@@ -31,9 +31,9 @@ user-invocable: false
 
 ### Proof Is Not Automatically a Test
 
-Choose the cheapest evidence that exercises the claimed boundary. A search, diff, lint, typecheck,
-import smoke, build, command invocation, or manual inspection can be valid task proof without
-becoming a committed pytest test.
+Proof is the existing tests plus one real run of the changed behaviour (the command, the endpoint,
+the page); say what that leaves unproven. A search, diff, lint, typecheck, import smoke or build
+supports that proof without becoming a committed pytest test.
 
 Use task proof instead of a durable test when checking only that:
 
@@ -42,32 +42,26 @@ Use task proof instead of a durable test when checking only that:
 - source text has a particular shape or wording;
 - a formatter, linter, type checker, package builder, or framework validator accepts the change.
 
-These checks freeze a change rather than protect product behavior. A structural artifact warrants a
-durable test only when the artifact itself is a maintained public contract and no cheaper owning tool
-validates it.
+These checks freeze a change rather than protect product behavior. A structural artifact gets no
+new test of its own.
 
-### Durable Test Admission
+### New Test Admission
 
-Create or retain a durable test only when it passes Durable Test Admission and protects at least one
-of these:
-
-- observable behavior or a public interface used by callers;
-- a non-obvious invariant or edge case that is hard to re-derive;
-- a realistic error, concurrency, security, migration, or data-loss boundary;
-- a previously observed bug with meaningful recurrence risk;
-- a shared path whose regression would be expensive or difficult to notice manually.
-
-A durable test must be cheaper to understand and maintain than repeated verification of the risk it
-protects. Do not add a test solely to raise coverage, mirror an acceptance-criteria sentence, or
+Add a new test only for a bug that came back, or one per new security or data-loss boundary, at that
+boundary; no case matrix. Never add one to raise coverage, mirror an acceptance-criteria sentence, or
 preserve an implementation detail.
+
+Existing tests stay until curation retires them. Curation keeps, per behaviour, the cheapest test that
+catches its plausible bug, judged by reading whether tests guard the same kind of bug; in doubt it
+keeps only security and data-loss guards, incident regressions and public contracts.
 
 ### Assertion Quality
 
 - Exercise meaningful input and assert observable output, state, error, or side effect.
 - Ask which plausible regression would make the test fail. If there is no behavioral answer, choose
   another proof mode or remove the test.
-- Add negative, boundary, or alternate cases only when they distinguish the contract from a common
-  incorrect implementation.
+- No case matrix: one test, with the assertions that distinguish the contract from a common incorrect
+  implementation.
 - Test through the same public boundary callers use. Mocks and fakes may replace lower external
   dependencies, but not the function, command, endpoint, workflow, or assembly being claimed.
 - For small tools and CLIs, prefer command or public-function input/output tests with temporary
@@ -84,12 +78,12 @@ Honor explicit project or CI thresholds, but never manufacture low-value asserti
 | --- | --- | --- | --- |
 | **Durable behavioral test** | Owning package or configured test root, named for behavior | While the protected contract exists | Maintained regression suite for product behavior and risk boundaries. |
 
-- Product work adds tests in the owning canonical suite when the task requires them; there is no
-  separate task-test lifecycle.
+- Product work adds a test in the owning canonical suite only when New Test Admission calls for one;
+  there is no separate task-test lifecycle.
 - Discover durable locations from pytest `testpaths`, package manifests, and the nearest existing test
   for the owning behavior; do not assume a repository root such as `serve/` or `src/`.
 - Durable test names describe behavior or risk, not task IDs or acceptance-criteria numbering.
-- Builder and independent proof roles run commands proportional to packet and change risk. There is no mandatory GREEN phase or coverage target.
+- Builder and proof roles run the touched tests and one real run of the changed behaviour. There is no mandatory GREEN phase or coverage target.
 
 ## Known Gotchas
 
