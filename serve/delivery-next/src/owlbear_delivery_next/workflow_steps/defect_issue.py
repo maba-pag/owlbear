@@ -83,11 +83,10 @@ def _named(issues: OwlbearIssues, store: Store, path: Path, text: str) -> list[s
     tracked = _tracked(path)
     if isinstance(tracked, str):
         return [tracked]  # unread, nothing can be told public: the issue is held
-    home = Path.home()
-    own = str(local_home.root()).replace(str(home), "~", 1)
-    places = {str(home), str(store.root), str(path), own}  # where its store, worktree and copies live
+    places = {str(Path.home()), str(store.root), str(path)}  # where its store, worktree and copies live
     names = {store.name, origin.name, slug, *places, *tracked, *(PurePosixPath(p).name for p in tracked)} - {""}
-    return sorted(n for n in names if re.search(rf"(?<![\w.-]){re.escape(n)}(?![\w-])", text, re.IGNORECASE))
+    found = [n for n in names if re.search(rf"(?<![\w.-]){re.escape(n)}(?![\w-])", text, re.IGNORECASE)]
+    return sorted(found + ["~/"] * bool(re.search(r"(?<![\w.-])~/", text)))  # any home-relative path
 
 
 def _tracked(path: Path) -> list[str] | str:
