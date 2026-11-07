@@ -29,7 +29,7 @@ RO_WORKTREE = "read-only-worktree"  # the cause subject of a read-only worktree 
 _QUOTA = re.compile(r"quota|premium requests?|credits", re.IGNORECASE)
 _CAPACITY = re.compile(r"\b429\b|rate.?limit|capacity|overloaded|quota|credits", re.IGNORECASE)
 _LIMITED = re.compile(r"\b429\b|rate.?limit|too many requests|overloaded", re.IGNORECASE)  # in a check's output
-_TEST_ID = re.compile(r"\S+\.py::\S+")  # a test's name says nothing of the network
+_TEST_ID = re.compile(r"\S+\.py::[^\s\[]+(?:\[[^\]\n]*\])?")  # a test's name and parameters, spaces included
 _COUNTS = re.compile(  # pytest's counting lines: collection and summary
     r"\bcollected \d+ items?\b|\[\d+ items?\]"
     r"|^[\s=]*\d+ (?:passed|failed|errors?|skipped|deselected|xfailed|xpassed|warnings?)\b"

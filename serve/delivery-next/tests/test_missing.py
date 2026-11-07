@@ -210,6 +210,7 @@ C1_TIMEOUT = (  # nodes naming a connection or a quota are no network or capacit
     "PASSED tests/test_vscode_step.py::test_connection_speaks_websocket_json_rpc_over_the_local_socket\n"
     "PASSED tests/test_missing.py::test_the_quota_never_overrides_a_report\n"
     "PASSED tests/test_api.py::test_a_rate_limit_waits[ECONNRESET]\n"
+    "tests/test_status.py::test_a_line[request failed: connection refused] PASSED\n"
     "10 workers [429 items]\ncollected 429 items\n"
     "========= 429 passed in 900.12s =========\n"
     "xdist.dsession.Interrupted: session-timeout: 900.0 sec exceeded"
