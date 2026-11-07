@@ -271,19 +271,17 @@ def test_picked_decisions_group_by_scope_and_link(shared_url, pds) -> None:
 
 
 @pytest.mark.parametrize("case", ["no-shared-data", "save-in-progress"])
-def test_an_unavailable_decision_list_is_said(c1, request, monkeypatch, case: str) -> None:
+def test_an_unavailable_decision_list_is_said(c1, monkeypatch, case: str) -> None:
     """The picked decisions can't be grouped without the list; the rest of the detail answers all the same."""
-    store, app = c1
+    _, app = c1
     reason = "there is no shared data repository, so there are no decisions to work by"
     if case == "save-in-progress":
         reason = "a decision save is in progress; try again in a moment"
 
-        def saving(*_args: object) -> None:
+        def saving(*_args: object) -> None:  # raises before reading its arguments: c1's store serves as it is
             raise decision_store.DecisionsUnavailable(reason)
 
         monkeypatch.setattr(brief_view.decision_store, "load", saving)
-        moved = Store(store.root, DataRepo(request.getfixturevalue("shared_repo")[0]), PROJECT)
-        app = api.create_app(moved, "tok", Host())
     client = TestClient(app, base_url="http://127.0.0.1", headers={"authorization": "Bearer tok"})
     detail = client.get("/api/next/changes/c1-fixture")
     assert detail.status_code == 200, detail.text
