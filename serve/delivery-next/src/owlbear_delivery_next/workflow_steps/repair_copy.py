@@ -78,8 +78,7 @@ def commit(at: Path, message: str) -> str:
 
 def shown(step: Path, base: str, fix: str, paths: list[str]) -> tuple[str, bool]:
     """The diff of *paths* between the baseline and the fix, and whether it is too long or binary to show whole."""
-    names = ["--", *paths] if paths else []
-    text = git(step, ["diff", base, fix, *names])
+    text = git(step, ["diff", base, fix, "--", *paths])
     binary = "Binary files" in text
     return text[:SHOWN], len(text) > SHOWN or binary
 

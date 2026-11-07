@@ -84,7 +84,7 @@ def test_a_private_projects_defect_text_naming_it_is_held_not_filed(repo, monkey
     monkeypatch.setattr(defect_issue, "OwlbearIssues", lambda *_: issues)
     monkeypatch.setattr(defect_issue.Origin, "of", classmethod(lambda *_: Origin("github.com", "acme", "secret-shop")))
     monkeypatch.setattr(defect_issue.repo_target, "view", lambda *_: SimpleNamespace(visibility="private"))
-    store = SimpleNamespace(name="secret-shop")
+    store = SimpleNamespace(name="secret-shop", root=repo / "store")
     path = "serve/tools/src/owlbear_tools/testing.py:216"
     named = Defect(
         title="--changed runs the full suite", text="secret-shop's a.txt routes to the full suite", paths=[path]
