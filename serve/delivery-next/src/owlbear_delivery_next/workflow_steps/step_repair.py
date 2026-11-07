@@ -10,6 +10,8 @@ the repair's spend. A defect in OwlBear's own code gets an issue (``defect_issue
 
 from __future__ import annotations
 
+import os
+import shlex
 import uuid
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
@@ -111,7 +113,7 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
     assert r is not None  # noqa: S101 - _repair() checked it
     changed = repair_copy.changed(at, r.base)
     if r.fix == "profile-check":  # Delivery never runs a proposed command before the owner confirms it (#1066)
-        _offered(store, lock, change, at, changed)
+        _offered(store, lock, change, at, changed, prof)
         return
     if not changed:
         _stopped(store, lock, change, "it reported a fix but changed nothing")
@@ -132,6 +134,7 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
     r.commit = repair_copy.commit(at, said)
     repair_copy.git(path, ["update-ref", f"{KEPT}{change.slug}", r.commit])
     r.held = [f"changes {p}, configuration that is yours" for p in r.paths if check_weakening.configured(p)]
+    r.held += [f"makes {p} a link or submodule" for p, how in changed if how.split()[0] in check_weakening.LINKS]
     r.held += [
         f"{edit} the test {p}"
         for p, how in changed
@@ -152,11 +155,13 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
     store.write(lock, change)
 
 
-def _offered(store: Store, lock: Lock, change: Change, at: Path, changed: list[tuple[str, str]]) -> None:
+def _offered(  # noqa: PLR0913, PLR0917 - the Change, its copy, what changed there and the profile
+    store: Store, lock: Lock, change: Change, at: Path, changed: list[tuple[str, str]], prof: Profile
+) -> None:
     """A proposed project check is the owner's to confirm, unless it can't be offered."""
     r = change.repairs.current
     assert r is not None  # noqa: S101 - _proven() checked it
-    if why := _unfit(at, r.package, changed):
+    if why := _unfit(at, r.package, changed, prof):
         _stopped(store, lock, change, why)
         return
     r.held = [f"adds the check `{r.command}` for {r.package} to the project profile, which you confirm"]
@@ -169,6 +174,9 @@ def _apply(store: Store, lock: Lock, change: Change, path: Path, prof: Profile) 
     assert r is not None  # noqa: S101 - run() checked it
     if r.fix == "profile-check":
         key = f"check:{r.package}"
+        if (entry := prof.entries.get(key)) is not None and profile.is_confirmed(entry):  # confirmed while it waited
+            _stopped(store, lock, change, f"{r.package}'s check `{entry.value}` was confirmed meanwhile; nothing added")
+            return
         store.write_profile(profile.confirm(prof, key, r.command, datetime.now(UTC)))
         made = f"profile {key}"
     else:
@@ -259,8 +267,22 @@ def _installs(change: Change, prof: Profile) -> tuple[str, ...]:
 
 def _named(path: str, witness: tuple[str, ...]) -> bool:
     """Whether a check command names *path*: a fix to the check it is proven by needs the owner (never weakened)."""
-    words = {w.strip("'\"{};()").removeprefix("./") for c in witness for w in c.split()}
-    return path in words or PurePosixPath(path).name in words
+    for one in witness:
+        where, command = _split(one)
+        for word in command.replace(";", " ").replace("&&", " ").replace("||", " ").split():
+            named = PurePosixPath(where or ".", word.strip("'\"{}()"))
+            if os.path.normpath(named) == os.path.normpath(path) or (not where and PurePosixPath(word).name == path):
+                return True
+    return False
+
+
+def _split(check: str) -> tuple[str | None, str]:
+    """A resolved check as (its directory, the command run there), as ``check_hint`` writes it: `cd <dir> && {…}`."""
+    found = check_hint.CD_CHECK.fullmatch(check.strip())
+    if not found:
+        return None, check
+    body = found[2].strip()
+    return shlex.split(found[1])[0], body[1:-1] if body.startswith("{") and body.endswith("}") else body
 
 
 def _in_scope(change: Change, path: str) -> bool:
@@ -311,13 +333,15 @@ def _gated(store: Store, lock: Lock, change: Change, done: Run) -> bool:
     return True
 
 
-def _unfit(at: Path, package: str, changed: list[tuple[str, str]]) -> str:
+def _unfit(at: Path, package: str, changed: list[tuple[str, str]], prof: Profile) -> str:
     """Why a proposed project check can't be offered: its package lies outside the repository, or it needs edits."""
     where = PurePosixPath(package)
     if where.is_absolute() or ".." in where.parts or not (at / where).resolve().is_relative_to(at.resolve()):
         return f"its proposed check names the package {package}, which is not a folder of this repository"
     if not (at / where).is_dir():
         return f"its proposed check names the package {package}, which is not a folder of this repository"
+    if (entry := prof.entries.get(f"check:{package}")) is not None and profile.is_confirmed(entry):
+        return f"its proposed check would replace {package}'s confirmed check `{entry.value}`, which only you change"
     if changed:
         edits = ", ".join(p for p, _ in changed)
         return f"its proposed check also needs files it changed ({edits}), which a project check cannot carry"
