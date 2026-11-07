@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.visual_records import OwnerDecision
-from owlbear_delivery_next.change_flow import amending
+from owlbear_delivery_next.change_flow import amending, answer_kinds
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -28,7 +28,7 @@ def amended(
     """
     kind, target, waits = how
     if kind == "brief_change":
-        amending.start(c, "answer", reason=item.text, now=now, question=q.id)
+        amending.start(c, "answer", reason=answer_kinds.answer_text(q), now=now, question=q.id)
         return ""
     if target != "amend":
         return None

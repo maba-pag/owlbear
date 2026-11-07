@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import amend_tools, tools
-from owlbear_delivery_next.change_flow import amend_apply
+from owlbear_delivery_next.change_flow import amend_apply, answer_kinds
 from owlbear_delivery_next.change_flow.brief_tools import BriefDraft
 from owlbear_delivery_next.runtimes import step_decisions
 
@@ -149,7 +149,7 @@ def _asked(c: Change, a: Amendment) -> list[str]:
     if a.source not in {"answer", "allow"}:
         return []
     asked = next((q for q in c.questions if q.id == a.question), None)
-    said = asked.answer.text if asked and asked.answer else ""
+    said = answer_kinds.answer_text(asked) if asked else ""
     return [*([f"The question it answers: {asked.text}"] if asked else []), f"The owner's answer: {said or a.reason}"]
 
 
