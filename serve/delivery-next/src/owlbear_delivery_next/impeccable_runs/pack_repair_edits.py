@@ -9,43 +9,17 @@ no proof that a test still checks as much.
 
 from __future__ import annotations
 
-import ast
-import re
-from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.impeccable_runs import pack_rounds
 from owlbear_delivery_next.impeccable_runs.pack_repair_content import IMPECCABLE, Kind
+from owlbear_delivery_next.workflow_steps.check_weakening import LINKS, configured, weakened
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_delivery_next.impeccable import pack_git
     from owlbear_delivery_next.impeccable_runs.pack_repair import Repair
-
-CONFIG_PREFIXES = (".github/", ".vscode/", ".husky/", ".githooks/")
-CONFIG_DIRS = frozenset({"hooks"})
-CONFIG_FILES = frozenset({
-    "pyproject.toml", "uv.lock", "conftest.py", "package.json", "package-lock.json", "biome.json", "biome.jsonc",
-    ".pre-commit-config.yaml", "ruff.toml", ".ruff.toml", "pytest.ini", "tox.ini", "setup.cfg", ".coveragerc",
-    ".editorconfig", ".gitattributes", ".gitignore", ".markdownlint-cli2.jsonc", ".yamllint.yml", ".coderabbit.yaml",
-    "renovate.json", ".nvmrc", ".python-version", ".mcp.json", ".snyk", "CODEOWNERS", "SECURITY.md",
-    "test_linter_formatter_policy.py",
-})  # fmt: skip
-WEAKENING = re.compile(
-    r"noqa|type:\s*ignore|pyright:\s*ignore|pragma:\s*no\s*cover|fmt:\s*(off|skip)|biome-ignore|eslint-disable"
-    r"|@ts-(ignore|nocheck|expect-error)|pytest\.mark\.(skip|xfail)|pytest\.(skip|xfail)\(|unittest\.skip"
-)
-REMOVED = re.compile(r"\bassert|\bexpect\(|\bdef test|^\s*(it|test|describe)(\.\w+)?\(")  # a check it took out
-DISABLING = re.compile(  # an added line that turns a test off without a suppression's words
-    r"\b(it|test|describe)\.(skip|todo|only)\b|\bx(it|test|describe)\(|SkipTest|importorskip|__test__\s*=\s*False"
-)
-RETURN = re.compile(r"^\s*return\b")
-BLOCK = re.compile(r"^\s*(async\s+)?def\s|\bfunction\b|=>|^\s*(it|test)(\.\w+)?\(")  # a function's first line
-TEST = re.compile(r"^\s*(async\s+)?def\s+test|^\s*(it|test)(\.\w+)?\(")  # a test's first line
-HUNK = re.compile(r"^@@ -\S+ \+(\d+)")
-LINKS = frozenset({"120000", "160000"})  # a symbolic link or a submodule: never pushed without the owner
-TESTS = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$|[^/]*\.test\.[mc]?[jt]sx?$)")
 
 
 def config(run: str, r: Repair) -> dict[str, Any]:
@@ -112,72 +86,12 @@ def held(  # noqa: PLR0913 - the copy, its head, the change, the package with it
     The weakening patterns (a deleted test, an added skip, suppression or early return, a removed assertion or test)
     are a quick filter, not a proof; every other edit of an existing test file is held for the owner's review.
     """
-    held = [p for p, how in changed if _configured(p) or how.split()[0] in LINKS]
-    refused = [f"{p} (deleted test)" for p, how in changed if how.endswith("D") and TESTS.search(p)]
+    held = [p for p, how in changed if configured(p) or how.split()[0] in LINKS]
+    found = {path: weakened(run, at, head, path, how) for path, how in changed}
+    refused = [f"{p} ({found[p][0]})" for p, how in changed if how.endswith("D") and found[p][0]]
     refused += [
         f"{p} ({kind.refusal})" for p, how in changed if kind.refused(package, p, not how.endswith("D"), skills)
     ]
-    reviewed = []
-    for path, how in changed:
-        if how.endswith("D"):
-            continue
-        lines = run(at, ["diff", "--cached", "--unified=0", head, "--", path]).splitlines()
-        added = [x[1:] for x in lines if x.startswith("+") and not x.startswith("+++")]
-        edited = how.endswith("M") and bool(TESTS.search(path))  # an existing test file: a new one may be pushed
-        removed = [x[1:] for x in lines if x.startswith("-") and not x.startswith("---")] if edited else []
-        cut = any(REMOVED.search(x) for x in removed)
-        same = cut and _same_code(run, at, head, path)  # only reformatted: no check went
-        if any(WEAKENING.search(x) for x in added):
-            refused.append(f"{path} (adds a suppression or skip)")
-        elif edited and (any(DISABLING.search(x) for x in added) or _returns_early(at / path, lines)):
-            refused.append(f"{path} (disables a test)")
-        elif cut and not same:
-            refused.append(f"{path} (removes an assertion or test)")
-        elif edited:
-            what = "reformats" if same else "removes lines from" if removed else "changes"
-            reviewed.append(f"{path} ({what} a test)")
+    refused += [f"{p} ({found[p][0]})" for p, how in changed if not how.endswith("D") and found[p][0]]
+    reviewed = [f"{p} ({found[p][1]} a test)" for p, _ in changed if found[p][1]]
     return held, refused, reviewed
-
-
-def _same_code(run: pack_git.Git, at: Path, head: str, path: str) -> bool:
-    """Whether a Python test file's edit only reformats it: its syntax tree is unchanged, so no check went."""
-    if not path.endswith(".py"):
-        return False
-    try:
-        old, new = run(at, ["show", f"{head}:{path}"]), (at / path).read_text("utf-8")
-        return ast.dump(ast.parse(old)) == ast.dump(ast.parse(new))
-    except SyntaxError, ValueError, OSError:
-        return False
-
-
-def _returns_early(file: Path, diff: list[str]) -> bool:
-    """Whether an added ``return`` line of the zero-context *diff* lies in a test function of the new *file*."""
-    text = file.read_text("utf-8", errors="replace").splitlines()
-    line = 0
-    for x in diff:
-        if found := HUNK.match(x):
-            line = int(found[1])
-        elif x.startswith("+") and not x.startswith("+++"):
-            if RETURN.match(x[1:]) and _in_test(text, line - 1):
-                return True
-            line += 1
-    return False
-
-
-def _in_test(text: list[str], at: int) -> bool:
-    """Whether line *at* of *text* lies in a test function: the first function around it, by indentation, is one."""
-    indent = len(text[at]) - len(text[at].lstrip()) if 0 <= at < len(text) else 0
-    for line in reversed(text[:at]):
-        here = len(line) - len(line.lstrip())
-        if not line.strip() or here >= indent:
-            continue
-        indent = here
-        if BLOCK.search(line):
-            return bool(TEST.search(line))
-    return False
-
-
-def _configured(path: str) -> bool:
-    """Whether *path* is lint, format, CI workflow, hook or security configuration."""
-    p = PurePosixPath(path)
-    return path.startswith(CONFIG_PREFIXES) or p.name in CONFIG_FILES or bool(CONFIG_DIRS & set(p.parts[:-1]))

@@ -27,7 +27,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.round_records import FINAL
-from owlbear_delivery_next.change_flow import curation_flow
+from owlbear_delivery_next.change_flow import curation_flow, stuck
 from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go
 
 if TYPE_CHECKING:
@@ -41,6 +41,7 @@ FLAKE_LIMIT = 1
 ROUND_LIMIT = 2
 REPLAN_LIMIT = 3
 DEFECT_LIMIT = 3  # the same Delivery defect in a row before asking
+REPAIR_AT = 2  # one cause stopping a step this often starts its repair (D-01M6RT5QHXFM58C9BPQXEK3QFB)
 WRONG_MODEL_LIMIT = 2  # wrong models in a row before asking: one rerun (owner decision 2026-10-15)
 PAUSE = timedelta(minutes=1)
 PAUSE_CAP = timedelta(minutes=30)
@@ -189,6 +190,8 @@ def _defect(c: Change, r: StepResult, now: datetime) -> None:
     b = c.budgets.causes.get(cause)
     count = b.count + 1 if b and b.signature == sig else 1
     c.budgets.causes[cause] = Budget(count=count, signature=sig, task=c.step.task, at=now)
+    if _repaired(c, r, count, now):
+        return
     if count >= DEFECT_LIMIT:
         text = f"Delivery failed the same way {count} times ({cause}): {r.reason}"
         ask(c, Question(step=c.step.kind, text=text, options=_resolve_or_pause(c), cause=cause), now)
@@ -275,6 +278,14 @@ def _round(c: Change, r: StepResult, now: datetime) -> None:
         s.attempt += 1
 
 
+def _repaired(c: Change, r: StepResult, count: int, now: datetime) -> bool:
+    """The second time one cause stops an agent step, Delivery repairs it (D-01M6RT5QHXFM58C9BPQXEK3QFB)."""
+    if count < REPAIR_AT or not stuck.repaired(c):
+        return False
+    stuck.start(c, r.cause or "", f"{r.reason}\n{r.detail}" if r.detail and r.detail not in r.reason else r.reason, now)
+    return True
+
+
 def retry(c: Change, r: StepResult, now: datetime) -> None:
     """Apply a retry exit: another round, an environment wait, a defect streak or a counted cause.
 
@@ -303,7 +314,10 @@ def retry(c: Change, r: StepResult, now: datetime) -> None:
         _defect(c, r, now)
         return
     limit = FLAKE_LIMIT if s.kind == StepKind.FOLLOW else RETRY_LIMIT
-    if _count(c, r.cause, now, r.score, r.classified or r.reason) > limit:
+    count = _count(c, r.cause, now, r.score, r.classified or r.reason)
+    if _repaired(c, r, count, now):
+        return
+    if count > limit:
         _exhausted(c, r, now)
     else:
         s.attempt += 1
@@ -323,7 +337,10 @@ def back(c: Change, r: StepResult, now: datetime) -> None:
     if c.tests is not None and target in curation_flow.FIXED:  # never counted, never a re-plan (TD-390)
         curation_flow.stop(c, r.reason or f"it would go back to {target}", r.cause, now)
         return
-    if _count(c, r.cause, now, r.score, r.classified or r.reason) > RETRY_LIMIT:
+    count = _count(c, r.cause, now, r.score, r.classified or r.reason)
+    if _repaired(c, r, count, now):
+        return
+    if count > RETRY_LIMIT:
         _exhausted(c, r, now)
         return
     if target == StepKind.PLAN:
