@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -208,6 +209,11 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     curation_build.recorded(change, run, path)
     post = held_writes.Deferred(store, slug) if accepted else store  # an accepted hold's writes wait for its receipt
     result = session_result.to_result(run, s.kind, end)
+    if ctx is not None:
+        try:
+            result = prepare.chosen(post, lock, change, path, run.payload, ctx, result)
+        except (OSError, subprocess.SubprocessError) as exc:
+            result = check.failed(f"the preparer's cleanup failed: {failure(exc)}")
     if run.ending == "ask" and result.cause == cause_key(ErrorKind.RESULT, s.kind, worker_questions.LABEL):
         parts = step_input.session(change, profile, path, others, ctx)
         kept = worker_questions.checkpoint(post, lock, change, run, parts.checks)
@@ -230,8 +236,6 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     if isinstance(p := run.payload, tools.WrongPremise) and (p.stage, s.kind, result.exit) == TARGET:
         writer = github_writer.of(store, repo)
         result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end, writer)
-    if ctx is not None:
-        result = prepare.chosen(post, lock, change, path, run.payload, ctx, result)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
         before.reset(change, worktree.head(path))  # each new environment's capture gets its own "before"
