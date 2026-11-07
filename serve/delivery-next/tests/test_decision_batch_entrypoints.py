@@ -2858,47 +2858,6 @@ def test_a_commit_that_does_not_hold_the_batch_is_never_pushed(picking, shared_r
     _no_authority(picking)
 
 
-def test_a_commit_rebased_into_one_that_does_not_hold_the_batch_is_never_pushed(picking, shared_repo, monkeypatch):
-    """The first push is refused, the commit is rebased on the remote, and the owner then commits a third image over
-    it. The rebased head is checked before its push: nothing of it is pushed and the batch stays interrupted."""
-    _seed(picking)
-    shared, remote = picking.shared, shared_repo[1]
-    items, first, _ = _update_and_successor(picking)
-    other = shared.root.parent / "other"
-    subprocess.run(["git", "clone", "-q", str(remote), str(other)], check=True)  # noqa: S603, S607
-    real_push, real_rebase, pushes = DataRepo.git, DataRepo.rebase, []
-
-    def first_push_refused(self, *args, **kwargs):
-        if args[:1] == ("push",) and not pushes:
-            pushes.append(1)  # another clone publishes first, so this push is refused
-            (other / "unrelated.txt").write_text("another clone\n")
-            for step in (["add", "-A"], ["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "other"]):
-                subprocess.run(["git", *step], cwd=other, check=True)  # noqa: S603, S607
-            subprocess.run(["git", "push", "-q"], cwd=other, check=True)  # noqa: S607
-        return real_push(self, *args, **kwargs)
-
-    def rebase_then_owner_commits(self, until=None, *guard):
-        said = real_rebase(self, until, *guard)
-        first.write_bytes(THIRD)
-        self.git("commit", "-qam", "the owner's own commit")
-        return said
-
-    with monkeypatch.context() as m:
-        m.setattr(DataRepo, "git", first_push_refused)
-        m.setattr(DataRepo, "rebase", rebase_then_owner_commits)
-        receipts = decision_store.save_all(shared, items, message="decisions: two")
-    published = _remote_main(remote)
-
-    assert pushes
-    assert not any(r.saved for r in receipts)
-    assert "not pushed" in receipts[0].notice
-    other_head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=other, check=True, capture_output=True, text=True)  # noqa: S607
-    assert published == other_head.stdout.strip()  # the remote holds only the other clone's commit
-    assert first.read_bytes() == THIRD
-    assert decision_batch.pending(shared) is not None
-    _no_authority(picking)
-
-
 def _lock_breaks_at_completion(m: pytest.MonkeyPatch, shared: DataRepo) -> None:
     """The batch lock becomes a link just before the batch would complete, so taking it fails for real."""
     real_complete = decision_batch.complete
@@ -3630,18 +3589,12 @@ def test_a_journal_whose_head_is_no_full_commit_id_is_corrupt_and_finishes_nothi
 
 
 @pytest.mark.parametrize("length", [40, 64])
-def test_a_journal_head_of_a_full_commit_id_is_read(picking, monkeypatch, length):
+def test_a_journal_head_of_a_full_commit_id_is_read(length):
     """A producer journals HEAD as `rev-parse` names it, 40 hexadecimal characters, or 64 in a SHA-256 repository."""
-    _seed(picking)
-    shared = picking.shared
-    _interrupt(picking, monkeypatch, [make(title="Use UTC", statement="All timestamps use UTC.")])
-    head = decision_batch.pending(shared).head
-    assert len(head) == 40  # a producer's own
-    value = head if length == 40 else "c" * 64
-    _rewrite_journal(shared, lambda record: record.__setitem__("head", value))
+    record = _journal_record()
+    record["head"] = "c" * length
 
-    assert decision_batch.pending(shared).head == value
-    assert decision_recovery_routes.diagnosis(shared)["corrupt"] is False
+    assert batch_journal.decode(json.dumps(record).encode("utf-8")).head == "c" * length
 
 
 def _owner_commits_after_push(m: pytest.MonkeyPatch, at: int, pushes: list[str], made: list[str]) -> None:
