@@ -11,15 +11,18 @@ import psutil
 import pytest
 from copilot._jsonrpc import JsonRpcError
 
-from owlbear_delivery_next.change_contracts import tool_schema, tools
+from owlbear_delivery_next.change_contracts import pick_tools, tool_schema, tools
 from owlbear_delivery_next.change_contracts.models import (
     Answer,
+    Brief,
     Change,
     ErrorKind,
     Exit,
     ItemRef,
+    Names,
     Plan,
     Question,
+    Step,
     StepKind,
     Task,
 )
@@ -40,6 +43,8 @@ from owlbear_delivery_next.runtimes import (
     step_input,
 )
 from owlbear_delivery_next.runtimes.session_result import Run, to_result
+from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
+from owlbear_delivery_next.workflow_steps import session_choice, worker_questions
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 HEAD, BASE = "a" * 40, "b" * 40
@@ -47,6 +52,91 @@ GOOD = {
     "summary": "Added greet().",
     "checks": [{"command": "npm test", "exit_code": 0}],
 }
+
+
+def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(tmp_path, monkeypatch) -> None:
+    store, lock = Store(tmp_path / "store"), Lock("c1")
+    c = Change(
+        slug="c1",
+        brief=Brief(version=1),
+        step=Step(kind=StepKind.BUILD, task="t1"),
+        names=Names(branch="owlbear/c1", target="main", worktree=str(tmp_path)),
+        plan=Plan(tasks=[Task(id="t1", title="Charts", scope=["web"])]),
+    )
+    proposed = tools.AskQuestion(
+        question="How should I unblock the charts?",
+        why="The check failed.",
+        options=[
+            {
+                "label": "Accept the evidence",
+                "effect": "Accept the failing task check; CI judges the full branch.",
+                "action": "continue",
+            },
+            {"label": "Land it on main first", "effect": "Open a separate prerequisite PR on main.", "action": "retry"},
+        ],
+    )
+    parent = Run("c1-author", "ask", proposed, termination=Termination(confirmed=True), usage={"credits": 1})
+    monkeypatch.setattr(worker_questions.worktree, "head", lambda _p: HEAD)
+    worker_questions.checkpoint(store, lock, c, parent, [])
+    starts = []
+
+    def judge(_store, _lock, _c, actual):
+        starts.append(actual)
+        return Run(
+            "c1-admission",
+            "result",
+            pick_tools.QuestionJudgment(
+                options=[
+                    {
+                        "index": 0,
+                        "executable": False,
+                        "why": "Required task checks cannot be waived.",
+                        "check_related": True,
+                        "recommends": False,
+                    },
+                    {
+                        "index": 1,
+                        "executable": False,
+                        "why": "No step opens a separate prerequisite PR on main.",
+                        "check_related": False,
+                        "recommends": False,
+                    },
+                ]
+            ),
+            termination=Termination(confirmed=True),
+            usage={"credits": 2},
+        )
+
+    monkeypatch.setattr(worker_questions, "session", judge)
+    real_write = Store.write
+
+    def interrupted(self, key, final):
+        if final.pending_question is None:
+            msg = "runner interrupted before question settlement"
+            raise StoreError(msg)
+        return real_write(self, key, final)
+
+    monkeypatch.setattr(Store, "write", interrupted)
+    with pytest.raises(StoreError, match="before question settlement"):
+        worker_questions.continued(store, lock, c, tmp_path)
+    kept = store.read("c1")
+    assert kept.pending_child.run is not None
+    assert kept.spend.credits == 1
+    monkeypatch.setattr(Store, "write", real_write)
+    assert worker_questions.continued(store, lock, kept, tmp_path)
+    done = store.read("c1")
+    assert len(starts) == 1
+    assert done.spend.credits == 3
+    assert not done.questions
+    assert done.step.session == "c1-author"
+    assert done.step.question_errors == [
+        "options[0].action: Required task checks cannot be waived.",
+        "options[1].action: No step opens a separate prerequisite PR on main.",
+    ]
+    _, accepted, _, resume = session_choice.opening(store, lock, done, done.plan.tasks[0])
+    assert resume
+    assert accepted is None
+    assert done.step.session == "c1-author"
 
 
 def build(**changes) -> BuildResult:

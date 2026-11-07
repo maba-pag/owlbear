@@ -34,7 +34,7 @@ def opening(
     repair = "" if accepted else repairs.session(change, task)
     if answer and s.session and s.session != repair:
         repair = ""  # the answer goes back to a session that is not this repair chance's
-    resume = bool(answer and s.session) or bool(repair)
+    resume = bool(s.session and (answer or s.question_errors)) or bool(repair)
     if repair:
         s.session = repair
     elif not resume:

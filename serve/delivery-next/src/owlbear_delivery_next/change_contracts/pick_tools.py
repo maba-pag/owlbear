@@ -43,6 +43,36 @@ class ClarificationResult(tools.Args):
 
 
 CLARIFY = tools.Spec("submit_result", "Submit your verdict on the clarification once.", ClarificationResult, "result")
+
+
+class OptionJudgment(tools.Args):
+    """Whether one exact option is carried by the engine action it names."""
+
+    index: int = Field(ge=0, le=4, description="The option's zero-based index", examples=[0])
+    executable: bool = Field(description="The engine can carry out the whole visible promise", examples=[True])
+    why: str = tools.bounded(600, "Why the promise is executable or which part is not", "It only pauses the Change.")
+    check_related: bool = Field(
+        description="The recommendation addresses a check problem or claims a check benefit", examples=[False]
+    )
+    recommends: bool = Field(
+        description="The label or effect presents this option as a recommendation", examples=[False]
+    )
+
+
+class QuestionJudgment(tools.Args):
+    """A complete pre-publication judgment, including a recommendation's observed trial."""
+
+    options: list[OptionJudgment] = tools.bounded(
+        5,
+        "One verdict for every option, by its zero-based index",
+        [{"index": 0, "executable": True, "why": "It pauses.", "check_related": False, "recommends": False}],
+        least=2,
+    )
+
+
+ADMIT = tools.Spec(
+    "submit_result", "Submit the executable-option verdict for every proposed option once.", QuestionJudgment, "result"
+)
 LIMIT = 600.0  # seconds a lookup's picker session may run: a pick takes about a minute
 WAIT = 900.0  # seconds a caller waits for a lookup's answer: its session's limit, its start and its end
 
