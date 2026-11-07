@@ -142,14 +142,25 @@ def checked(store: Store, lock: Lock, c: Change, path: Path) -> tuple[loop.StepR
             raise sessions.UsageUnreadError(done, LABEL)
         return session_result.to_result(done, StepKind.REVIEW, datetime.now(UTC), c.step.kind), done
 
+    if c.pending_child is None:
+        c.pending_child = pending_child.awaited(LABEL, parent.session_id, loop.StepResult(exit=Exit.PENDING), c)
+        store.write(lock, c)
     route, done = pending_child.child(store, lock, c, (LABEL, parent.session_id), start)
     if route.exit == Exit.DONE:
         verdict, errors = judged(done, proposed, p.proof)
         result = refused(c, errors) if errors or verdict is None else admitted(c, proposed, verdict, p.proof)
     else:
         result = route
+    return result, _booked(c, done, result)
+
+
+def _booked(c: Change, done: Run, result: loop.StepResult) -> dict[str, object] | None:
+    """Count a kept verdict or an unkept stopped run with its settlement, never trusting the latter."""
     event = pending_child.booked(c, done, {"exit": result.exit, "reason": result.reason})
-    return result, event
+    if event is None and not sessions.deferrable(done) and done.session_id not in c.counted_children:
+        c.counted_children.append(done.session_id)
+        event = sessions.account(c, done, {"kind": LABEL, "exit": result.exit, "reason": result.reason})
+    return event
 
 
 def trial(store: Store, lock: Lock, c: Change, path: Path, proposed: tools.AskQuestion) -> list[str]:
