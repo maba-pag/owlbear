@@ -123,8 +123,13 @@ def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
         brief=Brief(version=1),
         step=Step(kind=StepKind.BUILD, task="t1"),
         names=Names(branch="owlbear/c1", target="main", worktree=str(change_repo)),
-        plan=Plan(tasks=[Task(id="t1", title="Charts", scope=["web"])]),
+        plan=Plan(tasks=[Task(id="t1", title="Charts", scope=["web"], resume="missing-producer")]),
     )
+    store.write(lock, c)
+    assert session_choice.opening(store, lock, c, c.plan.tasks[0])[2:] == ("missing-producer", True)
+    c, author = session_choice.replaced(store, lock, c, "missing-producer")
+    assert author is not None
+    assert author != "missing-producer"
     proposed = tools.AskQuestion(
         question="How should I unblock the charts?",
         why="The check failed.",
@@ -137,7 +142,7 @@ def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
             {"label": "Land it on main first", "effect": "Open a separate prerequisite PR on main.", "action": "retry"},
         ],
     )
-    parent = Run("c1-author", "ask", proposed, termination=Termination(confirmed=True), usage={"credits": 1})
+    parent = Run(author, "ask", proposed, termination=Termination(confirmed=True), usage={"credits": 1})
     monkeypatch.setattr(worker_questions.worktree, "head", lambda _p: HEAD)
     worker_questions.checkpoint(store, lock, c, parent, [])
     starts = []
@@ -190,7 +195,7 @@ def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
     assert len(starts) == 1
     assert done.spend.credits == 3
     assert not done.questions
-    assert done.step.session == "c1-author"
+    assert done.step.session == author
     assert done.step.question_errors == [
         "options[0].action: Required task checks cannot be waived.",
         "options[1].action: No step opens a separate prerequisite PR on main.",
@@ -198,7 +203,7 @@ def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
     _, accepted, _, resume = session_choice.opening(store, lock, done, done.plan.tasks[0])
     assert resume
     assert accepted is None
-    assert done.step.session == "c1-author"
+    assert done.step.session == author
 
     worker_questions.checkpoint(store, lock, done, dataclasses.replace(parent, session_id="c1-author-again"), [])
     monkeypatch.setattr(Store, "write", interrupted)
