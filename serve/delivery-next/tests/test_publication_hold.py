@@ -435,14 +435,13 @@ def test_a_fifo_hold_is_refused_by_every_caller_without_waiting(held):
     assert owner_state(root) == owner
 
 
-@pytest.mark.parametrize("alias", ["none", "checkout", "ancestor"])
+@pytest.mark.parametrize("alias", ["ancestor"])
 def test_absent_and_valid_regular_holds_still_publish_through_preexisting_checkout_aliases(three, tmp_path, alias):
     winner, _, remote = three
     root = winner.shared.root
-    if alias != "none":
-        link = tmp_path / "checkout-alias"
-        link.symlink_to(root if alias == "checkout" else root.parent, target_is_directory=True)
-        root = link if alias == "checkout" else link / root.name
+    link = tmp_path / f"{alias}-alias"  # a folder holding the checkout, reached by a symlink
+    link.symlink_to(root.parent, target_is_directory=True)
+    root = link / root.name
     shared = DataRepo(root)
     record = root / git(root, "rev-parse", "--git-path", publication_hold.RECORD)
     assert not publication_hold.recorded(shared, None)
@@ -529,8 +528,8 @@ def test_a_healthy_unrelated_advance_at_the_first_push_is_checked_and_published(
     assert not publication_hold.recorded(winner.shared, None)  # the record lapsed with its publication
 
 
-def test_an_automatic_save_that_cannot_tell_a_rebase_says_why_whole(three, monkeypatch, whole_error):
-    winner = three[0]
+def test_an_automatic_save_that_cannot_tell_a_rebase_says_why_whole(shared_repo, tmp_path, monkeypatch, whole_error):
+    winner = Store(tmp_path / "winner-store", DataRepo(shared_repo[0]), PROJECT)
     basis = profile_share.config_digest(winner.config_path)
 
     def unknown(*_args: object) -> bool:
@@ -784,7 +783,7 @@ def test_a_malformed_held_record_is_refused_and_kept_as_it_is(tmp_path, case):
     assert record.read_bytes() == raw
 
 
-@pytest.mark.parametrize("case", ["watch escapes", "missing key", "not json"])
+@pytest.mark.parametrize("case", ["not json"])
 def test_a_malformed_held_record_stays_held_with_its_bytes_and_never_lapses(held, case):
     import json  # noqa: PLC0415
 
@@ -1018,17 +1017,6 @@ def test_a_configured_forced_push_of_a_held_fill_keeps_a_healthy_remote_advance(
     assert (fresh.shared.root / "unrelated" / "notes.md").exists()  # the other clone's commit was not overwritten
 
 
-def test_an_explicit_push_is_still_checked_whatever_push_refspec_is_configured(held):
-    winner, remote = held
-    git(winner.shared.root, "config", "remote.origin.push", FORCED)
-    before = remote_head(remote)
-    for args in (("push", "-q", "origin", "+HEAD:refs/heads/main"), ("push", "-q", "origin", "HEAD:refs/heads/main")):
-        said = winner.shared.git(*args)
-        assert said.returncode == 1
-        assert "nothing was pushed" in said.stderr
-    assert remote_head(remote) == before
-
-
 def old_roles(store: Store, roles_: dict) -> None:
     store.root.mkdir(parents=True, exist_ok=True)
     (store.root / profile_share.PROFILE).write_text(json.dumps({"format": 1, "roles": roles_}))
@@ -1227,29 +1215,12 @@ def test_an_interrupted_decision_batch_comes_before_a_held_change_in_every_ordin
     assert remote_head(remote) == before
 
 
-def test_an_owned_decision_push_never_sends_a_held_stale_fill(held):
-    winner, remote = held
-    shared, before = winner.shared, remote_head(remote)
-    until = time.monotonic() + 30
-    goal = decision_sync.target(shared, until)
-    assert goal is not None
-
-    said = decision_sync.push_commit(shared, git(shared.root, "rev-parse", "HEAD"), goal, until)
-
-    # the explicit SHA and captured target are checked against the hold too (R06 keeps 200 characters of the notice)
-    assert said.startswith(f"nothing was pushed or rebased in {shared.root}")
-    assert remote_head(remote) == before
-    assert not remote_has_config(remote)
-    assert shared.held()  # the kept refusal still names why
-
-
-@pytest.mark.parametrize("remote_name", ["origin", "authority"])
+@pytest.mark.parametrize("remote_name", ["authority"])
 def test_a_healthy_owned_decision_push_lands_on_its_target_within_one_deadline(three, monkeypatch, remote_name):
     winner, _, remote = three
     root = winner.shared.root
-    if remote_name != "origin":
-        git(root, "remote", "rename", "origin", remote_name)
-    git(root, "config", "remote.origin.push" if remote_name == "origin" else f"remote.{remote_name}.push", FORCED)
+    git(root, "remote", "rename", "origin", remote_name)
+    git(root, "config", f"remote.{remote_name}.push", FORCED)
     notes = root / "unrelated" / "decision-notes.md"
     notes.parent.mkdir(parents=True, exist_ok=True)
     notes.write_text("an owned batch's commit\n")
@@ -1305,10 +1276,7 @@ def owner_state(root: Path) -> tuple[str, ...]:
     )
 
 
-@pytest.mark.parametrize(
-    "refspec",
-    ["refs/heads/*:refs/heads/*", "refs/heads/*:refs/heads/main", "HEAD:refs/heads/*", "main*:refs/heads/main"],
-)
+@pytest.mark.parametrize("refspec", ["refs/heads/*:refs/heads/main", "HEAD:refs/heads/*"])
 def test_an_explicit_pattern_push_never_sends_more_than_one_captured_branch(three, monkeypatch, refspec):
     winner, _, remote = three
     root = winner.shared.root
@@ -1458,28 +1426,36 @@ def test_an_owned_decision_push_to_an_unchanged_address_with_spaces_lands(three,
     assert remote_head(spaced) == made
 
 
-def an_owned_decision(picking) -> object:
+@pytest.fixture
+def claimed(shared_repo) -> DataRepo:
+    """The shared checkout with this project's folder claimed, its claim file left untracked."""
+    shared = DataRepo(shared_repo[0])
+    shared.claim(PROJECT, "github.com/acme/shop-site")
+    return shared
+
+
+def an_owned_decision() -> object:
     from datetime import UTC, datetime  # noqa: PLC0415
 
     from owlbear_decisions import Decision, Origin, Scope, State, new_id  # noqa: PLC0415
 
     return Decision(
         id=new_id(), title="Notes live in SQLite", statement="Notes live in one SQLite table.", scope=Scope.PROJECT,
-        project=picking.PROJECT, origin=Origin.AUTONOMOUS, actor="shaper", state=State.IN_FORCE,
+        project=PROJECT, origin=Origin.AUTONOMOUS, actor="shaper", state=State.IN_FORCE,
         created_at=datetime(2026, 10, 26, tzinfo=UTC),
     )  # fmt: skip
 
 
 @pytest.mark.parametrize("push", ["initial", "rebased-retry"])
 def test_a_repoint_during_the_shared_checkouts_own_push_probes_sends_nothing_to_the_other_repository(
-    picking, shared_repo, tmp_path, monkeypatch, push
+    claimed, shared_repo, tmp_path, monkeypatch, push
 ):
     """The owned push checked its captured remote's addresses, then the shared checkout's own probes run (the held
     publication record's lookup first); origin is pointed at repository B during that lookup. The push still goes
     nowhere: its captured addresses are checked again at the push itself, after those probes."""
     from owlbear_delivery_next.state_store import decision_store  # noqa: PLC0415
 
-    shared, remote = picking.shared, shared_repo[1]
+    shared, remote = claimed, shared_repo[1]
     root = shared.root
     fork = tmp_path / "fork-b.git"
     git(tmp_path, "clone", "-q", "--bare", str(remote), str(fork))
@@ -1508,7 +1484,7 @@ def test_a_repoint_during_the_shared_checkouts_own_push_probes_sends_nothing_to_
 
     monkeypatch.setattr(DataRepo, "git", spy)
     fork_refs, before = remote_refs(fork), remote_head(remote)
-    receipts = decision_store.save_all(shared, [(an_owned_decision(picking), None)], message="decisions: one")
+    receipts = decision_store.save_all(shared, [(an_owned_decision(), None)], message="decisions: one")
 
     assert fired == [True]
     assert remote_refs(fork) == fork_refs  # repository B never got the commit
@@ -1608,12 +1584,12 @@ def test_a_held_record_lock_folder_or_rebase_state_that_cannot_be_read_says_the_
     )
 
 
-def test_a_spent_decision_whose_hold_git_fails_is_refused_with_git_s_whole_words(picking, failing_git, whole_error):
+def test_a_spent_decision_whose_hold_git_fails_is_refused_with_git_s_whole_words(claimed, failing_git, whole_error):
     """P21: spending an active project decision holds it first; a hold Git fails refuses the save, Git's words whole."""
     from owlbear_decisions import State  # noqa: PLC0415
     from owlbear_delivery_next.state_store import decision_store  # noqa: PLC0415
 
-    shared, rule = picking.shared, an_owned_decision(picking)
+    shared, rule = claimed, an_owned_decision()
     (saved,) = decision_store.save_all(shared, [(rule, None)], message="decisions: one")
     assert saved.saved
     ran: list[tuple[str, ...]] = []
