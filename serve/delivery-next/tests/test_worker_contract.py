@@ -95,9 +95,7 @@ def test_input_capture_failure_keeps_the_parent_and_returns_feedback_to_its_auth
     kept = store.read("c1")
     assert kept.pending_question is not None
     assert kept.pending_question.run.session_id == parent.session_id
-    assert not kept.pending_question.inputs
-    assert kept.spend.credits == 1
-    assert kept.tool_use.tools["ask_question"].calls == 1
+    assert (kept.pending_question.inputs, kept.spend.credits, kept.tool_use.tools["ask_question"].calls) == ("", 1, 1)
     assert not kept.questions
     monkeypatch.setattr(worker_questions, "session", lambda *_: pytest.fail("an unbound question cannot be judged"))
     assert worker_questions.continued(store, lock, kept, change_repo)
@@ -106,12 +104,43 @@ def test_input_capture_failure_keeps_the_parent_and_returns_feedback_to_its_auth
     assert done.step.question_errors == [
         "options: worktree inputs were not recorded - resubmit the options on its current code"
     ]
-    assert done.spend.credits == 1
-    assert done.tool_use.tools["ask_question"].calls == 1
+    assert (done.spend.credits, done.tool_use.tools["ask_question"].calls) == (1, 1)
     _, accepted, _, resume = session_choice.opening(store, lock, done, None)
-    assert resume
-    assert accepted is None
+    assert (resume, accepted, done.step.session) == (True, None, parent.session_id)
+    parent = dataclasses.replace(parent, session_id="resubmitted-author")
+    worker_questions.checkpoint(store, lock, done, parent, [])
+    child = Run(
+        "kept-admission",
+        "error",
+        detail="the verdict stopped",
+        termination=Termination(confirmed=True),
+        usage={"credits": 2},
+    )
+    pending_child.child(
+        store,
+        lock,
+        done,
+        (worker_questions.LABEL, parent.session_id),
+        lambda _keep: (worker_questions.loop.StepResult(exit=Exit.RETRY), child),
+    )
+    kept = store.read("c1")
+    asset.chmod(0)
+    try:
+        assert worker_questions.continued(store, lock, kept, change_repo)
+    finally:
+        asset.chmod(0o600)
+    done = store.read("c1")
+    assert (done.pending_question, done.pending_child) == (None, None)
     assert done.step.session == parent.session_id
+    assert "CalledProcessError:" in done.step.question_errors[0]
+    assert done.step.question_errors[1:] == [
+        'error: open("generated-asset"): Permission denied',
+        "error: unable to index file 'generated-asset'",
+        "fatal: adding files failed",
+    ]
+    assert done.spend.credits == 4
+    assert not worker_questions.continued(store, lock, done, change_repo)
+    assert store.read("c1").spend.credits == 4
 
 
 def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
