@@ -10,6 +10,7 @@ account for OwlBear's repository (``OwlbearIssues``); a failed write is said who
 from __future__ import annotations
 
 import hashlib
+import re
 import subprocess
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
@@ -80,16 +81,16 @@ def _named(issues: OwlbearIssues, store: Store, path: Path, text: str) -> list[s
         seen = None
     if seen is not None and seen.visibility == "public":
         return []
-    names = {store.name, origin.name, slug, *_tracked(path)} - {""}
-    low = text.casefold()
-    return sorted(n for n in names if n.casefold() in low)
+    tracked = _tracked(path)
+    names = {store.name, origin.name, slug, *tracked, *(PurePosixPath(p).name for p in tracked)} - {""}
+    return sorted(n for n in names if re.search(rf"(?<![\w.-]){re.escape(n)}(?![\w-])", text, re.IGNORECASE))
 
 
 def _tracked(path: Path) -> list[str]:
     done = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector
         [worktree.GIT, "ls-files", "-z"], cwd=path, capture_output=True, text=True, check=False, timeout=60
     )
-    return [p for p in done.stdout.split("\0") if "/" in p or "." in p] if done.returncode == 0 else []
+    return [p for p in done.stdout.split("\0") if p] if done.returncode == 0 else []
 
 
 def _version() -> str:
