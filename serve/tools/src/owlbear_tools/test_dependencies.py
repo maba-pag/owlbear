@@ -42,19 +42,24 @@ CONFIGS = {
 }
 
 
-def git(root: Path, *arguments: str) -> str:
-    """A repository query whose failure retains the command, directory and Git's details."""
+def run_git(root: Path, arguments: Sequence[str]) -> subprocess.CompletedProcess[bytes]:
+    """A root-aware Git result, preserving nonzero statuses such as an ancestry mismatch."""
     executable = shutil.which("git")
     if executable is None:
         msg = "Git is unavailable while reading test dependency evidence"
         raise RuntimeError(msg)
-    result = subprocess.run(  # noqa: S603 - fixed executable, no shell.
-        [executable, *arguments], cwd=root, text=True, capture_output=True, check=False
+    return subprocess.run(  # noqa: S603 - fixed executable, no shell.
+        [executable, *arguments], cwd=root, capture_output=True, check=False
     )
+
+
+def git(root: Path, *arguments: str) -> str:
+    """A repository query whose failure retains the command, directory and Git's details."""
+    result = run_git(root, arguments)
     if result.returncode:
-        msg = f"Git {' '.join(arguments)} in {root} exited {result.returncode}: {result.stderr.strip()}"
+        msg = f"Git {' '.join(arguments)} in {root} exited {result.returncode}: {result.stderr.decode().strip()}"
         raise RuntimeError(msg)
-    return result.stdout
+    return result.stdout.decode()
 
 
 def relative(value: str) -> bool:

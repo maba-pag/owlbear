@@ -26,6 +26,7 @@ from owlbear_tools.test_dependencies import (
     node_path,
     read_evidence,
     relative,
+    run_git,
 )
 from owlbear_tools.test_dependencies import (
     is_test_module as _is_test,
@@ -195,15 +196,12 @@ def _kept_paths(root: Path, span: str, target: str) -> set[str]:
     if len(endpoints) != task_scope.SPAN_ENDPOINTS or not all(endpoints):
         msg = f"Invalid kept dependency span {span!r} in {root}; expected OLD..NEW"
         raise ValueError(msg)
-    ancestors = set(git(root, "rev-list", target).splitlines())
-
-    def run(arguments: list[str]) -> subprocess.CompletedProcess[bytes]:
-        if arguments[:2] == ["merge-base", "--is-ancestor"]:
-            return subprocess.CompletedProcess(arguments, int(arguments[2] not in ancestors), b"", b"")
-        return subprocess.CompletedProcess(arguments, 0, git(root, *arguments).encode(), b"")
-
     return task_scope.between(
-        run, lambda arguments: set(git(root, *arguments).split("\0")) - {""}, endpoints[0], endpoints[1], target
+        lambda arguments: run_git(root, arguments),
+        lambda arguments: set(git(root, *arguments).split("\0")) - {""},
+        endpoints[0],
+        endpoints[1],
+        target,
     )
 
 
