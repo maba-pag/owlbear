@@ -139,7 +139,6 @@ class Evidence:
     shard: int
     shards: int
     inputs: dict[str, str]
-    nodes: frozenset[str]
     skipped: frozenset[str]
     observations: tuple[Observation, ...]
 
@@ -292,7 +291,6 @@ def read_evidence(path: Path, platforms: Sequence[str] = ("linux",)) -> Evidence
         _integer(document.get("shard")),
         _integer(document.get("shards")),
         hashes,
-        nodes,
         skipped,
         observations,
     )
