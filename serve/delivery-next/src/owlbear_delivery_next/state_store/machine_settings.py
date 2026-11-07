@@ -90,10 +90,8 @@ def update_check_inputs(sources: tuple[Path, ...] = ()) -> Inputs:
         if root is not None:
             paths.extend((root / ".git", root / ".git/config", root / ".git/commondir"))
     return (
-        str(home),
         view,
         repr(record),
-        str(root) if root else None,
         BASE.model_dump_json() if BASE is not None else None,
         *(token for path in dict.fromkeys(paths) for token in (str(path), _identity(path), _input(path))),
     )
