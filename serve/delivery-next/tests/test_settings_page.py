@@ -1716,14 +1716,11 @@ def test_a_refused_save_of_an_already_empty_clear_keeps_the_review_until_the_ret
     """Clearing a preference that is already empty is still a review, and the retry must not drop it."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    real, refused = Store.save, []
+    real, notices = Store.save, iter(["remote refused"])
 
     def refuse_once(self, path, *args, **kw) -> str:
-        notice = real(self, path, *args, **kw)
-        if path != pending.config_path or refused:
-            return notice
-        refused.append(True)
-        return "remote refused"  # the project file is written, and its first publication returns this notice
+        notice = real(self, path, *args, **kw)  # the project file is written; its first publication returns a notice
+        return next(notices, notice) if path == pending.config_path else notice
 
     monkeypatch.setattr(Store, "save", refuse_once)
     with settings_page(pending, pds) as page:
