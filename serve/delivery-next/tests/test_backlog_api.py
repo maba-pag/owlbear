@@ -262,8 +262,9 @@ def test_the_page_shows_why_github_could_not_be_reached_and_nothing_is_saved(sto
 
 
 @contextlib.contextmanager
-def backlog_page(store: Store, pds: Any) -> Iterator[Any]:
-    """The Backlog page in a real browser: only the test host and the PDS CDN answer."""
+def backlog_page(store: Store, pds: Any, logged: list[str] | None = None) -> Iterator[Any]:
+    """The Backlog page in a real browser: only the test host and the PDS CDN answer; *logged* gets its console and
+    page errors from before it loads."""
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     sock = socket.socket()
@@ -281,6 +282,11 @@ def backlog_page(store: Store, pds: Any) -> Iterator[Any]:
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
+            if logged is not None:
+                page.on(
+                    "console", lambda m: logged.append(f"{m.text} {m.location['url']}") if m.type == "error" else None
+                )
+                page.on("pageerror", lambda e: logged.append(str(e)))
             pds.only(page, base)
             page.goto(f"{base}/backlog#token=tok")
             yield page
@@ -307,7 +313,8 @@ def test_a_failed_gh_read_shows_on_the_backlog_page_whole_with_its_command_and_o
         return subprocess.CompletedProcess(argv, 1, f"{body}\n".encode(), f"gh: {whole_error}\n".encode())
 
     monkeypatch.setattr(backlog_issues, "RUNNER", gh)
-    with backlog_page(store, pds) as page:
+    logged: list[str] = []
+    with backlog_page(store, pds, logged) as page:
         expect(page.locator("#error")).to_be_visible()
         shown = page.locator("#error").text_content().strip()  # the template's own indentation around it
 
@@ -319,6 +326,8 @@ def test_a_failed_gh_read_shows_on_the_backlog_page_whole_with_its_command_and_o
         else f"{whole_error}\nCalledProcessError: Command '{argv}' returned non-zero exit status 1.\nstdout:\n{body}"
     )
     assert shown == f"The backlog could not be read from GitHub (acme/owlbear-data): ProviderError: list_issues: {said}"
+    if fails == "nonzero":  # the browser logs the failed read's status, and this project host's missing projects route
+        assert [s for s in logged if "503" not in s and "/api/next/projects" not in s] == []
 
 
 @pytest.mark.browser
