@@ -502,6 +502,47 @@ def test_kept_trial_of_staged_content_is_refused_after_an_index_only_change(tmp_
     assert (calls, done.spend.credits) == (["trial", "picker"], 3)
 
 
+def test_a_retained_trial_cannot_ignore_staging_an_empty_intent_to_add_file(tmp_path, change_repo, monkeypatch):
+    store, lock = Store(tmp_path / "store"), Lock("c1")
+    c = Change(
+        slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.BUILD), names=Names(worktree=str(change_repo))
+    )
+    (change_repo / "empty.txt").touch()
+    worker_questions.worktree.git(change_repo, "add", "-N", "empty.txt")
+    command = "git diff --cached --ita-invisible-in-index --quiet && echo hidden"
+    proposed = tools.AskQuestion(
+        question="Retry after checking the index or pause?",
+        why="Verify there are no staged edits.",
+        recommended=0,
+        options=[
+            {"label": "Retry", "effect": "Retry after the index check passes.", "action": "retry", "check": command},
+            {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
+        ],
+    )
+    parent = Run("author", "ask", proposed, termination=Termination(confirmed=True), usage={"credits": 1})
+    worker_questions.checkpoint(store, lock, c, parent, [command])
+    assert worker_questions.trial(store, lock, c, change_repo, proposed) == []
+    kept = store.read("c1")
+    assert kept.pending_question.proof.exit_code == 0
+    assert kept.pending_question.proof.output.strip() == "hidden"
+    index = worker_questions.worktree.git(change_repo, "ls-files", "--stage", "-z")
+    worker_questions.worktree.git(change_repo, "add", "empty.txt")
+    assert worker_questions.worktree.git(change_repo, "ls-files", "--stage", "-z") == index
+    observed = worker_questions.check.measured(["/bin/sh", "-c", command], change_repo, lambda _e: None)
+    assert observed.exit_code == 1
+    monkeypatch.setattr(
+        worker_questions.check, "measured", lambda *_a: pytest.fail("the stale proof must be refused, not rerun")
+    )
+    monkeypatch.setattr(worker_questions, "session", lambda *_a: pytest.fail("the stale proof cannot reach a picker"))
+    assert worker_questions.continued(store, lock, kept, change_repo)
+    done = store.read("c1")
+    assert not done.questions
+    assert done.step.question_errors == [
+        "options: worktree inputs changed since submission - reconsider the options on its current code"
+    ]
+    assert done.spend.credits == 1
+
+
 def build(**changes) -> BuildResult:
     result, errors = tool_schema.parse(BuildResult, {**GOOD, **changes})
     assert errors == []
