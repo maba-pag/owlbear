@@ -56,18 +56,17 @@ INSTRUCTION = (
 
 
 def checkpoint(post: Store | held_writes.Deferred, lock: Lock, c: Change, run: Run, checks: Sequence[str]) -> Store:
-    """Keep the parent and its accounting/held receipt before starting any trial or paid child."""
+    """Keep the parent and its accounting/held receipt before input capture, trials or paid children."""
     s, path = c.step, Path(c.names.worktree)
     s.session = run.session_id
     answer = answer_kinds.delivered_next(c)
     c.pending_question = PendingQuestion(
         run=held.dump_run(run),
         checks=list(checks),
-        head=worktree.head(path),
+        head=run.head or "",
         step=(s.kind, s.task, s.mode),
         brief=c.brief.version,
         answer=answer.id if answer else "",
-        inputs=_inputs(path),
     )
     route = loop.StepResult(exit=Exit.PENDING, reason="checking the proposed question before offering it")
     task = next((t for t in c.plan.tasks if t.id == s.task), None) if c.plan else None
@@ -76,6 +75,9 @@ def checkpoint(post: Store | held_writes.Deferred, lock: Lock, c: Change, run: R
     event = sessions.account(c, run, {"kind": s.kind, "exit": Exit.PENDING, "reason": route.reason})
     store = held_writes.checkpoint(post, lock, c)
     sessions.announce(store, lock, c.slug, event)
+    head, inputs = worktree.head(path), _inputs(path)
+    c.pending_question.head, c.pending_question.inputs = head, inputs
+    store.write(lock, c)
     return store
 
 
@@ -177,10 +179,10 @@ def checked(store: Store, lock: Lock, c: Change, path: Path) -> tuple[loop.StepR
 
 def _stale(p: PendingQuestion, path: Path) -> list[str]:
     """A returning or retained trial/picker cannot offer options for earlier Git-visible inputs."""
+    if not p.head or not p.inputs:
+        return ["options: worktree inputs were not recorded - resubmit the options on its current code"]
     if worktree.head(path) != p.head:
         return ["options: HEAD changed since submission - reconsider the options on its current code"]
-    if not p.inputs:
-        return ["options: worktree inputs were not recorded - resubmit the options on its current code"]
     if _inputs(path) != p.inputs:
         return ["options: worktree inputs changed since submission - reconsider the options on its current code"]
     return []

@@ -2,6 +2,7 @@ import asyncio
 import dataclasses
 import json
 import shlex
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -52,6 +53,65 @@ GOOD = {
     "summary": "Added greet().",
     "checks": [{"command": "npm test", "exit_code": 0}],
 }
+
+
+def test_input_capture_failure_keeps_the_parent_and_returns_feedback_to_its_author(
+    tmp_path, change_repo, monkeypatch
+) -> None:
+    store, lock = Store(tmp_path / "store"), Lock("c1")
+    c = Change(
+        slug="c1",
+        brief=Brief(version=1),
+        step=Step(kind=StepKind.BUILD),
+        names=Names(branch="owlbear/c1", target="main", worktree=str(change_repo)),
+    )
+    store.write(lock, c)
+    parent = Run(
+        "question-author",
+        "ask",
+        tools.AskQuestion(
+            question="Continue with this product choice?",
+            why="The choice stays within the brief.",
+            options=[
+                {"label": "Continue", "effect": "Continue within the approved brief.", "action": "continue"},
+                {"label": "Pause", "effect": "Pause the Change.", "action": "pause"},
+            ],
+        ),
+        head=worker_questions.worktree.head(change_repo),
+        termination=Termination(confirmed=True),
+        usage={"credits": 1},
+        tool_calls={"ask_question": {"calls": 1}},
+    )
+    asset = change_repo / "generated-asset"
+    asset.write_text("generated input\n")
+    asset.chmod(0)
+    try:
+        assert "generated-asset" in worker_questions.prepare.edits(change_repo)
+        with pytest.raises(subprocess.CalledProcessError) as failure:
+            worker_questions.checkpoint(store, lock, c, parent, [])
+        assert b"Permission denied" in failure.value.stderr
+    finally:
+        asset.chmod(0o600)
+    kept = store.read("c1")
+    assert kept.pending_question is not None
+    assert kept.pending_question.run.session_id == parent.session_id
+    assert not kept.pending_question.inputs
+    assert kept.spend.credits == 1
+    assert kept.tool_use.tools["ask_question"].calls == 1
+    assert not kept.questions
+    monkeypatch.setattr(worker_questions, "session", lambda *_: pytest.fail("an unbound question cannot be judged"))
+    assert worker_questions.continued(store, lock, kept, change_repo)
+    done = store.read("c1")
+    assert done.pending_question is None
+    assert done.step.question_errors == [
+        "options: worktree inputs were not recorded - resubmit the options on its current code"
+    ]
+    assert done.spend.credits == 1
+    assert done.tool_use.tools["ask_question"].calls == 1
+    _, accepted, _, resume = session_choice.opening(store, lock, done, None)
+    assert resume
+    assert accepted is None
+    assert done.step.session == parent.session_id
 
 
 def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
