@@ -192,6 +192,7 @@ class Checks:
         self.unticked = ""  # why the last look whether a check is due failed, until one succeeds
         self.kept: dict[str, dict[str, Any]] = self._restored()
         self.settings: tuple[machine_settings.Inputs, dict[str, int | None], str | None] | None = None
+        self.settings_lock = threading.Lock()
 
     def _restored(self) -> dict[str, dict[str, Any]]:
         try:
@@ -267,24 +268,25 @@ class Checks:
 
     def _settings(self, *, refresh: bool = False) -> tuple[dict[str, int | None], str | None]:
         """Each interval and channel, reusing unchanged inputs; a tick also retries unchanged failures."""
-        inputs: machine_settings.Inputs = ()
-        try:
-            inputs = machine_settings.update_check_inputs()
-            if not refresh and (kept := self.settings) is not None and kept[0] == inputs:
-                return kept[1], kept[2]
-            resolved = machine_settings.current()
-            hours = {n: getattr(resolved, f"update_check_hours_{n}") for n in CHECKS}
-            channel = resolved.channel
-        except Exception as exc:  # noqa: BLE001 - unreadable settings: no timed check; the start's and by hand run
-            reason = command_failure.failure(exc)
-            if reason != self.unsettled:
-                self.machine.say(f"update checks: the machine settings could not be read: {reason}")
-            self.unsettled = reason
-            hours, channel = dict.fromkeys(CHECKS), None
-        else:
-            self.unsettled = resolved.notice if resolved.notice != machine_settings.NO_SHARED else ""
-        self.settings = inputs, hours, channel
-        return hours, channel
+        with self.settings_lock:
+            inputs: machine_settings.Inputs = ()
+            try:
+                inputs = machine_settings.update_check_inputs()
+                if not refresh and (kept := self.settings) is not None and kept[0] == inputs:
+                    return kept[1], kept[2]
+                resolved = machine_settings.current()
+                hours = {n: getattr(resolved, f"update_check_hours_{n}") for n in CHECKS}
+                channel = resolved.channel
+            except Exception as exc:  # noqa: BLE001 - unreadable settings: no timed check; start and manual checks run
+                reason = command_failure.failure(exc)
+                if reason != self.unsettled:
+                    self.machine.say(f"update checks: the machine settings could not be read: {reason}")
+                self.unsettled = reason
+                hours, channel = dict.fromkeys(CHECKS), None
+            else:
+                self.unsettled = resolved.notice if resolved.notice != machine_settings.NO_SHARED else ""
+            self.settings = inputs, hours, channel
+            return hours, channel
 
     def _next(self, name: str, hours: int | None) -> datetime | None:
         """When the timed check of *name* is due; None while its interval is unset."""
