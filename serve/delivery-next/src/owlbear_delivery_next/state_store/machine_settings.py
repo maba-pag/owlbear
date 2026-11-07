@@ -11,7 +11,6 @@ import os
 import stat
 import subprocess
 from collections import deque
-from hashlib import sha256
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -84,36 +83,17 @@ def update_check_inputs(sources: tuple[Path, ...] = ()) -> Inputs:
     paths = [home / registry.MACHINE]
     if root is not None:
         paths.extend((root, root / data_repo.CONFIG))
-    environment = None
     if view is None:
         paths.extend(
             (home / data_place.POINTER, home / data_place.OLD_POINTER, *_config_roots(root or Path.cwd()), *sources)
         )
         if root is not None:
             paths.extend((root / ".git", root / ".git/config", root / ".git/commondir"))
-        # Config injected through the environment can contain credentials; the key retains only its digest.
-        selected = sorted(
-            (k, v)
-            for k, v in os.environ.items()
-            if k.startswith("GIT_CONFIG")
-            or k
-            in {
-                "HOME",
-                "XDG_CONFIG_HOME",
-                "GIT_DIR",
-                "GIT_COMMON_DIR",
-                "GIT_WORK_TREE",
-                "GIT_CEILING_DIRECTORIES",
-                "GIT_DISCOVERY_ACROSS_FILESYSTEM",
-            }
-        )
-        environment = sha256(repr(selected).encode(errors="surrogateescape")).hexdigest()
     return (
         str(home),
         view,
         repr(record),
         str(root) if root else None,
-        environment,
         BASE.model_dump_json() if BASE is not None else None,
         *(token for path in dict.fromkeys(paths) for token in (str(path), _identity(path), _input(path))),
     )
