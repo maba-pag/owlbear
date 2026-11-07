@@ -20,6 +20,7 @@ from owlbear_delivery_next.change_contracts.decision_records import (
 from owlbear_delivery_next.change_contracts.env_records import Environment, Recipe
 from owlbear_delivery_next.change_contracts.held_records import HeldRecord, PendingChild
 from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim
+from owlbear_delivery_next.change_contracts.repair_records import Repairs
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_contracts.shaper_records import SavingChat, ShaperNotice
 from owlbear_delivery_next.change_contracts.spend import Spend
@@ -39,13 +40,12 @@ type Actor = Literal["you", "admin", "delivery", "github"]
 type Channel = Literal["status-view", "chat"]
 type Role = Literal[
     "planner", "builder", "reviewer", "challenger", "design-judge", "preparer", "shaper", "updater", "test-reviewer",
-    "test-curator", "picker", "curator", "spotter", "retro", "retro-review", "auditor",
+    "test-curator", "picker", "curator", "spotter", "retro", "retro-review", "auditor", "repairer",
 ]  # fmt: skip
 type Effort = Literal["low", "medium", "high", "xhigh", "max"]
 type Context = Literal["default", "long"]  # the model's default context tier, or its long-context tier
-type Move = Literal[
-    "done", "pause", "abandon", "retry", "accept", "repair", "reconsider", "another", "rebuild", "amend"
-]
+type Move = Literal["done", "pause", "abandon", "retry", "accept", "repair", "reconsider", "another", "rebuild",
+                    "amend", "repair-apply", "repair-stop"]  # fmt: skip
 type AnswerKind = Literal["event", "clarification", "brief_change"]  # its relayer's class of a worker's answer
 
 
@@ -483,6 +483,7 @@ class Change(Record):
     waived: dict[str, str] = Field(default_factory=dict)  # TD-341: criteria the owner accepted unmet, by their text
     amendments: list[Amendment] = Field(default_factory=list)  # TD-185: every amendment and how it ended
     amending: Amending | None = None  # the amendment running before the stopped step
+    repairs: Repairs = Field(default_factory=Repairs)  # a stuck step's repair and those before it (#1066)
     loops: dict[str, RoundLoop] = Field(default_factory=dict)  # TD-208: each subject's challenge loop
     names: Names = Field(default_factory=Names)
     spend: Spend = Field(default_factory=Spend)

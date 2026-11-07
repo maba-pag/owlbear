@@ -155,7 +155,7 @@ def usage_gated(c: Change) -> bool:
     return bool(o and o.exit == Exit.ASK and (o.cause or "").endswith(f":{UNREAD}"))
 
 
-DECISIONS = frozenset({"retry", "accept", "repair", "reconsider", "another", "rebuild"})  # engine decisions only
+DECISIONS = frozenset({"retry", "accept", "repair", "reconsider", "another", "rebuild", stuck.APPLY, stuck.DECLINE})
 
 
 def owner_gated(c: Change) -> bool:
@@ -361,7 +361,9 @@ def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: boo
     q.effect_observed_at = item.at
     if not gate:
         return  # the Change moved on since it asked
-    if (q.cause or "").startswith(disputes.PREFIX):  # TD-176: the owner's decision on one upheld finding
+    if stuck.owned(c, q.id):  # #1066: the owner's yes or no on a proven fix
+        stuck.decided(c, target, item.at)
+    elif (q.cause or "").startswith(disputes.PREFIX):  # TD-176: the owner's decision on one upheld finding
         disputes.decided(c, q, target, item.at, item.text)
     elif (q.cause or "").startswith(round_flow.PREFIX):  # TD-208: another round, or a retry of the work
         round_flow.decided(c, q, target)

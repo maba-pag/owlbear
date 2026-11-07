@@ -10,8 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import permissions, tools
-from owlbear_delivery_next.change_contracts.failures import cause_key
-from owlbear_delivery_next.change_contracts.models import VISUAL, Environment, ErrorKind, Exit, StepKind, Waiting
+from owlbear_delivery_next.change_contracts.models import VISUAL, Environment, Exit, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import (
     amending,
@@ -21,6 +20,7 @@ from owlbear_delivery_next.change_flow import (
     plan_rounds,
     repairs,
     shaping_capture,
+    stuck,
     worktree,
 )
 from owlbear_delivery_next.change_flow.curation_flow import CURATE
@@ -76,6 +76,7 @@ from owlbear_delivery_next.workflow_steps import (
     review,
     session_choice,
     sessions,
+    step_repair,
     unset_settings,
     visual,
     watched,
@@ -458,6 +459,8 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
     try:
         if prepare.ran(store, lock, change, repo, runnable=step is not None):  # a gone check's end; a test copy
             _out(f"{change.slug}: test preparation ran")
+        elif step is not None and stuck.bound(change):  # a stuck step's repair runs first (#1066)
+            step_repair.run(store, lock, change, repo)
         elif step is not None and check.capturing(change):
             _visual(store, lock, change, repo)
         elif step is not None and before.due(change):
@@ -486,13 +489,6 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
         now = datetime.now(UTC)
         reason = failure(exc)
         store.log(lock, lock.slug, {"event": "not-shelved", "at": now.isoformat(timespec="seconds"), "reason": reason})
-        store.write(lock, loop.apply(store.read(lock.slug), _unshelved(reason), now))
+        store.write(lock, loop.apply(store.read(lock.slug), plan_round.unshelved(reason), now))
     except SettingsUnset as exc:
         unset_settings.asked(store, lock, exc)
-
-
-def _unshelved(why: str) -> Result:
-    """The owner clears the worktree the planner would find dirty, then planning runs again; *why* says the error."""
-    text = f"Delivery could not set aside the uncommitted edits before planning ({why}). Commit, stash or discard them."
-    cause = cause_key(ErrorKind.STATE, StepKind.PLAN, "dirty-worktree")
-    return engine.ask(StepKind.PLAN, text, cause, engine.continue_or_pause(StepKind.PLAN))

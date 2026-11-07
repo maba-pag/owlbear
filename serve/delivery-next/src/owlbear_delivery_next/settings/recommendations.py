@@ -61,6 +61,7 @@ def page() -> dict[str, object]:
         )
         for role, (model, effort, minutes) in AGENTS.items()
     }
+    agents["repairer"] = Agent(minutes=40, subagents=True)  # its model, effort and context are the builder's
     return GlobalLayer(
         agents=agents,
         widths=[1280, 1920, 2400],

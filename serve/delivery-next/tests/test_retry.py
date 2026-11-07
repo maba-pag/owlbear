@@ -154,7 +154,7 @@ def test_a_step_between_two_wrong_models_starts_a_new_streak():
     assert (c.outcome.exit, c.questions) == (Exit.RETRY, [])
 
 
-def test_identical_check_failures_replan_once_to_split_then_ask():
+def test_identical_check_failures_replan_once_to_split_then_repair():
     c = change()
     for _ in range(budgets.RETRY_LIMIT):
         c = loop.apply(c, failing(2), NOW)
@@ -164,7 +164,7 @@ def test_identical_check_failures_replan_once_to_split_then_ask():
     assert c.outcome.reason.startswith("re-plan to split the work")
     c.step = Step(kind=K.BUILD, task="t1")
     c = loop.apply(c, failing(2), NOW)
-    assert c.outcome.exit == Exit.ASK
+    assert c.repairs.current.cause == c.outcome.cause  # then it is repaired, not asked (#1066)
 
 
 def scored(findings: list[str], satisfied: int = 0, reason: str = "test_a failed") -> StepResult:

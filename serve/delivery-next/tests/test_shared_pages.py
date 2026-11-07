@@ -959,7 +959,7 @@ def every_name_is_what_its_row_shows(page, pds) -> None:
     expect(page.get_by_role("button", name="Dismiss the change of machine.spotter_budget")).to_have_count(1)
     page.evaluate(RETIRED_NOTICE, [])
     keys = page.evaluate(OVERVIEW_KEYS)
-    assert (len(keys), sum(k["unset"] for k in keys)) == (150, 146)  # 132 + 14 unset, and four shown when set
+    assert (len(keys), sum(k["unset"] for k in keys)) == (155, 151)  # 137 + 14 unset (the repairer's five), four set
     for group in dict.fromkeys(k["group"] for k in keys):
         pds.group(page, group)
         for shown in page.evaluate(ROW_WORDS, [k["key"] for k in keys if k["group"] == group]):
@@ -974,7 +974,7 @@ def every_name_is_what_its_row_shows(page, pds) -> None:
                 assert shown["column"], f"{key}: no column"
     pds.group(page, "agents")
     nothing = page.evaluate(NO_ROW)
-    assert (nothing["count"], nothing["wrong"]) == (52, [])
+    assert (nothing["count"], nothing["wrong"]) == (56, [])  # the repairer's four round keys among them
     assert "agents.planner.bogus" in nothing["unknown"]
 
 

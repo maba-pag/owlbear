@@ -223,7 +223,7 @@ def test_a_check_that_cannot_finish_is_repaired_and_a_network_failure_of_it_stil
     r = to_result(timed_out, K.BUILD, NOW)  # c1 case 1: retried as "failed temporarily" three times
     assert (r.exit, r.setup, r.cause) == (Exit.RETRY, True, "project-env:build:check-uv-run-test-changed")
     c = loop.apply(change(), r, NOW)
-    assert (c.outcome.exit, c.stop.action, c.step.kind) == (Exit.STOP, f"Resolve {r.cause}", K.BUILD)
+    assert (c.repairs.current.cause, c.step.kind, loop.next_step(c, NOW)) == (r.cause, K.BUILD, c.step)  # repaired
     for error in ("npm ERR! request to https://registry.npmjs.org failed, reason: connect ETIMEDOUT 104.16.1.35:443",
                   "Error: read ECONNRESET",
                   "socket.gaierror: [Errno -3] Temporary failure in name resolution",
@@ -243,8 +243,8 @@ def test_a_plan_missing_a_profile_entry_is_repaired_never_sent_back_to_the_brief
     said = "The project profile must hold a package at the repository root, checked with `uv run test --changed`"
     r = to_result(run(report("project profile packages (check commands)", said)), K.PLAN, NOW)  # c1 case 2
     c = loop.apply(change(K.PLAN), r, NOW)
-    assert (r.setup, c.outcome.exit, c.step.kind) == (True, Exit.STOP, K.PLAN)
-    assert said in c.stop.reason
+    assert (r.setup, c.repairs.current.step, c.step.kind) == (True, K.PLAN, K.PLAN)
+    assert said in c.repairs.current.evidence
 
 
 @pytest.mark.parametrize("stage", ["setup", "target"])
@@ -260,8 +260,8 @@ def test_a_plan_missing_an_outside_pr_is_repaired_never_sent_back_to_the_brief(s
     r = to_result(Run("s1", ending="premise", payload=said, termination=Termination(confirmed=True)), K.PLAN, NOW)
     assert plan_round.judged(c, r, said) is r  # the plan challenge counts no finding for it
     c = loop.apply(c, r, NOW)
-    assert (r.setup, c.outcome.exit, c.step.kind, c.loops["plan"].round) == (True, Exit.STOP, K.PLAN, 0)
-    assert "054e2edf6" in c.stop.reason
+    assert (r.setup, c.repairs.current.step, c.step.kind, c.loops["plan"].round) == (True, K.PLAN, K.PLAN, 0)
+    assert "054e2edf6" in c.repairs.current.evidence
     share = Run("s2", "premise", said.model_copy(update={"stage": "setup"}), termination=Termination(confirmed=True))
     assert to_result(share, K.TESTS, NOW).setup  # a test review's share too
 
@@ -379,7 +379,7 @@ def test_planning_starts_on_a_clean_tree_whatever_step_left_edits(repo, monkeypa
 def test_a_failed_shelve_asks_the_owner_before_any_planner_runs(tmp_path) -> None:
     with pytest.raises(worktree.ShelveError, match="git stash failed") as caught:
         worktree.shelve(tmp_path, "owlbear c1")  # not a repository: Git fails
-    asked = runner._unshelved(failure(caught.value))  # noqa: SLF001
+    asked = plan_round.unshelved(failure(caught.value))
     assert (asked.exit, asked.cause, options(asked)) == (
         Exit.ASK,
         "state:plan:dirty-worktree",

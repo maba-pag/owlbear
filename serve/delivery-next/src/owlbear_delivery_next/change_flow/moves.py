@@ -21,6 +21,9 @@ def go(c: Change, kind: StepKind, task: str | None = None, mode: str | None = No
     """Make *kind* the Change's current step; leaving planning ends its challenge attempt (TD-190)."""
     if c.step.kind == StepKind.PLAN != kind and (lp := c.loops.get(PLAN)) is not None and not lp.ended:
         lp.ended = "replanned"  # an accepted plan ended it already; any other way out makes the next plan anew
+    if (r := c.repairs.current) is not None and (r.step, r.task) != (kind, task):  # #1066: its step is left
+        c.repairs.done.append(r.model_copy(update={"phase": "stopped", "stopped": f"the Change moved on to {kind}"}))
+        c.repairs.current = None
     c.step = Step(kind=kind, task=task, mode=mode)
 
 

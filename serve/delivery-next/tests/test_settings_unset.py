@@ -138,6 +138,7 @@ def test_a_carried_global_resolves_every_setting(shared_repo):
     later |= {f"memory.{name}" for name in config.MemoryValues.model_fields}  # the owner's numbers: saved once by him
     later.add("github_account")  # TD-402: set through "Use recommended" or by hand, never carried
     later.add("agents.shaper.challenge_wait")  # D-01M6P1685N1R5W2PPV5SHKR2H0: added after the carry, never carried
+    later |= {"agents.repairer.minutes", "agents.repairer.subagents"}  # its model, effort, context are the builder's
     assert set(resolve(read_layer(shared.global_path, GlobalLayer), Layer()).missing) == prefs | later
 
 

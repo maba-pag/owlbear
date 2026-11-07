@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_contracts.failures import QUOTA, WRONG_MODEL
 from owlbear_delivery_next.change_contracts.merge_records import QUEUE_UNSEEN
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind, Waiting
-from owlbear_delivery_next.change_flow import brief_starts, loop, picks, shaping_capture, step_stages
+from owlbear_delivery_next.change_flow import brief_starts, loop, picks, shaping_capture, step_stages, stuck
 from owlbear_delivery_next.change_flow.brief_rounds import MODES
 from owlbear_delivery_next.change_flow.budgets import EPISODE_QUIET, RETRY_LIMIT, WRONG_MODEL_LIMIT, episode
 from owlbear_delivery_next.change_flow.loop import CONSENT
@@ -335,6 +335,14 @@ def status(c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | 
     return line
 
 
+def _repairing(c: Change, s: str) -> Status | None:
+    """#1066: the stuck step is being repaired, or the fix the owner approved is applied; None otherwise."""
+    if (r := c.repairs.current) is None:
+        return None
+    doing = "applying the approved fix for" if r.phase == "approved" else "repairing"
+    return Status(f"{s} · {doing}: {stuck.obstruction(r.evidence)}", None, "delivery", error=True)
+
+
 def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
     c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | None = None
 ) -> Status:
@@ -375,6 +383,8 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
         )
     if o and o.exit == Exit.STOP and c.stop:
         return Status(f"{s} · stopped: {c.stop.reason}", c.stop.action, c.stop.actor, error=True, stopped=True)
+    if (repairing := _repairing(c, s)) is not None:
+        return repairing
     if o and o.exit == Exit.PENDING:
         if (yours := _owned(c, s, o, activity)) is not None:
             return yours
