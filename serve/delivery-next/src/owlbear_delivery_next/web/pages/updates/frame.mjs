@@ -50,7 +50,7 @@ function often(u) {
   const all = checks.all ?? {};
   const lost = all.unrestored ? ` Earlier check results were lost: ${all.unrestored}.` : "";
   const unkept = all.unkept ? ` The check results are not kept: ${all.unkept}.` : "";
-  const unsettled = all.unsettled ? " The machine settings could not be read, so no check runs at its interval: "
+  const unsettled = all.unsettled ? " The machine settings could not be fully read: "
     + `${all.unsettled}.` : "";
   const unticked = all.unticked ? ` The last look whether a check is due failed: ${all.unticked}.` : "";
   return html`<p-text id="check-settings" size="sm">It looks ${by}${u.next_at ? `; next ${when(u.next_at)}` : ""}.

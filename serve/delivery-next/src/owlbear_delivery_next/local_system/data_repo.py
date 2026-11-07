@@ -84,8 +84,11 @@ def _git(cwd: Path, *args: str, until: float | None = None, lossless: bool = Fal
     return git_run.run(cwd, *args, until=until, cap=GIT_SECONDS, lossless=lossless)
 
 
-def _top(root: Path) -> Path | None:
+def _top(root: Path, *, diagnose: bool = False) -> Path | None:
     out = _git(root, "rev-parse", "--show-toplevel") if root.is_dir() else None
+    if diagnose and out and out.returncode:
+        msg = f"{root} is not a git repository's top folder: {command_failure.failed(out)}"
+        raise DataRepoError(msg)
     return Path(out.stdout.strip()).resolve() if out and out.returncode == 0 else None
 
 
@@ -170,10 +173,7 @@ class DataRepo:
 
     @contextlib.contextmanager
     def quiet(self) -> Iterator[bool]:
-        """Whether no writer holds the lock now; while True, none can take it until the block ends.
-
-        This thread's own `locked` counts as quiet; creating the lock file also keeps out the first writer.
-        """
+        """Hold readers' lock: no writer, even the first, while True; this thread's own writer lock counts quiet."""
         lock = self._lock_file()
         if lock in getattr(_HOLDING, "paths", ()):
             yield True
