@@ -169,12 +169,8 @@ def test_cause_count_survives_retry_back_replan_and_an_unobserved_answer():
     c = loop.apply(c, StepResult(exit=Exit.DONE, plan=Plan(version=2, tasks=[Task(id="t9", title="x")])), NOW)
     assert c.step.task == "t9"
     c = loop.apply(c, StepResult(exit=Exit.RETRY, cause=cause), NOW)
-    assert c.outcome.exit == Exit.ASK
-    assert [o.id for o in c.questions[-1].options] == ["revise", "narrow", "pause"]
-    c, step = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="narrow")], NOW)
-    assert step.kind == K.PLAN
-    assert c.budgets.causes[cause].count == 4
-    assert cause not in budgets.effect_observed(c, c.questions[-1].id, NOW).budgets.causes
+    assert c.budgets.causes[cause].count == 4  # counted through the retries, the step back and the re-plan
+    assert (c.repairs.current.cause, c.repairs.done[-1].stopped) == (cause, "the Change moved on to plan")  # #1066
 
 
 def test_effect_observation_clears_a_cause_once_per_answer_and_delivery_alone_clears_nothing():

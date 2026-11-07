@@ -20,6 +20,7 @@ from owlbear_delivery_next.change_flow import (
     plan_rounds,
     repairs,
     shaping_capture,
+    stuck,
     worktree,
 )
 from owlbear_delivery_next.change_flow.curation_flow import CURATE
@@ -458,7 +459,7 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
     try:
         if prepare.ran(store, lock, change, repo, runnable=step is not None):  # a gone check's end; a test copy
             _out(f"{change.slug}: test preparation ran")
-        elif step is not None and change.repairs.current is not None:  # a stuck step's repair runs first (#1066)
+        elif step is not None and stuck.bound(change):  # a stuck step's repair runs first (#1066)
             step_repair.run(store, lock, change, repo)
         elif step is not None and check.capturing(change):
             _visual(store, lock, change, repo)

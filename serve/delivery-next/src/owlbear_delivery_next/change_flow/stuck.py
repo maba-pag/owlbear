@@ -43,6 +43,12 @@ def start(c: Change, cause: str, evidence: str, now: datetime) -> None:
     c.outcome = Outcome(exit=Exit.RETRY, cause=cause, reason=f"repairing: {obstruction(evidence)}", at=now)
 
 
+def bound(c: Change) -> bool:
+    """Whether a repair runs for the step the Change is on; one it moved away from is retired by ``moves.go``."""
+    r = c.repairs.current
+    return r is not None and (r.step, r.task) == (c.step.kind, c.step.task)
+
+
 def obstruction(evidence: str) -> str:
     """The first sentence of what stopped the step, as the owner reads it in the status line."""
     first = evidence.strip().splitlines()[0] if evidence.strip() else "the step stopped"
