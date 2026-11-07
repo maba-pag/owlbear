@@ -29,8 +29,9 @@ RO_WORKTREE = "read-only-worktree"  # the cause subject of a read-only worktree 
 _QUOTA = re.compile(r"quota|premium requests?|credits", re.IGNORECASE)
 _CAPACITY = re.compile(r"\b429\b|rate.?limit|capacity|overloaded|quota|credits", re.IGNORECASE)
 _LIMITED = re.compile(r"\b429\b|rate.?limit|too many requests|overloaded", re.IGNORECASE)  # in a check's output
-_PROGRESS = re.compile(  # pytest's own lines: a test id, a collection count, a summary count
-    r"\S+\.py::\S|\bcollected \d+ items?\b|\[\d+ items?\]"
+_TEST_ID = re.compile(r"\S+\.py::\S+")  # a test's name says nothing of the network
+_COUNTS = re.compile(  # pytest's counting lines: collection and summary
+    r"\bcollected \d+ items?\b|\[\d+ items?\]"
     r"|^[\s=]*\d+ (?:passed|failed|errors?|skipped|deselected|xfailed|xpassed|warnings?)\b"
 )
 _NETWORK = re.compile(  # any runtime or provider failure text
@@ -69,8 +70,8 @@ def transient(text: str, *, local: bool = False) -> ErrorKind | None:
     *local* is a step's own check: its timeout or interruption is the check not finishing, so only a diagnostic of the
     network or a rate limit counts, never a word such as a test's name.
     """
-    if local:  # a check's own progress (test ids, counts) is no diagnostic
-        text = "\n".join(line for line in text.splitlines() if not _PROGRESS.search(line))
+    if local:  # a check's own progress (test ids, counts) is no diagnostic; a failure's message is
+        text = "\n".join(_TEST_ID.sub("", line) for line in text.splitlines() if not _COUNTS.search(line))
     if (_LIMITED if local else _CAPACITY).search(text):
         return ErrorKind.CAPACITY
     return ErrorKind.NETWORK if (_REMOTE if local else _NETWORK).search(text) else None
