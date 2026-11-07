@@ -62,7 +62,7 @@ def git(root: Path, *arguments: str) -> str:
 def relative(value: str) -> bool:
     """A nonempty repository path with no parent, absolute or platform-dependent spelling."""
     path = PurePosixPath(value)
-    return bool(value) and bool(path.parts) and not path.is_absolute() and ".." not in path.parts and "\\" not in value
+    return bool(path.parts) and not path.is_absolute() and ".." not in path.parts and "\\" not in value
 
 
 def node_path(node: str) -> str:
