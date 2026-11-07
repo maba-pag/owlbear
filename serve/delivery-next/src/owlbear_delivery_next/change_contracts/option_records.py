@@ -44,3 +44,4 @@ class PendingQuestion(Record):
     step: tuple[str, str | None, str | None]
     brief: int
     proof: OptionProof | None = None
+    answer: str = ""

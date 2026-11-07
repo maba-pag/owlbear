@@ -87,12 +87,35 @@ class Ran:
     why: str = ""  # why it has no exit: it did not start, or did not finish in time
 
 
+@dataclass(frozen=True)
+class CommandResult:
+    """The observed result of one journaled command, including successful trial evidence."""
+
+    reason: str
+    output: str
+    exit_code: int | None
+    elapsed_seconds: float
+
+
 def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: Mapping[str, str] | None = None) -> str:
     """Run one command the owner made known in its own group, within ``WITHIN``; a note if it failed, else empty."""
     done, cmd = execute(argv, cwd, log, WITHIN, env), shlex.join(argv)
     if done.exit is None:
         return done.why
     return f"`{cmd}` failed: {done.output.strip()}" if done.exit else ""
+
+
+def measured(
+    argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: Mapping[str, str] | None = None
+) -> CommandResult:
+    """Keep trial evidence from the same journaled executor used by checks and repairs."""
+    done, cmd = execute(argv, cwd, log, WITHIN, env), shlex.join(argv)
+    output = done.output.strip()
+    if done.exit is None:
+        reason = f"{done.why} in {cwd}; it printed: {output or 'nothing'}"
+    else:
+        reason = f"`{cmd}` failed: {output}" if done.exit else ""
+    return CommandResult(reason, output, done.exit, done.seconds)
 
 
 def execute(
