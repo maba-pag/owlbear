@@ -240,7 +240,7 @@ class CheckRecipe(Args):
 class PlanTask(Args):
     """One ordered task of the plan."""
 
-    title: str = _f(200, "What the task delivers", "Add farewell(name) with a test")
+    title: str = _f(200, "What the task delivers", "Add farewell(name)")
     goal: str = _f(3000, "The criteria it meets and how the Builder knows it is done", "AC-1: farewell('Ada')")
     scope: list[str] = _f(20, "Repository-relative paths or directories it may change", ["packages/app"])
     checks: list[str] = _f(100, "Complete check commands exactly as listed for their packages", [EXAMPLE_CHECK])
