@@ -33,6 +33,7 @@ class OptionProof(Record):
     elapsed_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     exit_code: int | None = None
     output: str = ""
+    inputs: str = ""
 
 
 class PendingQuestion(Record):
@@ -45,3 +46,4 @@ class PendingQuestion(Record):
     brief: int
     proof: OptionProof | None = None
     answer: str = ""
+    inputs: str = ""

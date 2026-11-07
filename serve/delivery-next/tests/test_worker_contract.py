@@ -54,13 +54,15 @@ GOOD = {
 }
 
 
-def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(tmp_path, monkeypatch) -> None:
+def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
+    tmp_path, change_repo, monkeypatch
+) -> None:
     store, lock = Store(tmp_path / "store"), Lock("c1")
     c = Change(
         slug="c1",
         brief=Brief(version=1),
         step=Step(kind=StepKind.BUILD, task="t1"),
-        names=Names(branch="owlbear/c1", target="main", worktree=str(tmp_path)),
+        names=Names(branch="owlbear/c1", target="main", worktree=str(change_repo)),
         plan=Plan(tasks=[Task(id="t1", title="Charts", scope=["web"])]),
     )
     proposed = tools.AskQuestion(
@@ -118,12 +120,12 @@ def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
 
     monkeypatch.setattr(Store, "write", interrupted)
     with pytest.raises(StoreError, match="before question settlement"):
-        worker_questions.continued(store, lock, c, tmp_path)
+        worker_questions.continued(store, lock, c, change_repo)
     kept = store.read("c1")
     assert kept.pending_child.run is not None
     assert kept.spend.credits == 1
     monkeypatch.setattr(Store, "write", real_write)
-    assert worker_questions.continued(store, lock, kept, tmp_path)
+    assert worker_questions.continued(store, lock, kept, change_repo)
     done = store.read("c1")
     assert len(starts) == 1
     assert done.spend.credits == 3
@@ -141,21 +143,25 @@ def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
     worker_questions.checkpoint(store, lock, done, dataclasses.replace(parent, session_id="c1-author-again"), [])
     monkeypatch.setattr(Store, "write", interrupted)
     with pytest.raises(StoreError, match="before question settlement"):
-        worker_questions.continued(store, lock, done, tmp_path)
+        worker_questions.continued(store, lock, done, change_repo)
     kept = store.read("c1")
     monkeypatch.setattr(Store, "write", real_write)
     monkeypatch.setattr(worker_questions.worktree, "head", lambda _p: BASE)
 
-    assert worker_questions.continued(store, lock, kept, tmp_path)
+    assert worker_questions.continued(store, lock, kept, change_repo)
     done = store.read("c1")
     assert (len(starts), done.spend.credits, done.pending_child, done.pending_question) == (2, 6, None, None)
     assert done.counted_children == ["c1-admission-1", "c1-admission-2"]
     assert "HEAD changed" in done.step.question_errors[0]
 
 
-def test_stopped_admission_counts_its_usage_and_its_resumed_child_keeps_its_generation(tmp_path, monkeypatch):
+def test_stopped_admission_counts_its_usage_and_its_resumed_child_keeps_its_generation(
+    tmp_path, change_repo, monkeypatch
+):
     store, lock = Store(tmp_path / "store"), Lock("c1")
-    c = Change(slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.BUILD))
+    c = Change(
+        slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.BUILD), names=Names(worktree=str(change_repo))
+    )
     proposed = tools.AskQuestion(
         question="Continue?",
         why="Choose the next move.",
@@ -198,7 +204,7 @@ def test_stopped_admission_counts_its_usage_and_its_resumed_child_keeps_its_gene
         )
 
     monkeypatch.setattr(worker_questions, "session", judge)
-    assert worker_questions.continued(store, lock, c, tmp_path)
+    assert worker_questions.continued(store, lock, c, change_repo)
     stopped = store.read("c1")
     assert (stopped.outcome.exit, stopped.spend.credits, stopped.counted_children) == (Exit.STOP, 3, ["admission-1"])
     assert stopped.tool_use.tools["view"].calls == 1
@@ -212,11 +218,11 @@ def test_stopped_admission_counts_its_usage_and_its_resumed_child_keeps_its_gene
 
     monkeypatch.setattr(Store, "write", interrupted)
     with pytest.raises(StoreError, match="interrupted settlement"):
-        worker_questions.continued(store, lock, stopped, tmp_path)
+        worker_questions.continued(store, lock, stopped, change_repo)
     kept = store.read("c1")
     assert pending_child.fits(kept)
     monkeypatch.setattr(Store, "write", real_write)
-    assert worker_questions.continued(store, lock, kept, tmp_path)
+    assert worker_questions.continued(store, lock, kept, change_repo)
     done = store.read("c1")
     assert (len(calls), done.spend.credits, done.counted_children) == (2, 5, ["admission-1", "admission-2"])
     assert done.tool_use.tools["view"].calls == 2
@@ -273,6 +279,82 @@ def test_admission_refuses_a_head_changed_while_its_paid_verdict_returns(tmp_pat
         "options: HEAD changed since submission - reconsider the options on its current code"
     ]
     assert (done.spend.credits, done.counted_children) == (3, ["admission"])
+
+
+def test_kept_recommendation_cannot_publish_after_uncommitted_inputs_change(tmp_path, change_repo, monkeypatch):
+    store, lock = Store(tmp_path / "store"), Lock("c1")
+    (change_repo / ".gitignore").write_text("trial-count\n")
+    command = 'test "$(cat a.txt)" = a && echo tested && printf run >> trial-count'
+    c = Change(
+        slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.BUILD), names=Names(worktree=str(change_repo))
+    )
+    proposed = tools.AskQuestion(
+        question="Retry the checked step or pause?",
+        why="The smoke check needs verification.",
+        recommended=0,
+        options=[
+            {
+                "label": "Retry",
+                "effect": "Retry this step after its smoke check passes.",
+                "action": "retry",
+                "check": command,
+            },
+            {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
+        ],
+    )
+    parent = Run("author", "ask", proposed, termination=Termination(confirmed=True), usage={"credits": 1})
+    worker_questions.checkpoint(store, lock, c, parent, [command])
+    calls = []
+
+    def judge(*_args):
+        calls.append(True)
+        return Run(
+            "admission",
+            "result",
+            pick_tools.QuestionJudgment(
+                options=[
+                    {
+                        "index": i,
+                        "executable": True,
+                        "why": "Observed smoke assertion passed.",
+                        "check_related": i == 0,
+                        "recommends": i == 0,
+                    }
+                    for i in range(2)
+                ]
+            ),
+            termination=Termination(confirmed=True),
+            usage={"credits": 2},
+        )
+
+    real_write = Store.write
+
+    def interrupted(self, key, final):
+        if final.pending_question is None:
+            msg = "interrupted settlement"
+            raise StoreError(msg)
+        return real_write(self, key, final)
+
+    monkeypatch.setattr(worker_questions, "session", judge)
+    monkeypatch.setattr(Store, "write", interrupted)
+    with pytest.raises(StoreError, match="interrupted settlement"):
+        worker_questions.continued(store, lock, c, change_repo)
+    kept = store.read("c1")
+    proof = kept.pending_question.proof
+    assert (proof.exit_code, proof.output.strip(), proof.inputs) == (0, "tested", kept.pending_question.inputs)
+    assert proof.elapsed_seconds is not None
+    (change_repo / "a.txt").write_text("changed\n")
+    (change_repo / "new-input.txt").write_text("new code\n")
+    assert worker_questions.worktree.head(change_repo) == kept.pending_question.head
+    monkeypatch.setattr(Store, "write", real_write)
+    assert worker_questions.continued(store, lock, kept, change_repo)
+    done = store.read("c1")
+    assert not done.questions
+    assert done.step.question_errors == [
+        "options: worktree inputs changed since submission - reconsider the options on its current code"
+    ]
+    assert (len(calls), (change_repo / "trial-count").read_text(), done.spend.credits) == (1, "run", 3)
+    assert worker_questions.worktree.git(change_repo, "diff", "--cached") == ""
 
 
 def build(**changes) -> BuildResult:

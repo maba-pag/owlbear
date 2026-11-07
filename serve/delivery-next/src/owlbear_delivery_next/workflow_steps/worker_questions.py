@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import uuid
@@ -15,7 +16,16 @@ from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Optio
 from owlbear_delivery_next.change_contracts.option_records import OptionProof, PendingQuestion
 from owlbear_delivery_next.change_flow import answer_kinds, budgets, loop, worktree
 from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, session_result, step_decisions
-from owlbear_delivery_next.workflow_steps import check, held, held_writes, pending_child, pick, review, sessions
+from owlbear_delivery_next.workflow_steps import (
+    check,
+    held,
+    held_writes,
+    pending_child,
+    pick,
+    prepare,
+    review,
+    sessions,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -56,6 +66,7 @@ def checkpoint(post: Store | held_writes.Deferred, lock: Lock, c: Change, run: R
         step=(s.kind, s.task, s.mode),
         brief=c.brief.version,
         answer=answer.id if answer else "",
+        inputs=_inputs(path),
     )
     route = loop.StepResult(exit=Exit.PENDING, reason="checking the proposed question before offering it")
     task = next((t for t in c.plan.tasks if t.id == s.task), None) if c.plan else None
@@ -156,10 +167,22 @@ def checked(store: Store, lock: Lock, c: Change, path: Path) -> tuple[loop.StepR
 
 
 def _stale(p: PendingQuestion, path: Path) -> list[str]:
-    """A returning trial or picker cannot offer options for an earlier HEAD."""
+    """A returning or retained trial/picker cannot offer options for earlier Git-visible inputs."""
     if worktree.head(path) != p.head:
         return ["options: HEAD changed since submission - reconsider the options on its current code"]
+    if not p.inputs:
+        return ["options: worktree inputs were not recorded - resubmit the options on its current code"]
+    if _inputs(path) != p.inputs:
+        return ["options: worktree inputs changed since submission - reconsider the options on its current code"]
     return []
+
+
+def _inputs(path: Path) -> str:
+    """Bind Git-visible edits, including new files, using the existing private-index capture.
+
+    Ignored dependencies and external inputs are not captured; this is not an isolated test environment.
+    """
+    return hashlib.sha256(prepare.capture(path, prepare.edits(path))).hexdigest()
 
 
 def _booked(c: Change, done: Run, result: loop.StepResult) -> dict[str, object] | None:
@@ -187,6 +210,7 @@ def trial(store: Store, lock: Lock, c: Change, path: Path, proposed: tools.AskQu
             exit_code=observed.exit_code,
             output=observed.output,
             admission=observed.reason,
+            inputs=p.inputs,
         )
         store.write(lock, c)
     if p.proof.exit_code == 0:
