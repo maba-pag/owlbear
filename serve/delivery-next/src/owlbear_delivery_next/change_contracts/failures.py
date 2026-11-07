@@ -29,7 +29,10 @@ RO_WORKTREE = "read-only-worktree"  # the cause subject of a read-only worktree 
 _QUOTA = re.compile(r"quota|premium requests?|credits", re.IGNORECASE)
 _CAPACITY = re.compile(r"\b429\b|rate.?limit|capacity|overloaded|quota|credits", re.IGNORECASE)
 _LIMITED = re.compile(r"\b429\b|rate.?limit|too many requests|overloaded", re.IGNORECASE)  # in a check's output
-_PROGRESS = re.compile(r"::|^[\s=]*\d+ (?:passed|failed|errors?|skipped|deselected|xfailed|xpassed|warnings?)\b")
+_PROGRESS = re.compile(  # pytest's own lines: a test id, a collection count, a summary count
+    r"\S+\.py::\S|\bcollected \d+ items?\b|\[\d+ items?\]"
+    r"|^[\s=]*\d+ (?:passed|failed|errors?|skipped|deselected|xfailed|xpassed|warnings?)\b"
+)
 _NETWORK = re.compile(  # any runtime or provider failure text
     r"\b(?:status|http|code|error)\W{0,3}5\d\d\b|\b5\d\d (?:internal|bad gateway|service unavailable|gateway)"
     r"|timed? ?out|timeout|connection|unreachable|temporar|runtime start|network|could not resolve",
