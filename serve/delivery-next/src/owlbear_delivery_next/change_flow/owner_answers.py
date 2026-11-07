@@ -18,6 +18,17 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change, Question
 
 
+def refused(q: Question, target: str | None, item: AnswerItem, decisions: frozenset[str]) -> bool:
+    """Engine gates need their options; admitted worker choices also take continue or the owner's own words."""
+    worker = q.cause is None and not q.repair and bool(q.options) and all(o.action is not None for o in q.options)
+    continuing = worker and (
+        (item.option is None and bool(item.text.strip()))
+        or any(o.id == item.option and o.action == "continue" and o.next is None for o in q.options)
+    )
+    unchosen = target is None and not continuing and bool({o.next for o in q.options} & decisions or q.repair)
+    return unchosen or (target == "reconsider" and not item.text.strip())
+
+
 def amended(
     c: Change, q: Question, item: AnswerItem, how: tuple[str | None, str | None, bool], now: datetime
 ) -> str | None:

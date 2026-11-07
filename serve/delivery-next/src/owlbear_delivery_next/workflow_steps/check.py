@@ -410,6 +410,16 @@ def failed(reason: str) -> loop.StepResult:
     return loop.StepResult(exit=Exit.RETRY, cause=cause, reason=reason)
 
 
+def failed_cleanup(result: loop.StepResult, reason: str) -> loop.StepResult:
+    """Show cleanup failure without discarding an existing stop's remediation gate."""
+    if result.exit != Exit.STOP:
+        return failed(reason)
+    result.reason = f"{result.reason}\n{reason}"
+    if result.stop is not None:
+        result.stop.reason = result.reason
+    return result
+
+
 def settle(c: Change, now: datetime, paths: Mapping[str, str]) -> Change:
     """A pass moves on, judged against the current *paths*; a fail goes back to build with the owner's note (H2)."""
     person = next(p for p in c.checks if p.id == c.step.task)
