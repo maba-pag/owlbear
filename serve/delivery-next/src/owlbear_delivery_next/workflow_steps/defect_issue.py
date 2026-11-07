@@ -72,8 +72,8 @@ def _named(issues: OwlbearIssues, store: Store, path: Path, text: str) -> list[s
         origin = Origin.of(path)
     except AccountMissing:
         origin = Origin.LOCAL
-    slug = f"{origin.owner}/{origin.name}" if origin.host else ""
-    if slug.casefold() == REPOSITORY.casefold():
+    slug = f"{origin.owner}/{origin.name}" if origin.host == "github.com" else ""  # elsewhere: never public here
+    if slug and slug.casefold() == REPOSITORY.casefold():
         return []  # OwlBear's own repository is the public one the issue goes to
     try:
         seen = repo_target.view(issues, slug) if slug else None
