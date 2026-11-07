@@ -73,8 +73,9 @@ def checked(tool: str, checks: tuple[str, ...]) -> bool:
 
     c1's builder reported `uv run test --changed`, part of its check `uv run test --changed && uv run lint --no-fix`.
     """
-    said = " ".join(tool.split())
-    return bool(said) and any(f" {said} " in f" {' '.join(c.split())} " for c in checks)
+    said = re.escape(" ".join(tool.split()))
+    found = re.compile(rf"(?<![^\s;&|(){{}}]){said}(?![^\s;&|(){{}}])")  # bounded by blanks or shell operators
+    return bool(said) and any(found.search(" ".join(c.split())) for c in checks)
 
 
 def setup(cause: str, reason: str) -> StepResult:
@@ -111,10 +112,11 @@ def classify(run: Run, p: MissingTool, enclosing: StepKind, now: datetime) -> St
         text = f"Set up {tool} on this machine (install or start it), then run the step again. The step needs {said}"
         options = [Option(id="done", label="Done, run the step again", next="retry"), PAUSE]
         return _ask(enclosing, text, cause_key(ErrorKind.PROJECT_ENV, enclosing, subject), options)
-    if checked(tool, run.checks) and transient(p.error, local=True) not in ENVIRONMENT:
+    own = checked(tool, run.checks)
+    if (kind := transient(p.error, local=own)) not in ENVIRONMENT and own:
         cause = cause_key(ErrorKind.PROJECT_ENV, enclosing, f"{CHECK}-{slug(tool)}")
         return setup(cause, f"the check {tool} cannot finish: {p.error}")
-    if (kind := transient(p.error)) in ENVIRONMENT:
+    if kind in ENVIRONMENT:
         return StepResult(
             exit=Exit.RETRY,
             cause=cause_key(kind, enclosing, subject),
