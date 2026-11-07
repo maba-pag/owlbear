@@ -645,7 +645,8 @@ def test_a_shaping_rows_next_action_says_whether_the_owner_approves_or_the_shapi
         expect(flip).to_have_text("Next: Approve brief")
         expect(tidy).to_have_text("Next: Continue in the shaping chat")
         expect(page.locator("#detail h2")).to_have_text("Flip the hero")
-        expect(page.locator("#changes")).to_contain_text("Needs you (")
+        needs_you = page.locator("#changes section.group", has_text="Needs you (")  # flip and tidy wait on you too
+        expect(needs_you.locator("a[data-key='greet']")).to_have_count(1)
         titled, untitled = (page.locator(f"#changes .card:has(a[data-key='{k}'])") for k in ("flip", "greet"))
         expect(titled.locator("a.open")).to_have_text("Flip the hero")
         expect(titled.locator(".meta").first).to_have_text("flip")  # the slug below it
