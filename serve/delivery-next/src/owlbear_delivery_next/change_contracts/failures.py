@@ -30,7 +30,8 @@ _QUOTA = re.compile(r"quota|premium requests?|credits", re.IGNORECASE)
 _CAPACITY = re.compile(r"\b429\b|rate.?limit|capacity|overloaded|quota|credits", re.IGNORECASE)
 _REMOTE = (  # a failure that names the network itself: temporary even for a step's own check (#1065)
     r"\b(?:status|http|code|error)\W{0,3}5\d\d\b|\b5\d\d (?:internal|bad gateway|service unavailable|gateway)"
-    r"|connection|unreachable|runtime start|network|could not resolve"
+    r"|connection (?:refused|reset|closed|aborted|error|timed? ?out)|(?:host|network) (?:is )?unreachable"
+    r"|network error|runtime start|could not resolve"
     r"|\b(?:ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|ENOTFOUND)\b|\b(?:connect|read) timed? ?out"
 )
 _NETWORK = re.compile(rf"{_REMOTE}|timed? ?out|timeout|temporar", re.IGNORECASE)
