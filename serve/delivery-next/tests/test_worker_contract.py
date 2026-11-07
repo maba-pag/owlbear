@@ -13,6 +13,7 @@ import pytest
 from copilot._jsonrpc import JsonRpcError
 
 from owlbear_delivery_next.change_contracts import pick_tools, tool_schema, tools
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import (
     Answer,
     Brief,
@@ -30,7 +31,7 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_contracts.tools import AskQuestion, BuildResult, Worktree
-from owlbear_delivery_next.change_flow import repairs
+from owlbear_delivery_next.change_flow import loop, repairs
 from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.local_system.processes import Termination, verdict
 from owlbear_delivery_next.runtimes import (
@@ -380,6 +381,70 @@ def test_stopped_admission_counts_its_usage_and_its_resumed_child_keeps_its_gene
     done = store.read("c1")
     assert (len(calls), done.spend.credits, done.counted_children) == (2, 5, ["admission-1", "admission-2"])
     assert done.tool_use.tools["view"].calls == 2
+
+
+def test_a_retried_unread_admission_returns_the_answer_to_the_proposal_author(tmp_path, change_repo, monkeypatch):
+    store, lock = Store(tmp_path / "store"), Lock("c1")
+    c = Change(
+        slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.BUILD), names=Names(worktree=str(change_repo))
+    )
+    parent = Run(
+        "proposal-author",
+        "ask",
+        tools.AskQuestion(
+            question="Continue?",
+            why="Choose the next move.",
+            options=[
+                {"label": "Continue", "effect": "Continue this worker.", "action": "continue"},
+                {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
+            ],
+        ),
+        termination=Termination(confirmed=True),
+        usage={"credits": 1},
+    )
+    worker_questions.checkpoint(store, lock, c, parent, [])
+    calls = []
+
+    def judge(*_args):
+        calls.append(True)
+        return Run(
+            f"admission-{len(calls)}",
+            "result",
+            pick_tools.QuestionJudgment(
+                options=[
+                    {
+                        "index": i,
+                        "executable": True,
+                        "why": "The engine can carry out this action.",
+                        "check_related": False,
+                        "recommends": False,
+                    }
+                    for i in range(2)
+                ]
+            ),
+            termination=Termination(confirmed=True),
+            usage={"error": "RuntimeError"} if len(calls) == 1 else {"credits": 2},
+            usage_unread="usage read failed" if len(calls) == 1 else "",
+        )
+
+    monkeypatch.setattr(worker_questions, "session", judge)
+    with pytest.raises(worker_questions.sessions.UsageUnreadError):
+        worker_questions.continued(store, lock, c, change_repo)
+    gated = store.read("c1")
+    question = loop.open_question(gated)
+    assert [o.id for o in question.options] == ["retry"]
+    retry = loop.fold(gated, [AnswerItem(at=NOW, question=question.id, option="retry")], NOW)
+    assert retry.step.session is None
+    store.write(lock, retry)
+    assert worker_questions.continued(store, lock, store.read("c1"), change_repo)
+    asked = store.read("c1")
+    assert (len(calls), asked.step.session, asked.spend.credits) == (2, parent.session_id, 3)
+    question = loop.open_question(asked)
+    answered = loop.fold(asked, [AnswerItem(at=NOW, question=question.id, option=question.options[0].id)], NOW)
+    store.write(lock, answered)
+    done = store.read("c1")
+    _, accepted, _, resume = session_choice.opening(store, lock, done, None)
+    assert (resume, accepted, done.step.session) == (True, None, parent.session_id)
 
 
 def test_admission_refuses_a_head_changed_while_its_paid_verdict_returns(tmp_path, change_repo, monkeypatch):

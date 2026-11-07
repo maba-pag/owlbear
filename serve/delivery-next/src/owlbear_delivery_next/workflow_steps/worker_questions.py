@@ -135,12 +135,12 @@ def continued(store: Store, lock: Lock, c: Change, path: Path) -> bool:
         c = budgets.effect_observed(c, p.answer, datetime.now(UTC))
     final = loop.apply(c, result, datetime.now(UTC))
     rejected = result.cause == cause_key(ErrorKind.RESULT, c.step.kind, LABEL)
-    if result.exit == Exit.RETRY and rejected:
+    retrying = result.exit == Exit.RETRY and rejected
+    offered = result.exit == Exit.ASK and result.question is not None and result.question.cause is None
+    if retrying or (not gated and offered):
         final.step.session = p.run.session_id
-        final.step.question_errors = result.reason.splitlines()
-    else:
-        final.step.question_errors = []
-    if gated or rejected or (result.exit == Exit.ASK and result.question and result.question.cause is None):
+    final.step.question_errors = result.reason.splitlines() if retrying else []
+    if gated or rejected or offered:
         final.pending_question = None
     final.pending_child = None
     store.write(lock, final)
