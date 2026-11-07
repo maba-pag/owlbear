@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import re
 import subprocess
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_flow import worktree
@@ -24,8 +24,6 @@ from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.local_system import codebase, local_home
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from owlbear_delivery_next.change_contracts.repair_tools import Defect
     from owlbear_delivery_next.state_store.store import Store
 
@@ -85,7 +83,10 @@ def _named(issues: OwlbearIssues, store: Store, path: Path, text: str) -> list[s
     tracked = _tracked(path)
     if isinstance(tracked, str):
         return [tracked]  # unread, nothing can be told public: the issue is held
-    names = {store.name, origin.name, slug, *tracked, *(PurePosixPath(p).name for p in tracked)} - {""}
+    home = Path.home()
+    own = str(local_home.root()).replace(str(home), "~", 1)
+    places = {str(home), str(store.root), str(path), own}  # where its store, worktree and copies live
+    names = {store.name, origin.name, slug, *places, *tracked, *(PurePosixPath(p).name for p in tracked)} - {""}
     return sorted(n for n in names if re.search(rf"(?<![\w.-]){re.escape(n)}(?![\w-])", text, re.IGNORECASE))
 
 
