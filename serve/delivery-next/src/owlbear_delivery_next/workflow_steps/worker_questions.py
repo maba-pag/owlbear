@@ -296,9 +296,7 @@ def message(c: Change, proposed: tools.AskQuestion) -> str:
     )
 
 
-def session(
-    store: Store, lock: Lock, c: Change, proposed: tools.AskQuestion, *, keep: sessions.Keep | None = None
-) -> Run:
+def session(store: Store, lock: Lock, c: Change, proposed: tools.AskQuestion, *, keep: sessions.Keep) -> Run:
     """One sequential read-only picker, kept before its temporary-directory cleanup."""
     sessions.granted(LABEL)
     identity = f"{c.slug}-{LABEL}-{uuid.uuid4().hex[:8]}"
@@ -308,8 +306,7 @@ def session(
             store.settings(), Path(folder), identity, message(c, proposed), journal, submit=pick_tools.ADMIT, job=LABEL
         )
         done = loop_owner.run(sdk_adapter.run(cfg))
-        if keep is not None:
-            keep([done])
+        keep([done])
         return done
 
 
