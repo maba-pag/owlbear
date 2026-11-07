@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change
 
 APPLY, DECLINE = "repair-apply", "repair-stop"
+RERUN = "Run the step again"  # the stop's action, once its cause is resolved
 REPAIRED = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})  # agent steps
 
 
@@ -97,17 +98,17 @@ def stopped(c: Change, why: str, now: datetime) -> None:
     """Nothing worked, a fix was refused or declined: stop listing every fix tried and the repair's spend."""
     r = c.repairs.current
     assert r is not None  # noqa: S101 - only a repair stops
-    tried = " ".join(f"{i}. {t.fix}: {t.outcome}" for i, t in enumerate(r.tried, 1)) or "nothing"
+    tried = "; ".join(f"{i}. {t.fix}: {t.outcome.rstrip('.')}" for i, t in enumerate(r.tried, 1)) or "nothing"
     spent = f"{r.credits:.2f} credits" if r.credits is not None else "an unknown number of credits"
-    found = f" It found: {r.found}." if r.found else ""
+    found = f" It found: {r.found.rstrip('.')}." if r.found else ""
     r.phase, r.stopped = "stopped", why
     c.repairs.done.append(r)
     c.repairs.current = None
-    _stop(c, r.cause, f"repair stopped, {why}: {r.evidence}.{found} Tried: {tried} Spent {spent}.", now)
+    _stop(c, r.cause, f"repair stopped, {why}: {r.evidence.rstrip('.')}.{found} Tried: {tried}. Spent {spent}.", now)
 
 
 def _stop(c: Change, cause: str, reason: str, now: datetime) -> None:
     c.stop = Stop(
-        kind=ErrorKind(kind_of(cause)), reason=reason, action=f"Resolve {cause}", resume="the step runs again", at=now
+        kind=ErrorKind(kind_of(cause)), reason=reason, action=RERUN, resume="the step runs again", at=now
     )
     c.outcome = Outcome(exit=Exit.STOP, cause=cause, reason=reason, who="you", at=now)
