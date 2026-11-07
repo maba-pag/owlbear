@@ -28,6 +28,7 @@ READ_ONLY_UNREAD = "read-only-unread"  # shared Git settings could not be inspec
 RO_WORKTREE = "read-only-worktree"  # the cause subject of a read-only worktree Delivery could not prepare
 _QUOTA = re.compile(r"quota|premium requests?|credits", re.IGNORECASE)
 _CAPACITY = re.compile(r"\b429\b|rate.?limit|capacity|overloaded|quota|credits", re.IGNORECASE)
+_LIMITED = re.compile(r"\b429\b|rate.?limit|too many requests|overloaded", re.IGNORECASE)  # in a check's output
 _NETWORK = re.compile(  # any runtime or provider failure text
     r"\b(?:status|http|code|error)\W{0,3}5\d\d\b|\b5\d\d (?:internal|bad gateway|service unavailable|gateway)"
     r"|timed? ?out|timeout|connection|unreachable|temporar|runtime start|network|could not resolve",
@@ -61,10 +62,10 @@ def signature(kind: str, step: str, message: str) -> str:
 def transient(text: str, *, local: bool = False) -> ErrorKind | None:
     """Classify a runtime or provider failure text as capacity, network or neither.
 
-    *local* is a step's own check: its timeout or interruption is the check not finishing, so only text naming the
-    network or capacity itself counts.
+    *local* is a step's own check: its timeout or interruption is the check not finishing, so only a diagnostic of the
+    network or a rate limit counts, never a word such as a test's name.
     """
-    if _CAPACITY.search(text):
+    if (_LIMITED if local else _CAPACITY).search(text):
         return ErrorKind.CAPACITY
     return ErrorKind.NETWORK if (_REMOTE if local else _NETWORK).search(text) else None
 
