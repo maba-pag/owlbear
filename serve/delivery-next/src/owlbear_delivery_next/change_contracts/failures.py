@@ -28,14 +28,18 @@ READ_ONLY_UNREAD = "read-only-unread"  # shared Git settings could not be inspec
 RO_WORKTREE = "read-only-worktree"  # the cause subject of a read-only worktree Delivery could not prepare
 _QUOTA = re.compile(r"quota|premium requests?|credits", re.IGNORECASE)
 _CAPACITY = re.compile(r"\b429\b|rate.?limit|capacity|overloaded|quota|credits", re.IGNORECASE)
-_REMOTE = (  # a failure that names the network itself: temporary even for a step's own check (#1065)
+_NETWORK = re.compile(  # any runtime or provider failure text
     r"\b(?:status|http|code|error)\W{0,3}5\d\d\b|\b5\d\d (?:internal|bad gateway|service unavailable|gateway)"
-    r"|connection (?:refused|reset|closed|aborted|error|timed? ?out)|(?:host|network) (?:is )?unreachable"
-    r"|network error|runtime start|could not resolve"
-    r"|\b(?:ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|ENOTFOUND)\b|\b(?:connect|read) timed? ?out"
+    r"|timed? ?out|timeout|connection|unreachable|temporar|runtime start|network|could not resolve",
+    re.IGNORECASE,
 )
-_NETWORK = re.compile(rf"{_REMOTE}|timed? ?out|timeout|temporar", re.IGNORECASE)
-_REMOTE_ONLY = re.compile(_REMOTE, re.IGNORECASE)
+_REMOTE = re.compile(  # a check's output that names the network itself: temporary even there (#1065)
+    r"\b(?:status|http|code|error)\W{0,3}5\d\d\b|\b5\d\d (?:internal|bad gateway|service unavailable|gateway)"
+    r"|connection ?(?:refused|reset|closed|aborted|error|timed? ?out)|(?:host|network) (?:is )?unreachable"
+    r"|network error|could not resolve"
+    r"|\b(?:ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|ENOTFOUND)\b|\b(?:connect|read) timed? ?out",
+    re.IGNORECASE,
+)
 CHECK = "check"  # the subject prefix of a step's own check that cannot finish: setup, never temporary (#1065)
 SETUP = "setup"  # the subject prefix of a worker's premise about something outside the brief and plan (#1065)
 _NOISE = (
@@ -62,7 +66,7 @@ def transient(text: str, *, local: bool = False) -> ErrorKind | None:
     """
     if _CAPACITY.search(text):
         return ErrorKind.CAPACITY
-    return ErrorKind.NETWORK if (_REMOTE_ONLY if local else _NETWORK).search(text) else None
+    return ErrorKind.NETWORK if (_REMOTE if local else _NETWORK).search(text) else None
 
 
 def quota(text: str) -> bool:
