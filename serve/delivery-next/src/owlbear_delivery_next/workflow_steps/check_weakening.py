@@ -40,6 +40,7 @@ BLOCK = re.compile(r"^\s*(async\s+)?def\s|\bfunction\b|=>|^\s*(it|test)(\.\w+)?\
 TEST = re.compile(r"^\s*(async\s+)?def\s+test|^\s*(it|test)(\.\w+)?\(")  # a test's first line
 HUNK = re.compile(r"^@@ -\S+ \+(\d+)")
 LINKS = frozenset({"120000", "160000"})  # a symbolic link or a submodule: never pushed without the owner
+LINTERS = re.compile(r"^\.(?:eslintrc|prettierrc|stylelintrc)|^(?:eslint|prettier|stylelint)\.config\.\w+$")
 TESTS = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$|[^/]*\.test\.[mc]?[jt]sx?$)")
 
 
@@ -65,7 +66,7 @@ def weakened(run: Git, at: Path, head: str, path: str, how: str) -> tuple[str, s
         return ("deleted test" if TESTS.search(path) else ""), ""
     lines = run(at, ["diff", "--cached", "--unified=0", head, "--", path]).splitlines()
     added = [x[1:] for x in lines if x.startswith("+") and not x.startswith("+++")]
-    edited = how.endswith("M") and bool(TESTS.search(path))  # an existing test file: a new one may be pushed
+    edited = how.endswith(("M", "T")) and bool(TESTS.search(path))  # an existing test file, its type changed too
     removed = [x[1:] for x in lines if x.startswith("-") and not x.startswith("---")] if edited else []
     cut = any(REMOVED.search(x) for x in removed)
     same = cut and _same_code(run, at, head, path)  # only reformatted: no check went
@@ -83,7 +84,8 @@ def weakened(run: Git, at: Path, head: str, path: str, how: str) -> tuple[str, s
 def configured(path: str) -> bool:
     """Whether *path* is lint, format, CI workflow, hook or security configuration."""
     p = PurePosixPath(path)
-    return path.startswith(CONFIG_PREFIXES) or p.name in CONFIG_FILES or bool(CONFIG_DIRS & set(p.parts[:-1]))
+    configs = p.name in CONFIG_FILES or bool(LINTERS.search(p.name))
+    return path.startswith(CONFIG_PREFIXES) or configs or bool(CONFIG_DIRS & set(p.parts[:-1]))
 
 
 def _same_code(run: Git, at: Path, head: str, path: str) -> bool:
