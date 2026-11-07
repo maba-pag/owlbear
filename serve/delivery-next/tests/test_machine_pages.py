@@ -227,9 +227,7 @@ def serving(records: list[dict[str, Any]]) -> Callable[[Any], None]:
         if route.request.method != "GET":
             route.fallback()
             return
-        body = route.fetch().json()
-        body["projects"] = list(records)
-        route.fulfill(json=body)
+        route.fulfill(json=route.fetch().json() | {"projects": records})
 
     return answer
 
