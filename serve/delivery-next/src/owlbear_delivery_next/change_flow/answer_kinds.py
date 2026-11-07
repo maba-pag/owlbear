@@ -35,11 +35,11 @@ SPOTTER_OPTIONS = [
 
 
 def answer_text(question: Question) -> str:
-    """The chosen option and owner's words; a clarification's confirmed statement alone."""
+    """The full chosen answer, or its confirmed clarification even after promotion to a brief change."""
     a = question.answer
     if a is None:
         return ""
-    if a.kind == "clarification":
+    if a.statement or a.kind == "clarification":
         return a.statement
     label = next((o.label for o in question.options if o.id == a.option), "")
     return " - ".join(part for part in (label, a.text) if part)
