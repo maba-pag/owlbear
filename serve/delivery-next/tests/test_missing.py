@@ -206,21 +206,24 @@ def test_the_plan_challenge_passes_an_operational_step_back_on_and_keeps_a_premi
 
 # c1 (#1061): the check its builder reported, its resolved form, and pytest's session timeout as observed on OwlBear
 C1_CHECK = "cd . && {\nuv run test --changed && uv run lint --no-fix\n}"
-C1_TIMEOUT = (  # a node naming a connection is no network failure
+C1_TIMEOUT = (  # nodes naming a connection or a quota are no network or capacity failure
     "PASSED tests/test_vscode_step.py::test_connection_speaks_websocket_json_rpc_over_the_local_socket\n"
+    "PASSED tests/test_missing.py::test_the_quota_never_overrides_a_report\n"
     "xdist.dsession.Interrupted: session-timeout: 900.0 sec exceeded"
 )
 
 
-def test_a_check_that_cannot_finish_is_repaired_and_a_network_failure_of_it_still_waits() -> None:
-    timed_out = run(report("uv run test --changed", C1_TIMEOUT, "run the task's check"), checks=(C1_CHECK,))
+@pytest.mark.parametrize("check", [C1_CHECK, "cd . && {\nuv run test --changed;uv run lint --no-fix\n}"])
+def test_a_check_that_cannot_finish_is_repaired_and_a_network_failure_of_it_still_waits(check) -> None:
+    timed_out = run(report("uv run test --changed", C1_TIMEOUT, "run the task's check"), checks=(check,))
     r = to_result(timed_out, K.BUILD, NOW)  # c1 case 1: retried as "failed temporarily" three times
     assert (r.exit, r.setup, r.cause) == (Exit.RETRY, True, "project-env:build:check-uv-run-test-changed")
     c = loop.apply(change(), r, NOW)
     assert (c.outcome.exit, c.stop.action, c.step.kind) == (Exit.STOP, f"Resolve {r.cause}", K.BUILD)
-    error = "npm ERR! request to https://registry.npmjs.org failed, reason: connect ETIMEDOUT 104.16.1.35:443"
-    offline = to_result(run(report("uv run test --changed", error), checks=(C1_CHECK,)), K.BUILD, NOW)
-    assert (offline.cause, offline.setup) == ("network:build:tool-uv-run-test-changed", False)
+    for error in ("npm ERR! request to https://registry.npmjs.org failed, reason: connect ETIMEDOUT 104.16.1.35:443",
+                  "Error: read ECONNRESET"):  # fmt: skip
+        offline = to_result(run(report("uv run test --changed", error), checks=(check,)), K.BUILD, NOW)
+        assert (offline.cause, offline.exit, offline.setup) == ("network:build:tool-uv-run-test-changed", Exit.RETRY, False)
     kept = held.load_run(held.dump_run(timed_out))  # a held result keeps its checks
     assert to_result(kept, K.BUILD, NOW) == r
 
