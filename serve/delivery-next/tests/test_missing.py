@@ -33,7 +33,7 @@ from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import missing, sdk_adapter, step_input
 from owlbear_delivery_next.runtimes.session_result import Run, to_result
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import brief_round, conversation, plan_round
+from owlbear_delivery_next.workflow_steps import brief_round, conversation, held, plan_round
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 K = StepKind
@@ -158,7 +158,6 @@ def test_a_window_only_tool_changes_the_plan_or_the_brief_only_where_they_can_ch
     [
         (K.BUILD, Exit.BACK, K.PLAN),
         (K.REVIEW, Exit.BACK, K.PLAN),
-        (K.PLAN, Exit.BACK, K.SHAPE),
         (K.CHECK, Exit.ASK, K.PLAN),
         (K.FOLLOW, Exit.ASK, K.PLAN),
     ],
@@ -199,10 +198,72 @@ def test_the_plan_challenge_passes_an_operational_step_back_on_and_keeps_a_premi
     assert plan_round.judged(c, nowhere, nowhere) is nowhere  # counted no round: the same plan is challenged again
     assert (c.loops["plan"].round, c.step.mode) == (0, plan_rounds.CHALLENGE)
     said = tools.WrongPremise(stage="brief", reason="AC-1 cannot hold", evidence=["a.txt:1"])
-    premise = nowhere.model_copy(update={"operational": False})
+    premise = StepResult(exit=Exit.BACK, back_to=K.SHAPE, cause="scope:review:brief", reason="AC-1 cannot hold")
     kept = plan_round.judged(c, premise, said)
     assert (kept.exit, kept.plan, kept.challenged) == (Exit.RETRY, c.plan, True)
     assert [f.text for f in c.loops["plan"].findings] == ["premise: AC-1 cannot hold (a.txt:1)"]
+
+
+# c1 (#1061): the check its builder reported, its resolved form, and pytest's session timeout as observed on OwlBear
+C1_CHECK = "cd . && {\nuv run test --changed && uv run lint --no-fix\n}"
+C1_TIMEOUT = (  # nodes naming a connection or a quota are no network or capacity failure
+    "PASSED tests/test_vscode_step.py::test_connection_speaks_websocket_json_rpc_over_the_local_socket\n"
+    "PASSED tests/test_missing.py::test_the_quota_never_overrides_a_report\n"
+    "PASSED tests/test_api.py::test_a_rate_limit_waits[ECONNRESET]\n"
+    "tests/test_status.py::test_a_line[request failed: connection refused] PASSED\n"
+    "10 workers [429 items]\ncollected 429 items\n"
+    "========= 429 passed in 900.12s =========\n"
+    "xdist.dsession.Interrupted: session-timeout: 900.0 sec exceeded"
+)
+
+
+@pytest.mark.parametrize("check", [C1_CHECK, "cd . && {\nuv run test --changed;uv run lint --no-fix\n}"])
+def test_a_check_that_cannot_finish_is_repaired_and_a_network_failure_of_it_still_waits(check) -> None:
+    timed_out = run(report("uv run test --changed", C1_TIMEOUT, "run the task's check"), checks=(check,))
+    r = to_result(timed_out, K.BUILD, NOW)  # c1 case 1: retried as "failed temporarily" three times
+    assert (r.exit, r.setup, r.cause) == (Exit.RETRY, True, "project-env:build:check-uv-run-test-changed")
+    c = loop.apply(change(), r, NOW)
+    assert (c.outcome.exit, c.stop.action, c.step.kind) == (Exit.STOP, f"Resolve {r.cause}", K.BUILD)
+    for error in ("npm ERR! request to https://registry.npmjs.org failed, reason: connect ETIMEDOUT 104.16.1.35:443",
+                  "Error: read ECONNRESET",
+                  "socket.gaierror: [Errno -3] Temporary failure in name resolution",
+                  "Error: connect ECONNREFUSED ::1:443",
+                  "FAILED tests/test_api.py::test_fetch - ConnectionError: connection refused"):  # fmt: skip
+        offline = to_result(run(report("uv run test --changed", error), checks=(check,)), K.BUILD, NOW)
+        assert (offline.cause, offline.exit, offline.setup) == (
+            "network:build:tool-uv-run-test-changed",
+            Exit.RETRY,
+            False,
+        )
+    kept = held.load_run(held.dump_run(timed_out))  # a held result keeps its checks
+    assert to_result(kept, K.BUILD, NOW) == r
+
+
+def test_a_plan_missing_a_profile_entry_is_repaired_never_sent_back_to_the_brief() -> None:
+    said = "The project profile must hold a package at the repository root, checked with `uv run test --changed`"
+    r = to_result(run(report("project profile packages (check commands)", said)), K.PLAN, NOW)  # c1 case 2
+    c = loop.apply(change(K.PLAN), r, NOW)
+    assert (r.setup, c.outcome.exit, c.step.kind) == (True, Exit.STOP, K.PLAN)
+    assert said in c.stop.reason
+
+
+@pytest.mark.parametrize("stage", ["setup", "target"])
+def test_a_plan_missing_an_outside_pr_is_repaired_never_sent_back_to_the_brief(stage) -> None:
+    said = tools.WrongPremise(  # c1 case 3, recorded as scope:plan:target and sent to shaping
+        stage=stage,
+        reason="The owner chose to land the exclusion on main in its own PR before re-planning. That has not happened.",
+        evidence=["main (054e2edf6) has no exclusion and no PR"],
+    )
+    c = change(K.PLAN)
+    plan_rounds.loop(c, RoundPolicy(), NOW)
+    c.step.mode = plan_rounds.CHALLENGE
+    r = to_result(Run("s1", ending="premise", payload=said, termination=Termination(confirmed=True)), K.PLAN, NOW)
+    assert plan_round.judged(c, r, said) is r  # the plan challenge counts no finding for it
+    c = loop.apply(c, r, NOW)
+    assert (r.setup, c.outcome.exit, c.step.kind, c.loops["plan"].round) == (True, Exit.STOP, K.PLAN, 0)
+    assert "054e2edf6" in c.stop.reason
+    share = Run("s2", "premise", said.model_copy(update={"stage": "setup"}), termination=Termination(confirmed=True))
+    assert to_result(share, K.TESTS, NOW).setup  # a test review's share too
 
 
 def test_the_planner_reads_why_the_change_is_planned_again() -> None:

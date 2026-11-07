@@ -1,6 +1,7 @@
-"""The missing-tool report's five cases (TD-36), in order.
+"""The missing-tool report's cases (TD-36), in order.
 
-A guard denial, owner setup, a temporary failure, a tool only a VS Code window has, nowhere. Delivery never grants a
+A guard denial, owner setup, one of the step's own checks that cannot finish (a setup problem for repair, unless its
+text names the network: #1065), a temporary failure, a tool only a VS Code window has, nowhere. Delivery never grants a
 tool, and a window-only tool is asked of the owner, naming it, never run elsewhere (D-01M5WG7TB1292KJ05CH0R11WE0).
 """
 
@@ -9,7 +10,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts.failures import ENVIRONMENT, cause_key, transient
+from owlbear_delivery_next.change_contracts.failures import CHECK, ENVIRONMENT, cause_key, transient
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, Question, StepKind
 from owlbear_delivery_next.change_flow.loop import StepResult
 
@@ -67,6 +68,21 @@ def slug(tool: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", tool.lower()).strip("-")[:40] or "unknown"
 
 
+def checked(tool: str, checks: tuple[str, ...]) -> bool:
+    """Whether the reported *tool* is one of the step's resolved *checks*, or a command run inside one.
+
+    c1's builder reported `uv run test --changed`, part of its check `uv run test --changed && uv run lint --no-fix`.
+    """
+    said = re.escape(" ".join(tool.split()))
+    found = re.compile(rf"(?<![^\s;&|(){{}}]){said}(?![^\s;&|(){{}}])")  # bounded by blanks or shell operators
+    return bool(said) and any(found.search(" ".join(c.split())) for c in checks)
+
+
+def setup(cause: str, reason: str) -> StepResult:
+    """A setup problem: never retried as temporary and never back to the brief; it goes to repair (#1065)."""
+    return StepResult(exit=Exit.RETRY, cause=cause, reason=reason, setup=True, operational=True)
+
+
 def _without(enclosing: StepKind, tool: str) -> list[Option]:
     """Go on without the tool: the plan or the brief changes, whichever the step's work comes from.
 
@@ -96,7 +112,11 @@ def classify(run: Run, p: MissingTool, enclosing: StepKind, now: datetime) -> St
         text = f"Set up {tool} on this machine (install or start it), then run the step again. The step needs {said}"
         options = [Option(id="done", label="Done, run the step again", next="retry"), PAUSE]
         return _ask(enclosing, text, cause_key(ErrorKind.PROJECT_ENV, enclosing, subject), options)
-    if (kind := transient(p.error)) in ENVIRONMENT:
+    own = checked(tool, run.checks)
+    if (kind := transient(p.error, local=own)) not in ENVIRONMENT and own:
+        cause = cause_key(ErrorKind.PROJECT_ENV, enclosing, f"{CHECK}-{slug(tool)}")
+        return setup(cause, f"the check {tool} cannot finish: {p.error}")
+    if kind in ENVIRONMENT:
         return StepResult(
             exit=Exit.RETRY,
             cause=cause_key(kind, enclosing, subject),
@@ -113,7 +133,7 @@ def classify(run: Run, p: MissingTool, enclosing: StepKind, now: datetime) -> St
 
 
 def _nowhere(tool: str, said: str, enclosing: StepKind, subject: str) -> StepResult:
-    """No runtime here has it: the work that asked for it changes (TD-36).
+    """No runtime here has it: the work that asked for it changes (TD-36); a plan's is a setup problem (#1065).
 
     A brief challenge's step back becomes its round's finding (``steps.brief_round``); the brief changes in chat.
     """
@@ -121,10 +141,11 @@ def _nowhere(tool: str, said: str, enclosing: StepKind, subject: str) -> StepRes
     back = {
         StepKind.BUILD: StepKind.PLAN,
         StepKind.REVIEW: StepKind.PLAN,
-        StepKind.PLAN: StepKind.SHAPE,
         StepKind.SHAPE: StepKind.SHAPE,
     }
     cause = cause_key(ErrorKind.SCOPE, enclosing, subject)
+    if enclosing == StepKind.PLAN:  # never back to the approved brief (D-01M6RT5QHWHB0ZHBBY0BE34FBE)
+        return setup(cause, f"the plan {reason}")
     if to := back.get(enclosing):
         return StepResult(exit=Exit.BACK, back_to=to, cause=cause, reason=reason, operational=True)
     return _ask(enclosing, f"The step {reason}.", cause, [*_without(enclosing, tool), PAUSE])

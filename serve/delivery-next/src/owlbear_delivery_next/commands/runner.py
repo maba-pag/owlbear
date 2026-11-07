@@ -303,7 +303,8 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             reviewed, designed = ran[: len(mine)], ran[len(mine) :]
             stop = next((r for r, _ in ran if r.exit == Exit.STOP), None)  # any judge left running stops the Change
             result = stop or next((r for r, run in reviewed if not isinstance(run.payload, tools.ReviewResult)), None)
-            result = result or next((r for r, run in designed if r.exit != Exit.DONE and not run.payload), None)
+            failed = (r for r, run in designed if r.exit != Exit.DONE and (r.setup or not run.payload))
+            result = result or next(failed, None)
             judgement = None if result else judges.merged([run.payload for _, run in reviewed])
             runs = ([run for _, run in reviewed], [run for _, run in designed])
             inputs = [judges.given(cfg) for _, cfg in theirs]  # kept, so a calibration replay judges the same

@@ -99,7 +99,10 @@ End the step with exactly one call:
 - `ask_question`: an owner decision you cannot make. The step ends and resumes with the answer.
 - `report_wrong_premise`: the task cannot be built as written, with the evidence. Use stage
   `target` when it needs a commit or API that is on the target branch but not in this branch yet:
-  Delivery merges the target in first, then resumes the task. With stage `brief` you may add
+  Delivery merges the target in first, then resumes the task. Use stage `setup` when something
+  outside the brief and plan is missing or broken (a PR not merged, a profile entry or setting, a
+  tool, one of your checks that cannot finish): Delivery repairs it. Use stage `brief` only when
+  what the owner gets must change. With stage `brief` you may add
   `amendment`: each brief item to change (a criterion, the UI flag, a visual state, a person
   check, a scope line or a brief decision; never the outcome or non-goals), what it should say and
   why. The shaper words the exact change and a challenger judges it; the owner decides unless it

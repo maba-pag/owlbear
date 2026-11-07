@@ -84,7 +84,10 @@ End the step with exactly one call:
 - `submit_result`: the tasks in build order. If it is rejected, each error names a field: fix it and
   call again.
 - `ask_question`: an owner decision the plan depends on.
-- `report_wrong_premise`: the brief cannot be delivered as written, with the evidence. You may add
+- `report_wrong_premise`: the brief cannot be delivered as written, with the evidence. Use stage
+  `setup` when something outside the brief and plan is missing or broken (a PR not merged, a
+  profile entry or setting, a tool, a check that cannot finish): Delivery repairs it. Use stage
+  `brief` only when what the owner gets must change. With stage `brief` you may add
   `amendment`: each brief item to change (a criterion, the UI flag, a visual state, a person
   check, a scope line or a brief decision; never the outcome or non-goals), what it should say and
   why. The shaper words the exact change and a challenger judges it; the owner decides unless it

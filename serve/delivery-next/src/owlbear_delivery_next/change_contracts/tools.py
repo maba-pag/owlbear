@@ -22,6 +22,9 @@ if TYPE_CHECKING:
 INVALID_LIMIT = 3
 LOCAL_URL = re.compile(r"http://(127\.0\.0\.1|localhost):\{port\}(/\S*)?")  # Delivery picks the port (TD-40)
 EXAMPLE_CHECK = "cd ./packages/app && {\nnpm test\n}"
+STAGES = ("Which document is wrong; target when the task needs a commit or API on the target branch but not in this "
+          "one yet; setup when something outside the brief and plan is missing or broken (a PR not merged, a profile "
+          "entry or setting, a tool, a check that cannot end); brief only if what the owner gets changes")  # fmt: skip
 
 
 class Args(BaseModel):
@@ -119,11 +122,7 @@ class Amend(Args):
 class WrongPremise(Args):
     """``report_wrong_premise``: the brief or plan cannot be built as written, or the target has what is missing."""
 
-    stage: Literal["brief", "plan", "target"] = Field(
-        description="Which document is wrong; target when the task needs a commit or API that is on the target "
-        "branch but not in this branch yet",
-        examples=["plan"],
-    )
+    stage: Literal["brief", "plan", "target", "setup"] = Field(description=STAGES, examples=["plan"])
     reason: str = _f(1000, "What is wrong", "greet() already exists with another signature.")
     evidence: list[str] = _f(10, "Paths, lines or command output that show it", ["src/greet.ts:3 exports greet(a, b)"])
     amendment: list[Amend] = Field(default_factory=list, max_length=5, description="Only for stage brief, optional: "
