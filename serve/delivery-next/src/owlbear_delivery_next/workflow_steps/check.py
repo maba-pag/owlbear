@@ -137,6 +137,7 @@ def execute(
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True, env=env,
         )  # fmt: skip
     except OSError as exc:
+        _diagnostic(log, "check-command-failed", f"`{cmd}` in {cwd}", exc)
         return Ran(None, 0.0, "", f"`{cmd}` did not start: {failure(exc)}")
     born = created(proc.pid)
     try:
