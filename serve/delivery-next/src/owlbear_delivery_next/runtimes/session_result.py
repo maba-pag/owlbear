@@ -265,6 +265,10 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
             return StepResult(exit=Exit.DONE, reason=f"{len(p.verdicts)} verdict(s), {p.kept} test(s) kept")
         case "result" if isinstance(p, curation_tools.TestCurationResult):
             return StepResult(exit=Exit.DONE, reason=p.summary[:200])
+        case "premise" if isinstance(p, tools.WrongPremise) and (p.stage == "setup" or (kind, p.stage) == PLAN_TARGET):
+            said = " ".join(f"{p.reason} ({'; '.join(p.evidence)})".split())
+            subject = f"{SETUP}-{signature(SETUP, str(kind), p.reason)[:8]}"  # one obstruction, not every premise
+            return missing.setup(cause_key(ErrorKind.PROJECT_ENV, kind, subject), said)
         case "premise" | "missing-tool" if kind == StepKind.TESTS:  # a share retries; its plan is fixed (TD-390)
             said = p.reason if isinstance(p, tools.WrongPremise) else run.detail
             said = f"missing {p.tool}: {p.error}" if isinstance(p, tools.MissingTool) else said
@@ -284,10 +288,6 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
             return StepResult(exit=Exit.ASK, question=question)
         case "spotter-ask":  # the Spotter stopped the step to ask the owner (#717)
             return StepResult(exit=Exit.ASK, question=answer_kinds.spotter(kind, run.detail))
-        case "premise" if isinstance(p, tools.WrongPremise) and (p.stage == "setup" or (kind, p.stage) == PLAN_TARGET):
-            said = " ".join(f"{p.reason} ({'; '.join(p.evidence)})".split())
-            subject = f"{SETUP}-{signature(SETUP, str(kind), p.reason)[:8]}"  # one obstruction, not every premise
-            return missing.setup(cause_key(ErrorKind.PROJECT_ENV, kind, subject), said)
         case "premise" if isinstance(p, tools.WrongPremise):
             cause = cause_key(ErrorKind.SCOPE, kind, p.stage)
             back = {StepKind.CHECK: StepKind.BUILD, StepKind.PLAN: StepKind.SHAPE}.get(kind, StepKind.PLAN)
