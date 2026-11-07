@@ -61,6 +61,11 @@ objects; current test modules, helpers, fixtures, production callers and platfor
 supplement those observations. Footprints are compared with both task-before and current code, so
 restoring a mapped version does not erase the task's checked scope. Source-reading, subprocess and
 invariant selectors supplied by the task runner remain in the union.
+Literal test-module, directory or pytest-node targets selected by the Planner stay in the bound command and
+remain required even when the task has no edited paths. For example,
+`uv run test --changed serve/tools/tests/test_todo.py --task-base OLD --target TARGET`
+unions that module with the task's affected checks. Positional targets with ordinary `--changed`
+still require task context rather than silently replacing branch scope.
 Kept tasks also compare their original `OLD..NEW` source versions, even when their bytes were
 restored before the current task began. The span's own paths use the same target-import exclusions
 as task Git scoping, and the selected consumers execute on the current tree.

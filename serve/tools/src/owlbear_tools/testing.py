@@ -385,58 +385,6 @@ def _commands_for_paths(paths: list[str], *, all_tests: bool, coverage: bool) ->
     return commands
 
 
-def _task_targets(paths: list[str], workspace: _Packages) -> tuple[set[str], list[str], list[_WorkspacePackage]]:
-    """Existing routes and the source packages requiring dependency evidence."""
-    forced: set[str] = set(_INVARIANT_TESTS)
-    python: list[str] = []
-    packages: dict[str, _WorkspacePackage] = {}
-    for path in paths:
-        package = _package_for_path(path, workspace)
-        if path in _CONFIG_TESTS:
-            forced.update(_CONFIG_TESTS[path])
-        elif package and path.startswith(_PAGES):
-            forced.update(_page_scope(package, workspace))
-        elif path.endswith(".py") and (package or path.startswith("tests/")):
-            current_test = "/tests/" in path or path.startswith("tests/")
-            if current_test and Path(path).name.startswith("test_") and (_REPOSITORY_ROOT / path).is_file():
-                forced.add(path)
-            else:
-                python.append(path)
-                if package:
-                    packages[package.namespace] = package
-        elif (
-            path.endswith((".py", ".sh", ".bash", ".zsh", ".js", ".mjs", ".cjs"))
-            or (scope := _python_scope(path, workspace)) is None
-        ):
-            raise task_scope.unsupported(path)
-        else:
-            forced.update(scope)
-    return forced, python, list(packages.values())
-
-
-def _task_commands(paths: list[str], context: task_scope.Context, *, coverage: bool) -> list[tuple[list[str], Path]]:
-    """One task's evidenced tests, with no testmon bootstrap or full-suite fallback."""
-    workspace = _workspace_packages()
-    forced, python, packages = _task_targets(paths, workspace)
-    for package in packages:
-        forced.update(_relative_paths(_neighbour_tests(package, workspace)))
-        forced.update(
-            _relative_paths(path for path in _package_tests(package) if _unseen_by_testmon(path, package.namespace))
-        )
-    selected = sorted(forced) if paths else []
-    if python:
-        from owlbear_tools import test_impact  # noqa: PLC0415 - task evidence only, never ordinary test startup.
-
-        selected = test_impact.select(_REPOSITORY_ROOT, python, context, selected)
-    print(f"Task paths: {', '.join(paths) or 'none'}")  # noqa: T201
-    if not selected:
-        return []
-    command = ["uv", "run", "--locked", "pytest", *selected]
-    if coverage:
-        command.append("--cov")
-    return [(command, _REPOSITORY_ROOT)]
-
-
 @contextlib.contextmanager
 def _testmon_lock(command: list[str]) -> Iterator[dict[str, tuple[int, ...]]]:
     """Serialize testmon runs sharing one data file: a first run deletes and recreates the database.
@@ -475,11 +423,13 @@ def test_main() -> None:
     paths = args.paths
     all_tests = args.all_tests or not args.paths
     if args.task_base is not None:
+        from owlbear_tools.task_testing import commands_for_task  # noqa: PLC0415 - task mode only.
+
         target = task_scope.commit(_run_git, args.target)
         paths = task_scope.changed(_run_git, _git_paths, args.task_base, args.keep_span, target)
         maps_dir = Path(args.maps_dir) if args.maps_dir is not None else None
         context = task_scope.Context(args.task_base, target, maps_dir, tuple(args.keep_span))
-        commands = _task_commands(paths, context, coverage=args.coverage)
+        commands = commands_for_task(paths, context, args.paths, coverage=args.coverage)
     elif args.changed:
         try:
             paths = _changed_paths(args.base)

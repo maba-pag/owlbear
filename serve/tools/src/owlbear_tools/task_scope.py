@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -103,6 +104,34 @@ def changed(run: Run, paths: Paths, base: str, kept: Sequence[str], target: str)
     return sorted(selected)
 
 
+def explicit_targets(root: Path, targets: Sequence[str]) -> set[str]:
+    """Existing checkout-relative test modules, directories or nodes, required without edited paths."""
+    selected: set[str] = set()
+    for target in targets:
+        name = PurePosixPath(target.split("::", 1)[0])
+        path = root / name
+        msg = (
+            f"Explicit task test target {target!r} must name an existing checkout-relative "
+            "test module, directory or node"
+        )
+        if name.is_absolute() or ".." in name.parts or not path.resolve().is_relative_to(root.resolve()):
+            raise ScopeError(msg)
+        modules = [path] if path.is_file() else sorted(path.rglob("test_*.py")) if path.is_dir() else []
+        if (
+            not modules
+            or (path.is_dir() and "::" in target)
+            or any(
+                not module.name.startswith("test_")
+                or module.suffix != ".py"
+                or not module.resolve().is_relative_to(root.resolve())
+                for module in modules
+            )
+        ):
+            raise ScopeError(msg)
+        selected.update([target] if path.is_file() else (str(module.relative_to(root)) for module in modules))
+    return selected
+
+
 def arguments() -> argparse.Namespace:
     """Maintained test arguments, with explicit task context separate from ordinary branch scope."""
     parser = argparse.ArgumentParser(prog="test")
@@ -122,8 +151,8 @@ def arguments() -> argparse.Namespace:
         parser.error("--all cannot be combined with paths")
     if args.base is not None and not args.changed:
         parser.error("--base requires --changed")
-    if args.changed and args.paths:
-        parser.error("--changed cannot be combined with paths")
+    if args.changed and args.paths and args.task_base is None:
+        parser.error("--changed paths require --task-base and --target")
     if args.task_base is not None and not args.changed:
         parser.error("--task-base requires --changed")
     if args.task_base is not None and args.target is None:

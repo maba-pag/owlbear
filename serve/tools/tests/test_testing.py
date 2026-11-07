@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
+from owlbear_tools import task_scope
 from owlbear_tools import testing as testing_module
 from owlbear_tools.testing import _commands_for_paths, _require_development_checkout
 from owlbear_tools.testing import test_main as run_test
@@ -356,6 +357,20 @@ def test_changed_runs_git_scope_and_accepts_explicit_base(options: list[str]) ->
     else:
         assert commands[1][0] == "env"
         assert "--testmon" in commands[1]
+        target = "serve/tools/tests/test_todo.py::test_todo_ignores_binary_files"
+        with (
+            patch.object(sys, "argv", ["test", "--changed", target, "--task-base", "base", "--target", "target"]),
+            patch("owlbear_tools.task_scope.commit", return_value="target"),
+            patch("owlbear_tools.task_scope.changed", return_value=[]),
+            patch("owlbear_tools.testing.subprocess.call", return_value=0) as task_call,
+            pytest.raises(SystemExit, match="0"),
+        ):
+            run_test()
+        task_command = task_call.call_args.args[0]
+        assert target in task_command
+        assert "tests/test_package_boundary.py" in task_command
+        assert "--testmon" not in task_command
+        assert task_command[-2:] == ["-o", "session_timeout="]
 
 
 def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() -> None:
@@ -419,3 +434,5 @@ def test_dependency_artifacts_cannot_name_tests_outside_the_checkout(tmp_path: P
     )
     with pytest.raises(ValueError, match="Invalid dependency test identity"):
         read_evidence(artifact)
+    with pytest.raises(task_scope.ScopeError, match="checkout-relative test module"):
+        task_scope.explicit_targets(_ROOT, [node])

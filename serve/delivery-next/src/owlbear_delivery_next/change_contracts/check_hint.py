@@ -55,6 +55,19 @@ def body(command: str) -> tuple[str | None, str]:
     return directory, said
 
 
+def _literal_targets(targets: Sequence[str]) -> bool:
+    return any(target != "--" for target in targets) and all(
+        target == "--"
+        or (
+            target not in {"", ".", "./"}
+            and not target.startswith(("-", "~"))
+            and not PurePosixPath(target).is_absolute()
+            and ".." not in PurePosixPath(target).parts
+        )
+        for target in targets
+    )
+
+
 def offered(command: str, choices: Sequence[str]) -> bool:
     """An offered check, or literal test targets appended to its same runner and package."""
     if command in choices:
@@ -69,17 +82,7 @@ def offered(command: str, choices: Sequence[str]) -> bool:
         suffix = said[len(original) + 1 :]
         if not WORDS.fullmatch(suffix):
             continue
-        targets = shlex.split(suffix)
-        if any(target != "--" for target in targets) and all(
-            target == "--"
-            or (
-                target not in {"", ".", "./"}
-                and not target.startswith(("-", "~"))
-                and not PurePosixPath(target).is_absolute()
-                and ".." not in PurePosixPath(target).parts
-            )
-            for target in targets
-        ):
+        if _literal_targets(shlex.split(suffix)):
             return True
     return False
 
@@ -93,22 +96,29 @@ def qualified(package: str, command: str) -> str:
 
 
 def changed_runner(command: str) -> tuple[str, list[str]] | None:
-    """OwlBear's root changed runner and its already frozen spans; other commands have no adapter."""
+    """OwlBear's root runner with literal targets and frozen spans; other commands have no adapter."""
     directory, said = body(command)
     if directory != ".":
         return None
     for runner in ("uv run test --changed", "uv run tests --changed"):
         if said in {runner, f"{runner} && uv run lint --no-fix"}:
             return runner, []
-        if not said.startswith(runner + " "):
-            continue
         rest = said[len(runner) + 1 :]
-        if not WORDS.fullmatch(rest):
+        if not said.startswith(runner + " ") or not WORDS.fullmatch(rest):
+            continue
+        words = iter(shlex.split(rest))
+        targets, spans = [], []
+        for word in words:
+            if word == "--keep-span":
+                if (span := next(words, None)) is None:
+                    return None
+                spans.append(span)
+            else:
+                targets.append(word)
+        if targets and not _literal_targets(targets):
             return None
-        words = shlex.split(rest)
-        if len(words) % 2 or any(word != "--keep-span" for word in words[::2]):
-            return None
-        return runner, words[1::2]
+        suffix = "".join(f" {shlex.quote(target)}" for target in targets if target != "--")
+        return runner + suffix, spans
     return None
 
 
