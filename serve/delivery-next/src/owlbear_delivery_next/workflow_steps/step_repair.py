@@ -80,11 +80,16 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
     try:
         witness = _witness(change, prof)
         asked = lookup.Asked(store, lock, lambda: change)  # the repairer's and its Spotter's lookups (TD-456)
-        done = asked.settled(lambda: sessions.run(store, _session(store, lock, change, (at, asked), settings, witness)))
+        try:
+            cfg = _session(store, lock, change, (at, asked), settings, witness)
+            done = asked.settled(lambda: sessions.run(store, cfg))
+        except sessions.UsageUnreadError as exc:  # the owner's gate decides its result; its spend is the repair's
+            done = exc.run
+            _spent(r, done)
+            store.write(lock, change)
+            raise
         sessions.logged(store, lock, change, done, {"kind": LABEL, "exit": done.ending})
-        spent, first = _credits(done.usage), not r.session  # a rerun's spend adds to the repair's
-        r.credits = spent if first else None if r.credits is None or spent is None else r.credits + spent
-        r.session = done.session_id
+        _spent(r, done)
         if _gated(store, lock, change, done):
             return
         p = done.payload
@@ -336,9 +341,12 @@ def _ran(at: Path, commands: tuple[str, ...], within: float, store: Store, lock:
     return Witness(commands=list(commands), exit=0, seconds=seconds, output="\n".join(out))
 
 
-def _credits(usage: dict[str, object]) -> float | None:
-    found = usage.get("credits")
-    return float(found) if isinstance(found, int | float) else None
+def _spent(r: Repair, run: Run) -> None:
+    """Add *run*'s credits to the repair's: unknown once any session's spend is unknown."""
+    found = run.usage.get("credits")
+    spent = float(found) if isinstance(found, int | float) else None
+    r.credits = spent if not r.session else None if r.credits is None or spent is None else r.credits + spent
+    r.session = run.session_id
 
 
 def _gated(store: Store, lock: Lock, change: Change, done: Run) -> bool:
@@ -371,9 +379,8 @@ def _gated(store: Store, lock: Lock, change: Change, done: Run) -> bool:
 def _unfit(at: Path, package: str, changed: list[tuple[str, str]], prof: Profile) -> str:
     """Why a proposed project check can't be offered: its package lies outside the repository, or it needs edits."""
     where = PurePosixPath(package)
-    if where.is_absolute() or ".." in where.parts or not (at / where).resolve().is_relative_to(at.resolve()):
-        return f"its proposed check names the package {package}, which is not a folder of this repository"
-    if not (at / where).is_dir():
+    inside = not where.is_absolute() and ".." not in where.parts and (at / where).resolve().is_relative_to(at.resolve())
+    if not inside or not (at / where).is_dir():
         return f"its proposed check names the package {package}, which is not a folder of this repository"
     if (entry := prof.entries.get(f"check:{package}")) is not None and profile.is_confirmed(entry):
         return f"its proposed check would replace {package}'s confirmed check `{entry.value}`, which only you change"
