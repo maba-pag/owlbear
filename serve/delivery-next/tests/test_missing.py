@@ -223,7 +223,11 @@ def test_a_check_that_cannot_finish_is_repaired_and_a_network_failure_of_it_stil
     for error in ("npm ERR! request to https://registry.npmjs.org failed, reason: connect ETIMEDOUT 104.16.1.35:443",
                   "Error: read ECONNRESET"):  # fmt: skip
         offline = to_result(run(report("uv run test --changed", error), checks=(check,)), K.BUILD, NOW)
-        assert (offline.cause, offline.exit, offline.setup) == ("network:build:tool-uv-run-test-changed", Exit.RETRY, False)
+        assert (offline.cause, offline.exit, offline.setup) == (
+            "network:build:tool-uv-run-test-changed",
+            Exit.RETRY,
+            False,
+        )
     kept = held.load_run(held.dump_run(timed_out))  # a held result keeps its checks
     assert to_result(kept, K.BUILD, NOW) == r
 
