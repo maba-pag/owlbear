@@ -173,7 +173,7 @@ def held_with(scope: Any, name: str, why: str | re.Pattern[str]) -> None:
 
 
 @pytest.mark.browser
-def test_the_changes_page_names_the_blocked_project_and_holds_only_its_starting_buttons(host) -> None:
+def test_the_changes_page_names_the_blocked_project_and_holds_only_its_starting_buttons(host, request) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     page, base, a, b = host.page, host.base, host.ids["alpha"], host.ids["beta"]
@@ -209,6 +209,22 @@ def test_the_changes_page_names_the_blocked_project_and_holds_only_its_starting_
     expect(detail.locator("section.act").get_by_role("button", name="Answer")).to_be_enabled(timeout=WAIT)
     expect(detail.get_by_role("button", name="Pause")).to_be_enabled()
 
+    host.stores["alpha"].config_path.write_text("{")  # an unreadable layer is named with its reason
+    try:
+        json.loads("{")
+    except ValueError as exc:
+        unreadable = f"alpha: settings can't be read: state of config is unreadable: {failure(exc)}"
+    page.goto(f"{base}/#token=t")
+    expect(banner.locator("li")).to_have_text([unreadable], timeout=WAIT)
+
+    request.getfixturevalue("intervals_unset")  # this machine's update checks: every project waits
+    expect(banner).to_have_attribute("state", "error", timeout=WAIT)
+    expect(banner).to_have_attribute("heading", EVERY)
+    expect(banner.locator("li")).to_have_count(2)
+    expect(banner.locator("li").nth(0)).to_have_text(unreadable)
+    expect(banner.locator("li").nth(1)).to_have_text("beta: 3 settings are unset; set them on the Settings page")
+    expect(page.get_by_role("button", name="New Change")).to_be_disabled()
+
 
 @pytest.mark.browser
 def test_new_change_offers_only_projects_whose_work_may_start_and_follows_the_poll(host, pds) -> None:
@@ -234,29 +250,6 @@ def test_new_change_offers_only_projects_whose_work_may_start_and_follows_the_po
     expect(go).to_be_enabled(timeout=WAIT)
     expect(select).to_have_js_property("value", b)
     expect(page.locator("#blocked")).to_have_attribute("state", "warning")
-
-
-@pytest.mark.browser
-def test_an_unreadable_layer_is_named_with_its_reason_and_an_unset_interval_blocks_every_project(host, request) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    page, base = host.page, host.base
-    host.stores["alpha"].config_path.write_text("{")
-    try:
-        json.loads("{")
-    except ValueError as exc:
-        unreadable = f"alpha: settings can't be read: state of config is unreadable: {failure(exc)}"
-    page.goto(f"{base}/#token=t")
-    banner = page.locator("#blocked")
-    expect(banner.locator("li")).to_have_text([unreadable], timeout=WAIT)
-
-    request.getfixturevalue("intervals_unset")  # this machine's update checks: every project waits
-    expect(banner).to_have_attribute("state", "error", timeout=WAIT)
-    expect(banner).to_have_attribute("heading", EVERY)
-    expect(banner.locator("li")).to_have_count(2)
-    expect(banner.locator("li").nth(0)).to_have_text(unreadable)
-    expect(banner.locator("li").nth(1)).to_have_text("beta: 3 settings are unset; set them on the Settings page")
-    expect(page.get_by_role("button", name="New Change")).to_be_disabled()
 
 
 @pytest.mark.browser
@@ -286,13 +279,7 @@ def test_maintenance_holds_curation_and_a_test_review_only_where_work_may_not_st
     expect(page.get_by_role("button", name="Review tests")).to_be_enabled(timeout=WAIT)
     expect(page.locator("#tests-blocked")).to_have_count(0)
 
-
-@pytest.mark.browser
-@pytest.mark.usefixtures("data")
-def test_a_folder_refused_for_unset_settings_says_how_many_and_an_unreadable_reason_stays_whole(host) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    page, base, a = host.page, host.base, host.ids["alpha"]
+    # a past run refused while no folder waits now: its reason, not a current block, shows at the next poll
     unreadable = "settings can't be read: state of config is unreadable"
     refused = {"state": "failed", "entries": [], "blocked": "", "unset": [], "unset_reason": ""}
     stub = {"available": True, "queue": [], "folders": [
@@ -301,12 +288,9 @@ def test_a_folder_refused_for_unset_settings_says_how_many_and_an_unreadable_rea
         {"folder": "beta", "reason": unreadable, "reason_unset": 0, **refused},
     ]}  # fmt: skip
     page.route("**/api/next/curation", lambda route: route.fulfill(json=stub))
-    page.goto(f"{base}/#token=t")
-    page.goto(f"{base}/maintenance?project={a}")
-    rows = page.locator("#curation li")
-    expect(rows.nth(0)).to_contain_text(UNSET, timeout=WAIT)  # alpha's refusal, in the pages' words
+    expect(rows.nth(1)).to_contain_text(unreadable, timeout=WAIT)  # beta's stays whole; only the stub says it
+    expect(rows.nth(0)).to_contain_text(UNSET)  # alpha's refusal, in the pages' words
     expect(rows.nth(0)).not_to_contain_text(GAP)
-    expect(rows.nth(1)).to_contain_text(unreadable)  # beta's stays whole
 
 
 @pytest.mark.browser
