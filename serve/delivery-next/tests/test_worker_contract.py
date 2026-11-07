@@ -222,6 +222,59 @@ def test_stopped_admission_counts_its_usage_and_its_resumed_child_keeps_its_gene
     assert done.tool_use.tools["view"].calls == 2
 
 
+def test_admission_refuses_a_head_changed_while_its_paid_verdict_returns(tmp_path, change_repo, monkeypatch):
+    store, lock = Store(tmp_path / "store"), Lock("c1")
+    c = Change(
+        slug="c1",
+        brief=Brief(version=1),
+        step=Step(kind=StepKind.BUILD),
+        names=Names(worktree=str(change_repo)),
+    )
+    proposed = tools.AskQuestion(
+        question="Continue or pause?",
+        why="Choose the next move.",
+        options=[
+            {"label": "Continue", "effect": "Continue this worker.", "action": "continue"},
+            {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
+        ],
+    )
+    parent = Run("author", "ask", proposed, termination=Termination(confirmed=True), usage={"credits": 1})
+    worker_questions.checkpoint(store, lock, c, parent, [])
+
+    def judge(*_args):
+        done = Run(
+            "admission",
+            "result",
+            pick_tools.QuestionJudgment(
+                options=[
+                    {
+                        "index": i,
+                        "executable": True,
+                        "why": "Supported action.",
+                        "check_related": False,
+                        "recommends": False,
+                    }
+                    for i in range(2)
+                ]
+            ),
+            termination=Termination(confirmed=True),
+            usage={"credits": 2},
+        )
+        (change_repo / "a.txt").write_text("New code while the picker returns.\n")
+        worker_questions.worktree.git(change_repo, "add", "a.txt")
+        worker_questions.worktree.git(change_repo, "commit", "-qm", "new code")
+        return done
+
+    monkeypatch.setattr(worker_questions, "session", judge)
+    assert worker_questions.continued(store, lock, c, change_repo)
+    done = store.read("c1")
+    assert not done.questions
+    assert done.step.question_errors == [
+        "options: HEAD changed since submission - reconsider the options on its current code"
+    ]
+    assert (done.spend.credits, done.counted_children) == (3, ["admission"])
+
+
 def build(**changes) -> BuildResult:
     result, errors = tool_schema.parse(BuildResult, {**GOOD, **changes})
     assert errors == []

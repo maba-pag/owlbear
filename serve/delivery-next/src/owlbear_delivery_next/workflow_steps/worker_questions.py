@@ -127,11 +127,11 @@ def checked(store: Store, lock: Lock, c: Change, path: Path) -> tuple[loop.StepR
         return refused(c, errors), _retired(c, "\n".join(errors))
     proposed = parent.payload
     errors = tools.check_question(proposed, p.checks)
-    if worktree.head(path) != p.head:
-        errors.append("options: HEAD changed since submission - reconsider the options on its current code")
+    errors += _stale(p, path)
     if errors:
         return refused(c, errors), _retired(c, "\n".join(errors))
     errors += trial(store, lock, c, path, proposed)
+    errors += _stale(p, path)
     if errors:
         return refused(c, errors), _retired(c, "\n".join(errors))
 
@@ -148,10 +148,18 @@ def checked(store: Store, lock: Lock, c: Change, path: Path) -> tuple[loop.StepR
     route, done = pending_child.child(store, lock, c, (LABEL, parent.session_id), start)
     if route.exit == Exit.DONE:
         verdict, errors = judged(done, proposed, p.proof)
+        errors += _stale(p, path)
         result = refused(c, errors) if errors or verdict is None else admitted(c, proposed, verdict, p.proof)
     else:
         result = route
     return result, _booked(c, done, result)
+
+
+def _stale(p: PendingQuestion, path: Path) -> list[str]:
+    """A returning trial or picker cannot offer options for an earlier HEAD."""
+    if worktree.head(path) != p.head:
+        return ["options: HEAD changed since submission - reconsider the options on its current code"]
+    return []
 
 
 def _booked(c: Change, done: Run, result: loop.StepResult) -> dict[str, object] | None:
