@@ -145,7 +145,23 @@ def checks(c: Change, rebuild: Sequence[str], profile: Profile) -> list[str]:
         return []
     last = picked[-1]
     others = [t for t in tasks if t.origin == "plan" and t is not last and t.checks]
-    return check_hint.resolve([check for task in (last, *others) for check in task.checks], worktree.checks(profile))
+    selected = [
+        check_hint.freeze(check, task.spans) if task is not last else check
+        for task in (last, *others)
+        for check in check_hint.resolve(task.checks, worktree.checks(profile))
+    ]
+    roots: dict[str, list[str]] = {}
+    retained = []
+    for check in selected:
+        if (root := check_hint.changed_runner(check)) is None:
+            retained.append(check)
+        else:
+            roots.setdefault(root[0], []).extend(root[1])
+    selected = [
+        *(check_hint.freeze(check_hint.qualified(".", runner), spans) for runner, spans in roots.items()),
+        *retained,
+    ]
+    return list(dict.fromkeys(selected))
 
 
 def rotated(c: Change, lp: RoundLoop, undone: list[Task], required: Sequence[str]) -> None:

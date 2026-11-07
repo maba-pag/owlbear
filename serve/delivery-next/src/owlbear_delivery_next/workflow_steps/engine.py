@@ -118,10 +118,10 @@ def contains(path: Path, ancestor: str, ref: str = "HEAD") -> bool:
 
 
 def task(c: Change, title: str, origin: Origin, detail: str = "", tid: str | None = None) -> Task:
-    """A fix task over the plan's scope with the first task's checks; appended without a new plan version."""
+    """A fix task over the plan's scope and package checks; appended without a new plan version."""
     tasks = c.plan.tasks if c.plan else []
     scope = list(dict.fromkeys(p for t in tasks for p in t.scope))
-    checks = tasks[0].checks if tasks else []
+    checks = list(dict.fromkeys(check for task in tasks for check in task.checks))
     tid = tid or f"t{len(tasks) + 1}"
     return Task(id=tid, title=title, scope=scope, checks=checks, origin=origin, detail=detail[-4000:])
 

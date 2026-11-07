@@ -6,9 +6,11 @@ import hashlib
 import os
 import shutil
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.change_contracts import check_hint
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home
@@ -16,6 +18,7 @@ from owlbear_delivery_next.local_system import local_home
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
 
+    from owlbear_delivery_next.change_contracts.models import Task
     from owlbear_delivery_next.change_contracts.profile_record import Profile
 
 GIT = shutil.which("git") or "git"
@@ -80,6 +83,46 @@ def checks(profile: Profile) -> list[tuple[str, str]]:
     """Return ``(package, command)`` per known check entry of the profile; plans may name only these commands."""
     found = ((k.removeprefix("check:"), e) for k, e in profile.entries.items() if k.startswith("check:"))
     return sorted((p, e.value) for p, e in found if e.state == "known" and e.value)
+
+
+def owns_changed_runner(path: Path, name: str = "test") -> bool:
+    """Whether the checkout declares OwlBear's root test console script."""
+    manifest = path / "serve/tools/pyproject.toml"
+    if not manifest.is_file():
+        return False
+    scripts = tomllib.loads(manifest.read_text(encoding="utf-8")).get("project", {}).get("scripts", {})
+    return scripts.get(name) == "owlbear_tools.testing:test_main"
+
+
+def plan_checks(profile: Profile, path: Path) -> list[tuple[str, str]]:
+    """Confirmed test runners offered to the Planner; root lint already belongs to submission."""
+    pairs = checks(profile)
+    if not owns_changed_runner(path):
+        return pairs
+    found = []
+    for package, command in pairs:
+        root = check_hint.changed_runner(check_hint.qualified(package, command))
+        adapted = root[0] if root and owns_changed_runner(path, root[0].split()[2]) else command
+        found.append((package, adapted))
+    return found
+
+
+def task_checks(profile: Profile, task: Task, path: Path, target: str) -> list[str]:
+    """Exact checks for one task, bound to its recorded base and the actual integration target."""
+    selected = check_hint.resolve(task.checks, checks(profile))
+    if not owns_changed_runner(path) or not any(check_hint.changed_runner(command) for command in selected):
+        return selected
+    commit = git(path, "rev-parse", f"{tracking(path, target)}^{{commit}}").strip()
+    found = []
+    for command in selected:
+        root = check_hint.changed_runner(command)
+        adapted = (
+            check_hint.task_command(command, task.base, commit)
+            if root and owns_changed_runner(path, root[0].split()[2])
+            else command
+        )
+        found.append(adapted)
+    return found
 
 
 def head(path: Path) -> str:

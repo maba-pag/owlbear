@@ -44,7 +44,7 @@ bounded = _f  # the same helper for the owner chat's brief schema (brief_tools)
 class CheckRun(Args):
     """One check command the agent ran and its exit code."""
 
-    command: str = _f(1000, "The complete command as listed in the task", EXAMPLE_CHECK)
+    command: str = _f(16000, "Complete issued command, including its task context", EXAMPLE_CHECK)
     exit_code: int = Field(description="Its exit code; 0 means it passed", examples=[0])
 
 
@@ -238,7 +238,7 @@ class PlanTask(Args):
     title: str = _f(200, "What the task delivers", "Add farewell(name)")
     goal: str = _f(3000, "The criteria it meets and how the Builder knows it is done", "AC-1: farewell('Ada')")
     scope: list[str] = _f(20, "Repository-relative paths or directories it may change", ["packages/app"])
-    checks: list[str] = _f(100, "Complete check commands exactly as listed for their packages", [EXAMPLE_CHECK])
+    checks: list[str] = _f(100, "Package checks with literal test targets of the confirmed runner", [EXAMPLE_CHECK])
 
 
 class PlanResult(Args):
@@ -281,7 +281,7 @@ def check_plan(
         errors += [
             f'tasks[{i}].checks: "{c}" is not a check of the project profile - ' + f"use one of {listed}"
             for c in task.checks
-            if c not in checks
+            if not check_hint.offered(c, checks)
         ]
         errors += [f"tasks[{i}].scope: {p} is not repository-relative" for p in task.scope if not relative(p)]
         errors += [

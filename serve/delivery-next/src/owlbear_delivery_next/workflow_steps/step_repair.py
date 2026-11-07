@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import os
 import shlex
+import tomllib
 import uuid
 from datetime import UTC, datetime
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import check_hint, evidence, permissions, repair_tools, tools
@@ -37,8 +38,6 @@ from owlbear_delivery_next.workflow_steps import (
 )
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.change_contracts.repair_records import Repair
     from owlbear_delivery_next.runtimes.session_result import Run
@@ -78,7 +77,7 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
     store.write(lock, change)
     done: Run | None = None
     try:
-        witness = _witness(change, prof)
+        witness = _witness(change, prof, path)
         asked = lookup.Asked(store, lock, lambda: change)  # the repairer's and its Spotter's lookups (TD-456)
         try:
             cfg = _session(store, lock, change, (at, asked), settings, witness)
@@ -148,7 +147,9 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
         if (edit := check_weakening.weakened(repair_copy.git, at, r.base, p, how)[1])
     ]
     r.held += [
-        f"changes {p}, which the step's check runs, so it proves nothing alone" for p in r.paths if _named(p, witness)
+        f"changes {p}, which the step's check runs, so it proves nothing alone"
+        for p in r.paths
+        if _named(p, witness, path)
     ]
     r.held += [f"changes {p}, outside the brief's scope" for p in r.paths if not _in_scope(change, p)]
     if not r.held:
@@ -273,22 +274,27 @@ def _message(change: Change, witness: tuple[str, ...]) -> str:
     ])  # fmt: skip
 
 
-def _witness(change: Change, prof: Profile) -> tuple[str, ...]:
+def _witness(change: Change, prof: Profile, source: Path) -> tuple[str, ...]:
     """The commands that must pass: the task's resolved checks, else the confirmed checks of the brief's packages."""
     tasks = change.plan.tasks if change.plan else []
     r = change.repairs.current
     task = next((t for t in tasks if r and t.id == r.task), None)
     pairs = worktree.checks(profile.vouched(prof))
-    if task and task.checks:
-        return tuple(check_hint.resolve(task.checks, pairs))
-    return tuple(check_hint.qualified(p, c) for p, c in pairs if _in_scope(change, p))
+    if task and task.checks and r is not None:
+        bound = task if task.base is not None else task.model_copy(update={"base": r.base})
+        return tuple(worktree.task_checks(profile.vouched(prof), bound, source, change.names.target))
+    selected = [check_hint.qualified(p, c) for p, c in pairs if _in_scope(change, p)]
+    if r is None or not worktree.owns_changed_runner(source):
+        return tuple(selected)
+    target = worktree.git(source, "rev-parse", f"{worktree.tracking(source, change.names.target)}^{{commit}}").strip()
+    return tuple(check_hint.task_command(command, r.base, target) for command in selected)
 
 
 def _installs(change: Change, prof: Profile) -> tuple[str, ...]:
     return tuple(check_hint.qualified(p, c) for p, c in worktree.installs(prof, change.brief.scope or ["."]))
 
 
-def _named(path: str, witness: tuple[str, ...]) -> bool:
+def _named(path: str, witness: tuple[str, ...], source: Path | None = None) -> bool:
     """Whether a check command names *path*: a fix to the check it is proven by needs the owner (never weakened).
 
     A script by its path, or a Python module run with ``-m`` by its file; a command that can't be parsed names every
@@ -299,6 +305,8 @@ def _named(path: str, witness: tuple[str, ...]) -> bool:
         try:
             words = list(shlex.shlex(command, posix=True, punctuation_chars=True))
         except ValueError:
+            return True
+        if source is not None and _console_script(path, words, source):
             return True
         for before, word in zip(["", *words], words, strict=False):
             found = [word.strip("{}")]
@@ -312,6 +320,25 @@ def _named(path: str, witness: tuple[str, ...]) -> bool:
                 if before == "-m" and path.endswith(f"/{name}") and (not where or evidence.within(where, path)):
                     return True  # a module found on the path, as a src/ layout puts it
                 if not where and PurePosixPath(name).name == path:
+                    return True
+    return False
+
+
+def _console_script(path: str, words: list[str], source: Path) -> bool:
+    """A workspace console script from the unchanged source, not the repair's replacement manifest."""
+    invoked = {words[i + 2] for i in range(len(words) - 2) if words[i : i + 2] == ["uv", "run"]}
+    if not invoked:
+        return False
+    manifests = worktree.git(source, "ls-files", "*pyproject.toml").splitlines()
+    for name in manifests:
+        manifest = source / name
+        project = tomllib.loads(manifest.read_text(encoding="utf-8")).get("project", {})
+        scripts = project.get("scripts", {})
+        for command in invoked & scripts.keys():
+            module = scripts[command].split(":", 1)[0].replace(".", "/")
+            package = manifest.parent.relative_to(source)
+            for relative in (package / "src" / f"{module}.py", package / f"{module}.py"):
+                if relative.as_posix() == path:
                     return True
     return False
 

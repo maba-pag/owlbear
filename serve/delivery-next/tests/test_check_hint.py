@@ -48,6 +48,8 @@ def test_a_check_not_offered_by_the_profile_is_refused_with_the_choice(check, sa
 def test_the_hint_needs_the_profile_s_packages():
     assert errors("npm test", ())[1][0].endswith(PROFILE)
     assert errors(CHOICE) == ([CHOICE], [])
+    target = "cd ./packages/app && {\nnpm test -- tests/metrics.test.js\n}"
+    assert errors(target) == ([target], [])
 
 
 def test_the_hint_names_the_profile_s_command_as_written():
