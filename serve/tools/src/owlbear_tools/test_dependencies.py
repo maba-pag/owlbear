@@ -322,9 +322,11 @@ def export(collection: Collection, native: TestmonData) -> None:
         for source, node, fingerprint, _identifier, _failed, _duration in native.db.fetch_changed_file_data(
             batch, native.exec_id
         ):
-            if source not in collection.initial_inputs or not source.endswith(".py"):
-                continue
-            if node not in collection.collected:
+            if (
+                source not in collection.initial_inputs
+                or not source.endswith(".py")
+                or node not in collection.collected
+            ):
                 continue
             if node_path(node) not in tracked:
                 msg = f"Dependency node {node!r} is not tracked in {collection.head}"
