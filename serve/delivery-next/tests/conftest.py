@@ -188,9 +188,10 @@ def complete_layer():
     """The carried values plus test values for what came later: the Spotter's settings, the retro roles and the
     user-config switches, off (D-01M5YE4P5317N1HWD0QN6N05E0), the shell guard at strict (D-01M6DX04FRP680Z4GGHK5B9VRC),
     the memory values, as they once stood in code, GitHub writes by the repository owner's account (TD-402) and the
-    shaper's 15 minutes before Delivery starts a missing brief challenge (D-01M6P1685N1R5W2PPV5SHKR2H0)."""
+    shaper's 15 minutes before Delivery starts a missing brief challenge (D-01M6P1685N1R5W2PPV5SHKR2H0), and the
+    repairer's own minutes and subagents (D-01M6SY11CY5SN5ZKYJNM0K6BDM)."""
     from owlbear_delivery_next.settings import carried  # noqa: PLC0415
-    from owlbear_delivery_next.settings.config import MemoryValues  # noqa: PLC0415
+    from owlbear_delivery_next.settings.config import Agent, MemoryValues  # noqa: PLC0415
     from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter  # noqa: PLC0415
 
     base = carried.layer()
@@ -203,6 +204,7 @@ def complete_layer():
         for role in ("retro", "retro-review", "auditor")
     }
     agents["shaper"] = base.agents["shaper"].model_copy(update={"challenge_wait": 15})
+    agents["repairer"] = Agent(minutes=40, subagents=True)  # its model, effort and context are the builder's
     memory = MemoryValues(
         outstanding_boost=0.1, unremarkable_penalty=0.01, stale_factor=50, purge_days=30, preflight_cap=5,
         preflight_budget=2000, recall_limit=20, explore_slots=2, challenge_slots=2,

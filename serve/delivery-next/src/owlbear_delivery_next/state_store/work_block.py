@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.local_system import local_home
-from owlbear_delivery_next.settings.config import SettingsUnset
+from owlbear_delivery_next.settings.config import SettingsUnset, holds_work
 from owlbear_delivery_next.state_store import machine_settings, registry
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.layers import layered
@@ -66,13 +66,13 @@ def machine() -> Block:
 
 def of_settings(settings: Settings) -> Block:
     """Resolved settings' unset keys, with this machine's read now."""
-    return Block(tuple(settings.missing)) + machine()
+    return Block(_held(settings)) + machine()
 
 
 def of_store(store: Store, here: Block | None = None) -> Block:
     """A registered project's block."""
     try:
-        own = Block(tuple(store.settings().missing))
+        own = Block(_held(store.settings()))
     except StoreError as exc:
         own = Block(reason=str(exc))
     return own + (machine() if here is None else here)
@@ -82,7 +82,12 @@ def of_folder(shared: DataRepo, folder: str, here: Block | None = None) -> Block
     """A shared folder's block: Global, the folder's project layer and this machine's; no registration needed."""
     try:
         settings = layered(shared.global_path, shared.project_path(folder), local_home.root() / MACHINE_SETTINGS)
-        own = Block(tuple(settings.missing))
+        own = Block(_held(settings))
     except StoreError as exc:
         own = Block(reason=str(exc))
     return own + (machine() if here is None else here)
+
+
+def _held(settings: Settings) -> tuple[str, ...]:
+    """The unset keys that hold work; the repairer's hold only a repair (D-01M6SY11CY5SN5ZKYJNM0K6BDM)."""
+    return tuple(k for k in settings.missing if holds_work(k))

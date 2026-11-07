@@ -36,6 +36,7 @@ REQUIRED: dict[str, tuple[str, ...]] = {
     "retro": (),  # whole finished tasks with hindsight, no code to design
     "retro-review": ("owlbear-review-judgment",),  # challenges Retro's proposals
     "auditor": (),  # its one job's skill comes from the PDS candidate (JOBS)
+    "repairer": ("owlbear-module-design", "owlbear-acceptance-criteria"),  # it fixes code and checks, as the builder
 }
 UI: dict[str, tuple[str, ...]] = {"builder": ("owlbear-interface-design",)}  # added when the brief has a UI (TD-76)
 JUDGED = ("owlbear-acceptance-criteria", "owlbear-review-judgment")  # no code to judge: no module design (TD-166)

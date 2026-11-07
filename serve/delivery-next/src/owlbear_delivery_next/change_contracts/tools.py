@@ -334,11 +334,12 @@ SPECS = (SUBMIT, ASK, PREMISE, MISSING)
 FIRST_LOOK = "submit_first_look"  # the design judge's own verdict, before the detector's findings reach it
 SCAN_DESIGN = "scan_design"  # the builder's design detector on a UI Change (slice 7)
 LOOKUP = "lookup_decisions"  # which decisions govern a question, answered by the picker (TD-456, TD-459)
-LOOKERS = frozenset({"planner", "builder", "reviewer", "preparer", "test-curator"})  # a Change step's own worker
+LOOKERS = frozenset({"planner", "builder", "reviewer", "preparer", "test-curator", "repairer"})  # a step's worker
 JUDGES = frozenset({"challenger", "design-judge", "test-reviewer", "picker", "curator", "auditor"})  # never asks
 PICKER = "picker"  # an SDK-only session whose one tool is its result (TD-459)
 CURATOR = "curator"  # automatic memory curation: its memory tools, then its report as its result (item 5 slice 4)
 AUDITOR = "auditor"  # the PDS deprecation audit: read tools, then its report as its result (#777)
+REPAIRER = "repairer"  # a stuck step's repair: its findings and tries as its result (#1066)
 # Sessions that judge with a verdict whatever their role, such as the reviewer's screenshot judgement (TD-108)
 VERDICTS = frozenset({
     "visual-review", "design-review", "plan-challenge", "brief-challenge", "amendment-challenge", "dispute-reconsider",
@@ -349,15 +350,18 @@ VERDICTS = frozenset({
 def asks(role: str, *, judging: bool = False) -> bool:
     """Whether a session may ask the owner with ``ask_question``: never a judge's, a judgement's or the updater's.
 
-    The pack updater runs inside a host job, not a Change; its owner questions are the job's stops (TD-177).
+    The pack updater runs inside a host job, not a Change; its owner questions are the job's stops (TD-177). Delivery
+    asks a repair's one question itself, with the proof (#1066).
     """
-    return role not in JUDGES and role != "updater" and not judging
+    return role not in JUDGES and role not in {"updater", REPAIRER} and not judging
 
 
 def results(role: str, *, ui: bool = False, judging: bool = False) -> list[str]:
     """Delivery's tools a role's agent is offered: every step's own, the first look, the UI scan, the lookup."""
     if role in {PICKER, CURATOR, AUDITOR}:
         return [SUBMIT.name]
+    if role == REPAIRER:  # Delivery asks the owner its one question, with the proof (#1066)
+        return [SUBMIT.name, LOOKUP]
     extra = [FIRST_LOOK] if role == "design-judge" else [SCAN_DESIGN] if role == "builder" and ui else []
     extra += [LOOKUP] if role in LOOKERS and not judging else []
     return [*(s.name for s in SPECS if s is not ASK or asks(role, judging=judging)), *extra]
