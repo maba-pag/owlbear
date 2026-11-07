@@ -7,6 +7,7 @@ import threading
 from contextlib import suppress
 from io import StringIO
 from pathlib import Path
+from stat import S_ISLNK, S_ISREG
 from tempfile import mkstemp
 from typing import Any
 
@@ -14,7 +15,7 @@ from pydantic import ValidationError as PydanticValidationError
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
-from owlbear_memory.errors import NotFoundError
+from owlbear_memory.errors import NotFoundError, diagnostic
 from owlbear_memory.models import MemoryEntry
 
 _FRONTMATTER_PARTS = 3
@@ -33,9 +34,22 @@ def _yaml() -> YAML:
 def _pydantic_error_detail(error: PydanticValidationError) -> str:
     fields: list[str] = []
     for item in error.errors(include_url=False, include_context=False, include_input=False):
-        location = ".".join(str(part) for part in item.get("loc", ())) or "entry"
+        parts = item.get("loc", ())
+        if item.get("type") in {"extra_forbidden", "invalid_key"}:
+            parts = parts[:-1]  # An unknown mapping key is input, not a schema field.
+        location = ".".join(str(part) for part in parts) or "entry"
         fields.append(f"{location} ({item.get('type', 'invalid')})")
-    return "schema validation failed: " + ", ".join(fields)
+    return f"schema validation failed ({type(error).__name__}): " + ", ".join(fields)
+
+
+def _yaml_error_detail(error: Exception) -> str:
+    positions = [
+        f"{label}: line {mark.line + 1}, column {mark.column + 1}"
+        for label in ("context_mark", "problem_mark")
+        if (mark := getattr(error, label, None)) is not None
+    ]
+    detail = "; ".join([type(error).__name__, *positions])
+    return f"YAML frontmatter is invalid ({detail})"
 
 
 def _assert_within_memory_dir(path: Path, memory_dir: Path) -> None:
@@ -52,28 +66,27 @@ def _reject_symlink(path: Path) -> None:
         raise ValueError(msg)
 
 
-def read_entry(path: Path) -> MemoryEntry | None:
+def read_entry(path: Path, *, read_errors: dict[str, str] | None = None) -> MemoryEntry | None:
     """Read one memory entry file; return None for malformed or unsafe files."""
     try:
-        if path.is_symlink() or not path.is_file():
-            return None
         return read_entry_strict(path)
-    except OSError, ValueError:
+    except (OSError, ValueError) as exc:
+        if read_errors is not None:
+            read_errors[str(path)] = diagnostic(exc)
         return None
 
 
 def _parse_frontmatter(frontmatter_raw: str) -> dict[str, Any]:
-    data = _yaml().load(frontmatter_raw)
+    try:
+        data = _yaml().load(frontmatter_raw)
+    except (YAMLError, ValueError, TypeError, KeyError, IndexError, OverflowError) as exc:
+        raise ValueError(_yaml_error_detail(exc)) from None
     if data is None:
         return {}
     if not isinstance(data, dict):
         msg = "YAML frontmatter must be an object"
         raise TypeError(msg)
     return data
-
-
-def _read_entry_file(path: Path) -> MemoryEntry:
-    return _read_entry_bytes(path.read_bytes())
 
 
 def _read_entry_bytes(raw: bytes) -> MemoryEntry:
@@ -95,28 +108,22 @@ def _read_entry_bytes(raw: bytes) -> MemoryEntry:
 
 def read_entry_strict(path: Path) -> MemoryEntry:
     """Read one memory entry file or raise a safe validation diagnostic."""
-    if path.is_symlink():
-        msg = "symlink paths are not allowed"
-        raise ValueError(msg)
-    if not path.is_file():
-        msg = "memory entry file is missing"
-        raise ValueError(msg)
-
     try:
-        return _read_entry_file(path)
+        try:
+            metadata = path.lstat()
+        except FileNotFoundError:
+            msg = "memory entry file is missing"
+            raise ValueError(msg) from None
+        if S_ISLNK(metadata.st_mode):
+            msg = "symlink paths are not allowed"
+            raise ValueError(msg)
+        if not S_ISREG(metadata.st_mode):
+            msg = "memory entry file is missing"
+            raise ValueError(msg)
+        return read_entry_bytes_strict(path.read_bytes())
     except OSError as exc:
-        msg = f"file read failed ({type(exc).__name__})"
+        msg = f"file read failed for {path}: {diagnostic(exc)}"
         raise ValueError(msg) from exc
-    except UnicodeDecodeError as exc:
-        msg = "file is not valid UTF-8"
-        raise ValueError(msg) from exc
-    except YAMLError as exc:
-        msg = "YAML frontmatter is invalid"
-        raise ValueError(msg) from exc
-    except TypeError as exc:
-        raise ValueError(str(exc)) from exc
-    except PydanticValidationError as exc:
-        raise ValueError(_pydantic_error_detail(exc)) from exc
 
 
 def read_entry_bytes_strict(raw: bytes) -> MemoryEntry:
@@ -124,15 +131,13 @@ def read_entry_bytes_strict(raw: bytes) -> MemoryEntry:
     try:
         return _read_entry_bytes(raw)
     except UnicodeDecodeError as exc:
-        msg = "file is not valid UTF-8"
-        raise ValueError(msg) from exc
-    except YAMLError as exc:
-        msg = "YAML frontmatter is invalid"
-        raise ValueError(msg) from exc
+        msg = f"file is not valid UTF-8 ({type(exc).__name__} at byte {exc.start})"
+        raise ValueError(msg) from None
     except TypeError as exc:
-        raise ValueError(str(exc)) from exc
+        msg = diagnostic(exc)
+        raise ValueError(msg) from None
     except PydanticValidationError as exc:
-        raise ValueError(_pydantic_error_detail(exc)) from exc
+        raise ValueError(_pydantic_error_detail(exc)) from None
 
 
 def _serialize_entry(entry: MemoryEntry) -> bytes:

@@ -15,7 +15,8 @@ from owlbear_delivery_next.change_contracts.curation_tools import TEST_CURATION,
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import Exit, Step, StepKind, Task
 from owlbear_delivery_next.change_flow import loop
-from owlbear_delivery_next.change_flow.loop import StepResult, apply, brief_ready
+from owlbear_delivery_next.change_flow.brief_rounds import ready
+from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity, status
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
@@ -76,7 +77,7 @@ def test_the_start_approves_the_fixed_brief_and_plan_and_pins_the_commit(repo):
     assert (c.step.kind, c.tests.packages, c.brief.scope, [t.id for t in c.plan.tasks]) == (
         StepKind.TESTS, ["web"], ["web"], ["t1"]
     )  # fmt: skip
-    assert brief_ready(c)
+    assert ready(c)
     assert (c.brief.approved_at, len(c.brief.criteria)) == (NOW, 4)
     assert c.tests.commit == git(repo, "rev-parse", "main") == git(c.names.worktree, "rev-parse", "HEAD")
     assert [s.paths for s in c.tests.shares] == [["web/src/b.test.ts"]]

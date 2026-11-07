@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import signal
 import time
 from dataclasses import replace
@@ -12,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from copilot.rpc import TasksCancelRequest
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.local_system.processes import Termination, verdict
 from owlbear_delivery_next.runtimes import sdk_spend
@@ -32,6 +34,7 @@ CALL = 30.0  # one request while the step runs
 STOP_CALL = 10.0  # one teardown request
 GRACE = 5.0  # between terminate and kill
 IDLE = 2.0  # for the turn a submitted result ended; the runtime ends it within ~0.1 s (#780)
+LOG = logging.getLogger(__name__)
 
 
 async def call[T](aw: Awaitable[T], what: str, limit: float = CALL) -> T:
@@ -58,9 +61,10 @@ async def owned_call[T](st: _Step, operation: Callable[[], Awaitable[T]], what: 
 async def settle(recorded: Pids, problems: list[str], limit: float | None = None) -> Termination:
     """Wait until the recorded processes are gone, or the limit passes."""
     end = time.monotonic() + (SETTLE if limit is None else limit)
+    seen = partial(processes.observed, problems=problems)
     # Polls the OS process table; there is no event to wait on.
     while (  # noqa: ASYNC110
-        not (result := verdict(recorded, processes.alive, problems)).confirmed and time.monotonic() < end
+        ((result := verdict(recorded, seen, problems)).survivors or result.unknown) and time.monotonic() < end
     ):
         await asyncio.sleep(0.5)
     return result
@@ -70,19 +74,24 @@ def _guard(problems: list[str], what: str, stage: Callable[..., object], /, *arg
     try:
         stage(*args, **kwargs)
     except Exception as exc:  # noqa: BLE001 - metadata failure cannot bypass physical cleanup
-        problems.append(f"{what} failed ({type(exc).__name__})")
+        problems.append(f"{what} failed: {failure(exc)}")
 
 
 async def force(st: _Step, why: str, problems: list[str]) -> None:
-    """Runtime-stop fallback: terminate, then kill the runtime (an unreaped child), recorded PIDs and their groups."""
+    """Runtime-stop fallback: terminate, then kill the runtime (an unreaped child), recorded PIDs and their groups.
+
+    Why is logged too: a caller that keeps no session journal (PDS, Impeccable, curation, lookup) has no other record.
+    """
+    LOG.warning("SDK runtime force-stopped: %s", why)
     _guard(problems, "force-stop log", st.log, event="force-stop", reason=why, runtime_pid=st.run.runtime_pid)
     with contextlib.suppress(OSError, AttributeError):
         st.proc.terminate()
-    processes.kill(st.run.pids, signal.SIGTERM)
-    await settle(st.run.pids, [], GRACE)
+    seen = partial(processes.observed, problems=problems)
+    processes.kill(st.run.pids, signal.SIGTERM, seen=seen)
+    await settle(st.run.pids, problems, GRACE)
     with contextlib.suppress(OSError, AttributeError):
         st.proc.kill()
-    processes.kill(st.run.pids, signal.SIGKILL)
+    processes.kill(st.run.pids, signal.SIGKILL, seen=seen)
 
 
 async def teardown(client: CopilotClient, session: CopilotSession | None, st: _Step) -> Termination:  # noqa: C901
@@ -102,7 +111,7 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
         try:
             tasks = await owned_call(st, listing, "tasks.list")
         except Exception as exc:  # noqa: BLE001 - any failure leaves termination unverified
-            problems.append(f"tasks.list failed ({type(exc).__name__})")
+            problems.append(f"tasks.list failed: {failure(exc)}")
             tasks = []
         for task in tasks:
             pid = getattr(task, "pid", None)
@@ -117,30 +126,32 @@ async def teardown(client: CopilotClient, session: CopilotSession | None, st: _S
                         "tasks.cancel",
                     )
             except Exception as exc:  # noqa: BLE001 - failed cancellation remains an unverified stage
-                problems.append(f"tasks.cancel {tid} failed ({type(exc).__name__})")
+                problems.append(f"tasks.cancel {tid} failed: {failure(exc)}")
         failed = any(p.startswith(("tasks.list ", "tasks.cancel ")) for p in problems[unverified:])
         _guard(problems, "task tree record", st.record_tree)
         _guard(problems, "tasks log", st.log, event="tasks", listed=sorted(listed), problems=list(problems))
-        settled = (await settle(listed, [])).confirmed and not failed
+        task_problems: list[str] = []
+        settled = (await settle(listed, task_problems)).confirmed and not failed
+        problems.extend(p for p in task_problems if p not in problems)
         if st.metered:  # what it spent once its tasks settled: once, bounded, before the disconnect (``sdk_spend``)
             await _idle(st)
             try:
                 final = await owned_call(st, partial(usage_once, session, st.cfg.model), "usage read")
             except Exception as exc:  # noqa: BLE001 - an unread usage is recorded as such
-                final = {"error": type(exc).__name__}
+                final = {"error": sdk_spend.failed(exc)}
             sdk_spend.final(st, final, settled=settled)
         try:
             await owned_call(st, session.disconnect, "disconnect")
         except Exception as exc:  # noqa: BLE001
-            problems.append(f"disconnect failed ({type(exc).__name__})")
+            problems.append(f"disconnect failed: {failure(exc)}")
     try:
         await owned_call(st, client.stop, "runtime stop")
     except Exception as exc:  # noqa: BLE001 - errors and timeouts alike fall back to signals
-        await force(st, f"runtime stop failed ({type(exc).__name__})", problems)
+        await force(st, f"runtime stop failed: {failure(exc)}", problems)
     rt = st.run.runtime_pid
     if rt is None:
         problems.append("runtime PID unknown")
-    elif processes.alive(rt, st.run.pids.get(rt)) is not False:
+    elif processes.observed(rt, st.run.pids.get(rt), problems=problems) is not False:
         await force(st, "runtime still present after stop", problems)
     return await _last(st, problems)
 
@@ -198,7 +209,7 @@ async def _wait[T](task: asyncio.Future[T]) -> bool:
 
 
 def _failure[T](task: asyncio.Future[T]) -> str:
-    return "cancelled" if task.cancelled() else type(task.exception()).__name__
+    return "cancelled" if task.cancelled() else failure(task.exception())
 
 
 async def _protected(client: CopilotClient, st: _Step) -> tuple[Termination, bool]:
@@ -206,15 +217,15 @@ async def _protected(client: CopilotClient, st: _Step) -> tuple[Termination, boo
     cancelled = await _wait(cleanup)
     if not cleanup.cancelled() and cleanup.exception() is None:
         return cleanup.result(), cancelled
-    problems = [f"teardown failed ({_failure(cleanup)})"]
-    fallback = asyncio.create_task(force(st, "teardown failed", problems))
+    problems = [f"teardown failed: {_failure(cleanup)}"]
+    fallback = asyncio.create_task(force(st, problems[0], problems))
     cancelled |= await _wait(fallback)
     if fallback.cancelled() or fallback.exception() is not None:
-        problems.append(f"force fallback failed ({_failure(fallback)})")
+        problems.append(f"force fallback failed: {_failure(fallback)}")
     observed = asyncio.create_task(settle(dict(st.run.pids), problems))
     cancelled |= await _wait(observed)
     if observed.cancelled() or observed.exception() is not None:
-        problems.append(f"termination observation failed ({_failure(observed)})")
+        problems.append(f"termination observation failed: {_failure(observed)}")
         return Termination(confirmed=False, unknown=tuple(st.run.pids), problems=tuple(problems)), cancelled
     return observed.result(), cancelled
 

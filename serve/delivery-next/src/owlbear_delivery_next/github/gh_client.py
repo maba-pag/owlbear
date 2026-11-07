@@ -14,15 +14,19 @@ from owlbear_delivery_next.git import command_failure
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError, bounded
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection
+    from collections.abc import Callable, Collection, Mapping
     from pathlib import Path
+
+    from owlbear_delivery_next.github.account import Writer
 
 TIMEOUT = 30.0
 API_VERSION = "2026-03-10"
 # gh prints `gh: <message> (HTTP 409)`, or `gh: HTTP 409` when the body has no top-level message.
 _HTTP_STATUS = re.compile(r"^gh: (?:HTTP (\d{3})|.*\(HTTP (\d{3})\))$", re.MULTILINE)
 
-type Runner = Callable[[tuple[str, ...], bytes | None, float, Path | None], subprocess.CompletedProcess[bytes]]
+type Runner = Callable[
+    [tuple[str, ...], bytes | None, float, Path | None, Mapping[str, str] | None], subprocess.CompletedProcess[bytes]
+]
 type Json = Any
 
 
@@ -35,11 +39,11 @@ class Missing:
 
 
 def run(
-    argv: tuple[str, ...], data: bytes | None, timeout: float, cwd: Path | None
+    argv: tuple[str, ...], data: bytes | None, timeout: float, cwd: Path | None, env: Mapping[str, str] | None
 ) -> subprocess.CompletedProcess[bytes]:
-    """Run one fixed ``gh`` command without a terminal."""
+    """Run one fixed ``gh`` command without a terminal, in *env* (the process's own when ``None``)."""
     return subprocess.run(  # noqa: S603 - fixed gh executable and code-owned argument vectors
-        argv, input=data, capture_output=True, timeout=timeout, cwd=cwd, check=False, stdin=None
+        argv, input=data, capture_output=True, timeout=timeout, cwd=cwd, env=env, check=False, stdin=None
     )
 
 
@@ -81,8 +85,9 @@ def repo(repository: str) -> str:
     return f"repos/{quote(owner, safe='')}/{quote(name, safe='')}"
 
 
-def fail(operation: str, stderr: bytes, *, write: bool) -> NoReturn:
-    """Raise the provider error that gh's failure output describes."""
+def fail(operation: str, done: subprocess.CompletedProcess[bytes], *, write: bool) -> NoReturn:
+    """Raise the provider error that gh's stderr describes, the command and its stdout (an API error's body) noted."""
+    stderr = done.stderr
     text = stderr.decode(errors="replace").casefold()
     if "rate limit" in text or "http 429" in text:
         code, safe = FailureCode.RATE_LIMITED, True
@@ -97,7 +102,11 @@ def fail(operation: str, stderr: bytes, *, write: bool) -> NoReturn:
     else:
         code, safe = FailureCode.UNAVAILABLE, True
     whole = stderr.decode(errors="replace").strip().removeprefix("gh: ") or "no message"
-    raise ProviderError(code, operation, whole, retry_safe=safe)
+    error = ProviderError(code, operation, whole, retry_safe=safe)
+    ran = command_failure.failed(subprocess.CompletedProcess(done.args, done.returncode))
+    out = done.stdout.decode(errors="replace").strip()
+    error.add_note(ran + (f"\nstdout:\n{out}" if out else ""))
+    raise error
 
 
 def invalid(operation: str, detail: str, cause: Exception | None = None) -> NoReturn:
@@ -108,9 +117,23 @@ def invalid(operation: str, detail: str, cause: Exception | None = None) -> NoRe
 class GhClient:
     """Run Delivery's fixed ``gh`` commands; GitHub Enterprise via ``host``."""
 
-    def __init__(self, cwd: Path, *, host: str = "github.com", timeout: float = TIMEOUT, runner: Runner = run) -> None:
-        self.cwd, self.host, self.timeout, self.runner = cwd, host, timeout, runner
+    def __init__(
+        self,
+        cwd: Path,
+        *,
+        writer: Writer | None,
+        host: str = "github.com",
+        timeout: float = TIMEOUT,
+        runner: Runner = run,
+    ) -> None:
+        """*writer*: the account every launch acts as (TD-402); ``None`` leaves ``gh``'s active one, for tests only."""
+        self.cwd, self.writer, self.host, self.timeout, self.runner = cwd, writer, host, timeout, runner
         self._viewer = ""
+
+    def _launch(self, argv: tuple[str, ...], data: bytes | None) -> subprocess.CompletedProcess[bytes]:
+        """Run *argv* as the writer's account: its token is the only one in the child's environment."""
+        env = None if self.writer is None else self.writer.access().environment()
+        return self.runner(argv, data, self.timeout, self.cwd, env)
 
     def _gh(  # noqa: PLR0913 - one runner for reads, writes, absent statuses and raw logs
         self,
@@ -124,23 +147,29 @@ class GhClient:
     ) -> Json:
         data = None if body is None else json.dumps(body, separators=(",", ":")).encode()
         try:
-            done = self.runner(("gh", *args), data, self.timeout, self.cwd)
+            done = self._launch(("gh", *args), data)
         except FileNotFoundError as exc:
-            raise ProviderError(FailureCode.UNAVAILABLE, operation, "gh is not installed", retry_safe=False) from exc
+            error = ProviderError(FailureCode.UNAVAILABLE, operation, "gh is not installed", retry_safe=False)
+            error.add_note(command_failure.failure(exc))  # the path it names: gh, or a working folder that is gone
+            raise error from exc
         except subprocess.TimeoutExpired as exc:
             code = FailureCode.RESPONSE_UNKNOWN if write else FailureCode.TIMEOUT
-            raise ProviderError(code, operation, "gh timed out", retry_safe=not write) from exc
+            error = ProviderError(code, operation, "gh timed out", retry_safe=not write)
+            error.add_note(command_failure.failure(exc))  # and what gh printed before it was stopped
+            raise error from exc
         if done.returncode != 0:
             if (found := status(done.stderr)) in absent:
                 return Missing(found or 0, message(done.stderr))
-            fail(operation, done.stderr, write=write)
+            fail(operation, done, write=write)
         if raw:
             return done.stdout.decode(errors="replace")
         try:
             return json.loads(done.stdout)
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             code = FailureCode.RESPONSE_UNKNOWN if write else FailureCode.INVALID_RESPONSE
-            raise ProviderError(code, operation, "gh returned invalid JSON", retry_safe=not write) from exc
+            error = ProviderError(code, operation, "gh returned invalid JSON", retry_safe=not write)
+            error.add_note(f"{command_failure.failure(exc)}\nstdout:\n{done.stdout.decode(errors='replace').strip()}")
+            raise error from exc
 
     def _api(self, operation: str, method: str, endpoint: str, **kw: Any) -> Json:  # noqa: ANN401 - JSON
         args = ("api", "--method", method, "--hostname", self.host, "-H", "Accept: application/vnd.github+json")

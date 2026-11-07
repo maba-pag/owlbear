@@ -10,7 +10,7 @@ fields are stored for the config page and stay inactive until their features use
 
 from __future__ import annotations
 
-from typing import Any, Literal, get_args
+from typing import Annotated, Any, Literal, get_args
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
@@ -22,11 +22,12 @@ from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
 from owlbear_delivery_next.change_contracts.visual_records import (
     DesignFailures,  # noqa: TC001 - pydantic resolves it at runtime
 )
+from owlbear_delivery_next.github import account
 from owlbear_delivery_next.github.provider import MergeMethod  # noqa: TC001 - pydantic resolves it at runtime
 from owlbear_delivery_next.settings import improvement
 from owlbear_delivery_next.settings.improvement import Spotter
 
-CONFIG_FORMAT = 20  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
+CONFIG_FORMAT = 23  # 3 renamed the designer to design-judge (TD-169); 4 minutes; 5 PR labels; 6 subagents; 7 sessions;
 # 8 the test reviewer and curator roles; 9 the watcher's role and switch; 10 no code defaults; 11 Global's machine part;
 # 12 the watcher became the Spotter (role and settings), with the retro roles (2026-10-25);
 # 13 the five unset-by-default preferences and their one-time import marker;
@@ -36,7 +37,10 @@ CONFIG_FORMAT = 20  # 3 renamed the designer to design-judge (TD-169); 4 minutes
 # 17 the user-config switches for Delivery steps (2026-10-27);
 # 18 the machine's three update check intervals (D-01M63CCVRK8ZKFENY9F4A2K11A);
 # 19 Copilot Memory in Delivery's sessions (D-01M69EBRBBW97001KZ43C0BJM1);
-# 20 the shell guard's level (D-01M6DX04FRP680Z4GGHK5B9VRC)
+# 20 the shell guard's level (D-01M6DX04FRP680Z4GGHK5B9VRC);
+# 21 the memory values Global holds: the ratings' points, the stale factor, the purge age and the recall limits;
+# 22 the account a project's GitHub writes are made by (TD-402);
+# 23 the shaper's wait before Delivery starts a missing brief challenge (D-01M6P1685N1R5W2PPV5SHKR2H0)
 CARRIED_FORMAT = 10  # a Global layer below it has not had the built-in values carried in (``settings_carry.carry``)
 ROLES: tuple[Role, ...] = get_args(Role.__value__)
 type Source = Literal["default", "global", "machine", "project", "builder"]
@@ -45,7 +49,10 @@ type Curate = Literal["off", "on", "paused"]  # an automatic curation trigger: o
 HOURS = 720  # the longest update check interval: 30 days
 WIDTHS = (1280, 2400)  # the allowed screenshot width range (R7)
 MINUTES = (1, 480)  # the allowed session time limit range (TD-286)
+DAY = 1440  # the longest wait, in minutes, before Delivery starts a missing brief challenge
 LABEL = 50  # GitHub's longest label name
+PURGE_DAYS = 3650  # the longest wait before a deleted memory entry's files are purged: ten years
+type Worth = Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)]  # what a memory rating is worth
 
 
 class Agent(Record):
@@ -62,6 +69,7 @@ class Agent(Record):
     ask_owner_at: int | None = None
     minutes: int | None = None  # TD-286: one session's total running time
     subagents: bool | None = None  # TD-374, TD-376: its sessions may start built-in subagents
+    challenge_wait: int | None = Field(default=None, ge=1, le=DAY)  # the shaper's: minutes before a brief challenge
 
     @field_validator("model")
     @classmethod
@@ -124,6 +132,7 @@ class Layer(Record):
     load_user_skills: bool | None = None
     load_user_memory: bool | None = None  # D-01M69EBRBBW97001KZ43C0BJM1: Copilot Memory in Delivery's sessions
     guard_level: Level | None = None  # D-01M6DX04FRP680Z4GGHK5B9VRC: what the shell guard refuses or warns about
+    github_account: str | None = None  # TD-402: a login, or ``repository-owner``; the account of GitHub writes
     sessions: int | None = Field(default=None, ge=1)  # TD-336: agent sessions at once in a project, layered
     spotter: Spotter | None = None  # Improvement's Spotter (design §4); a project may set its own, e.g. switch it off
 
@@ -139,6 +148,14 @@ class Layer(Record):
     def _labels(cls, v: list[str] | None) -> list[str] | None:
         if v is not None and (len(set(v)) < len(v) or any(not 0 < len(x) <= LABEL or x != x.strip() for x in v)):
             msg = f"labels must be distinct, each 1 to {LABEL} characters without outer spaces"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("github_account")
+    @classmethod
+    def _account(cls, v: str | None) -> str | None:
+        if v is not None and v != account.REPOSITORY_OWNER and not account.LOGIN.fullmatch(v):
+            msg = f"the GitHub account is a login or {account.REPOSITORY_OWNER}"
             raise ValueError(msg)
         return v
 
@@ -202,10 +219,31 @@ class MachineValues(Record):
         return v
 
 
+class MemoryValues(Record):
+    """The memory-management values, Global only: what rating, recall and purge do with a memory entry.
+
+    ``None`` is unset: code ships no value for any of them, and while one is unset no project's work starts.
+    The memory tools read these from the global file at each request.
+    """
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    outstanding_boost: Worth | None = None  # what an "outstanding" rating adds to an entry's score
+    unremarkable_penalty: Worth | None = None  # what an "unremarkable" rating takes off it
+    stale_factor: int | None = Field(default=None, ge=1)  # skipped ratings beyond this times the others: stale
+    purge_days: int | None = Field(default=None, ge=0, le=PURGE_DAYS)  # days a deleted entry waits before its files go
+    preflight_cap: int | None = Field(default=None, ge=1)  # entries a step's pre-flight recall may hold
+    preflight_budget: int | None = Field(default=None, ge=1)  # characters the pre-flight recall may use in all
+    recall_limit: int | None = Field(default=None, ge=1)  # entries the recall tool returns when it is given no limit
+    explore_slots: int | None = Field(default=None, ge=0)  # recall slots for the least-rated entries
+    challenge_slots: int | None = Field(default=None, ge=0)  # recall slots for the least-outstanding entries
+
+
 class GlobalLayer(WideLayer):
-    """The global settings; the curator's threshold is global only (TD-400)."""
+    """The global settings; the curator's threshold and the memory values are global only (TD-400)."""
 
     curator_threshold: int | None = Field(default=None, ge=50, le=100)  # percent: the curator decides alone at or above
+    memory: MemoryValues | None = None
     machine: MachineValues | None = None  # every machine's settings, each machine may set its own
     machine_moved: bool | None = None  # a machine's settings were moved in once (2026-10-23); no machine copies again
 
@@ -226,6 +264,7 @@ class Effective(Record):
     ask_owner_at: int | None
     minutes: int | None
     subagents: bool | None
+    challenge_wait: int | None
 
     @model_validator(mode="after")
     def _rounds(self) -> Effective:
@@ -237,12 +276,22 @@ class Effective(Record):
 
 LOOPED: tuple[Role, ...] = ("shaper", "planner", "builder", "updater")  # whose work runs a challenge loop (TD-209)
 UNTIMED: tuple[Role, ...] = ("shaper", "spotter")  # the shaping chat has no session limit; a Spotter look is no session
+TIMED = ("minutes", "subagents")
 
 
 def used(role: Role) -> tuple[str, ...]:
     """The fields *role*'s work reads and needs set."""
-    timed = () if role in UNTIMED else ("minutes", "subagents")
-    return ("model", "effort", "context", *timed, *(tuple(RoundPolicy.model_fields) if role in LOOPED else ()))
+    timed = () if role in UNTIMED else TIMED
+    rounds = tuple(RoundPolicy.model_fields) if role in LOOPED else ()
+    return ("model", "effort", "context", *timed, *rounds, *(("challenge_wait",) if role == "shaper" else ()))
+
+
+def settable(role: Role) -> tuple[str, ...]:
+    """The fields the owner sets for *role*: the used ones, and the shaper's for its hosted amendment sessions.
+
+    The shaping chat runs without them; an amendment session refuses while they are unset (TD-185).
+    """
+    return (*used(role), *TIMED) if role == "shaper" else used(role)
 
 
 class SettingsUnset(Exception):  # noqa: N818 - says what happened
@@ -274,10 +323,12 @@ class Settings(Record):
     load_user_skills: bool | None = None
     load_user_memory: bool | None = None
     guard_level: Level | None = None
+    github_account: str | None = None
     sessions: int | None = None
     prefs: Prefs = Field(default_factory=Prefs)  # R15: each field None where no layer sets it
     spotter: Spotter = Field(default_factory=Spotter)
     curator_threshold: int | None = None
+    memory: MemoryValues = Field(default_factory=MemoryValues)
     sources: dict[str, Source]
     missing: list[str] = Field(default_factory=list)
     final_values: dict[str, int | None] = Field(default_factory=dict, exclude=True)  # the page's, set or not
@@ -349,6 +400,7 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
             "load_user_skills",
             "load_user_memory",
             "guard_level",
+            "github_account",
             "sessions",
         )
     }
@@ -356,6 +408,11 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
     general["curator_threshold"] = _pick(  # global only (TD-400)
         "curator_threshold", sources, *((s, layer.curator_threshold) for s, layer in wide if s != "machine")
     )
+    held = [(s, getattr(layer, "memory", None) or MemoryValues()) for s, layer in wide if s != "machine"]
+    memory = {
+        name: _pick(f"memory.{name}", sources, *((s, getattr(values, name)) for s, values in held))
+        for name in MemoryValues.model_fields
+    }  # global only, like the curator's threshold
     prep = _pick("preparations", sources, ("project", project.preparations), ("default", []))
     data = _pick("data", sources, ("project", project.data), ("default", DataPermissions()))
     final = {
@@ -374,10 +431,12 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
     missing = [f"agents.{r}.{n}" for r, v in roles.items() for n in used(r) if v[n] is None]
     missing += [k for k, v in general.items() if v is None]
     missing += [f"prefs.{k}" for k, v in prefs.items() if v is None]
+    missing += [f"memory.{n}" for n, v in memory.items() if v is None]
     missing += [f"final_review.{n}" for n, v in final.items() if v is None]
     missing += unset
     return Settings(
         **general,
+        memory=MemoryValues.model_validate(memory),
         prefs=Prefs.model_validate(prefs),
         spotter=spotter,
         agents=agents,

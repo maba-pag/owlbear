@@ -1,4 +1,4 @@
-"""The PDS auditor's one Delivery tool (#777): the audit skill's JSON report and its Markdown, which Delivery writes."""
+"""The PDS auditor's one Delivery tool: its JSON report, from which Delivery derives the human Markdown."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from pathlib import Path
 import jsonschema
 
 from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.git.command_failure import failure
 
 SKILL = "pds-audit-deprecations-js"
 PACKAGE = Path("node_modules", "@porsche-design-system", "components-js")  # the release, as the copy installs it
@@ -23,13 +24,10 @@ class AuditResult(tools.Args):
         "The JSON report, serialized: one object valid against the skill's references/report.schema.json",
         '{"schemaVersion": "1.0.0", "...": "..."}',
     )
-    markdown: str = tools.bounded(
-        REPORT, "The Markdown report rendered from that same JSON, as the skill's report template lays it out", "# ..."
-    )
 
 
 SUBMIT = tools.Spec(
-    "submit_result", "Submit both reports once, instead of writing them as files.", AuditResult, "result"
+    "submit_result", "Submit the JSON report once; Delivery writes both reports.", AuditResult, "result"
 )
 
 
@@ -38,7 +36,10 @@ def check(args: AuditResult, root: Path) -> list[str]:
     try:
         report = json.loads(args.report)
     except ValueError as exc:
-        return [f"report: not JSON ({exc})"]
+        return [f"report: not JSON ({failure(exc)})\nsubmitted audit report:\n{args.report}"]
     schema = json.loads((root / PACKAGE / SCHEMA).read_text(encoding="utf-8"))
     found = sorted(jsonschema.Draft202012Validator(schema).iter_errors(report), key=lambda e: list(e.absolute_path))
-    return [f"report: {'/'.join(map(str, e.absolute_path)) or 'the report'}: {e.message}" for e in found[:5]]
+    errors = [f"report: {'/'.join(map(str, e.absolute_path)) or 'the report'}: {e.message}" for e in found[:5]]
+    if errors:
+        errors[-1] += f"\nsubmitted audit report:\n{args.report}"
+    return errors

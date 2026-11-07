@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Query
 from owlbear_memory.engine import MemoryEngine
 from pydantic import Field
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.improvement import case_edits, cases, followups, improvement_view, proposal_apply
@@ -87,6 +88,8 @@ def _redraft(pid: str) -> str:
     snap = props.folded().get(pid)
     if snap is None or snap["state"] != "redirected":
         raise HTTPException(409, f"proposal {pid} is {snap['state'] if snap else 'unknown'}, not redirected")
+    if snap.get("provenance") == "synthetic":
+        raise HTTPException(409, store.SYNTHETIC_RETIRED)
     if snap["redraft"] and snap["redraft_state"] != "drafted":  # one filed but not reviewed is reviewed again
         raise HTTPException(409, f"proposal {pid}'s redraft is filed already: {snap['redraft']}")
     if waiting := next((q["id"] for q in store.queued() if q.get("redraft") == pid), ""):
@@ -98,8 +101,9 @@ def _switches() -> dict[str, Any]:
     try:
         s = machine_settings.current()
     except registry.RegistryError as exc:
-        return {"error": f"the machine's settings cannot be read: {exc}"}
-    return {"retro_after_change": s.retro_after_change, "retro_when_idle": s.retro_when_idle}
+        return {"error": f"the machine's settings cannot be read: {failure(exc)}"}
+    return {"retro_after_change": s.retro_after_change, "retro_when_idle": s.retro_when_idle,
+            "chats_enrolled": bool(s.enrolled_chats)}  # fmt: skip
 
 
 @dataclass(frozen=True)
@@ -149,16 +153,44 @@ def router(machine: Machine, shared: Callable[[], DataRepo | None]) -> APIRouter
 def _reads(routes: APIRouter, m: _Machine) -> None:
     @routes.get("")
     def overview() -> dict[str, Any]:
-        """The Spotter (with chats not followed and the follower's failed pass), Retro, Spotter cases and proposals."""
+        """The Spotter (with chats not followed, the follower's failed pass or start), Retro, cases and proposals."""
         loaded = m.projects()
-        spotted = improvement_view.spotter(loaded, units.records(), datetime.now(UTC))
-        return {
-            "spotter": spotted
-            | {"not_followed": m.machine.chats.not_followed(), "follower_failed": m.machine.chats.failed},
-            "retro": improvement_view.retro(loaded, _switches()),
-            "cases": improvement_view.spotter_cases(),
-            "proposals": improvement_view.proposals(loaded, m.root()),
+        unread: dict[str, list[str]] = {}
+        missing: list[str] = []
+        found = units.records(unread=missing)
+        spotted = improvement_view.read_part(
+            "spotter", unread, lambda: improvement_view.spotter(loaded, found, datetime.now(UTC))
+        )
+        chats = m.machine.chats
+        followed = {
+            "not_followed": chats.not_followed(),
+            "follower_failed": chats.failed,
+            "follower_refused": chats.refused,
+            "chat_looks_unread": chats.owned.unread if chats.owned is not None else "",
         }
+        if spotted is not None:
+            spotted |= followed
+            if missing:
+                spotted["unread"] = {"records": missing}
+        shown = {
+            "spotter": spotted,
+            "retro": improvement_view.read_part(
+                "retro",
+                unread,
+                lambda: improvement_view.retro(
+                    loaded, _switches(), m.machine.retro.failed, m.machine.retro.prune_failed
+                ),
+            ),
+            "cases": improvement_view.read_part(
+                "cases",
+                unread,
+                lambda: improvement_view.spotter_cases(m.machine.cases.failed, m.machine.cases.unpublished),
+            ),
+            "proposals": improvement_view.read_part(
+                "proposals", unread, lambda: improvement_view.proposals(loaded, m.root())
+            ),
+        }
+        return shown | ({"unread": unread} if unread else {})
 
     @routes.get("/looks")
     def looks(
@@ -169,8 +201,10 @@ def _reads(routes: APIRouter, m: _Machine) -> None:
         """The Spotter's looks and the outside writes, of one project or Change when named."""
         if project:
             m.registered(project)
-        return improvement_view.looks(m.projects(), units.records(), store.grades(), project=project, change=change,
-                                      limit=limit)  # fmt: skip
+        missing: list[str] = []
+        shown = improvement_view.looks(m.projects(), units.records(unread=missing), store.grades(), project=project,
+                                       change=change, limit=limit)  # fmt: skip
+        return shown | ({"record_unread": missing} if missing else {})
 
     @routes.get("/change")
     def change(
@@ -182,7 +216,9 @@ def _reads(routes: APIRouter, m: _Machine) -> None:
         loaded = m.projects().get(project)
         if loaded is not None and slug not in loaded[0].slugs():
             raise HTTPException(404, f"project {project} has no Change {slug!r}")
-        return improvement_view.change_detail(project, slug, units.records(), store.grades())
+        missing: list[str] = []
+        shown = improvement_view.change_detail(project, slug, units.records(unread=missing), store.grades())
+        return shown | ({"record_unread": missing} if missing else {})
 
 
 def _retro(routes: APIRouter, m: _Machine) -> None:
@@ -195,7 +231,7 @@ def _retro(routes: APIRouter, m: _Machine) -> None:
             try:
                 finished = loaded is not None and slug in loaded[0].slugs() and loaded[0].read(slug).finished_at
             except (StoreError, OSError, ValueError) as exc:
-                raise HTTPException(409, f"Change {body.change} cannot be read: {exc}") from exc
+                raise HTTPException(409, f"Change {body.change} cannot be read: {failure(exc)}") from exc
             if not finished:
                 msg = f"{body.change} is not a finished Change of a loaded project: Retro runs on one"
                 raise HTTPException(409, msg)
@@ -210,9 +246,9 @@ def _retro(routes: APIRouter, m: _Machine) -> None:
         except followups.Unknown as exc:
             raise HTTPException(404, str(exc)) from exc
         except store.RetroError as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise HTTPException(409, failure(exc)) from exc
         except UNREACHABLE as exc:
-            raise HTTPException(409, f"the backlog could not be reached: {type(exc).__name__}: {exc}") from exc
+            raise HTTPException(409, f"the backlog could not be reached: {failure(exc)}") from exc
 
 
 def _proposals(routes: APIRouter, m: _Machine) -> None:
@@ -229,7 +265,7 @@ def _proposals(routes: APIRouter, m: _Machine) -> None:
         except proposal_apply.Refused as exc:
             raise HTTPException(422, str(exc)) from exc
         except store.RetroError as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise HTTPException(409, failure(exc)) from exc
 
     @routes.post("/proposals/{pid}/apply")
     def apply(pid: str) -> dict[str, Any]:
@@ -238,7 +274,7 @@ def _proposals(routes: APIRouter, m: _Machine) -> None:
             with m.admitted(f"applying proposal {pid}"):
                 return proposal_apply.apply(pid, seams(lambda: m.machine.cases.running), m.writable)
         except store.RetroError as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise HTTPException(409, failure(exc)) from exc
 
     @routes.post("/proposals/{pid}/redraft")
     def redraft(pid: str) -> dict[str, Any]:
@@ -264,4 +300,4 @@ def _cases(routes: APIRouter, m: _Machine) -> None:
         except Stale as exc:
             raise HTTPException(409, str(exc)) from exc
         except CaseError as exc:
-            raise HTTPException(422, str(exc)) from exc
+            raise HTTPException(422, failure(exc)) from exc

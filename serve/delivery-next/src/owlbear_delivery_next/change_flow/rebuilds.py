@@ -9,9 +9,9 @@ reverts it twice.
 
 from __future__ import annotations
 
-import shlex
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.change_contracts import check_hint
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.round_records import FINAL, RoundLoop
 from owlbear_delivery_next.change_flow import worktree
@@ -137,11 +137,22 @@ def fresh(c: Change, task: Task) -> None:
     task.done, task.base, task.spans, task.built_by, task.earlier = False, None, [], "", ""
 
 
-def rotated(c: Change, lp: RoundLoop, undone: list[Task], profile: Profile) -> None:
+def checks(c: Change, rebuild: Sequence[str], profile: Profile) -> list[str]:
+    """Resolve the last rebuilt task's complete check set before any Git undo or task mutation."""
+    tasks = c.plan.tasks if c.plan else []
+    picked = [t for t in tasks if t.id in rebuild]
+    if not picked:
+        return []
+    last = picked[-1]
+    others = [t for t in tasks if t.origin == "plan" and t is not last and t.checks]
+    return check_hint.resolve([check for task in (last, *others) for check in task.checks], worktree.checks(profile))
+
+
+def rotated(c: Change, lp: RoundLoop, undone: list[Task], required: Sequence[str]) -> None:
     """After the undo the ticked tasks are built again in plan order, then the final loop goes on (TD-235).
 
     The last rebuilt task then runs its own and every other plan task's checks on the rebuilt code, each placed in its
-    own task's package by that task's planned scope, which no rebuild widens, so a later retry places them the same
+    selected package, without widening the task's planned scope, so a later retry places them the same
     way; its builder fixes what they find before its result is accepted, and that task's rounds review the fix
     (TD-246). The final loop's completion and any merge consent no longer count.
     """
@@ -152,28 +163,9 @@ def rotated(c: Change, lp: RoundLoop, undone: list[Task], profile: Profile) -> N
     for t in picked:
         fresh(c, t)
     if picked:
-        last, others = picked[-1], [t for t in tasks if t.origin == "plan" and t is not picked[-1] and t.checks]
-        last.checks = list(dict.fromkeys([*_placed(profile, [last]), *_placed(profile, others)]))
+        picked[-1].checks = list(required)
     lp.ended, lp.rebuild, lp.completion, c.consent = "retried", [], None, None
     if nxt := open_task(c):
         go(c, StepKind.BUILD, nxt.id)
     else:
         go(c, StepKind.REVIEW, mode="final")
-
-
-def _placed(profile: Profile, tasks: Sequence[Task]) -> list[str]:
-    """Each task's checks as `cd <package> && <check>` for every package of its scope the profile runs it in.
-
-    A check the profile runs at the repository root, or in no package of the scope, stays as it is.
-    """
-    known, out = worktree.checks(profile), []
-    for t in tasks:
-        for check in t.checks:
-            homes = sorted(p for p, k in known if k == check and _holds(p, t.scope))
-            out += [f"cd {shlex.quote(p.strip('/'))} && {check}" for p in homes] or [check]
-    return out
-
-
-def _holds(package: str, scope: Sequence[str]) -> bool:
-    root = package.strip("/")
-    return any(p.strip("/") == root or p.startswith(f"{root}/") for p in scope)

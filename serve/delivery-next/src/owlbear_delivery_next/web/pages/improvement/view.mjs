@@ -21,7 +21,9 @@ export function view() {
   const d = state.data;
   if (!d) return html`${notice()}${state.error ? unread("The Improvement page", state.error)
     : quiet("Reading\u2026")}${looksSection()}`;
+  const part = (key, label, render) => d[key] === null
+    ? html`<section id=${key}>${unread(label, (d.unread?.[key] ?? []).join("\n"))}</section>` : render(d[key]);
   return html`${notice()}${state.error ? unread("The newest state", state.error) : nothing}
-    ${proposalsSection(d.proposals)}${spotterSection(d.spotter)}${looksSection()}${retroSection(d.retro)}
-    ${casesSection(d.cases)}`;
+    ${part("proposals", "Retro's proposals", proposalsSection)}${part("spotter", "The Spotter", spotterSection)}
+    ${looksSection()}${part("retro", "Retro", retroSection)}${part("cases", "The Spotter cases", casesSection)}`;
 }

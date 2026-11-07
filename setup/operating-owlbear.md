@@ -30,6 +30,7 @@ OwlBear keeps everything it runs and records under `~/.owlbear/` on your Mac:
 | `worktrees/` | The worktrees OwlBear's agents work in |
 | `design-pack/` | Impeccable, the pinned design skills and detector Delivery's design checks use; the folder keeps its name from before the rename |
 | `machine.json` | The registered projects and the machine's settings |
+| `onboarding/<id>.json` | Each Add a project run's receipt: its approved choices and each step's result, so **Resume** never repeats a step |
 | `data/` | The [shared settings repository](#the-shared-settings-repository)'s checkout, unless you set one elsewhere; updates and uninstalling never delete it |
 | `data.json`, `data.lock` | Which shared settings repository OwlBear uses and where it is cloned from, and the lock held while that changes |
 | `host.log` | The running host's log; `owlbear logs` shows its end |
@@ -43,8 +44,8 @@ Only with your yes at `owlbear install`, OwlBear also adds:
 | `~/Library/LaunchAgents/com.owlbear.host.plist` | The login item; `owlbear autostart on` or `off` changes it |
 | `~/.owlbear/completion.zsh` | The zsh completion, always written; nothing edits `~/.zshrc` |
 
-In a project, `owlbear setup --repo PATH` writes only with your yes, and lists each file in the
-clone's `.git/info/exclude`:
+In a project, the **Add a project** dialog and `owlbear setup --repo PATH` write only with your yes, and list each
+file in the clone's `.git/info/exclude`:
 
 | File | Entry |
 | --- | --- |
@@ -73,7 +74,7 @@ project's Changes while that project's VS Code window is closed.
 | `owlbear versions [--prepare]` | The version it runs and the one it would take next; `--prepare` installs and checks that one without switching |
 | `owlbear impeccable [--install]` | Shows the Impeccable this version pins; `--install` downloads and verifies what is missing. `owlbear design-pack` is its old name, kept so versions from before the rename can install it |
 | `owlbear autostart on` or `off` | Starts OwlBear at login, or not; `on` saves this shell's PATH and `COPILOT_CLI_PATH` as they are now, so run it again after adding or removing a tool or Node version |
-| `owlbear setup --repo PATH` | Checks a project's readiness, confirms its profile and registers its chat server |
+| `owlbear setup --repo PATH` | Checks a project's readiness, confirms its profile and registers its chat server; the **Add a project** dialog does the same from the Projects page, and repairs use this command |
 | `owlbear data` | Shows the shared settings repository and what only this Mac's checkout of it holds |
 | `owlbear data URL` | Clones that repository into `~/.owlbear/data`, or adopts the checkout of it already in use or there |
 | `owlbear data PATH` | Uses a checkout you keep elsewhere instead of `~/.owlbear/data` |
@@ -153,8 +154,8 @@ proposes cases, lessons and fixes, each challenged before you see it. Its two sw
 curation's and work the same way: `retro_after_change` for a Change that ended, and `retro_when_idle`
 for chats in the folders listed in `enrolled_chats`, once a chat has been quiet for a day and only
 while OwlBear is idle. Each run stops at `retro_run_credit_limit`. `owlbear improvement retro run`
-with `--change PROJECT/SLUG`, `--chat SESSION` or `--synthetic [NAME]` queues a run for the machine
-host (one per synthetic unit), even while paused or switched off; `owlbear improvement retro status` lists the latest runs,
+with `--change PROJECT/SLUG` or `--chat SESSION` queues a run for the machine
+host, even while paused or switched off; `owlbear improvement retro status` lists the latest runs,
 and `--plan UNIT` shows how many judging calls a run would make, without spending credits.
 
 The **Improvement** page (menu, under Work) shows Retro's proposals waiting for you first, each with
@@ -163,14 +164,21 @@ memory, a candidate Spotter case, an entry in the project's backlog, or an issue
 to OwlBear itself; if making it fails, the card says why and **Apply again** retries. **Reject** closes
 it for good, **Later** sets it aside, and **Redirect** takes your direction: Retro redrafts it at once
 and it comes back as a new proposal; if no redraft is queued or running, **Redraft again** asks once
-more. Proposals from synthetic runs land only in the sandbox's places; one about OwlBear itself becomes
-a public issue marked `[synthetic]`, closed at once. Below them are the Spotter's test, its settings, where each
+more. Earlier synthetic Retro proposals remain as history and cannot be acted on. Below them are the Spotter's test,
+its settings, where each
 comes from, its spend over the last week and the enrolled chats it does not follow; its looks, each with what it did
 (its act, whether its Change or chat was drawn steered or silent, and whether the act was delivered or why not) and the outside writes the watcher saw, by
 project and Change; Retro's switches, runs and findings, with **Run Retro** on a finished Change; and
 the Spotter cases, whose moves queue a regression run and wait until it has run. A look or a Retro
-finding can be followed up as one backlog entry. The menu's switch **Show the Spotter's and Retro's
-detail on Change pages** adds a Change's looks and findings to its page.
+finding can be followed up as one backlog entry. A Change page's switch **Show details**, one setting for every
+Change of every project, adds a Change's looks and findings to its page, with its review rounds and the rest of its
+record.
+
+An unreadable Improvement input says where and why beside the affected content; independent sections and readable
+looks still show. Counts based on skipped records are marked partial. Memory likewise keeps readable entries and
+names files it could not read; Maintenance shows those diagnostics beside the memory folder even when no curation
+has run. A memory path that exists but is not a readable directory is reported, not treated as absent.
+These notices do not change which work is admitted or repair the files.
 
 The **Metrics** page shows every credit OwlBear spent on this Mac: every agent session it ran
 (Delivery's workers, judges, picker and lookups, the curator, Impeccable runs, Spotter looks, Retro),
@@ -233,11 +241,15 @@ sets shows as unset on the Settings page. While one of a project's settings is u
 settings can't be read, nothing starts for that project: no Change step runs, and New Change,
 Retro, curation of its memory folder and test review wait. On the Changes page the buttons that
 would start its work, such as Resume, Answer and the approvals, are disabled; Pause, Withdraw and
-Pull still work, and a draft answer stays. The page names each project that waits, with what is
-unset and a link to its settings, and shows an error once no project can start work. A
-step that already runs when one turns unset asks you to fill it in. Automatic memory curation also
-waits until its role and threshold are set; a memory folder with no project settings of its own
-waits only for those and this machine's. A new machine that uses your
+Pull still work, and a draft answer stays. The page names each project that waits, with how many of its
+settings are unset (or why they can't be read) and a link to its settings, and shows an error once no
+project can start work. Maintenance's curation folders say the same for their own block and for their last
+refused run. The Unset settings list, Across projects, the changed-elsewhere notices and the pending line and
+save dialogs of Settings name a setting by the words its row on the Settings page shows, such as
+"planner · Model", so you can find it there; a setting the page has no row for is named by its key, and the
+technical keys stay in the CLI, logs and agent errors. A step that already runs when one turns unset asks you
+to fill it in. Automatic memory curation also waits until its role and threshold are set; a memory folder
+with no project settings of its own waits only for those and this machine's. A new machine that uses your
 shared repository takes its global settings; one without starts with every setting unset. Nothing
 lies under the global settings, so with the Global layer chosen the page names the choice that
 clears a value Unset and warns while a needed one is unset.
@@ -257,10 +269,10 @@ Machine preferences and this machine's own settings are always **this Mac only**
 The latter keep their separate **Save machine settings** button and confirmation.
 The per-project session limit and the machine-wide limit across all projects remain separate.
 
-The **Agents and runs**, **Guardrails** and **Checks and merge** groups have a **Show** menu: all settings, only the
-**unset** ones, only those the chosen layer **sets** (as saved), or only those with **unsaved** edits. It hides the
-other rows and any panel left without one, and stays across those groups and layers until you follow a link to a
-setting. A group's long explanations sit behind disclosures, closed until opened.
+The **Agents and runs**, **Guardrails**, **Memory** and **Checks and merge** groups have a **Show** menu: all
+settings, only the **unset** ones, only those the chosen layer **sets** (as saved), or only those with **unsaved**
+edits. It hides the other rows and any panel left without one, and stays across those groups and layers until you
+follow a link to a setting. A group's long explanations sit behind disclosures, closed until opened.
 
 Three of them, in **Settings → Your instructions, skills and memory**, decide whether Delivery's agent steps
 also use your own Copilot files from `~/.copilot` (or `$COPILOT_HOME`) and Copilot Memory. **Your instructions in
@@ -291,6 +303,27 @@ level a read-only step's writes stay refused, and so do the step's folder, tool 
 when it starts. Like those three, it has no default and the Spotter does not need it: while it is unset, the project's
 work waits, and an Impeccable update or automatic memory curation ends without starting one. Set it on the Global layer
 right after the first install of the version that adds it.
+
+**Memory**, in **Settings → Memory**, holds the numbers memory management uses. Each is Global's alone, one value for
+every project and machine, and shows read-only on the other layers. An agent's rating of a memory entry moves its
+**score**: its confidence, plus the **points an outstanding rating adds** for each outstanding rating, minus the
+**points an unremarkable rating takes off** for each unremarkable one. Recall ranks by that score as it works it out
+when it ranks, so a changed value reorders the next recall and rewrites no entry. An entry goes stale at a rating when
+its skipped ratings exceed the **skipped ratings per other rating before an entry is stale** times its outstanding and
+unremarkable ratings together (counted as 1 when there are none); stale entries wait for your review on the Memory
+page, raising the factor revives none, and nothing is deleted by score. The other values are the **lessons a step
+starts with** (their count and their characters), the **entries the recall tool returns** when an agent gives it no
+limit, its **recall slots** for the least-rated and the least-outstanding entries, and the **days a deleted entry
+waits** before the Memory page's **Remove** button may delete its file. The curator's confidence threshold sits in this
+group too, moved from Guardrails.
+
+None of the nine values has a default: while one is unset, the project's work waits as described above, the memory
+tools refuse the ratings and recalls that need it, naming it, and a step's starting lessons say so instead of listing
+any. They start unset after the update that adds them, so choose the Global layer and use **Use recommended**, which
+drafts them with the values the code held before (0.1, 0.01, 50, 30 days, 5 lessons, 2000 characters, 20 entries, and 2
+and 2 slots); review the drafts and save once. The recommendations are only offered there and nothing resolves from
+them, so a value you never save stays unset. The Memory page links to this group, and its **Remove** button, which now
+takes the purge age from here, stays disabled with the reason while it is unset.
 
 The machine settings in **Settings → This machine** (versions, updating itself, curation per
 trigger, sessions at once) work the same way: each machine follows the global ones, which you
@@ -331,6 +364,10 @@ one, checks it, and switches only while nothing runs; it never moves to an older
   server over the same memory and knowledge stores, so a version that changes how they store data
   must read and write what the versions still running write, with tests that an older server's
   writes survive.
+- A memory server reads the memory values from the global settings at each request, but its code is the version it
+  started with: one started before the update that added them keeps ranking by each entry's stored score and its
+  built-in numbers until its chat ends or you stop and start it (**MCP: List Servers** → `owlbear-memory` → **Stop
+  Server**, then **Start Server**), so restart it after you set the values.
 
 ---
 
@@ -402,6 +439,18 @@ OwlBear's pages run Changes; open them at the address `owlbear status` prints.
    **Approve merge** for merge consent.
 4. Once the pull request's checks and your branch rules pass, OwlBear merges it and the Change
    shows as done.
+
+When your answer on Changes leaves brief work for the shaper, Delivery posts one continuation
+to the chat that saved that brief version. The brief panel says whether it posted, waits for
+Resume, failed, or could not be confirmed, with the whole available error. Posting means the
+editor accepted the message, not that the shaper finished. A running turn and your draft stay
+intact; the editor queues the message.
+
+Delivery contacts only an editor already running; it never starts VS Code for this hand-off.
+If the saving chat is unknown or posting fails, use **Continue in the shaping chat** yourself.
+Delivery never automatically resends a consumed attempt, including one whose outcome is
+uncertain after a disconnect or restart. Pause prevents a new post, not a message the editor
+already accepted.
 
 Cleanup verifies the preservation of work held only in a Change's worktree before removing it.
 Archives retain regular-file permissions and symbolic links, including dangling links, without

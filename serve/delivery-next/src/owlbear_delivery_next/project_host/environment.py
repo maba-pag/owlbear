@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -27,7 +28,7 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
         h.mark(c, left, now)  # never a second group beside one that may still run
         return c
     # after disposal: a stop or question holds only the launch; a setting unset holds it before the gate's fetch
-    c, going = (c, False) if launch_gate.blocked(h) else decisions_gate.launch(h.store, c, now)
+    c, going = (c, False) if launch_gate.blocked(h) else decisions_gate.launch(h.store, c, now, lock=lock)
     if not going:
         return c
     root = Path(c.names.worktree)
@@ -43,21 +44,26 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
     with h.launching:  # a project's stop or a folder rename waits; once paused or stopping, nothing starts
         if h.paused() or h.updating() or launch_gate.blocked(h):  # an update's fence holds it too
             return c
-        c.env = e = e.model_copy(update={"pids": {}, "pgid": None, "ready_at": None, "launched_at": datetime.now(UTC)})
+        launched = {"pids": {}, "pgid": None, "ready_at": None, "launched_at": datetime.now(UTC)}
+        c.env = e = e.model_copy(update=launched | {"port": check.free_port()})  # fresh on every launch (TD-40)
         h.store.write(lock, c)
+        since = check.size(log)
         if proc := check.start(e, root, log, env, log.with_name(check.PIDFILE)):
             c.env = e = e.model_copy(update={"pgid": proc.pid, "pids": {proc.pid: check.created(proc.pid)}})
             h.store.write(lock, c)
             check.release(proc)
-    pids = check.ready(e, proc) if proc else None
+
+    record = partial(h.store.log, lock, c.slug)
+    pids = check.ready(e, proc, log=record) if proc else None
     if pids is None:
-        c.env = e = check.unready(e, proc)
+        c.env = e = check.unready(e, proc, log=record)
+        why = check.unanswered(e, proc, log, since)  # before the clearing ends the process: its own exit, or none
         if left := h.clear(c, e):
             h.mark(c, left, now)
             return c
         c.env = c.recipe = None
-        h.say(f"{c.slug}: check environment failed: no answer at {e.ready_url}")
-        return loop.apply(c, check.failed(f"no answer at {e.ready_url}"), now)
+        h.say(f"{c.slug}: check environment failed: {why}")
+        return loop.apply(c, check.failed(why), now)
     c.env = e.model_copy(update={"pids": pids, "ready_at": datetime.now(UTC)})
     c.recipe = Recipe(
         check=e.check,
@@ -66,5 +72,5 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
         ready_url=e.ready_url,
         inputs=worktree.launch_inputs(root, e.directory),
     )
-    h.say(f"{c.slug}: check environment ready at {e.ready_url}, group {e.pgid}, PIDs {sorted(pids)}")
+    h.say(f"{c.slug}: check environment ready at {check.url(e)}, group {e.pgid}, PIDs {sorted(pids)}")
     return loop.apply(c, check.pending(c, c.env), now)

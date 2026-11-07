@@ -12,11 +12,14 @@ import subprocess
 from pathlib import PurePath
 from typing import TYPE_CHECKING, Literal
 
+from owlbear_delivery_next.git.command_failure import failed, failure, output
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
     from pathlib import Path
+
+    from owlbear_delivery_next.git.access import Access
 
 RemoteGitKind = Literal["read", "write"]
 WriteReadback = Literal["applied", "not-applied", "conflict"]
@@ -50,6 +53,11 @@ class RemoteGitError(RuntimeError):
         super().__init__(detail)
         self.retry_safe = retry_safe
         self.result = result
+        if result is not None:  # the command and what Git said, beside the detail retries classify, unless it holds it
+            said = output(result.stderr, result.stdout)
+            ran = subprocess.CompletedProcess(result.args, result.returncode)
+            note = failed(ran) if result.returncode else f"Command '{result.args}' returned exit status 0."
+            self.add_note(note + (f"\n{said}" if said and said not in detail else ""))
 
 
 class RemoteGitTimeout(RemoteGitError):  # noqa: N818 - interface name fixed by the N02 plan.
@@ -140,6 +148,12 @@ def _global_options(arguments: Sequence[str]) -> tuple[str, ...]:
     return tuple(arguments[:index])
 
 
+def _remote(arguments: Sequence[str]) -> str:
+    """The remote a ``push`` names: the first argument after the verb that is not an option."""
+    rest = arguments[len(_global_options(arguments)) + 1 :]
+    return next((argument for argument in rest if not argument.startswith("-")), "origin")
+
+
 def _configured_ssh_command(repository: Path, base: Mapping[str, str], global_options: Sequence[str]) -> str | None:
     """Read ``core.sshCommand`` as the operation's own Git would, including its ``-c`` options."""
     environment = {name: value for name, value in base.items() if name not in _REPOSITORY_VARIABLES}
@@ -162,9 +176,11 @@ def _configured_ssh_command(repository: Path, base: Mapping[str, str], global_op
         )
     except subprocess.TimeoutExpired as exc:
         error = RemoteGitFailed("Git SSH configuration could not be read", retry_safe=True)
+        error.add_note(failure(exc))  # beside the detail retries classify (#971 R7)
         raise error from exc
     except OSError as exc:
         error = RemoteGitFailed("Git is unavailable for remote access", retry_safe=False)
+        error.add_note(failure(exc))
         raise error from exc
     if result.returncode == _CONFIG_UNSET:
         return None
@@ -180,20 +196,22 @@ def run_remote_git(
     arguments: Sequence[str],
     *,
     kind: RemoteGitKind,
+    access: Access,
     timeout: float | None = None,
-    environment: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
-    """Run one remote Git command in its own session and kill the whole group at the bound.
+    """Run one remote Git command in its own session, as *access*'s account, and kill the whole group at the bound.
 
     A read returns its completed process whatever its exit status. A write returns only on exit 0;
-    a timeout or failure raises ``RemoteGitWriteUnknown`` so the caller reads the remote back first.
+    a timeout or failure raises ``RemoteGitWriteUnknown`` so the caller reads the remote back first. A write whose
+    remote pushes over SSH raises ``PushRefused`` before Git starts (TD-402).
     """
     bound = timeout if timeout is not None else (READ_TIMEOUT_SECONDS if kind == "read" else WRITE_TIMEOUT_SECONDS)
-    base = os.environ if environment is None else environment
-    configured = (
-        None if "GIT_SSH_COMMAND" in base else _configured_ssh_command(repository, base, _global_options(arguments))
-    )
-    command = (resolve_git_executable(), "-C", str(repository), *arguments)
+    base = access.environment()
+    options = (*access.options(), *_global_options(arguments))
+    if kind == "write":
+        access.destinations(repository, _remote(arguments), CONFIG_TIMEOUT_SECONDS)
+    configured = None if "GIT_SSH_COMMAND" in base else _configured_ssh_command(repository, base, options)
+    command = (resolve_git_executable(), "-C", str(repository), *access.options(), *arguments)
     gated = launched is not None  # a journaled leader waits on its stdin until the journal holds it
     try:
         process = subprocess.Popen(  # noqa: S603 - fixed Git executable and code-owned argument vectors.
@@ -206,6 +224,7 @@ def run_remote_git(
         )
     except OSError as exc:
         error = RemoteGitFailed("Git is unavailable for remote access", retry_safe=False)
+        error.add_note(failure(exc))
         raise error from exc
     finished = False
     try:
@@ -219,8 +238,10 @@ def run_remote_git(
         finished = True
         if kind == "write":
             write_error = RemoteGitWriteUnknown(f"remote Git write exceeded {bound:g} s", timed_out=True)
+            write_error.add_note(failure(exc))  # the command and what it printed before its bound
             raise write_error from exc
         read_error = RemoteGitTimeout(f"remote Git read exceeded {bound:g} s")
+        read_error.add_note(failure(exc))
         raise read_error from exc
     finally:
         if not finished:
@@ -257,6 +278,7 @@ def read_remote_ref(
     remote: str,
     reference: str,
     *,
+    access: Access,
     timeout: float | None = None,
 ) -> str | None:
     """Read one exact remote ref through a bounded ``ls-remote``; ``None`` means absent."""
@@ -264,6 +286,7 @@ def read_remote_ref(
         repository,
         ("ls-remote", "--exit-code", "--refs", remote, reference),
         kind="read",
+        access=access,
         timeout=timeout,
     )
     if result.returncode == _LS_REMOTE_MISSING:

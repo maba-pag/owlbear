@@ -134,10 +134,30 @@ def test_a_failed_environment_fails_building_with_uvs_whole_output(stepping, who
 
     report = m.updater.report()
     said = f"its environment could not be made: {whole_error}"
+    reported = f"VersionError: {said}"
     building = next(s for s in report["steps"] if s["key"] == "building")
-    assert (building["state"], building["line"]) == ("failed", said)
-    assert {"step": "building", "line": said} in [{"step": e["step"], "line": e["line"]} for e in report["log"]]
-    assert report["detail"] == said
+    assert (building["state"], building["line"]) == ("failed", reported)
+    assert {"step": "building", "line": reported} in [{"step": e["step"], "line": e["line"]} for e in report["log"]]
+    assert report["detail"] == f"VersionError: {said}"
+
+
+def test_steps_that_could_not_be_kept_are_logged_whole_in_each_update(stepping, monkeypatch, whole_error):
+    """#971: the same failure to keep the steps on a later update is in that update's log too, whole."""
+    error = OSError(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(update_steps, "atomic_write", raising)
+    m = stepping.machine
+    path = local_home.root() / update_steps.RECORD
+    line = f"its steps could not be kept in {path}: OSError: {whole_error}\na note on the failure"
+
+    for _ in range(2):
+        m.updater._update()  # noqa: SLF001
+
+        assert [e["line"] for e in m.updater.report()["log"]].count(line) == 1
 
 
 def test_waiting_for_running_steps_is_its_own_step_and_the_log_keeps_each_line_once(stepping):

@@ -80,6 +80,34 @@ def test_closed_issue():
 def test_unmarked():
     assert _run("unmarked") > 1
 """
+# Model socket-processing lag without sleeps; only a worker read acknowledges queued counter writes.
+_DEFERRED_COUNTERS = """
+import threading
+
+from pytest_rerunfailures import ServerStatusDB
+
+pending = {}
+put = ServerStatusDB._set
+read = ServerStatusDB._get
+
+
+def queued(self, test, key, value):
+    if key == "r" and threading.current_thread() is not threading.main_thread():
+        pending[test, key] = value
+    else:
+        put(self, test, key, value)
+
+
+def acknowledged(self, test, key):
+    if threading.current_thread() is not threading.main_thread():
+        for entry in list(pending):
+            put(self, *entry, pending.pop(entry))
+    return read(self, test, key)
+
+
+ServerStatusDB._set = queued
+ServerStatusDB._get = acknowledged
+"""
 _NAMES = (
     "recovers",
     "keeps_failing",
@@ -106,9 +134,12 @@ def _runs(path: Path) -> dict[str, int]:
     return {name: int((path / f"{name}.runs").read_text()) for name in _NAMES}
 
 
+@pytest.mark.parametrize("deferred", [False, True], ids=["normal", "deferred-delivery"])
 def test_ci_reruns_once_only_tests_whose_issue_is_open_and_reports_every_attempt(
-    suite: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+    suite: pytest.Pytester, monkeypatch: pytest.MonkeyPatch, *, deferred: bool
 ) -> None:
+    if deferred:
+        suite.makeconftest(_DEFERRED_COUNTERS)
     report, summary = suite.path / "out/flaky.json", suite.path / "summary.md"
     monkeypatch.setenv("OWLBEAR_FLAKY_OPEN_ISSUES", "11")
     monkeypatch.setenv("OWLBEAR_FLAKY_REPORT", str(report))

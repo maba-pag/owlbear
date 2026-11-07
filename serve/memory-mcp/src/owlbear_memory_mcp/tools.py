@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict, Unpack, cast
 
 from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_memory import (
@@ -20,8 +21,10 @@ from owlbear_memory import (
     MemoryEntry,
     MemoryState,
     NotFoundError,
+    Points,
     TransitionError,
     Where,
+    entry_score,
     selection,
     storage,
     validate_scope_agents,
@@ -30,17 +33,18 @@ from owlbear_memory import (
 from owlbear_memory import (
     ValidationError as MemoryValidationError,
 )
+from owlbear_memory.errors import diagnostic, read_warning
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, ValidationError, field_validator
 
 from owlbear_memory_mcp import receipts
 from owlbear_memory_mcp.git import commit_batch, commit_move, cut_short, format_git_failure, repo_locked
+from owlbear_memory_mcp.store import StoreError
+from owlbear_memory_mcp.store import shared_root as machine_shared_root
 
 if TYPE_CHECKING:
     from mcp.server.mcpserver import Context
 
 __all__ = [
-    "SLOT_CHALLENGE",
-    "SLOT_EXPLORE",
     "approve_memory",
     "assess_memories",
     "commit_memory_batch",
@@ -54,14 +58,21 @@ __all__ = [
     "save_memory",
 ]
 
-SLOT_EXPLORE = 2
-SLOT_CHALLENGE = 2
 GLOBAL = "memory"  # Global memory: the shared repository's own memory folder (TD-241)
 FOLDER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")  # a project folder's name in the shared repository
-CONFIG = "config.json"  # the global settings, which hold the curator's threshold (TD-400)
+CONFIG = "config.json"  # the global settings, which hold the curator's threshold (TD-400) and the memory values
 UNSET_THRESHOLD = "the curator's confidence threshold is unset; the owner sets it on the Settings page"
+UNSET_VALUES = "these memory values are unset in the global settings; the owner sets them on the Settings page: "
+_INTEGER_VALUES = frozenset({"stale_factor", "recall_limit", "explore_slots", "challenge_slots"})
+_LEAST = {"stale_factor": 1, "recall_limit": 1}  # the settings' own lower bounds; every other value may be 0
 _WITNESSES = frozenset({MemoryState.CURATED, MemoryState.APPROVED})  # entries whose scope vouches for a named agent
 AssessmentTaskId = Annotated[StrictStr, Field(pattern=r"^[\x21-\x7e]{1,128}$")]
+
+
+class ReadDiagnostics(TypedDict, total=False):
+    """Optional internal collectors, never agent-facing tool arguments."""
+
+    read_errors: dict[str, str]
 
 
 class AssessmentItem(BaseModel):
@@ -109,14 +120,29 @@ def _global_engine(ctx: Context) -> MemoryEngine | None:
     return engine
 
 
-def _readable(ctx: Context) -> list[MemoryEntry]:
+def collect(engine: MemoryEngine, read_errors: dict[str, str] | None, where: str = "project") -> None:
+    """Keep the loaded snapshot's safe errors, including the folder's reading context."""
+    if read_errors is not None:
+        read_errors.update({path: f"{where}: {detail}" for path, detail in engine.read_errors.items()})
+
+
+def with_read_errors(data: dict[str, Any], read_errors: dict[str, str]) -> dict[str, Any]:
+    """Leave healthy result shapes unchanged."""
+    return data | {"read_errors": read_errors} if read_errors else data
+
+
+def _readable(ctx: Context, *, read_errors: dict[str, str] | None = None) -> list[MemoryEntry]:
     """The store's entries, then Global memory's ones it does not hold: what agents read (TD-241)."""
-    entries = _engine_from_ctx(ctx).get_entries()
+    engine = _engine_from_ctx(ctx)
+    entries = engine.get_entries()
+    collect(engine, read_errors)
     shared = _global_engine(ctx)
     if shared is None:
         return entries
     mine = {entry.id for entry in entries}
-    return entries + [entry for entry in shared.get_entries() if entry.id not in mine]
+    common = shared.get_entries()
+    collect(shared, read_errors, "Global")
+    return entries + [entry for entry in common if entry.id not in mine]
 
 
 def _shared_root(ctx: Context) -> Path | None:
@@ -126,6 +152,40 @@ def _shared_root(ctx: Context) -> Path | None:
         return None
     root = _memory_dir_from_ctx(ctx).parent.parent
     return root if Path(common) == root / GLOBAL else None
+
+
+def _memory_values(ctx: Context, *names: str) -> dict[str, float]:
+    """The owner's memory values among *names*, read from the global settings now, not when the server started.
+
+    Code ships no value for them: a tool that needs one the settings do not hold refuses, naming it. Settings that
+    cannot be read refuse too, with the file and the reason. A server bound to the shared repository reads its global
+    settings; one that keeps its own local store looks for the machine's shared repository itself.
+    """
+    try:
+        root = _shared_root(ctx) or machine_shared_root()
+    except StoreError as exc:
+        raise ToolError(str(exc)) from exc
+    data: object = {}
+    if root is not None:
+        path = root / CONFIG
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            pass  # no global settings yet: every value is unset
+        except (OSError, ValueError) as exc:
+            msg = f"the global settings {path} can't be read, so no memory value is known: {type(exc).__name__}: {exc}"
+            raise ToolError(msg) from exc
+    block = data.get("memory") if isinstance(data, dict) else None
+    block = block if isinstance(block, dict) else {}
+    found: dict[str, float] = {}
+    for name in names:
+        value, whole = block.get(name), name in _INTEGER_VALUES
+        number = isinstance(value, int) if whole else isinstance(value, (int, float))
+        if number and not isinstance(value, bool) and math.isfinite(value) and value >= _LEAST.get(name, 0):
+            found[name] = value
+    if unset := [name for name in names if name not in found]:
+        raise ToolError(UNSET_VALUES + ", ".join(unset))
+    return found
 
 
 def _in_folder(ctx: Context, folder: str | None) -> Context:
@@ -172,7 +232,9 @@ def _validate_scope(agents: list[str]) -> None:
         raise ToolError(str(exc)) from exc
 
 
-def _uncorroborated(ctx: Context, current: MemoryEntry, scope: list[str]) -> list[str]:
+def _uncorroborated(
+    ctx: Context, current: MemoryEntry, scope: list[str], *, read_errors: dict[str, str] | None = None
+) -> list[str]:
     """Named members a pending entry's scope keeps, or a reviewed entry's scope adds, that nothing vouches for.
 
     A member is vouched for by the server's known agents or by another curated or approved entry, here or in Global
@@ -186,7 +248,7 @@ def _uncorroborated(ctx: Context, current: MemoryEntry, scope: list[str]) -> lis
     known = getattr(ctx.request_context.lifespan_context, "agents", frozenset())
     vouched = {
         agent
-        for entry in _readable(ctx)
+        for entry in _readable(ctx, read_errors=read_errors)
         if entry.state in _WITNESSES and entry.id != current.id
         for agent in entry.scope_agents
     }
@@ -288,7 +350,6 @@ def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]:
         "outstanding_count": entry.outstanding_count,
         "unremarkable_count": entry.unremarkable_count,
         "didnt_use_count": entry.didnt_use_count,
-        "score": entry.score,
         "scope_agents": entry.scope_agents,
         "source_agent": entry.source_agent,
         "recommended": entry.recommended,
@@ -300,12 +361,20 @@ def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]:
     }
 
 
-def _load_entry_or_raise(engine: MemoryEngine, entry_id: str) -> MemoryEntry:
+def _load_entry_or_raise(
+    engine: MemoryEngine, entry_id: str, *, read_errors: dict[str, str] | None = None
+) -> MemoryEntry:
     try:
         return engine.get_entry(entry_id)
     except NotFoundError as exc:
+        errors: dict[str, str] = {}
+        collect(engine, errors)
         msg = f"entry not found: {entry_id}"
+        if warning := read_warning(errors):
+            msg += f"\n{warning}"
         raise ToolError(msg) from exc
+    finally:
+        collect(engine, read_errors)
 
 
 def _stale_revision_error(exc: ConcurrencyError) -> ToolError:
@@ -380,7 +449,9 @@ async def save_memory(  # noqa: PLR0913
         f"Saved as pending and unscoped in this project, recommended {where}. "
         "The memory curator decides its scope and assigns relevance before promotion."
     )
-    return _with_hint(_entry_to_dict(entry), hint)
+    read_errors: dict[str, str] = {}
+    collect(engine, read_errors)
+    return with_read_errors(_with_hint(_entry_to_dict(entry), hint), read_errors)
 
 
 async def commit_memory_batch(ctx: Context, *, session_type: str, folder: str | None = None) -> dict[str, Any]:
@@ -399,7 +470,7 @@ async def commit_memory_batch(ctx: Context, *, session_type: str, folder: str | 
         )
         raise ToolError(msg) from exc
     except OSError as exc:
-        detail = f"{type(exc).__name__}: {exc}"
+        detail = diagnostic(exc)
         _LOGGER.exception("Memory batch commit failed: %s", detail)
         msg = f"memory batch commit failed: {detail}"
         raise ToolError(msg) from exc
@@ -425,8 +496,10 @@ async def list_memories(
     categories: list[MemoryCategory | str] | None = None,
     scope_agents: list[str] | None = None,
     folder: str | None = None,
+    **diagnostics: Unpack[ReadDiagnostics],
 ) -> list[dict[str, Any]]:
     """Return metadata-only entries with pending-first ordering."""
+    read_errors = diagnostics.get("read_errors")
     ctx = _in_folder(ctx, folder)
     coerced_states = _coerce_states(states)
     coerced_categories = _coerce_categories(categories)
@@ -446,7 +519,7 @@ async def list_memories(
     scope_filter = set(scope_agents or [])
     _validate_scope(list(scope_filter))
 
-    entries = [entry for entry in _readable(ctx) if entry.state in allowed_states]
+    entries = [entry for entry in _readable(ctx, read_errors=read_errors) if entry.state in allowed_states]
     if category_filter:
         entries = [entry for entry in entries if bool(category_filter.intersection(set(entry.categories)))]
     if scope_filter:
@@ -465,6 +538,7 @@ async def list_memories(
         )
     )
     own = {entry.id for entry in _engine_from_ctx(ctx).get_entries()}  # the rest is Global memory, read beside it
+    collect(_engine_from_ctx(ctx), read_errors)
     return [_metadata_dict(entry) | {"where": "project" if entry.id in own else "global"} for entry in entries]
 
 
@@ -473,15 +547,26 @@ async def read_memory(ctx: Context, *, entry_id: str, folder: str | None = None)
     ctx = _in_folder(ctx, folder)
     engine = _engine_from_ctx(ctx)
     shared = _global_engine(ctx)
-    where = "project"
-    try:
-        entry = engine.get_entry(entry_id)
-    except NotFoundError:
-        entry, where = _load_entry_or_raise(shared or engine, entry_id), "global"  # Global memory, read only
+    read_errors: dict[str, str] = {}
+    for candidate, source, label in ((engine, "project", "project"), (shared, "global", "Global")):
+        if candidate is None:
+            continue
+        try:
+            entry, where = candidate.get_entry(entry_id), source
+        except NotFoundError:
+            continue
+        finally:
+            collect(candidate, read_errors, label)
+        break
+    else:
+        msg = f"entry not found: {entry_id}"
+        if warning := read_warning(read_errors):
+            msg += f"\n{warning}"
+        raise ToolError(msg)
     if entry.state == MemoryState.DELETED:
         msg = f"entry is deleted: {entry_id}"
         raise ToolError(msg)
-    return _entry_to_dict(entry) | {"where": where}
+    return with_read_errors(_entry_to_dict(entry) | {"where": where}, read_errors)
 
 
 async def recall_memory(
@@ -498,8 +583,18 @@ async def recall_memory(
     marker and one `Challenge task:` line per record between the revision and body.
     """
     category_filter = set(_coerce_categories(categories) or [])
-    capped_limit = 20 if limit is None else _validate_limit(limit)
-    readable = _readable(ctx)
+    values = _memory_values(
+        ctx, "outstanding_boost", "unremarkable_penalty", "explore_slots", "challenge_slots",
+        *(("recall_limit",) if limit is None else ()),
+    )  # fmt: skip
+    points, explore_slots, challenge_slots = (
+        Points(values["outstanding_boost"], values["unremarkable_penalty"]),
+        int(values["explore_slots"]),
+        int(values["challenge_slots"]),
+    )
+    capped_limit = int(values["recall_limit"]) if limit is None else _validate_limit(limit)
+    read_errors: dict[str, str] = {}
+    readable = _readable(ctx, read_errors=read_errors)
     known_agents = _recognized_agent_names(readable)
     recognized = isinstance(agent, str) and bool(agent.strip()) and agent != "*" and agent in known_agents
 
@@ -513,16 +608,17 @@ async def recall_memory(
     if category_filter:
         entries = [entry for entry in entries if bool(category_filter.intersection(set(entry.categories)))]
 
-    explore_capacity = min(SLOT_EXPLORE, capped_limit)
-    regular_capacity = max(0, capped_limit - SLOT_EXPLORE - SLOT_CHALLENGE)
+    explore_capacity = min(explore_slots, capped_limit)
+    regular_capacity = max(0, capped_limit - explore_slots - challenge_slots)
 
     def _explore_metric(entry: MemoryEntry) -> int:
         return entry.outstanding_count + entry.unremarkable_count + entry.didnt_use_count
 
+    # the score is worked out now, from the current points: the stored score ranks nothing
     explore_pool = sorted(entries, key=lambda entry: (_explore_metric(entry), entry.id))[:explore_capacity]
     selected_ids = {entry.id for entry in explore_pool}
 
-    challenge_capacity = min(SLOT_CHALLENGE, max(0, capped_limit - len(explore_pool)))
+    challenge_capacity = min(challenge_slots, max(0, capped_limit - len(explore_pool)))
     challenge_candidates = [entry for entry in entries if entry.id not in selected_ids]
     challenge_pool = sorted(challenge_candidates, key=lambda entry: (entry.outstanding_count, entry.id))[
         :challenge_capacity
@@ -530,16 +626,17 @@ async def recall_memory(
     selected_ids.update(entry.id for entry in challenge_pool)
 
     regular_candidates = [entry for entry in entries if entry.id not in selected_ids]
-    regular_pool = sorted(regular_candidates, key=lambda entry: (-entry.score, entry.id))[:regular_capacity]
+    regular_pool = sorted(regular_candidates, key=lambda entry: (-entry_score(entry, points), entry.id))[
+        :regular_capacity
+    ]
 
     selected_entries = explore_pool + challenge_pool + regular_pool
-    selected_entries.sort(key=lambda entry: (state_rank[entry.state], -entry.score, entry.id))
+    selected_entries.sort(key=lambda entry: (state_rank[entry.state], -entry_score(entry, points), entry.id))
 
     blocks = "\n\n".join(_recall_block(entry) for entry in selected_entries)
-    if recognized:
-        return blocks
-    guidance = _recall_fallback(known_agents)
-    return f"{guidance}\n\n{blocks}" if blocks else guidance
+    parts = [blocks] if recognized else [_recall_fallback(known_agents), blocks]
+    parts.append(read_warning(read_errors))
+    return "\n\n".join(part for part in parts if part)
 
 
 async def _update_entry(  # noqa: C901, PLR0912, PLR0913
@@ -552,6 +649,7 @@ async def _update_entry(  # noqa: C901, PLR0912, PLR0913
     categories: list[MemoryCategory | str] | None = None,
     confidence: float | None = None,
     scope_agents: list[str] | None = None,
+    read_errors: dict[str, str],
 ) -> dict[str, Any]:
     """Update mutable fields on an existing entry.
 
@@ -577,12 +675,14 @@ async def _update_entry(  # noqa: C901, PLR0912, PLR0913
     if current.state != MemoryState.PENDING and scope_agents is not None and not scope_agents:
         msg = "scope_agents cannot be blanked on curated or approved entries"
         raise ToolError(msg)
-    if missing := _uncorroborated(ctx, current, next_scope_agents):
+    if missing := _uncorroborated(ctx, current, next_scope_agents, read_errors=read_errors):
         names = ", ".join(repr(agent) for agent in missing)
         msg = (
             f"No agent this memory server knows and no other curated or approved entry here or in Global memory has "
             f"{names} in scope; scope the entry to known agents or '*', or skip it. Nothing was changed."
         )
+        if warning := read_warning(read_errors):
+            msg += f"\n{warning}"
         raise ToolError(msg)
 
     payload: dict[str, Any] = {}
@@ -613,17 +713,18 @@ async def _update_entry(  # noqa: C901, PLR0912, PLR0913
         raise ToolError(str(exc)) from exc
     except ValidationError as exc:
         raise ToolError(_teaching_validation_message(exc)) from exc
-    return _entry_to_dict(updated)
+    collect(engine, read_errors)
+    return with_read_errors(_entry_to_dict(updated), read_errors)
 
 
-async def _delete_entry(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]:
+async def _delete_entry(ctx: Context, *, entry_id: str, revision: str, read_errors: dict[str, str]) -> dict[str, Any]:
     """Delete an entry.
 
     Pending entries are hard-deleted from disk; curated and approved entries
     are soft-deleted to deleted state.
     """
     engine = _engine_from_ctx(ctx)
-    current = _load_entry_or_raise(engine, entry_id)
+    current = _load_entry_or_raise(engine, entry_id, read_errors=read_errors)
 
     if current.state == MemoryState.DELETED:
         msg = "delete_memory cannot delete an entry that is already deleted"
@@ -645,7 +746,8 @@ async def _delete_entry(ctx: Context, *, entry_id: str, revision: str) -> dict[s
             }
         )
 
-    return _entry_to_dict(deleted)
+    collect(engine, read_errors)
+    return with_read_errors(_entry_to_dict(deleted), read_errors)
 
 
 async def curate_memory(  # noqa: PLR0913
@@ -663,7 +765,8 @@ async def curate_memory(  # noqa: PLR0913
     """Curate entries using code-managed lifecycle transitions."""
     ctx = _in_folder(ctx, folder)
     engine = _engine_from_ctx(ctx)
-    current = _load_entry_or_raise(engine, entry_id)
+    read_errors: dict[str, str] = {}
+    current = _load_entry_or_raise(engine, entry_id, read_errors=read_errors)
     updated = await _update_entry(
         ctx,
         current=current,
@@ -673,6 +776,7 @@ async def curate_memory(  # noqa: PLR0913
         categories=categories,
         confidence=confidence,
         scope_agents=scope_agents,
+        read_errors=read_errors,
     )
     if current.state == MemoryState.PENDING and updated["state"] == str(MemoryState.CURATED):
         hint = "Promoted from pending to curated with explicit scope."
@@ -687,8 +791,9 @@ async def delete_memory(ctx: Context, *, entry_id: str, revision: str, folder: s
     """Compatibility alias for delete semantics."""
     ctx = _in_folder(ctx, folder)
     engine = _engine_from_ctx(ctx)
-    current = _load_entry_or_raise(engine, entry_id)
-    deleted = await _delete_entry(ctx, entry_id=entry_id, revision=revision)
+    read_errors: dict[str, str] = {}
+    current = _load_entry_or_raise(engine, entry_id, read_errors=read_errors)
+    deleted = await _delete_entry(ctx, entry_id=entry_id, revision=revision, read_errors=read_errors)
     if current.state == MemoryState.PENDING:
         hint = "Hard-delete applied: pending entry removed and never committed."
     else:
@@ -699,7 +804,8 @@ async def delete_memory(ctx: Context, *, entry_id: str, revision: str, folder: s
 async def _approve_entry(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]:
     """Promote a curated entry to approved."""
     engine = _engine_from_ctx(ctx)
-    current = _load_entry_or_raise(engine, entry_id)
+    read_errors: dict[str, str] = {}
+    current = _load_entry_or_raise(engine, entry_id, read_errors=read_errors)
 
     try:
         updated = engine.approve(current.id, expected_revision=revision)
@@ -710,7 +816,8 @@ async def _approve_entry(ctx: Context, *, entry_id: str, revision: str) -> dict[
     except (TransitionError, NotFoundError, DuplicateEntryError) as exc:
         raise ToolError(str(exc)) from exc
 
-    return _entry_to_dict(updated)
+    collect(engine, read_errors)
+    return with_read_errors(_entry_to_dict(updated), read_errors)
 
 
 async def approve_memory(ctx: Context, *, entry_id: str, revision: str) -> dict[str, Any]:
@@ -724,7 +831,7 @@ async def assess_memories(
     *,
     assessments: list[AssessmentItem],
     task_id: str,
-) -> dict[str, list[dict[str, object]]]:
+) -> dict[str, Any]:
     """Process batch assessment submissions with per-entry success/failure results."""
     try:
         batch = _AssessmentBatch.model_validate({"assessments": assessments, "task_id": task_id})
@@ -736,11 +843,19 @@ async def assess_memories(
         )
         raise ToolError(msg) from exc
 
+    stale_factor = (
+        int(_memory_values(ctx, "stale_factor")["stale_factor"])
+        if any(item.bucket != "factually_wrong" for item in batch.assessments)
+        else None
+    )  # only a rating that counts needs the owner's stale rule
     engine = _engine_from_ctx(ctx)
     results: list[dict[str, object]] = []
     root = _shared_root(ctx)
     ids = [assessment.entry_id for assessment in batch.assessments]
-    with receipts.committed(root, _memory_dir_from_ctx(ctx) if root else None, ids, batch.task_id):
+    read_errors: dict[str, str] = {}
+    with receipts.committed(
+        root, _memory_dir_from_ctx(ctx) if root else None, ids, batch.task_id, read_errors=read_errors
+    ):
         for assessment in batch.assessments:
             entry_id = assessment.entry_id
             bucket = assessment.bucket
@@ -757,6 +872,7 @@ async def assess_memories(
                         bucket,
                         task_id=batch.task_id,
                         expected_revision=assessment.revision,
+                        stale_factor=cast("int", stale_factor),
                     )
                 results.append(
                     {
@@ -777,8 +893,10 @@ async def assess_memories(
                 ValidationError,
             ) as exc:
                 results.append({"entry_id": entry_id, "success": False, "error": str(exc)})
+            finally:
+                collect(engine, read_errors)
 
-    return {"results": results}
+    return with_read_errors({"results": results}, read_errors)
 
 
 def _unmoved(root: Path, entry_id: str) -> None:
@@ -786,6 +904,38 @@ def _unmoved(root: Path, entry_id: str) -> None:
     if why := cut_short(root):
         msg = f"{entry_id} stays: {why}"
         raise ToolError(msg)
+
+
+def _global_candidate(
+    source: Path, target: Path, entry_id: str, revision: str, read_errors: dict[str, str]
+) -> tuple[Path, MemoryEntry, Path]:
+    source_errors: dict[str, str] = {}
+    found = [
+        (p, e)
+        for p in sorted(source.glob("*.md"))
+        if (e := storage.read_entry(p, read_errors=source_errors)) and e.id == entry_id
+    ]
+    read_errors.update({p: f"project: {detail}" for p, detail in source_errors.items()})
+    if len(found) != 1:
+        msg = f"entry not found: {entry_id}"
+        raise ToolError(msg)
+    path, entry = found[0]
+    if entry.revision != revision:
+        msg = f"Entry changed since it was read: {entry_id}. Re-read before retrying."
+        raise ToolError(msg)
+    if entry.state not in {MemoryState.CURATED, MemoryState.APPROVED}:  # the owner resolves the others first
+        msg = f"{entry.title} is {entry.state}: only a curated or approved entry goes global"
+        raise ToolError(msg)
+    moved = target / path.name
+    target_errors: dict[str, str] = {}
+    duplicate = moved.exists() or any(
+        getattr(storage.read_entry(p, read_errors=target_errors), "id", "") == entry_id for p in target.glob("*.md")
+    )
+    read_errors.update({p: f"Global: {detail}" for p, detail in target_errors.items()})
+    if duplicate:
+        msg = f"Global memory holds {entry.title} already"
+        raise ToolError(msg)
+    return path, entry, moved
 
 
 async def make_global(ctx: Context, *, entry_id: str, revision: str, folder: str | None = None) -> dict[str, Any]:
@@ -801,24 +951,11 @@ async def make_global(ctx: Context, *, entry_id: str, revision: str, folder: str
         msg = "Global memory is a link out of the shared repository: nothing moves"
         raise ToolError(msg)
     target.mkdir(exist_ok=True)
+    read_errors: dict[str, str] = {}
     try:
         with repo_locked(root), writer_lock(source), writer_lock(target):  # the repository lock first, as the page
             _unmoved(root, entry_id)
-            found = [(p, e) for p in sorted(source.glob("*.md")) if (e := storage.read_entry(p)) and e.id == entry_id]
-            if len(found) != 1:
-                msg = f"entry not found: {entry_id}"
-                raise ToolError(msg)
-            path, entry = found[0]
-            if entry.revision != revision:
-                msg = f"Entry changed since it was read: {entry_id}. Re-read before retrying."
-                raise ToolError(msg)
-            if entry.state not in {MemoryState.CURATED, MemoryState.APPROVED}:  # the owner resolves the others first
-                msg = f"{entry.title} is {entry.state}: only a curated or approved entry goes global"
-                raise ToolError(msg)
-            moved = target / path.name
-            if moved.exists() or any(getattr(storage.read_entry(p), "id", "") == entry_id for p in target.glob("*.md")):
-                msg = f"Global memory holds {entry.title} already"
-                raise ToolError(msg)
+            path, entry, moved = _global_candidate(source, target, entry_id, revision, read_errors)
             moving = entry.model_copy(update={"origin": project})
             storage.write_entry(path, moving, memory_dir=source)  # rewritten in place, then moved whole
             try:
@@ -835,10 +972,13 @@ async def make_global(ctx: Context, *, entry_id: str, revision: str, folder: str
                 storage.write_entry(path, entry, memory_dir=source)  # back where it was, so it can be tried again
                 msg = f"{entry.title} stays in {project}: the commit failed: {format_git_failure(exc)}"
                 raise ToolError(msg) from exc
-    except (MemoryBusyError, TimeoutError) as exc:
-        raise ToolError(str(exc)) from exc
+    except (ToolError, MemoryBusyError, TimeoutError) as exc:
+        msg = str(exc)
+        if warning := read_warning(read_errors):
+            msg += f"\n{warning}"
+        raise ToolError(msg) from exc
     hint = f"Moved into Global memory and committed; the owner can move it back to {project} on the Memory page."
-    return _with_hint(_entry_to_dict(moving) | {"commit_sha": sha}, hint)
+    return with_read_errors(_with_hint(_entry_to_dict(moving) | {"commit_sha": sha}, hint), read_errors)
 
 
 async def curation_threshold(ctx: Context) -> dict[str, Any]:

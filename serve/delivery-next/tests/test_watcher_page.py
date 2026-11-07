@@ -34,6 +34,7 @@ SECRET = "/Users/me/.ssh/config"  # noqa: S105 - a path, not a password
 
 class Host:
     maintenance = None
+    failed = ""
     wake = type("W", (), {"set": staticmethod(lambda: None)})()
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
 
@@ -134,6 +135,7 @@ def opened(base: str, slug: str, pds: Any) -> Iterator[Any]:
         page = browser.new_page()
         pds.only(page, base)
         page.add_init_script("sessionStorage.setItem('token', 'tok');")
+        page.add_init_script("localStorage.setItem('owlbear-improvement-detail', 'on');")  # the record behind the work
         page.goto(f"{base}/?change={slug}")
         yield page
         browser.close()

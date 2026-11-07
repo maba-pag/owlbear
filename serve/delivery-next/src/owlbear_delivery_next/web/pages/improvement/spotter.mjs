@@ -1,6 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
-import { here } from "/assets/ui.mjs";
-import { credits, empty, heading, plural, quiet, text, when } from "./widgets.mjs";
+import { OWN_TAG, displayName, here, isOwn } from "/assets/ui.mjs";
+import { credits, empty, heading, plural, quiet, text, unread, when } from "./widgets.mjs";
 
 // The Spotter (design §6): its test, each loaded project's settings and where each comes from, linked to Settings,
 // its spend over the last week and the enrolled chats it does not follow, with the chats follower's failed pass. Its
@@ -28,8 +28,8 @@ function model(s) {
     (${SOURCES[from] ?? from})</span>` : nothing}</li>`;
 }
 
-function spent(s) {
-  if (!s) return "No looks in the last week.";
+function spent(s, partial) {
+  if (!s) return partial ? "No readable looks in the last week." : "No looks in the last week.";
   const unknown = s.unknown ? `, ${plural(s.unknown, "look")} whose credits were not reported` : "";
   const stopped = s.stopped ? `, ${plural(s.stopped, "look")} stopped at its credit limit` : "";
   const skipped = s.skipped ? `; ${plural(s.skipped, "look")} skipped before starting` : "";
@@ -43,8 +43,9 @@ function project(pid, p, spend) {
       ${setting(p, "sample_rate", "Sample", (v) => `${v}% of completed actions`)}
       ${setting(p, "look_credit_limit", "Credit limit per look", (v) => `${v} credits`)}
       ${CATEGORIES.map(([key, label]) => setting(p, key, label))}${setting(p, "verbose", "Verbose")}${model(p)}</ul>`;
-  return html`<li class="panel" id=${`spotter-${pid}`}>${heading(3, p.name, "sm")}${settings}
-    ${text(`Last ${spend.window}: ${spent(spend.of)}`, { size: "sm" })}
+  return html`<li class="panel" id=${`spotter-${pid}`}>${heading(3, displayName(p), "sm")}
+    ${isOwn(p) ? html`<p-tag compact="true">${OWN_TAG}</p-tag>` : nothing}${settings}
+    ${text(`Last ${spend.window}: ${spent(spend.of, spend.partial)}`, { size: "sm" })}
     <p-link-pure icon="arrow-right"><a href=${here({ project: pid }, p.link)}>Change the Spotter's settings</a>
     </p-link-pure></li>`;
 }
@@ -63,11 +64,13 @@ function testLine(t) {
     : nothing}.${frozen}`);
 }
 
-// The enrolled chats it does not follow: all of them while the follower's last pass failed (its whole error), and a
-// terminal ``copilot`` session, which has no host it could act through.
-function notFollowed(chats, failed) {
-  if (!chats?.length && !failed) return nothing;
-  return html`<div id="not-followed">${heading(3, "Chats not followed", "md")}<ul class="meta">${failed ? html`<li
+// The enrolled chats it does not follow: all of them while the follower could not start or its last pass failed (each
+// its whole error), and a terminal ``copilot`` session, which has no host it could act through.
+function notFollowed(chats, failed, refused) {
+  if (!chats?.length && !failed && !refused) return nothing;
+  const stopped = "All enrolled chats: the follower did not start, and none is followed until OwlBear starts again: ";
+  return html`<div id="not-followed">${heading(3, "Chats not followed", "md")}<ul class="meta">${refused
+    ? html`<li id="follower-refused">${stopped}${refused}</li>` : nothing}${failed ? html`<li
     id="follower-failed">All enrolled chats: the last pass failed, and the next one tries again: ${failed}</li>`
     : nothing}${(chats ?? []).map((c) => html`<li>${c.workspace}: ${c.why} (session ${c.session})</li>`)}</ul></div>`;
 }
@@ -75,16 +78,21 @@ function notFollowed(chats, failed) {
 export function spotterSection(s) {
   const window = plural(s.window_days, "day"), ids = Object.keys(s.projects);
   const elsewhere = Object.entries(s.spend).filter(([pid]) => !s.projects[pid]);
+  const missing = s.unread?.records ?? [];
   return html`<section id="spotter" aria-labelledby="spotter-title">
     ${heading(2, "The Spotter", "lg", "spotter-title")}
-    ${quiet("It looks at agents' work at the moments its settings name, records what it sees and acts as its "
+    ${quiet(html`${"It looks at agents' work at the moments its settings name, records what it sees and acts as its "
       + "settings say, in Delivery's steps and in enrolled VS Code chats. A look stopped at its credit limit stops "
-      + "only that look.")}
+      + "only that look."}${s.chat_looks_unread ? html` New chat looks cannot start because ownership cannot be
+        inspected: <span class="failure-detail">${s.chat_looks_unread}</span>` : nothing}`)}
     ${testLine(s.test)}
+    ${missing.length ? html`${unread("Some Spotter records", missing.join("\n"))}
+      ${quiet("Counts and spend include only the records that could be read.")}` : nothing}
     ${ids.length ? html`<ul class="cards">${ids.map((pid) => project(pid, s.projects[pid],
-      { window, of: s.spend[pid] }))}</ul>` : empty("No project is loaded on this machine.")}
+      { window, of: s.spend[pid], partial: missing.length > 0 }))}</ul>`
+      : empty("No project is loaded on this machine.")}
     ${elsewhere.map(([pid, of]) => quiet(`${pid ? `Project ${pid}, not loaded now` : "Outside a project"}, last `
       + `${window}: ${spent(of)}`))}
-    ${notFollowed(s.not_followed, s.follower_failed)}
+    ${notFollowed(s.not_followed, s.follower_failed, s.follower_refused)}
   </section>`;
 }

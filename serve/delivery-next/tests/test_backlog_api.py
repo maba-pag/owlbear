@@ -1,6 +1,7 @@
 import contextlib
 import shlex
 import socket
+import subprocess
 import threading
 import time
 from collections.abc import Iterator
@@ -17,6 +18,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api, backlog_routes
 from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.state_store import backlog_issues
 from owlbear_delivery_next.state_store.backlog import Backlog
 from owlbear_delivery_next.state_store.store import Store
 
@@ -231,19 +233,30 @@ def test_create_change_without_code_gives_the_command_and_leaves_the_entries(sto
     assert c.post("/api/next/backlog/change", json={"ids": []}).status_code == 422
 
 
-def test_the_page_shows_why_github_could_not_be_reached_and_nothing_is_saved(store, github):
+def test_the_page_shows_why_github_could_not_be_reached_and_nothing_is_saved(store, github, whole_error):
+    """A read, a save GitHub refused before doing it, and a save it did not confirm: each with gh's whole words."""
     c = client(store)
     entry = Backlog.of(store).add("Wider status line")[0]
-    github.down = True
+    github.down, github.said = True, whole_error
 
     listed = c.get("/api/next/backlog")
+    ran = [github.ran[-1]]
+    github.down, github.fail_writes, github.said = False, True, f"{whole_error}\n(HTTP 429)"
     added = c.post("/api/next/backlog", json={"title": "lost"})
-    github.down, github.fail_writes = False, True
+    ran.append(github.ran[-1])
+    github.said = whole_error
     patched = c.patch(f"/api/next/backlog/{entry.id}", json={"notes": "lost"})
+    ran.append(github.ran[-1])
 
     assert [r.status_code for r in (listed, added, patched)] == [503] * 3
-    assert "could not be read from GitHub (acme/owlbear-data): list_issues: error connecting" in listed.json()["detail"]
-    assert "did not confirm the save" in patched.json()["detail"]
+    repo = "GitHub (acme/owlbear-data)"
+    gh = [f"CalledProcessError: Command '{argv}' returned non-zero exit status 1." for argv in ran]
+    assert [r.json()["detail"] for r in (listed, added, patched)] == [
+        f"the backlog could not be read from {repo}: ProviderError: list_issues: {whole_error}\n{gh[0]}",
+        f"not saved: {repo} could not be reached: ProviderError: create_issue: {whole_error}\n(HTTP 429)\n{gh[1]}",
+        f"{repo} did not confirm the save; check its issues before retrying: ProviderError: edit_issue: {whole_error}\n"
+        + gh[2],
+    ]
     assert [i["title"] for i in github.issues.values()] == ["Wider status line"]
     assert "lost" not in github.issues[1]["body"]
 
@@ -274,6 +287,38 @@ def backlog_page(store: Store, pds: Any) -> Iterator[Any]:
             browser.close()
     finally:
         server.should_exit = True
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("fails", ["timeout", "nonzero"])
+def test_a_failed_gh_read_shows_on_the_backlog_page_whole_with_its_command_and_output(
+    store, pds, monkeypatch, whole_error, fails
+):
+    """A gh that timed out or exited non-zero: the page says its error, the command and what gh printed, whole."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    body = '{\n  "message": "BODY-MARK",\n  "documentation_url": "https://docs.github.com/rest"\n}'
+    ran = []
+
+    def gh(argv, _data, timeout, _cwd, _env):
+        ran.append((argv, timeout))
+        if fails == "timeout":
+            raise subprocess.TimeoutExpired(argv, timeout, output=b"PARTIAL-OUT\n", stderr=f"{whole_error}\n".encode())
+        return subprocess.CompletedProcess(argv, 1, f"{body}\n".encode(), f"gh: {whole_error}\n".encode())
+
+    monkeypatch.setattr(backlog_issues, "RUNNER", gh)
+    with backlog_page(store, pds) as page:
+        expect(page.locator("#error")).to_be_visible()
+        shown = page.locator("#error").text_content().strip()  # the template's own indentation around it
+
+    (argv, timeout), *_ = ran
+    said = (
+        f"gh timed out\nTimeoutExpired: Command '{argv}' timed out after {timeout} seconds\nstderr:\n{whole_error}"
+        "\nstdout:\nPARTIAL-OUT"
+        if fails == "timeout"
+        else f"{whole_error}\nCalledProcessError: Command '{argv}' returned non-zero exit status 1.\nstdout:\n{body}"
+    )
+    assert shown == f"The backlog could not be read from GitHub (acme/owlbear-data): ProviderError: list_issues: {said}"
 
 
 @pytest.mark.browser

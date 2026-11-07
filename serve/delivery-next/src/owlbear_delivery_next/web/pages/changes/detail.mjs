@@ -1,16 +1,19 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
+import { statusLine } from "/assets/page/config/unset.mjs";
 import { state, show, several, formsOf, send, starts } from "./state.mjs";
 import { toggle, button, hd, text, info, notice, refusal } from "./widgets.mjs";
 import {
   questionForm, retryForm, criteriaPanel, checkForm, mergeForm, restartButton, pullbackNote, stopNotice,
 } from "./forms.mjs";
 import { decisionForm, visualSection, beforeSection, roundRefused } from "./visual.mjs";
-import { spendLines, toolLines, planList, roundsInfo, stepper } from "./progress.mjs";
+import { spendLines, toolLines, planInfo, roundsInfo, stepper } from "./progress.mjs";
 import { activityLog, split } from "./activity.mjs";
 import { approval, briefInfo } from "./brief.mjs";
 import { choose } from "./list.mjs";
 import { watcherSection } from "./watcher.mjs";
 import { improvementSection } from "./improvement.mjs";
+import { detailsOn, detailsSwitch } from "./details.mjs";
+import { actionItems } from "./actions.mjs";
 
 function detailHead(d) {
   const back = html`<p-button-pure type="button" icon="arrow-left" class="back" @click=${() => choose(null)}>All
@@ -31,7 +34,8 @@ function detailHead(d) {
   }
   const under = [d.brief.title && d.slug, several() && `in ${d.projectName}`].filter(Boolean).join(" \u00b7 ");
   return html`<div class="detail-head">${back}<div>${hd(2, d.brief.title || d.slug, "xl", { tabindex: "-1" })}${under
-    ? text(under, { size: "sm", color: "contrast-medium" }) : nothing}</div>${intent}</div>`;
+    ? text(under, { size: "sm", color: "contrast-medium" }) : nothing}</div><div class="row">${detailsSwitch()}${intent}
+    </div></div>`;
 }
 
 // The tag says the status; the line keeps its stage only where the stage says more than the tag.
@@ -43,7 +47,7 @@ function said(line, label) {
 const PAUSED = /· paused by you/;
 
 export function badge(c) {
-  if (/(^|· )stopped:/.test(c.line)) return ["error", "Stopped"];
+  if (c.stopped) return ["error", "Stopped"];
   if (PAUSED.test(c.line)) return ["secondary", "Paused"];
   if (c.actor === "you") return ["warning", "Your turn"];
   if (c.actor === "admin") return ["warning", "Admin"];
@@ -52,8 +56,9 @@ export function badge(c) {
   return c.actor === "github" ? ["secondary", "GitHub"] : ["info", "Delivery"];
 }
 
+// What the owner needs to act always shows; the record behind it shows with the details (detailsOn).
 export function detailView(d) {
-  const [variant, label] = badge(d), forms = formsOf(d);
+  const [variant, label] = badge(d), forms = formsOf(d), on = detailsOn();
   const was = state.refused;
   if (was && was.forms !== forms) {  // #914: a refusal whose form went stays on top of its Change until he acts or goes
     state.refused = was.key !== d.key ? null : was.kept ? was
@@ -63,8 +68,10 @@ export function detailView(d) {
     : nothing;
   const behind = d.pullback?.state === "behind";
   const r = d.visual_round, deciding = r && r.outcome === "ask" && d.question?.options.some((o) => o.id === "fail");
-  const pictures = d.visual ? visualSection(d.key, d.visual, d.before, d.visual_existing_errors, deciding)
-    : d.before ? beforeSection(d.key, d.before) : null;
+  const amending = (d.amendments?.list ?? []).find((a) => a.state === "proposed");
+  const pictures = d.visual ? visualSection(d.key, d.visual, d.before, d.visual_existing_errors, deciding, d.reference,
+    amending)
+    : d.before ? beforeSection(d.key, d.before, d.reference) : null;
   const unjudged = roundRefused(r, d.visual);
   const approvingNow = d.step === "shape" && d.brief.approved !== d.brief.version;
   let question = nothing;
@@ -73,7 +80,8 @@ export function detailView(d) {
       : d.retry ? retryForm(d.question, d.retry, d) : questionForm(d.question, d);
   }
   return html`${detailHead(d)}
-    <div class="row status"><p-tag variant=${variant} compact="true">${label}</p-tag>${text(said(d.line, label))}</div>
+    <div class="row status"><p-tag variant=${variant} compact="true">${label}</p-tag>${
+      text(said(statusLine(d), label))}</div>
     ${d.now && label !== "Done" ? text(d.now, { size: "sm", color: "contrast-medium" }) : nothing}
     ${refusedTop}
     ${d.settings_fault ? notice("error", "Settings could not be read", d.settings_fault,
@@ -83,19 +91,22 @@ export function detailView(d) {
     ${question}
     ${d.merge ? mergeForm(d.merge, d) : nothing}
     ${d.checks.filter((c) => c.waiting).map((c) => checkForm(c, d))}
+    ${actionItems(d)}
     ${approvingNow ? approval(d) : nothing}
+    ${d.diagnostics?.length ? html`<ul class="diagnostics">${d.diagnostics.map((e) => html`
+      <li>Recorded ${new Date(e.at).toLocaleString()}: ${e.reason}</li>`)}</ul>` : nothing}
     ${pictures && !deciding ? info("Before and after", pictures.lines, unjudged,
       toggle("screenshots", `Screenshots (${pictures.count})`, pictures.shots))
       : unjudged !== nothing ? info("Before and after", unjudged) : nothing}
     ${d.owner_criteria.length ? criteriaPanel(d) : nothing}
     ${d.progress ? info("Progress", stepper(d.progress), d.restartable ? restartButton(d) : nothing) : nothing}
-    ${d.plan.length ? info("Plan", planList(d)) : nothing}
-    ${d.rounds ? roundsInfo(d.rounds, d) : nothing}
+    ${d.plan.length || d.plan_versions.versions.length ? planInfo(d) : nothing}
+    ${on && d.rounds ? roundsInfo(d.rounds) : nothing}
     ${!approvingNow && (d.brief.outcome || d.criteria.length) ? briefInfo(d) : nothing}
     ${d.pullback && !behind ? pullbackNote(d.pullback, d) : nothing}
-    ${watcherSection(d.watcher)}
+    ${on ? watcherSection(d.watcher) : nothing}
     ${improvementSection(d)}
-    ${info("Recent activity", activityLog(d.activity))}
+    ${on ? info("Recent activity", activityLog(d.activity)) : nothing}
     ${spendLines(d.spend)}
-    ${toolLines(d.tool_use)}`;
+    ${on ? toolLines(d.tool_use) : nothing}`;
 }

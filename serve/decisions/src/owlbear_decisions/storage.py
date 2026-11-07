@@ -84,8 +84,7 @@ def serialize(decision: Decision) -> str:
 
 def _schema_error(error: ValidationError) -> DecisionFileError:
     locations = tuple(".".join(str(p) for p in item["loc"]) or "decision" for item in error.errors())
-    details = ", ".join(f"{loc}: {item['msg']}" for loc, item in zip(locations, error.errors(), strict=True))
-    return DecisionFileError(f"schema: {details}", locations)
+    return DecisionFileError(f"schema: {type(error).__name__}: {error}", locations)
 
 
 def parse(text: str) -> Decision:
@@ -96,7 +95,7 @@ def parse(text: str) -> Decision:
     try:
         data = _yaml().load(text[len(_FENCE) : end + 1])
     except YAMLError as exc:
-        msg = f"front matter is not valid YAML: {str(exc).splitlines()[0]}"
+        msg = f"front matter is not valid YAML: {type(exc).__name__}: {exc}"
         raise DecisionFileError(msg) from exc
     if not isinstance(data, dict):
         msg = "front matter must be a mapping"
@@ -109,6 +108,20 @@ def parse(text: str) -> Decision:
         return Decision.model_validate(data)
     except ValidationError as exc:
         raise _schema_error(exc) from exc
+
+
+def parse_named(text: str, name: str) -> Decision:
+    """Parse a decision under its file name, applying the same identity check as a filesystem read."""
+    decision = parse(text)
+    if name != f"{decision.id}.md":
+        msg = f"file name must be {decision.id}.md"
+        raise DecisionFileError(msg, ("id",))
+    return decision
+
+
+def ignored_name(name: str) -> bool:
+    """Whether a decision folder deliberately ignores this housekeeping or in-flight temporary entry."""
+    return name in _IGNORED or bool(_TEMPORARY.match(name))
 
 
 def read(path: Path) -> Decision:
@@ -125,11 +138,7 @@ def read(path: Path) -> Decision:
     except (OSError, UnicodeDecodeError) as exc:
         msg = f"unreadable: {type(exc).__name__}"
         raise DecisionFileError(msg) from exc
-    decision = parse(text)
-    if path.name != f"{decision.id}.md":
-        msg = f"file name must be {decision.id}.md"
-        raise DecisionFileError(msg, ("id",))
-    return decision
+    return parse_named(text, path.name)
 
 
 class NotRegularFileError(OSError):
@@ -185,7 +194,7 @@ def load_folder(folder: Path) -> Loaded:
         loaded.errors.append(FileError(directory, "not a folder: decisions must be a real folder"))
         return loaded
     for path in sorted(directory.iterdir()):
-        if path.name in _IGNORED or _TEMPORARY.match(path.name):
+        if ignored_name(path.name):
             continue
         mode = path.lstat().st_mode
         if path.suffix != ".md" or not (stat.S_ISREG(mode) or stat.S_ISLNK(mode)):

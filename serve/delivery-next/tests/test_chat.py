@@ -28,10 +28,14 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_contracts.preparation import Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_contracts.round_records import RoundFinding, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_contracts.visual_records import VisualResult
 from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow.shaping_capture import CAPTURING
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import chat_client, setup
 from owlbear_delivery_next.commands.chat_client import NOT_RUNNING, NOT_SERVED, OWLBEAR_DOWN, Chat, OwlBear
+from owlbear_delivery_next.git.access import Access
+from owlbear_delivery_next.github.account import AccountMissing
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import answers, api, brief_routes, launches, pages
@@ -41,7 +45,7 @@ from owlbear_delivery_next.runtimes.vscode_contract import Outcome as Outcome_
 from owlbear_delivery_next.settings import carried
 from owlbear_delivery_next.settings.config import Agent, Layer
 from owlbear_delivery_next.state_store import briefs, work_block
-from owlbear_delivery_next.state_store.database import put_record
+from owlbear_delivery_next.state_store.database import StoreError, put_record
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -67,7 +71,9 @@ class Host:
 
 
 def client(store):
-    app = api.create_app(store, "t", Host())
+    host = Host()
+    host.repo = store.root
+    app = api.create_app(store, "t", host)
     return TestClient(app, base_url="http://127.0.0.1", headers={"authorization": "Bearer t"})
 
 
@@ -176,17 +182,53 @@ def test_decisions_and_non_goals_stay_on_the_brief_version_reach_the_workers_and
     assert [e.split(":", 1)[0] for e in errors] == ["decisions[0].reason"]  # an autonomous choice says why
 
 
-def test_a_saved_decision_reaches_the_workers_whole(repo):
+def _long(head: str, size: int, end: str) -> str:
+    return head.ljust(size - len(end), "x") + end
+
+
+def test_a_saved_brief_reaches_the_workers_whole(repo):
+    """#962: every brief field save_brief or an amendment stores reaches the step inputs whole, never cut."""
     store = Store.open(repo)
     question = "Which states may the greeting show? " + "q" * 240 + " end of question"
     answer = "Home and checkout. " + "x" * 400 + " Never on the payment page."
     decided = [{"question": question, "answer": answer, "origin": "decided"}]
     assert answer.index("Never") > 400  # past the old cut
-    assert client(store).post("/api/next/briefs", json={**BRIEF, "decisions": decided}).status_code == 200
+    outcome = _long("Farewell everywhere. ", 2000, " OUTCOME-END")
+    criterion = _long("farewell('Ada') returns 'Bye, Ada!' ", 500, " CRITERION-END")
+    non_goal = _long("No translations ", 300, " NONGOAL-END")
+    steps = [_long(f"Step {n}: open the farewell page ", 45, f"S{n}-END") for n in range(1, 11)]
+    assert criterion.index("CRITERION-END") > 400  # past the old cut
+    assert len(" / ".join(steps)) > 400
+    checks = [{"name": "walk", "steps": steps, "expect": "Walk ends"}]
+    states = [{"name": "home", "path": "/", "expect": "Bye"}]
+    body = {**BRIEF, "outcome": outcome, "criteria": [criterion], "non_goals": [non_goal], "decisions": decided}
+    recipe = {"command": "npm run dev -- --port {port}", "directory": ".", "ready_url": "http://127.0.0.1:{port}/"}
+    saved = hosted(store).save_brief(body | {"person_checks": checks, "ui": True, "visual": states, "recipe": recipe})
+    assert saved["saved"] is True
     change = store.read(store.slugs()[0])
 
     for text in (step_input.plan(change, Profile(), Path("/w"), {}), "\n".join(step_input.brief(change))):
         assert f"- {' '.join(question.split())} -> {answer} (decided)" in text
+    challenge = step_input.brief_challenge(change, Path("/w"))
+    assert f"> {outcome}" in challenge
+    assert f"- AC-1: {criterion}" in challenge
+    assert f"- {non_goal}" in challenge
+    assert all(f"\n  - {s}\n" in challenge for s in steps)
+    assert "(cut)" not in challenge
+
+    # an amendment stores an expectation up to 2000 characters, and a step has no length cap
+    expect, state = (_long(f"{w} shows ", 900, f" {w}-END") for w in ("EXPECT", "VISUAL"))
+    step = _long("Step 1 ", 1600, " LONGSTEP-END")
+    change.checks[0].expect, change.brief.visual[0].expect, change.checks[0].steps[0] = expect, state, step
+    shown = {
+        "plan": step_input.plan(change, Profile(), Path("/w"), {}),
+        "check": step_input.check(change, change.checks[0], Path("/w"), []),
+        "visual": step_input.visual(change, [("home", 1280, "a.png")]),
+        "challenge": step_input.brief_challenge(change, Path("/w")),
+    }
+    wanted = {"plan": [expect], "check": [expect, f"> {step}"], "visual": [state], "challenge": [expect, step, state]}
+    assert {k: [w for w in wanted[k] if w not in v] for k, v in shown.items()} == {k: [] for k in shown}
+    assert [k for k, v in shown.items() if "(cut)" in v] == []
 
 
 def test_what_the_owner_stated_himself_is_recorded_and_survives_a_visual_save_and_a_revision(repo):
@@ -194,7 +236,7 @@ def test_what_the_owner_stated_himself_is_recorded_and_survives_a_visual_save_an
     c = client(store)
     checks = [
         {"name": "feel", "steps": ["Flip five times"], "expect": "No stutter", "owner": True},
-        {"name": "copy", "steps": ["Read the label"], "expect": "It says Flip"},
+        {"name": "copy", "steps": ["Read the label"], "expect": "It says Flip", "covers": ["AC-2"]},
     ]
     body = {**BRIEF, "criteria": [*BRIEF["criteria"], "farewell('') returns 'Bye!'"], "specified": ["AC-2"]}
     body |= {"person_checks": checks}
@@ -212,21 +254,38 @@ def test_what_the_owner_stated_himself_is_recorded_and_survives_a_visual_save_an
     read_back = hosted(Store.open(repo)).show_status("c1")["brief"]  # what a resumed chat resaves
     assert read_back["specified"] == ["AC-2"]
     assert read_back["states"] == [{"name": "home", "owner": True}, {"name": "copy", "owner": False}]
-    assert read_back["person_checks"] == [{"name": "feel", "owner": True}, {"name": "copy", "owner": False}]
+    assert read_back["person_checks"] == [
+        {"name": "feel", "covers": ["AC-1", "AC-2"], "owner": True},
+        {"name": "copy", "covers": ["AC-2"], "owner": False},
+    ]  # fmt: skip
+    assert [p.procedure for p in store.read(slug).checks] == [1, 1]  # the visual check's resave kept what they cover
     unknown = c.post("/api/next/briefs", json={**body, "specified": ["AC-3"]}).json()["errors"]
     assert unknown == ["specified[0]: AC-3 names no criterion of this brief - use one of AC-1, AC-2"]
+    checks[1]["covers"] = ["AC-3"]
+    unknown = c.post("/api/next/briefs", json=body).json()["errors"]
+    assert unknown == ["person_checks[1].covers: AC-3 names no criterion of this brief - use one of AC-1, AC-2"]
 
 
-def test_a_brief_with_clicks_waits_for_a_declared_test_preparation_before_approval(tmp_path):
+def test_a_brief_with_clicks_waits_for_its_capture_and_a_declared_test_preparation_before_approval(tmp_path):
+    """D-01M61V2GR0C6JV2R6KJ0WR4PNB: the expectations are written against the current pages, so approval waits."""
     store = Store(tmp_path)
     c = client(store)
     states = [{"name": "dark", "path": "/", "expect": "Dark"}]
     steps = [{"state": "dark", "do": "click", "target": "Dark mode"}]
-    assert c.post("/api/next/briefs", json={**BRIEF, "ui": True, "visual": states, "steps": steps}).status_code == 200
+    recipe = {"command": "npm run preview -- --port {port}", "directory": ".", "ready_url": "http://127.0.0.1:{port}/"}
+    ui = {"ui": True, "visual": states, "steps": steps, "recipe": recipe}
+    assert c.post("/api/next/briefs", json=BRIEF | ui).status_code == 200
     slug = store.slugs()[0]
     with store.lock(slug) as lock:
         change = store.read(slug)
         change.brief.challenged = 1
+        store.write(lock, change)
+    capturing = c.post(f"/api/next/changes/{slug}/approve-brief", json={"version": 1})
+    assert (capturing.status_code, capturing.json()["detail"]) == (409, f"brief v1 cannot be approved yet: {CAPTURING}")
+    with store.lock(slug) as lock:  # the capture ended with its reason, as the runner writes it
+        change = store.read(slug)
+        ended = VisualResult(head="", tree="", findings=["dark: its steps need a test preparation"], at=NOW)
+        change.shaped = change.shaped.model_copy(update={"result": ended})
         store.write(lock, change)
     refused = c.post(f"/api/next/changes/{slug}/approve-brief", json={"version": 1})
     assert (refused.status_code, "dark" in refused.json()["detail"]) == (409, True)
@@ -330,9 +389,10 @@ def test_a_host_running_without_this_project_says_so_and_owlbears_clone_is_never
     assert (own["error"], "add this project" in own["error"]) == (OWLBEAR_DOWN, False)
 
 
+REPO_VIEW = f"gh repo view --json {readiness.REPO_FIELDS}"
 READY = {
     "gh --version": (0, "gh version 2.102.0"),
-    "gh repo view --json nameWithOwner,viewerPermission": (0, '{"nameWithOwner": "o/r", "viewerPermission": "ADMIN"}'),
+    REPO_VIEW: (0, '{"nameWithOwner": "o/r", "viewerPermission": "ADMIN", "isEmpty": false}'),
     "copilot --version": (0, "1.0.95"),
     "git config user.name": (0, "Ada"),
     "git config user.email": (0, "ada@example.com"),
@@ -341,23 +401,32 @@ READY = {
 GPG = "gpg --batch --yes --pinentry-mode error -u ABC --clearsign -o /dev/null /dev/null"
 
 
-def failed(table, network=None):
-    checks = readiness.readiness("github.com", lambda argv: table.get(" ".join(argv), (0, "")), network, "copilot")
+SIGNED = SimpleNamespace(
+    access=lambda: Access("ada", "the setting names it", "github.com", "tok-ada", "gh"), unset=False
+)
+
+
+def _lacking() -> Access:
+    msg = "gh holds no account ada on github.com"
+    raise AccountMissing(msg)
+
+
+def failed(table, network=None, writer=SIGNED):
+    probe = lambda argv, _env=None: table.get(" ".join(argv), (0, ""))  # noqa: E731
+    checks = readiness.readiness("github.com", probe, network, "copilot", writer)
     return [(c.name, c.fix) for c in checks if not c.ok]
 
 
 def test_readiness_gives_one_concrete_fix_per_failure():
     assert failed(READY) == []
-    assert failed(READY | {"gh auth status --hostname github.com": (1, "not logged in")}) == [
-        ("github sign-in", "Run `gh auth login --hostname github.com`")
+    assert failed(READY, writer=SimpleNamespace(access=_lacking, unset=False)) == [
+        ("github sign-in", readiness.SIGN_IN.format(host="github.com"))
     ]
     tls = failed(READY, "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed")
     assert [n for n, _ in tls] == ["network"]
     assert "SSL_CERT_FILE" in tls[0][1]
     read_only = '{"nameWithOwner": "o/r", "viewerPermission": "READ"}'
-    assert [n for n, _ in failed(READY | {"gh repo view --json nameWithOwner,viewerPermission": (0, read_only)})] == [
-        "repository"
-    ]
+    assert [n for n, _ in failed(READY | {REPO_VIEW: (0, read_only)})] == ["repository"]
     locked = {"git config --bool commit.gpgsign": (0, "true"), "git config user.signingkey": (0, "ABC"), GPG: (2, "")}
     assert [n for n, _ in failed(READY | locked)] == ["commit signing"]
     assert failed(READY | locked | {GPG: (0, "")}) == []
@@ -375,32 +444,12 @@ def test_copilot_cli_skips_vscode_shim_and_names_it_when_alone(tmp_path, monkeyp
     monkeypatch.setenv("PATH", str(shim))
     with pytest.raises(FileNotFoundError, match=r"only VS Code's shim .*brew install --cask copilot-cli"):
         copilot_cli.cli_path()
-    checks = readiness.readiness("github.com", lambda argv: READY.get(" ".join(argv), (0, "")), None, None)
+    checks = readiness.readiness(
+        "github.com", lambda argv, _env=None: READY.get(" ".join(argv), (0, "")), None, None, SIGNED
+    )
     [check] = [c for c in checks if c.name == "copilot cli"]
     assert not check.ok
     assert check.detail == f"not found: only VS Code's shim {shim / 'copilot'}, which is not the CLI"
-
-
-ENV_FAILED = "  X Failed to log in to github.com using token (GH_TOKEN)\n  - The token in GH_TOKEN is invalid.\n"
-SIGNED_IN = "  ✓ Logged in to github.com account ada (keyring)\n  - Token scopes: 'repo'\n"
-
-
-@pytest.mark.parametrize(
-    ("status", "fix"),
-    [
-        pytest.param(f"github.com\n{ENV_FAILED}\n{SIGNED_IN}", "Unset GH_TOKEN", id="token-failed"),
-        pytest.param(
-            f"github.com\n{SIGNED_IN.replace('keyring', 'GH_TOKEN')}\n{ENV_FAILED.replace('GH_TOKEN', 'keyring')}",
-            "Run `gh auth login",
-            id="keyring-failed",
-        ),
-    ],
-)
-def test_a_failed_sign_in_shows_every_account_and_fixes_the_failed_one(status, fix):
-    probe = READY | {"gh auth status --hostname github.com": (1, status)}
-    *_, sign_in = readiness.publishing("github.com", lambda argv: probe.get(" ".join(argv), (0, "")), None)
-    assert (sign_in.name, sign_in.ok, sign_in.detail) == ("github sign-in", False, status.strip())
-    assert sign_in.fix.startswith(fix)
 
 
 def test_an_unusable_ssh_signing_key_is_a_failed_check_with_one_fix(tmp_path):
@@ -623,6 +672,27 @@ def test_a_failed_follow_up_is_kept_whole_and_logged(caplog):
     assert (record.levelname, record.exc_info is not None) == ("ERROR", True)
 
 
+@pytest.mark.parametrize("where", ["launch", "follow-up"])
+def test_a_failed_launch_or_follow_up_keeps_its_whole_error(caplog, whole_error, where):
+    """What the page reads of a launch that raised, or of its follow-up, is the error whole, and it is logged (#971)."""
+    error = RuntimeError(whole_error)
+    error.add_note("a note added on the way up")
+
+    def failing(*_args: object) -> dict[str, str]:
+        raise error
+
+    kept = launches.Launches(0, time.monotonic)
+    work = failing if where == "launch" else lambda: {"state": "open"}
+    launch = kept.start(work, done=failing if where == "follow-up" else None)
+    end = time.monotonic() + 5
+    while (state := kept.state(launch))["state"] == "opening" and time.monotonic() < end:
+        time.sleep(0.01)
+    whole = f"RuntimeError: {whole_error}\na note added on the way up"
+    assert state == ({"state": "failed", "reason": whole} if where == "launch" else {"state": "open", "warning": whole})
+    [record] = [r for r in caplog.records if r.name == launches.__name__]
+    assert (record.levelname, record.exc_info[1]) == ("ERROR", error)
+
+
 DRAFT = {
     "change": "c1",
     "title": "Flip the hero",
@@ -695,6 +765,22 @@ def test_a_state_that_refuses_a_revision_says_why_and_opens_no_chat(tmp_path, up
     refused = c.post("/api/next/changes/flip/revise-brief")
     assert (refused.status_code, refused.json()["detail"], opening.calls) == (409, reason, [])
     assert briefs.save_brief(store, DRAFT) == (409, {"errors": [f"change: {reason}"]})
+
+
+@pytest.mark.parametrize("call", ["revise", "create", "visual"])
+def test_a_store_failure_of_a_brief_or_visual_save_is_answered_whole(tmp_path, monkeypatch, whole_error, call):
+    store = revisable(tmp_path)
+
+    def failing(*_args: object) -> None:
+        raise StoreError(whole_error)
+
+    monkeypatch.setattr(store, "read_profile" if call == "create" else "read", failing)
+    if call == "visual":
+        said = briefs.save_visual(store, {"change": "c1", "ui": False})
+        assert said == (409, {"errors": [f"change: StoreError: {whole_error}"]})
+        return
+    said = briefs.save_brief(store, DRAFT if call == "revise" else {k: v for k, v in DRAFT.items() if k != "change"})
+    assert said == (409, {"errors": [f"change: StoreError: {whole_error}; try again"]})
 
 
 def test_a_new_change_while_one_opens_is_refused_and_the_gap_starts_when_it_ends(tmp_path, monkeypatch):
@@ -835,6 +921,17 @@ def test_setup_replaces_a_saved_profile_it_cannot_read(repo, tmp_path_factory, m
     assert setup.run(repo, [], yes=True, local_files="no") == 0
     assert "cannot be read" in capsys.readouterr().out
     assert store.read_profile().confirmed_at is not None
+
+
+def test_setup_names_the_folder_its_fix_runs_in_when_started_from_another(repo, monkeypatch, capsys):
+    failed = readiness.Check("first commit", ok=False, detail="o/r has no commits yet", fix="Run `git push`")
+    monkeypatch.setattr(readiness, "check", lambda *_a: [failed])
+    monkeypatch.chdir(repo.parent)
+    assert setup.run(repo, [], yes=True, local_files="no") == 1
+    assert f"Next (in {repo}): Run `git push`" in capsys.readouterr().out
+    monkeypatch.chdir(repo)
+    assert setup.run(repo, [], yes=True, local_files="no") == 1
+    assert "Next: Run `git push`" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(

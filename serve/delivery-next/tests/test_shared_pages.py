@@ -12,12 +12,13 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 import uvicorn
-from owlbear_memory import MemoryCategory, MemoryEngine
+from owlbear_memory import MemoryCategory, MemoryEngine, storage
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
 from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryCurationResult
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
@@ -29,6 +30,7 @@ from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer
 from owlbear_delivery_next.state_store import backlog_issues, machine_settings, registry
 from owlbear_delivery_next.state_store.backlog import Backlog, Entry
+from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import Store, read_layer
 
 if TYPE_CHECKING:
@@ -64,10 +66,11 @@ class Host:
 class Launch:
     def __init__(self) -> None:
         self.prompts: list[str] = []
+        self.ending: dict[str, str] = {"state": "open"}
 
     def __call__(self, _repo, _role, prompt):
         self.prompts.append(prompt)
-        return {"state": "open"}
+        return self.ending
 
 
 def machine(tmp_path: Path, shared: Path) -> tuple[Starlette, dict[str, Launch]]:
@@ -130,6 +133,59 @@ def serving(app: Starlette) -> tuple[uvicorn.Server, str]:
 
 
 @pytest.mark.browser
+def test_changes_show_the_current_unreadable_profile_note_beside_fresh_cards(c1, tmp_path: Path, pds) -> None:
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    store, app = c1
+    server, base = serving(app)
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page(viewport={"width": 1440, "height": 1000})
+            pds.only(page, base)
+            errors: list[str] = []
+            page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(f"{base}/#token=tok")
+            expect(page.locator("#changes li.card")).to_have_count(1)
+            existing_errors = set(errors)
+            change = store.read(store.slugs()[0]).model_copy(deep=True)
+            change.brief.title = "Fresh readable card"
+            with store.lock(change.slug) as lock:
+                store.write(lock, change)
+            extra = change.model_copy(update={"slug": "fresh-change", "handle": ""}, deep=True)
+            extra.brief.title = "Another fresh card"
+            with store.lock(extra.slug) as lock:
+                store.write(lock, extra)
+            path = store.root / "profile.json"
+            path.write_text('{"format": 5, "entries":')
+            with pytest.raises(StoreError) as caught:
+                store.read_profile()
+            whole = failure(caught.value)
+            page.reload()
+            page.locator("#notes:not([hidden]), #error:not([hidden])").first.wait_for(state="visible")
+            pds.settled(page)
+            page.screenshot(path=str(tmp_path / "profile-read.png"), full_page=True)
+            notes = page.locator("#notes")
+            expect(notes).to_be_visible()
+            assert notes.text_content().strip() == f"The project profile could not be read: {whole}"
+            expect(page.locator("#changes li.card .open")).to_have_text(["Fresh readable card", "Another fresh card"])
+            expect(page.locator("#list")).not_to_have_class("stale")
+            expect(page.locator("#error")).to_be_hidden()
+            assert set(errors) == existing_errors
+            path.unlink()  # the same host reports only the current failure, not a retained probe notice
+            page.reload()
+            expect(page.locator("#notes")).to_be_hidden()
+            expect(page.locator("#changes li.card")).to_have_count(2)
+            browser.close()
+    finally:
+        server.should_exit = True
+
+
+@pytest.mark.browser
 @pytest.mark.usefixtures("github")
 def test_one_backlog_for_both_clones_triaged_by_project_and_a_change_started_in_the_chosen_clone(
     tmp_path: Path, shared_repo, pds
@@ -189,6 +245,44 @@ def test_one_backlog_for_both_clones_triaged_by_project_and_a_change_started_in_
         server.should_exit = True
 
 
+@pytest.mark.browser
+@pytest.mark.usefixtures("github")
+def test_a_failed_backlog_launch_shows_its_warning_whole(tmp_path: Path, shared_repo, pds, whole_error) -> None:
+    """R2 (#971): what Delivery could not undo is said beside a Backlog launch that failed too, whole."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    shop = Backlog(DataRepo(shared_repo[0]), "shop-site")
+    both = shop.add("Both sites", source="review")[0]
+    shop.update(both.id, {"kind": "improvement", "projects": ["shop-site", "docs-site"]})
+    app, launches = machine(tmp_path, shared_repo[0])
+    reason = "the Copilot chat did not start (unbound: x)"
+    launches[DOCS].ending = {"state": "failed", "reason": reason, "warning": whole_error}
+    server, base = serving(app)
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.goto(f"{base}/backlog?project={DOCS}#token=t")
+            page.get_by_label("Select Both sites").check()
+            page.get_by_role("button", name="Create Change from 1").click()
+            pds.pick(page.locator("#choose"), "Shape the Change in", DOCS)
+            page.get_by_role("button", name="Continue").click()
+            pds.answer(page, "Open the chat")
+            started = page.locator("#started")
+            expect(started.locator("code")).to_have_count(1, timeout=15000)
+            command = started.locator("code").text_content()
+            assert started.text_content().rstrip() == (  # the line's template ends in its own indent
+                f"Could not open the chat: {reason}. Note: {whole_error}. Run this command instead:{command}"
+            )
+            browser.close()
+    finally:
+        server.should_exit = True
+
+
 def curated(folder: Path, title: str) -> None:
     engine = MemoryEngine(folder)
     entry = engine.save(
@@ -213,6 +307,63 @@ def moves_back_only_where_it_came_from(page, pds, entries) -> None:
     pinned.get_by_role("button", name="Make global").click()
     pds.answer(page, "Make global")
     expect(pinned.locator(".place")).to_have_text("Global")
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("failing", ["every", "one"])
+def test_the_backlog_page_says_whole_why_github_could_not_be_read(  # noqa: PLR0913, PLR0917 - its fixtures
+    tmp_path: Path, shared_repo, pds, github, whole_error, monkeypatch, failing: str
+) -> None:
+    """GitHub's whole words reach the page: in the error when no clone was read, beside the backlog when one was not."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.github.provider import FailureCode, ProviderError  # noqa: PLC0415
+
+    Backlog(DataRepo(shared_repo[0]), "shop-site").add("Found in the shop", source="review")
+    read = f"the backlog could not be read from GitHub (acme/owlbear-data): ProviderError: list_issues: {whole_error}"
+    if failing == "every":
+        github.down, github.said = True, whole_error
+    else:
+        reads = Backlog.read
+
+        def docs_unreachable(self: Backlog, *, fresh: bool = False):
+            if self.project != "docs-site":
+                return reads(self, fresh=fresh)
+
+            def unreachable():
+                raise ProviderError(FailureCode.UNAVAILABLE, "list_issues", whole_error, retry_safe=True)
+
+            return self._github("read", unreachable)  # the read's own way of saying GitHub failed
+
+        monkeypatch.setattr(Backlog, "read", docs_unreachable)
+    before = len(github.ran)
+    server, base = serving(machine(tmp_path, shared_repo[0])[0])
+    said: list[str] = []
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            page.on("console", lambda m: said.append(f"{m.text} {m.location['url']}") if m.type == "error" else None)
+            page.on("pageerror", lambda e: said.append(str(e)))
+            pds.only(page, base)
+            page.goto(f"{base}/backlog?project={SHOP}#token=t")
+            if failing == "every":
+                expect(page.locator("#error")).to_be_visible()
+                shown = page.locator("#error").text_content()
+                gh = f"CalledProcessError: Command '{github.ran[before]}' returned non-zero exit status 1."
+                expected = f"{read[0].upper()}{read[1:]}\n{gh}\n    "  # the template's indent before the closing tag
+            else:
+                expect(page.locator("li.entry")).to_have_count(1)
+                shown = page.locator("#where").text_content()
+                expected = f"The backlog is the issues of acme/owlbear-data. Not read just now: docs-site: {read}."
+    finally:
+        server.should_exit = True
+    assert shown == expected
+    # the browser logs each failed read's status, and this machine host's missing updates route (404), nothing else
+    assert [s for s in said if "503" not in s and "/api/next/updates" not in s] == []
 
 
 def recommendation_shows_while_pending(page, entries, folder: Path) -> None:
@@ -284,6 +435,73 @@ def test_memory_shows_each_folder_once_beside_global_and_makes_an_entry_global(
     assert {e.title: e.state for e in MemoryEngine(root / "shop-site" / "memory").get_entries()}["Read the twin"] == (
         "approved"
     )
+
+
+@pytest.mark.browser
+def test_memory_shows_unreadable_settings_and_a_failed_move_whole(
+    tmp_path: Path, shared_repo, pds, monkeypatch, whole_error
+) -> None:
+    """#971: the purge line says why the purge age is unknown, and a move that fails says why, each whole."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    folder = shared_repo[0] / "docs-site" / "memory"
+    curated(folder, "Pin the runtime")
+    curated(folder, "Old lesson")
+    engine = MemoryEngine(folder)
+    old = next(e for e in engine.get_entries() if e.title == "Old lesson")
+    engine.delete(old.id, engine.approve(old.id, old.updated_at).updated_at)
+    unread, refused = StoreError(whole_error), ValueError(whole_error)
+    for error in (unread, refused):
+        error.add_note("a note added on the way up")
+
+    def unreadable(_store):
+        raise unread
+
+    real = storage.write_entry
+
+    def refusing(path, written, *, memory_dir):  # only the moving entry's write, which names its origin, fails
+        if getattr(written, "origin", None):
+            raise refused
+        return real(path, written, memory_dir=memory_dir)
+
+    monkeypatch.setattr(Store, "settings", unreadable)
+    server, base = serving(machine(tmp_path, shared_repo[0])[0])
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            said: list[str] = []
+            page.on("console", lambda m: said.append(f"{m.text} {m.location['url']}") if m.type == "error" else None)
+            page.on("pageerror", lambda e: said.append(str(e)))
+            page.goto(f"{base}/memory?project={DOCS}#token=t")
+            pds.pick(page.locator("#filters"), "State", "any")
+            line = page.locator("section.quiet div.row > div > p-text")  # the purge line
+            expect(line).to_have_count(1)
+            assert line.text_content() == (
+                f"The settings can't be read: StoreError: {whole_error}\na note added on the way up."
+            )
+            monkeypatch.setattr(storage, "write_entry", refusing)
+            pinned = page.locator("li.entry").filter(has_text="Pin the runtime")
+            pinned.get_by_role("button", name="Make global").click()
+            pds.answer(page, "Make global")
+            expect(page.locator("#error")).to_be_visible()
+            assert page.locator("#error").text_content().strip() == (
+                f"Pin the runtime cannot move: ValueError: {whole_error}\na note added on the way up"
+            )
+            moved = next(e.id for e in engine.get_entries() if e.title == "Pin the runtime")
+            answered = "Failed to load resource: the server responded with a status of"
+            assert set(said) == {  # the test machine has no update checks or seen marks; the refused move
+                f"{answered} 404 (Not Found) {base}/api/next/updates",
+                f"{answered} 404 (Not Found) {base}/api/next/seen",
+                f"{answered} 422 (Unprocessable Content) {base}/p/{DOCS}/api/next/memory/{moved}/make-global",
+            }
+            browser.close()
+    finally:
+        server.should_exit = True
 
 
 def test_an_older_scope_label_without_its_project_label_means_the_project_it_was_found_in():
@@ -440,7 +658,7 @@ def every_machine_s_settings_are_saved_with_the_global_layer(page, pds, shared: 
     page.get_by_label("Every machine: Agent sessions at once on this machine, across its projects").fill("5")
     page.get_by_label("Every machine: Hours between checks for a newer OwlBear (it also checks at launch)").fill("12")
     page.locator(".bar").get_by_role("button", name="Save global defaults").click()
-    expect(pds.modal(page)).to_contain_text("machine channel: unset → major")
+    expect(pds.modal(page)).to_contain_text("Versions this machine takes: unset → major")
     pds.answer(page, "Save global defaults")
     expect(page.locator("#status")).to_have_text("Saved the global settings. They apply to the next session.")
     glob = read_layer(shared.global_path, GlobalLayer).machine
@@ -517,7 +735,7 @@ def a_role_s_subagents_are_switched_off_and_saved(page, store: Store, pds) -> No
 
     pds.group(page, "agents")
     pds.pick(page, "Built-in subagents, reviewer", "false")
-    expect(page.locator("#pending")).to_contain_text("reviewer subagents: inherited → false")
+    expect(page.locator("#pending")).to_contain_text("reviewer · Subagents: inherited → false")
     page.locator(".bar").get_by_role("button", name="Save project settings").click()
     pds.answer(page, "Save project settings")
     expect(page.locator("#pending")).to_have_text("No unsaved edits.")
@@ -532,10 +750,10 @@ def a_role_s_subagents_are_switched_off_and_saved(page, store: Store, pds) -> No
     assert store.settings().sources["agents.builder.minutes"] == "machine"
     pds.group(page, "overview")
     across = page.locator("#across-table p-table-row")
-    minutes = across.filter(has_text="agents · builder · minutes")  # both baselines, apart
-    cells = ["agents · builder · minutes", "40 (built-in default)", "55", "none"]
+    minutes = across.filter(has_text="Agents and runs · builder · Minutes per session")  # both baselines, apart
+    cells = ["Agents and runs · builder · Minutes per session", "40 (built-in default)", "55", "none"]
     expect(minutes.locator("p-table-cell")).to_have_text(cells)
-    rounds = across.filter(has_text="final_review · max_rounds")  # derived from the builder's
+    rounds = across.filter(has_text="Agents and runs · Final review · Rounds at most")  # derived from the builder's
     expect(rounds.locator("p-table-cell").nth(2)).to_have_text("same")
     pds.pick(page, "Layer", "project")
 
@@ -545,15 +763,15 @@ def the_overview_shows_what_projects_set_apart(page) -> Any:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     across = page.locator("#across-table")
-    expect(across).to_contain_text("widths")
+    expect(across).to_contain_text("Checks and merge · Screenshot widths")
     expect(across).to_contain_text("(built-in default)")
     expect(across).to_contain_text("shop-site: 1600")  # once, though two clones of it are registered
     expect(across).not_to_contain_text("docs-site")
-    expect(across).not_to_contain_text("planner · subagents")
+    expect(across).not_to_contain_text("planner · Subagents")
     page.get_by_label("Show all settings").check()  # every setting, those nobody sets apart too (TD-295)
-    expect(across.get_by_text("agents · planner · subagents", exact=True)).to_have_count(1)
+    expect(across.get_by_text("Agents and runs · planner · Subagents", exact=True)).to_have_count(1)
     page.get_by_label("Show all settings").uncheck()
-    expect(across).not_to_contain_text("planner · subagents")
+    expect(across).not_to_contain_text("planner · Subagents")
     return across
 
 
@@ -611,7 +829,8 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
             expect(page.locator("#status")).to_have_text("Saved docs-site's settings. They apply to the next session.")
             pds.group(page, "overview")
             expect(across).to_contain_text("docs-site: no")  # the overview follows the save
-            expect(across.locator("text=final_review · max_rounds")).to_have_count(1)  # the builder's rounds, inherited
+            # the builder's rounds, inherited
+            expect(across.locator("text=Agents and runs · Final review · Rounds at most")).to_have_count(1)
             expect(across).to_contain_text("docs-site: 4")
             a_role_s_subagents_are_switched_off_and_saved(page, docs, pds)
             page.goto(f"{base}/config?project={DOCS}")
@@ -665,9 +884,103 @@ def a_machine_s_clear_shows_global_s_saved_value_and_global_ignores_its_draft(pa
     expect(line).to_have_text("in use: Every minor version (v0.1, v0.2 …), from this machine")
 
 
+# The page's modules, imported as the page does, so the probes read the page's own state and name table.
+OVERVIEW_KEYS = """
+async () => {
+  const { state } = await import("/assets/page/config/state.mjs");
+  const { rowOf, groupOf } = await import("/assets/page/config/groups.mjs");
+  const unset = [...state.loaded.settings.missing, ...state.machine.resolved.missing.map((k) => `machine.${k}`)];
+  const shown = ["agents.shaper.minutes", "agents.shaper.subagents", "spotter.sample_rate", "spotter.verbose_until"];
+  return [...unset, ...shown].map((key) => ({ key, group: groupOf(rowOf(key)), unset: unset.includes(key) }));
+}
+"""
+# What the page shows for each key: its row's own name, the heading of its section and, in the agents and rounds tables,
+# the head of the column whose cell holds the key's control.
+ROW_WORDS = """
+async (keys) => {
+  const { nameOf, hasRow } = await import("/assets/page/config/names.mjs");
+  const { rowOf } = await import("/assets/page/config/groups.mjs");
+  const own = (el) => [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join("").trim();
+  return keys.map((key) => {
+    const el = document.getElementById(rowOf(key));
+    if (!el) return { key, found: false };
+    const row = el.closest("p-table-row") ?? el;
+    const label = row.matches("p-table-row")
+      ? row.querySelector("p-table-cell p-text") : el.querySelector(":scope > p-text");
+    let column = "";
+    if (/^set-(agents|rounds)-/.test(el.id)) {
+      const draft = key.replace(/^agents[.]/, ""), control = row.querySelector(`[data-key="${draft}"]`);
+      const cells = [...row.children].filter((c) => c.matches("p-table-cell"));
+      const heads = row.closest("p-table").querySelectorAll("p-table-head-cell");
+      column = heads[cells.indexOf(control?.closest("p-table-cell"))]?.textContent.trim() ?? "";
+    }
+    return { key, found: true, has: hasRow(key), name: nameOf(key), row: own(label), column,
+      section: el.closest("section")?.querySelector("h2")?.textContent.trim() ?? "" };
+  });
+}
+"""
+# The settings the page has no row for: a role that runs no loop has no round values to set, the Spotter's minutes and
+# subagents show n/a, and test preparations and data permissions have no editor yet.
+NO_ROW = """
+async () => {
+  const { nameOf, hasRow, LOOPS, ROUNDS } = await import("/assets/page/config/names.mjs");
+  const { state } = await import("/assets/page/config/state.mjs");
+  const { rowOf } = await import("/assets/page/config/groups.mjs");
+  const loops = LOOPS.map(([owner]) => owner), roles = Object.keys(state.loaded.settings.agents);
+  const keys = ["data", "preparations", "agents.spotter.minutes", "agents.spotter.subagents",
+    ...roles.filter((r) => !loops.includes(r)).flatMap((r) => ROUNDS.map(([f]) => `agents.${r}.${f}`))];
+  let unknown = "";
+  try { nameOf("agents.planner.bogus"); } catch (e) { unknown = e.message; }
+  return { count: keys.length, unknown,
+    wrong: keys.filter((k) => hasRow(k) || nameOf(k) !== k || document.getElementById(rowOf(k))) };
+}
+"""
+# A change notice kept from an older version, for a setting since retired, as the read state keeps it until dismissed.
+RETIRED_NOTICE = """
+async (notices) => {
+  const { state, show } = await import("/assets/page/config/state.mjs");
+  state.reads = { ...(state.reads ?? {}), notices };
+  show();
+}
+"""
+SECTIONED = {"spotter.": "Spotter", "pr_labels": "Pull requests", "pr_marker": "Pull requests"}
+
+
+def every_name_is_what_its_row_shows(page, pds) -> None:
+    """The unset list's names are the page's own: each key's name is its row's visible name, behind its section's
+    heading where the row means little alone, and its column's head in the agents and rounds tables (never built from
+    the name table itself); the row sits in the group the list links to; a key with no row is named as written."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    retired = {"id": "n1", "key": "machine.spotter_budget", "old": "5", "new": None, "at": "2026-11-04T09:00:00Z"}
+    expect(page.locator("#reads-status")).to_contain_text("Last read", timeout=30_000)  # none lands over the notice
+    page.evaluate(RETIRED_NOTICE, [retired])  # it is shown as its key and can be dismissed, never a failure to draw
+    expect(page.locator("#reads-changed li")).to_contain_text("machine.spotter_budget: 5 → unset")
+    expect(page.get_by_role("button", name="Dismiss the change of machine.spotter_budget")).to_have_count(1)
+    page.evaluate(RETIRED_NOTICE, [])
+    keys = page.evaluate(OVERVIEW_KEYS)
+    assert (len(keys), sum(k["unset"] for k in keys)) == (150, 146)  # 132 + 14 unset, and four shown when set
+    for group in dict.fromkeys(k["group"] for k in keys):
+        pds.group(page, group)
+        for shown in page.evaluate(ROW_WORDS, [k["key"] for k in keys if k["group"] == group]):
+            key = shown["key"]
+            assert shown["found"], f"{key}: no row in {group}"
+            prefix = next((f"{section} · " for head, section in SECTIONED.items() if key.startswith(head)), "")
+            assert shown["section"] == prefix.removesuffix(" · ") or not prefix, key
+            expected = prefix + shown["row"] + (f" · {shown['column']}" if shown["column"] else "")
+            assert shown["has"]
+            assert shown["name"] == expected, key
+            if key.startswith(("agents.", "final_review.")) and key.split(".")[-1] not in ("minutes", "subagents"):
+                assert shown["column"], f"{key}: no column"
+    pds.group(page, "agents")
+    nothing = page.evaluate(NO_ROW)
+    assert (nothing["count"], nothing["wrong"]) == (52, [])
+    assert "agents.planner.bogus" in nothing["unknown"]
+
+
 @pytest.mark.browser
 def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_move(
-    tmp_path: Path, shared_repo, pds, monkeypatch
+    tmp_path: Path, shared_repo, pds, monkeypatch, whole_error
 ) -> None:
     """Code ships no defaults (2026-10-23): with no built-in layer, every unset machine setting is an error."""
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
@@ -677,7 +990,11 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
     monkeypatch.setattr(machine_settings, "BASE", None)
     monkeypatch.setattr(config, "BASE", None)
     with registry.locked():
-        registry.save(registry.Machine(settings_pending="the shared repository could not be brought current: offline"))
+        registry.save(  # #971: a failed carry's whole error
+            registry.Machine(
+                settings_pending=(pending := f"the settings carry failed: RuntimeError: {whole_error}\na note on it")
+            )
+        )
     server, base = serving(machine(tmp_path, shared_repo[0])[0])
     try:
         with sync_playwright() as pw:
@@ -690,13 +1007,18 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
             page.goto(f"{base}/config?project={DOCS}#token=t")
             listed = page.locator("#unset-this-machine")  # D-01M66B6GS0HKACV9C4R4QKFX7T: its count, its first three
             expect(listed).to_have_text(
-                "This machine, 14 unset: machine.channel, machine.update_when_idle, "
-                "machine.update_while_paused and 11 more"
+                "This machine, 14 unset: Versions this machine takes, Update itself when idle, "
+                "Update itself while paused and 11 more"
             )
             expect(listed.get_by_role("link", name="and 11 more")).to_have_attribute("href", "#this-machine")
+            every_name_is_what_its_row_shows(page, pds)
             pds.group(page, "this-machine")
             region = page.get_by_role("region", name="This machine")
-            expect(page.locator("#machine-pending")).to_contain_text("offline")
+            assert page.locator("#machine-pending").text_content() == (
+                "Moving this machine's settings into the global ones\n      is not done: "
+                f"{pending}. OwlBear tries again at its next start (owlbear restart); until then\n"
+                "      this machine keeps its own values."
+            )
             red = region.locator(".field > p-text[color='error']")  # GW8RT6: each unset setting's name is red
             expect(red).to_have_count(14)  # 3 update checks
             expect(region.locator("p-select[disabled], p-input-text[disabled]")).to_have_count(14)  # #809: a project

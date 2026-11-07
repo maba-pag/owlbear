@@ -1,5 +1,6 @@
 """Impeccable update tooling (design skill research §3.5): notice, rule diff, golden pages, calibration replay."""
 
+import contextlib
 import dataclasses
 import hashlib
 import json
@@ -12,20 +13,24 @@ from http.client import IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from pathlib import Path
+from types import SimpleNamespace
 from typing import ClassVar
 from urllib.error import HTTPError
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.visual_records import DesignInput, JudgeVerdict, OwnerDecision, VisualRound
 from owlbear_delivery_next.commands import cli, replay_client
 from owlbear_delivery_next.commands.chat_client import NOT_RUNNING, NOT_SERVED
+from owlbear_delivery_next.github.account import Writer
 from owlbear_delivery_next.impeccable import calibration, design_tools, detector, pack_files, pack_update
 from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_job, pack_replay, pack_run
 from owlbear_delivery_next.local_system import local_home, preload
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.project_host import config_routes
+from owlbear_delivery_next.project_host import config_routes, pack_routes
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Store
@@ -117,7 +122,8 @@ def test_the_notice_is_read_offline_refreshed_at_most_daily_and_shown_by_setup_a
     assert config_routes._state(Store.open(repo))["impeccable"] == shown  # noqa: SLF001
     monkeypatch.setattr(readiness, "readiness", lambda *_a: [])  # the other facts probe the machine and the network
     monkeypatch.setattr(readiness, "reach", lambda *_a: None)  # its argument is evaluated first: no real request
-    assert readiness.check(repo, None) == [readiness.Check("Impeccable updates", ok=True, detail=shown)]  # host start
+    checks = readiness.check(repo, None, Writer.rule(repo))  # a host start
+    assert checks == [readiness.Check("Impeccable updates", ok=True, detail=shown)]
     path = pack_files.folder().parent / pack_update.NOTICE
     path.write_text(json.dumps(json.loads(path.read_text()) | {"tag": "skill-v4.0.0"}))
     assert pack_update.notice(refresh=False)["behind"] is None  # another pinned pack's count
@@ -152,7 +158,11 @@ def test_the_notice_says_known_stale_unknown_or_error_and_a_failed_check_keeps_t
     stale = pack_update.notice(refresh=False)
     assert (stale["state"], stale["behind"], stale["checked_at"]) == ("stale", 2, old)
     error = pack_update.notice(refresh=True, fetch=refused)
-    assert (error["state"], error["behind"], error["detail"]) == ("error", None, "GitHub answered 403 rate limited")
+    assert (error["state"], error["behind"], error["detail"]) == (
+        "error",
+        None,
+        "GitHub answered 403 rate limited: HTTPError: HTTP Error 403: rate limited",
+    )
     assert pack_update.said(error) == "Impeccable (impeccable-4.5.2.1): releases upstream unknown"
     assert pack_update.notice(refresh=False, force=True, fetch=lambda _u: b"{}")["state"] == "error"
     offline = pack_update.notice(refresh=False, force=True)
@@ -471,6 +481,13 @@ def test_a_replay_rejudges_kept_rounds_with_their_exact_messages_and_screenshots
     assert [a["displayName"] for a in cfg.attachments] == ["home-1280-A.png", "home-1280-B.png"]
     assert cfg.observe().changed == ("home-1280-A.png", "home-1280-B.png")
     assert (cfg.policy.write, cfg.resume, cfg.session_id.startswith("replay-")) == (False, False, True)
+    clash = {"image": "home-1280-A.png", "rule": "Color", "problem": "the required grey is faint"}
+    said = {"verdict": "pass", "preferences": [{"pair": "home-1280", "better": "equal", "why": "same"}]}
+    said |= {"covered_paths": ["home-1280-A.png", "home-1280-B.png"]}
+    named = design_tools.DesignLook(**said, conflicts=[clash | {"departs": "home"}])  # the stored round's state
+    stray = design_tools.DesignLook(**said, conflicts=[clash | {"departs": "AC-1"}])  # a criterion it never had
+    assert design_tools.check(named, cfg.observe(), cfg.targets) == []
+    assert design_tools.check(stray, cfg.observe(), cfg.targets)[0].startswith("conflicts: AC-1 is no state")
 
 
 def test_a_replay_judge_left_running_stops_the_replay_before_another_starts(repo, tmp_path) -> None:
@@ -488,6 +505,34 @@ def test_a_replay_judge_left_running_stops_the_replay_before_another_starts(repo
     with pytest.raises(pack_replay.ReplayError, match="may still be running"):
         pack_replay.replay(store, run=run)
     assert len(started) == 1
+
+
+def test_an_unverified_session_end_says_its_problems_whole(caplog, repo, tmp_path, whole_error) -> None:
+    store = Store.open(repo)
+    (shot := tmp_path / "s.png").write_bytes(b"png")
+    shots = {"after-home-1280.png": shot, "before-home-1280.png": shot}
+    calibration.keep(store.shared, store.name, "c1", kept_round(1, "pass", "pass"), shots)
+    started = []
+    left = Termination(confirmed=False, unknown=(9,), problems=(f"disconnect failed: RuntimeError: {whole_error}",))
+
+    def run(cfg):
+        started.append(cfg.session_id)
+        return Run(cfg.session_id, ending="result", termination=left)
+
+    job = SimpleNamespace(
+        exclusive=contextlib.nullcontext,
+        keeps=lambda _path: False,
+        live=SimpleNamespace(replay=lambda s, _c, **_k: pack_replay.replay(s, run=run)),
+        count_replay=lambda _n: None,
+    )
+    app = FastAPI()
+    app.include_router(pack_routes.router(store, job))
+    answer = TestClient(app, base_url="http://127.0.0.1").post("/impeccable/replay")
+    why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
+    said = f"the replay judge {started[0]} may still be running; stop it before replaying again; {why}"
+    assert (answer.status_code, answer.json()) == (409, {"detail": said})
+    logged = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == pack_routes.__name__]
+    assert logged == [("WARNING", f"calibration replay refused: {said}")]
 
 
 def test_a_replay_worktree_git_refuses_stops_the_replay_stage_with_gits_whole_words(repo, monkeypatch, whole_error):
@@ -645,3 +690,39 @@ def test_the_cli_runs_each_update_tool_and_reports_failures(repo, capsys, monkey
     assert "CalledProcessError" in capsys.readouterr().out
     with pytest.raises(SystemExit):
         cli.main(["--repo", str(repo), "impeccable", "--diff", str(repo)])
+
+
+@pytest.mark.parametrize("failure_kind", ["timeout", "failed", "noted"])
+def test_the_cli_reports_each_diff_failure_whole(repo, capsys, monkeypatch, whole_error, failure_kind) -> None:
+    pin(monkeypatch, git(repo, "rev-parse", "HEAD"))
+    real = subprocess.run
+    seen = []
+
+    def run(argv, **kwargs):
+        if argv[1:2] != ["diff"]:
+            return real(argv, **kwargs)
+        seen.append((argv, kwargs["timeout"]))
+        out, err = f"OUT:{whole_error}".encode(), f"ERR:{whole_error}".encode()
+        if failure_kind == "timeout":
+            exc = subprocess.TimeoutExpired(argv, kwargs["timeout"], output=out, stderr=err)
+        elif failure_kind == "failed":
+            exc = subprocess.CalledProcessError(2, argv, output=out, stderr=err)
+        else:
+            exc = OSError(whole_error)
+        exc.add_note("Impeccable diff note")
+        raise exc
+
+    monkeypatch.setattr(pack_update.subprocess, "run", run)
+    monkeypatch.setattr(pack_update, "rules", lambda *_args: {})
+    assert cli.main(["--repo", str(repo), "impeccable", "--diff", str(repo), "--to", "HEAD"]) == 1
+    [(argv, timeout)] = seen
+    assert timeout == 60
+    if failure_kind == "timeout":
+        expected = f"TimeoutExpired: Command '{argv}' timed out after 60 seconds"
+    elif failure_kind == "failed":
+        expected = f"CalledProcessError: Command '{argv}' returned non-zero exit status 2."
+    else:
+        expected = f"OSError: {whole_error}"
+    if failure_kind != "noted":
+        expected += f"\nstderr:\nERR:{whole_error}\nstdout:\nOUT:{whole_error}"
+    assert capsys.readouterr().out == f"Impeccable: {expected}\nImpeccable diff note\n"

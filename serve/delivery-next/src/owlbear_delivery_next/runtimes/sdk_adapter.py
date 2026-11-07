@@ -20,6 +20,7 @@ from copilot.rpc import PermissionDecisionApproveOnce, PermissionDecisionReject
 from owlbear_delivery_next.change_contracts import tools, user_config
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import decide, identities, view
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import chatlogs
 from owlbear_delivery_next.improvement.chatlogs import around as chatlogged
 from owlbear_delivery_next.local_system import pds_skill, preload, processes
@@ -117,7 +118,8 @@ class Session:
     plan_tasks: tuple[str, ...] = ()  # the plan tasks each final-review finding names (TD-216)
     changed: tuple[str, ...] = ()  # the files an Impeccable challenger judges one by one (TD-194)
     settled: tuple[str, ...] = ()  # finding keys the owner decided to fix: never rejected (TD-193)
-    amendable: tuple[str, ...] = ()  # generated criteria a premise may propose new wording for (TD-179)
+    amendable: tuple[str, ...] = ()  # the brief items a premise may name in an amendment, as field:key (TD-185)
+    targets: tuple[str, ...] = ()  # what a design judge's conflict may depart from: its round's states and criteria
     skills: Path | None = None  # the skill folder this session loads instead of the package's: a pack candidate's
     pds: pds_skill.Choice | None = None  # the project's PDS knowledge skill; when None, chosen from the worktree (#777)
     subagents: bool = False  # its role's setting: it may start built-in subagents (TD-374, TD-376)
@@ -182,8 +184,8 @@ class _Step(StepTools):
         who = {"session": self.run.session_id, "role": role_of(self.cfg)} if self.session is not None else {}
         self.cfg.journal.event({"at": datetime.now(UTC).isoformat(timespec="seconds"), **who, **event})
 
-    def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "") -> None:
-        self.gate.finish(ending, payload, detail)
+    def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "", classified: str = "") -> None:
+        self.gate.finish(ending, payload, detail, classified)
 
     def on_event(self, ev: Any) -> None:  # noqa: ANN401, C901 - an SDK session event; one branch per family
         kind = getattr(ev.type, "value", str(ev.type))
@@ -353,12 +355,17 @@ class _Step(StepTools):
 
     def replace(self) -> str | None:
         """The resumed session is absent: replace it only once every earlier recorded process is observed gone."""
+        current = self.run.pids
+        self.run.pids = dict(self.cfg.previous) | current
         prior = verdict(self.cfg.previous, processes.alive)
         self.log(event="session-missing", previous=sorted(self.cfg.previous), gone=prior.confirmed)
         if not prior.confirmed:
-            self.run.pids.update(self.cfg.previous)
-            self.finish("missing", detail="session missing; earlier processes are not observed gone")
-        elif (sid := self.cfg.journal.replaced()) is None:
+            states = ((prior.survivors, "still present"), (prior.unknown, "in an unknown state"))
+            seen = "; ".join(f"{', '.join(map(str, pids))} {state}" for pids, state in states if pids)
+            self.finish("missing", detail=f"session missing; earlier processes are not observed gone: {seen}")
+            return None
+        self.run.pids = current
+        if (sid := self.cfg.journal.replaced()) is None:
             self.finish("missing", detail="session missing again")
         else:
             return sid
@@ -388,7 +395,8 @@ async def _open(client: CopilotClient, st: _Step) -> CopilotSession | None:
             events = await _call(session.get_events(), "transcript read")
             watch_feed.spotted(st.feed, lambda s: s.history(events))  # the task and evidence it had before
         except Exception as exc:  # noqa: BLE001 - an unobserved transcript never authorizes a resend
-            st.finish("unread", detail=f"transcript read failed ({type(exc).__name__}); the answer was not resent")
+            said = "transcript read failed ({}); the answer was not resent"
+            st.finish("unread", detail=said.format(sdk_spend.failed(exc)), classified=said.format(type(exc).__name__))
             return session
         if lessons.sent(events, message):
             message, resent = step_decisions.resumed(step_input.CONTINUE), False
@@ -427,7 +435,9 @@ def _refused(cfg: Session) -> str:
 async def run(cfg: Session) -> Run:
     """Open or resume the session, send the message, await its result, tear down within bounds, then the watcher."""
     st = _Step(cfg, asyncio.get_running_loop())
-    st.feed = watch_feed.opened(cfg.watch, cfg.worktree, lambda: st.run.session_id, st.watch)
+    st.feed = watch_feed.opened(
+        cfg.watch, cfg.worktree, lambda: st.run.session_id, st.watch, log=lambda event: st.log(**event)
+    )
     return await chatlogged(cfg, watch_feed.around(st.feed, _run(st)), lambda: st.run.session_id)  # design §5
 
 
@@ -448,10 +458,10 @@ async def _run(st: _Step) -> Run:
                     session = await _open(client, st)
                     if session is not None:
                         await st.wait(session)
-            except TimeoutError as exc:
-                st.finish("deadline", detail=str(exc) or "step deadline")
+            except TimeoutError as exc:  # retries classify its message alone, as before (R7)
+                st.finish("deadline", detail=failure(exc) if str(exc) else "step deadline", classified=str(exc))
             except Exception as exc:  # noqa: BLE001 - any SDK failure ends the step with retry after teardown
-                st.finish("error", detail=f"{type(exc).__name__}: {exc}")
+                st.finish("error", detail=sdk_spend.failed(exc), classified=f"{type(exc).__name__}: {exc}")
             session = st.session
             st.run.usage = await usage_read(session, cfg.model) if session else {}
             limit_reached(st.run, cfg.credit_limit)

@@ -297,20 +297,35 @@ def test_a_fold_counts_changes_by_project_apart_from_runs_outside_one_and_its_ro
 
 
 @pytest.mark.browser
-def test_only_a_failed_read_is_said_to_have_failed(pds) -> None:
-    """#780: picker runs read while their turn ran were all said to have had their last read fail."""
+def test_only_a_failed_read_is_said_to_have_failed(pds, whole_error: str) -> None:
+    """#780: reads while a turn ran are not failures; #971 P14: actual failures say their whole error."""
+    from copilot._jsonrpc import JsonRpcError  # noqa: PLC0415 - the SDK's own error, as a request raises it
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
+    from owlbear_delivery_next.runtimes import sdk_spend  # noqa: PLC0415
+
+    def said(message: str, note: str) -> str:
+        exc = JsonRpcError(-32603, message, {"marker": f"DATA-{note}"})
+        exc.add_note(f"NOTE-{note}")
+        return sdk_spend.failed(exc)
+
+    unread, short, late = said(whole_error, "UNREAD"), said("SHORT-MARK", "SHORT"), said(whole_error, "LATE")
     now = datetime.now(UTC) - timedelta(hours=1)
     place = {"project": "owlbear", "name": "owlbear", "change": "", "agent": "picker", "job": "decision-pick"}
 
     def used(spent: float, **more: str) -> dict:
         return {"credits": spent, "models": {"m1": {"credits": spent, "input": 100, "output": 10}}} | more
 
+    # a resume with no baseline: its spend, since a run before the 30 days shown, may lie in them or not
+    resumed = run("resumed", now + timedelta(minutes=4), used(12.0, incomplete=late), place | {"session": "s-early"})
+    resumed[0]["before"] = None
     spend_ledger.append([
         *run("exact", now, used(9.0), place),
         *run("turn", now + timedelta(minutes=1), used(9.33, incomplete="turn running"), place),
-        *run("failed", now + timedelta(minutes=2), used(9.73, incomplete="TimeoutError"), place),
+        *run("failed", now + timedelta(minutes=2), used(9.73, incomplete=short), place),
+        *run("unread", now + timedelta(minutes=3), {"error": unread}, place),
+        *run("early", now - timedelta(days=40), used(2.0), place),
+        *resumed,
     ])  # fmt: skip
     machine, server, base = serve()
     try:
@@ -320,15 +335,24 @@ def test_only_a_failed_read_is_said_to_have_failed(pds) -> None:
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
+            errors: list[str] = []
+            page.on("pageerror", lambda e: errors.append(str(e)))
             pds.only(page, base)
             page.goto(f"{base}/metrics#token=t")
-            said = page.locator("#exact li")
-            expect(said).to_have_count(2)
-            texts = said.all_inner_texts()
-            assert [t.startswith("1 run ") for t in texts] == [True, True]
+            notes = page.locator("#exact li")
+            expect(notes).to_have_count(4)
+            texts = notes.all_inner_texts()
+            assert [t.startswith("1 run ") for t in texts] == [True, True, True, False]
             assert [("failed" in t) for t in texts].count(True) == 1
+            assert notes.nth(0).locator(".why").all_text_contents() == [unread]
+            assert notes.nth(1).locator(".why").all_text_contents() == [short]
+            assert notes.nth(3).locator(".why").all_text_contents() == [late]
+            expect(notes.nth(3)).to_contain_text("Spend of 1 run may also lie in this period (10.00 or more credits)")
+            expect(notes.nth(0)).to_contain_text("1 run did not report its credits")
+            expect(notes.nth(1)).to_contain_text("its last read failed")
             expect(page.locator("#lower-bound")).to_contain_text("spent at least this")
             expect(page.locator("#lower-bound")).not_to_contain_text("failed")
+            assert errors == []
             browser.close()
     finally:
         server.should_exit = True

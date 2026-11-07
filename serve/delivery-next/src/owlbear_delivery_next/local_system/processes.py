@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 import psutil
 
+from owlbear_delivery_next.git.command_failure import failure
+
 if TYPE_CHECKING:
     import signal
     from collections.abc import Callable, Mapping, Sequence
@@ -36,7 +38,7 @@ def verdict(recorded: Pids, alive: Observe, problems: Sequence[str] = ()) -> Ter
 
 
 def alive(pid: int, created: float | None) -> bool | None:
-    """Observe one recorded process: a zombie or a reused PID is gone; an unreadable one is unknown."""
+    """Observe identity: gone/zombie/reused is false, access denied is unknown; other errors raise with context."""
     try:
         p = psutil.Process(pid)
         if p.status() == psutil.STATUS_ZOMBIE:
@@ -44,7 +46,21 @@ def alive(pid: int, created: float | None) -> bool | None:
         return created is None or abs(p.create_time() - created) < 1.0
     except psutil.NoSuchProcess:
         return False
-    except psutil.Error, OSError:
+    except psutil.AccessDenied, PermissionError:
+        return None
+    except (psutil.Error, OSError) as exc:
+        exc.add_note(f"observing process {pid}, recorded start time {created!r}")
+        raise
+
+
+def observed(pid: int, created: float | None, *, problems: list[str]) -> bool | None:
+    """Observe during cleanup: retain an unexpected failure without abandoning other processes."""
+    try:
+        return alive(pid, created)
+    except (psutil.Error, OSError) as exc:
+        why = f"process {pid} could not be observed: {failure(exc)}"
+        if why not in problems:
+            problems.append(why)
         return None
 
 
@@ -81,7 +97,7 @@ def _matches(ids: Pids) -> dict[int, list[int]]:
     try:
         table = psutil.pids()
     except (psutil.Error, OSError) as exc:
-        msg = f"the process table could not be listed: {exc}"
+        msg = f"the process table could not be listed: {failure(exc)}"
         raise UnlistedError(msg) from exc
     matched: dict[int, list[int]] = {}
     for p in table:
@@ -92,7 +108,7 @@ def _matches(ids: Pids) -> dict[int, list[int]]:
         except ProcessLookupError:
             continue
         except OSError as exc:
-            msg = f"process {p}: its group or session could not be read: {exc}"
+            msg = f"process {p}: its group or session could not be read: {failure(exc)}"
             raise UnlistedError(msg) from exc
         for key in keys & ids.keys():
             matched.setdefault(key, []).append(p)
@@ -147,9 +163,9 @@ def targets(recorded: Pids, seen: Observe, group: Callable[[int], int], own: int
     return live, [p for p in live if p != own and group(p) == p]
 
 
-def kill(recorded: Pids, sig: signal.Signals) -> list[int]:
+def kill(recorded: Pids, sig: signal.Signals, *, seen: Observe | None = None) -> list[int]:
     """Signal recorded PIDs whose start time proves identity, and the groups they lead; return the live ones."""
-    live, groups = targets(recorded, alive, _pgid, os.getpgrp())
+    live, groups = targets(recorded, seen or alive, _pgid, os.getpgrp())
     for g, send in [*((g, os.killpg) for g in groups), *((p, os.kill) for p in live)]:
         with contextlib.suppress(OSError):
             send(g, sig)

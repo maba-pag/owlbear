@@ -40,9 +40,14 @@ from owlbear_delivery_next.change_contracts.round_records import RoundLoop, Roun
 from owlbear_delivery_next.change_flow import budgets, delivery_target, loop, round_flow, worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git import access as git_access
+from owlbear_delivery_next.git import remote_git
+from owlbear_delivery_next.git.access import Access
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown, classify_write_readback, read_remote_ref
-from owlbear_delivery_next.github import gh_queue, merge_offer
+from owlbear_delivery_next.github import account, gh_queue, merge_offer
 from owlbear_delivery_next.github import provider as provider_contract
+from owlbear_delivery_next.github.account import Writer
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import (
     Check,
@@ -139,6 +144,13 @@ class FakeGh:
         self.pr, self.merges, self.result = current, [], MergeResult(status=MergeStatus.UNKNOWN)
         self.checks = (Check(name="test", status="completed", conclusion="success"),)
         self.after, self.reopened, self.commit_checks, self.review = None, [], (), (None, ())
+        self.can_push = False  # what the project's account reads when the detected permission is no
+
+    def read_repository(self):
+        return Repository(
+            repository="o/r", url="https://github.com/o/r", default_branch="main", methods=(MergeMethod.SQUASH,),
+            can_push=self.can_push, delete_branch_on_merge=False,
+        )  # fmt: skip
 
     def observe_commit_checks(self, _repo, _sha):
         return self.commit_checks
@@ -200,13 +212,14 @@ def set_prefs(monkeypatch, **values):
 
 
 def ctx(tmp_path, gh, p=None, repo=None):
-    return engine.Ctx(Store(tmp_path / "store"), Lock("c1"), repo or tmp_path, p or prof(), gh, NOW)
+    local = Writer.rule(account.Origin.LOCAL)  # the step's own Git runs on fakes or a local origin
+    return engine.Ctx(Store(tmp_path / "store"), Lock("c1"), repo or tmp_path, p or prof(), gh, NOW, local)
 
 
 def change(kind=StepKind.MERGE, worktree="", head=A, **fields):
     if kind == StepKind.MERGE:
         fields.setdefault("reviews", [Review(commit=head, inputs=Inputs(), verdict="pass")])
-    plan = Plan(tasks=[Task(id="t1", title="one", scope=["src"], checks=["npm test"])])
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["src"], checks=["cd . && npm test"])])
     names = Names(branch="owlbear/c1", target="main", worktree=worktree, pr=7)
     return Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=kind), names=names, **fields)
 
@@ -431,12 +444,14 @@ def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_m
     saving = cx.store.write_profile
 
     def locked(_profile) -> None:
-        raise SharedError(whole_error)
+        busy = SharedError(whole_error)
+        busy.add_note("NOTE-MARK")
+        raise busy
 
     cx.store.write_profile = locked
     assert follow.declared(cx, c, gh.pr, StepKind.MERGE) == ((), None)  # the answer holds though unsaved
     assert [e["reason"] for e in cx.store.events(c.slug) if e.get("event") == "profile-not-saved"] == [
-        f"SharedError: {whole_error}"
+        f"SharedError: {whole_error}\nNOTE-MARK"  # #971: its notes too
     ]
     cx.store.write_profile, cx.profile = saving, p
     names, held = follow.declared(cx, c, gh.pr, StepKind.MERGE)
@@ -864,7 +879,7 @@ def _no_user(*_):
 
 def test_an_empty_conversation_passes_with_a_credential_that_cannot_read_the_viewer(tmp_path):
     gh = ChatGh(pr(head=A))
-    gh.viewer = GhProvider(tmp_path, runner=_no_user).viewer
+    gh.viewer = GhProvider(tmp_path, writer=None, runner=_no_user).viewer
     assert follow.conversation(ctx(tmp_path, gh), change(), gh.pr, StepKind.FOLLOW)[1] is None
 
 
@@ -874,7 +889,7 @@ def test_a_pending_replay_with_a_credential_that_cannot_read_the_viewer_names_gh
     c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
     c = handled(c, result, "answered", "Answered.")
     gh.items.append(comment("x1", f"Answered.\n\n<!-- delivery:c1:c1:{result.fix_task.id} -->", "delivery"))
-    gh.viewer = GhProvider(tmp_path, runner=_no_user).viewer
+    gh.viewer = GhProvider(tmp_path, writer=None, runner=_no_user).viewer
     with pytest.raises(ProviderError) as raised:
         follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert (raised.value.code, raised.value.retry_safe) == (FailureCode.AUTHENTICATION_REQUIRED, False)
@@ -1011,7 +1026,7 @@ def test_gh_reads_every_conversation_page_and_keeps_changes_requested_empty_revi
     ]
     calls, threads = [], []
 
-    def runner(argv, data, _timeout, _cwd):
+    def runner(argv, data, _timeout, _cwd, _env):
         body = json.loads(data)
         if "ThreadComments" in body["query"]:
             threads.append(body["variables"])
@@ -1019,7 +1034,7 @@ def test_gh_reads_every_conversation_page_and_keeps_changes_requested_empty_revi
         calls.append((argv, body["variables"]))
         return done({"data": {"repository": {"pullRequest": pages[len(calls) - 1]}}})
 
-    items = GhProvider(tmp_path, runner=runner).read_conversation("o/r", 7)
+    items = GhProvider(tmp_path, writer=None, runner=runner).read_conversation("o/r", 7)
     assert [(i.id, i.kind, i.bot) for i in items] == [
         ("c1", "comment", False),
         ("c2", "comment", True),
@@ -1040,13 +1055,13 @@ def test_gh_reads_every_conversation_page_and_keeps_changes_requested_empty_revi
 def test_gh_replies_in_threads_by_graphql_and_quotes_other_items_in_an_issue_comment(tmp_path):
     calls = []
 
-    def runner(argv, data, _timeout, _cwd):
+    def runner(argv, data, _timeout, _cwd, _env):
         calls.append((argv, json.loads(data)))
         if "graphql" in argv:
             return done({"data": {"addPullRequestReviewThreadReply": {"comment": {"id": "R1"}}}})
         return done({"node_id": "IC1"})
 
-    gh = GhProvider(tmp_path, runner=runner)
+    gh = GhProvider(tmp_path, writer=None, runner=runner)
     assert gh.post_reply("o/r", 7, thread("t1", ("h1", "o", "q")), "ok") == "R1"
     assert calls[-1][1]["variables"] == {"id": "t1", "body": "ok"}
     assert gh.post_reply("o/r", 7, comment("c1", "q"), "ok") == "IC1"
@@ -1058,7 +1073,7 @@ def test_gh_replies_in_threads_by_graphql_and_quotes_other_items_in_an_issue_com
 def test_an_unexpected_github_answer_is_raised_whole(tmp_path, whole_error, op):
     """#895: GitHub's whole answer reaches the step's retry reason through the engine."""
     said = {"errors": [{"message": whole_error}]}
-    gh = GhProvider(tmp_path, runner=lambda *_a: done(said))
+    gh = GhProvider(tmp_path, writer=None, runner=lambda *_a: done(said))
     calls = {
         "mark_ready": lambda: gh.mark_ready(pr()),
         "post_reply": lambda: gh.post_reply("o/r", 7, thread("t1", ("h1", "o", "q")), "ok"),
@@ -1121,8 +1136,10 @@ def test_a_check_result_is_accepted_only_for_the_inputs_the_page_showed(tmp_path
 
 def test_a_saved_person_check_is_voided_by_revised_steps_or_a_commit_in_its_scope(clone, tmp_path):
     store, url = Store(tmp_path / "store"), "http://127.0.0.1:4173/"
+    host = Host()
+    host.repo = clone
     client = TestClient(
-        api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
+        api.create_app(store, "t", host), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
     )
     steps = {"name": "preview", "steps": ["Open the preview"], "expect": "Hallo, Ada!"}
     brief = {"title": "Greet", "outcome": "The preview greets the owner.", "criteria": ["The page greets Ada"]}
@@ -1243,7 +1260,9 @@ def test_a_pr_gets_the_projects_labels_once_and_the_marker_line_follows_its_swit
     def add_labels(repo, number, labels):
         added.append((repo, number, labels))
         if fails:
-            raise ProviderError(FailureCode.NOT_FOUND, "add_labels", "no such label", retry_safe=True)
+            refused = ProviderError(FailureCode.NOT_FOUND, "add_labels", "no such label", retry_safe=True)
+            refused.add_note("NOTE-MARK")
+            raise refused
 
     gh.find_pull_request, gh.create_pull_request, gh.add_labels = (lambda *_a: gh.pr), create, add_labels
     cx = ctx(tmp_path, gh)
@@ -1260,8 +1279,9 @@ def test_a_pr_gets_the_projects_labels_once_and_the_marker_line_follows_its_swit
     gh.pr = gh.pr.model_copy(update={"draft": False})  # someone marked it ready meanwhile
     assert publish.pull_request(cx, c, A).number == 7  # the next runner
     assert (added, "Opened by OwlBear Delivery" in bodies[0]) == ([("o/r", 7, ["release:minor"])], False)
-    said = {e["event"]: (e["pr"], e["labels"]) for e in cx.store.events(c.slug) if "labels" in e}
-    assert said == {"labels-failed" if fails else "labels": (7, ["release:minor"])}
+    said = {e["event"]: (e["pr"], e["labels"], e.get("reason")) for e in cx.store.events(c.slug) if "labels" in e}
+    why = "ProviderError: add_labels: no such label\nNOTE-MARK" if fails else None  # #971: its notes too
+    assert said == {"labels-failed" if fails else "labels": (7, ["release:minor"], why)}
     publish.pull_request(cx, cx.store.read(c.slug), A)  # a runner that died right after labelling reads it back
     assert (len(added), cx.store.read(c.slug).names.labelled) == (1, 7)  # never again on this PR
     cleared = {"pr_labels": None, "pr_marker": None}
@@ -1303,10 +1323,10 @@ def test_a_pr_head_lagging_the_push_is_observed_again_shortly_without_budget(clo
 def test_a_pr_head_lag_with_a_moved_branch_republishes_instead_of_waiting(clone, tmp_path, monkeypatch):
     head = git(clone, "rev-parse", "HEAD")
     c, gh = change(StepKind.PUBLISH, worktree=str(clone)), FakeGh(pr(head=A))
-    monkeypatch.setattr(publish, "read_remote_ref", lambda *_a: B)
+    monkeypatch.setattr(publish, "read_remote_ref", lambda *_a, **_k: B)
     pushed = []
     monkeypatch.setattr(
-        publish, "push", lambda _p, _c, h: pushed.append(h) or engine.integrate(c, StepKind.PUBLISH, "x")
+        publish, "push", lambda _p, _c, h, _access: pushed.append(h) or engine.integrate(c, StepKind.PUBLISH, "x")
     )
     result = publish.lagging(ctx(tmp_path, gh), c, gh.pr, head)
     assert (result.exit, pushed, c.lag) == (Exit.BACK, [head], None)
@@ -1414,21 +1434,24 @@ def test_write_readback_replays_only_on_confirmed_absence():
 def test_an_unknown_push_is_read_back_and_replayed_only_when_absent(clone, monkeypatch, applied, pushes):
     real, calls = publish.run_remote_git, []
 
-    def flaky(path, args, *, kind):
+    def flaky(path, args, *, kind, access):
         calls.append(args)
         if len(calls) == 1:
             if applied:
-                real(path, args, kind=kind)
+                real(path, args, kind=kind, access=access)
             raise RemoteGitWriteUnknown(TIMED_OUT, timed_out=True)
-        return real(path, args, kind=kind)
+        return real(path, args, kind=kind, access=access)
 
     monkeypatch.setattr(publish, "run_remote_git", flaky)
     (clone / "b.txt").write_text("b\n")
     git(clone, "add", "b.txt")
     git(clone, "commit", "-q", "-m", "b")
     head = git(clone, "rev-parse", "HEAD")
-    assert publish.push(clone, change(StepKind.PUBLISH), head) is None
-    assert (len(calls), read_remote_ref(clone, "origin", "refs/heads/owlbear/c1")) == (pushes, head)
+    assert publish.push(clone, change(StepKind.PUBLISH), head, Access.LOCAL) is None
+    assert (len(calls), read_remote_ref(clone, "origin", "refs/heads/owlbear/c1", access=Access.LOCAL)) == (
+        pushes,
+        head,
+    )
 
 
 @pytest.mark.parametrize(("after", "exit_"), [("merged", Exit.DONE), ("open", Exit.RETRY)])
@@ -1460,6 +1483,20 @@ def test_without_ask_before_merge_a_gated_head_merges_without_consent(tmp_path, 
     asked = ctx(tmp_path, FakeGh(pr(head=A)), prof())
     _, result = merge.run(asked, change(worktree=str(clone)))
     assert (result.exit, result.cause) == (Exit.ASK, loop.CONSENT)
+
+
+@pytest.mark.parametrize(("detected", "account"), [("yes", False), ("no", True), ("no", False)])
+def test_merge_asks_the_projects_account_again_when_detection_found_no_push_permission(
+    tmp_path, clone, detected, account
+):
+    """The setting may name another account than detection ran as (TD-402): a detected no doesn't block it."""
+    gh = FakeGh(pr(head=A))
+    gh.can_push = account
+    merged(gh)
+    on = ctx(tmp_path, gh, prof(**{profile.PUSH: ProfileEntry(state="known", value=detected)}))
+    _, result = merge.run(on, change(worktree=str(clone)))
+    permitted = detected == "yes" or account
+    assert (result.exit, len(gh.merges)) == ((Exit.DONE, 1) if permitted else (Exit.PENDING, 0))
 
 
 def test_a_head_without_a_valid_final_review_goes_back_to_publish(tmp_path, clone):
@@ -1531,7 +1568,7 @@ def test_a_merge_without_a_known_result_keeps_what_gh_said_whole(tmp_path, clone
     cases = gh_cases(whole_error, sent) | {"message": (message, lambda: f"{whole_error}\n{server}")}
     runner, said = cases[case]
     gh = FakeGh(pr(head=A))
-    gh.request_merge = GhProvider(tmp_path, runner=runner).request_merge
+    gh.request_merge = GhProvider(tmp_path, writer=None, runner=runner).request_merge
     cx = ctx(tmp_path, gh)
     _, result = merge.run(cx, change(worktree=str(clone)))
     (event,) = cx.events("c1", "merge-request")
@@ -1543,7 +1580,7 @@ def test_a_merge_refusal_without_a_message_keeps_gh_s_whole_error(tmp_path, clon
     """#921: a refusal whose answer has no message keeps all of gh's error output, in its event and its reason."""
     said = f"{whole_error}\ngh: HTTP 405"
     gh = FakeGh(pr(head=A))
-    gh.request_merge = GhProvider(tmp_path, runner=answered(1, stderr=said.encode())).request_merge
+    gh.request_merge = GhProvider(tmp_path, writer=None, runner=answered(1, stderr=said.encode())).request_merge
     cx = ctx(tmp_path, gh)
     _, result = merge.run(cx, change(worktree=str(clone)))
     (event,) = cx.events("c1", "merge-request")
@@ -1739,17 +1776,27 @@ def test_cleanup_removes_the_change_s_read_only_worktree_with_its_own(worktree_w
     assert not any("note.txt" in p for p in result.preserved)
 
 
-def test_failed_preservation_stops_and_leaves_the_worktree_untouched(worktree_with_work, tmp_path, monkeypatch):
+@pytest.mark.parametrize("step", ["inventory", "preserve"])
+def test_failed_preservation_stops_and_leaves_the_worktree_untouched(
+    worktree_with_work, tmp_path, monkeypatch, whole_error, step
+):
+    """#971: Git's whole refusal (its stderr and notes) is the stop's reason, at either stage."""
     clone, wt = worktree_with_work
+    refused = subprocess.CalledProcessError(128, ["git", "status"], stderr=f"{whole_error}\n")
+    refused.add_note("NOTE-MARK")
 
     def broken(*_args):
-        raise cleanup.PreservationError(wt)
+        raise refused
 
-    monkeypatch.setattr(cleanup, "preserve", broken)
+    monkeypatch.setattr(cleanup, step, broken)
     c = change(StepKind.CLEANUP, worktree=str(wt))
     c.names.branch, c.names.pr = "owlbear/c2", None
     _, result = cleanup.run(ctx(tmp_path, FakeGh(pr()), repo=clone), c)
-    assert result.exit == Exit.STOP
+    said = (
+        f"CalledProcessError: Command '['git', 'status']' returned non-zero exit status 128.\n{whole_error}\nNOTE-MARK"
+    )
+    reason = f"could not {'inventory' if step == 'inventory' else 'save'} {wt}: {said}"
+    assert (result.exit, result.reason, result.stop.reason) == (Exit.STOP, reason, reason)
     assert result.stop.action.startswith(f"Copy or delete {wt}")
     assert (wt / "new.txt").read_text() == "untracked\n"
     assert (wt / "kept.txt").exists()
@@ -1968,7 +2015,7 @@ def test_a_moved_target_integrates_before_merging_whatever_github_reports(tmp_pa
 def test_a_builder_needing_target_work_integrates_then_resumes_its_task(clone):
     c = change(StepKind.BUILD, worktree=str(clone))
     c.step.task = "t1"
-    c = loop.apply(c, engine.needs_target(c, clone, "greet() exists only on main", NOW), NOW)
+    c = loop.apply(c, engine.needs_target(c, clone, "greet() exists only on main", NOW, Writer.rule(clone)), NOW)
     assert (c.step.task, c.plan.tasks[-1].origin) == ("t2", "integration")
     assert "greet() exists only on main" in c.plan.tasks[-1].detail
     c = loop.apply(c, loop.StepResult(exit=Exit.DONE), NOW)  # its build; the task's next round reviews the merge
@@ -2183,15 +2230,17 @@ def test_a_repaired_task_resolves_only_after_every_part_and_the_parts_run_before
 # Reopen and the pre-push hook
 
 
-@pytest.mark.parametrize("push", ["yes", "no"])
-def test_reopen_reopens_the_pr_when_permitted_else_asks_the_owner(tmp_path, clone, push):
+@pytest.mark.parametrize(("push", "account"), [("yes", False), ("no", True), ("no", False)])
+def test_reopen_reopens_the_pr_when_permitted_else_asks_the_owner(tmp_path, clone, push, account):
+    """A detected no is asked again of the project's account, which the setting may have changed (TD-402)."""
     head, entries = ci_head(clone, "test")
     gh = FakeGh(pr(head=head, state="closed"))
+    gh.can_push = account
     c, _ = loop.schedule(change(StepKind.FOLLOW, worktree=str(clone)), [], NOW, "closed")
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question="q1", option="reopen")], NOW, "closed")
     pushing = {profile.PUSH: ProfileEntry(state="known", value=push)}
     c, result = follow.run(ctx(tmp_path, gh, prof(**entries, **pushing)), c)
-    if push == "yes":
+    if push == "yes" or account:
         assert (result.exit, gh.reopened, bool(c.questions[0].effect_observed_at)) == (Exit.DONE, [7], True)
     else:
         assert (result.exit, gh.reopened, c.questions[0].effect_observed_at) == (Exit.ASK, [], None)
@@ -2204,7 +2253,9 @@ def test_a_refused_reopen_is_logged_with_its_whole_error(tmp_path, clone, whole_
 
     class Refusing(FakeGh):
         def reopen_pull_request(self, _repo, _number):
-            raise ProviderError(FailureCode.CONFLICT, "reopen_pull_request", whole_error, retry_safe=True)
+            refused = ProviderError(FailureCode.CONFLICT, "reopen_pull_request", whole_error, retry_safe=True)
+            refused.add_note("NOTE-MARK")
+            raise refused
 
     gh = Refusing(pr(head=head, state="closed"))
     c, _ = loop.schedule(change(StepKind.FOLLOW, worktree=str(clone)), [], NOW, "closed")
@@ -2212,16 +2263,16 @@ def test_a_refused_reopen_is_logged_with_its_whole_error(tmp_path, clone, whole_
     on = ctx(tmp_path, gh, prof(**entries, **{profile.PUSH: ProfileEntry(state="known", value="yes")}))
     c, result = follow.run(on, c)
     (event,) = [e for e in on.store.events("c1") if e.get("event") == "reopen"]
-    assert (result.exit, event["error"]) == (Exit.ASK, f"ProviderError: reopen_pull_request: {whole_error}")
+    assert (result.exit, event["error"]) == (Exit.ASK, f"ProviderError: reopen_pull_request: {whole_error}\nNOTE-MARK")
 
 
 def test_a_silent_rejecting_pre_push_hook_becomes_a_builder_fix_after_readback(clone):
     hook = clone / ".git" / "hooks" / "pre-push"
     hook.write_text("#!/bin/sh\nexit 1\n")
     hook.chmod(0o755)
-    result = publish.push(clone, change(StepKind.PUBLISH), git(clone, "rev-parse", "HEAD"))
+    result = publish.push(clone, change(StepKind.PUBLISH), git(clone, "rev-parse", "HEAD"), Access.LOCAL)
     assert (result.back_to, result.cause) == (StepKind.BUILD, "commit-policy:publish:pre-push")
-    assert read_remote_ref(clone, "origin", "refs/heads/owlbear/c1") is None
+    assert read_remote_ref(clone, "origin", "refs/heads/owlbear/c1", access=Access.LOCAL) is None
     assert not publish.hook_rejected(128, b"fatal: Could not read from remote repository.", hook=True)
     assert not publish.hook_rejected(1, b" ! [remote rejected] main (protected branch)", hook=True)
 
@@ -2335,7 +2386,7 @@ def test_an_enqueue_without_a_known_result_keeps_what_github_said_whole(tmp_path
     }
     runner, said = cases[case]
     gh = QueueGh(pr(head=A))
-    gh.enqueue = GhProvider(tmp_path, runner=runner).enqueue
+    gh.enqueue = GhProvider(tmp_path, writer=None, runner=runner).enqueue
     _, result = queue_step(tmp_path, gh, change(worktree=str(clone)))
     (event,) = [e for e in Store(tmp_path / "store").events("c1") if e.get("event") == "merge-enqueue"]
     status = EnqueueStatus.REFUSED if case == "refused" else EnqueueStatus.UNKNOWN
@@ -2450,7 +2501,7 @@ def fold_store(tmp_path, monkeypatch, gh, c):
     store.write_profile(qprof())
     with store.lock("c1") as lock:
         store.write(lock, c)
-    monkeypatch.setattr(profile, "provider", lambda _p, _r: gh)
+    monkeypatch.setattr(profile, "provider", lambda _p, _r, _w: gh)
     store.put_inbox("c1", IntentItem(at=NOW, intent="pause"))
     return store
 
@@ -3033,9 +3084,9 @@ def test_an_unknown_withdrawal_keeps_the_barrier_and_asks_nothing(tmp_path):
 
 @pytest.fixture
 def both_prefs_unset(tmp_path, monkeypatch):
-    """A real Store with a queued merge, no settings layer, and the synthetic queue provider through the runner."""
+    """A real Store with a queued merge, no settings layer but the GitHub account, and the synthetic queue provider."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    monkeypatch.setattr(config, "BASE", None)
+    monkeypatch.setattr(config, "BASE", config.GlobalLayer(github_account=account.REPOSITORY_OWNER))
     for args in (
         ["init", "-q"],
         ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"],
@@ -3071,7 +3122,7 @@ def both_prefs_unset(tmp_path, monkeypatch):
 
 def run_merge_step(store, capsys):
     with store.lock("c1") as lock:
-        runner._step(store, lock, store.read("c1"), Step(kind=StepKind.MERGE), store.root)  # noqa: SLF001
+        runner._step(store, lock, c := store.read("c1"), Step(kind=StepKind.MERGE), Path(c.names.worktree))  # noqa: SLF001
     return json.loads(capsys.readouterr().out.strip().splitlines()[-1])
 
 
@@ -3093,7 +3144,7 @@ def test_an_uncertain_withdrawal_with_both_prefs_unset_waits_and_a_later_confirm
     gh.__dict__.pop("dequeue", None)  # the next pass reaches GitHub normally and reads back the removal
     gh.dequeue_fails = False
     with store.lock("c1") as lock:
-        runner._step(store, lock, store.read("c1"), Step(kind=StepKind.MERGE), store.root)  # noqa: SLF001
+        runner._step(store, lock, c := store.read("c1"), Step(kind=StepKind.MERGE), Path(c.names.worktree))  # noqa: SLF001
     after = store.read("c1")
     assert (after.queue, gh.state.entry) == (None, None)
     assert len(after.questions) == 1
@@ -3121,19 +3172,153 @@ def test_a_failed_fetch_keeps_gits_whole_output(clone, whole_error, monkeypatch)
         return subprocess.CompletedProcess(argv, 1, b"", f"{whole_error}\n".encode())
 
     monkeypatch.setattr(engine, "run_remote_git", refused)
-    result = engine.needs_target(c, clone, "greet() exists only on main", NOW)
-    assert (result.exit, result.reason) == (Exit.RETRY, f"RemoteGitFailed: fetch of main failed: {whole_error}")
+    result = engine.needs_target(c, clone, "greet() exists only on main", NOW, Writer.rule(clone))
+    spec = "+refs/heads/main:refs/remotes/origin/main"
+    ran = ("fetch", "--quiet", "--no-tags", "origin", spec)
+    said = f"RemoteGitFailed: fetch of main failed: {whole_error}\n"  # the stderr is said once, after the command
+    said += f"CalledProcessError: Command '{ran}' returned non-zero exit status 1."
+    assert (result.exit, result.reason) == (Exit.RETRY, said)
+
+
+def _remote_failures(clone: Path, monkeypatch, whole_error: str) -> dict[str, Exception]:
+    """Each remote Git failure whose detail stays the same while Git said more; its output names the network."""
+    said = b"fatal: unable to access 'https://github.com/o/r/': Connection timed out\n"
+
+    def refused(_path, argv, **_k):
+        return subprocess.CompletedProcess(argv, 128, b"", said)
+
+    def invalid(_path, argv, **_k):
+        return subprocess.CompletedProcess(argv, 0, said, b"")
+
+    def slow(argv, **_k):
+        raise subprocess.TimeoutExpired(argv, 5, output=said)
+
+    def no_remote(argv, **_k):
+        return subprocess.CompletedProcess(argv, 2, f"OUT-BEGIN\n{whole_error}\nOUT-END".encode(), NO_REMOTE.encode())
+
+    found: dict[str, Exception] = {}
+    for name, kind in (("read-timeout", "read"), ("write-timeout", "write")):
+        found[name] = _stalled(clone, monkeypatch, kind, stalled_streams(whole_error))
+    for name, ran in (("refused", refused), ("invalid", invalid)):
+        monkeypatch.setattr(remote_git, "run_remote_git", ran)
+        with pytest.raises(remote_git.RemoteGitFailed) as raised:
+            read_remote_ref(clone, "origin", "refs/heads/CMD-MARK", access=Access.LOCAL)
+        found[name] = raised.value
+    found["write"] = RemoteGitWriteUnknown(
+        "remote Git write did not confirm its outcome", timed_out=False,
+        result=subprocess.CompletedProcess(["git", "push", "origin", "CMD-MARK"], 1, b"", said),
+    )  # fmt: skip
+    with monkeypatch.context() as m:
+        m.setattr(git_access.subprocess, "run", no_remote)
+        with pytest.raises(remote_git.RemoteGitError) as raised:
+            Access("ada", "chosen", "github.com", "tok", "gh").destinations(clone, "CMD-MARK", 5)
+    found["urls-refused"] = raised.value
+    monkeypatch.setattr(git_access.subprocess, "run", slow)
+    with pytest.raises(remote_git.RemoteGitError) as raised:
+        Access("ada", "chosen", "github.com", "tok", "gh").destinations(clone, "origin", 5)
+    found["urls"] = raised.value
+    return found
+
+
+NO_REMOTE = "error: No such remote 'CMD-MARK'"
+
+
+def stalled_streams(whole_error: str) -> tuple[str, str]:
+    """What a stalled remote Git printed before its bound: two long streams, each with its own marks."""
+    return f"OUT-BEGIN\n{whole_error}\nOUT-END", "ERR-BEGIN\nConnection timed out\nERR-END"
+
+
+def _stalled(clone: Path, monkeypatch, kind: str, streams: tuple[str, str]) -> Exception:
+    """A remote Git command that printed some of its output, then passed its bound."""
+
+    class Stalled:
+        pid = 0
+
+        def __init__(self, command, **_k) -> None:
+            self.args = command
+
+        def communicate(self, timeout=None):
+            raise subprocess.TimeoutExpired(self.args, timeout, streams[0].encode(), streams[1].encode())
+
+    with monkeypatch.context() as m:
+        m.setattr(remote_git.subprocess, "Popen", Stalled)
+        m.setattr(remote_git, "_terminate_group", lambda _process: None)
+        m.setattr(remote_git, "_configured_ssh_command", lambda *_a: None)
+        m.setattr(Access, "destinations", lambda *_a: [])
+        with pytest.raises(remote_git.RemoteGitError) as raised:
+            remote_git.run_remote_git(clone, ("fetch", "origin"), kind=kind, access=Access.LOCAL)
+    return raised.value
+
+
+@pytest.mark.parametrize(
+    "which", ["refused", "invalid", "write", "urls", "urls-refused", "read-timeout", "write-timeout"]
+)
+def test_a_remote_git_failure_is_whole_and_retries_as_its_detail_always_did(clone, monkeypatch, whole_error, which):
+    """#971 R7: the reason says what Git printed, but the cause and the wait still read the detail alone: Git
+    saying "Connection timed out" never turns a defect into a network episode."""
+    exc = _remote_failures(clone, monkeypatch, whole_error)[which]
+    out, err = stalled_streams(whole_error)
+    said = "fatal: unable to access 'https://github.com/o/r/': Connection timed out"
+    git_url = (resolve_git_executable(), "-C", str(clone), "remote", "get-url", "--push", "--all", "origin")
+    fetch = (resolve_git_executable(), "-C", str(clone), "fetch", "origin")
+    ls = ("ls-remote", "--exit-code", "--refs", "origin", "refs/heads/CMD-MARK")
+    push = ["git", "push", "origin", "CMD-MARK"]
+    no_remote = (*git_url[:-1], "CMD-MARK")
+    expected = {
+        "refused": "RemoteGitFailed: remote ref could not be observed\n"
+        f"CalledProcessError: Command '{ls}' returned non-zero exit status 128.\n{said}",
+        "invalid": f"RemoteGitFailed: remote ref response is invalid\nCommand '{ls}' returned exit status 0.\n{said}",
+        "write": "RemoteGitWriteUnknown: remote Git write did not confirm its outcome\n"
+        f"CalledProcessError: Command '{push}' returned non-zero exit status 1.\n{said}",
+        "urls-refused": f"RemoteGitError: the push URLs of CMD-MARK in {clone} could not be read: {NO_REMOTE}\n"
+        f"CalledProcessError: Command '{no_remote}' returned non-zero exit status 2.\n"
+        f"stderr:\n{NO_REMOTE}\nstdout:\nOUT-BEGIN\n{whole_error}\nOUT-END",
+        "urls": f"RemoteGitError: the push URLs of origin in {clone} could not be read in 5 s\n"
+        f"TimeoutExpired: Command '{git_url}' timed out after 5 seconds\n{said}",
+    } | {
+        f"{kind}-timeout": f"{name}: remote Git {kind} exceeded 120 s\nTimeoutExpired: Command '{fetch}' timed out "
+        f"after 120.0 seconds\nstderr:\n{err}\nstdout:\n{out}"
+        for kind, name in (("read", "RemoteGitTimeout"), ("write", "RemoteGitWriteUnknown"))
+    }
+    assert failures.transient(str(exc)) is None  # the detail alone, as classified before #971
+    result = engine.failed(change(StepKind.BUILD), exc, NOW)
+    error = ErrorKind.NETWORK if which.endswith("timeout") else ErrorKind.TOOLING  # by its type, as before
+    cause = failures.cause_key(error, StepKind.BUILD, "git")
+    assert (result.exit, result.cause, result.wake_at) == (Exit.RETRY, cause, NOW + timedelta(minutes=1))
+    assert result.reason == expected[which]
+
+
+@pytest.mark.parametrize("which", ["account", "credential", "conflict"])
+def test_a_provider_failure_the_owner_handles_says_its_whole_error(whole_error, which):
+    """#971: the question or stop names GitHub's whole error, notes included, beside the owner's words."""
+    exc = {
+        "account": account.AccountMissing(whole_error),
+        "credential": ProviderError(FailureCode.AUTHENTICATION_REQUIRED, "read_pr", whole_error, retry_safe=False),
+        "conflict": ProviderError(FailureCode.CONFLICT, "merge", whole_error, retry_safe=False),
+    }[which]
+    exc.add_note("NOTE-MARK")
+    result = engine.failed(change(StepKind.MERGE), exc, NOW)
+    said = f"{type(exc).__name__}: {exc}\nNOTE-MARK"
+    expected = {
+        "account": f"{said}; then continue",
+        "credential": f"GitHub refused the credential ({said}): "
+        "run `gh auth login` (or `gh auth refresh`), then continue",
+        "conflict": said,
+    }
+    assert result.reason == expected[which]
+    if which == "conflict":
+        assert (result.exit, result.stop.reason) == (Exit.STOP, said)
 
 
 class PlanLimitedGh(FakeGh):
     """A private repository whose GitHub plan allows no rules: the real read of GitHub's plan-limit 403 (#936)."""
 
     def read_rules(self, repo, branch):
-        def limited(argv, _body, _timeout, _cwd):
+        def limited(argv, _body, _timeout, _cwd, _env):
             said = b"gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)\n"
             return subprocess.CompletedProcess(argv, 1, b"", said)
 
-        return GhProvider(Path(), runner=limited).read_rules(repo, branch)
+        return GhProvider(Path(), writer=None, runner=limited).read_rules(repo, branch)
 
 
 def test_a_plan_limited_repository_merges_without_the_owner_on_its_detected_profile(tmp_path, clone):

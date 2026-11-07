@@ -10,6 +10,7 @@ import psutil
 import pytest
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.change_contracts import evidence
 from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     Brief,
@@ -24,13 +25,13 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.preparation import Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_contracts.visual_records import PageError
+from owlbear_delivery_next.change_contracts.visual_records import PageError, VisualResult, VisualRound
 from owlbear_delivery_next.change_flow.status import Activity
-from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import before, check, prepare, visual
+from owlbear_delivery_next.workflow_steps import before, captures, check, prepare, visual
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 HOME = VisualState(name="home", path="/", expect="The greeting is centred")
@@ -76,8 +77,9 @@ def ui(tmp_path, monkeypatch):
     git(work, "switch", "-q", "-c", "owlbear/c1")
     commit(work, "site/index.html", "after")
     port = free_port()
-    command = f"{sys.executable} -m http.server {port} --bind 127.0.0.1"
-    env = Environment(check=VISUAL, command=command, directory="site", ready_url=f"http://127.0.0.1:{port}/")
+    monkeypatch.setattr(check, "free_port", lambda: port)  # the port Delivery picks, known to the test
+    command = f"{sys.executable} -m http.server {{port}} --bind 127.0.0.1"
+    env = Environment(check=VISUAL, command=command, directory="site", ready_url="http://127.0.0.1:{port}/")
     plan = Plan(tasks=[Task(id="t1", title="greet", scope=["site"])])
     names = Names(branch="owlbear/c1", target="main", worktree=str(work))
     brief = Brief(version=1, ui=True, visual=[HOME])
@@ -97,6 +99,11 @@ def fetching(base, states, out, widths, **_k):
             seen = (PageError(state=s.name, version=s.version, width=w, kind="console", text="old"),)
             shots.append(visual.Shot(s.name, w, f"{s.name}-{w}.png", errors=seen))
     return shots
+
+
+def served(c):
+    """The URL the recipe answered at, with the port the fixture made Delivery pick."""
+    return check.url(c.env.model_copy(update={"port": check.free_port()}))
 
 
 def run(c, tmp_path, events, profile=None, widths=(1280, 1920)):
@@ -122,11 +129,39 @@ class Host:
         return Activity(host_up=True)
 
 
-def test_due_only_once_before_the_visual_preview_starts(ui):
+def test_due_once_per_visual_check_environment_unless_the_owners_answer_settles_its_round(ui):
+    """D-01M6Q4B6VV4Z05WFQ1BD4X95HJ: each new environment's capture gets its own "before"; settling needs none."""
     assert before.due(ui)
     assert not before.due(ui.model_copy(update={"env": ui.env.model_copy(update={"launched_at": NOW})}))
     assert not before.due(ui.model_copy(update={"step": Step(kind=StepKind.CHECK, task="look")}))
     assert not before.due(ui.model_copy(update={"brief": Brief(version=1, ui=True)}))
+    taken = VisualResult(head="base", tree="t", at=NOW)
+    waived = VisualRound(number=1, head="h", tree="t", brief=ui.brief.version, before=taken.identity(), outcome="model",
+                         model_waived=True, states={"home": 1}, criteria=evidence.criteria(ui),
+                         pack=pack_files.identity(), at=NOW)  # fmt: skip
+    for rounds, head, env, due in (
+        ([], "h", ui.env, True),  # a new environment, no round to settle
+        ([waived.model_copy(update={"model_waived": False})], "h", ui.env, True),  # a round judged again
+        ([waived], "moved", ui.env, True),  # his waiver no longer matches the head
+        ([waived], "h", ui.env, False),  # his waiver settles the round on the capture it judged
+        ([waived.model_copy(update={"owner": ["owner-1"]})], "h", ui.env, True),  # a criterion withdrawn since
+        ([], "h", ui.env.model_copy(update={"check": "look"}), False),  # a person check keeps the visual evidence
+    ):
+        c = ui.model_copy(update={"before": taken, "visual_rounds": rounds, "env": env})
+        before.reset(c, head)
+        assert (c.before is None) is due
+    about = VisualState(name="about", path="/about.html", expect="About us")
+    amended = ui.model_copy(update={"brief": ui.brief.model_copy(update={"visual": [HOME, about]})})
+    amended.before = taken.model_copy(update={"states": {"home": 1, "about": 1}})
+    # an amendment voided about's "after", its wording unchanged: the challenger named it
+    amended.visual = VisualResult(head="h", tree="t", states={"home": 1, "about": 0}, passed=True, at=NOW,
+                                  criteria=evidence.criteria(amended))  # fmt: skip
+    before.reset(amended, "h")  # D-01M6GBBY578CY7F5N863EXHYEQ: home keeps its "after" and its "before"
+    assert (amended.before.identity(), amended.before.states, before.due(amended)) == (
+        taken.identity(),
+        {"home": 1, "about": 0},
+        True,
+    )  # only about is captured again, on both sides
 
 
 def test_the_states_are_rendered_at_the_merge_base_with_the_same_recipe_and_everything_is_removed(ui, tmp_path):
@@ -139,7 +174,7 @@ def test_the_states_are_rendered_at_the_merge_base_with_the_same_recipe_and_ever
     pids = [int(p) for e in events if e["event"] == "pids" for p in e["pids"]]
     assert pids
     assert not any(psutil.pid_exists(p) and psutil.Process(p).status() != psutil.STATUS_ZOMBIE for p in pids)
-    assert (check.answers(ui.env.ready_url), worktrees(ui)) == (False, 1)
+    assert (check.answers(served(ui)), worktrees(ui)) == (False, 1)
 
 
 def test_a_failing_install_is_a_note_and_nothing_is_launched(ui, tmp_path, monkeypatch):
@@ -155,7 +190,7 @@ def test_a_port_already_answering_is_a_note_and_nothing_is_launched(ui, tmp_path
     import http.server  # noqa: PLC0415
     import threading  # noqa: PLC0415
 
-    port = int(ui.env.ready_url.rsplit(":", 1)[1].strip("/"))
+    port = check.free_port()  # the port Delivery picks is taken by another server meanwhile
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), http.server.SimpleHTTPRequestHandler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
@@ -163,19 +198,19 @@ def test_a_port_already_answering_is_a_note_and_nothing_is_launched(ui, tmp_path
         shots = run(ui, tmp_path, events)
     finally:
         server.shutdown()
-    assert (shots.files, shots.findings, events) == ([], [f"something else already answers at {ui.env.ready_url}"], [])
+    assert (shots.files, shots.findings, events) == ([], [f"something else already answers at {served(ui)}"], [])
 
 
-def test_a_recipe_that_never_answers_is_a_note_and_its_processes_are_stopped(ui, tmp_path, monkeypatch):
+def test_a_recipe_ignoring_its_port_is_a_note_and_its_processes_are_stopped(ui, tmp_path, monkeypatch):
     monkeypatch.setattr(check, "READY_WITHIN", 1.0)
-    command = f"{sys.executable} -c 'import time; time.sleep(60)'"
+    command = f"{sys.executable} -m http.server {free_port()} --bind 127.0.0.1"  # a fixed port, not the assigned one
     ui.env = ui.env.model_copy(update={"command": command})
     events = []
     shots = run(ui, tmp_path, events)
-    assert (shots.files, shots.findings) == (
-        [],
-        [f"the recipe did not answer at {ui.env.ready_url} for the merge-base"],
-    )
+    assigned = check.free_port()
+    why = f"the preview did not answer on its assigned port {assigned} at http://127.0.0.1:{assigned}/"
+    assert (shots.files, len(shots.findings)) == ([], 1)
+    assert shots.findings[0].startswith(f"for the merge-base, {why}; it may use a fixed port; it printed: ")
     pid = int(next(iter(events[0]["pids"])))
     assert not (psutil.pid_exists(pid) and psutil.Process(pid).status() != psutil.STATUS_ZOMBIE)
     assert worktrees(ui) == 1
@@ -186,16 +221,18 @@ def gone(pid):
 
 
 def test_a_recipe_whose_leader_exits_leaving_a_child_has_the_child_stopped(ui, tmp_path, monkeypatch):
-    monkeypatch.setattr(check, "READY_WITHIN", 1.0)
+    monkeypatch.setattr(check, "READY_WITHIN", 20.0)  # its leader's exit ends the wait
     child = tmp_path / "child.pid"
     spawn = (
         "import subprocess, sys; "
         "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
-        f"open({str(child)!r}, 'w').write(str(p.pid))"
+        f"open({str(child)!r}, 'w').write(str(p.pid)); print('no database at TEST_DB')"
     )
     ui.env = ui.env.model_copy(update={"command": f"{sys.executable} -c {shlex.quote(spawn)}"})
     shots = run(ui, tmp_path, [])
-    assert shots.findings == [f"the recipe did not answer at {ui.env.ready_url} for the merge-base"]
+    url = check.url(ui.env.model_copy(update={"port": check.free_port()}))
+    said = f"the preview exited with status 0 before it answered at {url}; it printed: no database at TEST_DB"
+    assert shots.findings == [f"for the merge-base, {said}"]  # D-01M64TXG1P1HMPQH7Q9CWAYSSW: what it said, whole
     assert gone(int(child.read_text()))
 
 
@@ -209,7 +246,7 @@ def test_a_capture_that_raises_still_stops_the_preview_and_removes_the_worktree(
     shots = run(ui, tmp_path, events)
     assert (shots.files, shots.findings) == ([], ["RuntimeError: no Chromium"])
     assert all(gone(int(p)) for e in events for p in e["pids"])
-    assert (check.answers(ui.env.ready_url), worktrees(ui)) == (False, 1)
+    assert (check.answers(served(ui)), worktrees(ui)) == (False, 1)
 
 
 def test_an_unwritable_screenshot_folder_is_a_note_not_a_crash(ui, tmp_path):
@@ -255,7 +292,7 @@ def test_the_runner_records_the_before_capture_and_the_page_serves_it(ui, tmp_pa
         == ""
     )
     prepare._write(store, "c1", prepare.Prepared(check=VISUAL, option=none))  # noqa: SLF001 - as the preparer chose
-    runner._before(store, Lock("c1"), ui, Path(ui.names.worktree))  # noqa: SLF001
+    captures.at_merge_base(store, Lock("c1"), ui, Path(ui.names.worktree))
     c = store.read("c1")
     assert (c.before.files, c.before.findings, before.due(c)) == (
         ["home-1280.png", "home-1920.png", "home-2400.png"],

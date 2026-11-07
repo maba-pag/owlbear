@@ -13,9 +13,19 @@ from owlbear_delivery_next.change_contracts import permissions, tools
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import VISUAL, Environment, ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import budgets, disputes, loop, plan_rounds, repairs, worktree
+from owlbear_delivery_next.change_flow import (
+    amending,
+    budgets,
+    disputes,
+    loop,
+    plan_rounds,
+    repairs,
+    shaping_capture,
+    worktree,
+)
 from owlbear_delivery_next.change_flow.curation_flow import CURATE
 from owlbear_delivery_next.commands.cli import describe
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import design_tools
 from owlbear_delivery_next.impeccable_runs import visual_settled
 from owlbear_delivery_next.local_system import git_files
@@ -33,12 +43,13 @@ from owlbear_delivery_next.runtimes import (
 )
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.settings.config import SettingsUnset
-from owlbear_delivery_next.state_store import project_home, spend_ledger
+from owlbear_delivery_next.state_store import github_writer, project_home, spend_ledger
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 from owlbear_delivery_next.workflow_steps import (
-    amend,
+    amendment,
     before,
     brief_round,
+    captures,
     check,
     clarification,
     cleanup,
@@ -59,6 +70,7 @@ from owlbear_delivery_next.workflow_steps import (
     pending_child,
     plan_round,
     prepare,
+    project_checks,
     publish,
     queue,
     review,
@@ -74,6 +86,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_delivery_next.change_contracts.models import Change, Step
+    from owlbear_delivery_next.github.account import Writer
     from owlbear_delivery_next.state_store.store import Lock
 
 AGENT = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})
@@ -102,9 +115,8 @@ _kept = held.kept_session
 
 def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noqa: C901, PLR0915 - session lifecycle
     now, s, slug = datetime.now(UTC), change.step, change.slug
-    if held.settled(store, lock, change):  # its result is recorded already: only the hold's cleanup remains (RUN-04)
-        return
-    profile = store.read_profile() or Profile()
+    if held.settled(store, lock, change) or (profile := project_checks.profile_for(store, lock, change, repo)) is None:
+        return  # its result is recorded already (RUN-04), or the owner settles the project's checks first (#968)
     path = worktree.ensure(repo, git_common_dir(repo), slug, change.names.branch, change.names.target)
     change.names.worktree = str(path)
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
@@ -116,7 +128,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     look_limit = watched.needed(
         settings
     )  # before anything is recorded: an unset Spotter setting asks, leaving no open span
-    review.started(change, task, path, settings)  # one snapshot, checked before anything is taken (TD-208, TD-179)
+    review.started(change, task, path, settings)  # one snapshot, checked before anything is taken (TD-208)
     answer, accepted, repair, resume = session_choice.opening(store, lock, change, task)  # unset settings take nothing
     s.started_at = now
     since = task.base if task and s.kind in {StepKind.BUILD, StepKind.REVIEW} else None
@@ -188,7 +200,6 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     post = held_writes.Deferred(store, slug) if accepted else store  # an accepted hold's writes wait for its receipt
     result = review.recorded(change, task, run, path, session_result.to_result(run, s.kind, end))
     result = disputes.processed(change, task, run.session_id, run.payload, result, run.changed)
-    proposal = amend.proposed(change, run, result)  # TD-179: judged once this step's own result is durable
     result = conversation.disputed(task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
     change = budgets.effect_observed(change, answer.id, end) if answer and session_result.effect_seen(run) else change
@@ -202,15 +213,17 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
         end = datetime.now(UTC)
     result = overlap.integrated(post, lock, change, path, (start, run.ending), result)
     if isinstance(p := run.payload, tools.WrongPremise) and (p.stage, s.kind, result.exit) == TARGET:
-        result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end)
+        writer = github_writer.of(store, repo)
+        result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end, writer)
     if ctx is not None:
         result = prepare.chosen(post, lock, change, path, run.payload, ctx, result)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
-    if proposal is not None:  # its challenger's stop, else this result, is written with the verdict and its spend
-        amend.challenge(post, lock, change, path, proposal, route=result, settings=settings)
-        return
-    held_writes.write_result(store, lock, change, accepted, loop.apply(change, result, end), post)
+        before.reset(change, worktree.head(path))  # each new environment's capture gets its own "before"
+    if isinstance(p := run.payload, tools.WrongPremise) and p.stage == "brief" and result.exit == Exit.BACK:
+        amending.premised(change, p, run.session_id, end)  # TD-185: run before this step goes on; a stop wins
+    final = change if change.amending is not None else loop.apply(change, result, end)
+    held_writes.write_result(store, lock, change, accepted, final, post)
     sessions.announce_all(store, lock, slug, events)  # logged once the result that counts their round is durable
 
 
@@ -236,9 +249,10 @@ def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list
 
 
 def _captured(change: Change, path: Path, head: str, out: Path, widths: list[int]) -> tuple[list[Any], list[Any]]:
-    """The brief's states captured at *widths* from the ready environment, and the design scans they and the UI hold."""
-    pack, url = design.pack(), change.env.ready_url if change.env else ""
-    shots = visual.oversize(out, visual.CAPTURE(visual.root(url), change.brief.visual, out, widths, pack=pack))
+    """The states to redo captured at *widths* from the ready environment, and the design scans they and the UI hold."""
+    pack, url = design.pack(), check.url(change.env) if change.env else ""
+    redo = visual.redone(change, head, visual.tree(path, head))
+    shots = visual.oversize(out, visual.CAPTURE(visual.root(url), redo, out, widths, pack=pack))
     states = {s.name: s.version for s in change.brief.visual}
     source = design.sources(path, visual.ui_paths(change, head), pack)
     found = [s.design for s in shots if s.design] + ([source] if source else [])
@@ -315,38 +329,22 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         sessions.log_held(store, lock, [label for label, _ in [*mine, *theirs]], [run for _, run in ran])
 
 
-def _before(store: Store, lock: Lock, change: Change, repo: Path) -> None:
-    """TD-24: render the brief's states at the merge-base once, before the visual check's own preview starts."""
-    settings, log = store.settings(), lambda e: store.log(lock, change.slug, e)
-    settings.need("widths")
-    change.before = shots = before.capture(
-        change,
-        repo,
-        lambda base: store.before_dir(change.slug, base),
-        store.read_profile() or Profile(),
-        log,
-        widths=settings.widths,
-        prepare=prepare.merge_base(store, change, settings, log),
-    )
-    store.write(lock, change)
-    _out("; ".join([f"before: {len(shots.files)} screenshots at {shots.head[:7]}", *shots.findings]))
-
-
-def _ready(prof: Profile, path: Path, now: datetime) -> Result | None:
+def _ready(prof: Profile, path: Path, now: datetime, writer: Writer) -> Result | None:
     """DR2 before publishing: the publishing readiness facts, their first failure as its exit."""
     host = profile.value(prof, profile.HOST, "github.com")
-    return publish.gate(readiness.publishing(host, git_files.probe_in(path), readiness.reach(host)), now)
+    return publish.gate(readiness.publishing(host, git_files.probe_in(path), readiness.reach(host), writer), now)
 
 
 def _engine(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     now, kind = datetime.now(UTC), change.step.kind
     prof = store.read_profile() or Profile()
-    ctx = engine.Ctx(store, lock, repo, prof, profile.provider(prof, repo), now)
+    writer = github_writer.of(store, repo)
+    ctx = engine.Ctx(store, lock, repo, prof, profile.provider(prof, repo, writer), now, writer)
     if kind in {StepKind.PUBLISH, StepKind.FOLLOW, StepKind.MERGE} and change.names.branch:
         path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
         change.names.worktree = str(path)
     step = ENGINE.get(kind)
-    gated = _ready(prof, Path(change.names.worktree or repo), now) if kind == StepKind.PUBLISH else None
+    gated = _ready(prof, Path(change.names.worktree or repo), now, writer) if kind == StepKind.PUBLISH else None
     if gated:
         result = gated
     else:
@@ -376,6 +374,7 @@ def _reused(store: Store, lock: Lock, change: Change) -> bool:
         store.write(lock, change)
         return False
     change.env = Environment(check=r.check, command=r.command, directory=r.directory, ready_url=r.ready_url)
+    before.reset(change, worktree.head(root))
     reason = f"starting `{r.command}` for the check, as it last launched"
     result = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK, reason=reason)
     event = {"event": "step", "at": now.isoformat(timespec="seconds"), "kind": StepKind.CHECK, "exit": result.exit}
@@ -406,7 +405,13 @@ def main(argv: list[str] | None = None) -> int:
             change, step = store.fold(lock, args.change, datetime.now(UTC), state, moved=moved, leave=leave)
             kind = step.kind.value if step is not None else ""
             spend_ledger.enter(spend_ledger.Where.of(store, repo, change=args.change, step=kind))  # every session's
-            _step(store, lock, change, step, repo)
+            try:
+                _step(store, lock, change, step, repo)
+            except Exception as exc:  # the owner reads it in Recent activity; runner.log gets it and its traceback
+                at = datetime.now(UTC).isoformat()
+                failed = {"event": "runner-failed", "at": at, "reason": failure(exc)}
+                sessions.announce(store, lock, args.change, failed)
+                raise
             _out(describe(store.read(args.change)))
     except LockHeldError as exc:
         _out(f"{args.change}: {exc}; another runner holds it")
@@ -425,7 +430,7 @@ def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Pat
             store.settings()
         except StoreError as exc:  # damaged settings stop the Change once, not every runner the host starts
             now = datetime.now(UTC)
-            stop = loop.StepResult(exit=Exit.STOP, reason=str(exc), stop=exc.stop(now))
+            stop = loop.StepResult(exit=Exit.STOP, reason=failure(exc), stop=exc.stop(now))
             store.write(lock, loop.apply(change, stop, now))
             return
         try:
@@ -447,24 +452,26 @@ def _step(store: Store, lock: Lock, change: Change, step: Step | None, repo: Pat
         unset_settings.asked(store, lock, exc)
 
 
-def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None:  # noqa: C901 - per phase
-    """The step's phase: a test copy's end, the visual capture, "before", a test review, an agent or engine step."""
+def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path) -> None:  # noqa: C901, PLR0912
+    """The step's phase: a test copy's end, a capture, a test review, an agent, a brief challenge or an engine step."""
     try:
         if prepare.ran(store, lock, change, repo, runnable=step is not None):  # a gone check's end; a test copy
             _out(f"{change.slug}: test preparation ran")
         elif step is not None and check.capturing(change):
             _visual(store, lock, change, repo)
         elif step is not None and before.due(change):
-            _before(store, lock, change, repo)
+            _out(captures.at_merge_base(store, lock, change, repo))
         elif step is None or change.env is not None:
             _out("nothing to run; the host owns a check environment" if change.env else "nothing to run")
-        elif step.kind == StepKind.TESTS:  # a test review's reviewers (TD-373)
-            curation.run(store, lock, change, repo)
-        elif step.kind in AGENT:  # a step whose amendment challenge did not settle goes on from it (TD-179)
-            agent = amend.resumed(store, lock, change, repo) or _reused(store, lock, change)
+        elif step.kind == StepKind.TESTS or change.amending is not None:
+            (curation.run if step.kind == StepKind.TESTS else amendment.run)(store, lock, change, repo)
+        elif step.kind in AGENT:
+            agent = _reused(store, lock, change)
             agent = agent or prepare.refused(store, lock, change) or review.completed(store, lock, change, repo)
             agent = agent or plan_round.continued(store, lock, change, repo)
             agent or _agent(store, lock, change, repo)
+        elif shaping_capture.owed(change):  # the draft's pages, before its challenge and the chat's wait
+            _out(f"{change.slug}: {captures.at_target(store, lock, change, repo)}")
         elif step.kind == StepKind.SHAPE and brief_round.due(change):  # TD-221: before approval
             brief_round.run(store, lock, change, repo)
         else:
@@ -476,15 +483,15 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
         store.write(lock, loop.apply(store.read(lock.slug), exc.result(now), now))
     except worktree.ShelveError as exc:  # the planner never starts on edits it would have to reject
         now = datetime.now(UTC)
-        reason = f"{type(exc).__name__}: {exc}"
+        reason = failure(exc)
         store.log(lock, lock.slug, {"event": "not-shelved", "at": now.isoformat(timespec="seconds"), "reason": reason})
-        store.write(lock, loop.apply(store.read(lock.slug), _unshelved(exc), now))
+        store.write(lock, loop.apply(store.read(lock.slug), _unshelved(reason), now))
     except SettingsUnset as exc:
         unset_settings.asked(store, lock, exc)
 
 
-def _unshelved(exc: worktree.ShelveError) -> Result:
-    """The owner clears the worktree the planner would find dirty, then planning runs again."""
-    text = f"Delivery could not set aside the uncommitted edits before planning ({exc}). Commit, stash or discard them."
+def _unshelved(why: str) -> Result:
+    """The owner clears the worktree the planner would find dirty, then planning runs again; *why* says the error."""
+    text = f"Delivery could not set aside the uncommitted edits before planning ({why}). Commit, stash or discard them."
     cause = cause_key(ErrorKind.STATE, StepKind.PLAN, "dirty-worktree")
     return engine.ask(StepKind.PLAN, text, cause, engine.continue_or_pause(StepKind.PLAN))

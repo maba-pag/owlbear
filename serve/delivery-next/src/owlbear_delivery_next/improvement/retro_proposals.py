@@ -29,7 +29,6 @@ FILE = "proposals.jsonl"
 KINDS = ("lesson", "agent-change", "delivery-change", "look-reconsider", "spotter-case")
 CLOSED = frozenset({"accepted", "rejected", "redirected"})
 OWNER_STATES = frozenset({"shown", "accepted", "rejected", "redirected", "later"})
-ERROR = 2_000  # characters of a failure's message kept
 
 
 def steps(destination: Mapping[str, Any]) -> tuple[str, ...]:
@@ -217,13 +216,13 @@ def file(
 
 
 def due_reviews() -> list[dict[str, Any]]:
-    """The drafted proposals, synthetic ones included: their current evidence has no review yet.
+    """The drafted real proposals whose current evidence has no review yet.
 
     That holds too for evidence grown back to a digest reviewed before, since growth made that review stale. None that
     rests on a retired assumption is listed.
     """
     gone = store.retired_ids()
-    return [p for p in folded().values() if p["state"] == "drafted" and store.visible(p, gone, synthetic=True)]
+    return [p for p in folded().values() if p["state"] == "drafted" and store.visible(p, gone, synthetic=False)]
 
 
 def reviewed(proposal: str, digest: str, answer: Mapping[str, Any]) -> None:
@@ -309,7 +308,7 @@ def outcome(proposal: str, kind: str, **fields: object) -> None:
     if kind == "applied":
         eid = f"ap-{proposal}-{fields['step']}-{store.digest(fields['artefact'])}"
     else:
-        error = mask.redact(str(fields.get("error", "")))[:ERROR]
+        error = mask.redact(str(fields.get("error", "")))
         eid, fields = f"fa-{uuid.uuid4().hex[:12]}", fields | {"error": error}
     _event({"eid": eid, "proposal": proposal, "type": kind, **fields})
 

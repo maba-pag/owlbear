@@ -31,6 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.provider import Check, ProviderError
 from owlbear_delivery_next.impeccable import pack_files, pack_git
 from owlbear_delivery_next.impeccable_runs import pack_publish, pack_rounds
@@ -44,7 +45,7 @@ from owlbear_delivery_next.impeccable_runs.pack_repair_edits import asked as _as
 from owlbear_delivery_next.impeccable_runs.pack_repair_edits import config as _config
 from owlbear_delivery_next.impeccable_runs.pack_repair_edits import held as _held
 from owlbear_delivery_next.impeccable_runs.pack_repair_edits import staged as _staged
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.workflow_steps import follow, sessions
 
@@ -210,7 +211,7 @@ def repaired(job: Job, ctx: Context) -> None:
         moved = _moved(gh, ctx) if r.phase == "requested" else ""
     except ProviderError as exc:
         r.phase = ""  # asked again from the CI stop's question, never started unseen
-        msg = f"the pull request could not be read before the agent's repair ({exc}); try again or discard"
+        msg = f"the pull request could not be read before the agent's repair ({failure(exc)}); try again or discard"
         raise pack_publish.Held(msg) from exc
     if moved:
         r.phase, r.stop = "", None
@@ -320,7 +321,7 @@ def _made(job: Job, ctx: Context, src: pack_git.Source, gh: Provider) -> Outcome
         run(at, ["commit", "--quiet", "-m", message])
         r.commit = run(at, ["rev-parse", "HEAD"])
     except (pack_files.PackError, ProviderError, OSError) as exc:
-        return Outcome("failed", f"the agent's repair did not finish: {type(exc).__name__}: {exc}")
+        return Outcome("failed", f"the agent's repair did not finish: {failure(exc)}")
     finally:
         if not job.keeps(at):
             _quiet(run, src.root, ["worktree", "remove", "--force", str(at)])
@@ -360,7 +361,7 @@ def _pushed(job: Job, ctx: Context, src: pack_git.Source) -> Outcome:
     except pack_files.PackError as exc:
         r.phase = ""
         job.keep(ctx)
-        return Outcome("failed", f"the agent's repair {r.commit[:12]} was not pushed: {exc}")
+        return Outcome("failed", f"the agent's repair {r.commit[:12]} was not pushed: {failure(exc)}")
     r.protected |= blobs
     shown = f"{r.shown}\n{diff}".strip()
     r.shown, r.shown_binary = shown[:SHOWN], r.shown_binary or binary
@@ -425,6 +426,7 @@ def _ended(done: Run) -> str:
     p = done.payload
     if not (done.termination and done.termination.confirmed):
         msg = f"the agent {done.session_id} may still be running; stop it on the Maintenance page"
+        msg += f"; {session_result.unverified(done.termination)}"
         raise pack_files.PackError(msg)
     if done.ending != "result" or not isinstance(p, RepairResult):
         said = p.reason if isinstance(p, tools.WrongPremise) else done.detail or "no result"

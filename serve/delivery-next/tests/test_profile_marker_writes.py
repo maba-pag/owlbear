@@ -6,10 +6,11 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.settings import config
-from owlbear_delivery_next.state_store import prefs_import
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store import prefs_import, profile_share
+from owlbear_delivery_next.state_store.profile_errors import Basis, SharedSyncError
+from owlbear_delivery_next.state_store.store import Store, StoreError
 
 
 def clone_profile(remote: Path, tmp_path: Path) -> tuple[Store, Profile]:
@@ -125,3 +126,74 @@ def test_a_second_store_cannot_publish_done_while_the_config_removal_is_unpublis
     fresh, got = clone_profile(remote, tmp_path / "again")
     assert got.prefs_import == "done"
     assert not fresh.config_path.exists()
+
+
+@pytest.mark.parametrize("operation", ["pull", "layer", "claim", "retry"])
+def test_profile_publication_refusals_keep_the_error_and_notes(shared_repo, tmp_path, monkeypatch, operation):
+    root, _remote = shared_repo
+    store = shared_store(root, tmp_path, "own")
+    store.write_profile(Profile(prefs_import="done" if operation == "retry" else ""))
+    error = DataRepoError("publication refused")
+    error.add_note("the complete refusal context")
+
+    failed = []
+
+    def refuse(*_args, **_kwargs):
+        if not failed:
+            failed.append(True)
+            raise error
+        return ""
+
+    if operation == "pull":
+        monkeypatch.setattr(DataRepo, "pull", refuse)
+        with pytest.raises(SharedSyncError) as caught:
+            store.write_profile(Profile(), basis=Basis())
+        text = str(caught.value)
+    elif operation == "retry":
+        (store.root / profile_share.UNPUBLISHED).touch()
+        monkeypatch.setattr(profile_share, "publish_config_unlocked", lambda _store: "")
+        monkeypatch.setattr(DataRepo, "publish", refuse)
+        text = store.retry_prefs_import()
+    else:
+        monkeypatch.setattr(DataRepo, "publish", refuse)
+        action = (
+            (lambda: profile_share.publish_layer(store, store.config_path, "test settings", 0))
+            if operation == "layer"
+            else lambda: store.mark_prefs_import("", "pending", "basis", "claim")
+        )
+        with pytest.raises(StoreError) as caught:
+            action()
+        text = str(caught.value)
+    assert "DataRepoError: publication refused\nthe complete refusal context" in text
+    if operation == "claim":
+        assert (store.root / profile_share.UNCONFIRMED).read_text() == "claim"
+    if operation == "retry":
+        assert profile_share.unpublished(store)
+
+
+@pytest.mark.parametrize("step", ["fetch", "rev-parse", "ls-tree", "show"])
+def test_a_pending_record_failure_reaches_the_real_completion_retry_whole(
+    shared_repo, tmp_path, monkeypatch, whole_error, step
+):
+    root, _remote = shared_repo
+    store = shared_store(root, tmp_path, "own")
+    store.write_profile(Profile(prefs_import="done"))
+    (store.root / profile_share.UNPUBLISHED).touch()
+    saved = profile_share.path(store).read_bytes()
+    real = DataRepo.git
+    out, err = f"stdout {whole_error}", f"stderr {whole_error}"
+
+    def git(self, *args, **kwargs):
+        if args[0] == step:
+            return subprocess.CompletedProcess(args, 128, out, err)
+        if step == "show" and args[0] == "ls-tree":
+            return subprocess.CompletedProcess(args, 0, "100644 blob pending\tshop-site/config.pending", "")
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(DataRepo, "git", git)
+    with pytest.raises(StoreError) as caught:
+        prefs_import.republish(store)
+    assert f"stderr:\n{err}\nstdout:\n{out}" in str(caught.value)
+    assert profile_share.CONFIG_WAITING in str(caught.value)
+    assert profile_share.unpublished(store)
+    assert profile_share.path(store).read_bytes() == saved

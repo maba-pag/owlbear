@@ -80,9 +80,13 @@ def waived(c: Change, k: Criterion) -> str:
 def review_valid(c: Change, review: Review, paths: Mapping[str, str], changed: Iterable[str] | None = None) -> bool:
     """Return whether a passing review still holds for the observed fingerprints and, given, the changed paths.
 
-    Every path changed against the base must lie in the review's engine-computed coverage (F3).
+    Every path changed against the base must lie in the review's engine-computed coverage (F3). It judged one brief
+    version: an amendment applied since makes it insufficient (TD-185).
     """
     if changed is not None and not set(changed) <= review.inputs.paths.keys():
+        return False
+    amended = any(a.state == "applied" for a in c.amendments)
+    if review.brief != c.brief.version and (review.brief is not None or amended):
         return False
     return review.verdict == "pass" and inputs_valid(review.inputs, Inputs(criteria=criteria(c), paths=dict(paths)))
 

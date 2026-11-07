@@ -19,10 +19,10 @@ from owlbear_delivery_next.change_contracts.models import Episode, ErrorKind, Ex
 from owlbear_delivery_next.change_flow import budgets, delivery_target, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.git.remote_git import RemoteGitError, run_remote_git
-from owlbear_delivery_next.github.provider import BranchState, classify_checks
+from owlbear_delivery_next.github.provider import BranchState, ProviderError, classify_checks
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.settings import profile
-from owlbear_delivery_next.settings.config import pref
+from owlbear_delivery_next.settings.config import SettingsUnset, pref
 from owlbear_delivery_next.state_store import briefs, change_record, decision_fixes, project_home
 from owlbear_delivery_next.state_store.backlog import Backlog, BacklogError
 from owlbear_delivery_next.state_store.database import StoreError
@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from owlbear_delivery_next.change_contracts.models import Change
+    from owlbear_delivery_next.github.account import Writer
     from owlbear_delivery_next.github.provider import PullRequest
     from owlbear_delivery_next.workflow_steps.engine import Ctx
 
@@ -272,13 +273,13 @@ def preserve(path: Path, branch: str, inv: Inventory, dest: Path, stem: str) -> 
 
 
 def _keep(ctx: Ctx, path: Path, c: Change, pr: PullRequest | None) -> list[str]:
-    engine.fetch(path, c.names.target)
+    access = ctx.writer.access()
+    engine.fetch(path, c.names.target, access)
     keep = [f"origin/{c.names.target}"]
     if pr and pr.merged:
         if not engine.git_ok(path, "cat-file", "-e", f"{pr.head_sha}^{{commit}}"):
-            run_remote_git(
-                path, ("fetch", "--quiet", "--no-tags", "origin", f"refs/pull/{pr.number}/head"), kind="read"
-            )
+            fetch = ("fetch", "--quiet", "--no-tags", "origin", f"refs/pull/{pr.number}/head")
+            run_remote_git(path, fetch, kind="read", access=access)
         keep.append(pr.head_sha)
     ctx.log(c.slug, "inventory", keep=keep)
     return keep
@@ -407,17 +408,17 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
         ctx.log(c.slug, "change-record", notice=notice)
     fixes(ctx, c, proof)
     if proof and c.step.mode != "abandon":
-        c.pullback = pullback.run(ctx.repo, c.names.target, ctx.now)
+        c.pullback = pullback.run(ctx.repo, c.names.target, ctx.now, ctx.writer)
         ctx.log(c.slug, "pullback", **c.pullback.model_dump(mode="json", exclude={"at"}))
     reason = f"worktree removed; {len(saved)} preservation file(s)"
     reason = f"workspace kept: large ignored files ({path})" if kept else reason
     return c, StepResult(exit=Exit.DONE, reason=reason, preserved=[str(s) for s in saved])
 
 
-def merged_files(repo: Path, target: str, sha: str) -> frozenset[str]:
+def merged_files(repo: Path, target: str, sha: str, writer: Writer) -> frozenset[str]:
     """The files the merge commit changed against its first parent; the target is fetched when it is missing."""
     if not engine.git_ok(repo, "cat-file", "-e", f"{sha}^{{commit}}"):
-        engine.fetch(repo, target)
+        engine.fetch(repo, target, writer.access())
     out = _bytes(repo, "diff", "--name-only", "--no-renames", "-z", f"{sha}^1", sha)
     return frozenset(p.decode(errors="surrogateescape") for p in out.split(b"\0") if p)
 
@@ -429,10 +430,11 @@ def fixes(ctx: Ctx, c: Change, pr: PullRequest | None) -> None:
     # an abandoning Change credits nothing, even when its PR merged before cleanup read it: it reopens its entries
     sha = pr.merge_commit_sha if pr and pr.merged and c.step.mode != "abandon" else None
     try:
-        files = merged_files(ctx.repo, c.names.target, sha) if sha else None
+        files = merged_files(ctx.repo, c.names.target, sha, ctx.writer) if sha else None
         clone = project_home.clone_id(project_home.clone_dir(ctx.repo))
         decision_fixes.verified(Backlog.of(ctx.store), c.slug, clone, files, pr.url if pr and sha else "")
-    except (BacklogError, DataRepoError, RemoteGitError, StoreError, OSError, subprocess.SubprocessError) as exc:
+    except (BacklogError, DataRepoError, RemoteGitError, ProviderError, SettingsUnset, StoreError, OSError,
+            subprocess.SubprocessError) as exc:  # fmt: skip
         notice = f"the decision fixes of {c.slug} were not updated: {worktree.failure(exc)}"
         ctx.log(c.slug, "decision-fixes", notice=notice)
 
@@ -443,7 +445,7 @@ def _workspace(ctx: Ctx, c: Change, path: Path, pr: PullRequest | None) -> tuple
         inv = inventory(path, c.names.branch, keep)
         kept = large(path, inv)
     except (PreservationError, OSError, subprocess.SubprocessError) as exc:
-        return [], False, _stopped(ctx, path, f"could not inventory {path}: {exc}")
+        return [], False, _stopped(ctx, path, f"could not inventory {path}: {worktree.failure(exc)}")
     if kept:
         ctx.log(c.slug, "workspace-kept", path=str(path), reason="large ignored files")
         return [], True, None
@@ -463,7 +465,7 @@ def _retire(ctx: Ctx, c: Change, path: Path, inv: Inventory) -> tuple[list[Path]
     try:
         saved = preserve(path, c.names.branch, inv, dest, f"{c.slug}-{len(c.names.preserved) + 1}")
     except (PreservationError, subprocess.CalledProcessError, OSError, tarfile.TarError) as exc:
-        return [], _stopped(ctx, path, f"could not save {path}: {exc}")
+        return [], _stopped(ctx, path, f"could not save {path}: {worktree.failure(exc)}")
     dirty, ignored = list(inv.dirty)[:50], list(inv.ignored)[:50]
     saved_paths = [str(s) for s in saved]
     ctx.log(c.slug, "preserved", commits=len(inv.commits), dirty=dirty, ignored=ignored, saved=saved_paths)

@@ -14,7 +14,13 @@ from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import curation, curation_block, curation_snapshots
+from owlbear_delivery_next.machine_host import (
+    curation,
+    curation_block,
+    curation_resume,
+    curation_snapshots,
+    curation_tree,
+)
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import Layer, Prefs
@@ -105,14 +111,42 @@ def test_only_the_unblocked_folder_curates_and_the_blocked_one_runs_once_its_set
     assert curator.folders == ["a", "b", "b", "b"]
     assert (a.state, a.reason, a.seen, a.ended_at == a.started_at) == ("failed", UNSET, seen, True)
     assert job.due("a")
-    blocked = {f["folder"]: f["blocked"] for f in job.read()["folders"]}
-    assert (blocked["a"], blocked["b"]) == (UNSET, "")
+    listed = {f["folder"]: f for f in job.read()["folders"]}
+    assert (listed["a"]["blocked"], listed["b"]["blocked"]) == (UNSET, "")
+    assert [(f["unset"], f["unset_reason"]) for f in listed.values()] == [([GAP], ""), ([], "")]  # for the page
+    assert (a.reason_unset, _row(job, "b").reason_unset) == (1, 0)  # the refusal's count, beside its recorded words
 
     _poll(shared, "a", 20)
     assert job.queue == []  # A's refused request has left; no manual request waits
     assert job.nudge(None, "idle") == ["a"]
     _drained(job)
     assert (curator.folders[-1], _row(job, "a").state) == ("a", "done")
+
+
+def test_a_later_reason_leaves_none_of_an_earlier_unset_refusal_s_count(shared, monkeypatch) -> None:
+    """The count belongs to the reason it was recorded with: a restart's, an automatic trigger's and a resumed apply's
+    note each replace or extend that reason whole, and the page then says no settings are unset."""
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: shared, run=Curator())
+    job.start("a")
+    _drained(job)
+    assert (_row(job, "a").reason, _row(job, "a").reason_unset) == (UNSET, 1)
+
+    waiting = _row(job, "a").model_copy(update={"state": "waiting"})  # a restart ends a waiting row
+    job._save("a", waiting)  # noqa: SLF001
+    restarted = curation.Curation(Slots(lambda: 1), shared=lambda: shared, run=Curator())
+    assert [(_row(restarted, "a").reason, _row(restarted, "a").reason_unset)] == [(curation.INTERRUPTED, 0)]
+
+    job._save("a", FolderRun(state="failed", reason=UNSET, reason_unset=1))  # noqa: SLF001
+    _poll(shared, "a", 20)  # set now; an automatic trigger is refused at its grant
+    monkeypatch.setattr(job, "allowed", lambda _trigger: False)
+    job.start("a", "idle")
+    _drained(job)
+    assert (_row(job, "a").reason, _row(job, "a").reason_unset) == (curation.OFF, 0)
+
+    job._save("a", FolderRun(state="failed", reason=UNSET, reason_unset=1))  # noqa: SLF001
+    curation_resume._noted(job, curation_tree.Resumed("a", done=False, said="git push failed"))  # noqa: SLF001
+    noted = _row(job, "a")
+    assert (noted.reason_unset, UNSET in noted.reason, "git push failed" in noted.reason) == (0, True, True)
 
 
 def test_a_folder_with_no_project_layer_curates_though_project_settings_are_unset(shared) -> None:
@@ -139,7 +173,7 @@ def test_a_setting_cleared_while_the_request_waits_for_its_slot_refuses_it_at_th
     slots.give(HELD, "a-step")
     _drained(job)
     b = _row(job, "b")
-    assert (curator.folders, b.state, b.reason) == ([], "failed", UNSET)
+    assert (curator.folders, b.state, b.reason, b.reason_unset) == ([], "failed", UNSET, 1)
     assert slots.take(HELD, "after", 1, 1) == 1  # the refusal gave the slot back
 
 
@@ -173,6 +207,7 @@ def test_an_unreadable_global_refuses_every_folder_and_keeps_what_the_last_run_s
     b = _row(job, "b")
     assert curator.folders == ["b"]
     assert (b.state, b.reason.startswith(work_block.UNREADABLE), b.seen) == ("failed", True, seen)
+    assert b.reason_unset == 0  # unreadable settings are no count of unset ones: the reason stands whole
     assert (curation_snapshots.refused(b), b.ended_at == b.started_at) == (True, True)
     restarted = curation.Curation(Slots(lambda: 1), shared=lambda: shared, run=curator)
     assert (_row(restarted, "b").reason, restarted.lingering()) == (b.reason, False)
@@ -188,5 +223,6 @@ def test_an_unset_update_check_interval_on_this_machine_blocks_every_folder(shar
     _drained(job)
     assert curator.folders == []
     assert all(f"machine.{k}" in _row(job, "b").reason for k in unset)
-    assert curation_block.blocked(shared, "b") == _row(job, "b").reason
-    assert all(f"machine.{k}" in curation_block.blocked(shared, "no-layer") for k in unset)  # a folder without one too
+    assert curation_block.block(shared, "b").text() == _row(job, "b").reason
+    no_layer = curation_block.block(shared, "no-layer").text()  # a folder without a project layer too
+    assert all(f"machine.{k}" in no_layer for k in unset)

@@ -197,7 +197,10 @@ def counted(c: Change, found: list[str], judged: Mapping[str, tuple[bool, str]])
     """Count one challenger verdict: its judgements and new findings; then the owner, the planner or the end."""
     lp = c.loops[PLAN]
     recheck = c.step.mode == RECHECK
-    lp.verdict(found, judged, identity(c.plan), f"r{lp.round}", recheck=recheck)
+    repair = lp.head != identity(c.plan)
+    upheld = lp.verdict(found, judged, identity(c.plan), f"r{lp.round}", recheck=recheck)
+    if c.plan:
+        lp.read(c.plan.version, recheck=recheck, upheld=upheld, repair=repair)
     if _undecided(lp) is not None:
         return "ask"
     if addressing(c):
@@ -252,6 +255,12 @@ def _said(f: RoundFinding) -> str:
 def owned(q: Question) -> bool:
     """Whether the plan loop asked *q*: it settles only while it is the Change's open question."""
     return (q.cause or "").startswith((DISPUTE, ROUND))
+
+
+def owned_open(c: Change) -> bool:
+    """Whether the Change waits on one of the plan loop's questions."""
+    o = c.outcome
+    return any(q.id == o.question and owned(q) for q in c.questions) if o and o.exit == Exit.ASK else False
 
 
 def decided(c: Change, q: Question, target: str, note: str, now: datetime) -> None:

@@ -1,13 +1,13 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { call, here } from "/assets/ui.mjs";
+import { call, defined, here, machineState } from "/assets/ui.mjs";
 import { receipts } from "./actions.mjs";
 import { detail, open } from "./entry.mjs";
 import { scopes, scopesView } from "./overview.mjs";
 import { queue } from "./queue.mjs";
 import { loadRecovery, recoveryView } from "./recovery.mjs";
-import { addressOf, cutOff, filter, readBack, ROOT, sameAddress, STATES, scopeOf, show, state, TAGS, VIEWS, wide }
-  from "./state.mjs";
+import { addressOf, cutOff, filter, linked, readBack, ROOT, sameAddress, STATES, scopeOf, show, state, TAGS, VIEWS,
+  wide } from "./state.mjs";
 import { field, select } from "./widgets.mjs";
 
 const WHERE = [["all", "This project and Global"], ["project", "This project"], ["global", "Global"],
@@ -24,7 +24,7 @@ function query() {
   return q.toString();
 }
 
-let listTurn = 0;
+let listTurn = 0, unopened = linked;
 
 export async function refresh() {
   const turn = ++listTurn, where = filter.where;
@@ -44,6 +44,24 @@ export async function refresh() {
   }
   show();
   if (state.opened) await open(state.opened, { again: true });
+  await openLinked();
+}
+
+// Opens the linked decision once the list is read, in its card, scrolled into view with its heading focused; one the
+// filters leave out (a retired one) shows above the list. One that can't be read says why in the page's error notice.
+async function openLinked() {
+  if (!unopened || !state.loaded?.available) return;
+  unopened = "";
+  await open(linked, { address: state.loaded.address });
+  const card = document.querySelector(`.entry[data-id="${CSS.escape(linked)}"]`);
+  const heading = card?.querySelector(".heading");
+  if (!heading) return;
+  // The heading sits in the accordion's slot, which can't take focus until the accordion is defined and rendered.
+  await defined(["p-accordion"]);
+  await card.querySelector("p-accordion").componentOnReady();
+  if (!heading.isConnected) return;
+  card.scrollIntoView({ block: "start" });
+  heading.focus();
 }
 
 function chose(key) {
@@ -85,7 +103,7 @@ function card(d, address) {
   return html`<li class="entry" data-id=${d.id}>
     <p-accordion compact="true" background="surface" .open=${opened} @update=${() => open(d.id, { address })}>
       <div slot="summary" class="summary"><div class="named"><p-heading tag="h3" size="sm" weight="semibold"
-        class="heading">${once ? d.statement : d.title}</p-heading>
+        class="heading" tabindex=${d.id === linked ? "-1" : nothing}>${once ? d.statement : d.title}</p-heading>
         ${once ? nothing : html`<p-text class="said" size="sm">${d.statement}</p-text>`}</div>${tags(d)}</div>
       ${opened ? detail() : nothing}
     </p-accordion>
@@ -93,11 +111,14 @@ function card(d, address) {
 }
 
 function listView(loaded) {
-  const rows = loaded.decisions;
+  const rows = loaded.decisions, e = state.entry;
+  const apart = e && e.id === linked && state.opened === linked && sameAddress(state.address, loaded.address)
+    && !rows.some((d) => d.id === linked);
   const empty = loaded.total ? "No decision matches these filters." : "No decision is recorded yet.";
   return html`<section id="decisions" aria-labelledby="decisions-heading">
     <p-heading size="lg"><h2 id="decisions-heading">Recorded decisions</h2></p-heading>
     ${filters()}
+    ${apart ? html`<ul class="entries" id="linked">${card(e, loaded.address)}</ul>` : nothing}
     ${rows.length ? html`<ul class="entries" id="entries">${repeat(rows, (d) => d.id, (d) => card(d, loaded.address))}
       </ul>` : html`<p-text class="empty" color="contrast-medium">${empty}</p-text>`}
   </section>`;
@@ -111,6 +132,7 @@ function back() {
 
 export function view() {
   const loaded = state.loaded, available = loaded?.available && wide !== "";
+  const undecided = machineState()?.undecided ?? [];  // what the machine host's start could not do about decisions
   // The total counts every decision the host reads, which for Global's or OwlBear's view holds the other's too.
   const shown = !available ? "" : wide ? `${VIEWS[wide].name} · ${loaded.decisions.length} shown`
     : `${loaded.decisions.length} of ${loaded.total} shown`;
@@ -118,7 +140,8 @@ export function view() {
   return html`
     ${back()}
     ${recoveryView()}
-    <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
+    <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error && !undecided.length}
+      >${state.error}${undecided.map((line) => html`<div class="said">At this start, ${line}.</div>`)}
     </p-inline-notification>
     <p-inline-notification id="unavailable" state="info" heading="Decisions cannot be read" heading-tag="h2"
       dismiss-button="false" ?hidden=${!loaded || available}>${loaded && !available ? loaded.reason : ""}

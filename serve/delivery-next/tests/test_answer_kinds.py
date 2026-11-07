@@ -14,7 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_decisions import Decision, Origin, Scope, State, new_id
-from owlbear_delivery_next.change_contracts import pick_tools, tools
+from owlbear_delivery_next.change_contracts import amend_tools, pick_tools, tools
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
 from owlbear_delivery_next.change_contracts.models import (
     Answer,
@@ -30,7 +30,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import answer_kinds, loop
+from owlbear_delivery_next.change_flow import amending, answer_kinds, loop
 from owlbear_delivery_next.commands import chat_client, cli, mcp_server, runner
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.processes import Termination
@@ -77,7 +77,7 @@ class Asking:
         picking.step()
         assert picking.approve(1).status_code == 200
         c = picking.approved()
-        c.plan = Plan(tasks=[Task(id="t1", title="Add farewell", scope=["packages/app"], checks=["true"])])
+        c.plan = Plan(tasks=[Task(id="t1", title="Add farewell", scope=["packages/app"], checks=["cd . && true"])])
         c.step = Step(kind=StepKind.BUILD, task="t1", session=session or None)
         asked = Question(step=StepKind.BUILD, text=ASKED, options=list(options))
         c = loop.apply(c, loop.StepResult(exit=Exit.ASK, question=asked), AT)
@@ -168,7 +168,7 @@ def test_a_confirmed_clarification_within_the_brief_becomes_a_change_decision_in
     assert archived["read_back"] == d.at.date().isoformat()  # read back when he confirmed it
 
 
-def test_a_clarification_the_check_finds_changing_the_brief_stops_the_work_undelivered_and_undecided(
+def test_a_clarification_the_check_finds_changing_the_brief_starts_its_amendment_undelivered_and_undecided(
     picking, monkeypatch
 ):
     run = Asking(picking, monkeypatch)
@@ -178,13 +178,12 @@ def test_a_clarification_the_check_finds_changing_the_brief_stops_the_work_undel
 
     c = run.step()
 
-    assert (run.held, c.decisions) == ([], [])
-    q = loop.open_question(c)
-    assert (q.cause, [o.id for o in q.options]) == (f"scope:build:brief-change:{run.qid}", ["within", "stop"])
-    assert "A French greeting is an outcome the brief lacks." in q.text
+    assert (run.held, c.decisions, loop.open_question(c)) == ([], [], None)
+    (a,) = c.amendments
+    assert (a.source, a.question, c.amending.phase) == ("answer", run.qid, "prepare")  # the shaper prepares it next
+    assert "A French greeting is an outcome the brief lacks." in a.reason
     assert (run.asked(c).answer.kind, answer_kinds.delivered_next(c)) == ("brief_change", None)
     assert WORDS not in "\n".join(step_input.brief(c))  # no later role reads it either
-    assert loop.next_step(c, AT) is None  # nothing runs while the owner decides
 
 
 def test_a_check_that_fails_waits_and_runs_again_never_taken_for_a_pass(picking, monkeypatch):
@@ -205,25 +204,44 @@ def test_a_check_that_fails_waits_and_runs_again_never_taken_for_a_pass(picking,
     assert ([d.text for d in c.decisions], len(run.held), len(picking.pickers())) == ([SAID], 1, 3)
 
 
-def test_a_brief_change_stops_the_work_and_answering_within_the_brief_reopens_the_question(picking, monkeypatch):
-    run = Asking(picking, monkeypatch)
+FRENCH = amend_tools.CandidateResult(
+    items=[{"field": "criterion", "text": "farewell('Ada') also says 'Au revoir, Ada!'", "why": "he wants French"}]
+)
+MORE = amend_tools.VerdictResult(verdict="weaker", reasons="a new outcome", beyond="it adds French to every page")
+
+
+def amended(run: Asking) -> Question:
+    """His brief_change answer through the amendment path: the shaper's candidate, its challenge, his question."""
     assert run.answer(kind="brief_change", text=WORDS).status_code == 200
+    run.p.verdicts += [FRENCH, MORE]
+    run.step()
+    return loop.open_question(run.step())
 
-    c = run.step()
 
-    q = loop.open_question(c)
-    assert (answer_kinds.owned(q), loop.ordinary(q), "not built yet" in q.text) == (True, False, True)
-    assert (run.held, len(picking.pickers()), answer_kinds.delivered_next(c)) == ([], 1, None)  # no check, no worker
+def test_a_brief_change_runs_its_amendment_and_declining_it_within_the_brief_reopens_the_question(picking, monkeypatch):
+    run = Asking(picking, monkeypatch)
+
+    q = amended(run)
+
+    assert (amending.owned(q), loop.ordinary(q), "Beyond your answer: it adds French" in q.text) == (
+        ("A1", "decide"),
+        False,
+        True,
+    )
+    assert [cfg.role for cfg in picking.told[-2:]] == ["shaper", "challenger"]
+    assert (run.held, answer_kinds.delivered_next(picking.change())) == ([], None)  # no worker, nothing delivered
     assert run.answer(q.id, kind="event", option="within").json()["detail"] == "only a worker's question takes a kind"
     assert run.answer(q.id).status_code == 422  # one of its options
     assert run.answer(q.id, option="within", channel="chat").status_code == 403  # a Changes-page decision
-    assert run.answer(q.id, option="within").status_code == 200
+    assert run.answer(q.id, option="within").status_code == 422  # his reason goes to the work
+    assert run.answer(q.id, option="within", text="English only").status_code == 200
 
     c, _ = run.fold()
 
     reopened = loop.open_question(c)
     assert (reopened.id, reopened.answer, loop.ordinary(reopened)) == (run.qid, None, True)
-    assert not any("not built yet" in line for line in step_answers.answered(c))  # the owner's question stays his
+    assert (c.amendments[0].state, c.amendments[0].declined, c.brief.version) == ("declined", "English only", 1)
+    assert any("English only" in line for line in step_answers.answered(c))  # his reason goes to the work
     assert run.answer(kind="event", text="English").status_code == 200
     run.step()
     [(_, delivered)] = run.held
@@ -235,9 +253,7 @@ def test_a_reopened_question_does_not_show_an_answer_dropped_before_a_later_one_
     run = Asking(picking, monkeypatch)
     dropped = {"event": "answer-not-applied", "at": AT.isoformat(), "question": run.qid, "reason": "it was settled"}
     picking.store.log(Lock(picking.slug), picking.slug, dropped)
-    assert run.answer(kind="brief_change", text=WORDS).status_code == 200
-    c = run.step()
-    assert run.answer(loop.open_question(c).id, option="within").status_code == 200
+    assert run.answer(amended(run).id, option="within", text="English only").status_code == 200
 
     run.fold()
 
@@ -247,13 +263,25 @@ def test_a_reopened_question_does_not_show_an_answer_dropped_before_a_later_one_
 
 def test_stopping_the_change_over_a_brief_change_abandons_it(picking, monkeypatch):
     run = Asking(picking, monkeypatch)
-    assert run.answer(kind="brief_change", text=WORDS).status_code == 200
-    q = loop.open_question(run.step())
-    assert run.answer(q.id, option="stop").status_code == 200
+    assert run.answer(amended(run).id, option="stop").status_code == 200
 
     c, _ = run.fold()
 
     assert (c.intent.abandoned_at is not None, c.step.kind, run.held) == (True, StepKind.CLEANUP, [])
+    assert (c.amendments[0].state, c.amendments[0].choice, c.brief.version) == ("declined", "stop", 1)
+
+
+def test_a_brief_change_that_says_no_more_than_his_answer_applies_without_another_question(picking, monkeypatch):
+    run = Asking(picking, monkeypatch)
+    assert run.answer(kind="brief_change", text=WORDS).status_code == 200
+    picking.verdicts += [FRENCH, amend_tools.VerdictResult(verdict="weaker", reasons="French is what he asked for")]
+    run.step()
+
+    c = run.step()
+
+    (a,) = c.amendments
+    assert (a.state, a.level, loop.open_question(c), c.brief.version) == ("applied", "decided", None, 2)
+    assert (c.step.kind, run.held) == (StepKind.PLAN, [])  # his amendment replans the task on the new version
 
 
 class Reply(io.BytesIO):
@@ -419,7 +447,7 @@ def test_the_check_reads_the_approved_brief_decisions_and_catches_a_clarificatio
 
     c = run.step()
 
-    assert (c.decisions, run.held, loop.open_question(c).cause) == ([], [], f"scope:build:brief-change:{run.qid}")
+    assert (c.decisions, run.held, [a.source for a in c.amendments]) == ([], [], ["answer"])
     [said] = checks
     assert all(x in said for x in ("Changes what a page shows: no", "UI states:", "Person checks:"))
 
@@ -663,34 +691,32 @@ def test_a_replacement_check_session_is_told_the_owners_pending_answer(tmp_path)
 STOPPED = "The Spotter stopped this step for irreversible harm: it would force-push over main."
 
 
-@pytest.mark.parametrize(("then", "kind"), [("again", StepKind.BUILD), ("replan", StepKind.PLAN)])
-def test_allowing_what_the_spotter_stopped_keeps_the_answer_and_asks_again_until_another_option_moves_on(
-    picking, monkeypatch, then, kind
-):
-    """#717: allowing needs a brief amendment, not built yet: Resume never moves the step on; the other options do."""
+def test_allowing_what_the_spotter_stopped_amends_the_brief_and_leaves_the_project_decision(picking, monkeypatch):
+    """#717: "Allow it" runs a brief amendment: a Change-scoped exception, never an edit of the project decision."""
     run = Asking(picking, monkeypatch)
+    project = {p: p.read_text() for p in picking.shared.root.rglob("*.md")}
     stopped = Run("s", ending="spotter-ask", detail=STOPPED, termination=DONE)
     c = loop.apply(picking.change(), session_result.to_result(stopped, StepKind.BUILD, AT), AT)
     picking.store.write(Lock(picking.slug), c)
-    first = c.outcome.question
-    assert run.answer(first, option="allow").status_code == 200
+    assert run.answer(c.outcome.question, option="allow").status_code == 200
     run.fold()
-    assert picking.http.post(f"/api/next/changes/{picking.slug}/intent", json={"intent": "resume"}).status_code == 200
+    exception = {"field": "decision", "question": "May this Change force-push over main?",
+                 "text": "Yes, for this Change only", "why": "the owner allowed it"}  # fmt: skip
+    said = amend_tools.VerdictResult(verdict="weaker", reasons="it allows what the project forbids")
+    picking.verdicts += [amend_tools.CandidateResult(items=[exception]), said]
 
-    c = run.step()  # the state as stored, Resume pressed, a tick
-
-    again = loop.open_question(c)
-    kept = next(q for q in c.questions if q.id == first)
-    assert (kept.answer.option, again.id != first, again.text, again.cause) == ("allow", True, STOPPED, kept.cause)
-    assert [o.id for o in again.options] == ["allow", "again", "replan"]
-    assert (run.held, c.step.kind) == ([], StepKind.BUILD)  # no worker started
-    assert run.answer(again.id, option=then).status_code == 200
-
+    run.step()
     c = run.step()
 
-    assert (len(run.held), c.step.kind, loop.open_question(c)) == (1, kind, None)
-    delivered = run.held[0][1]
-    assert delivered is None or delivered.answer.option == then  # the worker never receives the allow answer
+    (a,) = c.amendments
+    assert (a.source, a.state, a.level, loop.open_question(c), run.held) == ("allow", "applied", "decided", None, [])
+    assert STOPPED in a.reason
+    made = [(d.answer, d.scope, d.origin) for d in c.brief.decisions if d.question.startswith("May this Change")]
+    assert made == [("Yes, for this Change only", "change", "decided")]
+    assert {p: p.read_text() for p in picking.shared.root.rglob("*.md")} == project
+    run.step()
+    [(_, delivered)] = run.held
+    assert delivered is None or delivered.answer.option != "allow"  # the worker never receives the allow answer
 
 
 @pytest.mark.parametrize("field", ["detail", "usage_unread"])
@@ -712,3 +738,32 @@ def test_a_check_that_fails_waits_with_its_whole_reason(picking, monkeypatch, wh
         else f"its verdict cannot be trusted: {whole_error}"
     )
     assert (c.outcome.exit, c.outcome.reason) == (Exit.PENDING, f"{clarification.FAILED}: {why}")
+
+
+@pytest.mark.parametrize("case", ["ending", "usage"])
+def test_an_unverified_session_end_says_its_problems_whole(picking, monkeypatch, whole_error, case):
+    run = Asking(picking, monkeypatch)
+    assert run.answer(kind="clarification", text=WORDS, statement=SAID, confirmed=True).status_code == 200
+    left = Termination(confirmed=False, unknown=(9,), problems=(f"disconnect failed: RuntimeError: {whole_error}",))
+    seen = []
+
+    async def unverified(cfg):
+        seen.append(cfg.session_id)
+        if case == "ending":
+            return Run(cfg.session_id, "error", None, detail="the runtime did not start", termination=left)
+        return Run(cfg.session_id, "result", verdict(), usage_unread="the usage was not read", termination=left)
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", unverified)
+
+    c = run.step()
+
+    why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
+    said = (
+        f"its session ended error: the runtime did not start; {why}"
+        if case == "ending"
+        else f"its verdict cannot be trusted: the usage was not read; {why}"
+    )
+    assert (c.outcome.exit, c.outcome.reason) == (Exit.PENDING, f"{clarification.FAILED}: {said}")
+    steps = [e for e in picking.store.events(picking.slug) if e.get("session") in seen]
+    ended = {"confirmed": False, "survivors": [], "unknown": [9], "problems": list(left.problems)}
+    assert [(e["termination"], e["reason"]) for e in steps] == [(ended, why)]

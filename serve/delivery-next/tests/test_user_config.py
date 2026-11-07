@@ -104,3 +104,31 @@ def test_a_format_19_layer_loads_with_the_guard_level_unset_and_refuses_an_unkno
     path.write_text(json.dumps({"format": 20, "guard_level": "loose"}))
     with pytest.raises(StoreError):
         read_layer(path, Layer)
+
+
+@pytest.mark.usefixtures("no_base")
+def test_the_github_account_is_unset_until_a_layer_sets_it_and_the_project_wins():
+    got = resolve(None, Layer())
+    assert ("github_account" in got.missing, got.page()["github_account"]) == (True, None)
+    got = resolve(GlobalLayer(github_account="repository-owner"), Layer(), MachineLayer(github_account="maba-pag"))
+    assert (got.github_account, got.sources["github_account"]) == ("maba-pag", "machine")
+    got = resolve(GlobalLayer(github_account="repository-owner"), Layer(github_account="boecht"), MachineLayer())
+    assert (got.github_account, got.sources["github_account"], got.page()["github_account"]) == (
+        "boecht", "project", "boecht"
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize("value", ["", "-boecht", "boecht!", "a" * 40, "maba pag", "Repository-Owner "])
+def test_a_github_account_that_is_neither_a_login_nor_the_rule_is_refused(tmp_path, value):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"format": 20, "github_account": value}))
+    with pytest.raises(StoreError):
+        read_layer(path, Layer)
+
+
+def test_a_format_20_layer_loads_with_the_github_account_unset(tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"format": 20, "guard_level": "strict"}))
+    for model in (Layer, MachineLayer, GlobalLayer):
+        layer = read_layer(path, model)
+        assert (layer.format, layer.guard_level, layer.github_account) == (config.CONFIG_FORMAT, "strict", None)

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_memory import MemoryBusyError, MemoryState, storage, writer_lock
 
+from owlbear_delivery_next.git.command_failure import failed, failure
 from owlbear_delivery_next.local_system import curation_apply
 from owlbear_delivery_next.local_system.data_place import HELD
 from owlbear_delivery_next.local_system.data_repo import CONFIG, MEMORY, DataRepoError
@@ -31,7 +32,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 NO_EDITS = "the run changed no memory, so nothing is held"
-LISTED = "its worktree is still listed (the log says why)"
+LISTED = "its worktree is still listed"
 MESSAGE = "chore: memory curation of {folder} (machine host)"
 
 _log = logging.getLogger(__name__)
@@ -47,10 +48,10 @@ def _git(cwd: Path, *args: str, index: Path | None = None) -> str:
             check=False,
         )  # fmt: skip
     except (OSError, subprocess.TimeoutExpired) as exc:
-        msg = f"git {args[0]} failed: {exc}"
+        msg = f"git {args[0]} failed: {failure(exc)}"
         raise DataRepoError(msg) from exc
     if done.returncode:
-        msg = f"git {args[0]} failed: {done.stderr.strip()}"
+        msg = f"git {args[0]} failed: {failed(done)}"
         raise DataRepoError(msg)
     return done.stdout.strip()
 
@@ -283,14 +284,15 @@ def seed(shared: DataRepo, at: Path, folders: Sequence[str]) -> Tree:
 def prune(shared: DataRepo) -> str:
     """Forget the worktrees whose folder is gone, so the checkout lists none of a finished run; why that failed.
 
-    A failure changes nothing a run did, and the next run's seed prunes again, so it is logged and its row says so.
+    A failure changes nothing a run did, and the next run's seed prunes again, so it is logged and its row says why.
     """
     try:
         with shared.locked():
             _git(shared.root, "worktree", "prune")
     except DataRepoError as exc:
-        _log.warning("%s still lists a finished curation run's worktree: %s", shared.root, exc)
-        return LISTED
+        why = failure(exc)
+        _log.warning("%s still lists a finished curation run's worktree: %s", shared.root, why)
+        return f"{LISTED}: {why}"
     return ""
 
 
@@ -301,7 +303,7 @@ def forgetting(shared: DataRepo) -> Iterator[None]:
         yield
     except Exception as exc:
         if pruned := prune(shared):
-            msg = f"{pruned}; {type(exc).__name__}: {exc}"
+            msg = f"{pruned}; {failure(exc)}"
             raise RuntimeError(msg) from exc
         raise
 
@@ -311,7 +313,7 @@ def held(tree: Tree, folder: str, key: str, ran: str) -> str:
     try:
         return tree.hold(folder, key)
     except (OSError, DataRepoError) as failed:
-        msg = f"{ran}; its edits are not held in a curation ref: {type(failed).__name__}: {failed}"
+        msg = f"{ran}; its edits are not held in a curation ref: {failure(failed)}"
         raise RuntimeError(msg) from failed
 
 
@@ -321,8 +323,8 @@ def holding(tree: Tree, folder: str, key: str) -> Iterator[None]:
     try:
         yield
     except Exception as exc:
-        where = held(tree, folder, key, f"{type(exc).__name__}: {exc}")
+        where = held(tree, folder, key, failure(exc))
         if where == NO_EDITS:
             raise
-        msg = f"{where}; {type(exc).__name__}: {exc}"
+        msg = f"{where}; {failure(exc)}"
         raise RuntimeError(msg) from exc

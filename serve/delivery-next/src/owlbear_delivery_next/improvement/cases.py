@@ -29,11 +29,13 @@ import os
 import threading
 import time
 import uuid
+import zlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import assumptions
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.settings.improvement import CATEGORIES
@@ -149,7 +151,7 @@ def lines(name: str) -> list[dict[str, Any]]:
     try:
         return [json.loads(line) for line in text.splitlines() if line.strip()]
     except ValueError as exc:
-        msg = f"{name} cannot be read: {exc}"
+        msg = f"{name} cannot be read: {failure(exc)}"
         raise CaseError(msg) from exc
 
 
@@ -192,7 +194,7 @@ def fact(cid: str) -> dict[str, Any]:
     try:
         return json.loads((place() / f"{cid}.json").read_text())
     except (OSError, ValueError) as exc:
-        msg = f"case {cid} cannot be read: {exc}"
+        msg = f"case {cid} cannot be read: {failure(exc)}"
         raise CaseError(msg) from exc
 
 
@@ -202,11 +204,13 @@ def card(cid: str) -> dict[str, Any]:
     Raises:
         CaseError: It is missing, unreadable or not the card frozen.
     """
+    path = place() / "cards" / f"{cid}.json.gz"
     try:
-        with gzip.open(place() / "cards" / f"{cid}.json.gz", "rt") as fh:
+        with gzip.open(path, "rt") as fh:
             the_card = json.load(fh)
-    except (OSError, ValueError) as exc:
-        msg = f"the card of case {cid} cannot be read: {exc}"
+    except (OSError, ValueError, EOFError, zlib.error) as exc:
+        exc.add_note(f"reading case {cid}'s card {path}")
+        msg = f"the card of case {cid} cannot be read: {failure(exc)}"
         raise CaseError(msg) from exc
     if digest(the_card) != fact(cid)["card"]:
         msg = f"the card of case {cid} is not the one frozen"
@@ -414,11 +418,11 @@ def snapshot(*, verbose: bool) -> Prompt:
         cur = current()
         return render(cur["cases"], cur["n"], verbose=verbose)
     except (CaseError, OSError, ValueError, KeyError, TypeError) as exc:
-        gap = f"the Spotter cases could not be read, so no examples were shown ({type(exc).__name__})"
+        gap = f"the Spotter cases could not be read, so no examples were shown ({failure(exc)})"
     try:
         base = render({}, 0, verbose=verbose)
-    except OSError:
-        return Prompt("", 0, "unreadable", "the Spotter's prompt could not be read")
+    except OSError as exc:
+        return Prompt("", 0, "unreadable", f"the Spotter's prompt could not be read: {failure(exc)}")
     return Prompt(base.text, 0, base.hash, gap)
 
 
@@ -431,7 +435,7 @@ def of_version(n: int, *, verbose: bool = False) -> Prompt:
     try:
         return render(version(n)["cases"], n, verbose=verbose)
     except OSError as exc:
-        msg = f"the Spotter's prompt cannot be read: {exc}"
+        msg = f"the Spotter's prompt cannot be read: {failure(exc)}"
         raise CaseError(msg) from exc
 
 

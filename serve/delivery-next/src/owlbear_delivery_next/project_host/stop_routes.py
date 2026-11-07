@@ -41,9 +41,8 @@ def clearable(c: Change) -> str | None:
     return None
 
 
-def unset(store: Store) -> str | None:
+def _wait(block: work_block.Block) -> str | None:
     """Why no work may start for want of settings, this machine's included (D-01M61SBWK4VE4MNTD35TR0VPS8), or None."""
-    block = work_block.of_store(store)
     if block.reason:
         return f"The settings can't be read ({block.reason}); fix them on the Settings page to run the step again"
     if missing := block.keys:
@@ -52,11 +51,24 @@ def unset(store: Store) -> str | None:
     return None
 
 
+def unset(store: Store) -> str | None:
+    """The words for the settings in force now, or None."""
+    return _wait(work_block.of_store(store))
+
+
 def shown(c: Change, store: Store) -> dict[str, Any] | None:
-    """The stop the owner may clear and why its rerun waits on the settings, or None."""
+    """The stop the owner may clear and why its rerun waits on the settings, or None.
+
+    ``unset`` is the words; ``settings`` holds the count of unset settings and the reason they can't be read, from the
+    same read, so the page can say how many are unset without their keys.
+    """
     if clearable(c):
         return None
-    return c.stop.model_dump(mode="json", include={"reason", "action", "at"}) | {"unset": unset(store)}
+    block = work_block.of_store(store)
+    return c.stop.model_dump(mode="json", include={"reason", "action", "at"}) | {
+        "unset": _wait(block),
+        "settings": {"count": len(block.keys), "reason": block.reason},
+    }
 
 
 def _owner(request: Request) -> None:

@@ -21,8 +21,16 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import Field
 
 from owlbear_delivery_next.change_contracts import chat_contract
-from owlbear_delivery_next.local_system import codebase, data_repo, leases, local_home
-from owlbear_delivery_next.machine_host import control, impeccable, improvement_routes, update_routes, versions
+from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.local_system import codebase, data_place, data_repo, leases, local_home
+from owlbear_delivery_next.machine_host import (
+    control,
+    impeccable,
+    improvement_routes,
+    onboarding_routes,
+    update_routes,
+    versions,
+)
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.project_host import (
     api,
@@ -33,6 +41,7 @@ from owlbear_delivery_next.project_host import (
     metrics_routes,
     pack_routes,
     pages,
+    token_guard,
 )
 from owlbear_delivery_next.state_store import decision_impact, machine_settings, registry, work_block
 
@@ -133,6 +142,7 @@ def create(machine: Machine, ended: Callable[[], None] = lambda: None) -> ASGIAp
         ended()
 
     app = FastAPI(title="OwlBear", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+    app.add_exception_handler(Exception, token_guard.uncaught)
     expected = f"Bearer {machine.record.token}".encode()
 
     @app.middleware("http")
@@ -144,8 +154,7 @@ def create(machine: Machine, ended: Callable[[], None] = lambda: None) -> ASGIAp
         return await call_next(request)
 
     def auth(request: Request) -> None:
-        if not secrets.compare_digest(request.headers.get("authorization", "").encode(), expected):
-            raise HTTPException(401, "token required")
+        token_guard.admit(request, expected)
 
     pages.assets(app)
     for path, html in pages.pages().items():
@@ -161,6 +170,14 @@ def _update_while_paused() -> bool:
         return False
 
 
+def _shared_notice(machine: Machine) -> str:
+    if machine.unshared:
+        place = data_place.describe()  # may migrate the legacy pointer; never rebinds loaded Stores
+        if place.root is not None and place.kind in {"default", "override"} and not place.problem:
+            machine.unshared = ""
+    return machine.unshared
+
+
 def _routes(machine: Machine) -> APIRouter:
     routes = APIRouter(prefix="/api/next")
 
@@ -174,12 +191,14 @@ def _routes(machine: Machine) -> APIRouter:
     def projects() -> dict[str, Any]:
         here = work_block.machine()
         listed = [p.info(here) for p in list(machine.projects.values())]
+        stop = _stop_state(machine)
         return {
             "paused": machine.paused, "waiting": machine.waiting(), "projects": listed, "ending": machine.ending,
-            "left": machine.left() if machine.ending else [],
+            **stop,
             "update_while_paused": _update_while_paused(),
             "update": machine.updater.read(), "updated": machine.updated or versions.running(),
             "announce": machine.auto.read(), "pack": machine.impeccable.read(), "reads": machine.reads.polled(),
+            "unretried": machine.unretried, "unshared": _shared_notice(machine), "undecided": list(machine.undecided),
         }  # fmt: skip
 
     @routes.post("/projects")
@@ -224,6 +243,7 @@ def _routes(machine: Machine) -> APIRouter:
     _update_routes(routes, machine)
     routes.include_router(update_routes.router(machine))  # the update checks (D-01M63CCVRK8ZKFENY9F4A2K11A)
     _pack_routes(routes, machine)
+    routes.include_router(onboarding_routes.router(machine))  # Add project (item 15)
     return routes
 
 
@@ -266,7 +286,7 @@ def _machine_routes(routes: APIRouter, machine: Machine) -> None:
         try:
             registry.configure(body.settings, body.rev)
         except registry.RegistryError as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise HTTPException(409, str(exc) if str(exc) == registry.STALE else failure(exc)) from exc
         return values()
 
     @routes.post("/settings-read/dismiss")
@@ -302,7 +322,7 @@ def _curation_routes(routes: APIRouter, machine: Machine) -> None:
     @routes.get("/curation")
     def curation() -> dict[str, Any]:
         """Each memory folder's last automatic curation, and what waits (item 5 slice 4)."""
-        return machine.curation.read()
+        return machine.curation.read() | {"inspection_error": machine.uncurated}
 
     @routes.post("/curation")
     def curate(body: CurateBody) -> dict[str, Any]:
@@ -311,9 +331,26 @@ def _curation_routes(routes: APIRouter, machine: Machine) -> None:
             raise HTTPException(503, why)
         try:
             started = machine.curation.start(body.folder)
+        except data_repo.DataRepoError as exc:
+            raise HTTPException(409, failure(exc)) from exc
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         return machine.curation.read() | {"started": started}
+
+
+def _stop_state(machine: Machine) -> dict[str, Any]:
+    if not machine.ending:
+        return {"left": [], "stop_error": ""}
+    try:
+        left = machine.left()
+    except Exception as exc:  # noqa: BLE001 - presentation must not turn a failed inspection into empty work
+        fresh = failure(exc)
+        why = "\n".join(dict.fromkeys(filter(None, (machine.unstopped, fresh))))
+        if fresh != machine.unstopped:
+            machine.say(f"looking whether OwlBear may stop failed: {fresh}")
+        machine.unstopped = fresh
+        return {"left": None, "stop_error": why}
+    return {"left": left, "stop_error": machine.unstopped}
 
 
 def machine_values(machine: Machine) -> dict[str, Any]:
@@ -362,7 +399,7 @@ def _update_routes(routes: APIRouter, machine: Machine) -> None:
             try:
                 versions.keep_data(path)
             except versions.VersionError as exc:
-                raise HTTPException(409, str(exc)) from exc
+                raise HTTPException(409, failure(exc)) from exc
             shutil.rmtree(path)
         return machine_values(machine)
 

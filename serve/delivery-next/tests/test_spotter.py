@@ -7,10 +7,12 @@ import dataclasses
 import gzip
 import json
 import random
+import re
 import stat
 import threading
 import time
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -24,10 +26,22 @@ from owlbear_delivery_next.change_contracts.models import Brief, Change, Plan, S
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import ReviewResult, Worktree
 from owlbear_delivery_next.change_flow import loop
-from owlbear_delivery_next.improvement import acts, card, cases, chatlogs, credit_meter, events, retro_units, spotter
+from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.improvement import (
+    acts,
+    card,
+    cases,
+    chatlogs,
+    credit_meter,
+    events,
+    improvement_view,
+    retro_units,
+    spotter,
+)
 from owlbear_delivery_next.improvement.events import Kept
+from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import sdk_adapter, spend_reconcile, spotter_look, step_decisions
+from owlbear_delivery_next.runtimes import sdk_adapter, spend_reconcile, spotter_look, step_decisions, step_tools
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
 from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter
@@ -759,6 +773,20 @@ def test_a_burst_of_samples_while_looks_run_is_counted_once_not_queued() -> None
     got = records()
     assert sorted(r["skipped"][:30] for r in got) == ["", "", "capacity: 298 sampled looks sk"]
 
+    async def paused() -> None:  # a summary for another why, and one look skipped on its own
+        spot = spotter.Spotter(ctx(looks=("sample",), sample_rate=100), lambda: "s-2", judge(),
+                               room=lambda: "paused: the machine is paused")  # fmt: skip
+        for i in range(4):
+            spot.seen(started(f"p{i}", "bash", {"command": "ls"}))
+            spot.seen(done(f"p{i}", "ok"))
+        spot.skip("plan", 1.0, {"kind": "plan"}, "capacity: looks already running")
+        await spot.drain()
+
+    asyncio.run(paused())
+    assert spotter.WORK.settled(5)
+    spent = improvement_view.spotter({}, records(), datetime.now(UTC))["spend"]["p"]
+    assert spent == {"looks": 2, "credits": pytest.approx(0.5), "unknown": 0, "stopped": 0, "skipped": 298 + 4 + 1}
+
 
 def test_a_spotter_writes_where_it_started_whatever_changes_later(monkeypatch, tmp_path) -> None:
     async def main() -> spotter.Spotter:
@@ -1281,6 +1309,19 @@ class Delivered:
         acts.update(spotter.place(), record.id, delivery="delivered")
 
 
+def test_unreadable_kept_arms_are_said_with_their_path_and_the_parser_s_whole_error() -> None:
+    kept = local_home.root() / "spotter" / spotter_arms.FILE
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    kept.write_text("{")
+    try:
+        json.loads("{")
+    except ValueError as exc:
+        whole = f"the Spotter's arms in {kept} cannot be read: {failure(exc)}"
+    with pytest.raises(ValueError, match=rf"^{re.escape(whole)}\Z"):
+        spotter_arms.arm("chat:s-1", 100)
+    assert kept.read_text() == "{"
+
+
 def test_acting_follows_arms_the_cap_per_owner_turn_repeats_and_a_rebuilt_spotter_keeps_its_counts() -> None:
     silent, steered = spotter_arms.arm("chat:s-quiet", 0), spotter_arms.arm("chat:s-1", 100)
     deliver, queue = Delivered(), []
@@ -1338,14 +1379,15 @@ def test_acting_follows_arms_the_cap_per_owner_turn_repeats_and_a_rebuilt_spotte
     assert {done[i].delivery for i in ids[2:4]} == {"delivered"}
 
 
-def test_an_act_is_written_before_it_is_dispatched_and_a_failed_dispatch_keeps_its_whole_error() -> None:
+def test_an_act_is_written_before_it_is_dispatched_and_a_failed_dispatch_keeps_its_whole_error(whole_error) -> None:
     seen: list[acts.Act | None] = []
-    error = "the runtime refused the note: " + "x" * 600
 
     async def dispatch(record: spotter.Record, _act: acts.Act) -> None:
         seen.append(acts.acts(spotter.root()).get(record.id))
         if len(seen) == 2:
-            raise RuntimeError(error)
+            exc = RuntimeError(whole_error)
+            exc.add_note("the runtime refused the note")
+            raise exc
 
     async def main() -> None:
         for session in ("s-1", "s-2"):
@@ -1363,11 +1405,14 @@ def test_an_act_is_written_before_it_is_dispatched_and_a_failed_dispatch_keeps_i
     assert first.token == acts.TOKEN.format(id=first.record)
     assert first.note == "About hand-off-fitness."
     failed = acts.acts(spotter.root())[second.record]
-    assert (failed.delivery, failed.error) == ("failed", f"RuntimeError: {error}")
+    assert (failed.delivery, failed.error) == ("failed", f"RuntimeError: {whole_error}\nthe runtime refused the note")
     assert acts.acts(spotter.root())[first.record].delivery == "pending"  # the actuator's own log confirms it
 
 
-def test_a_state_change_finding_asks_the_conflict_check_after_acting_and_its_answer_lands_on_the_act() -> None:
+@pytest.mark.parametrize("fails", [False, True], ids=["answers", "fails"])
+def test_a_state_change_finding_asks_the_conflict_check_after_acting_and_its_answer_lands_on_the_act(
+    fails, whole_error
+) -> None:
     order: list[str] = []
 
     async def dispatch(_record: spotter.Record, act: acts.Act) -> None:
@@ -1375,6 +1420,10 @@ def test_a_state_change_finding_asks_the_conflict_check_after_acting_and_its_ans
 
     def conflicts(change: str) -> str:
         order.append(f"check {change}")
+        if fails:
+            exc = RuntimeError(whole_error)
+            exc.add_note("the decisions lookup ended early")
+            raise exc
         return json.dumps({"decisions": [{"id": "D-1", "conflict": "none"}]})
 
     answer = json.dumps({"category": "irreversible-harm", "note": "Deletes the backups.", "evidence": ["e1"],
@@ -1390,7 +1439,8 @@ def test_a_state_change_finding_asks_the_conflict_check_after_acting_and_its_ans
     assert spotter.WORK.settled(5)
     assert order == ["act stop-and-ask", "check rm -rf ~/backups"]
     [act] = acts.acts(spotter.root()).values()
-    assert json.loads(act.conflict) == {"decisions": [{"id": "D-1", "conflict": "none"}]}
+    failed = {"failed": f"RuntimeError: {whole_error}\nthe decisions lookup ended early"}
+    assert json.loads(act.conflict) == (failed if fails else {"decisions": [{"id": "D-1", "conflict": "none"}]})
     assert act.harm
 
 
@@ -1639,9 +1689,23 @@ def test_a_submit_waits_for_a_hand_off_look_that_first_waited_for_a_slot_and_tak
     """One budget holds the submit: the look's wait for a slot, its answer and a teardown stage (#919)."""
     monkeypatch.setattr(spotter, "LOOK", 0.5)
     monkeypatch.setattr(spotter, "TEARDOWN", 0.05)
+    ready, release, judged = asyncio.Barrier(3), asyncio.Event(), asyncio.Event()
+    budgets: list[float] = []
+    real_wait = step_tools.wait
+
+    def wait() -> float:
+        seconds = real_wait()
+        budgets.append(seconds)
+        return seconds
+
+    monkeypatch.setattr(step_tools, "wait", wait)
 
     async def look(the_card: dict[str, Any], _ctx: spotter.Context, spend: credit_meter.Meter) -> str:
-        await asyncio.sleep(0.35)  # the running looks free their slots after this; the hand-off's then answers after it
+        if the_card["moment"]["call"] == "call-1":
+            judged.set()
+        else:
+            await ready.wait()
+            await release.wait()
         spend.part().ended(None, confirmed=True)
         return finding("hand-off-fitness") if the_card["moment"]["call"] == "call-1" else '{"category": "none"}'
 
@@ -1650,12 +1714,19 @@ def test_a_submit_waits_for_a_hand_off_look_that_first_waited_for_a_slot_and_tak
         st = handing_off(tmp_path, spot)
         for i in range(2):
             spot.look("plan", 1.0, {"kind": "a running look", "call": f"p{i}"})  # neither gives its slot
-        result = await submitted(st, "call-1")
+        await ready.wait()
+        submitting = asyncio.create_task(submitted(st, "call-1"))
+        await asyncio.sleep(0)
+        assert not submitting.done()
+        assert not judged.is_set()
+        release.set()
+        result = await submitting
         await spot.drain()
         return result
 
     result = asyncio.run(main())
     assert spotter.WORK.settled(5)
+    assert budgets == [pytest.approx(2 * spotter.LOOK + spotter.TEARDOWN)]
     assert (result.result_type, result.text_result_for_llm.endswith("] About hand-off-fitness.")) == ("failure", True)
 
 

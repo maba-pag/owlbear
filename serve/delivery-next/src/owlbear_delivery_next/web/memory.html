@@ -43,7 +43,7 @@
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { call, defined, shown as projects } from "/assets/ui.mjs";
+import { call, defined, here, shown as projects } from "/assets/ui.mjs";
 
 const ORDER = ["contested", "disputed", "stale", "curated", "pending", "approved", "deleted"];  // needs you first
 const GROUPS = [  // who acts next on an entry in each state
@@ -195,14 +195,17 @@ async function moveBack(m, to) {
   if (sure) act(m, "move-back", {}, to.of);
 }
 
-const PURGE_DAYS = 30;  // an entry deleted this long ago is removed
 const many = (n) => `${n} deleted ${n === 1 ? "entry" : "entries"}`;
 
-// The deleted entries old enough to remove, grouped by the place they are kept in.
+// The deleted entries old enough to remove under the owner's purge age, grouped by the place they are kept in; a place
+// whose age is unset holds none, and says why.
 function purgeable(deleted) {
-  const cutoff = Date.now() - PURGE_DAYS * 86_400_000, by = new Map();
-  for (const m of deleted.filter((d) => Date.parse(d.updated_at) <= cutoff)) {
-    by.set(m.place.key, [...(by.get(m.place.key) ?? []), m]);
+  const by = new Map();
+  for (const m of deleted) {
+    const days = m.place.purge_days;
+    if (days !== null && Date.parse(m.updated_at) <= Date.now() - days * 86_400_000) {
+      by.set(m.place.key, [...(by.get(m.place.key) ?? []), m]);
+    }
   }
   return [...by.values()];
 }
@@ -211,7 +214,7 @@ async function purge(old) {
   const place = old[0].place;
   const sure = await ask({
     title: `Remove ${many(old.length)} from ${place.label}?`, yes: "Remove them", no: "Keep them", destructive: true,
-    now: `The files of entries deleted ${PURGE_DAYS} days ago or earlier leave the folder; later ones stay.`,
+    now: `The files of entries deleted ${place.purge_days} days ago or earlier leave the folder; later ones stay.`,
     after: "The shared repository's Git history keeps them; this page cannot bring them back.",
     instead: "They stay listed as deleted.",
   });
@@ -220,7 +223,7 @@ async function purge(old) {
   show();
   try {
     const r = await call(`/memory/purge${place.where === "global" ? "?where=global" : ""}`,
-      { body: { min_age_days: PURGE_DAYS }, timeout: 60000, of: place.of });
+      { body: { min_age_days: place.purge_days }, timeout: 60000, of: place.of });  // the age the dialog confirmed
     state.error = r.failed ? `${many(r.failed)} could not be removed; try again.` : "";
     state.status = `Removed ${many(r.purged)} from ${place.label}.${r.notice ? ` ${r.notice}` : ""}`;
     state.pending = null;
@@ -233,10 +236,19 @@ async function purge(old) {
 
 // Every deleted entry counts, filtered or not: the purge removes all of a folder's old ones.
 function purges() {
-  const groups = purgeable(state.loaded.entries.filter((m) => m.state === "deleted"));
-  return groups.length ? html`<div class="row">${groups.map((old) => button(
-    `Remove ${many(old.length)} older than ${PURGE_DAYS} days from ${old[0].place.label}`, () => purge(old),
-    { variant: "secondary", icon: "delete", aria: DIALOG, busy: state.pending === `${old[0].place.key}:purge` }))}
+  const deleted = state.loaded.entries.filter((m) => m.state === "deleted");
+  const groups = purgeable(deleted);
+  const unset = [...new Map(deleted.filter((m) => m.place.purge_days === null).map((m) => [m.place.key, m.place]))
+    .values()];  // a place whose purge age the owner has not set: the button waits for it, and says so
+  return groups.length || unset.length ? html`<div class="row">${groups.map((old) => button(
+    `Remove ${many(old.length)} older than ${old[0].place.purge_days} days from ${old[0].place.label}`,
+    () => purge(old), { variant: "secondary", icon: "delete", aria: DIALOG,
+      busy: state.pending === `${old[0].place.key}:purge` }))}
+    ${unset.map((place) => html`<p-button type="button" compact="true" variant="secondary" icon="delete"
+      disabled="true">Remove old deleted entries from ${place.label}</p-button>
+      <div><p-text color="contrast-medium">${place.purge_why.charAt(0).toUpperCase()}${
+        place.purge_why.slice(1)}.</p-text><p-link-pure icon="arrow-right"><a href=${here({ layer: "global" },
+        "/config#memory")}>Set the purge age</a></p-link-pure></div>`)}
     </div>` : nothing;
 }
 
@@ -348,8 +360,10 @@ function entries(shown) {
       <ul class="entries">${repeat(mine, (m) => m.key, (m, i) => card(m, leads && i === 0))}</ul>
       </section>`;
   });
-  const empty = state.loaded.entries.length ? "No memory matches these filters."
-    : "Agents have not remembered anything yet.";
+  const empty = state.loaded.parse_errors ? (state.loaded.entries.length
+    ? "No readable memory matches these filters; some files could not be read."
+    : "No readable memory is available; some files could not be read.")
+    : state.loaded.entries.length ? "No memory matches these filters." : "Agents have not remembered anything yet.";
   return shown.length ? sections : html`<p-text color="contrast-medium" class="empty">${empty}</p-text>`;
 }
 
@@ -358,7 +372,8 @@ function view() {
   const parts = available ? choices() : [];
   const shown = available ? loaded.entries.filter(matches).sort((a, b) => ORDER.indexOf(a.state)
     - ORDER.indexOf(b.state) || b.updated_at.localeCompare(a.updated_at)) : [];
-  document.getElementById("shown").textContent = available ? `${shown.length} of ${loaded.entries.length} shown` : "";
+  document.getElementById("shown").textContent = available ? `${shown.length} of ${loaded.entries.length} ${
+    loaded.parse_errors ? "readable entries shown" : "shown"}` : "";
   const errors = loaded?.parse_errors ? ` ${loaded.parse_errors} file(s) could not be read.` : "";
   return html`
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
@@ -367,13 +382,17 @@ function view() {
       dismiss-button="false" ?hidden=${!loaded || available}>${loaded && !available ? `${loaded.reason}.` : ""}
     </p-inline-notification>
     <p-text id="status" role="status" aria-live="polite">${state.status}</p-text>
+    <p-link-pure icon="arrow-right" id="memory-settings"><a href=${here({ layer: "global" }, "/config#memory")}>Memory
+      settings</a></p-link-pure>
     ${available ? html`<section id="filters" class="row" aria-label="Filters">
       ${parts.map(([key, label, options]) => select(key, label, options))}</section>` : nothing}
     ${available ? html`<div id="entries">${entries(shown)}</div>` : nothing}
     ${available ? html`<p-text id="where" size="xs" color="contrast-medium"
       title=${loaded.places.map((p) => p.folder).join("\n")}>Kept in
       ${loaded.places.map((p) => p.folder.split("/").slice(-2).join("/")).join(", ")} of the shared
-      repository.${errors}</p-text>` : nothing}`;
+      repository.${errors}</p-text>` : nothing}
+    ${Object.keys(loaded?.read_errors ?? {}).length ? html`<p-text id="memory-read-errors" class="said" size="sm">${
+      Object.entries(loaded.read_errors).map(([path, error]) => `${path}: ${error}`).join("\n")}</p-text>` : nothing}`;
 }
 
 // What the page reads (TD-241): each shown project's memory and its shared repository's Global memory, each
@@ -387,7 +406,7 @@ function sources() {
 // an entry keeps its place, so an action goes through the project that read it. A project that failed this time
 // stands for its folder only when no other project read it now.
 function gather(wanted, fresher) {
-  const places = new Map(), entries = [], said = wanted.map((s) => answers.get(`${s.of}|${s.where}`));
+  const places = new Map(), entries = [], readErrors = {}, said = wanted.map((s) => answers.get(`${s.of}|${s.where}`));
   let errors = 0;
   const fresh = (i) => (fresher.has(`${wanted[i].of}|${wanted[i].where}`) ? 0 : 1);
   [...wanted.keys()].sort((i, j) => fresh(i) - fresh(j)).forEach((i) => {  // this refresh's answers before older ones
@@ -395,16 +414,17 @@ function gather(wanted, fresher) {
     const key = a?.available && `${a.repository}#${s.where === "global" ? "" : a.project}`;
     if (!key || places.has(key)) return;
     const place = { key, of: s.of, where: s.where, folder: a.folder, repository: a.repository,
-      name: s.where === "global" ? "Global" : a.project };
+      name: s.where === "global" ? "Global" : a.project, purge_days: a.purge_days ?? null, purge_why: a.purge_why };
     places.set(key, place);
     errors += a.parse_errors;
+    Object.assign(readErrors, a.read_errors ?? {});
     entries.push(...a.entries.map((m) => ({ ...m, key: `${key}/${m.id}`, place })));
   });
   const shape = said.find((a) => a?.available), first = said.find(Boolean);
   if (!first) return null;
   const several = new Set([...places.values()].map((p) => p.repository)).size > 1;
   for (const p of places.values()) p.label = several ? `${p.name} (${p.repository.split("/").pop()})` : p.name;
-  return { available: Boolean(shape), reason: first.reason, entries, parse_errors: errors,
+  return { available: Boolean(shape), reason: first.reason, entries, parse_errors: errors, read_errors: readErrors,
     states: shape?.states ?? [], categories: shape?.categories ?? [], places: [...places.values()] };
 }
 

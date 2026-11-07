@@ -125,8 +125,8 @@ class _World:
             return False
         return None if created is None else self.live[pid] == created
 
-    def kill(self, recorded, sig):
-        targets, _ = processes.targets(recorded, self.alive, lambda _: -1, -2)
+    def kill(self, recorded, sig, *, seen=None):
+        targets, _ = processes.targets(recorded, seen or self.alive, lambda _: -1, -2)
         self.signals.append((sig, targets))
         for pid in targets:
             self.live.pop(pid, None)
@@ -302,12 +302,12 @@ def test_cleanup_cancellation_inside_a_callers_except_handler_still_propagates(w
     assert world.steps[0].run.termination.confirmed
 
 
-def test_tasks_journal_failure_still_disconnects_and_stops_without_confirming(world):
-    world.fail_event = "tasks"
+def test_tasks_journal_failure_still_disconnects_and_stops_without_confirming(world, whole_error):
+    world.fail_event, world.journal_error = "tasks", OSError(whole_error)
     run = asyncio.run(sdk_adapter.run(world.cfg))
     assert (world.disconnects, world.stop_calls) == (1, 1)
     assert not run.termination.confirmed
-    assert "tasks log failed (OSError)" in run.termination.problems
+    assert f"tasks log failed: OSError: {whole_error}" in run.termination.problems
 
 
 @pytest.mark.parametrize("phase", ["usage", "proof"])
@@ -349,12 +349,61 @@ def test_a_known_orphan_remains_a_stop_and_cannot_start_the_successor(world):
     assert loop.next_step(stopped, NOW) is None
 
 
-def test_forced_cleanup_never_signals_a_reused_pid(world):
-    world.reuse, world.stop_error = True, RuntimeError("synthetic stop failure")
-    run = asyncio.run(sdk_adapter.run(world.cfg))
+def test_forced_cleanup_never_signals_a_reused_pid(world, caplog, whole_error):
+    """A failed runtime stop is forced, its whole error in the journal and the host's log (#951)."""
+    world.reuse, world.stop_error = True, RuntimeError(whole_error)
+    with caplog.at_level("WARNING", logger=sdk_teardown.__name__):
+        run = asyncio.run(sdk_adapter.run(world.cfg))
     assert world.live[ROOT] == 222.0
     assert all(not targets for _, targets in world.signals)
     assert run.termination.confirmed
+    why = f"runtime stop failed: RuntimeError: {whole_error}"
+    assert [e["reason"] for e in world.events if e["event"] == "force-stop"] == [why]
+    assert [r.getMessage() for r in caplog.records if r.name == sdk_teardown.__name__] == [
+        f"SDK runtime force-stopped: {why}"
+    ]
+
+
+@pytest.mark.parametrize("stage", ["tasks list", "tasks cancel", "disconnect", "force fallback", "observation"])
+def test_each_teardown_failure_keeps_its_whole_error(world, monkeypatch, whole_error, stage):
+    """Each teardown stage that fails says so with its whole error, type included, in the termination (#951)."""
+
+    async def failing(*_args, **_kwargs):
+        raise RuntimeError(whole_error)
+
+    said = f"RuntimeError: {whole_error}"
+    if stage == "tasks list":
+        world.session.rpc.tasks.list = failing
+        problem = f"tasks.list failed: {said}"
+    elif stage == "tasks cancel":
+        world.child, world.session.rpc.tasks.cancel = True, failing
+        problem = f"tasks.cancel child failed: {said}"
+    elif stage == "disconnect":
+        world.session.disconnect = failing
+        problem = f"disconnect failed: {said}"
+    else:
+
+        async def escaped(*_args):
+            msg = "synthetic teardown failure"
+            raise RuntimeError(msg)
+
+        monkeypatch.setattr(sdk_teardown, "teardown", escaped)
+        if stage == "force fallback":
+            monkeypatch.setattr(sdk_teardown, "force", failing)
+            problem = f"force fallback failed: {said}"
+        else:
+            settle = sdk_teardown.settle
+
+            async def observing(recorded, problems, limit=None):
+                if problems:  # the observation after the fallback, not the fallback's own grace wait
+                    raise RuntimeError(whole_error)
+                return await settle(recorded, problems, limit)
+
+            monkeypatch.setattr(sdk_teardown, "settle", observing)
+            problem = f"termination observation failed: {said}"
+    run = asyncio.run(sdk_adapter.run(world.cfg))
+    assert not run.termination.confirmed
+    assert problem in run.termination.problems
 
 
 def test_a_clean_lifecycle_confirms_without_signals(world):
@@ -440,8 +489,8 @@ def test_real_sdk_teardown_progresses_past_repeatedly_cancel_resistant_rpc(tmp_p
     monkeypatch.setattr(target, stage, resistant)
     monkeypatch.setattr(sdk_teardown, "STOP_CALL", 0.01)
     monkeypatch.setattr(step_budget, "Budget", _Issued)
-    # Two shutdown windows of 0.2 s stay inside the 1 s bound and give the second cancellation room on a loaded machine.
-    monkeypatch.setattr(loop_owner, "SHUTDOWN", 0.2)
+    # Two 50 ms shutdown windows leave scheduling headroom inside the unchanged 1 s bound.
+    monkeypatch.setattr(loop_owner, "SHUTDOWN", 0.05)
     monkeypatch.setattr(loop_owner, "RETRY", 0.001)
     started = time.monotonic()
     run = loop_owner.run(sdk_adapter.run(world.cfg))
@@ -460,16 +509,19 @@ def test_unknown_runtime_identity_cannot_be_reported_confirmed(world):
     assert "runtime PID unknown" in run.termination.problems
 
 
-@pytest.mark.parametrize("error", [RuntimeError("synthetic teardown failure"), asyncio.CancelledError()])
-def test_escaped_teardown_failure_still_forces_and_observes_unconfirmed(world, monkeypatch, error):
+@pytest.mark.parametrize("error", ["error", "cancelled"])
+def test_escaped_teardown_failure_still_forces_and_observes_unconfirmed(world, monkeypatch, whole_error, error):
     async def failed(*_args):
-        raise error
+        raise RuntimeError(whole_error) if error == "error" else asyncio.CancelledError
 
     monkeypatch.setattr(sdk_teardown, "teardown", failed)
     run = asyncio.run(sdk_adapter.run(world.cfg))
     assert not run.termination.confirmed
     assert world.proc_effects == ["terminate", "kill"]
     assert ROOT not in world.live
+    why = f"teardown failed: {f'RuntimeError: {whole_error}' if error == 'error' else 'cancelled'}"
+    assert run.termination.problems == (why,)
+    assert [e["reason"] for e in world.events if e["event"] == "force-stop"] == [why]
 
 
 def _metered(world, monkeypatch, *, hold=False):
@@ -567,12 +619,37 @@ def test_a_cancelled_run_reads_its_usage_before_the_disconnect_and_is_recorded(w
     assert order == ["usage", "disconnect"]
     _, end = _spend()
     expected = (
-        {"credits": 0.75, "models": {}, "incomplete": "interrupted"} if read == "read" else {"error": "RuntimeError"}
+        {"credits": 0.75, "models": {}, "incomplete": "interrupted"}
+        if read == "read"
+        else {"error": "RuntimeError: synthetic"}
     )
     assert (end["ending"], end["usage"]) == (
         "interrupted",
         expected,
     )  # a call may still have been billed: a lower bound
+
+
+@pytest.mark.parametrize("earlier", [False, True])
+def test_a_failed_final_usage_read_reaches_the_ledger_whole(world, monkeypatch, whole_error, earlier):
+    """#971 P14: the ledger keeps the final read's whole error, with its notes and JSON-RPC data: as the run's unread
+    usage, or as why the step's earlier read is only a lower bound."""
+    _metered(world, monkeypatch)
+    used = {"credits": 1.25, "models": {"gpt-6-luna": {"credits": 1.25, "input": 9, "output": 1}}}
+    error = JsonRpcError(-32603, whole_error, {"marker": "DATA-MARK"})
+    error.add_note("NOTE-MARK")
+
+    async def usage(_session, _model):
+        return used if earlier else {}
+
+    async def once(_session, _model):
+        raise error
+
+    monkeypatch.setattr(sdk_adapter, "usage_read", usage)
+    monkeypatch.setattr(sdk_teardown, "usage_once", once)
+    asyncio.run(sdk_adapter.run(world.cfg))
+    said = f"JsonRpcError: JSON-RPC Error -32603: {whole_error}\nNOTE-MARK {{'marker': 'DATA-MARK'}}"
+    _, end = _spend()
+    assert end["usage"] == (used | {"incomplete": said} if earlier else {"error": said})
 
 
 def test_a_run_that_never_opened_a_session_records_nothing(world):
@@ -810,8 +887,142 @@ def test_a_session_failure_keeps_its_whole_error_in_the_journal_and_status(world
     assert result.reason == f"RuntimeError: {whole_error}"
 
 
+TRIGGER = "the connection timed out once the quota of credits was read"  # words the retry classifiers match (R7)
+
+
+def _step_detail(run, tmp_path) -> str:
+    """The ``detail`` of the step event the run's accounting writes (#894), which Recent activity shows."""
+    store, change = Store(tmp_path / "store"), Change(slug="c1", brief=Brief(version=1))
+    store.write(Lock("c1"), change)
+    sessions.logged(store, Lock("c1"), change, run, {"kind": StepKind.BUILD, "exit": "retry"})
+    (step,) = [e for e in store.events("c1") if e.get("event") == "step"]
+    return step["detail"]
+
+
+@pytest.mark.parametrize(
+    "case",
+    [({"marker": "DATA-MARK"}, " {'marker': 'DATA-MARK'}"), (0, " 0"), ("", " ''"), (None, "")],
+    ids=["data", "zero", "empty", "none"],
+)
+def test_a_failed_sdk_request_keeps_its_notes_and_data_and_retries_as_before(world, monkeypatch, tmp_path, whole_error,
+                                                                             case):  # fmt: skip
+    """#971 R5/R7: the step's error keeps the request's notes and JSON-RPC data, falsy data too; retries classify
+    what they did."""
+    data, shown = case
+    error = JsonRpcError(-32603, whole_error, data)
+    error.add_note(TRIGGER)
+
+    async def broken(*_args, **_kw):
+        raise error
+
+    monkeypatch.setattr(sdk_adapter, "_open", broken)
+    run = asyncio.run(sdk_adapter.run(world.cfg))
+    want = f"JsonRpcError: JSON-RPC Error -32603: {whole_error}\n{TRIGGER}{shown}"  # falsy data is data too
+    assert _step_detail(run, tmp_path) == want
+    result = to_result(run, StepKind.BUILD, NOW)
+    assert (result.reason, result.exit, result.cause, result.wake_at) == (want, Exit.RETRY, "tooling:build:sdk", None)
+
+
+def test_three_sdk_failures_whose_data_and_notes_say_different_words_ask_as_one_defect(world, monkeypatch, whole_error):
+    """#971: a request's JSON-RPC data and notes differ each time; retries sign the error without them, so the third
+    asks, showing the last one whole."""
+    c = Change(
+        slug="c1",
+        brief=Brief(version=1, approved_version=1),
+        plan=Plan(tasks=[Task(id="t1", title="one", scope=["a"])]),
+        step=Step(kind=StepKind.BUILD, task="t1", started_at=NOW),
+    )
+    signatures = set()
+    for where in ("queue drained", "worker replaced", "lease handed over"):
+        error = JsonRpcError(-32603, whole_error, {"where": where})
+        error.add_note(f"while the {where}")
+
+        async def broken(*_args, error=error, **_kw):
+            raise error
+
+        monkeypatch.setattr(sdk_adapter, "_open", broken)
+        c = loop.apply(c, to_result(asyncio.run(sdk_adapter.run(world.cfg)), StepKind.BUILD, NOW), NOW)
+        signatures.add(c.budgets.causes["tooling:build:sdk"].signature)
+    budget = c.budgets.causes["tooling:build:sdk"]
+    assert (len(signatures), budget.count, c.outcome.exit) == (1, 3, Exit.ASK)
+    said = f"JsonRpcError: JSON-RPC Error -32603: {whole_error}\nwhile the lease handed over"
+    said += " {'where': 'lease handed over'}"
+    assert loop.open_question(c).text == f"Delivery failed the same way 3 times (tooling:build:sdk): {said}"
+
+
+@pytest.mark.parametrize(
+    ("said", "cause"),
+    [
+        ("session create did not answer within 60 s", "liveness:build:deadline"),
+        ("runtime start did not answer within 60 s", "network:build:sdk"),  # an unanswered start stays the network's
+        ("", "liveness:build:deadline"),
+    ],
+)
+def test_a_timed_out_session_keeps_its_whole_error_and_retries_as_before(world, monkeypatch, tmp_path, said, cause):
+    """#971 R7: a timeout shows its type and notes, which never turn the step's own deadline into a network wait."""
+    error = TimeoutError(said)
+    error.add_note(TRIGGER)
+
+    async def late(*_args, **_kw):
+        raise error
+
+    monkeypatch.setattr(sdk_adapter, "_open", late)
+    run = asyncio.run(sdk_adapter.run(world.cfg))
+    want = f"TimeoutError: {said}\n{TRIGGER}" if said else "step deadline"
+    assert (run.ending, _step_detail(run, tmp_path)) == ("deadline", want)
+    result = to_result(run, StepKind.BUILD, NOW)
+    assert (result.reason, result.exit, result.cause, result.wake_at) == (want, Exit.RETRY, cause, None)
+    assert result.classified == said  # retries sign the message alone, as before (#971)
+
+
+def test_an_unread_transcript_keeps_its_whole_error(world, monkeypatch, tmp_path, whole_error):
+    """#971 R5: a resumed session's failed transcript read says the read's whole error, with its JSON-RPC data."""
+    error = JsonRpcError(-32603, whole_error, {"marker": "DATA-MARK"})
+    error.add_note(TRIGGER)
+
+    async def known(_sid):
+        return SimpleNamespace(session_id="synthetic")
+
+    async def resumed(_sid, **_kw):
+        return world.session
+
+    async def events():
+        raise error
+
+    world.get_session_metadata, world.resume_session, world.session.get_events = known, resumed, events
+    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
+    run = asyncio.run(sdk_adapter.run(dataclasses.replace(world.cfg, resume=True)))
+    failed = f"JsonRpcError: JSON-RPC Error -32603: {whole_error}\n{TRIGGER} {{'marker': 'DATA-MARK'}}"
+    want = f"transcript read failed ({failed}); the answer was not resent"
+    assert (run.ending, _step_detail(run, tmp_path)) == ("unread", want)
+    result = to_result(run, StepKind.BUILD, NOW)
+    assert (result.reason, result.cause, result.wake_at) == (want, "liveness:build:transcript", None)
+    assert result.classified == "transcript read failed (JsonRpcError); the answer was not resent"  # what retries sign
+
+
+@pytest.mark.parametrize("unknown", [False, True])
+def test_a_missing_session_names_the_earlier_processes_not_observed_gone(world, monkeypatch, tmp_path, unknown):
+    """#971: the step says which recorded processes are still present and which are in an unknown state; once its
+    teardown confirmed them gone, the retry's reason is that detail (session_result's ``missing`` case)."""
+
+    async def missing(_sid):
+        return None
+
+    world.get_session_metadata = missing
+    world.live[CHILD] = world.births[CHILD]
+    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
+    previous = {ROOT: world.births[ROOT]} | ({CHILD: None} if unknown else {})
+    run = asyncio.run(sdk_adapter.run(dataclasses.replace(world.cfg, resume=True, previous=previous)))
+    seen = f"{ROOT} still present" + (f"; {CHILD} in an unknown state" if unknown else "")
+    want = f"session missing; earlier processes are not observed gone: {seen}"
+    assert (run.ending, _step_detail(run, tmp_path)) == ("missing", want)
+    reason = f"termination unverified: processes {CHILD} still present" if unknown else want  # unknown stays unknown
+    assert to_result(run, StepKind.BUILD, NOW).reason == reason
+
+
 class Host:
     maintenance = None
+    failed = ""
     wake = SimpleNamespace(set=lambda: None)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
 

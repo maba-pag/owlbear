@@ -25,17 +25,21 @@ from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Recor
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import delivery_target, loop
 from owlbear_delivery_next.change_flow.status import Activity, passes
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import codebase, data_repo, maintenance, processes
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.project_host import environment, launch_gate, leftovers, session_slots
+from owlbear_delivery_next.project_host import brief_timer, environment, launch_gate, leftovers, session_slots
 from owlbear_delivery_next.project_host.runner_end import Found, disappeared, gone
 from owlbear_delivery_next.project_host.runner_end import block as _block
 from owlbear_delivery_next.project_host.runner_end import unverified as _unverified
-from owlbear_delivery_next.runtimes import readiness
+from owlbear_delivery_next.project_host.shaping_chat import dispatch as shape_dispatch
+from owlbear_delivery_next.runtimes import chat_contact, readiness
 from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.state_store import github_writer
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 from owlbear_delivery_next.workflow_steps import before, check, disposable, engine, prepare, pullback, queue
+from owlbear_delivery_next.workflow_steps.project_checks import settle as settle_checks
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -151,6 +155,7 @@ class Host:
     ) -> None:
         self.store, self.repo, self.members, self.alive = store, repo, members, alive
         self.spawn, self.code, self.reach, self.paused = spawn or self._spawn, code, reach, paused
+        self.post = chat_contact.post
         self.peers: Callable[[], list[Host]] = list  # the machine's other clones sharing this folder
         self.machine: Callable[[], list[Store]] = lambda: [self.store]  # every project store on this machine (TD-336)
         self.draining: Callable[[], bool] = lambda: False  # the owner's stop when idle: environments go too
@@ -174,6 +179,8 @@ class Host:
         self.offline: set[str] = set()  # Changes last seen waiting on the network
         self.back: dict[str, datetime] = {}  # those to wake, with when the probe saw the network return
         self.down, self.probe_at, self.clock = False, 0.0, time.monotonic
+        self.probe_said: str | None = None  # the last failed profile read the probe logged
+        self.failed = ""  # the last pass's whole error until a pass succeeds; the Changes page notes it
         pid, started = os.getpid(), datetime.now(UTC)
         self.record = HostRecord(url="", token="", pid=pid, started_at=started, code=codebase.CURRENT)
 
@@ -224,7 +231,7 @@ class Host:
                 except LockHeldError:
                     continue
                 except StoreError as exc:
-                    self._unloadable(slug, str(exc))
+                    self._unloadable(slug, failure(exc))
         finally:  # who waits for a slot after this pass, even one that failed: no wait outlives its asking
             self.waiting, self.asked = self.asked, set()
             self.slots.keep(session_slots.project(self), self.waiting)
@@ -244,8 +251,13 @@ class Host:
         self.probe_at = self.clock() + PROBE.total_seconds()
         try:
             name = profile.value(self.store.read_profile() or Profile(), profile.HOST, "github.com")
-        except StoreError:
-            name = "github.com"
+        except StoreError as exc:
+            said = f"network probe skipped: {failure(exc)}"
+            if self.probe_said != said:
+                self.say(said)
+                self.probe_said = said
+            return
+        self.probe_said = None
         up = self.reach(name) is None
         if up and self.down:  # only a return wakes them: a probe that never failed says nothing about their failure
             self.back |= dict.fromkeys(self.offline, now)
@@ -286,6 +298,8 @@ class Host:
         paused = self.paused()
         with self.store.lock(slug) as lock:
             c = self._folded(lock, slug, rec, now, paused=paused)
+            settle_checks(self.store, c, now)  # another Change's answer settled the project's checks (#968)
+            c = brief_timer.passed(self.store, lock, c, now, paused=paused)  # #986, before the pause decides
             if paused:
                 if not (self.owner_runs() and passes(c, now)):
                     return self._ended(lock, c, rec, now)
@@ -307,6 +321,7 @@ class Host:
                 runs = check.capturing(c) or before.due(c) or prepare.due(self.store, c)
                 step = loop.next_step(c, now) if runs else None
             self.store.write(lock, c)
+            shape_dispatch(self, lock, c)
             self.wants[slug] = session_slots.wanted(c, step)
             return step is not None or bool(not c.stop and prepare.left(self.store, c))  # a gone check's end
 
@@ -361,7 +376,8 @@ class Host:
         """Run pull-back again when the owner asked to Pull, and record its result."""
         if not c.pull_requested:
             return c
-        c.pullback, c.pull_requested = pullback.run(self.repo, c.names.target, now), None
+        writer = github_writer.of(self.store, self.repo)
+        c.pullback, c.pull_requested = pullback.run(self.repo, c.names.target, now, writer), None
         self.store.log(lock, c.slug, {"event": "pullback", "at": now.isoformat(), **c.pullback.model_dump(mode="json")})
         self.say(f"{c.slug}: pull-back {c.pullback.state} {c.pullback.reason}".rstrip())
         return c
@@ -402,7 +418,7 @@ class Host:
                 e = check.recovered(e, self.store.root / "changes" / c.slug / check.PIDFILE)
             return check.dispose(e)
         except (OSError, ValueError, processes.UnlistedError) as exc:
-            return f"the check environment's processes could not be looked for: {exc}"
+            return f"the check environment's processes could not be looked for: {failure(exc)}"
 
     def _launch(self, slug: str) -> bool:
         if launch_gate.stale(self):
@@ -474,4 +490,7 @@ class Host:
             try:
                 self.tick()
             except Exception as exc:  # noqa: BLE001 - the scheduler outlives one failed pass
-                self.say(f"pass failed: {type(exc).__name__}: {exc}")
+                self.failed = failure(exc)
+                self.say(f"pass failed: {self.failed}")
+            else:
+                self.failed = ""

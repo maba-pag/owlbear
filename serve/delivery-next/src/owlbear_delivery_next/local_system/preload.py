@@ -39,9 +39,14 @@ REQUIRED: dict[str, tuple[str, ...]] = {
 }
 UI: dict[str, tuple[str, ...]] = {"builder": ("owlbear-interface-design",)}  # added when the brief has a UI (TD-76)
 JUDGED = ("owlbear-acceptance-criteria", "owlbear-review-judgment")  # no code to judge: no module design (TD-166)
-JOBS: dict[str, tuple[str, ...]] = dict.fromkeys(
-    ("visual-review", "brief-challenge", "brief-reconsider", "amendment-challenge"), JUDGED
-) | {"pds-audit": ("pds-audit-deprecations-js",), "pds-update": ("pds-knowledge-js",)}  # a PDS candidate's (#777)
+JOBS: dict[str, tuple[str, ...]] = (
+    dict.fromkeys(
+        ("visual-review", "brief-challenge", "brief-reconsider", "amendment-challenge", "amendment-reconsider"), JUDGED
+    )
+    | {"pds-audit": ("pds-audit-deprecations-js",), "pds-update": ("pds-knowledge-js",)}  # a PDS candidate's (#777)
+    | dict.fromkeys(("amendment-prepare", "amendment-revise"), ("owlbear-acceptance-criteria",))  # TD-185
+)
+HOSTED = frozenset({"view", "glob", "grep"})  # a chat role's tools when Delivery hosts it: the shaper's candidate
 MEMORY = "owlbear-memory"  # the memory server's name; agent files name its tools as owlbear-memory/<tool>
 MEMORY_MODULE = "owlbear_memory_mcp"  # the memory server's package
 MEMORY_DIR = "OWLBEAR_MEMORY_DIR"  # the memory server's store folder
@@ -72,8 +77,12 @@ def agent_file(role: str) -> tuple[dict[str, Any], str]:
 
 
 def tools(role: str) -> list[str]:
-    """The runtime tools the role may use, as its agent file names them; Delivery adds its result tools."""
-    return [str(name) for name in agent_file(role)[0].get("tools") or []]
+    """The runtime tools the role may use, as its agent file names them; Delivery adds its result tools.
+
+    The shaper's file is its chat's: a session Delivery hosts on it only reads (TD-185), never asks or saves a brief.
+    """
+    named = [str(name) for name in agent_file(role)[0].get("tools") or []]
+    return [t for t in named if t in HOSTED] if role == "shaper" else named
 
 
 def memory(store: Path | None) -> dict[str, Any] | None:

@@ -20,6 +20,7 @@ import tempfile
 import threading
 import uuid
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -27,6 +28,7 @@ from owlbear_decisions import Decision, Scope, State, new_id
 from owlbear_delivery_next.change_contracts import pick_tools
 from owlbear_delivery_next.change_contracts.decision_records import Pick
 from owlbear_delivery_next.change_contracts.decision_wording import problem
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home, processes
 from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter
 from owlbear_delivery_next.settings import roles
@@ -65,6 +67,8 @@ ENDED = "the step has ended"
 BUSY = "another lookup is running; try again"
 LEFT = "a previous lookup's processes are not confirmed gone"
 SLOT_WAIT = 5.0  # seconds a lead chat's lookup waits for the host's running one
+KEPT = 16  # started lookups' answers a host keeps for their reads
+GONE = "this host has no lookup {}: it restarted or the answer was dropped; ask again"
 
 
 def worker(store: Store, lock: Lock, c: Change, question: str) -> tuple[dict[str, Any], Run | None]:
@@ -79,7 +83,7 @@ def worker(store: Store, lock: Lock, c: Change, question: str) -> tuple[dict[str
         found += _own(c, store.name, found)
         log, settings = pick.corrections(view.snapshot.root, store.name), store.settings()
     except (StoreError, OSError, ValueError) as exc:
-        return {"failed": f"{type(exc).__name__}: {exc}"}, None
+        return {"failed": failure(exc)}, None
     if not found:
         return {"decisions": [], "note": NONE}, None
     journal = sdk_adapter.Journal(lambda e: store.log(lock, c.slug, e))
@@ -149,7 +153,7 @@ def _chat(
             return blocked, None
         log, resolved = pick.corrections(view.snapshot.root, project), settings() if settings else machine(shared)
     except (StoreError, OSError, ValueError) as exc:
-        return {"failed": f"{type(exc).__name__}: {exc}"}, None
+        return {"failed": failure(exc)}, None
     if not found:
         return {"decisions": [], "note": NONE}, None
     try:
@@ -157,7 +161,7 @@ def _chat(
             resolved, project or "global", pick.message(None, found, log, ASKED, question), sdk_adapter.Journal()
         )
     except Exception as exc:  # noqa: BLE001 - a lookup that cannot run is failed, never "none apply"
-        return {"failed": f"{type(exc).__name__}: {exc}"}, None
+        return {"failed": failure(exc)}, None
     return answered(done, found), done
 
 
@@ -165,12 +169,16 @@ class Chats:
     """A host's lead-chat lookups: one at a time, none while an earlier one's processes may still run.
 
     A waiting call holds its request thread for `SLOT_WAIT` at most, so only the running lookup holds one for long.
+    A started lookup (contract 6) is read by its id; the host keeps the last `KEPT` answers, until it restarts.
     """
 
     def __init__(self) -> None:
         """No lookup runs yet and none was left."""
-        self.slot = threading.BoundedSemaphore(1)
+        self.slot = threading.BoundedSemaphore(1)  # a semaphore, so the thread that finishes a started one releases it
         self.left: dict[int, float | None] = {}  # an unconfirmed run's processes, until a rescan sees them gone
+        self.left_problems: tuple[str, ...] = ()
+        self.lock = threading.Lock()
+        self.answers: dict[str, dict[str, Any] | None] = {}  # a started lookup's answer by id; None while it runs
 
     def __call__(
         self, shared: DataRepo | None, project: str, question: str, settings: Callable[[], Settings] | None
@@ -179,17 +187,69 @@ class Chats:
         if not self.slot.acquire(timeout=SLOT_WAIT):
             return {"failed": BUSY}
         try:
-            if self.left and not processes.verdict(self.left, processes.alive).confirmed:
-                return {"failed": LEFT}
-            with spend_ledger.at(spend_ledger.Where(project=project, name=project, job=CHAT)):  # never the chat's
-                said, done = chat(shared, project, question, settings)
-            t = done.termination if done else None
-            gone = done is None or (t is not None and t.confirmed)
-            left = dict.fromkeys((*t.survivors, *t.unknown) if t else ()) | (done.pids if done else {})
-            self.left = {} if gone else left
-            return said
+            return self._run(shared, project, question, settings)
         finally:
             self.slot.release()
+
+    def start(self) -> str | None:
+        """A new lookup's id, holding the slot until `finish` ends it; None when another one runs."""
+        if not self.slot.acquire(timeout=SLOT_WAIT):
+            return None
+        lookup_id = uuid.uuid4().hex
+        with self.lock:
+            self.answers[lookup_id] = None
+        return lookup_id
+
+    def finish(
+        self,
+        lookup_id: str,
+        shared: DataRepo | None,
+        project: str,
+        question: str,
+        settings: Callable[[], Settings] | None,
+    ) -> None:
+        """Run the started lookup *lookup_id* and keep its answer, then free the slot."""
+        try:
+            said = self._run(shared, project, question, settings)
+        except BaseException as exc:  # a cancelled run too
+            said = {"failed": failure(exc)}  # a read never says running forever; the host logs the exception
+            raise
+        finally:
+            with self.lock:
+                self.answers[lookup_id] = said
+                for k in list(self.answers)[:-KEPT]:  # this run held the slot, so every kept answer is finished
+                    del self.answers[k]
+            self.slot.release()
+
+    def read(self, lookup_id: str) -> dict[str, Any] | None:
+        """A started lookup's state: running, or its whole answer; None for an id this host doesn't hold."""
+        with self.lock:
+            if lookup_id not in self.answers:
+                return None
+            said = self.answers[lookup_id]
+        return {"running": True} if said is None else {"running": False, "answer": said}
+
+    def _run(
+        self, shared: DataRepo | None, project: str, question: str, settings: Callable[[], Settings] | None
+    ) -> dict[str, Any]:
+        if self.left:
+            problems: list[str] = []
+            seen = partial(processes.observed, problems=problems)
+            prior = processes.verdict(self.left, seen, problems)
+            if not prior.confirmed:
+                states = ((prior.survivors, "still present"), (prior.unknown, "in an unknown state"))
+                detail = [f"processes {', '.join(map(str, pids))} {state}" for pids, state in states if pids]
+                detail += list(dict.fromkeys((*self.left_problems, *prior.problems)))
+                return {"failed": f"{LEFT}: " + "\n".join(detail)}
+            self.left, self.left_problems = {}, ()
+        with spend_ledger.at(spend_ledger.Where(project=project, name=project, job=CHAT)):  # never the chat's
+            said, done = chat(shared, project, question, settings)
+        t = done.termination if done else None
+        gone = done is None or (t is not None and t.confirmed)
+        left = dict.fromkeys((*t.survivors, *t.unknown) if t else ()) | (done.pids if done else {})
+        self.left = {} if gone else left
+        self.left_problems = t.problems if t is not None and not gone else ()
+        return said
 
 
 def machine(shared: DataRepo) -> Settings:
@@ -295,7 +355,7 @@ class Asked:
             with spend_ledger.at(self.place):
                 said, done = worker(self.store, self.lock, self.current(), question)
         except Exception as exc:  # noqa: BLE001 - a lookup that cannot run is failed, never "none apply"
-            said, done = {"failed": f"{type(exc).__name__}: {exc}"}, None
+            said, done = {"failed": failure(exc)}, None
         if "failed" in said:
             at = datetime.now(UTC).isoformat()
             self.store.log(self.lock, self.lock.slug, {"event": "lookup-failed", "at": at, "reason": said["failed"]})

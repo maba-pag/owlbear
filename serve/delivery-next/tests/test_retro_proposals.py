@@ -101,6 +101,14 @@ def test_a_proposal_not_redirected_is_not_redrafted():
         props.redrafted(pid, {}, "x")
 
 
+def test_a_real_run_does_not_review_historical_synthetic_proposals():
+    real = props.file(props.open_key("real", "lesson", "a"), ["f1"], kind="lesson", provenance="real")
+    fake = props.file(props.open_key("synthetic", "lesson", "b"), ["f2"], kind="lesson", provenance="synthetic")
+
+    assert [p["id"] for p in props.due_reviews()] == [real]
+    assert fake in props.folded()
+
+
 def test_the_reset_list_names_each_synthetic_artefact_once():
     real, fake = _waiting(), _waiting("synthetic")
     issue = {"kind": "issue", "where": "o/r", "ref": "7"}

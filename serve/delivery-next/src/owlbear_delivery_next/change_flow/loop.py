@@ -15,6 +15,7 @@ from owlbear_delivery_next.change_contracts.inbox import (
     CheckResult,
     ConsentItem,
     IntentItem,
+    ObjectionItem,
     PullItem,
     Recovery,
     RestartItem,
@@ -39,8 +40,9 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
     Waiting,
 )
-from owlbear_delivery_next.change_contracts.visual_records import OwnerDecision
 from owlbear_delivery_next.change_flow import (
+    amend_apply,
+    amending,
     answer_kinds,
     brief_rounds,
     budgets,
@@ -48,10 +50,12 @@ from owlbear_delivery_next.change_flow import (
     decision_baseline,
     delivery_target,
     disputes,
+    owner_answers,
     picks,
     plan_rounds,
     rebuilds,
     round_flow,
+    shaping_capture,
 )
 from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go, open_task, resolved, resume
 
@@ -99,6 +103,7 @@ class StepResult(Record):
     exit: Exit
     cause: str | None = None
     reason: str = ""
+    classified: str = ""  # what retries sign when reason says more (#971)
     back_to: StepKind | None = None
     question: Question | None = None
     stop: Stop | None = None
@@ -152,15 +157,9 @@ DECISIONS = frozenset({"retry", "accept", "repair", "reconsider", "another", "re
 
 
 def owner_gated(c: Change) -> bool:
-    """An owner-only gate, including a persisted delivery discrepancy; its environment cannot settle or relaunch."""
+    """An owner-only gate: a persisted delivery discrepancy or an amendment's question too; nothing settles past it."""
     q = open_question(c)
-    return delivery_target.held(c) or bool(q and q.options and {o.next for o in q.options} & DECISIONS)
-
-
-def brief_ready(c: Change) -> bool:
-    """Planning starts only from the approved current brief version its challenge loop ended on (TD-249)."""
-    b = c.brief
-    return b.approved_version == b.version == b.challenged
+    return delivery_target.held(c) or bool(q and ({o.next for o in q.options} & DECISIONS or amending.owned(q)))
 
 
 def next_step(c: Change, now: datetime) -> Step | None:
@@ -172,8 +171,8 @@ def next_step(c: Change, now: datetime) -> Step | None:
         return c.step
     if o.exit in {Exit.ASK, Exit.STOP}:
         return None
-    if o.who == "you":  # an owed pick runs while the chat revises or approves; the wait stays (TD-459)
-        return c.step if o.waiting == Waiting.CHAT and picks.owed(c) else None
+    if o.who == "you":  # an owed pick or the draft's capture runs while the chat revises or approves (TD-459)
+        return c.step if o.waiting == Waiting.CHAT and (picks.owed(c) or shaping_capture.owed(c)) else None
     return None if o.wake_at and o.wake_at > now else c.step
 
 
@@ -188,7 +187,7 @@ def schedule(  # noqa: PLR0913 - the PR observation, the profile's consent setti
     dropped: list[tuple[AnswerItem, str]] | None = None,
 ) -> tuple[Change, Step | None]:
     """Fold the inbox, observe the PR's end and intent flags, and only then apply exclusions."""
-    c = fold(change, items, now, dropped)
+    c = fold(change, amending.unmerged(change, items, dropped) if pr_state == "merged" else items, now, dropped)
     routed = delivery_target.route(c, pr_state, now)
     if not routed and not c.finished_at and c.step.kind != StepKind.CLEANUP:
         if not asking and waiting_consent(c) and (q := open_question(c)) is not None:
@@ -197,6 +196,8 @@ def schedule(  # noqa: PLR0913 - the PR observation, the profile's consent setti
         if moved and waiting_consent(c):
             c.outcome = None  # the merge step runs again: it routes the comment or offers the moved head
         if pr_state == "merged" or c.intent.abandoned_at:
+            if pr_state != "merged":
+                amending.left(c, "the Change stopped before it ended")
             go(c, StepKind.CLEANUP, mode=None if pr_state == "merged" else "abandon")
             c.outcome = None
         elif pr_state == "closed" and not any(q.cause == PR_CLOSED and not q.effect_observed_at for q in c.questions):
@@ -208,6 +209,7 @@ def schedule(  # noqa: PLR0913 - the PR observation, the profile's consent setti
             ]
             ask(c, Question(step=StepKind.MERGE, text="The PR was closed", options=options, cause=PR_CLOSED), now)
         elif c.intent.hold and c.step.kind != StepKind.MERGE:
+            amending.left(c, "the brief is reshaped")  # its question no longer approves anything
             go(c, StepKind.SHAPE)
             c.intent.hold = False
             c.outcome = None
@@ -223,18 +225,22 @@ def fold(  # noqa: C901, PLR0912 - per item kind
     for item in items:
         match item:
             case BriefApproval(version=version) if version == c.brief.version == c.brief.challenged:
-                c.brief.approved_version, c.brief.approved_at = version, item.at
                 decision_baseline.approved(c, item.baseline, item.at if item.unpinned else None)
+                c.brief.approved_version, c.brief.approved_at, c.brief.reference = version, item.at, version
+                c.brief.approve_if_clean = None  # the owner's recorded approval is spent with this one (#986)
                 c.brief.picked = item.picked or c.brief.picked  # what the approval validated, not a later retry
+                c.reference = c.shaped  # its capture, ended before approval: the design reference
                 held = {p.id: p for p in c.decisions_published} | {p.id: p for p in item.published}
                 c.decisions_published = list(held.values())
-                if all(b.version != version for b in c.brief.approved):
-                    c.brief.approved.append(c.brief.model_copy(deep=True, update={"approved": []}))
+                if all(b.version != version for b in c.brief.approved):  # with its person checks (TD-185)
+                    amend_apply.kept(c)
                 if c.step.kind == StepKind.SHAPE:
                     _done(c, None, now)
                     c.outcome = None
-            case AnswerItem() if answer_kinds.held(c, item, now):  # #717: the Spotter's question, kept, asked again
-                pass
+            case AnswerItem() if answer_kinds.held(c, item, now) or amending.answered(c, item, now, dropped):
+                pass  # #717: the Spotter's question, kept; an amendment's, recorded or dropped by its path (TD-185)
+            case ObjectionItem():
+                amending.objected(c, item, now)
             case AnswerItem():  # one that settles nothing goes to *dropped* with why, for the activity (#791)
                 if (why := _answer(c, item, now)) and dropped is not None:
                     dropped.append((item, why))
@@ -283,14 +289,6 @@ def _intent(c: Change, item: IntentItem) -> None:
             c.intent.words, c.intent.hold = item.text, True
 
 
-def _visual_decision(c: Change, decision: str, item: AnswerItem) -> None:
-    """Record the owner's decision on the round it was about, while that round still waits for it (TD-79)."""
-    kept = c.visual_rounds[-1] if c.visual_rounds else None
-    if kept and kept.number == item.round and kept.outcome == "ask" and kept.decision is None:
-        outcome = "pass" if decision == "accept" else "fail"
-        kept.decision = OwnerDecision(outcome=outcome, findings=item.findings, comment=item.text, at=item.at)
-
-
 def _target(q: Question, option: str | None) -> str | None:
     """Where the chosen option leads; a question whose every option reruns the step does so on any answer."""
     if q.options and all(o.next == "retry" for o in q.options):
@@ -317,9 +315,8 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> str:
         return f"question {q.id} is settled only by one of its options, a reconsideration by a note"
     if gate and (target != "pause" or c.step.kind != StepKind.CLEANUP):
         c.outcome = None
-    if kind == "brief_change":  # never delivered: the work stops and asks while amendments are not built
-        ask(c, answer_kinds.question(c, q), now)
-        return ""
+    if (amended := owner_answers.amended(c, q, item, (kind, target, gate), now)) is not None:
+        return amended
     if q.cause and kind_of(q.cause) in ENVIRONMENT | DEFECT and target != "pause":
         c.budgets.causes.pop(q.cause, None)  # "Done, continue" starts a new episode or streak
     if target in DECISIONS:
@@ -382,7 +379,7 @@ def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: boo
     elif target == "retry" or (q.cause or "").endswith(f":{UNREAD}"):  # an accepted hold is taken by the runner
         go(c, c.step.kind, c.step.task, c.step.mode)
     else:
-        _visual_decision(c, target, item)
+        owner_answers.decided(c, target, item)
 
 
 def answer_delivered(change: Change, question_id: str, now: datetime) -> Change:
@@ -405,17 +402,9 @@ def apply(change: Change, result: StepResult, now: datetime) -> Change:
     if result.exit not in EXITS[kind]:
         msg = f"{kind} has no {result.exit} exit"
         raise ValueError(msg)
-    c.outcome = Outcome(
-        exit=result.exit,
-        cause=result.cause,
-        reason=result.reason,
-        who=result.who,
-        waiting=result.waiting,
-        wake_at=result.wake_at,
-        denial=result.denial,
-        challenged=result.challenged,
-        at=now,
-    )
+    c.outcome = Outcome(exit=result.exit, cause=result.cause, reason=result.reason, who=result.who,
+                        waiting=result.waiting, wake_at=result.wake_at, denial=result.denial,
+                        challenged=result.challenged, at=now)  # fmt: skip
     budgets.streaks(c, result)
     match result.exit:
         case Exit.DONE:
@@ -447,7 +436,7 @@ def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901
     paths = r.paths if r else {}
     match s.kind:
         case StepKind.SHAPE | StepKind.PLAN:
-            if s.kind == StepKind.SHAPE and not brief_ready(c):
+            if s.kind == StepKind.SHAPE and not brief_rounds.ready(c):
                 return  # the shape step reviews the approved version first
             c.budgets.rounds.pop(str(s.kind), None)
             if s.kind == StepKind.PLAN and r and r.plan:

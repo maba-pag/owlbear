@@ -5,7 +5,7 @@ follow-up, and nothing more is made. A Retro finding that a current reviewed pro
 publishable words is saved at once; anything else is minimised by one ``retro-review`` call of a Retro run first. The
 text is checked for credentials, emails and home paths before it is saved; an unsafe one is refused, nothing written,
 and an unsafe minimised answer is never replayed: the next run asks again. It lands in the backlog seen from the
-subject's project, or from none; a synthetic finding's only in the sandbox's. A finding resting on a retired
+subject's project, or from none; synthetic findings are historical. A finding resting on a retired
 assumption is refused, as is a reviewed proposal's text resting on one.
 """
 
@@ -15,6 +15,7 @@ import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.improvement import case_review, retro_judge
 from owlbear_delivery_next.improvement import proposal_targets as targets
@@ -65,7 +66,7 @@ def subject(fid: str, places: Mapping[str, targets.Place]) -> dict[str, Any]:
 
     Raises:
         Unknown: *fid* is neither.
-        RetroError: A finding resting on a retired assumption, or a synthetic one while the sandbox is not registered.
+        RetroError: A finding resting on a retired assumption, or a synthetic one.
     """
     found = next((f for f in store.all_findings() if f["id"] == fid), None)
     if found is not None and not store.visible(found, store.retired_ids(), synthetic=True):
@@ -81,10 +82,8 @@ def subject(fid: str, places: Mapping[str, targets.Place]) -> dict[str, Any]:
     else:
         msg = f"no Retro finding or Spotter record {fid}"
         raise Unknown(msg)
-    pid = targets.sandbox(places) if provenance == "synthetic" else targets.project(unit, places, store.known())
-    if provenance == "synthetic" and not pid:
-        msg = f"a synthetic finding's follow-up goes only to the sandbox; register ~/Projects/{targets.SANDBOX}"
-        raise store.RetroError(msg)
+    store.require_real(provenance)
+    pid = targets.project(unit, places)
     change = unit.split(":", 2)[2] if pid and unit.startswith(f"chg:{pid}:") else ""
     folder = places[pid].folder if pid else ""
     return {"id": fid, "source": source, "provenance": provenance, "project": pid, "change": change,
@@ -136,7 +135,6 @@ def save(subj: Mapping[str, Any], text: Mapping[str, str], backlogs: Backlogs) -
             refs = f"\n\nRefs: {subj['id']}"
             cut_body = body[: retro_judge.BODY - len(refs)]
             body = f"{cut_body}{refs}" if subj["id"] not in body else body[: retro_judge.BODY]
-            title = f"[synthetic] {title}" if subj["provenance"] == "synthetic" else title  # never a real entry's match
             made, _ = view.add(title[: retro_judge.TITLE], body, subj["source"], evidence=[f"{MARK}{subj['id']}"])
     return _entry(made, view)
 
@@ -191,8 +189,8 @@ def run(w: Work, fid: str, places: Mapping[str, targets.Place], backlogs: Backlo
         said = paid(w, f"followup:{fid}", message, _valid, "retro-review")
         return {"followup": save(subj, said, backlogs)}
     except store.RetroError as exc:
-        msg = f"refused: {exc}"
+        msg = f"refused: {failure(exc)}"
         raise StoppedError(msg) from exc
     except (BacklogError, ProviderError, OSError) as exc:  # the answer is kept: the next run saves it unpaid
-        msg = f"stopped: the backlog could not be reached ({type(exc).__name__}: {exc})"
+        msg = f"stopped: the backlog could not be reached ({failure(exc)})"
         raise StoppedError(msg) from exc

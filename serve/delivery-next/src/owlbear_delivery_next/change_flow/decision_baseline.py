@@ -19,8 +19,12 @@ def owned(q: Question) -> bool:
 
 
 def approved(c: Change, baseline: DecisionBaseline | None, unpinned_at: datetime | None = None) -> None:
-    """A brief approval pins its decisions; *unpinned_at*: they could not be read, so the owner confirms them later."""
-    c.decisions_baseline, c.decisions_offered, c.decisions_unpinned_at = baseline, None, unpinned_at
+    """A brief approval pins its decisions; *unpinned_at*: they could not be read, so the owner confirms them later.
+
+    Called before the approval is recorded: a retried one of the approved version keeps the pin and any open offer.
+    """
+    if c.brief.approved_version != c.brief.version:
+        c.decisions_baseline, c.decisions_offered, c.decisions_unpinned_at = baseline, None, unpinned_at
 
 
 def decided(c: Change, target: str) -> None:

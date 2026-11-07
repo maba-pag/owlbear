@@ -14,6 +14,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.machine_host import versions
 from owlbear_delivery_next.machine_host.update import ATTEMPTS
 from owlbear_delivery_next.state_store import machine_settings, registry
@@ -44,6 +45,22 @@ class Auto:
         self.deadline: float | None = None
         self.target, self.next_look = "", 0.0
         self.clocks = (wall(), mono())
+        self.errors: dict[str, str] = {}
+
+    def _problem(self, operation: str, why: str) -> None:
+        with self.lock:
+            changed = why and self.errors.get(operation) != why
+            if why:
+                self.errors[operation] = why
+            else:
+                self.errors.pop(operation, None)
+        if changed:
+            self.machine.say(f"automatic update: {operation} failed: {why}")
+
+    def problems(self) -> list[str]:
+        """Current failures, read without inspecting settings, versions or running work again."""
+        with self.lock:
+            return [f"{operation} failed: {why}" for operation, why in self.errors.items()]
 
     def use(self) -> None:
         """The owner is at it: idle time starts again and an announcement is cancelled (Postpone too)."""
@@ -61,8 +78,10 @@ class Auto:
         """Whether the machine's settings let it update by itself now (TD-288)."""
         try:
             settings = machine_settings.current()
-        except registry.RegistryError:
-            return False  # unset or unreadable: no update by itself (2026-10-23)
+        except registry.RegistryError as exc:
+            self._problem("reading settings", failure(exc))
+            return False
+        self._problem("reading settings", "" if settings.notice == machine_settings.NO_SHARED else settings.notice)
         return settings.update_when_idle is True and (not self.machine.paused or settings.update_while_paused is True)
 
     def _allowed(self) -> bool:
@@ -76,8 +95,11 @@ class Auto:
             self.next_look = now + LOOK
             try:
                 choice = versions.target()
-            except versions.VersionError, registry.RegistryError:
+            except (versions.VersionError, registry.RegistryError) as exc:
+                self._problem("looking for a version", failure(exc))
                 choice = None
+            else:
+                self._problem("looking for a version", "")
             self.target = choice.tag if choice else ""
         failed = self.machine.updater.attempts.get(self.target, 0) >= ATTEMPTS  # tried enough: a later version
         return "" if failed else self.target
@@ -112,4 +134,6 @@ class Auto:
             try:
                 self.tick()
             except Exception as exc:  # noqa: BLE001 - the loop outlives one failed look
-                self.machine.say(f"looking whether to update failed: {type(exc).__name__}: {exc}")
+                self._problem("looking whether to update", failure(exc))
+            else:
+                self._problem("looking whether to update", "")

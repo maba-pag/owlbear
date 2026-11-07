@@ -4,23 +4,30 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from owlbear_delivery_next.git.command_failure import failed, failure
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Mapping
     from pathlib import Path
 
-type Probe = Callable[[list[str]], tuple[int, str]]
+
+class Probe(Protocol):
+    """One bounded command."""
+
+    def __call__(self, argv: list[str], env: Mapping[str, str] | None = None, /) -> tuple[int, str]:
+        """Its exit code and what it printed, or its whole failure; *env* replaces the process's environment."""
 
 
 def probe_in(cwd: Path) -> Probe:
     """Run one command in *cwd*, bounded: what it printed, or its whole failure; a missing program is exit 127."""
 
-    def run(argv: list[str]) -> tuple[int, str]:
+    def run(argv: list[str], env: Mapping[str, str] | None = None, /) -> tuple[int, str]:
         try:
-            done = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=30, check=False)  # noqa: S603
+            done = subprocess.run(  # noqa: S603
+                argv, cwd=cwd, env=env, capture_output=True, text=True, timeout=30, check=False
+            )
         except (OSError, subprocess.TimeoutExpired) as exc:
             return 127, failure(exc)
         return done.returncode, failed(done) if done.returncode else (done.stdout + done.stderr).strip()

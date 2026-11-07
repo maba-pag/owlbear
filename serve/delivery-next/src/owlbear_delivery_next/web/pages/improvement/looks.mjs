@@ -57,10 +57,13 @@ function body(named) {
   if (state.looksError && !state.looks) return unread("The looks", state.looksError);
   if (!state.looks) return quiet("Reading the looks\u2026");
   const { looks, outside, unread: missing } = state.looks;
+  const records = state.looks.record_unread ?? [];
   return html`${state.looksError ? unread("The newest looks", state.looksError) : nothing}
     ${heading(3, "The Spotter's looks", "md")}
+    ${records.length ? unread("Some Spotter records", records.join("\n")) : nothing}
     ${looks.length ? html`<ul class="cards">${repeat(looks, (r) => r.id, (r) => shown(r, named))}</ul>`
-      : empty("No look yet here: the Spotter looks at the moments its settings name.")}
+      : empty(records.length ? "No readable look here; some records could not be read."
+        : "No look yet here: the Spotter looks at the moments its settings name.")}
     ${heading(3, "Outside writes", "md")}
     ${quiet("Commands the watcher observed writing outside their worktree. It only reports: nothing was stopped.")}
     ${missing.length ? unread("Some projects' writes", missing.join("; ")) : nothing}

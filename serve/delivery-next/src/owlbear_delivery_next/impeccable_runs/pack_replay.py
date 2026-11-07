@@ -23,7 +23,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.impeccable import calibration, pack_files
 from owlbear_delivery_next.impeccable_runs.scratch import scratch
 from owlbear_delivery_next.local_system import git_files
-from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter
+from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.state_store import spend_ledger
 from owlbear_delivery_next.workflow_steps import judges, sessions
@@ -129,6 +129,7 @@ def _ran(run: Callable[[sdk_adapter.Session], Run], cfgs: list[sdk_adapter.Sessi
         done = run(cfg)
         if not (done.termination and done.termination.confirmed):
             msg = f"the replay judge {cfg.session_id} may still be running; stop it before replaying again"
+            msg += f"; {session_result.unverified(done.termination)}"
             raise ReplayError(msg)
         runs.append(done)
     return runs

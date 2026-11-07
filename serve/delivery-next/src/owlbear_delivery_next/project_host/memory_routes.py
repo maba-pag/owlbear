@@ -30,9 +30,12 @@ from owlbear_memory import (
     writer_lock,
 )
 from owlbear_memory import ValidationError as MemoryValidationError
+from owlbear_memory.errors import read_warning as _read_notice
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import curation_apply, data_repo
+from owlbear_delivery_next.state_store.database import StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -64,15 +67,30 @@ class EditBody(Shown):
 
 
 class PurgeBody(BaseModel):
-    """Remove the files of entries deleted at least this many days ago; Git history keeps them."""
+    """Remove the files of entries deleted at least this many days ago; Git history keeps them.
+
+    Without an age the owner's purge age from the global settings applies; an age sent overrides it.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    min_age_days: int = Field(default=30, ge=0, le=3650)
+    min_age_days: int | None = Field(default=None, ge=0, le=3650)
 
 
 def _shown(entry: MemoryEntry) -> dict[str, Any]:
-    return entry.model_dump(mode="json", exclude={"assessment_receipts"})
+    return entry.model_dump(mode="json", exclude={"assessment_receipts", "score"})  # the stored score ranks nothing
+
+
+UNSET_PURGE = "the purge age is unset; set it in the Memory group of the Settings page"
+
+
+def _purge_age(store: Store) -> tuple[int | None, str]:
+    """The owner's purge age in days from the global settings, and why not when there is none."""
+    try:
+        days = store.settings().memory.purge_days
+    except StoreError as exc:
+        return None, f"the settings can't be read: {failure(exc)}"
+    return days, "" if days is not None else UNSET_PURGE
 
 
 REFUSED: tuple[tuple[type[Exception], int, str], ...] = (  # the first match answers; "" says the error's own text
@@ -98,7 +116,8 @@ def folder_of(store: Store, where: Where) -> Path:
 
 def _refused(exc: Exception) -> HTTPException:
     status, said = next((s, t) for e, s, t in REFUSED if isinstance(exc, e))
-    return HTTPException(status, said or str(exc))
+    detail = failure(exc) if getattr(exc, "__notes__", ()) else str(exc)
+    return HTTPException(status, f"{said}: {detail}" if said and getattr(exc, "__notes__", ()) else said or detail)
 
 
 def _act(
@@ -110,8 +129,8 @@ def _act(
         raise HTTPException(404, "no such memory entry")
     shared, until = store.shared, time.monotonic() + data_repo.SAVE_SECONDS
     label = "global" if where == "global" else store.name
+    engine = MemoryEngine(folder)
     try:
-        engine = MemoryEngine(folder)
         with shared.locked(), writer_lock(folder):
             before = _files(folder)
             entry = do(engine)
@@ -119,8 +138,10 @@ def _act(
             changed = sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p))
             notice = shared.publish(changed, f"memory {label}: {what} {entry.title}", until)
     except tuple(e for e, _, _ in REFUSED) as exc:
+        if engine.read_errors:
+            exc.add_note(_read_notice(engine.read_errors))
         raise _refused(exc) from exc
-    return {"entry": _shown(entry), "notice": notice}
+    return {"entry": _shown(entry), "notice": "\n".join(filter(None, (notice, _read_notice(engine.read_errors))))}
 
 
 def _move(store: Store, entry_id: str, shown: str, *, back: bool) -> dict[str, Any]:
@@ -136,9 +157,14 @@ def _move(store: Store, entry_id: str, shown: str, *, back: bool) -> dict[str, A
         raise HTTPException(404, "no such memory entry")
     shared, until = store.shared, time.monotonic() + data_repo.SAVE_SECONDS
     target.mkdir(exist_ok=True)
+    unread: dict[str, str] = {}
     try:
         with shared.locked(), writer_lock(source), writer_lock(target):
-            found = [(p, e) for p in sorted(source.glob("*.md")) if (e := storage.read_entry(p)) and e.id == entry_id]
+            found = [
+                (p, e)
+                for p in sorted(source.glob("*.md"))
+                if (e := storage.read_entry(p, read_errors=unread)) and e.id == entry_id
+            ]
             if len(found) != 1:
                 raise NotFoundError(entry_id)
             path, entry = found[0]
@@ -152,7 +178,9 @@ def _move(store: Store, entry_id: str, shown: str, *, back: bool) -> dict[str, A
             if not back and entry.state in {MemoryState.PENDING, MemoryState.DELETED}:  # the project's curator first
                 raise HTTPException(409, f"{entry.title} is {entry.state}: the curator scopes it before it goes global")
             moved = target / path.name
-            if moved.exists() or any(getattr(storage.read_entry(p), "id", "") == entry_id for p in target.glob("*.md")):
+            if moved.exists() or any(
+                getattr(storage.read_entry(p, read_errors=unread), "id", "") == entry_id for p in target.glob("*.md")
+            ):
                 where = store.name if back else "Global memory"
                 raise HTTPException(409, f"{where} holds {entry.title} already")
             moving = entry.model_copy(update={"origin": None if back else store.name, "updated_at": _later(entry)})
@@ -161,8 +189,10 @@ def _move(store: Store, entry_id: str, shown: str, *, back: bool) -> dict[str, A
             what = "move back" if back else "make global"
             notice = shared.publish([path, moved], f"memory {store.name}: {what} {entry.title}", until)
     except tuple(e for e, _, _ in REFUSED) as exc:
+        if unread:
+            exc.add_note(_read_notice(unread))
         raise _refused(exc) from exc
-    return {"entry": _shown(entry), "notice": notice}
+    return {"entry": _shown(entry), "notice": "\n".join(filter(None, (notice, _read_notice(unread))))}
 
 
 def unmoved(shared: data_repo.DataRepo, what: str) -> None:
@@ -202,9 +232,9 @@ def _relocate(
                 storage.write_entry(path, entry, memory_dir=source)
                 raise
     except ValueError as exc:  # the origin made it too large to store
-        raise HTTPException(422, f"{entry.title} cannot move: {exc}") from exc
+        raise HTTPException(422, f"{entry.title} cannot move: {failure(exc)}") from exc
     except OSError as exc:
-        raise HTTPException(409, f"{entry.title} could not move: {exc.strerror or exc}; try again") from exc
+        raise HTTPException(409, f"{entry.title} could not move: {failure(exc)}; try again") from exc
 
 
 def reorigin(shared: data_repo.DataRepo, old: str, new: str, until: float) -> str:
@@ -215,32 +245,42 @@ def reorigin(shared: data_repo.DataRepo, old: str, new: str, until: float) -> st
     common = shared.root / "memory"
     if not common.is_dir():
         return ""
-    changed = []
+    changed, unread = [], {}
     with writer_lock(common):
         for path in sorted(common.glob("*.md")):
-            if (entry := storage.read_entry(path)) is not None and entry.origin == old:
+            if (entry := storage.read_entry(path, read_errors=unread)) is not None and entry.origin == old:
                 storage.write_entry(path, entry.model_copy(update={"origin": new}), memory_dir=common)
                 changed.append(path)
-    return shared.publish(changed, f"memory global: {old} is now {new}", until) if changed else ""
+    notice = shared.publish(changed, f"memory global: {old} is now {new}", until) if changed else ""
+    return "\n".join(filter(None, (notice, _read_notice(unread))))
 
 
-def _purge(store: Store, days: int, where: Where) -> dict[str, Any]:
-    """Remove the files of entries deleted ``days`` ago or earlier and publish their removal."""
+def _purge(store: Store, age: int | None, where: Where) -> dict[str, Any]:
+    """Remove the files of entries deleted ``age`` days ago or earlier, else the owner's purge age, and publish it."""
+    days, why = (age, "") if age is not None else _purge_age(store)
+    if days is None:
+        raise HTTPException(409, why)
     folder = folder_of(store, where)
     if not folder.is_dir():
         return {"purged": 0, "skipped": 0, "failed": 0, "notice": ""}
     shared, until = store.shared, time.monotonic() + data_repo.SAVE_SECONDS
     label = "global" if where == "global" else store.name
+    engine = MemoryEngine(folder)
     try:
         with shared.locked(), writer_lock(folder):
             before = _files(folder)
-            done = MemoryEngine(folder).purge(days)
+            done = engine.purge(days)
             after = _files(folder)  # a duplicate repair on the way may add a recovered entry: publish it too
             changed = sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p))
             notice = shared.publish(changed, f"memory {label}: purge {done.purged} deleted", until) if changed else ""
     except tuple(e for e, _, _ in REFUSED) as exc:
         raise _refused(exc) from exc
-    return {"purged": done.purged, "skipped": done.skipped, "failed": done.failed, "notice": notice}
+    return {
+        "purged": done.purged,
+        "skipped": done.skipped,
+        "failed": done.failed,
+        "notice": "\n".join(filter(None, (notice, _read_notice(engine.read_errors)))),
+    }
 
 
 def router(store: Store) -> APIRouter:
@@ -253,6 +293,7 @@ def router(store: Store) -> APIRouter:
             return {"available": False, "reason": NO_SHARED, "entries": []}
         folder = folder_of(store, where)
         engine = MemoryEngine(folder)
+        days, why = _purge_age(store)
         return {
             "available": True,
             "folder": str(folder),
@@ -260,8 +301,11 @@ def router(store: Store) -> APIRouter:
             "project": store.name,
             "entries": [_shown(e) for e in engine.get_entries()],
             "parse_errors": engine.parse_errors,
+            "read_errors": engine.read_errors,
             "states": [s.value for s in MemoryState],
             "categories": [c.value for c in MemoryCategory],
+            "purge_days": days,
+            "purge_why": why,
         }
 
     @routes.post("/memory/{entry_id}/approve")

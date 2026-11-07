@@ -8,9 +8,18 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
+from owlbear_delivery_next.github import account
 from owlbear_delivery_next.github.provider import MergeMethod
 from owlbear_delivery_next.settings.carried import LOOK_CREDIT_LIMIT, REPLAY_RUN_CREDIT_LIMIT
-from owlbear_delivery_next.settings.config import LOOPED, Agent, GlobalLayer, MachineValues, Prefs, used
+from owlbear_delivery_next.settings.config import (
+    LOOPED,
+    Agent,
+    GlobalLayer,
+    MachineValues,
+    MemoryValues,
+    Prefs,
+    settable,
+)
 from owlbear_delivery_next.settings.improvement import Spotter
 
 if TYPE_CHECKING:
@@ -45,8 +54,9 @@ def page() -> dict[str, object]:
             model=model,
             effort=effort,
             context="long" if role in ("design-judge", "shaper") else "default",  # the owner chose the long tier
-            minutes=minutes if "minutes" in used(role) else None,
-            subagents=True if "subagents" in used(role) else None,
+            minutes=minutes if "minutes" in settable(role) else None,
+            subagents=True if "subagents" in settable(role) else None,
+            challenge_wait=15 if "challenge_wait" in settable(role) else None,
             **(rounds if role in LOOPED else {}),
         )
         for role, (model, effort, minutes) in AGENTS.items()
@@ -61,8 +71,20 @@ def page() -> dict[str, object]:
         load_user_skills=False,
         load_user_memory=False,
         guard_level="lenient",
+        github_account=account.REPOSITORY_OWNER,
         sessions=2,
         curator_threshold=95,
+        memory=MemoryValues(  # what the code held before these became settings
+            outstanding_boost=0.1,
+            unremarkable_penalty=0.01,
+            stale_factor=50,
+            purge_days=30,
+            preflight_cap=5,
+            preflight_budget=2000,
+            recall_limit=20,
+            explore_slots=2,
+            challenge_slots=2,
+        ),
         prefs=Prefs(
             merge_method=MergeMethod.SQUASH,
             delete_remote_branch=False,

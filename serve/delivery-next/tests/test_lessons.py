@@ -10,14 +10,18 @@ from types import SimpleNamespace
 
 import pytest
 from owlbear_memory import MemoryEntry, MemoryState, selection, storage
+from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.local_system import preload
 from owlbear_delivery_next.runtimes import lessons, sdk_adapter, sdk_usage, step_input
+from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.state_store.layers import read_layer
 
 PRODUCING = ("builder", "planner", "preparer", "updater", "test-curator")
+BUDGET = 2000  # the characters the tests' settings layer gives the pre-flight recall (conftest's complete_layer)
 RECALLING = (*PRODUCING, "reviewer", "challenger", "design-judge", "test-reviewer")
 NEVER = ("picker", "curator")  # the picker has no memory; the curator curates it and never recalls
 
@@ -141,12 +145,12 @@ def test_conflicting_lessons_are_both_shown_as_advice_under_the_frame(memory: Pa
 
 
 def test_whole_lessons_fit_the_hard_budget_wrappers_included_and_skipped_ones_are_logged(memory: Path) -> None:
-    big = [entry(n, content="x" * 1000, score=1.0 - n / 100) for n in (1, 2)]
-    small = [entry(n, score=0.5 - n / 100) for n in range(3, 10)]
+    big = [entry(n, content="x" * 1000, confidence=1.0 - n / 100) for n in (1, 2)]
+    small = [entry(n, confidence=0.9 - n / 100) for n in range(3, 10)]
     keep(memory, *big, *small)
     text, log = told("builder", memory)
     block = text.split("\n\n## Task\n", 1)[0]
-    assert len(block) <= selection.BUDGET
+    assert len(block) <= BUDGET
     quoted, kept = shown(text), len(shown(text)) - 1
     assert kept >= 1
     assert [q["id"] for q in quoted] == [e.id for e in (big[0], *small[:kept])]  # big[1] is skipped, never cut
@@ -155,11 +159,11 @@ def test_whole_lessons_fit_the_hard_budget_wrappers_included_and_skipped_ones_ar
     assert log[0]["omitted"] == [{"id": e.id, "revision": e.revision, "reason": "budget"} for e in skipped]
     assert len(quoted) + len(log[0]["omitted"]) == len(big) + len(small)  # every eligible lesson is accounted for
     for skipped in (big[1], small[kept]):
-        assert len(block) + len(lessons.line(selection.Candidate(skipped, "project", specific=True))) + 1 > 2000
+        assert len(block) + len(lessons.line(selection.Candidate(skipped, "project", specific=True))) + 1 > BUDGET
 
 
 def test_at_most_five_lessons_are_shown_and_none_fills_a_quota(memory: Path) -> None:
-    keep(memory, *(entry(n, score=0.9 - n / 100) for n in range(1, 9)))
+    keep(memory, *(entry(n, confidence=0.99 - n / 100) for n in range(1, 9)))
     text, log = told("builder", memory)
     assert [q["title"] for q in shown(text)] == [f"Lesson {n}" for n in range(1, 6)]
     assert [(o["id"][-5:], o["reason"]) for o in log[0]["omitted"]] == [(f"{n:05d}", "cap") for n in range(6, 9)]
@@ -175,6 +179,62 @@ def test_no_eligible_lessons_are_said_as_such(memory: Path) -> None:
     assert told("builder", memory.parent / "absent")[0].startswith(f"{lessons.HEADING}\n{lessons.NONE}")
 
 
+def owner_holds(memory: Path, **values: object) -> None:
+    """The owner's memory values in the global file of the shared repository beside *memory*."""
+    (memory.parent.parent / "config.json").write_text(json.dumps({"format": 21, "memory": values}))
+
+
+def test_the_owners_cap_and_budget_decide_how_many_lessons_are_shown(memory: Path) -> None:
+    keep(memory, *(entry(n, confidence=0.99 - n / 100) for n in range(1, 6)))
+    owner_holds(memory, preflight_cap=2)
+    text, log = told("builder", memory)
+    assert [q["title"] for q in shown(text)] == ["Lesson 1", "Lesson 2"]
+    assert [o["reason"] for o in log[0]["omitted"]] == ["cap"] * 3
+
+    owner_holds(memory, preflight_cap=5, preflight_budget=len(lessons.HEADING) + 1)  # no room for the wrappers
+    text, log = told("builder", memory)
+    assert text.startswith(f"{lessons.HEADING}\n{lessons.UNFIT.format(role='builder')}")
+    assert {o["reason"] for o in log[0]["omitted"]} == {"budget"}
+
+
+def test_the_owners_points_decide_the_order_and_the_stored_score_ranks_nothing(memory: Path) -> None:
+    keep(
+        memory,
+        entry(1, title="rated", confidence=0.8, outstanding_count=2, score=0.1),
+        entry(2, title="confident", confidence=0.95, score=5.0),
+    )
+    owner_holds(memory, outstanding_boost=0.1)  # 1.0 against 0.95
+    assert [q["title"] for q in shown(told("builder", memory)[0])] == ["rated", "confident"]
+    owner_holds(memory, outstanding_boost=0.01)  # 0.82 against 0.95
+    assert [q["title"] for q in shown(told("builder", memory)[0])] == ["confident", "rated"]
+
+
+def test_an_unset_value_is_told_to_the_agent_and_never_stops_the_step(memory: Path, monkeypatch) -> None:
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+
+    monkeypatch.setattr(config, "BASE", None)  # production: no layer under the owner's own
+    keep(memory, entry(1))
+    owner_holds(memory, outstanding_boost=0.1, unremarkable_penalty=0.01)
+    text, log = told("builder", memory)
+    assert text.startswith(f"{lessons.HEADING}\nDelivery could not read them all (SettingsUnset: settings unset: ")
+    assert "memory.preflight_cap, memory.preflight_budget" in text
+    assert (log[0]["status"], "memory.preflight_cap" in log[0]["failed"], log[0]["lessons"]) == ("unread", True, [])
+
+
+def test_challenge_rounds_that_do_not_combine_are_told_to_the_agent_and_never_stop_the_step(memory: Path) -> None:
+    keep(memory, entry(1))
+    misfit = {"max_rounds": 5, "max_findings": 10, "last_round_at": 8, "ask_owner_at": 7}  # last must be below ask
+    (memory.parent.parent / "config.json").write_text(
+        json.dumps({"format": 21, "agents": {"builder": misfit}, "memory": {"stale_factor": 50}})
+    )
+    text, log = told("builder", memory)
+    with pytest.raises(ValidationError) as misfits:
+        config.resolve(read_layer(memory.parent.parent / "config.json", config.GlobalLayer), config.Layer())
+    why = f"StoreError: the settings do not combine: ValidationError: {misfits.value}"  # #971: every error, whole
+    assert text.startswith(f"{lessons.HEADING}\n{lessons.UNREAD.format(why=why, role='builder')}")
+    assert (log[0]["status"], log[0]["failed"], log[0]["lessons"]) == ("unread", why, [])
+
+
 def test_lessons_that_exist_but_fit_nothing_send_the_agent_to_its_own_recall(memory: Path) -> None:
     keep(memory, entry(1, title="t" * 2000))
     text, log = told("builder", memory)
@@ -187,15 +247,18 @@ def test_lessons_that_exist_but_fit_nothing_send_the_agent_to_its_own_recall(mem
     ]
 
 
-def test_an_unread_memory_falls_back_to_the_agents_own_recall(memory: Path, monkeypatch) -> None:
+def test_an_unread_memory_falls_back_to_the_agents_own_recall(memory: Path, monkeypatch, whole_error) -> None:
     def broken(_folder: Path) -> list:
-        raise PermissionError
+        refused = PermissionError(13, "Permission denied", "m")
+        refused.add_note(whole_error)
+        raise refused
 
     monkeypatch.setattr(selection, "stored", broken)
     text, log = told("reviewer", memory)
-    assert text.startswith(f"{lessons.HEADING}\n{lessons.UNREAD.format(why='PermissionError', role='reviewer')}")
+    why = f"PermissionError: [Errno 13] Permission denied: 'm'\n{whole_error}"  # #971: its type, message and notes
+    assert text.startswith(f"{lessons.HEADING}\n{lessons.UNREAD.format(why=why, role='reviewer')}")
     assert "call `recall_memory` with agent `reviewer` before you start" in text
-    assert log == [selected("reviewer", status="unread", failed="PermissionError")]
+    assert log == [selected("reviewer", status="unread", failed=why)]
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root reads files whatever their mode")
@@ -208,11 +271,14 @@ def test_entries_the_real_reader_skips_make_an_incomplete_read_that_falls_back_t
         text, log = told("builder", memory)
     finally:
         (common / f"{entry(2).id}.md").chmod(0o600)
-    assert (
-        text
-        == f"{lessons.HEADING}\n{lessons.UNREAD.format(why='2 unreadable entries', role='builder')}\n\n## Task\nDo it."
+    path = common / f"{entry(2).id}.md"
+    why = (
+        f"2 unreadable entries\n{memory / 'broken.md'}: ValueError: YAML frontmatter is missing\n"
+        f"{path}: ValueError: file read failed for {path}: "
+        f"PermissionError: [Errno 13] Permission denied: '{path}'"
     )
-    assert log == [selected(status="incomplete", failed="2 unreadable entries")]
+    assert text == f"{lessons.HEADING}\n{lessons.UNREAD.format(why=why, role='builder')}\n\n## Task\nDo it."
+    assert log == [selected(status="incomplete", failed=why)]
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root lists folders whatever their mode")
@@ -223,10 +289,12 @@ def test_a_memory_folder_the_real_reader_cannot_list_is_unread_and_an_absent_one
         text, log = told("builder", memory)
     finally:
         memory.chmod(0o700)
-    assert text.startswith(f"{lessons.HEADING}\n{lessons.UNREAD.format(why='PermissionError', role='builder')}")
-    assert log == [selected(status="unread", failed="PermissionError")]
+    why = f"PermissionError: [Errno 13] Permission denied: '{memory}'"  # #971: the OS error, whole
+    assert text.startswith(f"{lessons.HEADING}\n{lessons.UNREAD.format(why=why, role='builder')}")
+    assert log == [selected(status="unread", failed=why)]
     (memory.parent / "file").write_text("")
-    assert told("builder", memory.parent / "file")[1] == [selected(status="unread", failed="NotADirectoryError")]
+    why = f"NotADirectoryError: {memory.parent / 'file'}"
+    assert told("builder", memory.parent / "file")[1] == [selected(status="unread", failed=why)]
     text, log = told("builder", memory.parent / "absent")  # no folders yet: memory holds nothing, completely
     assert (text.split("\n\n")[0], log) == (f"{lessons.HEADING}\n{lessons.NONE}", [selected(status="none")])
 

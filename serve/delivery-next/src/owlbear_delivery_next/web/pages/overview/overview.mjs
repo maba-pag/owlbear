@@ -3,18 +3,19 @@
 // still show as each is read.
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
-import { call, here, machineState } from "/assets/ui.mjs";
+import { OWN_TAG, call, displayName, here, isOwn, machineState, ownFirst } from "/assets/ui.mjs";
 
-// *fixed* scopes ({ key, name, href, path }) come first, then every registered project, loaded or not, read at its own
-// API's *path*. *said* turns what was read into [tags, text]; *unread* says why an answer holds nothing, which then
-// fails the read as an error would; *show* renders the page again. While *live()* says the overview shows, *again()*
-// reads the page again when a project is added, removed, or loaded or stopped.
+// *fixed* scopes ({ key, name, href, path, own }) come first, then every registered project, loaded or not, OwlBear's
+// own first, read at its own API's *path*; a fixed scope marked *own* is OwlBear's, so its project gets no second row.
+// *said* turns what was read into [tags, text]; *unread* says why an answer holds nothing, which then fails the read as
+// an error would; *show* renders the page again. While *live()* says the overview shows, *again()* reads the page again
+// when a project is added, removed, or loaded or stopped.
 export function overview({ fixed = [], path, said, unread = () => "", show, live = () => true, again: reread,
   timeout = 15000 }) {
   const rows = new Map();
   let turn = 0, known = "";
   const projects = () => machineState()?.projects ?? [];
-  const states = () => JSON.stringify(projects().map((p) => [p.id, p.state, p.reason, p.name, p.path]));
+  const states = () => JSON.stringify(projects().map((p) => [p.id, p.state, p.reason, p.name, p.path, p.kind]));
 
   async function readOne(row, n) {
     try {
@@ -36,7 +37,8 @@ export function overview({ fixed = [], path, said, unread = () => "", show, live
   async function refresh() {
     const n = ++turn, all = projects();
     known = states();
-    const wanted = [...fixed, ...all.map((p) => project(p, all))];
+    const listed = ownFirst(all).filter((p) => !(isOwn(p) && fixed.some((f) => f.own)));
+    const wanted = [...fixed, ...listed.map((p) => project(p, all))];
     const before = new Map(rows);
     rows.clear();
     for (const w of wanted) rows.set(w.key, { ...before.get(w.key), ...w, state: w.down ? "down" : "reading" });
@@ -62,11 +64,11 @@ export function overview({ fixed = [], path, said, unread = () => "", show, live
 
 // A registered project as a scope: its own view, or why it cannot be read while it is not loaded.
 function project(p, all) {
-  const twin = all.some((o) => o !== p && o.name === p.name);
-  const said = `${p.name} is ${p.state}${p.reason ? `: ${p.reason}` : ""}`;
+  const name = displayName(p), twin = all.some((o) => o !== p && displayName(o) === name);
+  const said = `${name} is ${p.state}${p.reason ? `: ${p.reason}` : ""}`;
   const down = p.state === "loaded" ? "" : /[.!?]$/.test(said) ? said : `${said}.`;
-  return { key: p.id, of: p.id, name: `${p.name}${twin ? ` (${p.path})` : ""}`, href: here({ project: p.id }), down,
-    tag: p.state };
+  return { key: p.id, of: p.id, name: `${name}${twin ? ` (${p.path})` : ""}`, href: here({ project: p.id }), down,
+    tag: p.state, own: isOwn(p) };
 }
 
 function item(r, said, again) {
@@ -75,6 +77,7 @@ function item(r, said, again) {
     <a href=${r.href}>${r.name}</a></p-link-pure>`;
   return html`<li class="scope" data-key=${r.key} aria-busy=${r.state === "reading" ? "true" : "false"}>
     <div class="title"><p-heading size="md"><h3>${name}</h3></p-heading>
+      ${r.own ? html`<p-tag compact="true">${OWN_TAG}</p-tag>` : nothing}
       ${r.down ? html`<p-tag compact="true" variant="error">${r.tag}</p-tag>` : nothing}
       ${r.state === "failed" ? html`<p-tag compact="true" variant="error">cannot be read</p-tag>` : tags}</div>
     ${r.state === "reading" ? html`<p-text size="sm" color="contrast-medium">Reading…</p-text>` : nothing}

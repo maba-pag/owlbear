@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.impeccable_runs import pack_progress
 from owlbear_delivery_next.impeccable_runs.pack_state import running_for
@@ -74,7 +75,8 @@ def _places(own: tuple[str, Path] | None) -> tuple[list[tuple[str, str, Path, bo
         listed = registry.load().projects
         unread = ""
     except registry.RegistryError as exc:
-        listed, unread = [], f"the machine's registry cannot be read, so other projects' runs are not shown: {exc}"
+        listed = []
+        unread = f"the machine's registry cannot be read, so other projects' runs are not shown: {failure(exc)}"
     places: dict[str, list[Any]] = {}
     if own is not None:
         places[os.path.realpath(own[1])] = ["", own[0], own[1], True]
@@ -93,7 +95,7 @@ def _seen(pid: str, name: str, root: Path, reader: Callable[[Path], dict[str, An
         try:
             record = reader(root)
         except (OSError, ValueError) as exc:
-            error = f"its run record cannot be read ({exc})"
+            error = f"its run record cannot be read ({failure(exc)})"
             continue
         state = str(record.get("state") or "idle") if record else "idle"
         return {"pid": pid, "name": name, "state": state, "error": "", "record": record}

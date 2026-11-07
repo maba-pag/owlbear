@@ -1,10 +1,12 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
-import { here } from "/assets/ui.mjs";
-import { DIALOG, state, send, starts } from "./state.mjs";
-import { button, hd, text, list, panel, info, row } from "./widgets.mjs";
+import { here, machineState } from "/assets/ui.mjs";
+import { DIALOG, state, send, starts, draft } from "./state.mjs";
+import { button, field, hd, text, list, panel, info, refusal, row, toggle } from "./widgets.mjs";
 import { merging } from "./forms.mjs";
-import { marks, findingDetails, WORKERS } from "./progress.mjs";
 import { reviseBrief } from "./shaping.mjs";
+import { detailsOn } from "./details.mjs";
+import { versionList } from "./versions.mjs";
+import { currentPages } from "./visual.mjs";
 
 function screen(s) {
   const steps = s.steps.map((x) => (x.do === "type" ? `type "${x.text}" into ${x.target}` : `click ${x.target}`));
@@ -27,30 +29,39 @@ function part(title, ...children) {
   return html`<section>${hd(4, title, "sm")}${children}</section>`;
 }
 
-// A project-scope decision stays in force for later Changes once approved, so it says so (C-14, TD-426).
+const ORIGINS = { decided: "you decided", approved: "you took the shaper's recommendation" };
+
+// Who made the decision, then whether it stays in force for later Changes once approved (C-14, TD-426).
 function said(x) {
-  return [x.question, x.scope === "project" ? `${x.answer} (lasting: applies to later Changes too)` : x.answer];
+  const how = [ORIGINS[x.origin], x.scope === "project" && "lasting: applies to later Changes too"].filter(Boolean);
+  return [x.question, how.length ? `${x.answer} (${how.join("; ")})` : x.answer];
 }
 
-// The agreement the owner approves (TD-122, TD-179 rule 2): his decisions, what he specified among the technical
-// details, the shaper's choices that the approval accepts, and what is out.
+// The agreement the owner approves (TD-122, TD-179 rule 2): his decisions with their origins and what he specified
+// among the technical details, the shaper's own choices that the approval accepts, and what is out; each folded
+// under its count, the outcome above them.
 function agreement(d, approved = false) {
   const decisions = d.brief.decisions || [], out = d.brief.non_goals || [], parts = [];
-  const mine = decisions.filter((x) => x.origin === "decided").map(said);
+  const mine = decisions.filter((x) => x.origin in ORIGINS).map(said);
   const specified = [
     ...d.criteria.filter((k) => yours(d, k.id)).map((k) => ["Acceptance criterion", k.text]),
     ...d.brief.visual.filter((s) => yours(d, `screen:${s.name}`)).map((s) => ["Screen the visual check takes",
       screenSaid(s)]),
     ...d.checks.filter((c) => yours(d, `check:${c.id}`)).map((c) => ["Check you do yourself", checkSaid(c)]),
   ];
-  if (mine.length || specified.length) parts.push(part("Your decisions", saidList([...mine, ...specified])));
-  const proposed = decisions.filter((x) => x.origin !== "decided").map(said);
+  const fold = (name, n, ...inside) => html`<section>${toggle(`${d.key}:${name}`, `${name} (${n})`, inside)}
+    </section>`;
+  if (mine.length || specified.length) {
+    parts.push(fold("Your decisions", mine.length + specified.length, mine.length ? saidList(mine) : nothing,
+      specified.length ? [hd(5, "You specified", "xs"), saidList(specified)] : nothing));
+  }
+  const proposed = decisions.filter((x) => !(x.origin in ORIGINS)).map(said);
   if (proposed.length) {
     const accepts = approved ? "Your approval accepted these choices." : "Approving accepts these choices.";
-    parts.push(part("Choices proposed by the shaper", text(accepts), saidList(proposed)));
+    parts.push(fold("Shaper's choices", proposed.length, text(accepts), saidList(proposed)));
   }
   if (!decisions.length && !specified.length) parts.push(text("No separate decisions recorded."));
-  if (out.length) parts.push(part("Not in this Change", list(out)));
+  if (out.length) parts.push(fold("Out of scope", out.length, list(out)));
   return parts;
 }
 
@@ -58,15 +69,34 @@ function checkSaid(c) {
   return `${c.steps.join("; ")}${c.expect ? `. Expected: ${c.expect}` : ""}`;
 }
 
-// The decisions in force this version's work follows, as Delivery's picker chose them (TD-459): titles only.
-function picked(d) {
-  const p = d.brief.picked, title = "Decisions this work follows";
-  if (!p) return nothing;
+const SCOPES = [["global", "Global"], ["project", "This project"], ["change", "This Change"],
+  [null, "Not in the current decisions"]];
+
+// One picked decision, linked to its entry on its project's Decisions page; one no longer in force says what it is now.
+function pickedItem(project, x) {
+  if (!x.scope) return x.title;
+  const was = x.state === "in_force" ? "" : ` (${x.state})`;
+  return html`<a href=${here({ project, decision: x.id }, "/decisions")}>${x.title}</a>${was}`;
+}
+
+// The decisions in force this version's work follows, as Delivery's picker chose them (TD-459). Without the details
+// one line counts them; with them they fold under their count, grouped by where each applies, each linked.
+function picked(d, on) {
+  const p = d.brief.picked, title = "Decisions this work follows", n = p?.decisions.length;
+  if (!p || (!on && p.status !== "ok")) return nothing;
+  if (!on) return text(`This version follows ${n} decision${n === 1 ? "" : "s"}.`);
   if (p.status === "owed") return part(title, text("Delivery is picking them from the decisions in force."));
   if (p.status === "failed") {
-    return part(title, text(`The pick failed: ${p.reason}. The shaping chat can ask for it again.`));
+    return part(title, text(`The pick failed: ${p.reason}. Pick the decisions again under Open items.`));
   }
-  return part(title, p.decisions.length ? list(p.decisions) : text("None of the decisions in force governs it."));
+  if (!n) return part(title, text("None of the decisions in force governs it."));
+  const items = d.brief.picked_items, why = d.brief.picked_unavailable;
+  const groups = items ? SCOPES.map(([scope, name]) => {
+    const held = items.filter((x) => x.scope === scope);
+    if (!held.length) return nothing;
+    return [hd(5, `${name} (${held.length})`, "xs"), list(held.map((x) => pickedItem(d.project, x)))];
+  }) : [text(`They can't be grouped or linked: ${why}.`), list(p.decisions)];
+  return html`<section>${toggle(`${d.key}:picked`, `${title} (${n})`, groups)}</section>`;
 }
 
 // A screen as the owner reads it: what it must show, then where and after which clicks.
@@ -126,32 +156,98 @@ function readBacks(d) {
 }
 
 // A new shaping chat on the saved brief, offered only while the brief may take a revision.
-function reviseButton(d) {
+export function reviseButton(d) {
   if (d.brief.unrevisable !== "") return nothing;
   return button("Revise the brief in a new chat", () => reviseBrief(d),
     { variant: "secondary", icon: "edit", aria: DIALOG, busy: state.creating, ...starts(d) });
 }
 
-export function approval(d) {
+// Approving the current version, from its line in the version list; off, with the reason above, until it may be.
+function approveButton(d) {
   const version = d.brief.version, key = `${d.key}:approve:${version}`;
   const start = async () => {
-    if (await ask(approving(d))) {
+    if (await ask(d.brief.challenge_waits ? challengeFirst(d) : approving(d))) {
       send("/approve-brief", { version, unreviewed: Boolean(d.brief.unreviewed) }, d, key);
     }
   };
-  const why = d.brief.unapprovable;  // TD-249: off until its challenge loop ended on this version
+  return button(`Approve v${version}`, start,
+    { icon: "check", aria: DIALOG, disabled: Boolean(d.brief.approve_off), ...starts(d) });
+}
+
+// When Delivery starts a waiting version's challenge, in the owner's time; a pause of Delivery holds it until Resume.
+function startsWhen(d) {
+  const at = d.brief.starts_at  // HH:MM in the owner's time, as the status line says it
+    ? `at ${new Date(d.brief.starts_at).toLocaleTimeString("en-GB", { timeStyle: "short" })}`
+    : "after the wait set in Settings";
+  return machineState()?.paused ? `${at}, after you resume` : at;
+}
+
+// #986: a version saved after its loop ended waits for the challenge Delivery starts; Approve starts it now.
+function waitLine(d) {
+  const v = d.brief.version;
+  if (d.paused) return `Brief v${v}'s challenge starts by itself after you resume this Change; resume it to approve`;
+  return `Brief v${v}'s challenge starts by itself ${startsWhen(d)}; Approve starts it now and approves it if it is `
+    + "clean";
+}
+
+// Approve on such a version: its challenge first, then the approval today's dialog describes, if nothing was found.
+function challengeFirst(d) {
+  const v = d.brief.version, base = approving(d);
+  return { ...base, title: `Approve brief v${v} once its challenge is clean?`, yes: "Challenge and approve",
+    now: `A challenger reads brief v${v} at once, even while paused, using AI credits. Nothing is approved yet.`,
+    then: `If it finds nothing: ${base.now} That happens without another step from you, even while paused. `
+      + `${base.then} If it finds something, the shaper revises the brief in the shaping chat and v${v} stays `
+      + "unapproved.",
+    instead: `The challenge starts by itself ${startsWhen(d)}; you approve after it.` };
+}
+
+// One more challenge of the current version, whose revision after its last challenge no challenger read (#966).
+function challengeButton(d) {
+  const version = d.brief.version, key = `${d.key}:approve:${version}`;
+  const start = async () => {
+    if (await ask({
+      title: `Challenge brief v${version} once more?`, yes: "Challenge it", no: "Keep it waiting",
+      now: `A challenger reads brief v${version}, including the revision no challenger reviewed. It starts at once, `
+        + "even while paused, and uses AI credits.",
+      then: `If it finds nothing, you approve v${version} without ticking that revision. If it finds something, the `
+        + "shaper revises the brief for it in the shaping chat.",
+      after: `The challenge only reads brief v${version}, which stays as it is. Once it runs, a pause doesn't stop it `
+        + "and the credits it uses stay spent.",
+      instead: `Brief v${version} waits; you can approve it as it is, ticking that no challenger reviewed its `
+        + "revision.",
+    })) {
+      send("/challenge-brief", { version }, d, key);
+    }
+  };
+  return button(`Challenge v${version}`, start, { variant: "secondary", aria: DIALOG, ...starts(d) });
+}
+
+function chatReceipt(d) {
+  const c = d.brief.chat;
+  return c ? html`<div class="shaping-chat-state">${text(c.text, { weight: "semibold" })}
+    ${c.detail ? text(c.detail) : nothing}</div>` : nothing;
+}
+
+export function approval(d) {
+  const version = d.brief.version, key = `${d.key}:approve:${version}`, on = detailsOn();
+  // TD-249: off until its loop ended on this version; the wait line says the rest while its challenge waits
+  const why = d.brief.challenge_waits && !d.brief.capture?.running ? "" : d.brief.approve_off;
+  const act = (v) => [v.actions.includes("approve") ? approveButton(d) : nothing,
+    v.actions.includes("challenge") ? challengeButton(d) : nothing];
   return panel(`Brief v${version}${d.brief.title ? `: ${d.brief.title}` : ""}`, key,
     html`<div class="brief">${d.brief.outcome ? text(d.brief.outcome, { size: "md" }) : nothing}${agreement(d)}
-      ${picked(d)}${technical(d)}${readBacks(d)}</div>`,
-    d.rounds?.brief?.length ? html`${marks("Brief challenge", d.rounds.brief)}${findingDetails(
-      "Finding details of the brief challenge", [["Brief challenge", d.rounds.brief, WORKERS.brief]])}` : nothing,
+      ${picked(d, on)}${technical(d)}${currentPages(d.key, d.brief.capture, d.brief.visual)}${on ? readBacks(d)
+        : nothing}</div>`,
     text("Nothing is built until you approve. You approve the whole brief, including the collapsed technical "
       + "details; your own choices stay yours to change. Approval authorises work within this brief, not new "
       + `product commitments. To change the brief before approving, ${d.brief.unrevisable === ""
         ? "revise it in a new chat or in the shaping chat" : "return to the shaping chat"}.`),
+    d.brief.challenge_waits ? text(`${waitLine(d)}.`, { weight: "semibold" }) : nothing,
     why ? text(`Not yet: ${why}.`, { weight: "semibold" }) : nothing,
-    row(button(`Approve brief v${version}`, start,
-      { icon: "check", aria: DIALOG, disabled: Boolean(why), ...starts(d) }), reviseButton(d)));
+    d.brief.approve_refused ? refusal(d.brief.approve_refused) : nothing,
+    chatReceipt(d),
+    versionList(d.brief.versions, "Versions", act),
+    d.brief.revising.length ? nothing : row(reviseButton(d)));  // while the shaper revises, Open items offers it
 }
 
 // What approving starts (TD-151): the brief, details included, becomes the baseline; then the challenge, planning,
@@ -187,23 +283,82 @@ export function briefInfo(d) {
   const at = d.brief.approved_at ? new Date(d.brief.approved_at).toLocaleString() : "";
   const v = d.brief.approved || d.brief.version;
   const added = (d.owner_criteria || []).map((k) => [`You added in visual round ${k.round}`, k.text]);
+  const on = detailsOn();
   return info(`Brief v${v}${at ? `, approved ${at}` : ""}`, html`<div class="brief">
-    ${d.brief.outcome ? text(d.brief.outcome) : nothing}${agreement(d, true)}${picked(d)}${technical(d)}
-    ${part("Changes since you approved", added.length ? saidList(added)
-      : text("None. A change to an approved brief comes back to you as a new version to approve."))}
-    ${(d.amendments || []).length ? proposedWording(d.amendments) : nothing}</div>
+    ${d.brief.outcome ? text(d.brief.outcome) : nothing}${chatReceipt(d)}
+    ${agreement(d, true)}${picked(d, on)}${technical(d)}
+    ${on ? part("Changes since you approved", added.length ? saidList(added)
+      : text("None besides the amendments below.")) : nothing}
+    ${on ? amendmentsPart(d) : nothing}${versionList(d.brief.versions, "Versions")}</div>
     ${d.brief.unrevisable === "" ? row(reviseButton(d)) : nothing}`);
 }
 
-// TD-179: new wording a worker proposed for a generated criterion, with the challenger's verdict. Nothing is
-// applied: adopting one means revising the brief in chat, which comes back as a version to approve.
-function proposedWording(amendments) {
-  const judged = { equivalent: "keeps the approved intent", weaker: "weaker", unsure: "unsure" };
-  const rows = amendments.flatMap((a) => a.items.flatMap((i) => [
-    [`${i.criterion} as you approved it`, i.old],
-    [`Proposed by the ${a.step} step`, `${i.new} (${i.why})`],
-    ["Challenger", [judged[a.verdict] || "not judged yet", a.judged].filter(Boolean).join(": ")],
-  ]));
-  return part("Proposed wording (not applied)", saidList(rows),
-    text("To adopt one, revise the brief in chat; the new version comes back to you to approve."));
+// TD-185: the reference and current versions, and every amendment: old -> new, reason, level, challenger and verdict,
+// how it ended; an applied one takes his objection while he may object, else says why not.
+const SOURCES = { worker: "a worker", answer: "your answer", allow: "your Allow it", revert: "your revert" };
+const LEVELS = { autonomous: "applied by Delivery alone", approved: "approved by you", decided: "decided by you" };
+const STATES = {
+  recorded: "recorded before amendments existed; never applied", proposed: "in progress", applied: "applied",
+  declined: "declined", refused: "refused: an outcome or non-goal change needs reshaping",
+  moved: "moved: this Change merged first",
+};
+
+const OBJECTIONS = { revert: "reverted", keep: "kept", reshape: "reshaped" };
+
+function amendmentsPart(d) {
+  const m = d.amendments;
+  if (!m) return nothing;
+  const earlier = m.versions.filter((v) => v !== m.version).map((v) => `v${v}`);
+  return part("Amendments", text(`Current version v${m.version}; reference version v${m.reference}, from which `
+    + `the challenger judges how far the amendments since have weakened it${earlier.length
+      ? `. Earlier versions, kept unchanged: ${earlier.join(", ")}` : ""}.`),
+  m.list.length ? m.list.map((a) => amendment(a, d)) : text("None."));
+}
+
+function actionText(x) {
+  return x.do === "type" ? `type "${x.text}" into "${x.target}"` : `click "${x.target}"`;
+}
+
+function itemRow(i) {
+  const name = `${i.field}${i.key ? ` ${i.key}` : ""}`;
+  if (i.remove) return [name, `removed: ${i.old}`];
+  const look = i.visual == null ? "" : i.visual ? "judged by look" : "not judged by look";
+  const shape = [i.path && `path ${i.path}`, i.actions && `actions: ${i.actions.map(actionText).join("; ") || "none"}`,
+    i.steps?.length && `steps: ${i.steps.join("; ")}`, i.covers?.length && `covers ${i.covers.join(", ")}`, look,
+    i.question && `question: ${i.question}`]
+    .filter(Boolean).map((p) => ` (${p})`).join("");
+  return [name, i.old ? `${i.old} → ${i.new}${shape}` : `added: ${i.new}${shape}`];
+}
+
+function amendment(a, d) {
+  const verdict = a.verdict || (a.state === "recorded" ? "not judged" : "unsure");
+  const judged = `${verdict}${a.unreviewed && a.verdict ? " (on an earlier wording)" : ""}`;
+  const rows = [...a.items.map(itemRow), ["Reason", `${a.reason || "none given"} (from ${SOURCES[a.source]})`],
+    ["Challenger", `${a.challenger ? `session ${a.challenger}: ` : ""}${judged}${a.judged ? `: ${a.judged}` : ""}`],
+    ["State", `${STATES[a.state]}${a.version ? `, made v${a.version}` : ""}${a.level ? `, ${LEVELS[a.level]}` : ""}`]];
+  if (a.unreviewed) rows.push(["Note", "its final wording was revised after the last challenge round"]);
+  if (a.declined) rows.push(["Your reason", a.declined]);
+  if (a.refused) rows.push(["Why refused", a.refused]);
+  if (a.moved_to) rows.push(["Moved to", `Change ${a.moved_to}`]);
+  if (a.objection) rows.push(["Your objection", OBJECTIONS[a.objection]]);
+  return html`<div class="amendment">${hd(5, `${a.id}, proposed at the ${a.step} step`, "xs")}${saidList(rows)}
+    ${a.state === "applied" ? objecting(a, d) : nothing}</div>`;
+}
+
+function objecting(a, d) {
+  const key = `${d.key}:object:${a.id}`, why = a.object;
+  if (why) return text(`Object: not now, ${why}.`, { size: "xs" });
+  const go = async () => {
+    if (!(await ask({
+      title: `Object to amendment ${a.id}?`, yes: "Object", no: "Keep it as it is",
+      now: "Work that depends on it pauses once the running step ends.",
+      then: "Delivery shows you what was built and judged on it, and asks you to revert it as a new brief version, "
+        + "keep it, or reshape the brief.",
+      after: "Earlier brief versions stay unchanged; merged or published work can't be undone.",
+      instead: "The amendment stays applied and the work goes on.",
+    }))) return;
+    send(`/amendments/${encodeURIComponent(a.id)}/objection`, { text: draft(key, () => ({})).text ?? "" }, d, key);
+  };
+  return html`${field(key, "text", "Why you object (optional)", "1")}
+    ${row(button("Object", go, { variant: "secondary", aria: DIALOG, ...starts(d) }))}`;
 }

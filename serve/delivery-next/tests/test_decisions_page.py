@@ -60,8 +60,8 @@ def store(tmp_path, shared_repo) -> Store:
 
 
 @contextlib.contextmanager
-def decisions_page(store: Store, pds: Any) -> Iterator[Any]:
-    """The Decisions page in a real browser: only the test host and the PDS CDN answer."""
+def decisions_page(store: Store, pds: Any, query: str = "") -> Iterator[Any]:
+    """The Decisions page, with *query*, in a real browser: only the test host and the PDS CDN answer."""
     import uvicorn  # noqa: PLC0415
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
@@ -80,7 +80,7 @@ def decisions_page(store: Store, pds: Any) -> Iterator[Any]:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page()
             pds.only(page, base)
-            page.goto(f"{base}/decisions#token=tok")
+            page.goto(f"{base}/decisions{query}#token=tok")
             yield page
             browser.close()
     finally:
@@ -118,6 +118,37 @@ def held_once(page: Any, held: list[Any]) -> Any:
             return held.pop(0)
         page.wait_for_timeout(50)
     pytest.fail("the page sent no request to hold")
+
+
+@pytest.mark.browser
+def test_a_missing_linked_decision_is_said(store, pds):
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with decisions_page(store, pds, f"?decision={new_id()}") as page:
+        missing = re.compile("no such decision in this project's view", re.IGNORECASE)
+        expect(page.locator("#error")).to_contain_text(missing)
+        expect(page.locator(".entry")).to_have_count(2)  # the list still shows, nothing opened
+        expect(page.locator("#linked, #detail")).to_have_count(0)
+
+
+@pytest.mark.browser
+def test_a_linked_decision_opens_once_the_list_can_be_read(store, pds):
+    """#996 review: a first list read that fails keeps the linked decision waiting; the next read opens it."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    rule = in_force(store)["Notes live in one SQLite table."]
+    with decisions_page(store, pds) as page:
+        base = page.url.split("/decisions")[0]
+        listing = re.compile(r".*/api/next/decisions\?.*")
+        page.route(listing, lambda route: route.fulfill(status=503, body="down"))
+        page.goto(f"{base}/decisions?decision={rule.id}")
+        expect(page.locator("#error")).to_be_visible()
+        expect(page.locator("#detail")).to_have_count(0)
+        page.unroute(listing)
+        page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+        expect(page.locator(f'.entry[data-id="{rule.id}"] #detail')).to_be_visible()
+        # no input reached the page, so the window may lack focus: the heading must be the active element
+        page.wait_for_function(f"document.activeElement?.matches('.entry[data-id=\"{rule.id}\"] .heading')")
 
 
 @pytest.mark.browser
@@ -553,6 +584,44 @@ def test_a_refused_save_shows_its_whole_notice(store, pds, whole_error, failing_
     assert [s for s in said if "/api/next/projects" not in s] == []  # a project host lists no projects (404)
 
 
+@pytest.mark.browser
+def test_an_error_or_a_failed_save_shows_its_ids_and_paths_as_produced(store, pds, monkeypatch, whole_error):
+    """An error and a not-saved receipt's notice say what failed exactly as produced, a decision's file and its bare
+    id included, though the page knows its title; the receipt still names the decision by title."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.state_store import decision_batch, decision_sync  # noqa: PLC0415
+
+    rule = make(title="Exports are CSV", statement="Exports are CSV.", read_back="pending",
+                read_back_why="Asked again.", read_back_kind="uncertain")  # fmt: skip
+    write(rule, store.shared.root / PROJECT)
+    file = store.shared.root / PROJECT / f"{rule.id}.md"
+    behind = f"HEAD is not on the remote: {file} differs, so {rule.id} waits: {whole_error}"
+    monkeypatch.setattr(decision_sync, "prepare", lambda *_args, **_kwargs: ("", behind))
+    why = f"the journal names {file}, and {rule.id} is in it: {whole_error}"
+
+    def unreadable(_shared):
+        raise decision_batch.JournalError(why)
+
+    with decisions_page(store, pds) as page:
+        said: list[str] = []
+        page.on("console", lambda m: said.append(f"{m.text} {m.location['url']}") if m.type == "error" else None)
+        page.on("pageerror", lambda e: said.append(str(e)))
+        page.reload()
+        queued = page.locator("#queue .queued", has_text="Exports are CSV")
+        still_right = queued.get_by_role("button", name="Still right")
+        still_right.click()
+        expect(page.locator("#receipts li")).to_have_count(1)
+        receipt = page.locator("#receipts li").text_content()
+        monkeypatch.setattr(decision_batch, "pending", unreadable)
+        still_right.click()
+        expect(page.locator("#error")).to_be_visible()
+        error = page.locator("#error").text_content()
+    assert receipt == f"\u201cExports are CSV\u201d: not saved. {behind}"
+    assert error == f"JournalError: {why} ({decision_store.RECOVER})\n    "  # the template's indent before its end tag
+    assert [s for s in said if "/api/next/projects" not in s and "409" not in s] == []  # a refusal's status, no more
+
+
 def owner(store: Store) -> Any:
     from fastapi.testclient import TestClient  # noqa: PLC0415
 
@@ -582,8 +651,9 @@ def test_a_refused_save_answers_its_whole_notice(store, monkeypatch, whole_error
     from owlbear_delivery_next.state_store import decision_batch  # noqa: PLC0415
 
     new = replaced(store)
+    probe = ("rev-parse", "--git-path", publication_hold.RECORD)
     if failure == "held":  # the held publication's probe fails before the push and again before the rebase
-        failing_git(whole_error, lambda args, _: args == ("rev-parse", "--git-path", publication_hold.RECORD))
+        failing_git(whole_error, lambda args, _: args == probe)
     else:
 
         def unreadable(_shared):
@@ -602,12 +672,13 @@ def test_a_refused_save_answers_its_whole_notice(store, monkeypatch, whole_error
         root = store.shared.root
         notice = (
             f"saved and committed in {root}, but it could not be rebased on the remote: nothing was pushed or "
-            f"rebased in {root}: a held automatic change cannot be checked: {whole_error}; push it by hand"
+            f"rebased in {root}: a held automatic change cannot be checked: CalledProcessError: Command "
+            f"'{['git', *probe]}' returned non-zero exit status 128.\n{whole_error}; push it by hand"
         )
         [receipt] = got.json()["receipts"]
         assert (got.status_code, receipt["saved"], receipt["notice"]) == (200, True, notice)
         assert logged(caplog) == [f"decision {receipt['id']} saved: {notice}"]
     else:
-        detail = f"{whole_error} ({decision_store.RECOVER})"
+        detail = f"JournalError: {whole_error} ({decision_store.RECOVER})"
         assert (got.status_code, got.json()["detail"]) == (409, detail)
         assert logged(caplog) == [f"decisions unavailable: {detail}"]

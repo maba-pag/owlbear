@@ -13,16 +13,21 @@ pushed or rebased, the refusal is kept in the record and reported, and nothing i
 once the checkout itself holds no change of the file the remote lacks: no unpushed commit touches it and its copies are
 the committed one. A record that cannot be read, is malformed or is not a regular file is kept as it is and holds:
 a dangling link is a damaged record, never an absent one.
+
+A project completion also requires its watched decision to remain active in the pinned remote rule graph.
+Its pending journal keeps that condition alive before the first file write; journal recovery never drops it.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.local_system import curation_apply
+from owlbear_delivery_next.git.command_failure import failed, failure
+from owlbear_delivery_next.local_system import batch_journal, curation_apply, decision_authority
 from owlbear_delivery_next.local_system.storage_io import atomic_write, read_regular
 
 if TYPE_CHECKING:
@@ -34,10 +39,10 @@ if TYPE_CHECKING:
 RECORD = "owlbear-held-publication.json"
 ABSENT = "absent"
 UPSTREAM = "@{upstream}"
-_KEYS = ("watch", "base", "since", "file", "fields", "what")
-_RECORD_KEYS = frozenset((*_KEYS, "refused"))
+_RECORD_KEYS = frozenset(("watch", "base", "since", "file", "fields", "what", "refused"))
 _EXPLICIT = 2  # an explicit push: one remote and one source:destination
 _BLOB = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+_log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -45,12 +50,14 @@ class Requires:
     """What the shared remote must still hold, described for the owner as *what*.
 
     The changed file's own remote blob is always bound. *path* and *fields*, both or neither, add the fields the
-    remote's copy of another file must keep, such as a claim.
+    remote's copy of another file must keep, such as a claim. *decision_active* binds a watched project instruction's
+    active authority, including competitors whose arrival need not change its own revision.
     """
 
     what: str
     path: Path | None = None
     fields: Mapping[str, str | None] | None = None
+    decision_active: bool = False
 
     def __post_init__(self) -> None:
         """A file and its fields are named together, and the fields are never empty."""
@@ -60,13 +67,16 @@ class Requires:
 
 
 class _UnknownError(Exception):
-    """Git could not say what the checkout or the remote holds: nothing is pushed or rebased."""
+    """Git could not say what the checkout or the remote holds: nothing is pushed or rebased.
+
+    Its text is whole where it is raised, so it is said as it stands.
+    """
 
 
 def _run(repo: DataRepo, until: float | None, *args: str) -> str:
     said = repo.git(*args, until=until)
     if said.returncode:
-        raise _UnknownError(said.stderr.strip() or f"git {args[0]} failed")
+        raise _UnknownError(failed(said))
     return said.stdout
 
 
@@ -96,7 +106,7 @@ def _safe(rel: object) -> bool:
 
 def _malformed(data: object) -> str:
     """What makes *data* no record this module writes; nothing when it is one."""
-    if not isinstance(data, dict) or set(data) != _RECORD_KEYS:
+    if not isinstance(data, dict) or set(data) not in (_RECORD_KEYS, _RECORD_KEYS | {"decision_active"}):
         return f"its keys are not exactly {', '.join(sorted(_RECORD_KEYS))}"
     bound = not (data["file"] is None and data["fields"] is None)  # a file and its fields, or neither
     if not _safe(data["watch"]) or (bound and not _safe(data["file"])):
@@ -114,7 +124,12 @@ def _malformed(data: object) -> str:
     ):
         return "its fields are not a non-empty map of text"
     texts = isinstance(data["what"], str) and data["what"] and isinstance(data["refused"], str)
-    return "" if texts else "its description or refusal is not text"
+    text_error = "" if texts else "its description or refusal is not text"
+    return (
+        "its decision-active condition is not a boolean"
+        if ("decision_active" in data and type(data["decision_active"]) is not bool)
+        else text_error
+    )
 
 
 def _load(path: Path) -> dict[str, object] | None:
@@ -128,7 +143,7 @@ def _load(path: Path) -> dict[str, object] | None:
             return None
         data = json.loads(raw)
     except (OSError, ValueError) as exc:
-        msg = f"the held publication record {path} cannot be read ({exc}); check it before removing it"
+        msg = f"the held publication record {path} cannot be read ({failure(exc)}); check it before removing it"
         raise _UnknownError(msg) from exc
     if why := _malformed(data):
         msg = f"the held publication record {path} is malformed: {why}; check it before removing it"
@@ -186,13 +201,15 @@ def hold(repo: DataRepo, watch: Path, requires: Requires, until: float | None) -
             "fields": None if requires.fields is None else dict(requires.fields),
             "what": requires.what,
         }
+        if requires.decision_active:
+            want["decision_active"] = True
         held = _load(path)
     except _UnknownError as exc:
         msg = f"the automatic change was not written: {exc}"
         raise DataRepoError(msg) from exc
     if held is None:
         atomic_write(path, json.dumps({**want, "refused": ""}))
-    elif {key: held[key] for key in _KEYS} != want:
+    elif {key: held.get(key) for key in want} != want or held.get("decision_active", False) != requires.decision_active:
         why = held["refused"] or "it is not pushed yet"
         msg = f"an earlier automatic change of {held['watch']} in {repo.root} is still held: {why}"
         raise DataRepoError(msg)
@@ -207,11 +224,19 @@ def _lapsed(repo: DataRepo, held: Mapping[str, object], until: float | None) -> 
     change could still be pushed after the remote changed the file again.
     """
     watch = str(held["watch"])
+    if held.get("decision_active", False):
+        try:
+            batch = batch_journal.pending(repo, until)
+        except batch_journal.JournalError as exc:
+            msg = f"the completion's pending journal cannot be checked: {failure(exc)}"
+            raise _UnknownError(msg) from exc
+        if batch is not None and any(rel == watch and before != after for rel, before, after in batch.files):
+            return False
     if _changes(repo, watch, until):
         return False
     staged = repo.git("diff", "--cached", "--quiet", "HEAD", "--", watch, until=until)
     if staged.returncode not in (0, 1):
-        raise _UnknownError(staged.stderr.strip() or "git could not compare the index")
+        raise _UnknownError(failed(staged))
     return staged.returncode == 0 and _blob(repo, watch, until) == _blob_at(repo, "HEAD", watch, until)
 
 
@@ -225,7 +250,7 @@ def _unmet(repo: DataRepo, held: Mapping[str, object], until: float | None) -> s
     watch, rel, since = str(held["watch"]), held["file"], str(held["since"])
     kept = repo.git("merge-base", "--is-ancestor", since, UPSTREAM, until=until)
     if kept.returncode not in (0, 1):
-        raise _UnknownError(kept.stderr.strip() or "git could not compare the remote's history")
+        raise _UnknownError(failed(kept))
     if kept.returncode:
         return f"the shared remote's history no longer holds {since[:12]}, where the change was prepared"
     # every commit since, merges included: a file that changed and changed back still changed (no bytes-only proof)
@@ -233,6 +258,14 @@ def _unmet(repo: DataRepo, held: Mapping[str, object], until: float | None) -> s
         return f"{watch} changed on the shared remote after the change was prepared"
     if _blob_at(repo, UPSTREAM, watch, until) != held["base"]:
         return f"{watch} changed on the shared remote after the change was prepared"
+    if held.get("decision_active", False):
+        try:
+            inactive = decision_authority.inactive(repo, UPSTREAM, watch, until)
+        except (OSError, ValueError) as exc:
+            msg = f"the held decision's active authority cannot be checked: {failure(exc)}"
+            raise _UnknownError(msg) from exc
+        if inactive:
+            return inactive
     return _kept(repo, rel, held["fields"], str(held["what"]), until) if isinstance(rel, str) else ""
 
 
@@ -340,7 +373,8 @@ def _checked(repo: DataRepo, until: float | None, *, fetch: bool, push: tuple[st
         ahead = _changes(repo, str(held["watch"]), until)
         elsewhere, run = _target(repo, push, until, held=True) if push and not why else ("", push)
     except _UnknownError as exc:
-        return f"nothing was pushed or rebased in {repo.root}: a held automatic change cannot be checked: {exc}", ()
+        why = f"a held automatic change cannot be checked: {exc}"
+        return f"nothing was pushed or rebased in {repo.root}: {why}", ()
     if why != held["refused"]:
         atomic_write(path, json.dumps({**held, "refused": why}))
     if elsewhere:
@@ -355,13 +389,14 @@ def _checked(repo: DataRepo, until: float | None, *, fetch: bool, push: tuple[st
 
 
 def settled(repo: DataRepo, until: float | None) -> None:
-    """Remove the record once a push gave the remote the held change, or left the checkout without one; never checks."""
+    """Retire a lapsed hold after successful work; a failed cleanup is logged and leaves the next push's check."""
     try:
         path = _path(repo, until)
         held = _load(path)
         if held is not None and _lapsed(repo, held, until):
             path.unlink(missing_ok=True)
-    except _UnknownError:
+    except _UnknownError as exc:
+        _log.warning("could not settle held publication in %s: %s", repo.root, failure(exc))
         return  # the record stays, and the next push or rebase checks it again
 
 

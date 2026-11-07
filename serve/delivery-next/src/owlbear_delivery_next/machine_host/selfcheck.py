@@ -2,20 +2,22 @@
 
 Run by an update with the new version's own interpreter, before anything switches: its modules import, its pages and
 their assets are there, and every registered project's store and settings are in a format it reads. It only reads:
-no store is opened for writing and nothing migrates. Exit 0 when it passes, else 1 with one line per failure.
+no store is opened for writing and nothing migrates. Exit 0 when it passes, else 1 with each failure whole, each
+starting on a line of its own.
 """
 
 from __future__ import annotations
 
-import contextlib
 import json
 import re
+import subprocess
 import sys
 from importlib import import_module
 from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.storage_io import read_regular
 
 if TYPE_CHECKING:
@@ -35,7 +37,7 @@ def problems() -> list[str]:
         try:
             import_module(f"owlbear_delivery_next.{name}")
         except Exception as exc:  # noqa: BLE001 - every import failure is reported, none ends the check
-            found.append(f"{name} does not import: {type(exc).__name__}: {exc}")
+            found.append(f"{name} does not import: {failure(exc)}")
     found += _pages()
     try:
         projects = _registered()
@@ -67,7 +69,7 @@ def _registered() -> list[tuple[str, Path]]:
     try:
         machine = registry.Machine.model_validate_json(path.read_text())
     except (OSError, ValueError) as exc:
-        msg = f"{path} is unreadable: {exc}"
+        msg = f"{path} is unreadable: {failure(exc)}"
         raise ValueError(msg) from exc
     if machine.format > registry.MACHINE_FORMAT:
         msg = f"{path} has format {machine.format}, newer than this version's {registry.MACHINE_FORMAT}"
@@ -97,7 +99,7 @@ def _pages() -> list[str]:
         return [f"the pages cannot be read: {type(exc).__name__}: {exc}"]
     if not listed:
         return ["no page is there"]
-    return [f"the pages' assets are missing: {', '.join(missing[:5])}"] if missing else []
+    return [f"the pages' assets are missing: {', '.join(missing)}"] if missing else []
 
 
 def _project(pid: str, path: Path) -> list[str]:
@@ -105,9 +107,12 @@ def _project(pid: str, path: Path) -> list[str]:
     from owlbear_delivery_next.state_store import project_home  # noqa: PLC0415
 
     clone = None
+    problems = []
     if path.is_dir():
-        with contextlib.suppress(Exception):  # a clone that is gone fails to load as before; not this check's
+        try:
             clone = project_home.clone_dir(path)
+        except (OSError, subprocess.SubprocessError) as exc:
+            problems.append(f"its clone could not be inspected: {failure(exc)}")
     found: list[str] | None = None
 
     def inspect(retained: Path) -> None:
@@ -117,7 +122,7 @@ def _project(pid: str, path: Path) -> list[str]:
     retained, problem = _receipt(pid, clone, inspect=inspect) if clone is not None else (None, None)
     if found is None:
         found = _project_formats(pid, path, clone, retained, problem)
-    return ([problem] if problem is not None else []) + found
+    return problems + ([problem] if problem is not None else []) + found
 
 
 def _project_formats(pid: str, path: Path, clone: Path | None, retained: Path | None, problem: str | None) -> list[str]:
@@ -131,8 +136,8 @@ def _project_formats(pid: str, path: Path, clone: Path | None, retained: Path | 
         try:
             raw = read_regular(marker)
             value = int(raw.decode("utf-8")) if raw is not None else 0
-        except OSError, ValueError:
-            found.append(f"{marker} is unreadable")
+        except (OSError, ValueError) as exc:
+            found.append(f"{marker} is unreadable: {failure(exc)}")
             continue
         if clone is not None and marker == clone / MARKER and retained is not None:
             if value != int(FENCE):
@@ -149,8 +154,9 @@ def _project_formats(pid: str, path: Path, clone: Path | None, retained: Path | 
             found.append(f"its store has format {value}, newer than this version's {STORE_FORMAT}")
     # a validated switch leaves the source's config as a retained copy: the target's config is the one that counts
     own = [clone / "config.json"] if clone and retained is None else []
-    layers = [project_home.home(pid) / "config.json", *own, *_shared(path)]
-    return found + _formats("its settings", layers)
+    shared, problems = _shared(path)
+    layers = [project_home.home(pid) / "config.json", *own, *shared]
+    return found + problems + _formats("its settings", layers)
 
 
 def _receipt(pid: str, clone: Path, *, inspect: Callable[[Path], None] | None = None) -> tuple[Path | None, str | None]:
@@ -161,18 +167,20 @@ def _receipt(pid: str, clone: Path, *, inspect: Callable[[Path], None] | None = 
     try:
         return switched_authority.retained_target(clone, pid, inspect=inspect), None
     except StoreError as exc:
-        return None, str(exc)
+        return None, failure(exc)
 
 
-def _shared(path: Path) -> list[Path]:
+def _shared(path: Path) -> tuple[list[Path], list[str]]:
     """The shared repository's global layer and the project's layer there, found without moving anything."""
     from owlbear_delivery_next.local_system import data_place, data_repo  # noqa: PLC0415
 
-    with contextlib.suppress(Exception):  # no shared repository, or one that cannot be read: the host says so
+    try:
         if (root := data_place.configured_root()) is not None:
             shared = data_repo.DataRepo(root)
-            return [shared.global_path, shared.project_path(data_repo.folder(shared, path))]
-    return []
+            return [shared.global_path, shared.project_path(data_repo.folder(shared, path))], []
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        return [], [f"its shared settings could not be inspected: {failure(exc)}"]
+    return [], []
 
 
 def _formats(what: str, layers: list[Path]) -> list[str]:
@@ -182,8 +190,8 @@ def _formats(what: str, layers: list[Path]) -> list[str]:
     for layer in layers:
         try:
             value = int(json.loads(layer.read_text()).get("format", 0)) if layer.is_file() else 0
-        except OSError, ValueError, AttributeError:
-            found.append(f"{layer} is unreadable")
+        except (OSError, ValueError, AttributeError) as exc:
+            found.append(f"{layer} is unreadable: {failure(exc)}")
             continue
         if value > CONFIG_FORMAT:
             found.append(f"{what} in {layer} have format {value}, newer than this version's {CONFIG_FORMAT}")

@@ -12,8 +12,7 @@ from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Input
 from owlbear_delivery_next.change_contracts.round_records import FINAL, RECHECK
 from owlbear_delivery_next.change_flow import disputes, loop, worktree
 from owlbear_delivery_next.change_flow.moves import loop_of, subject_of
-from owlbear_delivery_next.runtimes import amendments
-from owlbear_delivery_next.settings import roles, rounds
+from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.workflow_steps import reconsider, retry
 
 if TYPE_CHECKING:
@@ -33,10 +32,8 @@ def started(c: Change, task: Task | None, path: Path, settings: Settings) -> Non
 
     A task built before its loop existed (a Change from before TD-208) stays on the earlier rules to its end. A span a
     session left open stays open: its end is unknown, so no undo takes that task's work. It raises ``SettingsUnset``
-    before it changes anything, also for a proposal's challenge after the session (TD-179), so nothing is lost.
+    before it changes anything, so nothing is lost.
     """
-    if amendments.amendable(c):
-        settings.agent(roles.SESSIONS[amendments.LABEL])
     if c.step.kind == StepKind.REVIEW and task is None:
         _final(c, settings)
     if c.step.kind != StepKind.BUILD or task is None:
@@ -121,7 +118,8 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
     found = lines(p)
     if (lp := looped(change, task)) is not None and result.cause is None:
         found = _counted(change, lp, p, task, run.head)
-    review = Review(task=change.step.task, commit=run.head, inputs=inputs, verdict=p.verdict, tree=tree, findings=found)
+    review = Review(task=change.step.task, commit=run.head, inputs=inputs, verdict=p.verdict, tree=tree, findings=found,
+                    brief=change.brief.version)  # fmt: skip  # TD-185: the brief version it judged
     if p.verdict == "pass":
         return result.model_copy(update={"review": review})
     fixes = repair(change, task, found)

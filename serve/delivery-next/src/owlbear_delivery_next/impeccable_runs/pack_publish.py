@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.provider import (
     BranchState,
     Check,
@@ -116,7 +117,14 @@ def _done(job: Job, gh: Provider, pub: Publication, merged: str, head: str) -> s
     try:
         retired = gh.delete_branch(pub.repository, pub.branch, head)
     except ProviderError as exc:
-        job.log(f"could not confirm retirement of {pub.branch} at {head[:12]}: {exc}; inspect the remote branch")
+        detail = (
+            f"could not confirm retirement of {pub.branch} at {head[:12]}: {failure(exc)}; inspect the remote branch"
+        )
+        if job.state.get("invocations") is None:
+            job.stage("merge", "passed", f"merged as {merged[:12]}\n{detail}")
+        else:
+            job.note("merge", "retirement", "completed", detail, head, at="publish")
+            job.log(detail)
     else:
         if retired.state is BranchState.MOVED:
             job.log(f"kept {pub.branch}: it now points to {retired.head}, not its merged head {head}")
@@ -132,7 +140,7 @@ def preflight(gh: Provider, repository: str) -> str:
     try:
         found = gh.read_repository()
     except ProviderError as exc:
-        msg = f"gh cannot read {repository} ({exc}); sign in with `gh auth login` and run the update again"
+        msg = f"gh cannot read {repository} ({failure(exc)}); sign in with `gh auth login` and run the update again"
         raise Held(msg) from exc
     if found.repository.casefold() != repository.casefold() or not found.can_push:
         msg = f"gh on this machine cannot push to {repository}; sign in as an account that can, then run it again"
@@ -149,7 +157,7 @@ def _held[T](job: Job, name: str, work: Callable[[], T], said: Callable[[T], str
         except Held:
             raise
         except Exception as exc:
-            raise Held(str(exc)) from exc
+            raise Held(failure(exc)) from exc
 
     return job.do(name, guarded, said, hold=Held, identity=made)
 
@@ -175,7 +183,7 @@ def _opened(  # noqa: PLR0913 - the job, GitHub, the publication and the pull re
         if settings.pr_labels:
             gh.add_labels(pub.repository, pr.number, list(settings.pr_labels))
     except ProviderError as exc:  # a label never holds the update (TD-308)
-        job.log(f"the labels {', '.join(settings.pr_labels)} were not added: {exc}")
+        job.log(f"the labels {', '.join(settings.pr_labels)} were not added: {failure(exc)}")
     if pr.draft:
         gh.mark_ready(pr)
     return pr

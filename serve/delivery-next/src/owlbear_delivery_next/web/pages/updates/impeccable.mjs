@@ -6,7 +6,7 @@ import { defined, machineState } from "/assets/ui.mjs";
 import { readChecks, update } from "./checks.mjs";
 import { frame, framed, sentence, when } from "./frame.mjs";
 import { follow, own, readPack } from "./pack.mjs";
-import { others, runPart, startPart } from "./run.mjs";
+import { historyUnread, others, runPart, startPart } from "./run.mjs";
 
 function installed(i) {  // a missing pack is the running version's; one installing or failed names its version
   const whose = i.version ? `Impeccable of OwlBear ${i.version}` : "An Impeccable pack";
@@ -26,17 +26,24 @@ function released(bar) {
 
 function published(run) {
   const p = run?.published;
-  if (!p?.commit) return run ? `Nothing yet from the last update, run in ${run.name}.` : "Nothing yet.";
+  const last = own.unread.runs && run ? "Last read: " : "";
+  if (!p?.commit && historyUnread()) return run
+    ? `Not known across all projects. The last readable update, run in ${run.name}, has no published commit.`
+    : "Not known: run history could not be read completely.";
+  if (!p?.commit) return run ? `${last}Nothing yet from the last update, run in ${run.name}.`
+    : "Nothing yet.";
   const pr = p.url ? `pull request #${p.number}` : `commit ${p.commit.slice(0, 12)} on ${p.branch}`;
-  return `${sentence(pr)}${p.merged ? `, merged into main as ${p.merged.slice(0, 12)}` : p.url ? ", not merged yet"
-    : ""}; a machine takes it with the OwlBear version that carries it.`;
+  return `${last}${sentence(pr)}${p.merged ? `, merged into main as ${p.merged.slice(0, 12)}`
+    : p.url ? ", not merged yet" : ""}; a machine takes it with the OwlBear version that carries it.`;
 }
 
 function candidate(run) {
-  if (!run || !["running", "waiting"].includes(run.state)) return "None: no update runs now.";
+  if (!run || !["running", "waiting"].includes(run.state)) return historyUnread()
+    ? "Not known: run history could not be read completely." : "None: no update runs now.";
   const made = (run.stages ?? []).find((s) => s.name === "candidate" && s.detail)?.detail;
-  return `${made ?? "Being prepared"}, in ${run.name}'s update; it is not active anywhere until it is published and `
-    + "released.";
+  const last = own.unread.runs ? "Last read: " : "";
+  return `${last}${made ?? "Being prepared"}, in ${run.name}'s update; it is not active anywhere until it is `
+    + "published and released.";
 }
 
 function fact(term, said, id) {
@@ -56,6 +63,7 @@ function stands() {
           pin.identity}. ${plain(pin.status)}.</dd>` : nothing}
         ${install ? html`<dd id="pack-install-state">${installed(install)} on this machine${install.detail
           ? `: ${install.detail}` : ""}.</dd>` : nothing}</div>` : nothing}
+      ${fact("Install record", bar?.pack?.unkept ? `${sentence(bar.pack.unkept)}.` : "", "pack-unkept")}
       ${fact("Released", released(bar), "pack-release")}
       ${own.runs ? fact("Published", published(run), "pack-published") : nothing}
       ${own.runs ? fact("Candidate", candidate(run), "pack-candidate") : nothing}

@@ -22,11 +22,17 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from owlbear_decisions import Origin, ReadBackKind, Scope, State
 from owlbear_decisions.models import ID_PATTERN
 from owlbear_delivery_next.change_contracts import decision_wording
-from owlbear_delivery_next.project_host import decision_recovery_routes, impact_routes
+from owlbear_delivery_next.project_host import (
+    decision_history,
+    decision_recovery_routes,
+    impact_routes,
+    lookup_routes,
+)
 from owlbear_delivery_next.state_store import (
     decision_actions,
     decision_batch,
     decision_cache,
+    decision_completion,
     decision_impact,
     decision_origin,
     decision_store,
@@ -34,7 +40,6 @@ from owlbear_delivery_next.state_store import (
 )
 from owlbear_delivery_next.state_store.decision_actions import Effect
 from owlbear_delivery_next.state_store.store import StoreError
-from owlbear_delivery_next.workflow_steps import lookup
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -56,11 +61,6 @@ Statement = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1
 type Where = Literal["project", "global", "all", "owlbear"]
 type ReadBack = Literal["", "none", "pending", "done"]
 OWLBEAR = "owlbear"  # OwlBear's own folder in owlbear-data, shown beside Global without registering it (TD-435)
-ACTIONS = {  # a commit subject's first word after "decisions: " -> the action shown; older subjects' words included
-    **{a: a for a in ("replace", "withdraw", "activate", "promote", "exception", "keep", "read-back",
-                      "queue-read-back", "propose", "record", "accept-existing", "conflict", "correct-origin")},
-    "proposed": "propose", "queue": "queue-read-back",
-}  # fmt: skip
 
 
 class Shown(BaseModel):
@@ -86,6 +86,13 @@ class RetireBody(WithdrawBody):
     """A chat's withdrawal: ``confirmed`` says the owner confirmed retiring it there."""
 
     confirmed: bool = False
+
+
+class CompletionBody(Shown):
+    """The lead's exact finite-condition quote and proof, not another owner confirmation."""
+
+    condition: Annotated[Text, Field(min_length=1)]
+    evidence: Annotated[Text, Field(min_length=1)]
 
 
 class Promotion(Shown):
@@ -150,14 +157,6 @@ class QueueBody(BaseModel):
     revision: Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 
 
-class LookupBody(BaseModel):
-    """A lead chat's question: which decisions govern it."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    question: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
-
-
 class ProposalBody(BaseModel):
     """A chat's decision: in force at once when the owner confirmed it (``confirmed``), else a draft he activates.
 
@@ -213,27 +212,6 @@ def _linked(view: DataView, entry: Entry) -> tuple[list[dict[str, str]], list[di
         if link.target == entry.decision.id
     ]
     return out, into
-
-
-def _history(shared: DataRepo | None, entry: Entry) -> list[dict[str, str]]:
-    """The data repository's commits of the decision's file, newest first, each by its action word only."""
-    if shared is None:
-        return []
-    rel = entry.path.relative_to(shared.root).as_posix()
-    said = shared.git("log", "-n", "30", "--format=%H%x1f%cI%x1f%s", "--", rel)
-    if said.returncode:
-        return []
-    rows = (line.split("\x1f", 2) for line in said.stdout.splitlines() if line.count("\x1f") == 2)  # noqa: PLR2004
-    return [{"commit": commit[:12], "at": at, "action": _action(subject)} for commit, at, subject in rows]
-
-
-def _action(subject: str) -> str:
-    """A commit's known action word, else "changed": an older subject may hold words a person typed (TD-449)."""
-    if not subject.startswith(prefix := "decisions: "):
-        return "changed"
-    rest = subject.removeprefix(prefix)
-    word = "read-back" if rest.startswith("read back ") else rest.split(" ", 1)[0]
-    return ACTIONS.get(word, "changed")
 
 
 def _shown(d: dict[str, Any], where: Where, state: str, read_back: ReadBack, *, retired: bool) -> bool:
@@ -369,7 +347,7 @@ def router(shared: Shared, folder: Callable[[], str], places: Places, store: Sto
             raise HTTPException(409, f"{exc} ({exc.action})") from exc
         return _row(view, entry) | more | {
             "links": links,
-            "linked_from": linked_from, "problems": problems, "history": _history(data, entry),
+            "linked_from": linked_from, "problems": problems, "history": decision_history.read(data, entry),
             "changes": decision_impact.pinning(store, d.id) if store else [], "rivals": rivals, "redecide": redecide,
         }  # fmt: skip
 
@@ -377,17 +355,8 @@ def router(shared: Shared, folder: Callable[[], str], places: Places, store: Sto
     if store is not None:
         _ignore_route(routes, store, at, mine)
     _shared_routes(routes, shared, at, places)
-    _lookup_route(routes, shared, folder, store)
+    routes.include_router(lookup_routes.router(shared, folder, store))
     return routes
-
-
-def _lookup_route(routes: APIRouter, shared: Shared, folder: Callable[[], str], store: Store | None) -> None:
-    """A lead chat's lookup: the picker over the folder's and Global decisions in force (TD-456, TD-459)."""
-    chats = lookup.Chats()  # this host's: one lookup at a time (TD-336)
-
-    @routes.post("/decisions/lookup")
-    def look_up(body: LookupBody) -> dict[str, Any]:
-        return chats(shared(), folder(), body.question, store.settings if store else None)
 
 
 def _confirmed(body: SuccessorBody) -> None:
@@ -480,6 +449,11 @@ def _shared_routes(routes: APIRouter, shared: Shared, at: At, places: Places) ->
         if out["saved"]:
             out["impact"] = impact_routes.after_change(shared(), at(project), decision_id, places)
         return out
+
+    @routes.post("/decisions/{decision_id}/complete")
+    def complete(decision_id: str, body: CompletionBody, project: In) -> dict[str, Any]:
+        proof = decision_completion.Proof(body.condition, body.evidence)
+        return _receipts(lambda: decision_completion.complete(shared(), at(project), decision_id, body.revision, proof))
 
     @routes.post("/decisions/{decision_id}/queue-read-back")
     def queue_read_back(decision_id: str, body: QueueBody, project: In) -> dict[str, Any]:

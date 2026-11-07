@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.models import Pullback
 from owlbear_delivery_next.git.remote_git import RemoteGitError, run_remote_git
+from owlbear_delivery_next.github.provider import ProviderError
+from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.workflow_steps import engine, pullback_replay
 from owlbear_delivery_next.workflow_steps.pullback_replay import (
     SHOWN,
@@ -34,9 +36,12 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from datetime import datetime
 
+    from owlbear_delivery_next.git.access import Access
+    from owlbear_delivery_next.github.account import Writer
+
 _IN_PROGRESS = ("MERGE_HEAD", "rebase-merge", "rebase-apply", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG")
 _HELD = ("rebase-merge/head-name", "rebase-apply/head-name", "BISECT_START")
-_FAILURES = (subprocess.TimeoutExpired, RemoteGitError, BehindError, OSError)
+_FAILURES = (subprocess.TimeoutExpired, RemoteGitError, ProviderError, SettingsUnset, BehindError, OSError)
 
 
 def _held(path: str) -> str | None:
@@ -223,22 +228,23 @@ def _pull(wt: Path, target: str) -> tuple[str, str]:
     return state, "; ".join(filter(None, (reason, note)))
 
 
-def _ref_only(repo: Path, target: str) -> tuple[str, str]:
+def _ref_only(repo: Path, target: str, access: Access) -> tuple[str, str]:
     """Fast-forward a *target* branch no worktree has checked out."""
     if rev(repo, f"refs/heads/{target}") is None:
         return "updated", f"no local {target} branch; origin/{target} updated"
-    done = run_remote_git(repo, ("fetch", "--quiet", "--no-tags", "origin", f"{target}:{target}"), kind="read")
+    fetch = ("fetch", "--quiet", "--no-tags", "origin", f"{target}:{target}")
+    done = run_remote_git(repo, fetch, kind="read", access=access)
     return ("updated", "") if done.returncode == 0 else ("behind", first(done.stderr))
 
 
-def _update(repo: Path, target: str) -> tuple[str, str, list[str]]:
+def _update(repo: Path, target: str, access: Access) -> tuple[str, str, list[str]]:
     """Fetch and bring local *target* up to ``origin/<target>``: ``(state, reason, holders)``."""
-    engine.fetch(repo, target)
+    engine.fetch(repo, target, access)
     held = holders(repo, target)
     old, new = rev(repo, f"refs/heads/{target}"), rev(repo, f"origin/{target}")
     note = "submodules changed" if _submodules(repo, old, new) else ""
     if not held:
-        state, why = _ref_only(repo, target)
+        state, why = _ref_only(repo, target, access)
     elif len(held) > 1:
         state, why = "behind", f"{target} is checked out in {len(held)} worktrees"
     else:
@@ -253,10 +259,10 @@ def _reason(exc: Exception) -> str:
     return "git timed out" if isinstance(exc, subprocess.TimeoutExpired) else first(str(exc))
 
 
-def run(repo: Path, target: str, now: datetime) -> Pullback:
+def run(repo: Path, target: str, now: datetime, writer: Writer) -> Pullback:
     """Fetch the target and update the local branch; never pull, stash, rebase, force or merge with a commit."""
     try:
-        state, why, held = _update(repo, target)
+        state, why, held = _update(repo, target, writer.access())
     except _FAILURES as exc:
         state, why, held = "behind", _reason(exc), []
     reason = f"local {target} is behind: {why}" if state == "behind" else why

@@ -24,6 +24,7 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile, ProfileEntry
 from owlbear_delivery_next.change_flow import loop, status
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.settings import migrations
 from owlbear_delivery_next.state_store import offline_protocol, profile_share, project_home, project_move
@@ -183,7 +184,8 @@ def test_a_current_format_file_that_does_not_validate_was_written_by_another_del
     overwrite(store, "c1", json.dumps(edit(json.loads(record(store, "c1")))))
     with pytest.raises(StoreError) as err:
         store.read("c1")
-    assert str(err.value) == f"state of c1 was written by a newer or different Delivery ({said})"
+    whole = failure(err.value.__cause__)
+    assert str(err.value) == f"state of c1 was written by a newer or different Delivery ({said}): {whole}"
     assert err.value.stop(NOW).action == "Restore the previous state"
 
 

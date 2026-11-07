@@ -81,7 +81,7 @@ def test_an_unknown_pack_workspace_outlives_its_job_until_its_processes_are_prov
     job.workspace.mkdir(parents=True)
 
     ident = host.maintenance.begin(session_slots.project(host), "pack:one", "pack", str(job.workspace))
-    host.maintenance.failed(ident, RuntimeError("the session ended without a result"))
+    host.maintenance.failed(ident, "RuntimeError: the session ended without a result")
     job._finish("failed", "the update ended")  # noqa: SLF001 - the update's own end, as the run calls it
     assert job.workspace.is_dir()
 
@@ -133,7 +133,7 @@ def test_the_machine_pack_lock_stays_blocked_while_a_pack_lease_is_unproven(tmp_
     job = pack_job.Job(store, pack_job.Live())
     session_slots.packed(host, job)
     ident = host.maintenance.begin(session_slots.project(host), "pack:three", "pack", str(tmp_path / "w"))
-    host.maintenance.failed(ident, RuntimeError("the session ended without a result"))
+    host.maintenance.failed(ident, "RuntimeError: the session ended without a result")
 
     with pytest.raises(pack_job.Busy):
         job._claim(job._alone)  # noqa: SLF001 - the claim a starting run takes
@@ -233,6 +233,37 @@ def test_an_unreadable_or_second_waiting_record_elsewhere_refuses_a_fresh_start_
     assert not (job.store.root / pack_job.FILE).exists()
 
 
+@pytest.mark.parametrize(
+    ("where", "said"),
+    [
+        ("registry", "the machine's registry cannot be read, so other projects' updates cannot be ruled out: {}"),
+        ("record", "the Impeccable run record of gamma cannot be read ({}); unreadable is never idle, repair it first"),
+        ("pulls", "OwlBear's open Impeccable pull requests could not be read ({}); try again"),
+    ],
+)
+def test_a_start_refused_by_an_unreadable_registry_record_or_pull_request_list_says_why_whole(
+    tmp_path, monkeypatch, whole_error, where, said
+):
+    registered(tmp_path, {"beta": "", "gamma": ""})
+    error = {"registry": registry.RegistryError, "record": OSError, "pulls": RuntimeError}[where](whole_error)
+    error.add_note("a note added on the way up")
+    real = pack_run_record.observed
+
+    def raising(*args):
+        if where == "record" and args[0] != project_home.home("gamma"):
+            return real(*args)
+        raise error
+
+    if where != "pulls":
+        monkeypatch.setattr(*((registry, "load") if where == "registry" else (pack_run_record, "observed")), raising)
+    github = SimpleNamespace(open_pull_requests=raising if where == "pulls" else lambda *_a: ())
+    job = pack_job.Job(Store(project_home.home("beta"), None, "beta"), pack_job.Live(github=lambda _root: github))
+    with pytest.raises(pack_job.Busy) as refused:
+        job.start()
+    whole = f"{type(error).__name__}: {whole_error}\na note added on the way up"
+    assert str(refused.value) == said.format(whole)
+
+
 def test_a_waiting_run_goes_on_only_as_itself_alone_and_with_no_pack_pull_request_but_its_own(tmp_path):
     registered(tmp_path, {"alpha": waiting("r-alpha"), "gamma": ""})
     root = project_home.home("alpha")
@@ -265,12 +296,12 @@ def node(number: int, head: str, *, fork: bool = False) -> dict:
 def served(pages: list[dict], cursors: list) -> GhProvider:
     """``gh`` answering each GraphQL page in turn, recording the cursor each request asked from."""
 
-    def server(argv, body, _timeout, _cwd):
+    def server(argv, body, _timeout, _cwd, _env):
         assert "graphql" in argv
         cursors.append(json.loads(body)["variables"]["after"])
         return subprocess.CompletedProcess(argv, 0, json.dumps(pages.pop(0)).encode(), b"")
 
-    return GhProvider(Path("/nowhere"), runner=server)
+    return GhProvider(Path("/nowhere"), writer=None, runner=server)
 
 
 def test_open_pack_pull_requests_are_read_to_the_last_page_and_a_list_cut_short_refuses_a_start(tmp_path):

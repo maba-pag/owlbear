@@ -8,18 +8,33 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, read, validate_repo, write
+from owlbear_decisions import (
+    Decision,
+    Link,
+    LinkType,
+    Origin,
+    ReadBackKind,
+    Scope,
+    State,
+    new_id,
+    read,
+    validate_repo,
+    write,
+)
 from owlbear_delivery_next.change_contracts import pick_tools, tools
 from owlbear_delivery_next.change_contracts.inbox import BriefApproval
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_flow import loop, status
+from owlbear_delivery_next.change_flow.budgets import EPISODE_ASK
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.github.provider import PullRequest
+from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host.host import Host, RunnerRecord
 from owlbear_delivery_next.state_store import change_record, decision_batch, decision_store
 from owlbear_delivery_next.state_store.store import Lock
-from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate, pick
+from owlbear_delivery_next.workflow_steps import decision_publication, decisions_gate
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -174,6 +189,31 @@ def test_a_failed_push_lets_approval_proceed_shows_on_the_card_and_the_next_save
     assert api.summary(picking.store, picking.slug, Activity(host_up=True), AT)["decisions"] == []
 
 
+def test_approve_on_a_version_saved_after_its_loop_ended_challenges_it_then_the_host_approves_it(picking, monkeypatch):
+    """#986: Approve starts the round of a version saved after its loop ended, its decisions picked first; once the
+    round raised nothing, the host's next pass approves it as the owner's Approve would, even while paused."""
+    shape(picking, 1)
+    assert picking.save(decisions=[LASTING])["version"] == 2  # the loop ended on v1: v2 waits for one more round
+    (lasting,) = picking.change().brief.decisions
+    assert picking.approve(2).json() == {"accepted": "brief-challenge"}
+    c = picking.change()
+    assert (c.brief.approve_if_clean, c.brief.approved_version, c.brief.picked.status) == (2, None, "owed")
+    picking.verdicts.append(tools.ReviewResult(verdict="pass", findings=[]))
+    assert picking.step().brief.challenged == 2
+    spawned: list[str] = []
+    monkeypatch.setattr(data_repo, "folder", lambda *_a: picking.PROJECT)  # the test clone has no claimed remote
+    host = Host(picking.store, picking.repo, spawn=lambda slug: spawned.append(slug) or RunnerRecord(
+        pid=9, created=1.0, started_at=AT), members=lambda _ids: {})  # fmt: skip
+    host.paused = lambda: True
+    assert host.tick(datetime.now(UTC)) == []
+    a = picking.store.read(picking.slug)
+    assert (a.brief.approved_version, a.brief.approve_if_clean, a.step.kind, spawned) == (2, None, StepKind.PLAN, [])
+    assert (a.decisions_baseline is not None, a.decisions_unpinned_at) == (True, None)  # pinned as the owner's
+    (p,) = a.decisions_published
+    assert (p.id, p.published) == (lasting.id, True)
+    assert loop.next_step(a, datetime.now(UTC)).kind == StepKind.PLAN  # planning waits only for Resume
+
+
 def test_approving_the_same_version_again_rewrites_the_same_file_without_a_commit(picking, shared_repo):
     root, remote = shared_repo
     (lasting,) = shape(picking, 1, LASTING).brief.decisions
@@ -259,6 +299,42 @@ def test_an_approval_interrupted_after_its_commit_stays_and_its_next_step_saves(
     assert c.decisions_baseline.revisions[lasting.id] == rule.rule_revision
 
 
+def test_an_interrupted_later_approval_keeps_the_receipt_of_an_unchanged_own_decision(
+    picking, shared_repo, monkeypatch
+):
+    root, _ = shared_repo
+    (lasting,) = shape(picking, 1, LASTING).brief.decisions
+    assert picking.approve(1).status_code == 200
+    (v1,) = picking.approved().decisions_published
+    reshape(picking)
+    more = {"question": "How long is a note?", "answer": "A note is one paragraph.", "origin": "decided",
+            "scope": "project"}  # fmt: skip
+    added = shape(picking, 2, LASTING, more).brief.decisions[1]
+    real = decision_store.save_all
+
+    def crashed(*args, **kwargs):
+        real(*args, **kwargs)
+        raise Crash
+
+    monkeypatch.setattr(decision_store, "save_all", crashed)
+    with pytest.raises(Crash):
+        picking.approve(2)
+    monkeypatch.setattr(decision_store, "save_all", real)
+    picking.approved()
+    rule = read(root / rel(lasting.id))
+    write(rule.model_copy(update={"title": "Where notes are kept"}), root / PROJECT, rule.revision)  # Decisions page
+    ran: list[str] = []
+    monkeypatch.setattr(runner, "_run", lambda _s, _l, c, _st, _r: ran.append(c.slug))
+
+    c = stepped(picking, picking.slug)
+
+    kept = {p.id: p for p in c.decisions_published}
+    assert (kept[lasting.id].revision, kept[lasting.id].committed) == (v1.revision, True)
+    assert (kept[added.id].committed, kept[added.id].revision) == (True, read(root / rel(added.id)).revision)
+    assert f"changed: {lasting.id}" in loop.open_question(c).text
+    assert ran == []
+
+
 def test_a_recovery_that_fails_waits_with_its_reason_and_the_next_step_saves_before_work(
     picking, shared_repo, monkeypatch
 ):
@@ -333,7 +409,9 @@ def test_a_refused_conflict_flag_commit_after_the_approvals_commit_keeps_the_app
     assert a.brief.approved_version == 1
 
 
-def test_a_published_decision_withdrawn_outside_the_change_makes_the_next_versions_pick_stale(picking, shared_repo):
+def test_a_published_decision_withdrawn_outside_the_change_does_not_block_the_next_versions_approval(
+    picking, shared_repo
+):
     root, _ = shared_repo
     (first,) = shape(picking, 1, LASTING).brief.decisions
     picking.approve(1)
@@ -343,14 +421,66 @@ def test_a_published_decision_withdrawn_outside_the_change_makes_the_next_versio
     rule = read(root / rel(first.id))
     write(rule.model_copy(update={"state": State.WITHDRAWN}), root / PROJECT, rule.revision)  # the Decisions page
 
-    said = picking.approve(2)
+    assert picking.approve(2).status_code == 200  # the next step's gate judges the withdrawal
+    assert read(root / rel(first.id)).state == State.WITHDRAWN  # it stands
 
-    assert said.status_code == 409
-    assert pick.CHANGED in said.json()["detail"]
-    assert picking.ask(2, retry=True).status_code == 200
-    picking.step()
-    assert picking.approve(2).status_code == 200  # picked again with the withdrawal: it stands
-    assert read(root / rel(first.id)).state == State.WITHDRAWN
+
+def test_a_published_decision_changed_outside_the_change_stays_as_changed_and_goes_to_the_next_steps_picker(
+    picking, shared_repo, monkeypatch
+):
+    root, _ = shared_repo
+    (first,) = shape(picking, 1, LASTING).brief.decisions
+    assert picking.approve(1).status_code == 200
+    (v1,) = picking.approved().decisions_published
+    reshape(picking)
+    shape(picking, 2, LASTING, OWN)
+    rule = read(root / rel(first.id))
+    write(rule.model_copy(update={"title": "Where notes are kept"}), root / PROJECT, rule.revision)  # Decisions page
+    renamed = read(root / rel(first.id))
+
+    assert picking.approve(2).status_code == 200
+
+    a = picking.approved()
+    (p,) = [p for p in a.decisions_published if p.id == first.id]
+    assert (p.revision, p.committed) == (v1.revision, True)  # its receipt is the Change's own save, not the change
+    assert read(root / rel(first.id)).revision == renamed.revision
+    assert a.decisions_baseline.revisions.get(first.id) != renamed.rule_revision
+    monkeypatch.setattr(runner, "_run", lambda *_a: None)
+    picking.picks.append(pick_tools.PickResult(picked=[]))
+
+    c = stepped(picking, picking.slug)
+
+    assert c.outcome is None
+    assert first.id in picking.pickers()[-1].message.split("## Decisions")[1]
+    assert first.id not in c.decisions_baseline.said
+    assert c.decisions_baseline.revisions[first.id] == renamed.rule_revision
+
+
+def test_a_published_decision_only_read_back_since_stays_the_changes_own_through_a_later_approval(
+    picking, shared_repo, monkeypatch
+):
+    root, _ = shared_repo
+    (first,) = shape(picking, 1, LASTING).brief.decisions
+    assert picking.approve(1).status_code == 200
+    reshape(picking)
+    shape(picking, 2, LASTING, OWN)
+    rule = read(root / rel(first.id))
+    asked = {"read_back": "pending", "read_back_why": "check it", "read_back_kind": ReadBackKind.UNCERTAIN}
+    write(rule.model_copy(update=asked), root / PROJECT, rule.revision)  # a read-back queued, no rule changed
+    queued = read(root / rel(first.id))
+    assert (queued.revision != rule.revision, queued.rule_revision) == (True, rule.rule_revision)
+
+    assert picking.approve(2).status_code == 200
+
+    a = picking.approved()
+    assert first.id in a.decisions_baseline.said
+    monkeypatch.setattr(runner, "_run", lambda *_a: None)
+    pickers = len(picking.pickers())
+
+    c = stepped(picking, picking.slug)
+
+    assert (c.outcome, len(picking.pickers())) == (None, pickers)  # nothing for the picker
+    assert c.decisions_baseline.revisions[first.id] == queued.rule_revision
 
 
 @pytest.mark.parametrize("pr", [None, MERGED], ids=["abandoned", "merged"])
@@ -618,9 +748,11 @@ def test_unavailable_authority_is_not_proof_that_malformed_history_was_never_pub
     assert picking.store.read(picking.slug).brief.approved_version == 1
 
 
-def _unavailable(reason: str):
+def _unavailable(reason: str, note: str = "NOTE-MARK"):
     def fail(*_args, **_kwargs):
-        raise decision_store.DecisionsUnavailable(reason)
+        error = decision_store.DecisionsUnavailable(reason)
+        error.add_note(note)
+        raise error
 
     return fail
 
@@ -631,7 +763,7 @@ def test_a_save_that_fails_refuses_the_approval_with_its_whole_reason(picking, m
 
     said = picking.approve(1)
 
-    reason = f"{decision_publication.REFUSED}: {whole_error}"
+    reason = f"{decision_publication.REFUSED}: DecisionsUnavailable: {whole_error}\nNOTE-MARK"
     assert (said.status_code, said.json()["detail"]) == (409, reason)
     (event,) = [e for e in picking.store.events(picking.slug) if e.get("event") == "approval-refused"]
     assert event["reason"] == reason
@@ -649,10 +781,10 @@ def test_a_recovery_that_fails_waits_with_its_whole_reason(picking, monkeypatch,
         picking.approve(1)
     if fails == "save":
         monkeypatch.setattr(decision_store, "save_all", _unavailable(whole_error))
-        why = whole_error
+        why = f"DecisionsUnavailable: {whole_error}\nNOTE-MARK"
     else:
         monkeypatch.setattr(decision_publication.decision_archive, "lasting", _unavailable(whole_error))
-        why = f"DecisionsUnavailable: {whole_error}"
+        why = f"DecisionsUnavailable: {whole_error}\nNOTE-MARK"
     monkeypatch.setattr(runner, "_run", lambda *_a: pytest.fail("no step works before the saves"))
 
     waiting = stepped(picking, picking.slug)
@@ -661,3 +793,31 @@ def test_a_recovery_that_fails_waits_with_its_whole_reason(picking, monkeypatch,
     assert waiting.outcome.reason == reason
     (event,) = [e for e in picking.store.events(picking.slug) if e.get("event") == "decisions-unsaved"]
     assert event["reason"] == reason
+
+
+@pytest.mark.parametrize("fails", ["save", "items"])
+def test_a_day_of_the_same_failed_recovery_asks_though_its_notes_said_different_words(
+    picking, monkeypatch, whole_error, fails
+):
+    """#971: a failed save's notes differ each time; the wait signs the error without them, so a day of it asks,
+    showing the last one whole."""
+    shape(picking, 1, LASTING)
+
+    def crashed(*_args, **_kwargs):
+        raise Crash
+
+    monkeypatch.setattr(decision_store, "save_all", crashed)
+    with pytest.raises(Crash):
+        picking.approve(1)
+    target = (decision_store, "save_all") if fails == "save" else (decision_publication.decision_archive, "lasting")
+    for at, note in ((AT, "the push was refused"), (AT + EPISODE_ASK, "the fetch was cut off")):
+        monkeypatch.setattr(*target, _unavailable(whole_error, note))
+        with picking.store.lock(picking.slug) as lock:
+            assert decision_publication.resume(picking.store, lock, picking.store.read(picking.slug), at) is None
+
+    c = picking.store.read(picking.slug)
+    budget = c.budgets.causes[f"network:{c.step.kind}:decisions"]
+    assert (budget.since, budget.attempts, c.outcome.exit) == (AT, 2, Exit.ASK)
+    reason = f"{decision_publication.UNSAVED}: DecisionsUnavailable: {whole_error}\nthe fetch was cut off"
+    since = f"{AT:%Y-%m-%d %H:%M}"
+    assert loop.open_question(c).text == f"network keeps failing for {c.step.kind} since {since}; last error: {reason}"

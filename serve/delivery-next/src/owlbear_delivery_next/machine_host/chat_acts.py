@@ -37,17 +37,17 @@ import asyncio
 import contextlib
 import functools
 import json
-import sqlite3
 import time
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from urllib.parse import quote
 
 from owlbear_delivery_next.commands import chat_client
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import acts, chatlogs, spotter
 from owlbear_delivery_next.improvement.events import NOTE, main_agent, requester
-from owlbear_delivery_next.runtimes import ahp
+from owlbear_delivery_next.runtimes import ahp, chat_contact
+from owlbear_delivery_next.runtimes.chat_contact import channel, chat_of, opened
 from owlbear_delivery_next.workflow_steps.watched import CONFLICT
 
 if TYPE_CHECKING:
@@ -59,19 +59,9 @@ VSCODE = "vscode-agent-host"  # ``client_name`` of a chat VS Code's agent host r
 TERMINAL = frozenset({"github/cli", "github/autopilot"})  # the ``copilot`` command's sessions
 BOUND = 60.0  # seconds a note may take to show in the chat's log
 ACK = 10.0  # seconds the host may take to show a cancel or a withdrawal
-GONE = "VS Code's agent host is not running"
+GONE = chat_contact.GONE
 ASKS = frozenset({"stop-and-ask", "ask"})
 SUPERSEDED = "a newer requester message superseded its turn"
-CHATS = "SELECT owner_session_uri, chat_uri, provider_data FROM chats_v2 WHERE tombstoned = 0 AND provider_data LIKE ?"
-
-
-def store() -> Path:
-    """VS Code's agent-host store, where it keeps each chat's Copilot session."""
-    return Path.home() / "Library/Application Support/Code/User/globalStorage/agent-host.db"
-
-
-class ChatError(RuntimeError):
-    """The chat to act on is not known for certain."""
 
 
 def why_not(client: str) -> str:
@@ -109,75 +99,16 @@ class Metadata:
         return self.kept[session][2]
 
 
-def chat_of(session: str, db: Path | None = None) -> tuple[str, str]:
-    """The host's session and chat URIs, as VS Code's store keeps them, of the Copilot session *session*.
-
-    The store's ``chats_v2`` holds every chat, a session's default one too (its older ``session_chats`` misses those);
-    it is opened read-only. Raises ``ChatError`` unless exactly one chat names the session, and ``sqlite3.Error`` when
-    the store cannot be read.
-    """
-    path = db or store()
-    with contextlib.closing(sqlite3.connect(f"file:{quote(str(path))}?mode=ro", uri=True)) as conn:
-        rows = conn.execute(CHATS, (f"%{session}%",)).fetchall()
-    found = {(owner, chat) for owner, chat, data in rows if _sdk(data) == session}
-    if len(found) != 1:
-        msg = f"no exact chat for session {session}: {len(found)} matches"
-        raise ChatError(msg)
-    return found.pop()
-
-
-def _sdk(data: str | None) -> str:
-    try:
-        said = json.loads(data or "")
-    except ValueError:
-        return ""
-    return str(said.get("sdkSessionId") or "") if isinstance(said, dict) else ""
-
-
-def channel(conn: Transport, owner: str, chat: str) -> str:
-    """The channel the host lists now for the store's *chat* of session *owner*.
-
-    The store keeps ``ahp-chat://<id>/<session>`` and ``ahp-chat://default/<session>``; the host lists a chat as
-    ``ahp-chat:/<id>``, and a default chat either as ``ahp-chat://default/…`` under the session's own URI, which may
-    differ from the store's, or by its own id as the listed session's ``defaultChat`` (both traced 2026-11-02).
-    """
-    sid = owner.split(":/", 1)[-1]
-    head = chat.removeprefix("ahp-chat://").split("/", 1)[0]
-    items = conn.request("listSessions", {"channel": ahp.ROOT}).get("items") or []
-    sessions = [s for s in items if s.get("resource", "").split(":/", 1)[-1] == sid]
-    listed = [c.get("resource", "") for s in sessions for c in s.get("chats") or []]
-    if head == "default":
-        found = [c for c in listed if c.startswith("ahp-chat://default/")] or [
-            d for s in sessions if (d := s.get("defaultChat")) and d in listed]  # fmt: skip
-    else:
-        found = [c for c in listed if c in {chat, f"ahp-chat:/{head}"}]
-    if len(found) != 1:
-        msg = f"the agent host lists {len(found)} chats for {chat} of session {owner}, not one"
-        raise ChatError(msg)
-    return found[0]
-
-
-def opened() -> Transport:
-    """A connection to VS Code's running agent host; VS Code is never started for it."""
-    if (entry := ahp.endpoint()) is None:
-        raise ahp.HostError(GONE)
-    try:
-        return ahp.connect(entry, f"owlbear-spotter-{uuid.uuid4().hex[:8]}")
-    except OSError as exc:  # an endpoint left behind by a VS Code that quit
-        msg = f"{GONE}: its published endpoint failed: {type(exc).__name__}: {exc}"
-        raise ahp.HostError(msg) from exc
-
-
 def conflicts(workspace: str, change: str) -> str:
     """The decision-conflict check of a chat's state *change*, by the host's lookup for *workspace*'s clone, as JSON.
 
-    It goes through the running host's ``/decisions/lookup``, whose coordinator admits one lookup at a time and
+    It starts and reads the running host's ``/decisions/lookups``, whose coordinator admits one lookup at a time and
     accounts its run; a busy, failed or refused lookup is kept as ``failed``, so the record stays preliminary.
     """
     question = CONFLICT.format(change=" ".join(change.split())[:800])
     said = chat_client.workspace(Path(workspace)).lookup_decisions(question)
-    if "error" in said and "failed" not in said:
-        said = {"failed": str(said["error"])}
+    if "failed" not in said and ("error" in said or said.get("running")):  # still running: no answer to grade by
+        said = {"failed": str(said.get("error") or "the lookup still ran when its wait ended")}
     return json.dumps(said)
 
 
@@ -333,7 +264,7 @@ class ChatActor:
             gone = await self._host(self._withdraw, kind, mid)
         except (ahp.HostError, OSError) as exc:
             await self._update(record, delivery="unconfirmed",
-                               error=f"{head}; its withdrawal failed: {type(exc).__name__}: {exc}")  # fmt: skip
+                               error=f"{head}; its withdrawal failed: {failure(exc)}")  # fmt: skip
             return
         why = {
             "taken": f"{SUPERSEDED}, but the host had taken it already" if superseded else

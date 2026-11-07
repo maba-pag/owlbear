@@ -4,6 +4,7 @@ A brief is shaped, picked and approved through the host API (`picking`); the Cha
 decision new since the pick goes to the picker.
 """
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,7 +13,9 @@ import pytest
 
 from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.change_contracts import pick_tools, tools
+from owlbear_delivery_next.change_contracts.decision_records import Pick
 from owlbear_delivery_next.change_contracts.dispute_tools import ReconsiderResult
+from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import Change, ErrorKind, Exit, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.profile_record import Profile
@@ -49,13 +52,15 @@ def line(d: Decision) -> str:
 class Running:
     """A Change approved on a pick, then at its build step; each step records the sections it held."""
 
-    def __init__(self, picking, monkeypatch, *chosen: Decision) -> None:
+    def __init__(self, picking, monkeypatch, *chosen: Decision, between: Callable[[], object] | None = None) -> None:
         self.p = picking
         picking.save()
         assert picking.ask(1).status_code == 200
         picking.picks.append(picked(*(d.id for d in chosen)))
         picking.verdicts.append(tools.ReviewResult(verdict="pass"))
         picking.step()
+        if between is not None:  # what the data repository goes through between the pick and the approval
+            between()
         assert picking.approve(1).status_code == 200
         c = picking.approved()
         c.plan = Plan(tasks=[Task(id="t1", title="Add farewell", scope=["packages/app"], checks=["true"])])
@@ -159,6 +164,118 @@ def test_a_replaced_pinned_decision_asks_the_owner_and_its_successor_goes_to_the
     picking.picks.append(picked(successor.id))
     assert run.step().outcome is None
     assert set(run.p.change().decisions_baseline.said) == {successor.id}
+
+
+@pytest.mark.parametrize("governs", [False, True], ids=["unrelated", "governing"])
+def test_decisions_the_pick_did_not_read_pass_approval_and_go_to_the_next_steps_picker(picking, monkeypatch, governs):
+    rule = picking.put(make())
+    other = picking.put(make(title="Invoices are PDF", topic="billing", statement="Invoices are sent as PDF."))
+    new = (
+        make(title="Farewells are polite", statement="Farewells say thank you.")
+        if governs
+        else make(title="Receipts are numbered", topic="billing", statement="Receipts carry a running number.")
+    )
+    renamed = other.model_copy(update={"title": "Invoices are PDF files"})
+
+    def between() -> None:
+        picking.put(new)
+        write(renamed, picking.shared.root / PROJECT, other.revision)
+
+    run = Running(picking, monkeypatch, rule, between=between)
+    pin = run.p.change().decisions_baseline
+    assert (pin.picked, set(pin.said)) == (True, {rule.id})
+    assert pin.revisions == {rule.id: rule.rule_revision, other.id: other.rule_revision}  # what the pick read
+    picking.picks.append(picked(new.id) if governs else picked())
+
+    c = run.step()
+
+    assert c.outcome is None
+    context, rows = picking.pickers()[-1].message.split("## Decisions")
+    assert (len(picking.pickers()), new.id in rows, other.id in rows, rule.id in rows) == (2, True, True, False)
+    assert (
+        context.split("## The work's rules so far (context, not to judge)\n")[1].strip()
+        == f"{rule.id} | {rule.statement}"
+    )
+    pin = c.decisions_baseline
+    assert pin.revisions[other.id] == renamed.rule_revision  # considered at its new revision
+    assert (new.id in pin.said, pin.revisions[new.id]) == (governs, new.rule_revision)
+    [(worker, _)] = run.held
+    assert (line(new) in worker, line(rule) in worker) == (governs, True)
+    (event,) = [e for e in picking.store.events(picking.slug) if e.get("reassessed")]
+    assert sorted(event["reassessed"]) == sorted([new.id, other.id])
+    assert picking.approve(1).status_code == 200  # a retried approval keeps what was judged since
+    again = picking.change().decisions_baseline
+    assert (again.said, again.revisions) == (pin.said, pin.revisions)
+
+
+def test_a_pick_approved_while_the_decisions_did_not_load_offers_its_rule_as_it_stands_and_pins_that(
+    picking, monkeypatch, tmp_path
+):
+    rule, data, away = picking.put(make()), picking.shared.root / PROJECT, tmp_path / "away"
+    run = Running(picking, monkeypatch, rule, between=lambda: data.rename(away))
+    assert run.p.change().decisions_unpinned_at is not None
+    away.rename(data)
+    renamed = rule.model_copy(update={"title": "Pages are plain HTML files"})
+    write(renamed, data, rule.revision)
+
+    q = loop.open_question(run.step())
+
+    assert f"{rule.id} Pages are plain HTML files:" in q.text
+    c, _ = loop.schedule(run.p.change(), [AnswerItem(at=AT, question=q.id, option="continue")], AT)
+    picking.store.write(Lock(picking.slug), c)
+    assert run.step().outcome is None  # no second question
+    assert run.p.change().decisions_baseline.revisions[rule.id] == renamed.rule_revision
+
+
+@pytest.mark.parametrize("fate", ["changed", "withdrawn"])
+def test_a_picked_decision_changed_or_withdrawn_before_approval_asks_the_owner_at_the_next_step(
+    picking, monkeypatch, fate
+):
+    rule = picking.put(make())
+    update = {"title": "Pages are plain HTML files"} if fate == "changed" else {"state": State.WITHDRAWN}
+
+    def between() -> None:
+        write(rule.model_copy(update=update), picking.shared.root / PROJECT, rule.revision)
+
+    run = Running(picking, monkeypatch, rule, between=between)
+
+    c = run.step()
+
+    q = loop.open_question(c)
+    assert q.cause.startswith("decisions:build:")
+    gone = f"no longer in force: {rule.id}"
+    assert (f"changed: {rule.id} Pages are plain HTML files: was" if fate == "changed" else gone) in q.text
+    assert rule.statement in q.text  # the wording the pick read
+    assert (run.held, len(picking.pickers())) == ([], 1)
+    assert picking.approve(1).status_code == 200  # a retried approval keeps the question's offer
+    c, _ = loop.schedule(run.p.change(), [AnswerItem(at=AT, question=q.id, option="continue")], AT)
+    picking.store.write(Lock(picking.slug), c)
+    assert run.step().outcome is None  # Continue took the change in: not asked again
+
+
+def test_a_pick_saved_before_it_recorded_what_it_read_counts_only_its_picks_as_read(picking, monkeypatch):
+    rule = picking.put(make())
+    other = picking.put(make(title="Invoices are PDF", topic="billing", statement="Invoices are sent as PDF."))
+    new = make(title="Farewells are polite", statement="Farewells say thank you.")
+
+    def between() -> None:
+        c = picking.change()
+        c.brief.picked = Pick.model_validate(c.brief.picked.model_dump(exclude={"read"}))  # as older releases saved
+        picking.store.write(Lock(picking.slug), c)
+        picking.put(new)
+
+    run = Running(picking, monkeypatch, rule, between=between)
+    assert run.p.change().decisions_baseline.revisions == {rule.id: rule.rule_revision}
+    picking.picks.append(picked())
+
+    c = run.step()
+
+    assert c.outcome is None
+    rows = picking.pickers()[-1].message.split("## Decisions")[1]
+    assert (new.id in rows, other.id in rows, rule.id in rows) == (True, True, False)  # every other one, once
+    assert set(c.decisions_baseline.revisions) == {rule.id, other.id, new.id}
+    assert run.step().outcome is None
+    assert len(picking.pickers()) == 2
 
 
 def test_a_failed_pick_at_a_boundary_waits_and_tries_again_never_taking_it_for_none_apply(picking, monkeypatch):
@@ -266,6 +383,10 @@ def test_plan_and_code_reconsiderations_read_the_complete_list(which):
     assert said.index(line(rule)) < said.index(step_decisions.COMPLETE) < said.index(line(other))
 
 
+# trigger words in a note leave the gate's cause as it was (#971)
+NOTE = "while reading the corrections log; the request timed out over quota"
+
+
 def _session_said(ending: str, payload: pick_tools.PickResult | None = None, **fields):
     async def run(cfg):
         return Run(cfg.session_id, ending, payload, termination=Termination(confirmed=True), **fields)
@@ -276,16 +397,19 @@ def _session_said(ending: str, payload: pick_tools.PickResult | None = None, **f
 @pytest.mark.parametrize(
     ("said", "why"),
     [
-        ("corrections", "OSError: {e}"),
+        ("corrections", "OSError: {e}\n" + NOTE),
         ("detail", "its session ended error: {e}"),
         ("usage_unread", "its pick cannot be trusted: {e}"),
     ],
+    ids=["corrections", "detail", "usage_unread"],
 )
 def test_a_failed_pick_at_a_boundary_keeps_its_whole_reason(picking, monkeypatch, whole_error, said, why):
     run = Running(picking, monkeypatch, picking.put(make()))
     picking.put(make(title="Farewells are polite", statement="Farewells say thank you."))
     if said == "corrections":
-        monkeypatch.setattr(pick, "corrections", lambda *_a: (_ for _ in ()).throw(OSError(whole_error)))
+        unreadable = OSError(whole_error)
+        unreadable.add_note(NOTE)
+        monkeypatch.setattr(pick, "corrections", lambda *_a: (_ for _ in ()).throw(unreadable))
     elif said == "detail":
         monkeypatch.setattr(runner.sdk_adapter, "run", _session_said("error", detail=whole_error))
     else:
@@ -294,6 +418,6 @@ def test_a_failed_pick_at_a_boundary_keeps_its_whole_reason(picking, monkeypatch
     c = run.step()
 
     reason = f"{decisions_gate.REPICK}: {why.format(e=whole_error)}"
-    assert c.outcome.reason == reason
+    assert (c.outcome.reason, c.outcome.cause) == (reason, cause_key(ErrorKind.NETWORK, StepKind.BUILD, pick.LABEL))
     (event,) = [e for e in picking.store.events(picking.slug) if e.get("kind") == StepKind.BUILD]
     assert event["reason"] == reason

@@ -1,4 +1,4 @@
-"""The six recorded plan refusals of a check written with its package directory: words, never a new form."""
+"""Plan checks select the complete directory-qualified commands offered by the project profile."""
 
 from pathlib import Path
 
@@ -13,26 +13,26 @@ from owlbear_delivery_next.runtimes import sdk_adapter, step_input
 from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.session_result import Run
 
-APP = (("packages/app", "npm test"),)  # the sandbox profile of the recorded refusals
-HINT = 'write the command alone: "npm test"; the Builder runs it from that package\'s directory'
-PROFILE = 'use one of "npm test"'
+APP = (("packages/app", "npm test"),)
+CHOICE = "cd ./packages/app && {\nnpm test\n}"
+PROFILE = f'use one of "{CHOICE}"'
 
 
 def errors(check: str, packages=APP) -> tuple[list[str], list[str]]:
     plan, _ = tool_schema.parse(
         PlanResult, {"tasks": [{"title": "t", "goal": "AC-1", "scope": ["packages/app"], "checks": [check]}]}
     )
-    found = tools.check_plan(plan, Worktree("a", "a"), ["npm test"], (), packages)
+    found = tools.check_plan(plan, Worktree("a", "a"), [CHOICE], (), packages)
     return plan.tasks[0].checks, found
 
 
 @pytest.mark.parametrize(
     ("check", "said"),
     [
-        ("cd packages/app && npm test", HINT),  # four recorded refusals
-        ("cd ./packages/app/ && npm test", HINT),
-        ("cd 'packages/app' &&npm test", HINT),
-        ("npm --prefix packages/app test", PROFILE),  # two recorded refusals: today's error
+        ("npm test", PROFILE),
+        ("cd ./packages/app/ && npm test", PROFILE),
+        ("cd 'packages/app' &&npm test", PROFILE),
+        ("npm --prefix packages/app test", PROFILE),
         ("cd packages/other && npm test", PROFILE),
         ("cd packages && npm test", PROFILE),
         ("cd packages/app && npm run test", PROFILE),
@@ -41,23 +41,24 @@ def errors(check: str, packages=APP) -> tuple[list[str], list[str]]:
         ("cd packages/frontend-components-library; npm test", PROFILE),  # answered at once, however long
     ],
 )
-def test_a_check_with_its_package_directory_is_refused_with_what_to_write(check, said):
+def test_a_check_not_offered_by_the_profile_is_refused_with_the_choice(check, said):
     assert errors(check) == ([check], [f'tasks[0].checks: "{check}" is not a check of the project profile - {said}'])
 
 
 def test_the_hint_needs_the_profile_s_packages():
-    assert errors("cd packages/app && npm test", ())[1][0].endswith(PROFILE)
-    assert errors("npm test") == (["npm test"], [])
+    assert errors("npm test", ())[1][0].endswith(PROFILE)
+    assert errors(CHOICE) == ([CHOICE], [])
 
 
 def test_the_hint_names_the_profile_s_command_as_written():
-    task = {"title": "t", "goal": "AC-1", "scope": ["packages/app"], "checks": ["cd packages/app && npm test"]}
+    task = {"title": "t", "goal": "AC-1", "scope": ["packages/app"], "checks": [CHOICE]}
     plan, _ = tool_schema.parse(PlanResult, {"tasks": [task]})
     spaced = (("packages/app", "npm  test"),)
-    found = tools.check_plan(plan, Worktree("a", "a"), ["npm  test"], (), spaced)
-    assert found[0].endswith('write the command alone: "npm  test"; the Builder runs it from that package\'s directory')
-    plan.tasks[0].checks = ["npm  test"]  # the hint's command is admitted as written
-    assert tools.check_plan(plan, Worktree("a", "a"), ["npm  test"], (), spaced) == []
+    offered = "cd ./packages/app && {\nnpm  test\n}"
+    found = tools.check_plan(plan, Worktree("a", "a"), [offered], (), spaced)
+    assert found[0].endswith(f'use one of "{offered}"')
+    plan.tasks[0].checks = [offered]
+    assert tools.check_plan(plan, Worktree("a", "a"), [offered], (), spaced) == []
 
 
 def test_the_plan_step_says_how_a_task_names_its_checks_and_carries_the_packages():
@@ -68,14 +69,10 @@ def test_the_plan_step_says_how_a_task_names_its_checks_and_carries_the_packages
     c = Change(slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.PLAN))
     parts = step_input.session(c, Profile(entries=entries), Path("/w"), {})
     assert parts.packages == ((".", "make check"), ("packages/app", "npm test"))
-    assert parts.checks == ("make check", "npm test")
-    assert (
-        "A task's `checks` are these check commands exactly as listed. The Builder runs each from its package's "
-        "directory, so a check never starts with `cd`: write `npm test`, not `cd packages/app && npm test`."
-    ) in parts.message
-    bare = step_input.plan(c, Profile(), Path("/w"), {})
-    assert "so a check never starts with `cd`." in bare  # no package check listed: no example naming one
-    assert "write `" not in bare
+    assert parts.checks == ("cd . && {\nmake check\n}", CHOICE)
+    assert all(f"check `{command}`" in parts.message for command in parts.checks)
+    bare = step_input.session(c, Profile(), Path("/w"), {})
+    assert (bare.checks, bare.packages) == ((), ())
 
 
 def test_the_plan_step_s_gate_gives_the_hint():
@@ -87,12 +84,14 @@ def test_the_plan_step_s_gate_gives_the_hint():
         resume=False,
         policy=Policy(Path("/w")),
         observe=lambda: Worktree("a", "a"),
-        checks=("npm test",),
+        checks=(CHOICE,),
         packages=APP,
         submit=tools.PLAN,
     )
     gate = Gate(cfg, Run("s1"), lambda **_e: None, lambda: None)
-    task = {"title": "t", "goal": "AC-1", "scope": ["packages/app"], "checks": ["cd packages/app && npm test"]}
+    task = {"title": "t", "goal": "AC-1", "scope": ["packages/app"], "checks": ["npm test"]}
     text, ok = gate.call(tools.PLAN, {"tasks": [task]})
     assert not ok
-    assert HINT in text
+    assert PROFILE in text
+    task["checks"] = [CHOICE]
+    assert gate.call(tools.PLAN, {"tasks": [task]})[1]

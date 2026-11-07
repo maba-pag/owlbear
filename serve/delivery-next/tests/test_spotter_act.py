@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from copilot._jsonrpc import JsonRpcError
 from copilot.generated.session_events import SessionEvent
 from copilot.session import AgentMessageSource
 
@@ -249,27 +250,25 @@ def test_a_send_that_raises_leaves_the_act_failed_with_its_whole_error(tmp_path)
     assert (act.act, act.delivery, act.error) == ("stop-and-resume", "failed", f"ConnectionError: {error}")
 
 
-UNRESUMED = "The Spotter could not stop and resume this step: ConnectionError: refused"
-
-
-@pytest.mark.parametrize(("category", "fails", "said"), [
-    ("irreversible-harm", "abort", f"{spotter_act.HARM.format(note='Deletes the backups.')} {UNRESUMED}"),
-    ("outside-state-changes", "send", UNRESUMED),
+@pytest.mark.parametrize(("category", "fails"), [
+    ("irreversible-harm", "abort"),
+    ("outside-state-changes", "send"),
 ])  # fmt: skip
 def test_a_failed_stop_and_resume_ends_the_step_with_a_question_naming_the_failure(
-    tmp_path, category, fails, said
+    tmp_path, category, fails, whole_error
 ) -> None:
-    class Failing(Session):
-        refused = "refused"
+    refused = JsonRpcError(-32000, whole_error, {"DATA-MARK": 1})
+    refused.add_note("NOTE-MARK")
 
+    class Failing(Session):
         async def send(self, prompt: str, **kw: Any) -> str:
-            self.fails = self.refused if fails == "send" else ""
+            self.fails = "refused" if fails == "send" else ""
             return await super().send(prompt, **kw)
 
         async def abort(self) -> None:
             await super().abort()
             if fails == "abort":
-                raise ConnectionError(self.refused)
+                raise refused
 
     async def main() -> sdk_adapter._Step:
         st = stepped(tmp_path, Failing(), category, **{category: "stop-and-resume"})
@@ -279,8 +278,13 @@ def test_a_failed_stop_and_resume_ends_the_step_with_a_question_naming_the_failu
 
     st = asyncio.run(main())
     assert spotter.WORK.settled(5)
+    error = f"JsonRpcError: JSON-RPC Error -32000: {whole_error}" if fails == "abort" else "ConnectionError: refused"
     act = act_of(st)
-    assert (act.act, act.delivery, act.error) == ("stop-and-resume", "failed", "ConnectionError: refused")
+    detail = f"{error}\nNOTE-MARK {{'DATA-MARK': 1}}" if fails == "abort" else error
+    assert (act.act, act.delivery, act.error) == ("stop-and-resume", "failed", detail)
+    said = spotter_act.UNRESUMED.format(error=detail)
+    if category == "irreversible-harm":
+        said = f"{spotter_act.HARM.format(note='Deletes the backups.')} {said}"
     assert (st.run.ending, st.run.detail, st.done) == ("spotter-ask", said, True)
 
 
@@ -434,7 +438,9 @@ def test_a_steps_first_reply_is_its_plan_look_and_a_course_finding_steers_the_ru
             observe=lambda: tools.Worktree("a", "a"), checks=(), model="gpt-6-luna", watch=watching,
         )  # fmt: skip
         st = sdk_adapter._Step(cfg, asyncio.get_running_loop())  # noqa: SLF001 - the real step, its feed and Spotter
-        st.feed = watch_feed.opened(cfg.watch, cfg.worktree, lambda: st.run.session_id, st.watch)
+        st.feed = watch_feed.opened(
+            cfg.watch, cfg.worktree, lambda: st.run.session_id, st.watch, log=lambda event: st.log(**event)
+        )
         spot = st.feed.spotter
         spot.judge = answering("course-and-constraints")
         spotter_act.bind(st, session)

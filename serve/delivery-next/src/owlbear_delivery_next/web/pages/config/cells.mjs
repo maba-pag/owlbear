@@ -1,9 +1,11 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
+import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
 import { EFFORTS, INHERIT, SOURCES, state, shown } from "./state.mjs";
 import { own, inherited, edit, layerValue, preview, drafted } from "./layers.mjs";
 import { levels, arrows } from "./cost.mjs";
 import { at } from "./sections.mjs";
+import { PLAIN_NAMES, PREF_NAMES, USER_NAMES } from "./names.mjs";
 
 // Code ships no defaults (2026-10-23): a value no layer sets is unset; its row's name says so in red (GW8RT6). While
 // the edited layer has an unsaved edit of it, the line says what the save would give (#809).
@@ -19,7 +21,8 @@ function source(key, inUse, needed = true, format = (v) => v) {
 // D-01M61SEXPFT9MXZGQHYVYFQ77C: what an unset Global value leaves to the layers below, while Global's own is unset.
 function unsetWarning(key) {
   if (state.layer !== "global" || layerValue("global", key) !== null || !required(key)) return nothing;
-  const text = key === "curator_threshold" ? "Unset: no machine or project can set it, so it stays unset"
+  const text = key === "curator_threshold" || key.startsWith("memory.")
+    ? "Unset: no machine or project can set it, so it stays unset"
     : key.startsWith("final_review.") ? "Unset: it then takes the builder's value"
       : "Unset: every machine or project must then set its own";
   return html`<p-text size="sm" color="warning">${text}</p-text>`;
@@ -75,8 +78,9 @@ export function setting(id, name, keys, ...cells) {
       return state.kept.has(pin);
     },
   }[state.filter]();
+  // Always a colour: removing the attribute sets p-text's to null, which PDS rejects once a set name stops being red.
   return html`<p-table-row id=${id} tabindex="-1" data-setting ?hidden=${!matches}>${cell(html`<p-text
-    color=${unset ? "error" : nothing}>${name}</p-text>`)}${cells}</p-table-row>`;
+    color=${unset ? "error" : "primary"}>${name}</p-text>`)}${cells}</p-table-row>`;
 }
 
 export function table(caption, heads, body, rows, { id, hidden = false } = {}) {
@@ -88,12 +92,23 @@ export function table(caption, heads, body, rows, { id, hidden = false } = {}) {
 // A table cell's choice: its column says what it is, so the label is for assistive technology only.
 // *wrong* says why the choice cannot run, for a choice that is checked (an effort); undefined for the others.
 function choose(label, options, value, chosen, { key, disabled = false, filter = false, wrong } = {}) {
-  const changed = (e) => chosen(e.target.value);
+  const changed = (e) => {
+    chosen(e.target.value);
+    if (!e.currentTarget.isConnected) {
+      const next = document.querySelector(`p-select[label="${CSS.escape(label)}"]`);
+      const focused = document.activeElement;
+      Promise.resolve(next?.componentOnReady?.()).then(() => {
+        if (next?.isConnected && document.activeElement === focused) next.focus({ preventScroll: true });
+      });
+    }
+  };
   const items = options.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`);
   const checked = wrong === undefined ? nothing : wrong ? "error" : "none";
-  return html`<p-select label=${label} hide-label="true" data-key=${key ?? nothing}
-    filter=${filter ? "true" : nothing} state=${checked} message=${wrong || nothing} ?disabled=${disabled}
-    .value=${live(value)} @change=${changed}>${items}</p-select>`;
+  // PDS options can receive a queued slotchange after removal; replace their select as one subtree.
+  return repeat([options], (list) => JSON.stringify(list.map(([v]) => v)),
+    () => html`<p-select label=${label} hide-label="true" data-key=${key ?? nothing}
+      filter=${filter ? "true" : nothing} state=${checked} message=${wrong || nothing} ?disabled=${disabled}
+      .value=${live(value)} @change=${changed}>${items}</p-select>`);
 }
 
 function typed(label, value, onInput, { key, placeholder, inputmode, disabled = false } = {}) {
@@ -151,11 +166,6 @@ export function designFailures() {
 
 // R15: five preferences, each set per layer and never defaulted in code; the project's value wins, then this
 // machine's, then Global's. A blank or "inherit" choice clears the layer's own value.
-export const PREFS = ["merge_method", "delete_remote_branch", "ci_poll_seconds", "ci_start_window_seconds",
-  "ask_before_merge"];
-const PREF_NAMES = { merge_method: "Merge method", delete_remote_branch: "Delete the remote branch after merging",
-  ci_poll_seconds: "CI poll interval (seconds)", ci_start_window_seconds: "CI start window (seconds)",
-  ask_before_merge: "Ask before merging" };
 const PREF_CHOICES = { merge_method: [["merge", "merge commit"], ["squash", "squash"], ["rebase", "rebase"]],
   delete_remote_branch: [["on", "on"], ["off", "off"]], ask_before_merge: [["on", "on"], ["off", "off"]] };
 
@@ -172,7 +182,8 @@ function prefCell(field) {
 }
 
 export function prefRows() {
-  return PREFS.map((field) => setting(`set-prefs-${field}`, PREF_NAMES[field], [`prefs.${field}`], prefCell(field)));
+  return Object.entries(PREF_NAMES).map(([field, name]) =>
+    setting(`set-prefs-${field}`, name, [`prefs.${field}`], prefCell(field)));
 }
 
 export function widths() {
@@ -186,24 +197,32 @@ export function widths() {
 // TD-336: how many agent sessions of one project run at once; the machine's total holds as well.
 export function sessionsAtOnce() {
   const key = "sessions", below = inherited()[key];
-  return cell(typed("Agent sessions at once in one project", own(key), (v) => edit(key, v),
+  return cell(typed(PLAIN_NAMES.sessions, own(key), (v) => edit(key, v),
     { key, placeholder: clear(below), inputmode: "numeric", disabled: state.saving }),
   source(key, state.loaded.settings[key]));
 }
 
-// TD-400: the curator decides alone at or above this confidence; one value for every machine and project, so
-// another layer shows it read-only with where it is set (#809).
-export function curatorThreshold() {
-  const key = "curator_threshold", label = "Curator's confidence threshold in percent (50 to 100)";
+// A setting only Global holds, for every project and machine: another layer shows it read-only with where it is set
+// (#809). *key* is the draft's and the resolved settings' path alike.
+function globalOnly(key, label, inUse, inputmode) {
   if (state.layer !== "global") {
-    const inUse = state.loaded.settings[key];
-    return cell(typed(label, String(inUse ?? ""), () => undefined,
-      { placeholder: "unset", inputmode: "numeric", disabled: true }), source(key, inUse),
-    html`<p-text size="sm" color="contrast-medium">set on Global</p-text>`);
+    return cell(typed(label, String(inUse ?? ""), () => undefined, { placeholder: "unset", inputmode, disabled: true }),
+      source(key, inUse), html`<p-text size="sm" color="contrast-medium">set on Global</p-text>`);
   }
   return cell(typed(label, own(key), (v) => edit(key, v),
-    { key, placeholder: clear(inherited()[key]), inputmode: "numeric", disabled: state.saving }),
-  source(key, state.loaded.settings[key]));
+    { key, placeholder: clear(at(inherited(), key)), inputmode, disabled: state.saving }), source(key, inUse));
+}
+
+// TD-400: the curator decides alone at or above this confidence; one value for every machine and project.
+export function curatorThreshold() {
+  const key = "curator_threshold", label = "Curator's confidence threshold in percent (50 to 100)";
+  return globalOnly(key, label, state.loaded.settings[key], "numeric");
+}
+
+// The memory values: what a rating is worth, when an entry goes stale, how much recall returns, when deleted files go.
+// Each is Global's alone, with no code default: unset, it holds the projects' work and the memory tools refuse.
+export function memoryValue(field, label, inputmode = "numeric") {
+  return globalOnly(`memory.${field}`, label, state.loaded.settings.memory?.[field], inputmode);
 }
 
 // Improvement's Spotter (design §4): each setting layered field by field; a project may set its own (2026-10-25).
@@ -250,24 +269,30 @@ export function prMarker() {
   { key, disabled: state.saving }), source(key, state.loaded.settings[key]));
 }
 
+// TD-402: the account a project's GitHub writes are made by; repository-owner shows the account TD-402's rule gives on
+// this project's origin now, whatever layer holds it (D-01M6G9XSXY0G5N65PBJ3RKKPK7).
+export function githubAccount() {
+  const key = "github_account", rule = state.loaded.github_rule ?? {};
+  const named = (v) => v !== "repository-owner" ? v
+    : rule.error ? `repository-owner: ${rule.error}` : `${rule.login || "no account"} (${rule.why})`;
+  return cell(typed("GitHub account: a login, or repository-owner", own(key), (v) => edit(key, v, true),
+    { key, placeholder: clear(inherited()[key]), disabled: state.saving }),
+  source(key, state.loaded.settings[key], true, named));
+}
+
 // D-01M5YE4P5317N1HWD0QN6N05E0: whether a Delivery step loads the owner's own instruction files or is offered his own
 // skills, from his Copilot folder; layered, with no default: steps refuse while either is unset.
 const USER_CONFIG = {
-  load_user_instructions: ["Your instructions in Delivery steps", "on: your instruction files load too",
-    "off: only the repository's instructions"],
-  load_user_skills: ["Your skills in Delivery steps", "on: your skills are offered too", "off: only Delivery's skills"],
-  load_user_memory: ["Copilot Memory in Delivery sessions", "on: they recall it; producing steps may save",
+  load_user_instructions: ["on: your instruction files load too", "off: only the repository's instructions"],
+  load_user_skills: ["on: your skills are offered too", "off: only Delivery's skills"],
+  load_user_memory: ["on: they recall it; producing steps may save",
     "off: no Copilot Memory (recommended)"], // D-01M69EBRBBW97001KZ43C0BJM1
 };
 export const USER_KEYS = Object.keys(USER_CONFIG);
 
-export function userConfigLabel(key) {
-  return USER_CONFIG[key][0];
-}
-
 export function userConfig(key) {
-  const [label, on, off] = USER_CONFIG[key], below = onOff(inherited()[key]);
-  return cell(choose(label, [[INHERIT, clear(below)], ["on", on], ["off", off]], own(key) || INHERIT,
+  const [on, off] = USER_CONFIG[key], below = onOff(inherited()[key]);
+  return cell(choose(USER_NAMES[key], [[INHERIT, clear(below)], ["on", on], ["off", off]], own(key) || INHERIT,
     (v) => edit(key, v), { key, disabled: state.saving }), source(key, state.loaded.settings[key], true, onOff));
 }
 
@@ -279,7 +304,7 @@ const GUARD = [["strict", "strict: refuse what it finds, warn on weak signs"],
 
 export function guardLevel() {
   const key = "guard_level", below = inherited()[key];
-  return cell(choose("Shell guard level", [[INHERIT, clear(below)], ...GUARD], own(key) || INHERIT,
+  return cell(choose(PLAIN_NAMES.guard_level, [[INHERIT, clear(below)], ...GUARD], own(key) || INHERIT,
     (v) => edit(key, v), { key, disabled: state.saving }), source(key, state.loaded.settings[key]));
 }
 

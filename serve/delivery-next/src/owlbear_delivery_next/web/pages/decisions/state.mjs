@@ -18,6 +18,8 @@ export const VIEWS = { global: { where: "global", name: "Global" }, owlbear: { w
 const asked = new URLSearchParams(location.search).get("view") ?? "";
 export const wide = shown() !== null && !project ? (Object.hasOwn(VIEWS, asked) ? asked : "") : null;
 export const ROOT = wide === null ? "" : "/owlbear";
+// A decision another page links to (the Change page's picked decisions): opened once the list has loaded.
+export const linked = new URLSearchParams(location.search).get("decision") ?? "";
 // Everything the page shows comes from here, so a re-render never loses what the owner typed or opened.
 export const state = {
   loaded: null, error: "", receipts: [], notice: "",
@@ -59,9 +61,9 @@ export function show() {
   if (focused?.isConnected && document.activeElement !== focused) focused.focus();
 }
 
+// An error shows exactly as it was produced, ids and paths included (D-01M6K2QT33Y51A83HQDR9X0D37).
 export function notify(message = "") {
-  const said = untagged(message);
-  state.error = said ? said.charAt(0).toUpperCase() + said.slice(1) : "";
+  state.error = message;
   show();
 }
 
@@ -88,7 +90,7 @@ export function readBack(d) {
   return d.inherited ? "Inherited, never read back" : "not read back";
 }
 
-// Titles identify decisions on this page; ids stay in attributes and requests.
+// Titles identify decisions on this page; ids stay in attributes and requests, and in errors as produced.
 const ID = /\bD-[0-7][0-9A-HJKMNP-TV-Z]{25}\b/g;
 
 function titles() {

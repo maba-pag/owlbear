@@ -1,6 +1,7 @@
 """The Settings page's Impeccable update job (TD-101) and the Maintenance overview (TD-113), with fakes for the live
 parts: upstream, downloads, golden pages, replay and the challenger. Git runs only on local repositories in tmp."""
 
+import dataclasses
 import fcntl
 import hashlib
 import json
@@ -49,6 +50,7 @@ from owlbear_delivery_next.impeccable_runs import (
     pack_run,
     pack_updater,
 )
+from owlbear_delivery_next.local_system import git_run
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.maintenance import Maintenance
 from owlbear_delivery_next.local_system.processes import Termination
@@ -142,11 +144,11 @@ class FakeGitHub:
         assert branch == "main"
         if self.plan_limited:  # the real read of GitHub's plan-limit 403: no rules, no required checks
 
-            def limited(argv, _body, _timeout, _cwd):
+            def limited(argv, _body, _timeout, _cwd, _env):
                 said = b"gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)\n"
                 return subprocess.CompletedProcess(argv, 1, b"", said)
 
-            return GhProvider(self.remote, runner=limited).read_rules(repository, branch)
+            return GhProvider(self.remote, writer=None, runner=limited).read_rules(repository, branch)
         return Rules(state="known", evidence="rules", required_checks=("CI",))
 
     def observe_checks(self, _repository: str, _number: int, _head: str) -> tuple[Check, ...]:
@@ -1010,6 +1012,81 @@ def test_a_ci_repair_of_detector_code_is_checked_again_and_merges_only_once_the_
     assert fakes.github.calls == ["create", "merge", "delete"]
 
 
+@pytest.mark.parametrize("cause", ["read", "lay", "alike"])
+def test_a_repair_that_cannot_be_read_or_laid_out_holds_with_its_whole_error(
+    tmp_path, checkout, clone, whole_error, cause
+):
+    """#971: GitHub's or git's whole error holds the update: its reason, its question and its log."""
+    fakes, job, _state = ci_failed(tmp_path, checkout, clone, {DETECTOR: "# repaired\n"})
+    fakes.github.checks = ["success"]
+    error = noted(ProviderError(FailureCode.INVALID_RESPONSE, "read_pull_request", whole_error, retry_safe=False))
+    whole, real = f"{type(error).__name__}: {error}\na note added on the way up", job.live.git
+    reading, listing, listed = fakes.github.read_pull_request, fakes.github.open_pull_requests, []
+
+    def unreadable(repository: str, number: int) -> PullRequest:
+        if listed:  # the start's own check of open pull requests reads them
+            return reading(repository, number)
+        raise error
+
+    def opened(repository: str, prefix: str) -> tuple[PullRequest, ...]:
+        listed.append(prefix)
+        try:
+            return listing(repository, prefix)
+        finally:
+            listed.clear()
+
+    def refusing(at: Path, argv: list[str]) -> str:
+        if argv[0] == "ls-tree":  # the repair's protected content, read from its commit
+            raise noted(pack_files.PackError(whole_error))
+        return real(at, argv)
+
+    if cause == "read":
+        fakes.github.read_pull_request, fakes.github.open_pull_requests = unreadable, opened
+    elif cause == "lay":
+        job.live.git = refusing
+    state = answered(job, "repair")
+    if cause == "alike":
+        job.live.git = refusing
+        state = answered(job, "approve")
+
+    made = (state["repair"] or {}).get("commit", "")[:12]  # none before the repair started
+    reason = {
+        "read": f"the pull request could not be read before the agent's repair ({whole}); try again or discard",
+        "lay": f"the agent's repair {made} could not be laid out for its check: PackError: {whole_error}\n"
+        "a note added on the way up",
+        "alike": f"the checked candidate is not the agent's repair {made}: PackError: {whole_error}\n"
+        "a note added on the way up",
+    }[cause]
+    (q,) = state["questions"]
+    assert (state["state"], state["reason"], q["text"]) == (
+        "waiting",
+        reason,
+        f"{reason} ({state['published']['url']})",
+    )
+    assert state["log"][-1].split(" ", 1)[1] == f"waiting for you: {reason}"
+
+
+def test_labels_that_cannot_be_added_are_logged_whole_and_never_hold_the_update(tmp_path, checkout, clone, whole_error):
+    """#971: GitHub's whole refusal of the pull request's labels reaches the run's log; the update goes on (TD-308)."""
+    fakes, store = Fakes(clone), Store(tmp_path / "store")
+    store.root.mkdir(parents=True)
+    (store.root / "config.json").write_text(json.dumps({"format": 4, "pr_labels": ["release:minor"]}))
+    error = noted(ProviderError(FailureCode.INVALID_RESPONSE, "add_labels", whole_error, retry_safe=False))
+    live = fakes.live(checkout)
+
+    def refused(_repository: str, _number: int, _labels: list[str]) -> None:
+        raise error
+
+    fakes.github.add_labels = refused
+    state = run(pack_job.Job(store, live))
+
+    said = (
+        f"the labels release:minor were not added: ProviderError: add_labels: {whole_error}\na note added on the way up"
+    )
+    assert state["state"] == "passed", state["reason"]
+    assert [line.split(" ", 1)[1] for line in state["log"] if " were not added: " in line] == [said]
+
+
 def test_a_second_protected_repair_after_the_owners_approval_asks_for_it_again(tmp_path, checkout, clone):
     fakes, job, _ = ci_failed(tmp_path, checkout, clone, {DETECTOR: "# repaired\n"}, {GOLDEN: "<p>repaired</p>\n"})
     fakes.github.checks = ["success"]
@@ -1523,12 +1600,32 @@ def test_a_missing_tool_the_updater_reports_stops_with_its_words(tmp_path, check
     assert state["reason"].endswith(" no shell tool)")
 
 
+NOTE = "a note added on the way up"
+OUT = "what the command printed"
+
+
+def noted(error: Exception) -> Exception:
+    """*error*, with a note added on its way up."""
+    error.add_note(NOTE)
+    return error
+
+
+def stage_failed(state: dict, stage: str, said: str) -> None:
+    """The run failed in *stage* saying *said*: its reason, its stage's, its last invocation's and its log's."""
+    reason = f"{stage}: {said}"
+    assert (state["state"], state["reason"]) == ("failed", reason)
+    assert next(s for s in state["stages"] if s["name"] == stage)["detail"] == reason
+    assert state["invocations"][-1]["detail"] == reason
+    logged = [line.split(" ", 1)[1] for line in state["log"]]
+    assert logged[-3:] == [f"{stage}: running", f"{stage}: failed: {reason}", reason]
+
+
 @pytest.mark.parametrize("cause", ["git", "updater", "challenger", "reconsideration", "outside-a-stage"])
 def test_a_failed_pack_stage_keeps_and_logs_its_whole_error(  # noqa: PLR0913, PLR0917 - its fixtures
     tmp_path, checkout, clone, monkeypatch, whole_error, cause
 ):
-    """A stage's error reaches the run's reason, its stage, its invocation and its log whole (#895)."""
-    fakes, real = Fakes(clone), subprocess.run
+    """A stage's error reaches the run's reason, its stage, its invocation and its log whole (#895, #971)."""
+    fakes, real, ran = Fakes(clone), subprocess.run, []
 
     def ended(_store: Store, cfg) -> Run:  # a session that ends without a result
         return Run(cfg.session_id, "error", detail=whole_error, termination=Termination(confirmed=True))
@@ -1536,26 +1633,23 @@ def test_a_failed_pack_stage_keeps_and_logs_its_whole_error(  # noqa: PLR0913, P
     if cause == "outside-a-stage":  # the run's own code fails between stages: the run ends with its words
 
         def failing(*_args: object, **_kwargs: object) -> None:
-            raise RuntimeError(whole_error)
+            raise noted(RuntimeError(whole_error))
 
         monkeypatch.setattr(pack_run, "begin", failing)
         state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
-        reason = f"RuntimeError: {whole_error}"
+        reason = f"RuntimeError: {whole_error}\n{NOTE}"
         assert (state["state"], state["reason"], state["log"][-1].split(" ", 1)[1]) == ("failed", reason, reason)
         return
-    if cause == "git":  # the checkout's own git refuses, in git's words
+    if cause == "git":  # the checkout's own git refuses, in git's words: both its streams
 
         def refusing(args, *rest, **kw):
             if args[:3] == ["git", "rev-parse", "--show-toplevel"]:
-                raise subprocess.CalledProcessError(128, args, output="", stderr=f"{whole_error}\n")
+                ran.append(args)
+                return subprocess.CompletedProcess(args, 128, f"{OUT}\n", f"{whole_error}\n")
             return real(args, *rest, **kw)
 
-        monkeypatch.setattr(pack_git.subprocess, "run", refusing)
-        stage = "candidate"
-        said = (
-            f"PackError: the package at {checkout.resolve()} is not a git checkout, so an update cannot be committed: "
-            f"git rev-parse failed: {whole_error}"
-        )
+        monkeypatch.setattr(git_run.subprocess, "run", refusing)
+        stage, said = "candidate", None
     elif cause == "updater":  # its session ends without a result
         fakes.update = ended
         stage, said = "update", f"PackError: the updater ended with error: {whole_error}"
@@ -1570,12 +1664,113 @@ def test_a_failed_pack_stage_keeps_and_logs_its_whole_error(  # noqa: PLR0913, P
     else:
         state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
-    reason = f"{stage}: {said}"
-    assert (state["state"], state["reason"]) == ("failed", reason)
-    assert next(s for s in state["stages"] if s["name"] == stage)["detail"] == reason
-    assert state["invocations"][-1]["detail"] == reason
+    stage_failed(
+        state,
+        stage,
+        said
+        or (
+            f"PackError: the package at {checkout.resolve()} is not a git checkout, so an update cannot be "
+            f"committed: PackError: git rev-parse failed: CalledProcessError: Command '{ran[0]}' returned non-zero "
+            f"exit status 128.\nstderr:\n{whole_error}\nstdout:\n{OUT}"
+        ),
+    )
+
+
+@pytest.mark.parametrize("cause", ["upstream-file", "engine-digest", "golden"])
+def test_a_candidate_or_golden_stage_that_fails_keeps_its_whole_error(  # noqa: PLR0913, PLR0917 - its fixtures
+    tmp_path, checkout, clone, monkeypatch, whole_error, cause
+):
+    """#971: git's streams, a download's error or the golden pages' browser's error, with their notes, is the run's
+    reason, its stage's, its invocation's and its log's."""
+    fakes, real, ran = Fakes(clone), subprocess.run, []
+    if cause == "upstream-file":  # upstream's clone lacks a pinned file: git's streams and the error's note
+
+        def lacking(args, *rest, **kw):
+            if args[:4] == ["git", "-C", str(clone), "show"]:
+                ran.append(args)
+                raise noted(subprocess.CalledProcessError(128, args, OUT.encode(), whole_error.encode()))
+            return real(args, *rest, **kw)
+
+        monkeypatch.setattr(subprocess, "run", lacking)
+    elif cause == "engine-digest":  # the engine's published digest cannot be downloaded
+
+        def unreachable(url: str) -> bytes:
+            ran.append(url)
+            raise noted(OSError(whole_error))
+
+        fakes.download = unreachable
+    else:  # the golden pages' browser does not start
+        from playwright import sync_api  # noqa: PLC0415 - the optional browser runtime
+
+        def unstarted() -> None:
+            raise noted(sync_api.Error(whole_error))
+
+        monkeypatch.setattr(sync_api, "sync_playwright", unstarted)
+        fakes.golden = lambda installed, _folder=None: pack_update._in_pages(installed, tmp_path, ["good.html"])  # noqa: SLF001
+
+    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+
+    if cause == "golden":
+        stage_failed(state, "golden", f"DetectorError: the golden pages did not render: Error: {whole_error}\n{NOTE}")
+        return
+    said = {
+        "upstream-file": f"PackError: upstream at {NEWER} lacks a file the pack pins: CalledProcessError: Command "
+        f"'{ran[0]}' returned non-zero exit status 128.\nstderr:\n{whole_error}\nstdout:\n{OUT}\n{NOTE}",
+        "engine-digest": f"PackError: cannot download {ran[0]}: OSError: {whole_error}\n{NOTE}",
+    }[cause]
+    stage_failed(state, "candidate", said)
+
+
+@pytest.mark.parametrize("stage", ["updater", "challenger", "reconsider", "repair"])
+def test_an_unverified_session_end_says_its_problems_whole(tmp_path, checkout, clone, whole_error, stage):
+    """A session whose end is not proven stops its stage saying why, each teardown problem whole (#951)."""
+    left = Termination(confirmed=False, unknown=(9,), problems=(f"disconnect failed: RuntimeError: {whole_error}",))
+    seen: list[str] = []
+
+    def unproven(real, aimed):
+        def session(store: Store, cfg) -> Run:
+            done = real(store, cfg)
+            if aimed(cfg) and not seen:
+                seen.append(cfg.session_id)
+                done = dataclasses.replace(done, termination=left)
+            return done
+
+        return session
+
+    if stage == "reconsider":
+        job, _fakes, _state = upheld(tmp_path, checkout, clone)
+        job.live.challenge = unproven(job.live.challenge, lambda cfg: cfg.submit is dispute_tools.SUBMIT)
+        state = answered(job, "reconsider", "the halo is upstream's own example")
+    elif stage == "repair":
+        _fakes, job, _state = ci_failed(tmp_path, checkout, clone, {"fixed.txt": "fixed\n"})
+        job.live.update = unproven(job.live.update, lambda cfg: cfg.submit is pack_repair.SUBMIT)
+        state = answered(job, "repair")
+    else:
+        fakes = Fakes(clone)
+        if stage == "updater":
+            fakes.update = unproven(fakes.update, lambda _cfg: True)
+        else:
+            fakes.challenge = unproven(fakes.challenge, lambda _cfg: True)
+        state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+    why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
     logged = [line.split(" ", 1)[1] for line in state["log"]]
-    assert logged[-3:] == [f"{stage}: running", f"{stage}: failed: {reason}", reason]
+    if stage == "repair":
+        said = f"the agent's repair did not finish: PackError: the agent {seen[0]} may still be running; stop it on "
+        said += f"the Maintenance page; {why}"
+        published = state["published"]
+        reason = f"CI failed at {published['commit'][:12]} of {published['url']}: CI; {said}. Fix it and try again, "
+        reason += "have an agent try again, or discard"
+        assert (state["state"], state["reason"]) == ("waiting", reason)
+        assert [i["detail"] for i in state["invocations"] if i["operation"] == "ci-repair"] == [said]
+        assert next(s for s in state["stages"] if s["name"] == "merge")["detail"] == reason
+        assert logged[-3:] == ["merge: running", f"merge: failed: {said}", f"waiting for you: {reason}"]
+        return
+    name, who = ("update", "updater") if stage == "updater" else ("challenger", "challenger")
+    reason = f"{name}: PackError: the {who} {seen[0]} may still be running; stop it before updating again; {why}"
+    assert (state["state"], state["reason"]) == ("failed", reason)
+    assert next(s for s in state["stages"] if s["name"] == name)["detail"] == reason
+    assert state["invocations"][-1]["detail"] == reason
+    assert logged[-3:] == [f"{name}: running", f"{name}: failed: {reason}", reason]
 
 
 def test_a_hold_stops_a_running_invocation_with_its_whole_reason(whole_error) -> None:

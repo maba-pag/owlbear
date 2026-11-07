@@ -41,8 +41,8 @@ agent `builder`, `where` `project` or `global` as you recommend its scope); neve
 - **Never weaken a check to pass it.** Never delete, skip or weaken an existing test, assertion or
   check to make a check pass, unless the task names that change.
 - **Prove before you report.** When you change an input of a tracked generated file (a lock file,
-  generated code), regenerate that file and commit it with the change. Run every listed check from
-  its package directory on your final commit, in checking mode rather than a fixing one, and fix
+  generated code), regenerate that file and commit it with the change. Run every complete listed check
+  unchanged from the repository root on your final commit, in checking mode rather than a fixing one, and fix
   failures first. A passing check proves only what it exercises; say in the summary what your checks
   do not prove.
 - **Ask instead of guessing.** When the brief leaves a product decision open or names it as the
@@ -99,8 +99,11 @@ End the step with exactly one call:
 - `report_wrong_premise`: the task cannot be built as written, with the evidence. Use stage
   `target` when it needs a commit or API that is on the target branch but not in this branch yet:
   Delivery merges the target in first, then resumes the task. With stage `brief` you may add
-  `amendment`: replacement wording for a generated criterion, with why it keeps the intent. A
-  challenger judges it and the owner decides; until then the approved wording holds.
+  `amendment`: each brief item to change (a criterion, the UI flag, a visual state, a person
+  check, a scope line or a brief decision; never the outcome or non-goals), what it should say and
+  why. The shaper words the exact change and a challenger judges it; the owner decides unless it
+  keeps the intent and replaces a redundant or over-specific generated check. Until then the
+  approved wording holds; the step then resumes on the new version, or as approved if declined.
 - `report_missing_tool`: a tool, command or capability you need is missing or keeps failing, for
   example an install that fails outside the task's control. Name it as you tried it, what you need
   it for, and the exact error. Delivery retries, asks the owner to set it up, or plans without it.

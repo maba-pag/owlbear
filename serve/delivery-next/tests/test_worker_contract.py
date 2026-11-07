@@ -1,5 +1,6 @@
 import asyncio
 import dataclasses
+import json
 import shlex
 from datetime import UTC, datetime
 from pathlib import Path
@@ -8,6 +9,7 @@ from typing import ClassVar
 
 import psutil
 import pytest
+from copilot._jsonrpc import JsonRpcError
 
 from owlbear_delivery_next.change_contracts import tool_schema, tools
 from owlbear_delivery_next.change_contracts.models import (
@@ -56,10 +58,11 @@ def build(**changes) -> BuildResult:
 def test_the_plan_challenger_sees_where_each_check_runs() -> None:
     entry = ProfileEntry(state="known", value="npm test", evidence="packages/app/package.json")
     profile = Profile(entries={"check:packages/app": entry})
-    plan = Plan(tasks=[Task(id="t1", title="Add sign", scope=["packages/app"], checks=["npm test"])])
+    check = "cd ./packages/app && {\nnpm test\n}"
+    plan = Plan(tasks=[Task(id="t1", title="Add sign", scope=["packages/app"], checks=[check])])
     text = step_input.plan_challenge(Change(slug="s"), plan, profile, Path("/w"), {})
-    assert "- `packages/app`: install `none`, check `npm test`" in text
-    assert "runs each check from its package directory" in text
+    assert f"- `packages/app`: install `none`, check `{check}`" in text
+    assert text.count(check) == 2
 
 
 def test_the_plan_challenger_sees_the_whole_plan_and_a_cut_is_said() -> None:
@@ -152,7 +155,8 @@ LONG = "packages/frontend-components-library"
 def test_a_required_check_counts_only_as_that_command_or_that_command_run_in_a_directory(reported, required, missing):
     result = build(checks=[{"command": c, "exit_code": 0} for c in reported])
     assert tools.check_build(result, Worktree(HEAD, BASE), required) == [
-        f'checks: "{c}" missing - run it on your commit and report it, e.g. {{"command": "{c}", "exit_code": 0}}'
+        f'checks: "{c}" missing - run it on your commit and report it, '
+        f"e.g. {json.dumps({'command': c, 'exit_code': 0})}"
         for c in missing
     ]
 
@@ -324,7 +328,9 @@ def test_usage_is_read_once_more_and_a_still_unread_read_names_why_the_check_can
         async def get_metrics(self) -> SimpleNamespace:
             if self.fails:
                 self.fails -= 1
-                raise RuntimeError
+                error = JsonRpcError(-32603, "MESSAGE-MARK", {"marker": "DATA-MARK"})
+                error.add_note("NOTE-MARK")
+                raise error
             tokens = SimpleNamespace(input_tokens=5, output_tokens=7)
             luna = SimpleNamespace(total_nano_aiu=2e9, usage=tokens)
             return SimpleNamespace(total_nano_aiu=2e9, model_metrics={"gpt-6-luna": luna})
@@ -334,8 +340,9 @@ def test_usage_is_read_once_more_and_a_still_unread_read_names_why_the_check_can
     assert asyncio.run(sdk_usage.usage_read(once, "gpt-6-luna"))["models"]["gpt-6-luna"]["tokens"] == 12
     twice = SimpleNamespace(rpc=SimpleNamespace(usage=Usage(2)))
     after = asyncio.run(sdk_usage.usage_read(twice, "gpt-6-luna"))
-    assert after == {"error": "RuntimeError"}
-    assert sdk_usage.unread({}, after) == "the usage at the step's end could not be read (RuntimeError)"
+    said = "JsonRpcError: JSON-RPC Error -32603: MESSAGE-MARK\nNOTE-MARK {'marker': 'DATA-MARK'}"  # #971: whole
+    assert after == {"error": said}
+    assert sdk_usage.unread({}, after) == f"the usage at the step's end could not be read ({said})"
     before = sdk_usage.unread({"error": "TimeoutError"}, {"models": {}})
     assert before == "the usage before the resumed turn could not be read (TimeoutError)"
     assert sdk_usage.unread({}, {}) == sdk_usage.unread({}, {"models": {}}) == ""
@@ -347,7 +354,8 @@ def test_a_session_that_opened_but_could_not_send_still_needs_its_usage_read(mon
             self.rpc = SimpleNamespace(usage=SimpleNamespace(get_metrics=self.metrics))
 
         async def metrics(self) -> None:
-            raise RuntimeError
+            msg = "usage refused"
+            raise RuntimeError(msg)
 
         async def send(self, *_a, **_k) -> None:
             raise ConnectionError
@@ -376,7 +384,8 @@ def test_a_session_that_opened_but_could_not_send_still_needs_its_usage_read(mon
     monkeypatch.setattr(sdk_usage, "USAGE_PAUSE", 0)
     cfg = dataclasses.replace(step().cfg, model="gpt-6-luna", resume=False)
     run = asyncio.run(sdk_adapter.run(cfg))
-    assert (run.ending, run.usage_unread) == ("error", "the usage at the step's end could not be read (RuntimeError)")
+    said = "the usage at the step's end could not be read (RuntimeError: usage refused)"
+    assert (run.ending, run.usage_unread) == ("error", said)
     assert Client.excluded == ["ask_user"]
     Client.opens = False  # nothing opened, so no model ran
     assert asyncio.run(sdk_adapter.run(cfg)).usage_unread == ""
@@ -514,7 +523,7 @@ def test_a_hung_runtime_stop_is_bounded_and_falls_back_to_signals(monkeypatch) -
     st = step()
     t = asyncio.run(sdk_teardown.teardown(client, None, st))
     assert (t.confirmed, t.problems, calls) == (False, ("runtime PID unknown",), ["term", "kill"])
-    assert st.events[-1]["reason"] == "runtime stop failed (TimeoutError)"
+    assert st.events[-1]["reason"] == "runtime stop failed: TimeoutError: runtime stop did not answer within 0.05 s"
 
 
 def test_deadline_retries_unless_termination_is_unverified_and_carries_the_last_denial() -> None:
@@ -529,9 +538,9 @@ def test_deadline_retries_unless_termination_is_unverified_and_carries_the_last_
         "send did not answer within 30 s",
         "`git commit --no-verify` uses --no-verify",
     )
-    run.termination = Termination(confirmed=False, unknown=(9,), problems=("disconnect failed (OSError)",))
+    run.termination = Termination(confirmed=False, unknown=(9,), problems=("disconnect failed: OSError: gone",))
     assert to_result(run, StepKind.BUILD, NOW).stop.reason == (
-        "termination unverified: processes 9 still present; disconnect failed (OSError)"
+        "termination unverified: processes 9 still present; disconnect failed: OSError: gone"
     )
 
 

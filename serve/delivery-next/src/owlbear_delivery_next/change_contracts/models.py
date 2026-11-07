@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next.change_contracts.amendment_records import Amendment
+from owlbear_delivery_next.change_contracts.amendment_records import Amending, Amendment
 from owlbear_delivery_next.change_contracts.curation_records import TestReview
 from owlbear_delivery_next.change_contracts.decision_records import (
     BriefDecision,
@@ -17,14 +17,22 @@ from owlbear_delivery_next.change_contracts.decision_records import (
     Pick,
     Published,
 )
+from owlbear_delivery_next.change_contracts.env_records import Environment, Recipe
 from owlbear_delivery_next.change_contracts.held_records import HeldRecord, PendingChild
 from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
+from owlbear_delivery_next.change_contracts.shaper_records import SavingChat, ShaperNotice
 from owlbear_delivery_next.change_contracts.spend import Spend
 from owlbear_delivery_next.change_contracts.tool_use import ToolUse
-from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion, VisualResult, VisualRound
+from owlbear_delivery_next.change_contracts.visual_records import (
+    OwnerCriterion,
+    ShapingCapture,
+    VisualResult,
+    VisualRound,
+    VisualStep,
+)
 
-FORMAT = 8
+FORMAT = 9
 DETAIL = 60000  # one review batch: up to 20 new and 20 owner-decided findings of about 1,300 characters
 
 type Actor = Literal["you", "admin", "delivery", "github"]
@@ -35,7 +43,9 @@ type Role = Literal[
 ]  # fmt: skip
 type Effort = Literal["low", "medium", "high", "xhigh", "max"]
 type Context = Literal["default", "long"]  # the model's default context tier, or its long-context tier
-type Move = Literal["done", "pause", "abandon", "retry", "accept", "repair", "reconsider", "another", "rebuild"]
+type Move = Literal[
+    "done", "pause", "abandon", "retry", "accept", "repair", "reconsider", "another", "rebuild", "amend"
+]
 type AnswerKind = Literal["event", "clarification", "brief_change"]  # its relayer's class of a worker's answer
 
 
@@ -116,14 +126,6 @@ class Criterion(Record):
 VISUAL = "visual"  # the reserved check-step task id of the engine's visual check
 
 
-class VisualStep(Record):
-    """One owner-authored action before a state's screenshot (TD-49), on a prepared test copy only (TD-96)."""
-
-    do: Literal["click", "type"]
-    target: str  # the control's accessible name: a button or link to click, a field's label to type into
-    text: str = ""  # what to type
-
-
 class VisualState(Record):
     """One page state the visual check renders: a path under the preview root, steps, and what it must show."""
 
@@ -134,14 +136,27 @@ class VisualState(Record):
     version: int = 1
 
 
+class BriefRecipe(Record):
+    """How shaping and the visual check start the target's preview: the command, where, and the URL that answers.
+
+    ``command`` passes ``{port}`` to its server and ``ready_url`` holds ``{port}``: Delivery picks it per launch.
+    """
+
+    command: str
+    directory: str
+    ready_url: str
+
+
 class Brief(Record):
     """The user's brief: the current draft, the approved version, and each approved version's content."""
 
     version: int = 0
+    saving_chat: SavingChat | None = None
     approved_version: int | None = None
     approved_at: datetime | None = None
     challenged: int | None = None  # the version its challenge loop ended on: approvable (TD-249, TD-208)
     requested: int | None = None  # the version the shaper asked to be challenged (TD-249)
+    approve_if_clean: int | None = None  # the version the owner approves once its challenge raises nothing (#986)
     title: str = ""
     outcome: str = ""
     scope: list[str] = Field(default_factory=list)
@@ -151,8 +166,12 @@ class Brief(Record):
     criteria: list[Criterion] = Field(default_factory=list)
     ui: bool = False
     visual: list[VisualState] = Field(default_factory=list)
+    recipe: BriefRecipe | None = None  # how the target's pages render, established in shaping
+    preparation: str = ""  # the declared test preparation option the shaping capture runs on
     specified: list[str] = Field(default_factory=list)  # criteria, states and checks the owner stated (TD-179)
     approved: list[Brief] = Field(default_factory=list)
+    checks: list[PersonCheck] = Field(default_factory=list)  # an approved version's person checks (TD-185)
+    reference: int | None = None  # the version weakening is judged from; None: the first approved one (TD-185)
 
 
 class Intent(Record):
@@ -223,6 +242,7 @@ class Question(Record):
     answer: Answer | None = None
     delivered_at: datetime | None = None
     effect_observed_at: datetime | None = None
+    shaping_version: int | None = None
 
 
 class ItemRef(Record):
@@ -320,6 +340,7 @@ class Review(Record):
     round: int = 1
     tree: str | None = None  # the reviewed tree; ``inputs.paths`` hold the engine-computed covered blobs
     findings: list[str] = Field(default_factory=list)  # every accepted finding, complete
+    brief: int | None = None  # the brief version it judged; a final review stands for that version only (TD-185)
 
 
 class Step(Record):
@@ -402,29 +423,6 @@ class Stop(Record):
     at: datetime
 
 
-class Environment(Record):
-    """A person-only check's environment: the Builder's launch recipe and the PIDs the host started from it."""
-
-    check: str
-    command: str
-    directory: str
-    ready_url: str
-    pids: dict[int, float | None] = Field(default_factory=dict)
-    pgid: int | None = None
-    launched_at: datetime | None = None  # set before spawning; without ``pgid`` the launch is uncertain
-    ready_at: datetime | None = None
-
-
-class Recipe(Record):
-    """The launch recipe one check last started from; reused while its directory's own files are unchanged."""
-
-    check: str
-    command: str
-    directory: str
-    ready_url: str
-    inputs: str | None = None  # digest of the directory's own files at launch; unknown is never reused
-
-
 class Names(Record):
     """Names only; heads always come from git."""
 
@@ -452,6 +450,7 @@ class Change(Record):
     profile_version: int = 0
     intent: Intent = Field(default_factory=Intent)
     brief: Brief = Field(default_factory=Brief)
+    shaper_notice: ShaperNotice | None = None
     checks: list[PersonCheck] = Field(default_factory=list)
     decisions: list[Decision] = Field(default_factory=list)
     questions: list[Question] = Field(default_factory=list)
@@ -476,11 +475,14 @@ class Change(Record):
     env: Environment | None = None
     recipe: Recipe | None = None
     visual: VisualResult | None = None
-    before: VisualResult | None = None  # TD-24: the states at the merge-base, captured once; never gates
+    before: VisualResult | None = None  # the states at the merge-base, captured by each visual check; never gates
+    shaped: ShapingCapture | None = None  # the current draft's pages, captured in shaping; approval waits for it
+    reference: ShapingCapture | None = None  # the approved version's shaping pictures: the design reference
     visual_rounds: list[VisualRound] = Field(default_factory=list)  # TD-78: two judges per round
     owner_criteria: list[OwnerCriterion] = Field(default_factory=list)  # TD-79: checked by every later round
     waived: dict[str, str] = Field(default_factory=dict)  # TD-341: criteria the owner accepted unmet, by their text
-    amendments: list[Amendment] = Field(default_factory=list)  # TD-179: proposed brief wording, challenged
+    amendments: list[Amendment] = Field(default_factory=list)  # TD-185: every amendment and how it ended
+    amending: Amending | None = None  # the amendment running before the stopped step
     loops: dict[str, RoundLoop] = Field(default_factory=dict)  # TD-208: each subject's challenge loop
     names: Names = Field(default_factory=Names)
     spend: Spend = Field(default_factory=Spend)

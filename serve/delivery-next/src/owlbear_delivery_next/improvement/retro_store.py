@@ -25,6 +25,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import assumptions
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
@@ -40,6 +41,15 @@ UNITS = "units.json"
 
 class RetroError(Exception):
     """Retro's state cannot be read or written as asked."""
+
+
+SYNTHETIC_RETIRED = "synthetic Retro is retired; its records are historical"
+
+
+def require_real(provenance: str) -> None:
+    """Refuse an action on historical synthetic Retro work."""
+    if provenance == "synthetic":
+        raise RetroError(SYNTHETIC_RETIRED)
 
 
 def place() -> Path:
@@ -124,7 +134,7 @@ def lines(name: str) -> list[dict[str, Any]]:
     try:
         return [json.loads(line) for line in text.splitlines() if line.strip()]
     except ValueError as exc:
-        msg = f"Retro's {name} cannot be read: {exc}"
+        msg = f"Retro's {name} cannot be read: {failure(exc)}"
         raise RetroError(msg) from exc
 
 
@@ -162,7 +172,7 @@ def table() -> dict[str, Any]:
     except FileNotFoundError:
         return {"watermark": "", "units": {}}
     except ValueError as exc:
-        msg = f"Retro's {UNITS} cannot be read: {exc}"
+        msg = f"Retro's {UNITS} cannot be read: {failure(exc)}"
         raise RetroError(msg) from exc
     if not isinstance(found, dict) or not isinstance(found.get("units"), dict):
         msg = f"Retro's {UNITS} is not a table of units"
@@ -206,29 +216,26 @@ def units(state: str | None = None, *, synthetic: bool = False) -> dict[str, dic
 # Button requests (the Improvement page's, or ``owlbear improvement retro run``)
 
 
-def request(  # noqa: PLR0913 - one keyword per thing a run may be about
+def request(
     by: str,
     change: str | None = None,
     chat: str | None = None,
     *,
-    synthetic: str = "",
     redraft: str = "",
     followup: str = "",
 ) -> str:
-    """Queue a run of one Change, chat, synthetic unit, redirected proposal's redraft or finding's follow-up; its id.
+    """Queue a run of one Change, chat, redirected proposal's redraft or finding's follow-up; its id.
 
-    A Change is named ``project:slug``, a synthetic unit by its name, a proposal and a finding by their ids.
+    A Change is named ``project:slug``, a proposal and a finding by their ids.
 
-    A request is taken before its run opens, so a host that stops in between loses it and never pays twice; the
-    synthetic set is queued one unit per request, so a stop loses none of its units still queued.
+    A request is taken before its run opens, so a host that stops in between loses it and never pays twice.
 
     Raises:
         RetroError: Not exactly one of them is named.
     """
-    named = {"change": change or "", "chat": chat or "", "synthetic": synthetic}
-    named |= {"redraft": redraft, "followup": followup}
+    named = {"change": change or "", "chat": chat or "", "redraft": redraft, "followup": followup}
     if sum(map(bool, named.values())) != 1:
-        msg = "a Retro request names exactly one Change, one chat, the synthetic units, one redraft or one follow-up"
+        msg = "a Retro request names exactly one Change, one chat, one redraft or one follow-up"
         raise RetroError(msg)
     rid = f"rq-{uuid.uuid4().hex[:12]}"
     with locked():
@@ -304,7 +311,7 @@ def run_states() -> dict[str, dict[str, Any]]:
         elif event == "ended":
             snap |= {"state": "ended", "result": line.get("result", ""), "ended": line["at"]}
             snap["credits"], snap["held"] = line.get("credits"), line.get("held", False)
-            snap |= {k: line[k] for k in ("followup", "redraft") if k in line}  # what a redraft or follow-up made
+            snap |= {k: line[k] for k in ("followup", "redraft", "settings_unset") if k in line}
     return found
 
 

@@ -6,6 +6,7 @@ import contextlib
 import os
 import shlex
 import signal
+import socket
 import subprocess
 import threading
 import time
@@ -19,6 +20,7 @@ import psutil
 from owlbear_delivery_next.change_contracts import evidence, failures
 from owlbear_delivery_next.change_contracts.models import VISUAL, ErrorKind, Exit, StepKind, Task, Waiting
 from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import processes
 
 if TYPE_CHECKING:
@@ -30,10 +32,43 @@ READY_WITHIN = 60.0
 GRACE = 5.0
 WITHIN = 600.0  # seconds per install or preparation command
 PIDFILE = "env.pid"  # the launched recipe's pid, written by its wrapper before the recipe runs
+PORT = "{port}"  # a recipe's placeholder for the port Delivery picks per launch (TD-40)
 type Action = Literal["launch", "keep", "dispose", "settle"]
 type Pids = dict[int, float | None]
 type Found = dict[int, str]
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
+
+
+def free_port() -> int:
+    """A port no local listener holds now, as the kernel hands it out; the launch takes it right away (TD-40)."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
+
+
+def url(e: Environment) -> str:
+    """The launch's readiness URL: the recipe's ``ready_url`` with its picked port."""
+    return e.ready_url.replace(PORT, str(e.port)) if e.port is not None else e.ready_url
+
+
+def unanswered(e: Environment, proc: subprocess.Popen[bytes] | None, log: Path, since: int) -> str:
+    """Why a launch failed when nothing answered at its URL, with all it wrote to *log* past its size *since*.
+
+    One that exited says so with its status; one still running may ignore its assigned port.
+    """
+    try:
+        said = log.read_bytes()[since:].decode(errors="replace").strip() or "nothing"
+    except FileNotFoundError:
+        said = "nothing"
+    if proc is not None and proc.returncode is not None:
+        return f"the preview exited with status {proc.returncode} before it answered at {url(e)}; it printed: {said}"
+    why = f"the preview did not answer on its assigned port {e.port} at {url(e)}; it may use a fixed port"
+    return f"{why}; it printed: {said}"
+
+
+def size(log: Path) -> int:
+    """The bytes *log* holds before a launch appends to it."""
+    return log.stat().st_size if log.is_file() else 0
 
 
 def journal(log: Callable[[dict[str, Any]], None], pids: Pids) -> None:
@@ -54,22 +89,33 @@ def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: 
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True, env=env,
         )  # fmt: skip
     except OSError as exc:
-        return f"`{cmd}` did not start: {exc}"
+        return f"`{cmd}` did not start: {failure(exc)}"
     born = created(proc.pid)
     try:
         journal(log, {proc.pid: born})
         release(proc)
         out, _ = proc.communicate(timeout=within)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        _diagnostic(log, "check-command-failed", f"`{cmd}` in {cwd}", exc)
         return f"`{cmd}` took over {within:.0f} s"
     finally:  # timed out, interrupted or done: nothing of its group outlives the command
-        _end(proc, born)
+        _end(proc, born, log, f"`{cmd}` in {cwd}")
     if proc.returncode:
         return f"`{cmd}` failed: {out.decode(errors='replace').strip()}"
     return ""
 
 
-def _end(proc: subprocess.Popen[bytes], born: float | None) -> None:
+def _diagnostic(log: Callable[[dict[str, Any]], None], kind: str, where: str, exc: Exception) -> None:
+    log(
+        {
+            "event": kind,
+            "at": datetime.now(UTC).isoformat(timespec="milliseconds"),
+            "reason": f"{where}: {failure(exc)}",
+        }
+    )
+
+
+def _end(proc: subprocess.Popen[bytes], born: float | None, log: Callable[[dict[str, Any]], None], where: str) -> None:
     """Kill the command's group unless its id may name a newer one, then collect its output.
 
     An unreaped leader still holds its id, so a command over time or interrupted is killed without a lookup. Once it is
@@ -77,8 +123,10 @@ def _end(proc: subprocess.Popen[bytes], born: float | None) -> None:
     """
     ours = proc.returncode is None
     if not ours:
-        with contextlib.suppress(processes.UnlistedError):
+        try:
             ours = bool(members(proc.pid, born))
+        except processes.UnlistedError as exc:
+            _diagnostic(log, "check-observation-failed", f"looking for processes of {where}", exc)
     if ours:
         with contextlib.suppress(OSError):
             os.killpg(proc.pid, signal.SIGKILL)
@@ -94,7 +142,7 @@ def action(c: Change, *, live: bool, paths: Mapping[str, str]) -> Action | None:
     person = next((p for p in c.checks if p.id == e.check), None)
     known = person is not None or e.check == VISUAL
     stale = (c.step.kind, c.step.task) != (StepKind.CHECK, e.check)
-    if c.finished_at or not known or stale or loop.owner_gated(c):  # a gated check relaunches on its rerun
+    if c.finished_at or not known or stale or loop.owner_gated(c) or c.amending is not None:  # rerun relaunches
         return "dispose"
     if person is None:
         if c.intent.abandoned_at or c.stop is not None:
@@ -172,14 +220,18 @@ def taken(e: Environment, leader: int) -> Pids:
     return e.pids | {p: created(p) for p in members(leader, e.pids.get(leader))}
 
 
-def unready(e: Environment, proc: subprocess.Popen[bytes] | None) -> Environment:
+def unready(
+    e: Environment, proc: subprocess.Popen[bytes] | None, *, log: Callable[[dict[str, Any]], None]
+) -> Environment:
     """A launch that never answered, with its group's members recorded for disposal to prove them its own.
 
     Its leader is gone at most a moment ago, too soon for the group's or session's id to be another's.
     """
     if proc is not None and e.pgid:
-        with contextlib.suppress(processes.UnlistedError):
+        try:
             return e.model_copy(update={"pids": taken(e, e.pgid)})
+        except processes.UnlistedError as exc:
+            _diagnostic(log, "check-observation-failed", f"check {e.check} after {url(e)}, group {e.pgid}", exc)
     return e
 
 
@@ -226,10 +278,11 @@ def start(
     """Spawn the recipe as leader of its own session and group; *env* is a test copy's isolated environment.
 
     Its leader, a shell, waits on its stdin: it becomes the recipe only once ``release`` says the group is recorded, so
-    a host or runner that stops in between leaves no recipe. With *pidfile*, the shell first writes its pid there.
+    a host or runner that stops in between leaves no recipe. With *pidfile*, the shell first writes its pid there. The
+    recipe's ``{port}`` becomes the launch's picked port.
     """
     try:
-        argv = shlex.split(e.command)
+        argv = [a.replace(PORT, str(e.port)) if e.port is not None else a for a in shlex.split(e.command)]
         if pidfile is not None:
             pidfile.unlink(missing_ok=True)
         record = 'echo $$ > "$0" && ' if pidfile is not None else ""
@@ -277,13 +330,15 @@ def recovered(e: Environment, pidfile: Path) -> Environment:
     return e.model_copy(update={"pgid": pid, "pids": e.pids | {pid: st.st_mtime}})
 
 
-def ready(e: Environment, proc: subprocess.Popen[bytes]) -> Pids | None:
+def ready(e: Environment, proc: subprocess.Popen[bytes], *, log: Callable[[dict[str, Any]], None]) -> Pids | None:
     """Wait for the readiness URL; return the group's PIDs once it answers, else None."""
     end = time.monotonic() + READY_WITHIN
     while time.monotonic() < end and proc.returncode is None:
-        if answers(e.ready_url):
-            with contextlib.suppress(processes.UnlistedError):  # unlisted now: poll again; the deadline ends the wait
+        if answers(url(e)):
+            try:
                 return taken(e, proc.pid)
+            except processes.UnlistedError as exc:
+                _diagnostic(log, "check-observation-failed", f"check {e.check} at {url(e)}, group {proc.pid}", exc)
         time.sleep(0.5)
     return None
 
@@ -291,10 +346,10 @@ def ready(e: Environment, proc: subprocess.Popen[bytes]) -> Pids | None:
 def pending(c: Change, e: Environment) -> loop.StepResult:
     """The check waits on the owner once its environment answers; the visual check waits on its capture."""
     if e.check == VISUAL:
-        reason = f"capturing {len(c.brief.visual)} visual states at {e.ready_url}"
+        reason = f"capturing {len(c.brief.visual)} visual states at {url(e)}"
         return loop.StepResult(exit=Exit.PENDING, waiting=Waiting.REVIEWER, reason=reason)
     person = next(p for p in c.checks if p.id == e.check)
-    reason = f"{'; '.join(person.steps) or person.id} · {e.ready_url}"
+    reason = f"{'; '.join(person.steps) or person.id} · {url(e)}"
     a = person.answer
     if a and a.inputs and (what := evidence.changed(a.inputs, evidence.check_inputs(c, person, declared(c)))):
         reason += f" · asked again: changed {', '.join(what)}"

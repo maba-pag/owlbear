@@ -36,7 +36,7 @@ def held_ledger(tmp_path: Path) -> maintenance.Maintenance:
     """A ledger with one uncertain pack session holding its slot, written whole."""
     owner = maintenance.Maintenance(Slots(lambda: 2), boot=lambda: 10.0, observe=lambda *_a: False)
     assert owner.slots.take("p", "pack:one", 1, 1) == 1
-    owner.failed(owner.begin("p", "pack:one", "pack", str(tmp_path), now=AT), RuntimeError("no Run returned"))
+    owner.failed(owner.begin("p", "pack:one", "pack", str(tmp_path), now=AT), "RuntimeError: no Run returned")
     return owner
 
 
@@ -67,6 +67,20 @@ def test_a_persisted_ledger_without_a_field_it_is_always_written_with_is_a_visib
         pass  # whether a lease retains it cannot be read, so it is not removed
     assert (entered, owner.slots.counts("p")[2], kept.is_dir(), owner.path.read_bytes()) == ([], 1, True, before)
     kept.rmdir()
+
+
+@pytest.mark.parametrize(("step", "error"), [("read", ValueError), ("saved", OSError)])
+def test_a_ledger_that_cannot_be_read_or_saved_says_its_whole_error(tmp_path, monkeypatch, whole_error, step, error):
+    owner = held_ledger(tmp_path)
+    assert owner.slots.take("p", "pack:two", 1, 2) == 1
+
+    def refused(*_args: object) -> None:
+        raise error(whole_error)
+
+    monkeypatch.setattr(maintenance, "_read" if step == "read" else "atomic_write", refused)
+    with pytest.raises(maintenance.MaintenanceError) as said:
+        owner.begin("p", "pack:two", "pack", str(tmp_path), now=AT)
+    assert str(said.value) == f"maintenance ownership could not be {step}: {error.__name__}: {whole_error}"
 
 
 def test_the_exact_reviewed_ledger_with_only_format_and_imported_is_refused():

@@ -141,7 +141,9 @@ const listed = (id) => bar.data.projects.some((p) => p.id === id);
 if (bar.data && !listed(project) && (project || scope !== "all")) {
   const first = bar.data.projects.find((p) => p.state === "loaded") ?? bar.data.projects[0];
   if (first || project) {  // a project page shows one project: the first loaded one when the link named none
-    location.replace(here({ project: first && scope !== "all" ? first.id : "" }, location.pathname + location.hash));
+    const layer = new URLSearchParams(location.search).get("layer") ?? "";  // Settings' layer is no project's own
+    location.replace(here({ project: first && scope !== "all" ? first.id : "", layer },
+      location.pathname + location.hash));
     await new Promise(() => {});
   }
 }
@@ -185,10 +187,27 @@ export function loaded() {
   return bar.data ? bar.data.projects.filter((p) => p.state === "loaded") : null;
 }
 
+// OwlBear's own repository is a project of its own kind, shown as OwlBear with this tag and listed before consumer
+// projects (D-01M5ZGGSMKBZ830H8FQSPHH5BN); the machine host knows it by its shared-data folder.
+export const OWN_TAG = "OwlBear's own";
+export const isOwn = (p) => p.kind === "owlbear";
+export const displayName = (p) => (isOwn(p) ? "OwlBear" : p.name);
+export const ownFirst = (projects) => [...projects.filter(isOwn), ...projects.filter((p) => !isOwn(p))];
+
+// What a settings block says in words: its unreadable-settings *reason* in full and first (the host's *text* of it),
+// else how many settings are unset, never their keys; "" when nothing blocks.
+export function settingsWait(count, reason, text) {
+  if (reason) return text;
+  if (!count) return "";
+  const one = count === 1;
+  return `${count} setting${one ? " is" : "s are"} unset; set ${one ? "it" : "them"} on the Settings page`;
+}
+
 // Why no work may start for project *id* (#808), as the machine host last polled it; "" when its work may start, and
 // on a clone's own host, whose refusals come from its API.
 export function blockedOf(id) {
-  return loaded()?.find((p) => p.id === id)?.blocked ?? "";
+  const p = loaded()?.find((o) => o.id === id);
+  return p ? settingsWait(p.unset?.length ?? 0, p.unset_reason, p.blocked ?? "") : "";
 }
 for (const link of document.querySelectorAll("#top a[href^='/']")) link.href = here({}, link.getAttribute("href"));
 // The guard covers every link of the top row, the menu and the notes under it; a link opened in another tab leaves
@@ -231,8 +250,8 @@ function control(label, onclick, { variant = "secondary", busy = false, title } 
 }
 
 function chosen(p, all) {
-  const twin = all.some((o) => o !== p && o.name === p.name);
-  return `${p.name}${twin ? ` (${p.path})` : ""}${p.state === "loaded" ? "" : ` · ${p.state}`}`;
+  const twin = all.some((o) => o !== p && displayName(o) === displayName(p));
+  return `${displayName(p)}${twin ? ` (${p.path})` : ""}${p.state === "loaded" ? "" : ` · ${p.state}`}`;
 }
 
 // The top row's end: which project the page shows, or Add project while there is none, and Pause. Adding, removing
@@ -250,7 +269,7 @@ function controls() {
     ${projects.length ? html`<p-select label="Project" hide-label="true" compact="true" .value=${project}
       @change=${go}>
       ${scope === "all" ? html`<p-select-option value="">All projects</p-select-option>` : nothing}
-      ${projects.map((o) => html`<p-select-option value=${o.id}>${chosen(o, projects)}</p-select-option>`)}
+      ${ownFirst(projects).map((o) => html`<p-select-option value=${o.id}>${chosen(o, projects)}</p-select-option>`)}
     </p-select>` : html`<p-link compact="true" variant="primary"><a href=${location.pathname === "/projects" ? "#add"
       : here({}, "/projects")}>Add project</a></p-link>`}
     ${paused ? nothing : control("Pause Delivery", () => act("pause", () => call("/pause", { method: "POST",
@@ -260,14 +279,15 @@ function controls() {
 // What the owner should know under the top row: the shown project's trouble, the pause, updates and errors.
 function notes() {
   if (!bar.data) return bar.error ? html`<p role="alert">${bar.error}</p>` : nothing;
-  const { projects, paused, waiting, ending, left = [], update, updated, announce } = bar.data;
-  const p = projects.find((o) => o.id === project);
-  const trouble = location.pathname !== "/projects" && p && (p.state !== "loaded" ? `${p.name} is ${p.state}: ${
-    p.reason}` : p.setup ? `${p.name} needs setup before its chats reach Delivery.` : "");
+  const { projects, paused, waiting, ending, left = [], stop_error, update, updated, announce } = bar.data;
+  const p = projects.find((o) => o.id === project), who = p && displayName(p);
+  const trouble = location.pathname !== "/projects" && p && (p.state !== "loaded" ? `${who} is ${p.state}: ${
+    p.reason}` : p.setup ? `${who} needs setup before its chats reach Delivery.` : "");
   return html`
     ${trouble ? html`<p role="status">${trouble} <a href=${here({}, "/projects")}>Open Projects</a></p>` : nothing}
     ${paused ? html`<p class="paused" role="status">${ending
-        ? `OwlBear stops once nothing runs${left.length ? `; it waits for ${left.join("; ")}` : ""}.`
+        ? stop_error ? html`OwlBear could not inspect the work it waits for: <span class="failure-detail">${stop_error}
+            </span>` : `OwlBear stops once nothing runs${left?.length ? `; it waits for ${left.join("; ")}` : ""}.`
         : `Delivery is paused: ${waiting} Change${waiting === 1 ? "" : "s"} would continue.`}
       ${control("Resume", () => act("resume", () => call("/resume", { method: "POST", machine: true })),
         { variant: "primary", busy: bar.busy === "resume" })}

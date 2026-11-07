@@ -18,6 +18,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.git import remote_git
+from owlbear_delivery_next.git.access import Access
 from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes import command_marks, sdk_adapter
 from owlbear_delivery_next.state_store.store import Store
@@ -63,7 +64,9 @@ def _git(cwd: Path, *args: str) -> str:
 
 
 def _push(work: Path, remote: Path, ref: str) -> None:
-    remote_git.run_remote_git(work, ["push", str(remote), f"HEAD:refs/heads/{ref}"], kind="write")
+    if ref not in _git(work, "remote").split():
+        _git(work, "remote", "add", ref, str(remote))  # Delivery pushes to named remotes only
+    remote_git.run_remote_git(work, ["push", ref, f"HEAD:refs/heads/{ref}"], kind="write", access=Access.LOCAL)
 
 
 def test_remote_git_runs_only_once_its_leader_is_journaled(change_repo, tmp_path, monkeypatch) -> None:

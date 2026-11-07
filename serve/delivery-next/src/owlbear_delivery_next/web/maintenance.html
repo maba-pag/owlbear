@@ -21,8 +21,10 @@
   }
   .action .title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
   .action a { font-size: var(--p-typescale-sm); color: inherit; }
+  .history-notice { white-space: pre-wrap; overflow-wrap: anywhere; }
   #tests { display: grid; gap: var(--p-spacing-static-xs); }
   #tests fieldset { display: grid; gap: var(--p-spacing-static-xs); margin: 0; padding: 0; border: 0; }
+  .read-errors { white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -36,8 +38,9 @@
 <!-- ask -->
 <script type="module">
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
-import { blockedOf, call, defined, here, project, shown } from "/assets/ui.mjs";
+import { blockedOf, call, defined, here, project, settingsWait, shown } from "/assets/ui.mjs";
 import { lastSaid, maintained } from "/assets/page/maintenance/overview.mjs";
+import { curationReason } from "/assets/page/config/unset.mjs";
 
 // Under the machine host with no project chosen, each project shows as a summary that opens it, beside the machine's
 // own parts.
@@ -60,7 +63,9 @@ function lastRun(a) {
   const tag = RESULTS[a.last.state];
   return html`<p-text size="sm">Last run${by}: ${what}</p-text>
     ${tag ? html`<p-tag variant=${tag} compact="true">${a.last.state}</p-tag>` : nothing}
-    ${a.last.reason ? html`<p-text size="xs" color="contrast-medium">${a.last.reason}</p-text>` : nothing}`;
+    ${a.last.reason ? html`<p-text size="xs" color="contrast-medium">${a.last.reason}</p-text>` : nothing}
+    ${a.last.history_notice ? html`<p-text class="history-notice" size="xs"
+      color="contrast-medium">${a.last.history_notice}</p-text>` : nothing}`;
 }
 
 function action(a) {
@@ -183,16 +188,21 @@ function folderRun(f) {
   const at = f.ended_at || f.started_at, when = at ? `, ${new Date(at).toLocaleString()}` : "";
   const said = f.state === "never" ? "Never curated." : `Last run: ${f.state}${when}`;
   const skipped = f.entries.filter((e) => e.action === "skipped");
+  const blocked = settingsWait(f.unset.length, f.unset_reason, f.blocked);
+  const reason = f.reason_unset ? settingsWait(f.reason_unset, "", f.reason) : curationReason(f.reason ?? "");
   return html`<li class="action">
     <div class="title"><p-heading size="md"><h3>${f.folder}</h3></p-heading>
       <p-button type="button" compact="true" variant="secondary" .loading=${state.curating === f.folder}
-        ?disabled=${["waiting", "running"].includes(f.state) || f.blocked} title=${f.blocked || nothing}
+        ?disabled=${["waiting", "running"].includes(f.state) || blocked} title=${blocked || nothing}
         @click=${() => curate(f.folder)} aria=${`{"aria-label": "Curate ${f.folder} now"}`}>Curate now</p-button></div>
-    ${f.blocked ? html`<p-text class="blocked" size="xs" color="contrast-medium">${sentence(f.blocked)}.</p-text>`
+    ${blocked ? html`<p-text class="blocked" size="xs" color="contrast-medium">${sentence(blocked)}.</p-text>`
       : nothing}
     <p-text size="sm">${said}</p-text>
+    ${Object.keys(f.read_errors ?? {}).length ? html`<p-text class="read-errors" size="xs">${
+      "Some memory files could not be read; automatic curation considers only readable pending entries:\n"}${
+      Object.entries(f.read_errors).map(([path, error]) => `${path}: ${error}`).join("\n")}</p-text>` : nothing}
     ${f.summary ? html`<p-text size="sm">${f.summary}</p-text>` : nothing}
-    ${f.reason ? html`<p-text size="xs" color="contrast-medium">${f.reason}</p-text>` : nothing}
+    ${reason ? html`<p-text size="xs" color="contrast-medium">${reason}</p-text>` : nothing}
     ${skipped.length ? html`<p-text size="xs">Left for you: ${skipped.map((e) => `${e.entry_id.slice(0, 8)} (${
       e.confidence}%${e.reason ? `: ${e.reason}` : ""})`).join("; ")}</p-text>` : nothing}
   </li>`;
@@ -206,7 +216,9 @@ function curationSection() {
     <p-text size="sm">The memory curator judges each folder's pending entries: alone at or above your threshold
       (Settings, Memory curation), and leaves the rest for you on the Memory page. It runs after a merge and when
       OwlBear is idle, for folders with entries no run has seen, as each trigger's setting in Settings → This machine
-      says: off, on, or on even while paused. Each run is one agent session.</p-text>
+      says: off, on, or on even while paused. Each run is one agent session.${c?.inspection_error
+        ? html` The last idle inspection failed: <span class="failure-detail">${c.inspection_error}</span>`
+        : nothing}</p-text>
     ${refusal("curation")}${readError("curation")}
     ${c?.available ? html`<ul id="curation" class="actions">${c.folders.map(folderRun)}</ul>
       <div><p-button id="curate-all" type="button" compact="true" variant="primary"
@@ -429,7 +441,12 @@ async function follow() {
   const generation = state.reading;
   const [curation] = await Promise.allSettled([call("/curation", { machine: true, timeout: 15000 })]);
   if (generation !== state.reading) return;
-  if (curation.status === "fulfilled") state.curation = curation.value;
+  if (curation.status === "fulfilled") {
+    state.curation = curation.value;
+    state.unread.curation = "";
+  } else {
+    state.unread.curation = curation.reason.status === 404 && !state.curation ? "" : curation.reason.message;
+  }
   show();
 }
 

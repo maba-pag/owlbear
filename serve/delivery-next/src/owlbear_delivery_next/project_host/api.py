@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-import secrets
 import shlex
 import shutil
 import time
@@ -13,10 +12,10 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next.change_contracts import chat_contract, evidence
+from owlbear_delivery_next.change_contracts import chat_contract, evidence, failures
 from owlbear_delivery_next.change_contracts.inbox import (
     AnswerItem,
     CheckResult,
@@ -26,16 +25,19 @@ from owlbear_delivery_next.change_contracts.inbox import (
     RestartItem,
     WithdrawItem,
 )
-from owlbear_delivery_next.change_contracts.models import Change, Exit, PersonCheck, Waiting
-from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import brief_rounds, loop, picks, rebuilds, round_flow, round_marks
+from owlbear_delivery_next.change_contracts.models import Change, ErrorKind, Exit, PersonCheck, Waiting
+from owlbear_delivery_next.change_flow import loop, moves, rebuilds, round_flow, round_marks, versions
 from owlbear_delivery_next.change_flow.progress import progress
-from owlbear_delivery_next.change_flow.status import card, status, unloadable
+from owlbear_delivery_next.change_flow.status import card, for_chat, status, unloadable
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable_runs import pack_job
 from owlbear_delivery_next.project_host import (
+    amendment_routes,
     answers,
     backlog_routes,
+    brief_actions,
     brief_routes,
+    brief_view,
     chat_routes,
     config_routes,
     decision_routes,
@@ -43,20 +45,24 @@ from owlbear_delivery_next.project_host import (
     pack_routes,
     pages,
     pds_routes,
+    project_notes,
+    screenshots,
     session_slots,
+    shaping_chat,
     stop_routes,
+    token_guard,
 )
 from owlbear_delivery_next.project_host.admission import admitted
 from owlbear_delivery_next.project_host.launches import Launches, Refused
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.runtimes.vscode_adapter import open_chat
 from owlbear_delivery_next.runtimes.window_files import HARNESS
-from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import spend_ledger, tool_metrics, watch_reports, work_block
-from owlbear_delivery_next.state_store.briefs import save_brief, save_visual, unrevisable
+from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
+from owlbear_delivery_next.state_store.database import DIAGNOSTIC_EVENTS
 from owlbear_delivery_next.state_store.store import StoreError
-from owlbear_delivery_next.workflow_steps import check, decision, decisions_gate, held, visual
+from owlbear_delivery_next.workflow_steps import captures, check, decision, held, visual
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -64,7 +70,6 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.change_contracts.inbox import InboxItem
     from owlbear_delivery_next.change_contracts.models import Inputs
-    from owlbear_delivery_next.change_contracts.visual_records import VisualResult
     from owlbear_delivery_next.change_flow.status import Activity
     from owlbear_delivery_next.project_host.host import Host, HostRecord
     from owlbear_delivery_next.project_host.launches import Ended
@@ -75,6 +80,10 @@ if TYPE_CHECKING:
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost"})
 START_PROMPT = "Start a new Delivery Change: use the owlbear-change-shaping skill to shape a brief with me."
+CAPTURE = (  # D-01M61V2GR0C6JV2R6KJ0WR4PNB: the expectations are written against the current pages
+    "Delivery now captures the target's current pages: call await_capture (change {change}) and write each state's "
+    "expectation against its pictures with the owner, then save again. "
+)
 PICKER_NOTE = (  # the owner's typed messages run on the picker, not on the role's model (TD-277)
     '\n\nBegin your first message or question to the owner with this line: "Messages you type here run on this '
     "chat's model picker: set it to {model} at {effort} effort.\""
@@ -133,18 +142,18 @@ def snapshot(inputs: Inputs, person: PersonCheck) -> str:
     return hashlib.sha256(shown.encode()).hexdigest()
 
 
-def person_check(c: Change, p: PersonCheck, *, inputs: Inputs, waiting: bool) -> dict[str, Any]:
-    """One person-only check as the page shows it; a pass its inputs no longer match counts as open (None)."""
+def person_check(c: Change, p: PersonCheck, *, inputs: Inputs | None, waiting: bool) -> dict[str, Any]:
+    """A check as shown; a pass with unmatched or unavailable current inputs counts as open (None)."""
     a = p.answer
-    held = bool(a and a.passed and a.inputs and evidence.check_valid(a.inputs, inputs))
+    held = bool(inputs is not None and a and a.passed and a.inputs and evidence.check_valid(a.inputs, inputs))
     return {
         "id": p.id,
         "steps": p.steps,
         "expect": p.expect,
         "passed": True if held else (False if a and a.passed is False else None),
         "waiting": waiting,
-        "url": c.env.ready_url if c.env and c.env.check == p.id and c.env.ready_at else None,
-        "inputs": snapshot(inputs, p),
+        "url": check.url(c.env) if c.env and c.env.check == p.id and c.env.ready_at else None,
+        "inputs": snapshot(inputs, p) if inputs is not None else None,
     }
 
 
@@ -162,11 +171,11 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     try:
         c = store.read(slug)
     except StoreError as exc:
-        s = unloadable(exc.stop(now))
-        return {"slug": slug, "line": s.line, "action": s.action, "actor": s.actor}
+        s = unloadable(exc.stop(now).model_copy(update={"reason": failure(exc)}))
+        return {"slug": slug, **asdict(s)}
     tool = store.now(slug)
     s = status(c, act, now, tool)
-    out = {"slug": slug, "handle": c.handle, "step": c.step.kind, "line": s.line, "action": s.action, "actor": s.actor}
+    out = {"slug": slug, "handle": c.handle, "step": c.step.kind, **asdict(s)}
     out["title"] = c.brief.title
     out |= card(c, act, store.events(slug), now, tool, pending=store.shared.pending if store.shared else None)
     out["progress"] = asdict(progress(c))
@@ -177,7 +186,13 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     if q := loop.open_question(c):
         options = [o.model_dump(include={"id", "label"}) for o in held.offered(store, c, q)]
         where = "chat" if loop.ordinary(q) else "changes-page"
-        out["question"] = {"id": f"{c.handle or slug}.{q.id}", "text": q.text, "options": options, "answer_in": where}
+        out["question"] = {
+            "id": f"{c.handle or slug}.{q.id}",
+            "text": q.text,
+            "cause": q.cause,
+            "options": options,
+            "answer_in": where,
+        }
     return out
 
 
@@ -232,6 +247,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
 ) -> FastAPI:
     """Return the host's app: its pages without data, and a guarded API under ``/api/next``."""
     app = FastAPI(title="OwlBear Delivery", docs_url=None, redoc_url=None, openapi_url=None)
+    app.add_exception_handler(Exception, token_guard.uncaught)
     expected = f"Bearer {token}".encode()
     launches = Launches(LAUNCH_GAP, time.monotonic)
 
@@ -244,8 +260,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         return await call_next(request)
 
     def auth(request: Request) -> None:
-        if not secrets.compare_digest(request.headers.get("authorization", "").encode(), expected):
-            raise HTTPException(401, "token required")
+        token_guard.admit(request, expected)
 
     def read(slug: str) -> Change:
         if not SLUG.fullmatch(slug) or slug not in store.slugs():
@@ -253,7 +268,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         try:
             return store.read(slug)
         except StoreError as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise HTTPException(409, failure(exc)) from exc
 
     def summary_of(slug: str) -> dict[str, Any]:
         return summary(store, slug, host.activity(slug), datetime.now(UTC))
@@ -266,13 +281,15 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         host.wake.set()
         return {"accepted": item.kind}
 
-    def save(
-        body: object, write: Callable[[Store, object], tuple[int, dict[str, Any]]] = save_brief
-    ) -> tuple[int, dict[str, Any]]:
-        code, out = write(store, body)
+    def save(body: object, contract: str | None, *, visual: bool = False) -> tuple[int, dict[str, Any]]:
+        write = save_visual if visual else save_brief
+        tool = "save_visual_check" if write is save_visual else "save_brief"
+        code, out = write(store, body, contract, binding=lambda: shaping_chat.binding(host.repo, tool, body))
         if code == 200:  # noqa: PLR2004 - HTTP OK
+            host.wake.set()  # a version saved after its loop ended gets its challenge's start time at once (#986)
             out["next"] = (
-                f"Once the draft is ready, ask for its challenge with challenge_brief (change {out['change']}, "
+                (CAPTURE.format(change=out["change"]) if out.get("capturing") else "")
+                + f"Once the draft is ready, ask for its challenge with challenge_brief (change {out['change']}, "
                 f"version {out['version']}); the owner approves it in the Changes page after: {link(host.record)}"
             )
         return code, out
@@ -314,7 +331,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
             body = await request.json()
         except ValueError:
             body = ""
-        code, out = save(body)
+        code, out = save(body, request.headers.get(chat_contract.HEADER))
         return JSONResponse(out, status_code=code)
 
     @router.post("/briefs/visual")
@@ -323,16 +340,14 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
             body = await request.json()
         except ValueError:
             body = ""
-        code, out = save(body, save_visual)
+        code, out = save(body, request.headers.get(chat_contract.HEADER), visual=True)
         return JSONResponse(out, status_code=code)
 
     @router.get("/changes")
-    def changes() -> list[dict[str, Any]]:
-        return [summary_of(slug) for slug in store.slugs()]
+    def changes(request: Request) -> list[dict[str, Any]]:
+        return [for_chat(summary_of(slug), request.headers.get(chat_contract.HEADER)) for slug in store.slugs()]
 
-    @router.get("/project")
-    def project() -> dict[str, list[str]]:
-        return {"notes": profile.notes(store.read_profile() or Profile())}
+    router.add_api_route("/project", project_notes.reader(store, host), methods=["GET"])
 
     @router.post("/new-change")
     def new_change() -> dict[str, Any]:
@@ -352,34 +367,27 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         merge = offer(c, events)
         q = loop.open_question(c) if not merge else None
         q = q.model_copy(update={"options": held.offered(store, c, q)}) if q else None
-        shown = q and q.model_dump(mode="json", include={"id", "text", "options"}) | answers.shown(c, q, events)
+        shown = q and q.model_dump(mode="json", include={"id", "text", "cause", "options"}) | answers.shown(q, events)
         waiting = o and o.exit == Exit.PENDING and o.waiting == Waiting.PERSON_CHECK and o.who == "you"
-        checks = [person_check(c, p, inputs=evidence.check_inputs(c, p, check.fingerprints(c, p)), waiting=bool(
-            waiting and c.step.task == p.id)) for p in c.checks]  # fmt: skip
+        unread = q and q.cause == failures.cause_key(ErrorKind.STATE, q.step, failures.READ_ONLY_UNREAD)
+        checks = [
+            person_check(
+                c,
+                p,
+                inputs=None if unread else evidence.check_inputs(c, p, check.fingerprints(c, p)),
+                waiting=bool(waiting and c.step.task == p.id),
+            )
+            for p in c.checks
+        ]
         prefs, fault = display_prefs(store)
         return (
             summary_of(slug)
             | {
-                "brief": {
-                    "version": c.brief.version,
-                    "approved": c.brief.approved_version,
-                    "title": c.brief.title,
-                    "outcome": c.brief.outcome,
-                    "scope": c.brief.scope,
-                    "non_goals": c.brief.non_goals,
-                    "decisions": [x.model_dump(exclude={"id", "replaces"}) for x in c.brief.decisions],  # as drafted
-                    "specified": c.brief.specified,
-                    "approved_at": c.brief.approved_at.isoformat() if c.brief.approved_at else None,
-                    "ui": c.brief.ui,
-                    "visual": [s.model_dump() for s in c.brief.visual],
-                    "unapprovable": brief_rounds.approvable(c),  # TD-249: why the approve button is off
-                    "unrevisable": unrevisable(c),  # why no new shaping chat may revise the saved brief
-                    "unreviewed": brief_rounds.unreviewed(c),  # TD-255: approving needs the owner's tick
-                    "read_backs": decisions_gate.checkpoint(store, c),  # TD-427: at most three, never blocking
-                    "picked": picks.shown(c),  # TD-459: the decisions this version's work follows, by title
-                },
+                "brief": brief_view.shown(store, c, paused=host.activity(slug).paused),
                 "criteria": [k.model_dump() for k in c.brief.criteria],
                 "plan": [t.model_dump() for t in c.plan.tasks] if c.plan else [],
+                "plan_versions": versions.plan(c),
+                "open_task": t.id if (t := moves.open_task(c)) else None,  # a repair part runs before later tasks
                 "handled": [
                     h.model_dump(mode="json", include={"item", "kind", "url", "how", "text", "resolved", "at"})
                     for h in c.handled
@@ -399,40 +407,27 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                 "consent": c.consent.model_dump(mode="json") if c.consent else None,
                 "fixes": [f"fix Change {e['fix']} drafted" for e in events if e.get("event") == "fix-drafted"],
                 "visual": c.visual.model_dump(mode="json") if c.visual else None,
-                "visual_existing_errors": [
-                    f"{e.state} at {e.width}px, {e.kind} error: {e.text}"
-                    for e in visual.classify(c.visual.errors if c.visual else [], c.before)[1]
-                ],
+                "visual_existing_errors": visual.existing(c),
                 "before": c.before.model_dump(mode="json") if c.before else None,
-                "visual_round": c.visual_rounds[-1].model_dump(mode="json")
-                | {"proposed": decision.proposed(c.visual_rounds[-1])}
+                "reference": c.reference.result.model_dump(mode="json") if c.reference and c.reference.result else None,
+                "visual_round": (
+                    c.visual_rounds[-1].model_dump(mode="json")
+                    | {
+                        "proposed": decision.proposed(c.visual_rounds[-1]),
+                        "departs": decision.departs(c, c.visual_rounds[-1]),
+                    }
+                )
                 if c.visual_rounds
                 else None,
                 "owner_criteria": [k.model_dump(mode="json") for k in c.owner_criteria if k.withdrawn_at is None],
-                "amendments": [a.model_dump(mode="json") for a in c.amendments],  # TD-179: proposed, never applied here
+                "amendments": amendment_routes.shown(c),  # TD-185
                 "restartable": not round_flow.restartable(c),
                 "recovery": stop_routes.shown(c, store),  # #754: the stop the owner may clear, or None
                 "activity": events[-20:],
+                "diagnostics": [e for e in events if e.get("event") in DIAGNOSTIC_EVENTS],
                 "watcher": watcher(store, slug),
             }
         )
-
-    def png(shots: VisualResult | None, folder_of: Callable[[str], Path], name: str) -> FileResponse:
-        if not (shots and visual.FILE.fullmatch(name) and name in shots.files):
-            raise HTTPException(404, "no such screenshot")
-        folder = folder_of(shots.head).resolve()
-        path = (folder / name).resolve()
-        if path.parent != folder or not path.is_file():
-            raise HTTPException(404, "no such screenshot")
-        return FileResponse(path, media_type="image/png")
-
-    @router.get("/changes/{slug}/visual/{name}")
-    def screenshot(slug: str, name: str) -> FileResponse:
-        return png(read(slug).visual, lambda head: store.visual_dir(slug, head), name)
-
-    @router.get("/changes/{slug}/before/{name}")
-    def before_screenshot(slug: str, name: str) -> FileResponse:
-        return png(read(slug).before, lambda base: store.before_dir(slug, base), name)
 
     @router.post("/changes/{slug}/criteria/{criterion}/withdraw")
     def withdraw(slug: str, criterion: str) -> dict[str, str]:
@@ -482,10 +477,13 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
 
     router.include_router(config_routes.router(store, host))
     router.include_router(answers.router(store, read, put))
-    router.include_router(chat_routes.router(read))
+    router.include_router(amendment_routes.router(read, put))
+    router.include_router(chat_routes.router(read, lambda slug, s: captures.folder(store, slug, s)))
+    router.include_router(screenshots.router(store, read))
     wake, ending = lambda: host.wake.set(), lambda: host.draining()  # noqa: PLW0108 - read late
     router.include_router(brief_routes.router(store, read, wake, ending))
     router.include_router(brief_routes.revising(read, start_chat))
+    router.include_router(brief_actions.router(store, read, wake))
     router.include_router(stop_routes.router(store, read, wake))
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))
     router.include_router(memory_routes.router(store))

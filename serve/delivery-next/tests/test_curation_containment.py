@@ -26,6 +26,8 @@ from owlbear_delivery_next.runtimes.session_result import Run
 REPORT = MemoryCurationResult(summary="curated", entries=[])
 CURATOR = "chore: memory curation batch (memory-mcp, memory-curator)"
 HELD = re.compile(r"refs/owlbear/curation/[0-9a-f]{32}")
+WHOLE = "the session broke at its start\n" + "and then in its middle\n" * 30 + "and at its end"
+NOTE = "a note added on the way up"
 FULL = "[Errno 28] No space left on device"
 
 
@@ -220,17 +222,21 @@ def test_an_exception_after_an_edit_holds_it_and_the_failed_row_names_where(repo
     assert logged.exc_info is not None
 
 
-@pytest.mark.parametrize("ends", ["raised", "returned"])
+@pytest.mark.parametrize("case", ["raised/exited", "raised/timed-out", "returned/exited", "returned/timed-out"])
 def test_a_failed_run_that_cannot_be_held_shows_both_failures_in_full_in_its_row_and_log(
-    repo, monkeypatch, caplog, ends
+    repo, monkeypatch, caplog, case, whole_error
 ) -> None:
+    ends, git_ = case.split("/")
     entry = curated(repo / "shop" / "memory", "Lesson")
-    real = subprocess.run
-    said = f"fatal: {FULL} " * 9
+    real, ran_git = subprocess.run, []
+    printed = f"printed {whole_error}"
 
     def run_(argv, *args, **kw):
         if argv[:2] == ["git", "update-ref"]:
-            return subprocess.CompletedProcess(argv, 1, "", said)
+            ran_git.append(argv)
+            if git_ == "exited":
+                return subprocess.CompletedProcess(argv, 1, printed, whole_error)
+            raise subprocess.TimeoutExpired(argv, 60, output=printed.encode(), stderr=whole_error.encode())
         return real(argv, *args, **kw)
 
     broke = f"the session broke{' and said more' * 30}"
@@ -239,20 +245,33 @@ def test_a_failed_run_that_cannot_be_held_shows_both_failures_in_full_in_its_row
         reword(cfg.memory, entry.id, "Lesson: the curator's version")
         if ends == "returned":  # an SDK failure comes back as the run's result
             return Run(cfg.session_id, ending="error", detail=broke, termination=Termination(confirmed=True))
-        raise RuntimeError(broke)
+        exc = RuntimeError(WHOLE)
+        exc.add_note(NOTE)
+        raise exc
 
     monkeypatch.setattr(curation_tree.subprocess, "run", run_)
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
     job.start("shop")
     row = drained(job)
 
-    ran = f"RuntimeError: {broke}" if ends == "raised" else f"ended error: {broke}"
+    ran = f"RuntimeError: {WHOLE}\n{NOTE}" if ends == "raised" else f"ended error: {broke}"
+    git_said = [
+        f"CalledProcessError: Command '{argv}' returned non-zero exit status 1."
+        if git_ == "exited" else f"TimeoutExpired: Command '{argv}' timed out after 60 seconds"
+        for argv in ran_git  # each hold commits anew, so a later second gives it another SHA
+    ]  # fmt: skip
+    streams = f"\nstderr:\n{whole_error}\nstdout:\n{printed}"
+    failed = [f"DataRepoError: git update-ref failed: {s}{streams}" for s in git_said]
     assert row.state == "failed"
-    assert f"{ran}; its edits are not held in a curation ref: DataRepoError: git update-ref failed: {said.strip()}" in (
-        row.reason
-    )
+    unheld = [f"its edits are not held in a curation ref: {f}" for f in failed]
+    if ends == "raised":
+        (only,) = unheld
+        assert row.reason == f"RuntimeError: {ran}; {only}"
+    else:
+        refused, failing = unheld  # a refused run's hold, then the failure's
+        assert row.reason == f"RuntimeError: RuntimeError: {ran}; {refused}; {failing}"
     (logged,) = [r for r in caplog.records if r.name == curation.__name__]
-    assert (ran in caplog.text, said.strip() in caplog.text, logged.exc_info is not None) == (True, True, True)
+    assert (all(f in caplog.text for f in failed), logged.exc_info is not None) == (True, True)
 
 
 def test_a_run_whose_entry_changed_meanwhile_is_refused_whole_and_the_other_change_is_published(repo, remote) -> None:
@@ -340,7 +359,9 @@ def test_an_accepted_run_publishes_its_edits_once_and_leaves_pending_and_receipt
     pushed(repo, "curated entries")
     p1, p2 = pending(shop, "To curate"), pending(shop, "Left pending")
     c = MemoryEngine(shop).get_entry(c.id)
-    MemoryEngine(shop).record_assessment(c.id, "outstanding", task_id="task-1", expected_revision=c.revision)
+    MemoryEngine(shop).record_assessment(
+        c.id, "outstanding", task_id="task-1", expected_revision=c.revision, stale_factor=50
+    )
     seed = {p1.id: (repo / rel(p1)).read_bytes(), c.id: (repo / rel(c)).read_bytes()}
     start = bare(remote, "rev-parse", "main").stdout.strip().decode()
     made = {}
@@ -429,22 +450,27 @@ LOCKED = "git worktree failed: locked"
 
 
 @pytest.mark.parametrize("raises", [False, True], ids=["refused", "raised"])
-def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(repo, monkeypatch, caplog, raises) -> None:
+def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(
+    repo, monkeypatch, caplog, raises, whole_error
+) -> None:
     entry = curated(repo / "shop" / "memory", "Lesson")
     pushed(repo, "a curated entry")
     real, failing = curation_tree._git, []  # noqa: SLF001
 
     def git_(cwd, *args, **kw):
         if failing and args == ("worktree", "prune"):
-            raise curation_tree.DataRepoError(LOCKED)
+            exc = curation_tree.DataRepoError(f"{LOCKED}\n{whole_error}")
+            exc.add_note(NOTE)
+            raise exc
         return real(cwd, *args, **kw)
 
     def run(cfg) -> Run:
         failing.append(True)  # the seed's own prune ran
         reword(cfg.memory, entry.id, "Lesson: the curator's version")
         if raises:
-            msg = "the session broke: " + "x" * 400  # longer than a row's reason keeps
-            raise RuntimeError(msg)
+            exc = RuntimeError(WHOLE)
+            exc.add_note(NOTE)
+            raise exc
         return Run(cfg.session_id, termination=Termination(confirmed=True), **REFUSALS["unread"])
 
     monkeypatch.setattr(curation_tree, "_git", git_)
@@ -452,9 +478,17 @@ def test_a_finished_runs_worktree_left_listed_is_logged_and_named_in_its_row(rep
     job.start("shop")
 
     row = drained(job)
-    assert (row.state, curation_tree.LISTED in row.reason, bool(HELD.search(row.reason))) == ("failed", True, True)
+    pruning = f"DataRepoError: {LOCKED}\n{whole_error}\n{NOTE}"
+    listed = f"its worktree is still listed: {pruning}"
+    assert (row.state, bool(HELD.search(row.reason))) == ("failed", True)
+    where = f"its edits are held, never published, in {HELD.search(row.reason).group()}"
+    if raises:  # each wrapper on the way up keeps the whole failure, note included
+        ran = f"RuntimeError: {WHOLE}\n{NOTE}"
+        assert row.reason == f"RuntimeError: {listed}; RuntimeError: {where}; {ran}"
+    else:
+        assert row.reason == f"ended result: the model is unknown: no tokens; {where}; {listed}"
     assert [r.getMessage() for r in caplog.records if r.name == curation_tree.__name__] == [
-        f"{repo} still lists a finished curation run's worktree: {LOCKED}"
+        f"{repo} still lists a finished curation run's worktree: {pruning}"
     ]
 
 
@@ -822,6 +856,16 @@ def test_an_apply_whose_folder_another_process_holds_stays_cut_short(repo, monke
 
     assert (resumed.done, resumed.said.startswith("MemoryBusyError: "), CUT in resumed.said) == (False, True, True)
     assert ((repo / rel(entry)).read_bytes(), curation_apply.read(shared) is not None) == (seed, True)
+
+
+def test_a_curation_run_is_seeded_with_the_global_settings_whole_memory_values_included(repo, tmp_path) -> None:
+    """The curator's memory server reads the settings beside its worktree: one copy of Global's file, byte for byte."""
+    text = '{"format": 21, "curator_threshold": 90, "memory": {"stale_factor": 50, "purge_days": 14}}'
+    (repo / "config.json").write_text(text)
+
+    tree = curation_tree.seed(DataRepo(repo), tmp_path / "run", ["shop"])
+
+    assert (tree.root / "config.json").read_text() == text
 
 
 def test_an_apply_finished_first_leads_the_refusal_of_a_run_whose_file_changed_meanwhile(repo, tmp_path) -> None:

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Literal, Protocol
 import psutil
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home, processes
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 
@@ -99,11 +100,7 @@ class Maintenance:
     """One machine's ledger; every reader and writer uses the same no-follow filesystem lock."""
 
     def __init__(
-        self,
-        slots: Slots,
-        *,
-        boot: Callable[[], float] | None = None,
-        observe: processes.Observe | None = None,
+        self, slots: Slots, *, boot: Callable[[], float] | None = None, observe: processes.Observe | None = None
     ) -> None:
         self.slots, self.boot, self.observe = slots, boot or psutil.boot_time, observe or processes.alive
         with self.locked() as ledger:
@@ -141,7 +138,7 @@ class Maintenance:
             try:
                 ledger = _read(root / FILE)
             except (OSError, ValueError) as exc:
-                msg = f"maintenance ownership could not be read: {exc}"
+                msg = f"maintenance ownership could not be read: {failure(exc)}"
                 raise MaintenanceError(msg) from exc
             yield ledger
         finally:
@@ -151,7 +148,7 @@ class Maintenance:
         try:
             atomic_write(self.path, ledger.model_dump_json(indent=2) + "\n")
         except OSError as exc:
-            msg = f"maintenance ownership could not be saved: {exc}"
+            msg = f"maintenance ownership could not be saved: {failure(exc)}"
             raise MaintenanceError(msg) from exc
 
     @staticmethod
@@ -356,12 +353,12 @@ class Maintenance:
             if not self.retained(str(root)):
                 shutil.rmtree(root)
 
-    def failed(self, ident: str, error: BaseException) -> None:
-        """An exception without a returned Run proves neither absence nor complete process coverage."""
+    def failed(self, ident: str, error: str) -> None:
+        """An exception (*error*, its whole text) without a returned Run proves neither absence nor full coverage."""
         with self.locked() as ledger:
             lease = self._lease(ledger, ident)
             lease.state, lease.complete = "held", False
-            lease.reason = f"session ended without termination proof ({type(error).__name__})"
+            lease.reason = f"session ended without termination proof: {error}"
             self._save(ledger)
 
     def finished(self, ident: str, run: Outcome) -> None:

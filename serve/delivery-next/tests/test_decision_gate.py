@@ -86,7 +86,7 @@ def replace(shared: DataRepo, old: Decision, statement: str) -> Decision:
 
 def change(kind: StepKind = K.BUILD, scope: tuple[str, ...] = ("web",), **fields) -> Change:
     brief = Brief(version=1, approved_version=1, challenged=1, approved_at=AT, title="Notes", scope=list(scope))
-    plan = Plan(tasks=[Task(id="t1", title="Show notes", scope=list(scope), checks=["true"])])
+    plan = Plan(tasks=[Task(id="t1", title="Show notes", scope=list(scope), checks=["cd . && true"])])
     names = Names(branch="owlbear/c1", target="main")
     return Change(slug="c1", brief=brief, plan=plan, names=names, step=Step(kind=kind, task="t1"), **fields)
 
@@ -393,7 +393,7 @@ def test_a_long_answer_reaches_the_step_whole(shared):
 
 
 def checking(**fields) -> Change:
-    env = Environment(check="preview", command="npm run preview", directory=".", ready_url="http://127.0.0.1:4173/")
+    env = Environment(check="preview", command="npm run preview", directory=".", ready_url="http://127.0.0.1:{port}/")
     c = change(K.CHECK, checks=[PersonCheck(id="preview", steps=["open the preview"])], env=env, **fields)
     return c.model_copy(update={"step": Step(kind=K.CHECK, task="preview")})
 
@@ -522,8 +522,8 @@ def test_an_unreadable_decision_set_stops_with_its_whole_error(tmp_path, shared,
 
     c = step(store, tmp_path)
 
-    assert (ran, c.stop.reason) == ([], whole_error)
-    assert gate_event(store, K.BUILD)["reason"] == whole_error
+    assert (ran, c.stop.reason) == ([], f"Unsettled: {whole_error}")
+    assert gate_event(store, K.BUILD)["reason"] == f"Unsettled: {whole_error}"
 
 
 def test_a_refresh_git_cannot_read_stops_an_irreversible_step_with_its_whole_error(
@@ -541,7 +541,9 @@ def test_a_refresh_git_cannot_read_stops_an_irreversible_step_with_its_whole_err
 
     c = step(store, tmp_path)
 
-    said = f"not refreshed: Git cannot read the shared data repository {shared.root}: {whole_error}"
+    probe = ["git", "status", "--porcelain", "--untracked-files=no"]
+    why = f"CalledProcessError: Command '{probe}' returned non-zero exit status 128.\n{whole_error}"
+    said = f"not refreshed: DecisionsUnavailable: Git cannot read the shared data repository {shared.root}: {why}"
     reason = f"the decisions were not refreshed before {K.PUBLISH}, which cannot be undone: {said}"
     assert (ran, c.stop.reason) == ([], reason)
     assert gate_event(store, K.PUBLISH)["reason"] == reason

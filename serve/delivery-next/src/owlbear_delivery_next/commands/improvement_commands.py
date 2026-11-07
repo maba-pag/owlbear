@@ -30,16 +30,14 @@ def run_retro(
     *,
     change: Annotated[str | None, Parameter(group=UNIT)] = None,
     chat: Annotated[str | None, Parameter(group=UNIT)] = None,
-    synthetic: Annotated[str | bool | None, Parameter(group=UNIT, negative="")] = None,  # NAME stays a name
 ) -> Namespace:
     """Queue a run of one unit for the host's Retro job (paid).
 
     Args:
         change: PROJECT/SLUG: a finished Change; PROJECT is its folder's name or id.
         chat: SESSION: an enrolled chat, quiet for a day.
-        synthetic: The synthetic units, or one NAME.
     """
-    return Namespace(command="improvement", action="retro", retro="run", change=change, chat=chat, synthetic=synthetic)
+    return Namespace(command="improvement", action="retro", retro="run", change=change, chat=chat)
 
 
 @retro.command(name="status")
@@ -48,7 +46,7 @@ def retro_status(*, last: int = 10, plan: str | None = None) -> Namespace:
 
     Args:
         last: How many of the latest runs.
-        plan: UNIT: a unit id (chg:…, chat:…, syn:…) or PROJECT/SLUG.
+        plan: UNIT: a unit id (chg:…, chat:…) or PROJECT/SLUG.
     """
     return Namespace(command="improvement", action="retro", retro="status", last=last, plan=plan)
 

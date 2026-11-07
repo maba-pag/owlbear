@@ -83,7 +83,7 @@ function last(a) {
       <p-tag id="audit-result" variant=${tone} compact="true">${word}</p-tag>
     </div>
     ${a.reason ? html`<p-inline-notification id="audit-reason" state=${a.state === "failed" ? "error" : "info"}
-      dismiss-button="false">${sentence(a.reason)}.</p-inline-notification>` : nothing}
+      dismiss-button="false"><pre class="log">${sentence(a.reason)}.</pre></p-inline-notification>` : nothing}
     <dl class="facts" aria-labelledby="audit-last-title">
       <div><dt>Ended</dt><dd id="audit-when">${when(a.ended_at)}</dd></div>
       <div><dt>PDS version</dt><dd id="audit-version">${a.version ?? "not known"}</dd></div>

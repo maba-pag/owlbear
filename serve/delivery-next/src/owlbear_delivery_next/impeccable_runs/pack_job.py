@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files, pack_git, pack_update
 from owlbear_delivery_next.impeccable_runs import (
     pack_activation,
@@ -436,7 +437,7 @@ class Job(Steps):
             self.log(exc.reason)
             self._end("up-to-date" if exc.current else "failed", exc.reason)
         except Exception as exc:  # noqa: BLE001 - the page must learn how the run ended
-            reason = f"{type(exc).__name__}: {exc}"
+            reason = failure(exc)
             self.log(reason)
             self._end("failed", reason)
         else:
@@ -476,10 +477,11 @@ class Job(Steps):
         return pack_run.advance(self, pack_run.rebuilt(self, ctx), ctx, lp)
 
     def _notice(self) -> str:
-        found = pack_update.newer(self.live.releases)
-        if found is None:
-            msg = "upstream's releases could not be read; try again when online"
-            raise Stopped(msg)
+        try:
+            found = pack_update.releases(self.live.releases)
+        except pack_update.Unread as exc:
+            msg = f"upstream's releases could not be read: {failure(exc)}"
+            raise Stopped(msg) from exc
         if not found:
             msg = f"up to date: no skill release newer than {pack_files.manifest()['upstream']['tag']}"
             raise Stopped(msg, current=True)

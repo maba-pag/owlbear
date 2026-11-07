@@ -990,7 +990,7 @@ def modern_run_owned(machines, tmp_path, shared_repo, *, recovered: bool):
     workspace = live / pack_job.RUNS / "modern-a"
     workspace.mkdir(parents=True)
     lease = settled.maintenance.begin(good.id, "pack:modern-a", "pack", str(workspace))
-    settled.maintenance.failed(lease, RuntimeError("synthetic: the session ended without termination proof"))
+    settled.maintenance.failed(lease, "RuntimeError: synthetic: the session ended without termination proof")
     if recovered:
         reboot_then_recover(settled, lease)
     settled.stop_all()

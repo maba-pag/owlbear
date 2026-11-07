@@ -229,8 +229,11 @@ def install(choice: Choice, report: Report = _quiet) -> Path:
         _build(choice, folder, report)
     except PackInstallError:
         raise
-    except VersionError:
-        remove(folder)
+    except VersionError as exc:
+        try:
+            remove(folder)
+        except (OSError, VersionError) as cleanup:
+            exc.add_note(f"removing the failed install also failed: {failure(cleanup)}")
         raise
     return folder
 
@@ -251,14 +254,14 @@ def _build(choice: Choice, folder: Path, report: Report) -> None:
     try:
         _git(_bare(repo()), "worktree", "add", "--quiet", "--detach", str(folder), choice.commit)
     except VersionError as exc:
-        report("getting", "failed", str(exc))
+        report("getting", "failed", failure(exc))
         raise
     report("getting", "done", f"{choice.tag} at {choice.commit[:12]}")
     report("building", "running", "uv sync --locked")
     try:
         _sync(folder)
     except VersionError as exc:
-        report("building", "failed", str(exc))
+        report("building", "failed", failure(exc))
         raise
     report("building", "done", "its environment is in place")
     _checked(choice, folder, report)
@@ -372,7 +375,7 @@ def _holds_data(path: Path) -> Path | None:
     try:
         return data_place.holds_data(path)
     except data_repo.DataRepoError as exc:
-        msg = f"nothing is removed while the shared data's pointer cannot be read: {exc}"
+        msg = f"nothing is removed while the shared data's pointer cannot be read: {failure(exc)}"
         raise VersionError(msg) from exc
 
 
@@ -386,11 +389,18 @@ def keep_data(path: Path) -> None:
 def remove(folder: Path) -> None:
     """Remove an installed version's worktree and folder, if there is one; never one holding the shared data."""
     keep_data(folder)
-    with contextlib.suppress(VersionError):
-        _git(_bare(local_home.root() / REPO), "worktree", "remove", "--force", str(folder))
-    shutil.rmtree(folder, ignore_errors=True)
-    with contextlib.suppress(VersionError):
-        _git(_bare(local_home.root() / REPO), "worktree", "prune")
+    try:
+        with contextlib.suppress(FileNotFoundError):
+            shutil.rmtree(folder)
+        bare = local_home.root() / REPO
+        try:
+            (bare / "HEAD").stat()
+        except FileNotFoundError:
+            return
+        _git(_bare(bare), "worktree", "prune")
+    except OSError as exc:
+        msg = f"removing {folder} failed: {failure(exc)}"
+        raise VersionError(msg) from exc
 
 
 def prune() -> list[str]:
@@ -434,7 +444,7 @@ def report(say: Callable[[str], None], *, prepare: bool = False) -> int:
     try:
         choice = target()
     except (VersionError, registry.RegistryError) as exc:
-        say(f"the versions could not be read: {exc}")
+        say(f"the versions could not be read: {failure(exc)}")
         return 1
     for note in choice.notes if choice else ():
         say(f"  {note}")
@@ -450,7 +460,7 @@ def report(say: Callable[[str], None], *, prepare: bool = False) -> int:
     try:
         folder = install(choice)
     except VersionError as exc:
-        say(str(exc))
+        say(failure(exc))
         return 1
     say(f"{choice.tag} is installed and checked in {folder}; nothing switched to it")
     return 0

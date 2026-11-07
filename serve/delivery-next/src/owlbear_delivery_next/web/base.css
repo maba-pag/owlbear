@@ -17,6 +17,7 @@ header {
 section { display: grid; gap: var(--p-spacing-static-md); }
 /* A long path or command in a notice wraps instead of widening the page. */
 p-inline-notification { overflow-wrap: anywhere; }
+.failure-detail { white-space: pre-wrap; overflow-wrap: anywhere; }
 /* A section heading sits closer to what it heads than to the block before it (B2). */
 :is(main, #page) > :is(section, details) + :is(section, details) { margin-block-start: var(--p-spacing-fluid-md); }
 .panel {
@@ -26,6 +27,8 @@ p-inline-notification { overflow-wrap: anywhere; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
 /* A long status line, such as a whole error, keeps its tag beside its first line. */
 .row.status { align-items: flex-start; }
+.shaping-chat-state { display: grid; gap: var(--p-spacing-static-sm); }
+.shaping-chat-state p-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .heading-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--p-spacing-static-sm); }
 .empty {
   padding: var(--p-spacing-static-lg) var(--p-spacing-static-md); text-align: center;
@@ -38,7 +41,7 @@ li { font-size: var(--p-typescale-sm); }
    row, a line of facts (.meta), a path (.path) and the lists of cards or timed rows keep their width; the text in a
    card is capped as text. Its last line keeps more than one word. */
 :is(p, p-text, dd, li):not(:is(p-table, p-inline-notification, p-banner, .bar, #machine) *, .meta, .path):not(
-  :is(.scopes, .cards, .entries, .actions, .log, #projects) > li) { max-inline-size: 47ch; text-wrap: pretty; }
+  :is(.scopes, .cards, .entries, .actions, .log, .projects) > li) { max-inline-size: 47ch; text-wrap: pretty; }
 p-text[size="xs"] { font-size: var(--p-typescale-xs); }  /* its ch follows its smaller text; PDS sizes the text */
 details > summary { cursor: pointer; font-size: var(--p-typescale-sm); padding-block: var(--p-spacing-static-xs); }
 :is(a, button, summary, input, select, textarea, [tabindex]):focus-visible {

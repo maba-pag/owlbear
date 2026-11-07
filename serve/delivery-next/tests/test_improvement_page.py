@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import socket
 import subprocess
@@ -24,6 +25,7 @@ from owlbear_delivery_next.improvement import (
     acts,
     case_edits,
     case_replay,
+    case_review,
     cases,
     followups,
     improvement_view,
@@ -34,7 +36,7 @@ from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.local_system import codebase, maintenance
-from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import (
@@ -42,6 +44,7 @@ from owlbear_delivery_next.machine_host import (
     cases_job,
     chat_acts,
     chat_settings,
+    chats,
     improvement_routes,
     project,
     retro_job,
@@ -57,17 +60,18 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
-    from playwright.sync_api import Page
+    from playwright.sync_api import Locator, Page
 
 NOW = datetime(2026, 10, 1, 10, tzinfo=UTC)
 SLUG = "alpha-1"
 DONE = "alpha-2"  # a finished Change: Retro may run on it
 TEXT = {"title": "Check the export's week column", "body": "The builder said done before the week held ISO weeks."}
 STOPPED = "The Spotter stopped this step for irreversible harm: it would force-push over main"
-ALLOW = "Allow it: needs a brief amendment"  # the Spotter's question's first option
+ALLOW = "Allow it: the brief is amended first, then the step goes on"  # the Spotter's question's first option
 PREFILL = "t hand-off-fitness\n\nbash make"
 FAILED = "HostError: VS Code's agent host is not running: its published endpoint failed: ConnectionRefusedError"
 RETRO_TICK, CASES_TICK = retro_job.RetroJob.tick, cases_job.CasesJob.tick  # taken before machine_page stubs them
+NOTE = "the runtime said more after the error"  # a note an error carries, which its whole text keeps
 # An element's text without its times, which the browser words in its own locale, nor its nested list.
 BARE = (
     "e => { const c = e.cloneNode(true); c.querySelectorAll('time, ul').forEach((t) => t.remove()); "
@@ -262,6 +266,48 @@ def contained(page: Page) -> None:
         where.append(page.evaluate(f"{inside} ? 'dialog' : document.activeElement === document.body ? '' : 'page'"))
     assert "page" not in where
     assert where[-1] == "dialog"
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)
+def test_synthetic_retro_is_visible_as_history_without_action_buttons(tmp_path, monkeypatch, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
+        store.add_findings([{"id": "f-history", "unit": "syn:old", "what": "An invented finding",
+                             "provenance": "synthetic"}])  # fmt: skip
+        pid = props.file(props.open_key("synthetic", "lesson", "old"), ["f-history"], kind="lesson",
+                         target="agent:builder", provenance="synthetic")  # fmt: skip
+        props.reviewed(pid, props.folded()[pid]["evidence"], {"verdict": "survive", "publishable": TEXT})
+        redirected = props.file(props.open_key("synthetic", "agent-change", "old"), ["f-history"], kind="agent-change",
+                                target="agent:builder", provenance="synthetic")  # fmt: skip
+        props.reviewed(redirected, props.folded()[redirected]["evidence"], {"verdict": "survive", "publishable": TEXT})
+        props.transition(redirected, "redirected", "owner", direction="Keep the old direction")
+        child = props.redrafted(redirected, {"cause": "c", "target": "agent:builder", "mechanism": "m"}, "old")
+        props.reviewed(child, props.folded()[child]["evidence"], {"verdict": "survive", "publishable": TEXT})
+        partial = props.file(props.open_key("synthetic", "delivery-change", "old"), ["f-history"],
+                             kind="delivery-change", target="delivery:review", provenance="synthetic")  # fmt: skip
+        props.reviewed(partial, props.folded()[partial]["evidence"], {"verdict": "survive", "publishable": TEXT})
+        snapshot = {"destination": {"kind": "issue", "repository": "o/r", "synthetic": True}}
+        props.transition(partial, "accepted", "owner", snapshot=snapshot)
+        props.outcome(partial, "applied", step="created", artefact={"kind": "issue", "where": "o/r", "ref": "#2"})
+        page = improvement(w, pds)
+        old = card(page, pid)
+        expect(old).to_contain_text("Historical")
+        expect(old).to_contain_text("synthetic Retro is retired")
+        expect(old.get_by_role("button")).to_have_count(0)
+        expect(page.locator("#finding-f-history")).to_contain_text("An invented finding")
+        expect(page.locator("#finding-f-history")).to_contain_text("Synthetic finding: historical only.")
+        expect(page.locator("#finding-f-history").get_by_role("button", name="Follow up")).to_have_count(0)
+        expect(page.locator("#proposals")).to_contain_text("None waits for you.")
+        history = card(page, redirected)
+        expect(history).to_contain_text("Redirected")
+        expect(history).to_contain_text("Your direction: Keep the old direction")
+        expect(history).to_contain_text(f"Redrafted as {child}.")
+        expect(history.get_by_role("button")).to_have_count(0)
+        expect(card(page, partial)).to_contain_text("Partly made")
+        expect(card(page, partial)).not_to_contain_text("closed at once")
+        expect(card(page, partial).get_by_role("button")).to_have_count(0)
 
 
 @pytest.mark.browser
@@ -622,9 +668,50 @@ def test_an_empty_machine_says_so_and_an_unread_one_says_why(tmp_path, monkeypat
         expect(page.locator("#looks")).to_contain_text("No look yet here")  # what was read still shows
 
 
+def failing(whole_error: str) -> Callable[..., Any]:
+    """A read that raises *whole_error*, which no route catches."""
+
+    def read(*_args: object, **_kwargs: object) -> Any:
+        raise RuntimeError(whole_error)
+
+    return read
+
+
+def described(notification: Locator) -> str:
+    """The description a notification shows, as its shadow tree renders it."""
+    return notification.evaluate("n => n.shadowRoot.querySelector('.notification p').textContent")
+
+
 @pytest.mark.browser
-@pytest.mark.timeout(120)  # a journey through the menu, the Change page and a reload
-def test_a_changes_detail_shows_behind_the_menu_switch(tmp_path, monkeypatch, pds) -> None:
+def test_an_uncaught_read_shows_its_whole_error_on_the_improvement_page(
+    tmp_path, monkeypatch, pds, whole_error
+) -> None:
+    monkeypatch.setattr(spotter_test, "current", failing(whole_error))  # the overview's Spotter cases
+    monkeypatch.setattr(improvement_view, "looks", failing(whole_error))
+    with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
+        w.page.goto(f"{w.base}/improvement#token=t")
+        overview = w.page.locator('#page p-inline-notification[heading="The Improvement page could not be read"]')
+        looks = w.page.locator('#looks p-inline-notification[heading="The looks could not be read"]')
+        looks.wait_for()
+        pds.settled(w.page)
+        assert (described(overview), described(looks)) == (f"RuntimeError: {whole_error}",) * 2
+
+
+@pytest.mark.browser
+def test_an_uncaught_read_shows_its_whole_error_in_a_changes_detail(tmp_path, monkeypatch, pds, whole_error) -> None:
+    monkeypatch.setattr(improvement_view, "change_detail", failing(whole_error))
+    with machine_page(tmp_path, monkeypatch, pds) as w:
+        w.page.add_init_script("localStorage.setItem('owlbear-improvement-detail', 'on')")
+        w.page.goto(f"{w.base}/?project={w.pid}&change={w.pid}%2F{SLUG}#token=t")
+        shown = w.page.locator("#improvement-detail p-inline-notification")
+        shown.wait_for()
+        pds.settled(w.page)
+        assert described(shown) == f"RuntimeError: {whole_error}"
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)  # a journey through the Change page, the menu and a reload
+def test_a_changes_detail_shows_behind_the_details_switch(tmp_path, monkeypatch, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with machine_page(tmp_path, monkeypatch, pds) as w:
@@ -640,10 +727,11 @@ def test_a_changes_detail_shows_behind_the_menu_switch(tmp_path, monkeypatch, pd
         page.get_by_role("button", name="Menu").click()
         menu = page.locator("p-drilldown")
         expect(menu.get_by_role("link", name="Changes")).to_be_focused()  # it opens on the Work level, this page's
-        switch = page.locator("#improvement-detail-switch")
+        expect(menu.locator("p-switch")).to_have_count(0)  # the switch moved to the Change page
+        page.keyboard.press("Escape")
+        switch = page.locator("#details-switch")
         expect(switch).to_be_visible()
         switch.click()
-        page.keyboard.press("Escape")
         detail = page.locator("#improvement-detail")
         expect(detail.locator("#look-r-note")).to_contain_text("It said done with the week column unchecked.")
         finding = detail.locator("#finding-f-1")
@@ -663,6 +751,11 @@ def test_a_changes_detail_shows_behind_the_menu_switch(tmp_path, monkeypatch, pd
         expect(page.locator("#improvement-detail #finding-f-1")).to_be_visible()  # the switch stays on
         expect(page.get_by_text(STOPPED).first).to_be_visible()
 
+        page.route("**/improvement/change?*", lambda route: route.fulfill(status=500, body="spotter store unreadable"))
+        page.reload()
+        expect(page.get_by_text("The Spotter's and Retro's detail could not be read")).to_be_visible()
+        expect(page.get_by_text(STOPPED).first).to_be_visible()  # the rest of the page still shows
+
 
 def aside(work: Callable[[], object]) -> None:
     """Run *work* off the browser's thread, whose event loop Playwright holds; its exception is raised here."""
@@ -679,6 +772,11 @@ def _cases_job(monkeypatch, **seams: Any) -> cases_job.CasesJob:
     return cases_job.CasesJob(slots, shared=lambda: None, **seams)
 
 
+def _noted(exc: Exception) -> Exception:
+    exc.add_note(NOTE)
+    return exc
+
+
 def _run_line(page: Page, kind: str, rid: str):
     return page.locator("#cases ol.meta > li", has_text=f"{kind} {rid}:")
 
@@ -687,7 +785,7 @@ def _run_line(page: Page, kind: str, rid: str):
 @pytest.mark.timeout(90)
 def test_a_failed_retro_run_shows_its_whole_error(tmp_path, monkeypatch, pds, whole_error) -> None:
     def failing(_work: object) -> None:
-        raise RuntimeError(whole_error)
+        raise _noted(RuntimeError(whole_error))
 
     found = SimpleNamespace(retro_after_change="off", retro_when_idle="off", enrolled_chats=[])
     monkeypatch.setattr(cases_job, "limits", lambda: {"retro": 5.0})
@@ -696,12 +794,13 @@ def test_a_failed_retro_run_shows_its_whole_error(tmp_path, monkeypatch, pds, wh
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
         slots = Slots(lambda: 1)
         slots.open()
-        store.request("owner", synthetic="large")
+        store.request("owner", change=f"{w.pid}:{DONE}")
         with monkeypatch.context() as settings:  # the job's own view of the machine's settings
             settings.setattr(machine_settings, "current", lambda: found)
-            aside(lambda: RETRO_TICK(retro_job.RetroJob(slots, owner=maintenance.Maintenance(slots)), 0.0))
+            seams = retro_job.Seams(projects=w.machine.retro.seams.projects)
+            aside(lambda: RETRO_TICK(retro_job.RetroJob(slots, seams, owner=maintenance.Maintenance(slots)), 0.0))
         [run] = store.run_states().values()
-        expected = f"failed: RuntimeError: {whole_error}"
+        expected = f"failed: RuntimeError: {whole_error}\n{NOTE}"
         assert run["result"] == expected
         page = improvement(w, pds)
         shown = page.locator(f"#run-{run['id']} > p.meta").first
@@ -713,12 +812,12 @@ def test_a_failed_retro_run_shows_its_whole_error(tmp_path, monkeypatch, pds, wh
 @pytest.mark.timeout(90)
 def test_a_failed_cases_run_shows_its_whole_error(tmp_path, monkeypatch, pds, whole_error) -> None:
     async def asked(_text: str, _meter: object, _role: object) -> str:
-        raise RuntimeError(whole_error)
+        raise _noted(RuntimeError(whole_error))
 
     def unread(_name: str) -> None:
-        raise RuntimeError(whole_error)
+        raise _noted(RuntimeError(whole_error))
 
-    expected = f"failed: RuntimeError: {whole_error}"
+    expected = f"failed: RuntimeError: {whole_error}\n{NOTE}"
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
         ids = []
         for task in ("t one", "t two"):
@@ -753,7 +852,7 @@ def test_a_failed_replay_look_shows_its_whole_note(tmp_path, monkeypatch, pds, w
         request = case_replay.regression(edits, "owner", "promote")
         _quiet, failing = request["frozen"]  # in their order, each before then after; the run ends after a failure
         answers = [{"category": "hand-off-fitness", "note": "It said done early."}, {"category": "none", "note": ""},
-                   RuntimeError(whole_error), RuntimeError(whole_error),  # a failed look is retried once
+                   _noted(RuntimeError(whole_error)), _noted(RuntimeError(whole_error)),  # a failed look is retried
                    {"category": "failed", "note": ""}, {"category": "failed", "note": ""}]  # fmt: skip
 
         async def looked(_card, _prompt, meter, _spot) -> dict[str, Any]:
@@ -769,7 +868,7 @@ def test_a_failed_replay_look_shows_its_whole_note(tmp_path, monkeypatch, pds, w
         rid = case_replay.ask(request)
         aside(lambda: CASES_TICK(job, 0.0))
         [run] = [r for r in case_replay.results() if r["id"] == rid and "answers" in r]
-        note = f"RuntimeError: {whole_error}"
+        note = f"RuntimeError: {whole_error}\n{NOTE}"
         assert (run["answers"][failing]["before"]["note"], answers) == (note, [])
         console: list[str] = []
         w.page.on("console", lambda m: console.append(m.text) if m.type == "error" else None)
@@ -783,7 +882,7 @@ def test_a_failed_replay_look_shows_its_whole_note(tmp_path, monkeypatch, pds, w
 @pytest.mark.timeout(90)
 def test_a_failed_spotter_look_shows_its_whole_error(tmp_path, monkeypatch, pds, whole_error) -> None:
     async def judge(_card: object, _ctx: object, _meter: object) -> str:
-        raise RuntimeError(whole_error)
+        raise _noted(RuntimeError(whole_error))
 
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
         ctx = spotter.Context(project=w.pid, change=SLUG, step="build", looks=("hand-off",), sample_rate=0,
@@ -797,7 +896,7 @@ def test_a_failed_spotter_look_shows_its_whole_error(tmp_path, monkeypatch, pds,
         aside(lambda: asyncio.run(main()))
         assert spotter.WORK.settled(5)
         [record] = [json.loads(x) for f in spotter.root().glob("records-*.jsonl") for x in f.read_text().splitlines()]
-        expected = f"RuntimeError: {whole_error}"
+        expected = f"RuntimeError: {whole_error}\n{NOTE}"
         assert record["skipped"] == expected
         page = improvement(w, pds)
         tag = page.locator(f"#look-{record['id']} p-tag").first
@@ -814,7 +913,7 @@ def test_a_failed_chats_pass_shows_its_whole_error_until_a_pass_succeeds(
     error = f"{whole_error}\n/{'x' * 3000}"  # and an unbroken path component, wider than the page
 
     def read() -> chat_settings.Plan:
-        raise RuntimeError(error)
+        raise _noted(RuntimeError(error))
 
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
         follower, told = w.machine.chats, []
@@ -824,7 +923,7 @@ def test_a_failed_chats_pass_shows_its_whole_error_until_a_pass_succeeds(
         page = improvement(w, pds)
         failed = page.locator("#not-followed #follower-failed")
         expect(failed).to_be_visible()
-        said = f"All enrolled chats: the last pass failed, and the next one tries again: RuntimeError: {error}"
+        said = f"All enrolled chats: the last pass failed, and the next one tries again: RuntimeError: {error}\n{NOTE}"
         assert failed.evaluate("e => e.innerText") == said  # as shown, its lines kept
         assert failed.evaluate("e => e.scrollWidth <= e.clientWidth")  # wrapped, not cut off at the page's edge
 
@@ -837,8 +936,264 @@ def test_a_failed_chats_pass_shows_its_whole_error_until_a_pass_succeeds(
         expect(page.locator("#not-followed")).to_have_count(0)
 
 
+@pytest.mark.browser
+@pytest.mark.timeout(90)
+def test_a_follower_that_cannot_open_its_lock_shows_its_whole_error_and_that_it_stopped(
+    tmp_path, monkeypatch, pds, whole_error
+) -> None:
+    error = f"{whole_error}\n/{'x' * 3000}"  # and an unbroken path component, wider than the page
+    opening = os.open
+
+    def refused(path: object, *args: Any) -> int:
+        if str(path).endswith(chats.LOCK):
+            raise _noted(PermissionError(error))
+        return opening(path, *args)
+
+    with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
+        follower, told = w.machine.chats, []
+        follower.say = told.append
+        with monkeypatch.context() as lock:
+            lock.setattr(chats.os, "open", refused)
+            follower.run()
+        assert follower.ended.is_set()
+        page = improvement(w, pds)
+        shown = page.locator("#not-followed #follower-refused")
+        said = (
+            "All enrolled chats: the follower did not start, and none is followed until OwlBear starts again: "
+            f"its lock cannot be opened: PermissionError: {error}\n{NOTE}"
+        )
+        assert shown.evaluate("e => e.innerText") == said  # as shown, its lines kept
+        assert shown.evaluate("e => e.scrollWidth <= e.clientWidth")  # wrapped, not cut off at the page's edge
+
+
 def _until(done: Callable[[], object]) -> None:
     deadline = time.monotonic() + 10
     while not done():
         assert time.monotonic() < deadline, "not reached in 10 s"
         time.sleep(0.02)
+
+
+def _one_pass() -> SimpleNamespace:
+    """A loop's stop signal that lets one pass run, then stops it."""
+    passes = iter([False, True])
+    return SimpleNamespace(wait=lambda _s: next(passes))
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_a_failed_cases_or_retro_pass_and_an_unpublished_sync_show_their_whole_error(
+    tmp_path, monkeypatch, pds, whole_error
+) -> None:
+    def raising(exc: Exception) -> Any:
+        raise _noted(exc)
+
+    told: list[str] = []
+    with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
+        monkeypatch.setattr(cases_job.CasesJob, "tick", CASES_TICK)
+        monkeypatch.setattr(retro_job.RetroJob, "tick", RETRO_TICK)
+        cases_now = _cases_job(monkeypatch, say=told.append)
+        monkeypatch.setattr(cases_job, "limits", lambda: raising(OSError(whole_error)))
+        with monkeypatch.context() as due:  # a sync with work: it cannot read its limits
+            due.setattr(case_review, "due", lambda: ({"c-1": "r"}, {}, []))
+            cases_now.loop(_one_pass(), lambda: 0.0)
+        with monkeypatch.context() as due:  # the next sync cannot read what is due
+            due.setattr(case_review, "due", lambda: raising(cases.CaseError(whole_error)))
+            cases_now.loop(_one_pass(), lambda: cases_job.PUBLISH_EVERY)
+        loaded, broken = w.machine.retro.seams.projects, [True]
+        slots = Slots(lambda: 1)
+        slots.open()
+        seams = retro_job.Seams(
+            say=told.append, projects=lambda: raising(RuntimeError(whole_error)) if broken else loaded()
+        )
+        retro_now = retro_job.RetroJob(slots, seams, maintenance.Maintenance(slots))
+        retro_now.loop(_one_pass(), lambda: 0.0)  # the loaded projects cannot be read, for this pass only
+        broken.clear()
+        unpublished = f"the credit limits cannot be read: OSError: {whole_error}\n{NOTE}"
+        failed = f"CaseError: {whole_error}\n{NOTE}"
+        retro_failed = f"RuntimeError: {whole_error}\n{NOTE}"
+        assert told == [
+            f"the Spotter cases are not published: {unpublished}",
+            f"the Spotter cases job failed: {failed}",
+            f"Retro failed: {retro_failed}",
+        ]
+        w.machine.cases, w.machine.retro = cases_now, retro_now  # what the page reads
+        console: list[str] = []
+        w.page.on("console", lambda m: console.append(m.text) if m.type == "error" else None)
+        page = improvement(w, pds)
+        shown = page.locator("#cases ol.meta > li")
+        assert shown.evaluate_all("els => els.map((e) => e.textContent)") == [
+            f"The job's last pass failed, and the next one tries again: {failed}",
+            f"Not published, and the next sync tries again: {unpublished}",
+        ]
+        assert page.locator("#cases-failed").evaluate("e => e.scrollWidth <= e.clientWidth")
+        said = page.locator("#retro #retro-failed .meta")
+        assert (
+            said.evaluate("e => e.textContent")
+            == f"Retro's last pass failed, and the next one tries again: {retro_failed}"
+        )
+        assert said.evaluate("e => e.scrollWidth <= e.clientWidth")
+        assert console == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_a_publication_that_did_not_go_through_shows_each_cases_whole_reason(
+    tmp_path, monkeypatch, pds, shared_repo, whole_error
+) -> None:
+    good = (
+        '{"situation": "An agent stopped with half the task done.", "call": "hand-off-fitness", "why": "Unfinished."}'
+    )
+
+    async def asked(_text: str, _meter: object, _role: object) -> str:
+        return good
+
+    with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
+        ids = []
+        for task in ("t one", "t two"):
+            cid = cases.freeze({"intent": {"task": task}}, {"source": "pilot", "family": "f"})
+            entry = {"stage": "candidate", "call": "hand-off-fitness", "why": "why", "example": "", "review": None}
+            cases.commit(cases.current()["n"], {cid: entry}, "t", "add")
+            reviewed = cases.edited(cid, entry, stage="test", reviewed_by="sol")
+            cases.commit(cases.current()["n"], {cid: reviewed}, "t", "reviewed")
+            ids.append(cid)
+        refused, unpushed = ids
+        warned = f"saved and committed in {shared_repo[0]}, but not pushed: the push failed: {whole_error}"
+
+        def publish(_self: DataRepo, path: Path, _message: str) -> str:
+            if path.stem == refused:
+                raise _noted(DataRepoError(whole_error))
+            return warned
+
+        monkeypatch.setattr(DataRepo, "publish", publish)
+        job = _cases_job(monkeypatch, asked=asked)
+        job.shared = lambda: DataRepo(shared_repo[0])
+        aside(job._publish)  # noqa: SLF001 - one publication sync, as the job's loop runs it
+        [run] = [r for r in case_replay.results() if r["kind"] == "publication"]
+        reasons = {refused: f"failed: DataRepoError: {whole_error}\n{NOTE}", unpushed: f"pending: {warned}"}
+        expected = "\n".join(f"case {cid}, {reasons[cid]}" for cid in sorted(ids))  # in the order they were written
+        assert (run["failed"], run["pending"], run["result"]) == ([refused], [unpushed], expected)
+        page = improvement(w, pds)
+        line = _run_line(page, "publication", run["id"])
+        assert line.evaluate(BARE) == f" \u00b7 publication {run['id']}: {expected}"
+        said = line.locator(".said")
+        assert said.evaluate("e => e.innerText") == expected  # as shown, its lines kept
+        assert said.evaluate("e => e.scrollWidth <= e.clientWidth")
+
+
+SAID = "e => e.shadowRoot.querySelector('p').textContent"  # a notification's description, as its shadow holds it
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_a_refusal_and_each_part_that_cannot_be_read_show_their_whole_error(
+    tmp_path, monkeypatch, pds, whole_error
+) -> None:
+    error = f"{whole_error}\n{NOTE}"
+    fact = cases.fact
+
+    def unread_case(cid: str) -> dict[str, Any]:
+        if cid == w.ids["checked"]:
+            raise _noted(cases.CaseError(whole_error))
+        return fact(cid)
+
+    def unread_settings() -> None:
+        raise _noted(registry.RegistryError(whole_error))
+
+    def refused(*_args: object) -> None:
+        raise _noted(store.RetroError(whole_error))
+
+    with machine_page(tmp_path, monkeypatch, pds) as w:
+        monkeypatch.setattr(cases, "fact", unread_case)
+        monkeypatch.setattr(improvement_routes.machine_settings, "current", unread_settings)
+        monkeypatch.setattr(followups, "request", refused)
+        failing = w.ids["backlog"]
+        props.transition(failing, "accepted", "owner")
+        props.outcome(failing, "failed", step="backlog", error=f"RetroError: {error}")
+        page = improvement(w, pds)
+        page.locator("#retro #finding-f-1").get_by_role("button", name="Follow up").click()
+        pds.answer(page, "Follow up")
+        page.locator("#notice").wait_for()
+        switches = '#retro p-inline-notification[heading="Retro\'s switches could not be read"]'
+        shown = (
+            page.locator("#notice").evaluate(SAID),
+            page.locator(switches).evaluate(SAID),
+            page.locator(f"#case-{w.ids['checked']} p-inline-notification").evaluate(SAID),
+            card(page, failing).locator("ul.meta > li", has_text="Last failure").evaluate(BARE),
+        )
+        assert shown == (
+            f"RetroError: {error}",
+            f"the machine's settings cannot be read: RegistryError: {error}",
+            f"CaseError: {error}",
+            f"Last failure (backlog): RetroError: {error}",
+        )
+
+
+def _judge(answer: str) -> spotter.Judge:
+    """A look that bills one confirmed call and answers *answer*."""
+
+    async def look(_card: object, _ctx: spotter.Context, spend: Any) -> str:
+        part = spend.part()
+        part.started(f"sdk-{spend.id}")
+        part.call(0.25)
+        part.ended(None, confirmed=True)
+        return answer
+
+    return look
+
+
+async def _failed_acts(pid: str, error: OSError) -> None:
+    """Two looks of *pid*'s Change: one whose act and conflict check raise *error*, one whose withdrawal does."""
+    steered = {"hand-off-fitness": "refuse-hand-off", "irreversible-harm": "stop-and-ask"}
+    harm = json.dumps({"category": "irreversible-harm", "note": "Deletes the backups.", "evidence": ["e1"],
+                       "state_change": "rm -rf ~/backups"})  # fmt: skip
+    unfit = json.dumps({"category": "hand-off-fitness", "note": "Done too early.", "evidence": ["e1"]})
+
+    async def dispatch(record: spotter.Record, _act: acts.Act) -> None:
+        if record.session == "s-harm":
+            raise error
+
+    def conflicts(_change: str) -> str:
+        raise error
+
+    def unreachable() -> None:
+        raise error
+
+    async def instant(_seconds: float) -> None:
+        return
+
+    for session, answer, arm in (("s-harm", harm, "silent"), ("s-unfit", unfit, "steered")):
+        ctx = spotter.Context(project=pid, change=SLUG, step="build", looks=("hand-off",), sample_rate=0,
+                              verbose=False, model="m", effort="medium", limit=0.75, actions=steered, arm=arm, cap=2,
+                              act=dispatch, conflicts=conflicts)  # fmt: skip
+        spot = spotter.Spotter(ctx, lambda s=session: s, _judge(answer))
+        spot.handed_off("call-1", {})
+        await spot.drain()
+    withdrawn = next(i for i, a in acts.acts(spotter.root()).items() if a.session == "s-unfit")
+    actor = chat_acts.ChatActor("s-unfit", spot, connect=unreachable, sleep=instant)
+    actor.chat = "chat-1"  # resolved already: the withdrawal's connection is what fails
+    await actor._confirmed(SimpleNamespace(id=withdrawn), "[t]", "steering", "m-1", yields=False)  # noqa: SLF001
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_a_failed_act_conflict_check_and_withdrawal_show_their_whole_error(
+    tmp_path, monkeypatch, pds, whole_error
+) -> None:
+    error = f"{whole_error}\n{NOTE}"
+    with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
+        aside(lambda: asyncio.run(_failed_acts(w.pid, _noted(OSError(whole_error)))))
+        assert spotter.WORK.settled(5)
+        by = {a.session: (rid, a) for rid, a in acts.acts(spotter.root()).items()}
+        (harmed, _), (withdrawn, act) = by["s-harm"], by["s-unfit"]
+        page = improvement(w, pds)
+
+        def line(rid: str, start: str) -> str:
+            return page.locator(f"#look-{rid} p.meta", has_text=start).evaluate(BARE)
+
+        shown = (line(harmed, "Its error:"), line(harmed, "Decision check:"), line(withdrawn, "Its act:"))
+        withdrawal = f"not taken within {chat_acts.BOUND:.0f} s; its withdrawal failed: OSError: {error}"
+        assert shown == (
+            f"Its error: OSError: {error}",
+            f"Decision check: failed: OSError: {error}",
+            f"Its act: {act.act}, steered arm, unconfirmed ({withdrawal})",
+        )

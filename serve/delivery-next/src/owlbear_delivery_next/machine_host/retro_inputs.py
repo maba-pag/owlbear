@@ -12,12 +12,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import assumptions, cases, chatlogs, retro_judge
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
-from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
+from owlbear_delivery_next.improvement.retro_calls import Refusal
 from owlbear_delivery_next.machine_host import cases_job
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import machine_settings, registry, spend_ledger
@@ -46,8 +47,22 @@ def session(agent: str) -> tuple[RoleModel, float]:
     minutes = cases_job.settings().agent(agent).minutes
     if minutes is None:
         msg = f"agents.{agent}.minutes"
-        raise SettingsUnset(msg)
+        raise SettingsUnset([msg])
     return cases_job.role(agent), minutes * 60.0
+
+
+def start_settings() -> tuple[float | None, Refusal]:
+    """The startup allowance and technical refusal, with identity only for genuinely absent settings."""
+    limit = None
+    try:
+        limit = cases_job.limits()["retro"]
+        for agent in ("retro", "retro-review"):
+            session(agent)
+    except (SettingsUnset, registry.RegistryError, OSError, ValueError) as exc:
+        return limit, Refusal(failure(exc), tuple(exc.keys) if isinstance(exc, SettingsUnset) else ())
+    if limit is None:
+        return None, Refusal("the Retro run credit limit is unset", ("machine.retro_run_credit_limit",))
+    return limit, Refusal()
 
 
 def _changes(uid: str) -> set[tuple[str, str]]:
@@ -163,15 +178,17 @@ def pinned() -> set[str]:
     return pins - {""}
 
 
-def prune(say: Callable[[str], None]) -> None:
+def prune(say: Callable[[str], None]) -> str:
     """Remove the captures of judged chats nothing pins, saying how many or why it could not."""
     try:
         gone = chatlogs.prune(datetime.now(UTC), judged_sessions(), pinned())
     except (store.RetroError, OSError, ValueError) as exc:
-        say(f"Retro could not prune judged captures: {type(exc).__name__}: {exc}")
-        return
+        why = f"Retro could not prune judged captures: {failure(exc)}"
+        say(why)
+        return why
     if gone:
         say(f"Retro pruned the captures of {len(gone)} judged sessions")
+    return ""
 
 
 NEEDS = (*retro_judge.NEEDS, assumptions.RETRO_LESSON_BAR, assumptions.RETRO_CATCHABLE)  # what every run rests on
@@ -218,7 +235,7 @@ class Running:
     @property
     def needs(self) -> tuple[str, ...]:
         """The assumptions this run rests on."""
-        return (*NEEDS, *(syn.NEEDS if self.provenance == "synthetic" else ()))
+        return (*NEEDS, *((assumptions.RETRO_SYNTHETIC,) if self.provenance == "synthetic" else ()))
 
     def retired(self) -> str:
         """Why this run may not go on: the assumptions it rests on retired now; "" while none is."""

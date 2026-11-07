@@ -1,5 +1,5 @@
 import { html } from "/assets/lit-html/3.3.3/lit-html.js";
-import { blockedOf, project, shown } from "/assets/ui.mjs";
+import { blockedOf, displayName, project, shown } from "/assets/ui.mjs";
 import { state, show, call, several, failed } from "./state.mjs";
 import { button } from "./widgets.mjs";
 
@@ -9,8 +9,9 @@ export function startedView() {
   if (!s) return html`<p-text id="started" aria-live="polite"></p-text>`;
   // a project whose settings block its work gets no command to run by hand (#808)
   const by = s.command ? html` Copy this command: <code>${s.command}</code>` : "";
+  const note = s.warning ? ` Note: ${s.warning}.` : "";
   return html`<p-text id="started" aria-live="polite">${s.text
-    ?? html`Could not open the chat ${s.about}: ${s.reason}.${by}`}</p-text>`;
+    ?? html`Could not open the chat ${s.about}: ${s.reason}.${note}${by}`}</p-text>`;
 }
 
 async function launched(id, of) {  // the host opens the chat in the background; VS Code may first have to start
@@ -59,7 +60,7 @@ function chooserView() {
   };
   const stop = () => { state.choosing = false; show(); };
   return html`<div id="choose" class="row"><p-select label="Shape the new Change in" .value=${state.choosing}
-    @change=${picked}>${offered.map((p) => html`<p-select-option value=${p.id}>${p.name}</p-select-option>`)}
+    @change=${picked}>${offered.map((p) => html`<p-select-option value=${p.id}>${displayName(p)}</p-select-option>`)}
     </p-select>
     ${button("Continue", go, { disabled: !ready, title: ready ? undefined : unshapeable() })}
     ${button("Cancel", stop, { variant: "secondary" })}</div>`;
@@ -110,7 +111,7 @@ async function openChat({ path, of, dialog, about }) {
     const s = r.started ? await launched(r.launch, of) : { state: "failed", ...r };
     state.started = s.state === "open"
       ? { text: `A chat opened in VS Code ${about}.${s.warning ? ` Note: ${s.warning}.` : ""}` }
-      : { reason: s.reason, command: s.command, about };
+      : { reason: s.reason, warning: s.warning, command: s.command, about };
   } catch (e) {
     state.started = null;
     failed(e);

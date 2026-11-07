@@ -202,6 +202,7 @@ async def test_curate_memory_surfaces_duplicate_repair_failure_without_changes(t
     assert _directory_snapshot(tmp_path) == before
 
 
+@pytest.mark.usefixtures("todays_memory_values")
 @pytest.mark.asyncio
 async def test_assess_memories_reports_duplicate_failure_and_continues(
     monkeypatch: pytest.MonkeyPatch,
@@ -231,6 +232,7 @@ async def test_assess_memories_reports_duplicate_failure_and_continues(
         *,
         task_id: str,
         expected_revision: str,
+        stale_factor: int,
     ) -> AssessmentResult:
         nonlocal failure_snapshot
         try:
@@ -239,6 +241,7 @@ async def test_assess_memories_reports_duplicate_failure_and_continues(
                 bucket,
                 task_id=task_id,
                 expected_revision=expected_revision,
+                stale_factor=stale_factor,
             )
         except DuplicateEntryError:
             failure_snapshot = _directory_snapshot(tmp_path)
@@ -273,6 +276,7 @@ async def test_assess_memories_reports_duplicate_failure_and_continues(
     assert engine.get_entry(later_entry.id).outstanding_count == 1
 
 
+@pytest.mark.usefixtures("todays_memory_values")
 @pytest.mark.asyncio
 async def test_purge_keeps_repaired_copy_pending_and_out_of_recall(tmp_path: Path) -> None:
     scope_agents = ["agent-one", "agent-two"]

@@ -47,14 +47,23 @@ what is wrong (TD-150). In OwlBear also:
 - Record each answer with `record_decision`: his confirmed intent, never his words (TD-449); a changed
   decision names the one it replaces. "Take your recommendation" records what the option showed as
   `approved` (`confirmed=true`, `origin="approved"`); details you add stay `autonomous` with their reason.
+- Before recording, distinguish new owner intent from implementation/work evidence; do not record an unchanged rule
+  again merely because it was used. Keep a finite instruction's explicit bound in its confirmed binding statement,
+  not just its rationale. Preserve continuing intent and the owner's scope; implementation or merge implies no expiry.
+  Keep mixed intent whole unless the owner confirms its separation; do not mechanically split every instruction.
+  If the whole binding cannot fit the statement's limit, ask for faithful wording rather than truncating, hiding
+  obligations in rationale or inventing an end condition.
 - End the session with one check of everything you record (TD-448). At work completion, use that same check to
-  consider only decisions recorded or materially relied on in this work, not the whole inventory. Propose closeout
-  only for a finite instruction whose stated end condition demonstrably happened: show its ID, current revision,
-  completion evidence, continuing obligations and proposed withdrawal or replacement.
-  Earlier work or plan approval and a merged PR are not retirement consent. Use `retire_decision`, or a replacement
-  through `record_decision`, only after the owner's specific confirmation; a `decided` rule needs his re-decision.
-  Preserve continuing intent in any replacement; if a mixed rule's surviving intent is unclear, leave it unchanged.
-  Without approval, the record stays in force. If no candidate qualifies, add no closeout question or extra gate.
+  consider only decisions recorded or materially relied on in this work, not the whole inventory.
+  For a wholly finite OwlBear project instruction, verify its explicit end condition and every binding clause are
+  fulfilled with no continuing intent lost, then use `complete_decision` with the current revision, exact condition
+  quote and evidence. Retain history, verify the published receipt and report the completion; do not ask the owner
+  to verify historical engineering facts. Investigate uncertain facts and leave unresolved intent active.
+  Continuing or mixed rules are not administrative completions. Explain the effect of any proposed intent change:
+  `retire_decision` or a replacement through `record_decision` still needs the owner's specific confirmation, and
+  a `decided` rule his re-decision. Preserve continuing intent; ambiguity leaves the rule unchanged.
+  Do not fake those flags when the completion tool is unavailable: update the installed runtime first.
+  If no eligible completion or genuine intent question remains, add no closeout question or extra gate.
 
 ### Challenges Run by Hand
 
@@ -111,10 +120,23 @@ quality-runner `mode=full` with `changed_paths`.
 | Source prefix | Test scope | Toolchain |
 | --- | --- | --- |
 | `serve/*/src/`, `serve/*/tests/`, `tests/` | `uv run test --changed` | manifest- and import-aware pytest scope plus invariant tests |
+| (known root tooling config or CI workflow filename) | config-consuming tests plus invariant tests | unioned with source/page scopes |
 | `share/` `.owlbear/` | skip (docs/config only, except executable hooks/scripts) | — |
 | (unsafe or unknown path) | full Python suite fallback | pytest |
 
-`uv run test` remains the complete Python suite. Use `uv run test --changed` for the agent inner loop; it includes direct consumer tests discovered from workspace manifests and imports, plus cross-cutting invariants. For changed Python sources of `serve/delivery-next`, pytest-testmon picks the package's tests that executed the changed code (its data stays in `.owlbear/scratch/`; the first run records it over the whole package), and tests that start the package in a child process always run. Other changes there (pages, skills, fixtures) run the whole package. Unknown or unsafe Git scope falls back to the full Python suite.
+`uv run test` remains the complete Python suite. Use `uv run test --changed` for the agent inner loop;
+it includes direct consumer tests discovered from workspace manifests and imports, plus cross-cutting invariants.
+For changed Python sources of `serve/delivery-next`, pytest-testmon picks the package's tests that executed the
+changed code (its data stays in `.owlbear/scratch/`; the first run records it over the whole package), and tests
+that start the package in a child process always run. A change to a page (`.mjs`, `.html` or `.css` under its
+`web/`) runs the tests that load pages, the package's and its consumers'; other changes there (skills, fixtures)
+run the whole package. Unknown or unsafe Git scope falls back to the full Python suite.
+Known tooling configs and workflow filenames add their actual test consumers; root Python-wide configs
+and unrecognised paths keep full-suite coverage. No filename-extension rule skips config tests.
+
+Only `--changed` disables pytest's aggregate session timer, including coverage and full fallback; individual-test
+timeouts and failures stay enforced. Ordinary full-suite and explicit-path runs keep their configured limits.
+See the [tools guide](../serve/tools/README.md#test-selection-and-limits) for selection and timeout details.
 
 For local development, prefer `uv run test` for the complete Python suite and
 `uv run test [PATH ...]` to apply this routing table to explicit paths. Direct pytest commands remain valid

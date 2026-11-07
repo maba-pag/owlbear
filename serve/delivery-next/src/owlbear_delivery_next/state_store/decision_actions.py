@@ -12,6 +12,8 @@ replaces one need a reason, recorded in the successor's (or withdrawn decision's
 never stored (TD-449): what he confirmed is `decided`, or `approved` when he took a chat's recommendation as shown,
 and its `read_back` is the day he confirmed it. A commit message
 names the action and the decisions' ids only, never text a person typed. An origin is corrected in `decision_origin`.
+Wholly finite administrative completion without changed intent is separate (`decision_completion`); it marks spent,
+never supplies a false owner confirmation to these withdrawal or replacement actions.
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ from typing import TYPE_CHECKING, Literal
 from owlbear_decisions import Decision, Link, LinkType, Origin, ReadBackKind, Scope, State, new_id
 from owlbear_decisions.validate import layers, project_folders, read_layers
 from owlbear_delivery_next.change_contracts import decision_wording
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.state_store import decision_store
 from owlbear_delivery_next.state_store.decision_store import DecisionsUnavailable, Receipt
 
@@ -106,7 +109,7 @@ def every(shared: DataRepo | None) -> dict[str, Decision]:
     try:
         entries, _ = read_layers(layers(shared.root, project_folders(shared.root)))
     except OSError as exc:
-        msg = f"the decisions in {shared.root} cannot be read: {exc}"
+        msg = f"the decisions in {shared.root} cannot be read: {failure(exc)}"
         raise DecisionsUnavailable(msg, decision_store.READ) from exc
     return {e.decision.id: e.decision for e in entries}
 

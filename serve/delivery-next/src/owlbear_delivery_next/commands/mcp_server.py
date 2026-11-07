@@ -6,17 +6,19 @@ The workspace is told at start, before any state is made (``chat_client.workspac
 from __future__ import annotations
 
 import argparse
+import json
 import urllib.parse
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from mcp.server import MCPServer
-from mcp.types import ToolAnnotations
+from mcp.types import ImageContent, TextContent, ToolAnnotations
 from pydantic import Field
 
+from owlbear_decisions.models import ID_PATTERN
 from owlbear_delivery_next.change_contracts import tools  # noqa: TC001 - MCP resolves the tools' annotations at runtime
 from owlbear_delivery_next.change_flow import brief_tools
-from owlbear_delivery_next.commands.chat_client import Chat, Closed, workspace
+from owlbear_delivery_next.commands.chat_client import WAIT, Chat, Closed, workspace
 from owlbear_delivery_next.commands.mcp_launch import serve_stdio
 from owlbear_delivery_next.project_host import answers
 from owlbear_delivery_next.workflow_steps import lookup
@@ -33,7 +35,8 @@ def _d(name: str, model: type[tools.Args] = brief_tools.BriefDraft) -> Any:  # n
 mcp = MCPServer(
     "owlbear-delivery",
     instructions="Shape a Change with the owner, save its brief and visual check, show Delivery status, answer a "
-    "worker's question, find decisions, record one the owner confirmed or propose one, retire one, queue a "
+    "worker's question, find decisions, record one the owner confirmed or propose one, complete a finite "
+    "OwlBear instruction, retire a rule, queue a "
     "read-back and record one.",
 )
 
@@ -59,14 +62,20 @@ def save_brief(  # noqa: PLR0913 - the brief's nine fields
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
-def save_visual_check(
+def save_visual_check(  # noqa: PLR0913, PLR0917 - the visual check's six fields
     change: Annotated[str, _d("change", brief_tools.VisualDraft)],
     ui: Annotated[bool, _d("ui", brief_tools.VisualDraft)],
     states: Annotated[list[brief_tools.VisualStateDraft] | None, _d("states", brief_tools.VisualDraft)] = None,
     steps: Annotated[list[brief_tools.VisualStepDraft] | None, _d("steps", brief_tools.VisualDraft)] = None,
+    recipe: Annotated[brief_tools.RecipeDraft | None, _d("recipe", brief_tools.VisualDraft)] = None,
+    preparation: Annotated[str, _d("preparation", brief_tools.VisualDraft)] = "",
 ) -> dict[str, Any]:
-    """Set a Change's UI flag, the page states Delivery screenshots, and the clicks or typing before each."""
+    """Set a Change's UI flag, page states, their clicks or typing, and the recipe that renders the current pages.
+
+    Delivery then captures the target's current pages; call await_capture for the pictures.
+    """
     body = {"change": change, "ui": ui, "states": [s.model_dump() for s in states or []]}
+    body |= {"recipe": recipe.model_dump() if recipe else None, "preparation": preparation}
     return _STATE["chat"].save_brief(body | {"steps": [s.model_dump() for s in steps or []]}, "/briefs/visual")
 
 
@@ -90,9 +99,43 @@ def challenge_brief(
         ),
     ] = False,
 ) -> dict[str, Any]:
-    """Ask for the brief version's challenge once the draft is ready; waits for its verdict, gives findings by ID."""
+    """Ask for the brief version's challenge once the draft is ready; waits about 70 s for its verdict.
+
+    Gives findings by ID, or says it still runs: then call await_challenge.
+    """
     found = [r.model_dump() for r in rejected or []]
     return _STATE["chat"].challenge_brief(change, version, found, retry_pick=retry_pick)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
+def await_challenge(
+    change: Annotated[str, Field(description="Handle of the Change", examples=["c1"])],
+    version: Annotated[int, Field(description="The brief version whose challenge you wait for", examples=[2])],
+) -> dict[str, Any]:
+    """Wait about 70 s for a requested challenge; it asks for nothing. Gives findings by ID, who must act, or running.
+
+    While it says running, call it again at once.
+    """
+    return _STATE["chat"].await_challenge(change, version)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
+def await_capture(
+    change: Annotated[str, Field(description="Handle of the Change", examples=["c1"])],
+) -> list[TextContent | ImageContent]:
+    """Wait about 70 s for the draft's capture of the target's current pages; it asks for nothing.
+
+    Gives each state's picture at the first width and why any is missing, or running: then call it again at once.
+    """
+    out = _STATE["chat"].await_capture(change)
+    shown: list[TextContent | ImageContent] = []
+    for s in out.get("states", []):
+        data, said = s.pop("png", None), f"state {s['name']} at {s['width']}px"
+        if data:
+            shown += [TextContent(type="text", text=said), ImageContent(type="image", data=data, mime_type="image/png")]
+        elif s["bytes"]:
+            shown.append(TextContent(type="text", text=f"{said}: over 4 MB, open it on the Changes page"))
+    return [TextContent(type="text", text=json.dumps(out)), *shown]
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
@@ -140,15 +183,36 @@ def find_decisions(
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=False, destructive_hint=False))
 def lookup_decisions(question: Annotated[str, ASKED]) -> dict[str, Any]:
-    """Ask which decisions govern a question; the picker answers in about a minute, a failure says `failed`."""
-    return lookup.agent_reply(_STATE["chat"].lookup_decisions(question))
+    """Ask which decisions govern a question; waits about 70 s.
+
+    Gives the decisions, `failed`, or running: then call await_lookup with its lookup_id at once.
+    """
+    return lookup.agent_reply(_STATE["chat"].lookup_decisions(question, WAIT))
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
+def await_lookup(
+    lookup_id: Annotated[str, Field(description="The lookup_id lookup_decisions gave", max_length=64)],
+) -> dict[str, Any]:
+    """Wait about 70 s more for a lookup_decisions answer; it asks for nothing.
+
+    While it says running, call it again at once.
+    """
+    return lookup.agent_reply(_STATE["chat"].await_lookup(lookup_id))
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
 def record_decision(  # noqa: PLR0913 - the decision's fields
     *,
     title: Annotated[str, Field(description="Short name of the decision", max_length=200)],
-    statement: Annotated[str, Field(description="The rule in force, at most two lines", max_length=240)],
+    statement: Annotated[
+        str,
+        Field(
+            description="Whole rule, at most two lines; keep explicit finite bounds here, not only in rationale",
+            max_length=240,
+            examples=["Until the migration is verified, keep the old format readable."],
+        ),
+    ],
     rationale: Annotated[
         str,
         Field(
@@ -180,6 +244,9 @@ def record_decision(  # noqa: PLR0913 - the decision's fields
 ) -> dict[str, Any]:
     """Record a decision the owner confirmed (in force at once), or propose your own as a draft.
 
+    Keep implementation-only details in work evidence; do not record an unchanged rule again merely because it was used.
+    Preserve the owner's scope and mixed intent unless he confirms separation; if full binding cannot fit, ask.
+    Continuing intent does not expire on implementation or merge.
     Read back free text and unclear answers at once; before the chat ends, run one closing check of everything you
     record. A replacement retires what it replaces; the reply shows its impact on existing work.
     """
@@ -210,6 +277,52 @@ def retire_decision(
     path = f"/decisions/{urllib.parse.quote(decision, safe='')}/retire"
     body = {"revision": revision, "reason": reason, "redecide": redecide, "confirmed": confirmed}
     return _STATE["chat"].write(path, body)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))
+def complete_decision(
+    *,
+    decision: Annotated[
+        str,
+        Field(
+            description="ID of the in-force OwlBear project instruction: D- and its 26-character ULID",
+            pattern=ID_PATTERN,
+            examples=["D-00000000000000000000000000"],
+        ),
+    ],
+    revision: Annotated[
+        str,
+        Field(description="Its current revision from find_decisions", pattern=r"^[0-9a-f]{64}$", examples=["0" * 64]),
+    ],
+    condition: Annotated[
+        str,
+        Field(
+            description="Exact quote of its explicit finite end condition from the whole binding, not its rationale",
+            min_length=1,
+            max_length=4000,
+            examples=["Once the acceptance report is published"],
+        ),
+    ],
+    evidence: Annotated[
+        str,
+        Field(
+            description="Proof that the end condition and every binding clause are fulfilled; no continuing intent "
+            "may be lost. Give references, not credentials or the owner's words",
+            min_length=1,
+            max_length=4000,
+            examples=["PR 123 and its acceptance report establish every required check"],
+        ),
+    ],
+) -> dict[str, Any]:
+    """Mark a wholly finite OwlBear project instruction spent under the lead's standing delegation.
+
+    The lead judges finiteness and verifies the evidence; a quote match is not that judgement. Investigate uncertain
+    facts and leave unclear, mixed or continuing rules in force. This is completion, not changed owner intent:
+    no new confirmation or re-decision flags are needed. Retain history, verify publication and report afterward.
+    Global, consumer-project and Change-owned decisions use their existing authority paths.
+    """
+    path = f"/decisions/{urllib.parse.quote(decision, safe='')}/complete"
+    return _STATE["chat"].write(path, {"revision": revision, "condition": condition, "evidence": evidence})
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))

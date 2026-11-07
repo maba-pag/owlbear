@@ -95,7 +95,7 @@ def classify(run: Run, p: MissingTool, enclosing: StepKind, now: datetime) -> St
     if absent(tool, p.error):
         text = f"Set up {tool} on this machine (install or start it), then run the step again. The step needs {said}"
         options = [Option(id="done", label="Done, run the step again", next="retry"), PAUSE]
-        return _ask(enclosing, text[:1500], cause_key(ErrorKind.PROJECT_ENV, enclosing, subject), options)
+        return _ask(enclosing, text, cause_key(ErrorKind.PROJECT_ENV, enclosing, subject), options)
     if (kind := transient(p.error)) in ENVIRONMENT:
         return StepResult(
             exit=Exit.RETRY,
@@ -108,7 +108,7 @@ def classify(run: Run, p: MissingTool, enclosing: StepKind, now: datetime) -> St
     if window_only(names(tool)):
         text = f"{tool} exists only in a VS Code window; Delivery steps run only through the SDK. The step needs {said}"
         options = [*_without(enclosing, tool), PAUSE]
-        return _ask(enclosing, text[:1500], cause_key(ErrorKind.PROJECT_ENV, enclosing, subject), options)
+        return _ask(enclosing, text, cause_key(ErrorKind.PROJECT_ENV, enclosing, subject), options)
     return _nowhere(tool, said, enclosing, subject)
 
 
@@ -117,7 +117,7 @@ def _nowhere(tool: str, said: str, enclosing: StepKind, subject: str) -> StepRes
 
     A brief challenge's step back becomes its round's finding (``steps.brief_round``); the brief changes in chat.
     """
-    reason = f"needs {said}, which no runtime here provides"[:1500]
+    reason = f"needs {said}, which no runtime here provides"
     back = {
         StepKind.BUILD: StepKind.PLAN,
         StepKind.REVIEW: StepKind.PLAN,

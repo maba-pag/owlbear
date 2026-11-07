@@ -12,18 +12,34 @@ def _said(stream: object) -> str:
     return (stream.decode(errors="replace") if isinstance(stream, bytes) else str(stream)).strip()
 
 
-def failure(exc: BaseException) -> str:
-    """Its type and message, then what a command it carries printed.
+def streams(exc: BaseException) -> str:
+    """What a command *exc* carries printed, or nothing when it carries none.
 
-    ``str()`` of a ``CalledProcessError`` or ``TimeoutExpired`` names the command but not what it said, so its output
-    follows on its own lines: the one stream that said something as it is, or both, labelled, stderr first.
+    The one stream that said something as it is, or both, labelled, stderr first. ``str()`` of a
+    ``CalledProcessError`` or ``TimeoutExpired`` leaves it out.
     """
-    stderr, stdout = _said(getattr(exc, "stderr", None)), _said(getattr(exc, "output", None))
-    head = f"{type(exc).__name__}: {exc}"
-    if stderr and stdout:
-        return f"{head}\nstderr:\n{stderr}\nstdout:\n{stdout}"
-    out = stderr or stdout
-    return head + (f"\n{out}" if out else "")
+    return output(getattr(exc, "stderr", None), getattr(exc, "output", None))
+
+
+def failure(exc: BaseException) -> str:
+    """Its type and message, then what a command it carries printed (`streams`) on its own lines, then its notes.
+
+    Notes added on the way up (``add_note``, a cleanup that also failed) follow, each on its own line.
+    """
+    out = streams(exc)
+    notes = "".join(f"\n{note}" for note in getattr(exc, "__notes__", ()))
+    return f"{type(exc).__name__}: {exc}" + (f"\n{out}" if out else "") + notes
+
+
+def rpc_failure(exc: BaseException) -> str:
+    """`failure`, then the data a JSON-RPC error carries beside its message, which its ``str()`` leaves out."""
+    return failure(exc) + ("" if (data := getattr(exc, "data", None)) is None else f" {data!r}")
+
+
+def output(stderr: object, stdout: object) -> str:
+    """What a command printed: the one stream that said something as it is, or both, labelled, stderr first."""
+    err, out = _said(stderr), _said(stdout)
+    return f"stderr:\n{err}\nstdout:\n{out}" if err and out else err or out
 
 
 def failed(done: subprocess.CompletedProcess) -> str:

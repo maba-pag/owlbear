@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.inbox import BriefApproval
 from owlbear_delivery_next.change_contracts.round_records import BRIEF
-from owlbear_delivery_next.change_flow import brief_rounds, picks
+from owlbear_delivery_next.change_flow import brief_rounds, brief_starts, picks, shaping_capture
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store.briefs import unrevisable
@@ -70,12 +70,14 @@ def refused(store: Store, c: Change, body: ApproveBody, view: DataView | None) -
     brief = c.brief
     if body.version != brief.version:
         return f"brief version {body.version} is not the current draft"
-    if why := brief_rounds.approvable(c):  # TD-249: only a version its challenge loop ended on
+    # its current pages first, which the expectations are written against (D-01M61V2GR0C6JV2R6KJ0WR4PNB); then
+    # TD-249: only a version its challenge loop ended on
+    if why := shaping_capture.waiting(c) or brief_rounds.approvable(c):
         return f"brief v{brief.version} cannot be approved yet: {why}"
     if brief_rounds.unreviewed(c) and not body.unreviewed:  # TD-255: the owner ticks that he accepts it
         return f"brief v{brief.version}'s last revision was not reviewed; accept that to approve"
     # TD-459: approval pins the pick, never picks; wording is checked before the baseline reads it
-    if why := pick.unapproved(store, c, view) or decisions_gate.unworded(view, c):
+    if why := pick.unapproved(store, c) or decisions_gate.unworded(view, c):
         return f"brief v{brief.version} cannot be approved yet: {why}"
     if (stepped := [s.name for s in brief.visual if s.steps]) and not store.settings().preparations:
         return (
@@ -89,7 +91,7 @@ def refused(store: Store, c: Change, body: ApproveBody, view: DataView | None) -
 def approved(store: Store, lock: Lock, body: ApproveBody) -> str:
     """Check and record the owner's approval under *lock*, its project decisions published; or why it is refused."""
     c = store.read(lock.slug)
-    view = decisions_gate.loaded(store)  # one read: the pick is checked against the list the baseline pins
+    view = decisions_gate.loaded(store)  # one read: the wording is checked on the decisions the baseline pins
     if why := refused(store, c, body, view):
         return why
     now = datetime.now(UTC)  # the decisions in force now are the Change's baseline (TD-419)
@@ -118,6 +120,26 @@ def asked(store: Store, c: Change, body: ChallengeBody) -> str:
     return ""
 
 
+def answered(store: Store, lock: Lock, body: ApproveBody) -> tuple[str, str]:
+    """The owner's Approve under *lock*: his approval, or on a version saved after its loop ended its challenge (#986).
+
+    On such a version his approval follows once the challenge raises nothing; the host makes it.
+
+    Returns:
+        Why it is refused, or "", and what was accepted.
+    """
+    c = store.read(lock.slug)
+    if not brief_starts.waiting(c):
+        return approved(store, lock, body), "brief-approval"
+    if c.intent.paused_at:  # its round could not run, yet it would hold every save
+        return "this Change is paused: resume it to approve", ""
+    c.brief.approve_if_clean = body.version
+    if why := asked(store, c, ChallengeBody(change=c.handle, version=body.version)):
+        return why, ""
+    store.write(lock, c)
+    return "", "brief-challenge"
+
+
 def router(
     store: Store,
     read: Callable[[str], Change],
@@ -127,7 +149,8 @@ def router(
     """POST /briefs/challenge records the shaper's request; POST /changes/{slug}/approve-brief the owner's approval.
 
     Both are checked and recorded under the Change's lock, so the brief cannot change in between. The challenge runs
-    at once, even while Delivery is paused (TD-287); *held* says a stop when idle keeps it until Resume.
+    at once, even while Delivery is paused (TD-287); *held* says a stop when idle keeps it until Resume. On a version
+    saved after its loop ended, the approval starts its challenge and takes effect once that is clean (#986).
     """
     routes = APIRouter()
 
@@ -136,12 +159,13 @@ def router(
         read(slug)
         try:
             with store.lock(slug) as lock:
-                if why := approved(store, lock, body):
+                why, accepted = answered(store, lock, body)
+                if why:
                     raise HTTPException(409, why)
         except (LockHeldError, StoreError) as exc:
             raise HTTPException(409, f"change: {exc}; try again") from exc
         wake()
-        return {"accepted": "brief-approval"}
+        return {"accepted": accepted}
 
     @routes.post("/briefs/challenge")
     def challenge(body: ChallengeBody) -> dict[str, Any]:

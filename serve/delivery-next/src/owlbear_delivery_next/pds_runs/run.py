@@ -18,11 +18,13 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import dispute_tools, tools
 from owlbear_delivery_next.change_contracts.round_records import PDS, RoundLoop
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files, pack_git
 from owlbear_delivery_next.impeccable_runs import pack_activation, pack_publish, pack_repair, pack_rounds, pack_run
 from owlbear_delivery_next.impeccable_runs.pack_run import Stopped
 from owlbear_delivery_next.pds_runs import audit, checks, diff, pin, publish, repair, sessions, tree
 from owlbear_delivery_next.pds_runs.context import CANDIDATE, NEXT, UPDATER, Action, Context
+from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.workflow_steps import sessions as step_sessions
 
@@ -41,18 +43,23 @@ def notice(job: Job) -> str:
     """The latest release on npm, when newer than the installed pin.
 
     Raises:
-        Stopped: npm was not reached or named no version, or the pin is current.
+        Stopped: The npm lookup failed or named no version, or the pin is current.
     """
     try:
-        latest = json.loads(job.live.fetch(f"{pin.REGISTRY}/latest", pin.SECONDS))["version"]
+        response = job.live.fetch(f"{pin.REGISTRY}/latest", pin.SECONDS)
     except OSError as exc:
-        msg = f"npm was not reached for {pin.NAME}: {exc}; try again when online"
+        msg = f"npm release lookup failed for {pin.NAME}: {failure(exc)}"
         raise Stopped(msg) from exc
+    try:
+        latest = json.loads(response)["version"]
     except (ValueError, KeyError, TypeError) as exc:
-        msg = f"npm's answer for {pin.NAME} names no version"
+        msg = (
+            f"npm's answer for {pin.NAME} names no version: {failure(exc)}\n"
+            f"response:\n{response.decode(errors='replace')}"
+        )
         raise Stopped(msg) from exc
     if not (isinstance(latest, str) and pin.VERSION.fullmatch(latest)):
-        msg = f"npm's answer names no version: {str(latest)[:60]}"
+        msg = f"npm's answer names no version: {latest}"
         raise Stopped(msg)
     installed = pin.read(job.live.package.resolve()).version
     if diff.number(latest) <= diff.number(installed):
@@ -185,7 +192,7 @@ def _laid(job: Job, ctx: Context, lp: RoundLoop) -> bool:
     try:
         repair.lay(job, ctx)
     except pack_files.PackError as exc:
-        job.hold(ctx, f"the agent's repair {r.commit[:12]} could not be laid out for its check: {exc}")
+        job.hold(ctx, f"the agent's repair {r.commit[:12]} could not be laid out for its check: {failure(exc)}")
         return False
     note = f"Then an agent repaired the pull request's failed CI: {r.summary}"
     ctx.summary = ctx.summary if note in ctx.summary else f"{ctx.summary}\n\n{note}"
@@ -357,6 +364,7 @@ def _reconsider(job: Job, ctx: Context, lp: RoundLoop) -> Action:
         p = run.payload
         if not (run.termination and run.termination.confirmed):
             msg = f"the challenger {run.session_id} may still be running; stop it before updating again"
+            msg += f"; {session_result.unverified(run.termination)}"
             raise pack_files.PackError(msg)
         if run.ending == "premise" and isinstance(p, tools.WrongPremise):
             return dict.fromkeys(keys, ("unsure", f"premise: {p.reason}"))

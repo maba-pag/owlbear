@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.runtimes import command_marks
 from owlbear_delivery_next.state_store import step_pids
@@ -27,14 +28,14 @@ def survivors(h: Host, c: Change, rec: RunnerRecord | None) -> Found | str:
     try:
         pids |= step_pids.recorded(folder, since) if since else {}
     except (OSError, ValueError) as exc:
-        return f"the step's recorded processes could not be read: {exc}"
+        return f"the step's recorded processes could not be read: {failure(exc)}"
     try:
         marks = command_marks.read(folder, since) if since else {}
     except (OSError, ValueError) as exc:
-        return f"the step's command marks could not be read: {exc}"
+        return f"the step's command marks could not be read: {failure(exc)}"
     found: Found = {p: "" for p, t in pids.items() if h.alive(p, t) is not False}
     try:
         found |= h.members(marks | pids)  # a recorded start time wins over a mark's
     except processes.UnlistedError as exc:
-        return f"the step's processes could not be looked for: {exc}"
+        return f"the step's processes could not be looked for: {failure(exc)}"
     return {p: v for p, v in found.items() if not (c.env and check.owned(c.env, p))}

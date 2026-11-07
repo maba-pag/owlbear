@@ -5,9 +5,10 @@ from __future__ import annotations
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from subprocess import CalledProcessError
+from subprocess import CalledProcessError, TimeoutExpired
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.change_contracts import check_hint
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
     Change,
@@ -28,6 +29,7 @@ from owlbear_delivery_next.change_contracts.profile_record import (
 from owlbear_delivery_next.change_flow.status import status, unloadable
 from owlbear_delivery_next.commands import cases_cli, project_commands, replay_client, setup
 from owlbear_delivery_next.commands.answer_console import answer, describe
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.impeccable.detector import DetectorError
 from owlbear_delivery_next.impeccable_runs import pack_replay
@@ -37,6 +39,7 @@ from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.settings.config import Agent, Layer
 from owlbear_delivery_next.state_store import (
     backlog_migrate,
+    github_writer,
     offline_protocol,
     prefs_import,
     profile_share,
@@ -66,7 +69,7 @@ def show_data(target: str | Path | None) -> tuple[int, str]:
         else:
             shared, done = data_place.point(Path(target)), ""
     except data_repo.DataRepoError as exc:
-        return 1, f"Not set: {exc}"
+        return 1, f"Not set: {failure(exc)}"
     root = shared.root if shared else data_place.default()
     said = f"{done[:1].upper()}{done[1:]}. " if done else ""
     return 0, f"{said}Shared data repository: {root} (pointer {data_place.pointer()}). Run `owlbear restart` to use it."
@@ -80,7 +83,7 @@ def _shown() -> tuple[int, str]:
     except data_place.BusyError:
         pass
     except data_repo.DataRepoError as exc:
-        return 1, f"Shared data: problem: {exc}"
+        return 1, f"Shared data: problem: {failure(exc)}"
     found = data_place.describe()
     lines = [f"{finished[:1].upper()}{finished[1:]}."] if finished else []
     if found.kind == "none":
@@ -132,10 +135,11 @@ def update_pack(a: argparse.Namespace, repo: Path) -> int:
         DetectorError,
         data_repo.DataRepoError,
         CalledProcessError,
+        TimeoutExpired,
         OSError,
         ValueError,
     ) as exc:
-        sys.stdout.write(f"Impeccable: {type(exc).__name__}: {exc}\n")
+        sys.stdout.write(f"Impeccable: {failure(exc)}\n")
         return 1
     return 0
 
@@ -154,7 +158,7 @@ def _golden() -> int:
 
 
 def seed(store: Store, a: argparse.Namespace) -> None:
-    """Write a minimal confirmed profile and one Change whose approved brief and one-task plan start at build."""
+    """Write a dev Change at build; explicit check arguments run from the repository root."""
     now = datetime.now(UTC)
     entries = {f"install:{pkg}": ProfileEntry(state="known", value=cmd, evidence="dev seed") for pkg, cmd in a.install}
     old = store.read_profile() or Profile()
@@ -167,7 +171,16 @@ def seed(store: Store, a: argparse.Namespace) -> None:
         slug=a.change,
         profile_version=old.version + 1,
         brief=brief,
-        plan=Plan(tasks=[Task(id="t1", title=a.title, scope=a.scope, checks=a.check)]),
+        plan=Plan(
+            tasks=[
+                Task(
+                    id="t1",
+                    title=a.title,
+                    scope=a.scope,
+                    checks=[check_hint.qualified(".", command) for command in a.check],
+                )
+            ]
+        ),
         checks=[PersonCheck(id=i, criteria=[c.id for c in criteria], steps=[s]) for i, s in a.person_check],
         step=Step(kind=StepKind.BUILD, task="t1"),
         names=Names(branch=f"owlbear/{a.change}", target=a.target),
@@ -203,7 +216,8 @@ def show_profile(
     overrides: list[tuple[Role, RoleModel]] | None = None,
 ) -> str:
     """Detect the profile, apply the owner's confirmations and role overrides to the project settings."""
-    prof = profile.detect(repo, profile.provider(store.read_profile() or Profile(), repo), store.read_profile())
+    gh = profile.provider(store.read_profile() or Profile(), repo, github_writer.of(store, repo, detecting=True))
+    prof = profile.detect(repo, gh, store.read_profile())
     for key, value in confirms:
         prof = profile.confirm(prof, key, value, datetime.now(UTC))
     store.write_profile(prof)

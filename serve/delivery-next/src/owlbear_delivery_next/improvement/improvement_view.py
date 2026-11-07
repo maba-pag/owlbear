@@ -6,11 +6,15 @@ Nothing here writes or spends.
 
 from __future__ import annotations
 
-import contextlib
+import logging
+import re
+import sqlite3
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import case_replay, cases, followups, proposal_apply, spotter_test_run
+from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.improvement import case_replay, cases, chatlogs, followups, proposal_apply, spotter_test_run
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
@@ -20,7 +24,7 @@ from owlbear_delivery_next.state_store import watch_reports
 from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
     from pathlib import Path
 
     from owlbear_delivery_next.state_store.store import Store
@@ -36,7 +40,20 @@ VERSIONS = 20  # case versions and case runs shown, newest first
 SEEN = 3  # a proposal's findings its card shows
 OPEN = {"waiting": 0, "shown": 0, "later": 1, "drafted": 2}  # the order open proposals are listed in
 UNREADABLE = (StoreError, OSError, ValueError)
+READ_ERRORS = (*UNREADABLE, sqlite3.Error, CaseError, store.RetroError)
 NO_SHARED = {"error": "there is no shared repository: a proposal lands in or through it"}
+LOG = logging.getLogger(__name__)
+
+
+def read_part[T](name: str, unread: dict[str, list[str]], read: Callable[[], T]) -> T | None:
+    """Keep a known read failure local to the part it prevented, without pretending it was empty."""
+    try:
+        return read()
+    except READ_ERRORS as exc:
+        detail = failure(exc)
+        LOG.exception("Improvement's %s could not be read: %s", name, detail)
+        unread[name] = [detail]
+        return None
 
 
 def _when(text: object) -> datetime:
@@ -79,7 +96,7 @@ def _settings(st: Store) -> dict[str, Any]:
     try:
         s = st.settings()
     except UNREADABLE as exc:
-        return {"error": f"the settings cannot be read: {type(exc).__name__}: {exc}", "link": SETTINGS}
+        return {"error": f"the settings cannot be read: {failure(exc)}", "link": SETTINGS}
     sources = {k: v for k, v in s.sources.items() if k.startswith(("spotter.", "agents.spotter."))}
     return {"spotter": s.spotter.model_dump(mode="json"), "model": s.roles.get("spotter"), "sources": sources,
             "link": SETTINGS}  # fmt: skip
@@ -88,7 +105,8 @@ def _settings(st: Store) -> dict[str, Any]:
 def spotter(projects: units.Projects, records: list[dict[str, Any]], now: datetime) -> dict[str, Any]:
     """Each loaded project's Spotter settings, each project's spend over the last week and the Spotter's test.
 
-    A look skipped before it began (no SDK session, no credits) is counted apart: it neither ran nor spent.
+    A look skipped before it began (no SDK session, no credits) is counted apart: it neither ran nor spent. A summary
+    the Spotter wrote at a step's end counts the n sampled looks it stands for.
     """
     spend: dict[str, dict[str, Any]] = {}
     for r in records:
@@ -96,14 +114,19 @@ def spotter(projects: units.Projects, records: list[dict[str, Any]], now: dateti
             s = spend.setdefault(str(r.get("project") or ""),
                                  {"looks": 0, "credits": 0.0, "unknown": 0, "stopped": 0, "skipped": 0})  # fmt: skip
             if r.get("skipped") and not r.get("sdk_sessions") and not r.get("credits"):
-                s["skipped"] += 1
+                # spotter.drain's summary of n sampled looks: "...: <n> sampled looks skipped..."
+                s["skipped"] += int(m[1]) if (m := re.search(r"(\d+) sampled looks skipped", r["skipped"])) else 1
                 continue
             s["looks"] += 1
             s["credits"] += float(r.get("credits") or 0.0)
             s["unknown"] += not r.get("credits_known")
             s["stopped"] += r.get("stopped") == "reached"
-    return {
-        "projects": {pid: {"name": repo.name} | _settings(st) for pid, (st, repo) in projects.items()},
+    kinds = {pid: "owlbear" if st.name == targets.OWLBEAR else "consumer" for pid, (st, _repo) in projects.items()}
+    return {  # OwlBear's own project first (D-01M5ZGGSMKBZ830H8FQSPHH5BN), the others in their order
+        "projects": {
+            pid: {"name": repo.name, "kind": kinds[pid]} | _settings(st)
+            for pid, (st, repo) in sorted(projects.items(), key=lambda item: kinds[item[0]] != "owlbear")
+        },
         "window_days": WINDOW,
         "spend": spend,
         "test": spotter_test_run.show(),  # read-only: declared, started with its frozen versions, ended, or none
@@ -136,7 +159,7 @@ def looks(  # noqa: PLR0913 - what is read, and the filter
                 rows = watch_reports.reports(st.db, slug, limit)
                 outside += [r | {"project": pid, "change": slug} for r in rows if r["targets"]]
         except UNREADABLE as exc:
-            unread.append(f"{pid}: {type(exc).__name__}: {exc}")
+            unread.append(f"{pid}: {failure(exc)}")
     known = _followups()
     shown = [r | {"followup": followup(r["id"], *known)} for r in _graded(picked, grades)[:limit]]
     return {"looks": shown, "outside": _newest(outside)[:limit], "unread": unread}
@@ -145,37 +168,70 @@ def looks(  # noqa: PLR0913 - what is read, and the filter
 # Retro
 
 
-def _finished(projects: units.Projects) -> list[dict[str, Any]]:
+def _finished(projects: units.Projects, unread: list[str]) -> list[dict[str, Any]]:
     """Every finished Change of the loaded projects, newest first: what the Run Retro picker offers."""
     found = []
     for pid, (st, repo) in projects.items():
-        with contextlib.suppress(*UNREADABLE):
-            for slug in st.slugs():
-                with contextlib.suppress(*UNREADABLE):
-                    if (done := st.read(slug).finished_at) is not None:
-                        found.append({"change": f"{pid}:{slug}", "project": repo.name, "slug": slug,
-                                      "at": done.isoformat()})  # fmt: skip
+        try:
+            slugs = st.slugs()
+        except units.UNREADABLE as exc:
+            unread.append(f"{pid}: {failure(exc)}")
+            continue
+        for slug in slugs:
+            try:
+                done = st.read(slug).finished_at
+            except units.UNREADABLE as exc:
+                unread.append(f"{pid}:{slug}: {failure(exc)}")
+                continue
+            if done is not None:
+                found.append({"change": f"{pid}:{slug}", "project": repo.name, "slug": slug,
+                              "at": done.isoformat()})  # fmt: skip
     return _newest(found)
 
 
-def retro(projects: units.Projects, switches: Mapping[str, Any]) -> dict[str, Any]:
+def _unit_states() -> dict[str, int]:
+    states = ((u.get("revisions") or [{}])[-1].get("state") or "new" for u in store.units(synthetic=True).values())
+    return dict(Counter(states))
+
+
+def retro(
+    projects: units.Projects, switches: Mapping[str, Any], failed: str = "", prune_failed: str = ""
+) -> dict[str, Any]:
     """Retro's queue, newest runs and findings, units by state, switches and the finished Changes it may run on.
+
+    *failed* is the last pass's error; *prune_failed* stays until pruning, not merely a pass, succeeds.
 
     Each finding carries its follow-up, a chat's too: a chat has no Change page to follow it up on.
     """
-    by_state: dict[str, int] = {}
-    for u in store.units(synthetic=True).values():
-        state = (u.get("revisions") or [{}])[-1].get("state") or "new"
-        by_state[state] = by_state.get(state, 0) + 1
-    known, newest = _followups(), store.findings(synthetic=True)[::-1][:FINDINGS]
-    return {
-        "queued": known[0],
-        "findings": [f | {"followup": followup(f["id"], *known)} for f in newest],
-        "runs": [{k: v for k, v in r.items() if k != "unsettled"} for r in store.runs(RUNS, synthetic=True)],
-        "units": by_state,
+    unread: dict[str, list[str]] = {}
+    states = read_part("units", unread, _unit_states)
+    if switches.get("retro_when_idle") in {"on", "paused"} and switches.get("chats_enrolled"):
+        try:
+            chatlogs.own()
+        except (OSError, ValueError) as exc:
+            unread["ownership"] = [failure(exc)]
+    known = read_part("followups", unread, _followups)
+    newest = read_part("findings", unread, lambda: store.findings(synthetic=True)[::-1][:FINDINGS])
+    runs = read_part("runs", unread, lambda: store.runs(RUNS, synthetic=True))
+    missing: list[str] = []
+    finished = _finished(projects, missing)[:LOOKS]
+    if missing:
+        unread["finished"] = missing
+    shown = {
+        "queued": known[0] if known is not None else None,
+        "findings": (
+            [f | {"followup": followup(f["id"], *known)} for f in newest]
+            if newest is not None and known is not None
+            else None
+        ),
+        "runs": ([{k: v for k, v in r.items() if k != "unsettled"} for r in runs] if runs is not None else None),
+        "units": states,
         "switches": dict(switches),
-        "finished": _finished(projects)[:LOOKS],
+        "finished": finished,
+        "failed": failed,
+        "prune_failed": prune_failed,
     }
+    return shown | ({"unread": unread} if unread else {})
 
 
 # The Spotter cases
@@ -186,10 +242,7 @@ def prefill(cid: str) -> str:
 
     The case's own example text is empty for a case checked the ordinary way, and its record's turn is an event id.
     """
-    try:
-        card = cases.card(cid)
-    except CaseError:
-        return ""
+    card = cases.card(cid)
     parts = [str((card.get("intent") or {}).get("task") or "")]
     if recent := card.get("recent"):
         last = recent[-1]
@@ -200,17 +253,22 @@ def prefill(cid: str) -> str:
 def _case(cid: str, entry: Mapping[str, Any]) -> dict[str, Any]:
     try:
         fact = cases.fact(cid)
+        example = prefill(cid)
     except CaseError as exc:
-        return {"id": cid, **entry, "marks": [], "error": str(exc)}
+        return {"id": cid, **entry, "marks": [], "error": failure(exc)}
     marks = [m for m, on in (("reserve", fact.get("reserve")), ("synthetic", fact.get("source") == "synthetic"),
                              ("unscored", fact.get("unscored"))) if on]  # fmt: skip
     if fact.get("assumption"):
         marks.append(f"assumption {fact['assumption']}")
-    return {"id": cid, **entry, "source": fact.get("source"), "marks": marks, "prefill": prefill(cid)}
+    return {"id": cid, **entry, "source": fact.get("source"), "marks": marks, "prefill": example}
 
 
-def spotter_cases() -> dict[str, Any]:
-    """The newest version's cases with marks and last checks, its versions and case runs (newest first), the queue."""
+def spotter_cases(failed: str = "", unpublished: str = "") -> dict[str, Any]:
+    """The newest version's cases with marks and last checks, its versions and case runs (newest first), the queue.
+
+    *failed* is the cases job's last pass's whole error and *unpublished* why its last publication sync could not
+    start, each "" once that went well.
+    """
     cur, runs = cases.current(), case_replay.results()
     shown = [{k: v for k, v in v.items() if k != "cases"} for v in cases.versions()]
     last: dict[str, dict[str, Any]] = {}
@@ -222,12 +280,16 @@ def spotter_cases() -> dict[str, Any]:
             said = reviews.get(cid) or {"result": r.get("result")}
             last[cid] = {"id": r["id"], "at": r.get("ended") or r.get("asked"), "result": said.get("result"),
                          "note": said.get("note", "")}  # fmt: skip
+            if not reviews.get(cid) and "settings_unset" in r:
+                last[cid]["settings_unset"] = r["settings_unset"]
     return {
         "n": cur["n"],
         "cases": [{**_case(cid, e), "last_check": last.get(cid)} for cid, e in sorted(cur["cases"].items())],
         "versions": shown[::-1][:VERSIONS],
         "runs": runs[::-1][:VERSIONS],
         "queued": [*case_replay.queued(), *({**r, "running": True} for r in case_replay.running())],
+        "failed": failed,
+        "unpublished": unpublished,
     }
 
 
@@ -247,7 +309,10 @@ def _redrafts() -> dict[str, dict[str, Any]]:
     found: dict[str, dict[str, Any]] = {}
     for r in store.runs(ALL_RUNS, synthetic=True):
         if (unit := str(r.get("unit") or "")).startswith("proposal:"):
-            found.setdefault(unit.removeprefix("proposal:"), {k: r.get(k) for k in ("state", "result", "why")})
+            found.setdefault(
+                unit.removeprefix("proposal:"),
+                {k: r[k] for k in ("state", "result", "why", "settings_unset") if k in r},
+            )
     return found | {q["redraft"]: {"state": "queued"} for q in store.queued() if q.get("redraft")}
 
 
@@ -279,14 +344,12 @@ def proposals(projects: units.Projects, shared_root: Path | None) -> list[dict[s
     """The visible proposals: open ones first, then the newest closed ones and every closed one with work left.
 
     Open ones are waiting, later or under review. Work is left on an accepted one not made in full and on a redirected
-    one whose redraft is not filed and reviewed. One a reset retired shows only while its synthetic issue is open. An
-    open one carries where it would land, or why it cannot be accepted, and the token a decision on it names.
+    one whose redraft is not filed and reviewed. An open one carries where it would land, or why it cannot be accepted,
+    and the token a decision on it names. Synthetic proposals are kept as history.
     """
     where, known, redrafts, found = places(projects), targets.units_of(), _redrafts(), _found()
     open_, closed = [], []
-    listed = props.proposals(synthetic=True)
-    ids = {p["id"] for p in listed}  # a reset hides a proposal, unless only its synthetic issue is left to close
-    for snap in [*listed, *(p for p in props.folded().values() if p["id"] not in ids and proposal_apply.closing(p))]:
+    for snap in props.proposals(synthetic=True):
         if snap["state"] in props.CLOSED:
             closed.append(_shown(snap, snap["accepted"].get("destination") or {}, redrafts, found))
         elif shared_root is None:
@@ -327,7 +390,12 @@ def followup(
         return {"state": ""}
     if run.get("followup"):
         return {"state": "saved", "entry": run["followup"]}
-    return {"state": run.get("state") or "", "result": run.get("result") or "", "why": run.get("why") or ""}
+    return {
+        "state": run.get("state") or "",
+        "result": run.get("result") or "",
+        "why": run.get("why") or "",
+        **{k: run[k] for k in ("settings_unset",) if k in run},
+    }
 
 
 def change_detail(pid: str, slug: str, records: list[dict[str, Any]], grades: list[dict[str, Any]]) -> dict[str, Any]:

@@ -19,16 +19,17 @@ from contextlib import AbstractContextManager, contextmanager, nullcontext
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
-from owlbear_memory import MemoryEngine, MemoryState
-
 from owlbear_delivery_next.change_contracts import memory_curation_tools, tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import data_repo, local_home, maintenance
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import curation_block, curation_resume, curation_snapshots, curation_tree
 from owlbear_delivery_next.machine_host.curation_block import LABEL
-from owlbear_delivery_next.runtimes import loop_owner, maintained, sdk_adapter
+from owlbear_delivery_next.machine_host.curation_reads import folders
+from owlbear_delivery_next.machine_host.curation_reads import pending as _pending
+from owlbear_delivery_next.runtimes import loop_owner, maintained, sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.state_store import machine_settings, registry, spend_ledger, work_block
 from owlbear_delivery_next.state_store.curation_runs import STATE, FolderRun, Runs
@@ -65,13 +66,6 @@ def message(folder: str) -> str:
         f"Curate: automatic. Your memory server is bound to the folder `{folder}` of the shared repository, with "
         "Global memory beside it. Curate it as your agent file says, then commit and submit your report."
     )
-
-
-def folders(root: Path) -> list[str]:
-    """The project folders of the shared repository that keep memory, Global's own folder never among them."""
-    found = (p for p in root.iterdir() if p.is_dir() and not p.is_symlink() and not p.name.startswith("."))
-    own = (p for p in found if p.name != "memory" and (p / "memory").is_dir() and not (p / "memory").is_symlink())
-    return sorted(p.name for p in own)  # a link never leads a run to Global or out of the repository
 
 
 def _run(cfg: sdk_adapter.Session) -> Run:
@@ -137,7 +131,7 @@ class Curation:
         for name, r in runs.folders.items():
             if r.state not in {"waiting", "running"}:
                 continue
-            update: dict[str, object] = {"state": "failed", "reason": INTERRUPTED}
+            update: dict[str, object] = {"state": "failed", "reason": INTERRUPTED, "reason_unset": 0}
             if r.state == "waiting" and not r.key:  # judged: no uncertain session, so its copied times go with it
                 update |= {"started_at": None, "ended_at": None}
             runs.folders[name] = r.model_copy(update=update)
@@ -161,7 +155,7 @@ class Curation:
         except (OSError, ValueError) as exc:
             path = self.path()
             msg = (
-                f"the memory curation ownership record {path} cannot be read:\n{exc}\n"
+                f"the memory curation ownership record {path} cannot be read:\n{failure(exc)}\n"
                 "OwlBear can't tell whether a memory curation session it started still runs, so memory curation "
                 "doesn't go on. Stop OwlBear if it still runs, and make sure no copilot process that memory curation "
                 'started still runs: the PIDs under "left" are the ones it recorded, but a session that failed early '
@@ -187,14 +181,15 @@ class Curation:
         if shared is None:
             return {"available": False, "reason": NO_SHARED, "folders": []}
         runs, here = self.load().folders, work_block.machine()
-        listed = [
-            {
-                "folder": f,
-                **runs.get(f, FolderRun()).model_dump(mode="json"),
-                "blocked": curation_block.blocked(shared, f, here),
-            }
-            for f in folders(shared.root)
-        ]
+        listed = []
+        for f in folders(shared.root, include_invalid=True):
+            block = curation_block.block(shared, f, here)
+            row = {"folder": f, **runs.get(f, FolderRun()).model_dump(mode="json")}
+            unread: dict[str, str] = {}
+            _pending(shared.root / f / "memory", read_errors=unread)
+            if unread:
+                row["read_errors"] = unread
+            listed.append(row | {"blocked": block.text(), "unset": list(block.keys), "unset_reason": block.reason})
         return {"available": True, "folders": listed, "queue": list(self.queue)}
 
     def _pids(self, event: dict[str, Any]) -> None:
@@ -329,7 +324,7 @@ class Curation:
                 refused = self._one(folder, started, key)
             except Exception as exc:  # noqa: BLE001 - one folder's failure never strands the others
                 _log.exception("memory curation of %s failed (%s)", folder, key)
-                why = f"{type(exc).__name__}: {exc}"
+                why = failure(exc)
                 failed = FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why, key=key)
                 self._save(folder, failed)  # its session, if one began, is the ledger's lease under this key
             with self.lock:  # a follow-up joins before the run leaves, so the queue never looks empty between
@@ -389,6 +384,7 @@ class Curation:
                 prior = self.load().folders.get(folder, FolderRun())  # keeps what the last finished run left pending
                 why = self._refusal(asked)
                 update = {"state": "failed", "started_at": started, "ended_at": started, "reason": why}
+                update["reason_unset"] = 0  # the earlier refusal's count belongs to its own reason
                 self._save(folder, prior.model_copy(update=update))
                 return True
             self._save(folder, FolderRun(state="running", started_at=started, key=key))
@@ -404,8 +400,8 @@ class Curation:
     def _session(self, shared: data_repo.DataRepo, folder: str, started: datetime, key: str) -> FolderRun:
         settings = lookup.machine(shared)
         # cleared just after the grant's check: the run never starts, its entries unseen
-        if why := curation_block.unset(settings):
-            return FolderRun(state="failed", started_at=started, ended_at=datetime.now(UTC), reason=why)
+        if why := curation_block.unset_block(settings):
+            return curation_block.refused(FolderRun(), why, started, datetime.now(UTC))
         role = roles.chosen(settings, LABEL)
         with curation_tree.forgetting(shared), self.maintenance.workspace("owlbear-curation-") as at:
             tree = curation_tree.seed(shared, at / "data", folders(shared.root))
@@ -456,7 +452,7 @@ class Curation:
             why = " ".join((done.detail or "no report was submitted").split())
             if done.usage_unread and done.ending == "result" and report is not None:  # TD-94: its model is unproven
                 why = " ".join(f"the model is unknown: {done.usage_unread}".split())
-            why = f"{UNKNOWN}; {why}" if unknown else why
+            why = f"{UNKNOWN}; {session_result.unverified(t)}; {why}" if unknown else why
             ran = f"ended {done.ending}: {why}"
             reason = f"{ran}; {curation_tree.held(tree, folder, key, ran)}"
             _log.error("memory curation of %s failed (%s): %s", folder, key, reason)
@@ -470,13 +466,6 @@ class Curation:
             state="done", started_at=started, ended_at=ended, summary=report.summary, reason=notice,
             entries=report.entries,
         )  # fmt: skip
-
-
-def _pending(store: Path) -> list[Any]:
-    """The folder's pending entries; none when it has no memory yet."""
-    if not store.is_dir():
-        return []
-    return [e for e in MemoryEngine(store).get_entries() if e.state == MemoryState.PENDING]
 
 
 def legacy_uncertain(run: FolderRun) -> bool:

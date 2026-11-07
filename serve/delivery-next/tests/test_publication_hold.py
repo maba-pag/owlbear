@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -526,6 +527,19 @@ def test_a_healthy_unrelated_advance_at_the_first_push_is_checked_and_published(
     assert remote_has_config(remote)
     assert winner.read_config().prefs.ci_poll_seconds == 45
     assert not publication_hold.recorded(winner.shared, None)  # the record lapsed with its publication
+
+
+def test_an_automatic_save_that_cannot_tell_a_rebase_says_why_whole(three, monkeypatch, whole_error):
+    winner = three[0]
+    basis = profile_share.config_digest(winner.config_path)
+
+    def unknown(*_args: object) -> bool:
+        raise DataRepoError(whole_error)
+
+    monkeypatch.setattr(DataRepo, "rebasing", unknown)
+    prepared = config_save.Prepared(basis, lambda cur: cur.model_copy(update={"widths": [1300]}))
+    assert winner.update_config(prepared, "automatic") == f"DataRepoError: {whole_error}"
+    assert not winner.config_path.exists()
 
 
 def test_an_owner_rebase_in_progress_is_left_alone_by_an_automatic_save(three):
@@ -1515,8 +1529,98 @@ def test_a_failed_hold_probe_names_git_s_whole_stderr(held, monkeypatch, failing
     if probe == "index":  # with no unpushed change of the watched file, its staged copy is compared next
         monkeypatch.setattr(publication_hold, "_changes", lambda *_args: [])
     picked = ("diff", "--cached", "--quiet", "HEAD") if probe == "index" else ("merge-base", "--is-ancestor")
-    failing_git(whole_error, lambda args, _until: args[: len(picked)] == picked)
-    expected = (
-        f"nothing was pushed or rebased in {shared.root}: a held automatic change cannot be checked: {whole_error}"
+    ran: list[tuple[str, ...]] = []
+    failing_git(whole_error, lambda args, _until: args[: len(picked)] == picked and not ran.append(args))
+    said = shared.rebase()
+    git = f"CalledProcessError: Command '{['git', *ran[-1]]}' returned non-zero exit status 128.\n{whole_error}"
+    expected = f"nothing was pushed or rebased in {shared.root}: a held automatic change cannot be checked: {git}"
+    assert said == expected
+
+
+@pytest.mark.parametrize("site", ["journal", "authority", "rebasing"])
+def test_a_held_decision_or_rebase_that_cannot_be_checked_says_the_whole_error(
+    tmp_path, monkeypatch, whole_error, site
+):
+    """A held decision's pending journal or active authority, or a rebase probe, that fails: its whole error."""
+    from owlbear_delivery_next.local_system import batch_journal, decision_authority  # noqa: PLC0415
+
+    error = {"journal": batch_journal.JournalError, "authority": OSError, "rebasing": DataRepoError}[site]
+
+    def refused(*_args: object, **_kwargs: object) -> None:
+        raise error(whole_error)
+
+    if site == "rebasing":
+        monkeypatch.setattr(DataRepo, "rebasing", refused)
+        said = DataRepo(tmp_path)._pull_held(None)  # noqa: SLF001 - the held pull's own probe
+        assert said == f"not rebased on the remote: DataRepoError: {whole_error}"
+        return
+    held = {"watch": "w", "file": "w", "since": "s", "base": "b", "decision_active": True}
+    monkeypatch.setattr(publication_hold.batch_journal, "pending", refused)
+    monkeypatch.setattr(decision_authority, "inactive", refused)
+    monkeypatch.setattr(publication_hold, "_run", lambda *_args: "")
+    monkeypatch.setattr(publication_hold, "_blob_at", lambda *_args: "b")
+    repo = SimpleNamespace(git=lambda *args, **_kwargs: subprocess.CompletedProcess(args, 0, "", ""))
+    check = publication_hold._lapsed if site == "journal" else publication_hold._unmet  # noqa: SLF001
+    with pytest.raises(publication_hold._UnknownError) as unknown:  # noqa: SLF001 - the probe's own error
+        check(repo, held, None)
+    where = {
+        "journal": "the completion's pending journal cannot be checked: JournalError",
+        "authority": "the held decision's active authority cannot be checked: OSError",
+    }[site]
+    assert str(unknown.value) == f"{where}: {whole_error}"
+
+
+@pytest.mark.parametrize("site", ["record", "lock-folder", "settle"])
+def test_a_held_record_lock_folder_or_rebase_state_that_cannot_be_read_says_the_whole_error(
+    tmp_path, monkeypatch, whole_error, site
+):
+    """A held record, the batch lock's Git folder or a failed rebase's state that cannot be read: the whole error."""
+    from owlbear_delivery_next.local_system import batch_journal  # noqa: PLC0415
+
+    def unknown(*_args: object) -> None:
+        raise DataRepoError(whole_error)
+
+    if site == "settle":
+        monkeypatch.setattr(DataRepo, "rebasing", unknown)
+        done = subprocess.CompletedProcess(["git", "rebase"], 1, "", whole_error)
+        said = DataRepo(tmp_path)._settle(done, "git rebase failed", None)  # noqa: SLF001 - the rebase report alone
+        git = f"CalledProcessError: Command '['git', 'rebase']' returned non-zero exit status 1.\n{whole_error}"
+        left = "so it was left as it is for the owner to check"
+        assert said == f"git rebase failed: {git}; DataRepoError: {whole_error}, {left}"
+        return
+    path = tmp_path / "held.json"
+    path.write_text("{")
+    monkeypatch.setattr(batch_journal, "admin", lambda *_args: path)
+    act = {
+        "record": lambda: publication_hold._load(path),  # noqa: SLF001 - the record's reader is the unit
+        "lock-folder": lambda: batch_journal.locked(SimpleNamespace()).__enter__(),
+    }[site]
+    with pytest.raises((publication_hold._UnknownError, batch_journal.JournalError)) as raised:  # noqa: SLF001
+        act()
+    cause = f"{type(raised.value.__cause__).__name__}: {raised.value.__cause__}"
+    said = {
+        "record": f"the held publication record {path} cannot be read ({cause}); check it before removing it",
+        "lock-folder": f"the git folder {path} cannot be opened for the batch lock: {cause}",
+    }[site]
+    assert (str(raised.value), type(raised.value.__cause__).__name__) == (
+        said,
+        "JSONDecodeError" if site == "record" else "NotADirectoryError",
     )
-    assert shared.rebase() == expected
+
+
+def test_a_spent_decision_whose_hold_git_fails_is_refused_with_git_s_whole_words(picking, failing_git, whole_error):
+    """P21: spending an active project decision holds it first; a hold Git fails refuses the save, Git's words whole."""
+    from owlbear_decisions import State  # noqa: PLC0415
+    from owlbear_delivery_next.state_store import decision_store  # noqa: PLC0415
+
+    shared, rule = picking.shared, an_owned_decision(picking)
+    (saved,) = decision_store.save_all(shared, [(rule, None)], message="decisions: one")
+    assert saved.saved
+    ran: list[tuple[str, ...]] = []
+    hold_probe = ("ls-tree", publication_hold.UPSTREAM)
+    failing_git(whole_error, lambda args, _until: args[:2] == hold_probe and not ran.append(args))
+    spent = rule.model_copy(update={"state": State.SPENT})
+    with pytest.raises(decision_store.DecisionsUnavailable) as refused:
+        decision_store.save_all(shared, [(spent, saved.revision)], message="decisions: spent")
+    git = f"CalledProcessError: Command '{['git', *ran[-1]]}' returned non-zero exit status 128.\n{whole_error}"
+    assert str(refused.value) == f"DataRepoError: the automatic change was not written: {git}"

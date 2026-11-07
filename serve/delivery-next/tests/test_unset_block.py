@@ -77,7 +77,9 @@ class Project:
         self.save(Change(slug="build", plan=plan, step=Step(kind=StepKind.BUILD, task="t1"), names=names))
         asked = Change(slug="asked", plan=plan, step=Step(kind=StepKind.BUILD, task="t1"), names=names)
         self.save(apply(asked, StepResult(exit=Exit.ASK, question=Question(step=StepKind.BUILD, text="lang?")), NOW))
-        env = Environment(check="preview", command="npm run preview", directory=".", ready_url="http://127.0.0.1:4/")
+        env = Environment(
+            check="preview", command="npm run preview", directory=".", ready_url="http://127.0.0.1:{port}/"
+        )
         done = Plan(tasks=[Task(id="t1", title="greet", done=True)])
         self.save(Change(slug="check", plan=done, checks=[PersonCheck(id="preview", steps=["open it"])],
                          step=Step(kind=StepKind.CHECK, task="preview"), env=env, names=names))  # fmt: skip
@@ -97,7 +99,7 @@ def started(monkeypatch) -> list[str]:
 
     monkeypatch.setattr(check, "dispose", lambda _e: {})
     monkeypatch.setattr(check, "start", start)
-    monkeypatch.setattr(check, "ready", lambda e, _proc: e.pids | {901: 2.0})
+    monkeypatch.setattr(check, "ready", lambda e, _proc, **_kw: e.pids | {901: 2.0})
     monkeypatch.setattr(check, "created", lambda _pid: 2.0)
     return roots
 

@@ -46,7 +46,7 @@ def ready(store: Store, lock: Lock, change: Change, at: Path) -> str:
         seconds = round(time.monotonic() - start, 1)
         now = datetime.now(UTC).isoformat(timespec="seconds")
         event = {"event": "ro-install", "at": now, "package": package, "command": command, "seconds": seconds}
-        store.log(lock, change.slug, event | {"ok": not failed})
+        store.log(lock, change.slug, event | ({"ok": False, "error": failed} if failed else {"ok": True}))
         if failed:
             done.pop(package, None)
             notes.append(f"Dependencies could not be installed in {package or '.'}: {failed}")

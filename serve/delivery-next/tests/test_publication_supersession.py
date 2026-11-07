@@ -103,6 +103,7 @@ def broken_fetch(monkeypatch) -> list[str | None]:
 @pytest.fixture
 def no_network(monkeypatch) -> None:
     monkeypatch.setattr(config, "BASE", None)
+    monkeypatch.setattr(profile, "detect", lambda _repo, _gh, previous: previous or Profile())
     monkeypatch.setattr(readiness, "check", lambda *_a, **_k: [])
 
 
@@ -219,10 +220,12 @@ def test_an_unreadable_shared_pending_record_holds_every_config_write_visibly(  
 
     # the completion retry keeps the config unpublished and says so; a removal is held the same way
     with b.shared.locked():
-        assert profile_share.publish_config_unlocked(b) == CONFIG_WAITING
+        notice = profile_share.publish_config_unlocked(b)
+    assert notice.startswith(f"{CONFIG_WAITING}: DataRepoError:")
+    assert "simulated: remote" in notice
     b.config_path.unlink()
     with b.shared.locked():
-        assert profile_share.publish_config_unlocked(b) == CONFIG_WAITING
+        assert profile_share.publish_config_unlocked(b) == notice
     assert config_publishes == []
     assert remote_bytes(remote, SHARED_CONFIG) == before
     assert profile_share._shared_pending(b) == pending  # noqa: SLF001

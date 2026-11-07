@@ -10,12 +10,15 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+import time
+import webbrowser
 from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git.command_failure import failed, failure
 from owlbear_delivery_next.local_system import data_place, data_repo, local_home, preload
-from owlbear_delivery_next.machine_host import control
+from owlbear_delivery_next.machine_host import control, serve
 from owlbear_delivery_next.runtimes import copilot_cli, readiness
 from owlbear_delivery_next.state_store import registry
 
@@ -25,6 +28,7 @@ if TYPE_CHECKING:
     from cyclopts import App
 
     from owlbear_delivery_next.machine_host.control import Say
+    from owlbear_delivery_next.project_host.host import HostRecord
 
 COMPLETION = "completion.zsh"
 TOOLS = ("git", "gh", "uv")  # besides the Copilot CLI, which skips VS Code's shim
@@ -78,9 +82,22 @@ def install(say: Say, ask: Callable[[str], bool], app: App) -> int:
     if ask(f"Link the shaper and its skill into {Path.home() / '.copilot'}, so New Change finds them anywhere?"):
         for link, to in shaper_links():
             say(_link(link, to))
-    if ask("Start OwlBear at login, paused until you press Resume?"):
-        return control.autostart(say, on=True)
-    return 0
+    started = ask("Start OwlBear at login, paused until you press Resume?")
+    code = control.autostart(say, on=True) if started else 0
+    rec = _answering(control.WAIT if started and code == 0 else 0.0)
+    if code == 0 and rec and rec.token and ask("Open Add a project in your browser now?"):
+        webbrowser.open(f"{rec.url}projects?add=1#token={rec.token}")  # the page opens its dialog (item 15)
+    return code
+
+
+def _answering(wait: float) -> HostRecord | None:
+    """The machine host's record once its API answers, waiting up to *wait* seconds for one the login item starts."""
+    deadline = time.monotonic() + wait
+    while control.projects() is None:
+        if time.monotonic() >= deadline:
+            return None
+        time.sleep(0.2)
+    return serve.running()
 
 
 def uninstall(say: Say) -> int:
@@ -103,13 +120,12 @@ def uninstall(say: Say) -> int:
 
 
 def _fails(command: list[str]) -> str | None:
-    """None when *command* exits 0, else its first output line or the error."""
+    """None when *command* exits 0, else its whole failure: the error, or its exit status and all it printed."""
     try:
         done = subprocess.run(command, capture_output=True, text=True, timeout=60, check=False)  # noqa: S603
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return str(exc)
-    lines = (done.stdout + done.stderr).strip().splitlines()
-    return None if done.returncode == 0 else (lines or [f"exit {done.returncode}"])[0]
+        return failure(exc)
+    return None if done.returncode == 0 else failed(done)
 
 
 def _tools(say: Say) -> int:
@@ -177,7 +193,7 @@ def doctor(say: Say, dropped: list[str]) -> int:
         try:
             checks = readiness.ready(Store.open(Path(p.path)), Path(p.path))
         except (StoreError, OSError) as exc:
-            say(f"{p.path}: cannot be read: {exc}")
+            say(f"{p.path}: cannot be read: {failure(exc)}")
             failed += 1
             continue
         for c in checks:

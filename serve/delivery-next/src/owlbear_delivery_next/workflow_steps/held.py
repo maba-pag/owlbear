@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
-from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts import amend_tools, dispute_tools, tools
 from owlbear_delivery_next.change_contracts.failures import UNREAD, VISUAL_MODEL
 from owlbear_delivery_next.change_contracts.held_records import HeldRecord, HeldRun
 from owlbear_delivery_next.change_contracts.models import Change, Exit, StepKind
@@ -66,6 +66,7 @@ def dump_run(run: Run) -> HeldRun:
         session_id=run.session_id,
         ending=run.ending,
         detail=run.detail,
+        classified=run.classified,
         head=run.head,
         changed=run.changed,
         payload={"model": type(p).__name__, "args": p.model_dump(mode="json")} if p else None,
@@ -83,6 +84,9 @@ def dump_run(run: Run) -> HeldRun:
     )
 
 
+RESULTS = (tools, amend_tools, dispute_tools)  # where a kept run's result model is defined: an amendment's own
+
+
 def load_run(data: HeldRun) -> Run:
     """The held run, whose processes were confirmed gone when it was held; its payload is a result model.
 
@@ -90,7 +94,7 @@ def load_run(data: HeldRun) -> Run:
         ValueError: The payload names no result model.
     """
     p = data.payload
-    model = getattr(tools, str(p.get("model")), None) if p else None
+    model = next((m for k in RESULTS if (m := getattr(k, str(p.get("model")), None))), None) if p else None
     if p and not (isinstance(model, type) and issubclass(model, tools.Args)):
         msg = f"held payload {p.get('model')!r} is not a result model"
         raise ValueError(msg)
@@ -105,6 +109,7 @@ def _unloaded(data: HeldRun) -> Run:
         data.session_id,
         ending=data.ending,  # type: ignore[arg-type] - checked by the ending dispatch, which refuses unknown ones
         detail=data.detail,
+        classified=data.classified,
         head=data.head,
         changed=list(data.changed),
         denials=list(data.denials),

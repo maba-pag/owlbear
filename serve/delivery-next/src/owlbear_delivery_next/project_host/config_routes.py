@@ -19,6 +19,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ValidationError
 
 from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
+from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.github import account
 from owlbear_delivery_next.impeccable import calibration, pack_update
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
@@ -58,6 +60,7 @@ APPLIED = [
     "agents.shaper.max_findings",
     "agents.shaper.last_round_at",
     "agents.shaper.ask_owner_at",
+    "agents.shaper.challenge_wait",
     "final_review",
     *(f"agents.{role}.minutes" for role in ("planner", "builder", "reviewer", "challenger", "design-judge")),
     "agents.preparer.minutes",
@@ -70,6 +73,7 @@ APPLIED = [
     "load_user_skills",
     "load_user_memory",  # D-01M69EBRBBW97001KZ43C0BJM1
     "guard_level",  # D-01M6DX04FRP680Z4GGHK5B9VRC
+    "github_account",  # TD-402
     "prefs.merge_method",
     "prefs.delete_remote_branch",
     "prefs.ci_poll_seconds",
@@ -82,6 +86,7 @@ APPLIED = [
     "sessions",  # TD-336
 ]  # the settings Delivery uses today
 STARTING = 5.0  # seconds a folder rename waits for a runner launch or the host's folder check to end
+RULE_SECONDS = 3.0  # the GitHub account row waits this long for gh, inside the page's 5 s; past it, the row shows why
 
 
 class Save(BaseModel):
@@ -115,7 +120,7 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         machine, machine_raw = read_layer_bytes(store.machine_path, MachineLayer)
         project, project_raw = read_layer_bytes(store.config_path, Layer)
     except StoreError as exc:
-        raise HTTPException(409, str(exc)) from exc
+        raise HTTPException(409, failure(exc)) from exc
     here, alone = list[str](), list[str]()
     settings, below = resolved(glob, project, machine, here), resolved(glob, Layer(), machine, alone)
     if here:
@@ -131,7 +136,8 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         prof = store.read_profile()
     except StoreError as exc:  # a profile this build cannot read is shown as its repair notice, never a 500
         prof = None
-        notice = notice or f"{exc}; repair or replace the profile file, or update OwlBear if it is newer, then reload"
+        why = failure(exc)
+        notice = notice or f"{why}; repair or replace the profile file, or update OwlBear if it is newer, then reload"
     if not notice and prof is not None and prof.prefs_import == "pending":
         notice = PREFS_REVIEW
     return {
@@ -156,6 +162,20 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         "agreement": _agreement(store),
         "impeccable": pack_update.said(pack_update.notice(refresh=False)),  # never online; setup refreshes it
     }
+
+
+def _github_rule(repo: Path, until: float) -> dict[str, str]:
+    """What ``repository-owner`` resolves to on the project's origin now: the account and why, never a token."""
+    remaining = until - time.monotonic()
+    if remaining <= 0:
+        exc = account.AccountMissing("no time was left to read the project's origin and choose its GitHub account")
+        return {"error": failure(exc)}
+    try:
+        origin = account.Origin.of(repo, timeout=remaining)
+        chosen = account.resolve(account.REPOSITORY_OWNER, origin, until=until)
+    except account.AccountMissing as exc:
+        return {"error": failure(exc)}
+    return {"login": chosen.login, "why": chosen.why}
 
 
 def resolved(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | None, misfit: list[str]) -> Settings:
@@ -260,7 +280,7 @@ def _save[T: Layer](  # noqa: PLR0913, PLR0917 - the host names this machine's p
     except ValidationError as exc:
         raise HTTPException(422, exc.errors(include_url=False, include_context=False)) from exc
     except StoreError as exc:
-        raise HTTPException(409, str(exc)) from exc
+        raise HTTPException(409, failure(exc)) from exc
 
     pair: list[T] = []
 
@@ -278,9 +298,9 @@ def _save[T: Layer](  # noqa: PLR0913, PLR0917 - the host names this machine's p
             return ""
         return store.save(path, model, change, what, owner=True, on_written=hook)
     except StoreError as exc:
-        raise HTTPException(409, str(exc)) from exc
+        raise HTTPException(409, failure(exc)) from exc
     except OSError as exc:
-        raise HTTPException(503, f"the settings could not be saved: {exc.strerror or exc}") from exc
+        raise HTTPException(503, f"the settings could not be saved: {failure(exc)}") from exc
 
 
 def _working(store: Store, host: Host) -> list[str]:
@@ -321,9 +341,9 @@ def _rename(store: Store, host: Host, name: str) -> str:
                     h.store.name = name
                 notice = notice or memory_routes.reorigin(store.shared, old, name, until)  # Global keeps its way home
     except DataRepoError as exc:
-        raise HTTPException(409, str(exc)) from exc
+        raise HTTPException(409, failure(exc)) from exc
     except OSError as exc:
-        raise HTTPException(503, f"the folder could not be renamed: {exc.strerror or exc}") from exc
+        raise HTTPException(503, f"the folder could not be renamed: {failure(exc)}") from exc
     finally:
         for h in held:
             h.launching.release()
@@ -361,7 +381,7 @@ def _intent_readable(store: Store) -> Profile | None:
     try:
         return store.read_profile()
     except StoreError as exc:
-        raise HTTPException(409, str(exc)) from exc
+        raise HTTPException(409, failure(exc)) from exc
 
 
 def _settle_prefs_import(store: Store, *, reviewed: bool) -> None:
@@ -376,7 +396,7 @@ def _settle_prefs_import(store: Store, *, reviewed: bool) -> None:
     try:
         prefs_import.republish(store)
     except StoreError as exc:
-        raise HTTPException(503, str(exc)) from exc
+        raise HTTPException(503, failure(exc)) from exc
 
 
 def _reader(store: Store, host: Host) -> Callable[[], settings_read.Reader]:
@@ -403,14 +423,30 @@ def _read_routes(routes: APIRouter, reads: Callable[[], settings_read.Reader]) -
         return {"reads": reads().shown()}
 
 
+def _save_global(store: Store, path: Path, host: Host, body: Save, reads: settings_read.Reader) -> str:
+    """Save Global from the page; its notice also says whole when the save could not be recorded as seen."""
+    unrecorded: list[str] = []
+
+    def own(before: GlobalLayer, after: GlobalLayer) -> None:
+        # this machine's change of Global is never noticed as one from elsewhere; if it was not recorded, say so
+        unrecorded.append(reads.ledger.own(before, after))
+
+    notice = _save(store, path, GlobalLayer, body, "global: from the settings page", host, written=own)
+    return "; ".join(filter(None, [notice, *unrecorded]))
+
+
 def router(store: Store, host: Host) -> APIRouter:
     """The settings routes; the caller adds the token check."""
     routes, reads = APIRouter(), _reader(store, host)
     _read_routes(routes, reads)
 
+    def state(notice: str = "") -> dict[str, Any]:
+        until = time.monotonic() + RULE_SECONDS
+        return _state(store, notice) | {"github_rule": _github_rule(host.repo, until)}
+
     @routes.get("/config")
     def read() -> dict[str, Any]:
-        return _state(store)
+        return state()
 
     @routes.put("/config/project")
     def put_project(body: Save) -> dict[str, Any]:
@@ -418,22 +454,20 @@ def router(store: Store, host: Host) -> APIRouter:
         notice = _project_notice(store, host, body)
         if not notice:  # a publication notice leaves the import pending for a retry
             _settle_prefs_import(store, reviewed=body.prefs_reviewed)
-        return _state(store, notice) | {"unpublished": notice}  # the page keeps its review intent until this is empty
+        return state(notice) | {"unpublished": notice}  # the page keeps its review intent until this is empty
 
     @routes.put("/config/global")
     def put_global(body: Save) -> dict[str, Any]:
         if store.global_path is None:
             raise HTTPException(409, "no shared settings location is set up; run `owlbear-next data PATH`")
-        what = "global: from the settings page"
-        # this machine's change of Global is never noticed as one from elsewhere
-        return _state(store, _save(store, store.global_path, GlobalLayer, body, what, host, written=reads().ledger.own))
+        return state(_save_global(store, store.global_path, host, body, reads()))
 
     @routes.put("/config/machine")
     def put_machine(body: Save) -> dict[str, Any]:
-        return _state(store, _save(store, store.machine_path, MachineLayer, body, "this machine", host))
+        return state(_save(store, store.machine_path, MachineLayer, body, "this machine", host))
 
     @routes.put("/config/folder")
     def put_folder(body: Folder) -> dict[str, Any]:
-        return _state(store, "" if body.name == store.name else _rename(store, host, body.name))
+        return state("" if body.name == store.name else _rename(store, host, body.name))
 
     return routes

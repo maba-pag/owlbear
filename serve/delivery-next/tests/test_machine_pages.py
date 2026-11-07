@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextvars
 import json
+import logging
 import os
 import re
 import shlex
@@ -12,9 +14,10 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,14 +29,20 @@ import uvicorn
 from copilot.generated import rpc
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.change_contracts.decision_records import Pick, PickedDecision
+from owlbear_delivery_next.change_contracts.failures import cause_key
+from owlbear_delivery_next.change_contracts.merge_records import Pullback
 from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     Brief,
     Change,
     Environment,
+    ErrorKind,
     Exit,
     Names,
+    Outcome,
     Plan,
+    Question,
     Step,
     StepKind,
     Task,
@@ -49,34 +58,51 @@ from owlbear_delivery_next.change_contracts.visual_records import (
     VisualResult,
     VisualRound,
 )
-from owlbear_delivery_next.change_flow import loop, round_flow
-from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.change_flow import budgets, loop, moves, round_flow
+from owlbear_delivery_next.change_flow.budgets import DEFECT_LIMIT, RETRY_LIMIT
+from owlbear_delivery_next.commands import cli, runner
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import pack_files
-from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home, processes
-from owlbear_delivery_next.machine_host import app, project
+from owlbear_delivery_next.impeccable.detector import DetectorError
+from owlbear_delivery_next.local_system import (
+    codebase,
+    data_place,
+    data_repo,
+    leases,
+    local_home,
+    maintenance,
+    processes,
+)
+from owlbear_delivery_next.machine_host import alias, app, project, update_checks, versions
+from owlbear_delivery_next.machine_host import impeccable as machine_impeccable
 from owlbear_delivery_next.machine_host import serve as host_start
 from owlbear_delivery_next.machine_host.machine import Machine
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import api, pack_routes, runner_end
+from owlbear_delivery_next.project_host import host as host_module
+from owlbear_delivery_next.project_host import leftovers as host_leftovers
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.runtimes import copilot_cli, model_choices
+from owlbear_delivery_next.runtimes import copilot_cli, model_choices, readiness
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.runtimes.settings_seen import NAME as SEEN
 from owlbear_delivery_next.settings import carried, config, profile
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
-from owlbear_delivery_next.state_store import decision_store, registry, watch_reports
-from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store
-from owlbear_delivery_next.workflow_steps import decision, design, judges, pick, publish, retry, visual
+from owlbear_delivery_next.state_store import curation_runs, decision_store, registry, watch_reports
+from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store, StoreError
+from owlbear_delivery_next.workflow_steps import captures, decision, design, judges, pick, publish, retry, visual
 from owlbear_delivery_next.workflow_steps.engine import Ctx
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
 
 
-def clone(path: Path, slug: str = "") -> Path:
+def clone(path: Path, slug: str = "", origin: str = "") -> Path:
+    """A clone with one Change in Build; *origin*, when given, is its remote, so its store claims that folder."""
     for args in (["init", "-q", str(path)], ["-C", str(path), "commit", "-q", "--allow-empty", "-m", "i"]):
         subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
+    if origin:
+        subprocess.run(["git", "-C", str(path), "remote", "add", "origin", origin], check=True)  # noqa: S603, S607
     store = Store.open(path)
     slug = slug or f"{path.name}-1"
     with store.lock(slug) as lock:
@@ -100,9 +126,9 @@ def serve() -> tuple[Machine, uvicorn.Server, str]:
 
 
 @contextmanager
-def browsing(monkeypatch, pds, width: int = 1280) -> Iterator[tuple[Page, str]]:
-    """A Chromium page at *width* that reaches only a machine host serving the registered projects and the PDS CDN, and
-    the host's address; the scheduler runs, no runner starts."""
+def browsing(monkeypatch, pds, width: int = 1280, *, details: bool = False) -> Iterator[tuple[Page, str]]:
+    """A Chromium page at *width*, the Change page's details shown or not, that reaches only a machine host serving the
+    registered projects and the PDS CDN, and the host's address; the scheduler runs, no runner starts."""
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
@@ -115,12 +141,60 @@ def browsing(monkeypatch, pds, width: int = 1280) -> Iterator[tuple[Page, str]]:
             except Error as exc:
                 pytest.skip(f"no Playwright Chromium: {exc}")
             page = browser.new_page(viewport={"width": width, "height": 800})
+            if details:
+                page.add_init_script("localStorage.setItem('owlbear-improvement-detail', 'on');")
             pds.only(page, base)
             yield page, base
             browser.close()
     finally:
         server.should_exit = True
         machine.stop_all()
+
+
+@contextmanager
+def logged(caplog) -> Iterator[None]:
+    """Uvicorn's records for the host log in *caplog*: its logger does not pass them on to the root, where caplog
+    listens. Enter it once the server runs, as starting one sets up that logger afresh."""
+    server = logging.getLogger("uvicorn.error")
+    server.addHandler(caplog.handler)
+    try:
+        yield
+    finally:
+        server.removeHandler(caplog.handler)
+
+
+COMMAND = ["git", "owlbear-test-read"]  # the failed command an uncaught read raises
+
+
+def uncaught(whole_error: str) -> tuple[Callable[..., Any], str, str]:
+    """A read no route catches: it raises *COMMAND*'s failure, long stderr and stdout with it, and a note added on
+    the way up. Also the error's whole text as a page says it, and as the host log's traceback ends."""
+    out = "\n".join(f"out {line}" for line in whole_error.splitlines())
+    note = "NOTE added on the way up"
+
+    def read(*_args: object) -> Any:
+        exc = subprocess.CalledProcessError(1, COMMAND, output=out, stderr=whole_error)
+        exc.add_note(note)
+        raise exc
+
+    head = f"CalledProcessError: Command '{COMMAND}' returned non-zero exit status 1."
+    said = f"stderr:\n{whole_error}\nstdout:\n{out}"
+    return read, f"{head}\n{said}\n{note}", f"subprocess.{head}\n{note}\n{said}\n"  # a traceback names its module
+
+
+def traced(caplog, page: Page) -> set[tuple[str, str]]:
+    """What uvicorn logged into the host log about *COMMAND*'s failure, once it did: each record's message and the
+    exception its traceback ends with. A page's other reads may fail too, with other errors."""
+
+    def ours() -> list[logging.LogRecord]:
+        return [
+            r
+            for r in caplog.records
+            if r.name == "uvicorn.error" and r.exc_info and getattr(r.exc_info[1], "cmd", None) == COMMAND
+        ]
+
+    until(page, ours)
+    return {(r.getMessage(), "".join(traceback.format_exception_only(r.exc_info[1]))) for r in ours()}
 
 
 def until(page: Page, done: Callable[[], object], seconds: float = 8) -> None:
@@ -196,9 +270,10 @@ def test_changes_of_all_projects_or_one_the_top_row_switches_and_resumes_and_pro
             page.get_by_role("button", name="Menu").click()  # Projects adds and removes (D-01M63C8DA1D95Z7M9ZYWVYYNF7)
             page.locator("p-drilldown").get_by_role("link", name="Projects").click()
             expect(page).to_have_url(f"{base}/projects?project={b.id}")
-            page.get_by_label("Folder").fill(str(third))
-            page.get_by_role("button", name="Add", exact=True).click()
-            expect(page.locator("#page > [role=status]")).to_have_text("Added gamma.")
+            page.request.post(
+                f"{base}/api/next/projects", data={"path": str(third)}, headers={"Authorization": "Bearer t"}
+            )  # Add a project's dialog has its own tests
+            page.reload()
             added = next(p for p in registry.load().projects if p.path == str(third))
             expect(pds.select(top, "Project").locator(f'p-select-option[value="{added.id}"]')).to_have_text("gamma")
             pds.pick(top, "Project", added.id)
@@ -217,10 +292,64 @@ def test_changes_of_all_projects_or_one_the_top_row_switches_and_resumes_and_pro
             page.locator("p-drilldown").get_by_role("button", name="Settings").click()
             page.locator("p-drilldown").get_by_role("link", name="Overview").click()
             expect(page).to_have_url(f"{base}/config?project={a.id}#overview")  # a project page opens the first project
+            page.goto(f"{base}/memory")  # under All, the link to the Memory settings keeps the Global layer it names
+            page.get_by_role("link", name="Memory settings").click()
+            expect(page).to_have_url(f"{base}/config?project={a.id}&layer=global#memory")
             browser.close()
     finally:
         server.should_exit = True
         machine.stop_all()
+
+
+OWLBEAR_ORIGIN = "https://github.com/maba-pag/owlbear.git"
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("width", [390, 1280])
+def test_owlbears_own_project_shows_as_owlbear_apart_and_first_wherever_projects_are_listed(
+    tmp_path: Path, monkeypatch, pds, shared_repo, width: int
+) -> None:
+    """D-01M5ZGGSMKBZ830H8FQSPHH5BN, D-01M6JZQEEAXBNNH9P05HT7JNH2: the project whose data folder is owlbear/, added
+    after a consumer, shows as OwlBear with its tag in its own section above the consumer projects, first in the
+    picker, and as OwlBear on Changes, where it is still reached by its id."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
+    registry.register(clone(tmp_path / "alpha"))
+    own = registry.register(clone(tmp_path / "mine", origin=OWLBEAR_ORIGIN))
+    with browsing(monkeypatch, pds, width) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/projects#token=t")
+        expect(page.locator("#page h2")).to_have_text(["OwlBear", "Consumer projects", "Add a project"])
+        expect(page.locator("#own > li h3")).to_have_text(["OwlBear"])
+        expect(page.locator("#own > li p-tag")).to_have_text(["OwlBear's own"])
+        expect(page.locator("#projects > li h3")).to_have_text(["alpha"])
+        expect(page.locator("#projects p-tag")).to_have_count(0)
+        picker = pds.select(page.locator("#top"), "Project").locator("p-select-option")
+        expect(picker).to_have_text(["All projects", "OwlBear", "alpha"])
+        assert targets(page.locator("#page p-button, #page p-input-text input")) == []
+        assert page.evaluate("document.documentElement.scrollWidth") <= width
+        page.goto(f"{base}/#token=t")
+        card = page.locator("#changes li.card", has_text="mine-1")
+        expect(card.locator(".project")).to_have_text("OwlBear")
+        expect(card.locator("p-tag", has_text="OwlBear's own")).to_have_count(1)
+        other = page.locator("#changes li.card", has_text="alpha-1")
+        expect(other.locator("p-tag", has_text="OwlBear's own")).to_have_count(0)
+        card.locator("a.open").click()
+        expect(page).to_have_url(f"{base}/?change={own.id}%2Fmine-1")
+        expect(page.locator("#detail")).to_contain_text("in OwlBear")
+        page.go_back()
+        page.get_by_role("button", name="New Change").click()
+        chooser = pds.select(page.locator("#choose"), "Shape the new Change in").locator("p-select-option")
+        expect(chooser).to_have_text(["alpha", "OwlBear"])
+        page.goto(f"{base}/projects#token=t")
+        page.get_by_role("listitem", name="OwlBear").get_by_role("button", name="Remove project").click()
+        expect(pds.modal(page)).to_contain_text("Remove OwlBear?")
+        pds.answer(page, "Remove project")
+        expect(page.locator("#page > [role=status]")).to_contain_text("Removed OwlBear; nothing in")
+        expect(page.get_by_role("listitem", name="alpha").get_by_role("button", name="Remove project")).to_be_focused()
+        expect(page.locator("#own")).to_have_count(0)
+        assert said == []
 
 
 @pytest.mark.browser
@@ -323,9 +452,6 @@ def opened(page: Page, base: str, of: str, slug: str = "same") -> None:
 
 
 REVISE = "Revise the brief in a new chat"
-# A native modal dialog: past either end focus leaves for the browser's own controls (body), never the page behind.
-INSIDE = """() => document.activeElement === document.body
-    || [...document.querySelectorAll('p-modal')].some((m) => m.open && m.contains(document.activeElement))"""
 
 
 @pytest.mark.browser
@@ -348,7 +474,7 @@ def test_the_brief_offers_a_new_shaping_chat_and_says_how_it_went(tmp_path: Path
         pds.settled(page)
         for key in ["Shift+Tab"] * 3 + ["Tab"] * 3:  # the dialog keeps focus at both ends
             page.keyboard.press(key)
-            assert page.evaluate(INSIDE), key
+            assert page.evaluate(pds.INSIDE), key
         pds.answer(page, "Not now")
         assert REVISE in page.evaluate("document.activeElement?.textContent ?? ''")  # focus back on the button
         assert launched.calls == []
@@ -377,9 +503,198 @@ def test_the_brief_offers_a_new_shaping_chat_and_says_how_it_went(tmp_path: Path
         # the project's work now waits for its settings (#808): the button is held and says why
         expect(again).to_be_disabled(timeout=15000)
         expect(page.locator("#detail section.info p-button", has_text=REVISE)).to_have_attribute(
-            "title", re.compile("shaper")
+            "title",
+            "8 settings are unset; set them on the Settings page",  # the shaper's model, effort, context, loop, wait
         )
         assert len(launched.calls) == 2
+
+
+@pytest.mark.browser
+def test_a_shaping_chat_that_could_not_open_says_the_host_s_whole_error(
+    tmp_path: Path, monkeypatch, pds, whole_error
+) -> None:
+    """#971: a refused upgrade of the published agent host reaches the shaping launch's line whole, its note too."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+    from websockets.exceptions import InvalidHandshake  # noqa: PLC0415 - the library's own error
+
+    from owlbear_delivery_next.runtimes import ahp, readiness, vscode_adapter  # noqa: PLC0415
+
+    refused = InvalidHandshake(whole_error)
+    refused.add_note("NOTE-MARK")
+
+    def upgrade(*_a: object, **_k: object) -> None:
+        raise refused
+
+    monkeypatch.setattr(api, "LAUNCH_GAP", 0)
+    monkeypatch.setattr(api, "create_app", partial(api.create_app, which=lambda _n: "/bin/code"))
+    monkeypatch.setattr(
+        ahp, "endpoint", lambda: {"endpoint": {"path": str(tmp_path / "h.sock")}, "connectionToken": "t"}
+    )
+    monkeypatch.setattr(ahp, "unix_connect", upgrade)
+    monkeypatch.setattr(readiness, "shaper_path", lambda _home: None)
+    monkeypatch.setattr(vscode_adapter, "launch_code_chat", lambda _args, _cwd: None)
+    monkeypatch.setattr(vscode_adapter, "START", 0.0)
+    alpha = registry.register(clone(tmp_path / "alpha", "same"))
+    shaping(Path(alpha.path), "Alpha brief")
+    detail = (
+        "HostError: VS Code published no agent host within 0 s; before that, the published agent host failed: "
+        f"HostError: upgrade refused: InvalidHandshake: {whole_error}\nNOTE-MARK"
+    )
+    with browsing(monkeypatch, pds) as (page, base):
+        broke = errors(page)
+        opened(page, base, alpha.id)
+        page.locator("#detail").get_by_role("button", name=REVISE).click()
+        pds.answer(page, "Open the chat")
+        command = page.locator("#started code")
+        expect(command).to_be_visible(timeout=15000)
+        said = f"the Copilot chat did not start (error: {detail}); run this in {alpha.path}"
+        expected = f"Could not open the chat to revise c1: {said}. Copy this command: {command.text_content()}"
+        assert page.locator("#started").text_content() == expected
+        assert broke == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)  # a real browser and the machine host; a loaded runner needs more than 30 s
+def test_a_failed_shaping_launch_shows_its_warning_whole(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """P19 (#971): what Delivery could not undo is said beside a failed launch too, whole."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    launched = chats(monkeypatch)
+    reason = "the Copilot chat did not start (unbound: x)"
+    launched.ending = {"state": "failed", "reason": reason, "warning": whole_error}
+    launched.release.set()
+    alpha = registry.register(clone(tmp_path / "alpha", "same"))
+    shaping(Path(alpha.path), "Alpha brief")
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        opened(page, base, alpha.id)
+        page.locator("#detail").get_by_role("button", name=REVISE).click()
+        pds.answer(page, "Open the chat")
+        started = page.locator("#started")
+        expect(started.locator("code")).to_have_count(1, timeout=15000)
+        command = started.locator("code").text_content()
+        assert started.text_content() == (
+            f"Could not open the chat to revise c1: {reason}. Note: {whole_error}. Copy this command: {command}"
+        )
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)  # a real browser and the machine host; a loaded runner needs more than 30 s
+def test_a_failed_host_pass_is_noted_whole_on_the_changes_page(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """P18 (#971): the project's scheduler pass that failed is noted above its Changes with its whole error."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    error = RuntimeError(whole_error)
+    error.add_note("a note added on the way up")
+
+    def failing(_self: Host, _slug: str, _now: object) -> bool:  # observing the project's Change
+        raise error
+
+    monkeypatch.setattr(Host, "_one", failing)
+    registry.register(clone(tmp_path / "alpha", "same"))
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/#token=t")
+        notes = page.locator("#notes p-text")
+        expect(notes).to_have_count(1, timeout=15000)
+        whole = f"RuntimeError: {whole_error}\na note added on the way up"
+        assert notes.all_text_contents() == [f"The host's last pass failed: {whole}"]
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)  # a real browser and the machine host; a loaded runner needs more than 30 s
+def test_a_blocked_or_unreadable_changes_card_shows_its_whole_error(
+    tmp_path: Path, monkeypatch, pds, whole_error
+) -> None:
+    """R1 (#971): a card that says why its Change stopped keeps every path and line of the error, unclipped."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "stuck"))
+    folder = f"{alpha.path}/.owlbear/changes"
+    now = datetime.now(UTC)
+    shaping(Path(alpha.path), "Stuck brief", "stuck", step=Step(kind=StepKind.SHAPE, started_at=now),
+            blocked=runner_end.block({9: ""}, now))  # fmt: skip
+    shaping(Path(alpha.path), "Broken brief", "broken")
+    pids = OSError(13, whole_error, f"{folder}/stuck/step-pids.json")
+    pids.add_note(f"a note naming {folder}/stuck")
+    broken = StoreError(f"{whole_error}\nunreadable: {folder}/broken/change.json")
+    broken.add_note("a note added on the way up")
+
+    def recorded(*_args: object) -> None:
+        raise pids
+
+    def read(self: Store, slug: str, *args: object, **kwargs: object) -> Change:
+        if slug == "broken":
+            raise broken
+        return reading(self, slug, *args, **kwargs)
+
+    reading = Store.read
+    monkeypatch.setattr(host_leftovers.step_pids, "recorded", recorded)
+    monkeypatch.setattr(Store, "read", read)
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/#token=t")
+        stuck = page.locator("li.card", has=page.locator('a[data-key$="stuck"]')).locator("p.says:not(.stage)")
+        unreadable = page.locator("li.card", has=page.locator('a[data-key$="broken"]')).locator("p.says")
+        expect(stuck).to_contain_text("could not be read", timeout=15000)
+        expect(unreadable).to_contain_text("StoreError")
+        assert stuck.text_content() == f"stopped: the step's recorded processes could not be read: {failure(pids)}"
+        assert unreadable.text_content() == f"stopped: {failure(broken)}"
+        for says in (stuck, unreadable):
+            expect(says).to_be_visible()
+            assert says.evaluate("e => e.scrollHeight <= e.clientHeight && getComputedStyle(e).overflow === 'visible'")
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("kind", ["retrying", "pulled-back", "exhausted", "asked"])
+def test_an_erring_changes_card_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, whole_error, kind) -> None:
+    """#971: a retry's reason, a failed pull-back and a question asked once retries ran out are errors too: the card
+    keeps every path and line, unclipped. An ordinary question stays compact."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", kind))
+    now, path = datetime.now(UTC), f"{alpha.path}/.owlbear/changes/{kind}/step-pids.json"
+    wake = now + timedelta(hours=1)
+    reason = f"OSError: [Errno 13] {whole_error}: '{path}'\na note naming {path}"
+    if kind == "retrying":
+        retrying = Outcome(exit=Exit.RETRY, cause="environment:network", reason=reason, wake_at=wake, at=now)
+        shaping(Path(alpha.path), "Retrying brief", kind, outcome=retrying)
+        line = f"retrying: environment:network (1 of {RETRY_LIMIT}) at {wake:%H:%M} · {reason}"
+    elif kind == "pulled-back":
+        behind = Pullback(state="behind", reason=f"local main is behind: {reason}", at=now)
+        shaping(
+            Path(alpha.path), "Pulled brief", kind, finished_at=now, names=Names(target="main", pr=13), pullback=behind
+        )
+        line = f"Done · merged PR #13 · local main is behind: {reason}"
+    elif kind == "exhausted":  # the same Delivery defect DEFECT_LIMIT times in a row asks with the error
+        c, cause = Change(slug=kind, handle="c1", step=Step(kind=StepKind.SHAPE)), "tooling:shape:adapter"
+        for _ in range(DEFECT_LIMIT):
+            budgets.retry(c, loop.StepResult(exit=Exit.RETRY, cause=cause, reason=reason), now)
+        shaping(Path(alpha.path), "Exhausted brief", kind, outcome=c.outcome, questions=c.questions, budgets=c.budgets)
+        line = f"waiting for you: Delivery failed the same way {DEFECT_LIMIT} times ({cause}): {reason}"
+    else:  # a question with a failure-kind cause key that no budget spent: compact
+        c = Change(slug=kind, handle="c1", step=Step(kind=StepKind.SHAPE))
+        dispute = cause_key(ErrorKind.REVIEW, StepKind.SHAPE, "dispute-t1")
+        moves.ask(c, Question(step=StepKind.SHAPE, text=f"Keep the finding? {reason}", cause=dispute), now)
+        shaping(Path(alpha.path), "Asked brief", kind, outcome=c.outcome, questions=c.questions)
+        line = None
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/#token=t")
+        page.locator("#machine").get_by_role("button", name="Resume").click()  # a paused Delivery says only that
+        says = page.locator("li.card", has=page.locator(f'a[data-key$="{kind}"]')).locator("p.says:not(.stage)")
+        expect(says).to_contain_text("a note naming", timeout=15000)
+        if line is None:
+            assert path not in says.text_content()
+            expect(says).not_to_have_class(re.compile(r"\bwhole\b"))
+        else:
+            assert says.text_content() == line
+            expect(says).to_be_visible()
+            assert says.evaluate("e => e.scrollHeight <= e.clientHeight && getComputedStyle(e).overflow === 'visible'")
+        assert said == []
 
 
 @pytest.mark.browser
@@ -429,6 +744,31 @@ def test_two_projects_whose_changes_share_a_handle_revise_the_one_clicked(tmp_pa
         pds.answer(page, "Open the chat")
         expect(page.locator("#started")).to_have_text("A chat opened in VS Code to shape the new Change.")
         assert [(Path(r), p.startswith(api.START_PROMPT)) for r, p in launched.calls[1:]] == [(Path(a.path), True)]
+
+
+@pytest.mark.browser
+def test_show_details_holds_for_every_change_of_every_project(tmp_path: Path, monkeypatch, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
+    with browsing(monkeypatch, pds) as (page, base):
+        broke = errors(page)
+        opened(page, base, a.id, "alpha-1")
+        switch = page.locator("#details-switch")
+        expect(switch).to_be_visible()
+        expect(page.get_by_role("heading", name="Recent activity")).to_have_count(0)
+        pds.settled(page)
+        switch.click()
+        expect(page.get_by_role("heading", name="Recent activity")).to_be_visible()
+        page.goto(f"{base}/?change={b.id}%2Fbeta-1")
+        expect(page.locator("#detail")).to_contain_text("beta-1")
+        expect(page.get_by_role("heading", name="Recent activity")).to_be_visible()
+        page.reload()
+        expect(page.get_by_role("heading", name="Recent activity")).to_be_visible()
+        pds.settled(page)
+        page.locator("#details-switch").click()
+        expect(page.get_by_role("heading", name="Recent activity")).to_have_count(0)
+        assert broke == []
 
 
 @pytest.mark.browser
@@ -612,6 +952,418 @@ def test_updates_impeccable_with_no_project_answers_a_loaded_projects_run_with_i
         machine.stop_all()
 
 
+@pytest.mark.browser
+@pytest.mark.parametrize("fails", ["write", "removal"])
+def test_updates_impeccable_says_an_install_failure_it_could_not_keep_whole(
+    monkeypatch, capsys, pds, whole_error, fails
+) -> None:
+    """#951: a failed install's record that could not be written, or an ended one that could not be removed, says why
+    whole on Updates and in the host's log."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    path = local_home.root() / pack_files.PACKS / machine_impeccable.FAILED
+    broken, write, unlink = [], Path.write_text, Path.unlink
+
+    def writing(self, *args, **kwargs):
+        if fails == "write" and self.name == f".{machine_impeccable.FAILED}.tmp":
+            broken.append(self)
+            raise OSError(whole_error)
+        return write(self, *args, **kwargs)
+
+    def unlinking(self, *args, **kwargs):
+        if fails == "removal" and self == path:
+            broken.append(self)
+            raise OSError(whole_error)
+        return unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    machine, server, base = serve()
+    running = versions.running()  # its pack is not installed here, so its failure applies
+    machine.impeccable.failed(running, "cannot download")
+    monkeypatch.setattr(Path, "write_text", writing)
+    monkeypatch.setattr(Path, "unlink", unlinking)
+    if fails == "write":
+        machine.impeccable.failed(running, "cannot download again")
+    else:
+        machine.impeccable.ready(running)
+    monkeypatch.setattr(Path, "write_text", write)
+    monkeypatch.setattr(Path, "unlink", unlink)
+    assert broken == [path.with_name(f".{machine_impeccable.FAILED}.tmp") if fails == "write" else path]
+    unkept = f"the failure could not be {'kept in' if fails == 'write' else 'removed from'} {path}: OSError: "
+    unkept += whole_error
+    logged = capsys.readouterr().out
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            said = errors(page)
+            pds.only(page, base)
+            page.goto(f"{base}/updates/impeccable#token=t")
+            expect(page.locator("#pack-install-state")).to_be_visible()
+            shown = page.locator("#pack-unkept")
+            expect(shown).to_be_visible()
+            assert shown.text_content() == f"{unkept[0].upper()}{unkept[1:]}."
+            assert said == []
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    line = r"^\d\d:\d\d:\d\dZ Impeccable: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"  # up to the host log's next line
+    assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [unkept]
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("unread", ["versions", "pins"])
+def test_updates_say_a_release_look_that_could_not_read_the_versions_whole(
+    monkeypatch, capsys, pds, whole_error, unread
+) -> None:
+    """#971: the OwlBear check's look whose versions or newer pack could not be read says why whole on Updates ▸
+    Impeccable and Updates ▸ OwlBear, and in the host's log."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    error = versions.VersionError(whole_error)
+    error.add_note("a note on the failure")
+
+    def failing(*_args, **_kwargs):
+        raise error
+
+    if unread == "versions":
+        monkeypatch.setattr(versions, "target", failing)
+        detail = f"the versions could not be read: VersionError: {whole_error}\na note on the failure"
+    else:
+        monkeypatch.setattr(versions, "target", lambda _channel=None: versions.Choice("v9.9", "c" * 40))
+        monkeypatch.setattr(versions, "pins", failing)
+        detail = f"v9.9's Impeccable is unreadable: VersionError: {whole_error}\na note on the failure"
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    machine, server, base = serve()
+    for _ in range(2):  # a failure shows after two in a row
+        assert machine.checks.start("owlbear")
+        assert machine.checks.drain(10)
+    logged = capsys.readouterr().out
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            said = errors(page)
+            pds.only(page, base)
+            page.goto(f"{base}/updates/impeccable#token=t")
+            shown = page.locator("#pack-release")
+            expect(shown).to_be_visible()
+            assert shown.text_content() == f"Not known yet: {detail}."
+            page.goto(f"{base}/updates/owlbear#token=t")
+            if unread == "versions":
+                shown = page.locator("#check-failure")
+                expect(shown).to_be_visible()
+                told = r"The last\s+2 checks failed; the latest at [^\n]*?: "
+                assert re.fullmatch(told + re.escape(f"{detail}."), shown.text_content())
+            else:
+                shown = page.locator("#check-latest")
+                expect(shown).to_be_visible()
+                assert shown.text_content() == f"v9.9 ({detail})"
+            assert said == []
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    line = r"^\d\d:\d\d:\d\dZ update check of OwlBear failed: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
+    assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == ([detail] * 2 if unread == "versions" else [])
+
+
+@pytest.mark.browser
+def test_updates_owlbear_says_an_update_whose_versions_could_not_be_read_whole(
+    monkeypatch, capsys, pds, whole_error
+) -> None:
+    """#971: an update whose look failed says why whole, its type and notes included, on Updates ▸ OwlBear and in the
+    host's log."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    error = versions.VersionError(whole_error)
+    error.add_note("a note on the failure")
+
+    def failing(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(versions, "target", failing)
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    detail = f"the versions could not be read: VersionError: {whole_error}\na note on the failure"
+    machine, server, base = serve()
+    machine.updater._update()  # noqa: SLF001 - the update thread's work, run here
+    logged = capsys.readouterr().out
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            said = errors(page)
+            pds.only(page, base)
+            page.goto(f"{base}/updates/owlbear#token=t")
+            shown = page.locator("#owlbear-state")
+            expect(shown).to_be_visible()
+            assert re.fullmatch(r"The update failed \([^)]*\): " + re.escape(detail), shown.text_content())
+            assert said == []
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    line = r"^\d\d:\d\d:\d\dZ update: failed: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
+    assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [detail]
+
+
+@pytest.mark.browser
+def test_updates_say_update_checks_that_started_afresh_whole(monkeypatch, capsys, pds, whole_error) -> None:
+    """#951: update checks whose earlier results could not be read at the start say why whole on Updates and in the
+    host's log."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    path = local_home.root() / update_checks.STATE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{}", encoding="utf-8")
+    broken, read = [], Path.read_text
+
+    def reading(self, *args, **kwargs):
+        if self == path:
+            broken.append(self)
+            raise OSError(whole_error)
+        return read(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", reading)
+    unrestored = f"{path} is unreadable, so they start afresh: OSError: {whole_error}"
+    with browsing(monkeypatch, pds) as (page, base):
+        monkeypatch.setattr(Path, "read_text", read)
+        assert broken == [path]
+        logged = capsys.readouterr().out
+        said = errors(page)
+        page.goto(f"{base}/updates/owlbear#token=t")
+        shown = page.locator("#check-settings")
+        expect(shown).to_be_visible()
+        told = r"It looks [^\n]*\.\s+How often is set in Settings → This machine\. Earlier check results were lost: "
+        assert re.fullmatch(told + re.escape(f"{unrestored}."), shown.text_content())
+        assert said == []
+    line = r"^\d\d:\d\d:\d\dZ update checks: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"  # up to the host log's next line
+    assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [unrestored]
+
+
+def _checks_page(base: str, path: str, locator: str) -> tuple[str, list[str]]:
+    """The text of *locator* on the machine host's page at *path* once shown, and the page's errors."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    with sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        page = browser.new_page()
+        said = errors(page)
+        page.goto(f"{base}{path}#token=t")
+        shown = page.locator(locator)
+        expect(shown).to_be_visible()
+        text = shown.text_content()
+        browser.close()
+    return text, said
+
+
+def _tick_fails_once(monkeypatch, machine: Machine, error: Exception, released: threading.Event) -> None:
+    """Run *machine*'s update-check loop until its first look whether a check is due failed with *error*; its next
+    look waits for *released*, so nothing clears it."""
+    looks = []
+
+    def ticking() -> None:
+        looks.append(1)
+        if len(looks) == 1:
+            raise error
+        released.wait()
+
+    monkeypatch.setattr(update_checks, "TICK", 0.05)
+    monkeypatch.setattr(machine.checks, "start", lambda _name: False)
+    monkeypatch.setattr(machine.checks, "tick", ticking)
+    threading.Thread(target=machine.checks.loop, daemon=True).start()
+    for _ in range(200):
+        if len(looks) > 1:
+            return
+        time.sleep(0.05)
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("failing", ["unkept", "unsettled", "unticked"])
+def test_updates_say_update_checks_that_could_not_be_kept_set_or_looked_at_whole(
+    monkeypatch, capsys, whole_error, failing
+) -> None:
+    """#971: update checks whose results could not be written, whose machine settings could not be read, or whose
+    look whether one is due failed say why whole on Updates and in the host's log."""
+    error = OSError(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising(*_args, **_kwargs):
+        raise error
+
+    newer = {"newer": True, "current": "3.0.0", "latest": "999.0.0", "detail": ""}
+    monkeypatch.setitem(update_checks.CHECKS, "pds", lambda: newer)
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    released = threading.Event()
+    machine, server, base = serve()
+    try:
+        whole = f"OSError: {whole_error}\na note on the failure"
+        if failing == "unkept":
+            monkeypatch.setattr(update_checks, "atomic_write", raising)
+            assert machine.checks.start("pds")
+            assert machine.checks.drain(10)
+            told = f"The check results are not kept: {machine.checks.path} could not be written: {whole}."
+            logged = f"update checks: {machine.checks.path} could not be written: {whole}"
+        elif failing == "unsettled":
+            monkeypatch.setattr(update_checks, "machine_settings", SimpleNamespace(current=raising))
+            told = f"The machine settings could not be read, so no check runs at its interval: {whole}."
+            logged = f"update checks: the machine settings could not be read: {whole}"
+        else:
+            _tick_fails_once(monkeypatch, machine, error, released)
+            told = f"The last look whether a check is due failed: {whole}."
+            logged = f"update checks failed: {whole}"
+        text, said = _checks_page(base, "/updates/owlbear", "#check-settings")
+    finally:
+        released.set()
+        server.should_exit = True
+        machine.stop_all()
+    lead = r"It looks [^\n]*\.\s+How often is set in Settings → This machine\. "
+    assert re.fullmatch(lead + re.escape(told), text)
+    assert said == []
+    line = r"^\d\d:\d\d:\d\dZ (update checks.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
+    lines = re.findall(line, capsys.readouterr().out, re.MULTILINE | re.DOTALL)
+    assert set(lines) == {logged}
+
+
+@pytest.mark.browser
+def test_updates_pds_says_a_newer_release_whose_projects_runs_could_not_be_read_whole(
+    monkeypatch, capsys, whole_error
+) -> None:
+    """#971: a newer PDS whose projects' updates could not be read says why whole beside it on Updates ▸ PDS and in
+    the host's log."""
+    error = OSError(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising(*_args, **_kwargs):
+        raise error
+
+    newer = {"newer": True, "current": "3.0.0", "latest": "999.0.0", "detail": ""}
+    monkeypatch.setitem(update_checks.CHECKS, "pds", lambda: newer)
+    monkeypatch.setattr(update_checks, "_pds_runs", raising)  # the PDS page's own run list reads them apart
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    machine, server, base = serve()
+    try:
+        assert machine.checks.start("pds")
+        assert machine.checks.drain(10)
+        text, said = _checks_page(base, "/updates/pds", "#check-latest")
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    whole = f"OSError: {whole_error}\na note on the failure"
+    assert text == f"999.0.0 (whether a project already takes it could not be read: {whole})"
+    assert said == []
+    line = r"^\d\d:\d\d:\d\dZ (update checks.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
+    lines = re.findall(line, capsys.readouterr().out, re.MULTILINE | re.DOTALL)
+    assert set(lines) == {f"update checks: the PDS updates could not be read: {whole}"}
+
+
+@pytest.mark.browser
+def test_updates_owlbear_logs_update_steps_that_could_not_be_kept_whole(monkeypatch, capsys, whole_error) -> None:
+    """#971: an update whose steps could not be written logs why whole, once, under its step on Updates ▸ OwlBear and in
+    the host's log."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.machine_host import update_steps  # noqa: PLC0415
+
+    error = OSError(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(update_steps, "atomic_write", raising)
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    machine, server, base = serve()
+    path = local_home.root() / update_steps.RECORD
+    line = f"its steps could not be kept in {path}: OSError: {whole_error}\na note on the failure"
+    try:
+        machine.updater.steps.begin()
+        machine.updater.steps.mark("looking", "running", "fetching the versions")
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            said = errors(page)
+            page.goto(f"{base}/updates/owlbear#token=t")
+            page.locator("#owlbear-log-box summary").click()
+            shown = page.locator("#owlbear-log")
+            expect(shown).to_be_visible()
+            text = shown.text_content()
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    looking = r"[^\n]*? · Looking for a newer version: "
+    assert re.fullmatch(f"{looking}{re.escape(line)}\n{looking}fetching the versions", text)
+    assert said == []
+    logged = r"^\d\d:\d\d:\d\dZ update: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
+    assert re.findall(logged, capsys.readouterr().out, re.MULTILINE | re.DOTALL) == [line]
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("failing", ["prune", "migration", "both"])
+def test_updates_owlbear_says_old_versions_it_could_not_remove_at_the_start_whole(
+    monkeypatch, whole_error, failing
+) -> None:
+    """#971: old versions the host's start could not remove, and the runtime from before the first update it could not
+    put away, say why whole on Updates ▸ OwlBear's update line."""
+    error = OSError(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising(*_args):
+        raise error
+
+    refused = versions.VersionError(whole_error)
+    refused.add_note("a note on the refusal")
+
+    def refusing(_path):
+        raise refused
+
+    left = unpruned = ""
+    if failing != "migration":
+        monkeypatch.setattr(versions, "prune", raising)
+        unpruned = f"OSError: {whole_error}\na note on the failure"
+        assert host_start._pruned() == ([], unpruned)  # noqa: SLF001 - the start's own step
+    if failing != "prune":
+        (local_home.root() / alias.NEW).mkdir(parents=True)  # a first migration a crash interrupted
+        monkeypatch.setattr(versions, "keep_data", refusing)
+        left = alias.complete()
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    machine, server, base = serve()
+    try:
+        machine.updater.unpruned, machine.updater.unmigrated = unpruned, left  # as the host's start sets them
+        if failing == "both":  # an update that failed after the start: its error ends before the start's notes
+            machine.updater.state |= {"phase": "failed", "detail": f"OSError: {whole_error}", "version": "v0.3"}
+        text, said = _checks_page(base, "/updates/owlbear", "#owlbear-state")
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    told = "No update has run since OwlBear started."
+    if failing == "both":
+        told = f"The update to v0.3 failed: OSError: {whole_error}."
+    if failing != "prune":
+        told += (" The runtime from before the first update could not be put away at this start: "
+                 f"VersionError: {whole_error}\na note on the refusal.")  # fmt: skip
+    if failing != "migration":
+        told += f" Old versions could not be removed at this start: {unpruned}."
+    assert (text, said) == (told, [])
+
+
 def targets(scope) -> list[str]:
     """WCAG 2.5.8: each shown control in *scope* still smaller than 24 by 24 pixels once the design system has laid it
     out (under load that takes a moment), by its text."""
@@ -626,6 +1378,131 @@ def targets(scope) -> list[str]:
             break
         scope.page.wait_for_timeout(250)
     return list(small)
+
+
+@pytest.mark.browser
+def test_projects_says_why_the_shared_data_and_a_pass_loading_projects_again_failed_whole(
+    monkeypatch, whole_error
+) -> None:
+    """#971: the shared data the start could not set up, said as that start's finding, and the last failed pass loading
+    the failed projects again, say why whole above the Projects list."""
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    unprovided = data_repo.DataRepoError(whole_error)
+    unprovided.add_note("a note on the place")
+
+    def provision(**_kwargs):
+        raise unprovided
+
+    monkeypatch.setattr(data_place, "provision", provision)
+    machine, server, base = serve()
+    try:
+        host_start._provisioned(machine)  # noqa: SLF001 - the start's own step
+        machine.unretried = unretried = f"RuntimeError: {whole_error}\na note on the pass"  # as the retry loop sets it
+        shared, said = _checks_page(base, "/projects", "#unshared")
+        retried, broke = _checks_page(base, "/projects", "#unretried")
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    unshared = f"at this start, DataRepoError: {whole_error}\na note on the place; `owlbear restart` looks again"
+    assert (machine.unshared, shared, retried) == (
+        unshared, f"Shared data: {unshared}", f"Loading the failed projects again failed: {unretried}"
+    )  # fmt: skip
+    assert said == broke == []
+
+
+@pytest.mark.browser
+def test_projects_refresh_after_the_data_command_repairs_the_pointer_without_restarting(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
+    from playwright.sync_api import expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    monkeypatch.setattr(project.readiness, "ready", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(Host, "_launch", lambda *_args: False)
+    entry = registry.register(clone(tmp_path / "shop"))
+    source, dest = clone(tmp_path / "old-data"), data_place.default()
+    subprocess.run(["git", "clone", "-q", str(source), str(dest)], check=True)  # noqa: S603, S607
+    data_place.pointer().write_text(json.dumps({"moving_from": str(source), "moving_to": str(dest)}))
+    machine, server, base = serve()
+    try:
+        host_start._provisioned(machine)  # noqa: SLF001 - the real startup failure, not a supplied UI notice
+        original = machine.unshared
+        assert original
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            page = browser.new_page(viewport={"width": 1280, "height": 800})
+            said = errors(page)
+            pds.only(page, base)
+            page.goto(f"{base}/projects#token=t")
+            expect(page.locator("#unshared")).to_have_text(f"Shared data: {original}")
+            page.screenshot(path=str(tmp_path / "projects-before-data-repair.png"), full_page=True)
+            assert cli.main(["data"]) == 1
+            page.reload()
+            expect(page.locator("#unshared")).to_have_text(f"Shared data: {original}")
+            shutil.rmtree(source)
+            assert cli.main(["data"]) == 0
+            machine.retry()
+            loaded = machine.projects[entry.id].store
+            assert loaded is not None
+            assert loaded.shared.root == dest
+            page.reload()  # the same server and Machine reread the actual repaired pointer
+            row = page.locator("#projects > li", has_text="shop")
+            expect(row.get_by_role("heading", name="shop", exact=True)).to_be_visible()
+            expect(row.locator("p-tag", has_text="failed")).to_have_count(0)
+            page.screenshot(path=str(tmp_path / "projects-after-data-repair.png"), full_page=True)
+            expect(page.locator("#unshared")).to_be_hidden()
+            assert machine.unshared == ""
+            assert machine.projects[entry.id].store is loaded
+            assert targets(page.locator("#projects a, #projects button")) == []
+            assert said == []
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
+@pytest.mark.browser
+def test_decisions_says_what_the_start_could_not_do_about_decisions_whole(monkeypatch, whole_error) -> None:
+    """#971: a retired decision index file the start could not remove, and decisions it could not pre-load, say why
+    whole in the Decisions page's error notice; a decision id or file in the text stays as written."""
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    named = f"owlbear/decisions/D-01M5ZE13N37HZAGJ69VWW69X23.md: {whole_error}"
+    unremoved = OSError(named)
+    unremoved.add_note("a note on the removal")
+    unlocated = data_repo.DataRepoError(f"D-01M5ZE13N37HZAGJ69VWW69X23 {whole_error}")
+    unlocated.add_note("a note on the place")
+
+    def refusing(path: Path) -> None:
+        if path.name == "decisions.sqlite":
+            raise unremoved
+        raise FileNotFoundError(path)
+
+    def unplaced() -> Path:
+        raise unlocated
+
+    machine, server, base = serve()
+    try:
+        with monkeypatch.context() as removing:  # only the removal refuses; the fixtures' overrides stay
+            removing.setattr(Path, "unlink", refusing)
+            host_start._retired_index(machine, local_home.root())  # noqa: SLF001 - the start's own step
+        monkeypatch.setattr(data_repo, "locate", unplaced)
+        host_start.warm(machine)
+        text, said = _checks_page(base, "/decisions", "#error")
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+    lines = [
+        (
+            f"the retired decision index file decisions.sqlite could not be removed: OSError: {named}"
+            "\na note on the removal"
+        ),
+        (
+            f"decisions of owlbear not pre-loaded: DataRepoError: D-01M5ZE13N37HZAGJ69VWW69X23 {whole_error}"
+            "\na note on the place"
+        ),
+    ]
+    assert machine.undecided == lines
+    assert text == "".join(f"At this start, {line}." for line in lines) + "\n    "
+    assert said == []
 
 
 @pytest.mark.browser
@@ -692,6 +1569,37 @@ def test_settings_say_a_failed_read_of_the_shared_repository_whole(
 
 
 @pytest.mark.browser
+def test_settings_say_why_the_old_runtime_stays_whole(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """#971: Remove the old runtime, refused because the folder may hold the shared data, says why whole in Settings'
+    notice."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    kept = local_home.root() / local_home.VERSIONS / "legacy-c1c1c1c1c1c1"
+    kept.mkdir(parents=True)
+    error = versions.VersionError(whole_error)
+    error.add_note("a note on the failure")
+
+    def refusing(_path):
+        raise error
+
+    monkeypatch.setattr(versions, "legacy", lambda: [kept])
+    monkeypatch.setattr(leases, "unpinned", list)
+    monkeypatch.setattr(versions, "keep_data", refusing)
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        pds.group(page, "this-machine")
+        page.get_by_role("button", name="Remove the old runtime").click()
+        pds.answer(page, "Remove it")
+        notice = page.locator("#error")
+        expect(notice).to_be_visible()
+        assert notice.text_content().strip() == f"VersionError: {whole_error}\na note on the failure"
+        assert said == ["Failed to load resource: the server responded with a status of 409 (Conflict)"]
+    assert kept.is_dir()
+
+
+@pytest.mark.browser
 def test_settings_show_a_failed_source_the_models_and_global_s_machine_settings_whole(
     tmp_path: Path, monkeypatch, pds, whole_error
 ) -> None:
@@ -717,13 +1625,18 @@ def test_settings_show_a_failed_source_the_models_and_global_s_machine_settings_
         page.route("**/api/next/config/models", lambda r: r.fulfill(json={"models": [], "error": failed}))
         page.route(f"{base}/api/next/machine", lambda r: machine(r) if r.request.method == "GET" else r.fallback())
         page.goto(f"{base}/config?project={a.id}#token=t")
+        # Both startup reads must finish; the second can replace the first error with a loading message.
+        page.evaluate("() => import('/assets/page/config/main.mjs')")
         source = page.locator(".reads-failure")
         expect(source).to_be_visible()
         assert source.text_content().split() == f"Could not read: Impeccable releases — {failed}".split()
         pds.group(page, "agents")
         models = page.locator("#models-note")
+        expect(models).to_have_text(f"Could not read the offered models ({failed}); type a model name.")
         expect(models).to_be_visible()
-        assert models.text_content() == f"Could not read the offered models ({failed}); type a model name."
+        expect(models).to_have_js_property(
+            "textContent", f"Could not read the offered models ({failed}); type a model name."
+        )
         pds.group(page, "this-machine")
         notice = page.locator("#machine-notice")
         expect(notice).to_be_visible()
@@ -823,7 +1736,7 @@ def test_the_menu_reaches_every_page_moves_focus_into_each_level_and_back_to_the
         expect(overview).to_have_attribute("aria-current", "page")
         served = ["/", "/backlog", "/memory", "/decisions", "/metrics", "/improvement", "/projects", "/maintenance"]
         served += ["/updates/owlbear", "/updates/pds", "/updates/impeccable"]
-        groups = ["overview", "agents", "guardrails", "checks", "project", "this-machine"]
+        groups = ["overview", "agents", "guardrails", "memory", "checks", "project", "this-machine"]
         hrefs = menu.locator("a").evaluate_all("as => as.map(a => a.getAttribute('href'))")
         assert sorted(hrefs) == sorted([f"{path}?project={a.id}" for path in served]
                                        + [f"/config?project={a.id}#{group}" for group in groups])  # fmt: skip
@@ -929,7 +1842,8 @@ def test_projects_says_why_a_move_of_the_shared_repository_stopped_whole(
         expect(shop.locator("p-tag")).to_have_text("failed")
         said = shop.locator("p-text").filter(has_text="is not finished")
         expect(said).to_have_count(1)
-        assert said.text_content() == f"its Delivery state cannot be opened: {unfinished}; `owlbear data` finishes it"
+        opened = f"its Delivery state cannot be opened: StoreError: DataRepoError: {unfinished}"
+        assert said.text_content() == f"{opened}; `owlbear data` finishes it"
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
         assert broke == []
 
@@ -975,7 +1889,197 @@ def test_projects_lists_a_host_s_failed_readiness_checks_whole_under_its_reason(
 
 
 @pytest.mark.browser
-def test_projects_adopts_removes_and_adds_keeping_focus_and_the_next_folder(tmp_path: Path, monkeypatch, pds) -> None:
+def test_projects_lists_a_detection_read_failure_from_the_real_readiness_pass(
+    tmp_path: Path, monkeypatch, pds, shared_repo, whole_error
+) -> None:
+    """#1007: a failed detector read reaches Project._ready and its real Projects readiness line."""
+    from playwright.sync_api import expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
+    entry = registry.register(clone(tmp_path / "shop"))
+    store = Store.open(Path(entry.path))
+    store.write_profile(
+        Profile(
+            entries={
+                profile.HOST: ProfileEntry(
+                    state="known", value="git.enterprise.invalid", evidence=f"{profile.CONFIRMED}; owner"
+                ),
+            }
+        )
+    )
+    error = DetectorError(whole_error)
+    error.add_note("the detector's source could not be read")
+
+    def detect(*_args):
+        raise error
+
+    monkeypatch.setattr(profile, "detect", detect)
+    monkeypatch.setattr(readiness, "reach", lambda *_args: "fixture network unavailable")
+    monkeypatch.setattr(readiness, "probe_in", lambda _repo: lambda _cmd: (1, "fixture probe not checked"))
+    monkeypatch.setattr(readiness.pack_update, "notice", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(readiness.pack_update, "said", lambda _notice: "fixture packs not checked")
+    monkeypatch.setattr(Host, "_launch", lambda *_args: False)
+    machine, server, base = serve()  # actual readiness.ready → Project._ready → HostRecord.ready
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            page = browser.new_page(viewport={"width": 1280, "height": 800})
+            said = errors(page)
+            pds.only(page, base)
+            page.goto(f"{base}/projects#token=t")
+            row = page.get_by_role("listitem", name="shop")
+            checks = row.get_by_role("list", name="Failed readiness checks")
+            expect(checks).to_be_visible()
+            page.screenshot(path=str(tmp_path / "projects-detection.png"), full_page=True)
+            detected = checks.get_by_role("listitem").filter(has_text="profile detection:")
+            assert detected.count() == 1  # the visible list is the completed readiness pass
+            assert detected.text_content() == (
+                f"profile detection: StoreError: the project profile could not be detected: {failure(error)} · fix: "
+                "Resolve the profile detection or publication error reported above, then restart Delivery"
+            )
+            assert detected.evaluate("e => getComputedStyle(e).whiteSpace") == "pre-wrap"
+            assert store.read_profile().entries[profile.HOST].value == "git.enterprise.invalid"
+            page.set_viewport_size({"width": 375, "height": 800})
+            assert page.evaluate("document.documentElement.scrollWidth") <= 375
+            assert said == []
+            browser.close()
+    finally:
+        server.should_exit = True
+        machine.stop_all()
+
+
+@pytest.mark.browser
+def test_a_long_unverified_session_end_shows_whole_on_changes(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    """#951: a step whose session's end is unproven says why whole in Recent activity, the forced stop and the step's
+    own line; the step's line keeps it once the host found the processes gone and cleared the stop."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "flip"))
+    path = Path(alpha.path)
+    store = Store.open(path)
+    names = Names(branch="owlbear/flip", target="main", worktree=str(path))
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
+    c = Change(slug="flip", brief=Brief(version=1), plan=plan, step=Step(kind=StepKind.BUILD, task="t1"), names=names)
+    stopped = f"runtime stop failed: RuntimeError: {whole_error}"
+    left = processes.Termination(
+        confirmed=False, unknown=(9,), problems=(f"disconnect failed: RuntimeError: {whole_error}",)
+    )
+
+    async def ended(cfg):
+        at = datetime.now(UTC).isoformat(timespec="seconds")
+        cfg.journal.event({"at": at, "event": "force-stop", "reason": stopped, "runtime_pid": 9})
+        return Run(cfg.session_id, "error", None, detail="the session failed", termination=left)
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", ended)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: path)
+    with store.lock("flip") as lock:
+        store.write(lock, c)
+        runner._step(store, lock, c, c.step, path)  # noqa: SLF001
+    why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
+    said = [
+        f"Building stopped: {why}; the session failed",  # #971: and the session's own error
+        f"Tried to force the session to stop: {stopped}",
+    ]
+    present = [True]  # the host finds process 9 until the owner ends it
+    monkeypatch.setattr(host_leftovers, "survivors", lambda *_a: {9: ""} if present[0] else {})
+    monkeypatch.setattr(host_module, "TICK", 0.5)  # the host looks again soon after the owner ended them
+    with browsing(monkeypatch, pds, details=True) as (page, base):
+        broke = errors(page)
+        opened(page, base, alpha.id, "flip")
+        lines = page.locator("#detail .log li > span")
+        expect(page.locator("#detail")).to_contain_text("stopped: processes still present: 9")
+        expect(lines).to_have_count(2)
+        assert lines.all_text_contents() == said
+        assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+        present[0] = False
+        expect(page.locator("#detail").get_by_text("Stopped", exact=True)).to_have_count(0, timeout=15000)
+        assert lines.all_text_contents() == said  # the step's line keeps why once the host cleared the stop
+        page.set_viewport_size({"width": 390, "height": 800})
+        assert page.evaluate("document.documentElement.scrollWidth") <= 390
+        assert broke == []
+
+
+@pytest.mark.browser
+def test_a_failed_sdk_step_s_whole_error_shows_in_recent_activity(
+    tmp_path: Path, monkeypatch, pds, whole_error
+) -> None:
+    """#971 P22: a session that failed says its whole error, JSON-RPC data and notes included, on its step's line."""
+    from copilot._jsonrpc import JsonRpcError  # noqa: PLC0415 - the SDK's own error, as a request raises it
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.runtimes import sdk_spend  # noqa: PLC0415
+
+    alpha = registry.register(clone(tmp_path / "alpha", "flip"))
+    path = Path(alpha.path)
+    store = Store.open(path)
+    names = Names(branch="owlbear/flip", target="main", worktree=str(path))
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
+    c = Change(slug="flip", brief=Brief(version=1), plan=plan, step=Step(kind=StepKind.BUILD, task="t1"), names=names)
+    exc = JsonRpcError(-32603, whole_error, {"marker": "DATA-MARK"})
+    exc.add_note("NOTE-MARK")
+    detail = sdk_spend.failed(exc)
+
+    async def failed(cfg):
+        return Run(cfg.session_id, "error", None, detail=detail, termination=processes.Termination(confirmed=True))
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", failed)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: path)
+    with store.lock("flip") as lock:
+        store.write(lock, c)
+        runner._step(store, lock, c, c.step, path)  # noqa: SLF001
+    with browsing(monkeypatch, pds, details=True) as (page, base):  # Recent activity is a detail
+        broke = errors(page)
+        opened(page, base, alpha.id, "flip")
+        lines = page.locator("#detail .log li > span")
+        expect(lines.first).to_contain_text("DATA-MARK")
+        assert lines.all_text_contents() == [f"Building will try again: {detail}"]
+        assert broke == []
+
+
+@pytest.mark.browser
+def test_a_crashed_runner_s_whole_error_shows_in_recent_activity(
+    tmp_path: Path, monkeypatch, capsys, pds, whole_error
+) -> None:
+    """D-01M6GCGED6NRBVEB2XGKRPCKX0: a Change runner that crashes says its whole error, notes included, in Recent
+    activity and on its output, runner.log; the exception still ends the runner, whose traceback follows there."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    alpha = registry.register(clone(tmp_path / "alpha", "flip"))
+    path = Path(alpha.path)
+    store = Store.open(path)
+    names = Names(branch="owlbear/flip", target="main", worktree=str(path))
+    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
+    c = Change(slug="flip", brief=Brief(version=1), plan=plan, step=Step(kind=StepKind.BUILD, task="t1"), names=names)
+    note = f"the session's teardown also failed: OSError: {whole_error}"
+
+    async def crashing(_cfg):
+        broke = RuntimeError(whole_error)
+        broke.add_note(note)  # as loop_owner.run adds it
+        raise broke
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", crashing)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: path)
+    with store.lock("flip") as lock:
+        store.write(lock, c)
+    with pytest.raises(RuntimeError) as crashed:
+        contextvars.copy_context().run(runner.main, ["flip", "--repo", str(path)])  # it sets the process's spend place
+    assert (str(crashed.value), crashed.value.__notes__) == (whole_error, [note])
+    reason = f"RuntimeError: {whole_error}\n{note}"
+    printed = [json.loads(line) for line in capsys.readouterr().out.splitlines() if '"runner-failed"' in line]
+    assert [e["reason"] for e in printed] == [reason]
+    with browsing(monkeypatch, pds, details=True) as (page, base):
+        broke = errors(page)
+        opened(page, base, alpha.id, "flip")
+        expect(page.locator("#detail")).to_contain_text("Recent activity")
+        expect(page.locator("#detail")).to_contain_text("Build 1/1 · the runner failed")
+        lines = page.locator("#detail .log li > span")
+        assert lines.all_text_contents() == [f"Runner failed: {reason}"]
+        assert broke == []
+    assert [e["reason"] for e in store.events("flip") if e.get("event") == "runner-failed"] == [reason]
+
+
+@pytest.mark.browser
+def test_projects_adopts_removes_and_adds_keeping_focus(tmp_path: Path, monkeypatch, pds) -> None:
     """D-01M63C8DA1D95Z7M9ZYWVYYNF7: with no project shown each action stays on Projects, and focus stays on it; one
     action runs at a time; with no project left, the top row offers Add project."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
@@ -995,28 +2099,13 @@ def test_projects_adopts_removes_and_adds_keeping_focus_and_the_next_folder(tmp_
         expect(alpha.get_by_role("button", name="Remove project")).to_be_focused()  # delta's went with it
         alpha.get_by_role("button", name="Remove project").click()
         pds.answer(page, "Remove project")
-        expect(page.get_by_label("Folder")).to_be_focused()
+        expect(page.get_by_role("button", name="Add a project")).to_be_focused()
         expect(page.locator("#page")).to_contain_text("No project yet")
         assert registry.load().projects == []
         add = page.locator("#top").get_by_role("link", name="Add project")
-        expect(add).to_have_attribute("href", "#add")  # Projects is where it leads, so it goes to the form
-        page.get_by_role("button", name="Add", exact=True).click()
-        expect(page.locator("#page > [role=alert]")).to_have_text("Name the folder of a clone first.")
-        posted = []
-        page.route(
-            f"{base}/api/next/projects", lambda r: posted.append(r) if r.request.method == "POST" else r.fallback()
-        )
-        page.get_by_label("Folder").fill(a.path)
-        page.locator("#add p-input-text").evaluate(  # Enter twice before Delivery answers adds it once
-            "e => { for (const _ of [1, 2]) e.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter'})) }"
-        )
-        until(page, lambda: posted)
-        page.get_by_label("Folder").fill("~/Projects/next")  # typed while Delivery adds the first
-        posted[0].fallback()
-        expect(page.locator("#page > [role=status]")).to_have_text("Added alpha.")
-        expect(page.locator("#page > [role=alert]")).to_have_count(0)
-        expect(page.get_by_label("Folder")).to_have_value("~/Projects/next")
-        assert len(posted) == 1
+        expect(add).to_have_attribute("href", "#add")  # Projects is where it leads, so it goes to Add a project
+        page.request.post(f"{base}/api/next/projects", data={"path": a.path}, headers={"Authorization": "Bearer t"})
+        page.reload()
         expect(add).to_have_count(0)
         expect(pds.select(page.locator("#top"), "Project")).to_be_visible()
         page.goto(f"{base}/backlog")
@@ -1168,10 +2257,10 @@ def test_focus_goes_to_the_same_place_after_remove_and_stays_where_the_owner_mov
         page.route(f"{base}/api/next/projects/*/adopt", hold)
         page.get_by_role("listitem", name="epsilon").get_by_role("button", name="Adopt the new clone").click()
         until(page, lambda: held)
-        page.get_by_label("Folder").focus()  # the owner moves on while Delivery adopts it
+        page.get_by_role("button", name="Add a project").focus()  # the owner moves on while Delivery adopts it
         held[0].fallback()
         expect(page.locator("#page > [role=status]")).to_contain_text("epsilon now serves the clone at")
-        expect(page.get_by_label("Folder")).to_be_focused()
+        expect(page.get_by_role("button", name="Add a project")).to_be_focused()
 
 
 @pytest.mark.browser
@@ -1611,6 +2700,7 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
         expect(row["global"]).to_contain_text("2 in force · 0 drafts")
         expect(row["global"]).to_contain_text("1 read-back waiting")
         expect(row["owlbear"]).to_contain_text("1 in force · 0 drafts")
+        expect(row["owlbear"].locator("p-tag", has_text="OwlBear's own")).to_have_count(1)
         expect(row[gone.id]).to_contain_text("gone is replaced: ")
         expect(row[gone.id].get_by_role("link", name="Open Projects")).to_have_attribute("href", "/projects")
         until(page, lambda: held)
@@ -1627,6 +2717,49 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
         assert targets(page.locator("#scopes a, #scopes button")) == []
         assert page.evaluate("document.documentElement.scrollWidth") <= 390
         each_scope_opens_its_view_and_leads_back(page, pds, base, row, a)
+
+
+@pytest.mark.browser
+def test_the_spotter_lists_owlbears_own_project_first_as_owlbear_with_its_tag(
+    tmp_path: Path, monkeypatch, pds, shared_repo
+) -> None:
+    """D-01M6JZQEEAXBNNH9P05HT7JNH2: Improvement's Spotter cards, added after a consumer, list OwlBear first, tagged."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
+    alpha = registry.register(clone(tmp_path / "alpha"))
+    own = registry.register(clone(tmp_path / "mine", origin=OWLBEAR_ORIGIN))
+    with browsing(monkeypatch, pds, 1280) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/improvement#token=t")
+        cards = page.locator("#spotter li.panel")
+        expect(cards.locator("h3")).to_have_text(["OwlBear", "alpha"])
+        expect(page.locator(f"#spotter-{own.id} p-tag")).to_have_text(["OwlBear's own"])
+        expect(page.locator(f"#spotter-{alpha.id} p-tag")).to_have_count(0)
+        assert said == []
+
+
+@pytest.mark.browser
+def test_owlbears_fixed_scope_stays_its_one_row_once_its_own_project_is_registered(
+    tmp_path: Path, monkeypatch, pds, shared_repo
+) -> None:
+    """D-01M5ZGHDMEG897N2SD1XNEXYNQ, D-01M6JZQEEAXBNNH9P05HT7JNH2: with OwlBear's own clone registered, All projects
+    still shows OwlBear once, as the fixed scope tagged as OwlBear's own, never as a project row too."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    shared = shared_repo[0]
+    monkeypatch.setenv(data_place.VIEW, str(shared))
+    decided(shared, "owlbear", "Lint once.")
+    registry.register(clone(tmp_path / "alpha"))
+    registry.register(clone(tmp_path / "mine", origin=OWLBEAR_ORIGIN))
+    with browsing(monkeypatch, pds, 390) as (page, base):
+        page.goto(f"{base}/decisions#token=t")
+        for _ in ("loaded", "reloaded"):
+            expect(page.locator("#scopes .scope h3")).to_have_text(["Global", "OwlBear", "alpha"])
+            row = page.locator('#scopes .scope[data-key="owlbear"]')
+            expect(row).to_contain_text("1 in force · 0 drafts")
+            expect(row.locator("p-tag", has_text="OwlBear's own")).to_have_count(1)
+            page.reload()
 
 
 @pytest.mark.browser
@@ -1697,20 +2830,146 @@ def each_scope_opens_its_view_and_leads_back(page, pds, base: str, row: dict, a:
     expect(page).to_have_url(f"{base}/decisions")
 
 
+FAILED_500 = "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+
+
 @pytest.mark.browser
-def test_maintenance_under_all_projects_sums_up_each_project_and_opens_it_even_with_a_project_unread(
-    tmp_path: Path, monkeypatch, pds
+def test_an_error_no_machine_route_caught_shows_whole_on_its_page_and_in_the_host_log(
+    monkeypatch, pds, caplog, whole_error
 ) -> None:
-    """D-01M63C6PMT4FX370W6B2VS9HAM: All projects shows one maintenance summary per project, each opening it; a
-    project that cannot be read says why and the rest still shows."""
+    """#971: the machine's held-sessions read failing with an error nothing catches, a command's with its output, says
+    it whole on Maintenance, as the host log's traceback does."""
+    read, whole, logged_whole = uncaught(whole_error)
+    monkeypatch.setattr(maintenance.Maintenance, "read", read)
+    with browsing(monkeypatch, pds) as (page, base), logged(caplog):
+        broke = errors(page)
+        with page.expect_response("**/api/next/maintenance/sessions") as answered:
+            page.goto(f"{base}/maintenance#token=t")
+        assert (answered.value.status, answered.value.json()) == (500, {"detail": whole})
+        assert page.locator("#sessions-error").text_content().strip() == f"Could not read the held sessions: {whole}."
+        assert traced(caplog, page) == {("Exception in ASGI application\n", logged_whole)}
+        assert set(broke) == {FAILED_500}  # the browser's own line for the answer, no script error
+
+
+@pytest.mark.browser
+def test_a_recovery_no_route_caught_shows_its_whole_error_in_the_held_sessions_row(
+    monkeypatch, pds, whole_error
+) -> None:
+    """#971: releasing a held session failing with an error nothing catches says it whole in that session's row."""
+    held = {"id": "s-1", "project": "p", "kind": "pack", "started_at": "2026-10-25T00:00:00+00:00"}
+    held |= {"workspace": "/w/s-1", "reason": "no Run returned", "state": "held", "recoverable": True}
+
+    def recover(*_args: object, **_kwargs: object) -> Any:
+        raise RuntimeError(whole_error)
+
+    monkeypatch.setattr(maintenance.Maintenance, "read", lambda _self: {"sessions": [held]})
+    monkeypatch.setattr(maintenance.Maintenance, "recover", recover)
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/maintenance#token=t")
+        page.get_by_label("The computer has rebooted since this session failed").check()
+        page.get_by_role("button", name="Release this session").click()
+        with page.expect_response("**/api/next/maintenance/sessions/s-1/recover") as answered:
+            pds.answer(page, "Release")
+        assert answered.value.status == 500
+        refused = page.locator("#sessions > li p-inline-notification")
+        refused.wait_for()
+        assert refused.text_content().strip() == f"RuntimeError: {whole_error}"
+
+
+@pytest.mark.browser
+def test_an_error_no_project_route_caught_shows_whole_on_its_page_and_in_the_host_log(
+    tmp_path: Path, monkeypatch, pds, caplog, whole_error
+) -> None:
+    """#971: a project's maintenance read, through the machine host's dispatcher, failing with an error nothing catches
+    says it whole on that project's Maintenance page, as the host log's traceback does."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
+    alpha = registry.register(clone(tmp_path / "alpha"))
+    read, whole, logged_whole = uncaught(whole_error)
+    monkeypatch.setattr(pack_routes, "overview", read)
+    with browsing(monkeypatch, pds) as (page, base), logged(caplog):
+        broke = errors(page)
+        with page.expect_response(f"**/p/{alpha.id}/api/next/maintenance") as answered:
+            page.goto(f"{base}/maintenance?project={alpha.id}#token=t")
+        assert (answered.value.status, answered.value.json()) == (500, {"detail": whole})
+        notice = page.locator("#error")
+        expect(notice).to_be_visible()
+        assert notice.text_content().strip() == whole
+        assert traced(caplog, page) == {("Exception in ASGI application\n", logged_whole)}
+        assert set(broke) == {FAILED_500}
+
+
+@pytest.fixture
+def owner_history_page(tmp_path: Path, pds, shared_repo, monkeypatch, whole_error):
+    monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
+    entry = registry.register(clone(tmp_path / "shop"))
+    _git(Path(entry.path), "branch", "-M", "main")
+    reason = "the curator's result stays intact\nwith its detail"
+    run = curation_runs.FolderRun(state="failed", started_at=datetime.now(UTC), reason=reason)
+    (local_home.root() / curation_runs.STATE).write_text(curation_runs.Runs(folders={"shop": run}).model_dump_json())
+    error = subprocess.TimeoutExpired(["git", "log"], 10, output=whole_error.encode(), stderr=b"owner history stderr")
+    error.add_note("owner history note")
+    real = subprocess.run
+
+    def history(args, **kwargs):
+        if args[:2] == ["git", "log"]:
+            raise error
+        return real(args, **kwargs)
+
+    monkeypatch.setattr(pack_routes.subprocess, "run", history)
+    notice = f"the owner's memory history could not be read, so it is not counted: {failure(error)}"
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        yield page, base, entry.id, notice, reason
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("scope", ["project", "all"])
+def test_owner_history_qualifies_a_failed_curation_in_both_maintenance_views(
+    owner_history_page, tmp_path: Path, scope
+) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    page, base, pid, notice, reason = owner_history_page
+    path = f"/maintenance?project={pid}" if scope == "project" else "/maintenance"
+    page.goto(f"{base}{path}#token=t")
+    surface = (
+        page.locator("#actions > li", has_text="Memory curation")
+        if scope == "project"
+        else page.locator(f'#projects .scope[data-key="{pid}"] .runs > li', has_text="Memory curation")
+    )
+    expect(surface).to_contain_text("(memory curator): failed, ")
+    page.screenshot(path=str(tmp_path / f"maintenance-{scope}-failed.png"), full_page=True)
+    expect(surface).to_contain_text(notice)
+    assert notice in surface.text_content()
+    expect(surface).not_to_contain_text("never run")
+    expect(surface).not_to_contain_text("Never run")
+    if scope == "project":
+        assert reason in surface.text_content()
+    else:
+        expect(surface).not_to_contain_text(reason)  # tagged runs' detail stays on the project page
+
+
+@pytest.mark.browser
+def test_maintenance_under_all_projects_sums_up_each_project_and_opens_it_even_with_a_project_unread(
+    tmp_path: Path, monkeypatch, pds, shared_repo
+) -> None:
+    """D-01M63C6PMT4FX370W6B2VS9HAM: All projects shows one maintenance summary per project, each opening it; a
+    project that cannot be read says why and the rest still shows. OwlBear's own, added last, comes first with its tag
+    (D-01M6JZQEEAXBNNH9P05HT7JNH2)."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
     a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
+    own = registry.register(clone(tmp_path / "mine", origin=OWLBEAR_ORIGIN))
     with browsing(monkeypatch, pds) as (page, base):
         page.route(f"**/p/{b.id}/api/next/maintenance", lambda route: route.abort())
         page.goto(f"{base}/maintenance#token=t")
-        row = {p.id: page.locator(f'#projects .scope[data-key="{p.id}"]') for p in (a, b)}
-        expect(page.locator("#projects h3")).to_have_text(["alpha", "beta"])
+        row = {p.id: page.locator(f'#projects .scope[data-key="{p.id}"]') for p in (a, b, own)}
+        expect(page.locator("#projects h3")).to_have_text(["OwlBear", "alpha", "beta"])
+        expect(row[own.id].locator("p-tag", has_text="OwlBear's own")).to_have_count(1)
+        expect(page.locator("#projects p-tag", has_text="OwlBear's own")).to_have_count(1)
         expect(row[a.id]).to_contain_text("Memory curation: never run")
         expect(row[b.id]).to_contain_text("Could not read it: Delivery is not running")
         expect(row[b.id].get_by_role("button", name="Read beta again")).to_be_visible()
@@ -1757,7 +3016,7 @@ def alpha_answers_while_curation_runs(page, row, a: registry.Project) -> None:
     """While curation runs the page looks again every five seconds; a project read slower than that still shows."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    running = {"available": True, "folders": [{"folder": "alpha", "state": "running", "entries": []}]}
+    running = {"available": True, "folders": [{"folder": "alpha", "state": "running", "entries": [], "unset": []}]}
     page.route("**/api/next/curation", lambda route: route.fulfill(json=running))
     held: list = []
 
@@ -2027,6 +3286,9 @@ def test_an_older_read_s_other_projects_answered_last_never_replace_a_newer_read
     second's, are not shown."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
+    def read_finished(response) -> bool:
+        return response.request.method == "POST" and response.url.endswith("/config/read")
+
     a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
     outside.push("beta/config.json", agents={"builder": {"minutes": 20}})
     with browsing(monkeypatch, pds) as (page, base):
@@ -2044,11 +3306,13 @@ def test_an_older_read_s_other_projects_answered_last_never_replace_a_newer_read
             held.append((route, route.fetch()))  # beta's settings as the first read's refresh has them
 
         page.route(f"**/p/{b.id}/api/next/config", hold)
-        page.locator("#read-again").click()
+        again = page.get_by_role("button", name="Read again", exact=True)
+        with page.expect_response(read_finished, timeout=READS_TIME * 1000):
+            again.click()
         until(page, lambda: held, READS_TIME)
         outside.push("beta/config.json", agents={"builder": {"minutes": 45}})
-        with page.expect_request("**/config/models", timeout=READS_TIME * 1000):  # the second refresh has shown all
-            page.locator("#read-again").click()
+        with page.expect_response(read_finished, timeout=READS_TIME * 1000):
+            again.click()
         expect(across).to_contain_text("beta: 45")
         route, before = held[0]
         with page.expect_request("**/config/models"):  # the first refresh goes on past what it read
@@ -2462,7 +3726,9 @@ def test_an_open_page_follows_reads_and_dismissals_made_elsewhere(tmp_path: Path
         Outside.read(base, a.id)
         changed = page.locator("#reads-changed li")
         expect(changed).to_have_count(1, timeout=READS_TIME * 1000)
-        expect(changed).to_contain_text("agents.builder.minutes: unset → 45")
+        expect(changed).to_contain_text("builder · Minutes per session: unset → 45")  # the row's words, not its key
+        dismiss = changed.get_by_role("button", name="Dismiss the change of builder · Minutes per session")
+        expect(dismiss).to_have_count(1)
         expect(page.locator(".reads-failure")).to_contain_text("Could not read: Impeccable releases")
         expect(status).to_contain_text(re.compile(rf"last full read\s+{re.escape(full)}"))
         pds.group(page, "agents")
@@ -2542,10 +3808,10 @@ def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
         outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 50}})
         page.get_by_role("button", name="Read again").click()
         entry = page.locator("#reads-changed li")
-        expect(entry).to_contain_text("agents.builder.minutes: 45 → 50", timeout=READS_TIME * 1000)
+        expect(entry).to_contain_text("builder · Minutes per session: 45 → 50", timeout=READS_TIME * 1000)
         expect(entry).to_contain_text("Set apart by this machine, alpha, beta, so it does not apply there.")
         page.context.add_init_script("sessionStorage.setItem('token', 't')")  # a new tab has no token of its own
-        for name, layer in (("agents.builder.minutes", "global"), ("this machine", "machine")):
+        for name, layer in (("builder · Minutes per session", "global"), ("this machine", "machine")):
             with page.context.expect_page() as opened:  # a new tab loads the address, which names the layer
                 entry.get_by_role("link", name=name).click(modifiers=["ControlOrMeta"])
             tab = opened.value
@@ -2553,7 +3819,7 @@ def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
             expect(tab.get_by_label("Minutes per session, builder")).to_have_value("50" if layer == "global" else "33")
             tab.close()
         expect(pds.select(page, "Layer")).to_have_js_property("value", "project")  # this page stays as it was
-        entry.get_by_role("link", name="agents.builder.minutes").focus()
+        entry.get_by_role("link", name="builder · Minutes per session").focus()
         page.keyboard.press("Enter")
         expect(pds.select(page, "Layer")).to_have_js_property("value", "global")
         expect(page.locator("#groups a[href='#agents']")).to_have_attribute("aria-current", "page")
@@ -2658,16 +3924,19 @@ def test_a_long_step_error_shows_whole_on_the_status_line(tmp_path: Path, monkey
     """#895 K1: gh's whole multiline stderr reaches the engine step's event and outcome."""
     store = Store(tmp_path / "store")
     store.write_profile(Profile(entries={profile.REPO: ProfileEntry(state="known", value="o/r")}))
+    ran = []
 
-    def refused(argv, _body, _timeout, _cwd):
+    def refused(argv, _body, _timeout, _cwd, _env):
+        ran.append(argv)
         return subprocess.CompletedProcess(argv, 1, b"", f"gh: {whole_error}\n".encode())
 
-    monkeypatch.setattr(runner.profile, "provider", lambda _p, r: GhProvider(r, runner=refused))
+    monkeypatch.setattr(runner.profile, "provider", lambda _p, r, _w: GhProvider(r, writer=None, runner=refused))
     with store.lock("c1") as lock:
         c = Change(slug="c1", step=Step(kind=StepKind.FOLLOW), names=Names(pr=7))
         store.write(lock, c)
         runner._engine(store, lock, c, tmp_path)  # noqa: SLF001
-    reason = f"ProviderError: read_pull_request: {whole_error}"
+    gh = f"CalledProcessError: Command '{ran[-1]}' returned non-zero exit status 1."
+    reason = f"ProviderError: read_pull_request: {whole_error}\n{gh}"
     step = next(e for e in store.events("c1") if e.get("event") == "step")
     assert (step["exit"], step["reason"], store.read("c1").outcome.reason) == (Exit.RETRY, reason, reason)
     page = TestClient(api.create_app(store, "tok", Host(store, tmp_path)), base_url="http://127.0.0.1",
@@ -2731,12 +4000,12 @@ def test_a_long_undo_failure_is_asked_whole(tmp_path: Path, monkeypatch, pds, wh
 @pytest.mark.browser
 def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monkeypatch, pds, whole_error: str) -> None:
     """#895 K2: a labelling failure, gh's whole multiline stderr, reads whole in the Change's recent activity."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     alpha = registry.register(clone(tmp_path / "alpha", "c1"))
     store = Store.open(Path(alpha.path))
+    ran = []
 
-    def refused(argv, _body, _timeout, _cwd):
+    def refused(argv, _body, _timeout, _cwd, _env):
+        ran.append(argv)
         return subprocess.CompletedProcess(argv, 1, b"", f"gh: {whole_error}\n".encode())
 
     pr = PullRequest(
@@ -2745,16 +4014,24 @@ def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monk
     )  # fmt: skip
     entries = {profile.REPO: ProfileEntry(state="known", value="o/r")}
     with store.lock("c1") as lock:
-        ctx = Ctx(store, lock, tmp_path, Profile(entries=entries), GhProvider("o/r", runner=refused), datetime.now(UTC))
+        ctx = Ctx(
+            store,
+            lock,
+            tmp_path,
+            Profile(entries=entries),
+            GhProvider("o/r", writer=None, runner=refused),
+            datetime.now(UTC),
+        )
         publish.labelled(ctx, store.read("c1"), pr, ["owlbear"])
     (event,) = [e for e in store.events("c1") if e["event"] == "labels-failed"]
-    reason = f"ProviderError: add_labels: {whole_error}"
+    gh = f"CalledProcessError: Command '{ran[-1]}' returned non-zero exit status 1."
+    reason = f"ProviderError: add_labels: {whole_error}\n{gh}"
     assert event["reason"] == reason
-    with browsing(monkeypatch, pds) as (page, url):
+    with browsing(monkeypatch, pds, details=True) as (page, url):
         said = errors(page)
         opened(page, url, alpha.id, "c1")
         line = page.locator("ol.log > li", has_text="Could not label PR #7").locator(":scope > span")
-        expect(line).to_have_text(" ".join(f"Could not label PR #7 with owlbear: {reason}".split()))
+        assert line.text_content() == f"Could not label PR #7 with owlbear: {reason}"
         assert said == []
 
 
@@ -2762,8 +4039,6 @@ def test_a_long_event_reason_shows_whole_in_recent_activity(tmp_path: Path, monk
 def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
     """#921: a recorded reason, message, cleanup, error or notice shows whole with its paths; the log's own wording
     names a file."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     alpha = registry.register(clone(tmp_path / "alpha", "c1"))
     store = Store.open(Path(alpha.path))
     kept = f"{whole_error}\nkept /Users/o/app/big/data.bin beside big/cache.db"
@@ -2775,6 +4050,7 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
     refused = ["changed: /Users/o/app/src/main.py is outside the task", whole_error]
     lint = ["lint: ruff found problems in /Users/o/app/src/main.py", "lint: biome broke on web/app.json"]
     failed = f"RuntimeError: {whole_error}"
+    install = f"`npm ci` did not start: PermissionError: [Errno 13] {whole_error}\nNOTE-MARK"
     events = [
         {"event": "tool", "tool": "view", "summary": "Read /Users/o/app/src/main.py"},
         {"event": "workspace-kept", "path": "/Users/o/.owlbear/worktrees/app-c1", "reason": kept},
@@ -2786,6 +4062,7 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
         {"event": "tool", "tool": "submit_result", "accepted": False, "errors": refused},
         {"event": "lint-unresolved", "errors": lint},
         {"event": "request-failed", "operation": "tasks.list", "error": failed},
+        {"event": "ro-install", "package": "app", "command": "npm ci", "seconds": 0.1, "ok": False, "error": install},
     ]
     with store.lock("c1") as lock:
         for e in events:
@@ -2801,23 +4078,29 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
         "Submitted its result": f"Submitted its result (refused): {'; '.join(refused)}",
         "Lint problems": f"Lint problems left unresolved: {'; '.join(lint)}",
         "Request tasks.list": f"Request tasks.list failed ({failed})",
+        "npm ci in app": f"npm ci in app failed: {install}",
     }
-    with browsing(monkeypatch, pds) as (page, url):
+    with browsing(monkeypatch, pds, details=True) as (page, url):
         said = errors(page)
         opened(page, url, alpha.id, "c1")
         for start, line in lines.items():
             shown = page.locator("ol.log > li", has_text=start).locator(":scope > span")
-            expect(shown).to_have_text(" ".join(line.split()))
+            assert shown.text_content() == line
         assert said == []
 
 
 @pytest.mark.browser
 def test_a_failed_pick_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, whole_error: str) -> None:
-    """#895 K3: a pick that cannot read the decisions shows why whole in the brief, and logs it."""
+    """#895 K3, #971: a pick that cannot read the decisions shows why whole, with its notes, in the brief and in
+    Recent activity."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
+    note = "while reading the decisions of project alpha"
+
     def unavailable(*_args, **_kwargs):
-        raise decision_store.DecisionsUnavailable(whole_error)
+        exc = decision_store.DecisionsUnavailable(whole_error)
+        exc.add_note(note)
+        raise exc
 
     alpha = registry.register(clone(tmp_path / "alpha", "c1"))
     store = Store.open(Path(alpha.path))
@@ -2826,16 +4109,53 @@ def test_a_failed_pick_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, w
         c = Change(slug="c1", brief=Brief(version=1, title="Notes"), step=Step(kind=StepKind.SHAPE))
         store.write(lock, c)
         pick.run(store, lock, c)
-    failed = f"DecisionsUnavailable: {whole_error}"
+    failed = f"DecisionsUnavailable: {whole_error}\n{note}"
     (event,) = [e for e in store.events("c1") if e["event"] == "pick-failed"]
     assert event["reason"] == failed
-    with browsing(monkeypatch, pds) as (page, url):
+    with browsing(monkeypatch, pds, details=True) as (page, url):
         said = errors(page)
         opened(page, url, alpha.id, "c1")
         follows = page.locator(".brief section", has_text="Decisions this work follows")
         shown = follows.locator("p-text")
         expect(shown).to_have_count(1)
-        assert shown.text_content() == f"The pick failed: {failed}. The shaping chat can ask for it again."
+        assert shown.text_content() == f"The pick failed: {failed}. Pick the decisions again under Open items."
+        line = page.locator("ol.log > li", has_text="Pick failed").locator(":scope > span")
+        expect(line).to_have_text(" ".join(f"Pick failed: {failed}".split()))
+        assert said == []
+
+
+@pytest.mark.browser
+def test_a_picked_decision_opens_in_its_project_from_all_projects(
+    tmp_path: Path, monkeypatch, pds, shared_repo
+) -> None:
+    """#964: a picked decision followed from a Change opened under All projects opens in that Change's project."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    shared = shared_repo[0]
+    monkeypatch.setenv(data_place.VIEW, str(shared))
+    alpha, _beta = (registry.register(clone(tmp_path / n, "c1")) for n in ("alpha", "beta"))
+    store = Store.open(Path(alpha.path))
+    decided(shared, store.name, "Lint once.")
+    (rule,) = [
+        e.decision
+        for e in decision_store.load(store.shared, store.name).snapshot.entries
+        if e.decision.title == "Lint once."
+    ]
+    with store.lock("c1") as lock:
+        c = Change(slug="c1", brief=Brief(version=1, title="Notes"), step=Step(kind=StepKind.SHAPE))
+        c.brief.picked = Pick(
+            version=1,
+            status="ok",
+            decisions=[PickedDecision(id=rule.id, revision="r1", title="Lint once.", statement="Lint once.")],
+        )
+        store.write(lock, c)
+    with browsing(monkeypatch, pds, details=True) as (page, base):
+        said = errors(page)
+        opened(page, base, alpha.id, "c1")
+        page.get_by_text("Decisions this work follows (1)").click()
+        page.get_by_role("link", name="Lint once.").click()
+        expect(page).to_have_url(f"{base}/decisions?project={alpha.id}&decision={rule.id}")
+        expect(page.locator(f'.entry[data-id="{rule.id}"] .heading')).to_be_focused()
         assert said == []
 
 
@@ -2883,12 +4203,25 @@ def shown_texts(page: Page, base: str, of: str, section: str) -> list[str]:
 
 
 def refusing_pack(tmp_path: Path, text: str) -> tuple[Path, SimpleNamespace]:
-    """A file holding *text*, and an Impeccable pack whose engine fails with it as its stderr."""
-    said, engine = tmp_path / "said.txt", tmp_path / "engine"
+    """A file holding *text*, and an Impeccable pack whose engine fails with it as its stderr; each run's arguments
+    are a tab-separated line of ``calls.txt`` beside it."""
+    said, engine, calls = tmp_path / "said.txt", tmp_path / "engine", shlex.quote(str(tmp_path / "calls.txt"))
     said.write_text(text)
-    engine.write_text(f"#!/bin/sh\ncat {shlex.quote(str(said))} >&2\nexit 1\n")
+    engine.write_text(
+        f"#!/bin/sh\nprintf '%s\\t' \"$@\" >> {calls}\necho >> {calls}\ncat {shlex.quote(str(said))} >&2\nexit 1\n"
+    )
     engine.chmod(0o755)
     return said, SimpleNamespace(bundle="", verified_engine=lambda: engine)
+
+
+def engine_failures(tmp_path: Path, text: str) -> list[str]:
+    """What the design detector said of each run of *refusing_pack*'s engine, in order."""
+    engine, calls = str(tmp_path / "engine"), (tmp_path / "calls.txt").read_text().replace("\t\n", "\n")
+    return [
+        f"the design detector failed (1): CalledProcessError: Command '{[engine, *args.split(chr(9))]}' "
+        f"returned non-zero exit status 1.\n{text}"
+        for args in calls.splitlines()
+    ]
 
 
 def updated(store: Store, **update: object) -> None:
@@ -2900,7 +4233,8 @@ def updated(store: Store, **update: object) -> None:
 @pytest.mark.browser
 @pytest.mark.timeout(90)  # git, the before capture and a real browser over three renders
 def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, capsys, whole_error: str) -> None:
-    """#895 K4: a judge's whole error, the detector's whole refusals and the before capture's whole finding."""
+    """#895 K4: a judge's whole error, the detector's whole refusals and the before capture's whole finding; #971: the
+    detector's failure names its command."""
     said, pack = refusing_pack(tmp_path, whole_error)
     monkeypatch.setattr(design, "pack", lambda: pack)
     install = shlex.join(
@@ -2909,8 +4243,7 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
     store, c, of = ui_change(tmp_path, install)
     with store.lock("c1") as lock:
         store.write(lock, c)
-        runner._before(store, lock, c, Path(c.names.worktree))  # noqa: SLF001
-    failed = f"the design detector failed (1): {whole_error}"
+        runner._out(captures.at_merge_base(store, lock, c, Path(c.names.worktree)))  # noqa: SLF001 - as it prints
     note = f"`{shlex.join(shlex.split(install))}` failed: {whole_error}"
     b = store.read("c1").before
 
@@ -2921,15 +4254,16 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
     after = design.rendered(
         page, pack, c.brief.visual[0], width=1280, url="http://127.0.0.1:9/", browser="", cwd=tmp_path
     )
+    sources, scanned = engine_failures(tmp_path, whole_error)  # the before capture's scan, then this one's
     why = (
-        f"not scanned: the page refused the design detector: RuntimeError: {whole_error}; "
-        f"the engine's own browser: {failed}"
+        f"not scanned: DetectorError: the page refused the design detector: RuntimeError: {whole_error}; "
+        f"the engine's own browser: DetectorError: {scanned}"
     )
     out = capsys.readouterr().out  # an earlier test's machine may still say it stopped, between these lines too
     assert all(
         message in out
         for message in (
-            f"design detector: sources: {failed}\n",
+            f"design detector: sources: {sources}\n",
             f"before: 0 screenshots at {b.head[:7]}; {note}\n",
             f"design detector: home at 1280: {why}\n",
         )
@@ -2945,7 +4279,7 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
         number=1, head=head, tree="t", widths=[1280, 1920, 2400], verdicts=[correct, looked],
         detector=[after, unexplained, clean], outcome="ask", at=now,
     )  # fmt: skip
-    items = [f"home at 1280px: {why}", "home at 1920px: no reason given", f"before, changed sources: {failed}"]
+    items = [f"home at 1280px: {why}", "home at 1920px: no reason given", f"before, changed sources: {sources}"]
     line = f"The design detector could not scan: {'; '.join(items)}"
     with store.lock("c1") as lock:
         c = store.read("c1")
@@ -2962,7 +4296,7 @@ def test_a_visual_round_shows_whole_errors(tmp_path: Path, monkeypatch, pds, cap
         updated(store, visual_rounds=[])  # a failed shot is judged without a round: the capture keeps its scans
         assert line in shown_texts(page, url, of, "Before and after")
         updated(store, visual=None)
-        before_only = {f"Not available: {note}", f"The design detector could not scan: changed sources: {failed}"}
+        before_only = {f"Not available: {note}", f"The design detector could not scan: changed sources: {sources}"}
         assert before_only <= set(shown_texts(page, url, of, "Before and after"))
         updated(store, visual_rounds=[kept.model_copy(update={"outcome": None})])  # a judge failed: no judged capture
         assert f"The design detector could not scan round 1 at {head[:7]}: {'; '.join(items[:2])}" in shown_texts(
@@ -3001,7 +4335,7 @@ def test_a_failed_shot_and_the_watchers_failures_show_whole_on_the_changes_page(
     out = capsys.readouterr().out
     assert all(f"visual check: {f}\n" in out for f in found), out
     reason = f"Fix: the visual check of {head[:7]} failed: {found[0]} (see gone at 1280px)"
-    with browsing(monkeypatch, pds) as (page, url):
+    with browsing(monkeypatch, pds, details=True) as (page, url):
         said = errors(page)
         opened(page, url, of, "c1")
         pictures = page.locator("section", has_text="Before and after").last
@@ -3043,7 +4377,7 @@ def test_a_failed_calibration_shows_in_recent_activity(tmp_path: Path, monkeypat
     assert f"calibration: {reason}\n" in capsys.readouterr().out
     [kept] = [e for e in store.events("same") if e["event"] == "calibration-not-kept"]
     assert kept["reason"] == reason
-    with browsing(monkeypatch, pds) as (page, base):
+    with browsing(monkeypatch, pds, details=True) as (page, base):
         opened(page, base, alpha.id)
         line = page.locator("#detail ol.log > li > span", has_text="Calibration not kept")
         expect(line).to_have_text(f"Calibration not kept: RuntimeError: {' '.join(whole_error.split())}")

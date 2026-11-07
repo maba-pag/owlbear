@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -28,6 +28,7 @@ from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Optio
 from owlbear_delivery_next.change_flow import loop, picks
 from owlbear_delivery_next.change_flow.decision_baseline import PREFIX
 from owlbear_delivery_next.change_flow.loop import StepResult
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.runtimes import step_decisions
 from owlbear_delivery_next.state_store import decision_store, read_backs
 from owlbear_delivery_next.state_store.decision_archive import whole
@@ -38,6 +39,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from owlbear_decisions import Decision, Queued, Snapshot
+    from owlbear_delivery_next.change_contracts.decision_records import PickedDecision
     from owlbear_delivery_next.change_contracts.models import Change, Step
     from owlbear_delivery_next.state_store.decision_store import DataView
     from owlbear_delivery_next.state_store.store import Lock, Store
@@ -73,6 +75,7 @@ class Gate:
     lines: list[str] | None = None
     others: list[str] | None = None  # the complete list a challenger reads besides *lines* (TD-452)
     pinned: bool = False
+    refresh_error: str = ""
 
 
 def stem(c: Change) -> str:
@@ -91,14 +94,17 @@ def in_force(seen: Snapshot, c: Change) -> list[Decision]:
 
 
 def _attached(d: Decision, c: Change) -> bool:
-    """One of *c*'s own, pinned without a pick: a Change decision, or one its approval published (TD-453)."""
-    return d.scope is Scope.CHANGE or d.id in {p.id for p in c.decisions_published}
+    """One of *c*'s own, pinned without a pick: a Change decision, or one its approval published (TD-453).
+
+    A published one counts only as its approval saved it: changed elsewhere since, the picker judges it like any other.
+    """
+    return d.scope is Scope.CHANGE or pick.published(c, d)
 
 
-def _picked(c: Change) -> set[str] | None:
-    """The ids *c*'s pick chose; None for a Change approved without one (no data repository, or before picking)."""
+def _picked(c: Change) -> dict[str, PickedDecision] | None:
+    """What *c*'s pick chose, by id; None for a Change approved without one (no data repository, or before picking)."""
     p = c.brief.picked
-    return {d.id for d in p.decisions} if p is not None and p.status == "ok" else None
+    return {d.id: d for d in p.decisions} if p is not None and p.status == "ok" else None
 
 
 def _said(d: Decision) -> Said:
@@ -108,9 +114,12 @@ def _said(d: Decision) -> Said:
 def baseline(view: DataView, c: Change, now: datetime) -> DecisionBaseline:
     """The decisions in force considered by rule revision, and the wording of those pinned.
 
-    A first pin considers every decision in force and pins the pick and the Change's own, or every one without a
-    pick. A later one from a pick keeps the pinned set at its current revisions and every other considered one at
-    the revision it was considered at, so a decision new to it stays for the picker (`_later`).
+    A first pin from a pick pins the picked decisions as the pick read them, in force or not, and the Change's own;
+    it considers what the pick read at the revision it read, so a decision new or changed since stays for the
+    picker (`_later`) and a picked one changed since asks the owner (`differences`). A pick saved before it recorded
+    what it read counts only its picked ones as read. Without a pick a first pin considers and pins every decision in
+    force. A later pin from a pick keeps the pinned set at its current revisions and every other considered one at
+    the revision it was considered at.
     """
     found, prior = in_force(view.snapshot, c), c.decisions_baseline
     if prior is not None and prior.picked:
@@ -119,9 +128,14 @@ def baseline(view: DataView, c: Change, now: datetime) -> DecisionBaseline:
         revisions = held | {d.id: d.rule_revision for d in found if d.id in said}
         return DecisionBaseline(commit=view.commit, at=now, revisions=revisions, said=said, picked=True)
     chosen = _picked(c) if prior is None else None  # a pin without a pick stays one
-    said = {d.id: _said(d) for d in found if chosen is None or d.id in chosen or _attached(d, c)}
-    revisions = {d.id: d.rule_revision for d in found}
-    return DecisionBaseline(commit=view.commit, at=now, revisions=revisions, said=said, picked=chosen is not None)
+    if chosen is None:
+        said, revisions = {d.id: _said(d) for d in found}, {d.id: d.rule_revision for d in found}
+        return DecisionBaseline(commit=view.commit, at=now, revisions=revisions, said=said, picked=False)
+    read, own = c.brief.picked.read, [d for d in found if _attached(d, c)]
+    said = {k: Said(title=p.title, statement=p.statement) for k, p in chosen.items()} | {d.id: _said(d) for d in own}
+    revisions = {k: p.revision for k, p in chosen.items()} | {d.id: read[d.id] for d in found if d.id in read}
+    revisions |= {d.id: d.rule_revision for d in own}
+    return DecisionBaseline(commit=view.commit, at=now, revisions=revisions, said=said, picked=True)
 
 
 def loaded(store: Store) -> DataView | None:
@@ -138,7 +152,7 @@ def pinned(store: Store, c: Change, now: datetime, view: DataView | None) -> tup
     """The baseline a brief approval pins from *view* (`loaded`), and whether one is owed.
 
     None is owed without a data repository; one is owed when the decisions did not load. An approval pins afresh,
-    whatever an earlier approval pinned.
+    whatever an earlier approval pinned; a retried one of the approved version keeps its pin (`decision_baseline`).
     """
     if view is None:
         return None, store.shared is not None
@@ -171,6 +185,15 @@ def differences(seen: Snapshot, pinned_at: DecisionBaseline, now: DecisionBaseli
         else:
             lines.append(f"- changed: {key} {title}: was {was}; now {_quoted(whole(entry.decision))}")
     return lines
+
+
+def _recovered(seen: Snapshot, pin: DecisionBaseline) -> DecisionBaseline:
+    """*pin* with its pinned decisions as they stand now, for the owner to see and pin; withdrawn ones leave it."""
+    now = {k: e.decision for k in pin.said if (e := seen.get(k)) and e.decision.state is State.IN_FORCE}
+    revisions = {k: v for k, v in pin.revisions.items() if k not in pin.said} | {
+        k: d.rule_revision for k, d in now.items()
+    }
+    return pin.model_copy(update={"said": {k: _said(d) for k, d in now.items()}, "revisions": revisions})
 
 
 def unpinned(now: DecisionBaseline) -> list[str]:
@@ -284,14 +307,21 @@ def check_step(store: Store, c: Change, now: datetime, lock: Lock | None = None)
         return Gate(c)
     if store.shared is None and c.decisions_baseline is None and c.decisions_unpinned_at is None:
         return Gate(c, lines=[step_decisions.HEAD, step_decisions.NONE])
-    if store.shared is not None and (stale := _refresh(store)) and c.step.kind in IRREVERSIBLE:
+    stale = _refresh(store) if store.shared is not None else ""
+    if stale and c.step.kind in IRREVERSIBLE:
         reason = f"the decisions were not refreshed before {c.step.kind}, which cannot be undone: {stale}"
-        return Gate(c, _stopped(ErrorKind.STATE, reason, STALE, "The decisions refresh from the remote", now))
+        return Gate(
+            c,
+            _stopped(ErrorKind.STATE, reason, STALE, "The decisions refresh from the remote", now),
+            refresh_error=stale,
+        )
     try:
         view = decision_store.load(store.shared, store.name)
     except decision_store.DecisionsUnavailable as exc:
-        return Gate(c, StepResult(exit=Exit.STOP, reason=str(exc), stop=exc.stop(now)))
-    return _wording_faults(view, c, now) or _judged(view, c, now, store, lock)
+        gate = Gate(c, StepResult(exit=Exit.STOP, reason=failure(exc), stop=exc.stop(now)))
+    else:
+        gate = _wording_faults(view, c, now) or _judged(view, c, now, store, lock)
+    return replace(gate, refresh_error=stale)
 
 
 def _refresh(store: Store) -> str:
@@ -299,24 +329,31 @@ def _refresh(store: Store) -> str:
     try:
         return decision_store.refresh(store.shared)
     except decision_store.DecisionsUnavailable as exc:
-        return f"not refreshed: {exc}"
+        return f"not refreshed: {failure(exc)}"
 
 
-def _faulty_wording(view: DataView, c: Change) -> list[str]:
-    return [why for d in in_force(view.snapshot, c) if (why := problem(d))]
+def _faulty_wording(found: Iterable[Decision]) -> list[str]:
+    return [why for d in found if (why := problem(d))]
 
 
 def _wording_faults(view: DataView, c: Change, now: datetime) -> Gate | None:
     """Unrecoverable full wording blocks before baseline construction or any paid reassessment."""
-    if faults := _faulty_wording(view, c):
+    if faults := _faulty_wording(in_force(view.snapshot, c)):
         stopped = _stopped(ErrorKind.STATE, "; ".join(faults), FAULTY, "The full decision wording is resolved", now)
         return Gate(c, stopped)
     return None
 
 
 def unworded(view: DataView | None, c: Change) -> str:
-    """Why an approval may not pin *c*'s decisions yet: an in-force full wording cannot be read; "" otherwise."""
-    if view is None or not (faults := _faulty_wording(view, c)):
+    """Why an approval may not pin *c*'s decisions yet: a full wording it pins cannot be read; "" otherwise.
+
+    From a pick it pins the picked decisions and the Change's own; any other one waits for the next step's gate.
+    """
+    if view is None:
+        return ""
+    chosen = _picked(c)
+    found = [d for d in in_force(view.snapshot, c) if chosen is None or d.id in chosen or _attached(d, c)]
+    if not (faults := _faulty_wording(found)):
         return ""
     why = f"the full decision wording is unresolved: {'; '.join(faults)}"
     _log.warning("brief approval refused: %s", why)
@@ -342,6 +379,7 @@ def _judged(view: DataView, c: Change, now: datetime, store: Store, lock: Lock |
     if stop := _faults(seen, c, pin.said.keys() | (set() if pin.picked else current.said.keys()), now):
         return stop
     if c.decisions_baseline is None and c.decisions_unpinned_at is not None:  # its approval could not pin them
+        current = _recovered(seen, current)
         return _asked(c, current, UNPINNED, unpinned(current), _waiting_lines(store, view, c))
     pinning = c.decisions_baseline is None  # a Change approved before this gate
     if pinning:
@@ -398,9 +436,25 @@ def _reassessed(
     return c, None
 
 
-def launch(store: Store, c: Change, now: datetime) -> tuple[Change, bool]:
+def _record(store: Store, lock: Lock, gate: Gate, now: datetime) -> None:
+    if gate.refresh_error:
+        c = gate.change
+        store.log(
+            lock,
+            c.slug,
+            {
+                "event": "decisions-refresh-failed",
+                "at": now.isoformat(timespec="milliseconds"),
+                "step": f"{c.step.kind}:{c.step.task}",
+                "reason": gate.refresh_error,
+            },
+        )
+
+
+def launch(store: Store, c: Change, now: datetime, *, lock: Lock) -> tuple[Change, bool]:
     """The gate before the host launches a check environment: the Change as it goes on, and whether it launches."""
     gate = check_step(store, c, now)
+    _record(store, lock, gate, now)
     if gate.result is None:
         return gate.change, True
     if c.stop is not None and c.stop.reason == gate.result.reason:
@@ -417,6 +471,7 @@ def gated(store: Store, lock: Lock, c: Change, step: Step | None) -> Iterator[Ch
         return
     now = datetime.now(UTC)
     gate = check_step(store, c, now, lock)
+    _record(store, lock, gate, now)
     if gate.result is not None:
         event = {"event": "step", "at": now.isoformat(timespec="seconds"), "kind": step.kind}
         store.log(lock, c.slug, event | {"exit": gate.result.exit, "reason": gate.result.reason})

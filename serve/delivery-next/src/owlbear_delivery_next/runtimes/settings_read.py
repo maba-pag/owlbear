@@ -12,6 +12,7 @@ import threading
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_update
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.runtimes import model_choices
@@ -58,7 +59,7 @@ class Reader:
                     else:
                         missed = {MODELS: self._models, IMPECCABLE: self._impeccable, MACHINE: self._machine}[source]()
                 except Exception as exc:  # noqa: BLE001 - one source's surprise is that source's failure
-                    missed = [("", f"{type(exc).__name__}: {exc}")]
+                    missed = [("", failure(exc))]
                 for place, detail in missed:
                     self.say(f"settings read: {source} failed{f' at {place}' if place else ''}: {detail}")
                     error = f"{place}: {detail}" if place else detail
@@ -72,7 +73,7 @@ class Reader:
             try:
                 self.read()
             except Exception as exc:  # noqa: BLE001 - a failed pass is said; the next hour reads again
-                self.say(f"settings read: the read failed: {type(exc).__name__}: {exc}")
+                self.say(f"settings read: the read failed: {failure(exc)}")
             if self.pause(stopping, EVERY):
                 return
 
@@ -127,20 +128,20 @@ class Reader:
         try:
             shared = data_repo.locate()
         except data_repo.DataRepoError as exc:
-            return [("the shared settings location", str(exc))], None, False
+            return [("the shared settings location", failure(exc))], None, False
         missed: Missed = []
         glob = None
         if shared is not None:
             try:
                 refused = settings_carry.sync(shared, registry.load().global_written)
             except (data_repo.DataRepoError, registry.RegistryError) as exc:
-                refused = str(exc)
+                refused = failure(exc)
             missed += [(str(shared.root), refused)] if refused else []
             self.ledger.begin()  # a save from here on is taken over the snapshot; one pulled beside it shows next read
             try:
                 glob = flatten(read_layer_settled(shared.global_path, GlobalLayer))  # an own save is taken as one
             except StoreError as exc:
-                missed.append((str(shared.global_path), str(exc)))
+                missed.append((str(shared.global_path), failure(exc)))
             missed += _unreadable(sorted(shared.root.glob(f"*/{data_repo.CONFIG}")))
         missed += _unreadable([s.config_path for s in self.stores() if s.shared is None])
         return missed, glob, shared is None
@@ -159,7 +160,7 @@ class Reader:
         try:
             machine_settings.current()
         except registry.RegistryError as exc:
-            missed.append(("", str(exc)))
+            missed.append(("", failure(exc)))
         return missed
 
 
@@ -170,5 +171,5 @@ def _unreadable(paths: list[Path], model: type[Layer] = Layer) -> Missed:
         try:
             read_layer(path, model)
         except StoreError as exc:
-            missed.append((str(path), str(exc)))
+            missed.append((str(path), failure(exc)))
     return missed

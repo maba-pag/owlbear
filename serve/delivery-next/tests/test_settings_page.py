@@ -32,6 +32,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
+SESSIONS = "Agent sessions at once in one project"  # the row's name; its key is `sessions`
+LOOKS = "Spotter · Looks (hand-off, plan, state-change, sample)"
+
 MODELS = {
     "models": [
         {"id": "claude-opus-5.5", "name": "Opus", "efforts": ["low", "medium", "high"], "default_effort": "medium",
@@ -47,6 +50,7 @@ MODELS = {
 
 class Host:
     maintenance = None
+    failed = ""
     wake = SimpleNamespace(set=lambda: None)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
     repo = None
@@ -136,11 +140,11 @@ def the_global_layer_kept_its_edit_and_takes_one_more(page, pds) -> None:
     expect(page.get_by_label("Minutes per session, builder")).to_have_value("60")
     pds.group(page, "checks")
     expect(page.locator("#pr")).to_contain_text("Unset")  # D-01M61SEXPFT9MXZGQHYVYFQ77C: nothing under Global
-    pds.group(page, "guardrails")
+    pds.group(page, "memory")  # the curation threshold moved here from Guardrails
     threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")
     expect(threshold).to_have_attribute("placeholder", "Unset")
     threshold.fill("90")
-    expect(page.locator("#pending")).to_contain_text("curator threshold: unset → 90")
+    expect(page.locator("#pending")).to_contain_text("Curator's confidence threshold (%): unset → 90")
     pds.pick(page, "Layer", "project")
     held = page.locator("#set-curator_threshold")  # #809: one value everywhere, shown read-only as saved
     expect(held).to_contain_text("set on Global")
@@ -157,7 +161,7 @@ def a_list_keeps_its_text_as_typed_and_counts_only_new_items(page, looks) -> Non
     looks.press_sequentially(",")
     expect(looks).to_have_value("hand-off,sample,")
     looks.press_sequentially(" plan")
-    expect(page.locator("#pending")).to_contain_text("spot looks: hand-off, sample → hand-off,sample, plan")
+    expect(page.locator("#pending")).to_contain_text(f"{LOOKS}: hand-off, sample → hand-off,sample, plan")
     looks.fill("hand-off, sample")
 
 
@@ -166,11 +170,11 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with settings_page(store, pds) as page:
-        rows = page.locator("#agents-rows")  # TD-286: a worker role's minutes; the shaper's chat and a look have none
+        rows = page.locator("#agents-rows")  # TD-286: a worker role's minutes; a look has none
         expect(rows.locator("#set-agents-builder-minutes")).to_be_visible()
-        for role in ("shaper", "spotter"):
-            expect(rows.locator(f"#set-agents-{role}-minutes")).to_have_count(0)
-            expect(rows.locator(f"#set-agents-{role}")).to_contain_text("n/a")
+        expect(rows.locator("#set-agents-shaper-minutes")).to_be_visible()  # its amendment sessions' (TD-185)
+        expect(rows.locator("#set-agents-spotter-minutes")).to_have_count(0)
+        expect(rows.locator("#set-agents-spotter")).to_contain_text("n/a")
         minutes = rows.get_by_label("Minutes per session, builder")
         expect(minutes).to_have_attribute("placeholder", "inherit (40)")
         pds.pick(page, "Model for builder", "tiny")
@@ -197,6 +201,19 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
 
 
 @pytest.mark.browser
+def test_the_pending_line_names_a_final_review_and_a_merge_edit_by_their_rows_words(store, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with settings_page(store, pds) as page:
+        page.get_by_label("Rounds at most, final review").fill("5")
+        pds.group(page, "checks")
+        page.get_by_label("CI poll interval (seconds)").fill("30")
+        expect(page.locator("#pending")).to_have_text(
+            "Unsaved: Final review · Rounds at most: inherited → 5; CI poll interval (seconds): inherited → 30."
+        )
+
+
+@pytest.mark.browser
 def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(store, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -211,7 +228,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         pds.pick(page, "Layer", "project")
         expect(rounds).to_have_value("4")
         expect(page.locator("#pending")).to_have_text(
-            "Unsaved: builder max rounds: inherited → 4. All projects: 1 more unsaved."
+            "Unsaved: Task reviews (builder) · Rounds at most: inherited → 4. All projects: 1 more unsaved."
         )
         expect(page.locator("#save")).to_have_attribute("variant", "primary")
         pds.group(page, "checks")
@@ -257,9 +274,18 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
     with settings_page(store, pds) as page:
         c = TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1",
                        headers={"authorization": "Bearer t"})  # fmt: skip
-        got = c.get("/api/next/config").json()
-        newer = got["project"] | {"widths": [1600]}
-        assert c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": newer}).status_code == 200
+
+        def intervene(route) -> None:
+            assert route.request.method == "PUT"
+            got = c.get("/api/next/config").json()
+            assert route.request.post_data_json["rev"] == got["project_rev"]
+            newer = got["project"] | {"widths": [1600]}
+            changed = c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": newer})
+            assert changed.status_code == 200
+            assert changed.json()["project_rev"] != got["project_rev"]
+            route.continue_()
+
+        page.route("**/api/next/config/project", intervene, times=1)
         pds.group(page, "agents")
         page.get_by_label("Minutes per session, reviewer").fill("25")
         page.get_by_label("Minutes per session, builder").fill("35")
@@ -273,14 +299,18 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
         expect(page.locator("#groups a[href='#agents'] p-tag")).to_have_text("3 unsaved")
         save = page.get_by_role("region", name="Save settings").get_by_role("button", name="Save project settings")
         save.click()
-        pds.answer(page, "Save project settings")
+        with page.expect_response("**/api/next/config/project") as refused:
+            pds.answer(page, "Save project settings")
+        assert refused.value.status == 409
         expect(page.locator("#error")).to_contain_text("kept your unsaved edits; check them and save again.")
         expect(unsaved).to_have_text(["3 unsaved", "1 unsaved", "1 unsaved"])
         expect(pds.select(page, "Merge method")).to_have_js_property("value", "squash")
         pds.group(page, "agents")
         expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("25")
         save.click()  # the answered confirmation may still be fading out with its own button of this name
-        pds.answer(page, "Save project settings")
+        with page.expect_response("**/api/next/config/project") as accepted:
+            pds.answer(page, "Save project settings")
+        assert accepted.value.status == 200
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         expect(unsaved).to_have_count(0)
     saved = json.loads(store.config_path.read_text())
@@ -303,9 +333,9 @@ def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(store, p
     with settings_page(store, pds) as page:
         url = page.url.split("#")[0]
         pds.group(page, "overview")
-        expect(page.locator("#unset-agents")).to_have_text("Agents and runs, 1 unset: sessions")
+        expect(page.locator("#unset-agents")).to_have_text(f"Agents and runs, 1 unset: {SESSIONS}")
         expect(page.locator("#set-sessions p-text[color='error']")).to_have_count(0)  # not shown: another group
-        page.locator("#unset").get_by_role("link", name="sessions", exact=True).click()
+        page.locator("#unset").get_by_role("link", name=SESSIONS, exact=True).click()
         expect(page).to_have_url(f"{url}#agents")
         at_once = page.get_by_label("Agent sessions at once in one project")
         expect(at_once).to_be_focused()
@@ -323,7 +353,8 @@ def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(store, p
             ("folder-title", "project", page.locator("#folder-title")),
             ("machine-title", "this-machine", page.locator("#machine-title")),
             ("spotter-title", "guardrails", page.locator("#spotter-title")),
-            ("curation-title", "guardrails", page.locator("#curation-title")),
+            ("curation-title", "memory", page.locator("#curation-title")),  # moved from Guardrails
+            ("set-curator_threshold", "memory", page.locator("#set-curator_threshold")),  # read-only here: the row
             ("rounds-title", "agents", page.locator("#rounds-title")),
             ("set-limits-builder", "agents", page.get_by_label("Minutes per session, builder")),  # rows that were
             (
@@ -354,6 +385,9 @@ def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(store, p
             expect(page).to_have_url(f"{url}#overview")
             expect(page.locator("#groups a[href='#overview']")).to_have_attribute("aria-current", "page")
             expect(page.locator("#unset")).to_be_visible()
+
+
+WAIT = "Challenge starts by itself after (minutes), shaper"  # the shaper's wait's cell (#986)
 
 
 @pytest.mark.browser
@@ -387,13 +421,16 @@ def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row
         pds.pick(page, "Show", "all")
         expect(none).to_be_hidden()
         expect(panels).to_have_text(
-            ["Where you edit", "Spotter", "Your instructions, skills and memory", "Memory curation", "Shell guard"]
+            ["Where you edit", "Spotter", "Your instructions, skills and memory", "Shell guard"]
         )
         pds.group(page, "agents")
         page.get_by_label("Rounds at most, builder").fill("4")
+        page.get_by_label(WAIT).fill("20")  # the shaper's row alone has the cell; the others say n/a
+        assert min(page.get_by_label(WAIT).bounding_box()[side] for side in ("width", "height")) >= 24  # WCAG 2.5.8
+        expect(page.locator("#set-rounds-planner")).to_contain_text("n/a")
         pds.pick(page, "Show", "unsaved")
-        expect(rows).to_have_count(2)  # the final review follows the builder's rounds, so it changes too
-        expect(page.locator("#set-rounds-builder, #set-rounds-final_review")).to_have_count(2)
+        expect(rows).to_have_count(3)  # the final review follows the builder's rounds, so it changes too
+        expect(page.locator("#set-rounds-builder, #set-rounds-final_review, #set-rounds-shaper")).to_have_count(3)
         pds.group(page, "checks")
         expect(none).to_have_text("No unsaved edits in this group.")
         pds.group(page, "agents")
@@ -402,14 +439,14 @@ def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         expect(rows).to_have_count(0)  # saved: no longer an edit
         pds.pick(page, "Show", "set")
-        expect(rows).to_have_count(1)  # this project sets the builder's rounds, nothing else
-        expect(page.locator("#set-rounds-builder")).to_be_visible()
+        expect(rows).to_have_count(2)  # this project sets the builder's rounds and the shaper's wait, nothing else
+        expect(page.locator("#set-rounds-builder, #set-rounds-shaper")).to_have_count(2)
         pds.pick(page, "Layer", "global")
         expect(rows).to_have_count(0)
         expect(none).to_have_text("This layer sets nothing in this group.")
         pds.pick(page, "Layer", "project")
         pds.group(page, "overview")
-        page.locator("#unset").get_by_role("link", name="sessions", exact=True).click()
+        page.locator("#unset").get_by_role("link", name=SESSIONS, exact=True).click()
         expect(page.locator("#set-sessions")).to_be_visible()
         expect(pds.select(page, "Show")).to_have_js_property("value", "all")
 
@@ -429,7 +466,7 @@ def test_the_unsaved_filter_shows_a_row_whose_draft_is_only_spelled_differently(
         pds.answer(page, "Save project settings")
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
         sessions.fill("02")
-        expect(page.locator("#pending")).to_contain_text("sessions: 2 \u2192 02")
+        expect(page.locator("#pending")).to_contain_text(f"{SESSIONS}: 2 \u2192 02")
         pds.pick(page, "Show", "unsaved")
         expect(page.locator("#set-sessions")).to_be_visible()
 
@@ -448,13 +485,13 @@ def test_the_unsaved_filter_keeps_a_row_whose_edit_is_undone_until_the_filter_ch
         sessions.fill("3")
         pds.pick(page, "Show", "unsaved")
         expect(row).to_be_visible()
-        sessions.press("End")
+        sessions.press("ArrowRight")  # one character; End scrolls rather than moving the caret on macOS
         sessions.press("Backspace")
         expect(page.locator("#pending")).to_have_text("No unsaved edits.")
         expect(row).to_be_visible()
         expect(sessions).to_be_focused()
         sessions.press_sequentially("5")
-        expect(page.locator("#pending")).to_contain_text("sessions: inherited \u2192 5")
+        expect(page.locator("#pending")).to_contain_text(f"{SESSIONS}: inherited \u2192 5")
         sessions.press("Backspace")
         pds.pick(page, "Show", "all")
         pds.pick(page, "Show", "unsaved")
@@ -478,18 +515,17 @@ def test_the_overview_counts_each_group_s_unset_names_its_first_three_and_opens_
         url = page.url.split("#")[0]
         pds.group(page, "overview")
         groups = page.locator("#unset-groups > li")
-        expect(groups).to_have_count(3)  # this machine's are set; the project's folder needs no setting
+        expect(groups).to_have_count(4)  # this machine's are set; the project's folder needs no setting
         expect(page.locator("#unset-project, #unset-this-machine, #unset-overview")).to_have_count(0)
         agents = page.locator("#unset-agents")
         expect(agents).to_have_text(
             re.compile(
-                r"^Agents and runs, (\d+) unset: agents\.planner\.model, agents\.planner\.effort, "
-                r"agents\.planner\.context and \d+ more$"
+                r"^Agents and runs, (\d+) unset: planner · Model, planner · Effort, planner · Context and \d+ more$"
             )
         )
-        total = sum(_unset_count(page, group) for group in ("agents", "guardrails", "checks"))
+        total = sum(_unset_count(page, group) for group in ("agents", "guardrails", "memory", "checks"))
         expect(page.locator("#unset > p-text").first).to_contain_text(f"{total} settings are unset.")
-        for group in ("agents", "guardrails", "checks"):
+        for group in ("agents", "guardrails", "memory", "checks"):
             links = page.locator(f"#unset-{group} a")
             expect(links).to_have_count(4)
             expect(links.last).to_have_text(f"and {_unset_count(page, group) - 3} more")
@@ -552,7 +588,7 @@ def test_the_owner_s_own_tab_after_an_unset_link_keeps_its_focus(store, pds, mon
         pds.group(page, "overview")
         # slow frames widen the time the page keeps the focus on the control, so a Tab lands inside it
         page.evaluate("window.requestAnimationFrame = (f) => setTimeout(() => f(performance.now()), 100)")
-        page.locator("#unset").get_by_role("link", name="sessions", exact=True).click()
+        page.locator("#unset").get_by_role("link", name=SESSIONS, exact=True).click()
         at_once = page.get_by_label("Agent sessions at once in one project")
         expect(at_once).to_be_focused()
         page.keyboard.press("Tab")
@@ -616,6 +652,8 @@ def test_models_arriving_while_a_model_name_is_typed_wait_until_the_field_is_lef
             expect(chosen).to_have_js_property("value", "my-model-2")
             said = "my-model-2 (not offered here)"
             expect(chosen.get_by_role("option", name=said, selected=True, include_hidden=True)).to_have_count(1)
+            pds.pick(page, "Model for builder", "claude-opus-5.5")
+            expect(chosen.get_by_role("combobox")).to_be_focused()
             browser.close()
     finally:
         arrive.set()
@@ -876,6 +914,8 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
 
     monkeypatch.setattr(config, "BASE", None)
     with settings_page(store, pds) as page:
+        errors: list[str] = []
+        page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
         pds.group(page, "overview")
         expect(page.locator("#unset")).to_contain_text("settings are unset")
         agents, guardrails = _unset_count(page, "agents"), _unset_count(page, "guardrails")
@@ -901,6 +941,7 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
             expect(page.locator(f"#set-spotter-{key} p-text[color='error']")).to_have_count(1)
         pds.group(page, "agents")
         expect(page.locator("#set-agents-spotter p-text[color='error']")).to_have_count(0)
+        assert errors == []  # a name that stops being red keeps a valid colour
     assert store.read_config().sessions == 3
     spotter = store.settings().agent("spotter")  # a look needs only its model, effort and context
     assert (spotter.model, spotter.effort, spotter.context) == ("tiny", "medium", "default")
@@ -938,6 +979,22 @@ def recommended_drafts_keep_saved_controls(page, pds) -> None:
     pds.group(page, "checks")
     expect(page.get_by_label("Labels, comma-separated; none for no labels")).to_have_value("none")
     expect(pds.select(page, "The line Opened by OwlBear Delivery")).to_have_js_property("value", "off")
+
+
+MEMORY_RECOMMENDED = {
+    "outstanding_boost": 0.1, "unremarkable_penalty": 0.01, "stale_factor": 50, "purge_days": 30,
+    "preflight_cap": 5, "preflight_budget": 2000, "recall_limit": 20, "explore_slots": 2, "challenge_slots": 2,
+}  # fmt: skip  # what the code held before the Memory group: the recommendations offer them, nothing resolves them
+
+
+def the_memory_group_is_filled_with_the_values_the_code_held(page, pds) -> None:
+    """Use recommended drafts all nine memory values on Global, decimals as typed, and the group counts them."""
+    from playwright.sync_api import expect  # noqa: PLC0415
+
+    pds.group(page, "memory")
+    for field, label in MEMORY_LABELS.items():
+        expect(page.get_by_label(label)).to_have_value(str(MEMORY_RECOMMENDED[field]))
+    expect(page.locator("#groups a[href='#memory'] p-tag")).to_have_text("10 unsaved")  # the nine and the threshold
 
 
 def lower_layers_cannot_use_recommended(page, pds) -> None:
@@ -987,6 +1044,7 @@ def test_recommendations_fill_only_globals_blanks_and_keep_saved_values_and_exis
         expect(page.locator("#pending")).to_have_text(pending)
         assert {name: path.read_bytes() for name, path in paths.items()} == before
         recommended_drafts_keep_saved_controls(page, pds)
+        the_memory_group_is_filled_with_the_values_the_code_held(page, pds)
         lower_layers_cannot_use_recommended(page, pds)
         pds.pick(page, "Layer", "global")
         page.locator("#save").click()
@@ -999,6 +1057,7 @@ def test_recommendations_fill_only_globals_blanks_and_keep_saved_values_and_exis
     assert (written["pr_marker"], written["pr_labels"], written["spotter"]["steer_share"]) == (False, [], 0)
     assert "curator_threshold" in written
     assert "machine" in written
+    assert written["memory"] == MEMORY_RECOMMENDED  # decimals and whole numbers as they were typed into the drafts
     assert all(paths[name].read_bytes() == before[name] for name in ("project", "machine"))
 
 
@@ -1097,10 +1156,10 @@ def global_s_rounds_curation_and_checks_clear_to_unset_and_warn_where_needed(pag
     expect(page.locator("#set-sessions p-text[color='warning']")).to_have_count(0)
     at_once.fill("")  # the warning follows the edit, before any save
     expect(page.locator("#set-sessions")).to_contain_text(WARNED)
-    expect(page.locator("#pending")).to_contain_text("sessions: 2 → unset")
+    expect(page.locator("#pending")).to_contain_text(f"{SESSIONS}: 2 → unset")
     at_once.fill("2")
     expect(page.locator("#set-sessions p-text[color='warning']")).to_have_count(0)
-    pds.group(page, "guardrails")
+    pds.group(page, "memory")
     threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")
     expect(threshold).to_have_attribute("placeholder", "Unset")
     expect(page.locator("#set-curator_threshold")).to_contain_text(
@@ -1253,7 +1312,7 @@ def global_s_edit_shows_what_its_save_would_give(page, pds) -> None:
     expect(final).to_contain_text("in use: 5, from the builder's value")
     findings.fill("")
     expect(final.get_by_text("in use", exact=False)).to_have_count(3)
-    pds.group(page, "guardrails")
+    pds.group(page, "memory")
     threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")
     line = _in_use(page, "set-curator_threshold")
     expect(line).to_have_count(0)
@@ -1261,6 +1320,7 @@ def global_s_edit_shows_what_its_save_would_give(page, pds) -> None:
     expect(line).to_have_text("in use: 90, from global")
     threshold.fill("")
     expect(line).to_have_count(0)
+    pds.group(page, "guardrails")
     looks, sample = page.get_by_label("Looks", exact=True), page.locator("#set-spotter-sample_rate")
     expect(sample.locator("p-text[color='warning']")).to_have_count(0)
     looks.fill("hand-off, sample")
@@ -1306,8 +1366,8 @@ def test_the_curator_threshold_shows_read_only_with_its_value_off_global(store, 
         row, line = page.locator("#set-curator_threshold"), _in_use(page, "set-curator_threshold")
         url = page.url.split("#")[0]
         pds.group(page, "overview")
-        expect(page.locator("#unset-guardrails")).to_contain_text("unset")
-        page.goto(f"{url}#set-curator_threshold")  # an unset link's address; Guardrails lists only its first three
+        expect(page.locator("#unset-memory")).to_contain_text("unset")
+        page.goto(f"{url}#set-curator_threshold")  # an unset link's address; Memory lists only its first three
         expect(row).to_be_focused()  # the disabled field can't take the focus
         expect(threshold).to_be_disabled()
         expect(threshold).to_have_attribute("placeholder", "unset")
@@ -1412,7 +1472,7 @@ def test_the_user_config_switches_save_in_each_layer_reload_and_clear_back_to_in
     with settings_page(store, pds) as page:
         shown = page.locator("#user-config")
         pds.group(page, "overview")
-        expect(page.locator("#unset")).to_contain_text(", ".join(USER_KEYS))
+        expect(page.locator("#unset")).to_contain_text(f"{INSTRUCTIONS}, {SKILLS}, {MEMORY}")
         pds.group(page, "guardrails")
         for key in USER_KEYS:  # GW8RT6: a red name, no line saying it is unset
             expect(page.locator(f"#set-{key} p-text[color='error']")).to_have_count(1)
@@ -1475,7 +1535,7 @@ def test_the_guard_level_saves_in_each_layer_as_a_level_and_clears_back_to_inher
     with settings_page(store, pds) as page:
         row = page.locator("#set-guard_level")
         pds.group(page, "overview")
-        expect(page.locator("#unset")).to_contain_text("guard_level")
+        expect(page.locator("#unset")).to_contain_text("Shell guard level")
         pds.group(page, "guardrails")
         expect(row.locator("p-text[color='error']")).to_have_count(1)
         pds.pick(page, "Layer", "global")
@@ -1504,6 +1564,68 @@ def test_the_guard_level_saves_in_each_layer_as_a_level_and_clears_back_to_inher
               read_layer(store.global_path, config.GlobalLayer))  # fmt: skip
     assert [layer.guard_level for layer in layers] == [None, "standard", "strict"]
     assert (store.settings().guard_level, store.settings().sources["guard_level"]) == ("standard", "machine")
+
+
+ACCOUNT = "GitHub account: a login, or repository-owner"
+FALLBACK = "maba-pag (gh has no account for the owner acme)"
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(90)  # one walk through both layers, a reload and the error state takes about 40 s
+def test_the_github_account_shows_the_account_it_resolves_to_in_each_layer(
+    store, pds, monkeypatch, fake_gh, tmp_path
+) -> None:
+    """TD-402: unset until a layer sets it; repository-owner shows the account TD-402's rule gives on the origin."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    from owlbear_delivery_next.settings import config  # noqa: PLC0415
+    from owlbear_delivery_next.state_store.store import read_layer  # noqa: PLC0415
+
+    clone = tmp_path / "tools"
+    origin = "https://github.com/acme/tools.git"
+    subprocess.run(("git", "init", "-q", str(clone)), check=True)  # noqa: S603, S607
+    subprocess.run(("git", "-C", str(clone), "remote", "add", "origin", origin), check=True)  # noqa: S603, S607
+    monkeypatch.setattr(Host, "repo", clone)
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"github_account": None}))
+    with settings_page(store, pds) as page:
+        url, row = page.url.split("#")[0], page.locator("#set-github_account")
+        pds.group(page, "overview")
+        page.locator("#unset").get_by_role("link", name="GitHub account", exact=True).click()
+        expect(page).to_have_url(f"{url}#checks")
+        field = page.get_by_label(ACCOUNT)
+        expect(field).to_be_focused()
+        expect(row.locator("p-text[color='error']")).to_have_text("GitHub account")
+        pds.pick(page, "Layer", "global")
+        box = field.bounding_box()
+        assert min(box["width"], box["height"]) >= 24  # WCAG 2.5.8 target size
+        field.fill("repository-owner")
+        expect(_in_use(page, "set-github_account")).to_have_text(f"in use: {FALLBACK}, from global")
+        expect(page.locator("#pending")).to_have_text("Unsaved: GitHub account: unset → repository-owner.")
+        _saved_by_keyboard(page, pds, "Save global defaults", "the global")
+        pds.pick(page, "Layer", "project")
+        expect(field).to_have_attribute("placeholder", "inherit (repository-owner)")
+        field.fill("octo-writer")
+        expect(_in_use(page, "set-github_account")).to_have_text("in use: octo-writer, from this project")
+        _saved(page, pds, "Save project settings", "this project's")
+
+        page.reload()
+        opened(page, pds, "checks")
+        expect(field).to_have_value("octo-writer")
+        expect(_in_use(page, "set-github_account")).to_have_text("in use: octo-writer, from this project")
+        field.fill("")
+        expect(_in_use(page, "set-github_account")).to_have_text(f"in use: {FALLBACK}, from global")
+        _saved(page, pds, "Save project settings", "this project's")
+        expect(_in_use(page, "set-github_account")).to_have_text(f"in use: {FALLBACK}, from global")
+
+        fake_gh.set({"github.com": {"boecht": "success"}}, {"github.com": "boecht"})
+        page.reload()
+        opened(page, pds, "checks")
+        expect(_in_use(page, "set-github_account")).to_contain_text(
+            "in use: repository-owner: AccountMissing: github account: "
+            "gh holds no account acme or maba-pag on github.com"
+        )
+    layers = (store.read_config(), read_layer(store.global_path, config.GlobalLayer))
+    assert [layer.github_account for layer in layers] == [None, "repository-owner"]
 
 
 CATEGORY_LABELS = {
@@ -1669,7 +1791,7 @@ def test_a_cancelled_review_is_not_sent_with_a_later_unrelated_save(pending_shar
         expect(page.get_by_role("dialog")).to_have_count(0)  # the page takes edits again once it has closed
         pds.group(page, "agents")
         page.get_by_label("Rounds at most, builder").fill("4")
-        expect(page.locator("#pending")).to_contain_text("builder max rounds: inherited → 4")
+        expect(page.locator("#pending")).to_contain_text("Task reviews (builder) · Rounds at most: inherited → 4")
         page.locator("#save").click()  # the cancelled confirmation may still be fading out
         pds.modal(page).get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
@@ -1828,3 +1950,152 @@ def test_an_unreadable_seen_state_keeps_its_whole_error(store, whole_error) -> N
     assert [s for s in said if s.startswith(f"settings read: {STATE}")] == [
         f"settings read: {STATE} failed at {path}: {expected}; it is rebuilt"
     ]
+
+
+MEMORY_LABELS = {
+    "outstanding_boost": "Points an outstanding rating adds to an entry's score",
+    "unremarkable_penalty": "Points an unremarkable rating takes off an entry's score",
+    "stale_factor": "Skipped ratings per other rating before an entry is stale",
+    "purge_days": "Days a deleted entry waits before its file can be removed",
+    "preflight_cap": "Lessons a step is told at its start, at most",
+    "preflight_budget": "Character budget for a step's starting lessons",
+    "recall_limit": "Entries the recall tool returns when it is given no limit",
+    "explore_slots": "Recall slots for the least-rated entries",
+    "challenge_slots": "Recall slots for the least-outstanding entries",
+}
+MEMORY_VALUES = {
+    "outstanding_boost": 0.25, "unremarkable_penalty": 0.05, "stale_factor": 7, "purge_days": 14,
+    "preflight_cap": 3, "preflight_budget": 1500, "recall_limit": 12, "explore_slots": 1, "challenge_slots": 3,
+}  # fmt: skip
+
+
+@pytest.mark.browser
+def test_every_memory_value_is_saved_to_global_exactly_and_shown_again_after_a_reload(store, pds, monkeypatch) -> None:
+    """The Memory group: nine values, each unset until saved on Global; decimals and zero reach the file as typed."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _layered(store, monkeypatch, GLOBAL, {}, {})
+    with settings_page(store, pds) as page:
+        url = page.url.split("#")[0]
+        pds.pick(page, "Layer", "global")
+        pds.group(page, "memory")
+        for label in MEMORY_LABELS.values():
+            expect(page.get_by_label(label)).to_have_attribute("placeholder", "Unset")
+        for field, label in MEMORY_LABELS.items():
+            page.get_by_label(label).fill(str(MEMORY_VALUES[field]))
+        expect(page.locator("#groups a[href='#memory'] p-tag")).to_have_text("9 unsaved")
+        expect(page.locator("#groups a[href='#guardrails'] p-tag")).to_have_count(0)
+        expect(page.locator("#pending")).to_contain_text(f"{MEMORY_LABELS['stale_factor']}: unset → 7")
+        _saved(page, pds, "Save global defaults", "the global")
+        assert json.loads(store.global_path.read_text())["memory"] == MEMORY_VALUES
+
+        page.goto(f"{url}?layer=global#memory")  # a reload shows what the file holds
+        for field, label in MEMORY_LABELS.items():
+            expect(page.get_by_label(label)).to_have_value(str(MEMORY_VALUES[field]))
+
+        page.get_by_label(MEMORY_LABELS["purge_days"]).fill("0")  # zero is a value, not an unset one
+        page.get_by_label(MEMORY_LABELS["explore_slots"]).fill("")  # blank clears it again
+        expect(page.locator("#pending")).to_contain_text(f"{MEMORY_LABELS['purge_days']}: 14 → 0")
+        expect(page.locator("#pending")).to_contain_text("Recall slots for the least-rated entries: 1 → unset")
+        _saved(page, pds, "Save global defaults", "the global")
+    assert json.loads(store.global_path.read_text())["memory"] == MEMORY_VALUES | {
+        "purge_days": 0,
+        "explore_slots": None,
+    }
+
+
+@pytest.mark.browser
+def test_memory_values_are_read_only_off_global_and_the_filter_lists_the_unset_ones(store, pds, monkeypatch) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _layered(store, monkeypatch, GLOBAL | {"memory": {"stale_factor": 7}}, {}, {})
+    with settings_page(store, pds) as page:
+        pds.group(page, "memory")
+        for layer in ("project", "machine"):
+            pds.pick(page, "Layer", layer)
+            stale = page.get_by_label(MEMORY_LABELS["stale_factor"])
+            expect(stale).to_be_disabled()
+            expect(stale).to_have_value("7")
+            expect(page.locator("#set-memory-stale_factor")).to_contain_text("set on Global")
+            expect(page.locator("#set-memory-purge_days")).to_contain_text("set on Global")
+            expect(page.get_by_label(MEMORY_LABELS["purge_days"])).to_be_disabled()
+        pds.pick(page, "Layer", "global")
+        rows = page.locator("main p-table-row[data-setting]:visible")
+        pds.pick(page, "Show", "unset")
+        expect(rows).to_have_count(9)  # eight memory values and the curator's threshold; stale_factor is set
+        expect(page.locator("#set-memory-stale_factor")).to_be_hidden()
+        pds.pick(page, "Show", "set")
+        expect(rows).to_have_count(1)
+        expect(page.locator("#set-memory-stale_factor")).to_be_visible()
+
+
+@pytest.mark.browser
+def test_an_unset_memory_value_is_listed_by_the_overview_and_its_link_opens_the_row(store, pds, monkeypatch) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _layered(store, monkeypatch, GLOBAL, {}, {})
+    with settings_page(store, pds) as page:
+        url = page.url.split("#")[0]
+        pds.group(page, "overview")
+        assert _unset_count(page, "memory") == 10  # nine memory values and the curator's threshold
+        page.locator("#unset-memory").get_by_role("link", name="Points an outstanding rating adds", exact=True).click()
+        expect(page).to_have_url(f"{url}#memory")
+        expect(page.locator("#set-memory-outstanding_boost p-text[color='error']")).to_have_count(1)
+        expect(page.get_by_label(MEMORY_LABELS["outstanding_boost"])).to_be_disabled()  # the project layer: read-only
+        expect(page.locator("#set-memory-outstanding_boost")).to_be_focused()
+
+
+@pytest.mark.browser
+def test_a_refused_memory_save_keeps_the_typed_values_and_says_why(store, pds, monkeypatch) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _layered(store, monkeypatch, GLOBAL, {}, {})
+    before = store.global_path.read_bytes()
+    with settings_page(store, pds) as page:
+        pds.pick(page, "Layer", "global")
+        pds.group(page, "memory")
+        wrong = page.get_by_label(MEMORY_LABELS["stale_factor"])
+        wrong.fill("0")  # the factor is at least 1
+        page.get_by_label(MEMORY_LABELS["recall_limit"]).fill("12")
+        page.locator(".bar").get_by_role("button", name="Save global defaults").click()
+        pds.answer(page, "Save global defaults")
+        expect(page.locator("#error")).to_be_visible()
+        expect(page.locator("#error")).to_contain_text("stale_factor")
+        expect(wrong).to_have_value("0")
+        expect(page.get_by_label(MEMORY_LABELS["recall_limit"])).to_have_value("12")
+        expect(page.locator("#groups a[href='#memory'] p-tag")).to_have_text("2 unsaved")
+    assert store.global_path.read_bytes() == before
+
+
+@pytest.mark.browser
+def test_a_global_save_not_recorded_as_seen_says_why_whole(store, pds, monkeypatch, whole_error) -> None:
+    """#971 P16: the save stands; its notice says whole why the next read may take it for a change from elsewhere."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    _layered(store, monkeypatch, GLOBAL, {}, {})
+    seen = local_home.root() / settings_seen.NAME
+    seen.parent.mkdir(parents=True, exist_ok=True)
+    seen.write_text(settings_seen.Seen(seen={}).model_dump_json())  # a read has recorded Global as found
+    full = OSError(28, whole_error)
+    full.add_note("NOTE-MARK")
+    real = settings_seen.atomic_write
+
+    def write(path: Path, text: str) -> None:
+        if path == seen and refusing:
+            raise full
+        real(path, text)
+
+    refusing: list[bool] = []
+    monkeypatch.setattr(settings_seen, "atomic_write", write)
+    with settings_page(store, pds) as page:
+        pds.group(page, "overview")
+        expect(page.locator("#reads-status")).to_contain_text("Last read")
+        refusing.append(True)
+        pds.pick(page, "Layer", "global")
+        pds.group(page, "agents")
+        page.get_by_label("Minutes per session, builder").fill("50")
+        _saved(page, pds, "Save global defaults", "the global")
+        said = f"The saved Global values could not be recorded as seen: OSError: [Errno 28] {whole_error}\nNOTE-MARK"
+        expect(page.locator("#error")).to_be_visible()
+        assert page.locator("#error").text_content().strip() == said
+    assert '"minutes":50' in store.global_path.read_text().replace(" ", "")

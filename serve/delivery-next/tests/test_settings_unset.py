@@ -30,7 +30,6 @@ from owlbear_delivery_next.workflow_steps import (
     decisions_gate,
     engine,
     lookup,
-    review,
     unset_settings,
     watched,
 )
@@ -50,9 +49,10 @@ def test_a_setting_no_layer_sets_is_unset_and_listed_never_filled_from_code():
     assert {"agents.builder.model", "agents.spotter.effort", "sessions", "spotter.switch"} <= set(empty.missing)
     assert {"spotter.hand_off_fitness", "spotter.irreversible_harm"} <= set(empty.missing)
     assert {"agents.retro.model", "agents.retro-review.minutes", "spotter.looks"} <= set(empty.missing)
+    assert "agents.shaper.challenge_wait" in empty.missing
     inactive = {"agents.spotter.minutes", "spotter.sample_rate"}
     inactive |= {"spotter.verbose_until"}
-    inactive |= {"agents.picker.max_rounds"}
+    inactive |= {"agents.picker.max_rounds", "agents.planner.challenge_wait"}
     assert not inactive & set(empty.missing)  # nothing reads them, and the page edits none of them
     assert empty.page()["agents"]["builder"]["model"] is None
     assert "sessions" not in empty.sources
@@ -135,6 +135,9 @@ def test_a_carried_global_resolves_every_setting(shared_repo):
     later |= {f"agents.{r}.{f}" for r in ("retro", "retro-review", "auditor")
               for f in ("model", "effort", "context", "minutes", "subagents")}  # fmt: skip
     later |= set(roles.USER_CONFIG)  # the owner sets them; never carried (2026-10-27)
+    later |= {f"memory.{name}" for name in config.MemoryValues.model_fields}  # the owner's numbers: saved once by him
+    later.add("github_account")  # TD-402: set through "Use recommended" or by hand, never carried
+    later.add("agents.shaper.challenge_wait")  # D-01M6P1685N1R5W2PPV5SHKR2H0: added after the carry, never carried
     assert set(resolve(read_layer(shared.global_path, GlobalLayer), Layer()).missing) == prefs | later
 
 
@@ -143,15 +146,20 @@ def test_a_role_needs_only_the_fields_its_work_reads():
     fields = ("model", "effort", "context")
     spotter = carried.layer().agents["spotter"].model_dump(include=set(fields))
     shaper = carried.layer().agents["shaper"].model_dump(include={*fields, *config.RoundPolicy.model_fields})
+    shaper["challenge_wait"] = 15  # the brief loop's wait before Delivery starts a missing challenge
     agents = {"spotter": config.Agent.model_validate(spotter), "shaper": config.Agent.model_validate(shaper)}
     some = resolve(GlobalLayer(agents=agents), Layer())
     assert (some.agent("spotter").model, some.agent("spotter").minutes) == (carried.MODELS["spotter"].model, None)
     assert some.agent("shaper").max_rounds is not None
     assert not [k for k in some.missing if k.startswith(("agents.spotter.", "agents.shaper."))]
+    for limit, key in ((roles.limit, "minutes"), (roles.subagents, "subagents")):  # its amendment sessions (TD-185)
+        with pytest.raises(SettingsUnset, match=rf"agents\.shaper\.{key}"):
+            limit(some, "amendment-prepare")
     picker = carried.layer().agents["picker"].model_dump(include=set(fields))
     with pytest.raises(SettingsUnset, match=r"agents\.picker\.minutes"):  # a picker session has a time limit
         resolve(GlobalLayer(agents={"picker": config.Agent.model_validate(picker)}), Layer()).agent("picker")
-    assert set(config.used("builder")) == set(config.Effective.model_fields)
+    assert set(config.used("builder")) == set(config.Effective.model_fields) - {"challenge_wait"}
+    assert "challenge_wait" in config.used("shaper")
 
 
 def test_the_decision_gate_asking_for_an_unset_setting_asks_the_owner(monkeypatch, tmp_path):
@@ -176,18 +184,19 @@ def test_curation_never_starts_with_its_threshold_or_role_unset(shared_repo):
     settings_carry.carry(shared)
     glob = read_layer(shared.global_path, GlobalLayer)
     switches = "load_user_instructions, load_user_skills, load_user_memory, guard_level"
-    assert switches in curation_block.unset(lookup.machine(shared))
+    assert switches in curation_block.unset_block(lookup.machine(shared)).text()
     glob = glob.model_copy(update=SWITCHES)
     shared.global_path.write_text(glob.model_dump_json())
-    assert curation_block.unset(lookup.machine(shared)) == ""
+    assert not curation_block.unset_block(lookup.machine(shared))
     shared.global_path.write_text(glob.model_copy(update={"curator_threshold": None}).model_dump_json())
-    assert "curator_threshold" in curation_block.unset(lookup.machine(shared))
+    assert "curator_threshold" in curation_block.unset_block(lookup.machine(shared)).text()
     job = curation.Curation(Slots(lambda: 1), shared=lambda: shared, run=lambda _cfg: pytest.fail("never started"))
     ran = job._session(shared, "shop", datetime.now(UTC), "curate:shop")  # noqa: SLF001 - cleared while it waited
     assert (ran.state, "curator_threshold" in ran.reason, ran.seen) == ("failed", True, {})
+    assert ran.reason_unset == 1  # the threshold alone: the role is set
     agents = {r: a for r, a in glob.agents.items() if r != "curator"}
     shared.global_path.write_text(glob.model_copy(update={"agents": agents}).model_dump_json())
-    assert "agents.curator.model" in curation_block.unset(lookup.machine(shared))
+    assert "agents.curator.model" in curation_block.unset_block(lookup.machine(shared)).text()
 
 
 @pytest.mark.parametrize("key", roles.USER_CONFIG)
@@ -201,7 +210,7 @@ def test_each_unset_user_config_switch_refuses_every_step_session_but_not_the_pa
         assert caught.value.keys == [key]
     with pytest.raises(SettingsUnset, match=key):
         roles.user_config(settings)
-    assert key in curation_block.unset(settings)  # machine curation never starts either
+    assert key in curation_block.unset_block(settings).text()  # machine curation never starts either
     assert settings.agent("shaper").model  # the shaper's chat opens (project_host.api.start_chat)
     assert settings.agent("spotter").model
     assert watched.needed(settings) == settings.spotter.look_credit_limit  # the Spotter's check passes
@@ -264,19 +273,6 @@ def test_round_values_that_do_not_hold_together_are_refused_while_the_role_is_in
     bad = config.Agent(max_rounds=3, max_findings=10, last_round_at=8, ask_owner_at=7)  # its model unset
     with pytest.raises(ValidationError, match="must be below"):
         resolve(GlobalLayer(agents={"shaper": bad}), Layer())
-
-
-@pytest.mark.usefixtures("no_base")
-def test_a_worker_that_may_propose_wording_needs_the_challenger_before_it_starts():
-    base = carried.layer()
-    no_challenger = resolve(base.model_copy(update={"agents": {r: a for r, a in base.agents.items()
-                                                                if r != "challenger"}}), Layer())  # fmt: skip
-    c = change(StepKind.BUILD)  # AC-1 is generated: the builder may propose its wording
-    with pytest.raises(SettingsUnset, match=r"agents\.challenger\."):
-        review.started(c, c.plan.tasks[0], Path(), no_challenger)
-    assert c.plan.tasks[0].spans == []  # raised before anything changed
-    c.brief.specified = ["AC-1"]  # nothing left to propose
-    review.started(c, None, Path(), no_challenger)
 
 
 @pytest.mark.usefixtures("no_base")

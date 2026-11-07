@@ -8,7 +8,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,13 +20,17 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_decisions import Decision, Scope, write
-from owlbear_delivery_next.change_contracts import pick_tools, tools
+from owlbear_delivery_next.change_contracts import chat_contract, pick_tools, tools
 from owlbear_delivery_next.change_contracts.models import Change
+from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git import remote_git
+from owlbear_delivery_next.git.access import Access
+from owlbear_delivery_next.github import account
 from owlbear_delivery_next.impeccable import pack_files
-from owlbear_delivery_next.local_system import data_repo, local_home
+from owlbear_delivery_next.local_system import data_repo, git_run, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
@@ -34,11 +38,38 @@ from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices, sdk_adapter, spotter_look
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import backlog, backlog_issues, decision_cache, decision_store, legacy_family
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 MACHINE_HOME = Path.home()  # read before any test replaces HOME
-CHAT_REPLIES = json.loads((Path(__file__).parent / "fixtures" / "chat_contract_1.json").read_text())["replies"]
+CHAT_REPLIES = {  # what a chat of each contract this host serves reads from its answers
+    n: json.loads((Path(__file__).parent / "fixtures" / f"chat_contract_{n}.json").read_text())["replies"]
+    for n in sorted(chat_contract.SUPPORTED)
+}
+
+
+@pytest.fixture
+def c1(tmp_path) -> tuple[Store, Any]:
+    """A store holding Change ``c1-fixture`` and the project app serving it with token ``tok``.
+
+    It is c1 waiting on brief v4 after challenges of v2 and v3, its decisions' wording replaced and its long texts cut.
+    """
+    return _c1(Store(tmp_path / "c1"))
+
+
+@pytest.fixture
+def c1_shared(tmp_path, shared_repo) -> tuple[Store, Any]:
+    """``c1`` in project ``shop-site`` of a shared data repository, where its decisions can be picked again."""
+    shared = DataRepo(shared_repo[0])
+    shared.claim("shop-site", "github.com/acme/shop-site")
+    return _c1(Store(tmp_path / "c1", shared, "shop-site"))
+
+
+def _c1(store: Store) -> tuple[Store, Any]:
+    c = Change.model_validate_json((Path(__file__).parent / "fixtures" / "c1_v4_waiting.json").read_text())
+    store.write(Lock(c.slug), c)
+    return store, api.create_app(store, "tok", Host())
 
 
 def pytest_configure() -> None:
@@ -61,15 +92,16 @@ def has(out: object, field: str) -> bool:
 
 def _chat_replied(method: str, url: str, out: object) -> None:
     path = re.sub(r"^.*/api/next(/owlbear)?", "", url).split("?")[0]
-    for route, fields in CHAT_REPLIES.items():
-        verb, template = route.split(" ")
-        if verb == method and re.fullmatch(re.sub(r"\{[^/]+\}", "[^/]+", template), path):
-            assert [f for f in fields if not has(out, f)] == [], f"{route} lost what chat contract 1 reads"
+    for n, replies in CHAT_REPLIES.items():
+        for route, fields in replies.items():
+            verb, template = route.split(" ")
+            if verb == method and re.fullmatch(re.sub(r"\{[^/]+\}", "[^/]+", template), path):
+                assert [f for f in fields if not has(out, f)] == [], f"{route} lost what chat contract {n} reads"
 
 
 @pytest.fixture
 def chat_replied() -> Callable[[str, str, object], None]:
-    """Asserts a host's answer to a chat keeps every field a chat of contract 1 reads from it."""
+    """Asserts a host's answer to a chat keeps every field a chat of a contract the host serves reads from it."""
     return _chat_replied
 
 
@@ -154,9 +186,11 @@ def intervals_unset(monkeypatch):
 
 def complete_layer():
     """The carried values plus test values for what came later: the Spotter's settings, the retro roles and the
-    user-config switches, off (D-01M5YE4P5317N1HWD0QN6N05E0), and the shell guard
-    at strict (D-01M6DX04FRP680Z4GGHK5B9VRC)."""
+    user-config switches, off (D-01M5YE4P5317N1HWD0QN6N05E0), the shell guard at strict (D-01M6DX04FRP680Z4GGHK5B9VRC),
+    the memory values, as they once stood in code, GitHub writes by the repository owner's account (TD-402) and the
+    shaper's 15 minutes before Delivery starts a missing brief challenge (D-01M6P1685N1R5W2PPV5SHKR2H0)."""
     from owlbear_delivery_next.settings import carried  # noqa: PLC0415
+    from owlbear_delivery_next.settings.config import MemoryValues  # noqa: PLC0415
     from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter  # noqa: PLC0415
 
     base = carried.layer()
@@ -168,9 +202,14 @@ def complete_layer():
         role: base.agents["curator"].model_copy(update={"model": "gpt-6.1-sol", "effort": "medium"})
         for role in ("retro", "retro-review", "auditor")
     }
-    update = {"spotter": spotter, "agents": agents, "guard_level": "strict"} | dict.fromkeys(
-        ("load_user_instructions", "load_user_skills", "load_user_memory"), False
-    )
+    agents["shaper"] = base.agents["shaper"].model_copy(update={"challenge_wait": 15})
+    memory = MemoryValues(
+        outstanding_boost=0.1, unremarkable_penalty=0.01, stale_factor=50, purge_days=30, preflight_cap=5,
+        preflight_budget=2000, recall_limit=20, explore_slots=2, challenge_slots=2,
+    )  # fmt: skip
+    update = {"spotter": spotter, "agents": agents, "guard_level": "strict", "memory": memory}
+    update |= {"github_account": "repository-owner"}
+    update |= dict.fromkeys(("load_user_instructions", "load_user_skills", "load_user_memory"), False)
     return base.model_copy(update=update)
 
 
@@ -251,6 +290,7 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(pack_files, "fetch", _offline)
     monkeypatch.setattr(model_choices, "_read", lambda: _offline("models.list"))
     monkeypatch.setattr(backlog_issues, "RUNNER", FakeGitHub(down=True))  # never the real backlog issues
+    monkeypatch.setattr(account, "resolve", _offline_account)  # nor the machine's gh accounts; fake_gh resolves
     monkeypatch.setattr(backlog, "_cache", {})
     monkeypatch.setattr(backlog, "_recent", {})
     monkeypatch.setattr(decision_cache, "_entries", {})  # no test sees another's decision snapshot
@@ -265,6 +305,10 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
     # Its own patcher, so a test's monkeypatch.undo(), which also puts the real HOME back, leaves it in place.
     # The shared patcher is undone inside it: undone later, it would put back the rule over what a test removed.
     with pytest.MonkeyPatch.context() as rule:
+        # Track even inactive entries: tests may scrub every Git selector.
+        for name in tuple(os.environ):
+            if name.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")):
+                rule.delenv(name)
         rule.setenv("GIT_CONFIG_COUNT", "1")
         rule.setenv("GIT_CONFIG_KEY_0", f"url.{offline}.insteadOf")
         rule.setenv("GIT_CONFIG_VALUE_0", github)
@@ -318,13 +362,18 @@ class FakeGitHub:
     def __init__(self, *, down: bool = False) -> None:
         self.issues, self.labels, self.comments, self.calls, self.hidden = {}, {}, [], [], set()
         self.down, self.fail_writes, self.tick, self.visibility = down, False, 0, "private"
+        self.said = ""  # what gh prints when GitHub is down or refuses a write, in place of its usual line
+        self.ran = []  # every gh command, failed ones too
 
-    def __call__(self, argv, data, _timeout, _cwd):
+    def __call__(self, argv, data, _timeout, _cwd, _env):
+        self.ran.append(argv)
         if self.down:
-            return subprocess.CompletedProcess(argv, 1, b"", b"error connecting to api.github.com\n")
+            said = self.said or "error connecting to api.github.com"
+            return subprocess.CompletedProcess(argv, 1, b"", f"{said}\n".encode())
         method, endpoint = argv[argv.index("--method") + 1], argv[10]
         if self.fail_writes and method != "GET":
-            return subprocess.CompletedProcess(argv, 1, b"", b"gh: Server Error (HTTP 502)\n")
+            said = self.said or "gh: Server Error (HTTP 502)"
+            return subprocess.CompletedProcess(argv, 1, b"", f"{said}\n".encode())
         body = json.loads(data) if data else None
         self.calls.append((method, endpoint, body))
         path, _, query = endpoint.partition("?")
@@ -388,6 +437,148 @@ def github(monkeypatch) -> FakeGitHub:
     fake = FakeGitHub()
     monkeypatch.setattr(backlog_issues, "RUNNER", fake)
     return fake
+
+
+_FAKE_GH = """
+import json, os, sys
+from pathlib import Path
+
+here, args = Path(__file__).parent, sys.argv[1:]
+state = json.loads((here / "state.json").read_text())
+call = {"argv": args, **{k: os.environ.get(k) for k in ("GH_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_TOKEN")}}
+with (here / "calls.jsonl").open("a") as log:
+    log.write(json.dumps(call) + "\\n")
+opt = lambda name: args[args.index(name) + 1] if name in args else None
+accounts, active = state["accounts"], state["active"]
+if args[:2] == ["auth", "token"]:
+    host = opt("--hostname") or "github.com"
+    user = opt("--user") or active.get(host)
+    if user in accounts.get(host, {}):
+        print(f"tok-{user}")
+        sys.exit(0)
+    sys.exit(print(f"no oauth token found for {host} account {user}", file=sys.stderr) or 1)
+if args[:2] == ["auth", "status"]:
+    print(json.dumps({"hosts": {
+        h: [{"login": x, "state": s, "active": x == active.get(h), "host": h} for x, s in held.items()]
+        for h, held in accounts.items() if opt("--hostname") in (None, h)
+    }}))
+    sys.exit(0)
+env = os.environ.get
+if args[:2] == ["auth", "git-credential"]:
+    asked = dict(line.split("=", 1) for line in sys.stdin.read().splitlines() if "=" in line)
+    host = asked.get("host", "")
+    cloud = host == "github.com" or host.endswith(".ghe.com")  # gh's rule; other hosts are GitHub Enterprise Server
+    token = env("GH_TOKEN") if cloud else env("GH_ENTERPRISE_TOKEN")
+    if args[2] == "get":
+        print(f"protocol=https\\nhost={host}\\nusername=x-access-token\\npassword={token or 'tok-' + active[host]}")
+    sys.exit(0)
+token = env("GH_TOKEN") or env("GH_ENTERPRISE_TOKEN") or "tok-" + active["github.com"]
+for rule in state["answers"]:
+    if all(x in args for x in rule["has"]):
+        out = rule["by_token"].get(token, rule["out"]) if "by_token" in rule else rule["out"]
+        print(out if isinstance(out, str) else json.dumps(out))
+        sys.exit(rule.get("exit", 0))
+print("{}")
+"""
+
+
+class FakeGh:
+    """A ``gh`` first on PATH: it holds accounts per host and records each call's argv and GitHub tokens (TD-402)."""
+
+    def __init__(self, folder: Path) -> None:
+        self.folder = folder
+        self.path = folder / "gh"
+        self.path.write_text(f"#!{sys.executable}\n{_FAKE_GH}")
+        self.path.chmod(0o755)
+        self.set({"github.com": {"maba-pag": "success", "boecht": "success"}}, {"github.com": "maba-pag"})
+
+    def set(self, accounts: dict[str, dict[str, str]], active: dict[str, str], answers: list | None = None) -> None:
+        """*accounts*: host to login to state; *active*: host to login; *answers*: ``{"has", "out", "by_token"}``."""
+        state = {"accounts": accounts, "active": active, "answers": answers or []}
+        (self.folder / "state.json").write_text(json.dumps(state))
+
+    def calls(self) -> list[dict[str, Any]]:
+        log = self.folder / "calls.jsonl"
+        return [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+
+
+@pytest.fixture
+def fake_gh(tmp_path, monkeypatch) -> FakeGh:
+    """The fake ``gh``, and a github.com credential helper in HOME's Git config answering ``tok-active``.
+
+    The helper is the one a launch would use without its own: a credential-bearing launch must reset it.
+    """
+    folder = tmp_path / "fake-gh"
+    folder.mkdir()
+    monkeypatch.setenv("PATH", f"{folder}{os.pathsep}{os.environ['PATH']}")
+    gitconfig = Path.home() / ".gitconfig"
+    helper = (
+        '[credential "https://github.com"]\n\thelper = "!f() { echo username=active; echo password=tok-active; }; f"\n'
+    )
+    gitconfig.write_text(gitconfig.read_text() + helper)
+    monkeypatch.setattr(account, "resolve", _RESOLVE)  # the real resolution, asking this fake
+    return FakeGh(folder)
+
+
+class GitLaunches:
+    """``remote_git``'s ``subprocess``: each Git launch's argv and environment is recorded, and the real Git runs."""
+
+    def __init__(self) -> None:
+        self.seen: list[tuple[tuple[str, ...], dict[str, str]]] = []
+        self.Popen = self._launch
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(subprocess, name)
+
+    def _launch(self, command: Sequence[str], **kwargs: Any) -> subprocess.Popen[bytes]:
+        self.seen.append((tuple(command), dict(kwargs["env"])))
+        return subprocess.Popen(command, **kwargs)  # noqa: S603 - the launch under test, unchanged
+
+    def verbs(self) -> list[str]:
+        return [argv[argv.index("-C") + 2 + len(self.options(argv))] for argv, _ in self.seen]
+
+    @staticmethod
+    def options(argv: tuple[str, ...]) -> tuple[str, ...]:
+        """The ``-c`` options straight after ``git -C <repository>``."""
+        start = argv.index("-C") + 2
+        end = start
+        while end < len(argv) and argv[end] == "-c":
+            end += 2
+        return argv[start:end]
+
+
+@pytest.fixture
+def git_launches(monkeypatch) -> GitLaunches:
+    """The remote Git launches the test starts."""
+    recording = GitLaunches()
+    monkeypatch.setattr(remote_git, "subprocess", recording)
+    return recording
+
+
+class GitRuns:
+    """``git_run``'s ``subprocess``: each Git run that reaches a remote is recorded with its environment."""
+
+    def __init__(self) -> None:
+        self.seen: list[tuple[tuple[str, ...], dict[str, str]]] = []
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(subprocess, name)
+
+    def run(self, command: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if git_run._remote(tuple(command[1:])):  # noqa: SLF001 - the verb as git_run reads it
+            self.seen.append((tuple(command), dict(kwargs["env"])))
+        return subprocess.run(command, **kwargs)  # noqa: S603, PLW1510 - the run under test, unchanged
+
+    def verbs(self) -> list[str]:
+        return [git_run._remote(argv[1:]) for argv, _ in self.seen]  # noqa: SLF001
+
+
+@pytest.fixture
+def git_runs(monkeypatch) -> GitRuns:
+    """The Git runs through ``git_run`` that reach a remote."""
+    recording = GitRuns()
+    monkeypatch.setattr(git_run, "subprocess", recording)
+    return recording
 
 
 class Warmth:
@@ -565,11 +756,23 @@ def change_repo(tmp_path, monkeypatch, _change_template: Path) -> Path:
     return work
 
 
+def _settled(store: Store) -> None:
+    store.write_profile(profile.confirm(Profile(), "check:.", "true", datetime.now(UTC)))
+
+
+@pytest.fixture
+def checks_settled() -> Callable[[Store], None]:
+    """Record a confirmed root check command in a store's profile, so its plan steps start their sessions (#968)."""
+    return _settled
+
+
 class Host:
     wake = SimpleNamespace(set=lambda: None)
     paused = staticmethod(lambda: False)
     draining = staticmethod(lambda: False)
     maintenance = None  # the real host's seam; None: no maintenance owns this fake's sessions
+    failed = ""  # the real host's last pass error; empty: the last pass succeeded
+    repo = None  # no clone: the settings page shows TD-402's rule as unreadable
     started = datetime(2026, 10, 21, 9, tzinfo=UTC)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=started, code=CURRENT)  # noqa: S106
 
@@ -662,6 +865,9 @@ class Pds:
     TRIES = 2
     _fetched: ClassVar[dict[str, tuple[int, dict[str, str], bytes]]] = {}  # CDN URL -> its answer, per test worker
     shared: ClassVar[Path | None] = None  # the run's folder of CDN answers, read by every worker; set by ``pds``
+    # A native modal dialog: past either end focus leaves for the browser's own controls (body), never the page behind.
+    INSIDE = """() => document.activeElement === document.body
+        || [...document.querySelectorAll('p-modal')].some((m) => m.open && m.contains(document.activeElement))"""
 
     @classmethod
     def only(cls, page, base: str) -> None:
@@ -804,6 +1010,18 @@ def _offline(url: str, *_args: object, **_kwargs: object) -> bytes:
     raise OSError(msg)
 
 
+_RESOLVE = account.resolve
+
+
+def _offline_account(setting: str, origin: account.Origin, *, until: float | None = None) -> Access:
+    """The account a launch would write as, chosen without ``gh``: the named login, else ``maba-pag``."""
+    del until
+    if origin == account.Origin.LOCAL:
+        return Access.LOCAL
+    login = account.FALLBACK if setting == account.REPOSITORY_OWNER else setting
+    return Access(login, "chosen offline in tests", origin.host, f"tok-{login}", "gh")
+
+
 AUDITED_COMMIT = "51aa0e1c6"
 LEGACY_V1_COMMIT = "e58e0ace4eadf44fabc775fa82adfdb2bac265e0"
 AUDITED_PACKAGE = "serve/delivery-next/src/owlbear_delivery_next"
@@ -906,6 +1124,46 @@ def whole_error() -> str:
     words = [f"w{i:04d}" for i in range(700)]
     lines = [" ".join(words[i : i + 20]) for i in range(0, 700, 20)]
     return "\n".join(['BEGIN <a & "b">', *lines[:17], "MIDDLE", *lines[17:], "END"])
+
+
+@pytest.fixture
+def failing_rebase_probe(monkeypatch: pytest.MonkeyPatch, whole_error: str) -> SimpleNamespace:
+    """Git fails the rebase probe alone, printing *whole_error* to stderr and a long variant of it to stdout.
+
+    `arm(at)` fails the probes whose 1-based count *at* picks (every one by default) and returns the roots probed;
+    `said(root)` is the whole `DataRepoError` such a probe raises there, as `failure` renders it.
+    """
+    real_rebasing, real_git, inside = DataRepo.rebasing, data_repo._git, []  # noqa: SLF001 - the probe's own Git call
+    stdout = whole_error.replace("BEGIN", "OUT")
+
+    def arm(at: Callable[[int], bool] = lambda _: True, patch: pytest.MonkeyPatch = monkeypatch) -> list[Path]:
+        probed: list[Path] = []
+
+        def rebasing(self: DataRepo, *args: Any, **kwargs: Any) -> bool:
+            probed.append(self.root)
+            inside.append(at(len(probed)))
+            try:
+                return real_rebasing(self, *args, **kwargs)
+            finally:
+                inside.pop()
+
+        def git(cwd: Path, *args: str, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+            if inside and inside[-1] and args == ("rev-parse", "--absolute-git-dir"):
+                return subprocess.CompletedProcess(["git", *args], 128, stdout, whole_error)
+            return real_git(cwd, *args, **kwargs)
+
+        patch.setattr(DataRepo, "rebasing", rebasing)
+        patch.setattr(data_repo, "_git", git)
+        return probed
+
+    def said(root: Path) -> str:
+        return (
+            f"DataRepoError: cannot tell whether a rebase is in progress in {root}: CalledProcessError: Command "
+            f"'['git', 'rev-parse', '--absolute-git-dir']' returned non-zero exit status 128.\nstderr:\n{whole_error}"
+            f"\nstdout:\n{stdout}"
+        )
+
+    return SimpleNamespace(arm=arm, said=said)
 
 
 @pytest.fixture

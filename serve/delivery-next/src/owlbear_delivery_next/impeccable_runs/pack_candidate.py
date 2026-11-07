@@ -21,6 +21,7 @@ from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.round_records import MAX_FINDINGS
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.impeccable_runs.scratch import scratch
 from owlbear_delivery_next.local_system import git_files, preload
@@ -108,7 +109,7 @@ def prepare(clone: Path, package: Path, tag: str, download: Callable[[str], byte
         bundle = _show(clone, tag, old["bundle"]["path"])
         licences = {name: _show(clone, tag, path) for name, path in LICENCE.items()}
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, UnicodeDecodeError) as exc:
-        msg = f"upstream at {tag} lacks a file the pack pins: {exc}"
+        msg = f"upstream at {tag} lacks a file the pack pins: {failure(exc)}"
         raise pack_files.PackError(msg) from exc
     if not re.fullmatch(r"\d+(\.\d+){1,3}", engine):
         msg = f"upstream's {ENGINE_VERSION} at {tag} is not a version: {engine[:40]!r}"
@@ -147,7 +148,7 @@ def _published(download: Callable[[str], bytes], pins: dict[str, Any], platform:
     try:
         found = DIGEST.search(download(url).decode("ascii", "replace"))
     except OSError as exc:
-        msg = f"cannot download {url}: {exc}"
+        msg = f"cannot download {url}: {failure(exc)}"
         raise pack_files.PackError(msg) from exc
     if found is None:
         msg = f"{url} holds no sha256 digest"

@@ -298,7 +298,7 @@ def test_a_chat_in_a_nested_project_belongs_to_the_innermost(tmp_path, machine, 
         items = list(machine.projects.items())  # in place: the seam reads this dict at each call
         machine.projects.clear()
         machine.projects.update(reversed(items))
-    assert machine.retro.seams.blocked("chat:cn") == ("" if blocked == "parent" else UNSET)
+    assert machine.retro.seams.blocked("chat:cn").text == ("" if blocked == "parent" else UNSET)
 
 
 def test_units_of_an_unloaded_or_unknown_project_wait_and_others_follow_this_machine(tmp_path, machine, monkeypatch):
@@ -306,33 +306,34 @@ def test_units_of_an_unloaded_or_unknown_project_wait_and_others_follow_this_mac
     failed.state = machine.projects.setdefault("pf", failed).state = "failed"
     _chat("cx", tmp_path / "elsewhere")
     blocked = machine.retro.seams.blocked
-    assert blocked("chg:pf:fix-it") == "its project is failed"
-    assert blocked("chg:pz:fix-it") == "its project is not registered"
-    assert (blocked("chat:cx"), blocked("syn:large")) == ("", "")
-    assert blocked("chat:unknown").startswith("settings can't be read: ")
+    assert blocked("chg:pf:fix-it").text == "its project is failed"
+    assert blocked("chg:pz:fix-it").text == "its project is not registered"
+    assert (blocked("chat:cx").text, blocked("syn:large").text) == ("", "")
+    assert blocked("chat:unknown").text.startswith("settings can't be read: ")
     update = {"update_check_hours_pds": None}
     monkeypatch.setattr(machine_settings, "BASE", machine_settings.BASE.model_copy(update=update))
-    assert blocked("chat:cx") == blocked("syn:large") == UNSET_PDS
+    assert blocked("chat:cx").text == blocked("syn:large").text == UNSET_PDS
 
 
 @pytest.mark.usefixtures("gap")
 def test_without_a_shared_repository_units_outside_projects_wait_on_the_settings_they_resolve(tmp_path, machine):
     _chat("cx", tmp_path / "elsewhere")
     blocked = machine.retro.seams.blocked
-    assert blocked("chat:cx") == blocked("syn:large") == UNSET
+    assert blocked("chat:cx").text == blocked("syn:large").text == UNSET
 
 
-def test_the_button_on_a_synthetic_unit_records_a_refusal_when_global_is_unreadable(tmp_path, machine, monkeypatch):
+def test_the_button_on_a_chat_records_a_refusal_when_global_is_unreadable(tmp_path, machine, monkeypatch):
     shared = tmp_path / "data"
     shared.mkdir()
     (shared / data_place.DataRepo(shared).global_path.name).write_text("{not json")
     monkeypatch.setenv(data_place.VIEW, str(shared))
-    retro_store.request("owner", synthetic="large")
+    _chat("cx", tmp_path / "elsewhere")
+    retro_store.request("owner", chat="cx")
     _job(machine, []).tick(0.0)
     [(unit, trigger, mode, result)] = _runs()
-    assert (unit.startswith("syn:"), trigger, mode) == (True, "button", "judge")
+    assert (unit, trigger, mode) == ("chat:cx", "button", "judge")
     assert result.startswith("refused: settings can't be read: ")
-    assert retro_block.block(unit, {}) == result.removeprefix("refused: ")
+    assert retro_block.block(unit, {}).text == result.removeprefix("refused: ")
 
 
 def test_after_a_restart_a_run_waiting_for_its_first_admission_is_rechecked_and_an_admitted_one_goes_on(

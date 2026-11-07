@@ -86,11 +86,19 @@ function outside(u) {
 // How exact the totals are, each way they may be off said once (D-01M63CEQYQ64VYQHFKCDGX7W9F).
 function exactness(t, undated) {
   const runs = (n) => `${count(n)} run${n === 1 ? "" : "s"}`;
+  // each failed read's error, whole, after the item that counts its run (#971)
+  const why = (errors) => (errors || []).map((e) => html`<span class="why">${e}</span>`);
+  const shown = new Set([
+    ...(t.unknown_why || []), ...(t.failed_why || []),
+    ...(undated?.unknown_why || []), ...(undated?.failed_why || []),
+  ]);
+  const earlier = [...new Set([...(t.read_errors || []), ...(undated?.read_errors || [])])]
+    .filter((error) => !shown.has(error));
   const items = [
-    t.unknown ? `${runs(t.unknown)} did not report ${t.unknown === 1 ? "its" : "their"} credits: they count as unknown,
-      never as zero, so the total is a lower bound.` : "",
-    t.failed ? `${runs(t.failed)} ${t.failed === 1 ? "counts" : "count"} only up to an earlier read, as
-      ${t.failed === 1 ? "its" : "their"} last read failed: a lower bound.` : "",
+    t.unknown ? html`${runs(t.unknown)} did not report ${t.unknown === 1 ? "its" : "their"} credits: they count as
+      unknown, never as zero, so the total is a lower bound.${why(t.unknown_why)}` : "",
+    t.failed ? html`${runs(t.failed)} ${t.failed === 1 ? "counts" : "count"} only up to an earlier read, as
+      ${t.failed === 1 ? "its" : "their"} last read failed: a lower bound.${why(t.failed_why)}` : "",
     t.incomplete > t.failed ? `${runs(t.incomplete - t.failed)} ${t.incomplete - t.failed === 1 ? "was" : "were"} read
       while a call could still be billed: a lower bound until OwlBear reads the runtime's own records.` : "",
     t.open ? `${runs(t.open)} started with no end recorded yet: ${t.open === 1 ? "its" : "their"} credits so far
@@ -98,8 +106,11 @@ function exactness(t, undated) {
     t.uncertain_time ? `${credits(t.uncertain_time)} credits were spent at a time known only roughly, so they may
       belong to a neighbouring day.` : "",
     t.uncertain_agent ? `${credits(t.uncertain_agent)} credits are not split between an agent and its subagents.` : "",
-    undated ? `Spend of ${runs(undated.runs)} may also lie in this period (${outside(undated)}): when it was spent is
-      not known closely enough to say, so it is not counted.` : "",
+    undated ? html`Spend of ${runs(undated.runs)} may also lie in this period (${outside(undated)}): when it was spent
+      is not known closely enough to say, so it is not counted.${why(undated.unknown_why)}${why(undated.failed_why)}`
+      : "",
+    earlier.length ? html`Earlier usage reads failed. The totals use the latest accounting; these errors do not
+      add spend.${why(earlier)}` : "",
   ].filter(Boolean);
   return html`<p-heading size="md"><h3 id="exact-title">How exact these totals are</h3></p-heading>
     <ul id="exact" class="notes" aria-labelledby="exact-title">${items.length ? items.map((i) => html`<li>${i}</li>`)

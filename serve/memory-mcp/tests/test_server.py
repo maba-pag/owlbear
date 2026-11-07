@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 import subprocess
 from pathlib import Path
 
@@ -12,6 +14,7 @@ from mcp.types import CallToolResult
 from owlbear_memory import MemoryCategory, MemoryEngine, MemoryEntry, MemoryState, storage
 from owlbear_memory.models import AssessmentReceipt
 
+from owlbear_memory_mcp import git as memory_git
 from owlbear_memory_mcp.server import mcp as memory_mcp
 
 _REVIEWED_MEMORY = """---
@@ -52,6 +55,26 @@ def _git(repository: Path, *args: str) -> str:
         text=True,
     )
     return result.stdout.strip()
+
+
+def _bound_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """A project folder of a shared repository whose global settings hold the memory values, as the server runs."""
+    root = tmp_path / "common"
+    held = {
+        "outstanding_boost": 0.1,
+        "unremarkable_penalty": 0.01,
+        "stale_factor": 50,
+        "recall_limit": 20,
+        "explore_slots": 2,
+        "challenge_slots": 2,
+    }
+    root.mkdir(parents=True, exist_ok=True)
+    _git(root, "init", "-q")
+    (root / "config.json").write_text(json.dumps({"format": 21, "memory": held}), encoding="utf-8")
+    store = root / "shop" / "memory"
+    monkeypatch.setenv("OWLBEAR_MEMORY_DIR", str(store))
+    monkeypatch.setenv("OWLBEAR_MEMORY_GLOBAL_DIR", str(root / "memory"))
+    return store
 
 
 def _create_entry(memory_dir: Path, *, title: str, state: MemoryState) -> MemoryEntry:
@@ -275,7 +298,7 @@ async def test_live_assessments_reject_stale_revision_and_apply_sibling_item(
     tmp_path: Path,
 ) -> None:
     """A stale recalled item is byte-stable while a current sibling is applied."""
-    memory_dir = tmp_path / ".owlbear/memory"
+    memory_dir = _bound_store(monkeypatch, tmp_path)
     stale_entry = _create_entry(memory_dir, title="Stale assessment", state=MemoryState.APPROVED)
     current_entry = _create_entry(memory_dir, title="Current assessment", state=MemoryState.APPROVED)
     monkeypatch.chdir(tmp_path)
@@ -330,7 +353,7 @@ async def test_live_assessments_replay_first_bucket_and_allow_different_task(
     tmp_path: Path,
 ) -> None:
     """Same-task retries retain the first bucket; a different task is applied."""
-    memory_dir = tmp_path / ".owlbear/memory"
+    memory_dir = _bound_store(monkeypatch, tmp_path)
     entry = _create_entry(memory_dir, title="Receipt replay", state=MemoryState.APPROVED)
     monkeypatch.chdir(tmp_path)
 
@@ -554,7 +577,7 @@ async def test_live_assessment_replay_survives_transition_to_stale(
     tmp_path: Path,
 ) -> None:
     """An idempotent replay is returned before the now-stale state guard."""
-    memory_dir = tmp_path / ".owlbear/memory"
+    memory_dir = _bound_store(monkeypatch, tmp_path)
     entry = _create_entry(memory_dir, title="Stale replay", state=MemoryState.APPROVED)
     entry = entry.model_copy(update={"didnt_use_count": 50})
     path = memory_dir / f"{entry.id}.md"
@@ -598,7 +621,7 @@ async def test_live_assessment_capacity_refusal_preserves_entry(
     tmp_path: Path,
 ) -> None:
     """The registered tool reports an unstorable receipt without changing entry bytes or state."""
-    memory_dir = tmp_path / ".owlbear/memory"
+    memory_dir = _bound_store(monkeypatch, tmp_path)
     entry = MemoryEntry(
         id="550e8400-e29b-41d4-a716-446655440000",
         title="t" * 6700,
@@ -652,6 +675,7 @@ async def test_live_server_accepts_optional_recall_and_open_provenance(
     tmp_path: Path,
 ) -> None:
     """Registered tools accept guided recall and any nonblank string provenance."""
+    _bound_store(monkeypatch, tmp_path)
     (tmp_path / ".owlbear").mkdir()
     monkeypatch.chdir(tmp_path)
 
@@ -839,11 +863,10 @@ async def test_live_server_reads_global_memory_named_beside_its_store(
     tmp_path: Path,
 ) -> None:
     """``OWLBEAR_MEMORY_GLOBAL_DIR`` names Global memory, read beside the store (TD-241)."""
-    store, shared = tmp_path / "common" / "shop" / "memory", tmp_path / "common" / "memory"
+    shared = tmp_path / "common" / "memory"
+    _bound_store(monkeypatch, tmp_path)
     common = _create_entry(shared, title="Global habit", state=MemoryState.APPROVED)
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("OWLBEAR_MEMORY_DIR", str(store))
-    monkeypatch.setenv("OWLBEAR_MEMORY_GLOBAL_DIR", str(shared))
 
     async with mcp.Client(memory_mcp) as client:
         read = await client.call_tool("read_memory", {"entry_id": common.id})
@@ -889,3 +912,72 @@ async def test_live_server_in_a_claimed_workspace_uses_its_shared_folder(
     (entry,) = (data / "shop" / "memory").iterdir()
     assert "title: Claimed store" in entry.read_text(encoding="utf-8")
     assert not (work / ".owlbear" / "memory").exists()
+
+
+def _whole_error() -> str:
+    """A long error with a distinct beginning, middle and end, as delivery-next's ``whole_error`` fixture builds it."""
+    words = [f"w{i:04d}" for i in range(700)]
+    lines = [" ".join(words[i : i + 20]) for i in range(0, 700, 20)]
+    return "\n".join(['BEGIN <a & "b">', *lines[:17], "MIDDLE", *lines[17:], "END"])
+
+
+def _refusal_logged(caplog: pytest.LogCaptureFixture, tool: str) -> list[str]:
+    """The MCP server's own log line for a tool's refusal: its answer, repr'd onto one line."""
+    prefix = f"Tool {tool!r} failed: "
+    return [record.getMessage() for record in caplog.records if record.getMessage().startswith(prefix)]
+
+
+@pytest.mark.asyncio
+async def test_unreadable_global_settings_reach_the_tool_answer_whole(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A settings read failing with a long error is answered with its type and every line of its message (#971)."""
+    store = _bound_store(monkeypatch, tmp_path)
+    config = store.parent.parent / "config.json"
+    error = _whole_error()
+    read_text = Path.read_text
+
+    def unreadable(path: Path, *args: object, **kwargs: object) -> str:
+        if path == config:
+            raise OSError(error)
+        return read_text(path, *args, **kwargs)
+
+    caplog.set_level(logging.INFO)
+    async with mcp.Client(memory_mcp) as client:
+        monkeypatch.setattr(Path, "read_text", unreadable)
+        result = await client.call_tool("recall_memory", {"agent": "builder", "limit": 5})
+
+    refusal = f"the global settings {config} can't be read, so no memory value is known: OSError: {error}"
+    expected = f"Error executing tool recall_memory: {refusal}"
+    assert result.is_error
+    assert _text(result) == expected
+    assert _refusal_logged(caplog, "recall_memory") == [f"Tool 'recall_memory' failed: {expected!r}"]
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_memory_file_reaches_the_batch_answer_whole(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A memory file whose read fails names the file, the validation and the read error whole in the answer (#971)."""
+    store = _bound_store(monkeypatch, tmp_path)
+    entry = _create_entry(store, title="Unreadable habit", state=MemoryState.APPROVED)
+    target = store / f"{entry.id}.md"
+    error = _whole_error()
+    opened = os.open
+
+    def refused(path: object, *args: object, **kwargs: object) -> int:
+        if Path(os.fsdecode(path)) == target:  # type: ignore[arg-type]
+            raise OSError(error)
+        return opened(path, *args, **kwargs)  # type: ignore[arg-type]
+
+    caplog.set_level(logging.INFO)
+    monkeypatch.setattr(memory_git.os, "open", refused)
+    async with mcp.Client(memory_mcp) as client:
+        result = await client.call_tool("commit_memory_batch", {"session_type": "review"})
+
+    inner = f"memory batch validation failed: unsafe or unreadable memory path {target.name}: OSError: {error}"
+    refusal = f"memory batch validation failed:\n- shop/memory/{target.name}: ValueError: {inner}"
+    expected = f"Error executing tool commit_memory_batch: {refusal}"
+    assert result.is_error
+    assert _text(result) == expected
+    assert _refusal_logged(caplog, "commit_memory_batch") == [f"Tool 'commit_memory_batch' failed: {expected!r}"]

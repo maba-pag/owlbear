@@ -7,6 +7,7 @@ shared repository, with a memory folder for each project, and a fake GitHub hold
 
 from __future__ import annotations
 
+import json
 import re
 import socket
 import subprocess
@@ -24,6 +25,7 @@ import uvicorn
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_contracts.merge_records import Pullback
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, project
@@ -40,7 +42,7 @@ if TYPE_CHECKING:
 
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
 GAP = "prefs.ci_poll_seconds"
-UNSET = f"settings unset: {GAP}; fill them in on the Settings page"
+UNSET = "1 setting is unset; set it on the Settings page"  # the pages' words: a count, never the keys
 EVERY = "No work can be done until the unset settings are set."
 NONE_OPEN = "every project's settings are unset or can't be read"
 NO_FOLDER = "every folder's settings are unset or can't be read"
@@ -240,16 +242,20 @@ def test_an_unreadable_layer_is_named_with_its_reason_and_an_unset_interval_bloc
 
     page, base = host.page, host.base
     host.stores["alpha"].config_path.write_text("{")
+    try:
+        json.loads("{")
+    except ValueError as exc:
+        unreadable = f"alpha: settings can't be read: state of config is unreadable: {failure(exc)}"
     page.goto(f"{base}/#token=t")
     banner = page.locator("#blocked")
-    expect(banner.locator("li")).to_have_text(["alpha: settings can't be read: state of config is unreadable"],
-                                              timeout=WAIT)  # fmt: skip
+    expect(banner.locator("li")).to_have_text([unreadable], timeout=WAIT)
 
     request.getfixturevalue("intervals_unset")  # this machine's update checks: every project waits
     expect(banner).to_have_attribute("state", "error", timeout=WAIT)
     expect(banner).to_have_attribute("heading", EVERY)
     expect(banner.locator("li")).to_have_count(2)
-    expect(banner.locator("li").nth(1)).to_contain_text("beta: settings unset: machine.update_check_hours_")
+    expect(banner.locator("li").nth(0)).to_have_text(unreadable)
+    expect(banner.locator("li").nth(1)).to_have_text("beta: 3 settings are unset; set them on the Settings page")
     expect(page.get_by_role("button", name="New Change")).to_be_disabled()
 
 
@@ -265,11 +271,11 @@ def test_maintenance_holds_curation_and_a_test_review_only_where_work_may_not_st
     rows, body = page.locator("#curation li"), page.locator("body")
     expect(rows.locator("h3")).to_have_text(["alpha", "beta"], timeout=WAIT)
     held_with(rows.nth(0), "Curate alpha now", UNSET)
-    expect(rows.nth(0).locator("p-text.blocked")).to_have_text(f"S{UNSET[1:]}.")
+    expect(rows.nth(0).locator("p-text.blocked")).to_have_text(f"{UNSET}.")
     expect(rows.nth(1).get_by_role("button", name="Curate beta now")).to_be_enabled()
     expect(page.get_by_role("button", name="Curate all now")).to_be_enabled()
     held_with(page.locator("#tests"), "Review tests", UNSET)
-    expect(page.locator("#tests-blocked")).to_have_text(f"S{UNSET[1:]}.")
+    expect(page.locator("#tests-blocked")).to_have_text(f"{UNSET}.")
 
     poll_interval(host.stores["beta"], None)  # every folder waits now: the open page follows the machine's poll
     held_with(body, "Curate all now", NO_FOLDER)
@@ -279,6 +285,28 @@ def test_maintenance_holds_curation_and_a_test_review_only_where_work_may_not_st
     poll_interval(host.stores["alpha"], 30)
     expect(page.get_by_role("button", name="Review tests")).to_be_enabled(timeout=WAIT)
     expect(page.locator("#tests-blocked")).to_have_count(0)
+
+
+@pytest.mark.browser
+@pytest.mark.usefixtures("data")
+def test_a_folder_refused_for_unset_settings_says_how_many_and_an_unreadable_reason_stays_whole(host) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    page, base, a = host.page, host.base, host.ids["alpha"]
+    unreadable = "settings can't be read: state of config is unreadable"
+    refused = {"state": "failed", "entries": [], "blocked": "", "unset": [], "unset_reason": ""}
+    stub = {"available": True, "queue": [], "folders": [
+        {"folder": "alpha", "reason": f"settings unset: {GAP}; fill them in on the Settings page", "reason_unset": 1,
+         **refused},
+        {"folder": "beta", "reason": unreadable, "reason_unset": 0, **refused},
+    ]}  # fmt: skip
+    page.route("**/api/next/curation", lambda route: route.fulfill(json=stub))
+    page.goto(f"{base}/#token=t")
+    page.goto(f"{base}/maintenance?project={a}")
+    rows = page.locator("#curation li")
+    expect(rows.nth(0)).to_contain_text(UNSET, timeout=WAIT)  # alpha's refusal, in the pages' words
+    expect(rows.nth(0)).not_to_contain_text(GAP)
+    expect(rows.nth(1)).to_contain_text(unreadable)  # beta's stays whole
 
 
 @pytest.mark.browser

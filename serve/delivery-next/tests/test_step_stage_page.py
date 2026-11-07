@@ -24,6 +24,7 @@ class Host:
     """The project host's seam over the real store: its activity is the real ``host.activity``."""
 
     maintenance = None
+    failed = ""
     wake = type("W", (), {"set": staticmethod(lambda: None)})()
 
     def __init__(self, store: Store) -> None:
@@ -54,7 +55,6 @@ def served(store: Store) -> tuple[uvicorn.Server, str]:
 
 
 @pytest.mark.browser
-@pytest.mark.timeout(120)  # a journey through 13 polled stages; it took 29 s alone and timed out on a loaded laptop
 def test_the_shown_stage_follows_a_builders_and_a_reviewers_events(tmp_path, pds) -> None:
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
@@ -78,7 +78,8 @@ def test_the_shown_stage_follows_a_builders_and_a_reviewers_events(tmp_path, pds
         detail, card = page.locator("#detail .row.status"), page.locator("#changes .card")
 
         def shows(said: str) -> None:
-            expect(detail).to_contain_text(f"Build 1/1 \u00b7 {said}", timeout=15_000)  # the page's poll brings it
+            page.evaluate("async () => (await import('/assets/page/changes/list.mjs')).refresh()")  # not the 3 s poll
+            expect(detail).to_contain_text(f"Build 1/1 \u00b7 {said}", timeout=15_000)  # the refresh above brings it
             expect(card).to_contain_text(said, timeout=15_000)  # the card shows its step apart
 
         shows("starting: greet")

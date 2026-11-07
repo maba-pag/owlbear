@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.models import Record
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import config as settings_config
 from owlbear_delivery_next.settings import migrations
@@ -31,7 +32,7 @@ def _parse[T: Record](raw: str, name: str, model: type[T], current: int, forward
         data = json.loads(raw)
         version = data.get("format", 0)
     except (AttributeError, TypeError, ValueError) as exc:
-        msg = f"state of {name} is unreadable"
+        msg = f"state of {name} is unreadable: {failure(exc)}"
         raise StoreError(msg) from exc
     if type(version) is not int:  # int() would take 4.5 as 4, true as 1 and "4" as 4: a format is an integer only
         msg = f"state of {name} is unreadable"
@@ -39,6 +40,12 @@ def _parse[T: Record](raw: str, name: str, model: type[T], current: int, forward
     if version > current:
         msg = f"{name} has format {version}, newer than {current}"
         raise FormatTooNewError(msg)
+    if version < current and version not in forward:
+        msg = (
+            f"state of {name} cannot be migrated to format {current}: unsupported format {version}; "
+            "restore a versioned state file"
+        )
+        raise StoreError(msg)
     written = version
     try:
         while version < current:
@@ -48,12 +55,12 @@ def _parse[T: Record](raw: str, name: str, model: type[T], current: int, forward
         return model.model_validate(data)
     except ValidationError as exc:
         if written < current:
-            msg = f"state of {name} cannot be migrated to format {current}"
+            msg = f"state of {name} cannot be migrated to format {current}: {failure(exc)}"
         else:  # the current format with fields this Delivery does not know: a newer or different one wrote it
-            msg = f"state of {name} was written by a newer or different Delivery ({_first(exc)})"
+            msg = f"state of {name} was written by a newer or different Delivery ({_first(exc)}): {failure(exc)}"
         raise StoreError(msg) from exc
     except (KeyError, TypeError, ValueError) as exc:
-        msg = f"state of {name} cannot be migrated to format {current}"
+        msg = f"state of {name} cannot be migrated to format {current}: {failure(exc)}"
         raise StoreError(msg) from exc
 
 
@@ -70,7 +77,7 @@ def layered(global_path: Path | None, config_path: Path | None, machine_path: Pa
     try:
         return settings_config.resolve(glob, project, read_layer(machine_path, MachineLayer))
     except ValidationError as exc:  # each layer is valid, their combination is not (TD-209)
-        msg = f"the settings do not combine: {exc.errors()[0]['msg']}"
+        msg = f"the settings do not combine: {failure(exc)}"
         raise StoreError(msg) from exc
 
 
@@ -90,7 +97,7 @@ def read_layer_bytes[T: Layer](path: Path, model: type[T]) -> tuple[T, bytes]:
     except FileNotFoundError:
         return model(), b""
     except (OSError, ValueError) as exc:  # ValueError: bytes that are not UTF-8
-        msg = f"state of {path.stem} is unreadable"
+        msg = f"state of {path.stem} is unreadable: {failure(exc)}"
         raise StoreError(msg) from exc
     forward = migrations.GLOBAL if issubclass(model, GlobalLayer) else migrations.CONFIG
     return _parse(text, path.stem, model, CONFIG_FORMAT, forward), raw

@@ -24,6 +24,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Stop
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock, read_regular
 
 if TYPE_CHECKING:
@@ -54,6 +55,15 @@ WATCH = (  # the watcher's reports (W1a): added to any database on open, which o
     "CREATE INDEX IF NOT EXISTS watch_slug ON watch(slug, id)",
 )
 RETRY = 0.05  # seconds between tries of a bounded write's fence
+DIAGNOSTIC_EVENTS = frozenset(
+    {
+        "watcher-failed",
+        "spotter-failed",
+        "check-command-failed",
+        "check-observation-failed",
+        "decisions-refresh-failed",
+    }
+)
 _local_devices: set[int] = set()
 
 
@@ -65,7 +75,7 @@ class StoreError(Exception):
 
     def stop(self, now: datetime) -> Stop:
         """Return the stop record for this error."""
-        return Stop(kind=ErrorKind.STATE, reason=str(self), action=self.action, resume=self.resume, at=now)
+        return Stop(kind=ErrorKind.STATE, reason=failure(self), action=self.action, resume=self.resume, at=now)
 
 
 class FormatTooNewError(StoreError):
@@ -225,7 +235,7 @@ class Database:
             try:
                 yield self._connection()
             except sqlite3.Error as exc:
-                msg = f"the Delivery database failed: {exc}"
+                msg = f"the Delivery database failed: {failure(exc)}"
                 raise StoreError(msg) from exc
 
     @contextlib.contextmanager
@@ -254,7 +264,7 @@ class Database:
                     raise
                 connection.execute("COMMIT")
             except sqlite3.Error as exc:
-                msg = f"the Delivery database failed: {exc}"
+                msg = f"the Delivery database failed: {failure(exc)}"
                 code = (getattr(exc, "sqlite_errorcode", 0) or 0) & 0xFF  # an extended code's primary one
                 held = wait is not None and code in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}
                 raise (BusyError if held else StoreError)(msg) from exc
@@ -405,14 +415,28 @@ def put_record(connection: sqlite3.Connection, slug: str, text: str) -> None:
 
 
 def append_activity(connection: sqlite3.Connection, slug: str, line: str, keep: int | None = None) -> None:
-    """Append one activity event (a JSON line) in the open transaction; with *keep*, drop all but the last ones."""
+    """Append activity, retaining whole diagnostics apart from the last *keep* ordinary events."""
     at: Any = None
     with contextlib.suppress(AttributeError, ValueError):
-        at = json.loads(line).get("at")
+        entry = json.loads(line)
+        at = entry.get("at")
+        kind = entry.get("event")
+        if isinstance(kind, str) and kind in DIAGNOSTIC_EVENTS:
+            connection.execute(
+                "WITH decoded AS (SELECT id, CASE WHEN json_valid(event) THEN event ELSE '{}' END AS body "
+                "FROM activity WHERE slug = ?) DELETE FROM activity WHERE id IN (SELECT id FROM decoded "
+                "WHERE json_extract(body, '$.event') = ? AND json_extract(body, '$.reason') = ? "
+                "AND COALESCE(json_extract(body, '$.session'), '') = ? "
+                "AND COALESCE(json_extract(body, '$.step'), '') = ?)",
+                (slug, kind, entry["reason"], *(entry.get(key) or "" for key in ("session", "step"))),
+            )
     connection.execute("INSERT INTO activity(slug, at, event) VALUES (?, ?, ?)", (slug, str(at) if at else None, line))
     if keep is not None:
         connection.execute(
-            "DELETE FROM activity WHERE slug = ? AND id NOT IN "
-            "(SELECT id FROM activity WHERE slug = ? ORDER BY id DESC LIMIT ?)",
-            (slug, slug, keep),
+            "WITH ordinary AS (SELECT id FROM activity WHERE slug = ? AND "
+            "COALESCE(json_extract(CASE WHEN json_valid(event) THEN event ELSE '{}' END, '$.event'), '') "
+            "NOT IN (SELECT value FROM json_each(?))) "
+            "DELETE FROM activity WHERE id IN (SELECT id FROM ordinary) AND id NOT IN "
+            "(SELECT id FROM ordinary ORDER BY id DESC LIMIT ?)",
+            (slug, json.dumps(sorted(DIAGNOSTIC_EVENTS)), keep),
         )

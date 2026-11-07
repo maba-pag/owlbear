@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -128,6 +129,19 @@ def test_install_writes_the_completion_and_asks_before_each_change(monkeypatch) 
     assert (install.uninstall(said.append), agent.is_symlink()) == (0, True)
 
 
+def test_install_offers_add_a_project_once_the_host_it_started_answers(monkeypatch) -> None:
+    monkeypatch.setattr(install, "runtime", lambda: Path(sys.executable).parent.parent)
+    monkeypatch.setattr(control, "autostart", lambda *_a, **_k: 0)
+    reads, opened = [], []
+    host = SimpleNamespace(url="http://127.0.0.1:1/", token="t")  # noqa: S106 - a test token
+    monkeypatch.setattr(control, "projects", lambda: reads.append(1) if len(reads) < 3 else {"paused": True})
+    monkeypatch.setattr(install.serve, "running", lambda: host if len(reads) >= 3 else None)  # launchd starts it
+    monkeypatch.setattr(install.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(install.webbrowser, "open", opened.append)
+    assert install.install(lambda _t: None, lambda _q: True, command.app) == 0
+    assert opened == ["http://127.0.0.1:1/projects?add=1#token=t"]
+
+
 def test_install_without_a_terminal_says_each_choice_was_not_done(monkeypatch, capsys) -> None:
     monkeypatch.setattr(install, "runtime", lambda: Path(sys.executable).parent.parent)
     monkeypatch.setattr(control, "autostart", lambda *_a, **_k: pytest.fail("the login item was touched"))
@@ -196,7 +210,10 @@ def test_doctor_runs_each_tool_and_checks_the_login_items_path(monkeypatch, tmp_
     said.clear()
     assert install.doctor(said.append, []) == 1
     assert said[:2] == [
-        f"uv: {bin_ / 'uv'} does not run: uv says 2 · fix: reinstall it",
+        (
+            f"uv: {bin_ / 'uv'} does not run: CalledProcessError: Command '{[str(bin_ / 'uv'), '--version']}' returned "
+            "non-zero exit status 2.\nuv says 2 · fix: reinstall it"
+        ),
         f"copilot: Copilot CLI not found: only VS Code's shim {shim / 'copilot'}, which is not the CLI. "
         + install.copilot_cli.FIX,
     ]
@@ -217,6 +234,54 @@ def test_doctor_runs_each_tool_and_checks_the_login_items_path(monkeypatch, tmp_
     assert login_item() == []
     (real / "copilot").unlink()
     assert login_item() == [f"login item: copilot at its COPILOT_CLI_PATH {real / 'copilot'} not found"]
+
+
+@pytest.mark.parametrize("failing", ["tool", "exit", "store"])
+def test_doctor_says_a_tool_that_does_not_run_and_a_project_it_cannot_read_whole(
+    monkeypatch, whole_error, failing
+) -> None:
+    """#971: doctor says a tool whose start failed or that exited non-zero, and a project whose store could not be read,
+    whole: type, notes and all the tool printed included."""
+    from owlbear_delivery_next.state_store.store import Store, StoreError  # noqa: PLC0415
+
+    error = (StoreError if failing == "store" else OSError)(whole_error)
+    error.add_note("a note on the failure")
+    whole = f"{type(error).__name__}: {whole_error}\na note on the failure"
+
+    def raising(*_args, **_kwargs):
+        raise error
+
+    def run(args, **_kwargs):  # each tool's start fails or it exits 3 saying both streams; gh's login answers
+        if "--version" not in args:
+            return subprocess.CompletedProcess(args, 0)
+        if failing == "exit":
+            return subprocess.CompletedProcess(args, 3, f"{whole_error}\n", "a warning\n")
+        return raising()
+
+    def told(tool: str) -> str:
+        if failing == "tool":
+            return whole
+        return (f"CalledProcessError: Command '{[f'/bin/{tool}', '--version']}' returned non-zero exit status 3.\n"
+                f"stderr:\na warning\nstdout:\n{whole_error}")  # fmt: skip
+
+    for step in ("_login_item", "_data"):
+        monkeypatch.setattr(install, step, lambda _say: 0)
+    monkeypatch.setattr(install.shutil, "which", lambda tool, **_kw: f"/bin/{tool}")
+    monkeypatch.setattr(install.copilot_cli, "cli_path", lambda: "/bin/copilot")
+    if failing == "store":
+        monkeypatch.setattr(install, "_tools", lambda _say: 0)
+        monkeypatch.setattr(install.subprocess, "run", lambda args, **_kw: subprocess.CompletedProcess(args, 0))
+        monkeypatch.setattr(install.registry, "load", lambda: SimpleNamespace(projects=[SimpleNamespace(path="/w")]))
+        monkeypatch.setattr(Store, "open", raising)
+        lines = [f"/w: cannot be read: {whole}"]
+    else:
+        monkeypatch.setattr(install.subprocess, "run", run)
+        monkeypatch.setattr(install.registry, "load", lambda: SimpleNamespace(projects=[]))
+        lines = [f"{tool}: /bin/{tool} does not run: {told(tool)} · fix: reinstall it" for tool in install.TOOLS]
+        lines += [f"copilot: /bin/copilot does not run: {told('copilot')} · fix: {install.copilot_cli.FIX}"]
+    said = []
+    assert install.doctor(said.append, []) == 1
+    assert said[:-1] == lines
 
 
 def shared_data() -> Path:
@@ -299,9 +364,10 @@ def test_start_runs_one_detached_host_and_stop_ends_it() -> None:
     assert listed | {"update": None, "pack": None, "reads": None} == {
         "paused": False, "waiting": 0, "projects": [], "ending": False, "left": [], "update_while_paused": False,
         "update": None, "updated": "", "announce": None, "pack": None, "reads": None,
+        "unretried": "", "unshared": "", "undecided": [], "stop_error": "",
     }  # fmt: skip  # a real host: no Global and nothing set here, so it never updates while paused (2026-10-23)
     assert listed["update"]["phase"] == "idle"
-    assert set(listed["pack"]) == {"install", "release"}  # its content depends on this machine's own pack
+    assert set(listed["pack"]) == {"install", "release", "unkept"}  # its content depends on this machine's own pack
     end = time.monotonic() + 30
     while (reads := control.projects()["reads"])["read_at"] is None:  # the start read, against the outside world
         assert time.monotonic() < end, "the host never read at its start"

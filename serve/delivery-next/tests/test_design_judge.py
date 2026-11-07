@@ -81,6 +81,11 @@ def test_a_first_look_comes_once_before_the_final_verdict_and_releases_the_detec
     assert (ok, text, gate.done, run.payload.false_positives) == (True, ACCEPTED, True, ["side-tab"])
 
 
+def conflict(**fields):
+    base = {"image": "home-1280-B.png", "rule": "Color", "departs": "AC-2", "problem": "the required grey is faint"}
+    return base | fields
+
+
 def finding(**fields):
     base = {"image": "home-1280-B.png", "problem": "cramped", "rule": "Layout & Space", "severity": "P2"}
     return base | fields
@@ -95,12 +100,14 @@ def finding(**fields):
         (look(covered_paths=list(IMAGES[:2])), "covered_paths: missing about-1280-A.png"),
         (look("fail", findings=[finding(image="x.png")]), "x.png is not one of your images"),
         (look(preferences=[]), "preferences: name each pair once - home-1280"),
+        (look(conflicts=[conflict(departs="AC-9")]), "conflicts: AC-9 is no state, brief criterion or owner's"),
     ],
 )
 def test_a_design_verdict_must_match_its_findings_and_judge_every_image_and_pair(args, error) -> None:
-    gate = Gate(session(), Run("s1"), lambda **_e: None, lambda: None)
+    gate = Gate(session(targets=("home", "AC-2")), Run("s1"), lambda **_e: None, lambda: None)
     text, ok = gate.call(design_tools.FIRST, args)
     assert (ok, error in text) == (False, True), text
+    assert gate.call(design_tools.FIRST, look(conflicts=[conflict()]))[1]  # a real brief criterion is accepted
 
 
 def test_only_the_first_look_lets_the_sdk_turn_go_on() -> None:

@@ -7,6 +7,7 @@ beside it, each role's use of built-in subagents (TD-376).
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import subprocess
 from datetime import UTC, datetime
@@ -16,6 +17,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.impeccable.detector import DetectorError
 from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_job, pack_replay
@@ -24,6 +26,7 @@ from owlbear_delivery_next.project_host import curation_routes, maintenance_rout
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.state_store import curation_runs
 
+_log = logging.getLogger(__name__)
 EARLIEST = datetime.min.replace(tzinfo=UTC)
 OLD = "/design-pack"  # the routes' prefix before the Impeccable rename
 REPLAY_FAILURES = (
@@ -73,16 +76,14 @@ def owner_last(store: Store) -> dict[str, Any] | None:
         return None
     marker = f"memory {store.name}: "  # the subject memory_routes commits each action with
     args = ["log", "-1", "--format=%cI%x00%s", "--fixed-strings", f"--grep={marker}", "--"]
-    try:
-        done = subprocess.run(  # noqa: S603
-            ["git", *args, str(store.shared.memory_path(store.name))],  # noqa: S607
-            cwd=store.shared.root, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}, stdin=subprocess.DEVNULL,
-            capture_output=True, text=True, timeout=10, check=False,
-        )  # fmt: skip
-    except OSError, subprocess.TimeoutExpired:
-        return None
+    done = subprocess.run(  # noqa: S603
+        ["git", *args, str(store.shared.memory_path(store.name))],  # noqa: S607
+        cwd=store.shared.root, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}, stdin=subprocess.DEVNULL,
+        capture_output=True, text=True, timeout=10, check=False,
+    )  # fmt: skip
+    done.check_returncode()
     at, _, subject = done.stdout.strip().partition("\0")
-    if done.returncode != 0 or not at:
+    if not at:
         return None
     return {"by": "owner", "state": "done", "action": subject.removeprefix(marker), "ended_at": at}
 
@@ -114,17 +115,24 @@ def _when(last: dict[str, Any]) -> datetime | None:
 def memory_last(store: Store) -> dict[str, Any] | None:
     """The later of the folder's last curation run and the owner's last memory action, saying which (``by``).
 
-    A run or action without a time loses to one with a time. A curation record that cannot be read leaves the owner's
-    action, its reason saying the curation's runs are not counted.
+    A run or action without a time loses to one with a time. Unreadable histories qualify the selected readable record,
+    independently of its state and reason; without one they qualify an unknown result, never an absence.
     """
-    owner = owner_last(store)
+    notices = []
+    owner = run = None
+    try:
+        owner = owner_last(store)
+    except (OSError, subprocess.TimeoutExpired, subprocess.CalledProcessError) as exc:
+        notices.append(f"the owner's memory history could not be read, so it is not counted: {failure(exc)}")
     try:
         run = curation_last(store.name) if store.name else None
     except (OSError, ValueError) as exc:
-        unread = f"memory curation's runs could not be read, so they are not counted: {exc}"
-        return (owner or {"by": "curation", "state": "unknown"}) | {"reason": unread}
+        notices.append(f"memory curation's runs could not be read, so they are not counted: {failure(exc)}")
     found = [last for last in (owner, run) if last]
-    return max(found, key=lambda last: _when(last) or EARLIEST) if found else None
+    selected = max(found, key=lambda last: _when(last) or EARLIEST) if found else None
+    if notices:
+        return (selected or {"by": "curation", "state": "unknown"}) | {"history_notice": "\n".join(notices)}
+    return selected
 
 
 def overview(store: Store) -> list[dict[str, Any]]:
@@ -272,9 +280,11 @@ def _replay(
         except pack_job.Busy as exc:
             raise HTTPException(409, str(exc)) from exc
         except pack_replay.ReplayError as exc:
+            _log.warning("calibration replay refused: %s", exc)  # the host's log, beside the answer the CLI prints
             raise HTTPException(409, str(exc)) from exc
         except REPLAY_FAILURES as exc:
-            raise HTTPException(422, str(exc)) from exc
+            _log.warning("calibration replay failed: %s", said := failure(exc), exc_info=True)
+            raise HTTPException(422, said) from exc
         return {"ok": r.ok, "report": f"calibration replay: {pack_candidate.said_replay(r)}"}
 
 

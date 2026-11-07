@@ -27,7 +27,10 @@
   /* The list: one card per Change, grouped by who acts next. */
   .group { display: grid; gap: var(--p-spacing-static-sm); }
   .group > summary { font-size: var(--p-typescale-md); }
-  .cards { display: grid; gap: var(--p-spacing-static-sm); margin: 0; padding: 0; list-style: none; }
+  .cards {
+    display: grid; align-items: start; gap: var(--p-spacing-static-sm);
+    margin: 0; padding: 0; list-style: none;
+  }
   .card {
     position: relative; display: grid; gap: var(--p-spacing-static-xs); align-content: start;
     padding: var(--p-spacing-static-sm) var(--p-spacing-static-md);
@@ -47,6 +50,8 @@
   .says { font-size: var(--p-typescale-sm); }
   #nothing-yours { font-size: var(--p-typescale-md); }  /* the list's answer to "what needs me?", read at body size */
   .card .says { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .card .says.whole { display: block; overflow: visible; white-space: pre-wrap; }  /* an error, whole (#971) */
+  .status > p-text, .log li > span { min-inline-size: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
   .stage { font-weight: 600; }
   .next { font-size: var(--p-typescale-sm); font-weight: 600; }
   .meta { font-size: var(--p-typescale-xs); color: var(--p-color-contrast-medium); }
@@ -60,6 +65,8 @@
   .act { box-shadow: inset 0 0 0 1px var(--p-color-contrast-low); }
   #changes { display: grid; gap: var(--p-spacing-fluid-sm); }
   .info { padding-top: var(--p-spacing-static-md); border-top: 1px solid var(--p-color-contrast-lower); }
+  .diagnostics { min-width: 0; margin: 0; padding: 0; list-style: none; }
+  .diagnostics li { white-space: pre-wrap; overflow-wrap: anywhere; }
   .panel > p-button, .panel > p-link-pure, .panel > a { justify-self: start; }
   .brief, .gallery { display: grid; gap: var(--p-spacing-static-sm); }
   /* The brief: the agreement first, each part with room around it; details collapsed below. */
@@ -75,6 +82,27 @@
   .plan li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--p-spacing-static-sm); }
   .plan li > details, .rounds details { flex-basis: 100%; font-size: var(--p-typescale-xs); }
   .marks { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--p-spacing-static-xs); }
+  /* A brief's or plan's versions: a coloured bullet, its state always in words beside it; the legend below. */
+  .version-list { display: grid; gap: var(--p-spacing-static-xs); margin: 0; padding: 0; list-style: none; }
+  .version { display: flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm); }
+  .version-list ul { margin-inline-start: 1.25rem; color: var(--p-color-contrast-medium); }
+  .version-list ul li { font-size: var(--p-typescale-xs); }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: var(--p-spacing-static-xs) var(--p-spacing-static-md); margin: 0; padding: 0;
+    list-style: none; color: var(--p-color-contrast-medium);
+  }
+  .legend li {
+    display: inline-flex; align-items: center; gap: var(--p-spacing-static-xs); font-size: var(--p-typescale-xs);
+  }
+  .dot {
+    flex: none; inline-size: .75rem; block-size: .75rem; border-radius: 50%;
+    box-shadow: inset 0 0 0 2px var(--p-color-contrast-medium);
+  }
+  .dot.running { background: var(--p-color-info); box-shadow: none; }
+  .dot.waits { background: var(--p-color-error); box-shadow: none; }
+  .dot.findings { background: var(--p-color-warning); box-shadow: none; }
+  .dot.clean { background: var(--p-color-success); box-shadow: none; }
+  .dot.unreviewed { background: var(--p-color-contrast-medium); box-shadow: none; }
   .log li { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--p-spacing-static-sm); }
   .log time { font-size: var(--p-typescale-xs); color: var(--p-color-contrast-medium); }
   .shots {
@@ -85,6 +113,7 @@
     display: grid; grid-template-columns: 1fr 1fr; gap: var(--p-spacing-static-xs) var(--p-spacing-static-sm);
     margin: 0;
   }
+  .pair.three { grid-template-columns: 1fr 1fr 1fr; }
   .pair figcaption { grid-column: 1 / -1; font-size: var(--p-typescale-xs); font-weight: 600; }
   .side { display: grid; gap: 2px; align-content: start; font-size: var(--p-typescale-xs); }
   .shots img, .missing {

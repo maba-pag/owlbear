@@ -16,6 +16,7 @@ import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable_runs import machine_lock
 from owlbear_delivery_next.impeccable_runs.pack_state import MACHINE_LOCK
 from owlbear_delivery_next.local_system import local_home
@@ -73,12 +74,18 @@ class Hand:
     def read(self) -> dict[str, Any]:
         """The last hand audit: ``none``, ``running``, ``done`` or ``failed``; one lost while running failed."""
         try:
-            kept = json.loads(self.path.read_text(encoding="utf-8"))
+            raw = self.path.read_bytes()
         except FileNotFoundError:
             return {"state": "none"}
+        try:
+            kept = json.loads(raw.decode("utf-8"))
         except ValueError as exc:
             return _failed(
-                {"state": "failed", "reason": f"the saved audit cannot be read: {type(exc).__name__}: {exc}"}
+                {
+                    "state": "failed",
+                    "reason": f"the saved audit {self.path} cannot be read: {failure(exc)}\n"
+                    f"saved audit:\n{raw.decode(errors='replace')}",
+                }
             )
         if kept.get("state") == "running" and not self.busy():
             return _failed({**kept, "state": "failed", "reason": INTERRUPTED})
@@ -129,7 +136,7 @@ class Hand:
             with spend_ledger.at(spend_ledger.Where.of(self.store, job="PDS audit")):
                 saved = {**state, **self._audit()}
         except Exception as exc:  # noqa: BLE001 - the page must learn how the audit ended
-            saved = {**state, "state": "failed", "reason": f"{type(exc).__name__}: {exc}"}
+            saved = {**state, "state": "failed", "reason": failure(exc)}
         finally:
             os.close(held)
         self._save({**saved, "ended_at": datetime.now(UTC).isoformat()})

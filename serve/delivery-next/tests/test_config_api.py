@@ -1,5 +1,7 @@
+import contextlib
 import json
 import subprocess
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,22 +10,25 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.github import account
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import api, config_routes
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices
 from owlbear_delivery_next.settings import carried, roles
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT as F
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store import profile_share, project_home, roles_move
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store.store import Store, StoreError
 
 AUTH = {"authorization": "Bearer t"}
 
 
 class Host:
+    repo = None  # no clone
     maintenance = None
     wake = SimpleNamespace(set=lambda: None)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
@@ -55,7 +60,7 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
         "format": F, "prefs": None, "prefs_imported": False, "roles_moved": False, "agents": {}, "widths": None,
         "preparations": None, "data": None, "design_failures": None, "final_review": None, "pr_labels": None,
         "pr_marker": None, "load_user_instructions": None, "load_user_skills": None, "load_user_memory": None,
-        "guard_level": None, "sessions": None, "spotter": None,
+        "guard_level": None, "github_account": None, "sessions": None, "spotter": None,
     }  # fmt: skip
     assert (got["global"], got["global_location"]) == (None, False)
     assert got["settings"]["agents"]["builder"]["model"] == "claude-opus-5.5"
@@ -69,12 +74,13 @@ def test_get_shows_each_layer_the_resolved_values_their_source_and_what_is_appli
         "agents.builder.max_rounds", "agents.builder.max_findings", "agents.builder.last_round_at",
         "agents.builder.ask_owner_at", "agents.planner.max_rounds", "agents.planner.max_findings",
         "agents.planner.last_round_at", "agents.planner.ask_owner_at", "agents.shaper.max_rounds",
-        "agents.shaper.max_findings", "agents.shaper.last_round_at", "agents.shaper.ask_owner_at", "final_review",
+        "agents.shaper.max_findings", "agents.shaper.last_round_at", "agents.shaper.ask_owner_at",
+        "agents.shaper.challenge_wait", "final_review",
         "agents.planner.minutes", "agents.builder.minutes", "agents.reviewer.minutes", "agents.challenger.minutes",
         "agents.design-judge.minutes", "agents.preparer.minutes", "agents.updater.minutes", "agents.picker.minutes",
         "agents.auditor.minutes",
         "pr_labels", "pr_marker", "load_user_instructions", "load_user_skills", "load_user_memory", "guard_level",
-        "prefs.merge_method",
+        "github_account", "prefs.merge_method",
         "prefs.delete_remote_branch", "prefs.ci_poll_seconds",
         "prefs.ci_start_window_seconds", "prefs.ask_before_merge",
         "agents.planner.subagents", "agents.builder.subagents", "agents.reviewer.subagents",
@@ -112,10 +118,17 @@ def test_recommendations_cover_current_required_settings_without_filling_any_lay
 
     assert set(suggested.agents) == set(config.ROLES)
     assert config.resolve(suggested, config.Layer()).missing == []
+    assert suggested.memory.model_dump() == {
+        "outstanding_boost": 0.1, "unremarkable_penalty": 0.01, "stale_factor": 50, "purge_days": 30,
+        "preflight_cap": 5, "preflight_budget": 2000, "recall_limit": 20, "explore_slots": 2, "challenge_slots": 2,
+    }  # what the code held before the Memory group; none is a default: resolution never reads them  # fmt: skip
     assert machine_settings.resolve(config.MachineValues(), suggested.machine).missing == []
     assert suggested.spotter.verbose_until is None  # optional, not an invented expiry date
     assert {name for name, agent in suggested.agents.items() if agent.context == "long"} == {"design-judge", "shaper"}
+    shaper, spotter = suggested.agents["shaper"], suggested.agents["spotter"]
+    assert ((shaper.minutes, shaper.subagents), (spotter.minutes, spotter.subagents)) == ((40, True), (None, None))
     assert suggested.machine.retro_run_credit_limit == 61.0  # not the old carry's 20
+    assert suggested.github_account == "repository-owner"  # TD-402's rule, D-01M6G9XSXY0G5N65PBJ3RKKPK7
     assert suggested.preparations is None
     assert suggested.data is None  # no project-specific permissions invented
     assert {"format", "prefs_imported", "roles_moved", "machine_moved"}.isdisjoint(got["recommendations"])
@@ -124,6 +137,88 @@ def test_recommendations_cover_current_required_settings_without_filling_any_lay
     assert got["settings"]["sources"].get("agents.builder.model") is None
     assert not store.config_path.exists()
     assert not store.machine_path.exists()
+
+
+def test_the_settings_say_which_account_td_402_s_rule_gives_on_the_project_s_origin(
+    store, monkeypatch, fake_gh, tmp_path
+):
+    clone = tmp_path / "tools"
+    origin = "https://github.com/acme/tools.git"
+    subprocess.run(("git", "init", "-q", str(clone)), check=True)  # noqa: S603, S607
+    subprocess.run(("git", "-C", str(clone), "remote", "add", "origin", origin), check=True)  # noqa: S603, S607
+    assert client(store, headers=AUTH).get("/api/next/config").json()["github_rule"]["error"]  # no clone to read
+
+    monkeypatch.setattr(Host, "repo", clone)
+    rule = client(store, headers=AUTH).get("/api/next/config").json()["github_rule"]
+    assert rule == {"login": "maba-pag", "why": "gh has no account for the owner acme"}
+
+    fake_gh.set({"github.com": {"maba-pag": "success", "acme": "success"}}, {"github.com": "maba-pag"})
+    assert client(store, headers=AUTH).get("/api/next/config").json()["github_rule"]["login"] == "acme"
+
+    fake_gh.set({"github.com": {"boecht": "success"}}, {"github.com": "boecht"})
+    error = client(store, headers=AUTH).get("/api/next/config").json()["github_rule"]["error"]
+    assert "gh holds no account acme or maba-pag on github.com" in error
+
+
+@pytest.mark.parametrize("state_seconds", [2.0, 3.0])
+@pytest.mark.usefixtures("fake_gh")
+def test_the_account_row_shares_its_deadline_with_the_settings_read(store, monkeypatch, state_seconds):
+    clock, seen = SimpleNamespace(now=100.0), []
+    real_resolve = account.resolve
+
+    def agreement(_store):
+        clock.now += state_seconds
+        return []
+
+    def origin(_repo, *, timeout=account.TIMEOUT):
+        seen.append(("origin", timeout))
+        clock.now += 0.25
+        return account.Origin("github.com", "acme", "tools")
+
+    def resolve(setting, origin, *, until):
+        seen.append(("resolve", until))
+        return real_resolve(setting, origin, until=until)
+
+    def gh(argv, **kwargs):
+        seen.append(("gh", kwargs["timeout"]))
+        return subprocess.CompletedProcess(argv, 0, b"fixture-token", b"")
+
+    monkeypatch.setattr(config_routes, "time", SimpleNamespace(monotonic=lambda: clock.now))
+    monkeypatch.setattr(account, "time", SimpleNamespace(monotonic=lambda: clock.now))
+    monkeypatch.setattr(config_routes, "_agreement", agreement)
+    monkeypatch.setattr(account.Origin, "of", origin)
+    monkeypatch.setattr(account, "resolve", resolve)
+    monkeypatch.setattr(account.subprocess, "run", gh)
+    got = client(store, headers=AUTH).get("/api/next/config")
+    assert got.status_code == 200
+    assert got.json()["project"]["format"] == F
+    rule = got.json()["github_rule"]
+    if state_seconds == 2:
+        assert seen == [("origin", 1.0), ("resolve", 103.0), ("gh", 0.75)]
+        assert rule == {"login": "acme", "why": "the repository owner"}
+    else:
+        assert seen == []
+        assert "AccountMissing: github account: no time was left" in rule["error"]
+
+
+def test_the_account_row_keeps_a_failed_origin_command_whole(store, monkeypatch, whole_error):
+    command = ["git", "config", "--get", "remote.origin.url"]
+    expired = subprocess.TimeoutExpired(
+        command, 1, output=f"OUT:{whole_error}".encode(), stderr=f"ERR:{whole_error}".encode()
+    )
+    expired.add_note("origin read note")
+
+    def origin(*_args, **_kwargs):
+        raise expired
+
+    monkeypatch.setattr(config_routes, "time", SimpleNamespace(monotonic=lambda: 0.0))
+    monkeypatch.setattr(account.subprocess, "run", origin)
+    got = client(store, headers=AUTH).get("/api/next/config")
+    assert got.status_code == 200
+    error = got.json()["github_rule"]["error"]
+    assert error.startswith("AccountMissing: github account:")
+    assert f"TimeoutExpired: Command '{command}' timed out after 1 seconds" in error
+    assert f"stderr:\nERR:{whole_error}\nstdout:\nOUT:{whole_error}\norigin read note" in error
 
 
 def test_the_challenge_round_values_are_saved_per_loop(store):
@@ -253,8 +348,10 @@ def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tm
                                                          "final_review": None, "pr_labels": None,
                                                          "pr_marker": None, "load_user_instructions": None,
                                                          "load_user_skills": None, "load_user_memory": None,
-                                                         "guard_level": None, "sessions": None, "spotter": None,
-                                                         "curator_threshold": None, "machine": None,
+                                                         "guard_level": None, "github_account": None,
+                                                         "sessions": None, "spotter": None,
+                                                         "curator_threshold": None, "memory": None,
+                                                         "machine": None,
                                                          "machine_moved": None},
                                                         True)  # fmt: skip
     data = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": {"format": F, "data": {}}})
@@ -364,9 +461,12 @@ def test_a_global_save_must_suit_every_project_sharing_it(tmp_path):
         assert (r.status_code, (root / "config.json").exists()) == (422, False)  # b's last round at 6 needs more
 
 
-def test_a_storage_failure_on_save_is_a_readable_error(store, monkeypatch):
+def test_a_storage_failure_on_save_is_a_readable_error(store, monkeypatch, whole_error):
+    denied = PermissionError(13, whole_error, str(store.config_path))
+    denied.add_note("settings write note")
+
     def full(*_a: object, **_k: object) -> None:
-        raise OSError(28, "No space left on device")
+        raise denied
 
     monkeypatch.setattr("owlbear_delivery_next.state_store.store.update_layer", full)
     c = client(store, headers=AUTH)
@@ -374,7 +474,72 @@ def test_a_storage_failure_on_save_is_a_readable_error(store, monkeypatch):
     r = c.put("/api/next/config/project", json={"rev": rev, "layer": {"format": F}})
 
     assert r.status_code == 503
-    assert r.json()["detail"] == "the settings could not be saved: No space left on device"
+    assert r.json()["detail"] == f"the settings could not be saved: PermissionError: {denied}\nsettings write note"
+    assert not store.config_path.exists()
+
+
+@pytest.mark.parametrize("site", ["read", "combined", "save", "completion"])
+def test_settings_storage_refusals_keep_their_type_and_notes(store, monkeypatch, whole_error, site):
+    if site == "completion":
+        store.write_profile(Profile())
+    c = client(store, headers=AUTH)
+    first = c.get("/api/next/config").json()
+    refused = StoreError(whole_error)
+    refused.add_note("settings storage note")
+
+    def failing(*_args, **_kwargs):
+        raise refused
+
+    if site in ("read", "combined"):
+        monkeypatch.setattr(config_routes, "read_layer_bytes", failing)
+    elif site == "save":
+        monkeypatch.setattr("owlbear_delivery_next.state_store.store.update_layer", failing)
+    else:
+        monkeypatch.setattr(config_routes.prefs_import, "republish", failing)
+    got = (
+        c.get("/api/next/config")
+        if site == "read"
+        else c.put(
+            "/api/next/config/project", json={"rev": first["project_rev"], "layer": {"format": F, "pr_marker": False}}
+        )
+    )
+    assert (got.status_code, got.json()["detail"]) == (
+        503 if site == "completion" else 409,
+        f"StoreError: {whole_error}\nsettings storage note",
+    )
+    assert store.config_path.exists() is (site == "completion")
+    if site == "completion":
+        assert store.read_config().pr_marker is False
+
+
+@pytest.mark.parametrize("kind", ["data-repo", "permission"])
+def test_a_refused_folder_rename_keeps_the_whole_failure_and_releases_the_launch_lock(
+    store, shared_repo, monkeypatch, whole_error, kind
+):
+    store.shared, store.name = data_repo.DataRepo(shared_repo[0]), "shop"
+    lock = threading.Lock()
+    monkeypatch.setattr(Host, "store", store, raising=False)
+    monkeypatch.setattr(Host, "launching", lock, raising=False)
+    monkeypatch.setattr(Host, "peers", lambda _: [], raising=False)
+    monkeypatch.setattr(Host, "curating", lambda _self, _name: contextlib.nullcontext(""), raising=False)
+    refused = (
+        data_repo.DataRepoError(whole_error)
+        if kind == "data-repo"
+        else PermissionError(13, whole_error, str(store.shared.root / "shop"))
+    )
+    refused.add_note("folder rename note")
+
+    def rename(*_args, **_kwargs):
+        raise refused
+
+    monkeypatch.setattr(data_repo.DataRepo, "rename", rename)
+    got = client(store, headers=AUTH).put("/api/next/config/folder", json={"name": "new-shop"})
+    prefix = "" if kind == "data-repo" else "the folder could not be renamed: "
+    assert (got.status_code, got.json()["detail"]) == (
+        409 if kind == "data-repo" else 503,
+        f"{prefix}{type(refused).__name__}: {refused}\nfolder rename note",
+    )
+    assert (store.name, lock.locked()) == ("shop", False)
 
 
 def prices(
@@ -679,6 +844,30 @@ def test_a_profile_this_build_cannot_read_is_a_repair_notice_on_settings_not_a_s
     assert got.status_code == 200
     assert "profile" in got.json()["notice"]
     assert "repair" in got.json()["notice"]
+
+
+def test_an_unreadable_profile_is_said_whole_in_the_notice_and_the_refused_save(store, monkeypatch, whole_error):
+    """#971: the read's whole error, its notes too, reaches the Settings notice and a refused project save."""
+    store.root.mkdir(parents=True)
+    (store.root / profile_share.PROFILE).write_text("{}")
+    note = "while reading the profile of shop"
+
+    def unreadable(_source):
+        exc = OSError(whole_error)
+        exc.add_note(note)
+        raise exc
+
+    monkeypatch.setattr(profile_share, "_read", unreadable)
+    c = client(store, headers=AUTH)
+    got = c.get("/api/next/config").json()
+    why = f"StoreError: the profile could not be read: OSError: {whole_error}\n{note}"
+    repair = "; repair or replace the profile file, or update OwlBear if it is newer, then reload"
+    assert got["notice"] == why + repair
+    refused = c.put(
+        "/api/next/config/project",
+        json={"rev": got["project_rev"], "layer": {"format": F, "agents": {"builder": {"effort": "high"}}}},
+    )
+    assert (refused.status_code, refused.json()["detail"]) == (409, why)
 
 
 def test_a_machine_save_with_an_unreadable_profile_applies_and_says_so_truthfully(store):

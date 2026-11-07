@@ -30,6 +30,7 @@ MODEL = cause_key(ErrorKind.LIVENESS, StepKind.CHECK, VISUAL_MODEL)
 REVIEW_OF = {"pass": "pass", "fail": "fix", "unsure": "unsure"}  # a recorded correctness verdict as the review's
 FIX = frozenset({"P0", "P1", "P2"})  # severities worth a fix; P3 is polish
 OWNER = "owner-"  # an owner criterion's id, which a finding cites as its rule
+AMEND = "amend"  # the owner takes one conflict with the brief: its answer's text is the conflict's id
 type Route = Literal["merge", "back", "ask", "again", "model"]
 
 
@@ -53,7 +54,8 @@ def route(
     """The verdict matrix: how the round ends, and the lines a fix task carries.
 
     A failed shot or a new browser error goes back on its own (R8), with the design findings when the setting sends
-    design fails back. Otherwise both verdicts must exist: a correctness fail goes back; pass and pass merge;
+    design fails back. Otherwise both verdicts must exist: a design rule the brief rules out (a conflict) goes to
+    the owner whatever the verdicts, never into a fix task; a correctness fail goes back; pass and pass merge;
     a design fail goes back or to the owner by the setting; any unsure goes to the owner (N6). A verdict whose
     judge's model is unknown sends the round to the owner first, unless he already waived the check (TD-94).
     """
@@ -64,7 +66,8 @@ def route(
         return "back", [*found, *sent]
     if verdict is None or design is None or design.verdict is None or kept is None:
         return "again", []
-    ends = _matrix(verdict.verdict, design.verdict, found, sent)
+    asked: tuple[Route, list[str]] = ("ask", [])
+    ends = asked if design.conflicts else _matrix(verdict.verdict, design.verdict, found, sent)
     if not kept.model_waived and not all(v.usage_verified for v in kept.verdicts):
         kept.waivable = ends[0]
         return "model", []
@@ -90,6 +93,13 @@ def doubts(ends: Route, verdict: tools.ReviewResult | None, kept: VisualRound | 
     return said + [f"{v.lens}: {v.reason}" for v in kept.verdicts if v.reason and v.lens == "design"] if kept else said
 
 
+def departs(c: Change, kept: VisualRound) -> dict[str, str]:
+    """The text each conflict of *kept* departs from: a state's expectation, a brief criterion or an owner's."""
+    texts = {s.name: s.expect for s in c.brief.visual} | {k.id: k.text for k in c.brief.criteria}
+    texts |= {k.id: k.text for k in c.owner_criteria}
+    return {k.id: texts.get(k.departs, "") for v in kept.verdicts for k in v.conflicts}
+
+
 def lines(verdicts: Sequence[JudgeVerdict | None], ticked: Sequence[str]) -> list[str]:
     """The ticked findings as fix-task lines, each with its judge, place and rule."""
     return [
@@ -112,12 +122,19 @@ def again(kept: VisualRound | None) -> StepResult:
 
 
 def ask(head: str, kept: VisualRound) -> StepResult:
-    """The owner decides this round on the Changes page; his answer holds for its capture and pack only."""
+    """The owner decides this round on the Changes page; his answer holds for its capture and pack only.
+
+    A conflict with a state or a brief criterion can also be taken: that answer changes the brief (TD-185).
+    """
     said = [f"{v.lens} {v.verdict}" + (f" ({v.reason[:300]})" if v.reason else "") for v in kept.verdicts]
+    every = [k for v in kept.verdicts for k in v.conflicts]
+    taken = [k for k in every if k.departs not in kept.owner]  # an owner's criterion is withdrawn instead
+    said += [f"{len(every)} conflicts with the brief"] if every else []
     text = f"Decide the visual review of {head[:7]} (round {kept.number}): {'; '.join(said)}"
     options = [
         Option(id="pass", label="Pass", next="accept"),
         Option(id="fail", label="Fail", next="repair"),
+        *([Option(id=AMEND, label="Change the brief to take this", next="amend")] if taken else []),
         Option(id="pause", label="Pause", next="pause"),
     ]
     return engine.ask(StepKind.CHECK, text, CAUSE, options)

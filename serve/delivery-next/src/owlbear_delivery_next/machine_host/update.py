@@ -44,6 +44,9 @@ class Updater:
         self.auto, self.uses = False, 0  # an automatic update, and the owner's use counted when it started
         self.state: dict[str, Any] = {"phase": "idle", "detail": "", "version": "", "at": None}
         self.steps = update_steps.Steps(machine.say)
+        self.unpruned = ""  # why the old versions could not be removed at this host's start
+        self.unmigrated = ""  # why the runtime from before the first update could not be put away at this start
+        self.uninspected = ""
 
     def read(self) -> dict[str, Any]:
         """The update's state: its phase, what it says and the version it is about."""
@@ -51,9 +54,23 @@ class Updater:
             return dict(self.state)
 
     def report(self) -> dict[str, Any]:
-        """The state with its steps and log, and whether Start update now may start one now, or why not."""
+        """The state with its steps and log, and whether Start update now may start one now, or why not.
+
+        ``unpruned`` says why the old versions could not be removed at this host's start, ``unmigrated`` why the runtime
+        from before the first update could not be put away then.
+        """
         why = self.unstartable()
-        return self.read() | self.steps.read() | {"startable": not why, "reason": why}
+        start = {"unpruned": self.unpruned, "unmigrated": self.unmigrated}
+        return (
+            self.read()
+            | self.steps.read()
+            | {
+                "startable": not why,
+                "reason": why,
+                "automatic_errors": self.machine.auto.problems(),
+            }
+            | start
+        )
 
     def unstartable(self) -> str:
         """Why Start update now refuses now (D-01M63CC7CYSMN156SJEBVFAXTQ): an update, a stop or work running."""
@@ -64,7 +81,16 @@ class Updater:
             return "OwlBear is stopping"
         if self.machine.ending:
             return "OwlBear stops once the running steps end"
-        if left := self.machine.busy():
+        try:
+            left = self.machine.busy()
+        except Exception as exc:  # noqa: BLE001 - a failed inspection is a visible refusal, never permission
+            why = failure(exc)
+            if why != self.uninspected:
+                self.machine.say(f"update: work could not be inspected: {why}")
+            self.uninspected = why
+            return f"Work could not be inspected: {why}"
+        self.uninspected = ""
+        if left:
             more = f" and {len(left) - SHOWN} more" if len(left) > SHOWN else ""
             return f"Work runs now: {'; '.join(left[:SHOWN])}{more}"
         return ""
@@ -110,6 +136,8 @@ class Updater:
         if self.auto and self.machine.auto.uses != self.uses:
             return "postponed: you used OwlBear"
         if self.auto and not self.machine.auto.permitted():
+            if problems := self.machine.auto.problems():
+                return "postponed: automatic updating cannot continue: " + "; ".join(problems)
             return "postponed: updating by itself is off now"
         return "postponed: work started" if self.auto and working else ""
 
@@ -128,7 +156,7 @@ class Updater:
         try:
             choice = versions.target()
         except (versions.VersionError, registry.RegistryError) as exc:
-            self._set("failed", f"the versions could not be read: {exc}")
+            self._set("failed", f"the versions could not be read: {failure(exc)}")
             return
         if choice is None or not choice.tag:
             said = "; ".join(choice.notes) if choice else "no newer version of this machine's channel"
@@ -156,7 +184,7 @@ class Updater:
                 if self._switch(folder, tag):
                     return
             except versions.VersionError as exc:
-                self._set("failed", str(exc), tag)
+                self._set("failed", failure(exc), tag)
                 return
         self._set("refused", why, tag)
 
@@ -169,8 +197,8 @@ class Updater:
         except versions.VersionError as exc:
             self.attempts[tag] = self.attempts.get(tag, 0) + 1
             if isinstance(exc, versions.PackInstallError):  # every page offers Install for it
-                self.machine.impeccable.failed(tag, str(exc))
-            self._set("failed", str(exc), tag)
+                self.machine.impeccable.failed(tag, failure(exc))
+            self._set("failed", failure(exc), tag)
             return None
         self.machine.impeccable.ready(tag)
         return folder

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, StepKind
+from owlbear_delivery_next.change_flow import shaping_capture
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay, pack_run, pack_state
 from owlbear_delivery_next.local_system.slots import PACK
@@ -57,6 +58,10 @@ def wanted(c: Change, step: Step | None) -> int:
     """
     if step is None:
         return 0
+    if c.amending is not None:  # TD-185: its sessions run before the stopped step, whichever step it is
+        return 1
+    if shaping_capture.owed(c):
+        return 0  # the draft's capture runs no agent, and its runner does nothing else
     if step.kind in NO_AGENT:
         o = c.outcome
         return int(o is not None and o.cause == cause_key(ErrorKind.NETWORK, step.kind, pick.LABEL))

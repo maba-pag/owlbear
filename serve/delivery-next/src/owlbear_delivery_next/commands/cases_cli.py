@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import (
     case_edits,
     case_intake,
@@ -26,7 +27,6 @@ from owlbear_delivery_next.improvement import (
     spotter_test_run,
 )
 from owlbear_delivery_next.improvement import retro_store as retro
-from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.cases import CaseError
 from owlbear_delivery_next.local_system import data_repo
@@ -40,8 +40,8 @@ if TYPE_CHECKING:
     import argparse
 
 BY = "owner (command)"
-REFUSED = (CaseError, retro.RetroError, registry.RegistryError, StoreError, spotter_test.Refused, SettingsUnset,
-           data_repo.DataRepoError)  # fmt: skip
+REFUSED = (CaseError, retro.RetroError, registry.RegistryError, StoreError, data_repo.DataRepoError)  # fmt: skip
+SAID = (spotter_test.Refused, SettingsUnset)  # refusals in OwlBear's own words, whole as they are
 QUEUED = "queued {}: the machine host runs it once OwlBear runs; `owlbear cases runs` shows its result"
 
 
@@ -63,8 +63,11 @@ def main(a: argparse.Namespace) -> int:
                 _say(f"synthetic {art['kind']} in {art['where']}: {art['ref']} {art.get('link') or ''}".rstrip())
         else:
             return _cases(a)
-    except REFUSED as exc:
+    except SAID as exc:
         _say(f"refused: {exc}")
+        return 1
+    except REFUSED as exc:
+        _say(f"refused: {failure(exc)}")
         return 1
     return 0
 
@@ -98,7 +101,11 @@ def _cases(a: argparse.Namespace) -> int:  # noqa: C901, PLR0912 - one branch pe
         _say(QUEUED.format(case_replay.ask(case_replay.comparison(rid, a.a, a.b, BY))))
     elif a.action == "runs":
         for r in case_replay.results()[-a.last :]:
-            _say(json.dumps({k: r.get(k) for k in ("id", "kind", "result", "applied", "counts", "credits") if k in r}))
+            _say(
+                json.dumps(
+                    {k: r.get(k) for k in ("id", "kind", "result", "applied", "why", "counts", "credits") if k in r}
+                )
+            )
     return 0
 
 
@@ -157,13 +164,9 @@ def _retro(a: argparse.Namespace) -> None:
         if a.change:
             pid, _ = _project(_slash(a.change)[0])
             change = f"{pid}:{_slash(a.change)[1]}"
-        if a.synthetic:  # one request per unit: a host that stops loses none still queued
-            named = a.synthetic if isinstance(a.synthetic, str) else ""
-            rids = [retro.request(BY, synthetic=s["name"]) for s in syn.specs(named)]
-        else:
-            rids = [retro.request(BY, change, a.chat)]
+        rid = retro.request(BY, change, a.chat)
         said = "the machine host's Retro job runs it; `owlbear improvement retro status` shows its result"
-        _say(f"queued {', '.join(rids)}: {said}")
+        _say(f"queued {rid}: {said}")
     elif a.plan:
         uid, projects = _unit(a.plan)
         _say(json.dumps(retro_evidence.plan(uid, projects)))

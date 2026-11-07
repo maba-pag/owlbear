@@ -49,6 +49,7 @@ FORMAT_12 = {
 
 
 class Host:
+    repo = None  # no clone
     wake = SimpleNamespace(set=lambda: None)
     maintenance = None
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
@@ -57,6 +58,7 @@ class Host:
 @pytest.fixture
 def no_network(monkeypatch) -> None:
     monkeypatch.setattr(config, "BASE", None)
+    monkeypatch.setattr(profile, "detect", lambda _repo, _gh, previous: previous or Profile())
     monkeypatch.setattr(readiness, "check", lambda *_a, **_k: [])
 
 

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from urllib.parse import quote, urlencode
@@ -290,9 +291,7 @@ class GhProvider(Queue, Conversation):
         endpoint = f"{repo(request.repository)}/pulls/{request.number}/merge"
         args = ("api", "--method", "PUT", "--hostname", self.host, "-H", f"X-GitHub-Api-Version: {API_VERSION}")
         try:
-            done = self.runner(
-                ("gh", *args, endpoint, "--input", "-"), merge_request_body(request), self.timeout, self.cwd
-            )
+            done = self._launch(("gh", *args, endpoint, "--input", "-"), merge_request_body(request))
         except (OSError, subprocess.TimeoutExpired) as exc:
             return MergeResult(status=MergeStatus.UNKNOWN, message=failure(exc))
         payload, unread = gh_client.answer(done.stdout)
@@ -335,39 +334,47 @@ class GhProvider(Queue, Conversation):
                 return BranchDelete(BranchState.DELETED)
             failed = ProviderError(FailureCode.RESPONSE_UNKNOWN, op, "the ref update was not acknowledged",
                                    retry_safe=False)  # fmt: skip
+            failed.add_note(f"GitHub retirement response:\n{json.dumps(answer, ensure_ascii=False)}")
         except ProviderError as exc:
             failed = exc
-        after_node, after = self._branch_head(repository, ref)
+        try:
+            after_node, after = self._branch_head(repository, ref)
+        except ProviderError as exc:
+            exc.add_note(f"retirement mutation failed: {failure(failed)}")
+            raise
         if after_node != node:
-            raise ProviderError(FailureCode.RESPONSE_UNKNOWN, op, "repository identity changed during ref retirement",
-                                retry_safe=False) from failed  # fmt: skip
-        if after is None:
-            return BranchDelete(BranchState.GONE)
+            error = ProviderError(FailureCode.RESPONSE_UNKNOWN, op, "repository identity changed during ref retirement",
+                                  retry_safe=False)  # fmt: skip
+            error.add_note(failure(failed))
+            raise error from failed
         if after != expected_head:
-            return BranchDelete(BranchState.MOVED, after)
+            return BranchDelete(BranchState.MOVED, after) if after is not None else BranchDelete(BranchState.GONE)
         if failed.code in _UNCERTAIN:
-            raise ProviderError(failed.code, op, "the merged head is still present; guarded retirement may retry",
-                                retry_safe=True) from failed  # fmt: skip
+            error = ProviderError(failed.code, op, "the merged head is still present; guarded retirement may retry",
+                                  retry_safe=True)  # fmt: skip
+            error.add_note(failure(failed))
+            raise error from failed
         raise failed
 
     def _branch_head(self, repository: str, ref: str) -> tuple[str, str | None]:
         owner, name = repository.split("/", 1)
         found = self._graphql("delete_branch", _BRANCH, {"owner": owner, "name": name, "ref": ref})
         if not isinstance(found, dict) or found.get("errors"):
-            invalid("delete_branch", "GitHub could not read the repository reference")
+            invalid("delete_branch", f"GitHub could not read the repository reference: {json.dumps(found)}")
         try:
             node = found["data"]["repository"]
             if node is None:
-                raise ProviderError(FailureCode.NOT_FOUND, "delete_branch", "repository is not readable",
+                raise ProviderError(FailureCode.NOT_FOUND, "delete_branch",
+                                    f"repository is not readable: {json.dumps(found)}",
                                     retry_safe=False)  # fmt: skip
             ident, target = node["id"], node["ref"]
             if not isinstance(ident, str) or not ident.strip():
-                invalid("delete_branch", "GitHub omitted the repository identity")
+                invalid("delete_branch", f"GitHub omitted the repository identity: {json.dumps(found)}")
             if target is None:
                 return ident, None
             head = target["target"]["oid"]
             if not isinstance(head, str) or not _OID.fullmatch(head):
-                invalid("delete_branch", "GitHub omitted the branch's commit identity")
+                invalid("delete_branch", f"GitHub omitted the branch's commit identity: {json.dumps(found)}")
         except (KeyError, TypeError) as exc:
-            invalid("delete_branch", "GitHub returned an invalid repository reference", exc)
+            invalid("delete_branch", f"GitHub returned an invalid repository reference: {json.dumps(found)}", exc)
         return ident, head

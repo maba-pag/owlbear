@@ -23,9 +23,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_flow import worktree
-from owlbear_delivery_next.improvement import acts, chatlogs, retro_store, spotter
+from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.improvement import acts, chatlogs, retro_records, retro_store, spotter
 from owlbear_delivery_next.local_system.git_files import git_common_dir
-from owlbear_delivery_next.state_store.database import StoreError
+from owlbear_delivery_next.state_store.database import DIAGNOSTIC_EVENTS, StoreError
 from owlbear_delivery_next.state_store.store import ACTIVITY_LIMIT
 
 if TYPE_CHECKING:
@@ -39,8 +40,9 @@ if TYPE_CHECKING:
 LINE = 8 << 20  # bytes: a longer event is left out, as the chat intake leaves it out (``chats.LINE``)
 OPEN = frozenset({"open", "waiting"})  # a revision whose run has not ended
 SHAPING = "the chat that shaped the brief is not attributable to the Change"
-SYNTHETIC = "syn-"  # a synthetic unit's session (``retro_synthetic``)
+SYNTHETIC = "syn-"  # historical synthetic sessions remain in Retro's own folder
 UNREADABLE = (StoreError, sqlite3.Error, OSError, ValueError)  # a Change or its activity cannot be read
+records = retro_records.records
 
 
 def change_id(project: str, slug: str) -> str:
@@ -61,29 +63,19 @@ def _when(text: str) -> datetime:
 # What Retro reads: the Spotter's records, Retro's manifest and its captures
 
 
-def records() -> list[dict[str, Any]]:
-    """Every Spotter record on this machine, each with its act if it has one (``acts.joined``).
+def manifest() -> list[dict[str, Any]]:
+    """Retro's manifest lines.
 
-    An unreadable line is left out, as case intake leaves it.
+    Raises:
+        RetroError: The manifest exists but cannot be read.
     """
-    found, done = [], acts.acts(spotter.place())
-    for path in sorted(spotter.place().glob("records-*.jsonl")):
-        with contextlib.suppress(OSError):
-            for line in path.read_text().splitlines():
-                with contextlib.suppress(ValueError):
-                    if isinstance(r := json.loads(line), dict) and r.get("id"):
-                        found.append(r | (acts.joined(done[r["id"]]) if r["id"] in done else {}))
-    return found
-
-
-def manifest() -> list[dict[str, Any]] | None:
-    """Retro's manifest lines; None when it exists but cannot be read."""
     try:
         text = (chatlogs.root() / "manifest.jsonl").read_text()
     except FileNotFoundError:
         return []
-    except OSError:
-        return None
+    except OSError as exc:
+        msg = f"Retro's manifest cannot be read: {failure(exc)}"
+        raise retro_store.RetroError(msg) from exc
     found = []
     for line in text.splitlines():
         with contextlib.suppress(ValueError):
@@ -122,7 +114,7 @@ def events(session: str) -> Iterator[dict[str, Any]]:
                     if isinstance(d := json.loads(raw), dict):
                         yield d
     except (EOFError, zlib.error) as exc:
-        raise OSError(str(exc)) from exc
+        raise OSError(failure(exc)) from exc
 
 
 def fingerprint(session: str) -> dict[str, Any]:
@@ -193,15 +185,18 @@ def change_place(st: Store, repo: Path | None, slug: str) -> str:
     """The Change's worktree as its sessions named it; "" when it cannot be known."""
     try:
         change = st.read(slug)
-    except UNREADABLE:
-        return ""
+    except UNREADABLE as exc:
+        exc.add_note(f"reading Change {slug} to find its worktree")
+        raise
     if change.names.worktree:
         return change.names.worktree
     if repo is None:
         return ""
-    with contextlib.suppress(OSError, subprocess.CalledProcessError):
+    try:
         return str(worktree.path_for(git_common_dir(repo), slug))
-    return ""
+    except (OSError, subprocess.CalledProcessError) as exc:
+        exc.add_note(f"finding Change {slug}'s worktree in {repo}")
+        raise
 
 
 def describe_change(uid: str, st: Store, repo: Path | None) -> dict[str, Any]:
@@ -212,9 +207,6 @@ def describe_change(uid: str, st: Store, repo: Path | None) -> dict[str, Any]:
     """
     slug = uid.split(":", 2)[2]
     lines = manifest()
-    if lines is None:
-        msg = "Retro's manifest cannot be read"
-        raise retro_store.RetroError(msg)
     place, gaps, seen = change_place(st, repo, slug), [SHAPING], set()
     sessions = change_sessions(lines, place) if place else []
     if not place:
@@ -228,11 +220,17 @@ def describe_change(uid: str, st: Store, repo: Path | None) -> dict[str, Any]:
             continue
         try:
             seen |= exposure(session)[0]
-        except OSError as exc:
+        except FileNotFoundError as exc:
             gaps.append(f"session {session}'s capture cannot be read ({type(exc).__name__})")
+        except OSError as exc:
+            exc.add_note(f"reading session {session}'s capture")
+            raise
     with contextlib.suppress(*UNREADABLE):
-        if len(st.events(slug)) >= ACTIVITY_LIMIT:
-            gaps.append(f"the Change's activity keeps only its last {ACTIVITY_LIMIT} events")
+        if sum(e.get("event") not in DIAGNOSTIC_EVENTS for e in st.events(slug)) >= ACTIVITY_LIMIT:
+            gaps.append(
+                f"the Change's activity keeps only its last {ACTIVITY_LIMIT} ordinary events; "
+                "diagnostics are retained separately"
+            )
     return {
         "kind": "change",
         "family": uid,
@@ -379,14 +377,15 @@ def eligible(
         try:
             return "" if projects[pid][0].read(slug).finished_at is not None else "it is not finished"
         except UNREADABLE as exc:
-            return f"it cannot be read ({type(exc).__name__})"
+            return f"it cannot be read ({failure(exc)})"
     return "it is no unit Retro knows"
 
 
 def _chat_refusal(session: str, enrolled: list[str], logs: Path, *, fresh: bool) -> str:
-    ours = chatlogs.own()
-    if ours is None:
-        return "Retro's manifest cannot be read, so no chat is told from OwlBear's own sessions"
+    try:
+        ours = chatlogs.own()
+    except (OSError, ValueError) as exc:
+        return f"Retro's manifest cannot be read, so no chat is told from OwlBear's own sessions: {failure(exc)}"
     if session in ours:
         return "it is one of OwlBear's own sessions"
     if not chatlogs.chat(logs / session, enrolled, ours):
@@ -394,7 +393,7 @@ def _chat_refusal(session: str, enrolled: list[str], logs: Path, *, fresh: bool)
     try:
         st = (logs / session / "events.jsonl").stat()
     except OSError as exc:
-        return f"its log cannot be read ({type(exc).__name__})"
+        return f"its log cannot be read ({failure(exc)})"
     return _fresh_refusal(session, st) if fresh else ""
 
 
@@ -433,9 +432,12 @@ def freeze(item: Mapping[str, Any], projects: Projects, found: list[dict[str, An
         described = {"kind": "chat", "family": uid, "sessions": [rest], "gaps": session_gaps(rest, {})}
         try:
             seen, n = exposure(rest)
-        except OSError as exc:
+        except FileNotFoundError as exc:
             seen, n = set(), 0
             described["gaps"].append(f"the chat's capture cannot be read ({type(exc).__name__})")
+        except OSError as exc:
+            exc.add_note(f"reading chat {rest}'s capture")
+            raise
         low = max((int(r.get("cutoff_events") or 0) for r in revs if r.get("state") == "judged"), default=0)
         mine = [r for r in found if unit_of(r) == uid and low < int(r.get("cutoff") or 0) <= n]
         rev = {"from_events": low, "cutoff_events": n, **fingerprint(rest)}

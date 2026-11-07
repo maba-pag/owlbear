@@ -152,6 +152,7 @@ async def test_mutation_tools_translate_busy_errors_from_another_process(tmp_pat
         _finish_lock_holder(holder, release)
 
 
+@pytest.mark.usefixtures("todays_memory_values")
 @pytest.mark.asyncio
 async def test_assess_memories_reports_busy_entry_and_continues(tmp_path: Path) -> None:
     process_context = multiprocessing.get_context("spawn")
@@ -212,8 +213,10 @@ async def test_curate_memory_routes_cross_process_stale_edit_to_tool_error(
     )
     original_load = vars(tools)["_load_entry_or_raise"]
 
-    def load_then_wait_for_editor(current_engine: MemoryEngine, entry_id: str) -> MemoryEntry:
-        current = original_load(current_engine, entry_id)
+    def load_then_wait_for_editor(
+        current_engine: MemoryEngine, entry_id: str, *, read_errors: dict[str, str] | None = None
+    ) -> MemoryEntry:
+        current = original_load(current_engine, entry_id, read_errors=read_errors)
         entry_read.set()
         if not edit_complete.wait(timeout=10):
             raise TimeoutError

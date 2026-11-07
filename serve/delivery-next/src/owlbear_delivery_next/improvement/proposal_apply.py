@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_memory.errors import ConcurrencyError, DuplicateEntryError, ValidationError
 from owlbear_memory.models import MemoryCategory
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.improvement import case_intake, case_replay, case_review, cases
 from owlbear_delivery_next.improvement import proposal_targets as targets
@@ -81,11 +82,10 @@ class Seams:
 
 
 def intake(pid: str, accepted: Mapping[str, Any]) -> str:
-    """The candidate case accepted Spotter case *pid* makes: of its record, real or synthetic, with its call."""
+    """The candidate case accepted Spotter case *pid* makes from its record and call."""
     dest = accepted["destination"]
-    make = case_intake.from_synthetic if dest.get("synthetic") else case_intake.from_record
     why = str((accepted.get("publishable") or {}).get("title") or "")[: cases.WHY]
-    return make(dest["record"], dest["call"], why, BY, proposal=pid)
+    return case_intake.from_record(dest["record"], dest["call"], why, BY, proposal=pid)
 
 
 def destination(
@@ -127,6 +127,7 @@ def decide(  # noqa: PLR0913 - the decision, what the owner saw, and where it ma
     units = targets.units_of()
 
     def seen(snap: dict[str, Any]) -> dict[str, Any]:
+        store.require_real(str(snap.get("provenance") or "real"))
         dest = destination(snap, places, shared_root, units)
         if props.token(snap, dest) != token:
             msg = f"proposal {pid} changed since it was shown: look again"
@@ -145,17 +146,10 @@ def decide(  # noqa: PLR0913 - the decision, what the owner saw, and where it ma
     return after
 
 
-def closing(snap: Mapping[str, Any]) -> bool:
-    """Whether all that is left of accepted *snap* is closing the synthetic issue it made; a reset never stops that."""
-    made = any(a["step"] == "created" for a in snap["applied"])
-    issue = (snap.get("accepted") or {}).get("destination", {}).get("kind") == "issue"
-    return snap["state"] == "accepted" and snap["apply_state"] != "done" and issue and made
-
-
 def apply(pid: str, seams: Seams, gate: Callable[[], None] = lambda: None) -> dict[str, Any]:
     """Act on the accepted proposal *pid* from what was accepted; the proposal after it, applied or failed.
 
-    One resting on an assumption a reset retired since makes nothing more, except closing a synthetic issue it made.
+    One resting on an assumption a reset retired since makes nothing more.
     *gate* is asked again once the proposal before it is done: a stop or a fence begun meanwhile refuses this one.
 
     Raises:
@@ -167,11 +161,12 @@ def apply(pid: str, seams: Seams, gate: Callable[[], None] = lambda: None) -> di
         if snap is None or snap["state"] != "accepted":
             msg = f"proposal {pid} is {'unknown' if snap is None else snap['state']}, not accepted"
             raise store.RetroError(msg)
+        store.require_real(str(snap.get("provenance") or "real"))
         if snap["apply_state"] == "done":
             return snap
         accepted = snap["accepted"]
         done = {a["step"]: a["artefact"] for a in snap["applied"]}
-        if not closing(snap) and not store.visible(snap, store.retired_ids(), synthetic=True):
+        if not store.visible(snap, store.retired_ids(), synthetic=True):
             msg = f"proposal {pid} rests on a retired assumption: nothing more is made of it"
             raise store.RetroError(msg)
         text = accepted.get("publishable") or {}
@@ -186,7 +181,7 @@ def apply(pid: str, seams: Seams, gate: Callable[[], None] = lambda: None) -> di
         try:
             act(pid, accepted, (title, body), done, seams)
         except (*FAILURES, store.RetroError, cases.CaseError) as exc:
-            props.outcome(pid, "failed", step="", error=f"{type(exc).__name__}: {exc}")
+            props.outcome(pid, "failed", step="", error=failure(exc))
         return props.folded()[pid]
 
 
@@ -198,8 +193,7 @@ def _backlog(pid: str, accepted: Mapping[str, Any], text: Text, _done: Done, sea
     marker, (title, body) = f"retro-proposal:{pid}", text
     view = seams.backlog(accepted["destination"]["folder"])
     entry = next((e for e in view.read(fresh=True)[0].values() if marker in e.evidence), None)
-    if entry is None:  # the marker last, as the newest refs are kept; a synthetic title never matches a real entry
-        title = f"[synthetic] {title}" if accepted["destination"].get("synthetic") else title
+    if entry is None:  # the marker last, as the newest refs are kept
         entry, _ = view.add(title, body, "retro", evidence=[*accepted["findings"], marker])
     link = f"https://github.com/{view.repository}/issues/{entry.id}"
     props.outcome(pid, "applied", step="created", artefact=_artefact("backlog", view.repository, f"#{entry.id}", link))
@@ -208,8 +202,10 @@ def _backlog(pid: str, accepted: Mapping[str, Any], text: Text, _done: Done, sea
 def _memory(pid: str, accepted: Mapping[str, Any], text: Text, _done: Done, seams: Seams) -> None:
     dest, (title, body) = accepted["destination"], text
     engine = seams.memory(Path(dest["folder"]))
+    entries = engine.get_entries()
+    unread = dict(engine.read_errors)
     made = next(
-        (e for e in engine.get_entries() if (e.title, e.source_agent, e.content) == (title, "retro", body)), None
+        (e for e in entries if (e.title, e.source_agent, e.content) == (title, "retro", body)), None
     ) or engine.save(
         title=title,
         content=body,
@@ -219,26 +215,21 @@ def _memory(pid: str, accepted: Mapping[str, Any], text: Text, _done: Done, seam
         scope_agents=list(dest["roles"]),
         recommended=dest["recommended"],
     )
-    props.outcome(pid, "applied", step="created", artefact=_artefact("memory", dest["folder"], made.id))
+    unread.update(engine.read_errors)
+    artefact = _artefact("memory", dest["folder"], made.id)
+    if unread:
+        artefact["read_errors"] = unread
+    props.outcome(pid, "applied", step="created", artefact=artefact)
 
 
-def _issue(pid: str, accepted: Mapping[str, Any], text: Text, done: Done, seams: Seams) -> None:
+def _issue(pid: str, _accepted: Mapping[str, Any], text: Text, _done: Done, seams: Seams) -> None:
     gh, (title, body) = seams.issues(), text
-    if "created" in done:  # only a synthetic one's closing is left: the issue made is closed, not looked for again
-        made = done["created"]
-        gh.close(int(made["ref"].lstrip("#")))
-        props.outcome(pid, "applied", step="closed", artefact=made)
-        return
-    synthetic, marker = bool(accepted["destination"].get("synthetic")), f"<!-- retro-proposal:{pid} -->"
+    marker = f"<!-- retro-proposal:{pid} -->"
     issue = gh.find(marker)
     if issue is None:
-        issue = gh.create(f"[synthetic] {title}" if synthetic else title, f"{body}\n\n{marker}")
+        issue = gh.create(title, f"{body}\n\n{marker}")
     made = _artefact("issue", gh.repository, f"#{issue.number}", issue.url)
     props.outcome(pid, "applied", step="created", artefact=made)
-    if synthetic:
-        if issue.state != "closed":
-            gh.close(issue.number)
-        props.outcome(pid, "applied", step="closed", artefact=made)
 
 
 def _case(pid: str, accepted: Mapping[str, Any], _text: Text, done: Done, seams: Seams) -> None:

@@ -21,6 +21,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import assumptions, spotter
 from owlbear_delivery_next.local_system import maintenance, processes
 from owlbear_delivery_next.runtimes import spotter_look
@@ -50,7 +51,7 @@ def retired(rule: str) -> str:
     try:
         held = assumptions.ensure(rule)
     except (OSError, ValueError) as exc:  # fails closed: the rule may be retired
-        return f"the marked assumptions cannot be read ({type(exc).__name__}), so its rule {rule} may be retired"
+        return f"the marked assumptions cannot be read ({failure(exc)}), so its rule {rule} may be retired"
     return "" if held else f"retired: its rule, the marked assumption {rule}, was reset; a decided rule must replace it"
 
 
@@ -68,13 +69,20 @@ class Owned:
 
     def __init__(self, ownership: maintenance.Maintenance, say: Callable[[str], None]) -> None:
         self.ownership, self.say = ownership, say
+        self.unread = ""
 
     def lingering(self) -> bool:
         """Whether a look's lease is held, so its runtime may still run; an unreadable ledger counts as held."""
         try:
-            return PROJECT in self.ownership.holding(KIND)
-        except maintenance.MaintenanceError:
+            held = PROJECT in self.ownership.holding(KIND)
+        except (maintenance.MaintenanceError, OSError) as exc:
+            why = failure(exc)
+            if why != self.unread:
+                self.say(f"chat looks: ownership cannot be inspected: {why}")
+            self.unread = why
             return True
+        self.unread = ""
+        return held
 
     async def judged(self, judge: spotter.Judge, the_card: dict[str, Any], ctx: spotter.Context, meter: Meter) -> str:
         """*judge*'s look under a lease begun before its session and ended with what its teardown confirmed."""
@@ -115,7 +123,11 @@ class Gate:
             if self.admitted >= LOOKS:
                 return CAPACITY
         if self.owned is not None and self.owned.lingering():
-            return HELD
+            return (
+                f"held: chat ownership cannot be inspected; no new look starts: {self.owned.unread}"
+                if self.owned.unread
+                else HELD
+            )
         with self.admission():  # a fence or stop taken before this keeps it out; one taken after counts it
             if self.fenced():
                 return FENCED
@@ -135,4 +147,11 @@ class Gate:
         with self.lock:
             n = self.admitted
         running = [f"Spotter chats: {n} look running"] if n else []
-        return running + ([LINGERING] if self.owned is not None and self.owned.lingering() else [])
+        if self.owned is not None and self.owned.lingering():
+            return [
+                *running,
+                f"Spotter chats: ownership cannot be inspected; no new look starts: {self.owned.unread}"
+                if self.owned.unread
+                else LINGERING,
+            ]
+        return running

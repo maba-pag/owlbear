@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts import dispute_tools, round_records, tools
+from owlbear_delivery_next.change_contracts import amend_tools, dispute_tools, round_records, tools
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import Dispute, ErrorKind, Exit, Option, Question, StepKind
 from owlbear_delivery_next.change_contracts.round_records import FINAL, MAX_FINDINGS, RECHECK
@@ -153,7 +153,7 @@ def check(  # noqa: PLR0913 - the result, its tree and the four bounds its field
         return _rejections([r.finding for r in args.rejected], tree, allowed, settled)
     if (rejected := getattr(args, "rejected", None)) is not None:  # a plan's or pack update's need no commit
         return _rejections([r.finding for r in rejected], None, allowed, settled)
-    if isinstance(args, tools.ReviewResult):
+    if isinstance(args, tools.ReviewResult | amend_tools.VerdictResult):  # an amendment's verdict too (TD-185)
         over = len(args.findings) - cap
         many = [f"findings: {len(args.findings)} given, at most {cap} - keep the most important"] if over > 0 else []
         return many + (_named(args.findings, tasks) if tasks else []) + _rechecks(args.rechecked, rechecks)

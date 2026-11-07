@@ -19,14 +19,14 @@ import pytest
 
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, local_home
-from owlbear_delivery_next.machine_host import environment, impeccable, selfcheck, update_checks, versions
+from owlbear_delivery_next.machine_host import command, environment, impeccable, selfcheck, update_checks, versions
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.machine_host.versions import Choice
 from owlbear_delivery_next.project_host import pages
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
-from owlbear_delivery_next.state_store import project_home, registry
-from owlbear_delivery_next.state_store.database import STORE_FORMAT
+from owlbear_delivery_next.state_store import project_home, registry, switched_authority
+from owlbear_delivery_next.state_store.database import STORE_FORMAT, StoreError
 
 
 def always(_older: str, _newer: str) -> bool:
@@ -271,11 +271,36 @@ def test_a_git_verb_failing_while_looking_says_its_whole_stderr_on_the_page_and_
     updating.machine.updater._update()  # noqa: SLF001 - the thread's work, run here
 
     detail, line, logged = ended(updating.machine, "looking")
-    lead = "the versions could not be read: git fetch failed: CalledProcessError: Command '["
+    lead = "the versions could not be read: VersionError: git fetch failed: CalledProcessError: Command '["
     assert detail.startswith(lead)
     assert f"' returned non-zero exit status 128.\n{whole_error}\n" in detail
     assert (line, logged[-1]) == (detail, detail)
     assert f"update: failed: {detail}" in updating.said
+
+
+def test_a_look_whose_git_fetch_fails_says_the_whole_failure_on_the_page_and_in_the_log(
+    updating, whole_error, monkeypatch
+):
+    """#971: the failed look's detail, its step's line and the host's log carry the error's type, streams and notes."""
+    run, seen = subprocess.run, []
+
+    def failing(command: list[str], *args: object, **kwargs: object) -> subprocess.CompletedProcess:
+        if "fetch" in command:
+            seen.append(command)
+            error = subprocess.CalledProcessError(128, command, OUT, whole_error)
+            error.add_note("a note on the failure")
+            raise error
+        return run(command, *args, **kwargs)
+
+    monkeypatch.setattr(versions.subprocess, "run", failing)
+
+    updating.machine.updater._update()  # noqa: SLF001 - the thread's work, run here
+
+    [command] = seen
+    failed = streams(f"CalledProcessError: Command '{command}' returned non-zero exit status 128.", whole_error)
+    whole = f"the versions could not be read: VersionError: git fetch failed: {failed}\na note on the failure"
+    assert ended(updating.machine, "looking") == (whole, whole, ["fetching the versions", whole])
+    assert updating.said[-1] == f"update: failed: {whole}"
 
 
 @pytest.mark.parametrize("word", FAILING)
@@ -303,10 +328,31 @@ def test_a_failing_build_step_says_both_its_streams_whole_on_the_page_and_in_the
     updating.machine.updater._update()  # noqa: SLF001
 
     detail, line, logged = ended(updating.machine, step)
-    assert (detail, line, logged[-1]) == (lead + whole, whole, whole)
+    kind = "PackInstallError" if word == "design-pack" else "VersionError"
+    reported = f"VersionError: {whole}" if step in {"getting", "building"} else whole
+    assert (detail, line, logged[-1]) == (f"{kind}: {lead}{whole}", reported, reported)
     assert f"update: failed v0.2: {detail}" in updating.said
     if word == "design-pack":
         assert updating.machine.impeccable.read()["install"]["detail"] == detail  # every page's banner
+
+
+def test_a_switch_that_fails_says_the_whole_failure_on_the_page_and_in_the_log(updating, whole_error, monkeypatch):
+    """#971: a version that could not take over: the update's detail and the host's log carry the error's notes."""
+    error = versions.VersionError(whole_error)
+    error.add_note("a note on the failure")
+
+    def failing(_folder: Path, _tag: str) -> bool:
+        raise error
+
+    updater = updating.machine.updater
+    monkeypatch.setattr(updater, "_prepared", lambda _choice: local_home.root() / local_home.VERSIONS / "v0.2")
+    monkeypatch.setattr(updater, "_switch", failing)
+
+    updater._update()  # noqa: SLF001 - the thread's work, run here
+
+    whole = f"VersionError: {whole_error}\na note on the failure"
+    assert (updater.read()["phase"], updater.read()["detail"]) == ("failed", whole)
+    assert updating.said[-1] == f"update: failed v0.2: {whole}"
 
 
 @pytest.mark.parametrize("word", ["--detach", *FAILING])  # --detach: git worktree add
@@ -333,7 +379,9 @@ def test_a_command_of_an_update_timing_out_says_what_it_printed_whole(updating, 
         word, f"it could not run: {whole}"
     )
     detail, line, logged = ended(updating.machine, step)
-    assert (detail, line, logged[-1]) == (lead + whole, whole, whole)
+    kind = "PackInstallError" if word == "design-pack" else "VersionError"
+    reported = f"VersionError: {whole}" if step in {"getting", "building"} else whole
+    assert (detail, line, logged[-1]) == (f"{kind}: {lead}{whole}", reported, reported)
     assert f"update: failed v0.2: {detail}" in updating.said
 
 
@@ -474,6 +522,33 @@ def test_the_versions_command_says_what_runs_and_what_comes_next(origin):
     assert lines[1].startswith("next: v0.2 at ")
 
 
+@pytest.mark.parametrize("prepare", [False, True])
+def test_the_versions_command_says_versions_it_could_not_read_or_install_whole(
+    origin, monkeypatch, capsys, whole_error, prepare
+):
+    """#971: ``owlbear versions`` says a failed look, and with ``--prepare`` a failed install, whole."""
+    runtime_at(origin, git(origin, "rev-parse", "v0.1^{commit}"))
+    error = versions.VersionError(whole_error)
+    error.add_note("a note on the failure")
+
+    def failing(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(sys, "platform", "darwin")  # CI runs on Linux, which the command refuses
+    monkeypatch.setattr(versions, "install" if prepare else "target", failing)
+    tag, commit = versions.active()
+    running = f"running: {tag or 'no installed version'} at {commit[:12]}\n"
+    whole = f"VersionError: {whole_error}\na note on the failure"
+
+    assert command.main(["versions", "--prepare"] if prepare else ["versions"]) == 1
+
+    if prepare:
+        nxt = f"next: v0.2 at {git(origin, 'rev-parse', 'v0.2^{commit}')[:12]}\n"
+        assert capsys.readouterr().out == f"{running}{nxt}{whole}\n"
+    else:
+        assert capsys.readouterr().out == f"{running}the versions could not be read: {whole}\n"
+
+
 def registered(tmp_path: Path, marker: int | None = None, config: int | None = None) -> Path:
     clone = tmp_path / "clone"
     git(tmp_path, "init", "-q", str(clone))
@@ -500,6 +575,55 @@ def test_the_selfcheck_refuses_a_store_or_settings_newer_than_it_reads(tmp_path)
 
     assert f"{clone}: its store has format 99, newer than this version's {STORE_FORMAT}" in found
     assert any("have format 99, newer" in line for line in found)
+
+
+@pytest.mark.parametrize("fails", ["import", "machine", "marker", "receipt", "settings"])
+def test_the_selfcheck_says_each_failure_whole(tmp_path, monkeypatch, capsys, whole_error, fails):
+    """#971: a module that does not import, an unreadable ``machine.json``, store marker or settings layer, and an
+    unsound move receipt: each said with its type and notes, as the update's step line reads them."""
+    clone = registered(tmp_path, marker=STORE_FORMAT)
+    pid = registry.load().projects[0].id
+    marker, layer = project_home.home(pid) / "format", project_home.home(pid) / "config.json"
+    layer.write_text(json.dumps({"format": CONFIG_FORMAT}))
+    error = {"import": RuntimeError, "machine": ValueError, "marker": OSError, "receipt": StoreError,
+             "settings": OSError}[fails](whole_error)  # fmt: skip
+    error.add_note("a note on the failure")
+    whole = f"{type(error).__name__}: {whole_error}\na note on the failure"
+
+    def failing(*_args, **_kwargs):
+        raise error
+
+    importing, reading, read_text = selfcheck.import_module, selfcheck.read_regular, Path.read_text
+    if fails == "import":
+        monkeypatch.setattr(
+            selfcheck, "import_module", lambda name: failing() if name.endswith(".commands.runner") else importing(name)
+        )
+        said = f"commands.runner does not import: {whole}"
+    elif fails == "machine":
+        monkeypatch.setattr(registry.Machine, "model_validate_json", failing)
+        said = f"{local_home.root() / registry.MACHINE} is unreadable: {whole}"
+    elif fails == "marker":
+        monkeypatch.setattr(selfcheck, "read_regular", lambda path: failing() if path == marker else reading(path))
+        said = f"{clone}: {marker} is unreadable: {whole}"
+    elif fails == "receipt":
+        monkeypatch.setattr(switched_authority, "retained_target", failing)
+        said = f"{clone}: {whole}"
+    else:
+        monkeypatch.setattr(Path, "read_text", lambda path, **kw: failing() if path == layer else read_text(path, **kw))
+        said = f"{clone}: {layer} is unreadable: {whole}"
+
+    assert selfcheck.main() == 1
+
+    assert capsys.readouterr().out == f"{said}\n"
+
+
+def test_the_selfcheck_names_every_missing_page_asset(monkeypatch):
+    """#971: the list the owner reads is never cut to its first five."""
+    gone = [f"gone{n}.js" for n in range(7)]
+    monkeypatch.setattr(pages, "lit_files", lambda: {"lit-html.js": "x"} | dict.fromkeys(gone, "y"))
+
+    named = ", ".join(f"vendor/lit-html/{name}" for name in gone)
+    assert selfcheck.problems() == [f"the pages' assets are missing: {named}"]
 
 
 def test_the_selfcheck_runs_as_its_own_process_and_says_it_passed():
@@ -557,19 +681,19 @@ def test_the_selfcheck_refuses_a_clones_unmoved_settings_newer_than_it_reads(tmp
     assert found == [f"{clone}: {said}"]
 
 
-def test_the_selfcheck_reads_settings_in_format_20_and_refuses_the_next_one(tmp_path):
+def test_the_selfcheck_reads_settings_in_format_23_and_refuses_the_next_one(tmp_path):
     clone = registered(tmp_path)
     folder = project_home.clone_dir(clone)
     folder.mkdir(exist_ok=True)
     switched = {
-        "format": 20, "load_user_instructions": True, "load_user_skills": False, "load_user_memory": False,
-        "guard_level": "strict",
+        "format": 23, "load_user_instructions": True, "load_user_skills": False, "load_user_memory": False,
+        "guard_level": "strict", "github_account": "boecht", "agents": {"shaper": {"challenge_wait": 15}},
     }  # fmt: skip
     (folder / "config.json").write_text(json.dumps(switched))
     assert selfcheck.problems() == []
 
-    (folder / "config.json").write_text(json.dumps(switched | {"format": 21}))
-    said = f"its settings in {folder / 'config.json'} have format 21, newer than this version's 20"
+    (folder / "config.json").write_text(json.dumps(switched | {"format": 24}))
+    said = f"its settings in {folder / 'config.json'} have format 24, newer than this version's 23"
     assert selfcheck.problems() == [f"{clone}: {said}"]
 
 

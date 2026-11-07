@@ -7,8 +7,9 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.failures import QUOTA, WRONG_MODEL
+from owlbear_delivery_next.change_contracts.merge_records import QUEUE_UNSEEN
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind, Waiting
-from owlbear_delivery_next.change_flow import loop, picks, step_stages
+from owlbear_delivery_next.change_flow import brief_starts, loop, picks, shaping_capture, step_stages
 from owlbear_delivery_next.change_flow.brief_rounds import MODES
 from owlbear_delivery_next.change_flow.budgets import EPISODE_QUIET, RETRY_LIMIT, WRONG_MODEL_LIMIT, episode
 from owlbear_delivery_next.change_flow.loop import CONSENT
@@ -17,7 +18,7 @@ from owlbear_delivery_next.local_system.mask import redact
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from owlbear_delivery_next.change_contracts.models import Actor, Change, Stop
+    from owlbear_delivery_next.change_contracts.models import Actor, Change, Outcome, Stop
 
 _AGENT, _ENGINE = timedelta(minutes=10), timedelta(minutes=2)
 QUIET: dict[StepKind, timedelta] = {
@@ -69,6 +70,7 @@ _SAID: dict[str, Callable[[dict[str, Any]], str]] = {
     "wave": lambda _e: "started judges",
     "answer": lambda e: f"answered {e.get('question')}: {str(e.get('class')).replace('_', ' ')}",  # TD-461
     "ended": lambda _e: "session ended",
+    "runner-failed": lambda _e: "the runner failed",
 }
 _WHO = {
     Waiting.CI: "CI",
@@ -76,7 +78,10 @@ _WHO = {
     Waiting.OWNER_ACTION: "your action in GitHub",
     Waiting.GITHUB: "GitHub",
 }
-_ACTION = {Waiting.PERSON_CHECK: "Report result", Waiting.OWNER_ACTION: "Act in GitHub", Waiting.CHAT: "Approve brief"}
+APPROVE = "Approve brief"  # the wait to approve a challenged brief version
+CONTINUE = "Continue in the shaping chat"  # a Change whose shaping chat acts next (D-01M6JY6QW936SGFAJ6W3DV48KA)
+_SAYS_CONTINUE = 6  # the chat contract from which a row may say CONTINUE; an earlier chat reads APPROVE there
+_ACTION = {Waiting.PERSON_CHECK: "Report result", Waiting.OWNER_ACTION: "Act in GitHub", Waiting.CHAT: APPROVE}
 RESUME = "Resume Delivery"
 _WORK = {
     StepKind.SHAPE: ("Shape", "shaping", "reviewer"),
@@ -109,11 +114,17 @@ class Activity:
 
 @dataclass(frozen=True)
 class Status:
-    """One line, the one next action (None when nothing is needed) and who takes it."""
+    """One line, the one next action (None when nothing is needed) and who takes it.
+
+    *error* says the line carries an error (a stop, or a retry's reason), which a card shows whole (#971).
+    *stopped* identifies the selected stop status, independently of its wording or an old Stop in the record.
+    """
 
     line: str
     action: str | None
     actor: Actor
+    error: bool = False
+    stopped: bool = False
 
 
 def _age(delta: timedelta) -> str:
@@ -126,6 +137,8 @@ def _age(delta: timedelta) -> str:
 
 def stage(c: Change) -> str:
     """Return the stage shown for the current step, with the task position while building."""
+    if shaping_capture.owed(c):
+        return "Capturing pages"
     kind = StepKind(c.step.mode) if c.step.kind == StepKind.INTEGRATE and c.step.mode else c.step.kind
     if kind in {StepKind.BUILD, StepKind.REVIEW} and c.plan and c.plan.tasks:
         ids = [t.id for t in c.plan.tasks]
@@ -135,7 +148,18 @@ def stage(c: Change) -> str:
 
 def unloadable(stop: Stop) -> Status:
     """Status of a Change whose state cannot load, from the store error's stop (restore or upgrade)."""
-    return Status(f"stopped: {stop.reason}", stop.action, stop.actor)
+    return Status(f"stopped: {stop.reason}", stop.action, stop.actor, error=True, stopped=True)
+
+
+def for_chat(row: dict[str, Any], contract: str | None) -> dict[str, Any]:
+    """A Change's row as a chat of *contract* (a served header, or None for a page) reads its action.
+
+    Before contract 6 every wait for the shaping chat said APPROVE, which such a chat's await_challenge reads as its
+    own.
+    """
+    if contract is not None and int(contract) < _SAYS_CONTINUE and row.get("action") == CONTINUE:
+        return row | {"action": APPROVE}
+    return row
 
 
 def _tool_at(c: Change, tool: dict[str, Any] | None) -> datetime | None:
@@ -150,6 +174,69 @@ def silent(c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | 
     if not (activity.runner_alive and since and now - since > QUIET[c.step.kind]):
         return None
     return now - since
+
+
+def _direct_error(cause: str | None) -> bool:
+    """Direct diagnostic asks carry their failure even when no retry budget was spent (#1007)."""
+    kind, _, rest = (cause or "").partition(":")
+    step, _, subject = rest.partition(":")
+    if step in {StepKind.PUBLISH, StepKind.FOLLOW, StepKind.MERGE} and kind in {
+        ErrorKind.AUTH,
+        ErrorKind.POLICY,
+        ErrorKind.TOOLING,
+        ErrorKind.NETWORK,
+    }:
+        return True
+    if kind in {ErrorKind.PROJECT_ENV, ErrorKind.SCOPE} and subject.startswith("tool-"):
+        return True
+    if kind == ErrorKind.PROJECT_ENV and step == StepKind.CHECK:
+        return subject in {"preparation", "preparation-missing", "preparation-unsafe"}
+    return kind == ErrorKind.GATE and (
+        cause in {"gate:publish:ssh", QUEUE_UNSEEN, "gate:merge:queue-timed-out", "gate:merge:queue-removed"}
+        or (step == StepKind.FOLLOW and subject.startswith("missing:"))
+        or (
+            step in {StepKind.FOLLOW, StepKind.MERGE}
+            and (subject == "reopen" or subject.startswith(("repost:", "resolve:")))
+        )
+    )
+
+
+def _enqueue_error(c: Change, activity: Activity) -> bool:
+    """The refused enqueue of the current completed attempt, never an older refusal behind another step."""
+    o, events = c.outcome, reversed(activity.events)
+    if c.step.kind != StepKind.MERGE or not o or o.waiting != Waiting.OWNER_ACTION:
+        return False
+    step = next((event for event in events if event.get("event") == "step"), None)
+    if step is None:
+        return False
+    if (step.get("kind"), step.get("exit")) != (StepKind.MERGE, Exit.PENDING) or (
+        datetime.fromisoformat(step["at"]).replace(microsecond=0) != o.at.replace(microsecond=0)
+    ):
+        return False
+    for event in events:
+        if event.get("event") == "step":
+            break
+        if event.get("event") == "merge-enqueue":
+            return event.get("status") == "refused" and event.get("pr") == c.names.pr
+    return False
+
+
+def _owned(c: Change, s: str, o: Outcome, activity: Activity) -> Status | None:
+    """A wait the owner or his shaping chat ends, or the brief challenge Delivery starts by itself (#986); else None."""
+    if shaping_capture.owed(c):  # the chat's wait goes on, but Delivery works first
+        return Status(f"{s} · brief v{c.brief.version}'s states at {c.names.target}; approval waits", None, "delivery")
+    if brief_starts.waiting(c):  # no chat needed: Delivery starts the version's challenge
+        at = f" at {o.wake_at.astimezone():%H:%M}" if o.wake_at else " after the wait set in Settings"
+        return Status(f"{s} · brief v{c.brief.version}'s challenge starts by itself{at}", None, "delivery")
+    if o.who != "you":
+        return None
+    action = (
+        CONTINUE  # the shaping chat acts next, unless the owner approves a challenged version
+        if o.waiting == Waiting.CHAT and not c.brief.challenged == c.brief.version != c.brief.approved_version
+        else _ACTION.get(o.waiting)
+    )
+    refused = o.cause == brief_starts.REFUSED  # the approval he asked for, refused: its reason whole (#986)
+    return Status(f"{s} · waiting for you: {o.reason}", action, "you", error=refused or _enqueue_error(c, activity))
 
 
 def _episode(c: Change, now: datetime) -> tuple[str, bool]:
@@ -225,11 +312,12 @@ def _left(events: list[dict[str, Any]], since: datetime | None) -> str:
 def passes(c: Change, now: datetime) -> bool:
     """Whether the next step runs while Delivery is paused (TD-287, TD-303).
 
-    A cleanup, or the brief challenge the owner's chat asked for and its decision pick; planning, building, publishing
-    and merging wait for Resume.
+    A cleanup, or the brief challenge the owner's chat asked for, its decision pick and the draft's capture: pause never
+    blocks shaping (D-01M5DW3X0016A1M4CK96QKWM6Z). Planning, building, publishing and merging wait for Resume.
     """
     step = loop.next_step(c, now)
-    shaping = step is not None and step.kind == StepKind.SHAPE and (step.mode in MODES or picks.owed(c))
+    owed = picks.owed(c) or shaping_capture.owed(c)
+    shaping = step is not None and step.kind == StepKind.SHAPE and (step.mode in MODES or owed)
     return step is not None and (step.kind == StepKind.CLEANUP or shaping)
 
 
@@ -254,7 +342,7 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
     s, o, stop = stage(c), c.outcome, activity.start_failure
     if not activity.host_up and not c.finished_at:
         if stop:
-            return Status(f"{s} · stopped: {stop.reason}", stop.action, stop.actor)
+            return Status(f"{s} · stopped: {stop.reason}", stop.action, stop.actor, error=True, stopped=True)
         return Status(f"{s} · Delivery is not running", "Start Delivery", "you")
     if c.finished_at:
         if c.intent.abandoned_at:
@@ -264,11 +352,11 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
         saved = f" · unmerged work saved in {', '.join(c.names.preserved)}" if c.names.preserved else ""
         pr = f" PR #{c.names.pr}" if c.names.pr else ""
         if (p := c.pullback) and p.state == "behind":  # its reason reads "local <target> is behind: <why>"
-            return Status(f"Done · merged{pr}{saved} · {p.reason}", "Pull on the Changes page", "you")
+            return Status(f"Done · merged{pr}{saved} · {p.reason}", "Pull on the Changes page", "you", error=True)
         return Status(f"Done · merged{pr}{saved}", None, "delivery")
     _, verb, role = _WORK[c.step.kind]
     if (b := c.blocked) and not activity.runner_alive:
-        return Status(f"{s} · stopped: {b.reason}", b.action, b.actor)
+        return Status(f"{s} · stopped: {b.reason}", b.action, b.actor, error=True, stopped=True)
     if c.intent.paused_at:
         if activity.runner_alive:
             return Status(f"{s} · pausing: finishing {c.step.kind}", None, "delivery")
@@ -276,15 +364,20 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
     if c.intent.hold and activity.runner_alive:
         return Status(f"{s} · holding for your change: finishing {c.step.kind}", None, "delivery")
     if loop.usage_gated(c):
-        return Status(f"{s} · stopped: {o.reason}", "Run this step again", "you")
-    if o and o.exit == Exit.ASK:
-        return Status(f"{s} · waiting for you: {o.reason}", "Approve merge" if o.cause == CONSENT else "Answer", "you")
+        return Status(f"{s} · stopped: {o.reason}", "Run this step again", "you", error=True, stopped=True)
+    if o and o.exit == Exit.ASK:  # a question its cause's spent retry budget asked carries that failure (#971)
+        action = "Approve merge" if o.cause == CONSENT else "Answer"
+        return Status(
+            f"{s} · waiting for you: {o.reason}",
+            action,
+            "you",
+            error=o.cause in c.budgets.causes or _direct_error(o.cause),
+        )
     if o and o.exit == Exit.STOP and c.stop:
-        return Status(f"{s} · stopped: {c.stop.reason}", c.stop.action, c.stop.actor)
+        return Status(f"{s} · stopped: {c.stop.reason}", c.stop.action, c.stop.actor, error=True, stopped=True)
     if o and o.exit == Exit.PENDING:
-        if o.who == "you":
-            action = _ACTION.get(o.waiting) if o.waiting else None
-            return Status(f"{s} · waiting for you: {o.reason}", action, "you")
+        if (yours := _owned(c, s, o, activity)) is not None:
+            return yours
         if o.waiting == Waiting.REVIEWER:  # the reason names the reviewers
             return Status(f"{s} · {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)
         wake = f", next try at {o.wake_at:%H:%M}" if o.wake_at else ""
@@ -294,7 +387,7 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
         if failing := _episode(c, now)[0]:
             capacity = (o.cause or "").startswith(f"{ErrorKind.CAPACITY}:")
             used = f" · {c.spend.shown()} used" if capacity else ""
-            return Status(f"{s} · retrying: {o.reason} · {failing}{wake}{used}", None, o.who)
+            return Status(f"{s} · retrying: {o.reason} · {failing}{wake}{used}", None, o.who, error=bool(o.reason))
         who = _WHO.get(o.waiting, str(o.waiting)) if o.waiting else o.who
         return Status(f"{s} · waiting for {who}: {o.reason} (checked {_age(now - o.at)} ago)", None, o.who)
     tried = f" · last try failed: {o.reason}" if o and o.exit == Exit.RETRY and o.reason else ""
@@ -313,14 +406,28 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
             return Status(f"{line} · no activity for {_age(gap)}", None, "delivery")
         if o and o.denial:
             return Status(f"{line} · last denied: {redact(o.denial)}", None, "delivery")
-        return Status(f"{line} · {role} active {_age(now - last) if last else '0 s'} ago{tried}", None, "delivery")
+        return Status(
+            f"{line} · {role} active {_age(now - last) if last else '0 s'} ago{tried}",
+            None,
+            "delivery",
+            error=bool(tried),
+        )
     if o and o.exit == Exit.RETRY and o.wake_at and o.wake_at > now and o.cause:
         k = c.budgets.causes[o.cause].count if o.cause in c.budgets.causes else 1
         limit = WRONG_MODEL_LIMIT if o.cause.endswith(f":{WRONG_MODEL}") else RETRY_LIMIT
         said = f" · {o.reason}" if o.reason else ""
-        return Status(f"{s} · retrying: {o.cause} ({k} of {limit}) at {o.wake_at:%H:%M}{said}", None, "delivery")
+        return Status(
+            f"{s} · retrying: {o.cause} ({k} of {limit}) at {o.wake_at:%H:%M}{said}", None, "delivery", error=bool(said)
+        )
     if activity.holder_pid:
-        return Status(f"{s} · not running: waiting for process {activity.holder_pid} to end{tried}", None, "delivery")
+        return Status(
+            f"{s} · not running: waiting for process {activity.holder_pid} to end{tried}",
+            None,
+            "delivery",
+            error=bool(tried),
+        )
     if activity.waiting_slot:
-        return Status(f"{s} · waiting for a session slot ({activity.waiting_slot}){tried}", None, "delivery")
-    return Status(f"{s} · not running: starting {role}{tried}", None, "delivery")
+        return Status(
+            f"{s} · waiting for a session slot ({activity.waiting_slot}){tried}", None, "delivery", error=bool(tried)
+        )
+    return Status(f"{s} · not running: starting {role}{tried}", None, "delivery", error=bool(tried))

@@ -14,7 +14,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shlex
 import shutil
 import subprocess
 import tempfile
@@ -41,7 +40,7 @@ from owlbear_delivery_next.change_contracts.preparation import LIVE, SNAPSHOT, P
 from owlbear_delivery_next.change_flow import loop, worktree
 from owlbear_delivery_next.change_flow.worktree import failure
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.workflow_steps import before, check, engine, preparer
+from owlbear_delivery_next.workflow_steps import before, check, engine, preparer, snapshot_files
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -52,6 +51,7 @@ if TYPE_CHECKING:
 
 type Log = Callable[[dict[str, Any]], None]
 SESSION = "session.open"  # a running preparer session's root and the edits it found (JSON)
+SHAPING = "shaping"  # the shaping capture's own test copy (D-01M6Q56RXK85C5T4AG7R051X6N)
 
 
 class Prepared(Record):
@@ -66,6 +66,7 @@ class Prepared(Record):
     applied: str = ""  # the worktree the patch is applied to now
     ready: bool = False  # restored into the Change worktree for this launch
     open: bool = False  # this run may have left what the end of the check removes
+    home: str = ""  # the shaping capture's throwaway checkout: its cleanup runs there, never elsewhere
 
 
 class PrepareError(Exception):
@@ -236,7 +237,7 @@ def unsafe(settings: Settings, live: Mapping[str, str] | None = None) -> loop.St
         "the project's preparation options or data permissions in its settings, then continue."
     )
     cause = cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, "preparation-unsafe")
-    return engine.ask(StepKind.CHECK, text[:1500], cause, engine.continue_or_pause(StepKind.CHECK))
+    return engine.ask(StepKind.CHECK, text, cause, engine.continue_or_pause(StepKind.CHECK))
 
 
 def refused(store: Store, lock: Lock, c: Change) -> bool:
@@ -299,43 +300,6 @@ def due(store: Store, c: Change) -> bool:
     return rec is not None and not rec.ready
 
 
-def _plain(folder: Path) -> str:
-    """Why the snapshot is not only plain files and folders inside itself; masking must write nothing beyond it."""
-    top = folder.resolve()
-    for p in folder.rglob("*"):
-        file = p.is_file(follow_symlinks=False)
-        if (
-            not (file or p.is_dir(follow_symlinks=False))
-            or (file and p.stat().st_nlink > 1)
-            or not p.resolve().is_relative_to(top)
-        ):
-            return f"the snapshot holds {p.relative_to(folder)}, a link or special file"
-    return ""
-
-
-def _digest(folder: Path) -> str:
-    h = hashlib.sha256()
-    for p in sorted(folder.rglob("*")):
-        h.update(str(p.relative_to(folder)).encode() + b"\0")
-        if p.is_file(follow_symlinks=False):
-            h.update(hashlib.sha256(p.read_bytes()).digest())
-        elif not p.is_dir(follow_symlinks=False):
-            h.update(b"\0not a plain file")  # never read through a link
-    return h.hexdigest()
-
-
-def _command(rec: Prepared, name: str, root: Path, log: Log, env: Mapping[str, str]) -> str:
-    cmd = getattr(rec.option, name)
-    return f"the {name} command {note}" if cmd and (note := check.run(shlex.split(cmd), root, log, env)) else ""
-
-
-def _gone(path: str) -> bool:
-    """Delete a snapshot folder; whether it is gone."""
-    if path:
-        shutil.rmtree(path, ignore_errors=True)
-    return not path or not Path(path).exists(follow_symlinks=False)
-
-
 def _snapshot(store: Store, slug: str, rec: Prepared, home: Path, log: Log) -> str:
     """Export and mask the live copy once per check; the frozen snapshot's digest is kept, a failed one deleted."""
     if rec.option.kind not in LIVE or rec.digest:
@@ -348,24 +312,32 @@ def _snapshot(store: Store, slug: str, rec: Prepared, home: Path, log: Log) -> s
     rec.snapshot = str(folder)
     _write(store, slug, rec)  # before the export: the end of the check removes even a partial snapshot
     live = dict(os.environ) | {SNAPSHOT: str(folder)}  # export reads live; it is the copy the owner permitted
-    note = _command(rec, "export", home, log, live) or _plain(folder)
-    note = note or _command(rec, "masking", home, log, live) or _plain(folder)
+    note = snapshot_files.command(rec, "export", home, log, live) or snapshot_files.plain(folder)
+    note = note or snapshot_files.command(rec, "masking", home, log, live) or snapshot_files.plain(folder)
     if not note and not any(folder.iterdir()):
         note = f"the export wrote nothing into ${SNAPSHOT}"
     if note:  # only a masked snapshot may be kept
-        if not _gone(rec.snapshot):
+        if not snapshot_files.gone(rec.snapshot):
             return f"the unmasked snapshot {folder} could not be deleted; {note}"
         rec.snapshot = ""
         _write(store, slug, rec)
         return note
-    rec.digest = _digest(folder)
+    rec.digest = snapshot_files.digest(folder)
     _write(store, slug, rec)
     log({"event": "snapshot", "at": datetime.now(UTC).isoformat(), "check": rec.check, "option": rec.option.id})
     return ""
 
 
 def _into(  # noqa: PLR0913 - the run, its two worktrees and the permissions in force
-    store: Store, c: Change, rec: Prepared, root: Path, *, settings: Settings, log: Log, keep: bool
+    store: Store,
+    c: Change,
+    rec: Prepared,
+    root: Path,
+    *,
+    settings: Settings,
+    log: Log,
+    keep: bool,
+    home: Path | None = None,
 ) -> str:
     """Restore the frozen snapshot into the test environment, seed it and apply the setup patch in *root*.
 
@@ -381,9 +353,9 @@ def _into(  # noqa: PLR0913 - the run, its two worktrees and the permissions in 
         raise PrepareError(check.failed(f"the preparation option {rec.option.id} is no longer permitted"))
     rec.open = True
     _write(store, c.slug, rec)
-    if note := _snapshot(store, c.slug, rec, Path(c.names.worktree), log):
+    if note := _snapshot(store, c.slug, rec, home or Path(c.names.worktree), log):
         return note
-    if rec.snapshot and _digest(Path(rec.snapshot)) != rec.digest:
+    if rec.snapshot and snapshot_files.digest(Path(rec.snapshot)) != rec.digest:
         return "the snapshot changed after it was frozen"
     patch = _file(store, c.slug, rec.check, ".patch")
     if rec.paths and patch.is_file():
@@ -395,7 +367,7 @@ def _into(  # noqa: PLR0913 - the run, its two worktrees and the permissions in 
         except subprocess.CalledProcessError as exc:
             return f"the setup patch did not apply: {exc.stderr.decode(errors='replace').strip()}"
     env = isolated(rec)
-    return _command(rec, "restore", root, log, env) or _command(rec, "seed", root, log, env)
+    return snapshot_files.command(rec, "restore", root, log, env) or snapshot_files.command(rec, "seed", root, log, env)
 
 
 def merge_base(store: Store, c: Change, settings: Settings, log: Log) -> Callable[[Path], dict[str, str]]:
@@ -406,6 +378,24 @@ def merge_base(store: Store, c: Change, settings: Settings, log: Log) -> Callabl
         if rec is None:
             raise PrepareError(check.failed("the check has no test preparation; nothing launches without one"))
         if note := _into(store, c, rec, root, settings=settings, log=log, keep=False):
+            raise PrepareError(check.failed(note))
+        return isolated(rec)
+
+    return go
+
+
+def shaping(store: Store, c: Change, settings: Settings, log: Log) -> Callable[[Path], dict[str, str]]:
+    """The shaping capture's test copy in its own checkout, under a check's permissions; a refusal is its reason."""
+
+    def go(root: Path) -> dict[str, str]:
+        option = next((o for o in settings.preparations if o.id == c.brief.preparation), None)
+        if option is None:
+            asked = unsafe(settings)
+            said = asked.reason if asked else f"the preparation option {c.brief.preparation} is not declared"
+            raise PrepareError(check.failed(said))
+        rec = Prepared(check=SHAPING, option=option, home=str(root))
+        _write(store, c.slug, rec)  # before the export: the next runner ends even a cut-short copy
+        if note := _into(store, c, rec, root, settings=settings, log=log, keep=False, home=root):
             raise PrepareError(check.failed(note))
         return isolated(rec)
 
@@ -458,12 +448,21 @@ def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> lo
     """
     for rec in left(store, c):
         stuck = note = ""
-        home = Path(c.names.worktree) if c.names.worktree and Path(c.names.worktree).is_dir() else repo
-        keep = settings.data.retention == "keep" and bool(rec.digest)  # only a masked snapshot is kept
+        if rec.home and not Path(rec.home).is_dir():  # a shaping copy's checkout is gone: its cleanup cannot run
+            note = f"its checkout {rec.home} is gone, so its cleanup did not run"
+            if not (gone := snapshot_files.gone(rec.snapshot)):  # outstanding: the next end deletes it again
+                note += f"; the snapshot {rec.snapshot} could not be deleted"
+            log({"event": "prepared-end", "at": datetime.now(UTC).isoformat(), "check": rec.check, "cleanup": note}
+                | ({} if gone else {"outstanding": True}))  # fmt: skip
+            _write(store, c.slug, rec.model_copy(update={"snapshot": "", "digest": "", "open": False}) if gone else rec)
+            continue
+        worked = Path(c.names.worktree) if c.names.worktree and Path(c.names.worktree).is_dir() else repo
+        home = Path(rec.home) if rec.home else worked
+        keep = settings.data.retention == "keep" and bool(rec.digest) and rec.check != SHAPING  # never a shaping copy
         try:
             _reapply(store, c, rec, home)
-            note = _command(rec, "cleanup", home, log, isolated(rec))
-            if not (gone := keep or _gone(rec.snapshot)):
+            note = snapshot_files.command(rec, "cleanup", home, log, isolated(rec))
+            if not (gone := keep or snapshot_files.gone(rec.snapshot)):
                 note = "; ".join(filter(None, [note, f"the snapshot {rec.snapshot} could not be deleted"]))
         finally:
             if rec.applied and Path(rec.applied).is_dir():

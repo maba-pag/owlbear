@@ -3,6 +3,7 @@ import io
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import threading
@@ -18,19 +19,22 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.change_contracts import chat_contract
 from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline
 from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
 from owlbear_delivery_next.commands import chat_client, cli, mcp_server, replay_client, setup
 from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay, pack_run
-from owlbear_delivery_next.local_system import codebase, local_home, maintenance
+from owlbear_delivery_next.improvement import improvement_view
+from owlbear_delivery_next.local_system import codebase, data_place, local_home, maintenance
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.machine_host import app, project, serve
+from owlbear_delivery_next.machine_host import machine as machine_module
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import ENDING, Host, HostRecord, RunnerRecord, running
-from owlbear_delivery_next.state_store import decision_store, profile_share, project_home, registry
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store import decision_store, profile_share, project_home, registry, spotter_test
+from owlbear_delivery_next.state_store.store import Store, StoreError
 
 AUTH = {"authorization": "Bearer t"}
 
@@ -94,6 +98,64 @@ def test_one_host_serves_each_project_under_its_id_and_each_clone_finds_it(tmp_p
     assert second.store is not None  # its layer still counts for this machine's settings (TD-336)
 
 
+@pytest.mark.parametrize(
+    ("seam", "name", "method", "path", "body"),
+    [
+        (maintenance.Maintenance, "read", "GET", "/maintenance/sessions", None),
+        (maintenance.Maintenance, "recover", "POST", "/maintenance/sessions/x/recover", {"rebooted": True}),
+        (spotter_test, "current", "GET", "/improvement", None),
+        (improvement_view, "looks", "GET", "/improvement/looks", None),
+        (improvement_view, "change_detail", "GET", "/improvement/change?project={id}&slug=a-1", None),
+    ],
+    ids=["sessions", "recover", "overview", "looks", "change"],
+)
+def test_an_error_no_machine_route_catches_answers_whole_to_the_token(  # noqa: PLR0913, PLR0917 - its fixtures
+    tmp_path, http, monkeypatch, whole_error, seam, name, method, path, body
+):
+    """#971: the machine's reads and the owner's recovery answer an error nothing catches whole, notes included."""
+    if "{id}" in path:
+        a = clone(tmp_path / "a")
+        store = Store.open(a)
+        with store.lock("a-1") as lock:
+            store.write(lock, Change(slug="a-1", step=Step(kind=StepKind.BUILD)))
+        path = path.format(id=add(http, a)["id"])
+    note = "NOTE added on the way up"
+
+    def fails(*_args: object, **_kwargs: object) -> None:
+        exc = RuntimeError(whole_error)
+        exc.add_note(note)
+        raise exc
+
+    monkeypatch.setattr(seam, name, fails)
+    got = TestClient(http.app, base_url="http://127.0.0.1", headers=AUTH, raise_server_exceptions=False).request(
+        method, f"/api/next{path}", json=body
+    )
+    assert (got.status_code, got.json()) == (500, {"detail": f"RuntimeError: {whole_error}\n{note}"})
+
+
+@pytest.mark.parametrize("project", [False, True], ids=["machine", "project"])
+def test_a_failing_asset_read_answers_the_generic_500_even_to_a_caller_with_the_token(
+    tmp_path, http, monkeypatch, whole_error, project
+):
+    """Pages and assets are served without the token, so an error reading one never shows: on the machine's app and on
+    a project's, through the dispatcher."""
+    at = f"/p/{add(http, clone(tmp_path / 'a'))['id']}" if project else ""
+    read = Path.read_bytes
+
+    def unread(self: Path) -> bytes:
+        if self.name == "ui.mjs":
+            raise OSError(whole_error)
+        return read(self)
+
+    monkeypatch.setattr(Path, "read_bytes", unread)
+    got = TestClient(http.app, base_url="http://127.0.0.1", headers=AUTH, raise_server_exceptions=False).get(
+        f"{at}/assets/ui.mjs"
+    )
+    assert (got.status_code, got.headers["content-type"], got.text) == (
+        500, "text/plain; charset=utf-8", "Internal Server Error"
+    )  # fmt: skip
+
+
 def test_the_chat_server_calls_its_projects_api_on_the_machine_host(tmp_path, http, monkeypatch):
     p = add(http, clone(tmp_path / "a"))
     sent = []
@@ -105,14 +167,15 @@ def test_the_chat_server_calls_its_projects_api_on_the_machine_host(tmp_path, ht
         def open(self, request, **_kw):
             sent.append((request.full_url, request.headers.get("X-owlbear-chat")))
             if request.full_url.endswith("/chat/contract"):
-                return Answer(b'{"supported": [1, 2]}')
+                return Answer(f'{{"supported": [{chat_contract.CHAT}]}}'.encode())
             raise OSError
 
     monkeypatch.setattr(chat_client, "_LOCAL", Opener())
     chat = chat_client.workspace(Path(p["path"]))
     chat.call("GET", "/changes")
-    assert sent == [("http://127.0.0.1:9/api/next/chat/contract", "2"),
-                    (f"http://127.0.0.1:9/p/{p['id']}/api/next/changes", "2")]  # fmt: skip
+    spoken = str(chat_contract.CHAT)
+    assert sent == [("http://127.0.0.1:9/api/next/chat/contract", spoken),
+                    (f"http://127.0.0.1:9/p/{p['id']}/api/next/changes", spoken)]  # fmt: skip
 
 
 class Answer(io.BytesIO):
@@ -228,7 +291,8 @@ def test_a_folder_that_is_no_owlbear_project_gets_every_tool_refused_and_nothing
         assert "new Copilot-runtime chat" in message
         assert "MCP: List Servers → owlbear-delivery → Stop Server, then Start Server" in message
         assert "Restart Local Agent Host" not in message
-    unsupported = "OwlBear does not serve this chat's owlbear-delivery server (chat contract 0; it serves 1, 2)"
+    served = ", ".join(map(str, sorted(chat_contract.SUPPORTED)))
+    unsupported = f"OwlBear does not serve this chat's owlbear-delivery server (chat contract 0; it serves {served})"
     assert stale.startswith(unsupported)  # the chat asks the host's contracts first
     chat = mcp_server._STATE["chat"]  # noqa: SLF001
     chat.checked = (machine.record.pid, machine.record.started_at.isoformat())  # past the contract check
@@ -250,6 +314,26 @@ def test_a_project_that_fails_to_load_is_listed_with_its_reason_beside_a_working
     (Path(bad.path) / ".git" / "owlbear-delivery" / "format").unlink()
     machine.retry()
     assert http.get(f"/p/{bad.id}/api/next/changes").status_code == 200
+
+
+def test_owlbears_own_clone_is_its_own_kind_by_its_data_folder_and_nothing_about_it_is_stored(
+    tmp_path, http, machine, shared_repo, monkeypatch
+):
+    """D-01M6JZMMXE7JEZW6402WN77TQS: OwlBear's kind follows the shared-data folder owlbear/, not the clone's directory;
+    its name stays the folder that Settings and Backlog match, and a clone whose store never opened can't be known."""
+    monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
+    own = registry.register(origin(clone(tmp_path / "mine"), "https://github.com/maba-pag/owlbear.git"))
+    shop = registry.register(origin(clone(tmp_path / "shop"), "https://github.com/acme/shop.git"))
+    unopened = registry.register(origin(clone(tmp_path / "other"), "https://github.com/maba-pag/owlbear.git"))
+    (Path(unopened.path) / ".git" / "owlbear-delivery" / "format").write_text("99\n")
+    machine.load_all()
+    listed = http.get("/api/next/projects").json()["projects"]
+    assert [(p["id"], p["path"], p["name"], p["kind"], p["state"]) for p in listed] == [
+        (own.id, own.path, "owlbear", "owlbear", "loaded"),
+        (shop.id, shop.path, "shop", "consumer", "loaded"),
+        (unopened.id, unopened.path, "other", "consumer", "failed"),
+    ]
+    assert [p.model_dump().keys() for p in registry.load().projects] == [{"id", "path", "added_at"}] * 3
 
 
 @pytest.mark.parametrize(
@@ -527,7 +611,7 @@ def test_a_recovered_legacy_pack_generation_is_not_resurrected_by_an_empty_recei
 def test_an_unconfirmed_pack_run_keeps_the_machine_busy_and_not_left_until_its_reboot_recovery(machine):
     """The pack ledger holds at machine scope even with no loaded project, so an update or stop waits for it."""
     ident = machine.maintenance.begin("unloaded", "pack:unloaded", "pack", "", now=datetime.now(UTC))
-    machine.maintenance.failed(ident, RuntimeError("synthetic unconfirmed run"))
+    machine.maintenance.failed(ident, "RuntimeError: synthetic unconfirmed run")
     assert (bool(machine.busy()), bool(machine.left())) == (True, True)
     booted = machine.maintenance.boot
     machine.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the unconfirmed run
@@ -790,6 +874,143 @@ def test_a_project_that_fails_while_starting_releases_its_lock(tmp_path, machine
     assert (unstarted.stop(drain=0), unstarted.state) == ([], "stopped")
 
 
+@pytest.mark.parametrize("site", ["open", "lock", "start", "load"])
+def test_a_project_that_fails_to_load_says_why_whole_in_its_reason(  # noqa: PLR0913, PLR0917 - its fixtures
+    tmp_path, http, machine, monkeypatch, whole_error, site
+) -> None:
+    """#971: the Projects page shows why a project failed to load whole: its type, message and notes."""
+    error = (StoreError if site == "open" else OSError if site == "lock" else RuntimeError)(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising(*_args, **_kwargs):
+        raise error
+
+    target = {"open": (Store, "open"), "lock": (project, "open_lock"), "start": (project.api, "create_app")}
+    monkeypatch.setattr(*target.get(site, (project.Project, "load")), raising)
+    registry.register(clone(tmp_path / "bad"))
+    machine.load_all()
+    said = {
+        "open": "its Delivery state cannot be opened",
+        "lock": "its host lock cannot be taken",
+        "start": "it could not start",
+        "load": "it could not load",
+    }[site]
+    (shown,) = http.get("/api/next/projects").json()["projects"]
+    whole = f"{type(error).__name__}: {whole_error}\na note on the failure"
+    assert (shown["state"], shown["reason"]) == ("failed", f"{said}: {whole}")
+
+
+def test_a_settings_carry_that_fails_is_kept_and_said_whole(machine, monkeypatch, whole_error, capsys) -> None:
+    """#971: a failed settings carry is kept whole for the Settings page and said whole in the log."""
+    error = RuntimeError(whole_error)
+    error.add_note("a note on the failure")
+
+    def raising(_say):
+        raise error
+
+    monkeypatch.setattr(machine_module, "_switched", raising)
+    machine.carry()
+    why = f"the settings carry failed: RuntimeError: {whole_error}\na note on the failure"
+    assert registry.load().settings_pending == why
+    said = re.escape(f"settings: {why}; tried again at the next start\n")
+    assert re.fullmatch(rf"\d\d:\d\d:\d\dZ {said}", capsys.readouterr().out)
+
+
+def test_a_start_s_shared_data_notice_clears_after_owlbear_data_sets_it_right(tmp_path, http, machine) -> None:
+    """#1007: the same host verifies the actual data command's repair without restarting or rebinding Stores."""
+    registry.register(clone(tmp_path / "shop"))
+    source, dest = clone(tmp_path / "old-data"), data_place.default()
+    subprocess.run(["git", "clone", "-q", str(source), str(dest)], check=True)  # noqa: S603, S607 - a move left both
+    data_place.pointer().write_text(json.dumps({"moving_from": str(source), "moving_to": str(dest)}))
+    serve._provisioned(machine)  # noqa: SLF001
+    machine.load_all()
+    both = f"an unfinished move left both {source} and {dest}; check which holds your data, remove the other, then run"
+    noticed = f"at this start, DataRepoError: {both} `owlbear data`; `owlbear restart` looks again"
+    read = http.get("/api/next/projects").json()
+    assert (read["unshared"], read["projects"][0]["state"]) == (noticed, "failed")
+    assert cli.main(["data"]) == 1  # both checkouts still exist: neither the command nor an HTTP read repairs it
+    assert http.get("/api/next/projects").json()["unshared"] == noticed
+    shutil.rmtree(source)
+    assert cli.main(["data"]) == 0  # the owner finishes the move while the host runs
+    machine.retry()
+    read = http.get("/api/next/projects").json()
+    assert (read["unshared"], read["projects"][0]["state"]) == ("", "loaded")
+    loaded = next(iter(machine.projects.values())).store
+    assert loaded.shared.root == dest
+    http.get("/api/next/projects").raise_for_status()
+    assert next(iter(machine.projects.values())).store is loaded
+
+
+def test_shared_data_notice_needs_a_usable_configured_checkout_not_absence_or_a_problem(
+    tmp_path, http, machine
+) -> None:
+    data_place.pointer().write_text("{")
+    serve._provisioned(machine)  # noqa: SLF001
+    noticed = machine.unshared
+    assert noticed
+    assert http.get("/api/next/projects").json()["unshared"] == noticed
+    data_place.pointer().unlink()
+    assert data_place.describe().kind == "none"
+    assert http.get("/api/next/projects").json()["unshared"] == noticed
+    data_place.pointer().write_text(json.dumps({"repository": str(tmp_path / "missing")}))
+    assert data_place.describe().kind == "problem"
+    assert http.get("/api/next/projects").json()["unshared"] == noticed
+    data_place.pointer().unlink()
+    legacy = data_place.pointer().with_name(data_place.OLD_POINTER)
+    legacy.write_text(json.dumps({"repository": str(clone(tmp_path / "data"))}))
+    assert http.get("/api/next/projects").json()["unshared"] == ""
+    assert data_place.pointer().is_file()
+    assert not legacy.exists()  # describe retains its one-time migration
+
+
+def test_a_failed_pass_loading_projects_again_is_kept_whole_until_one_passes(
+    machine, http, monkeypatch, whole_error, capsys
+) -> None:
+    """#971: a failed pass of the retry loop is said whole, kept for the Projects page and cleared once one passes."""
+    error = RuntimeError(whole_error)
+    error.add_note("a note on the failure")
+    seen: list[str] = []
+
+    def retry() -> None:
+        if not seen:
+            seen.append("")
+            raise error
+        machine.stopping.set()  # set first, so the loop ends whatever this pass does
+        seen.append(http.get("/api/next/projects").json()["unretried"])
+
+    monkeypatch.setattr(machine_module, "RETRY", 0.0)
+    monkeypatch.setattr(machine, "retry", retry)
+    machine.retry_loop()
+    whole = f"RuntimeError: {whole_error}\na note on the failure"
+    assert seen == ["", whole]
+    assert f" loading projects again failed: {whole}\n" in capsys.readouterr().out
+    assert http.get("/api/next/projects").json()["unretried"] == ""
+
+
+@pytest.mark.parametrize("act", ["register", "adopt"])
+def test_a_refused_registration_answers_its_whole_reason(  # noqa: PLR0913, PLR0917 - its fixtures
+    tmp_path, http, machine, monkeypatch, whole_error, act
+) -> None:
+    """#971: the Projects page's alert after Add or Adopt shows the registry's refusal whole."""
+    work = clone(tmp_path / "a")
+    pid = add(http, work)["id"] if act == "adopt" else ""
+    if act == "adopt":
+        machine.projects[pid].state = "replaced"
+    error = registry.RegistryError(whole_error)
+    error.add_note("a note on the refusal")
+
+    def refusing(*_args):
+        raise error
+
+    monkeypatch.setattr(registry, act, refusing)
+    if act == "adopt":
+        refused = http.post(f"/api/next/projects/{pid}/adopt")
+    else:
+        refused = http.post("/api/next/projects", json={"path": str(work)})
+    whole = f"RegistryError: {whole_error}\na note on the refusal"
+    assert (refused.status_code, refused.json()["detail"]) == (409, whole)
+
+
 def test_malformed_or_unrelated_server_entries_never_count_as_setup(tmp_path):
     work = clone(tmp_path / "a")
     (work / ".mcp.json").write_text(json.dumps({"mcpServers": {setup.SERVER: {"args": None}}}))
@@ -882,7 +1103,7 @@ def test_an_unreadable_mcp_file_is_named_on_the_project_and_logged_when_it_chang
         said = sum(f"{path} cannot be read" in line for line in capsys.readouterr().out.splitlines())
         return p.get("reason"), "setup" in p, said
 
-    broken = f"{path} cannot be read: Expecting value: line 1 column 16 (char 15)"
+    broken = f"{path} cannot be read: JSONDecodeError: Expecting value: line 1 column 16 (char 15)"
     valid.write_text(json.dumps({key: setup.with_server({}, "/py", work)["mcpServers"]}))
     path.write_text('{"mcpServers": ')
     assert listed() == (broken, False, 1)  # registered in a readable file: no setup, the broken one still named
@@ -890,13 +1111,42 @@ def test_an_unreadable_mcp_file_is_named_on_the_project_and_logged_when_it_chang
     valid.unlink()
     assert listed() == (broken, True, 0)
     path.write_text("{")
-    again = f"{path} cannot be read: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+    again = (
+        f"{path} cannot be read: JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 "
+        "(char 1)"
+    )
     assert listed() == (again, True, 1)
     path.write_text("{}")
     assert listed() == (None, True, 0)
     path.write_text('{"mcpServers": ')
     assert listed() == (broken, True, 1)  # it comes back: logged again
     assert listed() == (broken, True, 0)
+
+
+def test_an_unreadable_mcp_file_s_whole_error_is_the_project_s_reason_and_its_log_line(
+    tmp_path, http, monkeypatch, capsys, whole_error
+):
+    """#971: the error an MCP file could not be read with reaches the Projects reason and the host log whole."""
+    work = clone(tmp_path / "a")
+    path, _ = mcp_file("own", work, monkeypatch)
+    path.write_text("unread")
+    real, note = setup._loose_json, "a note added while reading END"  # noqa: SLF001 - the read is the boundary
+
+    def loose(text: str):
+        if text != "unread":
+            return real(text)
+        exc = ValueError(whole_error)
+        exc.add_note(note)
+        raise exc
+
+    monkeypatch.setattr(setup, "_loose_json", loose)
+    said = f"{path} cannot be read: ValueError: {whole_error}\n{note}"
+    assert add(http, work)["reason"] == said
+    assert http.get("/api/next/projects").json()["projects"][0]["reason"] == said
+    logged = re.findall(
+        r"^\d\d:\d\d:\d\dZ (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)", capsys.readouterr().out, re.MULTILINE | re.DOTALL
+    )
+    assert [line for line in logged if "cannot be read" in line] == [f"a: {said}"]  # once, not on every poll
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root reads files whatever their mode")
@@ -907,7 +1157,7 @@ def test_a_mcp_file_that_cannot_be_opened_is_named(tmp_path, http, monkeypatch):
     shared.write_text(json.dumps({key: setup.with_server({}, "/py", work)["mcpServers"]}))
     shared.chmod(0)
     listed = add(http, work)
-    why = f"{shared} cannot be read: [Errno 13] Permission denied: '{shared}'"
+    why = f"{shared} cannot be read: PermissionError: [Errno 13] Permission denied: '{shared}'"
     assert (listed["reason"], listed["setup"]) == (why, f"owlbear setup --repo {work}")  # an unread entry counts not
 
 

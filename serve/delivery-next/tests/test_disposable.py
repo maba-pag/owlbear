@@ -261,9 +261,10 @@ def test_judges_of_a_batch_share_the_read_only_worktree_and_a_violation_voids_ea
 
 
 def test_the_planner_and_its_challenge_each_judge_a_clean_head_in_the_read_only_worktree(
-    tmp_path, change_repo, monkeypatch
+    tmp_path, change_repo, monkeypatch, checks_settled
 ):
     store, seen = Store(tmp_path / "store"), []
+    checks_settled(store)
     names = Names(branch="owlbear/c1", target="main", worktree=str(change_repo))
     change = Change(slug="c1", brief=Brief(version=1, approved_version=1, challenged=1), step=Step(kind=K.PLAN))
     store.write(Lock("c1"), change.model_copy(update={"names": names}))
@@ -529,3 +530,27 @@ def test_a_long_shared_git_change_stops_with_its_whole_reason(store, change_repo
     c = reviewed(store, change_repo)
     expected = f"a read-only step changed shared Git settings: added config owlbear.note={value}"
     assert (c.outcome.exit, c.stop.reason) == (Exit.STOP, expected)
+
+
+@pytest.mark.parametrize("read", ["_shared", "_refs"])
+def test_a_read_only_check_that_cannot_read_says_git_s_whole_error(store, change_repo, monkeypatch, whole_error, read):
+    """#971: the check after the session says Git's whole refusal, its stderr and notes, in the step's outcome."""
+    refused = subprocess.CalledProcessError(128, ["git", "config"], stderr=f"{whole_error}\n")
+    refused.add_note("NOTE-MARK")
+
+    def broken(*_a):
+        raise refused
+
+    reviewer(monkeypatch, lambda _cfg: monkeypatch.setattr(disposable, read, broken))  # the copy was made first
+    c = reviewed(store, change_repo)
+    said = (
+        f"CalledProcessError: Command '['git', 'config']' returned non-zero exit status 128.\n{whole_error}\nNOTE-MARK"
+    )
+    if read == "_shared":
+        reason = f"the shared Git config and hooks could not be read: {said}"
+        assert c.outcome.exit == Exit.ASK
+        assert c.outcome.reason.startswith(f"{reason}\n")
+        assert reason in loop.open_question(c).text
+    else:
+        reason = f"a read-only step changed the repository: its refs could not be read: {said}"
+        assert (c.outcome.exit, c.outcome.reason) == (Exit.RETRY, reason)

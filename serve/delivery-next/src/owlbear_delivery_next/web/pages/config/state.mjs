@@ -1,27 +1,26 @@
 import { render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { view } from "./sections.mjs";
+import { ROUNDS } from "./names.mjs";
 
 export const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 export const INHERIT = "inherit";  // the option that clears the layer's own value
 export const SOURCES = { default: "built-in default", global: "global", machine: "this machine",
   project: "this project", builder: "the builder's value" };
 export const LAYERS = { project: "This project", machine: "This machine", global: "All projects" };
-export const ROUNDS = [["max_rounds", "Rounds at most"], ["max_findings", "New findings per round at most"],
-  ["last_round_at", "Last round at or below"], ["ask_owner_at", "Ask you at or above"]];  // TD-209
-export const NUMBERS = [...ROUNDS.map(([f]) => f), "minutes", "sessions", "curator_threshold", "steer_share",
-  "intervention_cap", "sample_rate", "update_check_hours_owlbear", "update_check_hours_pds",
-  "update_check_hours_impeccable"];  // whole numbers
+export const NUMBERS = [...ROUNDS.map(([f]) => f), "challenge_wait", "minutes", "sessions", "curator_threshold",
+  "steer_share", "intervention_cap", "sample_rate", "update_check_hours_owlbear", "update_check_hours_pds",
+  "update_check_hours_impeccable", "stale_factor", "purge_days", "preflight_cap", "preflight_budget", "recall_limit",
+  "explore_slots", "challenge_slots"];  // whole numbers
 // Credit limits (D-01M5XCD49YHHR1NQKKY8TQD0C3): credit amounts, a fraction allowed.
 export const CREDITS = ["look_credit_limit", "retro_run_credit_limit", "replay_run_credit_limit"];
-// A typed number as sent: a whole number for NUMBERS, a decimal one for CREDITS; other text as typed, which the
-// server refuses with its reason.
+// What a memory rating is worth: a fraction allowed.
+export const POINTS = ["outstanding_boost", "unremarkable_penalty"];
+// A typed number as sent: a whole number for NUMBERS, a decimal one for CREDITS and POINTS; other text as typed, which
+// the server refuses with its reason.
 export function typedNumber(field, value) {
-  if (CREDITS.includes(field)) return /^\d+(\.\d+)?$/.test(value) ? Number(value) : value;
+  if (CREDITS.includes(field) || POINTS.includes(field)) return /^\d+(\.\d+)?$/.test(value) ? Number(value) : value;
   return /^\d+$/.test(value) ? Number(value) : value;
 }
-export const LOOPS = [["shaper", "Brief challenges (shaper)"], ["planner", "Plan challenges (planner)"],
-  ["builder", "Task reviews (builder)"], ["final_review", "Final review"],
-  ["updater", "Impeccable updates (updater)"]];
 export const WRITE = 60000;  // a save commits and pushes the shared settings repository (TD-64): a network round trip
 // Answers of one kind that overlap and settle in any order, as the bar's reads do. *take*: an older one's data never
 // replaces a newer one's, and a newer one that failed never discards what an older one brought. *says*: whether this

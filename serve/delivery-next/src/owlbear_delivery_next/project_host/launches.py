@@ -11,6 +11,8 @@ import uuid
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
+from owlbear_delivery_next.git.command_failure import failure
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -71,12 +73,12 @@ class Launches:
         try:
             out = work()
         except Exception as exc:  # noqa: BLE001 - the page must learn how its launch ended
-            out = {"state": "failed", "reason": f"{type(exc).__name__}: {exc}"}
+            out = {"state": "failed", "reason": failure(exc)}
             _log.exception("New Change launch %s failed", launch)
         try:
             out = done(launch, out) if done else out
         except Exception as exc:  # noqa: BLE001 - a failed follow-up must not hold the next launch back
-            out = out | {"warning": f"{type(exc).__name__}: {exc}"}
+            out = out | {"warning": failure(exc)}
             _log.exception("New Change launch %s: its follow-up failed", launch)
         with self.lock:
             if (kept := self.kept.get(launch)) is not None:

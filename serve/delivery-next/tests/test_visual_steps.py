@@ -219,12 +219,13 @@ def test_the_before_capture_renders_only_static_states_without_a_test_copy(monke
     rendered: list[str] = []
     monkeypatch.setattr(before.check, "answers", lambda _u: False)
     monkeypatch.setattr(before.check, "start", lambda *_a: subprocess.Popen([sys.executable, "-c", "pass"]))
-    monkeypatch.setattr(before.check, "ready", lambda *_a: {})
+    monkeypatch.setattr(before.check, "ready", lambda *_a, **_kw: {})
     monkeypatch.setattr(before.check, "dispose", lambda _e: {})
     monkeypatch.setattr(
         before.visual, "CAPTURE", lambda _u, states, *_a, **_k: rendered.extend(s.name for s in states) or []
     )
     c.env = c.env or before.Environment(check="visual", command="serve", directory=".", ready_url="http://127.0.0.1:1/")
     notes: list[str] = []
-    before._serve(c, tmp_path, tmp_path, lambda _e: None, notes, widths=[1280])  # noqa: SLF001
+    states = c.brief.visual
+    before._serve(c.env, states, tmp_path, tmp_path, lambda _e: None, notes, widths=[1280], where="here")  # noqa: SLF001
     assert (rendered, notes) == (["home"], ["search: its steps need a test preparation"])

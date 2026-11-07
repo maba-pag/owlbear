@@ -1,8 +1,9 @@
 import { call } from "/assets/ui.mjs";
-import { CREDITS, INHERIT, LAYERS, NUMBERS, WRITE, state, drafts, page, show, showIdle, notify, typedNumber, turns }
-  from "./state.mjs";
+import { CREDITS, INHERIT, LAYERS, NUMBERS, POINTS, WRITE, state, drafts, page, show, showIdle, notify, typedNumber,
+  turns } from "./state.mjs";
 import { USER_KEYS, mismatch, tierMismatch } from "./cells.mjs";
 import { draftGroup } from "./groups.mjs";
+import { nameOf } from "./names.mjs";
 import { readAcross } from "./machine.mjs";
 import { at, named } from "./sections.mjs";
 
@@ -14,12 +15,15 @@ function saved(layer, key) {
     return typeof v === "boolean" ? (v ? "on" : "off") : String(v);
   }
   if (key === "widths") return (loaded[layer]?.widths ?? []).join(", ");
-  if (["design_failures", "guard_level", "sessions", "curator_threshold"].includes(key)) {
+  if (["design_failures", "guard_level", "github_account", "sessions", "curator_threshold"].includes(key)) {
     return String(loaded[layer]?.[key] ?? "");
   }
   if (key.startsWith("spot.")) {  // the Spotter's settings (design §4)
     const v = loaded[layer]?.spotter?.[key.slice(5)];
     return v === null || v === undefined ? "" : Array.isArray(v) ? v.join(", ") : String(v);
+  }
+  if (key.startsWith("memory.")) {  // the memory values, Global's only
+    return String(loaded[layer]?.memory?.[key.slice(7)] ?? "");
   }
   if (key === "pr_labels" || key === "pr_marker" || USER_KEYS.includes(key)) {
     const v = loaded[layer]?.[key];
@@ -63,7 +67,8 @@ function keepEdit(key, raw, literal = false) {
   const field = key.split(".")[1] ?? key;
   // even a no-op clear is a review
 if (state.layer === "project" && key.startsWith("prefs.")) state.prefsReview = true;
-  const value = !literal && !NUMBERS.includes(field) && !CREDITS.includes(field) && raw === INHERIT ? "" : raw;
+  const value = !literal && !NUMBERS.includes(field) && !CREDITS.includes(field) && !POINTS.includes(field)
+    && raw === INHERIT ? "" : raw;
   if (LISTS.includes(key)) typing[state.layer][key] = value;  // shown as typed: a comma, a space
   if (canonical(key, value) === saved(state.layer, key)) delete drafts[state.layer][key];
   else drafts[state.layer][key] = value;
@@ -78,7 +83,7 @@ export function useRecommended() {
       for (const [role, fields] of Object.entries(value)) {
         for (const [field, v] of Object.entries(fields)) values[`${role}.${field}`] = v;
       }
-    } else if (["prefs", "spotter", "machine"].includes(key)) {
+    } else if (["prefs", "spotter", "machine", "memory"].includes(key)) {
       for (const [field, v] of Object.entries(value)) values[`${key === "spotter" ? "spot" : key}.${field}`] = v;
     } else values[key] = value;
   }
@@ -126,12 +131,21 @@ export function drafted(path) {
   return dirty(state.layer).some(([draft]) => draft === key);
 }
 
-// Each unsaved edit of *layer* as "field: saved → new"; a blank value inherits, on Global it is unset.
+// The setting a draft key is for, as the server and the lists name it: the inverse of drafted()'s mapping
+// ("builder.model" is agents.builder.model, "spot.looks" is spotter.looks).
+function settingOf(draft) {
+  if (draft.startsWith("spot.")) return `spotter.${draft.slice(5)}`;
+  const own = !draft.includes(".") || ["final_review", "memory", "prefs", "machine"].includes(draft.split(".")[0]);
+  return own ? draft : `agents.${draft}`;
+}
+
+// Each unsaved edit of *layer* as "name: saved → new", by the words its row shows; a blank value inherits, on Global
+// it is unset.
 function changes(layer) {
   const blank = layer === "global" ? "unset" : "inherited";
   const said = (v) => (v === "" || v === null || v === undefined ? blank : v);
   return dirty(layer).map(([key, value]) =>
-    `${key.replace(".", " ").replaceAll("_", " ")}: ${said(saved(layer, key))} → ${said(value.trim())}`);
+    `${nameOf(settingOf(key))}: ${said(saved(layer, key))} → ${said(value.trim())}`);
 }
 
 // Confirms a pending legacy import's Merge and cleanup preferences as reviewed, with no edit: the saved values stand.
@@ -180,7 +194,7 @@ function edited(layer) {
       next.widths = value ? value.split(",").map((w) => Number(w.trim())) : null;
       continue;
     }
-    if (key === "design_failures" || key === "guard_level") {
+    if (["design_failures", "guard_level", "github_account"].includes(key)) {
       next[key] = value || null;
       continue;
     }
@@ -190,6 +204,12 @@ function edited(layer) {
     }
     if (key === "pr_labels") {
       next[key] = !value ? null : value === "none" ? [] : value.split(",").map((l) => l.trim()).filter(Boolean);
+      continue;
+    }
+    if (key.startsWith("memory.")) {  // the memory values: whole numbers, and decimals for what a rating is worth
+      const field = key.slice(7), mine = { ...(next.memory ?? {}) };
+      mine[field] = value === "" ? null : typedNumber(field, value);
+      next.memory = Object.values(mine).some((v) => v !== null) ? mine : null;
       continue;
     }
     if (key.startsWith("spot.")) {

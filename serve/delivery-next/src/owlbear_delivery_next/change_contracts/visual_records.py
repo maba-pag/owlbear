@@ -22,6 +22,14 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class VisualStep(_Strict):
+    """One owner-authored action before a state's screenshot (TD-49), on a prepared test copy only (TD-96)."""
+
+    do: Literal["click", "type"]
+    target: str  # the control's accessible name: a button or link to click, a field's label to type into
+    text: str = ""  # what to type
+
+
 class JudgeFinding(_Strict):
     """One finding of a judge, with the rule it cites, so the owner can tick it and a fix task can carry it."""
 
@@ -35,12 +43,24 @@ class JudgeFinding(_Strict):
     introduced: bool | None = None  # by this Change; None when the judge could not tell
 
 
+class JudgeConflict(_Strict):
+    """A design rule the brief or an owner's criterion rules out: shown to the owner, never ticked or sent to a fix."""
+
+    id: str  # unique within its round, such as ``conflict-1``
+    state: str
+    width: int | None = None
+    rule: str  # the design section or detector rule asking for the change
+    departs: str  # the state, brief criterion (``AC-N``) or owner's criterion (``owner-N``) it departs from
+    text: str
+
+
 class JudgeVerdict(_Strict):
     """One judge's verdict in one round; ``verdict`` is None until a verified result exists."""
 
     lens: Lens
     verdict: Verdict | None = None
     findings: list[JudgeFinding] = Field(default_factory=list)
+    conflicts: list[JudgeConflict] = Field(default_factory=list)  # the design judge's; the owner decides them
     reason: str = ""  # why unsure, or why no verified result
     model: str = ""
     effort: str = ""
@@ -174,3 +194,10 @@ class VisualResult(_Strict):
     def identity(self) -> str:
         """This capture among others of the same head: a recapture is another one."""
         return f"{self.head}@{self.at.isoformat()}"
+
+
+class ShapingCapture(_Strict):
+    """The capture of a shaping draft's current pages (D-01M61V2GR0C6JV2R6KJ0WR4PNB); its files live under its key."""
+
+    key: str  # what it renders: the brief's recipe, preparation option and states' paths and steps
+    result: VisualResult | None = None  # the pictures, or why a state has none; None while a runner captures it

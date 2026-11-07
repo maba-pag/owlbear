@@ -56,7 +56,7 @@ def host(store: Store, tmp_path: Path, said: list[str]) -> Host:
 
 
 def marked(store: Store, *, wrapped: bool = False) -> int:
-    """Run a shell command marked as c1's runner marks it, leaving a sleep behind; the sleep's pid."""
+    """Run a marked shell command, returning its background pid once the child has exec'd sleep."""
     with store.lock("c1") as lock, command_marks.marking(store, lock, "c1"):
         script = command_marks.folder(store, "c1") / command_marks.SCRIPT
         argv = ["/bin/bash", "-c", f'. "{script}"; {SLEEP} & echo $!']
@@ -64,7 +64,14 @@ def marked(store: Store, *, wrapped: bool = False) -> int:
             wrapper = "import subprocess, sys; sys.exit(subprocess.run(sys.argv[1:]).returncode)"
             argv = [sys.executable, "-c", wrapper, *argv]
         out = subprocess.run(argv, check=True, capture_output=True, text=True, timeout=30, start_new_session=True)  # noqa: S603
-    return int(out.stdout.split()[-1])
+    pid = int(out.stdout.split()[-1])
+    limit = time.monotonic() + 10
+    while (name := psutil.Process(pid).name()) != "sleep":
+        if time.monotonic() >= limit:
+            end(pid)
+            pytest.fail(f"{pid} stayed {name!r}; the fixture's background command did not exec sleep")
+        time.sleep(0.01)
+    return pid
 
 
 def end(pid: int) -> None:
@@ -176,10 +183,19 @@ def _no_group(_pid):
 @pytest.mark.parametrize(
     ("what", "detail"),
     [
-        ("table", "the step's processes could not be looked for: the process table could not be listed: "),
-        ("group", "its group or session could not be read: [Errno 1] Operation not permitted"),
-        ("marks", "the step's command marks could not be read: [Errno 21] Is a directory"),
-        ("pids", "the step's recorded processes could not be read: [Errno 21] Is a directory"),
+        (
+            "table",
+            (
+                "the step's processes could not be looked for: UnlistedError: the process table could not be listed: "
+                "AccessDenied: "
+            ),
+        ),
+        ("group", "its group or session could not be read: PermissionError: [Errno 1] Operation not permitted"),
+        ("marks", "the step's command marks could not be read: IsADirectoryError: [Errno 21] Is a directory: '{file}'"),
+        (
+            "pids",
+            "the step's recorded processes could not be read: IsADirectoryError: [Errno 21] Is a directory: '{file}'",
+        ),
     ],
 )
 def test_unreadable_marks_or_table_block_with_their_details(store, tmp_path, monkeypatch, what, detail) -> None:
@@ -198,8 +214,13 @@ def test_unreadable_marks_or_table_block_with_their_details(store, tmp_path, mon
         if what == "group":
             m.setattr(os, "getpgid", _no_group)
         assert host(store, tmp_path, said).tick() == []
-    assert detail in store.read("c1").blocked.reason
-    assert any(detail in line for line in said)
+    if what == "group":  # the process it stopped at is whichever the table lists first
+        assert detail in store.read("c1").blocked.reason
+        assert any(detail in line for line in said)
+        return
+    file = command_marks.folder(store, "c1") / (step_pids.FILE if what == "pids" else command_marks.FILE)
+    whole = detail.format(file=file)
+    assert (store.read("c1").blocked.reason, said) == (whole, [f"c1: no writer starts: {whole}"])
 
 
 def test_a_runner_runs_only_once_its_record_is_written(store, tmp_path, monkeypatch) -> None:

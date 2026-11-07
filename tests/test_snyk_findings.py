@@ -208,7 +208,7 @@ def test_only_the_owner_s_edit_of_a_finding_comment_in_owlbear_runs_the_ignore_f
     assert workflow["permissions"] == {}
     job = workflow["jobs"]["ignore"]
     for guard in (
-        "github.repository == 'maba-pag/owlbear'",
+        "github.repository_id == '1167866812'",  # OwlBear by its id, which its transfer keeps (TD-326)
         "github.event.sender.id == 238680231",
         "github.event.comment.user.login == 'github-actions[bot]'",
     ):

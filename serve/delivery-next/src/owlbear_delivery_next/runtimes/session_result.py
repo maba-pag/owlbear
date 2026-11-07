@@ -6,10 +6,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 
-from owlbear_delivery_next.change_contracts import curation_tools, dispute_tools, permissions, tools
+from owlbear_delivery_next.change_contracts import amend_tools, curation_tools, dispute_tools, permissions, tools
 from owlbear_delivery_next.change_contracts.failures import (
     QUOTA,
     READ_ONLY,
+    READ_ONLY_UNREAD,
     RO_WORKTREE,
     UNREAD,
     WRONG_MODEL,
@@ -51,6 +52,7 @@ type Ending = Literal[
     "read-only-write",
     "read-only-refused",
     "shared-git-changed",
+    "read-only-unread",
     "credit-limit",
     "spotter-ask",
 ]
@@ -68,6 +70,7 @@ class Run:
     payload: tools.Args | None = None
     first: tools.Args | None = None  # a judge's first look, before its final result (design judge, slice 5)
     detail: str = ""
+    classified: str = ""  # what retries classify and sign when ``detail`` says more: the error as it read before #971
     head: str | None = None
     changed: list[str] = field(default_factory=list)  # the paths the commits change at ``head``, as Delivery read them
     runtime_pid: int | None = None
@@ -84,6 +87,7 @@ class Run:
     model_check: ModelCheck = "unknown"  # only usage metrics prove the model; a mismatch reruns once after a wait
     tool_calls: dict[str, dict[str, int]] = field(default_factory=dict)  # each tool's tally fields (C-28 T8)
     wrong: dict[str, int] = field(default_factory=dict)  # its wrong tool choices by kind (``tool_use.WRONG``)
+    audit_rejection: str = ""  # the last refused audit submission, independent of how the session later ends
 
     def count(self, kind: str) -> None:
         """Count one wrong tool choice of *kind*."""
@@ -171,17 +175,38 @@ def to_result(run: Run, kind: StepKind, now: datetime, enclosing: StepKind | Non
     return result.model_copy(update={"denial": run.denials[-1]}) if run.denials and not result.denial else result
 
 
+def unverified(t: Termination | None) -> str:
+    """Why a session's end is not proven: the processes still present and each teardown problem, whole (#951)."""
+    t = t or Termination(confirmed=False, problems=("termination did not run",))
+    pids = ", ".join(str(p) for p in sorted({*t.survivors, *t.unknown}))
+    return "termination unverified: " + "; ".join([*([f"processes {pids} still present"] if pids else []), *t.problems])
+
+
 def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
     run: Run, kind: StepKind, now: datetime, enclosing: StepKind
 ) -> StepResult:
-    """One exit per ending; unverified termination stops whatever the session reported; the host scans after."""
+    """One exit per ending; unread inspection keeps its question while the host scans for surviving processes."""
     t = run.termination or Termination(confirmed=False, problems=("termination did not run",))
+    if run.ending == "read-only-unread":
+        text = f"{run.detail}\nThe result was voided; no shared Git setting was restored. "
+        text += (
+            "Resolve the inspection problem and check the repository's shared Git config and hooks before rerunning."
+        )
+        if not t.confirmed:
+            text += f"\n{unverified(t)}. A rerun waits until the previous processes are confirmed gone."
+        cause = cause_key(ErrorKind.STATE, enclosing, READ_ONLY_UNREAD)
+        question = Question(
+            step=enclosing,
+            text=text,
+            cause=cause,
+            options=[Option(id="retry", label="Resolved: rerun this step", next="retry")],
+        )
+        return StepResult(exit=Exit.ASK, reason=run.detail, question=question)
     if not t.confirmed:
         pids = ", ".join(str(p) for p in sorted({*t.survivors, *t.unknown}))
-        found = [f"processes {pids} still present"] if pids else []
         stop = Stop(
             kind=ErrorKind.LIVENESS,
-            reason="termination unverified: " + "; ".join([*found, *t.problems]),
+            reason=unverified(t),
             action=f"End processes {pids}" if pids else "Check that no process of this step remains",
             resume="No process of this step remains",
             at=now,
@@ -228,6 +253,8 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
         case "result" if isinstance(p, design_tools.DesignResult):  # the round's verdict matrix decides what follows
             found = "; ".join(f"{f.image}: {f.problem}" for f in p.findings)[:1500]
             return StepResult(exit=Exit.DONE, reason=f"design {p.verdict}: {found or p.doubt or 'no findings'}")
+        case "result" if isinstance(p, amend_tools.CandidateResult | amend_tools.VerdictResult):  # the path records it
+            return StepResult(exit=Exit.DONE, reason=getattr(p, "verdict", "amendment candidate"))
         case "result" if isinstance(p, dispute_tools.ReconsiderResult):  # the disputes record each verdict
             return StepResult(exit=Exit.DONE, reason=f"{len(p.reconsidered)} finding(s) reconsidered")
         case "result" if isinstance(p, curation_tools.TestReviewResult):  # the share records its verdicts
@@ -260,21 +287,22 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
         case "missing-tool" if isinstance(p, tools.MissingTool):
             return missing.classify(run, p, enclosing, now)
         case "deadline":  # an unanswered runtime start is the environment's; the step's own deadline is liveness
-            env = transient(run.detail) if run.detail != "step deadline" else None
+            said = run.classified or run.detail
+            env = transient(said) if said != "step deadline" else None
             cause = cause_key(env, kind, "sdk") if env else cause_key(ErrorKind.LIVENESS, kind, "deadline")
-            return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail or "deadline")
+            return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail or "deadline", classified=run.classified)
         case "missing":
             return StepResult(exit=Exit.RETRY, cause=missing_cause(kind), reason=run.detail)
         case "unread":
-            return StepResult(
-                exit=Exit.RETRY, cause=cause_key(ErrorKind.LIVENESS, kind, "transcript"), reason=run.detail
-            )
+            cause = cause_key(ErrorKind.LIVENESS, kind, "transcript")
+            return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail, classified=run.classified)
         case "error":
-            if transient(run.detail) == ErrorKind.CAPACITY and quota(run.detail):
+            said = run.classified or run.detail
+            if transient(said) == ErrorKind.CAPACITY and quota(said):
                 cause = cause_key(ErrorKind.CAPACITY, kind, QUOTA)
                 return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail, wake_at=run.quota_reset)
-            error = transient(run.detail) or ErrorKind.TOOLING
-            return StepResult(exit=Exit.RETRY, cause=cause_key(error, kind, "sdk"), reason=run.detail)
+            cause = cause_key(transient(said) or ErrorKind.TOOLING, kind, "sdk")
+            return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail, classified=run.classified)
         case _:
             reason = f"no valid result: {run.detail}"
             return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.RESULT, kind), reason=reason)

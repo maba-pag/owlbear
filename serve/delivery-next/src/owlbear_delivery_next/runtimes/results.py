@@ -15,6 +15,7 @@ from owlbear_delivery_next.change_contracts import (
     tools,
 )
 from owlbear_delivery_next.change_flow import disputes
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import design_tools
 from owlbear_delivery_next.local_system import lint
 from owlbear_delivery_next.runtimes import amendments
@@ -46,17 +47,21 @@ class Gate:
         self._lock = threading.Lock()
         self._linting = threading.Lock()
 
-    def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "") -> bool:
-        """End the step once and close the gate; the first ending is kept. Return whether it had already ended."""
+    def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "", classified: str = "") -> bool:
+        """End the step once and close the gate; the first ending is kept. Return whether it had already ended.
+
+        *classified* is what retries classify and sign when *detail* says more (``Run.classified``).
+        """
         with self._lock:
             was = self.done
-            self._finish(ending, payload, detail)
+            self._finish(ending, payload, detail, classified)
         self.ended()
         return was
 
-    def _finish(self, ending: Ending, payload: tools.Args | None, detail: str) -> None:
+    def _finish(self, ending: Ending, payload: tools.Args | None, detail: str, classified: str = "") -> None:
         if not self.done:
             self.done, self.run.ending, self.run.payload, self.run.detail = True, ending, payload, detail
+            self.run.classified = classified
 
     def _closed(self) -> bool:
         if self.stopped:
@@ -70,7 +75,7 @@ class Gate:
         with self._lock:
             self.done = True
             self.run.ending, self.run.payload, self.run.head, self.run.detail = "error", None, None, detail
-            self.run.changed = []
+            self.run.classified = ""
             self.run.changed = []
         self.ended()
 
@@ -147,9 +152,14 @@ class Gate:
     def _check(self, spec: tools.Spec, arguments: Any) -> Checked:  # noqa: ANN401 - the agent's JSON arguments
         args, errors = tool_schema.parse(spec.model, arguments)
         if args is None:
+            if spec is audit_tools.SUBMIT:
+                report = arguments.get("report") if isinstance(arguments, dict) else None
+                label = "report" if isinstance(report, str) else "arguments"
+                submitted = report if isinstance(report, str) else arguments
+                errors = [*errors, f"submitted audit {label}:\n{submitted}"]
             return None, errors, None, "invalid"
         errors, tree = tools.check_question(args) if isinstance(args, tools.AskQuestion) else [], None
-        errors += amendments.check(args, self.cfg.amendable)  # a premise's proposed wording (TD-179)
+        errors += amendments.check(args, self.cfg.amendable)  # a premise's brief items (TD-185)
         order: list[str] = []
         if spec is self.cfg.submit or spec is self.cfg.first_look:
             order = self._order(spec)
@@ -186,6 +196,8 @@ class Gate:
         self.log(event="tool", tool=spec.name, accepted=not errors, errors=errors, **({"read": read} if read else {}))
         if self._closed():
             return self._late(spec)
+        if spec is audit_tools.SUBMIT:
+            self.run.audit_rejection = "; ".join(errors)
         if tree is not None:
             self.run.head, self.run.changed = (None, []) if errors else (tree.head, list(tree.changed))
         linted = bool(errors) and all(e.startswith("lint: ") for e in errors)
@@ -217,10 +229,10 @@ class Gate:
         try:
             tree = self.cfg.observe()
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
-            return [f"changes: the worktree could not be read ({type(exc).__name__}); try again"], None
+            return [f"changes: the worktree could not be read ({failure(exc)}); try again"], None
         cfg = self.cfg
         if isinstance(args, design_tools.DesignLook):
-            return design_tools.check(args, tree), tree
+            return design_tools.check(args, tree, cfg.targets), tree
         if isinstance(args, tools.CheckRecipe):  # TD-96, TD-107: a declared, permitted option and setup edits only
             return preparation.check(args, tree, cfg.policy.root, cfg.preparing or preparation.Preparing()), tree
         if isinstance(args, curation_tools.TestCurationResult):  # TD-339: committed, clean, only tests

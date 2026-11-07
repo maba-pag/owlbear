@@ -13,25 +13,29 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 import uvicorn
+from fastapi.testclient import TestClient
 
+from owlbear_decisions import Decision, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_contracts.decision_records import Pick, PickedDecision
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
-from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_contracts.round_records import RoundFinding, RoundLoop, RoundPolicy, Verdict
 from owlbear_delivery_next.change_contracts.tool_use import ToolUse
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.project_host import api, brief_view
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings import config
-from owlbear_delivery_next.state_store import decision_store, machine_settings, spend_ledger
+from owlbear_delivery_next.state_store import decision_store, machine_settings, spend_ledger, work_block
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import decision_publication
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from pathlib import Path
 
 NOW = datetime(2026, 10, 16, 2, tzinfo=UTC)
 MINE, LEFT_TO_SHAPER = "Turns the hero 180 degrees in under 300 ms", "A second press returns the hero"
@@ -39,6 +43,7 @@ MINE, LEFT_TO_SHAPER = "Turns the hero 180 degrees in under 300 ms", "A second p
 
 class Host:
     maintenance = None
+    failed = ""
     wake = type("W", (), {"set": staticmethod(lambda: None)})()
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
 
@@ -51,6 +56,7 @@ def change() -> m.Change:
         m.BriefDecision(question="Where does the button sit?", answer="Top right of the hero", origin="decided"),
         m.BriefDecision(question="Animation length", answer="250 ms ease-out", origin="autonomous"),
         m.BriefDecision(question="Hero motion", answer="Never autoplay", origin="decided", scope="project"),
+        m.BriefDecision(question="Button label", answer="Flip", origin="approved"),
     ]
     brief = m.Brief(
         version=2, challenged=2, title="Flip the hero", outcome="Visitors flip the hero image with one button.",
@@ -65,10 +71,9 @@ def change() -> m.Change:
     return m.Change(slug="flip", brief=brief, checks=checks, step=m.Step(kind=m.StepKind.SHAPE))
 
 
-@pytest.fixture
-def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
-    store = Store(tmp_path)
-    store.write(Lock("flip"), change())
+@contextlib.contextmanager
+def served(store: Store) -> Iterator[str]:
+    """The project app over *store* on a free local port, with token ``tok``."""
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
@@ -78,13 +83,22 @@ def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
     threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
     while not server.started:
         time.sleep(0.05)
-    yield store, f"http://127.0.0.1:{sock.getsockname()[1]}"
+    yield f"http://127.0.0.1:{sock.getsockname()[1]}"
     server.should_exit = True
 
 
+@pytest.fixture
+def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
+    store = Store(tmp_path)
+    store.write(Lock("flip"), change())
+    with served(store) as base:
+        yield store, base
+
+
 @contextlib.contextmanager
-def opened(base: str, slug: str, pds: Any) -> Iterator[Any]:
-    """The Changes page on *slug* in a real browser: only the test host and the PDS CDN answer."""
+def opened(base: str, slug: str, pds: Any, *, details: bool = False) -> Iterator[Any]:
+    """The Changes page on *slug* in a real browser, its details shown or not: only the test host and the PDS CDN
+    answer."""
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     with sync_playwright() as pw:
@@ -95,12 +109,48 @@ def opened(base: str, slug: str, pds: Any) -> Iterator[Any]:
         page = browser.new_page()
         pds.only(page, base)
         page.add_init_script("sessionStorage.setItem('token', 'tok');")
+        if details:
+            page.add_init_script("localStorage.setItem('owlbear-improvement-detail', 'on');")
         page.goto(f"{base}/?change={slug}")
         yield page
         browser.close()
 
 
+def big(control: Any) -> None:
+    """WCAG 2.5.8: *control*, laid out, takes at least 24 by 24 CSS pixels."""
+    box = control.bounding_box()
+    assert box is not None
+    assert (box["width"] >= 24, box["height"] >= 24) == (True, True), box
+
+
 STAGES = ["Shape", "Plan", "Build", "Final review", "Publish", "Visual check", "Your checks", "Merge"]
+
+
+def agreed(brief: Any) -> None:
+    """The outcome comes first; the owner's decisions, the shaper's choices and what is out fold under their counts."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    expect(brief.locator(":scope > *").first).to_have_text("Visitors flip the hero image with one button.")
+    folds = brief.locator(":scope > section > details > summary")
+    expect(folds).to_have_text(  # the decisions picked fold too, shown with the details
+        ["Your decisions (4)", "Shaper's choices (1)", "Out of scope (1)", "Decisions this work follows (1)"]
+    )
+    expect(brief.get_by_text("Top right of the hero")).to_be_hidden()  # folded until opened
+    for fold in folds.all():
+        big(fold)
+        fold.click()
+    yours = brief.locator("section", has_text="Your decisions")
+    expect(yours.locator(".said").first.locator("li")).to_have_text([
+        "Where does the button sit? Top right of the hero (you decided)",
+        "Hero motion Never autoplay (you decided; lasting: applies to later Changes too)",  # C-14
+        "Button label Flip (you took the shaper's recommendation)",
+    ])  # fmt: skip
+    expect(yours.locator("p-heading", has_text="You specified").locator("+ ul.said")).to_contain_text(MINE)
+    shaper = brief.locator("section", has_text="Shaper's choices")
+    expect(shaper).to_contain_text("Approving accepts these choices.Animation length")
+    expect(shaper).not_to_contain_text("Flip")  # the recommendation he took is his
+    expect(brief.locator("section", has_text="Out of scope")).to_contain_text("Saving the direction")
+    expect(brief.locator("section", has_text="Decisions this work follows")).to_contain_text("Motion stays subtle")
 
 
 @pytest.mark.browser
@@ -108,7 +158,7 @@ def test_the_agreement_keeps_details_collapsed_and_the_approved_brief_lists_the_
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
-    with opened(base, "flip", pds) as page:
+    with opened(base, "flip", pds, details=True) as page:  # the decisions picked show with the details
         expect(page.locator("ol.stepper > li > span > span:first-child")).to_have_text(STAGES)
         current = page.locator("ol.stepper > li[aria-current]")
         expect(current).to_have_count(1)
@@ -116,17 +166,11 @@ def test_the_agreement_keeps_details_collapsed_and_the_approved_brief_lists_the_
         expect(current).to_contain_text("Shape")
         expect(page.locator("ol.stepper .loops")).to_have_count(0)  # no stage looped yet
         brief = page.locator(".brief").first
-        yours = brief.locator("section", has_text="Your decisions")
-        expect(yours).to_contain_text("Top right of the hero")
-        expect(yours).to_contain_text("Never autoplay (lasting: applies to later Changes too)")  # C-14
-        expect(yours.get_by_text("Top right of the hero (lasting", exact=False)).to_have_count(0)
-        expect(yours).to_contain_text(MINE)  # an owner-stated criterion is part of his agreement
-        expect(brief.locator("section", has_text="Choices proposed by the shaper")).to_contain_text("250 ms")
-        expect(brief.locator("section", has_text="Not in this Change")).to_contain_text("Saving the direction")
-        expect(brief.locator("section", has_text="Decisions this work follows")).to_contain_text("Motion stays subtle")
-        expect(brief.locator("summary")).to_contain_text("2 criteria \u00b7 1 screen \u00b7 1 check for you")
+        agreed(brief)
+        technical = brief.locator("summary", has_text="Technical details")
+        expect(technical).to_contain_text("2 criteria \u00b7 1 screen \u00b7 1 check for you")
         expect(page.get_by_text(LEFT_TO_SHAPER, exact=False)).to_be_hidden()  # collapsed until opened
-        page.get_by_role("button", name="Approve brief v2").click()
+        page.get_by_role("button", name="Approve v2").click()
         dialog = page.get_by_role("dialog")
         expect(dialog).to_be_visible()
         said = pds.modal(page)
@@ -153,16 +197,167 @@ def test_the_agreement_keeps_details_collapsed_and_the_approved_brief_lists_the_
         expect(page.locator("ol.stepper .loops")).to_have_count(1)
 
 
+PROJECT = "shop-site"
+
+
+def rule(title: str, scope: Scope, state: State = State.IN_FORCE) -> Decision:
+    where = {Scope.GLOBAL: {}, Scope.PROJECT: {"project": PROJECT}}.get(scope, {"project": PROJECT, "change": "flip"})
+    return Decision(id=new_id(), title=title, statement=f"{title}.", scope=scope, origin=Origin.DECIDED, actor="owner",
+                    state=state, created_at=NOW, **where)  # fmt: skip
+
+
+@pytest.fixture
+def shared_url(tmp_path: Path, shared_repo) -> Iterator[tuple[str, dict[str, Decision]]]:
+    """Change ``flip`` picking a Global, two project (one withdrawn since), a Change and an unknown decision."""
+    import subprocess  # noqa: PLC0415
+
+    shared = DataRepo(shared_repo[0])
+    shared.claim(PROJECT, "github.com/acme/shop-site")
+    rules = {
+        "global": rule("Pages are plain HTML", Scope.GLOBAL),
+        "project": rule("Notes live in SQLite", Scope.PROJECT),
+        "withdrawn": rule("Cache every read", Scope.PROJECT, State.WITHDRAWN),
+        "change": rule("The flip button stays square", Scope.CHANGE),
+    }
+    for r in rules.values():
+        folder = {Scope.GLOBAL: shared.root, Scope.PROJECT: shared.root / PROJECT}.get(r.scope)
+        write(r, folder or shared.root / PROJECT / "changes" / "flip")
+    for args in (("add", "-A"), ("commit", "-qm", "seed"), ("push", "-q", "origin", "HEAD")):
+        subprocess.run(["git", *args], cwd=shared.root, check=True, capture_output=True)  # noqa: S603, S607
+    store = Store(tmp_path / "store", shared, PROJECT)
+    c = change()
+    said = [PickedDecision(id=r.id, revision=r.revision, title=r.title, statement=r.statement) for r in rules.values()]
+    gone = PickedDecision(id=new_id(), revision="r0", title="An old rule since moved away", statement="Gone.")
+    c.brief.picked = Pick(version=2, status="ok", decisions=[*said, gone])
+    store.write(Lock("flip"), c)
+    with served(store) as base:
+        yield base, rules
+
+
+@pytest.mark.browser
+def test_picked_decisions_group_by_scope_and_link(shared_url, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    base, rules = shared_url
+    with opened(base, "flip", pds) as page:
+        expect(page.get_by_text("This version follows 5 decisions.")).to_be_visible()  # details off: one line
+        page.locator("#details-switch").click()
+        follows = page.locator(".brief section", has_text="Decisions this work follows")
+        summary = follows.locator("summary")
+        expect(summary).to_have_text("Decisions this work follows (5)")
+        big(summary)
+        summary.click()
+        expect(follows.locator("p-heading")).to_have_text(
+            ["Global (1)", "This project (2)", "This Change (1)", "Not in the current decisions (1)"]
+        )
+        expect(follows.locator("li")).to_have_text([
+            "Pages are plain HTML", "Notes live in SQLite", "Cache every read (withdrawn)",
+            "The flip button stays square", "An old rule since moved away",
+        ])  # fmt: skip
+        expect(follows.get_by_role("link")).to_have_count(4)  # the one gone from the list has nowhere to go
+        withdrawn = rules["withdrawn"]
+        follows.get_by_role("link", name="Cache every read").click()
+        expect(page).to_have_url(re.compile(rf"/decisions\?decision={withdrawn.id}$"))
+        card = page.locator(f'.entry[data-id="{withdrawn.id}"]')
+        expect(card).to_have_count(1)
+        expect(card.locator(".heading")).to_have_text("Cache every read.")  # its statement, which the title cuts
+        expect(card.locator("#detail")).to_be_visible()
+        expect(card).to_be_in_viewport()
+        expect(card.locator(".heading")).to_be_focused()
+        pds.pick(page, "State", "all")  # now listed, it shows once, still open
+        expect(page.locator(f'.entry[data-id="{withdrawn.id}"]')).to_have_count(1)
+        expect(page.locator("#linked")).to_have_count(0)
+        expect(page.locator(f'.entry[data-id="{withdrawn.id}"] #detail')).to_be_visible()
+
+
+@pytest.mark.parametrize("case", ["no-shared-data", "save-in-progress"])
+def test_an_unavailable_decision_list_is_said(c1, request, monkeypatch, case: str) -> None:
+    """The picked decisions can't be grouped without the list; the rest of the detail answers all the same."""
+    store, app = c1
+    reason = "there is no shared data repository, so there are no decisions to work by"
+    if case == "save-in-progress":
+        reason = "a decision save is in progress; try again in a moment"
+
+        def saving(*_args: object) -> None:
+            raise decision_store.DecisionsUnavailable(reason)
+
+        monkeypatch.setattr(brief_view.decision_store, "load", saving)
+        moved = Store(store.root, DataRepo(request.getfixturevalue("shared_repo")[0]), PROJECT)
+        app = api.create_app(moved, "tok", Host())
+    client = TestClient(app, base_url="http://127.0.0.1", headers={"authorization": "Bearer tok"})
+    detail = client.get("/api/next/changes/c1-fixture")
+    assert detail.status_code == 200, detail.text
+    brief = detail.json()["brief"]
+    assert (brief["picked"]["status"], len(brief["picked"]["decisions"])) == ("ok", 96)
+    assert (brief["picked_items"], brief["picked_unavailable"]) == (None, reason)
+    assert [v["n"] for v in brief["versions"]["versions"]] == [1, 2, 3, 4]
+
+
+@pytest.mark.browser
+def test_a_planned_change_folds_its_plan_with_the_current_task_outside(page_url, pds) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    built = change().model_copy(update={"step": m.Step(kind=m.StepKind.BUILD)})
+    built.brief = built.brief.model_copy(update={"approved_version": 2, "approved_at": NOW})
+    titles = ["Add the flip button", "Animate the hero", "Keep the caption readable"]
+    tasks = [m.Task(id=f"t{n}", title=t, done=n == 1) for n, t in enumerate(titles, 1)]
+    part = m.Task(id="t4", title="Label the hero's controls", origin="review", fixes="t2")  # runs before t3
+    built.plan = m.Plan(version=2, tasks=[*tasks, part])
+    found = RoundFinding(id="F1", text="t2: AC-1: no timing check - fix: measure it", raised=1, state="fixed")
+    verdicts = [Verdict(round=1, version=1), Verdict(round=2, version=2)]
+    built.loops["plan"] = RoundLoop(subject="plan", policy=RoundPolicy(), round=2, ended="clean", findings=[found],
+                                    verdicts=verdicts)  # fmt: skip
+    reviewed = RoundFinding(id="F1", text="the button lacks a label - fix: name it", raised=1, state="fixed")
+    built.loops["t1"] = RoundLoop(subject="t1", policy=RoundPolicy(), round=1, ended="clean", findings=[reviewed])
+    store.write(Lock("flip"), built)
+    with opened(base, "flip", pds) as page:
+        plan = page.locator("section.info", has=page.get_by_role("heading", name="Plan", exact=True))
+        now = plan.locator(":scope > ol.plan > li")
+        expect(now).to_have_count(1)  # the task at work, outside the fold
+        expect(now).to_contain_text("now")
+        expect(now).to_contain_text("Label the hero's controls")  # the repair part the build works on
+        fold = plan.locator("details", has_text="Tasks: 1 of 4 done")
+        expect(fold.locator("summary")).to_have_text("Tasks: 1 of 4 done")
+        expect(page.get_by_text("Keep the caption readable")).to_be_hidden()
+        versions = plan.locator(".version-list > li")
+        expect(versions).to_have_count(2)
+        expect(versions.nth(0)).to_contain_text("v1 findings")
+        expect(versions.nth(0)).to_contain_text("Challenge 1")
+        expect(versions.nth(1)).to_contain_text("v2 clean, current")
+        expect(versions.nth(1).locator(".dot.clean")).to_have_count(1)
+        expect(plan.locator(".versions p-button")).to_have_count(0)  # the plan's versions take no action here
+        pds.settled(page)
+        fold.locator("summary").click()
+        expect(page.get_by_text("Keep the caption readable")).to_be_visible()
+        expect(plan.get_by_text("Task review")).to_have_count(0)  # its review badges show with the details
+        box = fold.locator("summary").bounding_box()
+        assert box is not None
+        assert (box["width"] >= 24, box["height"] >= 24) == (True, True), box
+
+        page.locator("#details-switch").click()
+        first = fold.locator("li", has_text="Add the flip button")
+        expect(first).to_contain_text("Task review")
+        expect(first).to_contain_text("R1 \u00b7 1 unverified")
+
+
 @pytest.mark.browser
 def test_an_unreviewed_last_revision_is_approved_only_once_the_owner_ticks_that_he_accepts_it(page_url, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
     tail = change().model_copy(update={"slug": "tail"})
-    tail.loops["brief"] = RoundLoop(subject="brief", policy=RoundPolicy(), round=3, ended="max", unreviewed=["v2"])
+    said = "AC-2: the empty state has no check, so a list that renders nothing at all would pass every check we run"
+    kept = RoundFinding(id="F4", text=said, raised=3, state="rejected")
+    tail.loops["brief"] = RoundLoop(
+        subject="brief", policy=RoundPolicy(), round=3, ended="max", unreviewed=["v2"], findings=[kept]
+    )
     store.write(Lock("tail"), tail)
     with opened(base, "tail", pds) as page:
-        page.get_by_role("button", name="Approve brief v2").click()
+        items = page.locator(".actions")
+        expect(items).to_contain_text(f"brief challenge F4, rejection not reviewed: {said}")  # whole, never cut
+        expect(items).not_to_contain_text("No review yet")  # while shaping, the line on v2 says it
+        page.get_by_role("button", name="Approve v2").click()
         dialog = pds.modal(page)
         confirm = dialog.get_by_role("button", name="Approve and start")
         expect(confirm).to_be_disabled()  # TD-255
@@ -172,6 +367,10 @@ def test_an_unreviewed_last_revision_is_approved_only_once_the_owner_ticks_that_
             confirm.click()
         expect(page.get_by_role("dialog")).to_be_hidden()
     assert store.fold(Lock("tail"), "tail", NOW)[0].brief.approved_version == 2
+    with opened(base, "tail", pds) as page:  # approved, the unreviewed revision is still open
+        expect(page.locator(".actions")).to_contain_text(
+            "No review yet of brief v2, revised after its last challenge (brief challenge)"
+        )
 
 
 @pytest.mark.browser
@@ -189,7 +388,7 @@ def test_the_changes_tool_calls_show_under_its_spend_most_called_first(page_url,
     )  # fmt: skip
     ran(store, "idle", {}, {"no_result": 2})
     assert spend_ledger.WRITER.settled(10)
-    with opened(base, "used", pds) as page:
+    with opened(base, "used", pds, details=True) as page:  # tool calls show with the details
         expect(page.get_by_text("Tool calls (8)")).to_be_visible()
         page.get_by_text("Tool calls (8)").click()
         expect(page.get_by_text("report_wrong_premise: 4 calls, 25% succeeded, 25% refused (1 invalid arguments), "
@@ -199,7 +398,7 @@ def test_the_changes_tool_calls_show_under_its_spend_most_called_first(page_url,
         ).to_be_visible()
         expect(page.get_by_text("ask_question: 1 call, 100% succeeded, 0% refused, 0 retries")).to_be_visible()
         expect(page.get_by_text("Wrong tool choices: 2 denials by the guard")).to_be_visible()
-    with opened(base, "idle", pds) as page:  # no call counted, yet its wrong choices show
+    with opened(base, "idle", pds, details=True) as page:  # no call counted, yet its wrong choices show
         page.get_by_text("Tool calls (0)").click()
         expect(page.get_by_text("Wrong tool choices: 2 turns without a result")).to_be_visible()
 
@@ -248,7 +447,7 @@ def test_an_answer_being_typed_survives_polls_that_bring_new_activity_and_is_sen
 
     store, base = page_url
     store.write(Lock("greet"), asking())
-    with opened(base, "greet", pds) as page:
+    with opened(base, "greet", pds, details=True) as page:
         form = page.locator("section.act", has_text="Question q1")
         expect(form).to_contain_text("Which language?")
         form.get_by_label("English").check()
@@ -448,6 +647,24 @@ def test_a_card_names_the_files_its_activity_touches_without_their_paths(page_ur
 
 
 @pytest.mark.browser
+def test_a_shaping_rows_next_action_says_whether_the_owner_approves_or_the_shaping_chat_continues(
+    page_url, pds
+) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    waits = m.Outcome(exit=m.Exit.PENDING, waiting=m.Waiting.CHAT, who="you", reason="approve brief v2", at=NOW)
+    store.write(Lock("flip"), change().model_copy(update={"outcome": waits}))  # v2 challenged: the owner approves it
+    revises = waits.model_copy(update={"reason": "the shaper revises brief v1 for F1"})
+    tidy = m.Brief(version=1, title="Tidy the footer")
+    store.write(Lock("tidy"), m.Change(slug="tidy", brief=tidy, step=m.Step(kind=m.StepKind.SHAPE), outcome=revises))
+    with opened(base, "flip", pds) as page:
+        flip, tidy = (page.locator(f"#changes .card:has(a[data-key='{k}']) p.next") for k in ("flip", "tidy"))
+        expect(flip).to_have_text("Next: Approve brief")
+        expect(tidy).to_have_text("Next: Continue in the shaping chat")
+
+
+@pytest.mark.browser
 def test_a_change_reads_by_its_title_and_its_slug_stands_in_while_it_has_none(page_url, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -468,11 +685,12 @@ def test_a_change_reads_by_its_title_and_its_slug_stands_in_while_it_has_none(pa
 
 
 @pytest.mark.browser
-def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_counted(page_url, pds) -> None:
-    """C4: the display only; the activity file keeps every event as recorded."""
+def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_counted(page_url, pds, whole_error) -> None:
+    """C4: the display only; the activity file keeps every event as recorded. A force-stop reason shows whole (#951)."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
+    stopped = f"runtime stop failed: RuntimeError: {whole_error}"
     events = [
         {"event": "step", "kind": "cleanup", "exit": "done", "at": "2026-10-16T00:59:00+00:00",
          "reason": "workspace kept: large ignored files (/Users/Jane Doe/.owlbear/wt/flip)"},
@@ -498,14 +716,15 @@ def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_coun
         {"event": "lint", "ran": [{"tool": "ruff", "files": ["a.py"], "state": "passed"},
                                   {"tool": "mypy", "files": ["a.py"], "state": "broken"}],
          "skipped": [], "passed": True, "at": "2026-10-16T01:06:10+00:00"},  # a repeat break no longer blocks
-        {"event": "force-stop", "reason": "stop timed out", "runtime_pid": 41, "at": "2026-10-16T01:06:20+00:00"},
+        {"event": "force-stop", "reason": stopped, "runtime_pid": 41, "at": "2026-10-16T01:06:20+00:00"},
     ]  # fmt: skip
     for e in events:
         store.log(Lock("flip"), "flip", e)
-    with opened(base, "flip", pds) as page:
+    with opened(base, "flip", pds, details=True) as page:  # Recent activity shows with the details
         lines = page.locator("#detail .log li")
         expect(lines).to_have_count(11)
-        expect(lines.nth(0)).to_contain_text("Tried to force the session to stop: stop timed out")
+        said = lines.nth(0).locator(":scope > span")
+        assert said.text_content() == f"Tried to force the session to stop: {stopped}"
         expect(lines.nth(1)).to_contain_text("Lint incomplete (ruff, mypy could not run)")
         expect(lines.nth(2)).to_contain_text("Clean-up waiting: waiting for checks")
         expect(lines.nth(3)).to_have_text(re.compile(r"Undid task t1, attempt 2$"))  # not counted with the failure
@@ -584,7 +803,11 @@ def test_the_owner_reruns_a_stopped_step_after_confirming_what_follows(page_url,
         again = page.get_by_role("button", name="Done: run the step again")
         if case in {"liveness", "unset"}:
             if case == "unset":
-                expect(note).to_contain_text("Settings unset: ")
+                count = len(work_block.of_store(store).keys)
+                expect(note).to_contain_text(
+                    f"{count} settings are unset; set them on the Settings page to run the step again."
+                )
+                expect(note).not_to_contain_text("agents.")  # how many, never which keys
             expect(again).to_have_count(0)
             return
         posts = []
@@ -637,13 +860,15 @@ def test_a_refused_approval_shows_its_whole_reason(page_url, pds, monkeypatch, w
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     def unavailable(*_args, **_kwargs):
-        raise decision_store.DecisionsUnavailable(whole_error)
+        error = decision_store.DecisionsUnavailable(whole_error)
+        error.add_note("NOTE-MARK")
+        raise error
 
     monkeypatch.setattr(decision_publication.decision_archive, "lasting", unavailable)
     store, base = page_url
-    reason = f"{decision_publication.REFUSED}: DecisionsUnavailable: {whole_error}"
+    reason = f"{decision_publication.REFUSED}: DecisionsUnavailable: {whole_error}\nNOTE-MARK"
     with opened(base, "flip", pds) as page:
-        page.get_by_role("button", name="Approve brief v2").click()
+        page.get_by_role("button", name="Approve v2").click()
         with replied(page, "/approve-brief") as reply:
             pds.modal(page).get_by_role("button", name="Approve and start").click()
         assert (reply.value.status, reply.value.json()["detail"]) == (409, reason)

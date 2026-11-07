@@ -30,7 +30,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import decision_batch, decision_store, decision_sync
+from owlbear_delivery_next.state_store import decision_batch, decision_errors, decision_store, decision_sync
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import lookup
 
@@ -198,6 +198,21 @@ def test_a_rebase_is_a_save_in_progress_while_a_writer_holds_the_lock_and_a_repa
     with writing(shared):
         assert action(shared) == decision_store.SAVING
     assert action(shared) == decision_store.REPAIR
+
+
+def test_an_unreadable_journal_is_a_save_in_progress_while_a_writer_holds_the_lock_and_its_whole_error_after(
+    shared, monkeypatch, writing, whole_error
+):
+    def unreadable(_shared: DataRepo) -> None:
+        raise decision_batch.JournalError(whole_error)
+
+    monkeypatch.setattr(decision_batch, "pending", unreadable)
+    with writing(shared), pytest.raises(decision_store.DecisionsUnavailable) as saving_now:
+        decision_store.load(shared, PROJECT)
+    with pytest.raises(decision_store.DecisionsUnavailable) as after:
+        decision_store.load(shared, PROJECT)
+    assert (str(saving_now.value), saving_now.value.action) == (decision_errors.IN_PROGRESS, decision_store.SAVING)
+    assert (str(after.value), after.value.action) == (f"JournalError: {whole_error}", decision_store.RECOVER)
 
 
 def test_a_writer_that_reads_under_its_own_lock_meets_an_interrupted_batch(shared):
@@ -557,7 +572,7 @@ def test_a_decision_like_a_new_one_in_a_change_is_never_taken_for_it(shared, wir
 
 
 def test_a_host_without_the_fence_never_has_a_lost_save_called_not_saved(wire):
-    chat, _ = wire(served={"supported": [2]})
+    chat, _ = wire(served={"supported": [chat_contract.CHAT]})
     out = chat.propose(REFUSED)
     assert (out["saved"], out["error"]) == (None, chat_client.UNCLEAR.format(why=chat_client.UNFENCED))
     assert chat.fenced is False

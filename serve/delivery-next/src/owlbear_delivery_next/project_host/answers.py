@@ -18,9 +18,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_decisions.models import STATEMENT_LIMIT
+from owlbear_delivery_next.change_contracts import failures
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
-from owlbear_delivery_next.change_contracts.models import AnswerKind
-from owlbear_delivery_next.change_flow import answer_kinds, loop, rebuilds
+from owlbear_delivery_next.change_contracts.models import AnswerKind, ErrorKind
+from owlbear_delivery_next.change_flow import amending, answer_kinds, loop, rebuilds
 from owlbear_delivery_next.workflow_steps import decision, held
 
 if TYPE_CHECKING:
@@ -34,7 +35,7 @@ T6 = "This is a recovery decision; make it in the Changes page"
 KIND = (
     "How the owner's answer bears on the approved brief: event (it only settles how the work goes on), "
     "clarification (it settles intent within the brief; read it back first) or brief_change (it changes the "
-    "brief; the work stops and asks)"
+    "brief; Delivery amends it and asks the owner only about more than his answer says)"
 )
 STATEMENT = "For a clarification: the intent the owner confirmed when you read it back, at most two lines"
 CONFIRMED = "For a clarification: true only when the owner confirmed the statement as you read it back"
@@ -82,17 +83,16 @@ def router(store: Store, read: Callable[[str], Change], put: Callable[[str, Inbo
     return routes
 
 
-def shown(c: Change, q: Question, events: list[dict[str, Any]]) -> dict[str, object]:
+def shown(q: Question, events: list[dict[str, Any]]) -> dict[str, object]:
     """What the Changes page shows with the open *q* besides its text and options.
 
-    Whether chat may answer it, and when the owner allowed what the Spotter stopped on the questions *q* asks again
-    (#717): that answer is held, so without it the page would show the same question as if he had not answered. The
-    last answer to *q* the fold did not apply, from *events*, stays beside it until an answer to it applies (#791): a
-    question opened again after that never shows it.
+    Whether chat may answer it, and whether a brief amendment asks it. The last answer to *q* the fold did not apply,
+    from *events*, stays beside it until an answer to it applies (#791): a question opened again after that never
+    shows it.
     """
     said = [e for e in events if e.get("event") in {"answer", "answer-not-applied"} and e.get("question") == q.id]
     dropped = said[-1] if said and said[-1]["event"] == "answer-not-applied" else None
-    return {"ordinary": loop.ordinary(q), "held": answer_kinds.kept(c, q), "dropped": dropped}
+    return {"ordinary": loop.ordinary(q), "dropped": dropped, "amendment": bool(amending.owned(q))}
 
 
 def answer_item(store: Store, c: Change, body: AnswerBody) -> AnswerItem | tuple[int, str]:
@@ -126,13 +126,19 @@ def _checked(store: Store, c: Change, q: Question, body: AnswerBody) -> tuple[in
         return 422, f"option {body.option} is not one of {[o.id for o in q.options]}"
     if q.repair and ((now_open := loop.open_question(c)) is None or now_open.id != q.id):
         return 409, "the Change moved on since this round gate asked; reload"
-    anyway = bool(q.options) and all(o.next == "retry" for o in q.options)  # the fold reruns the step on any answer
+    anyway = (
+        bool(q.options)
+        and all(o.next == "retry" for o in q.options)
+        and q.cause != failures.cause_key(ErrorKind.STATE, q.step, failures.READ_ONLY_UNREAD)
+    )
     # Delivery's own questions are settled by an option; a worker's question also takes the owner's own words
     chosen = (not anyway and bool((q.cause and q.options) or q.repair)) or answer_kinds.owned(q)
     if body.option is None and chosen:
         return 422, f"choose one of {[o.label for o in q.options]}"
     if any(o.id == body.option and o.next == "reconsider" for o in q.options) and not body.text.strip():
         return 422, "a reconsideration needs your note: what the reviewer should weigh"
+    if amending.owned(q) and body.option in {amending.WITHIN.id, amending.RESHAPE.id} and not body.text.strip():
+        return 422, "say why: the work, or the shaper, goes on from your reason"
     return None
 
 
@@ -150,19 +156,22 @@ def classed(q: Question, body: AnswerBody) -> str:
 
 def refused(c: Change, q: Question, body: AnswerBody) -> tuple[int, str] | None:
     """The status and reason a Changes-page answer is refused with, or None."""
-    if q.cause == decision.CAUSE and body.option in {"pass", "fail"}:
+    if q.cause == decision.CAUSE and body.option in {"pass", "fail", decision.AMEND}:
         return _visual(c, body)
     return rebuilds.refused(c, q, body.option, body.tasks, (body.attempt, body.head))
 
 
 def _visual(c: Change, body: AnswerBody) -> tuple[int, str] | None:
-    """Why a Pass or Fail is refused: its round, capture or pack changed since the page showed them, or it is empty."""
+    """Why a Pass, Fail or taken conflict is refused: its round, capture or pack changed, or it names nothing."""
     kept = c.visual_rounds[-1] if c.visual_rounds else None
     shown = (body.round, body.head, body.pack)
     if kept is None or kept.outcome != "ask" or kept.decision or shown != (kept.number, kept.head, kept.pack):
         return 409, "the capture or Impeccable changed since the page was shown; reload"
     if unknown := sorted(set(body.findings) - {f.id for v in kept.verdicts for f in v.findings}):
         return 422, f"findings {unknown} are not in round {kept.number}"
+    taken = {k.id for v in kept.verdicts for k in v.conflicts if k.departs not in kept.owner}
+    if body.option == decision.AMEND and body.text.strip() not in taken:
+        return 422, f"name one of round {kept.number}'s conflicts with the brief: {', '.join(sorted(taken)) or 'none'}"
     if body.option == "fail" and not body.findings and not body.text.strip():
         return 422, "a Fail ticks a finding or says what is wrong"
     return None

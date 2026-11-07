@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from typing import TYPE_CHECKING
 
 import pytest
 
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import stop_routes
@@ -70,14 +72,27 @@ def test_a_project_waits_for_its_own_unset_setting_and_this_machine_s_intervals_
     assert (work_block.of_store(store), work_block.of_store(store).text()) == (Block(), "")
 
 
+def unreadable(text: str, name: str = "config") -> str:
+    """How a settings layer named *name* that holds *text* is said: its whole JSON error."""
+    try:
+        json.loads(text)
+    except ValueError as exc:
+        return f"state of {name} is unreadable: {failure(exc)}"
+    raise AssertionError(text)
+
+
 @pytest.mark.usefixtures("poll_unset")
 def test_no_shared_repository_is_no_block_but_an_unreadable_layer_blocks_with_why_first(store):
     assert work_block.machine() == Block()  # tests run without a shared repository
     store.config_path.write_text("{not json")
     block = work_block.of_store(store, Block(("machine.channel",)))
-    assert (block.keys, block.text()) == (("machine.channel",), f"{UNREADABLE}state of config is unreadable")
+    assert (block.keys, block.text()) == (("machine.channel",), f"{UNREADABLE}{unreadable('{not json')}")
     (local_home.root() / registry.MACHINE).write_text("{not json")
-    assert work_block.machine().reason.endswith("is unreadable: Invalid JSON: key must be a string at line 1 column 2")
+    try:
+        registry.Machine.model_validate_json("{not json")
+    except ValueError as exc:
+        invalid = failure(exc)
+    assert work_block.machine().reason == f"{local_home.root() / registry.MACHINE} is unreadable: {invalid}"
 
 
 @pytest.mark.usefixtures("poll_unset")
@@ -102,8 +117,7 @@ def test_the_rerun_texts_of_a_stop_are_unchanged(store):
     )
     store.config_path.write_text("{not json")
     assert stop_routes.unset(store) == (
-        "The settings can't be read (state of config is unreadable); "
-        "fix them on the Settings page to run the step again"
+        f"The settings can't be read ({unreadable('{not json')}); fix them on the Settings page to run the step again"
     )
 
 
@@ -117,6 +131,7 @@ def test_an_unreadable_global_blocks_with_its_reason_though_this_machine_sets_al
     assert work_block.of_folder(shared, "other-site") == work_block.of_settings(work_block.outside(shared))
     shared.global_path.write_text("{ not json")
     resolved = machine_settings.current()
-    assert (resolved.missing, resolved.notice.startswith("the global settings are unreadable: ")) == ([], True)
+    said = unreadable("{ not json", shared.global_path.stem)
+    assert (resolved.missing, resolved.notice) == ([], f"the global settings are unreadable: StoreError: {said}")
     assert work_block.machine() == Block(reason=resolved.notice)
-    assert work_block.of_store(registered).reason.startswith("state of config is unreadable; the global settings")
+    assert work_block.of_store(registered).reason.startswith(f"{unreadable('{ not json')}; the global settings")

@@ -1,24 +1,26 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
-import { here, moved, loaded as clones, project as current } from "/assets/ui.mjs";
+import { displayName, here, moved, loaded as clones, project as current } from "/assets/ui.mjs";
 import { SOURCES, state, drafts, page, show, notify, shown } from "./state.mjs";
 import { cell, row, table, button, more } from "./cells.mjs";
 import { pendingLine, save, rename, reviewPrefs, hasEdits, anyEdits, pendingIn, useRecommended } from "./layers.mjs";
 import { machineSection } from "./machine.mjs";
-import { agentsGroup, guardrailsGroup, checksGroup } from "./panels.mjs";
+import { agentsGroup, guardrailsGroup, memoryGroup, checksGroup } from "./panels.mjs";
 import { GROUPS, groupOf, renamed, rowOf } from "./groups.mjs";
+import { hasRow, nameOf } from "./names.mjs";
 import { readsView } from "./reads.mjs";
 
 // The project this page edits, by its name in the machine host's list; "This project" on a clone's own host.
 export function named(id = current) {
-  return clones()?.find((p) => p.id === id)?.name ?? "";
+  const p = clones()?.find((o) => o.id === id);
+  return p ? displayName(p) : "";
 }
 
 function scopeSection() {
   const loaded = state.loaded, mine = named();
-  const all = clones() ?? [], twin = (p) => all.some((o) => o !== p && o.name === p.name);
+  const all = clones() ?? [], twin = (p) => all.some((o) => o !== p && displayName(o) === displayName(p));
   const others = all.filter((p) => p.id !== current)
-    .map((p) => [`go:${p.id}`, `Project ${p.name}${twin(p) ? ` (${p.path})` : ""}`]);
+    .map((p) => [`go:${p.id}`, `Project ${displayName(p)}${twin(p) ? ` (${p.path})` : ""}`]);
   const storage = loaded.global_location ? "synced to shared repository" : "this Mac only";
   const options = [["project", `${mine ? `Project ${mine}` : "This project"} (${storage})`],
     ["machine", "This machine (its projects; this Mac only)"],
@@ -78,6 +80,12 @@ export function at(value, key) {
   return key.split(".").reduce((o, k) => o?.[k], value);
 }
 
+// A setting's name in the table: its group and its name on the page; a setting with no row, as it is written.
+function acrossName(key) {
+  if (!hasRow(key)) return key;
+  return `${GROUPS.find(([id]) => id === groupOf(rowOf(key)))[1]} · ${nameOf(key)}`;
+}
+
 // Each setting a project sets apart from the global value, with that global value and where it comes from.
 function acrossSection() {
   if (!clones()) return nothing;  // a clone's own host serves one project
@@ -90,7 +98,7 @@ function acrossSection() {
     const differ = all.filter((p) => JSON.stringify(at(p.config.settings, key)) !== JSON.stringify(here));
     return { key, global, from, machine: apart ? plain(here) : "same", differ, apart };
   }).filter((r) => state.everything || r.differ.length || r.apart);
-  const body = rows.map((r) => row(cell(r.key.replaceAll(".", " · ")), cell(`${plain(r.global)} (${r.from})`),
+  const body = rows.map((r) => row(cell(acrossName(r.key)), cell(`${plain(r.global)} (${r.from})`),
     cell(r.machine),
     cell(r.differ.map((p) => `${p.name}: ${plain(at(p.config.settings, r.key))}`).join("; ") || "none")));
   const flip = (e) => { state.everything = e.target.checked === true; show(); };
@@ -145,7 +153,7 @@ function unsetSection() {
         + `machine's could not be read (${state.machineUnread}), so whether they are is not known.`
         : "Every project setting is set; this machine's are being read."}</p-text></section>`;
   }
-  const link = (key, i) => html`${i ? ", " : ""}<a href=${`#${rowOf(key)}`}>${key}</a>`;
+  const link = (key, i) => html`${i ? ", " : ""}<a href=${`#${rowOf(key)}`}>${nameOf(key)}</a>`;
   const more = (id, keys) => keys.length > FIRST
     ? html` <a href=${`#${id}`}>and ${keys.length - FIRST} more</a>` : nothing;
   const item = ([id, label], keys) => html`<li id=${`unset-${id}`}><strong>${label}</strong>, ${
@@ -178,7 +186,8 @@ const FILTERS = [["all", "All settings"], ["unset", "Unset"], ["set", "Set on th
 const NONE = { unset: "No setting in this group is unset.", set: "This layer sets nothing in this group.",
   unsaved: "No unsaved edits in this group." };
 
-const LAYERED = ["agents", "guardrails", "checks"];  // the groups of settings a layer holds, saved by one Save
+// The groups of settings a layer holds, saved by one Save.
+const LAYERED = ["agents", "guardrails", "memory", "checks"];
 
 function filterBar() {
   if (!LAYERED.includes(state.group)) return nothing;
@@ -198,6 +207,7 @@ const GROUP_VIEWS = {
   overview: () => html`${unsetSection()}${acrossSection()}`,
   agents: agentsGroup,
   guardrails: guardrailsGroup,
+  memory: memoryGroup,
   checks: checksGroup,
   project: folderSection,
   "this-machine": machineSection,

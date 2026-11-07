@@ -15,7 +15,7 @@ import uvicorn
 from owlbear_delivery_next.change_contracts.models import Brief, Change, StepKind
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import curation
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import api, pack_routes
 from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.state_store.store import Lock, Store
 
@@ -134,6 +134,49 @@ def test_memory_curation_says_whether_its_last_run_was_the_curator_or_the_owner(
             page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
             expect(memory).to_contain_text("Last run (your memory action): approve Run ruff first, ")
             expect(memory).not_to_contain_text("memory curator")
+            browser.close()
+    finally:
+        server.should_exit = True
+
+
+@pytest.mark.browser
+def test_unreadable_curation_runs_show_whole_on_memory_curation(tmp_path: Path, pds, monkeypatch, whole_error) -> None:
+    """#971: why memory curation's runs are not counted shows whole under its last run."""
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    run = curation.FolderRun(state="done", started_at=datetime.now(UTC), ended_at=datetime.now(UTC))
+    (local_home.root() / curation.STATE).write_text(curation.Runs(folders={"shop": run}).model_dump_json())
+    error = ValueError(whole_error)
+    error.add_note("a note added on the way up")
+
+    def unreadable(_text: str):
+        raise error
+
+    monkeypatch.setattr(pack_routes.curation_runs.Runs, "model_validate_json", unreadable)
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    server = uvicorn.Server(
+        uvicorn.Config(api.create_app(Store(tmp_path, name="shop"), "tok", None), log_level="warning")
+    )
+    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
+    while not server.started:
+        time.sleep(0.05)
+    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    try:
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            pds.only(page, base)
+            page.goto(f"{base}/maintenance#token=tok")
+            reason = page.locator("#actions > li", has_text="Memory curation").locator("p-text[size='xs']")
+            expect(reason).to_have_count(1)
+            assert reason.text_content() == (
+                "memory curation's runs could not be read, so they are not counted: "
+                f"ValueError: {whole_error}\na note added on the way up"
+            )
             browser.close()
     finally:
         server.should_exit = True

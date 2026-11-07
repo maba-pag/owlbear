@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.improvement import events as ev
 from owlbear_delivery_next.improvement import retro_judge, retro_segments
 from owlbear_delivery_next.improvement import retro_store as store
-from owlbear_delivery_next.improvement import retro_synthetic as syn
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.retro_calls import Paid, Work, key
 from owlbear_delivery_next.improvement.retro_segments import dumps
@@ -76,7 +75,7 @@ def activity(uid: str, projects: units.Projects) -> str:
 def last_said(sid: str) -> str:
     """A chat's outcome: what its main agent said last in its capture."""
     said = ""
-    with contextlib.suppress(OSError):
+    with contextlib.suppress(FileNotFoundError):
         for d in units.events(sid):
             if d.get("type") == "assistant.message" and ev.main_agent(d) and d["data"].get("content"):
                 said = str(d["data"]["content"])
@@ -103,7 +102,7 @@ def plan(uid: str, projects: units.Projects) -> dict[str, Any]:
     """What a run of *uid* would ask now, with no paid call: its judging batches and how many are saved already.
 
     A unit whose last revision is judged, or that has none, is counted as its next revision would be taken; a
-    synthetic unit is installed first, as a run takes it; a chat only once taken, since taking it captures the chat.
+    chat only once taken, since taking it captures the chat.
     Proposals and reviews are not counted: they depend on what the judging finds.
 
     Raises:
@@ -112,10 +111,9 @@ def plan(uid: str, projects: units.Projects) -> dict[str, Any]:
     known = store.known().get(uid) or {}
     revs, found = list(known.get("revisions") or []), {r["id"]: r for r in units.records()}
     taken = bool(revs) and revs[-1].get("state") != "judged"
-    if uid.startswith(syn.PREFIX):
-        spec = syn.specs(uid.removeprefix(syn.PREFIX))[0]
-        w, taken = syn.work(spec, syn.install(spec), "plan", _never), True
-    elif taken:
+    if uid.startswith("syn:"):
+        raise store.RetroError(store.SYNTHETIC_RETIRED)
+    if taken:
         unit, rev = known, revs[-1]
         held = [found[i] for i in rev.get("records") or () if i in found]
         w = Work("plan", uid, rev, unit, held, evidence(uid, unit, rev, projects), _never)

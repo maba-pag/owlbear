@@ -53,13 +53,13 @@ def test_each_recorded_oversized_goal_now_passes_or_says_what_to_cut(session, le
         ),
         (
             tools.BuildResult,
-            {"summary": "s", "checks": [{"command": "npm test", "exit_code": 0}] * 21},
-            "checks: 21 items, at most 20 - report each task check once, as it last ran",
+            {"summary": "s", "checks": [{"command": "npm test", "exit_code": 0}] * 101},
+            "checks: 101 items, at most 100 - report each task check once, as it last ran",
         ),
         (
             tools.BuildResult,
-            {"summary": "s", "checks": [{"command": "x" * 301, "exit_code": 0}]},
-            "checks[0].command: 301 characters, at most 300 - shorten it",
+            {"summary": "s", "checks": [{"command": "x" * 1001, "exit_code": 0}]},
+            "checks[0].command: 1001 characters, at most 1000 - shorten it",
         ),
         (
             tools.BuildResult,
@@ -101,14 +101,14 @@ def test_a_limit_error_names_the_path_the_length_the_limit_and_what_to_cut(model
 
 def test_other_errors_give_the_nested_field_s_own_example():
     _, errors = tool_schema.parse(tools.PlanResult, {"tasks": [{"title": "t", "goal": "g", "scope": ["a"]}]})
-    assert errors == ['tasks[0].checks: Field required - e.g. ["npm test"]']
+    assert errors == ['tasks[0].checks: Field required - e.g. ["cd ./packages/app && {\\nnpm test\\n}"]']
     _, errors = tool_schema.parse(tools.BuildResult, {"summary": "s", "checks": [{"command": "npm test"}]})
     assert errors == ["checks[0].exit_code: Field required - e.g. 0"]
     _, errors = tool_schema.parse(tools.PlanResult, {"tasks": "[]"})  # the recorded wrong type
     assert errors == [
         (
             'tasks: Input should be a valid list - e.g. [{"title": "Add farewell", "goal": "AC-1", "scope": '
-            '["packages/app"], "checks": ["npm test"]}]'
+            '["packages/app"], "checks": ["cd ./packages/app && {\\nnpm test\\n}"]}]'
         )
     ]
     _, errors = tool_schema.parse(tools.PlanResult, {"tasks": ["t1"]})

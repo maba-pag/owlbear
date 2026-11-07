@@ -33,6 +33,7 @@ OPERATIONS = {
     "push": "Push the branch",
     "pull-request": "Pull request to main",
     "merge": "CI and merge",
+    "retirement": "Branch cleanup check",
     REPAIR: "Agent repairs CI in a copy of the pull request; Delivery pushes it",
     "pds-notice": "Notice: newer PDS release on npm",
     "pds-candidate": "Candidate: verified release, skills and served files",

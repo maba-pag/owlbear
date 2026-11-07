@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next.improvement import assumptions, cases, followups, retro_judge, spotter
+from owlbear_delivery_next.improvement import assumptions, followups, retro_judge, spotter
 from owlbear_delivery_next.improvement import proposal_apply as act
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
@@ -82,9 +82,9 @@ def said(monkeypatch):
 
 @pytest.fixture
 def world(tmp_path, monkeypatch):
-    """Projects p1 and the sandbox, registered; their backlogs; findings of p1's Change fix and of a synthetic unit."""
+    """Two projects and their backlogs; findings of p1's Change and of a historical synthetic unit."""
     projects, places = {}, {}
-    for pid, name in (("p1", "alpha"), ("ps", targets.SANDBOX)):
+    for pid, name in (("p1", "alpha"), ("ps", "example")):
         (tmp_path / name).mkdir()
         projects[pid] = (SimpleNamespace(name=f"{name}-folder", root=tmp_path / name), tmp_path / name)
         places[pid] = targets.Place(f"{name}-folder", tmp_path / name)
@@ -211,21 +211,15 @@ def test_a_redraft_cut_at_its_limit_files_nothing_and_keeps_its_spend(said, worl
 
 
 @pytest.mark.usefixtures("said")
-def test_a_synthetic_spotter_case_redraft_stays_synthetic_keeps_its_record_and_accepted_makes_its_case(world):
+def test_a_queued_synthetic_spotter_case_redraft_is_refused_without_a_call(world):
     pid = _redirected("spotter-case", "look:handoff", ("rf-s",), "synthetic", record="syn-scout-a-1", call="none")
+    model = Model(_redraft(call="hand-off-fitness"))
 
-    _job(Model(_redraft(call="hand-off-fitness")), world.projects).tick(0.0)
+    _job(model, world.projects).tick(0.0)
 
-    new = props.folded()[props.folded()[pid]["redraft"]]
-    assert (new["provenance"], new["kind"], new["record"], new["call"]) == (
-        "synthetic", "spotter-case", "syn-scout-a-1", "hand-off-fitness")  # fmt: skip
-    dest = act.destination(new, world.places, world.shared, targets.units_of())
-    act.decide(new["id"], "accepted", props.token(new, dest), "owner", places=world.places, shared_root=world.shared)
-    checks = []
-    seams = act.Seams(lambda _f: None, None, None, act.intake, lambda cid: checks.append(cid) or "r-1")
-    done = act.apply(new["id"], seams)
-    assert done["apply_state"] == "done", done["failures"]
-    assert cases.fact(checks[0])["provenance"]["record"]["id"] == "syn-scout-a-1"
+    [run] = _runs()
+    assert (run["result"], model.messages, props.folded()[pid]["redraft"]) == (
+        f"refused: {store.SYNTHETIC_RETIRED}", [], "")  # fmt: skip
 
 
 @pytest.mark.usefixtures("said")
@@ -334,7 +328,7 @@ def test_a_follow_up_of_a_finding_a_reset_retired_is_refused_with_nothing_saved_
     assert (world.entries, store.queued(), followups.reusable("rf-r")) == ([], [], None)
 
 
-def test_a_follow_up_cut_at_its_limit_saves_nothing_and_a_synthetic_one_goes_only_to_the_sandbox(said, world):
+def test_a_follow_up_cut_at_its_limit_saves_nothing_and_a_synthetic_one_is_refused(said, world):
     said.limit = 1.0
     followups.request("rf-2", "owner", world.places, followups.backlog)
     _job(Model(TEXT), world.projects).tick(0.0)
@@ -345,26 +339,32 @@ def test_a_follow_up_cut_at_its_limit_saves_nothing_and_a_synthetic_one_goes_onl
         [],
     )
 
-    said.limit = 125.0
-    followups.request("rf-s", "owner", world.places, followups.backlog)
-    _job(Model(TEXT), world.projects).tick(1.0)
-    assert [(e.folder, e.evidence) for e in world.entries] == [(f"{targets.SANDBOX}-folder", ["followup:rf-s"])]
-    assert world.entries[0].title.startswith("[synthetic] ")  # never the same title as a real entry
-    with pytest.raises(store.RetroError, match="only to the sandbox"):
-        followups.subject("rf-s", {"p1": world.places["p1"]})
+    for places in (world.places, {"p1": world.places["p1"]}):
+        with pytest.raises(store.RetroError, match=r"synthetic Retro.*retired"):
+            followups.request("rf-s", "owner", places, followups.backlog)
+    assert (world.entries, store.queued()) == ([], [])
 
 
 @pytest.mark.usefixtures("said")
-def test_a_follow_up_whose_backlog_cannot_be_reached_keeps_its_whole_reason(world, monkeypatch, whole_error):
+@pytest.mark.parametrize("site", ["its backlog", "its subject"])
+def test_a_follow_up_whose_backlog_or_subject_cannot_be_reached_keeps_its_whole_reason(
+    world, monkeypatch, whole_error, site
+):
     def unreachable(*_args, **_kwargs):
-        raise BacklogError(502, whole_error)
+        exc = BacklogError(502, whole_error) if site == "its backlog" else store.RetroError(whole_error)
+        exc.add_note("GitHub answered while the shared repository moved")
+        raise exc
 
     monkeypatch.setattr(FakeBacklog, "add", unreachable)
     followups.request("rf-2", "owner", world.places, followups.backlog)
+    if site == "its subject":  # asked for, then its subject became unreadable before the run
+        monkeypatch.setattr(followups, "subject", unreachable)
     _job(Model(TEXT), world.projects).tick(0.0)
     [run] = _runs()
-    assert (run["result"], world.entries) == (
-        f"stopped: the backlog could not be reached (BacklogError: {whole_error})", [])  # fmt: skip
+    whole = f"{whole_error}\nGitHub answered while the shared repository moved"
+    said = (f"stopped: the backlog could not be reached (BacklogError: {whole})" if site == "its backlog" else
+            f"refused: RetroError: {whole}")  # fmt: skip
+    assert (run["result"], world.entries) == (said, [])
 
 
 def test_a_follow_ups_spend_counts_for_its_change_and_an_unscoped_ones_machine_wide(world):

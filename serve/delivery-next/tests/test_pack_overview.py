@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.impeccable_runs import pack_job, pack_state
 from owlbear_delivery_next.project_host import api
-from owlbear_delivery_next.state_store import project_home, registry
+from owlbear_delivery_next.state_store import pack_run_record, project_home, registry
 from owlbear_delivery_next.state_store.store import Store
 
 AT = datetime(2026, 10, 17, 2, tzinfo=UTC)
@@ -40,3 +41,32 @@ def test_the_section_shows_the_open_run_where_it_started_and_says_an_unreadable_
     assert seen["gamma"]["state"] == "unreadable"
     assert "its run record cannot be read" in seen["gamma"]["error"]  # never taken for an idle one
     assert (project_home.home("alpha") / pack_job.FILE).read_bytes() == before  # read, never settled by a Job
+
+
+@pytest.mark.parametrize("where", ["registry", "record"])
+def test_an_unreadable_registry_or_run_record_is_said_whole(tmp_path, monkeypatch, whole_error, where) -> None:
+    projects = [registry.Project(id=n, path=str(tmp_path / n), added_at=AT) for n in ("beta", "gamma")]
+    with registry.locked():
+        registry.save(registry.Machine(projects=projects))
+    error = (registry.RegistryError if where == "registry" else OSError)(whole_error)
+    error.add_note("a note added on the way up")
+    real = pack_run_record.observed
+
+    def raising(*args):
+        if where == "record" and args[0] != project_home.home("gamma"):
+            return real(*args)
+        raise error
+
+    monkeypatch.setattr(*((registry, "load") if where == "registry" else (pack_run_record, "observed")), raising)
+    beta = Store(project_home.home("beta"), None, "beta")
+    c = TestClient(api.create_app(beta, "t", None), base_url="http://127.0.0.1", headers={"Authorization": "Bearer t"})
+
+    got = c.get("/api/next/maintenance/pack/runs").json()
+
+    whole = f"{type(error).__name__}: {whole_error}\na note added on the way up"
+    if where == "registry":
+        said = f"the machine's registry cannot be read, so other projects' runs are not shown: {whole}"
+        assert (got["registry"], [r["pid"] for r in got["runs"]]) == (said, [""])
+    else:
+        errors = {r["pid"]: (r["state"], r["error"]) for r in got["runs"]}
+        assert errors["gamma"] == ("unreadable", f"its run record cannot be read ({whole})")

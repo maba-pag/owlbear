@@ -40,6 +40,7 @@ AFTER = "BBBBBBBB-0000-4000-8000-000000000002"
 
 
 class Host:
+    repo = None  # no clone
     maintenance = None
     wake = SimpleNamespace(set=lambda: None)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
@@ -241,7 +242,11 @@ def test_a_shared_profile_is_detected_once_in_each_clone_and_again_after_a_failu
 
     monkeypatch.setattr(profile_share.profile, "detect", detect)
     monkeypatch.setattr(profile_share.profile, "provider", lambda *_a: None)
-    assert [profile_share.checked(store, repo).version for _ in range(2)] == [2, 5]
+    with pytest.raises(StoreError, match="ProviderError: repo view: offline"):
+        profile_share.checked(store, repo)
+    assert store.read_profile().version == 2
+    assert not (store.root / profile_share.DETECTED).exists()
+    assert profile_share.checked(store, repo).version == 5
     assert [profile_share.checked(store, repo).version for _ in range(2)] == [6, 6]
     assert (seen, Store.open(repo).read_profile().version) == ([2, 2, 5], 6)
 
@@ -502,7 +507,8 @@ def test_the_cli_records_the_shared_repository_and_refuses_a_plain_folder(tmp_pa
     git(tmp_path, "init", "-q", "-b", "main", str(local))
     assert cli.show_data(None)[0] == 0
     assert "No shared settings repository" in cli.show_data(None)[1]
-    assert cli.show_data(plain) == (1, f"Not set: {plain.resolve()} is not a git repository's top folder")
+    refused = f"Not set: DataRepoError: {plain.resolve()} is not a git repository's top folder"
+    assert cli.show_data(plain) == (1, refused)
     assert str(local) in cli.show_data(local)[1]
     assert Store.open(repo).global_path == local / "config.json"
     assert (local / "shop-site" / "repository").read_text() == "github.com/acme/shop-site\n"
@@ -758,23 +764,28 @@ def test_each_failed_git_step_says_its_whole_stderr(shared, failing_git, whole_e
         "rebase-probe": lambda args, until: args == ("rev-parse", "--absolute-git-dir") and until is not None,
         "rebase": lambda args, _: "rebase" in args[:3],
     }
-    failing_git(whole_error, picks[step])
+    ran: list[tuple[str, ...]] = []
+    failing_git(whole_error, lambda args, until: picks[step](args, until) and not ran.append(args))
+
+    def git() -> str:
+        return f"{git_failed(ran[-1])}\n{whole_error}"
+
     if step == "git-folder":
         with pytest.raises(data_repo.DataRepoError) as refused, data.locked():
             pass
-        assert str(refused.value) == f"the git folder of {root} cannot be found: {whole_error}"
+        assert str(refused.value) == f"the git folder of {root} cannot be found: {git()}"
     elif step == "rebase-probe":
         with pytest.raises(data_repo.DataRepoError) as refused:
             data.rebasing()
-        assert str(refused.value) == f"cannot tell whether a rebase is in progress in {root}: {whole_error}"
+        assert str(refused.value) == f"cannot tell whether a rebase is in progress in {root}: {git()}"
     elif step == "rebase":
         rebase = ("-c", "rebase.autoStash=false", "rebase", "-q", "@{upstream}")
         assert data.rebase() == f"git rebase failed: {git_failed(rebase)}\n{whole_error}"
     elif step == "tracked":
         said = data.commit(root / "gone.md", "notes")
-        assert said == f"saved, but not committed: git cannot tell whether gone.md is tracked: {whole_error}"
+        assert said == f"saved, but not committed: DataRepoError: git cannot tell whether gone.md is tracked: {git()}"
     else:
-        assert data.commit(root / "notes.md", "notes") == f"saved, but not committed: {whole_error}"
+        assert data.commit(root / "notes.md", "notes") == f"saved, but not committed: {git()}"
 
 
 OUT = "OUT begins\nwhat Git printed on stdout, in the middle\nOUT ends"
@@ -855,7 +866,7 @@ def test_each_failed_publication_step_says_git_whole_and_logs_it(shared, git_say
         assert said == f"saved and committed in {root}, but the push failed: {whole}"
     elif step == "journal-deadline":
         busy = f"this save's deadline passed before the git folder of {root} was found, so try again: {whole}"
-        unknown = f"whether a decision batch is interrupted is not known yet: {busy}"
+        unknown = f"whether a decision batch is interrupted is not known yet: JournalBusyError: {busy}"
         assert said == f"saved and committed in {root}, but not pushed: {unknown}"
     else:
         journal = f"JournalError: the git folder of {root} cannot be found: {whole}"
@@ -929,7 +940,9 @@ def test_a_timed_out_git_says_its_type_and_what_it_printed(shared, monkeypatch, 
 
     said = data_repo.DataRepo(root).publish(root / "notes.md", "notes")
 
-    timed_out = "saved, but not committed: TimeoutExpired: Command '['git', '-c', 'core.abbrev=no', 'commit'"
-    assert said.startswith(timed_out)
+    failed = "saved, but not committed: CalledProcessError: Command '['git', '-c', 'core.abbrev=no', 'commit'"
+    timed_out = "returned non-zero exit status 128.\nTimeoutExpired: Command '['git', '-c', 'core.abbrev=no', 'commit'"
+    assert said.startswith(failed)
+    assert timed_out in said
     assert said.endswith(f"timed out after 10 seconds\nstderr:\n{whole_error}\nstdout:\n{OUT}")
     assert logged(caplog) == [f"publishing 'notes' in {root}: {said}"]
