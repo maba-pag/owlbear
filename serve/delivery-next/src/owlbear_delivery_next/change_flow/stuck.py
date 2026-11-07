@@ -104,11 +104,12 @@ def stopped(c: Change, why: str, now: datetime) -> None:
     r.phase, r.stopped = "stopped", why
     c.repairs.done.append(r)
     c.repairs.current = None
-    _stop(c, r.cause, f"repair stopped, {why}: {r.evidence.rstrip('.')}.{found} Tried: {tried}. Spent {spent}.", now)
+    said = (
+        f"Delivery's repair: {why}. The step reported: {r.evidence.rstrip('.')}.{found} Tried: {tried}. Spent {spent}."
+    )
+    _stop(c, r.cause, said, now)
 
 
 def _stop(c: Change, cause: str, reason: str, now: datetime) -> None:
-    c.stop = Stop(
-        kind=ErrorKind(kind_of(cause)), reason=reason, action=RERUN, resume="the step runs again", at=now
-    )
+    c.stop = Stop(kind=ErrorKind(kind_of(cause)), reason=reason, action=RERUN, resume="the step runs again", at=now)
     c.outcome = Outcome(exit=Exit.STOP, cause=cause, reason=reason, who="you", at=now)
