@@ -207,24 +207,30 @@ def test_a_refused_move_changes_nothing(tmp_path: Path, source: Path, monkeypatc
     assert sorted(p.name for p in data_place.default().glob("*")) == (["mine"] if arrange is _dest_exists else [])
 
 
-@pytest.mark.parametrize("failing", ["process", "stores", "store", "changes", "maintenance", "pointer"])
+@pytest.mark.parametrize("failing", ["process", "permission", "stores", "store", "changes", "maintenance", "pointer"])
 def test_a_refused_move_says_each_failure_whole(
     tmp_path: Path, source: Path, monkeypatch, whole_error: str, failing: str
 ) -> None:
     """#971: a move refused because something could not be read says the error whole, its type and notes included."""
-    error = (data_repo.DataRepoError if failing == "pointer" else maintenance.MaintenanceError
-             if failing == "maintenance" else OSError)(whole_error)  # fmt: skip
+    kind = {"pointer": data_repo.DataRepoError, "maintenance": maintenance.MaintenanceError, "permission": SystemError}
+    error = kind.get(failing, OSError)(whole_error)
     error.add_note("a note on the failure")
     whole = f"{type(error).__name__}: {whole_error}\na note on the failure"
 
     def raising(*_args, **_kwargs):
         raise error
 
-    if failing == "process":
+    if failing in {"process", "permission"}:
         proc = SimpleNamespace(pid=7, uids=raising, cmdline=list)
+        line = f"process 7 cannot be read: {whole}"
+        if failing == "permission":  # #1057: psutil 7.2.2's macOS cmdline() over a refused sysctl(KERN_PROCARGS2)
+            denied = "force permission denied (originated from sysctl(KERN_PROCARGS2) -> errno 0)"
+            error.__cause__ = PermissionError(13, denied)
+            ids = SimpleNamespace(real=os.getuid(), effective=os.getuid())
+            proc = SimpleNamespace(pid=7, uids=lambda: ids, cmdline=raising)
+            line += f"\ncaused by PermissionError: [Errno 13] {denied}"
         monkeypatch.setattr(data_move.psutil, "process_iter", lambda: [proc])
         monkeypatch.setattr(data_move, "_processes", processes)  # the source fixture's stub put back
-        line = f"process 7 cannot be read: {whole}"
     elif failing == "stores":
         monkeypatch.setattr(data_move.registry, "load", raising)
         line = f"the project stores cannot be listed: {whole}"
