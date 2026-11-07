@@ -2378,8 +2378,7 @@ def test_the_source_must_be_owlbears_repository_on_main(checkout):
 
 def test_it_refuses_a_dirty_checkout_and_a_package_outside_git_before_any_download(tmp_path, checkout):
     (checkout / "skills" / "NOTICE.md").write_text("edited by hand\n")
-    unused = tmp_path / "impeccable"  # never cloned: the source check stops the run before the sync
-    fakes = Fakes(unused)
+    fakes = Fakes(tmp_path / "impeccable")  # never cloned: the source check stops the run before the sync
 
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
@@ -2390,7 +2389,7 @@ def test_it_refuses_a_dirty_checkout_and_a_package_outside_git_before_any_downlo
 
     loose = tmp_path / "loose"
     shutil.copytree(checkout, loose)
-    state = run(pack_job.Job(Store(tmp_path / "store2"), Fakes(unused).live(loose)))
+    state = run(pack_job.Job(Store(tmp_path / "store2"), Fakes(tmp_path / "impeccable").live(loose)))
     assert "is not a git checkout" in state["reason"]
     assert (loose / "impeccable.json").read_bytes() == (checkout / "impeccable.json").read_bytes()
 
@@ -2676,9 +2675,8 @@ def test_the_answer_routes_take_only_an_open_questions_options(tmp_path):
     store.root.mkdir(parents=True)
     (store.root / pack_job.FILE).write_text(json.dumps(waiting))
     job = pack_job.Job(store)
-    state = job.read()
     c = TestClient(api.create_app(job.store, "t", Host(), pack=job), base_url="http://127.0.0.1", headers=AUTH)
-    qid, url = state["questions"][0]["id"], "/api/next/impeccable/update/answer"
+    qid, url = waiting["questions"][0]["id"], "/api/next/impeccable/update/answer"
 
     stale = c.post(url, json={"question": "old:dispute:F1", "option": "drop"})
     assert (stale.status_code, stale.json()["detail"]) == (409, "this question is no longer open; reload the page")
