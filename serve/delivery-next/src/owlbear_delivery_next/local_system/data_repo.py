@@ -201,9 +201,7 @@ class DataRepo:
                 path.write_text(text + ("" if not text or text.endswith("\n") else "\n") + "\n".join(missing) + "\n")
 
     def claim(self, name: str, identity: str) -> bool:
-        """Bind the project folder to one repository; True when this call wrote the claim.
-        Another repository of the same name is refused.
-        """
+        """Bind the folder to one repository, refusing a different identity; True when this call wrote the claim."""
         path = self.root / name / CLAIM
         held = _held(path)
         if held and held != identity:
@@ -234,6 +232,7 @@ class DataRepo:
 
     def rename(self, old: str, new: str, until: float | None = None) -> str:
         """Move a project's folder with all it holds to ``new``, commit and push the move; the caller holds ``locked``.
+
         Files never committed move along uncommitted. What the owner should know about the publication, else nothing.
         """
         until = time.monotonic() + SAVE_SECONDS if until is None else until
@@ -258,6 +257,7 @@ class DataRepo:
 
     def publish(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> str:
         """Commit ``paths`` alone if they changed and push; what the owner should know when that fails, else nothing.
+
         The caller holds ``locked``. Unpushed earlier commits are pushed too, so an unchanged save retries them.
         """
         until = time.monotonic() + SAVE_SECONDS if until is None else until
