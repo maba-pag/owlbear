@@ -21,8 +21,9 @@ if TYPE_CHECKING:
 def refused(q: Question, target: str | None, item: AnswerItem, decisions: frozenset[str]) -> bool:
     """Engine gates need their options; admitted worker choices also take continue or the owner's own words."""
     worker = q.cause is None and not q.repair and bool(q.options) and all(o.action is not None for o in q.options)
+    text = item.statement if item.classed == "clarification" else item.text
     continuing = worker and (
-        (item.option is None and bool(item.text.strip()))
+        (item.option is None and bool(text.strip()))
         or any(o.id == item.option and o.action == "continue" and o.next is None for o in q.options)
     )
     unchosen = target is None and not continuing and bool({o.next for o in q.options} & decisions or q.repair)
