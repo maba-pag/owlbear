@@ -271,19 +271,17 @@ def test_picked_decisions_group_by_scope_and_link(shared_url, pds) -> None:
 
 
 @pytest.mark.parametrize("case", ["no-shared-data", "save-in-progress"])
-def test_an_unavailable_decision_list_is_said(c1, request, monkeypatch, case: str) -> None:
+def test_an_unavailable_decision_list_is_said(c1, monkeypatch, case: str) -> None:
     """The picked decisions can't be grouped without the list; the rest of the detail answers all the same."""
-    store, app = c1
+    _, app = c1
     reason = "there is no shared data repository, so there are no decisions to work by"
     if case == "save-in-progress":
         reason = "a decision save is in progress; try again in a moment"
 
-        def saving(*_args: object) -> None:
+        def saving(*_args: object) -> None:  # raises before reading its arguments: c1's store serves as it is
             raise decision_store.DecisionsUnavailable(reason)
 
         monkeypatch.setattr(brief_view.decision_store, "load", saving)
-        moved = Store(store.root, DataRepo(request.getfixturevalue("shared_repo")[0]), PROJECT)
-        app = api.create_app(moved, "tok", Host())
     client = TestClient(app, base_url="http://127.0.0.1", headers={"authorization": "Bearer tok"})
     detail = client.get("/api/next/changes/c1-fixture")
     assert detail.status_code == 200, detail.text
@@ -560,25 +558,6 @@ def test_an_answer_the_change_no_longer_waits_on_is_refused_and_the_reason_stays
         assert db.execute("SELECT count(*) FROM inbox").fetchone() == (0,)
 
 
-@pytest.mark.browser
-def test_choosing_another_change_and_going_back_keeps_the_address_and_the_list(page_url, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    store, base = page_url
-    store.write(Lock("greet"), asking())
-    with opened(base, "flip", pds) as page:
-        expect(page.locator("#detail h2")).to_have_text("Flip the hero")
-        expect(page.locator("#changes")).to_contain_text("Needs you (")
-        page.locator("#changes a[data-key='greet']").click()
-        expect(page.locator("#detail h2")).to_have_text("greet")
-        assert page.evaluate("location.search") == "?change=greet"
-        page.go_back()
-        expect(page.locator("#detail h2")).to_have_text("Flip the hero")
-        page.get_by_role("button", name="All Changes").click()
-        expect(page.locator("#board")).not_to_have_class("open")
-        assert page.evaluate("location.search") == ""
-
-
 @pytest.mark.parametrize("left", [["de", "fr"], []])
 @pytest.mark.browser
 def test_an_option_the_question_no_longer_offers_is_not_sent(page_url, left, pds) -> None:
@@ -650,6 +629,8 @@ def test_a_card_names_the_files_its_activity_touches_without_their_paths(page_ur
 def test_a_shaping_rows_next_action_says_whether_the_owner_approves_or_the_shaping_chat_continues(
     page_url, pds
 ) -> None:
+    """The card says the next action and reads by its title, the slug standing in while it has none; choosing another
+    Change and going back keeps the address and the list."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
@@ -658,30 +639,32 @@ def test_a_shaping_rows_next_action_says_whether_the_owner_approves_or_the_shapi
     revises = waits.model_copy(update={"reason": "the shaper revises brief v1 for F1"})
     tidy = m.Brief(version=1, title="Tidy the footer")
     store.write(Lock("tidy"), m.Change(slug="tidy", brief=tidy, step=m.Step(kind=m.StepKind.SHAPE), outcome=revises))
+    store.write(Lock("greet"), asking())  # no title yet
     with opened(base, "flip", pds) as page:
         flip, tidy = (page.locator(f"#changes .card:has(a[data-key='{k}']) p.next") for k in ("flip", "tidy"))
         expect(flip).to_have_text("Next: Approve brief")
         expect(tidy).to_have_text("Next: Continue in the shaping chat")
-
-
-@pytest.mark.browser
-def test_a_change_reads_by_its_title_and_its_slug_stands_in_while_it_has_none(page_url, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    store, base = page_url
-    store.write(Lock("greet"), asking())  # no title yet
-    with opened(base, "flip", pds) as page:
-        flip, greet = (page.locator(f"#changes .card:has(a[data-key='{k}'])") for k in ("flip", "greet"))
-        expect(flip.locator("a.open")).to_have_text("Flip the hero")
-        expect(flip.locator(".meta").first).to_have_text("flip")  # the slug below it
-        expect(greet.locator("a.open")).to_have_text("greet")
-        expect(greet.locator(".meta", has_text="greet")).to_have_count(0)  # said once
+        expect(page.locator("#detail h2")).to_have_text("Flip the hero")
+        needs_you = page.locator("#changes section.group", has_text="Needs you (")  # flip and tidy wait on you too
+        expect(needs_you.locator("a[data-key='greet']")).to_have_count(1)
+        titled, untitled = (page.locator(f"#changes .card:has(a[data-key='{k}'])") for k in ("flip", "greet"))
+        expect(titled.locator("a.open")).to_have_text("Flip the hero")
+        expect(titled.locator(".meta").first).to_have_text("flip")  # the slug below it
+        expect(untitled.locator("a.open")).to_have_text("greet")
+        expect(untitled.locator(".meta", has_text="greet")).to_have_count(0)  # said once
         head = page.locator("#detail .detail-head")
         expect(head.locator("h2")).to_have_text("Flip the hero")
         expect(head).to_contain_text("flip")
-        greet.locator("a.open").click()
+        page.locator("#changes a[data-key='greet']").click()
+        expect(page.locator("#detail h2")).to_have_text("greet")
         expect(head.locator("h2")).to_have_text("greet")
         expect(head.locator("p-text")).to_have_count(0)
+        assert page.evaluate("location.search") == "?change=greet"
+        page.go_back()
+        expect(page.locator("#detail h2")).to_have_text("Flip the hero")
+        page.get_by_role("button", name="All Changes").click()
+        expect(page.locator("#board")).not_to_have_class("open")
+        assert page.evaluate("location.search") == ""
 
 
 @pytest.mark.browser
