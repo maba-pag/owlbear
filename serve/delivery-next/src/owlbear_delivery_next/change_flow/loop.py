@@ -312,7 +312,7 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> str:
     said = {"kind": kind, "statement": item.statement if kind == "clarification" else ""}
     q.answer = Answer(option=item.option, text=item.text, channel=item.channel, at=item.at, tasks=item.tasks, **said)
     target = _target(q, item.option)
-    if _refused(q, target, item.text):
+    if _refused(q, target, item.text, item.option):
         q.answer = None  # settled only by one of its options; a reconsideration needs the owner's note (TD-193)
         return f"question {q.id} is settled only by one of its options, a reconsideration by a note"
     if gate and (target != "pause" or c.step.kind != StepKind.CLEANUP):
@@ -341,9 +341,14 @@ def _moved(c: Change, q: Question, item: AnswerItem, target: str, now: datetime)
         _entered(c, q, target)
 
 
-def _refused(q: Question, target: str | None, text: str) -> bool:
-    """An answer that settles nothing: a decision or a round gate needs one of its options, a reconsideration a note."""
-    unchosen = target is None and bool({o.next for o in q.options} & DECISIONS or q.repair)
+def _refused(q: Question, target: str | None, text: str, option: str | None) -> bool:
+    """Engine gates need their options; admitted worker choices also take continue or the owner's own words."""
+    worker = ordinary(q) and not q.repair and bool(q.options) and all(o.action is not None for o in q.options)
+    continuing = worker and (
+        (option is None and bool(text.strip()))
+        or any(o.id == option and o.action == "continue" and o.next is None for o in q.options)
+    )
+    unchosen = target is None and not continuing and bool({o.next for o in q.options} & DECISIONS or q.repair)
     return unchosen or (target == "reconsider" and not text.strip())
 
 

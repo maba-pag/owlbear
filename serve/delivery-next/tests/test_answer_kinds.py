@@ -40,7 +40,7 @@ from owlbear_delivery_next.runtimes import session_result, step_answers, step_de
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import decision_archive
 from owlbear_delivery_next.state_store.store import Lock
-from owlbear_delivery_next.workflow_steps import clarification
+from owlbear_delivery_next.workflow_steps import clarification, worker_questions
 
 AT = datetime(2026, 10, 22, 9, tzinfo=UTC)
 ASKED = "Which language does the greeting use?"
@@ -113,7 +113,14 @@ def inbox(picking) -> int:
 
 
 def test_an_event_is_delivered_as_before_with_its_class_in_the_history(picking, monkeypatch):
-    run = Asking(picking, monkeypatch)
+    run = Asking(
+        picking,
+        monkeypatch,
+        options=(
+            Option(id="en", label="English", action="continue"),
+            Option(id="again", label="Retry", next="retry", action="retry"),
+        ),
+    )
     assert run.answer(kind="event", option=None, text=WORDS).json() == {"accepted": "answer"}
 
     c = run.step()
@@ -123,6 +130,40 @@ def test_an_event_is_delivered_as_before_with_its_class_in_the_history(picking, 
     assert (c.decisions, len(picking.pickers())) == ([], 1)  # no decision, no check
     said = [e for e in picking.store.events(picking.slug) if e.get("event") == "answer"]
     assert [(e["question"], e["class"]) for e in said] == [(run.qid, "event")]
+
+
+def test_an_admitted_continue_option_beside_retry_reaches_the_original_worker(picking, monkeypatch):
+    run = Asking(picking, monkeypatch)
+    proposed = tools.AskQuestion(
+        question=ASKED,
+        why="The greeting needs a language.",
+        options=[
+            {"label": "English", "effect": "Continue with the English greeting.", "action": "continue"},
+            {"label": "Retry", "effect": "Retry the whole current step.", "action": "retry"},
+        ],
+    )
+    verdict = pick_tools.QuestionJudgment(
+        options=[
+            {
+                "index": i,
+                "executable": True,
+                "why": "The current step supports it.",
+                "check_related": False,
+                "recommends": False,
+            }
+            for i in range(2)
+        ]
+    )
+    c = loop.apply(picking.change(), worker_questions.admitted(picking.change(), proposed, verdict, None), AT)
+    picking.store.write(Lock(picking.slug), c)
+    run.qid = c.outcome.question
+    assert run.answer(option="o1", kind="event").status_code == 200
+    c = run.step()
+    [(_, delivered)] = run.held
+    assert delivered.id == run.qid
+    assert delivered.answer.option == "o1"
+    assert "English: Continue with the English greeting." in step_answers.answer(delivered)
+    assert c.step.kind == StepKind.BUILD
 
 
 def test_an_unclassed_answer_or_an_unconfirmed_clarification_is_refused_and_nothing_is_stored(picking, monkeypatch):
