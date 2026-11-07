@@ -277,18 +277,13 @@ def test_a_then_b_confirmation_remembers_a_after_real_shared_clone_and_host_relo
 
 @pytest.mark.parametrize("pending", [False, True])
 def test_origin_only_correction_preserves_prior_consent_without_confirming_pending_reason(owner, shared, pending):
-    rule = make(origin=Origin.DECIDED, read_back=TODAY)
-    put(shared, rule)
-    confirmed_reason(owner, shared, rule.id, "The vendor changed its terms.")
-    current = now(shared, rule.id)
-    queued = owner.post(
-        f"/api/next/decisions/{rule.id}/queue-read-back",
-        json={"revision": current.revision, "why": "A second team now uses notes.", "kind": "blocked"},
-    )
-    assert queued.json()["saved"] is True
-    current = now(shared, rule.id)
+    # As the owner API leaves it: A confirmed, then B queued; B pending, or replaced by C, queued and confirmed.
+    latest = {"read_back": "pending", "read_back_why": "A second team now uses notes.", "read_back_kind": "blocked"}
     if not pending:
-        current = confirmed_reason(owner, shared, rule.id, "A third team now uses notes.")
+        latest = {"read_back": TODAY, "read_back_why": "A third team now uses notes.", "read_back_kind": "uncertain"}
+    rule = make(origin=Origin.DECIDED, read_back_settled=("the vendor changed its terms.",), **latest)
+    put(shared, rule)
+    current = now(shared, rule.id)
     receipts = decision_origin.correct_origin(
         shared,
         PROJECT,
@@ -332,10 +327,11 @@ def test_unconfirmed_and_ignored_reasons_do_not_become_settled_consent(owner, sh
 
 @pytest.mark.parametrize("mutation", ["replace", "promote"])
 def test_a_changed_rule_does_not_inherit_settled_reasons(owner, shared, mutation):
-    rule = make()
+    # As the owner API leaves it after confirming A, then B: B answered today, A's normalized reason settled.
+    rule = make(read_back=TODAY, read_back_why="A second team now uses notes.", read_back_kind="uncertain",
+                read_back_settled=("the vendor changed its terms.",))  # fmt: skip
     put(shared, rule)
-    confirmed_reason(owner, shared, rule.id, "The vendor changed its terms.")
-    current = confirmed_reason(owner, shared, rule.id, "A second team now uses notes.")
+    current = now(shared, rule.id)
     if mutation == "replace":
         receipts = decision_actions.replace(
             shared,

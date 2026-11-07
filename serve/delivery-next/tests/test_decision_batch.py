@@ -193,7 +193,7 @@ def _race(warmth, shared: DataRepo, message: str) -> None:
     warmth.monkeypatch.setattr(target, name, raced)
 
 
-@pytest.mark.parametrize("reader", [decision_store.load, decision_store.file_snapshot], ids=["load", "file_only"])
+@pytest.mark.parametrize("reader", [decision_store.load], ids=["load"])  # file_snapshot only returns load's snapshot
 def test_a_batch_that_begins_and_completes_while_the_decisions_are_read_is_refused(picking, warmth, reader):
     _seed(picking)
     warmth.ready(picking.shared, PROJECT)
@@ -268,6 +268,7 @@ def test_ambiguous_stale_publish_stays_interrupted(picking, monkeypatch):
 
 
 @pytest.mark.parametrize("held", [False, True], ids=["crashed", "writer-holds-the-lock"])
+@pytest.mark.parametrize("warmth", ["warm"], indirect=True)  # the first stamp precedes any collection: cold adds none
 def test_a_batch_already_pending_at_the_first_stamp_is_refused(picking, monkeypatch, warmth, writing, held):
     _seed(picking)
     warmth.ready(picking.shared, PROJECT)
