@@ -104,7 +104,7 @@ def input_names(tracked: set[str]) -> set[str]:
         path
         for path in tracked
         if path in CONFIGS
-        or (path.startswith(("serve/", "tests/", ".github/scripts/")) and path.endswith((".py", "/pyproject.toml")))
+        or (path.startswith(("serve/", ".github/scripts/")) and path.endswith((".py", "/pyproject.toml")))
         or "/tests/" in path
         or path.startswith("tests/")
     }
