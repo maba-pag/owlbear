@@ -218,8 +218,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
             post.log(lock, slug, {"event": "preparer-cleanup-failed", "at": end.isoformat(), "reason": why})
             result = check.failed_cleanup(result, why)
     if run.ending == "ask" and result.cause == cause_key(ErrorKind.RESULT, s.kind, worker_questions.LABEL):
-        parts = step_input.session(change, profile, path, others, ctx)
-        kept = worker_questions.checkpoint(post, lock, change, run, parts.checks)
+        kept = worker_questions.checkpoint(post, lock, change, run, run.checks)
         worker_questions.continued(kept, lock, change, path)
         return
     result = review.recorded(change, task, run, path, result)
