@@ -825,7 +825,7 @@ def test_an_unknown_publication_keeps_its_whole_notice(picking, whole_error):
 
 @pytest.mark.parametrize(
     "rel",
-    [f"{PROJECT}/changes/add-notes/decisions/a1.md"],  # the nested path; project decisions and records decode in Finish
+    [f"{PROJECT}/changes/add-notes/decisions/a1.md"],  # project decisions and JSON records decode in other tests
     ids=["change-decision"],
 )
 def test_each_producer_shaped_journal_still_decodes(picking, rel):
@@ -1030,8 +1030,8 @@ def _record_checkout_writes(m: pytest.MonkeyPatch, shared: DataRepo, seen: list[
 
 
 @pytest.mark.parametrize("image", ["third", "after"])
-@pytest.mark.parametrize("parent", ["missing"])
-def test_an_owner_commit_while_finish_makes_the_folder_is_never_overwritten(picking, monkeypatch, parent, image):
+@pytest.mark.parametrize("_parent", ["missing"])
+def test_an_owner_commit_while_finish_makes_the_folder_is_never_overwritten(picking, monkeypatch, _parent, image):
     """The owner writes and commits the file during the folder's final fsync, after Finish's first epoch check.
 
     The folder's parent is missing too; an existing parent reaches the same final check of the file and HEAD.
@@ -1042,11 +1042,11 @@ def test_an_owner_commit_while_finish_makes_the_folder_is_never_overwritten(pick
     """
     _seed(picking)
     shared = picking.shared
-    project = "new-site" if parent == "missing" else PROJECT
+    project = "new-site"
     new, generation = _interrupted_before_folder(picking, monkeypatch, project)
     rel = f"{project}/decisions/{new.id}.md"
     folder = shared.root / project / "decisions"
-    assert folder.exists() == (parent == "existing")
+    assert not folder.exists()
     owned = {"third": b"the owner's own third image\n", "after": serialize(new).encode("utf-8")}[image]
     seen: list[str] = []
     real_sync = storage_io._sync_held  # noqa: SLF001 - make_dirs' own sync of the folder it holds open
@@ -1550,7 +1550,7 @@ def test_an_owner_rewrite_during_any_fsync_of_the_final_proof_keeps_the_batch(pi
     generation = _interrupt_at(picking, monkeypatch, items if order == "predecessor-first" else items[::-1])
     folder = shared.root / PROJECT / "decisions"
     added, updated = folder / f"{successor.id}.md", folder / f"{old.id}.md"
-    before, rewritten = updated.read_bytes(), serialize(update).encode("utf-8")
+    rewritten = serialize(update).encode("utf-8")
     added.write_bytes(serialize(successor).encode("utf-8"))
     updated.write_bytes(rewritten)
     head, index = shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
@@ -1574,11 +1574,7 @@ def test_an_owner_rewrite_during_any_fsync_of_the_final_proof_keeps_the_batch(pi
     assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (head, index)
     assert not added.exists()
     assert fired or call > 1  # the proof fsyncs at least once
-    assert done == (not fired), refusal  # any rewrite at an fsync refuses; none fired, Abandon completes
-    if not fired:
-        assert updated.read_bytes() == before
-        assert decision_batch.pending(shared) is None
-        return
+    assert done == (not fired), refusal  # any rewrite at an fsync refuses
     assert updated.read_bytes() == rewritten  # the owner's bytes stay
     assert decision_batch.pending(shared).generation == generation
     _no_authority(picking)
@@ -3038,7 +3034,7 @@ def test_only_this_saves_own_commit_or_its_unchanged_head_is_pushed(picking, sha
     if case != "owner-commits-after-the-batch":
         assert receipt.published
         assert _remote_main(remote) == shared.git("rev-parse", "HEAD").stdout.strip()
-        assert (_remote_main(remote) == published) == (case == "no-op-save")
+        assert _remote_main(remote) == published
         assert decision_batch.pending(shared) is None
         return
     assert not receipt.saved
@@ -3208,9 +3204,9 @@ def test_an_owner_commit_made_while_the_push_is_refused_is_never_rebased(picking
     _no_authority(picking)
 
 
-@pytest.mark.parametrize("owner", ["the-batch-files"])
+@pytest.mark.parametrize("_owner", ["the-batch-files"])
 def test_an_owner_commit_before_publication_is_never_adopted_as_the_batch_base(
-    picking, shared_repo, monkeypatch, owner
+    picking, shared_repo, monkeypatch, _owner
 ):
     """After the batch's last write and before its publication reads HEAD, the owner commits the batch's own files as
     written. HEAD then holds every after image, but it is not the batch's journalled head, so nothing is staged,
@@ -3223,12 +3219,9 @@ def test_an_owner_commit_before_publication_is_never_adopted_as_the_batch_base(
 
     def owner_commits_then_ready(repo, until):
         if not made:
-            if owner == "unrelated-file":
-                made.append(_owner_unrelated_commit(repo))
-            else:
-                repo.git("add", "-A", "--", PROJECT)
-                repo.git("commit", "-qm", "the owner commits the batch's files")
-                made.append(repo.git("rev-parse", "HEAD").stdout.strip())
+            repo.git("add", "-A", "--", PROJECT)
+            repo.git("commit", "-qm", "the owner commits the batch's files")
+            made.append(repo.git("rev-parse", "HEAD").stdout.strip())
         return real_ready(repo, until)
 
     def recording_commit(self, *args, **kwargs):
@@ -3246,11 +3239,7 @@ def test_an_owner_commit_before_publication_is_never_adopted_as_the_batch_base(
     assert _remote_main(remote) == published  # nothing pushed, the owner's commit included
     assert shared.git("rev-parse", "HEAD").stdout.strip() == made[0]  # the owner's commit stays, as made
     assert shared.git("diff", "--cached", "--name-only").stdout == ""  # the index is the owner's
-    if owner == "unrelated-file":  # the batch's files stay written, uncommitted
-        changed = shared.git("status", "--porcelain").stdout
-        assert all(f"{d.id}.md" in changed for d, _ in items)
-    else:
-        assert shared.git("status", "--porcelain").stdout == ""
+    assert shared.git("status", "--porcelain").stdout == ""
     assert decision_batch.pending(shared) is not None
     _no_authority(picking)
 
@@ -3452,15 +3441,9 @@ def test_the_commit_a_save_made_is_the_one_git_named_never_head_read_afterwards(
         return said
 
     with monkeypatch.context() as m:
-        if case != "healthy":
-            m.setattr(data_repo, "_git", commit_then_owner_amends)
+        m.setattr(data_repo, "_git", commit_then_owner_amends)
         receipts = decision_store.save_all(shared, items, message="decisions: two")
 
-    if case == "healthy":
-        assert all(r.published for r in receipts)
-        assert _remote_main(remote) == shared.git("rev-parse", "HEAD").stdout.strip() != published
-        assert decision_batch.pending(shared) is None
-        return
     assert not any(r.saved for r in receipts)
     said = "did not name the commit" if case == "git-names-no-commit" else "not provably its own"
     assert said in receipts[0].notice
