@@ -206,18 +206,18 @@ def test_the_plan_challenge_passes_an_operational_step_back_on_and_keeps_a_premi
 
 # c1 (#1061): the check its builder reported, its resolved form, and pytest's session timeout as observed on OwlBear
 C1_CHECK = "cd . && {\nuv run test --changed && uv run lint --no-fix\n}"
-C1_TIMEOUT = "xdist.dsession.Interrupted: session-timeout: 900.0 sec exceeded"
-
-
-def stopped(c: Change) -> tuple[object, ...]:
-    return c.outcome.exit, c.stop.action if c.stop else None, c.step.kind
+C1_TIMEOUT = (  # a node naming a connection is no network failure
+    "PASSED tests/test_vscode_step.py::test_connection_speaks_websocket_json_rpc_over_the_local_socket\n"
+    "xdist.dsession.Interrupted: session-timeout: 900.0 sec exceeded"
+)
 
 
 def test_a_check_that_cannot_finish_is_repaired_and_a_network_failure_of_it_still_waits() -> None:
     timed_out = run(report("uv run test --changed", C1_TIMEOUT, "run the task's check"), checks=(C1_CHECK,))
     r = to_result(timed_out, K.BUILD, NOW)  # c1 case 1: retried as "failed temporarily" three times
     assert (r.exit, r.setup, r.cause) == (Exit.RETRY, True, "project-env:build:check-uv-run-test-changed")
-    assert stopped(loop.apply(change(), r, NOW)) == (Exit.STOP, f"Resolve {r.cause}", K.BUILD)
+    c = loop.apply(change(), r, NOW)
+    assert (c.outcome.exit, c.stop.action, c.step.kind) == (Exit.STOP, f"Resolve {r.cause}", K.BUILD)
     error = "npm ERR! request to https://registry.npmjs.org failed, reason: connect ETIMEDOUT 104.16.1.35:443"
     offline = to_result(run(report("uv run test --changed", error), checks=(C1_CHECK,)), K.BUILD, NOW)
     assert (offline.cause, offline.setup) == ("network:build:tool-uv-run-test-changed", False)
@@ -248,6 +248,8 @@ def test_a_plan_missing_an_outside_pr_is_repaired_never_sent_back_to_the_brief(s
     c = loop.apply(c, r, NOW)
     assert (r.setup, c.outcome.exit, c.step.kind, c.loops["plan"].round) == (True, Exit.STOP, K.PLAN, 0)
     assert "054e2edf6" in c.stop.reason
+    share = Run("s2", "premise", said.model_copy(update={"stage": "setup"}), termination=Termination(confirmed=True))
+    assert to_result(share, K.TESTS, NOW).setup  # a test review's share too
 
 
 def test_the_planner_reads_why_the_change_is_planned_again() -> None:
