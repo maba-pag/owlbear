@@ -25,7 +25,6 @@ from owlbear_delivery_next.local_system import codebase, local_home
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.change_contracts.repair_tools import Defect
     from owlbear_delivery_next.state_store.store import Store
 
@@ -33,9 +32,8 @@ REPOSITORY = codebase.URL.removeprefix("https://github.com/").removesuffix(".git
 SOURCE = codebase.ROOT.parents[3]  # the OwlBear checkout holding serve/delivery-next/src/owlbear_delivery_next
 
 
-def file(store: Store, change: Change, path: Path, defect: Defect) -> str:
-    """File *defect* once; what happened, as the repair records it."""
-    del change  # the issue never names the Change
+def file(store: Store, path: Path, defect: Defect) -> str:
+    """File *defect* once; what happened, as the repair records it. It never names the Change."""
     verified = [p for p in defect.paths if _ours(p)]
     if not verified:
         return f"not filed: none of {', '.join(defect.paths)} is a file in OwlBear's code at {SOURCE}"

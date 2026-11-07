@@ -51,7 +51,8 @@ def test_a_fix_that_weakens_a_test_is_never_applied(repo, tmp_path) -> None:
     head = worktree.git(repo, "rev-parse", "HEAD")
     store = SimpleNamespace(log=lambda *_: None, write=lambda *_: None)
     step_repair._proven(store, None, c, (repo, at), ("true",), 60.0, Profile())  # noqa: SLF001
-    assert "weakens a check" in c.stop.reason and "tests/test_a.py (adds a suppression or skip)" in c.stop.reason
+    assert "weakens a check" in c.stop.reason
+    assert "tests/test_a.py (adds a suppression or skip)" in c.stop.reason
     assert (worktree.git(repo, "rev-parse", "HEAD"), c.repairs.done[-1].commit) == (head, "")  # nothing applied
 
 
@@ -67,7 +68,7 @@ def test_a_fix_reaches_the_branch_without_touching_the_steps_unfinished_edits(re
     fix = repair_copy.commit(at, "fix")
     new = repair_copy.apply(repo, "c1", base, fix, "fix: c")
     assert worktree.git(repo, "show", "--name-only", "--format=", new).split() == ["c.txt"]  # the fix alone
-    assert (repo / "a.txt").read_text() == "a, unstaged\n" and (repo / "u.txt").read_text() == "untracked\n"
+    assert ((repo / "a.txt").read_text(), (repo / "u.txt").read_text()) == ("a, unstaged\n", "untracked\n")
     assert worktree.git(repo, "diff", "--cached", "--name-only").split() == ["b.txt"]  # still staged, unchanged
     (at / "a.txt").write_text("a, by the repair\n")  # the same file as the unfinished edit
     repair_copy.changed(at, base)
@@ -85,7 +86,9 @@ def test_a_private_projects_defect_text_naming_it_is_held_not_filed(repo, monkey
     monkeypatch.setattr(defect_issue.repo_target, "view", lambda *_: SimpleNamespace(visibility="private"))
     store = SimpleNamespace(name="secret-shop")
     path = "serve/tools/src/owlbear_tools/testing.py:216"
-    named = Defect(title="--changed runs the full suite", text="secret-shop's a.txt routes to the full suite", paths=[path])
-    said = defect_issue.file(store, stuck_change(), repo, named)
+    named = Defect(
+        title="--changed runs the full suite", text="secret-shop's a.txt routes to the full suite", paths=[path]
+    )
+    said = defect_issue.file(store, repo, named)
     assert said.startswith("held for you, not filed: it names this private project (a.txt, secret-shop)")
     assert made == []
