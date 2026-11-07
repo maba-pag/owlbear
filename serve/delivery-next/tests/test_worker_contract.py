@@ -44,7 +44,7 @@ from owlbear_delivery_next.runtimes import (
 )
 from owlbear_delivery_next.runtimes.session_result import Run, to_result
 from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
-from owlbear_delivery_next.workflow_steps import session_choice, worker_questions
+from owlbear_delivery_next.workflow_steps import pending_child, session_choice, worker_questions
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 HEAD, BASE = "a" * 40, "b" * 40
@@ -151,6 +151,75 @@ def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
     assert (len(starts), done.spend.credits, done.pending_child, done.pending_question) == (2, 6, None, None)
     assert done.counted_children == ["c1-admission-1", "c1-admission-2"]
     assert "HEAD changed" in done.step.question_errors[0]
+
+
+def test_stopped_admission_counts_its_usage_and_its_resumed_child_keeps_its_generation(tmp_path, monkeypatch):
+    store, lock = Store(tmp_path / "store"), Lock("c1")
+    c = Change(slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.BUILD))
+    proposed = tools.AskQuestion(
+        question="Continue?",
+        why="Choose the next move.",
+        options=[
+            {"label": "Continue", "effect": "Continue this worker.", "action": "continue"},
+            {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
+        ],
+    )
+    monkeypatch.setattr(worker_questions.worktree, "head", lambda _p: HEAD)
+    parent = Run("author", "ask", proposed, termination=Termination(confirmed=True), usage={"credits": 1})
+    worker_questions.checkpoint(store, lock, c, parent, [])
+    calls = []
+
+    def judge(*_args):
+        calls.append(True)
+        return Run(
+            f"admission-{len(calls)}",
+            "result",
+            pick_tools.QuestionJudgment(
+                options=[
+                    {
+                        "index": 0,
+                        "executable": True,
+                        "why": "The worker can continue.",
+                        "check_related": False,
+                        "recommends": False,
+                    },
+                    {
+                        "index": 1,
+                        "executable": True,
+                        "why": "The engine can pause.",
+                        "check_related": False,
+                        "recommends": False,
+                    },
+                ]
+            ),
+            termination=Termination(confirmed=len(calls) > 1),
+            usage={"credits": 2},
+            tool_calls={"view": {"calls": 1}},
+        )
+
+    monkeypatch.setattr(worker_questions, "session", judge)
+    assert worker_questions.continued(store, lock, c, tmp_path)
+    stopped = store.read("c1")
+    assert (stopped.outcome.exit, stopped.spend.credits, stopped.counted_children) == (Exit.STOP, 3, ["admission-1"])
+    assert stopped.tool_use.tools["view"].calls == 1
+    real_write = Store.write
+
+    def interrupted(self, key, final):
+        if final.pending_question is None:
+            msg = "interrupted settlement"
+            raise StoreError(msg)
+        return real_write(self, key, final)
+
+    monkeypatch.setattr(Store, "write", interrupted)
+    with pytest.raises(StoreError, match="interrupted settlement"):
+        worker_questions.continued(store, lock, stopped, tmp_path)
+    kept = store.read("c1")
+    assert pending_child.fits(kept)
+    monkeypatch.setattr(Store, "write", real_write)
+    assert worker_questions.continued(store, lock, kept, tmp_path)
+    done = store.read("c1")
+    assert (len(calls), done.spend.credits, done.counted_children) == (2, 5, ["admission-1", "admission-2"])
+    assert done.tool_use.tools["view"].calls == 2
 
 
 def build(**changes) -> BuildResult:
