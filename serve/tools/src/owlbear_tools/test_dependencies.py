@@ -6,24 +6,25 @@ import hashlib
 import json
 import os
 import shutil
-import sqlite3
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from importlib.metadata import version
+from itertools import batched
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 import pytest
-from testmon.db import DATA_VERSION
-from testmon.process_code import blob_to_checksums
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Sequence
 
+    from testmon.testmon_core import TestmonData
+
 FORMAT = 1
 REPOSITORY = "maba-pag/owlbear"
 OUTPUT = "OWLBEAR_DEPENDENCIES_OUT"
+FINGERPRINT_BATCH = 900
 STATE: pytest.StashKey[Collection] = pytest.StashKey()
 SUITES = {"python": 4, "delivery-next-browser": 2, "python-browser": 1}
 PACKAGE_TEST_DEPTH = 4
@@ -303,7 +304,6 @@ class Collection:
     root: Path
     output: Path
     head: str
-    database: Path
     provenance: dict[str, str]
     initial_inputs: dict[str, str]
     collected: set[str] = field(default_factory=set)
@@ -312,23 +312,16 @@ class Collection:
     failed: set[str] = field(default_factory=set)
 
 
-def export(collection: Collection) -> None:
+def export(collection: Collection, native: TestmonData) -> None:
     """Export flushed native fingerprints and current inputs as one portable shard."""
     root = collection.root
     tracked = set(git(root, "ls-files", "-z").split("\0")) - {""}
     observations: list[dict[str, object]] = []
-    database = collection.database
-    with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as connection:
-        actual = connection.execute("PRAGMA user_version").fetchone()[0]
-        if actual != DATA_VERSION:
-            msg = f"Dependency database {database} has format {actual}, expected {DATA_VERSION}"
-            raise ValueError(msg)
-        rows = connection.execute(
-            "SELECT t.test_name, f.filename, f.method_checksums FROM test_execution t "
-            "JOIN test_execution_file_fp d ON d.test_execution_id=t.id "
-            "JOIN file_fp f ON f.id=d.fingerprint_id"
-        )
-        for node, source, fingerprint in rows:
+    identifiers = (record["fingerprint_id"] for record in native.db.filenames_fingerprints(native.exec_id))
+    for batch in batched(identifiers, FINGERPRINT_BATCH, strict=False):
+        for source, node, fingerprint, _identifier, _failed, _duration in native.db.fetch_changed_file_data(
+            batch, native.exec_id
+        ):
             if source not in collection.initial_inputs or not source.endswith(".py"):
                 continue
             if node not in collection.collected:
@@ -336,7 +329,7 @@ def export(collection: Collection) -> None:
             if node_path(node) not in tracked:
                 msg = f"Dependency node {node!r} is not tracked in {collection.head}"
                 raise ValueError(msg)
-            observations.append({"test": node, "source": source, "blocks": blob_to_checksums(fingerprint)})
+            observations.append({"test": node, "source": source, "blocks": fingerprint})
     missing = collection.collected - collection.completed
     if missing:
         msg = f"Dependency collection did not finish these tests: {', '.join(sorted(missing))}"
@@ -405,7 +398,7 @@ def pytest_configure(config: pytest.Config) -> None:
     if not destination.is_absolute():
         destination = root / destination
     config.stash[STATE] = Collection(
-        root, destination, git(root, "rev-parse", "HEAD").strip(), database, provenance, inputs(root, tracked)
+        root, destination, git(root, "rev-parse", "HEAD").strip(), provenance, inputs(root, tracked)
     )
 
 
@@ -469,7 +462,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> Generator[
         collection.collected.update(_collection_skips)
         collection.completed.update(_collection_skips)
         collection.skipped.update(_collection_skips)
-        export(session.config.stash[STATE])
+        export(session.config.stash[STATE], session.config.testmon_data)
     return result
 
 
