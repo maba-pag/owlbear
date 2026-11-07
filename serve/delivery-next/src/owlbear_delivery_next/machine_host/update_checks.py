@@ -277,6 +277,8 @@ class Checks:
                 if not refresh and (kept := self.settings) is not None and kept[0] == inputs:
                     return kept[1], kept[2]
                 sources, source_problem = machine_settings.update_check_sources()
+                if source_problem:
+                    sources = tuple(dict.fromkeys((*self.settings_sources, *sources)))
                 inputs = machine_settings.update_check_inputs(sources)
                 self.settings_sources = sources
                 resolved = machine_settings.current()
