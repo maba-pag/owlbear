@@ -272,6 +272,7 @@ class Checks:
         """Each interval and channel, reusing unchanged inputs; a tick also retries unchanged failures."""
         with self.settings_lock:
             inputs: machine_settings.Inputs = ()
+            source_problem = ""
             try:
                 inputs = machine_settings.update_check_inputs(self.settings_sources)
                 if not refresh and (kept := self.settings) is not None and kept[0] == inputs:
@@ -285,7 +286,7 @@ class Checks:
                 hours = {n: getattr(resolved, f"update_check_hours_{n}") for n in CHECKS}
                 channel = resolved.channel
             except Exception as exc:  # noqa: BLE001 - unreadable settings: no timed check; start and manual checks run
-                reason = command_failure.failure(exc)
+                reason = "\n".join(filter(None, (command_failure.failure(exc), source_problem)))
                 if reason != self.unsettled:
                     self.machine.say(f"update checks: the machine settings could not be read: {reason}")
                 self.unsettled = reason
