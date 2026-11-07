@@ -215,8 +215,9 @@ def replaced(path: Path) -> registry.Project:
 
 def listed(path: Path, pid: str, **more: object) -> dict[str, Any]:
     """The loaded consumer clone at *path*, not set up for chats yet, as ``GET /projects`` lists it (Project.info)."""
+    setup = f"owlbear setup --repo {shlex.quote(str(path))}"
     return {"id": pid, "name": path.name, "path": str(path), "state": "loaded", "kind": "consumer", "unset": [],
-            "unset_reason": "", "blocked": "", "setup": f"owlbear setup --repo {shlex.quote(str(path))}"} | more  # fmt: skip
+            "unset_reason": "", "blocked": "", "setup": setup} | more  # fmt: skip
 
 
 def serving(records: list[dict[str, Any]]) -> Callable[[Any], None]:
