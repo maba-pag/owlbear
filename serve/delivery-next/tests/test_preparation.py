@@ -587,6 +587,45 @@ def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env, monke
     assert prepare.edits(repo) == []
 
 
+def test_cleanup_cannot_replace_an_unverified_preparer_stop(env, monkeypatch):
+    repo, store, _log, tmp = env
+    c, s = change(repo, "pc1"), settings(option(tmp))
+    c.env, c.plan = None, Plan(tasks=[Task(id="t1", title="one", scope=["src"])])
+    c.checks = [PersonCheck(id="pc1", steps=["open the page"])]
+    monkeypatch.setattr(store, "settings", lambda: s)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)
+
+    async def preparer(cfg):
+        (repo / "fixtures" / "users.json").write_text("edited\n")
+        commit(repo, "fixtures/users.json")
+        return Run(cfg.session_id, "error", termination=Termination(confirmed=False, survivors=(17,)),
+                   usage={"credits": 1})  # fmt: skip
+
+    def broken(*_args):
+        raise subprocess.CalledProcessError(128, "git discard", stderr=b"index.lock exists")
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", preparer)
+    real_discard = prepare.discard
+    monkeypatch.setattr(prepare, "discard", broken)
+    store.write(Lock("c1"), c)
+    runner._agent(store, Lock("c1"), store.read("c1"), repo)  # noqa: SLF001
+    stopped = store.read("c1")
+    assert (stopped.outcome.exit, stopped.stop.action, stopped.spend.credits) == (Exit.STOP, "End processes 17", 1)
+    assert stopped.stop.resume == "No process of this step remains"
+    assert "termination unverified: processes 17 still present" in stopped.outcome.reason
+    assert "index.lock exists" in stopped.outcome.reason == stopped.stop.reason
+    assert any(e.get("event") == "preparer-cleanup-failed" for e in store.events("c1"))
+
+    monkeypatch.setattr(prepare, "discard", real_discard)
+    prepare.stray(store, "c1", lambda _e: None)
+    c.slug = "c2"
+    store.write(Lock("c2"), c)
+    runner._agent(store, Lock("c2"), store.read("c2"), repo)  # noqa: SLF001
+    stopped = store.read("c2")
+    assert (stopped.outcome.exit, stopped.stop.action, stopped.spend.credits) == (Exit.STOP, "End processes 17", 1)
+    assert prepare.edits(repo) == []
+
+
 def test_a_patch_that_cannot_be_discarded_stops_the_change(env, monkeypatch):
     repo, store, _log, tmp = env
     c, s = change(repo, "pc1"), settings(option(tmp))

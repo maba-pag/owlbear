@@ -213,7 +213,9 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
         try:
             result = prepare.chosen(post, lock, change, path, run.payload, ctx, result)
         except (OSError, subprocess.SubprocessError) as exc:
-            result = check.failed(f"the preparer's cleanup failed: {failure(exc)}")
+            why = f"the preparer's cleanup failed: {failure(exc)}"
+            post.log(lock, slug, {"event": "preparer-cleanup-failed", "at": end.isoformat(), "reason": why})
+            result = prepare.failed_cleanup(result, why)
     if run.ending == "ask" and result.cause == cause_key(ErrorKind.RESULT, s.kind, worker_questions.LABEL):
         parts = step_input.session(change, profile, path, others, ctx)
         kept = worker_questions.checkpoint(post, lock, change, run, parts.checks)
