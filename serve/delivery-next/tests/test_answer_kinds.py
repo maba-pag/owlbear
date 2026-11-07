@@ -313,10 +313,19 @@ def test_stopping_the_change_over_a_brief_change_abandons_it(picking, monkeypatc
 
 
 def test_a_brief_change_that_says_no_more_than_his_answer_applies_without_another_question(picking, monkeypatch):
-    run = Asking(picking, monkeypatch)
-    assert run.answer(kind="brief_change", text=WORDS).status_code == 200
+    french = "French: add a French greeting through the brief amendment first."
+    run = Asking(
+        picking,
+        monkeypatch,
+        options=(
+            Option(id="en", label="English: keep the current greeting.", action="continue"),
+            Option(id="fr", label=french, action="continue"),
+        ),
+    )
+    assert run.answer(kind="brief_change", option="fr").status_code == 200
     picking.verdicts += [FRENCH, amend_tools.VerdictResult(verdict="weaker", reasons="French is what he asked for")]
     run.step()
+    assert french in picking.told[-1].message
 
     c = run.step()
 
