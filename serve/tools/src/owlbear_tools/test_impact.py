@@ -353,8 +353,7 @@ class _Selection:
         self.reasons: dict[str, set[str]] = defaultdict(set)
 
     def add(self, node: str, reason: str) -> None:
-        module = node_path(node)
-        if not (self.root / module).is_file():
+        if not (self.root / node_path(node)).is_file():
             return  # Historical consumers of a deleted source survive; deleted tests are not executable.
         self.reasons[node].add(reason)
 
