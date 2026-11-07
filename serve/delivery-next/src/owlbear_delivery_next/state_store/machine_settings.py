@@ -46,7 +46,7 @@ def update_check_inputs() -> Inputs:
             root = Path(view) if view else None
         else:
             record = data_place.stored()
-            named = record.get("repository") if isinstance(record, dict) else None
+            named = record.get("repository") if record else None
             root = data_place.default() if record is None else Path(named).expanduser().resolve() if named else None
     except (OSError, ValueError, RuntimeError) as exc:
         root, record = None, failure(exc)
@@ -57,9 +57,9 @@ def update_check_inputs() -> Inputs:
         repr(record),
         str(root) if root else None,
         _input(root / data_repo.CONFIG) if root else None,
-        "directory" if root and (root / ".git").is_dir() else _input(root / ".git") if root else None,
-        _input(root / ".git/config") if root else None,
-        _input(home / ".gitconfig"),
+        ("directory" if (root / ".git").is_dir() else _input(root / ".git")) if root and view is None else None,
+        _input(root / ".git/config") if root and view is None else None,
+        _input(Path.home() / ".gitconfig") if view is None else None,
         BASE.model_dump_json() if BASE is not None else None,
     )
 

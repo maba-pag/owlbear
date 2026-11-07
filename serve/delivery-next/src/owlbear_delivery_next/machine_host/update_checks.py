@@ -282,7 +282,7 @@ class Checks:
             self.unsettled = reason
             hours, channel = dict.fromkeys(CHECKS), None
         else:
-            self.unsettled = ""
+            self.unsettled = resolved.notice if resolved.notice != machine_settings.NO_SHARED else ""
         self.settings = inputs, hours, channel
         return hours, channel
 

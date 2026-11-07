@@ -213,14 +213,14 @@ def _configured() -> DataRepo | None:
         place = default()
         if not place.exists():
             return None
-        if _top(place.resolve()) != place.resolve():
+        if _top(place.resolve(), diagnose=True) != place.resolve():
             msg = f"{place}, OwlBear's place for the shared repository, is not a git repository's top folder"
             raise DataRepoError(msg)
         return DataRepo(place.resolve())
     if not record.get("repository"):
         raise DataRepoError(_unready(path, record))
     root = Path(record["repository"]).expanduser().resolve()
-    if _top(root) != root:
+    if _top(root, diagnose=True) != root:
         msg = f"{root}, named in {path}, is not a git repository's top folder"
         raise DataRepoError(msg)
     return DataRepo(root)
