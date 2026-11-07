@@ -83,7 +83,7 @@ def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
     def judge(_store, _lock, _c, actual):
         starts.append(actual)
         return Run(
-            "c1-admission",
+            f"c1-admission-{len(starts)}",
             "result",
             pick_tools.QuestionJudgment(
                 options=[
@@ -137,6 +137,20 @@ def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
     assert resume
     assert accepted is None
     assert done.step.session == "c1-author"
+
+    worker_questions.checkpoint(store, lock, done, dataclasses.replace(parent, session_id="c1-author-again"), [])
+    monkeypatch.setattr(Store, "write", interrupted)
+    with pytest.raises(StoreError, match="before question settlement"):
+        worker_questions.continued(store, lock, done, tmp_path)
+    kept = store.read("c1")
+    monkeypatch.setattr(Store, "write", real_write)
+    monkeypatch.setattr(worker_questions.worktree, "head", lambda _p: BASE)
+
+    assert worker_questions.continued(store, lock, kept, tmp_path)
+    done = store.read("c1")
+    assert (len(starts), done.spend.credits, done.pending_child, done.pending_question) == (2, 6, None, None)
+    assert done.counted_children == ["c1-admission-1", "c1-admission-2"]
+    assert "HEAD changed" in done.step.question_errors[0]
 
 
 def build(**changes) -> BuildResult:

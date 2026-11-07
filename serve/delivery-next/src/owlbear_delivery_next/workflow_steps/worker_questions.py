@@ -82,8 +82,11 @@ def continued(store: Store, lock: Lock, c: Change, path: Path) -> bool:
     if p is None:
         return False
     if p.brief != c.brief.version or p.step != (s.kind, s.task, s.mode):
+        event = _retired(c, "the private question belongs to an earlier step or brief")
         c.pending_question = None
         store.write(lock, c)
+        if event is not None:
+            sessions.announce(store, lock, c.slug, event)
         return False
     result, event = checked(store, lock, c, path)
     if result.exit == Exit.ASK and p.answer:
@@ -104,6 +107,14 @@ def continued(store: Store, lock: Lock, c: Change, path: Path) -> bool:
     return True
 
 
+def _retired(c: Change, reason: str) -> dict[str, object] | None:
+    """A kept admission counts with its refusal even when its proposal is no longer current."""
+    pending = c.pending_child
+    if pending is None or pending.run is None:
+        return None
+    return pending_child.booked(c, held.accounted(pending.run), {"exit": "retired", "reason": reason})
+
+
 def checked(store: Store, lock: Lock, c: Change, path: Path) -> tuple[loop.StepResult, dict[str, object] | None]:
     """The exact proposed question admitted before publication, or its complete refusal."""
     p = c.pending_question
@@ -112,16 +123,17 @@ def checked(store: Store, lock: Lock, c: Change, path: Path) -> tuple[loop.StepR
         raise ValueError(msg)
     parent = held.restored(p.run)
     if not isinstance(parent.payload, tools.AskQuestion):
-        return refused(c, ["options: the checkpoint does not contain a worker question"]), None
+        errors = ["options: the checkpoint does not contain a worker question"]
+        return refused(c, errors), _retired(c, "\n".join(errors))
     proposed = parent.payload
     errors = tools.check_question(proposed, p.checks)
     if worktree.head(path) != p.head:
         errors.append("options: HEAD changed since submission - reconsider the options on its current code")
     if errors:
-        return refused(c, errors), None
+        return refused(c, errors), _retired(c, "\n".join(errors))
     errors += trial(store, lock, c, path, proposed)
     if errors:
-        return refused(c, errors), None
+        return refused(c, errors), _retired(c, "\n".join(errors))
 
     def start(keep: sessions.Keep) -> pending_child.Judged:
         done = session(store, lock, c, proposed)
