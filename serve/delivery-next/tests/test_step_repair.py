@@ -90,5 +90,5 @@ def test_a_private_projects_defect_text_naming_it_is_held_not_filed(repo, monkey
         title="--changed runs the full suite", text="secret-shop's a.txt routes to the full suite", paths=[path]
     )
     said = defect_issue.file(store, repo, named)
-    assert said.startswith("held for you, not filed: it names this private project (a.txt, secret-shop)")
+    assert said.startswith("held for you, not filed: it names this private project, or that could not be checked (a.txt, secret-shop)")
     assert made == []

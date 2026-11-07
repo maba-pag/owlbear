@@ -42,7 +42,8 @@ def file(store: Store, path: Path, defect: Defect) -> str:
     body = _body(defect, verified)
     if names := _named(issues, store, path, f"{defect.title}\n{body}"):
         named = ", ".join(names[:5])
-        return f"held for you, not filed: it names this private project ({named}). {defect.title}\n{body}"
+        held = f"it names this private project, or that could not be checked ({named})"
+        return f"held for you, not filed: {held}. {defect.title}\n{body}"
     marker = f"<!-- owlbear-defect:{hashlib.sha256(defect.title.casefold().encode()).hexdigest()[:16]} -->"
     try:
         if found := issues.find(marker):
@@ -82,15 +83,20 @@ def _named(issues: OwlbearIssues, store: Store, path: Path, text: str) -> list[s
     if seen is not None and seen.visibility == "public":
         return []
     tracked = _tracked(path)
+    if isinstance(tracked, str):
+        return [tracked]  # unread, nothing can be told public: the issue is held
     names = {store.name, origin.name, slug, *tracked, *(PurePosixPath(p).name for p in tracked)} - {""}
     return sorted(n for n in names if re.search(rf"(?<![\w.-]){re.escape(n)}(?![\w-])", text, re.IGNORECASE))
 
 
-def _tracked(path: Path) -> list[str]:
+def _tracked(path: Path) -> list[str] | str:
+    """The project's tracked files, or why Git could not list them."""
     done = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector
         [worktree.GIT, "ls-files", "-z"], cwd=path, capture_output=True, text=True, check=False, timeout=60
     )
-    return [p for p in done.stdout.split("\0") if p] if done.returncode == 0 else []
+    if done.returncode:
+        return f"its file list (git ls-files in {path} failed: {done.stderr.strip() or done.returncode})"
+    return [p for p in done.stdout.split("\0") if p]
 
 
 def _version() -> str:
