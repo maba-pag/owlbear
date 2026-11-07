@@ -32,9 +32,9 @@ def opening(
     answer = answer_kinds.delivered_next(change)
     accepted = held.take(store, lock, change)
     repair = "" if accepted else repairs.session(change, task)
-    if answer and s.session and s.session != repair:
-        repair = ""  # the answer goes back to a session that is not this repair chance's
-    resume = bool(answer and s.session) or bool(repair)
+    if (answer or s.question_errors) and s.session and s.session != repair:
+        repair = ""  # the answer or field feedback belongs to this author, not the earlier repair chance
+    resume = bool(s.session and (answer or s.question_errors)) or bool(repair)
     if repair:
         s.session = repair
     elif not resume:

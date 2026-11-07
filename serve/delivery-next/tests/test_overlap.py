@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.failures import kind_of
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
@@ -27,7 +28,7 @@ from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import overlap, plan_round
+from owlbear_delivery_next.workflow_steps import overlap, plan_round, worker_questions
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 K = StepKind
@@ -523,3 +524,61 @@ def test_a_collision_check_that_fails_stops_and_logs_its_whole_reason(
     )
     assert store.read("c1").outcome.reason == expected
     assert [e["reason"] for e in store.events("c1") if e.get("event") == "collisions-unchecked"] == [expected]
+
+
+def test_a_retained_worker_menu_waits_for_its_integration_collision_gate(conflicted, tmp_path, monkeypatch):
+    repo, start = conflicted
+    store, c = shared_store(tmp_path), building()
+    c.plan.tasks[1].base, c.names.worktree = start, str(repo)
+    store.write(C1, c)
+    calls = []
+
+    async def asked(cfg):
+        calls.append(cfg.session_id)
+        return Run(
+            cfg.session_id,
+            "ask",
+            tools.AskQuestion(
+                question="Pause or abandon?",
+                why="Choose the next move.",
+                options=[
+                    {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
+                    {"label": "Abandon", "effect": "Abandon this Change.", "action": "abandon"},
+                ],
+            ),
+            head=git(repo, "rev-parse", "HEAD"),
+            termination=Termination(confirmed=True),
+            usage={"credits": 1},
+        )
+
+    def no_picker(*_args):
+        msg = "collision resolution must precede worker-menu admission"
+        raise AssertionError(msg)
+
+    continued = worker_questions.continued
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)
+    monkeypatch.setattr(runner.sdk_adapter, "run", asked)
+    monkeypatch.setattr(worker_questions, "session", no_picker)
+    monkeypatch.setattr(worker_questions, "continued", lambda _s, _l, c, _p: c.pending_question is not None)
+    runner._agent(store, C1, store.read("c1"), repo)  # noqa: SLF001
+    saved = store.read("c1")
+    assert saved.pending_question is not None
+    assert saved.questions == []
+    monkeypatch.setattr(worker_questions, "continued", continued)
+    runner._agent(store, C1, saved.model_copy(deep=True), repo)  # noqa: SLF001
+    gated = store.read("c1")
+    assert (gated.outcome.exit, gated.spend.credits, len(calls)) == (Exit.ASK, 1, 1)
+    assert kind_of(gated.questions[-1].cause) == ErrorKind.CONFLICT
+    assert "c3" in gated.questions[-1].text
+    assert gated.pending_question is None
+
+    def unreadable(*_args):
+        raise subprocess.CalledProcessError(128, "git collision probe", stderr=b"probe denied")
+
+    store.write(C1, saved)
+    monkeypatch.setattr(overlap, "_merges", unreadable)
+    runner._agent(store, C1, store.read("c1"), repo)  # noqa: SLF001
+    stopped = store.read("c1")
+    assert (stopped.outcome.exit, stopped.questions, stopped.spend.credits, len(calls)) == (Exit.STOP, [], 1, 1)
+    assert "probe denied" in stopped.stop.reason
+    assert stopped.pending_question is None

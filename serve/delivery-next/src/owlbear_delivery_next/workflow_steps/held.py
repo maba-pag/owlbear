@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
-from owlbear_delivery_next.change_contracts import amend_tools, dispute_tools, tools
+from owlbear_delivery_next.change_contracts import amend_tools, dispute_tools, pick_tools, tools
 from owlbear_delivery_next.change_contracts.failures import UNREAD, VISUAL_MODEL
 from owlbear_delivery_next.change_contracts.held_records import HeldRecord, HeldRun
 from owlbear_delivery_next.change_contracts.models import Change, Exit, StepKind
@@ -85,7 +85,7 @@ def dump_run(run: Run) -> HeldRun:
     )
 
 
-RESULTS = (tools, amend_tools, dispute_tools)  # where a kept run's result model is defined: an amendment's own
+RESULTS = (tools, amend_tools, dispute_tools, pick_tools)  # kept worker and paid-child result schemas
 
 
 def load_run(data: HeldRun) -> Run:

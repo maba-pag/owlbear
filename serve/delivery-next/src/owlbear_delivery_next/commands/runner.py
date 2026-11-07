@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import permissions, tools
-from owlbear_delivery_next.change_contracts.models import VISUAL, Environment, Exit, StepKind, Waiting
+from owlbear_delivery_next.change_contracts.failures import cause_key
+from owlbear_delivery_next.change_contracts.models import VISUAL, Environment, ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import (
     amending,
@@ -24,9 +26,9 @@ from owlbear_delivery_next.change_flow import (
     worktree,
 )
 from owlbear_delivery_next.change_flow.curation_flow import CURATE
+from owlbear_delivery_next.commands import worker_input
 from owlbear_delivery_next.commands.cli import describe
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.impeccable import design_tools
 from owlbear_delivery_next.impeccable_runs import visual_settled
 from owlbear_delivery_next.local_system import git_files
 from owlbear_delivery_next.local_system.git_files import git_common_dir
@@ -80,12 +82,11 @@ from owlbear_delivery_next.workflow_steps import (
     unset_settings,
     visual,
     watched,
+    worker_questions,
 )
 from owlbear_delivery_next.workflow_steps.sessions import UsageUnreadError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from owlbear_delivery_next.change_contracts.models import Change, Step
     from owlbear_delivery_next.github.account import Writer
     from owlbear_delivery_next.state_store.store import Lock
@@ -120,6 +121,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
         return  # its result is recorded already (RUN-04), or the owner settles the project's checks first (#968)
     path = worktree.ensure(repo, git_common_dir(repo), slug, change.names.branch, change.names.target)
     change.names.worktree = str(path)
+    if worker_questions.continued(store, lock, change, path):
+        return
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     curated = change.tests is not None and s.kind == StepKind.BUILD and s.task == CURATE  # the curator's (TD-339)
     role = roles.chosen(settings := store.settings(), session := curation_build.LABEL if curated else s.kind)
@@ -135,7 +138,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     since = task.base if task and s.kind in {StepKind.BUILD, StepKind.REVIEW} else None
     start = worktree.head(path) if s.kind == StepKind.INTEGRATE else since
     store.write(lock, change)  # The session id and task base are durable before the runtime starts.
-    others = _planning(store, lock, slug, path) if s.kind == StepKind.PLAN else {}
+    others = worker_input.planning(store, lock, slug, path) if s.kind == StepKind.PLAN else {}
 
     def delivered() -> None:
         nonlocal change
@@ -152,14 +155,21 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
 
     def config(at: Path) -> sdk_adapter.Session:
         parts = step_input.session(change, profile, at, others, ctx)
-        told = parts.message + (repairs.fallback(task) if repair else "")  # a fresh session taking a repair chance
+        told = (
+            parts.message
+            + (repairs.fallback(task) if repair else "")
+            + (step_answers.answer(answer) if s.question_errors and answer else "")
+            + (worker_questions.feedback(s.question_errors) if s.question_errors else "")
+        )
         return sdk_adapter.Session(
             kind=s.kind,
             worktree=at,
             session_id=s.session or "",
-            message=step_decisions.resumed(step_answers.answer(answer))
+            message=step_decisions.resumed(told)
+            if resume and s.question_errors
+            else step_decisions.resumed(step_answers.answer(answer))
             if resume and answer
-            else (parts.message if resume else told),
+            else told,
             resume=resume,
             policy=permissions.Policy(at, write=parts.write),
             observe=lambda: worktree.observe(at, change.names.target, since),
@@ -187,7 +197,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
             user=roles.user_config(settings),  # D-01M5YE4P5317N1HWD0QN6N05E0: the owner's own instructions and skills
             memory=sessions.memory(store),
             ui=change.brief.ui,
-            helpers=_helpers(change, at, asked),
+            helpers=worker_input.helpers(change, at, asked),
             preparing=ctx,
             watch=watched.watching(store, lock, session, settings, at, _out, look_limit, asked),  # W1a's switch
         )
@@ -199,14 +209,31 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     curation_build.recorded(change, run, path)
     post = held_writes.Deferred(store, slug) if accepted else store  # an accepted hold's writes wait for its receipt
-    result = review.recorded(change, task, run, path, session_result.to_result(run, s.kind, end))
+    result = session_result.to_result(run, s.kind, end)
+    private = run.ending == "ask" and result.cause == cause_key(ErrorKind.RESULT, s.kind, worker_questions.LABEL)
+    kept = worker_questions.unbound(post, lock, change, run, run.checks) if private else None
+    if ctx is not None:
+        try:
+            result = prepare.chosen(post, lock, change, path, run.payload, ctx, result)
+        except (OSError, subprocess.SubprocessError) as exc:
+            why = f"the preparer's cleanup failed: {failure(exc)}"
+            post.log(lock, slug, {"event": "preparer-cleanup-failed", "at": end.isoformat(), "reason": why})
+            result = check.failed_cleanup(result, why)
+    if kept is not None:
+        if result.cause == cause_key(ErrorKind.RESULT, s.kind, worker_questions.LABEL):
+            worker_questions.bound(kept, lock, change, path)
+            worker_questions.continued(kept, lock, change, path)
+            return
+        change.pending_question, change.pending_child = None, None
+    result = review.recorded(change, task, run, path, result)
     result = disputes.processed(change, task, run.session_id, run.payload, result, run.changed)
     result = conversation.disputed(task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
     change = budgets.effect_observed(change, answer.id, end) if answer and session_result.effect_seen(run) else change
-    sessions.logged(
-        post, lock, change, run, {"kind": s.kind, "exit": result.exit} | ({"held": True} if accepted else {})
-    )
+    if kept is None:
+        sessions.logged(
+            post, lock, change, run, {"kind": s.kind, "exit": result.exit} | ({"held": True} if accepted else {})
+        )
     events: list[dict[str, object]] = []
     if s.kind == StepKind.PLAN and result.plan:  # recorded, then challenged in its loop (TD-190)
         result = plan_round.planned(post, lock, change, path, run.payload, result, profile, others, events)
@@ -216,8 +243,6 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     if isinstance(p := run.payload, tools.WrongPremise) and (p.stage, s.kind, result.exit) == TARGET:
         writer = github_writer.of(store, repo)
         result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end, writer)
-    if ctx is not None:
-        result = prepare.chosen(post, lock, change, path, run.payload, ctx, result)
     if isinstance(p := run.payload, tools.CheckRecipe) and result.exit == Exit.PENDING:
         change.env = Environment(check=s.task or "", command=p.command, directory=p.directory, ready_url=p.ready_url)
         before.reset(change, worktree.head(path))  # each new environment's capture gets its own "before"
@@ -226,27 +251,6 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     final = change if change.amending is not None else loop.apply(change, result, end)
     held_writes.write_result(store, lock, change, accepted, final, post)
     sessions.announce_all(store, lock, slug, events)  # logged once the result that counts their round is durable
-
-
-def _helpers(
-    change: Change, at: Path, asked: lookup.Asked
-) -> tuple[tuple[tools.Spec, Callable[[tools.Args], str]], ...]:
-    """The tools that answer within the turn: the builder's design detector on a UI Change (slice 7), the lookup."""
-    ui = change.step.kind == StepKind.BUILD and change.brief.ui
-    return (*(((design_tools.SCAN, partial(design.builder_scan, at)),) if ui else ()), asked.helper())
-
-
-def _planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list[str]]:
-    """The read-only planner needs a clean tree: edits an earlier step left are kept in a stash first.
-
-    Returns:
-        The other open Changes' scopes the planner avoids.
-    """
-    message = f"owlbear {slug}: uncommitted edits before planning"
-    if worktree.shelve(path, message):
-        store.log(lock, slug, {"event": "shelved", "at": datetime.now(UTC).isoformat(timespec="seconds")})
-        _out(f"{slug}: uncommitted edits kept in `git stash list` as '{message}'")
-    return plan_round.scopes(store, slug)
 
 
 def _captured(change: Change, path: Path, head: str, out: Path, widths: list[int]) -> tuple[list[Any], list[Any]]:

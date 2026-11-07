@@ -27,7 +27,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import brief_rounds, budgets, loop, plan_rounds, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
-from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.commands import runner, worker_input
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import missing, sdk_adapter, step_input
@@ -364,12 +364,12 @@ def repo(tmp_path, monkeypatch) -> Path:
 def test_planning_starts_on_a_clean_tree_whatever_step_left_edits(repo, monkeypatch) -> None:
     events: list[dict] = []
     store = SimpleNamespace(log=lambda _lock, _slug, e: events.append(e))
-    monkeypatch.setattr(runner.plan_round, "scopes", lambda *_: {"c2": ["b"]})
-    assert runner._planning(store, None, "c1", repo) == {"c2": ["b"]}  # noqa: SLF001 - a clean tree keeps nothing
+    monkeypatch.setattr(worker_input.plan_round, "scopes", lambda *_: {"c2": ["b"]})
+    assert worker_input.planning(store, None, "c1", repo) == {"c2": ["b"]}
     assert (events, worktree.git(repo, "stash", "list")) == ([], "")
     (repo / "a.txt").write_text("edited\n")
     (repo / "new.txt").write_text("new\n")
-    runner._planning(store, None, "c1", repo)  # noqa: SLF001
+    worker_input.planning(store, None, "c1", repo)
     assert worktree.git(repo, "status", "--porcelain") == ""
     assert "owlbear c1: uncommitted edits before planning" in worktree.git(repo, "stash", "list")
     assert worktree.git(repo, "stash", "show", "--include-untracked", "--name-only").split() == ["a.txt", "new.txt"]

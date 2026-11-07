@@ -9,13 +9,27 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.visual_records import OwnerDecision
-from owlbear_delivery_next.change_flow import amending
+from owlbear_delivery_next.change_flow import amending, answer_kinds
 
 if TYPE_CHECKING:
     from datetime import datetime
 
     from owlbear_delivery_next.change_contracts.inbox import AnswerItem
     from owlbear_delivery_next.change_contracts.models import Change, Question
+
+
+def refused(q: Question, target: str | None, item: AnswerItem, decisions: frozenset[str]) -> bool:
+    """Engine gates need their options; admitted worker choices also take continue or the owner's own words."""
+    worker = q.cause is None and not q.repair and bool(q.options) and all(o.action is not None for o in q.options)
+    text = item.statement if item.classed == "clarification" else item.text
+    if worker and item.option is None and not text.strip():
+        return True
+    continuing = worker and (
+        (item.option is None and bool(text.strip()))
+        or any(o.id == item.option and o.action == "continue" and o.next is None for o in q.options)
+    )
+    unchosen = target is None and not continuing and bool(worker or {o.next for o in q.options} & decisions or q.repair)
+    return unchosen or (target == "reconsider" and not item.text.strip())
 
 
 def amended(
@@ -28,7 +42,7 @@ def amended(
     """
     kind, target, waits = how
     if kind == "brief_change":
-        amending.start(c, "answer", reason=item.text, now=now, question=q.id)
+        amending.start(c, "answer", reason=answer_kinds.answer_text(q), now=now, question=q.id)
         return ""
     if target != "amend":
         return None
