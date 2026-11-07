@@ -20,6 +20,7 @@ from owlbear_delivery_next.change_contracts.decision_records import (
 from owlbear_delivery_next.change_contracts.env_records import Environment, Recipe
 from owlbear_delivery_next.change_contracts.held_records import HeldRecord, PendingChild
 from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim
+from owlbear_delivery_next.change_contracts.option_records import Inputs, OptionAction, OptionProof, PendingQuestion
 from owlbear_delivery_next.change_contracts.repair_records import Repairs
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
 from owlbear_delivery_next.change_contracts.shaper_records import SavingChat, ShaperNotice
@@ -184,15 +185,6 @@ class Intent(Record):
     hold: bool = False
 
 
-class Inputs(Record):
-    """What a review or person-only check depended on; valid while unchanged (P5)."""
-
-    criteria: dict[str, int] = Field(default_factory=dict)
-    paths: dict[str, str] = Field(default_factory=dict)
-    procedure: int = 0
-    environment: list[str] = Field(default_factory=list)
-
-
 class PersonCheck(Record):
     """One person-only check declared in the brief."""
 
@@ -213,6 +205,8 @@ class Option(Record):
     id: str
     label: str
     next: StepKind | Move | None = None
+    action: OptionAction | None = None
+    proof: OptionProof | None = None
 
 
 class Answer(Record):
@@ -243,6 +237,7 @@ class Question(Record):
     delivered_at: datetime | None = None
     effect_observed_at: datetime | None = None
     shaping_version: int | None = None
+    recommended: str | None = None
 
 
 class ItemRef(Record):
@@ -354,6 +349,7 @@ class Step(Record):
     session: str | None = None
     resumed: str = ""  # the planner session that had its repair chance after a plan challenge (TD-123)
     repair: str = ""  # the planner session whose repair chance is in flight until its plan is accepted
+    question_errors: list[str] = Field(default_factory=list)
 
 
 class Outcome(Record):
@@ -494,6 +490,7 @@ class Change(Record):
     inbox_acked: list[str] = Field(default_factory=list)
     handled: list[Handling] = Field(default_factory=list)  # pull-request conversation items, oldest first
     tests: TestReview | None = None  # a test review's shares and report (TD-373)
+    pending_question: PendingQuestion | None = None
     decisions_baseline: DecisionBaseline | None = None  # pinned at brief approval (TD-419 slice 4)
     decisions_offered: DecisionBaseline | None = None  # the set the owner's open decisions question would pin
     decisions_unpinned_at: datetime | None = None  # approved while unreadable: the owner confirms the set to pin
