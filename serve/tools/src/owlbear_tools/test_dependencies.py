@@ -428,15 +428,6 @@ def pytest_xdist_node_collection_finished(node: object, ids: list[str]) -> None:
         config.stash[STATE].collected.update(ids)
 
 
-@pytest.hookimpl(wrapper=True)
-def pytest_runtest_protocol(item: pytest.Item) -> Generator[None, object, object]:
-    """Retain the local item only when running without xdist."""
-    result = yield
-    if STATE in item.config.stash:
-        item.config.stash[STATE].completed.add(item.nodeid)
-    return result
-
-
 def pytest_runtest_logreport(report: pytest.TestReport) -> None:
     """Reports arrive on the controller too; collected data is kept by the active plugin instance."""
     if _controller is None:
