@@ -97,6 +97,9 @@ class _WorkspacePackage:
     dependencies: tuple[str, ...]
 
 
+type _Packages = tuple[_WorkspacePackage, ...]
+
+
 class _ChangedScopeError(RuntimeError):
     """Raised when a changed-path scope cannot be established safely."""
 
@@ -187,8 +190,8 @@ def _relative_paths(paths: Iterable[Path]) -> list[str]:
     return sorted({str(path.relative_to(_REPOSITORY_ROOT)) for path in paths if path.is_file()})
 
 
-def _package_scope(package: _WorkspacePackage) -> list[str]:
-    return _relative_paths([*_package_tests(package), *_neighbour_tests(package)])
+def _package_scope(package: _WorkspacePackage, packages: _Packages | None = None) -> list[str]:
+    return _relative_paths([*_package_tests(package), *_neighbour_tests(package, packages)])
 
 
 def _page_fetch() -> re.Pattern[str]:
@@ -198,17 +201,17 @@ def _page_fetch() -> re.Pattern[str]:
     return re.compile(rf"\.get\(\s*f?[\"'](?:/p/[^\"'/]*)?(?:{routes})[\"'?]")
 
 
-def _page_scope(package: _WorkspacePackage) -> list[str]:
-    tests = [*_package_tests(package), *_neighbour_tests(package)]
+def _page_scope(package: _WorkspacePackage, packages: _Packages | None = None) -> list[str]:
+    tests = [*_package_tests(package), *_neighbour_tests(package, packages)]
     fetch = _page_fetch()
     texts = {path: path.read_text(encoding="utf-8") for path in tests}
     pages = [path for path, text in texts.items() if _PAGE_TESTS.search(text) or fetch.search(text)]
     return _relative_paths([*pages, *(_REPOSITORY_ROOT / path for path in _INVARIANT_TESTS)])
 
 
-def _neighbour_tests(package: _WorkspacePackage) -> list[Path]:
+def _neighbour_tests(package: _WorkspacePackage, packages: _Packages | None = None) -> list[Path]:
     """Root and consumer tests that import the package, and the invariant tests."""
-    packages = _workspace_packages()
+    packages = packages if packages is not None else _workspace_packages()
     targets = _tests_importing(package.namespace, _root_tests())
     for consumer in _direct_consumers(package, packages):
         targets.extend(_tests_importing(package.namespace, _package_tests(consumer)))
@@ -264,8 +267,8 @@ def _testmon_commands(packages: Iterable[_WorkspacePackage], forced: set[str]) -
     return commands
 
 
-def _package_for_path(normalized: str) -> _WorkspacePackage | None:
-    for package in _workspace_packages():
+def _package_for_path(normalized: str, packages: _Packages | None = None) -> _WorkspacePackage | None:
+    for package in packages if packages is not None else _workspace_packages():
         prefix = f"serve/{package.directory.name}/"
         if normalized.startswith((f"{prefix}src/", f"{prefix}tests/")):
             return package
@@ -274,18 +277,18 @@ def _package_for_path(normalized: str) -> _WorkspacePackage | None:
     return None
 
 
-def _python_scope(path: str) -> list[str] | None:
+def _python_scope(path: str, packages: _Packages | None = None) -> list[str] | None:
     normalized = path.removeprefix("./")
     if normalized in _CONFIG_TESTS:
         return sorted({*_CONFIG_TESTS[normalized], *_INVARIANT_TESTS})
     scope: list[str] | None = None
-    package = _package_for_path(normalized)
+    package = _package_for_path(normalized, packages)
     if package is not None:
         package_prefix = f"serve/{package.directory.name}/"
         if normalized.startswith(_PAGES) and Path(normalized).suffix in {".mjs", ".html", ".css"}:
-            scope = _page_scope(package)
+            scope = _page_scope(package, packages)
         elif normalized.startswith(f"{package_prefix}src/") or normalized == f"{package_prefix}pyproject.toml":
-            scope = _package_scope(package)
+            scope = _package_scope(package, packages)
         elif normalized.startswith(f"{package_prefix}tests/"):
             candidate = _REPOSITORY_ROOT / normalized
             if candidate.exists():
@@ -382,17 +385,17 @@ def _commands_for_paths(paths: list[str], *, all_tests: bool, coverage: bool) ->
     return commands
 
 
-def _task_targets(paths: list[str]) -> tuple[set[str], list[str], list[_WorkspacePackage]]:
+def _task_targets(paths: list[str], workspace: _Packages) -> tuple[set[str], list[str], list[_WorkspacePackage]]:
     """Existing routes and the source packages requiring dependency evidence."""
     forced: set[str] = set(_INVARIANT_TESTS)
     python: list[str] = []
     packages: dict[str, _WorkspacePackage] = {}
     for path in paths:
-        package = _package_for_path(path)
+        package = _package_for_path(path, workspace)
         if path in _CONFIG_TESTS:
             forced.update(_CONFIG_TESTS[path])
         elif package and path.startswith(_PAGES):
-            forced.update(_page_scope(package))
+            forced.update(_page_scope(package, workspace))
         elif path.endswith(".py") and (package or path.startswith("tests/")):
             current_test = "/tests/" in path or path.startswith("tests/")
             if current_test and Path(path).name.startswith("test_") and (_REPOSITORY_ROOT / path).is_file():
@@ -403,7 +406,7 @@ def _task_targets(paths: list[str]) -> tuple[set[str], list[str], list[_Workspac
                     packages[package.namespace] = package
         elif (
             path.endswith((".py", ".sh", ".bash", ".zsh", ".js", ".mjs", ".cjs"))
-            or (scope := _python_scope(path)) is None
+            or (scope := _python_scope(path, workspace)) is None
         ):
             raise task_scope.unsupported(path)
         else:
@@ -413,9 +416,10 @@ def _task_targets(paths: list[str]) -> tuple[set[str], list[str], list[_Workspac
 
 def _task_commands(paths: list[str], context: task_scope.Context, *, coverage: bool) -> list[tuple[list[str], Path]]:
     """One task's evidenced tests, with no testmon bootstrap or full-suite fallback."""
-    forced, python, packages = _task_targets(paths)
+    workspace = _workspace_packages()
+    forced, python, packages = _task_targets(paths, workspace)
     for package in packages:
-        forced.update(_relative_paths(_neighbour_tests(package)))
+        forced.update(_relative_paths(_neighbour_tests(package, workspace)))
         forced.update(
             _relative_paths(path for path in _package_tests(package) if _unseen_by_testmon(path, package.namespace))
         )
