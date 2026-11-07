@@ -72,8 +72,11 @@ def _held(path: Path) -> str:
     """The identity a claim file holds; nothing when there is none."""
     try:
         return path.read_text().strip()
-    except OSError, ValueError:
+    except FileNotFoundError:
         return ""
+    except (OSError, ValueError) as exc:
+        msg = f"the claim {path} cannot be read: {command_failure.failure(exc)}"
+        raise DataRepoError(msg) from exc
 
 
 def _git(cwd: Path, *args: str, until: float | None = None, lossless: bool = False) -> subprocess.CompletedProcess[str]:
@@ -114,11 +117,9 @@ class DataRepo:
     ) -> subprocess.CompletedProcess[str]:
         """One git command in the checkout; a timeout or a missing folder is a failed command.
 
-        A push runs only as one checked, non-forced refspec. Plain and held pushes must land on the checked upstream;
-        with nothing held, an explicit push may name its caller's captured destination. An unproved destination or
-        a held change that no longer meets the fetched remote sends nothing (`publication_hold.pushing`). A push's
-        *guard*, an owned caller's final check, runs after those probes and immediately before Git starts the push:
-        what it refuses, nothing is sent.
+        Pushes use one checked, non-forced refspec: the upstream, or an explicit captured destination when unheld.
+        Unproved destinations or changed holds send nothing (`publication_hold.pushing`). The caller's *guard*
+        runs after those probes, immediately before Git; a refusal sends nothing.
         *lossless* preserves undecodable UTF-8 bytes for a caller's per-record validation; guards are unchanged.
         """
         pushing = args[:1] == ("push",)
@@ -171,8 +172,7 @@ class DataRepo:
     def quiet(self) -> Iterator[bool]:
         """Whether no writer holds the lock now; while True, none can take it until the block ends.
 
-        This thread's own `locked` counts as quiet. The lock file is made when no writer has made it yet, so the shared
-        hold keeps out the first writer too, and what the block reads stays as it is.
+        This thread's own `locked` counts as quiet; creating the lock file also keeps out the first writer.
         """
         lock = self._lock_file()
         if lock in getattr(_HOLDING, "paths", ()):
@@ -198,12 +198,9 @@ class DataRepo:
                 path.write_text(text + ("" if not text or text.endswith("\n") else "\n") + "\n".join(missing) + "\n")
 
     def claim(self, name: str, identity: str) -> bool:
-        """Bind the project folder to one repository; True when this call wrote the claim.
-
-        Another repository of the same name is refused.
-        """
+        """Bind the folder to one repository, refusing a different identity; True when this call wrote the claim."""
         path = self.root / name / CLAIM
-        held = path.read_text().strip() if path.exists() else ""
+        held = _held(path)
         if held and held != identity:
             msg = f"the shared settings folder {name} belongs to {held}, not {identity}; run setup with --folder NAME"
             raise DataRepoError(msg)
@@ -231,10 +228,7 @@ class DataRepo:
         return f"the shared settings folder {name} belongs to {held}" if held and held != identity else ""
 
     def rename(self, old: str, new: str, until: float | None = None) -> str:
-        """Move a project's folder with all it holds to ``new``, commit and push the move; the caller holds ``locked``.
-
-        Files never committed move along uncommitted. What the owner should know about the publication, else nothing.
-        """
+        """Move to ``new``, commit and push under ``locked``; uncommitted files stay so. Return publication notice."""
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         why = self.refusal(new, _held(self.root / old / CLAIM))
         if why or (self.root / new).exists():
@@ -256,10 +250,7 @@ class DataRepo:
         return said
 
     def publish(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> str:
-        """Commit ``paths`` alone if they changed and push; what the owner should know when that fails, else nothing.
-
-        The caller holds ``locked``. Unpushed earlier commits are pushed too, so an unchanged save retries them.
-        """
+        """Commit ``paths`` and push under ``locked``; return failures. An unchanged save retries earlier pushes."""
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         if said := self.commit(paths, message, until) or self._push(until):
             _log.warning("publishing %r in %s: %s", message, self.root, said)
@@ -482,9 +473,17 @@ def remote_identity(url: str) -> str:
 
 def identity(repo: Path) -> str:
     """Who a project is: its origin remote without scheme, user and ``.git``, else its main checkout's path."""
-    if url := _git(repo, "config", "--get", "remote.origin.url").stdout.strip():
+    origin = _git(repo, "config", "--get", "remote.origin.url")
+    if origin.returncode not in {0, 1}:
+        msg = f"the origin of {repo} cannot be read: {command_failure.failed(origin)}"
+        raise DataRepoError(msg)
+    if url := origin.stdout.strip():
         return remote_identity(url)
-    top = _git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()
+    common = _git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    if common.returncode:
+        msg = f"the Git directory of {repo} cannot be read: {command_failure.failed(common)}"
+        raise DataRepoError(msg)
+    top = common.stdout.strip()
     return str(Path(top).parent) if top else str(repo.resolve())
 
 

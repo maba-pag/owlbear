@@ -389,7 +389,8 @@ function progressView() {
     .includes(false);
   const shown = (x) => (skipped(x) ? "skipped" : x.state);
   const list = html`<ol class="stages">${j.stages.map((x) => html`<li><span>${STAGE[x.name] ?? x.name}${skipped(x)
-    && x.result.why ? html`<p-text size="xs">${x.result.why}</p-text>` : nothing}</span>
+    && x.result.why ? html`<p-text size="xs">${x.result.why}</p-text>` : nothing}
+    ${x.name === "shared" ? (x.result?.said ?? []).map((line) => html`<pre>${line}</pre>`) : nothing}</span>
     <p-tag compact="true" variant=${{ done: "success", failed: "error", waiting: "warning", held: "warning",
       running: "info" }[shown(x)] ?? "secondary"}>${shown(x)}</p-tag></li>`)}</ol>`;
   let body = nothing, actions = nothing;
@@ -427,6 +428,7 @@ function profileView(w) {
 
 function endingView() {
   const r = s.job.stages.find((x) => x.name === "end")?.result ?? {};
+  const shared = s.job.stages.find((x) => x.name === "shared")?.result?.said ?? [];
   const fact = (label, ok) => html`<li>${label}: <p-tag compact="true" variant=${ok ? "success" : "warning"}>${ok
     ? "yes" : "no"}</p-tag></li>`;
   const all = r.registered && r.profile && r.ready;
@@ -435,6 +437,8 @@ function endingView() {
     ${fact("Ready for Delivery", r.ready)}</ul>`}
     ${r.missing?.length && !r.local ? html`<p-text weight="semibold">Missing</p-text><ul>${r.missing.map((m) =>
       html`<li>${m}</li>`)}</ul>` : nothing}
+    ${shared.length ? html`<details><summary>Shared settings folder</summary>
+      <ul>${shared.map((line) => html`<li><pre>${line}</pre></li>`)}</ul></details>` : nothing}
     ${r.files?.length ? html`<details><summary>Chat-tool files</summary><ul>${r.files.map((x) => html`<li>${x}</li>`)}
       </ul></details>` : nothing}
     ${s.started ? html`<p-text role="status">${s.started}</p-text>` : nothing}`,

@@ -473,7 +473,8 @@ def test_no_local_write_without_consent(repo):
     assert (json.loads(path.read_text())["tasks"], setup.has_task(path)) == ([{"label": "build"}], False)
     jsonc = repo / ".mcp.json"
     jsonc.write_text("// mine\n{}")
-    assert "not plain JSON" in setup.consent(repo, jsonc, lambda d: d, "Write?", lambda _q: "y", yes=True)
+    said = setup.consent(repo, jsonc, lambda d: d, "Write?", lambda _q: "y", yes=True)
+    assert f"{jsonc} cannot be read: JSONDecodeError:" in said
     assert jsonc.read_text() == "// mine\n{}"
 
 
