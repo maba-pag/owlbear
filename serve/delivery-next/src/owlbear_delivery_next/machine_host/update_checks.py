@@ -37,6 +37,7 @@ from owlbear_delivery_next.state_store import machine_settings, pds_run_record
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     from owlbear_delivery_next.machine_host.machine import Machine
 
@@ -193,6 +194,7 @@ class Checks:
         self.kept: dict[str, dict[str, Any]] = self._restored()
         self.settings: tuple[machine_settings.Inputs, dict[str, int | None], str | None] | None = None
         self.settings_lock = threading.Lock()
+        self.settings_sources: tuple[Path, ...] = ()
 
     def _restored(self) -> dict[str, dict[str, Any]]:
         try:
@@ -271,9 +273,12 @@ class Checks:
         with self.settings_lock:
             inputs: machine_settings.Inputs = ()
             try:
-                inputs = machine_settings.update_check_inputs()
+                inputs = machine_settings.update_check_inputs(self.settings_sources)
                 if not refresh and (kept := self.settings) is not None and kept[0] == inputs:
                     return kept[1], kept[2]
+                sources, source_problem = machine_settings.update_check_sources()
+                inputs = machine_settings.update_check_inputs(sources)
+                self.settings_sources = sources
                 resolved = machine_settings.current()
                 hours = {n: getattr(resolved, f"update_check_hours_{n}") for n in CHECKS}
                 channel = resolved.channel
@@ -284,7 +289,8 @@ class Checks:
                 self.unsettled = reason
                 hours, channel = dict.fromkeys(CHECKS), None
             else:
-                self.unsettled = resolved.notice if resolved.notice != machine_settings.NO_SHARED else ""
+                notice = resolved.notice if resolved.notice != machine_settings.NO_SHARED else ""
+                self.unsettled = "\n".join(filter(None, (notice, source_problem)))
             self.settings = inputs, hours, channel
             return hours, channel
 

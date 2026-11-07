@@ -1238,7 +1238,13 @@ def test_updates_say_update_checks_that_could_not_be_kept_set_or_looked_at_whole
             logged = f"update checks: {machine.checks.path} could not be written: {whole}"
         elif failing == "unsettled":
             monkeypatch.setattr(
-                update_checks, "machine_settings", SimpleNamespace(current=raising, update_check_inputs=lambda: ())
+                update_checks,
+                "machine_settings",
+                SimpleNamespace(
+                    current=raising,
+                    update_check_inputs=lambda *_sources: (),
+                    update_check_sources=lambda: ((), ""),
+                ),
             )
             told = f"The machine settings could not be fully read: {whole}."
             logged = f"update checks: the machine settings could not be read: {whole}"
