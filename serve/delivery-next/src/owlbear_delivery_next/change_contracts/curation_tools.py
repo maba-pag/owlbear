@@ -29,7 +29,7 @@ def in_tests(path: str) -> bool:
 
 
 class TestVerdict(tools.Args):
-    """One test you would not keep as it is, and why; a test in doubt is kept and not listed."""
+    """One test you would not keep as it is, and why; a test you keep is not listed."""
 
     __test__ = False  # not a pytest class
 
@@ -48,7 +48,7 @@ class TestVerdict(tools.Args):
     caught_by: str = Field(
         default="",
         max_length=500,
-        description="For retire and merge: the remaining test and its assertion that still catches that bug",
+        description="For retire and merge: the kept test and its assertion that guards the same kind of bug",
         examples=["tests/test_greet.py::test_names asserts greet(' Ada ') == 'Hallo Ada'"],
     )
 
@@ -56,7 +56,7 @@ class TestVerdict(tools.Args):
     def _evidence(self) -> Self:
         """A removal names the bug and the test that still catches it (TD-112, TD-339)."""
         if self.action != "rewrite-lower" and not (self.bug.strip() and self.caught_by.strip()):
-            msg = f"{self.action} needs bug and caught_by; a test you cannot name them for is kept"
+            msg = f"{self.action} needs bug and caught_by: name them, or leave the test unlisted"
             raise ValueError(msg)
         return self
 
