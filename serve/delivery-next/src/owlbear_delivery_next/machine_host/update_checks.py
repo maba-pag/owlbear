@@ -11,6 +11,9 @@ a newer version stays available through failed checks until a check finds it wit
 
 A newer PDS release is the Updates page's to take (#777): while a project's update of it runs or waits for the owner,
 or once one merged it, it is shown so and not counted; a failed update leaves it available.
+
+State polls reuse unchanged settings inputs; edits are seen on the next read. Each scheduler tick resolves again,
+so a transient settings-read failure can recover without an edit, even when all intervals are unset.
 """
 
 from __future__ import annotations
@@ -188,6 +191,7 @@ class Checks:
         self.unsettled = ""  # why the machine settings could not be read at the last look
         self.unticked = ""  # why the last look whether a check is due failed, until one succeeds
         self.kept: dict[str, dict[str, Any]] = self._restored()
+        self.settings: tuple[machine_settings.Inputs, dict[str, int | None], str | None] | None = None
 
     def _restored(self) -> dict[str, dict[str, Any]]:
         try:
@@ -261,16 +265,26 @@ class Checks:
         if failure is not None:
             self.machine.say(f"update check of {TITLES[name]} failed: {failure}")
 
-    def _settings(self) -> tuple[dict[str, int | None], str | None]:
-        """Each check's interval and the machine's update channel, as resolved now."""
+    def _settings(self, *, refresh: bool = False) -> tuple[dict[str, int | None], str | None]:
+        """Each interval and channel, reusing unchanged inputs; a tick also retries unchanged failures."""
+        inputs: machine_settings.Inputs = ()
         try:
+            inputs = machine_settings.update_check_inputs()
+            if not refresh and (kept := self.settings) is not None and kept[0] == inputs:
+                return kept[1], kept[2]
             resolved = machine_settings.current()
+            hours = {n: getattr(resolved, f"update_check_hours_{n}") for n in CHECKS}
+            channel = resolved.channel
         except Exception as exc:  # noqa: BLE001 - unreadable settings: no timed check; the start's and by hand run
-            self.unsettled = command_failure.failure(exc)
-            self.machine.say(f"update checks: the machine settings could not be read: {self.unsettled}")
-            return dict.fromkeys(CHECKS), None
-        self.unsettled = ""
-        return {n: getattr(resolved, f"update_check_hours_{n}") for n in CHECKS}, resolved.channel
+            reason = command_failure.failure(exc)
+            if reason != self.unsettled:
+                self.machine.say(f"update checks: the machine settings could not be read: {reason}")
+            self.unsettled = reason
+            hours, channel = dict.fromkeys(CHECKS), None
+        else:
+            self.unsettled = ""
+        self.settings = inputs, hours, channel
+        return hours, channel
 
     def _next(self, name: str, hours: int | None) -> datetime | None:
         """When the timed check of *name* is due; None while its interval is unset."""
@@ -285,7 +299,7 @@ class Checks:
 
     def tick(self) -> None:
         """Start each check whose interval has passed; one whose interval is unset waits."""
-        hours, now = self._settings()[0], self.now()
+        hours, now = self._settings(refresh=True)[0], self.now()
         for name in CHECKS:
             due = self._next(name, hours[name])
             if due is not None and due <= now:

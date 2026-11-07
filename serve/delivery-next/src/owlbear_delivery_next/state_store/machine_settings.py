@@ -7,12 +7,14 @@ its switches and channel, no automatic curation without its trigger, no agent se
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import Field
 
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.local_system import data_repo
+from owlbear_delivery_next.local_system import data_place, data_repo, local_home
 from owlbear_delivery_next.settings.config import GlobalLayer, MachineValues
 from owlbear_delivery_next.state_store import registry
 from owlbear_delivery_next.state_store.store import StoreError, read_layer
@@ -23,6 +25,43 @@ if TYPE_CHECKING:
 FIELDS: tuple[str, ...] = tuple(MachineValues.model_fields)
 NO_SHARED = "no shared repository is set up, so there are no global machine settings"
 BASE: MachineValues | None = None  # a layer under Global; empty in production (no code defaults), tests set one
+type Inputs = tuple[bytes | str | None, ...]
+
+
+def _input(path: Path) -> bytes | str | None:
+    try:
+        return path.read_bytes()
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as exc:
+        return failure(exc)
+
+
+def update_check_inputs() -> Inputs:
+    """The update snapshot's inputs, without resolving settings or probing Git; read errors are distinct tokens."""
+    home, view = local_home.root(), os.environ.get(data_repo.VIEW)
+    record: dict[str, str] | str | None = None
+    try:
+        if view is not None:
+            root = Path(view) if view else None
+        else:
+            record = data_place.stored()
+            named = record.get("repository") if isinstance(record, dict) else None
+            root = data_place.default() if record is None else Path(named).expanduser().resolve() if named else None
+    except (OSError, ValueError, RuntimeError) as exc:
+        root, record = None, failure(exc)
+    return (
+        str(home),
+        view,
+        _input(home / registry.MACHINE),
+        repr(record),
+        str(root) if root else None,
+        _input(root / data_repo.CONFIG) if root else None,
+        "directory" if root and (root / ".git").is_dir() else _input(root / ".git") if root else None,
+        _input(root / ".git/config") if root else None,
+        _input(home / ".gitconfig"),
+        BASE.model_dump_json() if BASE is not None else None,
+    )
 
 
 class Resolved(MachineValues):
