@@ -1702,28 +1702,6 @@ def _fresh(tmp_path: Path, remote: Path) -> Store:
 
 
 @pytest.mark.browser
-def test_a_refused_save_of_an_edited_preference_keeps_the_review_until_the_retry_publishes(
-    pending_shared, tmp_path, monkeypatch, shared_repo, pds
-) -> None:
-    """A failed publication notice keeps the owner's review intent, so the plain retry settles the import."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    _refuse_config_once(monkeypatch, pending_shared.config_path)
-    with settings_page(pending_shared, pds) as page:
-        pds.group(page, "checks")
-        pds.pick(page, "Merge method", "squash")
-        page.get_by_role("button", name="Save project settings").click()
-        pds.modal(page).get_by_role("button", name="Save project settings").click()
-        expect(page.locator("#error")).to_be_visible()
-        assert pending_shared.read_profile().prefs_import == "pending"
-        page.locator("#save").click()  # the retry carries no new edit
-        pds.modal(page).get_by_role("button", name="Save project settings").click()
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
-    assert pending_shared.read_profile().prefs_import == "done"
-    assert _fresh(tmp_path, shared_repo[1]).read_config().prefs.merge_method == "squash"
-
-
-@pytest.mark.browser
 def test_a_refused_save_of_an_already_empty_clear_keeps_the_review_until_the_retry_publishes(
     pending_shared, tmp_path, monkeypatch, shared_repo, pds
 ) -> None:
@@ -1824,7 +1802,9 @@ def test_an_earlier_preference_edit_stays_a_review_after_a_cancelled_review_butt
 
 
 @pytest.mark.browser
-def test_a_refused_save_offers_its_retry_only_once_it_has_settled(pending_shared, monkeypatch, pds) -> None:
+def test_a_refused_save_offers_its_retry_only_once_it_has_settled(
+    pending_shared, tmp_path, monkeypatch, shared_repo, pds
+) -> None:
     """While a save runs, no earlier notice stands as its outcome; once it settles, the offered retry is taken."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -1861,6 +1841,7 @@ def test_a_refused_save_offers_its_retry_only_once_it_has_settled(pending_shared
 
     assert [body["prefs_reviewed"] for body in sent] == [True, True]
     assert pending_shared.read_profile().prefs_import == "done"
+    assert _fresh(tmp_path, shared_repo[1]).read_config().prefs.merge_method == "squash"
 
 
 def _rates(inp: float, out: float, cache: float, write: float, hour: float | None = None) -> dict[str, float | None]:
