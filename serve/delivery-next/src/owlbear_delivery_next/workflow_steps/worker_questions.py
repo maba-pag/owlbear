@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import tempfile
 import uuid
 from datetime import UTC, datetime
@@ -15,6 +16,7 @@ from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, Question, StepKind
 from owlbear_delivery_next.change_contracts.option_records import OptionProof, PendingQuestion
 from owlbear_delivery_next.change_flow import answer_kinds, budgets, loop, worktree
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, session_result, step_decisions
 from owlbear_delivery_next.workflow_steps import (
     check,
@@ -196,10 +198,13 @@ def _stale(p: PendingQuestion, path: Path) -> list[str]:
     """A returning or retained trial/picker cannot offer options for earlier Git-visible inputs."""
     if not p.head or not p.inputs:
         return ["options: worktree inputs were not recorded - resubmit the options on its current code"]
-    if worktree.head(path) != p.head:
-        return ["options: HEAD changed since submission - reconsider the options on its current code"]
-    if _inputs(path) != p.inputs:
-        return ["options: worktree inputs changed since submission - reconsider the options on its current code"]
+    try:
+        if worktree.head(path) != p.head:
+            return ["options: HEAD changed since submission - reconsider the options on its current code"]
+        if _inputs(path) != p.inputs:
+            return ["options: worktree inputs changed since submission - reconsider the options on its current code"]
+    except (OSError, subprocess.SubprocessError) as exc:
+        return [f"options: worktree inputs could not be read: {failure(exc)}"]
     return []
 
 
