@@ -56,6 +56,13 @@ INSTRUCTION = (
 
 
 def checkpoint(post: Store | held_writes.Deferred, lock: Lock, c: Change, run: Run, checks: Sequence[str]) -> Store:
+    """Keep and bind a parent whose inputs need no preparer cleanup."""
+    store = unbound(post, lock, c, run, checks)
+    bound(store, lock, c, Path(c.names.worktree))
+    return store
+
+
+def unbound(post: Store | held_writes.Deferred, lock: Lock, c: Change, run: Run, checks: Sequence[str]) -> Store:
     """Keep the parent and its accounting/held receipt before input capture, trials or paid children."""
     s, path = c.step, Path(c.names.worktree)
     s.session = run.session_id
@@ -75,10 +82,18 @@ def checkpoint(post: Store | held_writes.Deferred, lock: Lock, c: Change, run: R
     event = sessions.account(c, run, {"kind": s.kind, "exit": Exit.PENDING, "reason": route.reason})
     store = held_writes.checkpoint(post, lock, c)
     sessions.announce(store, lock, c.slug, event)
-    head, inputs = worktree.head(path), _inputs(path)
-    c.pending_question.head, c.pending_question.inputs = head, inputs
-    store.write(lock, c)
     return store
+
+
+def bound(store: Store, lock: Lock, c: Change, path: Path) -> None:
+    """Bind the kept proposal only once preparer cleanup has ended."""
+    p = c.pending_question
+    if p is None:
+        msg = "question input binding has no checkpoint"
+        raise ValueError(msg)
+    head, inputs = worktree.head(path), _inputs(path)
+    p.head, p.inputs = head, inputs
+    store.write(lock, c)
 
 
 def feedback(errors: Sequence[str]) -> str:

@@ -548,7 +548,13 @@ def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env, monke
             usage={"credits": 2},
         )
 
-    real_write = Store.write
+    real_write, real_discard = Store.write, prepare.discard
+
+    def discard(*args):
+        kept = store.read("c1")
+        assert kept.pending_question is not None
+        assert (kept.pending_question.inputs, kept.spend.credits) == ("", 1)
+        return real_discard(*args)
 
     def interrupted(self, key, final):
         if final.questions:
@@ -558,6 +564,7 @@ def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env, monke
 
     monkeypatch.setattr(runner.sdk_adapter, "run", preparer)
     monkeypatch.setattr(worker_questions, "session", judge)
+    monkeypatch.setattr(prepare, "discard", discard)
     monkeypatch.setattr(Store, "write", interrupted)
     with pytest.raises(StoreError, match="interrupted admission settlement"):
         runner._agent(store, Lock("c1"), store.read("c1"), repo)  # noqa: SLF001
@@ -569,7 +576,6 @@ def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env, monke
     assert (len(calls), len(store.read("c1").questions), store.read("c1").spend.credits) == (1, 1, 3)
     c.slug = "c2"
     store.write(Lock("c2"), c)
-    real_discard = prepare.discard
 
     def broken(*_args):
         raise subprocess.CalledProcessError(128, "git discard", stderr=b"index.lock exists")
@@ -578,6 +584,7 @@ def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env, monke
     runner._agent(store, Lock("c2"), store.read("c2"), repo)  # noqa: SLF001
     failed = store.read("c2")
     assert (failed.outcome.exit, failed.questions, failed.spend.credits, len(calls)) == (Exit.RETRY, [], 1, 1)
+    assert failed.pending_question is None
     assert failed.outcome.reason == (
         "the preparer's cleanup failed: CalledProcessError: Command 'git discard' returned non-zero exit status 128.\n"
         "index.lock exists"
