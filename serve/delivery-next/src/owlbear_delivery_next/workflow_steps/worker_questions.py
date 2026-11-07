@@ -167,6 +167,8 @@ def trial(store: Store, lock: Lock, c: Change, path: Path, proposed: tools.AskQu
     if p.proof.exit_code == 0:
         return []
     why = p.proof.admission or f"exit {p.proof.exit_code}; output: {p.proof.output or 'nothing'}"
+    if p.proof.exit_code is None and p.proof.output:
+        why += f"\n{p.proof.output}"
     return [f"options[{i}].check: trial of {command!r} in {path} failed: {why}"]
 
 
