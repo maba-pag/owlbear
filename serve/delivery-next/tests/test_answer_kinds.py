@@ -40,7 +40,7 @@ from owlbear_delivery_next.runtimes import session_result, step_answers, step_de
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import decision_archive
 from owlbear_delivery_next.state_store.store import Lock
-from owlbear_delivery_next.workflow_steps import clarification, worker_questions
+from owlbear_delivery_next.workflow_steps import clarification, session_choice, worker_questions
 
 AT = datetime(2026, 10, 22, 9, tzinfo=UTC)
 ASKED = "Which language does the greeting use?"
@@ -130,6 +130,28 @@ def test_an_event_is_delivered_as_before_with_its_class_in_the_history(picking, 
     assert (c.decisions, len(picking.pickers())) == ([], 1)  # no decision, no check
     said = [e for e in picking.store.events(picking.slug) if e.get("event") == "answer"]
     assert [(e["question"], e["class"]) for e in said] == [(run.qid, "event")]
+
+
+def test_an_admitted_all_retry_menu_delivers_free_text_to_its_original_author(picking, monkeypatch):
+    run = Asking(
+        picking,
+        monkeypatch,
+        session="original-author",
+        options=(
+            Option(id="again", label="Retry the step", next="retry", action="retry"),
+            Option(id="later", label="Retry after inspection", next="retry", action="retry"),
+        ),
+    )
+    assert run.answer(kind="event", text=WORDS).status_code == 200
+
+    c, step = run.fold()
+
+    assert step.session == "original-author"
+    question, accepted, repair, resumed = session_choice.opening(picking.store, Lock(picking.slug), c, c.plan.tasks[0])
+    assert question.id == run.qid
+    assert question.answer.text == WORDS
+    assert question.effect_observed_at is None
+    assert (c.step.session, accepted, repair, resumed) == ("original-author", None, "", True)
 
 
 def test_an_admitted_continue_option_beside_retry_reaches_the_original_worker(picking, monkeypatch):

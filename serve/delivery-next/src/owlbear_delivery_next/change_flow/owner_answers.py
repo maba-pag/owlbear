@@ -18,9 +18,14 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change, Question
 
 
+def admitted(q: Question) -> bool:
+    """A worker menu with admitted actions, not a legacy menu or an engine gate."""
+    return q.cause is None and not q.repair and bool(q.options) and all(o.action is not None for o in q.options)
+
+
 def refused(q: Question, target: str | None, item: AnswerItem, decisions: frozenset[str]) -> bool:
     """Engine gates need their options; admitted worker choices also take continue or the owner's own words."""
-    worker = q.cause is None and not q.repair and bool(q.options) and all(o.action is not None for o in q.options)
+    worker = admitted(q)
     text = item.statement if item.classed == "clarification" else item.text
     if worker and item.option is None and not text.strip():
         return True

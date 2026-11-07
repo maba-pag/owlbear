@@ -292,8 +292,8 @@ def _intent(c: Change, item: IntentItem) -> None:
 
 
 def _target(q: Question, option: str | None) -> str | None:
-    """Where the chosen option leads; a question whose every option reruns the step does so on any answer."""
-    if q.options and all(o.next == "retry" for o in q.options):
+    """The chosen move; only legacy menus and engine gates implicitly retry on any answer."""
+    if not owner_answers.admitted(q) and q.options and all(o.next == "retry" for o in q.options):
         return "retry"
     return next((o.next for o in q.options if o.id == option), None)
 
