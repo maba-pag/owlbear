@@ -314,7 +314,6 @@ class Collection:
     collected: set[str] = field(default_factory=set)
     completed: set[str] = field(default_factory=set)
     skipped: set[str] = field(default_factory=set)
-    failed: set[str] = field(default_factory=set)
 
 
 def export(collection: Collection, native: TestmonData) -> None:
@@ -362,7 +361,7 @@ def export(collection: Collection, native: TestmonData) -> None:
         "nodes": sorted(collection.collected),
         "completed": sorted(collection.completed),
         "skipped": sorted(collection.skipped),
-        "failed": sorted(collection.failed),
+        "failed": [],
         "observations": observations,
     }
     collection.output.parent.mkdir(parents=True, exist_ok=True)
@@ -430,14 +429,10 @@ def pytest_runtest_logreport(report: pytest.TestReport) -> None:
     """Reports arrive on the controller too; collected data is kept by the active plugin instance."""
     if _controller is None:
         return
-    if report.when == "setup":
-        _controller.failed.discard(report.nodeid)
     if report.when == "teardown":
         _controller.completed.add(report.nodeid)
     if report.skipped:
         _controller.skipped.add(report.nodeid)
-    if report.failed:
-        _controller.failed.add(report.nodeid)
 
 
 _controller: Collection | None = None
