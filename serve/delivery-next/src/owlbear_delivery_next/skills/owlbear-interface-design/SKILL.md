@@ -36,6 +36,9 @@ never supplies the layout, the navigation model or the controls; controls are th
 
 ## Craft floor: verify on the rendered result
 
+For the controls, dialogs and layouts the change adds or alters, checked in one browser look at each page
+where something becomes visible:
+
 - **Contrast:** body and placeholder text at least 4.5:1, large text 3:1, controls, icons and focus indicators
   3:1. On coloured surfaces, tint secondary text from that hue, never plain gray.
 - **Spacing:** tight inside a group, generous between groups, more space above a heading than below it.
@@ -54,7 +57,7 @@ never supplies the layout, the navigation model or the controls; controls are th
 
 ## Accessibility
 
-Use the project's accessibility target; without one, WCAG 2.2 AA.
+Use the project's accessibility target; without one, WCAG 2.2 AA. Check it for what the change adds or alters.
 
 - Native elements first; ARIA only where native semantics cannot express the interaction.
 - Every control has an accessible name; labels, instructions and errors are tied to their fields.
@@ -64,7 +67,8 @@ Use the project's accessibility target; without one, WCAG 2.2 AA.
   target's bounding box overlaps no other target and no other undersized target's circle (WCAG 2.5.8). Exceptions: an equivalent control of that size on the same page, a target inline in
   text, a size the browser sets, or a size that is essential or legally required.
 - A modal keeps focus inside while it is open and returns it to the control that opened it when it closes.
-  Prove both with the keyboard in a real browser; a screenshot cannot show either.
+  For a modal the change adds or alters, check both with the keyboard in that page's browser look; a screenshot
+  cannot show either.
 
 ## Refuse unless the brief asks for it
 
