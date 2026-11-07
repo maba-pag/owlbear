@@ -28,7 +28,9 @@ jobs:
         id: fingerprint
         run: |
           value="$(git ls-files -s -- .github/workflows/python-browser.yml .github/scripts/flaky_issues.py \
+            .github/scripts/check_uv_version.py \
             .python-version conftest.py serve/tools/src/owlbear_tools/flaky.py \
+            serve/tools/src/owlbear_tools/test_dependencies.py \
             pyproject.toml uv.lock serve/browser serve/browser-mcp serve/web-content | sha256sum | cut -c1-40)"
           echo "value=$value" >> "$GITHUB_OUTPUT"
 
@@ -83,12 +85,20 @@ jobs:
         if: steps.reuse.outputs.cache-hit != 'true'
         env:
           OWLBEAR_FLAKY_REPORT: ${{ runner.temp }}/test-results/flaky.json
+          OWLBEAR_DEPENDENCIES_OUT: ${{ runner.temp }}/test-results/dependencies.json
+          OWLBEAR_DEPENDENCIES_SUITE: python-browser
+          OWLBEAR_DEPENDENCIES_SHARD: 1
+          OWLBEAR_DEPENDENCIES_SHARDS: 1
+          TESTMON_DATAFILE: ${{ runner.temp }}/dependencies.db
+          COVERAGE_CORE: ctrace
           # Agent shells set safe.bareRepository=explicit; a test relying on finding a bare repository fails here too.
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: safe.bareRepository
           GIT_CONFIG_VALUE_0: explicit
         run: >-
+          PYTHONPATH="$GITHUB_WORKSPACE/serve/tools/src"
           uv run --no-sync pytest serve/browser serve/browser-mcp -m browser -n 4 --dist worksteal
+          -p owlbear_tools.test_dependencies --testmon --testmon-noselect
           --junitxml="$RUNNER_TEMP/test-results/junit.xml"
 
       - name: Upload test results
@@ -133,7 +143,9 @@ jobs:
         id: fingerprint
         run: |
           value="$(git ls-files -s -- .github/workflows/python-browser.yml .github/scripts/flaky_issues.py \
+            .github/scripts/check_uv_version.py \
             .github/scripts/ci_shard.py .python-version conftest.py serve/tools/src/owlbear_tools/flaky.py \
+            serve/tools/src/owlbear_tools/test_dependencies.py \
             pyproject.toml uv.lock serve/delivery-next serve/decisions serve/memory | sha256sum | cut -c1-40)"
           echo "value=$value" >> "$GITHUB_OUTPUT"
 
@@ -192,6 +204,12 @@ jobs:
           CI_SHARD_INDEX: ${{ matrix.shard }}
           CI_SHARDS: 2
           OWLBEAR_FLAKY_REPORT: ${{ runner.temp }}/test-results/flaky.json
+          OWLBEAR_DEPENDENCIES_OUT: ${{ runner.temp }}/test-results/dependencies.json
+          OWLBEAR_DEPENDENCIES_SUITE: delivery-next-browser
+          OWLBEAR_DEPENDENCIES_SHARD: ${{ matrix.shard }}
+          OWLBEAR_DEPENDENCIES_SHARDS: 2
+          TESTMON_DATAFILE: ${{ runner.temp }}/dependencies.db
+          COVERAGE_CORE: ctrace
           # Agent shells set safe.bareRepository=explicit; a test relying on finding a bare repository fails here too.
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: safe.bareRepository
@@ -200,8 +218,10 @@ jobs:
           plugin_dir="$RUNNER_TEMP/ci-plugins"
           mkdir -p "$plugin_dir"
           cp .github/scripts/ci_shard.py "$plugin_dir/"
-          PYTHONPATH="$plugin_dir" uv run --no-sync pytest serve/delivery-next -m browser -p ci_shard \
+          PYTHONPATH="$plugin_dir:$GITHUB_WORKSPACE/serve/tools/src" \
+            uv run --no-sync pytest serve/delivery-next -m browser -p ci_shard \
             -n 4 --dist worksteal -v -o timeout_method=thread --timeout 180 \
+            -p owlbear_tools.test_dependencies --testmon --testmon-noselect \
             --junitxml="$RUNNER_TEMP/test-results/junit.xml"
 
       - name: Upload test results

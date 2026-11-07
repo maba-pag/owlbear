@@ -449,7 +449,12 @@ def test_sharded_jobs_load_the_shared_shard_plugin_once_per_matrix_shard(workflo
     assert job["strategy"]["fail-fast"] is False
     assert env["CI_SHARD_INDEX"] == "${{ matrix.shard }}"
     assert 'cp .github/scripts/ci_shard.py "$plugin_dir/"' in step["run"]
-    assert re.search(r'PYTHONPATH="\$plugin_dir" uv run --no-sync pytest [^\n]* -p ci_shard\b', step["run"])
+    assert re.search(
+        r'PYTHONPATH="\$plugin_dir:\$GITHUB_WORKSPACE/serve/tools/src"\s+uv run --no-sync pytest [^\n]* -p ci_shard\b',
+        step["run"].replace("\\\n", ""),
+    )
+    assert "--testmon --testmon-noselect" in step["run"]
+    assert "--testmon-forceselect" not in step["run"]
     assert ".github/scripts/ci_shard.py" in ci_scope.SUITES[workflow.removesuffix(".yml")]
     assert ".github/scripts/ci_shard.py" in fingerprint or "git ls-files -s -- . " in fingerprint
 
@@ -759,7 +764,11 @@ def test_uv_setups_use_scoped_caches_and_check_the_runtime_first(name: str) -> N
                 "dev-tools",
                 "static",
             }
-        check = next(index for index, step in enumerate(steps) if "check_uv_version.py" in str(step.get("run", "")))
+        check = next(
+            index
+            for index, step in enumerate(steps)
+            if re.search(r"(^|\n)\s*python3 \.github/scripts/check_uv_version\.py(\s|$)", str(step.get("run", "")))
+        )
         first_uv = next(
             (
                 index

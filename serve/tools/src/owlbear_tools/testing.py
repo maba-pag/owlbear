@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import ast
 import contextlib
 import fcntl
@@ -14,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_tools import task_scope
+
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
@@ -21,6 +22,11 @@ _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 _DOCS_ONLY_PREFIXES = ("share/", ".owlbear/")
 _INVARIANT_TESTS = ("tests/test_package_boundary.py",)
 _CONFIG_TESTS = {
+    ".github/scripts/ci_scope.py": (
+        "tests/test_ci_workflows.py",
+        "tests/test_dependency_verification_workflow.py",
+        "tests/test_agent_ecosystem_validation.py",
+    ),
     ".pre-commit-config.yaml": (
         "tests/test_linter_formatter_policy.py",
         "serve/tools/tests/test_quality.py",
@@ -376,6 +382,58 @@ def _commands_for_paths(paths: list[str], *, all_tests: bool, coverage: bool) ->
     return commands
 
 
+def _task_targets(paths: list[str]) -> tuple[set[str], list[str], list[_WorkspacePackage]]:
+    """Existing routes and the source packages requiring dependency evidence."""
+    forced: set[str] = set(_INVARIANT_TESTS)
+    python: list[str] = []
+    packages: dict[str, _WorkspacePackage] = {}
+    for path in paths:
+        package = _package_for_path(path)
+        if path in _CONFIG_TESTS:
+            forced.update(_CONFIG_TESTS[path])
+        elif package and path.startswith(_PAGES):
+            forced.update(_page_scope(package))
+        elif path.endswith(".py") and (package or path.startswith("tests/")):
+            current_test = "/tests/" in path or path.startswith("tests/")
+            if current_test and Path(path).name.startswith("test_") and (_REPOSITORY_ROOT / path).is_file():
+                forced.add(path)
+            else:
+                python.append(path)
+                if package:
+                    packages[package.namespace] = package
+        elif (
+            path.endswith((".py", ".sh", ".bash", ".zsh", ".js", ".mjs", ".cjs"))
+            or (scope := _python_scope(path)) is None
+        ):
+            raise task_scope.unsupported(path)
+        else:
+            forced.update(scope)
+    return forced, python, list(packages.values())
+
+
+def _task_commands(paths: list[str], context: task_scope.Context, *, coverage: bool) -> list[tuple[list[str], Path]]:
+    """One task's evidenced tests, with no testmon bootstrap or full-suite fallback."""
+    forced, python, packages = _task_targets(paths)
+    for package in packages:
+        forced.update(_relative_paths(_neighbour_tests(package)))
+        forced.update(
+            _relative_paths(path for path in _package_tests(package) if _unseen_by_testmon(path, package.namespace))
+        )
+    if python:
+        from owlbear_tools import test_impact  # noqa: PLC0415 - task evidence only, never ordinary test startup.
+
+        selected = test_impact.select(_REPOSITORY_ROOT, python, context, sorted(forced))
+    else:
+        selected = sorted(forced) if paths else []
+    print(f"Task paths: {', '.join(paths) or 'none'}")  # noqa: T201
+    if not selected:
+        return []
+    command = ["uv", "run", "--locked", "pytest", *selected]
+    if coverage:
+        command.append("--cov")
+    return [(command, _REPOSITORY_ROOT)]
+
+
 @contextlib.contextmanager
 def _testmon_lock(command: list[str]) -> Iterator[dict[str, tuple[int, ...]]]:
     """Serialize testmon runs sharing one data file: a first run deletes and recreates the database.
@@ -409,24 +467,17 @@ def _run_commands(commands: list[tuple[list[str], Path]]) -> int:
 def test_main() -> None:
     """Run all maintained tests or suites selected by explicit paths."""
     _require_development_checkout()
-    parser = argparse.ArgumentParser(prog="test")
-    scope = parser.add_mutually_exclusive_group()
-    scope.add_argument("-a", "--all", action="store_true", dest="all_tests")
-    scope.add_argument("--changed", action="store_true")
-    parser.add_argument("--base", help="Git ref used as the committed-change baseline for --changed")
-    parser.add_argument("--coverage", action="store_true")
-    parser.add_argument("paths", nargs="*")
-    args = parser.parse_args()
-    if args.all_tests and args.paths:
-        parser.error("--all cannot be combined with paths")
-    if args.base and not args.changed:
-        parser.error("--base requires --changed")
-    if args.changed and args.paths:
-        parser.error("--changed cannot be combined with paths")
+    args = task_scope.arguments()
 
     paths = args.paths
     all_tests = args.all_tests or not args.paths
-    if args.changed:
+    if args.task_base is not None:
+        target = task_scope.commit(_run_git, args.target)
+        paths = task_scope.changed(_run_git, _git_paths, args.task_base, args.keep_span, target)
+        maps_dir = Path(args.maps_dir) if args.maps_dir is not None else None
+        context = task_scope.Context(args.task_base, target, maps_dir, tuple(args.keep_span))
+        commands = _task_commands(paths, context, coverage=args.coverage)
+    elif args.changed:
         try:
             paths = _changed_paths(args.base)
             all_tests = False
@@ -434,7 +485,8 @@ def test_main() -> None:
             print(f"Changed test scope unavailable; running the full suite: {error}")  # noqa: T201
             paths = []
             all_tests = True
-    commands = _commands_for_paths(paths, all_tests=all_tests, coverage=args.coverage)
+    if args.task_base is None:
+        commands = _commands_for_paths(paths, all_tests=all_tests, coverage=args.coverage)
     if args.changed:
         for command, _cwd in commands:
             command.extend(["-o", "session_timeout="])

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import fcntl
+import json
 import sys
 import threading
+from importlib.metadata import version
 from pathlib import Path
 from unittest.mock import patch
 
@@ -390,3 +392,30 @@ def test_commands_reject_consumer_checkouts(tmp_path: Path, monkeypatch: pytest.
 
     with pytest.raises(RuntimeError, match="development checkout root"):
         _require_development_checkout()
+
+
+def test_dependency_artifacts_cannot_name_tests_outside_the_checkout(tmp_path: Path) -> None:
+    from owlbear_tools.test_dependencies import read_evidence  # noqa: PLC0415 - exercise the artifact boundary.
+
+    node = "serve/tools/tests/../../../outside.py::test_escape"
+    artifact = tmp_path / "dependencies.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "format": 1,
+                "testmon": version("pytest-testmon"),
+                "python": f"{sys.version_info.major}.{sys.version_info.minor}",
+                "platform": "linux",
+                "repo": "maba-pag/owlbear",
+                "complete": True,
+                "failed": [],
+                "inputs": {"serve/tools/tests/test_testing.py": "0" * 64},
+                "nodes": [node],
+                "completed": [node],
+                "skipped": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="Invalid dependency test identity"):
+        read_evidence(artifact)

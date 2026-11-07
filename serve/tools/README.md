@@ -46,6 +46,33 @@ Root Python dependency/pytest/workspace configuration (`pyproject.toml`, `uv.loc
 and `conftest.py`), unknown paths and unrecognised workflow filenames still select the full suite.
 The root npm routes apply to this checkout's tooling-only Node package, not arbitrary application packages.
 
+### CI dependency evidence for task checks
+
+Full Linux CI test runs also collect pytest-testmon's native test-to-code block fingerprints, with
+`--testmon --testmon-noselect` and the classic coverage tracer. This does not shorten CI, change its
+shards or loosen its limits. Each existing test-results artifact includes `dependencies.json` with
+the checkout/run/shard identity, tracked input hashes, collected/completed/skipped tests and footprints.
+It contains no environment contents or transcripts. Identical-input cache hits create no new map.
+
+Task selection reads complete successful CI maps at ancestors of the explicit integration target,
+using read-only `gh` queries and downloads into this checkout's `.owlbear/scratch/dependency-maps/`.
+All required shards share a run, attempt and checkout. Historical inputs are checked against Git
+objects; current test modules, helpers, fixtures, production callers and platform/skipped consumers
+supplement those observations. Footprints are compared with both task-before and current code, so
+restoring a mapped version does not erase the task's checked scope. Source-reading, subprocess and
+invariant selectors supplied by the task runner remain in the union.
+Kept tasks also compare their original `OLD..NEW` source versions, even when their bytes were
+restored before the current task began. The span's own paths use the same target-import exclusions
+as task Git scoping, and the selected consumers execute on the current tree.
+
+`owlbear_tools.test_impact.select(root, paths, context, forced)` receives a frozen task context with
+the base, integration target, optional candidate map directory and original kept spans.
+An explicit map directory supports disposable candidate
+proof before merge. It prints **candidate evidence**, not installed acceptance; the default loader
+never automatically accepts an unmerged map. Missing, incompatible or unresolved evidence raises
+an error instead of bootstrapping the full suite or returning an empty passing check.
+Block observations are not line or branch coverage, and Linux maps alone do not prove macOS behavior.
+
 ### Dependency environment
 
 Use `uv run dep-sync` to reconcile the checked-out manifests and lockfiles with the local Python and root npm environments, after checking the running Node against `.nvmrc`. Use `uv run dep-status` for a read-only check; it also supports `--verbose` (`-v`) and `--json` (`-j`).
