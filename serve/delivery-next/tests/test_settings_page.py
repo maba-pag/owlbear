@@ -1701,26 +1701,44 @@ def _fresh(tmp_path: Path, remote: Path) -> Store:
     return Store(tmp_path / "fresh-store", data_repo.DataRepo(second), "shop-site")
 
 
+@pytest.fixture
+def pending(store) -> Store:
+    """An unshared project whose legacy preference import is pending: for the page's review intent alone."""
+    store.write_profile(Profile())
+    store.mark_prefs_import("", "pending", "absent")
+    return store
+
+
 @pytest.mark.browser
 def test_a_refused_save_of_an_already_empty_clear_keeps_the_review_until_the_retry_publishes(
-    pending_shared, tmp_path, monkeypatch, shared_repo, pds
+    pending, monkeypatch, pds
 ) -> None:
     """Clearing a preference that is already empty is still a review, and the retry must not drop it."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    _refuse_config_once(monkeypatch, pending_shared.config_path)
-    with settings_page(pending_shared, pds) as page:
+    real, refused = Store.save, []
+
+    def refuse_once(self, path, *args, **kw) -> str:
+        notice = real(self, path, *args, **kw)
+        if path != pending.config_path or refused:
+            return notice
+        refused.append(True)
+        return "remote refused"  # the project file is written, and its first publication returns this notice
+
+    monkeypatch.setattr(Store, "save", refuse_once)
+    with settings_page(pending, pds) as page:
+        sent = _project_puts(page)
         pds.group(page, "checks")
         pds.pick(page, "Merge method", "inherit")  # already inherited: no draft, only the review
         page.get_by_role("button", name="Save project settings").click()
         pds.modal(page).get_by_role("button", name="Save project settings").click()
         expect(page.locator("#error")).to_be_visible()
-        assert pending_shared.read_profile().prefs_import == "pending"
+        assert pending.read_profile().prefs_import == "pending"
         page.locator("#save").click()
         pds.modal(page).get_by_role("button", name="Save project settings").click()
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
-    assert pending_shared.read_profile().prefs_import == "done"
-    assert _fresh(tmp_path, shared_repo[1]).read_profile().prefs_import == "done"
+    assert [body["prefs_reviewed"] for body in sent] == [True, True]
+    assert pending.read_profile().prefs_import == "done"
 
 
 @pytest.mark.browser
@@ -1758,11 +1776,11 @@ def _project_puts(page) -> list[dict]:
 
 
 @pytest.mark.browser
-def test_a_cancelled_review_is_not_sent_with_a_later_unrelated_save(pending_shared, pds) -> None:
+def test_a_cancelled_review_is_not_sent_with_a_later_unrelated_save(pending, pds) -> None:
     """Keep editing on the review's confirmation is no review: a later unrelated save leaves the import pending."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    with settings_page(pending_shared, pds) as page:
+    with settings_page(pending, pds) as page:
         sent = _project_puts(page)
         page.get_by_role("button", name="Confirm merge preferences reviewed").click()
         pds.modal(page).get_by_role("button", name="Keep editing").click()
@@ -1776,16 +1794,16 @@ def test_a_cancelled_review_is_not_sent_with_a_later_unrelated_save(pending_shar
         expect(page.get_by_role("button", name="Confirm merge preferences reviewed")).to_be_visible()
 
     assert [body["prefs_reviewed"] for body in sent] == [False]
-    assert pending_shared.read_profile().prefs_import == "pending"
-    assert pending_shared.read_config().agents["builder"].max_rounds == 4
+    assert pending.read_profile().prefs_import == "pending"
+    assert pending.read_config().agents["builder"].max_rounds == 4
 
 
 @pytest.mark.browser
-def test_an_earlier_preference_edit_stays_a_review_after_a_cancelled_review_button(pending_shared, pds) -> None:
+def test_an_earlier_preference_edit_stays_a_review_after_a_cancelled_review_button(pending, pds) -> None:
     """Cancelling the review button never drops an earlier preference edit's review: its save still settles."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    with settings_page(pending_shared, pds) as page:
+    with settings_page(pending, pds) as page:
         sent = _project_puts(page)
         pds.group(page, "checks")
         pds.pick(page, "Merge method", "squash")
@@ -1797,8 +1815,8 @@ def test_an_earlier_preference_edit_stays_a_review_after_a_cancelled_review_butt
         expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
 
     assert [body["prefs_reviewed"] for body in sent] == [True]
-    assert pending_shared.read_profile().prefs_import == "done"
-    assert pending_shared.read_config().prefs.merge_method == "squash"
+    assert pending.read_profile().prefs_import == "done"
+    assert pending.read_config().prefs.merge_method == "squash"
 
 
 @pytest.mark.browser
