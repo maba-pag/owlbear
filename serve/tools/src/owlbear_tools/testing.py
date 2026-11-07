@@ -423,12 +423,11 @@ def _task_commands(paths: list[str], context: task_scope.Context, *, coverage: b
         forced.update(
             _relative_paths(path for path in _package_tests(package) if _unseen_by_testmon(path, package.namespace))
         )
+    selected = sorted(forced) if paths else []
     if python:
         from owlbear_tools import test_impact  # noqa: PLC0415 - task evidence only, never ordinary test startup.
 
-        selected = test_impact.select(_REPOSITORY_ROOT, python, context, sorted(forced))
-    else:
-        selected = sorted(forced) if paths else []
+        selected = test_impact.select(_REPOSITORY_ROOT, python, context, selected)
     print(f"Task paths: {', '.join(paths) or 'none'}")  # noqa: T201
     if not selected:
         return []
