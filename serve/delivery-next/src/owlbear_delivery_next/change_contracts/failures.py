@@ -29,6 +29,7 @@ RO_WORKTREE = "read-only-worktree"  # the cause subject of a read-only worktree 
 _QUOTA = re.compile(r"quota|premium requests?|credits", re.IGNORECASE)
 _CAPACITY = re.compile(r"\b429\b|rate.?limit|capacity|overloaded|quota|credits", re.IGNORECASE)
 _LIMITED = re.compile(r"\b429\b|rate.?limit|too many requests|overloaded", re.IGNORECASE)  # in a check's output
+_PROGRESS = re.compile(r"::|^[\s=]*\d+ (?:passed|failed|errors?|skipped|deselected|xfailed|xpassed|warnings?)\b")
 _NETWORK = re.compile(  # any runtime or provider failure text
     r"\b(?:status|http|code|error)\W{0,3}5\d\d\b|\b5\d\d (?:internal|bad gateway|service unavailable|gateway)"
     r"|timed? ?out|timeout|connection|unreachable|temporar|runtime start|network|could not resolve",
@@ -37,7 +38,7 @@ _NETWORK = re.compile(  # any runtime or provider failure text
 _REMOTE = re.compile(  # a check's output that names the network itself: temporary even there (#1065)
     r"\b(?:status|http|code|error)\W{0,3}5\d\d\b|\b5\d\d (?:internal|bad gateway|service unavailable|gateway)"
     r"|connection ?(?:refused|reset|closed|aborted|error|timed? ?out)|(?:host|network) (?:is )?unreachable"
-    r"|network error|could not resolve"
+    r"|network error|could not resolve|name resolution|gaierror|nodename nor servname"
     r"|\b(?:ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|ENOTFOUND)\b|\b(?:connect|read) timed? ?out",
     re.IGNORECASE,
 )
@@ -65,6 +66,8 @@ def transient(text: str, *, local: bool = False) -> ErrorKind | None:
     *local* is a step's own check: its timeout or interruption is the check not finishing, so only a diagnostic of the
     network or a rate limit counts, never a word such as a test's name.
     """
+    if local:  # a check's own progress (test ids, counts) is no diagnostic
+        text = "\n".join(line for line in text.splitlines() if not _PROGRESS.search(line))
     if (_LIMITED if local else _CAPACITY).search(text):
         return ErrorKind.CAPACITY
     return ErrorKind.NETWORK if (_REMOTE if local else _NETWORK).search(text) else None
