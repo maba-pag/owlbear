@@ -68,17 +68,13 @@ def slug(tool: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", tool.lower()).strip("-")[:40] or "unknown"
 
 
-def _words(text: str) -> str:
-    return " ".join(text.split())
-
-
 def checked(tool: str, checks: tuple[str, ...]) -> bool:
     """Whether the reported *tool* is one of the step's resolved *checks*, or a command run inside one.
 
     c1's builder reported `uv run test --changed`, part of its check `uv run test --changed && uv run lint --no-fix`.
     """
-    said = _words(tool)
-    return bool(said) and any(re.search(rf"(?<!\S){re.escape(said)}(?!\S)", _words(c)) for c in checks)
+    said = " ".join(tool.split())
+    return bool(said) and any(f" {said} " in f" {' '.join(c.split())} " for c in checks)
 
 
 def setup(cause: str, reason: str) -> StepResult:
