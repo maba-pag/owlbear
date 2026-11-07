@@ -3172,6 +3172,17 @@ def machine_layer(**fields: object) -> None:
     (local_home.root() / MACHINE_SETTINGS).write_text(json.dumps({"format": CONFIG_FORMAT, **fields}))
 
 
+def project_layer(path: Path, **fields: object) -> None:
+    """The own layer of the unshared project at *path*, kept in its clone, written as the owner would by hand."""
+    Store.open(path).config_path.write_text(json.dumps({"format": CONFIG_FORMAT, **fields}))
+
+
+def offering(monkeypatch: pytest.MonkeyPatch, price: float) -> None:
+    """This machine's Copilot offers m1 at *price*, and GitHub answers that Impeccable has no releases."""
+    monkeypatch.setattr(model_choices, "_read", lambda: [offered("m1", price)])
+    monkeypatch.setattr(pack_files, "fetch", lambda *_args, **_kwargs: b"[]")
+
+
 READS_TIME = 60  # a 120 s test: a read pulls the shared repository; a read the page did not start shows by its poll
 # Every wait of a page for an answer 20 times as long, so an answer a test holds outlives the next poll's ask.
 LONG_WAITS = "{ const t = AbortSignal.timeout; AbortSignal.timeout = (ms) => t.call(AbortSignal, ms * 20); }"
@@ -3304,9 +3315,9 @@ def test_a_read_s_layers_answered_while_a_save_reads_across_never_replace_the_sa
 
 
 @pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
+@pytest.mark.timeout(120)  # a real browser and three full outside reads, each awaited for up to READS_TIME
 def test_an_older_read_s_other_projects_answered_last_never_replace_a_newer_read_s(
-    tmp_path: Path, monkeypatch, pds, outside
+    tmp_path: Path, monkeypatch, pds
 ) -> None:
     """#810: two reads' refreshes overlap; another project's settings as the first one read them, answered after the
     second's, are not shown."""
@@ -3316,7 +3327,8 @@ def test_an_older_read_s_other_projects_answered_last_never_replace_a_newer_read
         return response.request.method == "POST" and response.url.endswith("/config/read")
 
     a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
-    outside.push("beta/config.json", agents={"builder": {"minutes": 20}})
+    offering(monkeypatch, 3)
+    project_layer(Path(b.path), agents={"builder": {"minutes": 20}})
     with browsing(monkeypatch, pds) as (page, base):
         page.goto(f"{base}/config?project={a.id}#token=t")
         expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
@@ -3336,7 +3348,7 @@ def test_an_older_read_s_other_projects_answered_last_never_replace_a_newer_read
         with page.expect_response(read_finished, timeout=READS_TIME * 1000):
             again.click()
         until(page, lambda: held, READS_TIME)
-        outside.push("beta/config.json", agents={"builder": {"minutes": 45}})
+        project_layer(Path(b.path), agents={"builder": {"minutes": 45}})
         with page.expect_response(read_finished, timeout=READS_TIME * 1000):
             again.click()
         expect(across).to_contain_text("beta: 45")
@@ -3347,13 +3359,15 @@ def test_an_older_read_s_other_projects_answered_last_never_replace_a_newer_read
 
 
 @pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_an_older_read_s_models_answered_last_never_replace_a_newer_read_s(tmp_path: Path, monkeypatch, pds, outside):
+@pytest.mark.timeout(120)  # a real browser and three full outside reads, each awaited for up to READS_TIME
+def test_an_older_read_s_models_answered_last_never_replace_a_newer_read_s(tmp_path: Path, monkeypatch, pds):
     """#810: two reads' refreshes overlap; the models' rates as the first one read them, answered after the second's,
     are not shown."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     a = registry.register(clone(tmp_path / "alpha"))
+    offering(monkeypatch, 3)
+    project_layer(Path(a.path), agents={"builder": {"model": "m1"}})
     with browsing(monkeypatch, pds) as (page, base):
         page.goto(f"{base}/config?project={a.id}#token=t")
         expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
@@ -3369,7 +3383,7 @@ def test_an_older_read_s_models_answered_last_never_replace_a_newer_read_s(tmp_p
         pds.group(page, "overview")
         page.get_by_role("button", name="Read again").click()
         until(page, lambda: held, READS_TIME)
-        outside.models(7)
+        offering(monkeypatch, 7)
         with page.expect_response("**/config/models", timeout=READS_TIME * 1000):
             page.get_by_role("button", name="Read again").click()
         pds.group(page, "agents")
