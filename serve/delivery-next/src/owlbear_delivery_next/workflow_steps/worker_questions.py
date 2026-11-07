@@ -122,6 +122,8 @@ def continued(store: Store, lock: Lock, c: Change, path: Path) -> bool:
     parent = held.restored(p.run)
     task = next((t for t in c.plan.tasks if t.id == s.task), None) if c.plan else None
     raw = session_result.to_result(parent, s.kind, datetime.now(UTC))
+    if raw.cause == cause_key(ErrorKind.RESULT, s.kind, LABEL) and isinstance(parent.payload, tools.AskQuestion):
+        raw.reason = f"{parent.payload.question} (why: {parent.payload.why})"
     result = overlap.integrated(store, lock, c, path, (task.base if task else None, parent.ending), raw)
     gated = result is not raw
     if gated:

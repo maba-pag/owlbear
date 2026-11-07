@@ -570,6 +570,7 @@ def test_a_retained_worker_menu_waits_for_its_integration_collision_gate(conflic
     assert (gated.outcome.exit, gated.spend.credits, len(calls)) == (Exit.ASK, 1, 1)
     assert kind_of(gated.questions[-1].cause) == ErrorKind.CONFLICT
     assert "c3" in gated.questions[-1].text
+    assert "Pause or abandon? (why: Choose the next move.)" in gated.questions[-1].text
     assert gated.pending_question is None
 
     def unreadable(*_args):
