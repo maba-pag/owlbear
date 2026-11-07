@@ -166,6 +166,33 @@ def test_an_admitted_continue_option_beside_retry_reaches_the_original_worker(pi
     assert c.step.kind == StepKind.BUILD
 
 
+def test_an_admitted_pause_or_abandon_menu_does_not_resume_on_an_empty_answer(picking, monkeypatch):
+    run = Asking(
+        picking,
+        monkeypatch,
+        options=(
+            Option(id="pause", label="Pause", next="pause", action="pause"),
+            Option(id="abandon", label="Abandon", next="abandon", action="abandon"),
+        ),
+    )
+    assert run.answer(kind="event").status_code == 200
+
+    c, step = run.fold()
+
+    assert loop.open_question(c).id == run.qid
+    assert step is None
+    assert run.asked(c).answer is None
+    [dropped] = [e for e in picking.store.events(picking.slug) if e.get("event") == "answer-not-applied"]
+    assert dropped["question"] == run.qid
+    assert "settled only by one of its options" in dropped["reason"]
+    assert run.answer(kind="event", option="pause").status_code == 200
+    c, step = run.fold()
+    assert c.intent.paused_at is not None
+    assert step is None
+    assert run.asked(c).answer.option == "pause"
+    assert run.held == []
+
+
 def test_an_unclassed_answer_or_an_unconfirmed_clarification_is_refused_and_nothing_is_stored(picking, monkeypatch):
     run = Asking(picking, monkeypatch)
     refused = [
