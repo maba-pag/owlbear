@@ -49,7 +49,7 @@ def _identity(path: Path) -> str:
             found = path.stat()
         except FileNotFoundError:
             return repr((target, None))
-        return repr((target, found.st_dev, found.st_ino, found.st_mode))
+        return repr((target, found.st_dev, found.st_ino, found.st_mode, found.st_uid))
     except (OSError, ValueError, RuntimeError) as exc:
         return failure(exc)
 
