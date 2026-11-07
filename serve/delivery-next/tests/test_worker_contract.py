@@ -357,6 +357,86 @@ def test_kept_recommendation_cannot_publish_after_uncommitted_inputs_change(tmp_
     assert worker_questions.worktree.git(change_repo, "diff", "--cached") == ""
 
 
+def test_kept_trial_of_staged_content_is_refused_after_an_index_only_change(tmp_path, change_repo, monkeypatch):
+    store, lock = Store(tmp_path / "store"), Lock("c1")
+    c = Change(
+        slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.BUILD), names=Names(worktree=str(change_repo))
+    )
+    command = "git show :a.txt | grep -x a"
+    proposed = tools.AskQuestion(
+        question="Retry the checked step or pause?",
+        why="Verify its staged smoke input.",
+        recommended=0,
+        options=[
+            {
+                "label": "Retry",
+                "effect": "Retry after the staged smoke assertion passes.",
+                "action": "retry",
+                "check": command,
+            },
+            {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
+        ],
+    )
+    parent = Run("author", "ask", proposed, termination=Termination(confirmed=True), usage={"credits": 1})
+    worker_questions.checkpoint(store, lock, c, parent, [command])
+    calls = []
+    real_measured = worker_questions.check.measured
+
+    def measured(*args):
+        calls.append("trial")
+        return real_measured(*args)
+
+    def judge(*_args):
+        calls.append("picker")
+        return Run(
+            "admission",
+            "result",
+            pick_tools.QuestionJudgment(
+                options=[
+                    {
+                        "index": i,
+                        "executable": True,
+                        "why": "The staged smoke assertion passed.",
+                        "check_related": i == 0,
+                        "recommends": i == 0,
+                    }
+                    for i in range(2)
+                ]
+            ),
+            termination=Termination(confirmed=True),
+            usage={"credits": 2},
+        )
+
+    real_write = Store.write
+
+    def interrupted(self, key, final):
+        if final.questions:
+            msg = "interrupted settlement"
+            raise StoreError(msg)
+        return real_write(self, key, final)
+
+    monkeypatch.setattr(worker_questions.check, "measured", measured)
+    monkeypatch.setattr(worker_questions, "session", judge)
+    monkeypatch.setattr(Store, "write", interrupted)
+    with pytest.raises(StoreError, match="interrupted settlement"):
+        worker_questions.continued(store, lock, c, change_repo)
+    kept = store.read("c1")
+    assert (kept.pending_question.proof.exit_code, kept.pending_question.proof.output.strip()) == (0, "a")
+    (change_repo / "a.txt").write_text("staged\n")
+    worker_questions.worktree.git(change_repo, "add", "a.txt")
+    (change_repo / "a.txt").write_text("a\n")
+    assert worker_questions.worktree.git(change_repo, "diff", "HEAD") == ""
+    assert worker_questions.worktree.git(change_repo, "show", ":a.txt") == "staged\n"
+    monkeypatch.setattr(Store, "write", real_write)
+    assert worker_questions.continued(store, lock, kept, change_repo)
+    done = store.read("c1")
+    assert not done.questions
+    assert done.step.question_errors == [
+        "options: worktree inputs changed since submission - reconsider the options on its current code"
+    ]
+    assert (calls, done.spend.credits) == (["trial", "picker"], 3)
+
+
 def build(**changes) -> BuildResult:
     result, errors = tool_schema.parse(BuildResult, {**GOOD, **changes})
     assert errors == []
