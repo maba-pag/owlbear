@@ -225,6 +225,18 @@ def test_a_clarification_the_check_finds_changing_the_brief_starts_its_amendment
     assert "A French greeting is an outcome the brief lacks." in a.reason
     assert (run.asked(c).answer.kind, answer_kinds.delivered_next(c)) == ("brief_change", None)
     assert WORDS not in "\n".join(step_input.brief(c))  # no later role reads it either
+    picking.verdicts += [
+        FRENCH,
+        amend_tools.VerdictResult(verdict="weaker", reasons="French matches his confirmed intent"),
+    ]
+
+    run.step()
+    assert "It greets in French too." in picking.told[-1].message
+    assert WORDS not in picking.told[-1].message
+
+    run.step()
+    assert "It greets in French too." in picking.told[-1].message
+    assert WORDS not in picking.told[-1].message
 
 
 def test_a_check_that_fails_waits_and_runs_again_never_taken_for_a_pass(picking, monkeypatch):
