@@ -60,8 +60,14 @@ def drop(step: Path, at: Path) -> None:
 
 
 def changed(at: Path, base: str) -> list[tuple[str, str]]:
-    """What the repairer changed in the copy against its baseline: each path with its new mode and status."""
-    return check_weakening.staged(git, at, base)
+    """What the repairer changed in the copy against its baseline, staged: each path with its new mode and status.
+
+    Python bytecode its check runs wrote is no part of the fix, where the repository does not ignore it.
+    """
+    found = check_weakening.staged(git, at, base)
+    if cache := [p for p, _ in found if "__pycache__/" in p or p.endswith(".pyc")]:
+        git(at, ["reset", "--quiet", "--", *cache])
+    return [(p, how) for p, how in found if p not in cache]
 
 
 def commit(at: Path, message: str) -> str:
