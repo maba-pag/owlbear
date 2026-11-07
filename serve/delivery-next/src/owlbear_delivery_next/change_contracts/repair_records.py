@@ -43,6 +43,7 @@ class Repair(BaseModel):
     phase: Phase = "running"
     at: datetime
     session: str = ""
+    rerun: bool = False  # its one rerun after a wrong model is spent (D-01M5DW3X003TZZRSDCY027SP3C)
     found: str = ""  # the repairer's cause, with its evidence
     tried: list[Tried] = Field(default_factory=list)
     fix: Fix = "none"

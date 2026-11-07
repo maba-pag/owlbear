@@ -12,15 +12,17 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import check_hint, evidence, permissions, repair_tools, tools
-from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_contracts.failures import ENVIRONMENT, WRONG_MODEL, kind_of
+from owlbear_delivery_next.change_contracts.models import Exit, Outcome, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.repair_records import KEPT, Tried, Witness
-from owlbear_delivery_next.change_flow import stuck, worktree
+from owlbear_delivery_next.change_flow import budgets, stuck, worktree
 from owlbear_delivery_next.local_system.git_files import git_common_dir
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import sdk_adapter, session_result
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.workflow_steps import (
     check,
@@ -37,11 +39,11 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.change_contracts.repair_records import Repair
+    from owlbear_delivery_next.runtimes.session_result import Run
     from owlbear_delivery_next.settings.config import Settings
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 LABEL = "step-repair"
-TAIL = 4000  # characters of a failed proof's output the stop shows
 
 
 def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -73,6 +75,8 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
         done = sessions.run(store, _session(store, lock, change, at, settings, witness))
         sessions.logged(store, lock, change, done, {"kind": LABEL, "exit": done.ending})
         r.session, r.credits = done.session_id, _credits(done.usage)
+        if _gated(store, lock, change, done):
+            return
         p = done.payload
         if not isinstance(p, repair_tools.RepairResult):
             _stopped(store, lock, change, f"its session ended without a result ({done.ending}: {done.detail})")
@@ -80,13 +84,11 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
         r.found, r.fix = p.cause, p.fix
         r.tried = [Tried(fix=t.fix, outcome=t.outcome) for t in p.tried]
         if p.defect is not None:
-            r.defect = defect_issue.file(store, change, path, p.defect)
+            r.defect = defect_issue.file(store, path, p.defect)
         if p.fix == "none":
             _stopped(store, lock, change, "nothing it tried worked")
             return
-        if p.fix == "profile-check":
-            r.package, r.command = p.package.strip(), p.command.strip()
-            witness = (check_hint.qualified(r.package, r.command),)
+        r.package, r.command = p.package.strip(), p.command.strip()
         _proven(store, lock, change, (path, at), witness, roles.limit(settings, LABEL), prof)
     finally:
         repair_copy.drop(path, at)
@@ -101,38 +103,51 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
     r = change.repairs.current
     assert r is not None  # noqa: S101 - _repair() checked it
     changed = repair_copy.changed(at, r.base)
+    if r.fix == "profile-check":  # Delivery never runs a proposed command before the owner confirms it (#1066)
+        _offered(store, lock, change, at, changed)
+        return
     if r.fix == "patch":
         if not changed:
             _stopped(store, lock, change, "it reported a fix but changed nothing")
             return
-        weak = [f"{p} ({w})" for p, how in changed if (w := check_weakening.weakened(_git, at, r.base, p, how)[0])]
+        weak = [
+            f"{p} ({w})"
+            for p, how in changed
+            if (w := check_weakening.weakened(repair_copy.git, at, r.base, p, how)[0])
+        ]
         if weak:
             _stopped(store, lock, change, f"its fix weakens a check, which Delivery never applies: {', '.join(weak)}")
             return
     r.witness = _ran(at, (*_installs(change, prof), *witness), within, store, lock)
     if not witness or r.witness.exit != 0:
-        out, ran = r.witness.output, ", ".join(witness) or "no check"
-        cut = f"(its last {TAIL} characters; the repair's record keeps it whole)\n{out[-TAIL:]}"
-        said = cut if len(out) > TAIL else out
-        _stopped(store, lock, change, f"Delivery's run of {ran} with the fix failed: {said}")
+        ran = ", ".join(witness) or "no check"
+        _stopped(store, lock, change, f"Delivery's run of {ran} with the fix failed: {r.witness.output}")
         return
-    if r.fix == "patch":
-        r.paths = [p for p, _ in changed]
-        said = f"fix: {stuck.obstruction(r.found)}\n\nRepaired by an agent; committed by Delivery."
-        r.commit = repair_copy.commit(at, said)
-        repair_copy.git(path, ["update-ref", f"{KEPT}{change.slug}", r.commit])
-        r.held = [f"changes {p}, configuration that is yours" for p in r.paths if check_weakening.configured(p)]
-        r.held += [f"changes {p}, outside the brief's scope" for p in r.paths if not _in_scope(change, p)]
-    else:
-        r.held = [f"adds the check `{r.command}` for {r.package} to the project profile, which you confirm"]
+    r.paths = [p for p, _ in changed]
+    said = f"fix: {stuck.obstruction(r.found)}\n\nRepaired by an agent; committed by Delivery."
+    r.commit = repair_copy.commit(at, said)
+    repair_copy.git(path, ["update-ref", f"{KEPT}{change.slug}", r.commit])
+    r.held = [f"changes {p}, configuration that is yours" for p in r.paths if check_weakening.configured(p)]
+    r.held += [f"changes {p}, outside the brief's scope" for p in r.paths if not _in_scope(change, p)]
     if not r.held:
         _apply(store, lock, change, path, prof)
         return
-    if r.fix == "patch":
-        r.diff, cut = repair_copy.shown(path, r.base, r.commit, r.paths)
-        if cut:
-            _stopped(store, lock, change, "its proven fix is too long or binary to show you whole: not applied")
-            return
+    r.diff, cut = repair_copy.shown(path, r.base, r.commit, r.paths)
+    if cut:
+        _stopped(store, lock, change, "its proven fix is too long or binary to show you whole: not applied")
+        return
+    stuck.asked(change, _question(r), datetime.now(UTC))
+    store.write(lock, change)
+
+
+def _offered(store: Store, lock: Lock, change: Change, at: Path, changed: list[tuple[str, str]]) -> None:
+    """A proposed project check is the owner's to confirm, unless it can't be offered."""
+    r = change.repairs.current
+    assert r is not None  # noqa: S101 - _proven() checked it
+    if why := _unfit(at, r.package, changed):
+        _stopped(store, lock, change, why)
+        return
+    r.held = [f"adds the check `{r.command}` for {r.package} to the project profile, which you confirm"]
     stuck.asked(change, _question(r), datetime.now(UTC))
     store.write(lock, change)
 
@@ -160,9 +175,9 @@ def _stopped(store: Store, lock: Lock, change: Change, why: str) -> None:
 
 
 def _question(r: Repair) -> str:
-    w = r.witness
-    assert w is not None  # noqa: S101 - asked only once proven
-    proof = f"{', '.join(w.commands)} passed in a throwaway copy (exit 0 in {w.seconds:.0f} s)"
+    w, last = r.witness, r.tried[-1].outcome if r.tried else "nothing"
+    proof = (f"{', '.join(w.commands)} passed in a throwaway copy (exit 0 in {w.seconds:.0f} s)" if w else
+             f"the repairer reports it passed ({last}); Delivery runs it only once you confirm it")  # fmt: skip
     diff = f"\n\nThe fix:\n{r.diff}" if r.diff else ""
     return (
         f"The step was stopped by: {r.evidence}\nDelivery's repair found: {r.found}\nWith its fix, {proof}. "
@@ -239,8 +254,44 @@ def _credits(usage: dict[str, object]) -> float | None:
     return float(found) if isinstance(found, int | float) else None
 
 
-def _git(at: Path, args: list[str]) -> str:
-    return repair_copy.git(at, args)
+def _gated(store: Store, lock: Lock, change: Change, done: Run) -> bool:
+    """The gates every session's result passes first; True when they settled the repair for now.
+
+    Processes not confirmed gone or a credit limit stop it; a wrong model reruns it once after the wait
+    (D-01M5DW3X003TZZRSDCY027SP3C); a network or quota failure is temporary: the repair runs again later
+    (D-01M6RT5QHWHB0ZHBBY0BE34FBE).
+    """
+    r, now = change.repairs.current, datetime.now(UTC)
+    assert r is not None  # noqa: S101 - _repair() checked it
+    seen = session_result.to_result(done, StepKind(r.step), now)
+    wrong = (seen.cause or "").endswith(f":{WRONG_MODEL}")
+    if seen.exit == Exit.STOP or (wrong and r.rerun):
+        _stopped(store, lock, change, f"its session's result was voided: {seen.reason}")
+        return True
+    temporary = kind_of(seen.cause) in ENVIRONMENT and not isinstance(done.payload, repair_tools.RepairResult)
+    if not (wrong or temporary):
+        return False
+    r.rerun = r.rerun or wrong
+    wake = seen.wake_at if seen.wake_at and seen.wake_at > now else now + budgets.PAUSE
+    change.outcome = Outcome(
+        exit=Exit.RETRY, cause=r.cause, reason=f"repairing again: {seen.reason}", wake_at=wake, at=now
+    )
+    _log(store, lock, change, f"runs again at {wake:%H:%M}: {seen.reason}")
+    store.write(lock, change)
+    return True
+
+
+def _unfit(at: Path, package: str, changed: list[tuple[str, str]]) -> str:
+    """Why a proposed project check can't be offered: its package lies outside the repository, or it needs edits."""
+    where = PurePosixPath(package)
+    if where.is_absolute() or ".." in where.parts or not (at / where).resolve().is_relative_to(at.resolve()):
+        return f"its proposed check names the package {package}, which is not a folder of this repository"
+    if not (at / where).is_dir():
+        return f"its proposed check names the package {package}, which is not a folder of this repository"
+    if changed:
+        edits = ", ".join(p for p, _ in changed)
+        return f"its proposed check also needs files it changed ({edits}), which a project check cannot carry"
+    return ""
 
 
 def _log(store: Store, lock: Lock, change: Change, said: str) -> None:
