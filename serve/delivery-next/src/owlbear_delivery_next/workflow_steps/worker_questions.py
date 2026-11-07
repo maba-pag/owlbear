@@ -297,7 +297,7 @@ def message(c: Change, proposed: tools.AskQuestion) -> str:
 
 
 def session(store: Store, lock: Lock, c: Change, proposed: tools.AskQuestion, *, keep: sessions.Keep) -> Run:
-    """One sequential read-only picker, kept before its temporary-directory cleanup."""
+    """One sequential read-only picker, whose result or termination gate is durable before cleanup."""
     sessions.granted(LABEL)
     identity = f"{c.slug}-{LABEL}-{uuid.uuid4().hex[:8]}"
     with tempfile.TemporaryDirectory(prefix="owlbear-question-") as folder:
@@ -307,6 +307,13 @@ def session(store: Store, lock: Lock, c: Change, proposed: tools.AskQuestion, *,
         )
         done = loop_owner.run(sdk_adapter.run(cfg))
         keep([done])
+        if not (done.termination and done.termination.confirmed):
+            now = datetime.now(UTC)
+            result = session_result.to_result(done, StepKind.REVIEW, now, c.step.kind)
+            event = _booked(c, done, result)
+            store.write(lock, loop.apply(c, result, now))
+            if event is not None:
+                sessions.announce(store, lock, c.slug, event)
         return done
 
 

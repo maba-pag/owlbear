@@ -128,6 +128,79 @@ def test_a_confirmed_admission_is_kept_before_its_temporary_directory_cleanup(tm
     assert len(done.questions) == 1
 
 
+def test_an_unconfirmed_admission_keeps_its_stop_and_accounting_before_cleanup(
+    tmp_path, change_repo, monkeypatch, capsys
+):
+    store, lock = Store(tmp_path / "store"), Lock("c1")
+    c = Change(slug="c1", names=Names(worktree=str(change_repo)), step=Step(kind=StepKind.BUILD))
+    proposed = AskQuestion(
+        question="Pause or abandon?",
+        why="Choose an engine move.",
+        options=[
+            {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
+            {"label": "Abandon", "effect": "Abandon this Change.", "action": "abandon"},
+        ],
+    )
+    parent = Run("author", "ask", proposed, termination=Termination(confirmed=True), usage={"credits": 1})
+    worker_questions.checkpoint(store, lock, c, parent, [])
+    calls = []
+
+    async def judge(_cfg):
+        calls.append(True)
+        return Run(
+            f"admission-{len(calls)}",
+            "result",
+            pick_tools.QuestionJudgment(
+                options=[
+                    {
+                        "index": i,
+                        "executable": True,
+                        "why": "Supported move.",
+                        "check_related": False,
+                        "recommends": False,
+                    }
+                    for i in range(2)
+                ]
+            ),
+            termination=Termination(confirmed=False, unknown=(9,), problems=("disconnect failed: OSError: gone",)),
+            usage={"credits": 2},
+            tool_calls={"submit_result": {"calls": 1}},
+        )
+
+    temporary = worker_questions.tempfile.TemporaryDirectory
+
+    @contextmanager
+    def broken_cleanup(*args, **kwargs):
+        with temporary(*args, **kwargs) as folder:
+            yield folder
+            if kwargs.get("prefix") == "owlbear-question-":
+                msg = "admission temporary-directory cleanup failed"
+                raise OSError(msg)
+
+    monkeypatch.setattr(worker_questions.pick, "config", lambda *_a, **_kw: None)
+    monkeypatch.setattr(worker_questions.sdk_adapter, "run", judge)
+    monkeypatch.setattr(worker_questions.tempfile, "TemporaryDirectory", broken_cleanup)
+    with pytest.raises(OSError, match="admission temporary-directory cleanup failed"):
+        worker_questions.continued(store, lock, c, change_repo)
+    stopped = store.read("c1")
+    assert stopped.stop is not None
+    assert stopped.stop.reason == "termination unverified: processes 9 still present; disconnect failed: OSError: gone"
+    assert loop.next_step(stopped, NOW) is None
+    assert (stopped.spend.credits, stopped.tool_use.tools["submit_result"].calls) == (3, 1)
+    assert (stopped.counted_children, stopped.pending_child, stopped.questions) == (["admission-1"], None, [])
+
+    # The fixture now confirms the processes gone, as Host._gone does; no untrusted verdict is reused.
+    stopped.stop = stopped.outcome = None
+    monkeypatch.setattr(worker_questions.tempfile, "TemporaryDirectory", temporary)
+    assert worker_questions.continued(store, lock, stopped, change_repo)
+    again = store.read("c1")
+    assert (len(calls), again.spend.credits, again.tool_use.tools["submit_result"].calls) == (2, 5, 2)
+    assert (again.counted_children, again.pending_child, again.questions) == (["admission-1", "admission-2"], None, [])
+    assert again.stop is not None
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
+    assert [e["session"] for e in events if e.get("kind") == worker_questions.LABEL] == ["admission-1", "admission-2"]
+
+
 def test_a_head_read_after_a_worker_ask_keeps_custody_and_replay_closes_the_build_span(
     tmp_path, change_repo, monkeypatch
 ):
