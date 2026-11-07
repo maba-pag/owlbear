@@ -76,7 +76,8 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
     store.write(lock, change)
     try:
         witness = _witness(change, prof)
-        done = sessions.run(store, _session(store, lock, change, at, settings, witness))
+        asked = lookup.Asked(store, lock, lambda: change)  # the repairer's and its Spotter's lookups (TD-456)
+        done = asked.settled(lambda: sessions.run(store, _session(store, lock, change, (at, asked), settings, witness)))
         sessions.logged(store, lock, change, done, {"kind": LABEL, "exit": done.ending})
         spent, first = _credits(done.usage), not r.session  # a rerun's spend adds to the repair's
         r.credits = spent if first else None if r.credits is None or spent is None else r.credits + spent
@@ -132,6 +133,11 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
     repair_copy.git(path, ["update-ref", f"{KEPT}{change.slug}", r.commit])
     r.held = [f"changes {p}, configuration that is yours" for p in r.paths if check_weakening.configured(p)]
     r.held += [
+        f"{edit} the test {p}"
+        for p, how in changed
+        if (edit := check_weakening.weakened(repair_copy.git, at, r.base, p, how)[1])
+    ]
+    r.held += [
         f"changes {p}, which the step's check runs, so it proves nothing alone" for p in r.paths if _named(p, witness)
     ]
     r.held += [f"changes {p}, outside the brief's scope" for p in r.paths if not _in_scope(change, p)]
@@ -169,15 +175,22 @@ def _apply(store: Store, lock: Lock, change: Change, path: Path, prof: Profile) 
         message = f"fix: {stuck.obstruction(r.found)}\n\nRepaired by an agent; applied by Delivery (#1066)."
         made = repair_copy.apply(path, change.names.branch, r.base, r.commit, message)
         repair_copy.git(path, ["update-ref", "-d", f"{KEPT}{change.slug}"])
-    _log(store, lock, change, f"applied {made}; the step runs again")
+    _log(store, lock, change, f"applied {made}; the step runs again.{_defect(r)}")
     stuck.applied(change, made)
     store.write(lock, change)
 
 
 def _stopped(store: Store, lock: Lock, change: Change, why: str) -> None:
-    _log(store, lock, change, f"stopped: {why}")
-    stuck.stopped(change, why, datetime.now(UTC))
+    r = change.repairs.current
+    said = f"{why}.{_defect(r)}".rstrip(".") if r else why
+    _log(store, lock, change, f"stopped: {said}")
+    stuck.stopped(change, said, datetime.now(UTC))
     store.write(lock, change)
+
+
+def _defect(r: Repair | None) -> str:
+    """What became of the issue for a defect in OwlBear's code, as the owner reads it with the repair."""
+    return f" OwlBear defect issue: {r.defect}" if r and r.defect else ""
 
 
 def _question(r: Repair) -> str:
@@ -187,14 +200,19 @@ def _question(r: Repair) -> str:
     diff = f"\n\nThe fix:\n{r.diff}" if r.diff else ""
     return (
         f"The step was stopped by: {r.evidence}\nDelivery's repair found: {r.found}\nWith its fix, {proof}. "
-        f"It needs your yes because it {'; '.join(r.held)}.{diff}\n\n{ASKED[r.fix]}"
+        f"It needs your yes because it {'; '.join(r.held)}.{_defect(r)}{diff}\n\n{ASKED[r.fix]}"
     )
 
 
-def _session(  # noqa: PLR0913, PLR0917 - the Change, its copy, the settings and the witness the repairer runs
-    store: Store, lock: Lock, change: Change, at: Path, settings: Settings, witness: tuple[str, ...]
+def _session(  # noqa: PLR0913, PLR0917 - the Change, its copy and lookup, the settings and the witness
+    store: Store,
+    lock: Lock,
+    change: Change,
+    given: tuple[Path, lookup.Asked],
+    settings: Settings,
+    witness: tuple[str, ...],
 ) -> sdk_adapter.Session:
-    role, asked = roles.chosen(settings, LABEL), lookup.Asked(store, lock, lambda: change)
+    (at, asked), role = given, roles.chosen(settings, LABEL)
     message = _message(change, witness)
     return sdk_adapter.Session(
         kind=StepKind(change.repairs.current.step if change.repairs.current else change.step.kind), worktree=at,
