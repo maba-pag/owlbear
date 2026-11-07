@@ -168,7 +168,7 @@ class BriefDraft(Args):
     person_checks: list[PersonCheckDraft] = Field(
         default_factory=list,
         max_length=5,
-        description="Checks only the owner can perform; empty when tests prove every criterion",
+        description="Checks only the owner can perform; empty when the tests and a real run prove every criterion",
         examples=[[{"name": "preview", "steps": ["Open the preview"], "expect": "The greeting shows"}]],
     )
     ui: bool = Field(default=False, description="Whether the Change changes what a page shows", examples=[True])

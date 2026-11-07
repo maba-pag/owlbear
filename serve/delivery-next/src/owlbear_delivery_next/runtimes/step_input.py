@@ -399,8 +399,9 @@ def plan_challenge(
             "",
             "## Judge",
             (
-                "Every criterion is met by a task's goal and its checks would catch a failure; tasks are in a "
-                "buildable order and each fits one session; scopes match the code and touch other open Changes' "
+                "Every criterion is named by a task's goal that says the real run showing it met, and its checks "
+                "run the existing tests the change touches; no new test per criterion. Tasks are in a buildable "
+                "order and each fits one session; scopes match the code and touch other open Changes' "
                 "scopes only where the brief needs it. Findings only for what must change."
             ),
             *plan_rounds.challenge_lines(change),

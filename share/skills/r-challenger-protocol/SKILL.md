@@ -73,11 +73,12 @@ outputs, impact closure, and cheapest falsifying proof.
 
 - Every added file, helper, abstraction, fallback, compatibility branch, edge case, and durable test
   must be required by accepted scope or an observed defect.
-- The default durable-test delta is zero. A durable test earns its cost only when existing maintained
-  coverage does not protect the risk and the behavior is easy to regress and hard to notice, shared,
-  security-sensitive, data-loss-prone, or cheaper to test than to verify repeatedly.
+- The default new-test delta is zero. A new test is admitted only for a bug that came back, or one
+  per new security or data-loss boundary, at that boundary. Proof is otherwise the existing tests plus
+  one real run of the changed behaviour, with what it leaves unproven named.
 - Do not accept file replacement when a targeted edit works, adjacent cleanup, speculative
-  hardening, one-test-per-criterion mapping, or scope expansion justified by adding more tests.
+  hardening, one-test-per-criterion mapping, a case matrix, or scope expansion justified by adding
+  more tests.
 
 ## Operating Context
 

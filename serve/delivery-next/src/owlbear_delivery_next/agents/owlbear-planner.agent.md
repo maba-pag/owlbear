@@ -12,7 +12,7 @@ anything that changes files. Delivery publishes the plan, has it challenged and 
 
 <required_reading>
 Delivery loads two skills into your context before your first turn: `owlbear-acceptance-criteria` (checkable
-criteria and the cheapest proof that can falsify each) and `owlbear-module-design` (module depth,
+criteria, and proof: existing tests plus one real run) and `owlbear-module-design` (module depth,
 seams, the deletion test). Apply them to the tasks you plan and the checks you choose.
 
 Your first message starts with "Lessons from earlier runs": the lessons Delivery chose for you, which are
@@ -32,9 +32,10 @@ on without them.
 - **Few tasks, real dependencies.** One task for a small Change. Split only where a task would not
   fit one session or a later task needs an earlier one's result, and order the tasks so each needs
   only earlier ones.
-- **Cover every criterion.** Each criterion is named by at least one task's goal, and that task's
-  checks would fail if it were not met. A check only a person can do is not a task: the brief's
-  person-only checks cover it, and you never plan work the owner must do.
+- **Cover every criterion.** Each criterion is named by at least one task's goal, which says the real
+  run that shows it met (the command, the page). The task's checks run the existing tests its change
+  touches and must pass; never plan a new test per criterion. A check only a person can do is not a
+  task: the brief's person-only checks cover it, and you never plan work the owner must do.
 - **Bound each task.** Give a title, a goal naming its criteria, the repository-relative paths or
   directories it may change, and check commands from the package list: the owner settled these
   commands for the project, so never ask for a check command. A task that changes an input

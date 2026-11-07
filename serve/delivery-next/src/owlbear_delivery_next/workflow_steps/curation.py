@@ -44,14 +44,17 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 TITLE = "Review the tests"
-OUTCOME = "Tests that protect no behaviour beyond another test are retired or merged; every other test stays"
+OUTCOME = (
+    "Per behaviour the cheapest test that catches its plausible bug stays; the tests that protect nothing beyond it "
+    "are retired or merged"
+)
 CRITERIA = (
     (
-        "Every retired or merged test names the behaviour it protected, a plausible bug and the remaining test that "
-        "still catches it"
+        "Every retired or merged test names the behaviour it protected, a plausible bug and the kept test that "
+        "guards the same kind of bug"
     ),
-    "Security guards, incident regressions and public-contract tests stay",
-    "A test in doubt stays",
+    "Security and data-loss guards, incident regressions and public-contract tests stay when in doubt",
+    "No other test stays only because of doubt",
     "The suite is measured before and after with the same command and scope, and no test that passed before fails",
 )
 RULES = (

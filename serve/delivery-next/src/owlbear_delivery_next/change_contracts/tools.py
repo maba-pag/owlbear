@@ -66,7 +66,7 @@ class Rejection(Args):
 class BuildResult(Args):
     """``submit_result`` for the build step."""
 
-    summary: str = _f(2000, "What you changed and why, in a few sentences", "Added greet(name), with a test.")
+    summary: str = _f(2000, "What changed and why, its real run, what stays unproven", "Ran greet('Ada'): Hallo, Ada!")
     checks: list[CheckRun] = _f(
         100, "Every task check you ran on your final commit", [{"command": EXAMPLE_CHECK, "exit_code": 0}], least=0
     )
@@ -236,7 +236,7 @@ class CheckRecipe(Args):
 class PlanTask(Args):
     """One ordered task of the plan."""
 
-    title: str = _f(200, "What the task delivers", "Add farewell(name) with a test")
+    title: str = _f(200, "What the task delivers", "Add farewell(name)")
     goal: str = _f(3000, "The criteria it meets and how the Builder knows it is done", "AC-1: farewell('Ada')")
     scope: list[str] = _f(20, "Repository-relative paths or directories it may change", ["packages/app"])
     checks: list[str] = _f(100, "Complete check commands exactly as listed for their packages", [EXAMPLE_CHECK])
