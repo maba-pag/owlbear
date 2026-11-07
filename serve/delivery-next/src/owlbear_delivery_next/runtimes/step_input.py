@@ -62,7 +62,7 @@ CONTINUE = (
 def reminder(role: str, *, judging: bool = False) -> str:
     """The one nudge after a turn that ended without a result; a judge or judgement has no question (TD-108)."""
     ask = "ask_question, " if tools.asks(role, judging=judging) else ""
-    if role == tools.REPAIRER:
+    if role == "repairer":
         return "Your turn ended without a result. Call submit_result with the cause and every fix you tried."
     return pick_tools.REMINDER if role == tools.PICKER else REMINDER.format(ask=ask)
 
