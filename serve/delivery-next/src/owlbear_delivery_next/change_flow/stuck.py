@@ -23,7 +23,8 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change
 
 APPLY, DECLINE = "repair-apply", "repair-stop"
-RERUN = "Run the step again"  # the stop's action, once its cause is resolved
+RERUN = "Run the step again"
+YES = ("Apply the fix", "Add the check to the project profile")  # the stop's action, once its cause is resolved
 REPAIRED = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})  # agent steps
 
 
@@ -58,7 +59,7 @@ def asked(c: Change, text: str, now: datetime) -> None:
     r = c.repairs.current
     assert r is not None  # noqa: S101 - only a running repair asks
     options = [
-        Option(id="yes", label="Apply the fix and run the step again", next=APPLY),
+        Option(id="yes", label=f"{YES[r.fix == 'profile-check']} and run the step again", next=APPLY),
         Option(id="no", label="Don't apply it; stop with what was tried", next=DECLINE),
     ]
     ask(c, Question(step=c.step.kind, text=text, options=options, cause=r.cause), now)

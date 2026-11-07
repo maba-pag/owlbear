@@ -44,6 +44,10 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 LABEL = "step-repair"
+ASKED = {
+    "patch": "Apply it to this Change and run the step again?",
+    "profile-check": "Add this check to the project profile and run the step again?",
+}
 
 
 def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -74,7 +78,9 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
         witness = _witness(change, prof)
         done = sessions.run(store, _session(store, lock, change, at, settings, witness))
         sessions.logged(store, lock, change, done, {"kind": LABEL, "exit": done.ending})
-        r.session, r.credits = done.session_id, _credits(done.usage)
+        spent, first = _credits(done.usage), not r.session  # a rerun's spend adds to the repair's
+        r.credits = spent if first else None if r.credits is None or spent is None else r.credits + spent
+        r.session = done.session_id
         if _gated(store, lock, change, done):
             return
         p = done.payload
@@ -106,18 +112,15 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
     if r.fix == "profile-check":  # Delivery never runs a proposed command before the owner confirms it (#1066)
         _offered(store, lock, change, at, changed)
         return
-    if r.fix == "patch":
-        if not changed:
-            _stopped(store, lock, change, "it reported a fix but changed nothing")
-            return
-        weak = [
-            f"{p} ({w})"
-            for p, how in changed
-            if (w := check_weakening.weakened(repair_copy.git, at, r.base, p, how)[0])
-        ]
-        if weak:
-            _stopped(store, lock, change, f"its fix weakens a check, which Delivery never applies: {', '.join(weak)}")
-            return
+    if not changed:
+        _stopped(store, lock, change, "it reported a fix but changed nothing")
+        return
+    weak = [
+        f"{p} ({w})" for p, how in changed if (w := check_weakening.weakened(repair_copy.git, at, r.base, p, how)[0])
+    ]
+    if weak:
+        _stopped(store, lock, change, f"its fix weakens a check, which Delivery never applies: {', '.join(weak)}")
+        return
     r.witness = _ran(at, (*_installs(change, prof), *witness), within, store, lock)
     if not witness or r.witness.exit != 0:
         ran = ", ".join(witness) or "no check"
@@ -128,6 +131,9 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
     r.commit = repair_copy.commit(at, said)
     repair_copy.git(path, ["update-ref", f"{KEPT}{change.slug}", r.commit])
     r.held = [f"changes {p}, configuration that is yours" for p in r.paths if check_weakening.configured(p)]
+    r.held += [
+        f"changes {p}, which the step's check runs, so it proves nothing alone" for p in r.paths if _named(p, witness)
+    ]
     r.held += [f"changes {p}, outside the brief's scope" for p in r.paths if not _in_scope(change, p)]
     if not r.held:
         _apply(store, lock, change, path, prof)
@@ -181,7 +187,7 @@ def _question(r: Repair) -> str:
     diff = f"\n\nThe fix:\n{r.diff}" if r.diff else ""
     return (
         f"The step was stopped by: {r.evidence}\nDelivery's repair found: {r.found}\nWith its fix, {proof}. "
-        f"It needs your yes because it {'; '.join(r.held)}.{diff}\n\nApply it to this Change and run the step again?"
+        f"It needs your yes because it {'; '.join(r.held)}.{diff}\n\n{ASKED[r.fix]}"
     )
 
 
@@ -231,6 +237,12 @@ def _witness(change: Change, prof: Profile) -> tuple[str, ...]:
 
 def _installs(change: Change, prof: Profile) -> tuple[str, ...]:
     return tuple(check_hint.qualified(p, c) for p, c in worktree.installs(prof, change.brief.scope or ["."]))
+
+
+def _named(path: str, witness: tuple[str, ...]) -> bool:
+    """Whether a check command names *path*: a fix to the check it is proven by needs the owner (never weakened)."""
+    words = {w.strip("'\"{};()").removeprefix("./") for c in witness for w in c.split()}
+    return path in words or PurePosixPath(path).name in words
 
 
 def _in_scope(change: Change, path: str) -> bool:
