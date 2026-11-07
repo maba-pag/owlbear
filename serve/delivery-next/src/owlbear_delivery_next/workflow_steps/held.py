@@ -69,6 +69,7 @@ def dump_run(run: Run) -> HeldRun:
         classified=run.classified,
         head=run.head,
         changed=run.changed,
+        checks=list(run.checks),
         payload={"model": type(p).__name__, "args": p.model_dump(mode="json")} if p else None,
         denials=run.denials,
         denied=run.denied,
@@ -112,6 +113,7 @@ def _unloaded(data: HeldRun) -> Run:
         classified=data.classified,
         head=data.head,
         changed=list(data.changed),
+        checks=tuple(data.checks),
         denials=list(data.denials),
         denied=dict(data.denied),
         usage={"error": "held"},  # counted when the gate logged the session

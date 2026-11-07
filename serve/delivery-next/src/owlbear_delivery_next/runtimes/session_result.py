@@ -73,6 +73,7 @@ class Run:
     classified: str = ""  # what retries classify and sign when ``detail`` says more: the error as it read before #971
     head: str | None = None
     changed: list[str] = field(default_factory=list)  # the paths the commits change at ``head``, as Delivery read them
+    checks: tuple[str, ...] = ()  # the session's resolved check commands: a report naming one is about a check (#1065)
     runtime_pid: int | None = None
     pids: dict[int, float | None] = field(default_factory=dict)
     usage: dict[str, Any] = field(default_factory=dict)

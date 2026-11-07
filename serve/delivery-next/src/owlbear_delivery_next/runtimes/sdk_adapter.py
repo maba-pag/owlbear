@@ -150,7 +150,7 @@ class _Step(StepTools):
     aborted = False  # the Spotter aborted the turn: its idle is no wrong choice (``step_budget.idled``)
 
     def __init__(self, cfg: Session, loop: asyncio.AbstractEventLoop) -> None:
-        self.cfg, self.loop, self.run, self.proc = cfg, loop, Run(cfg.session_id), None
+        self.cfg, self.loop, self.run, self.proc = cfg, loop, Run(cfg.session_id, checks=cfg.checks), None
         self.client: CopilotClient | None = None
         self.turn = self.idle = False
         self.billed: dict[str, Any] = {"error": "not read"}  # usage before this invocation's first send
