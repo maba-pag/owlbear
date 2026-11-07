@@ -183,8 +183,15 @@ def test_an_unclassed_answer_or_an_unconfirmed_clarification_is_refused_and_noth
 
 
 def test_a_confirmed_clarification_within_the_brief_becomes_a_change_decision_in_force_at_once(picking, monkeypatch):
-    run = Asking(picking, monkeypatch)
-    assert run.answer(kind="clarification", text=WORDS, statement=f"  {SAID} ", confirmed=True).status_code == 200
+    run = Asking(
+        picking,
+        monkeypatch,
+        options=(
+            Option(id="en", label="English", action="continue"),
+            Option(id="again", label="Retry", next="retry", action="retry"),
+        ),
+    )
+    assert run.answer(kind="clarification", statement=f"  {SAID} ", confirmed=True).status_code == 200
     picking.picks.append(verdict())
 
     c = run.step()
