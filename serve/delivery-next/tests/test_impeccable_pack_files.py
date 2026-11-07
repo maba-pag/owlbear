@@ -198,7 +198,7 @@ def test_a_scan_that_did_not_complete_says_its_whole_error(tmp_path, monkeypatch
         if cause in {"unreadable", "shapeless"}
         else f"#!/bin/sh\ncat {tmp_path / 'printed'}\ncat {tmp_path / 'said'} >&2\n"
     )
-    engine.write_text(engine.read_text() + {"hung": "sleep 60\n", "failed": "exit 1\n"}.get(cause, ""))
+    engine.write_text(engine.read_text() + {"hung": "exec sleep 60\n", "failed": "exit 1\n"}.get(cause, ""))
     engine.chmod(engine.stat().st_mode | stat.S_IEXEC)
     pack = pack_files.Installed(engine, hashlib.sha256(engine.read_bytes()).hexdigest(), "")
     command = [str(engine), "detect", "--json", "--no-config", str(tmp_path / "a.html")]
