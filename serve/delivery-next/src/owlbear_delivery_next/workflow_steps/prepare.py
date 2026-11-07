@@ -217,16 +217,6 @@ def chosen(  # noqa: PLR0913, PLR0917 - the session's end, its worktree and what
     return result
 
 
-def failed_cleanup(result: loop.StepResult, reason: str) -> loop.StepResult:
-    """Show cleanup failure without discarding an existing stop's remediation gate."""
-    if result.exit != Exit.STOP:
-        return check.failed(reason)
-    result.reason = f"{result.reason}\n{reason}"
-    if result.stop is not None:
-        result.stop.reason = result.reason
-    return result
-
-
 def unsafe(settings: Settings, live: Mapping[str, str] | None = None) -> loop.StepResult | None:
     """No option is declared, or none is permitted, so a check would run on live data: the owner decides."""
     live = dict(os.environ) if live is None else live
