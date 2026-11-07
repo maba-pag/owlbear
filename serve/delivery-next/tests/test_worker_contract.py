@@ -3,6 +3,7 @@ import dataclasses
 import json
 import shlex
 import subprocess
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -54,6 +55,77 @@ GOOD = {
     "summary": "Added greet().",
     "checks": [{"command": "npm test", "exit_code": 0}],
 }
+
+
+def test_a_confirmed_admission_is_kept_before_its_temporary_directory_cleanup(tmp_path, change_repo, monkeypatch):
+    store, lock = Store(tmp_path / "store"), Lock("c1")
+    store.root.mkdir()
+    c = Change(
+        slug="c1",
+        names=Names(worktree=str(change_repo)),
+        step=Step(kind=StepKind.BUILD, task="t1"),
+        plan=Plan(tasks=[Task(id="t1", title="one", scope=["src"])]),
+    )
+    proposed = AskQuestion(
+        question="Pause or abandon?",
+        why="Choose an engine move.",
+        options=[
+            {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
+            {"label": "Abandon", "effect": "Abandon this Change.", "action": "abandon"},
+        ],
+    )
+    parent = Run("author", "ask", proposed, termination=Termination(confirmed=True), usage={"credits": 1})
+    worker_questions.checkpoint(store, lock, c, parent, [])
+    calls = []
+
+    async def judge(_cfg):
+        calls.append(True)
+        return Run(
+            "admission",
+            "result",
+            pick_tools.QuestionJudgment(
+                options=[
+                    {
+                        "index": i,
+                        "executable": True,
+                        "why": "Supported move.",
+                        "check_related": False,
+                        "recommends": False,
+                    }
+                    for i in range(2)
+                ]
+            ),
+            termination=Termination(confirmed=True),
+            usage={"credits": 2},
+            tool_calls={"submit_result": {"calls": 1}},
+        )
+
+    temporary = worker_questions.tempfile.TemporaryDirectory
+
+    @contextmanager
+    def broken_cleanup(*args, **kwargs):
+        with temporary(*args, **kwargs) as folder:
+            yield folder
+            if kwargs.get("prefix") == "owlbear-question-":
+                msg = "admission temporary-directory cleanup failed"
+                raise OSError(msg)
+
+    monkeypatch.setattr(worker_questions.pick, "config", lambda *_a, **_kw: None)
+    monkeypatch.setattr(worker_questions.sdk_adapter, "run", judge)
+    monkeypatch.setattr(worker_questions.tempfile, "TemporaryDirectory", broken_cleanup)
+    with pytest.raises(OSError, match="admission temporary-directory cleanup failed"):
+        worker_questions.continued(store, lock, c, change_repo)
+    kept = store.read("c1")
+    assert kept.pending_child is not None
+    assert kept.pending_child.run is not None
+    assert (kept.pending_child.run.session_id, kept.spend.credits) == ("admission", 1)
+    monkeypatch.setattr(worker_questions.tempfile, "TemporaryDirectory", temporary)
+    monkeypatch.setattr(worker_questions.sdk_adapter, "run", lambda _cfg: pytest.fail("reuse the paid verdict"))
+    assert worker_questions.continued(store, lock, kept, change_repo)
+    done = store.read("c1")
+    assert (len(calls), done.spend.credits, done.tool_use.tools["submit_result"].calls) == (1, 3, 1)
+    assert (done.pending_child, done.pending_question) == (None, None)
+    assert len(done.questions) == 1
 
 
 def test_a_head_read_after_a_worker_ask_keeps_custody_and_replay_closes_the_build_span(
@@ -237,9 +309,9 @@ def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
     worker_questions.checkpoint(store, lock, c, parent, [])
     starts = []
 
-    def judge(_store, _lock, _c, actual):
+    def judge(_store, _lock, _c, actual, *, keep):
         starts.append(actual)
-        return Run(
+        done = Run(
             f"c1-admission-{len(starts)}",
             "result",
             pick_tools.QuestionJudgment(
@@ -263,6 +335,8 @@ def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
             termination=Termination(confirmed=True),
             usage={"credits": 2},
         )
+        keep([done])
+        return done
 
     monkeypatch.setattr(worker_questions, "session", judge)
     real_write = Store.write
@@ -291,9 +365,7 @@ def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
         "options[1].action: No step opens a separate prerequisite PR on main.",
     ]
     _, accepted, _, resume = session_choice.opening(store, lock, done, done.plan.tasks[0])
-    assert resume
-    assert accepted is None
-    assert done.step.session == author
+    assert (resume, accepted, done.step.session) == (True, None, author)
 
     worker_questions.checkpoint(store, lock, done, dataclasses.replace(parent, session_id="c1-author-again"), [])
     monkeypatch.setattr(Store, "write", interrupted)
@@ -330,9 +402,9 @@ def test_stopped_admission_counts_its_usage_and_its_resumed_child_keeps_its_gene
     worker_questions.checkpoint(store, lock, c, parent, [])
     calls = []
 
-    def judge(*_args):
+    def judge(*_args, keep):
         calls.append(True)
-        return Run(
+        done = Run(
             f"admission-{len(calls)}",
             "result",
             pick_tools.QuestionJudgment(
@@ -357,6 +429,8 @@ def test_stopped_admission_counts_its_usage_and_its_resumed_child_keeps_its_gene
             usage={"credits": 2},
             tool_calls={"view": {"calls": 1}},
         )
+        keep([done])
+        return done
 
     monkeypatch.setattr(worker_questions, "session", judge)
     assert worker_questions.continued(store, lock, c, change_repo)
@@ -405,9 +479,9 @@ def test_a_retried_unread_admission_returns_the_answer_to_the_proposal_author(tm
     worker_questions.checkpoint(store, lock, c, parent, [])
     calls = []
 
-    def judge(*_args):
+    def judge(*_args, keep):
         calls.append(True)
-        return Run(
+        done = Run(
             f"admission-{len(calls)}",
             "result",
             pick_tools.QuestionJudgment(
@@ -426,6 +500,8 @@ def test_a_retried_unread_admission_returns_the_answer_to_the_proposal_author(tm
             usage={"error": "RuntimeError"} if len(calls) == 1 else {"credits": 2},
             usage_unread="usage read failed" if len(calls) == 1 else "",
         )
+        keep([done])
+        return done
 
     monkeypatch.setattr(worker_questions, "session", judge)
     with pytest.raises(worker_questions.sessions.UsageUnreadError):
@@ -466,7 +542,7 @@ def test_admission_refuses_a_head_changed_while_its_paid_verdict_returns(tmp_pat
     parent = Run("author", "ask", proposed, termination=Termination(confirmed=True), usage={"credits": 1})
     worker_questions.checkpoint(store, lock, c, parent, [])
 
-    def judge(*_args):
+    def judge(*_args, keep):
         done = Run(
             "admission",
             "result",
@@ -488,6 +564,7 @@ def test_admission_refuses_a_head_changed_while_its_paid_verdict_returns(tmp_pat
         (change_repo / "a.txt").write_text("New code while the picker returns.\n")
         worker_questions.worktree.git(change_repo, "add", "a.txt")
         worker_questions.worktree.git(change_repo, "commit", "-qm", "new code")
+        keep([done])
         return done
 
     monkeypatch.setattr(worker_questions, "session", judge)
@@ -525,9 +602,9 @@ def test_kept_recommendation_cannot_publish_after_uncommitted_inputs_change(tmp_
     worker_questions.checkpoint(store, lock, c, parent, [command])
     calls = []
 
-    def judge(*_args):
+    def judge(*_args, keep):
         calls.append(True)
-        return Run(
+        done = Run(
             "admission",
             "result",
             pick_tools.QuestionJudgment(
@@ -545,6 +622,8 @@ def test_kept_recommendation_cannot_publish_after_uncommitted_inputs_change(tmp_
             termination=Termination(confirmed=True),
             usage={"credits": 2},
         )
+        keep([done])
+        return done
 
     real_write = Store.write
 
@@ -605,9 +684,9 @@ def test_kept_trial_of_staged_content_is_refused_after_an_index_only_change(tmp_
         calls.append("trial")
         return real_measured(*args)
 
-    def judge(*_args):
+    def judge(*_args, keep):
         calls.append("picker")
-        return Run(
+        done = Run(
             "admission",
             "result",
             pick_tools.QuestionJudgment(
@@ -625,6 +704,8 @@ def test_kept_trial_of_staged_content_is_refused_after_an_index_only_change(tmp_
             termination=Termination(confirmed=True),
             usage={"credits": 2},
         )
+        keep([done])
+        return done
 
     real_write = Store.write
 

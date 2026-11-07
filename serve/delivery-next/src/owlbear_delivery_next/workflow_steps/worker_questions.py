@@ -178,8 +178,7 @@ def checked(store: Store, lock: Lock, c: Change, path: Path) -> tuple[loop.StepR
         return refused(c, errors), _retired(c, "\n".join(errors))
 
     def start(keep: sessions.Keep) -> pending_child.Judged:
-        done = session(store, lock, c, proposed)
-        keep([done])
+        done = session(store, lock, c, proposed, keep=keep)
         if sessions.unread(done):
             raise sessions.UsageUnreadError(done, LABEL)
         return session_result.to_result(done, StepKind.REVIEW, datetime.now(UTC), c.step.kind), done
@@ -297,8 +296,10 @@ def message(c: Change, proposed: tools.AskQuestion) -> str:
     )
 
 
-def session(store: Store, lock: Lock, c: Change, proposed: tools.AskQuestion) -> Run:
-    """One sequential read-only picker; its processes and usage have the existing SDK lifecycle."""
+def session(
+    store: Store, lock: Lock, c: Change, proposed: tools.AskQuestion, *, keep: sessions.Keep | None = None
+) -> Run:
+    """One sequential read-only picker, kept before its temporary-directory cleanup."""
     sessions.granted(LABEL)
     identity = f"{c.slug}-{LABEL}-{uuid.uuid4().hex[:8]}"
     with tempfile.TemporaryDirectory(prefix="owlbear-question-") as folder:
@@ -306,7 +307,10 @@ def session(store: Store, lock: Lock, c: Change, proposed: tools.AskQuestion) ->
         cfg = pick.config(
             store.settings(), Path(folder), identity, message(c, proposed), journal, submit=pick_tools.ADMIT, job=LABEL
         )
-        return loop_owner.run(sdk_adapter.run(cfg))
+        done = loop_owner.run(sdk_adapter.run(cfg))
+        if keep is not None:
+            keep([done])
+        return done
 
 
 def judged(

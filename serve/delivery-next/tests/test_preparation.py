@@ -526,10 +526,10 @@ def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env, monke
 
     calls = []
 
-    def judge(*_args):
+    def judge(*_args, keep):
         assert prepare.edits(repo) == []
         calls.append(True)
-        return Run(
+        done = Run(
             "admission",
             "result",
             pick_tools.QuestionJudgment(
@@ -547,6 +547,8 @@ def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env, monke
             termination=Termination(confirmed=True),
             usage={"credits": 2},
         )
+        keep([done])
+        return done
 
     real_write, real_discard = Store.write, prepare.discard
 
@@ -632,12 +634,12 @@ def test_a_returned_reviewer_question_does_not_rebuild_its_message_before_checkp
             usage={"credits": 1},
         )
 
-    def judge(_store, _lock, private, _proposed):
+    def judge(_store, _lock, private, _proposed, *, keep):
         assert private.pending_question is not None
         assert private.pending_question.checks == []
         assert store.read("c1").pending_question.run.session_id == authored[0]
         assert store.read("c1").spend.credits == 1
-        return Run(
+        done = Run(
             "admission",
             "result",
             pick_tools.QuestionJudgment(
@@ -655,6 +657,8 @@ def test_a_returned_reviewer_question_does_not_rebuild_its_message_before_checkp
             termination=Termination(confirmed=True),
             usage={"credits": 2},
         )
+        keep([done])
+        return done
 
     monkeypatch.setattr(runner.step_input, "session", parts)
     monkeypatch.setattr(runner, "_kept", reviewer)
