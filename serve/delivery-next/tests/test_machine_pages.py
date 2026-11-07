@@ -213,6 +213,25 @@ def replaced(path: Path) -> registry.Project:
     return old
 
 
+def listed(path: Path, pid: str, **more: object) -> dict[str, Any]:
+    """The loaded consumer clone at *path*, not set up for chats yet, as ``GET /projects`` lists it (Project.info)."""
+    setup = f"owlbear setup --repo {shlex.quote(str(path))}"
+    return {"id": pid, "name": path.name, "path": str(path), "state": "loaded", "kind": "consumer", "unset": [],
+            "unset_reason": "", "blocked": "", "setup": setup} | more  # fmt: skip
+
+
+def serving(records: list[dict[str, Any]]) -> Callable[[Any], None]:
+    """A route that answers ``GET /projects`` with the machine's own answer listing *records* as they are then."""
+
+    def answer(route: Any) -> None:
+        if route.request.method != "GET":
+            route.fallback()
+            return
+        route.fulfill(json=route.fetch().json() | {"projects": records})
+
+    return answer
+
+
 @pytest.mark.browser
 def test_changes_of_all_projects_or_one_the_top_row_switches_and_resumes_and_projects_adds_and_removes(  # noqa: PLR0915 - a journey
     tmp_path: Path, monkeypatch, pds
@@ -1862,20 +1881,14 @@ def test_projects_lists_a_host_s_failed_readiness_checks_whole_under_its_reason(
         f"copilot cli: copilot: {out} · fix: {copilot_cli.FIX}",
     ]
     ready = {"checking": None, "passed": [], "failing": failed}  # "unhosted" has no host, so no ready
-    for name in ["unhosted", *ready]:
-        registry.register(clone(tmp_path / name))
-
-    def hosted(route) -> None:
-        body = route.fetch().json()
-        for p in body["projects"]:
-            p.pop("ready", None)
-            if p["name"] in ready:
-                p["ready"] = ready[p["name"]]
-        route.fulfill(json=body)
+    records = [
+        listed(tmp_path / name, f"{name}-id", **({"ready": ready[name]} if name in ready else {}))
+        for name in ["unhosted", *ready]
+    ]
 
     with browsing(monkeypatch, pds) as (page, base):
         broke = errors(page)
-        page.route(f"{base}/api/next/projects", lambda r: hosted(r) if r.request.method == "GET" else r.fallback())
+        page.route(f"{base}/api/next/projects", serving(records))
         page.goto(f"{base}/projects#token=t")
         expect(page.get_by_role("listitem", name="failing")).to_be_visible()
         for name in ["unhosted", *ready]:
@@ -2237,19 +2250,29 @@ def test_focus_goes_to_the_same_place_after_remove_and_stays_where_the_owner_mov
     """Removing the last project focuses the Remove before it; Adopt leaves focus where the owner put it meanwhile."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    replaced(tmp_path / "epsilon")
-    for name in ("alpha", "beta", "gamma"):
-        registry.register(clone(tmp_path / name))
+    epsilon = tmp_path / "epsilon"
+    records = [  # epsilon's clone was deleted and cloned again: the registered one is replaced
+        {"id": "epsilon-old", "name": "epsilon", "path": str(epsilon), "state": "replaced", "kind": "consumer",
+         "reason": f"the clone at {epsilon} is not the one registered; Remove or Adopt it"},
+        *(listed(tmp_path / name, f"{name}-id", ready=[]) for name in ("alpha", "beta", "gamma")),
+    ]  # fmt: skip
     held = []
+
+    def remove(route) -> None:  # the machine forgets the project and answers as its DELETE does
+        gone = route.request.url.rsplit("/", 1)[1]
+        records[:] = [p for p in records if p["id"] != gone]
+        route.fulfill(json={"removed": gone})
 
     def hold(route) -> None:  # Adopt, answered once the owner has moved on
         held.append(route)
 
     with browsing(monkeypatch, pds) as (page, base):
+        page.route(f"{base}/api/next/projects", serving(records))
+        page.route(f"{base}/api/next/projects/*", lambda r: remove(r) if r.request.method == "DELETE" else r.fallback())
         page.goto(f"{base}/projects#token=t")
         items = page.get_by_role("listitem")
         expect(items).to_have_count(4)
-        assert items.last.get_attribute("aria-labelledby") == f"p-{registry.load().projects[-1].id}"
+        assert items.last.get_attribute("aria-labelledby") == f"p-{records[-1]['id']}"
         last = page.get_by_role("listitem", name="gamma")
         last.get_by_role("button", name="Remove project").click()
         pds.answer(page, "Remove project")
@@ -2258,7 +2281,9 @@ def test_focus_goes_to_the_same_place_after_remove_and_stays_where_the_owner_mov
         page.get_by_role("listitem", name="epsilon").get_by_role("button", name="Adopt the new clone").click()
         until(page, lambda: held)
         page.get_by_role("button", name="Add a project").focus()  # the owner moves on while Delivery adopts it
-        held[0].fallback()
+        adopted = listed(epsilon, "epsilon-new", ready=[])  # the clone now at its path, under that clone's own id
+        records[:] = [*(p for p in records if p["id"] != "epsilon-old"), adopted]  # the machine loads it last
+        held[0].fulfill(json=adopted)
         expect(page.locator("#page > [role=status]")).to_contain_text("epsilon now serves the clone at")
         expect(page.get_by_role("button", name="Add a project")).to_be_focused()
 
@@ -3146,6 +3171,17 @@ def machine_layer(**fields: object) -> None:
     (local_home.root() / MACHINE_SETTINGS).write_text(json.dumps({"format": CONFIG_FORMAT, **fields}))
 
 
+def project_layer(path: Path, **fields: object) -> None:
+    """The own layer of the unshared project at *path*, kept in its clone, written as the owner would by hand."""
+    Store.open(path).config_path.write_text(json.dumps({"format": CONFIG_FORMAT, **fields}))
+
+
+def offering(monkeypatch: pytest.MonkeyPatch, price: float) -> None:
+    """This machine's Copilot offers m1 at *price*, and GitHub answers that Impeccable has no releases."""
+    monkeypatch.setattr(model_choices, "_read", lambda: [offered("m1", price)])
+    monkeypatch.setattr(pack_files, "fetch", lambda *_args, **_kwargs: b"[]")
+
+
 READS_TIME = 60  # a 120 s test: a read pulls the shared repository; a read the page did not start shows by its poll
 # Every wait of a page for an answer 20 times as long, so an answer a test holds outlives the next poll's ask.
 LONG_WAITS = "{ const t = AbortSignal.timeout; AbortSignal.timeout = (ms) => t.call(AbortSignal, ms * 20); }"
@@ -3278,9 +3314,9 @@ def test_a_read_s_layers_answered_while_a_save_reads_across_never_replace_the_sa
 
 
 @pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
+@pytest.mark.timeout(120)  # a real browser and three full outside reads, each awaited for up to READS_TIME
 def test_an_older_read_s_other_projects_answered_last_never_replace_a_newer_read_s(
-    tmp_path: Path, monkeypatch, pds, outside
+    tmp_path: Path, monkeypatch, pds
 ) -> None:
     """#810: two reads' refreshes overlap; another project's settings as the first one read them, answered after the
     second's, are not shown."""
@@ -3290,7 +3326,8 @@ def test_an_older_read_s_other_projects_answered_last_never_replace_a_newer_read
         return response.request.method == "POST" and response.url.endswith("/config/read")
 
     a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
-    outside.push("beta/config.json", agents={"builder": {"minutes": 20}})
+    offering(monkeypatch, 3)
+    project_layer(Path(b.path), agents={"builder": {"minutes": 20}})
     with browsing(monkeypatch, pds) as (page, base):
         page.goto(f"{base}/config?project={a.id}#token=t")
         expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
@@ -3310,7 +3347,7 @@ def test_an_older_read_s_other_projects_answered_last_never_replace_a_newer_read
         with page.expect_response(read_finished, timeout=READS_TIME * 1000):
             again.click()
         until(page, lambda: held, READS_TIME)
-        outside.push("beta/config.json", agents={"builder": {"minutes": 45}})
+        project_layer(Path(b.path), agents={"builder": {"minutes": 45}})
         with page.expect_response(read_finished, timeout=READS_TIME * 1000):
             again.click()
         expect(across).to_contain_text("beta: 45")
@@ -3321,13 +3358,15 @@ def test_an_older_read_s_other_projects_answered_last_never_replace_a_newer_read
 
 
 @pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_an_older_read_s_models_answered_last_never_replace_a_newer_read_s(tmp_path: Path, monkeypatch, pds, outside):
+@pytest.mark.timeout(120)  # a real browser and three full outside reads, each awaited for up to READS_TIME
+def test_an_older_read_s_models_answered_last_never_replace_a_newer_read_s(tmp_path: Path, monkeypatch, pds):
     """#810: two reads' refreshes overlap; the models' rates as the first one read them, answered after the second's,
     are not shown."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     a = registry.register(clone(tmp_path / "alpha"))
+    offering(monkeypatch, 3)
+    project_layer(Path(a.path), agents={"builder": {"model": "m1"}})
     with browsing(monkeypatch, pds) as (page, base):
         page.goto(f"{base}/config?project={a.id}#token=t")
         expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
@@ -3343,7 +3382,7 @@ def test_an_older_read_s_models_answered_last_never_replace_a_newer_read_s(tmp_p
         pds.group(page, "overview")
         page.get_by_role("button", name="Read again").click()
         until(page, lambda: held, READS_TIME)
-        outside.models(7)
+        offering(monkeypatch, 7)
         with page.expect_response("**/config/models", timeout=READS_TIME * 1000):
             page.get_by_role("button", name="Read again").click()
         pds.group(page, "agents")
