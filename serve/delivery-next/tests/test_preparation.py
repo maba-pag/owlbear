@@ -667,6 +667,46 @@ def test_a_returned_reviewer_question_does_not_rebuild_its_message_before_checkp
     assert len(authored) == 1
 
 
+def test_a_returned_recipe_is_accounted_before_preparer_cleanup(env, monkeypatch):
+    repo, store, _log, tmp = env
+    c, s = change(repo, "pc1"), settings(option(tmp))
+    c.env, c.plan = None, Plan(tasks=[Task(id="t1", title="one", scope=["src"])])
+    c.checks = [PersonCheck(id="pc1", steps=["open the page"])]
+    store.write(Lock("c1"), c)
+    monkeypatch.setattr(store, "settings", lambda: s)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)
+    returned = []
+
+    async def preparer(cfg):
+        returned.append(cfg.session_id)
+        return Run(
+            cfg.session_id,
+            "result",
+            recipe(),
+            termination=Termination(confirmed=True),
+            usage={"credits": 1},
+            tool_calls={"submit_result": {"calls": 1}},
+        )
+
+    real_end = prepare.preparer.end
+
+    def interrupted(*_args):
+        msg = "interrupted preparer cleanup"
+        raise KeyboardInterrupt(msg)
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", preparer)
+    monkeypatch.setattr(prepare.preparer, "end", interrupted)
+    with pytest.raises(KeyboardInterrupt, match="interrupted preparer cleanup"):
+        runner._agent(store, Lock("c1"), store.read("c1"), repo)  # noqa: SLF001
+    kept = store.read("c1")
+    assert (kept.spend.credits, kept.tool_use.tools["submit_result"].calls) == (1, 1)
+    monkeypatch.setattr(prepare.preparer, "end", real_end)
+    runner._agent(store, Lock("c1"), kept, repo)  # noqa: SLF001
+    done = store.read("c1")
+    assert (len(returned), done.spend.credits, done.tool_use.tools["submit_result"].calls) == (2, 2, 2)
+    assert done.env is not None
+
+
 def test_cleanup_cannot_replace_an_unverified_preparer_stop(env, monkeypatch):
     repo, store, _log, tmp = env
     c, s = change(repo, "pc1"), settings(option(tmp))

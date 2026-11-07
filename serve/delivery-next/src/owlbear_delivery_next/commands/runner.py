@@ -212,6 +212,10 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     result = session_result.to_result(run, s.kind, end)
     private = run.ending == "ask" and result.cause == cause_key(ErrorKind.RESULT, s.kind, worker_questions.LABEL)
     kept = worker_questions.unbound(post, lock, change, run, run.checks) if private else None
+    if kept is None:
+        sessions.logged(
+            post, lock, change, run, {"kind": s.kind, "exit": result.exit} | ({"held": True} if accepted else {})
+        )
     if ctx is not None:
         try:
             result = prepare.chosen(post, lock, change, path, run.payload, ctx, result)
@@ -230,10 +234,6 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     result = conversation.disputed(task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
     change = budgets.effect_observed(change, answer.id, end) if answer and session_result.effect_seen(run) else change
-    if kept is None:
-        sessions.logged(
-            post, lock, change, run, {"kind": s.kind, "exit": result.exit} | ({"held": True} if accepted else {})
-        )
     events: list[dict[str, object]] = []
     if s.kind == StepKind.PLAN and result.plan:  # recorded, then challenged in its loop (TD-190)
         result = plan_round.planned(post, lock, change, path, run.payload, result, profile, others, events)
