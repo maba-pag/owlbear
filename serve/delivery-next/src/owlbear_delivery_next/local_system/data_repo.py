@@ -72,8 +72,11 @@ def _held(path: Path) -> str:
     """The identity a claim file holds; nothing when there is none."""
     try:
         return path.read_text().strip()
-    except OSError, ValueError:
+    except FileNotFoundError:
         return ""
+    except (OSError, ValueError) as exc:
+        msg = f"the claim {path} cannot be read: {command_failure.failure(exc)}"
+        raise DataRepoError(msg) from exc
 
 
 def _git(cwd: Path, *args: str, until: float | None = None, lossless: bool = False) -> subprocess.CompletedProcess[str]:
@@ -199,11 +202,10 @@ class DataRepo:
 
     def claim(self, name: str, identity: str) -> bool:
         """Bind the project folder to one repository; True when this call wrote the claim.
-
         Another repository of the same name is refused.
         """
         path = self.root / name / CLAIM
-        held = path.read_text().strip() if path.exists() else ""
+        held = _held(path)
         if held and held != identity:
             msg = f"the shared settings folder {name} belongs to {held}, not {identity}; run setup with --folder NAME"
             raise DataRepoError(msg)
@@ -232,7 +234,6 @@ class DataRepo:
 
     def rename(self, old: str, new: str, until: float | None = None) -> str:
         """Move a project's folder with all it holds to ``new``, commit and push the move; the caller holds ``locked``.
-
         Files never committed move along uncommitted. What the owner should know about the publication, else nothing.
         """
         until = time.monotonic() + SAVE_SECONDS if until is None else until
@@ -257,7 +258,6 @@ class DataRepo:
 
     def publish(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> str:
         """Commit ``paths`` alone if they changed and push; what the owner should know when that fails, else nothing.
-
         The caller holds ``locked``. Unpushed earlier commits are pushed too, so an unchanged save retries them.
         """
         until = time.monotonic() + SAVE_SECONDS if until is None else until

@@ -182,7 +182,7 @@ def memory_missing(repo: Path) -> str | None:
         if shared and shared.claimed(data_repo.identity(repo)):
             return None
     except data_repo.DataRepoError as exc:
-        return str(exc)
+        return failure(exc)
     if shared is None:
         return "no shared repository is set up, so agents keep no memory; set one with `owlbear-next data PATH`"
     return "no folder in the shared repository holds this project; run setup again to claim one"
@@ -198,8 +198,8 @@ def consent(  # noqa: PLR0913 - the file, its merge and the owner's answer
         return f"not written (no consent): {path}"
     try:
         data = json.loads(path.read_text()) if path.exists() else {}
-    except OSError, ValueError:
-        data = None
+    except (OSError, ValueError) as exc:
+        return f"not written: {path} cannot be read: {failure(exc)}"
     if not isinstance(data, dict):
         return f"not written: {path} is not plain JSON; add the entry by hand"
     path.parent.mkdir(exist_ok=True)
@@ -214,7 +214,11 @@ def refused(repo: Path, path: Path) -> str | None:
     """Why *path* must not be written: a symbolic link on its way inside *repo*, or tracked."""
     if linked := text_files.linked_part(repo, path):
         return f"not written: {linked} is a symbolic link; add the entry by hand"
-    if not git_files.untracked(repo, path):
+    try:
+        untracked = git_files.untracked(repo, path)
+    except git_files.GitInspectionError as exc:
+        return f"not written: {failure(exc)}"
+    if not untracked:
         return f"not written: {path} is tracked, and Delivery commits nothing into the project"
     return None
 
@@ -248,15 +252,14 @@ def project_folder(repo: Path, chosen: str, ask: Ask, say: Callable[[str], objec
     name, asked = chosen or data_repo.project_name(repo), 0
     while True:
         if not (why := shared.refusal(name, ident)):
-            try:
-                with shared.locked():
-                    if shared.claim(name, ident):
-                        shared.publish(shared.root / name / data_repo.CLAIM, f"settings: the folder {name} is {ident}")
-            except data_repo.DataRepoError as exc:
-                why = str(exc)
-            else:
-                say(f"Shared settings folder: {shared.root / name}")
-                return True
+            notice = ""
+            with shared.locked():
+                if shared.claim(name, ident):
+                    notice = shared.publish(
+                        shared.root / name / data_repo.CLAIM, f"settings: the folder {name} is {ident}"
+                    )
+            say(f"Shared settings folder: {shared.root / name}" + (f"\n{notice}" if notice else ""))
+            return True
         say(f"{why}.")
         if chosen or asked == ASKS or not (name := ask("Folder name for this project in the shared settings: ")):
             break
