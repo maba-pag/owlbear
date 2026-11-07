@@ -228,7 +228,7 @@ class DataRepo:
         return f"the shared settings folder {name} belongs to {held}" if held and held != identity else ""
 
     def rename(self, old: str, new: str, until: float | None = None) -> str:
-        """Move all to ``new``, commit and push under ``locked``; uncommitted files stay so. Return publication notice."""
+        """Move to ``new``, commit and push under ``locked``; uncommitted files stay so. Return publication notice."""
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         why = self.refusal(new, _held(self.root / old / CLAIM))
         if why or (self.root / new).exists():
@@ -250,7 +250,7 @@ class DataRepo:
         return said
 
     def publish(self, paths: Path | Sequence[Path], message: str, until: float | None = None) -> str:
-        """Commit only ``paths`` and push under ``locked``; return failures. An unchanged save retries earlier pushes."""
+        """Commit ``paths`` and push under ``locked``; return failures. An unchanged save retries earlier pushes."""
         until = time.monotonic() + SAVE_SECONDS if until is None else until
         if said := self.commit(paths, message, until) or self._push(until):
             _log.warning("publishing %r in %s: %s", message, self.root, said)
