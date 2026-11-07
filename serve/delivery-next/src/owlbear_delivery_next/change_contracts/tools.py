@@ -66,7 +66,11 @@ class Rejection(Args):
 class BuildResult(Args):
     """``submit_result`` for the build step."""
 
-    summary: str = _f(2000, "What you changed and why, in a few sentences", "Added greet(name), with a test.")
+    summary: str = _f(
+        2000,
+        "What you changed and why, the real run that showed it and what stays unproven, in a few sentences",
+        "Added greet(name); ran greet('Ada'): 'Hallo, Ada!'. Unproven: non-ASCII names.",
+    )
     checks: list[CheckRun] = _f(
         100, "Every task check you ran on your final commit", [{"command": EXAMPLE_CHECK, "exit_code": 0}], least=0
     )

@@ -1,6 +1,6 @@
 ---
 name: owlbear-acceptance-criteria
-description: "Acceptance criteria that can be checked, and the cheapest proof that can falsify each one"
+description: "Acceptance criteria that can be checked, and how a change is proven: existing tests plus one real run"
 user-invocable: false
 ---
 
@@ -9,17 +9,11 @@ user-invocable: false
 Every criterion must be checkable by someone who cannot ask its author what was meant. Use this to
 write or judge a criterion, and to choose the proof that shows it is met.
 
-## Proof Selection
+## Proof
 
-Choose the cheapest proof that can falsify the boundary the criterion names. Escalate when the claim
-crosses an assembly or user-facing boundary:
-
-| Claimed boundary | Preferred proof |
-| --- | --- |
-| Pure logic, state transition, serialization, or supported component interaction | Focused public-function or component test |
-| Assembled command, endpoint, generated operation, or workflow | Integration test or the real assembled boundary, with dependencies replaced only below it |
-| Browser journey, layout, focus, geometry, or viewport behavior | A real-browser proof |
-| Startup, persistence, emitted side effect, publication, or visible status change | A command or procedure with a positive marker, artifact, or observed state change in addition to its exit status |
+A change is proven by the existing tests plus one real run of the changed behaviour: the command, the
+endpoint, one browser look at each page where something becomes visible. One run may cover several
+criteria. Say what that leaves unproven.
 
 A check that ran before the commit under review, or against a later changed worktree, does not prove
 that commit.
@@ -32,24 +26,20 @@ persisted, or changed.
 
 A reviewer judges the exact commit and its claimed boundary, not the builder's summary.
 
-A defect fix prefers an existing test that discriminates: one that fails on the defect and passes on the fix.
-Show failing-before evidence where it is feasible, such as that test failing on the commit before the fix;
-otherwise state what reproduces the defect and what the proof leaves open.
+A defect fix's real run shows the defect gone where it appeared. A bug that came back gets its new test,
+which fails on the commit before the fix and passes on the fix.
 
-## Durable Tests
+## New Tests
 
-Proof is not automatically a durable test. A search, diff, lint, type check, build or manual check can prove a
-task without becoming a committed test. A test that only confirms that text, a file or a symbol exists or is gone
+Proof is not automatically a durable test. A search, diff, lint, type check or build supports the proof without
+becoming a committed test. A test that only confirms that text, a file or a symbol exists or is gone
 freezes the change instead of protecting behaviour.
 
-- Admit a durable test only where it guards behaviour that is easy to break unnoticed and that nothing else
-  protects: a public interface, a non-obvious invariant or edge case, an error, concurrency, security or
-  data-loss boundary, or a fixed defect likely to return. Never add one to raise coverage or to mirror a
-  criterion's sentence.
+- Add a new test only for a bug that came back, or one per new security or data-loss boundary, at that
+  boundary; no case matrix.
 - Assertions test behaviour, not implementation: meaningful input through the boundary callers use, and an
   observable output, state, error or side effect. Ask which plausible regression would make the test fail;
   without an answer, choose another proof.
-- Add a negative or boundary case only where it separates the contract from a likely wrong implementation.
 
 ## Rules for a Criterion
 
