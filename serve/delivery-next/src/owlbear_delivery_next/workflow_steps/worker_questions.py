@@ -20,6 +20,7 @@ from owlbear_delivery_next.workflow_steps import (
     check,
     held,
     held_writes,
+    overlap,
     pending_child,
     pick,
     prepare,
@@ -99,7 +100,15 @@ def continued(store: Store, lock: Lock, c: Change, path: Path) -> bool:
         if event is not None:
             sessions.announce(store, lock, c.slug, event)
         return False
-    result, event = checked(store, lock, c, path)
+    parent = held.restored(p.run)
+    task = next((t for t in c.plan.tasks if t.id == s.task), None) if c.plan else None
+    raw = session_result.to_result(parent, s.kind, datetime.now(UTC))
+    result = overlap.integrated(store, lock, c, path, (task.base if task else None, parent.ending), raw)
+    gated = result is not raw
+    if gated:
+        event = _retired(c, result.reason)
+    else:
+        result, event = checked(store, lock, c, path)
     if result.exit == Exit.ASK and p.answer:
         c = budgets.effect_observed(c, p.answer, datetime.now(UTC))
     final = loop.apply(c, result, datetime.now(UTC))
@@ -109,7 +118,7 @@ def continued(store: Store, lock: Lock, c: Change, path: Path) -> bool:
         final.step.question_errors = result.reason.splitlines()
     else:
         final.step.question_errors = []
-    if rejected or (result.exit == Exit.ASK and result.question and result.question.cause is None):
+    if gated or rejected or (result.exit == Exit.ASK and result.question and result.question.cause is None):
         final.pending_question = None
     final.pending_child = None
     store.write(lock, final)
