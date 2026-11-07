@@ -67,12 +67,6 @@ def checkpoint(post: Store | held_writes.Deferred, lock: Lock, c: Change, run: R
     return store
 
 
-def matches(c: Change) -> bool:
-    """Whether the private proposal still belongs to this step and brief."""
-    p, s = c.pending_question, c.step
-    return bool(p and p.brief == c.brief.version and p.step == (s.kind, s.task, s.mode))
-
-
 def feedback(errors: Sequence[str]) -> str:
     """Delivery's field errors, never framed as an answer from the owner."""
     return (
@@ -84,13 +78,13 @@ def feedback(errors: Sequence[str]) -> str:
 
 def continued(store: Store, lock: Lock, c: Change, path: Path) -> bool:
     """Settle a private proposal, reusing its paid verdict; no parent worker is run a second time."""
-    if c.pending_question is None:
+    p, s = c.pending_question, c.step
+    if p is None:
         return False
-    if not matches(c):
+    if p.brief != c.brief.version or p.step != (s.kind, s.task, s.mode):
         c.pending_question = None
         store.write(lock, c)
         return False
-    p = c.pending_question
     result, event = checked(store, lock, c, path)
     if result.exit == Exit.ASK and p.answer:
         c = budgets.effect_observed(c, p.answer, datetime.now(UTC))
