@@ -178,11 +178,13 @@ def _stale(p: PendingQuestion, path: Path) -> list[str]:
 
 
 def _inputs(path: Path) -> str:
-    """Bind Git-visible edits, including new files, using the existing private-index capture.
+    """Bind live index entries and Git-visible edits, including new files, using private-index capture.
 
     Ignored dependencies and external inputs are not captured; this is not an isolated test environment.
     """
-    return hashlib.sha256(prepare.capture(path, prepare.edits(path))).hexdigest()
+    index = worktree.git(path, "ls-files", "--stage", "-z").encode()
+    edits = prepare.capture(path, prepare.edits(path))
+    return hashlib.sha256(len(index).to_bytes(8, "big") + index + edits).hexdigest()
 
 
 def _booked(c: Change, done: Run, result: loop.StepResult) -> dict[str, object] | None:
