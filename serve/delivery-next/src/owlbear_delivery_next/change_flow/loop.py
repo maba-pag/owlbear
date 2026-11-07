@@ -56,6 +56,7 @@ from owlbear_delivery_next.change_flow import (
     rebuilds,
     round_flow,
     shaping_capture,
+    stuck,
 )
 from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go, open_task, resolved, resume
 
@@ -123,6 +124,7 @@ class StepResult(Record):
     operational: bool = False  # about the session's tools, not its work: a plan challenge passes it on as it is
     challenged: bool = False  # the plan challenge's findings sent the plan back (TD-188)
     ungated: bool = False  # a task loop or the owner's Fix it governs the repair: no round gate (TD-193, TD-208)
+    setup: bool = False  # a setup problem: no retry, no step back; it goes to repair (#1065)
 
 
 def waiting_consent(c: Change) -> bool:
@@ -406,6 +408,10 @@ def apply(change: Change, result: StepResult, now: datetime) -> Change:
                         waiting=result.waiting, wake_at=result.wake_at, denial=result.denial,
                         challenged=result.challenged, at=now)  # fmt: skip
     budgets.streaks(c, result)
+    if result.setup:  # D-01M6RT5QHWHB0ZHBBY0BE34FBE: never retried as temporary, never back to the brief
+        stuck.start(c, result.cause or "", result.reason, now)
+        curation_flow.fixed(c, change.step, now)
+        return c
     match result.exit:
         case Exit.DONE:
             c.stop = None

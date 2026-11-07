@@ -12,10 +12,12 @@ from owlbear_delivery_next.change_contracts.failures import (
     READ_ONLY,
     READ_ONLY_UNREAD,
     RO_WORKTREE,
+    SETUP,
     UNREAD,
     WRONG_MODEL,
     cause_key,
     quota,
+    signature,
     transient,
 )
 from owlbear_delivery_next.change_contracts.models import (
@@ -58,6 +60,7 @@ type Ending = Literal[
 ]
 type ModelCheck = Literal["verified", "mismatch", "unknown"]
 PROVEN: frozenset[str] = frozenset({"result", "ask", "premise", "missing-tool"})  # endings whose model must be proven
+PLAN_TARGET = (StepKind.PLAN, "target")  # a planner finding the target lacks something: setup, not the brief
 WRONG_MODEL_WAIT = timedelta(minutes=5)  # owner decision 2026-10-15: one rerun of a wrong model, after a fixed wait
 
 
@@ -281,6 +284,10 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
             return StepResult(exit=Exit.ASK, question=question)
         case "spotter-ask":  # the Spotter stopped the step to ask the owner (#717)
             return StepResult(exit=Exit.ASK, question=answer_kinds.spotter(kind, run.detail))
+        case "premise" if isinstance(p, tools.WrongPremise) and (p.stage == "setup" or (kind, p.stage) == PLAN_TARGET):
+            said = " ".join(f"{p.reason} ({'; '.join(p.evidence)})".split())
+            subject = f"{SETUP}-{signature(SETUP, str(kind), p.reason)[:8]}"  # one obstruction, not every premise
+            return missing.setup(cause_key(ErrorKind.PROJECT_ENV, kind, subject), said)
         case "premise" if isinstance(p, tools.WrongPremise):
             cause = cause_key(ErrorKind.SCOPE, kind, p.stage)
             back = {StepKind.CHECK: StepKind.BUILD, StepKind.PLAN: StepKind.SHAPE}.get(kind, StepKind.PLAN)

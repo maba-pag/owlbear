@@ -119,9 +119,11 @@ class Amend(Args):
 class WrongPremise(Args):
     """``report_wrong_premise``: the brief or plan cannot be built as written, or the target has what is missing."""
 
-    stage: Literal["brief", "plan", "target"] = Field(
+    stage: Literal["brief", "plan", "target", "setup"] = Field(
         description="Which document is wrong; target when the task needs a commit or API that is on the target "
-        "branch but not in this branch yet",
+        "branch but not in this branch yet; setup when something outside the brief and plan is missing or broken "
+        "(a PR not merged, a profile entry or setting, a tool, a check that cannot finish); brief only when what the "
+        "owner gets must change",
         examples=["plan"],
     )
     reason: str = _f(1000, "What is wrong", "greet() already exists with another signature.")
