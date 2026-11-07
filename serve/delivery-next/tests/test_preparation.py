@@ -587,6 +587,79 @@ def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env, monke
     assert prepare.edits(repo) == []
 
 
+def test_a_returned_reviewer_question_does_not_rebuild_its_message_before_checkpointing(env, monkeypatch):
+    repo, store, _log, tmp = env
+    c, s = change(repo), settings(option(tmp))
+    c.env = None
+    c.step = Step(kind=StepKind.REVIEW, task="t1")
+    c.names.target = git(repo, "branch", "--show-current").strip()
+    c.plan = Plan(tasks=[Task(id="t1", title="one", scope=["src"])])
+    store.write(Lock("c1"), c)
+    monkeypatch.setattr(store, "settings", lambda: s)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)
+    returned, authored = [], []
+    compose = runner.step_input.session
+
+    def parts(*args):
+        if returned:
+            raise subprocess.CalledProcessError(-9, ["git", "rev-parse", "HEAD"])
+        return compose(*args)
+
+    def reviewer(_store, _lock, _change, path, config):
+        cfg = config(path)
+        authored.append(cfg.session_id)
+        returned.append(True)
+        return Run(
+            cfg.session_id,
+            "ask",
+            tools.AskQuestion(
+                question="Pause or abandon?",
+                why="Choose the next move.",
+                options=[
+                    {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
+                    {"label": "Abandon", "effect": "Abandon this Change.", "action": "abandon"},
+                ],
+            ),
+            checks=cfg.checks,
+            termination=Termination(confirmed=True),
+            usage={"credits": 1},
+        )
+
+    def judge(_store, _lock, private, _proposed):
+        assert private.pending_question is not None
+        assert private.pending_question.checks == []
+        assert store.read("c1").pending_question.run.session_id == authored[0]
+        assert store.read("c1").spend.credits == 1
+        return Run(
+            "admission",
+            "result",
+            pick_tools.QuestionJudgment(
+                options=[
+                    {
+                        "index": i,
+                        "executable": True,
+                        "why": "Supported move.",
+                        "check_related": False,
+                        "recommends": False,
+                    }
+                    for i in range(2)
+                ]
+            ),
+            termination=Termination(confirmed=True),
+            usage={"credits": 2},
+        )
+
+    monkeypatch.setattr(runner.step_input, "session", parts)
+    monkeypatch.setattr(runner, "_kept", reviewer)
+    monkeypatch.setattr(worker_questions, "session", judge)
+    runner._agent(store, Lock("c1"), store.read("c1"), repo)  # noqa: SLF001
+    done = store.read("c1")
+    assert done.outcome.exit == Exit.ASK
+    assert done.spend.credits == 3
+    assert done.pending_question is None
+    assert len(authored) == 1
+
+
 def test_cleanup_cannot_replace_an_unverified_preparer_stop(env, monkeypatch):
     repo, store, _log, tmp = env
     c, s = change(repo, "pc1"), settings(option(tmp))
