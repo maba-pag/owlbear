@@ -55,6 +55,66 @@ GOOD = {
 }
 
 
+def test_a_head_read_after_a_worker_ask_keeps_custody_and_replay_closes_the_build_span(
+    tmp_path, change_repo, monkeypatch
+):
+    store, lock = Store(tmp_path / "store"), Lock("c1")
+    base = worker_questions.worktree.head(change_repo)
+    c = Change(
+        slug="c1",
+        brief=Brief(version=1),
+        step=Step(kind=StepKind.BUILD, task="t1"),
+        names=Names(branch="owlbear/c1", target="main", worktree=str(change_repo)),
+        plan=Plan(tasks=[Task(id="t1", title="Product", scope=["."], base=base, spans=[f"{base}.."])]),
+    )
+    store.write(lock, c)
+    parent = Run(
+        "question-author",
+        "ask",
+        tools.AskQuestion(
+            question="Continue?",
+            why="Choose the next move.",
+            options=[
+                {"label": "Continue", "effect": "Continue this worker.", "action": "continue"},
+                {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
+            ],
+        ),
+        termination=Termination(confirmed=True),
+        usage={"credits": 1},
+        tool_calls={"ask_question": {"calls": 1}},
+    )
+
+    def interrupted(_path):
+        msg = "runner killed during HEAD read"
+        raise SystemExit(msg)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(worker_questions.worktree, "head", interrupted)
+        with pytest.raises(SystemExit, match="runner killed"):
+            worker_questions.checkpoint(store, lock, c, parent, [])
+    kept = store.read("c1")
+    assert kept.pending_question is not None
+    assert (kept.pending_question.run.session_id, kept.pending_question.inputs) == (parent.session_id, "")
+    assert (kept.spend.credits, kept.tool_use.tools["ask_question"].calls, kept.plan.tasks[0].spans) == (
+        1,
+        1,
+        [f"{base}.."],
+    )
+    monkeypatch.setattr(worker_questions, "session", lambda *_: pytest.fail("the parent must not be judged again"))
+    assert worker_questions.continued(store, lock, kept, change_repo)
+    done = store.read("c1")
+    assert (done.plan.tasks[0].spans, done.step.session, done.spend.credits) == (
+        [f"{base}..{base}"],
+        parent.session_id,
+        1,
+    )
+    assert done.step.question_errors == [
+        "options: worktree inputs were not recorded - resubmit the options on its current code"
+    ]
+    assert not worker_questions.continued(store, lock, done, change_repo)
+    assert store.read("c1").spend.credits == 1
+
+
 def test_input_capture_failure_keeps_the_parent_and_returns_feedback_to_its_author(
     tmp_path, change_repo, monkeypatch
 ) -> None:

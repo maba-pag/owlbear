@@ -66,7 +66,7 @@ def checkpoint(post: Store | held_writes.Deferred, lock: Lock, c: Change, run: R
 
 def unbound(post: Store | held_writes.Deferred, lock: Lock, c: Change, run: Run, checks: Sequence[str]) -> Store:
     """Keep the parent and its accounting/held receipt before input capture, trials or paid children."""
-    s, path = c.step, Path(c.names.worktree)
+    s = c.step
     s.session = run.session_id
     answer = answer_kinds.delivered_next(c)
     c.pending_question = PendingQuestion(
@@ -78,8 +78,6 @@ def unbound(post: Store | held_writes.Deferred, lock: Lock, c: Change, run: Run,
         answer=answer.id if answer else "",
     )
     route = loop.StepResult(exit=Exit.PENDING, reason="checking the proposed question before offering it")
-    task = next((t for t in c.plan.tasks if t.id == s.task), None) if c.plan else None
-    review.recorded(c, task, run, path, route)
     c.pending_child = pending_child.awaited(LABEL, run.session_id, route, c)
     event = sessions.account(c, run, {"kind": s.kind, "exit": Exit.PENDING, "reason": route.reason})
     store = held_writes.checkpoint(post, lock, c)
@@ -124,6 +122,9 @@ def continued(store: Store, lock: Lock, c: Change, path: Path) -> bool:
     raw = session_result.to_result(parent, s.kind, datetime.now(UTC))
     if raw.cause == cause_key(ErrorKind.RESULT, s.kind, LABEL) and isinstance(parent.payload, tools.AskQuestion):
         raw.reason = f"{parent.payload.question} (why: {parent.payload.why})"
+    parent.head = parent.head or p.head or None
+    raw = review.recorded(c, task, parent, path, raw)
+    store.write(lock, c)
     result = overlap.integrated(store, lock, c, path, (task.base if task else None, parent.ending), raw)
     gated = result is not raw
     if gated:
