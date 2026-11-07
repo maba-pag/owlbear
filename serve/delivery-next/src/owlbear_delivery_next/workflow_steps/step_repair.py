@@ -10,6 +10,7 @@ the repair's spend. A defect in OwlBear's own code gets an issue (``defect_issue
 
 from __future__ import annotations
 
+import ast
 import os
 import shlex
 import tomllib
@@ -297,8 +298,8 @@ def _installs(change: Change, prof: Profile) -> tuple[str, ...]:
 def _named(path: str, witness: tuple[str, ...], source: Path | None = None) -> bool:
     """Whether a check command names *path*: a fix to the check it is proven by needs the owner (never weakened).
 
-    A script by its path, or a Python module run with ``-m`` by its file; a command that can't be parsed names every
-    path.
+    A script by its path, a Python module run with ``-m`` by its file, or the root selector's imported machinery;
+    a command that can't be parsed names every path.
     """
     for one in witness:
         where, command = _split(one)
@@ -335,12 +336,43 @@ def _console_script(path: str, words: list[str], source: Path) -> bool:
         project = tomllib.loads(manifest.read_text(encoding="utf-8")).get("project", {})
         scripts = project.get("scripts", {})
         for command in invoked & scripts.keys():
-            module = scripts[command].split(":", 1)[0].replace(".", "/")
+            module = scripts[command].split(":", 1)[0]
             package = manifest.parent.relative_to(source)
-            for relative in (package / "src" / f"{module}.py", package / f"{module}.py"):
+            filename = module.replace(".", "/") + ".py"
+            for relative in (package / "src" / filename, package / filename):
                 if relative.as_posix() == path:
                     return True
+            if module == "owlbear_tools.testing" and path in _selector_inputs(source, package, module):
+                return True
     return False
+
+
+def _selector_inputs(source: Path, package: Path, entry: str) -> set[str]:
+    """The root selector's in-package imports from unchanged source, not tests it loads dynamically."""
+    found: set[str] = set()
+    seen: set[str] = set()
+    pending = [entry]
+    while pending:
+        module = pending.pop()
+        if module in seen or not (module == "owlbear_tools" or module.startswith("owlbear_tools.")):
+            continue
+        seen.add(module)
+        name = module.replace(".", "/")
+        for root in (source / package / "src", source / package):
+            for path in (root / f"{name}.py", root / name / "__init__.py"):
+                if not path.is_file():
+                    continue
+                found.add(path.relative_to(source).as_posix())
+                parent = module.split(".") if path.name == "__init__.py" else module.split(".")[:-1]
+                for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                    if isinstance(node, ast.Import):
+                        pending.extend(alias.name for alias in node.names)
+                    elif isinstance(node, ast.ImportFrom):
+                        prefix = parent[: len(parent) - node.level + 1] if node.level else []
+                        imported = ".".join([*prefix, *([node.module] if node.module else [])])
+                        pending.append(imported)
+                        pending.extend(f"{imported}.{alias.name}" for alias in node.names if alias.name != "*")
+    return found
 
 
 def _split(check: str) -> tuple[str | None, str]:

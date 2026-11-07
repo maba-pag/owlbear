@@ -77,6 +77,9 @@ proof before merge. It prints **candidate evidence**, not installed acceptance; 
 never automatically accepts an unmerged map. Missing, incompatible or unresolved evidence raises
 an error instead of bootstrapping the full suite or returning an empty passing check.
 Block observations are not line or branch coverage, and Linux maps alone do not prove macOS behavior.
+Repair witnesses recognize the root selector and its in-package imports from unchanged source.
+A repair that changes this selection machinery cannot prove itself with its altered check alone;
+it retains the existing owner hold rather than being applied automatically.
 
 ### Dependency environment
 

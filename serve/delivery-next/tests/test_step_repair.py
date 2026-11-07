@@ -6,8 +6,10 @@ from types import SimpleNamespace
 
 import pytest
 
+from owlbear_delivery_next.change_contracts import check_hint
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_contracts.repair_records import Witness
 from owlbear_delivery_next.change_contracts.repair_tools import Defect
 from owlbear_delivery_next.change_flow import stuck, worktree
 from owlbear_delivery_next.github.account import Origin
@@ -54,6 +56,46 @@ def test_a_fix_that_weakens_a_test_is_never_applied(repo, tmp_path) -> None:
     assert "weakens a check" in c.stop.reason
     assert "tests/test_a.py (adds a suppression or skip)" in c.stop.reason
     assert (worktree.git(repo, "rev-parse", "HEAD"), c.repairs.done[-1].commit) == (head, "")  # nothing applied
+
+
+def test_a_selector_fix_is_held_even_when_its_own_empty_check_passes(repo, tmp_path, monkeypatch) -> None:
+    package = repo / "serve/tools"
+    source = package / "src/owlbear_tools"
+    source.mkdir(parents=True)
+    (package / "pyproject.toml").write_text('[project.scripts]\ntest = "owlbear_tools.testing:test_main"\n')
+    for name, text in {
+        "testing.py": "from owlbear_tools import task_scope\n",
+        "task_scope.py": "from . import task_testing\n",
+        "task_testing.py": "from .test_impact import select\n\ndef commands():\n    return ['tests/test_a.py']\n",
+        "test_impact.py": "from owlbear_tools import test_dependencies\n",
+        "test_dependencies.py": "FORMAT = 1\n",
+    }.items():
+        (source / name).write_text(text)
+    worktree.git(repo, "add", "serve/tools")
+    worktree.git(repo, "commit", "-q", "-m", "root selector")
+    c, at = stuck_change(), tmp_path / "copy"
+    c.brief.scope = ["serve/tools"]
+    r = c.repairs.current
+    r.base, r.fix = repair_copy.copy(repo, at), "patch"
+    path = "serve/tools/src/owlbear_tools/task_testing.py"
+    (at / path).write_text("def commands():\n    return []\n")
+    witness = (check_hint.task_command(check_hint.qualified(".", "uv run test --changed"), r.base, r.base),)
+    head = worktree.git(repo, "rev-parse", "HEAD")
+    monkeypatch.setattr(
+        step_repair,
+        "_ran",
+        lambda _at, commands, *_: Witness(
+            commands=list(commands), exit=0, seconds=0.0, output="No test scope matched."
+        ),
+    )
+    store = SimpleNamespace(log=lambda *_: None, write=lambda *_: None)
+    step_repair._proven(store, None, c, (repo, at), witness, 60.0, Profile())  # noqa: SLF001
+    assert worktree.git(repo, "rev-parse", "HEAD") == head
+    assert r.held == [f"changes {path}, which the step's check runs, so it proves nothing alone"]
+    assert all(
+        step_repair._named(f"serve/tools/src/owlbear_tools/{name}.py", witness, repo)  # noqa: SLF001
+        for name in ("testing", "task_scope", "task_testing", "test_impact", "test_dependencies")
+    )
 
 
 def test_a_fix_reaches_the_branch_without_touching_the_steps_unfinished_edits(repo, tmp_path) -> None:
