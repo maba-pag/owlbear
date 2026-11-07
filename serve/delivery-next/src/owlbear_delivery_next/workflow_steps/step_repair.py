@@ -76,6 +76,7 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
     at = store.root / "runs" / f"{change.slug}-repair-{len(change.repairs.done) + 1}"
     r.base = repair_copy.copy(path, at)
     store.write(lock, change)
+    done: Run | None = None
     try:
         witness = _witness(change, prof)
         asked = lookup.Asked(store, lock, lambda: change)  # the repairer's and its Spotter's lookups (TD-456)
@@ -100,7 +101,10 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
         r.package, r.command = p.package.strip(), p.command.strip()
         _proven(store, lock, change, (path, at), witness, roles.limit(settings, LABEL), prof)
     finally:
-        repair_copy.drop(path, at)
+        if done is not None and done.termination is not None and done.termination.confirmed:
+            repair_copy.drop(path, at)
+        else:  # its processes may still use it: the next repair's copy replaces it
+            _log(store, lock, change, f"kept its copy {at}: its session's processes are not confirmed gone")
 
 
 def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof and its limit, the profile
@@ -124,10 +128,8 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
     if weak:
         _stopped(store, lock, change, f"its fix weakens a check, which Delivery never applies: {', '.join(weak)}")
         return
-    r.witness = _ran(at, (*_installs(change, prof), *witness), within, store, lock)
-    if not witness or r.witness.exit != 0:
-        ran = ", ".join(witness) or "no check"
-        _stopped(store, lock, change, f"Delivery's run of {ran} with the fix failed: {r.witness.output}")
+    if why := _witnessed(store, lock, change, at, (witness, within, prof)):
+        _stopped(store, lock, change, why)
         return
     r.paths = [p for p, _ in changed]
     said = f"fix: {stuck.obstruction(r.found)}\n\nRepaired by an agent; committed by Delivery."
@@ -153,6 +155,22 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
         return
     stuck.asked(change, _question(r), datetime.now(UTC))
     store.write(lock, change)
+
+
+def _witnessed(
+    store: Store, lock: Lock, change: Change, at: Path, given: tuple[tuple[str, ...], float, Profile]
+) -> str:
+    """Delivery's run of the witness on the staged fix; why it proves nothing, or empty when it proves the fix."""
+    (witness, within, prof), r = given, change.repairs.current
+    assert r is not None  # noqa: S101 - _proven() checked it
+    tree = repair_copy.git(at, ["write-tree"])
+    r.witness = _ran(at, (*_installs(change, prof), *witness), within, store, lock)
+    if not witness or r.witness.exit != 0:
+        return f"Delivery's run of {', '.join(witness) or 'no check'} with the fix failed: {r.witness.output}"
+    repair_copy.changed(at, r.base)  # stages what the run left, its bytecode aside
+    if wrote := repair_copy.git(at, ["diff", "--cached", "--name-only", tree]).splitlines():
+        return f"its proof changed {', '.join(wrote)}, so it proved other bytes than the fix"
+    return ""
 
 
 def _offered(  # noqa: PLR0913, PLR0917 - the Change, its copy, what changed there and the profile
@@ -266,13 +284,30 @@ def _installs(change: Change, prof: Profile) -> tuple[str, ...]:
 
 
 def _named(path: str, witness: tuple[str, ...]) -> bool:
-    """Whether a check command names *path*: a fix to the check it is proven by needs the owner (never weakened)."""
+    """Whether a check command names *path*: a fix to the check it is proven by needs the owner (never weakened).
+
+    A script by its path, or a Python module run with ``-m`` by its file; a command that can't be parsed names every
+    path.
+    """
     for one in witness:
         where, command = _split(one)
-        for word in command.replace(";", " ").replace("&&", " ").replace("||", " ").split():
-            named = PurePosixPath(where or ".", word.strip("'\"{}()"))
-            if os.path.normpath(named) == os.path.normpath(path) or (not where and PurePosixPath(word).name == path):
-                return True
+        try:
+            words = list(shlex.shlex(command, posix=True, punctuation_chars=True))
+        except ValueError:
+            return True
+        for before, word in zip(["", *words], words, strict=False):
+            found = [word.strip("{}")]
+            if before == "-m":
+                module = word.replace(".", "/")
+                found = [f"{module}.py", f"{module}/__main__.py", f"{module}/__init__.py"]
+            for name in found:
+                named = os.path.normpath(PurePosixPath(where or ".", name))
+                if named == os.path.normpath(path):
+                    return True
+                if before == "-m" and path.endswith(f"/{name}") and (not where or evidence.within(where, path)):
+                    return True  # a module found on the path, as a src/ layout puts it
+                if not where and PurePosixPath(name).name == path:
+                    return True
     return False
 
 
