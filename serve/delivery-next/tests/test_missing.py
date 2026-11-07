@@ -209,6 +209,8 @@ C1_CHECK = "cd . && {\nuv run test --changed && uv run lint --no-fix\n}"
 C1_TIMEOUT = (  # nodes naming a connection or a quota are no network or capacity failure
     "PASSED tests/test_vscode_step.py::test_connection_speaks_websocket_json_rpc_over_the_local_socket\n"
     "PASSED tests/test_missing.py::test_the_quota_never_overrides_a_report\n"
+    "PASSED tests/test_api.py::test_a_rate_limit_waits[ECONNRESET]\n"
+    "========= 429 passed in 900.12s =========\n"
     "xdist.dsession.Interrupted: session-timeout: 900.0 sec exceeded"
 )
 
@@ -221,7 +223,8 @@ def test_a_check_that_cannot_finish_is_repaired_and_a_network_failure_of_it_stil
     c = loop.apply(change(), r, NOW)
     assert (c.outcome.exit, c.stop.action, c.step.kind) == (Exit.STOP, f"Resolve {r.cause}", K.BUILD)
     for error in ("npm ERR! request to https://registry.npmjs.org failed, reason: connect ETIMEDOUT 104.16.1.35:443",
-                  "Error: read ECONNRESET"):  # fmt: skip
+                  "Error: read ECONNRESET",
+                  "socket.gaierror: [Errno -3] Temporary failure in name resolution"):  # fmt: skip
         offline = to_result(run(report("uv run test --changed", error), checks=(check,)), K.BUILD, NOW)
         assert (offline.cause, offline.exit, offline.setup) == (
             "network:build:tool-uv-run-test-changed",
