@@ -173,7 +173,7 @@ def held_with(scope: Any, name: str, why: str | re.Pattern[str]) -> None:
 
 
 @pytest.mark.browser
-def test_the_changes_page_names_the_blocked_project_and_holds_only_its_starting_buttons(host, request) -> None:
+def test_the_changes_page_names_the_blocked_project_and_holds_only_its_starting_buttons(host) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     page, base, a, b = host.page, host.base, host.ids["alpha"], host.ids["beta"]
@@ -209,22 +209,6 @@ def test_the_changes_page_names_the_blocked_project_and_holds_only_its_starting_
     expect(detail.locator("section.act").get_by_role("button", name="Answer")).to_be_enabled(timeout=WAIT)
     expect(detail.get_by_role("button", name="Pause")).to_be_enabled()
 
-    host.stores["alpha"].config_path.write_text("{")  # an unreadable layer is named with its reason
-    try:
-        json.loads("{")
-    except ValueError as exc:
-        unreadable = f"alpha: settings can't be read: state of config is unreadable: {failure(exc)}"
-    page.goto(f"{base}/#token=t")
-    expect(banner.locator("li")).to_have_text([unreadable], timeout=WAIT)
-
-    request.getfixturevalue("intervals_unset")  # this machine's update checks: every project waits
-    expect(banner).to_have_attribute("state", "error", timeout=WAIT)
-    expect(banner).to_have_attribute("heading", EVERY)
-    expect(banner.locator("li")).to_have_count(2)
-    expect(banner.locator("li").nth(0)).to_have_text(unreadable)
-    expect(banner.locator("li").nth(1)).to_have_text("beta: 3 settings are unset; set them on the Settings page")
-    expect(page.get_by_role("button", name="New Change")).to_be_disabled()
-
 
 @pytest.mark.browser
 def test_new_change_offers_only_projects_whose_work_may_start_and_follows_the_poll(host, pds) -> None:
@@ -250,6 +234,29 @@ def test_new_change_offers_only_projects_whose_work_may_start_and_follows_the_po
     expect(go).to_be_enabled(timeout=WAIT)
     expect(select).to_have_js_property("value", b)
     expect(page.locator("#blocked")).to_have_attribute("state", "warning")
+
+
+@pytest.mark.browser
+def test_an_unreadable_layer_is_named_with_its_reason_and_an_unset_interval_blocks_every_project(host, request) -> None:
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    page, base = host.page, host.base
+    host.stores["alpha"].config_path.write_text("{")
+    try:
+        json.loads("{")
+    except ValueError as exc:
+        unreadable = f"alpha: settings can't be read: state of config is unreadable: {failure(exc)}"
+    page.goto(f"{base}/#token=t")
+    banner = page.locator("#blocked")
+    expect(banner.locator("li")).to_have_text([unreadable], timeout=WAIT)
+
+    request.getfixturevalue("intervals_unset")  # this machine's update checks: every project waits
+    expect(banner).to_have_attribute("state", "error", timeout=WAIT)
+    expect(banner).to_have_attribute("heading", EVERY)
+    expect(banner.locator("li")).to_have_count(2)
+    expect(banner.locator("li").nth(0)).to_have_text(unreadable)
+    expect(banner.locator("li").nth(1)).to_have_text("beta: 3 settings are unset; set them on the Settings page")
+    expect(page.get_by_role("button", name="New Change")).to_be_disabled()
 
 
 @pytest.mark.browser
