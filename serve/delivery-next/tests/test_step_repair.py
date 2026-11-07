@@ -1,0 +1,91 @@
+"""#1066: a stuck step's repair at its three boundaries: weakened checks, unfinished edits, public issues."""
+
+from datetime import UTC, datetime
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from owlbear_delivery_next.change_contracts.models import Brief, Change, Plan, Step, StepKind, Task
+from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_contracts.repair_tools import Defect
+from owlbear_delivery_next.change_flow import stuck, worktree
+from owlbear_delivery_next.github.account import Origin
+from owlbear_delivery_next.workflow_steps import defect_issue, repair_copy, step_repair
+
+NOW = datetime(2026, 11, 7, 12, tzinfo=UTC)
+
+
+@pytest.fixture
+def repo(tmp_path, monkeypatch) -> Path:
+    (tmp_path / "gitconfig").write_text("")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    for who in ("AUTHOR", "COMMITTER"):
+        monkeypatch.setenv(f"GIT_{who}_NAME", "t")
+        monkeypatch.setenv(f"GIT_{who}_EMAIL", "t@t")
+    work = tmp_path / "work"
+    (work / "tests").mkdir(parents=True)
+    for name, text in {"a.txt": "a\n", "b.txt": "b\n", "tests/test_a.py": "def test_a():\n    assert 1\n"}.items():
+        (work / name).write_text(text)
+    worktree.git(work, "init", "-q", "-b", "c1")
+    worktree.git(work, "add", ".")
+    worktree.git(work, "commit", "-q", "-m", "base")
+    return work
+
+
+def stuck_change() -> Change:
+    c = Change(
+        slug="c1", brief=Brief(version=1, approved_version=1, challenged=1, scope=["."]),
+        plan=Plan(tasks=[Task(id="t1", title="t1", scope=["."])]), step=Step(kind=StepKind.BUILD, task="t1"),
+    )  # fmt: skip
+    stuck.start(c, "project-env:build:check-pytest", "the check pytest cannot finish", NOW)
+    return c
+
+
+def test_a_fix_that_weakens_a_test_is_never_applied(repo, tmp_path) -> None:
+    c, at = stuck_change(), tmp_path / "copy"
+    r = c.repairs.current
+    r.base, r.fix = repair_copy.copy(repo, at), "patch"
+    (at / "tests/test_a.py").write_text("import pytest\n\n\n@pytest.mark.skip\ndef test_a():\n    assert 1\n")
+    head = worktree.git(repo, "rev-parse", "HEAD")
+    store = SimpleNamespace(log=lambda *_: None, write=lambda *_: None)
+    step_repair._proven(store, None, c, (repo, at), ("true",), 60.0, Profile())  # noqa: SLF001
+    assert "weakens a check" in c.stop.reason and "tests/test_a.py (adds a suppression or skip)" in c.stop.reason
+    assert (worktree.git(repo, "rev-parse", "HEAD"), c.repairs.done[-1].commit) == (head, "")  # nothing applied
+
+
+def test_a_fix_reaches_the_branch_without_touching_the_steps_unfinished_edits(repo, tmp_path) -> None:
+    (repo / "a.txt").write_text("a, unstaged\n")
+    (repo / "b.txt").write_text("b, staged\n")
+    worktree.git(repo, "add", "b.txt")
+    (repo / "u.txt").write_text("untracked\n")
+    at = tmp_path / "copy"
+    base = repair_copy.copy(repo, at)
+    (at / "c.txt").write_text("the fix\n")
+    repair_copy.changed(at, base)
+    fix = repair_copy.commit(at, "fix")
+    new = repair_copy.apply(repo, "c1", base, fix, "fix: c")
+    assert worktree.git(repo, "show", "--name-only", "--format=", new).split() == ["c.txt"]  # the fix alone
+    assert (repo / "a.txt").read_text() == "a, unstaged\n" and (repo / "u.txt").read_text() == "untracked\n"
+    assert worktree.git(repo, "diff", "--cached", "--name-only").split() == ["b.txt"]  # still staged, unchanged
+    (at / "a.txt").write_text("a, by the repair\n")  # the same file as the unfinished edit
+    repair_copy.changed(at, base)
+    again = repair_copy.commit(at, "fix a")
+    with pytest.raises(repair_copy.RepairError, match=r"a\.txt, which hold the step's unfinished edits"):
+        repair_copy.apply(repo, "c1", base, again, "fix: a")
+    assert ((repo / "a.txt").read_text(), worktree.git(repo, "rev-parse", "HEAD").strip()) == ("a, unstaged\n", new)
+
+
+def test_a_private_projects_defect_text_naming_it_is_held_not_filed(repo, monkeypatch) -> None:
+    made: list[str] = []
+    issues = SimpleNamespace(find=lambda _m: None, create=lambda title, _body: made.append(title))
+    monkeypatch.setattr(defect_issue, "OwlbearIssues", lambda *_: issues)
+    monkeypatch.setattr(defect_issue.Origin, "of", classmethod(lambda *_: Origin("github.com", "acme", "secret-shop")))
+    monkeypatch.setattr(defect_issue.repo_target, "view", lambda *_: SimpleNamespace(visibility="private"))
+    store = SimpleNamespace(name="secret-shop")
+    path = "serve/tools/src/owlbear_tools/testing.py:216"
+    named = Defect(title="--changed runs the full suite", text="secret-shop's a.txt routes to the full suite", paths=[path])
+    said = defect_issue.file(store, stuck_change(), repo, named)
+    assert said.startswith("held for you, not filed: it names this private project (a.txt, secret-shop)")
+    assert made == []

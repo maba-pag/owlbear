@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Store
 
 REPOSITORY = codebase.URL.removeprefix("https://github.com/").removesuffix(".git")
-SOURCE = codebase.ROOT.parents[2]  # the OwlBear checkout the installed package lives in: serve/delivery-next/src/...
+SOURCE = codebase.ROOT.parents[3]  # the OwlBear checkout holding serve/delivery-next/src/owlbear_delivery_next
 
 
 def file(store: Store, change: Change, path: Path, defect: Defect) -> str:
