@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import permissions, tools
-from owlbear_delivery_next.change_contracts.models import VISUAL, Environment, Exit, StepKind, Waiting
+from owlbear_delivery_next.change_contracts.failures import cause_key
+from owlbear_delivery_next.change_contracts.models import VISUAL, Environment, ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import (
     amending,
