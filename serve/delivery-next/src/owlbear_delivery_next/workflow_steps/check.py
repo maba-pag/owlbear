@@ -11,6 +11,7 @@ import subprocess
 import threading
 import time
 import urllib.request
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -76,20 +77,44 @@ def journal(log: Callable[[dict[str, Any]], None], pids: Pids) -> None:
     log({"event": "pids", "at": datetime.now(UTC).isoformat(), "pids": {str(p): t for p, t in pids.items()}})
 
 
+@dataclass(frozen=True)
+class Ran:
+    """One command's end: its exit status (None when it did not finish in time or did not start), time, output."""
+
+    exit: int | None
+    seconds: float
+    output: str  # whole: stdout and stderr together
+    why: str = ""  # why it has no exit: it did not start, or did not finish in time
+
+
 def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: Mapping[str, str] | None = None) -> str:
-    """Run one command the owner made known in its own group, within ``WITHIN``; a note if it failed, else empty.
+    """Run one command the owner made known in its own group, within ``WITHIN``; a note if it failed, else empty."""
+    done, cmd = execute(argv, cwd, log, WITHIN, env), shlex.join(argv)
+    if done.exit is None:
+        return done.why
+    return f"`{cmd}` failed: {done.output.strip()}" if done.exit else ""
+
+
+def execute(
+    argv: list[str],
+    cwd: Path,
+    log: Callable[[dict[str, Any]], None],
+    within: float,
+    env: Mapping[str, str] | None = None,
+) -> Ran:
+    """Run one command the owner made known in its own group, within *within* seconds, keeping all it printed.
 
     Its leader waits on its stdin until the journal holds it; a runner that dies first closes the pipe, and the command
     never runs.
     """
-    within, cmd = WITHIN, shlex.join(argv)
+    cmd, start = shlex.join(argv), time.monotonic()
     try:
         proc = subprocess.Popen(  # noqa: S603 - argument vector of a command the owner made known
             ("/bin/sh", "-c", 'read -r _ && exec "$@" </dev/null', "sh", *argv), cwd=cwd, stdin=subprocess.PIPE,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True, env=env,
         )  # fmt: skip
     except OSError as exc:
-        return f"`{cmd}` did not start: {failure(exc)}"
+        return Ran(None, 0.0, "", f"`{cmd}` did not start: {failure(exc)}")
     born = created(proc.pid)
     try:
         journal(log, {proc.pid: born})
@@ -97,12 +122,11 @@ def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: 
         out, _ = proc.communicate(timeout=within)
     except subprocess.TimeoutExpired as exc:
         _diagnostic(log, "check-command-failed", f"`{cmd}` in {cwd}", exc)
-        return f"`{cmd}` took over {within:.0f} s"
+        said = (exc.output or b"").decode(errors="replace")
+        return Ran(None, time.monotonic() - start, said, f"`{cmd}` took over {within:.0f} s")
     finally:  # timed out, interrupted or done: nothing of its group outlives the command
         _end(proc, born, log, f"`{cmd}` in {cwd}")
-    if proc.returncode:
-        return f"`{cmd}` failed: {out.decode(errors='replace').strip()}"
-    return ""
+    return Ran(proc.returncode, time.monotonic() - start, out.decode(errors="replace"))
 
 
 def _diagnostic(log: Callable[[dict[str, Any]], None], kind: str, where: str, exc: Exception) -> None:

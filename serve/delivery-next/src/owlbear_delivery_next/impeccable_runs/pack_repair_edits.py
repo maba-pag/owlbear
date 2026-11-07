@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.impeccable_runs import pack_rounds
 from owlbear_delivery_next.impeccable_runs.pack_repair_content import IMPECCABLE, Kind
+from owlbear_delivery_next.workflow_steps import check_weakening
 from owlbear_delivery_next.workflow_steps.check_weakening import LINKS, configured, weakened
 
 if TYPE_CHECKING:
@@ -20,6 +21,9 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.impeccable import pack_git
     from owlbear_delivery_next.impeccable_runs.pack_repair import Repair
+
+
+staged = check_weakening.staged  # the pack's callers read it here
 
 
 def config(run: str, r: Repair) -> dict[str, Any]:
@@ -57,18 +61,6 @@ def asked(r: Repair) -> list[str]:
     """The repository paths the held question asks about: its held, refused and reviewed files, without the reasons."""
     named = {*r.held, *r.refused, *r.reviewed}
     return [p for p in r.paths if p in named or any(n.startswith(f"{p} (") for n in named)]
-
-
-def staged(run: pack_git.Git, at: Path, head: str) -> list[tuple[str, str]]:
-    """Everything the agent changed against *head*, staged: each repository path with its new mode and status."""
-    run(at, ["reset", "--quiet", "--soft", head])  # whatever it may have committed is its change all the same
-    run(at, ["add", "--all"])
-    raw = run(at, ["diff", "--cached", "--raw", "--no-renames", "-z", head]).split("\0")
-    changed = []
-    for meta, path in zip(raw[0::2], raw[1::2], strict=False):
-        fields = meta.lstrip(":").split()
-        changed.append((path, f"{fields[1]} {fields[-1]}"))  # the new mode and the status letter
-    return changed
 
 
 def held(  # noqa: PLR0913 - the copy, its head, the change, the package with its pinned skills, and the kind

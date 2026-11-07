@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 type Phase = Literal["running", "asked", "approved", "applied", "stopped"]
 type Fix = Literal["none", "patch", "profile-check"]
+KEPT = "refs/owlbear/repair/"  # + the Change's slug: a fix waiting for the owner's yes stays reachable
 
 
 class Tried(BaseModel):
@@ -48,7 +49,8 @@ class Repair(BaseModel):
     package: str = ""  # a profile check's package and command
     command: str = ""
     paths: list[str] = Field(default_factory=list)  # what the fix changes
-    commit: str = ""  # the fix, committed by Delivery on the copy's baseline; kept under ``ref``
+    base: str = ""  # the copy's baseline: the step worktree's whole state when the repair began
+    commit: str = ""  # the fix, committed by Delivery on that baseline; kept under ``KEPT`` until it ends
     applied: str = ""  # its commit on the Change's branch
     witness: Witness | None = None
     held: list[str] = Field(default_factory=list)  # why the owner is asked before it is applied

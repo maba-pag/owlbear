@@ -43,6 +43,18 @@ LINKS = frozenset({"120000", "160000"})  # a symbolic link or a submodule: never
 TESTS = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$|[^/]*\.test\.[mc]?[jt]sx?$)")
 
 
+def staged(run: Git, at: Path, head: str) -> list[tuple[str, str]]:
+    """Everything the agent changed against *head*, staged: each repository path with its new mode and status."""
+    run(at, ["reset", "--quiet", "--soft", head])  # whatever it may have committed is its change all the same
+    run(at, ["add", "--all"])
+    raw = run(at, ["diff", "--cached", "--raw", "--no-renames", "-z", head]).split("\0")
+    changed = []
+    for meta, path in zip(raw[0::2], raw[1::2], strict=False):
+        fields = meta.lstrip(":").split()
+        changed.append((path, f"{fields[1]} {fields[-1]}"))  # the new mode and the status letter
+    return changed
+
+
 def weakened(run: Git, at: Path, head: str, path: str, how: str) -> tuple[str, str]:
     """How the staged edit of *path* (``how``: its new mode and status) weakens a check, and how it edits a test.
 

@@ -11,7 +11,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import dispute_tools, tools
-from owlbear_delivery_next.change_contracts.models import Exit, StepKind
+from owlbear_delivery_next.change_contracts.failures import cause_key
+from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import PLAN, RECHECK
@@ -21,7 +22,7 @@ from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import sdk_adapter, step_input
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.settings.profile import vouched
-from owlbear_delivery_next.workflow_steps import held_writes, overlap, pending_child, sessions
+from owlbear_delivery_next.workflow_steps import engine, held_writes, overlap, pending_child, sessions
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -217,3 +218,10 @@ def prompt(c: Change, at: Path) -> str:
         lines += [f"  Earlier recheck: {' '.join(f.judgement.split())}"] if f.judgement else []
         lines += [f"  The owner's note: {' '.join(f.note.split())}"]
     return "\n".join([*lines, "", "## Judge", JUDGE, "", "## Finish", FINISH])
+
+
+def unshelved(why: str) -> loop.StepResult:
+    """The owner clears the worktree the planner would find dirty, then planning runs again; *why* says the error."""
+    text = f"Delivery could not set aside the uncommitted edits before planning ({why}). Commit, stash or discard them."
+    cause = cause_key(ErrorKind.STATE, StepKind.PLAN, "dirty-worktree")
+    return engine.ask(StepKind.PLAN, text, cause, engine.continue_or_pause(StepKind.PLAN))

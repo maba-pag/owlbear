@@ -379,7 +379,7 @@ def test_planning_starts_on_a_clean_tree_whatever_step_left_edits(repo, monkeypa
 def test_a_failed_shelve_asks_the_owner_before_any_planner_runs(tmp_path) -> None:
     with pytest.raises(worktree.ShelveError, match="git stash failed") as caught:
         worktree.shelve(tmp_path, "owlbear c1")  # not a repository: Git fails
-    asked = runner._unshelved(failure(caught.value))  # noqa: SLF001
+    asked = plan_round.unshelved(failure(caught.value))
     assert (asked.exit, asked.cause, options(asked)) == (
         Exit.ASK,
         "state:plan:dirty-worktree",
