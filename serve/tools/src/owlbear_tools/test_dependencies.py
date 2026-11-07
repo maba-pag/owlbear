@@ -36,9 +36,6 @@ CONFIGS = {
     "conftest.py",
     ".github/workflows/python.yml",
     ".github/workflows/python-browser.yml",
-    ".github/scripts/ci_shard.py",
-    ".github/scripts/flaky_issues.py",
-    ".github/scripts/check_uv_version.py",
 }
 
 
