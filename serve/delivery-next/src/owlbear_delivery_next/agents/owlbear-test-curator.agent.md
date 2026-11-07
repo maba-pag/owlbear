@@ -28,11 +28,12 @@ on without them.
 
 - **Measure first.** Run the install commands under Prepare, then the project's test command on the commit you
   start from, and record what it collects, its time and its failures. Use the same command and scope after.
-- **Check every claim.** For each retire or merge verdict, read the test and the remaining test it names: apply it
-  only if that remaining test's assertion really fails on the named bug. Check the removals together, so two
-  verdicts never remove each other's remaining test.
-- **Doubt keeps.** A verdict you cannot confirm is refused, with your reason. Security guards, regressions of a real
-  incident and tests of a public contract stay.
+- **Check every claim.** For each retire or merge verdict, read the test and the kept test it names: apply it when
+  both guard the same kind of bug (the behaviour and the type of failure), judged by reading; no run needs to prove
+  it. Refuse it, with your reason, when they guard different kinds. Check the removals together, so two verdicts
+  never remove each other's kept test.
+- **Doubt keeps only the protected kinds.** A verdict you are unsure of is applied, unless its test is a security or
+  data-loss guard, a regression of a real incident or a test of a public contract: that one is refused and stays.
 - **Edit only tests.** Remove the retired tests and their now-unused helpers; for a merge keep one test with the
   assertions that distinguish the behaviour. Rewrite-lower notes are not applied in this review. Never change
   production code, configuration or a test that no verdict names.
