@@ -69,6 +69,11 @@ def test_a_failed_detection_checks_the_known_enterprise_host_not_the_public_one(
     assert len(network) == 1
     assert ENTERPRISE in network[0].detail
 
+    monkeypatch.setattr(DataRepo, "publish", real)
+    monkeypatch.setattr(readiness, "check", lambda *_a, **_k: [])  # the host checks were asserted above
+    again = readiness.ready(store, root, carry=True)
+    assert not [c for c in again if not c.ok]  # the next start publishes the detection and carries
+
 
 def test_an_unreadable_profile_after_a_failed_detection_defers_the_host_checks(tmp_path, monkeypatch, reached):
     store = Store(tmp_path / "store")
