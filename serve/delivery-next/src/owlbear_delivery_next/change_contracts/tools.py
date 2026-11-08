@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next.change_contracts import build_tools, question_tools
+from owlbear_delivery_next.change_contracts import build_tools, check_hint, question_tools
 from owlbear_delivery_next.change_contracts.option_records import OptionAction
 
 if TYPE_CHECKING:
