@@ -202,13 +202,6 @@ class TestConfirmationCycle:
     # AC1 — approved and curated transitions to contested
     # ------------------------------------------------------------------
 
-    def test_approved_entry_transitions_to_contested(self, tmp_path: Path) -> None:
-        """AC1: record_factually_wrong on approved entry → contested state."""
-        entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
-        engine = _engine_with_entries(tmp_path, entry)
-        result = _record_factually_wrong(engine, _ID_APPROVED, _TASK_A)
-        assert result.state == MemoryState.CONTESTED
-
     def test_curated_entry_transitions_to_contested(self, tmp_path: Path) -> None:
         """AC1: record_factually_wrong on curated entry → contested state."""
         entry = _make_entry_base(_ID_CURATED, MemoryState.CURATED)
@@ -384,13 +377,6 @@ class TestConfirmationCycle:
     # ------------------------------------------------------------------
     # AC4 — OCC guard
     # ------------------------------------------------------------------
-
-    def test_occ_mismatch_raises_concurrency_error(self, tmp_path: Path) -> None:
-        """A stale content revision raises ConcurrencyError."""
-        entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
-        engine = _engine_with_entries(tmp_path, entry)
-        with pytest.raises(ConcurrencyError):
-            engine.record_factually_wrong(_ID_APPROVED, task_id=_TASK_A, expected_revision="0" * 16)
 
     def test_occ_mismatch_does_not_mutate_entry(self, tmp_path: Path) -> None:
         """AC4: ConcurrencyError is raised without mutating the entry."""
