@@ -310,13 +310,13 @@ SESSIONS = {  # each class and an allowed command at both levels: the cases a re
     "route8-echo *.py-strict",
     "route8-echo *.py-standard",
 }
+ROUTED = [pytest.param(t, f, id=f"route{r}-{t}") for r, cases in ROUTES.items() for t, f in cases]
+UNROUTED = SESSIONS - {f"{p.id}-{level}" for p in ROUTED for level in ("strict", "standard")}
+assert not UNROUTED, f"session witnesses that no route case has: {sorted(UNROUTED)}"
 
 
 @pytest.mark.parametrize("level", ["strict", "standard"])
-@pytest.mark.parametrize(
-    ("text", "found"),
-    [pytest.param(t, f, id=f"route{r}-{t}") for r, cases in ROUTES.items() for t, f in cases],
-)
+@pytest.mark.parametrize(("text", "found"), ROUTED)
 def test_each_routes_cases_through_the_guard_and_a_steps_session(
     request: pytest.FixtureRequest, text: str, found: str | None, level: str
 ):
