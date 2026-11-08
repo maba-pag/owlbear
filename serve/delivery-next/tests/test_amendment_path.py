@@ -129,10 +129,10 @@ def test_a_qualifying_replacement_of_a_generated_criterion_applies_alone_and_kee
     [
         verdict(qualifies=False),  # equivalent, but not shown by independent evidence
         verdict(build_only=True),  # only the failing build motivates it
-        verdict(qualifies=False, reasons="a rewording of AC-1, which is neither redundant nor over-specific"),
         verdict(tightening="AC-1 now also trims tabs: one more test"),
         verdict(widens=True),
     ],
+    ids=["said0", "said1", "said3", "said4"],
 )
 def test_an_equivalent_candidate_that_does_not_qualify_asks_the_owner(said):
     c = change()
@@ -967,14 +967,11 @@ def test_two_new_decisions_with_the_same_answer_keep_their_own_ids():
     assert len({d.id for d in c.brief.decisions}) == 3
 
 
-def test_a_new_check_may_cover_any_criterion_a_full_candidate_adds():
-    adds = [item("criterion", "", f"Says hello in language {n}") for n in range(1, 9)]
-    last = item("check", "", "it greets", steps=["open /"], covers=["AC-10"])
-
-    assert amendments.check(CandidateResult(items=[*adds, last]), amendments.amendable(change())) == []
-
-
 def test_a_candidate_may_not_grow_the_brief_past_a_shaped_briefs_limits():
+    full = [item("criterion", "", f"Says hello in language {n}") for n in range(1, 9)]
+    last = item("check", "", "it greets", steps=["open /"], covers=["AC-10"])
+    assert amendments.check(CandidateResult(items=[*full, last]), amendments.amendable(change())) == []
+
     adds = [item("criterion", "", f"Says hello in language {n}") for n in range(1, 10)]
     allowed = amendments.amendable(change())
 

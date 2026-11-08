@@ -228,14 +228,14 @@ def test_a_plain_overlap_that_merges_cleanly_is_recorded_not_asked(merged_cleanl
 
 
 def test_an_integration_build_without_its_start_head_stops_instead_of_passing(tmp_path):
-    stopped = overlap.integrated(shared_store(tmp_path), C1, building(), tmp_path, (None, "result"),
+    stopped = overlap.integrated(Store(tmp_path / "store"), C1, building(), tmp_path, (None, "result"),
                                  StepResult(exit=Exit.DONE))  # fmt: skip
     assert (stopped.exit, stopped.stop.kind) == (Exit.STOP, ErrorKind.STATE)
 
 
 def test_a_build_that_is_not_an_integration_is_not_checked_for_collisions(tmp_path):
     done = StepResult(exit=Exit.DONE)
-    assert overlap.integrated(shared_store(tmp_path), C1, building("plan"), tmp_path, (None, "result"), done) is done
+    assert overlap.integrated(Store(tmp_path / "store"), C1, building("plan"), tmp_path, (None, "result"), done) is done
 
 
 def test_a_new_integration_task_does_not_reuse_an_earlier_collision_answer():
