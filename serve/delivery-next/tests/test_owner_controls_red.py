@@ -1,6 +1,5 @@
 """RED regressions for owner controls (items 2 and 5). Production code is deliberately unchanged here."""
 
-import subprocess
 from datetime import UTC, datetime
 
 import pytest
@@ -21,12 +20,7 @@ NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 @pytest.fixture
 def store(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))  # the machine layer lives under this temporary home only
-    for args in (
-        ["init", "-q"],
-        ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"],
-    ):
-        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)  # noqa: S603, S607
-    return Store.open(tmp_path)
+    return Store(tmp_path / "store")  # unshared, as Store.open gives a clone without a shared settings repository
 
 
 def seed(store):
