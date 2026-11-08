@@ -238,14 +238,19 @@ FAILING = {  # a command of an update that fails: the step it fails, and what th
 }
 
 
-@pytest.fixture
-def updating(origin, monkeypatch) -> SimpleNamespace:
-    """A machine at v0.1 updating to v0.2 through the real versions and install; ``said`` is its host log."""
-    runtime_at(origin, git(origin, "rev-parse", "v0.1^{commit}"))
+def host(monkeypatch) -> SimpleNamespace:
+    """This machine's running host; ``said`` is its host log."""
     record = HostRecord(url=URL, token=TOKEN, pid=1, started_at=datetime.now(UTC), code="c")
     machine, said = Machine(record, paused=False), []
     monkeypatch.setattr(machine, "say", said.append)
     return SimpleNamespace(machine=machine, said=said)
+
+
+@pytest.fixture
+def updating(origin, monkeypatch) -> SimpleNamespace:
+    """A machine at v0.1 updating to v0.2 through the real versions and install; ``said`` is its host log."""
+    runtime_at(origin, git(origin, "rev-parse", "v0.1^{commit}"))
+    return host(monkeypatch)
 
 
 def ended(machine: Machine, step: str) -> tuple[str, str, list[str]]:
@@ -336,14 +341,19 @@ def test_a_failing_build_step_says_both_its_streams_whole_on_the_page_and_in_the
         assert updating.machine.impeccable.read()["install"]["detail"] == detail  # every page's banner
 
 
-def test_a_switch_that_fails_says_the_whole_failure_on_the_page_and_in_the_log(updating, whole_error, monkeypatch):
-    """#971: a version that could not take over: the update's detail and the host's log carry the error's notes."""
+def test_a_switch_that_fails_says_the_whole_failure_on_the_page_and_in_the_log(whole_error, monkeypatch):
+    """#971: a version that could not take over: the update's detail and the host's log carry the error's notes.
+
+    The look that chooses v0.2 is the Git tests' (annotated tags, the newest descendant); here it is given.
+    """
     error = versions.VersionError(whole_error)
     error.add_note("a note on the failure")
 
     def failing(_folder: Path, _tag: str) -> bool:
         raise error
 
+    monkeypatch.setattr(versions, "target", lambda: Choice("v0.2", TAGS["v0.2"]))
+    updating = host(monkeypatch)
     updater = updating.machine.updater
     monkeypatch.setattr(updater, "_prepared", lambda _choice: local_home.root() / local_home.VERSIONS / "v0.2")
     monkeypatch.setattr(updater, "_switch", failing)
