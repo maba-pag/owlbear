@@ -956,19 +956,6 @@ def test_a_failing_browser_run_tells_what_its_report_says_not_the_output_tail(tm
     assert r.told == "tests.test_v::t\nTimeoutError: 30000ms\ntrace"
 
 
-@pytest.mark.parametrize(
-    ("runner", "said"),
-    [
-        (Runner(suite(4), 1, "E   PDS CDN fetch of https://cdn.ui.porsche.com/x failed"), "the PDS CDN did not answer"),
-        (Runner(None, 2, "collection error"), "the browser tests left no report (exit 2)"),
-    ],
-    ids=["cdn", "no-report"],
-)
-def test_a_browser_run_that_proves_nothing_cannot_judge(tmp_path, browsers, runner, said):  # noqa: ARG001
-    with pytest.raises(browser.Unrunnable, match=re.escape(said)):
-        browser.run(tmp_path, runner=runner)
-
-
 @pytest.mark.parametrize("cause", ["cdn", "no-report"])
 def test_an_unrunnable_browser_run_is_told_with_its_whole_output(tmp_path, browsers, whole_error, cause):  # noqa: ARG001
     """The PDS CDN's silence, or a run that left no report, is told with the run's whole output (#895)."""
