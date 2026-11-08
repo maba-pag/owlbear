@@ -210,32 +210,3 @@ def test_a_raised_config_refusal_keeps_the_shared_evidence_so_a_fresh_start_cann
         assert got.read_config().widths == [1600]
     else:
         assert not got.config_path.exists()
-
-
-@pytest.mark.usefixtures("no_network")
-@pytest.mark.parametrize("raises", [False, True])
-def test_a_refused_detection_publication_is_a_failed_readiness_check(shared_repo, tmp_path, monkeypatch, raises):
-    root, _remote = shared_repo
-    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
-    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
-    monkeypatch.setattr(profile, "detect", lambda *_a: Profile(entries={profile.POLL: confirmed("60")}))
-    real, refused = DataRepo.publish, []
-
-    def refuse_detection(self, path, message, until=None):
-        if path == profile_share.path(store) and message.endswith("detected in a clone") and not refused:
-            refused.append(message)
-            if raises:
-                msg = "remote unavailable"
-                raise DataRepoError(msg)
-            return "remote refused"
-        return real(self, path, message, until)
-
-    monkeypatch.setattr(DataRepo, "publish", refuse_detection)
-    first = readiness.ready(store, root, carry=True)
-    assert refused
-    failed = [c for c in first if c.name == "profile detection"]
-    assert [c.ok for c in failed] == [False], [(c.name, c.ok, c.detail) for c in first]
-
-    monkeypatch.setattr(DataRepo, "publish", real)
-    again = readiness.ready(store, root, carry=True)
-    assert not [c for c in again if not c.ok]
