@@ -164,15 +164,31 @@ def test_a_single_legacy_marker_cannot_distinguish_a_full_answer_from_a_quoted_r
             decision_archive.whole(candidate)
 
 
-@pytest.mark.parametrize("text", ["ordinary\nformatting", TEXT, "Keep the literal ellipsis\u2026"])
-def test_genuine_canonical_wording_is_not_rewritten_or_expanded_from_an_unrelated_reason(text):
-    rule = archived().model_copy(
-        update={
-            "statement": text,
-            "source": "the owner's confirmed intent",
-            "rationale": f"Whole wording: {TEXT}\n\nWhole wording: quoted reason",
-        }
-    )
+INTENT, QUOTED = "the owner's confirmed intent", f"Whole wording: {TEXT}\n\nWhole wording: quoted reason"
+
+
+@pytest.mark.parametrize(
+    ("text", "source", "reason"),
+    [
+        pytest.param("ordinary\nformatting", INTENT, QUOTED, id="ordinary\nformatting"),
+        pytest.param(TEXT, INTENT, QUOTED, id="text1"),
+        pytest.param("Keep the literal ellipsis\u2026", INTENT, QUOTED, id="Keep the literal ellipsis\u2026"),
+        pytest.param(  # moved from test_decision_lookup: the blank source a generic Decision has
+            "Keep this rule's\noriginal formatting.",
+            "",
+            "Whole wording: unrelated rationale",
+            id="Keep this rule's\noriginal formatting.-Whole wording: unrelated rationale",
+        ),
+        pytest.param(
+            "Keep this rule\u2026",
+            "",
+            "Whole wording: a different prefix does not restore that rule",
+            id="Keep this rule\u2026-Whole wording: a different prefix does not restore that rule",
+        ),
+    ],
+)
+def test_genuine_canonical_wording_is_not_rewritten_or_expanded_from_an_unrelated_reason(text, source, reason):
+    rule = archived().model_copy(update={"statement": text, "source": source, "rationale": reason})
     assert decision_archive.whole(rule) == text
 
 

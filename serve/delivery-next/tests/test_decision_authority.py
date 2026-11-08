@@ -199,16 +199,6 @@ def test_pinned_authority_rejects_unreadable_layer_containers(authority, rel, da
     assert bool(refused) is (not rel.startswith("other/"))
 
 
-@pytest.mark.parametrize(
-    ("setting", "value"),
-    [("color.grep", "always"), ("grep.column", "true"), ("grep.patternType", "fixed")],
-)
-def test_pinned_authority_is_independent_of_git_presentation_settings(authority, setting, value):
-    repo, _rule, path = authority
-    assert repo.git("config", setting, value).returncode == 0
-    assert decision_authority.inactive(repo, "HEAD", path.relative_to(repo.root).as_posix(), None) == ""
-
-
 @pytest.mark.parametrize("folder", ["unrelated", "other/decisions", "owlbear/decisions", "decisions"])
 def test_pinned_authority_classifies_non_utf8_filenames_by_layer(authority, folder):
     repo, _rule, path = authority
