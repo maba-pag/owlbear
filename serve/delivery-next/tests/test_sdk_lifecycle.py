@@ -857,20 +857,8 @@ def test_a_turn_that_never_goes_idle_holds_a_result_run_once_for_the_bound_and_a
 REAL_OPEN = sdk_adapter._open  # noqa: SLF001 - the real one, which the fixture replaces
 
 
-def test_a_session_failure_keeps_its_whole_error_in_the_run(world, monkeypatch):
-    """#746: the run's page and log show an SDK failure in full."""
-    said = "the runtime refused the session: " + "x" * 400
-
-    async def broken(*_args, **_kw):
-        raise RuntimeError(said)
-
-    monkeypatch.setattr(sdk_adapter, "_open", broken)
-    run = asyncio.run(sdk_adapter.run(world.cfg))
-    assert (run.ending, run.detail) == ("error", f"RuntimeError: {said}")
-
-
 def test_a_session_failure_keeps_its_whole_error_in_the_journal_and_status(world, monkeypatch, tmp_path, whole_error):
-    """#894/#895: the step event of a failed session keeps its whole error, and its retry carries it as the reason."""
+    """#746/#894/#895: a failed session's step event keeps its whole error, and its retry carries it as the reason."""
 
     async def broken(*_args, **_kw):
         raise RuntimeError(whole_error)
