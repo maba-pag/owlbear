@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from importlib.metadata import version
 from itertools import batched
 from pathlib import Path, PurePosixPath
+from tempfile import TemporaryFile
 from typing import TYPE_CHECKING
 
 import pytest
@@ -160,13 +161,16 @@ def historical_inputs(root: Path, head: str) -> dict[str, str]:
     if executable is None:
         msg = "Git is unavailable while checking historical dependency inputs"
         raise RuntimeError(msg)
-    result = subprocess.run(  # noqa: S603 - fixed executable and Git object IDs.
-        [executable, "cat-file", "--batch"],
-        cwd=root,
-        input="".join(f"{entries[name]}\n" for name in names).encode(),
-        capture_output=True,
-        check=True,
-    )
+    with TemporaryFile() as requests:
+        requests.write("".join(f"{entries[name]}\n" for name in names).encode())
+        requests.seek(0)
+        result = subprocess.run(  # noqa: S603 - fixed executable and Git object IDs.
+            [executable, "cat-file", "--batch"],
+            cwd=root,
+            stdin=requests,
+            capture_output=True,
+            check=True,
+        )
     found: dict[str, str] = {}
     offset = 0
     for name in names:
