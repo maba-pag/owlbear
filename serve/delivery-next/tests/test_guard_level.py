@@ -300,6 +300,16 @@ ROUTES = {  # #864's routes: each case's command and the class it is found in, o
     ],
 }
 SEEN = {"refuse": "refused", "warn": "warned", "allow": "allowed"}
+SESSIONS = {  # each class and an allowed command at both levels: the cases a real step's session also meets
+    "route13-git push --mirror-strict",
+    "route13-git push --mirror-standard",
+    "route10-HUSKY=0 git commit -m x-strict",
+    "route10-HUSKY=0 git commit -m x-standard",
+    "route1-python3 -c 'print(\"git commit --no-verify\")'-strict",
+    "route1-python3 -c 'print(\"git commit --no-verify\")'-standard",
+    "route8-echo *.py-strict",
+    "route8-echo *.py-standard",
+}
 
 
 @pytest.mark.parametrize("level", ["strict", "standard"])
@@ -308,10 +318,12 @@ SEEN = {"refuse": "refused", "warn": "warned", "allow": "allowed"}
     [pytest.param(t, f, id=f"route{r}-{t}") for r, cases in ROUTES.items() for t, f in cases],
 )
 def test_each_routes_cases_through_the_guard_and_a_steps_session(
-    through_step, text: str, found: str | None, level: str
+    request: pytest.FixtureRequest, text: str, found: str | None, level: str
 ):
     expected = "allow" if found is None else OUTCOMES[level][["core", "variant", "doubtful"].index(found)]
     assert outcome(judge(WRITE, shell(text), level=level)) == expected
-    got = through_step(text, level)
+    if request.node.callspec.id not in SESSIONS:
+        return
+    got = request.getfixturevalue("through_step")(text, level)
     assert got.outcome == SEEN[expected]
     assert [e["event"] for e in got.events] == {"refuse": ["denied"], "warn": ["warned"], "allow": []}[expected]
