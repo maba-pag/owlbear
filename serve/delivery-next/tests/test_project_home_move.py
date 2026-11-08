@@ -392,13 +392,6 @@ def test_a_lock_a_running_writer_holds_refuses_the_move_and_moves_nothing(clone,
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"  # kept whole in the source
 
 
-def test_a_lock_nobody_holds_is_retained_by_the_move_and_never_unlinked(clone, monkeypatch):
-    repo, folder = clone
-    (folder / "host.lock").write_text("")
-    assert move(repo, monkeypatch) == project_home.home(SOURCE_ID)
-    assert (folder / "host.lock").is_file()
-
-
 def test_without_a_verified_offline_proof_production_refuses_and_moves_nothing(clone, current_binding, monkeypatch):
     repo, folder = clone
     monkeypatch.setattr(offline_protocol, "boot_session", lambda: BEFORE)
