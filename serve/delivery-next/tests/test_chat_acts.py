@@ -311,21 +311,24 @@ def test_an_act_on_a_host_whose_endpoint_fails_keeps_the_whole_error(tmp_path, m
 
 
 def test_a_note_whose_turn_was_superseded_or_ended_expires_unsent(tmp_path) -> None:
-    async def main(*, newer: bool) -> tuple[Host, acts.Act]:
+    async def main(*, newer: bool) -> tuple[Host, chat_acts.ChatActor]:
         host = Host(Clock(), active="" if not newer else "t-2")
         actor = chat(tmp_path / str(newer), host)
         if newer:
             actor.spot.take(asked("u-2"))  # the owner wrote again before the note went
         *_, sending = await acted(actor)
         await sending
-        return host, act_of(actor)
+        return host, actor
 
     (tmp_path / "True").mkdir()
     (tmp_path / "False").mkdir()
-    host, act = asyncio.run(main(newer=True))
+    host, actor = asyncio.run(main(newer=True))
+    act = act_of(actor)
     assert (host.opened, act.delivery, act.error) == (0, "expired", "a newer requester message superseded its turn")
-    host, act = asyncio.run(main(newer=False))
+    host, actor = asyncio.run(main(newer=False))
+    act = act_of(actor)
     assert (host.actions, act.delivery, act.error) == ([], "expired", "the turn had ended before the note was sent")
+    assert acts.counts(actor.spot.folder, act.session, act.scope)[0] == 0  # an expired note keeps no cap slot
 
 
 def test_a_discretionary_stop_and_resume_whose_turn_ended_expires_and_never_starts_a_turn(tmp_path) -> None:
@@ -397,18 +400,6 @@ def test_a_note_a_newer_requester_message_supersedes_while_it_is_sent_is_withdra
     assert withdrawn == {"type": "chat/pendingMessageRemoved", "kind": "steering", "id": sent["id"]}
     assert (act.delivery, act.error) == (
         "expired", "a newer requester message superseded its turn; withdrawn: the host no longer holds it")  # fmt: skip
-
-
-def test_an_expired_note_does_not_count_toward_the_cap(tmp_path) -> None:
-    async def main() -> chat_acts.ChatActor:
-        actor = chat(tmp_path, Host(Clock(), active=""))  # the turn ended before the note went
-        *_, sending = await acted(actor)
-        await sending
-        return actor
-
-    actor = asyncio.run(main())
-    act = act_of(actor)
-    assert (act.delivery, acts.counts(actor.spot.folder, act.session, act.scope)[0]) == ("expired", 0)
 
 
 def test_a_hand_off_note_is_queued_after_its_turn_and_delivered_once_the_log_shows_its_token(tmp_path) -> None:
