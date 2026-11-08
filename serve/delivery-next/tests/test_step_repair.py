@@ -8,7 +8,7 @@ import pytest
 
 from owlbear_delivery_next.change_contracts import check_hint
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Plan, Step, StepKind, Task
-from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_contracts.repair_records import Witness
 from owlbear_delivery_next.change_contracts.repair_tools import Defect
 from owlbear_delivery_next.change_flow import stuck, worktree
@@ -113,6 +113,19 @@ def test_a_selector_fix_is_held_even_when_its_own_empty_check_passes(repo, tmp_p
     assert "TOMLDecodeError" in reason
     assert str(malformed) in reason
     assert "proves nothing alone" in reason
+    (package / "pyproject.toml").write_text("[project\n")
+    monkeypatch.setattr(worktree, "tracking", lambda *_: "c1")
+    prof = Profile(
+        entries={
+            "check:.": ProfileEntry(state="known", value="uv run test --changed", evidence="owner confirmed"),
+        }
+    )
+    bound = step_repair._witness(c, prof, repo)  # noqa: SLF001
+    assert len(bound) == 1
+    assert f"--task-base {r.base}" in bound[0]
+    assert "--target " in bound[0]
+    assert "TOMLDecodeError" in r.evidence
+    assert "serve/tools/pyproject.toml" in r.evidence
 
 
 def test_a_fix_reaches_the_branch_without_touching_the_steps_unfinished_edits(repo, tmp_path) -> None:

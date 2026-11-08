@@ -274,6 +274,29 @@ def _message(change: Change, witness: tuple[str, ...]) -> str:
 
 def _witness(change: Change, prof: Profile, source: Path) -> tuple[str, ...]:
     """The commands that must pass: the task's resolved checks, else the confirmed checks of the brief's packages."""
+    try:
+        return _resolved_witness(change, prof, source)
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        r = change.repairs.current
+        if r is None:
+            raise
+        detail = "".join(format_exception_only(error)).strip()
+        r.evidence += f"\nUnchanged runner ownership in {source}/serve/tools/pyproject.toml: {detail}"
+        task = next((t for t in change.plan.tasks if t.id == r.task), None) if change.plan else None
+        pairs = worktree.checks(profile.vouched(prof))
+        selected = (
+            check_hint.resolve(task.checks, pairs)
+            if task and task.checks
+            else [check_hint.qualified(p, c) for p, c in pairs if _in_scope(change, p)]
+        )
+        target = worktree.git(
+            source, "rev-parse", f"{worktree.tracking(source, change.names.target)}^{{commit}}"
+        ).strip()
+        base = task.base if task and task.base is not None else r.base
+        return tuple(check_hint.task_command(command, base, target) for command in selected)
+
+
+def _resolved_witness(change: Change, prof: Profile, source: Path) -> tuple[str, ...]:
     tasks = change.plan.tasks if change.plan else []
     r = change.repairs.current
     task = next((t for t in tasks if r and t.id == r.task), None)
