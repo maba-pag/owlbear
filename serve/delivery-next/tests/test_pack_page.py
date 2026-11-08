@@ -155,6 +155,11 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_impeccable_p
         state = page.locator("#pack-state")
         expect(state).to_contain_text("The update waits for your answers below. Started ")
         expect(state).not_to_contain_text("ended")
+        # waiting()'s record is from before invocations: its stages alone, with no history made up for it
+        expect(page.locator("#pack-stages li")).to_have_count(len(pack_job.STAGES))
+        expect(page.locator("#pack-progress")).to_have_count(0)
+        expect(page.locator("#pack-next")).to_have_count(0)
+        expect(page.locator("#pack-state")).to_contain_text("The update waits for your answers below.")
         expect(page.get_by_role("button", name="Update Impeccable")).to_be_disabled()
         expect(page.locator("#pack-update")).to_have_attribute("variant", "secondary")  # the answer leads instead
         first, second = ask.locator(".pack-question").first, ask.locator(".pack-question").last
@@ -336,18 +341,6 @@ def test_the_update_shows_its_phases_with_each_invocation_in_order_and_what_come
             expect(page.locator("#pack-todo")).to_contain_text("Nothing for now")
             expect(page.locator("#pack-ask")).to_be_hidden()  # no Discard while it runs
         expect(page.locator("#pack-state")).to_contain_text("Its host stopped while it ran")  # and the polling ends
-
-
-@pytest.mark.browser
-def test_a_record_from_before_invocations_shows_its_stages_without_made_up_history(served, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    _job, base = served()
-    with opened(base, pds) as page:
-        expect(page.locator("#pack-stages li")).to_have_count(len(pack_job.STAGES))
-        expect(page.locator("#pack-progress")).to_have_count(0)
-        expect(page.locator("#pack-next")).to_have_count(0)
-        expect(page.locator("#pack-state")).to_contain_text("The update waits for your answers below.")
 
 
 REPLAY_NONE = "0 decided rounds, 0 left out; the design judge agreed with the owner 0% as recorded, 0% with this pack"
