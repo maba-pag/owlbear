@@ -89,6 +89,7 @@ restored before the current task began. The span's own paths use the same target
 as task Git scoping, and the selected consumers execute on the current tree.
 Rebuilds freeze retained task-review and current-plan final-review repair spans before clearing task records;
 undone repairs and earlier-plan final repairs do not enter those kept checks.
+Each rebuild recomputes that scope from current ownership, not older frozen flags inherited by a plan or repair task.
 
 `owlbear_tools.test_impact.select(root, paths, context, candidates, required_scope)` receives a frozen task context with
 the base, integration target, optional candidate map directory and original kept spans.

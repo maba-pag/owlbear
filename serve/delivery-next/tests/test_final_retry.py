@@ -433,6 +433,26 @@ def test_a_repair_of_an_earlier_plan_never_counts_for_the_current_one():
     rebuilds.rotated(c, lp, undone, required)
     assert t1.checks == [expected]
     assert t3.spans == []
+    t1.base, t1.spans, t1.done = "a" * 40, [f"{'a' * 40}..{'c' * 40}"], True
+    t7 = Task(
+        id="t7",
+        title="repair inheriting frozen checks",
+        origin="review",
+        fixes="t1",
+        base="c" * 40,
+        spans=[f"{'c' * 40}..{'e' * 40}"],
+        checks=list(t1.checks),
+        done=True,
+    )
+    c.plan.tasks.append(t7)
+    again = lp.model_copy(update={"rebuild": ["t2"]})
+    undone, why = rebuilds.undoing(c, again)
+    assert why == ""
+    expected = check_hint.freeze(t2.checks[0], [*t1.spans, *t7.spans])
+    required = rebuilds.checks(c, again, profile, undone)
+    assert required == [expected]
+    rebuilds.rotated(c, again, undone, required)
+    assert all((root := check_hint.changed_runner(task.checks[0])) is not None and root[1] == [] for task in (t1, t7))
 
 
 def test_a_task_whose_commits_are_not_recorded_is_not_undone():

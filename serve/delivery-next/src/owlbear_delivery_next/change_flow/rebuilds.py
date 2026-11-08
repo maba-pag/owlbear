@@ -153,18 +153,15 @@ def checks(c: Change, lp: RoundLoop, profile: Profile, undone: Sequence[Task]) -
     ]
     repair_spans = [span for task in repairs for span in task.spans]
     others = [t for t in tasks if t.origin == "plan" and t is not last and t.checks]
-    selected = [
-        check_hint.freeze(check, task.spans) if task is not last else check
-        for task in (last, *others, *repairs)
-        for check in check_hint.resolve(task.checks, worktree.checks(profile))
-    ]
     roots: dict[str, list[str]] = {}
     retained = []
-    for check in selected:
-        if (root := check_hint.changed_runner(check)) is None:
-            retained.append(check)
-        else:
-            roots.setdefault(root[0], []).extend(root[1])
+    for task in (last, *others):
+        for check in check_hint.resolve(task.checks, worktree.checks(profile)):
+            if (root := check_hint.changed_runner(check)) is None:
+                retained.append(check)
+            else:
+                # Previous retry flags can still name repairs this rebuild undoes.
+                roots.setdefault(root[0], []).extend(task.spans if task is not last else [])
     selected = [
         *(
             check_hint.freeze(check_hint.qualified(".", runner), [*spans, *repair_spans])
@@ -185,6 +182,11 @@ def rotated(c: Change, lp: RoundLoop, undone: list[Task], required: Sequence[str
     """
     tasks = c.plan.tasks if c.plan else []
     picked = [t for t in tasks if t.id in lp.rebuild]
+    for task in tasks:
+        task.checks = [
+            check_hint.qualified(".", root[0]) if (root := check_hint.changed_runner(check)) and root[1] else check
+            for check in task.checks
+        ]
     for t in undone:
         t.base, t.spans = None, []
     for t in picked:
