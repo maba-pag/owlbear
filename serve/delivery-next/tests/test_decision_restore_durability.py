@@ -125,7 +125,8 @@ def test_a_restore_whose_parent_fsync_fails_after_the_rename_stays_pending_and_t
 
     def fsync_meets_a_linked_folder(target):
         # the restore's final proof after the rename of the restored file, not the earlier put-back: its folder is
-        # moved and its old name linked to it meanwhile, so the real no-follow fsync of that name refuses
+        # moved and its old name linked to it meanwhile, so the real no-follow fsync of that name refuses; the folder
+        # is put back before the refusal propagates, so only the refused fsync can keep the batch pending
         if state["armed"] and not state["failed"] and path.read_bytes() == before:
             folder.rename(moved)
             folder.symlink_to(moved, target_is_directory=True)
@@ -134,6 +135,9 @@ def test_a_restore_whose_parent_fsync_fails_after_the_rename_stays_pending_and_t
             except OSError:
                 state["failed"] = True
                 raise
+            finally:
+                folder.unlink()
+                moved.rename(folder)
             return
         real_fsync(target)
 
@@ -152,8 +156,6 @@ def test_a_restore_whose_parent_fsync_fails_after_the_rename_stays_pending_and_t
     pending = decision_batch.pending(shared)
     assert pending is not None  # the restore is not durable, so the batch is not completed
     assert pending.generation == seen["generation"]
-    folder.unlink()
-    moved.rename(folder)  # the folder is itself again before the owner abandons the batch
     decision_recovery.abandon(shared, pending.generation)
     assert decision_batch.pending(shared) is None
     assert path.read_bytes() == before
