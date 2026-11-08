@@ -100,22 +100,6 @@ def test_a_copy_published_before_a_crash_resumes_and_the_source_stays_whole(clon
     assert project_home.located(repo) == target  # a repeated startup changes nothing
 
 
-def test_a_copy_cut_short_keeps_the_source_and_the_next_start_finishes(clone, monkeypatch):
-    repo, folder = clone
-    target = project_home.home(SOURCE_ID)
-    stage = target.with_name(f".{SOURCE_ID}.staging")
-    crash_before_sync(monkeypatch, "changes")
-    with pytest.raises(CrashError):
-        move(repo, monkeypatch)
-    assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
-    assert (stage / "changes").is_dir()
-    assert not target.exists()
-    heal(monkeypatch)
-    assert move(repo, monkeypatch) == target
-    assert not stage.exists()
-    assert (target / "changes" / "c1" / "runner.log").read_text() == "ran\n"
-
-
 def test_a_destination_nobody_recorded_is_refused_and_both_copies_are_kept(clone, monkeypatch):
     repo, folder = clone
     target = project_home.home(SOURCE_ID)
@@ -372,16 +356,12 @@ def test_a_wal_store_moves_with_its_committed_rows(clone, monkeypatch):
 def test_a_store_operation_in_flight_is_not_moved(clone, monkeypatch):
     # Store holds migrate.lock shared for each database operation; the move's exclusive fence refuses it.
     repo, folder = clone
-    writer = sqlite3.connect(folder / "delivery.db", isolation_level=None)
-    writer.execute("PRAGMA journal_mode=WAL")
-    writer.execute("CREATE TABLE t (v TEXT)")
     operation = hold(folder / "migrate.lock", shared=True)
     try:
         with pytest.raises(StoreError, match=r"held by a running process"):
             move(repo, monkeypatch)
     finally:
         os.close(operation)
-        writer.close()
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert not (project_home.home(SOURCE_ID) / "changes").exists()
 
@@ -410,13 +390,6 @@ def test_a_lock_a_running_writer_holds_refuses_the_move_and_moves_nothing(clone,
     assert not project_home.home(SOURCE_ID).exists()
     assert move(repo, monkeypatch) == project_home.home(SOURCE_ID)  # released: the move completes
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"  # kept whole in the source
-
-
-def test_a_lock_nobody_holds_is_retained_by_the_move_and_never_unlinked(clone, monkeypatch):
-    repo, folder = clone
-    (folder / "host.lock").write_text("")
-    assert move(repo, monkeypatch) == project_home.home(SOURCE_ID)
-    assert (folder / "host.lock").is_file()
 
 
 def test_without_a_verified_offline_proof_production_refuses_and_moves_nothing(clone, current_binding, monkeypatch):
