@@ -670,7 +670,7 @@ def test_main_averages_the_run_times_with_each_shards_latest_results(
     }
 
 
-@pytest.mark.parametrize("name", REUSING_WORKFLOWS)
+@pytest.mark.parametrize("name", ["python.yml", "python-browser.yml"])
 def test_each_matrix_shard_keeps_its_own_cached_pass_and_results(name: str) -> None:
     """One shard's cached pass must never let another shard skip its tests, nor its upload replace another's."""
     for job_name, job in _jobs(name).items():
