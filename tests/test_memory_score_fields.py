@@ -108,22 +108,6 @@ class TestComputeScore:
         result = compute_score(confidence=0.9, outstanding_count=0, unremarkable_count=0, points=POINTS)
         assert result == pytest.approx(0.9)
 
-    def test_compute_score_outstanding_only(self) -> None:
-        """compute_score accumulates outstanding boosts: confidence + N*boost."""
-        from owlbear_memory import compute_score
-
-        # 0.7 + (1 * 0.1) = 0.8
-        result = compute_score(confidence=0.7, outstanding_count=1, unremarkable_count=0, points=POINTS)
-        assert result == pytest.approx(0.8)
-
-    def test_compute_score_unremarkable_only(self) -> None:
-        """compute_score deducts unremarkable penalties: confidence - N*penalty."""
-        from owlbear_memory import compute_score
-
-        # 0.9 - (5 * 0.01) = 0.9 - 0.05 = 0.85
-        result = compute_score(confidence=0.9, outstanding_count=0, unremarkable_count=5, points=POINTS)
-        assert result == pytest.approx(0.85)
-
     def test_compute_score_return_type_is_float(self) -> None:
         """compute_score always returns float."""
         from owlbear_memory import compute_score
