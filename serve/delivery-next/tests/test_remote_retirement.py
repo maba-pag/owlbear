@@ -201,8 +201,8 @@ def test_invalid_or_failed_read_is_never_acknowledged_as_an_absent_branch(tmp_pa
         {"data": {"updateRefs": {"__typename": "UpdateRefsPayload"}}, "errors": [{"message": "refused"}]},
     ],
 )
-def test_malformed_or_rejected_mutation_is_not_success_and_a_guarded_retry_is_safe(history, ack):
-    server = RefServer(history, "invalid-ack")
+def test_malformed_or_rejected_mutation_is_not_success_and_a_guarded_retry_is_safe(tmp_path, ack):
+    server = RecordedRef(tmp_path, "invalid-ack")
     server.ack = ack
     with pytest.raises(ProviderError) as failed:
         GhProvider(server.root, writer=None, runner=server).delete_branch("o/r", "owlbear/work", server.merged)
