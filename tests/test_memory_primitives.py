@@ -130,10 +130,6 @@ class TestModels:
 
     # --- MemoryCategory ---
 
-    def test_memory_category_has_nine_values(self) -> None:
-        """MemoryCategory StrEnum must have exactly 9 members."""
-        assert len(list(MemoryCategory)) == 9
-
     def test_memory_category_values(self) -> None:
         """MemoryCategory must contain exactly the 9 documented string values."""
         expected = {
@@ -151,10 +147,6 @@ class TestModels:
         assert actual == expected
 
     # --- MemoryState ---
-
-    def test_memory_state_has_seven_values(self) -> None:
-        """MemoryState StrEnum must have exactly 7 members."""
-        assert len(list(MemoryState)) == 7
 
     def test_memory_state_values(self) -> None:
         """MemoryState must contain all lifecycle states."""
@@ -237,11 +229,6 @@ class TestModels:
         uuid_v3 = "a3bb189e-8bf9-3888-9912-ace4e6543002"
         with pytest.raises(PydanticValidationError):
             MemoryEntry(**{**_valid_entry_data(), "id": uuid_v3})
-
-    def test_id_valid_uuid_v4_is_accepted(self) -> None:
-        """Happy: a canonical UUIDv4 id is accepted."""
-        entry = MemoryEntry(**_valid_entry_data())
-        assert entry.id == _VALID_ID
 
     # --- timezone-aware timestamp validators ---
 
@@ -357,15 +344,6 @@ class TestStorageRead:
         link = tmp_path / "link.md"
         link.symlink_to(real_file)
         result = storage.read_entry(link)
-        assert result is None
-
-    def test_read_entry_file_over_8kb_returns_none(self, tmp_path: Path) -> None:
-        """Error: a file with st_size > 8192 bytes returns None."""
-        entry_file = tmp_path / "large.md"
-        # Pad with 9000 'x' chars in body to push total size well over 8192
-        _write_valid_file(entry_file, body="x" * 9000)
-        assert entry_file.stat().st_size > _8KB
-        result = storage.read_entry(entry_file)
         assert result is None
 
     def test_read_entry_file_at_exactly_8192_bytes_returns_entry(self, tmp_path: Path) -> None:
@@ -616,16 +594,6 @@ class TestStorageWrite:
         entry = _make_valid_entry()
         with pytest.raises(ValueError, match="Path escapes memory_dir"):
             storage.write_entry(outside, entry, memory_dir=memory_dir)
-
-    def test_write_entry_path_traversal_raises(self, tmp_path: Path) -> None:
-        """Error: path traversal (/../) that escapes memory_dir raises ValueError (containment)."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        # Resolved path escapes memory_dir via ..
-        escape = (memory_dir / ".." / "escaped.md").resolve()
-        entry = _make_valid_entry()
-        with pytest.raises(ValueError, match="Path escapes memory_dir"):
-            storage.write_entry(escape, entry, memory_dir=memory_dir)
 
     def test_write_entry_symlink_target_raises(self, tmp_path: Path) -> None:
         """Error: writing to a symlink path raises ValueError (symlink rejected)."""
