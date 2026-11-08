@@ -12,76 +12,7 @@ from urllib.parse import urlsplit
 from testmon.process_code import Module, bytes_to_string_and_fsha, methods_to_checksums
 
 from owlbear_tools.test_dependencies import is_test_module
-
-
-def fixture_names(tree: ast.AST) -> tuple[set[str], set[str]]:
-    """Fixture identities, including those applied without an explicit request."""
-    fixtures, autouse = set(), set()
-    for symbol, node in _definitions(tree).items():
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        for decorator in node.decorator_list:
-            called = decorator.func if isinstance(decorator, ast.Call) else decorator
-            if (isinstance(called, ast.Attribute) and called.attr == "fixture") or (
-                isinstance(called, ast.Name) and called.id == "fixture"
-            ):
-                fixtures.add(symbol)
-                if isinstance(decorator, ast.Call) and any(
-                    keyword.arg == "autouse" and isinstance(keyword.value, ast.Constant) and keyword.value.value is True
-                    for keyword in decorator.keywords
-                ):
-                    autouse.add(symbol)
-    return fixtures, autouse
-
-
-def _names(node: ast.AST) -> set[str]:
-    names: set[str] = set()
-    for item in ast.walk(node):
-        if isinstance(item, ast.Name):
-            names.add(item.id)
-        elif isinstance(item, ast.arg):
-            names.add(item.arg)
-        elif isinstance(item, ast.Attribute):
-            parts = [item.attr]
-            value = item.value
-            while isinstance(value, ast.Attribute):
-                parts.append(value.attr)
-                value = value.value
-            if isinstance(value, ast.Name):
-                names.add(".".join([value.id, *reversed(parts)]))
-        elif isinstance(item, ast.Constant) and isinstance(item.value, str):
-            names.add(item.value)  # Includes usefixtures/getfixturevalue requests.
-        elif (
-            isinstance(item, ast.Call)
-            and isinstance(item.func, ast.Name)
-            and item.func.id in {"getattr", "hasattr"}
-            and item.args[1:]
-            and isinstance(item.args[0], (ast.Name, ast.Attribute))
-        ):
-            attribute = item.args[1]
-            name = attribute.value if isinstance(attribute, ast.Constant) and isinstance(attribute.value, str) else "*"
-            names.add(f"{ast.unparse(item.args[0])}.{name}")
-    return names
-
-
-def _definitions(tree: ast.AST) -> dict[str, ast.AST]:
-    definitions: dict[str, ast.AST] = {}
-    for node in getattr(tree, "body", []):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            definitions[node.name] = node
-            if isinstance(node, ast.ClassDef):
-                definitions.update(
-                    (f"{node.name}.{item.name}", item)
-                    for item in node.body
-                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-                )
-        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
-            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-            for target in targets:
-                definitions.update((item.id, node) for item in ast.walk(target) if isinstance(item, ast.Name))
-        elif isinstance(node, (ast.Import, ast.ImportFrom)):
-            definitions.update((alias.asname or alias.name.split(".")[0], node) for alias in node.names)
-    return definitions
+from owlbear_tools.test_symbols import _definitions, _names, fixture_names
 
 
 def changed_symbols(before: Module | None, current: Module | None) -> set[str]:
@@ -235,7 +166,7 @@ class _Consumers:
             for caller in self.reverse.get(pending.pop(), set()):
                 if caller in self.tests:
                     tests.add(caller)
-                elif "/src/" not in caller and caller not in found:
+                if "/src/" not in caller and caller not in found:
                     found.add(caller)
                     pending.append(caller)
         return tests
@@ -271,10 +202,22 @@ class _Consumers:
                 elif symbol in affected:
                     names.add(local)
         if dependency != caller and dependency in self.fixtures and caller in self.tests:
-            fixtures, autouse = self.fixtures[dependency]
-            if autouse & affected:
-                names.update(self.definitions[caller])
-            names.update(affected & fixtures)
+            names.update(self._fixture_dependents(caller, dependency, affected))
+        return names
+
+    def _fixture_dependents(self, caller: str, dependency: str, affected: set[str]) -> set[str]:
+        fixtures, autouse = self.fixtures[dependency]
+        implicit = Path(dependency).name == "conftest.py" and Path(caller).is_relative_to(Path(dependency).parent)
+        imported = {
+            symbol
+            for local, choices in self.bindings[caller].items()
+            if isinstance(self.definitions[caller].get(local), (ast.Import, ast.ImportFrom))
+            for module, symbol in choices
+            if module == dependency
+        }
+        names = affected & fixtures if implicit else set()
+        if autouse & affected and (implicit or imported & autouse or "*" in imported):
+            names.update(symbol for symbol in self.definitions[caller] if symbol.rsplit(".", 1)[-1].startswith("test_"))
         return names
 
     def _local_names(self, caller: str, names: set[str]) -> set[str]:
@@ -292,10 +235,11 @@ class _Consumers:
                     for end in range(1, len(parts))
                 )
                 or any(
-                    symbol.startswith(f"{scope}.") if scope else "." not in symbol
+                    not scope or symbol.startswith(f"{scope}.")
                     for fixture in names & fixtures
                     for scope in [fixture.rpartition(".")[0]]
-                    if fixture in autouse or fixture.rsplit(".", 1)[-1] in references
+                    if fixture.rsplit(".", 1)[-1] in references
+                    or (fixture in autouse and symbol.rsplit(".", 1)[-1].startswith("test_"))
                 )
             } - names
             if not additions:

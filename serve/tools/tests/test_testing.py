@@ -480,11 +480,15 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     entry = "serve/demo/src/demo/entry.py"
     orphan = "serve/demo/src/demo/deleted_only.py"
     orphan_before = Module(source_code="def only():\n    return 1\n")
-    fixture = "serve/demo/tests/conftest.py"
-    test = "serve/demo/tests/test_consumer.py"
+    fixture, test, shared = (
+        "serve/demo/tests/conftest.py",
+        "serve/demo/tests/test_consumer.py",
+        "serve/demo/tests/test_shared_user.py",
+    )
     texts = {
         source: "CURRENT = 2\nimport demo.entry as hop\n\ndef forwarding():\n    return hop.load()\n",
         orphan: "def only():\n    return 2\n",
+        shared: "from test_consumer import shared_helper\n\ndef test_shared():\n    return shared_helper()\n",
         "serve/demo/src/demo/project_host/pages.py": "PAGES = (('/', 'Changes', 'changes.html'),)\n",
         "serve/demo/src/demo/web/changes.html": (
             '<script type="module" src="/assets/page/changes/main.mjs"></script>'
@@ -513,6 +517,7 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
             "@pytest.mark.skipif(sys.platform == 'linux', reason='Mac consumer')\n"
             "def test_platform():\n    assert load() == 2\n\n"
             "def test_fixture(loaded):\n    assert loaded == 2\n"
+            "def shared_helper():\n    return load()\n\n"
             "def test_reflective():\n    return getattr(api, 'load')()\n\n"
             "def test_dynamic(name):\n    return getattr(api, name)()\n\n"
             "def test_page_source():\n    return Path('web/metrics.html').read_text()\n\n"
@@ -564,12 +569,13 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
 
     with patch.object(test_impact, "_revision", side_effect=historical):
         selection.supplements(source, Module(source_code="CURRENT = 1\n"), Module(source_code=texts[source]))
-    assert consumers.tests_for({entry}) == {test}
+    assert consumers.tests_for({entry}) == {test, shared}
     assert set(selection.reasons) == {
         f"{test}::test_current",
         f"{test}::test_fixture",
         f"{test}::test_reflective",
         f"{test}::test_dynamic",
+        f"{shared}::test_shared",
         skipped,
     }
     assert any("current platform branch" in reason for reason in selection.reasons[skipped])
