@@ -498,13 +498,15 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
             "@pytest.fixture\ndef marked():\n    return Path('fixtures/marked.json').read_text()\n"
         ),
         test: (
-            "import sys\nimport pytest\nfrom demo.entry import load, unrelated\n\n"
+            "import sys\nimport pytest\nimport demo.entry as api\nfrom demo.entry import load, unrelated\n\n"
             "pytestmark = pytest.mark.usefixtures('marked')\n"
             "def test_current():\n    assert load() == 2\n\n"
             "def test_other():\n    assert unrelated() == 3\n\n"
             "@pytest.mark.skipif(sys.platform == 'linux', reason='Mac consumer')\n"
             "def test_platform():\n    assert load() == 2\n\n"
             "def test_fixture(loaded):\n    assert loaded == 2\n"
+            "def test_reflective():\n    return getattr(api, 'load')()\n\n"
+            "def test_dynamic(name):\n    return getattr(api, name)()\n\n"
             "def test_page_source():\n    return Path('web/metrics.html').read_text()\n\n"
             "def test_other_page_source():\n    return Path('web/settings.html').read_text()\n"
             "def opened(page, base):\n    page.goto(f'{base}/?change=c1')\n\n"
@@ -554,7 +556,13 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     with patch.object(test_impact, "_revision", side_effect=historical):
         selection.supplements(source, Module(source_code="CURRENT = 1\n"), Module(source_code=texts[source]))
     assert consumers.tests_for({entry}) == {test}
-    assert set(selection.reasons) == {f"{test}::test_current", f"{test}::test_fixture", skipped}
+    assert set(selection.reasons) == {
+        f"{test}::test_current",
+        f"{test}::test_fixture",
+        f"{test}::test_reflective",
+        f"{test}::test_dynamic",
+        skipped,
+    }
     assert any("current platform branch" in reason for reason in selection.reasons[skipped])
     assert any("platform fixture" in reason for reason in selection.reasons[f"{test}::test_fixture"])
     assert consumers.outside_nodes({"serve/demo/src/demo/web/metrics.html"}, {test}) == {f"{test}::test_page_source"}
