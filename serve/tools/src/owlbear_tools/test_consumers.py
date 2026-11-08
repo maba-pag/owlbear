@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import ast
+import posixpath
+import re
 from collections import defaultdict
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from testmon.process_code import Module, bytes_to_string_and_fsha, methods_to_checksums
 
@@ -84,10 +87,20 @@ def changed_symbols(before: Module | None, current: Module | None) -> set[str]:
     }
 
 
+def _asset_reference(path: str, literal: str) -> str | None:
+    reference = literal.split("?", 1)[0]
+    web = path.split("/web/", 1)[0] + "/web"
+    for prefix, replacement in (("/assets/page/", f"{web}/pages/"), ("/assets/", f"{web}/")):
+        if reference.startswith(prefix):
+            return replacement + reference.removeprefix(prefix)
+    return posixpath.normpath(str(Path(path).parent / reference)) if reference.startswith(".") else None
+
+
 class _Consumers:
     """Real imports, named uses and requested/autouse conftest fixtures."""
 
     def __init__(self, root: Path, files: set[str]) -> None:
+        self.root, self.files = root, files
         self.texts = {
             name: bytes_to_string_and_fsha((root / name).read_bytes())[0]
             for name in files
@@ -285,10 +298,58 @@ class _Consumers:
                 nodes.update(self.test_nodes(self.affected(path, symbols)))
         return nodes
 
+    def page_routes(self, paths: set[str]) -> set[str]:
+        """Served pages reached by changed assets through their actual relative imports."""
+        changed = {path for path in paths if "/web/" in path}
+        if not changed:
+            return set()
+        pages: dict[str, str] = {}
+        for path, definitions in self.definitions.items():
+            definition = definitions.get("PAGES")
+            if path.endswith("/project_host/pages.py") and isinstance(definition, (ast.Assign, ast.AnnAssign)):
+                web = Path(path).parent.parent / "web"
+                for route, _title, name in ast.literal_eval(definition.value):
+                    pages[str(web / name)] = route
+        roots = {str(Path(page).parent) for page in pages}
+        assets = {
+            path: (self.root / path).read_text(encoding="utf-8")
+            for path in self.files
+            if any(path.startswith(f"{root}/") for root in roots)
+            and Path(path).suffix in {".html", ".mjs", ".js", ".css"}
+            and (self.root / path).is_file()
+        }
+        reverse: dict[str, set[str]] = defaultdict(set)
+        for path, text in assets.items():
+            web = path.split("/web/", 1)[0] + "/web"
+            references = re.findall(
+                r"""(?:from\s+|import\s*(?:\(\s*)?|(?:src|href)\s*=\s*|url\(\s*)['"]([^'"]+)""", text
+            )
+            for dependency in filter(None, (_asset_reference(path, reference) for reference in references)):
+                reverse[dependency].add(path)
+            for marker, dependency in (
+                ("<!-- base -->", "base.css"),
+                ("<!-- ask -->", "ask.js"),
+                ("<!-- tabs -->", "pages/menu/menu.mjs"),
+            ):
+                if marker in text:
+                    reverse[f"{web}/{dependency}"].add(path)
+        reached, pending = set(changed), set(changed)
+        while pending:
+            callers = set().union(*(reverse[path] for path in pending)) - reached
+            reached.update(callers)
+            pending = callers
+        return {
+            route
+            for page, route in pages.items()
+            if page in reached
+            or any(path.startswith(f"{Path(page).parent}/pages/{Path(page).stem}/") for path in changed)
+        }
+
     def outside_nodes(self, paths: set[str], candidates: set[str]) -> set[str]:
         """Named page, source-reader and child-process consumers supplied by the ordinary router."""
         python = {path for path in paths if path.endswith(".py")}
         pages = paths - python
+        routes = self.page_routes(pages)
         labels = set(paths) | {Path(path).name for path in paths}
         labels.update(f"/{Path(path).stem}" for path in pages)
         modules = {
@@ -297,7 +358,7 @@ class _Consumers:
         namespaces = {module.split(".", 1)[0] for module in modules}
         suffixes = {Path(path).suffix for path in paths}
         selected: set[str] = set()
-        for test in candidates:
+        for test in candidates | self.fixtures.keys():
             definitions = self.definitions.get(test, {})
             symbols: set[str] = set()
             references = _names(self.trees[test]) if test in self.trees else set()
@@ -325,8 +386,27 @@ class _Consumers:
                 )
                 wildcard = globs and any(f"*{suffix}" in literal for suffix in suffixes for literal in literals)
                 child = subprocess and any(namespace in literal for namespace in namespaces for literal in literals)
-                if named or wildcard or child:
+                navigates = any(
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in {"goto", "get"}
+                    and node.args
+                    and urlsplit(
+                        "".join(
+                            item.value
+                            for item in ast.walk(node.args[0])
+                            if isinstance(item, ast.Constant) and isinstance(item.value, str)
+                        )
+                        or "/"
+                    ).path
+                    in routes
+                    for node in ast.walk(definition)
+                )
+                if named or wildcard or child or navigates:
                     symbols.add(symbol)
             if symbols:
                 selected.update(self.test_nodes(self.affected(test, symbols)))
+        if pages and not selected:
+            msg = f"No current page/import consumers resolved for task paths {sorted(pages)}"
+            raise RuntimeError(msg)
         return selected

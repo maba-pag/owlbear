@@ -464,6 +464,10 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     test = "serve/demo/tests/test_consumer.py"
     texts = {
         source: "CURRENT = 2\n",
+        "serve/demo/src/demo/project_host/pages.py": "PAGES = (('/', 'Changes', 'changes.html'),)\n",
+        "serve/demo/src/demo/web/changes.html": '<script type="module" src="/assets/page/changes/main.mjs"></script>',
+        "serve/demo/src/demo/web/pages/changes/main.mjs": "import {show} from './forms.mjs';\n",
+        "serve/demo/src/demo/web/pages/changes/forms.mjs": "export function show() {}\n",
         entry: "from demo.tables import CURRENT\n\ndef load():\n    return CURRENT\n\ndef unrelated():\n    return 3\n",
         fixture: (
             "import sys\nimport pytest\nfrom demo.entry import load\n\n"
@@ -478,6 +482,8 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
             "def test_fixture(loaded):\n    assert loaded == 2\n"
             "def test_page_source():\n    return Path('web/metrics.html').read_text()\n\n"
             "def test_other_page_source():\n    return Path('web/settings.html').read_text()\n"
+            "def opened(page, base):\n    page.goto(f'{base}/?change=c1')\n\n"
+            "def test_root_browser(page):\n    opened(page, 'http://localhost')\n"
         ),
     }
     for path, text in texts.items():
@@ -514,6 +520,9 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     assert any("current platform branch" in reason for reason in selection.reasons[skipped])
     assert any("platform fixture" in reason for reason in selection.reasons[f"{test}::test_fixture"])
     assert consumers.outside_nodes({"serve/demo/src/demo/web/metrics.html"}, {test}) == {f"{test}::test_page_source"}
+    assert consumers.outside_nodes({"serve/demo/src/demo/web/pages/changes/forms.mjs"}, {test}) == {
+        f"{test}::test_root_browser"
+    }
     selection.current_hashes[test] = "changed"
     selection.add(f"{test}::test_current", "native footprint")
     selection.add(f"{test}::test_other", "caller-supplied explicit target")

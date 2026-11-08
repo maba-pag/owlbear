@@ -67,7 +67,8 @@ use named current tests and requested conftest fixtures. Platform branches and r
 independent supplements at test-function/node scope; a changed historical test module runs in full.
 Internally, `test_impact.RequiredScope` separates full task paths and required explicit/invariant/configuration
 targets from automatic router candidates, so page, source-reader and child-process candidates narrow
-to named consumers.
+to named consumers. Page consumers follow served HTML and relative module imports to their real browser
+navigation routes, including the root Changes page and shared assets. Unresolved page consumers raise an error.
 Literal test-module, directory or pytest-node targets selected by the Planner stay in the bound command and
 remain required even when the task has no edited paths. For example,
 `uv run test --changed serve/tools/tests/test_todo.py --task-base OLD --target TARGET`
