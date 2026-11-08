@@ -137,17 +137,25 @@ def fresh(c: Change, task: Task) -> None:
     task.done, task.base, task.spans, task.built_by, task.earlier = False, None, [], "", ""
 
 
-def checks(c: Change, rebuild: Sequence[str], profile: Profile) -> list[str]:
+def checks(c: Change, lp: RoundLoop, profile: Profile, undone: Sequence[Task]) -> list[str]:
     """Resolve the last rebuilt task's complete check set before any Git undo or task mutation."""
     tasks = c.plan.tasks if c.plan else []
-    picked = [t for t in tasks if t.id in rebuild]
+    picked = [t for t in tasks if t.id in lp.rebuild]
     if not picked:
         return []
     last = picked[-1]
+    plan = {t.id for t in tasks if t.origin == "plan"}
+    named, removed = _named(lp), {t.id for t in undone}
+    repairs = [
+        t
+        for t in tasks
+        if t.fixes and t.base is not None and t.id not in removed and (subject_of(c, t) in plan or t.id in named)
+    ]
+    repair_spans = [span for task in repairs for span in task.spans]
     others = [t for t in tasks if t.origin == "plan" and t is not last and t.checks]
     selected = [
         check_hint.freeze(check, task.spans) if task is not last else check
-        for task in (last, *others)
+        for task in (last, *others, *repairs)
         for check in check_hint.resolve(task.checks, worktree.checks(profile))
     ]
     roots: dict[str, list[str]] = {}
@@ -158,7 +166,10 @@ def checks(c: Change, rebuild: Sequence[str], profile: Profile) -> list[str]:
         else:
             roots.setdefault(root[0], []).extend(root[1])
     selected = [
-        *(check_hint.freeze(check_hint.qualified(".", runner), spans) for runner, spans in roots.items()),
+        *(
+            check_hint.freeze(check_hint.qualified(".", runner), [*spans, *repair_spans])
+            for runner, spans in roots.items()
+        ),
         *retained,
     ]
     return list(dict.fromkeys(selected))

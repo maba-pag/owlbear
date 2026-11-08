@@ -196,7 +196,7 @@ def _final(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
     """Undo the ticked tasks' work before their fresh builds, or all the Change's work before a clean plan."""
     lp, clean = change.loops[FINAL], change.step.mode == CLEAN
     undo, why = ([], "") if clean else rebuilds.undoing(change, lp)
-    required = [] if clean or why else rebuilds.checks(change, lp.rebuild, vouched(store.read_profile() or Profile()))
+    required = [] if clean or why else rebuilds.checks(change, lp, vouched(store.read_profile() or Profile()), undo)
     path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
     try:
         if not why:

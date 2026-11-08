@@ -87,6 +87,8 @@ still require task context rather than silently replacing branch scope.
 Kept tasks also compare their original `OLD..NEW` source versions, even when their bytes were
 restored before the current task began. The span's own paths use the same target-import exclusions
 as task Git scoping, and the selected consumers execute on the current tree.
+Rebuilds freeze retained task-review and current-plan final-review repair spans before clearing task records;
+undone repairs and earlier-plan final repairs do not enter those kept checks.
 
 `owlbear_tools.test_impact.select(root, paths, context, candidates, required_scope)` receives a frozen task context with
 the base, integration target, optional candidate map directory and original kept spans.

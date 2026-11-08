@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts import check_hint, tools
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
@@ -393,6 +393,46 @@ def test_a_repair_of_an_earlier_plan_never_counts_for_the_current_one():
     old = RoundLoop(subject=FINAL, policy=RoundPolicy(), ended="replanned", findings=[theirs])
     lp = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"], findings=[mine], history=[old])
     assert [t.id for t in rebuilds.undoing(c, lp)[0]] == ["t1", "t3"]
+    t2 = Task(id="t2", title="kept", base="b" * 40, spans=[f"{'b' * 40}..{'d' * 40}"])
+    t4 = Task(
+        id="t4",
+        title="kept task repair",
+        origin="review",
+        fixes="t2",
+        base="d" * 40,
+        spans=[f"{'d' * 40}..{'e' * 40}"],
+    )
+    t5 = Task(
+        id="t5",
+        title="kept final repair",
+        origin="review",
+        fixes=FINAL,
+        base="e" * 40,
+        spans=[f"{'e' * 40}..{'f' * 40}"],
+    )
+    t6 = Task(
+        id="t6",
+        title="earlier plan repair",
+        origin="review",
+        fixes=FINAL,
+        base="f" * 40,
+        spans=[f"{'f' * 40}..{'a' * 40}"],
+    )
+    lp.findings.append(RoundFinding(id="F2", text="kept", raised=1, tasks=["t2"], state="fixed", repair="t5"))
+    old.findings.append(RoundFinding(id="F3", text="old", raised=1, tasks=["t2"], state="fixed", repair="t6"))
+    c.plan.tasks = [t1, t2, t3, t4, t5, t6]
+    for task in c.plan.tasks:
+        task.done = True
+    t1.checks = t2.checks = ["cd . && uv run test --changed"]
+    profile = Profile(entries={"check:.": ProfileEntry(state="known", value="uv run test --changed")})
+    undone, why = rebuilds.undoing(c, lp)
+    assert why == ""
+    expected = check_hint.freeze(t1.checks[0], [*t2.spans, *t4.spans, *t5.spans])
+    required = rebuilds.checks(c, lp, profile, undone)
+    assert required == [expected]
+    rebuilds.rotated(c, lp, undone, required)
+    assert t1.checks == [expected]
+    assert t3.spans == []
 
 
 def test_a_task_whose_commits_are_not_recorded_is_not_undone():
@@ -503,7 +543,7 @@ def test_a_kept_check_runs_from_each_package_of_its_task(change_repo, monkeypatc
     t3 = Task(id="t3", title="three", scope=["docs/z.md"], checks=["cd docs && make docs"])
     c = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[t1, t2, t3]))
     lp = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"])
-    rebuilds.rotated(c, lp, [], rebuilds.checks(c, lp.rebuild, profile))
+    rebuilds.rotated(c, lp, [], rebuilds.checks(c, lp, profile, []))
     assert t1.checks == [
         "cd packages/a && npm test",  # its own too: a report from another package never stands in for it
         "cd packages/b && npm test",
@@ -514,11 +554,12 @@ def test_a_kept_check_runs_from_each_package_of_its_task(change_repo, monkeypatc
     a = Task(id="t1", title="one", scope=["src/a.ts"], checks=["cd . && npm test"])
     twice = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[a, Task(**t2.model_dump())]))
     for _ in range(2):  # a second retry places the checks as the first did
+        again = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"])
         rebuilds.rotated(
             twice,
-            RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"]),
+            again,
             [],
-            rebuilds.checks(twice, ["t1"], profile),
+            rebuilds.checks(twice, again, profile, []),
         )
         assert a.checks == ["cd . && npm test", "cd packages/b && npm test", "cd packages/c && uv run pytest"]
     ran = tools.BuildResult(summary="b", checks=[{"command": "cd packages/b && npm test", "exit_code": 0}])
@@ -535,10 +576,12 @@ def test_a_kept_check_runs_from_each_package_of_its_task(change_repo, monkeypatc
     t4 = Task(id="t4", title="four", scope=["my app/q.ts"], checks=["cd 'my app' && npm test"])
     spaced = Profile(entries={"check:my app": ProfileEntry(state="known", value="npm test")})
     c.plan = Plan(tasks=[t4])
-    assert rebuilds.checks(c, ["t4"], spaced) == ["cd 'my app' && npm test"]
+    lp.rebuild = ["t4"]
+    assert rebuilds.checks(c, lp, spaced, []) == ["cd 'my app' && npm test"]
     t5 = Task(id="t5", title="five", scope=["packages/ab/z.ts"], checks=["cd . && npm test"])
     c.plan = Plan(tasks=[t5])
-    assert rebuilds.checks(c, ["t5"], profile) == ["cd . && npm test"]  # never relocate a selected check
+    lp.rebuild = ["t5"]
+    assert rebuilds.checks(c, lp, profile, []) == ["cd . && npm test"]  # never relocate a selected check
     both = ["cd packages/b && npm test", "cd packages/b && npm test:unit"]
     ran = tools.BuildResult(summary="b", checks=[{"command": k, "exit_code": 0} for k in both])
     assert [e for e in tools.check_build(ran, tree, both) if "missing" in e] == []
