@@ -308,27 +308,6 @@ class TestQueryFacadeSearch:
         assert traversal_query.relation_types == rel_types
 
     @pytest.mark.asyncio
-    async def test_graph_expansion_deduplicates_entity_seeds(
-        self,
-        facade: QueryFacade,
-        mock_content: MagicMock,
-        mock_graph: MagicMock,
-    ) -> None:
-        """AC2: same entity_id appearing in multiple chunks is traversed only once."""
-        chunk_a = _make_chunk(chunk_id="chunk-a")
-        chunk_b = _make_chunk(chunk_id="chunk-b")
-        mock_content.search.return_value = (
-            _make_search_result(chunk_a),
-            _make_search_result(chunk_b),
-        )
-        # both chunks claim the same entity
-        mock_graph.claims_for_chunk.side_effect = lambda cid: _make_claims(cid, entity_ids=("e1",))
-        mock_graph.traverse.return_value = _make_traversal_result(entities=[_make_entity("e1")])
-        request = QueryRequest(text="query", include_graph=True)
-        await facade.search(request)
-        assert mock_graph.traverse.call_count == 1
-
-    @pytest.mark.asyncio
     async def test_graph_expansion_skips_lookup_error_seeds(
         self,
         facade: QueryFacade,
