@@ -388,7 +388,10 @@ class _Consumers:
                 named = any(
                     label in literal for label in labels for literal in literals if "/" in label or "." in label
                 )
-                wildcard = globs and any(f"*{suffix}" in literal for suffix in suffixes for literal in literals)
+                wildcard = globs and (
+                    any(f"*{suffix}" in literal for suffix in suffixes for literal in literals)
+                    or ("*" in literals and bool(suffixes & literals))
+                )
                 child = subprocess and any(namespace in literal for namespace in namespaces for literal in literals)
                 navigates = any(
                     isinstance(node, ast.Call)

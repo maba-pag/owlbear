@@ -491,6 +491,8 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
             "def test_other_page_source():\n    return Path('web/settings.html').read_text()\n"
             "def opened(page, base):\n    page.goto(f'{base}/?change=c1')\n\n"
             "def test_root_browser(page):\n    opened(page, 'http://localhost')\n"
+            "INVENTORY = [p for p in Path('web').rglob('*') if p.suffix == '.mjs']\n\n"
+            "def test_inventory():\n    return INVENTORY\n\n"
         ),
     }
     for path, text in texts.items():
@@ -528,11 +530,15 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     assert any("platform fixture" in reason for reason in selection.reasons[f"{test}::test_fixture"])
     assert consumers.outside_nodes({"serve/demo/src/demo/web/metrics.html"}, {test}) == {f"{test}::test_page_source"}
     assert consumers.outside_nodes({"serve/demo/src/demo/web/pages/changes/forms.mjs"}, {test}) == {
-        f"{test}::test_root_browser"
+        f"{test}::test_root_browser",
+        f"{test}::test_inventory",
     }
-    assert consumers.outside_nodes({"serve/demo/src/demo/web/pds/load.mjs"}, {test}) == {f"{test}::test_root_browser"}
+    assert consumers.outside_nodes({"serve/demo/src/demo/web/pds/load.mjs"}, {test}) == {
+        f"{test}::test_root_browser",
+        f"{test}::test_inventory",
+    }
     assert consumers.outside_nodes({"serve/demo/src/demo/web/vendor/lit-html/lit-html.js"}, {test}) == {
-        f"{test}::test_root_browser"
+        f"{test}::test_root_browser",
     }
     selection.current_hashes[test] = "changed"
     selection.add(f"{test}::test_current", "native footprint")
