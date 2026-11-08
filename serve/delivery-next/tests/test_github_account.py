@@ -302,9 +302,8 @@ def test_https_and_local_push_destinations_pass(repo, tmp_path):
 
 
 GIT_CASES = {  # the setting, the origin's owner, the active account, whose token Git gets
+    # the resolver's owner and fallback choices are its own test's; a launch carries whichever login it chose
     "the setting names boecht": ("boecht", "acme", "maba-pag", "boecht"),
-    "the repository owner's account": (account.REPOSITORY_OWNER, "boecht", "maba-pag", "boecht"),
-    "maba-pag for an owner gh lacks": (account.REPOSITORY_OWNER, "acme", "boecht", "maba-pag"),
 }
 
 
@@ -378,11 +377,7 @@ WRITES = {
 @pytest.mark.parametrize("write", WRITES)
 @pytest.mark.parametrize(
     ("setting", "owner", "active", "login"),
-    [
-        ("boecht", "acme", "maba-pag", "boecht"),
-        ("repository-owner", "boecht", "maba-pag", "boecht"),
-        ("repository-owner", "acme", "boecht", "maba-pag"),
-    ],
+    [("boecht", "acme", "maba-pag", "boecht")],  # each write, not each resolver choice, is this test's subject
 )
 def test_each_gh_write_is_launched_with_only_the_chosen_accounts_token(  # noqa: PLR0913, PLR0917 - one case
     fake_gh, monkeypatch, write, setting, owner, active, login
