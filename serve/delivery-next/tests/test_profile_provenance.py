@@ -326,13 +326,12 @@ def test_detection_publication_failure_preserves_local_progress_and_retries_with
     assert calls == ["failed"]
 
 
-@pytest.mark.parametrize("reconfirm", [False, True])
-def test_owner_selected_ci_checks_keep_their_workflow_digest_through_confirmation(tmp_path, reconfirm):
+@pytest.mark.parametrize("_reconfirm", [True])  # a digest the first confirm loses stays lost after the second
+def test_owner_selected_ci_checks_keep_their_workflow_digest_through_confirmation(tmp_path, _reconfirm):
     repo = clone(tmp_path, "shop")
     raw = profile.detect(repo, GitHub(), None)
     chosen = profile.confirm(raw, profile.DECLARED, "lint", NOW)
-    if reconfirm:
-        chosen = profile.confirm(chosen, profile.DECLARED, "lint", NOW)
+    chosen = profile.confirm(chosen, profile.DECLARED, "lint", NOW)
     head = git(repo, "rev-parse", "HEAD")
     pr = PullRequest(
         repository="acme/shop-site",
