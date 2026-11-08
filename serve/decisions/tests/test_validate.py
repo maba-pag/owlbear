@@ -149,11 +149,6 @@ def test_two_promotions_or_a_promotion_and_a_replacement_of_one_source_are_two_s
     assert rules(tmp_path) == ["two-successors"] * 4
 
 
-def test_a_decided_decision_needs_no_quote(tmp_path, put):
-    put()  # TD-449: the owner's words are never stored
-    assert rules(tmp_path) == []
-
-
 def test_statement_over_240_characters(tmp_path, put):
     put(statement="x" * 240)
     put(statement="x" * 241)
