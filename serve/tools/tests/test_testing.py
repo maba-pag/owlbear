@@ -476,7 +476,7 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     fixture = "serve/demo/tests/conftest.py"
     test = "serve/demo/tests/test_consumer.py"
     texts = {
-        source: "CURRENT = 2\n",
+        source: "CURRENT = 2\nimport demo.entry as hop\n\ndef forwarding():\n    return hop.load()\n",
         "serve/demo/src/demo/project_host/pages.py": "PAGES = (('/', 'Changes', 'changes.html'),)\n",
         "serve/demo/src/demo/web/changes.html": (
             '<script type="module" src="/assets/page/changes/main.mjs"></script>'
@@ -488,7 +488,10 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
         "serve/demo/src/demo/web/pages/changes/forms.mjs": "export function show() {}\n",
         "serve/demo/src/demo/web/pds/load.mjs": "export const load = () => {};\n",
         "serve/demo/src/demo/web/vendor/lit-html/lit-html.js": "export const html = () => {};\n",
-        entry: "from demo.tables import CURRENT\n\ndef load():\n    return CURRENT\n\ndef unrelated():\n    return 3\n",
+        entry: (
+            "from demo.tables import CURRENT\nimport demo.tables as loop\n\ndef load():\n    return CURRENT\n"
+            "\ndef unrelated():\n    return 3\n\ndef mutual():\n    return loop.forwarding()\n"
+        ),
         fixture: (
             "import sys\nimport pytest\nfrom demo.entry import load\n\n"
             "@pytest.fixture\ndef loaded():\n    return load() if sys.platform == 'darwin' else 2\n"
@@ -517,7 +520,9 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
         target.write_text(text)
     consumers = test_impact._Consumers(tmp_path, set(texts))  # noqa: SLF001
     load = consumers.block_hashes(entry, {"load"})
-    unknown = set(Module(source_code=texts[entry]).checksums) - consumers.block_hashes(entry, {"load", "unrelated"})
+    unknown = set(Module(source_code=texts[entry]).checksums) - consumers.block_hashes(
+        entry, {"load", "unrelated", "mutual"}
+    )
     skipped = f"{test}::test_platform"
     evidence = Evidence(
         "map",

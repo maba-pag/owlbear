@@ -147,6 +147,10 @@ class _Consumers:
             name: {symbol: _names(node) for symbol, node in definitions.items()}
             for name, definitions in self.definitions.items()
         }
+        self.local_symbols = {
+            path: set(self.definitions[path]) | set().union(*references.values())
+            for path, references in self.references.items()
+        }
         self.fixtures = {
             path: fixture_names(tree) for path, tree in self.trees.items() if Path(path).name == "conftest.py"
         }
@@ -258,12 +262,18 @@ class _Consumers:
         return names
 
     def _local_names(self, caller: str, names: set[str]) -> set[str]:
+        names &= self.local_symbols.get(caller, set())
         while True:
             additions = {
                 symbol
                 for symbol, references in self.references.get(caller, {}).items()
                 if references & names
-                or any(reference.startswith(f"{name}.") for reference in references for name in names)
+                or any(
+                    ".".join(parts[:end]) in names
+                    for reference in references
+                    for parts in [reference.split(".")]
+                    for end in range(1, len(parts))
+                )
             } - names
             if not additions:
                 return names
