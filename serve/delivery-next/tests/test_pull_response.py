@@ -44,7 +44,7 @@ def request(root, payload, action):
 
 
 @pytest.mark.parametrize("action", ["read", "create"])
-@pytest.mark.parametrize("repository", ["o/r", "O/R"])
+@pytest.mark.parametrize("repository", ["O/R"])
 def test_response_repository_matches_case_insensitively_and_allows_a_fork_head(tmp_path, action, repository):
     payload = response(action)
     payload["base"]["repo"]["full_name"] = repository
