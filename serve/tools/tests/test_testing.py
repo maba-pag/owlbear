@@ -480,15 +480,21 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     entry = "serve/demo/src/demo/entry.py"
     orphan = "serve/demo/src/demo/deleted_only.py"
     orphan_before = Module(source_code="def only():\n    return 1\n")
-    fixture, test, shared = (
+    fixture, test, shared, data_helper = (
         "serve/demo/tests/conftest.py",
         "serve/demo/tests/test_consumer.py",
         "serve/demo/tests/test_shared_user.py",
+        "serve/demo/tests/shared_reader.py",
     )
     texts = {
         source: "CURRENT = 2\nimport demo.entry as hop\n\ndef forwarding():\n    return hop.load()\n",
         orphan: "def only():\n    return 2\n",
-        shared: "from test_consumer import shared_helper\n\ndef test_shared():\n    return shared_helper()\n",
+        shared: (
+            "from test_consumer import shared_helper\nfrom shared_reader import shared_value\n\n"
+            "def test_shared():\n    return shared_helper()\n\n"
+            "def test_shared_data():\n    return shared_value()\n"
+        ),
+        data_helper: ("DATA = Path('fixtures/shared.json').read_text()\n\ndef shared_value():\n    return DATA\n"),
         "serve/demo/src/demo/project_host/pages.py": "PAGES = (('/', 'Changes', 'changes.html'),)\n",
         "serve/demo/src/demo/web/changes.html": (
             '<script type="module" src="/assets/page/changes/main.mjs"></script>'
@@ -618,6 +624,9 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     assert consumers.outside_nodes({"serve/demo/tests/fixtures/marked.json"}, {test}) == all_nodes
     assert consumers.outside_nodes({"serve/demo/tests/fixtures/chat_contract_1.json"}, {test}) == {
         f"{test}::test_computed"
+    }
+    assert consumers.outside_nodes({"serve/demo/tests/fixtures/shared.json"}, {test, shared}) == {
+        f"{shared}::test_shared_data"
     }
     with (
         patch.object(test_impact, "_revision", return_value={orphan: orphan_before}),

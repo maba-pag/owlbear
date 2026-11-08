@@ -74,7 +74,7 @@ Changed test modules remain required and also feed dependency analysis for their
 Deleted test modules cannot supply observed coverage; unresolved current consumers fail explicitly.
 Named navigation consumers with an indirect, unresolved route remain selected, as do the users of
 source inventories that combine a wildcard with a filename-suffix filter.
-Test-data-only changes use the same named reader/fixture selection, not a mandatory whole-package fallback.
+Test-data-only changes follow named readers, imported test helpers and fixtures, not a mandatory whole-package fallback.
 Module/class autouse fixtures and module-level fixture marks retain their implicitly affected tests within
 the correct scope. Computed data filenames match their constant prefixes/suffixes and retain their reader users.
 Automatically selected parametrized consumers run their current function's cases, so a production inventory

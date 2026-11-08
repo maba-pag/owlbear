@@ -355,7 +355,10 @@ class _Consumers:
         namespaces = {module.split(".", 1)[0] for module in modules}
         suffixes = {Path(path).suffix for path in paths}
         selected: set[str] = set()
-        for test in candidates | self.fixtures.keys():
+        helpers = {
+            path for path in self.trees if path not in self.tests and ("/tests/" in path or path.startswith("tests/"))
+        }
+        for test in candidates | self.fixtures.keys() | helpers:
             definitions = self.definitions.get(test, {})
             symbols: set[str] = set()
             references = _names(self.trees[test]) if test in self.trees else set()
