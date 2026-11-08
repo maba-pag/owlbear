@@ -17,7 +17,7 @@ from owlbear_tools.test_dependencies import is_test_module
 def fixture_names(tree: ast.AST) -> tuple[set[str], set[str]]:
     """Fixture identities, including those applied without an explicit request."""
     fixtures, autouse = set(), set()
-    for node in ast.walk(tree):
+    for symbol, node in _definitions(tree).items():
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         for decorator in node.decorator_list:
@@ -25,12 +25,12 @@ def fixture_names(tree: ast.AST) -> tuple[set[str], set[str]]:
             if (isinstance(called, ast.Attribute) and called.attr == "fixture") or (
                 isinstance(called, ast.Name) and called.id == "fixture"
             ):
-                fixtures.add(node.name)
+                fixtures.add(symbol)
                 if isinstance(decorator, ast.Call) and any(
                     keyword.arg == "autouse" and isinstance(keyword.value, ast.Constant) and keyword.value.value is True
                     for keyword in decorator.keywords
                 ):
-                    autouse.add(node.name)
+                    autouse.add(symbol)
     return fixtures, autouse
 
 
@@ -152,11 +152,15 @@ class _Consumers:
             for path, references in self.references.items()
         }
         self.fixtures = {
-            path: fixture_names(tree) for path, tree in self.trees.items() if Path(path).name == "conftest.py"
+            path: fixture_names(tree)
+            for path, tree in self.trees.items()
+            if Path(path).name == "conftest.py" or path in self.tests
         }
         for path, (fixtures, autouse) in self.fixtures.items():
             for test in self.tests:
-                if Path(test).is_relative_to(Path(path).parent) and (autouse or fixtures & _names(self.trees[test])):
+                if (
+                    test == path or (Path(path).name == "conftest.py" and Path(test).is_relative_to(Path(path).parent))
+                ) and (autouse or fixtures & _names(self.trees[test])):
                     self.reverse[path].add(test)
 
     def _choices(self, name: str, caller: str) -> set[str]:
@@ -254,7 +258,7 @@ class _Consumers:
                     names.update(affected)
                 elif symbol in affected:
                     names.add(local)
-        if dependency in self.fixtures and caller in self.tests:
+        if dependency != caller and dependency in self.fixtures and caller in self.tests:
             fixtures, autouse = self.fixtures[dependency]
             if autouse & affected:
                 names.update(self.definitions[caller])
@@ -264,6 +268,7 @@ class _Consumers:
     def _local_names(self, caller: str, names: set[str]) -> set[str]:
         names &= self.local_symbols.get(caller, set())
         while True:
+            fixtures, autouse = self.fixtures.get(caller, (set(), set()))
             additions = {
                 symbol
                 for symbol, references in self.references.get(caller, {}).items()
@@ -273,6 +278,12 @@ class _Consumers:
                     for reference in references
                     for parts in [reference.split(".")]
                     for end in range(1, len(parts))
+                )
+                or any(
+                    symbol.startswith(f"{scope}.") if scope else "." not in symbol
+                    for fixture in names & fixtures
+                    for scope in [fixture.rpartition(".")[0]]
+                    if fixture in autouse or fixture.rsplit(".", 1)[-1] in references
                 )
             } - names
             if not additions:
@@ -303,7 +314,7 @@ class _Consumers:
             for path, symbols in affected.items()
             if path in self.tests
             for symbol in self.definitions[path]
-            if symbol in symbols or symbol.split(".", 1)[0] in symbols
+            if symbol in symbols or symbol.split(".", 1)[0] in symbols or "pytestmark" in symbols
             if symbol.rsplit(".", 1)[-1].startswith("test_")
             and isinstance(self.definitions[path][symbol], (ast.FunctionDef, ast.AsyncFunctionDef))
         }
@@ -414,6 +425,21 @@ class _Consumers:
                 named = any(
                     label in literal for label in labels for literal in literals if "/" in label or "." in label
                 )
+                computed = any(
+                    re.search(
+                        "".join(
+                            re.escape(part.value) if isinstance(part, ast.Constant) else ".*" for part in node.values
+                        ),
+                        label,
+                    )
+                    for node in ast.walk(definition)
+                    if isinstance(node, ast.JoinedStr)
+                    and any(
+                        isinstance(part, ast.Constant) and isinstance(part.value, str) and part.value
+                        for part in node.values
+                    )
+                    for label in labels
+                )
                 wildcard = globs and (
                     any(f"*{suffix}" in literal for suffix in suffixes for literal in literals)
                     or ("*" in literals and bool(suffixes & literals))
@@ -428,7 +454,7 @@ class _Consumers:
                     and ((route := _navigation_route(node.args[0])) is None or route in routes)
                     for node in ast.walk(definition)
                 )
-                if named or wildcard or child or navigates:
+                if named or computed or wildcard or child or navigates:
                     symbols.add(symbol)
             if symbols:
                 selected.update(self.test_nodes(self.affected(test, symbols)))

@@ -495,9 +495,11 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
         fixture: (
             "import sys\nimport pytest\nfrom demo.entry import load\n\n"
             "@pytest.fixture\ndef loaded():\n    return load() if sys.platform == 'darwin' else 2\n"
+            "@pytest.fixture\ndef marked():\n    return Path('fixtures/marked.json').read_text()\n"
         ),
         test: (
             "import sys\nimport pytest\nfrom demo.entry import load, unrelated\n\n"
+            "pytestmark = pytest.mark.usefixtures('marked')\n"
             "def test_current():\n    assert load() == 2\n\n"
             "def test_other():\n    assert unrelated() == 3\n\n"
             "@pytest.mark.skipif(sys.platform == 'linux', reason='Mac consumer')\n"
@@ -510,6 +512,12 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
             "INVENTORY = [p for p in Path('web').rglob('*') if p.suffix == '.mjs']\n\n"
             "def test_inventory():\n    return INVENTORY\n\n"
             "def test_data():\n    return Path('fixtures/input.json').read_text()\n\n"
+            "@pytest.fixture(autouse=True)\ndef local_data():\n    return Path('fixtures/local.json').read_text()\n\n"
+            "class TestScoped:\n"
+            "    @pytest.fixture(autouse=True)\n    def class_data(self):\n"
+            "        return Path('fixtures/class.json').read_text()\n"
+            "    def test_class(self):\n        assert True\n"
+            "def test_computed():\n    return Path(f'chat_contract_{1}.json').read_text()\n\n"
             "def indirect(page, base, path):\n    page.goto(f'{base}{path}#token=t')\n\n"
             "def test_indirect_route(page):\n    indirect(page, 'http://localhost', '/updates/owlbear')\n"
         ),
@@ -577,3 +585,12 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     assert f"{test}::test_other[explicit-state]" in selection.reasons
     selection.helper("serve/demo/tests/fixtures/input.json")
     assert f"{test}::test_data" in selection.reasons
+    all_nodes = consumers.test_nodes({test: set(consumers.definitions[test])})
+    assert consumers.outside_nodes({"serve/demo/tests/fixtures/local.json"}, {test}) == all_nodes
+    assert consumers.outside_nodes({"serve/demo/tests/fixtures/class.json"}, {test}) == {
+        f"{test}::TestScoped::test_class"
+    }
+    assert consumers.outside_nodes({"serve/demo/tests/fixtures/marked.json"}, {test}) == all_nodes
+    assert consumers.outside_nodes({"serve/demo/tests/fixtures/chat_contract_1.json"}, {test}) == {
+        f"{test}::test_computed"
+    }
