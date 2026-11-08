@@ -24,11 +24,14 @@ from owlbear_tools.testing import (
 )
 
 
-def _targets(paths: list[str], workspace: _Packages) -> tuple[set[str], list[str], list[_WorkspacePackage], set[str]]:
+def _targets(
+    paths: list[str], workspace: _Packages
+) -> tuple[set[str], list[str], list[_WorkspacePackage], set[str], list[str]]:
     forced: set[str] = set()
     required = set(_INVARIANT_TESTS)
     python: list[str] = []
     packages: dict[str, _WorkspacePackage] = {}
+    resources: list[str] = []
     for path in paths:
         package = _package_for_path(path, workspace)
         if path in _CONFIG_TESTS:
@@ -50,9 +53,12 @@ def _targets(paths: list[str], workspace: _Packages) -> tuple[set[str], list[str
         ):
             msg = f"Task test scope unsupported for {path}; use repair to establish its consumers, not the full suite"
             raise task_scope.ScopeError(msg)
+        elif package and "/src/" in path:
+            forced.update(scope)
+            resources.append(path)
         else:
             required.update(scope)
-    return forced | required, python, list(packages.values()), required
+    return forced | required, python, list(packages.values()), required, resources
 
 
 def commands_for_task(
@@ -60,7 +66,7 @@ def commands_for_task(
 ) -> list[tuple[list[str], Path]]:
     """Union affected consumers and required targets, never bootstrap the full suite."""
     workspace = _workspace_packages()
-    forced, python, packages, required = _targets(paths, workspace)
+    forced, python, packages, required, resources = _targets(paths, workspace)
     required.update(task_scope.explicit_targets(_REPOSITORY_ROOT, targets))
     for package in packages:
         forced.update(_relative_paths(_neighbour_tests(package, workspace)))
@@ -68,7 +74,7 @@ def commands_for_task(
             _relative_paths(path for path in _package_tests(package) if _unseen_by_testmon(path, package.namespace))
         )
     selected = sorted(forced | required) if paths or targets else []
-    if python or any(path.startswith((_PAGES, "tests/")) or "/tests/" in path for path in paths):
+    if python or resources or any(path.startswith((_PAGES, "tests/")) or "/tests/" in path for path in paths):
         from owlbear_tools import test_impact  # noqa: PLC0415 - task evidence only, never ordinary test startup.
 
         consumer_paths = [
@@ -77,7 +83,11 @@ def commands_for_task(
             if path in python or path.startswith("tests/") or "/tests/" in path or _python_scope(path, workspace) != []
         ]
         selected = test_impact.select(
-            _REPOSITORY_ROOT, python, context, selected, test_impact.RequiredScope(consumer_paths, sorted(required))
+            _REPOSITORY_ROOT,
+            python,
+            context,
+            selected,
+            test_impact.RequiredScope(consumer_paths, sorted(required), resources),
         )
     print(f"Task paths: {', '.join(paths) or 'none'}")  # noqa: T201
     if not selected:

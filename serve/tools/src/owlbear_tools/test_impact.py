@@ -368,10 +368,11 @@ class _Selection:
 
 @dataclass(frozen=True)
 class RequiredScope:
-    """Full task paths and explicit/invariant/configuration selectors, separate from router candidates."""
+    """Task paths, required selectors and runtime resources, separate from automatic router candidates."""
 
     paths: Sequence[str]
     tests: Sequence[str]
+    resources: Sequence[str] = ()
 
 
 def select(
@@ -384,7 +385,8 @@ def select(
     """Return one union of current pytest node/module selectors, never a bootstrap full suite."""
     root = root.resolve()
     all_paths = scope.paths
-    for path in {*paths, *all_paths}:
+    resources = set(scope.resources)
+    for path in {*paths, *all_paths, *resources}:
         if not relative(path):
             msg = f"Invalid task dependency path in {root}: {path!r}"
             raise ValueError(msg)
@@ -403,8 +405,10 @@ def select(
     )
     for node in scope.tests:
         selection.add(node, "caller-supplied invariant/source-reading/subprocess/neighbor")
-    for node in consumers.outside_nodes(set(all_paths), {node_path(node) for node in forced}):
-        selection.add(node, "current named page/source-reading/subprocess consumer")
+    reading_paths = [set(all_paths) - resources, *({resource} for resource in sorted(resources))]
+    for reading in reading_paths:
+        for node in consumers.outside_nodes(reading, {node_path(node) for node in forced}):
+            selection.add(node, "current named page/source-reading/subprocess consumer")
     selection.fingerprints(touched, callers, context.base)
     for span in context.kept_spans:
         kept = touched & _kept_paths(root, span, context.target)

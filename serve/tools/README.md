@@ -72,6 +72,8 @@ Internally, `test_impact.RequiredScope` separates full task paths and required e
 targets from automatic router candidates, so page, source-reader and child-process candidates narrow
 to named consumers. Documentation-only inputs retain the ordinary router's exclusion in mixed tasks;
 Markdown test fixtures and package runtime resources remain consumer inputs.
+Runtime-resource package fallbacks are candidates, not required whole-package tests; resource-only
+tasks also use reader discovery, and each runtime resource must resolve readers independently.
 Page consumers follow served HTML and relative module imports to their real browser
 navigation routes, including the root Changes page and shared assets. Unresolved page consumers raise an error.
 Reflective module readers (`getattr`/`hasattr`/`vars`) retain named consumers, including computed attribute names.

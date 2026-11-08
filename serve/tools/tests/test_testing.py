@@ -400,9 +400,10 @@ def test_changed_runs_git_scope_and_accepts_explicit_base(options: list[str]) ->
         assert scope.paths == [data]
         assert scope.tests == ["tests/test_package_boundary.py"]
         module = target.split("::", 1)[0]
-        _, python, _, required = _targets([module], _workspace_packages())
+        _, python, _, required, resources = _targets([module], _workspace_packages())
         assert python == [module]
         assert module in required
+        assert resources == []
 
 
 def test_task_consumers_exclude_docs_but_keep_markdown_fixtures_and_runtime_resources() -> None:
@@ -420,6 +421,52 @@ def test_task_consumers_exclude_docs_but_keep_markdown_fixtures_and_runtime_reso
         run_test()
     assert selected.call_args.args[1] == [_LOOP]
     assert selected.call_args.args[4].paths == [_LOOP, fixture, resource]
+    assert selected.call_args.args[4].resources == [resource]
+    assert selected.call_args.args[4].tests == ["tests/test_package_boundary.py"]
+    with (
+        patch.object(sys, "argv", ["test", "--changed", "--task-base", "base", "--target", "target"]),
+        patch("owlbear_tools.task_scope.commit", return_value="target"),
+        patch("owlbear_tools.task_scope.changed", return_value=[resource]),
+        patch("owlbear_tools.test_impact.select", return_value=[target]) as selected,
+        patch("owlbear_tools.testing.subprocess.call", return_value=0),
+        pytest.raises(SystemExit, match="0"),
+    ):
+        run_test()
+    assert selected.call_args.args[1] == []
+    assert selected.call_args.args[4].resources == [resource]
+    assert selected.call_args.args[4].tests == ["tests/test_package_boundary.py"]
+
+
+def test_a_known_source_reader_cannot_hide_an_unresolved_runtime_resource(tmp_path: Path) -> None:
+    from owlbear_tools import test_impact  # noqa: PLC0415
+    from owlbear_tools.task_scope import Context  # noqa: PLC0415
+    from owlbear_tools.test_dependencies import Evidence  # noqa: PLC0415
+
+    source = "serve/demo/src/demo/read.py"
+    resource = "serve/demo/src/demo/no-reader.bin"
+    test = "serve/demo/tests/test_reader.py"
+    texts = {
+        source: "VALUE = 1\n",
+        resource: "",
+        test: f"from pathlib import Path\n\ndef test_source():\n    Path('{source}').read_text()\n",
+    }
+    for name, text in texts.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    evidence = Evidence("map", 1, 1, "python", 1, 1, {}, frozenset(), ())
+    with (
+        patch("owlbear_tools.test_impact.git", return_value="\0".join(texts)),
+        patch("owlbear_tools.test_impact._load", return_value=[evidence]),
+        pytest.raises(RuntimeError, match=r"No current file-reading/page/import consumers.*no-reader\.bin"),
+    ):
+        test_impact.select(
+            tmp_path,
+            [],
+            Context("before", "target"),
+            [test],
+            test_impact.RequiredScope([source, resource], [], [resource]),
+        )
 
 
 def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() -> None:
