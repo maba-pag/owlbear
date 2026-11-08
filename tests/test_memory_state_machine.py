@@ -110,18 +110,6 @@ class TestStateEnum:
     _state_rank_for_list: contested=1 (curated tier), disputed=stale=3 (deleted tier).
     """
 
-    def test_contested_value_in_memory_state_enum(self) -> None:
-        """MemoryState.CONTESTED exists with value 'contested' in owlbear_memory."""
-        assert MemoryState.CONTESTED == "contested"
-
-    def test_disputed_value_in_memory_state_enum(self) -> None:
-        """MemoryState.DISPUTED exists with value 'disputed' in owlbear_memory."""
-        assert MemoryState.DISPUTED == "disputed"
-
-    def test_stale_value_in_memory_state_enum(self) -> None:
-        """MemoryState.STALE exists with value 'stale' in owlbear_memory."""
-        assert MemoryState.STALE == "stale"
-
     def test_new_states_accessible_via_mcp_memory_package(self) -> None:
         """owlbear_memory_mcp exposes the same MemoryState enum with all three new values."""
         from owlbear_memory_mcp.tools import MemoryState as McpState  # noqa: PLC0415
@@ -234,6 +222,7 @@ class TestResolve:
         result = engine.resolve(_ID_CONTESTED, expected_updated_at=_TS)
 
         assert result.state == MemoryState.APPROVED
+        assert result.approved_at is not None
 
     def test_resolve_disputed_returns_approved_state(self, tmp_path: Path) -> None:
         """resolve() on a disputed entry returns an entry with state=approved."""
@@ -243,6 +232,7 @@ class TestResolve:
         result = engine.resolve(_ID_DISPUTED, expected_updated_at=_TS)
 
         assert result.state == MemoryState.APPROVED
+        assert result.updated_at != _TS
 
     def test_resolve_stale_returns_approved_state(self, tmp_path: Path) -> None:
         """resolve() on a stale entry returns an entry with state=approved."""
@@ -252,24 +242,6 @@ class TestResolve:
         result = engine.resolve(_ID_STALE, expected_updated_at=_TS)
 
         assert result.state == MemoryState.APPROVED
-
-    def test_resolve_sets_approved_at_timestamp(self, tmp_path: Path) -> None:
-        """resolve() populates approved_at on the returned entry."""
-        _write_raw_md(tmp_path, _ID_CONTESTED, "contested")
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        result = engine.resolve(_ID_CONTESTED, expected_updated_at=_TS)
-
-        assert result.approved_at is not None
-
-    def test_resolve_updates_updated_at(self, tmp_path: Path) -> None:
-        """resolve() refreshes updated_at to a new value (not the original timestamp)."""
-        _write_raw_md(tmp_path, _ID_DISPUTED, "disputed", updated_at=_TS)
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        result = engine.resolve(_ID_DISPUTED, expected_updated_at=_TS)
-
-        assert result.updated_at != _TS
 
     def test_resolve_persists_approved_state_to_disk(self, tmp_path: Path) -> None:
         """resolve() writes approved state to disk; re-read via fresh engine confirms it."""
