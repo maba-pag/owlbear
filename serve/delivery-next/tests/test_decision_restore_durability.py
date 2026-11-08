@@ -296,9 +296,7 @@ def test_a_symlink_leaf_with_matching_bytes_rejects_the_whole_batch_before_any_r
     assert decision_batch.pending(shared) is not None
 
 
-def test_a_symlink_parent_with_matching_bytes_rejects_the_whole_batch_before_any_restore(
-    shared, monkeypatch, tmp_path
-):
+def test_a_symlink_parent_with_matching_bytes_rejects_the_whole_batch_before_any_restore(shared, monkeypatch, tmp_path):
     old, before = _committed(shared)
     path = _file(shared, old)
     folder = path.parent

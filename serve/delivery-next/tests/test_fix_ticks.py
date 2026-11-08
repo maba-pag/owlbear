@@ -11,6 +11,7 @@ import pytest
 from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id
 from owlbear_delivery_next.change_contracts.models import Change, Exit, Names, Step, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.settings import profile
@@ -160,23 +161,21 @@ def test_the_change_is_found_under_this_clone_s_id_and_an_owner_s_tick_meanwhile
 
 @pytest.mark.usefixtures("github")
 @pytest.mark.parametrize("ended", ["abandoned", "unchanged"])
-def test_a_change_that_merged_nothing_ticks_nothing_and_reopens_its_fixes(tmp_path, shared, merged, ended):
-    repo, _ = merged
+def test_a_change_that_merged_nothing_ticks_nothing_and_reopens_its_fixes(tmp_path, shared, change_repo, ended):
     fix = entry(shared, FIX, ["a.py", "!docs/c.md"])
     gh = Gh(pr(None, merged=False) if ended == "abandoned" else None)
 
-    finish(tmp_path, shared, repo, gh, "abandon" if ended == "abandoned" else None)
+    finish(tmp_path, shared, change_repo, gh, "abandon" if ended == "abandoned" else None)
 
     assert (now(shared, fix).status, ticks(now(shared, fix).text)) == ("open", {"a.py": False, "docs/c.md": True})
     assert "Verified by" not in now(shared, fix).text
 
 
 @pytest.mark.usefixtures("github")
-def test_an_abandoning_change_whose_pr_merged_anyway_credits_nothing(tmp_path, shared, merged):
-    repo, sha = merged
+def test_an_abandoning_change_whose_pr_merged_anyway_credits_nothing(tmp_path, shared, change_repo):
     fix = entry(shared, FIX, ["a.py"])
 
-    finish(tmp_path, shared, repo, Gh(pr(sha)), "abandon")
+    finish(tmp_path, shared, change_repo, Gh(pr(git(change_repo, "rev-parse", "HEAD"))), "abandon")
 
     assert (now(shared, fix).status, ticks(now(shared, fix).text)) == ("open", {"a.py": False})
 
@@ -243,32 +242,40 @@ def test_an_entry_reassigned_meanwhile_is_left_as_it_is(tmp_path, shared, merged
 
 @pytest.mark.parametrize("failure", ["github", "diff"])
 def test_a_failure_leaves_the_fixes_as_they_were_and_cleanup_finishes_with_a_notice(
-    tmp_path, shared, github, merged, failure
+    shared, github, merged, whole_error, failure
 ):
-    repo, sha = merged
+    repo, sha = merged  # the clone lies in the test's tmp_path, beside the store finish makes
+    missing = "f" * 40
     fix = entry(shared, FIX, ["a.py"])
     before = github.issues[int(fix)]["body"]
     github.down = failure == "github"
+    real_bytes, failed = cleanup._bytes, []  # noqa: SLF001
 
-    cx = finish(tmp_path, shared, repo, Gh(pr(sha if failure == "github" else "f" * 40)))
+    def longer_error(path, *args):  # the real command fails; a long whole error is added to its own
+        try:
+            return real_bytes(path, *args)
+        except subprocess.CalledProcessError as exc:
+            failed.append((exc.cmd, exc.returncode, exc.stderr))
+            exc.stderr += whole_error.encode()
+            raise
+
+    with pytest.MonkeyPatch.context() as patched:
+        if failure == "diff":
+            patched.setattr(cleanup, "_bytes", longer_error)
+        cx = finish(repo.parent, shared, repo, Gh(pr(sha if failure == "github" else missing)))
 
     github.down = False
     assert (github.issues[int(fix)]["body"], now(shared, fix).status) == (before, "in-change")
     [event] = cx.events("c1", "decision-fixes")
-    assert event["notice"].startswith("the decision fixes of c1 were not updated: ")
-
-
-def test_a_failed_merge_read_leaves_its_whole_error_in_the_notice(tmp_path, shared, merged, monkeypatch, whole_error):
-    repo, sha = merged
-    diff = ["git", "diff", "--name-only", f"{sha}^1", sha]
-
-    def unreadable(*_a):
-        raise subprocess.CalledProcessError(128, diff, stderr=whole_error.encode())
-
-    monkeypatch.setattr(cleanup, "_bytes", unreadable)
-    cx = finish(tmp_path, shared, repo, Gh(pr(sha)))
-    [event] = cx.events("c1", "decision-fixes")
+    if failure == "github":
+        assert event["notice"].startswith("the decision fixes of c1 were not updated: ")
+        return
+    diff = [worktree.GIT, "diff", "--name-only", "--no-renames", "-z", f"{missing}^1", missing]
+    [(command, status, said)] = failed
+    assert (command, status) == (diff, 128)
+    assert said.startswith(b"fatal: ")
+    assert missing.encode() in said
     assert event["notice"] == (
         "the decision fixes of c1 were not updated: CalledProcessError: "
-        f"Command '{diff}' returned non-zero exit status 128.\n{whole_error}"
+        f"Command '{diff}' returned non-zero exit status 128.\n{said.decode()}{whole_error}"
     )
