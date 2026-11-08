@@ -141,8 +141,10 @@ def started(tmp_path: Path) -> SimpleNamespace:
     """The Change ``review``'s start writes, built as the start builds it but without Git: its commit is a fixed one."""
     store = Store(tmp_path / "store")
     number, slug = identities.reserve(store, lambda n, taken: new_slug(f"{curation.TITLE} {n}", taken))
-    found = [curation_shares.Package(".", {"tests/helpers.py": 1, "tests/test_a.py": 3}),
-             curation_shares.Package("web", {"web/src/b.test.ts": 2})]  # fmt: skip
+    found = [
+        curation_shares.Package(".", {"tests/helpers.py": 1, "tests/test_a.py": 3}),
+        curation_shares.Package("web", {"web/src/b.test.ts": 2}),
+    ]
     scope = [p.path for p in found]
     criteria = [Criterion(id=f"AC-{i}", text=t) for i, t in enumerate(curation.CRITERIA, 1)]
     brief = Brief(
@@ -152,11 +154,15 @@ def started(tmp_path: Path) -> SimpleNamespace:
     brief.approved = [brief.model_copy(deep=True)]
     branch = f"owlbear/{slug}"
     c = Change(
-        slug=slug, handle=f"c{number}", profile_version=(store.read_profile() or Profile()).version, brief=brief,
+        slug=slug,
+        handle=f"c{number}",
+        profile_version=(store.read_profile() or Profile()).version,
+        brief=brief,
         plan=Plan(tasks=[Task(id=CURATE, title="Curate the tests", scope=scope, detail=curation.RULES)]),
-        step=Step(kind=StepKind.TESTS), names=Names(branch=branch, target="main", worktree=str(tmp_path / slug)),
+        step=Step(kind=StepKind.TESTS),
+        names=Names(branch=branch, target="main", worktree=str(tmp_path / slug)),
         tests=TestReview(commit="c" * 40, packages=scope, shares=curation_shares.split(found)),
-    )  # fmt: skip
+    )
     with store.lock(slug) as lock:
         identities.publish_reserved(store, lock, c)
     return SimpleNamespace(store=store, slug=slug, repo=tmp_path)
@@ -234,8 +240,11 @@ def test_a_test_review_never_shapes_or_plans_and_its_status_counts_shares_and_th
     for _ in range(4):  # REPLAN_LIMIT and RETRY_LIMIT never reached: nothing is counted
         again = apply(again.model_copy(update={"outcome": None, "stop": None}), sent, NOW)
     assert (again.step.kind, again.outcome.exit, again.budgets.replans, again.budgets.causes) == (
-        StepKind.BUILD, Exit.STOP, 0, {}
-    )  # fmt: skip
+        StepKind.BUILD,
+        Exit.STOP,
+        0,
+        {},
+    )
     again, step_ = loop.schedule(again.model_copy(update={"outcome": None, "stop": None}),
                                  [IntentItem(at=NOW, intent="change", text="also docs")], NOW)  # fmt: skip
     assert (again.step.kind, again.outcome.exit, step_) == (StepKind.BUILD, Exit.STOP, None)  # a change request too
