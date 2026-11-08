@@ -28,10 +28,10 @@ ENGINE_JSON = [
 ]  # fmt: skip
 
 
-def fake_engine(tmp_path: Path, code: int, out: str, sleep: float = 0) -> pack_files.Installed:
+def fake_engine(tmp_path: Path, code: int, out: str) -> pack_files.Installed:
     script = tmp_path / "impeccable"
     script.write_text(f"#!/bin/sh\nenv > {tmp_path / 'env.txt'}\necho $* > {tmp_path / 'args.txt'}\n"
-                      f"sleep {sleep}\ncat <<'EOF'\n{out}\nEOF\nexit {code}\n")  # fmt: skip
+                      f"cat <<'EOF'\n{out}\nEOF\nexit {code}\n")  # fmt: skip
     script.chmod(script.stat().st_mode | stat.S_IEXEC)
     digest = hashlib.sha256(script.read_bytes()).hexdigest()
     return pack_files.Installed(engine=script, engine_sha256=digest, bundle="window.x = 1")
@@ -176,12 +176,6 @@ def test_only_web_addresses_and_absolute_paths_reach_the_engine(tmp_path) -> Non
     with pytest.raises(detector.DetectorError, match="absolute paths"):
         detector.scan_source(pack, [Path("-x.html")], tmp_path)
     assert not (tmp_path / "args.txt").exists()
-
-
-def test_a_scan_that_hangs_ends(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(detector, "SECONDS", 0.2)
-    with pytest.raises(detector.DetectorError, match="did not finish"):
-        detector.scan_source(fake_engine(tmp_path, 0, "[]", sleep=5), [tmp_path / "a.html"], tmp_path)
 
 
 @pytest.mark.parametrize("cause", ["unverified", "unstarted", "hung", "failed", "unreadable", "shapeless"])
