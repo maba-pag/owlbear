@@ -236,6 +236,7 @@ class _Selection:
             row for item in self.maps for row in item.observations if node_path(row.test) in self.consumers.tests
         ]
         self.reasons: dict[str, set[str]] = defaultdict(set)
+        self.resource_sources: set[str] = set()
 
     def add(self, node: str, reason: str) -> None:
         module = node_path(node)
@@ -267,7 +268,9 @@ class _Selection:
         for source in touched:
             self.supplements(source, before[source], original[source])
 
-    def supplements(self, source: str, before: Module | None, current: Module | None) -> None:
+    def supplements(
+        self, source: str, before: Module | None, current: Module | None, symbols: set[str] | None = None
+    ) -> None:
         observed = {block for row in self.rows if row.source == source for block in row.blocks}
         relevant_callers = self.consumers.callers({source})
         relevant_tests = self.consumers.tests_for(relevant_callers)
@@ -278,7 +281,8 @@ class _Selection:
                 self.add(node, f"recorded platform/skip consumer: {source}")
         for node in self.consumers.platform_nodes({*relevant_callers, *relevant_tests, *footprint_tests}):
             self.add(node, f"current platform branch consumer: {source}")
-        symbols = changed_symbols(before, current)
+        if symbols is None:
+            symbols = changed_symbols(before, current)
         affected = self.consumers.affected(source, symbols or set(self.consumers.definitions.get(source, {})))
         fixtures = set(affected) & self.consumers.fixtures.keys()
         for node in self.consumers.platform_nodes(fixtures, affected):
@@ -310,7 +314,7 @@ class _Selection:
             raise RuntimeError(msg)
 
     def reconcile(self) -> None:
-        python = {path for path in self.paths if path.endswith(".py")}
+        python = {path for path in self.paths if path.endswith(".py")} | self.resource_sources
         relevant = self.consumers.tests_for(self.consumers.callers(python))
         relevant.update(node_path(node) for node in self.reasons)
         for test in relevant & self.consumers.tests:
@@ -365,6 +369,23 @@ class _Selection:
             msg = f"Unresolved current fixture/helper consumers in {self.root}: {helper}"
             raise RuntimeError(msg)
 
+    def resource(self, resource: str) -> None:
+        readers = self.consumers.resource_readers(resource)
+        self.resource_sources.update(readers.keys() - self.consumers.tests)
+        affected = dict(readers)
+        for reader, symbols in readers.items():
+            if reader in self.consumers.tests:
+                continue
+            hashes = self.consumers.block_hashes(reader, symbols)
+            observed = {block for row in self.rows if row.source == reader for block in row.blocks}
+            if hashes - observed:
+                for source, names in self.consumers.affected(reader, symbols).items():
+                    if names:
+                        affected.setdefault(source, set()).update(names)
+            module = _module(self.consumers.texts.get(reader))
+            self.supplements(reader, module, module, symbols)
+        self.named_consumers(resource, affected)
+
 
 @dataclass(frozen=True)
 class RequiredScope:
@@ -408,7 +429,7 @@ def select(
     for node in consumers.outside_nodes(set(all_paths) - resources, {node_path(node) for node in forced}):
         selection.add(node, "current named page/source-reading/subprocess consumer")
     for resource in sorted(resources):
-        selection.named_consumers(resource, consumers.resource_readers(resource))
+        selection.resource(resource)
     selection.fingerprints(touched, callers, context.base)
     for span in context.kept_spans:
         kept = touched & _kept_paths(root, span, context.target)

@@ -472,6 +472,58 @@ def test_a_known_source_reader_cannot_hide_an_unresolved_runtime_resource(tmp_pa
         )
 
 
+def test_observed_runtime_readers_do_not_expand_unrelated_importer_methods(tmp_path: Path) -> None:
+    from testmon.process_code import Module, methods_to_checksums  # noqa: PLC0415
+
+    from owlbear_tools.test_consumers import _Consumers  # noqa: PLC0415
+    from owlbear_tools.test_dependencies import Evidence, Observation  # noqa: PLC0415
+    from owlbear_tools.test_impact import _Selection  # noqa: PLC0415
+
+    reader = "serve/demo/src/demo/reader.py"
+    common = "serve/demo/src/demo/common.py"
+    resource = "serve/demo/src/demo/data.md"
+    test, other = "serve/demo/tests/test_reader.py", "serve/demo/tests/test_other.py"
+    texts = {
+        reader: "from pathlib import Path\nDATA = Path(__file__).with_name('data.md')\n"
+        "def value():\n    return DATA.read_text()\n",
+        common: "from demo.reader import value\nclass Common:\n"
+        "    def read(self):\n        return value()\n"
+        "    def unrelated(self):\n        return 2\n",
+        test: "from demo.reader import value\ndef test_value():\n    return value()\n",
+        other: "from demo.common import Common\ndef test_other():\n    return Common().unrelated()\n",
+        resource: "data",
+    }
+    for name, text in texts.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    consumers = _Consumers(tmp_path, set(texts))
+    value = tuple(methods_to_checksums(b.code for b in Module(source_code=texts[reader]).blocks if b.name == "value"))
+    unrelated = tuple(
+        methods_to_checksums(b.code for b in Module(source_code=texts[common]).blocks if b.name == "unrelated")
+    )
+    assert value
+    assert unrelated
+    hashes = dict.fromkeys(texts, "same")
+    evidence = Evidence(
+        "map",
+        1,
+        1,
+        "python",
+        1,
+        1,
+        hashes,
+        frozenset(),
+        (Observation(f"{test}::test_value", reader, value), Observation(f"{other}::test_other", common, unrelated)),
+    )
+    selection = _Selection(tmp_path, [resource], consumers, [evidence], hashes)
+    with patch("owlbear_tools.test_impact._revision", return_value={reader: Module(source_code=texts[reader])}):
+        selection.resource(resource)
+        selection.reconcile()
+    assert f"{test}::test_value" in selection.reasons
+    assert not any(node.startswith(other) for node in selection.reasons)
+
+
 def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() -> None:
     with (
         patch.object(sys, "argv", ["test", "--changed"]),

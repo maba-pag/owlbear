@@ -354,8 +354,7 @@ class _Consumers:
                 if resource in references or (path.startswith(prefix) and basename in references)
             }
             if symbols:
-                for source, names in self.affected(path, symbols).items():
-                    affected[source].update(names)
+                affected[path].update(self.affected(path, symbols).get(path, set()))
         if not affected:
             msg = f"No current runtime-resource readers resolved for {resource} in {self.root}"
             raise RuntimeError(msg)
