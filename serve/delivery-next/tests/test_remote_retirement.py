@@ -88,6 +88,17 @@ class RefServer:
         return subprocess.CompletedProcess(argv, 0, json.dumps(result).encode(), b"")
 
 
+class RecordedRef(RefServer):
+    """The invalid-read and invalid-ack modes never write the ref, so their merged head is recorded, not in Git."""
+
+    def __init__(self, root, mode):
+        assert mode in {"invalid-read", "invalid-ack"}
+        super().__init__((root, "a" * 40, None), mode)
+
+    def head(self):
+        return self.merged
+
+
 def test_atomic_retirement_uses_the_exact_merged_head_and_no_force(history):
     server = RefServer(history)
     result = GhProvider(server.root, writer=None, runner=server).delete_branch("o/r", "owlbear/work", server.merged)
@@ -169,8 +180,8 @@ def test_a_fresh_provider_replay_retains_a_branch_recreated_after_the_first_reti
         {"errors": [{"message": "access refused"}], "data": {"repository": {"id": "R", "ref": None}}},
     ],
 )
-def test_invalid_or_failed_read_is_never_acknowledged_as_an_absent_branch(history, reply):
-    server = RefServer(history, "invalid-read")
+def test_invalid_or_failed_read_is_never_acknowledged_as_an_absent_branch(tmp_path, reply):
+    server = RecordedRef(tmp_path, "invalid-read")
     server.ack = reply
     with pytest.raises(ProviderError) as failed:
         GhProvider(server.root, writer=None, runner=server).delete_branch("o/r", "owlbear/work", server.merged)
@@ -190,8 +201,8 @@ def test_invalid_or_failed_read_is_never_acknowledged_as_an_absent_branch(histor
         {"data": {"updateRefs": {"__typename": "UpdateRefsPayload"}}, "errors": [{"message": "refused"}]},
     ],
 )
-def test_malformed_or_rejected_mutation_is_not_success_and_a_guarded_retry_is_safe(history, ack):
-    server = RefServer(history, "invalid-ack")
+def test_malformed_or_rejected_mutation_is_not_success_and_a_guarded_retry_is_safe(tmp_path, ack):
+    server = RecordedRef(tmp_path, "invalid-ack")
     server.ack = ack
     with pytest.raises(ProviderError) as failed:
         GhProvider(server.root, writer=None, runner=server).delete_branch("o/r", "owlbear/work", server.merged)
