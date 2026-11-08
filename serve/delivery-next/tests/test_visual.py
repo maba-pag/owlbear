@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import dataclasses
+import errno
 import functools
 import http.server
 import subprocess
@@ -61,6 +62,7 @@ NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 MISSING, CRASHED = "Executable doesn't exist", "browser crashed"
 HOME = VisualState(name="home", path="/", expect="The greeting is centred")
+HEAD = "a" * 40  # judged, route, repair and loop.apply take the head as given; none reads a checkout
 
 
 def git(cwd, *args):
@@ -248,12 +250,11 @@ def test_a_passed_visual_check_holds_only_for_its_exact_head_tree_and_state_vers
     assert not merge.visual_ok(c, "c" * 40, [])  # an unreadable head tree is never accepted
 
 
-def test_a_fix_verdict_becomes_a_builder_repair_task(clone):
-    head = commit(clone, "web/app.css")
-    c = change(clone)
+def test_a_fix_verdict_becomes_a_builder_repair_task():
+    head, tree = HEAD, "b" * 40
+    c = change()
     verdict = rv("fix", [tools.Finding(place="home 390px", problem="text overflows", fix="wrap it")])
     shots = [visual.Shot("home", 1280, "home-1280.png"), visual.Shot("home", 390, "home-390.png")]
-    tree = visual.tree(clone, head)
     c, result = visual.judged(
         c, head, tree, shots, verdict=verdict, now=NOW, kept=rounded(c, head, tree, correct="fail")
     )
@@ -295,16 +296,16 @@ def test_an_error_is_existing_only_if_a_good_before_shot_of_that_state_version_a
     assert visual.classify(after, failed) == (after, [])
 
 
-def test_new_errors_fail_with_the_reviewers_findings_and_existing_ones_never_fail(clone):
-    head = commit(clone, "web/app.css")
+def test_new_errors_fail_with_the_reviewers_findings_and_existing_ones_never_fail():
+    head = HEAD
     shots = [visual.Shot("home", 1280, "home-1280.png", errors=(err("old"),))]
     before = VisualResult(head="b", tree="t", files=["home-1280.png"], errors=[err("old")], at=NOW)
-    c = change(clone, before=before)
+    c = change(before=before)
     c, result = visual.judged(c, head, "t", shots, verdict=rv("pass"), now=NOW, kept=rounded(c, head))
     assert (result.exit, c.visual.passed, c.visual.errors) == (Exit.DONE, True, [err("old")])
     shots = [visual.Shot("home", 1280, "home-1280.png", errors=(err("old"), err("boom", kind="page")))]
     verdict = rv("fix", [tools.Finding(place="home-1280.png", problem="text overflows", fix="wrap it")])
-    c, result = visual.judged(change(clone, before=before), head, "t", shots, verdict=verdict, now=NOW)
+    c, result = visual.judged(change(before=before), head, "t", shots, verdict=verdict, now=NOW)
     assert (result.exit, c.visual.passed) == (Exit.BACK, False)
     assert c.visual.findings == [
         "home at 1280px: new page error: boom",
@@ -314,23 +315,23 @@ def test_new_errors_fail_with_the_reviewers_findings_and_existing_ones_never_fai
     assert "text overflows" in result.fix_task.detail
 
 
-def test_doubt_is_only_offered_when_nothing_is_definitely_wrong(clone):
-    head = commit(clone, "web/app.css")
+def test_doubt_is_only_offered_when_nothing_is_definitely_wrong():
+    head = HEAD
     good = [visual.Shot("home", 1280, "home-1280.png")]
-    c = change(clone)
+    c = change()
     c, result = visual.judged(c, head, "t", good, verdict=unsure(), now=NOW, kept=rounded(c, head))
     assert (result.exit, c.visual.passed, result.question.options[0].next) == (Exit.ASK, False, "accept")
     assert (result.question.cause, c.visual_rounds[-1].outcome) == (decision.CAUSE, "ask")
     seen = tools.Finding(place="home-1280.png", problem="maybe wraps", fix="decide")
-    c = change(clone)
+    c = change()
     doubtful = unsure().model_copy(update={"findings": [seen]})
     c, result = visual.judged(c, head, "t", good, verdict=doubtful, now=NOW, kept=rounded(c, head, correct="unsure"))
     assert result.exit == Exit.ASK  # an unsure judge's findings are for the owner, never an automatic repair
     noisy = [visual.Shot("home", 1280, "home-1280.png", errors=(err("boom", kind="page"),))]
-    c, result = visual.judged(change(clone), head, "t", noisy, verdict=unsure(), now=NOW)
+    c, result = visual.judged(change(), head, "t", noisy, verdict=unsure(), now=NOW)
     assert (result.exit, c.visual.findings) == (Exit.BACK, ["home at 1280px: new page error: boom"])
     broken = [visual.Shot("home", 1280, error="/ answered 500")]
-    assert visual.judged(change(clone), head, "t", broken, verdict=unsure(), now=NOW)[1].exit == Exit.BACK
+    assert visual.judged(change(), head, "t", broken, verdict=unsure(), now=NOW)[1].exit == Exit.BACK
 
 
 def test_only_the_visual_review_may_be_unsure_and_it_must_say_why():
@@ -344,30 +345,30 @@ def test_only_the_visual_review_may_be_unsure_and_it_must_say_why():
         tools.ReviewResult(verdict="unsure")
 
 
-def test_a_failed_shot_keeps_the_new_errors_in_the_findings_and_long_details_split_not_cut(clone):
-    head = commit(clone, "web/app.css")
+def test_a_failed_shot_keeps_the_new_errors_in_the_findings_and_long_details_split_not_cut():
+    head = HEAD
     shots = [visual.Shot("home", 1280, error="/ answered 500", errors=(err("boom", kind="page"),))]
-    c, _ = visual.judged(change(clone), head, "t", shots, verdict=None, now=NOW)
+    c, _ = visual.judged(change(), head, "t", shots, verdict=None, now=NOW)
     assert c.visual.findings == ["home at 1280px: / answered 500", "home at 1280px: new page error: boom"]
     noisy = [visual.Shot("home", 1280, "home-1280.png", errors=tuple(err(f"e{i} " + "x" * 250) for i in range(30)))]
     verdict = rv("fix", [tools.Finding(place="home-1280.png", problem="text overflows", fix="wrap it")])
-    c, result = visual.judged(change(clone), head, "t", noisy, verdict=verdict, now=NOW)
+    c, result = visual.judged(change(), head, "t", noisy, verdict=verdict, now=NOW)
     details = [result.fix_task.detail, *(t.detail for t in result.more_fixes)]
     assert all(len(d) <= 4000 for d in details)
     assert "text overflows" in details[-1]  # the reviewer's finding survives the error noise
 
 
-def test_an_unanswered_url_is_a_finding_and_a_capture_without_judgement_never_passes(clone):
-    head = commit(clone, "web/app.css")
-    c = change(clone)
+def test_an_unanswered_url_is_a_finding_and_a_capture_without_judgement_never_passes():
+    head = HEAD
+    c = change()
     shots = [visual.Shot("home", 1280, error="/ did not answer: net::ERR_CONNECTION_REFUSED")]
     c, result = visual.judged(c, head, "t", shots, verdict=rv("pass"), now=NOW)
     assert (result.exit, c.visual.passed) == (Exit.BACK, False)
     assert c.visual.findings == ["home at 1280px: / did not answer: net::ERR_CONNECTION_REFUSED"]
     for shots, verdict in (([], rv("pass")), ([visual.Shot("home", 1280, error="/ answered 500")], None)):
-        c, result = visual.judged(change(clone), head, "t", shots, verdict=verdict, now=NOW)
+        c, result = visual.judged(change(), head, "t", shots, verdict=verdict, now=NOW)
         assert (result.exit, c.visual.passed) == (Exit.BACK, False)
-    c, result = visual.judged(change(clone), head, "t", [visual.Shot("home", 1280, "f.png")], verdict=None, now=NOW)
+    c, result = visual.judged(change(), head, "t", [visual.Shot("home", 1280, "f.png")], verdict=None, now=NOW)
     assert (result.exit, result.cause, c.visual.passed) == (Exit.RETRY, decision.AGAIN, False)  # judged again
 
 
@@ -972,8 +973,9 @@ def test_a_visual_accept_without_the_model_check_is_withdrawn_once_the_capture_m
 
     flow.mp.setattr(runner.sdk_adapter, "run", unread)
     log = flow.store.log
-    flow.mp.setattr(flow.store, "log", lambda *_a: (_ for _ in ()).throw(OSError(28, "No space left on device")))
-    with pytest.raises(OSError, match="No space"):  # the gate is written before the held runs are logged
+    refused = PermissionError(errno.EACCES, "Permission denied", str(flow.store.db.root))  # opening its directory
+    flow.mp.setattr(flow.store, "log", lambda *_a: (_ for _ in ()).throw(refused))
+    with pytest.raises(PermissionError, match="Permission denied"):  # the gate is written before the runs are logged
         runner._step(flow.store, Lock("c1"), c, c.step, flow.clone)  # noqa: SLF001
     flow.mp.setattr(flow.store, "log", log)
     asked = flow.store.read("c1")
