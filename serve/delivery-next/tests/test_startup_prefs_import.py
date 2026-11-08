@@ -9,6 +9,7 @@ import pytest
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
+from owlbear_delivery_next.local_system.git_files import probe_in
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.state_store import prefs_import, profile_share
@@ -25,6 +26,13 @@ def clone_profile(remote: Path, tmp_path: Path) -> tuple[Store, Profile]:
     subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
     fresh = Store(tmp_path / "fresh-store", DataRepo(second), "shop-site")
     return fresh, fresh.read_profile()
+
+
+def published_profile(remote: Path) -> Profile:
+    """The shared profile's bytes on the remote's main branch, as a fresh clone would get them."""
+    code, out = probe_in(remote)(["git", f"--git-dir={remote}", "show", f"main:shop-site/{profile_share.PROFILE}"])
+    assert code == 0, out
+    return Profile.model_validate_json(out)
 
 
 @pytest.fixture
@@ -98,14 +106,12 @@ def test_a_carry_whose_local_flag_cannot_be_written_is_a_failed_check_and_the_ne
     failed = [c for c in readiness.ready(store, root, carry=True) if not c.ok]  # no exception escapes the start
     assert [c.name for c in failed] == ["legacy preferences"]
     assert "No space left" in failed[0].detail
-    _, before = clone_profile(remote, tmp_path / "before")
-    assert before.prefs_import != "done"  # the completion never reached the shared profile
+    assert published_profile(remote).prefs_import != "done"  # the completion never reached the shared profile
 
     blocked[0] = False
     assert not [c for c in readiness.ready(store, root, carry=True) if not c.ok]
     assert store.read_config().prefs.ci_poll_seconds == 45
-    _, got = clone_profile(remote, tmp_path / "after")
-    assert got.prefs_import == "done"
+    assert published_profile(remote).prefs_import == "done"
 
 
 @pytest.mark.usefixtures("no_network")
