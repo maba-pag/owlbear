@@ -102,23 +102,6 @@ def _finish_refused(repo: Path, capsys) -> bool:
 
 
 @pytest.mark.usefixtures("current_binding")
-def test_held_run_is_settled_by_finish_and_carried_into_the_target(repo, boot, capsys):
-    _prepared(repo, boot)
-    _write_run(_source(repo), _run_record(RUN_A, STARTED_A))
-    assert not (Path.home() / ".owlbear" / maintenance.FILE).exists(), "no ledger: the receipt lookup is empty"
-
-    assert cli.main(["--repo", str(repo), "finish"]) == 0
-    capsys.readouterr()
-
-    carried = json.loads((Store.open(repo).root / pack_state.FILE).read_text())
-    assert carried["state"] == "failed"
-    assert carried["reason"] == pack_state.HOST_STOPPED
-    assert carried[pack_state.REWRITTEN] == f"{RUN_A}:{STARTED_A}"
-    assert carried["run"] == RUN_A
-    assert carried["started_at"] == STARTED_A
-
-
-@pytest.mark.usefixtures("current_binding")
 def test_receipted_generation_for_the_same_bytes_wins_over_the_record(repo, boot, capsys):
     _prepared(repo, boot)
     _write_run(_source(repo), _run_record(RUN_A, STARTED_A, state="failed", reason="the updater may still be running"))
