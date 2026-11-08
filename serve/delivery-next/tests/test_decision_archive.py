@@ -169,14 +169,17 @@ def test_a_crash_before_publishing_stays_interrupted_until_the_owner_finishes_it
     real_publish = decision_sync.publish
 
     def crash(*_a: object, **_k: object):
-        msg = "power cut"
+        msg = "publish call interrupted"
         raise OSError(msg)
 
     monkeypatch.setattr(decision_sync, "publish", crash)
-    assert "power cut" in change_record.save(store, c, MERGED, AT)
+    assert "publish call interrupted" in change_record.save(store, c, MERGED, AT)
     written = {p: p.read_text() for p in (root / "shop-site").rglob("decisions/*.md")}
     assert len(written) == 3
     assert git(root, "status", "--porcelain")  # written, never committed
+    assert decision_batch.pending(store.shared) is not None
+    with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
+        decision_store.load(store.shared, "shop-site")
     monkeypatch.setattr(decision_sync, "publish", real_publish)
 
     # an unknown publication is not retried
@@ -341,9 +344,7 @@ def test_an_invalid_decision_is_a_notice_and_nothing_is_archived(store, shared_r
     assert git(root, "status", "--porcelain") == ""
 
 
-def test_a_decision_that_would_break_the_repositorys_rules_keeps_all_out_and_the_record_is_not_written(
-    store, shared_repo
-) -> None:
+def test_a_refused_planning_creates_no_journal_and_publishes_no_record(store, shared_repo, monkeypatch) -> None:
     root, _ = shared_repo
     said = {"title": "Notes", "statement": "Notes live in SQLite.", "scope": Scope.PROJECT, "project": "shop-site",
             "origin": Origin.AUTONOMOUS, "actor": "shaper", "created_at": AT}  # fmt: skip
@@ -358,31 +359,6 @@ def test_a_decision_that_would_break_the_repositorys_rules_keeps_all_out_and_the
     c = finished()
     decisions = c.brief.approved[0].decisions
     decisions[1] = lasting = decisions[1].model_copy(update={"replaces": old.id})  # a second in-force successor
-
-    notice = change_record.save(store, c, MERGED, AT)
-
-    assert notice.startswith("the record of notes was not saved; no decision of notes was archived"), notice
-    assert f"decision {lasting.id}, {old.id} of notes: two-successors" in notice
-    assert {p: p.read_text() for p in root.rglob("decisions/*.md")} == rivals  # rival rules untouched
-    assert not (root / "shop-site" / "changes" / f"{STEM}.json").exists()
-    assert git(root, "rev-parse", "HEAD") == head_before
-    assert git(root, "status", "--porcelain") == ""
-
-
-def test_a_refused_planning_creates_no_journal_and_publishes_no_record(store, shared_repo, monkeypatch) -> None:
-    root, _ = shared_repo
-    said = {"title": "Notes", "statement": "Notes live in SQLite.", "scope": Scope.PROJECT, "project": "shop-site",
-            "origin": Origin.AUTONOMOUS, "actor": "shaper", "created_at": AT}  # fmt: skip
-    old = Rule(id=new_id(AT), state=State.REPLACED, **said)
-    later = Rule(id=new_id(AT), state=State.IN_FORCE, links=(Link(type=LinkType.REPLACES, target=old.id),), **said)
-    for d in (old, later):
-        write(d, root / "shop-site")
-    git(root, "add", "-A")
-    git(root, "commit", "-qm", "replaced in another Change")
-    head_before = git(root, "rev-parse", "HEAD")
-    c = finished()
-    decisions = c.brief.approved[0].decisions
-    decisions[1] = lasting = decisions[1].model_copy(update={"replaces": old.id})  # a second in-force successor
     begun = []
     monkeypatch.setattr(decision_batch, "begin", lambda *args, **_: begun.append(args))
 
@@ -391,6 +367,7 @@ def test_a_refused_planning_creates_no_journal_and_publishes_no_record(store, sh
     assert notice.startswith("the record of notes was not saved; no decision of notes was archived"), notice
     assert f"decision {lasting.id}, {old.id} of notes: two-successors" in notice
     assert begun == []  # no journal is created before the refusal
+    assert {p: p.read_text() for p in root.rglob("decisions/*.md")} == rivals  # rival rules untouched
     assert not (root / "shop-site" / "changes" / f"{STEM}.json").exists()
     assert git(root, "rev-parse", "HEAD") == head_before
     assert git(root, "status", "--porcelain") == ""
@@ -416,41 +393,23 @@ def test_a_write_failing_midway_puts_every_file_back_and_the_record_is_refused(s
     root, _ = shared_repo
     replaced, real = [], storage._replace
 
-    def full(path: Path, text: str, *fence) -> None:
+    def refused(path: Path, text: str, *fence) -> None:
         if replaced:
-            msg = "disk full"
-            raise OSError(msg)
+            msg = "permission denied"
+            raise PermissionError(msg)
         replaced.append(path)
         real(path, text, *fence)
 
-    monkeypatch.setattr(storage, "_replace", full)
+    monkeypatch.setattr(storage, "_replace", refused)
 
     notice = change_record.save(store, finished(), MERGED, AT)
 
     assert notice.startswith("the record of notes was not saved; no decision of notes was archived"), notice
-    assert "disk full" in notice
+    assert "permission denied" in notice
     assert len(replaced) == 1  # one file was in place before the second failed
     assert list(root.rglob("decisions/*.md")) == []
     assert not (root / "shop-site" / "changes" / f"{STEM}.json").exists()  # F2: no record commit without its archive
     assert git(root, "status", "--porcelain") == ""
-
-
-def test_a_publish_lost_after_the_record_and_archive_are_written_is_never_partial_authority(
-    store, shared_repo, monkeypatch
-) -> None:
-    root, _ = shared_repo
-
-    def lost(*_a: object, **_k: object) -> str:
-        msg = "power cut"
-        raise OSError(msg)
-
-    monkeypatch.setattr(decision_sync, "publish", lost)
-    assert "power cut" in change_record.save(store, finished(), MERGED, AT)
-
-    assert len(archived(root)) == 3  # the files are on disk, unpublished
-    assert decision_batch.pending(store.shared) is not None
-    with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
-        decision_store.load(store.shared, "shop-site")
 
 
 def test_a_known_refusal_puts_the_record_and_its_decisions_back(store, shared_repo, monkeypatch) -> None:
@@ -496,12 +455,12 @@ def test_a_crash_after_the_first_archived_file_leaves_readers_blocked(store, mon
     def first_then_crash(*args, **kwargs):
         calls.append(1)
         if len(calls) > 1:
-            msg = "power cut after the first file"
+            msg = "call interrupted after the first file"
             raise RuntimeError(msg)
         real_write(*args, **kwargs)
 
     monkeypatch.setattr(decision_store, "write", first_then_crash)
-    with pytest.raises(RuntimeError, match="power cut"):
+    with pytest.raises(RuntimeError, match="call interrupted"):
         decision_archive.archive(root, "shop-site", finished(), STEM, "merged")
 
     assert len(archived(root)) == 1  # the prefix reached disk

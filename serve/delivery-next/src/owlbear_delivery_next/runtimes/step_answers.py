@@ -20,15 +20,7 @@ def _one(text: str, limit: int = 400) -> str:
     return " ".join((text if len(text) <= limit else text[:limit] + " ...(cut)").split())
 
 
-def answer_text(question: Question) -> str:
-    """The chosen option's label and the owner's words; a clarification's confirmed statement alone."""
-    a = question.answer
-    if a is None:
-        return ""
-    if a.kind == "clarification":
-        return a.statement
-    label = next((o.label for o in question.options if o.id == a.option), "")
-    return " - ".join(part for part in (label, a.text) if part)
+answer_text = answer_kinds.answer_text
 
 
 def _lines(question: Question) -> list[str]:

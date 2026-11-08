@@ -6,7 +6,14 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 
-from owlbear_delivery_next.change_contracts import amend_tools, curation_tools, dispute_tools, permissions, tools
+from owlbear_delivery_next.change_contracts import (
+    amend_tools,
+    curation_tools,
+    dispute_tools,
+    permissions,
+    pick_tools,
+    tools,
+)
 from owlbear_delivery_next.change_contracts.failures import (
     QUOTA,
     READ_ONLY,
@@ -269,6 +276,8 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
             said = " ".join(f"{p.reason} ({'; '.join(p.evidence)})".split())
             subject = f"{SETUP}-{signature(SETUP, str(kind), p.reason)[:8]}"  # one obstruction, not every premise
             return missing.setup(cause_key(ErrorKind.PROJECT_ENV, kind, subject), said)
+        case "result" if isinstance(p, pick_tools.QuestionJudgment):
+            return StepResult(exit=Exit.DONE, reason="option judgment returned")
         case "premise" | "missing-tool" if kind == StepKind.TESTS:  # a share retries; its plan is fixed (TD-390)
             said = p.reason if isinstance(p, tools.WrongPremise) else run.detail
             said = f"missing {p.tool}: {p.error}" if isinstance(p, tools.MissingTool) else said
@@ -283,9 +292,11 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
             ]
             return StepResult(exit=Exit.DONE, reason=f"{len(tasks)} task(s) planned", plan=Plan(tasks=tasks))
         case "ask" if isinstance(p, tools.AskQuestion):
-            options = [Option(id=f"o{i}", label=f"{o.label}: {o.effect}") for i, o in enumerate(p.options, 1)]
-            question = Question(step=kind, text=f"{p.question} (why: {p.why})", options=options)
-            return StepResult(exit=Exit.ASK, question=question)
+            return StepResult(
+                exit=Exit.RETRY,
+                cause=cause_key(ErrorKind.RESULT, kind, "question-admission"),
+                reason="options: the worker question has not passed engine action admission",
+            )
         case "spotter-ask":  # the Spotter stopped the step to ask the owner (#717)
             return StepResult(exit=Exit.ASK, question=answer_kinds.spotter(kind, run.detail))
         case "premise" if isinstance(p, tools.WrongPremise):

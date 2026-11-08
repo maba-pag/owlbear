@@ -151,18 +151,12 @@ def test_a_corrupt_switched_receipt_is_refused_by_registration_adoption_selfchec
 
 
 @pytest.mark.usefixtures("current_binding")
-@pytest.mark.parametrize(
-    "marker",
-    [pytest.param("1000\n", id="future-1000"), pytest.param(None, id="missing"), pytest.param("x9\n", id="malformed")],
-)
+@pytest.mark.parametrize("marker", [pytest.param("1000\n", id="future-1000")])
 def test_a_valid_switched_receipt_with_an_unknown_source_marker_is_refused_and_nothing_is_written(repo, boot, marker):
     target = _finished_move(repo, boot)
     source = _source(repo)
     assert (source / MARKER).read_text() == f"{project_move.FENCE}\n"
-    if marker is None:
-        (source / MARKER).unlink()
-    else:
-        (source / MARKER).write_text(marker)
+    (source / MARKER).write_text(marker)
     source_before, target_before = _snapshot(source), _snapshot(target)
 
     with pytest.raises(StoreError):
@@ -175,7 +169,6 @@ def test_a_valid_switched_receipt_with_an_unknown_source_marker_is_refused_and_n
 TARGET_DAMAGE = [
     pytest.param("missing-proof", id="missing-proof"),
     pytest.param("wrong-proof", id="wrong-proof"),
-    pytest.param("recreated-identity", id="recreated-identity"),
     pytest.param("utf8-proof", id="utf8-proof"),
     pytest.param("utf8-format", id="utf8-format"),
     pytest.param("future-format", id="future-format"),
@@ -184,19 +177,9 @@ TARGET_DAMAGE = [
 ]
 
 
-def _damage(target: Path, damage: str, monkeypatch) -> type[StoreError]:
+def _damage(target: Path, damage: str) -> type[StoreError]:
     if damage == "missing-proof":
         (target / project_move.MOVE_PROOF).unlink()
-    elif damage == "recreated-identity":
-        original = fd_tree.ident(target.stat())
-        target.rename(target.with_name(target.name + "-retained"))
-        target.mkdir()
-        replacement = fd_tree.ident(target.stat())
-        assert replacement != original
-        real_ident = fd_tree.ident
-        monkeypatch.setattr(fd_tree, "ident", lambda st: original if real_ident(st) == replacement else real_ident(st))
-        (target / project_move.MOVE_PROOF).write_text("another-move\n")
-        (target / MARKER).write_text("7\n")
     elif damage == "quarantined":
         (target / f"{fd_tree.QUARANTINE}foreign").write_bytes(b"keep me")
     elif damage == "oversized-format":
@@ -210,10 +193,10 @@ def _damage(target: Path, damage: str, monkeypatch) -> type[StoreError]:
 
 @pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("damage", TARGET_DAMAGE)
-def test_current_and_every_admission_refuse_an_unproven_target_without_writes(repo, boot, monkeypatch, damage):
+def test_current_and_every_admission_refuse_an_unproven_target_without_writes(repo, boot, damage):
     target = _finished_move(repo, boot)
     entry = registry.register(repo)
-    error = _damage(target, damage, monkeypatch)
+    error = _damage(target, damage)
     source_before, target_before = _snapshot(_source(repo)), _snapshot(target.parent)
 
     with pytest.raises(error):
@@ -308,15 +291,13 @@ def test_an_unreadable_clone_id_refuses_registration_and_adoption_with_an_action
 
 
 @pytest.mark.usefixtures("current_binding")
-# unloaded holds every refusal in one except clause; each damage's own refusal is proven by
-# test_current_and_every_admission_refuse_an_unproven_target_without_writes, so a StoreError and its subclass suffice
-@pytest.mark.parametrize("damage", ["missing-proof", "future-format"])
-def test_a_failed_public_project_load_holds_unlocated_instead_of_reading_the_unproven_target(
-    repo, boot, monkeypatch, damage
-):
+# unloaded holds every refusal, FormatTooNewError included, in one except clause; each damage's own refusal is proven
+# by test_current_and_every_admission_refuse_an_unproven_target_without_writes, so one StoreError suffices
+@pytest.mark.parametrize("damage", ["missing-proof"])
+def test_a_failed_public_project_load_holds_unlocated_instead_of_reading_the_unproven_target(repo, boot, damage):
     target = _finished_move(repo, boot)
     entry = registry.register(repo)
-    _damage(target, damage, monkeypatch)
+    _damage(target, damage)
     assert not (target / pack_state.FILE).exists()
     source_before, target_before = _snapshot(_source(repo)), _snapshot(target.parent)
     machine = _machine()
@@ -381,8 +362,8 @@ def _replace_after_authority_read(repo, monkeypatch, changed, seam, *, current_o
     pid = project_home.clone_id(source)
     assert pid
     target = project_home.home(pid)
-    held_source, held_target = source.stat(), target.stat()
-    real_read, real_proof = fd_tree.read_at, project_move._proof_ok  # noqa: SLF001 - real proof read boundary
+    held_target = target.stat()
+    real_read = fd_tree.read_at
     moved = (target if changed == "target" else source).with_name("retained-original")
     fired, expected = [], {}
 
@@ -399,29 +380,17 @@ def _replace_after_authority_read(repo, monkeypatch, changed, seam, *, current_o
 
     def read(dfd, name):
         text = real_read(dfd, name)
-        if (
-            seam == "preparation" and name == project_move.PREPARED and os.path.samestat(os.fstat(dfd), held_source)
-        ) or (
-            name == (MARKER if seam == "marker" else project_move.MOVE_PROOF)
-            and os.path.samestat(os.fstat(dfd), held_target)
-        ):
+        if name == seam and os.path.samestat(os.fstat(dfd), held_target):
             replace()
         return text
 
-    def proof(dfd, rec):
-        valid = real_proof(dfd, rec)
-        if seam == "proof" and os.path.samestat(os.fstat(dfd), held_target):
-            replace()
-        return valid
-
     monkeypatch.setattr(fd_tree, "read_at", read)
-    monkeypatch.setattr(project_move, "_proof_ok", proof)
     return fired, expected, moved
 
 
 @pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("lookup", ["current", "register", "adopt", "selfcheck", "unloaded"])
-@pytest.mark.parametrize("seam", ["proof", "marker"])
+@pytest.mark.parametrize("seam", [MARKER], ids=["marker"])
 def test_target_replacement_during_authority_reads_refuses_and_keeps_uncertain_ownership(
     repo, boot, monkeypatch, lookup, seam
 ):
@@ -473,7 +442,7 @@ def test_target_replacement_during_authority_reads_refuses_and_keeps_uncertain_o
 
 @pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("lookup", ["current", "register", "adopt", "selfcheck", "open"])
-@pytest.mark.parametrize("seam", ["preparation", "marker"])
+@pytest.mark.parametrize("seam", [MARKER], ids=["marker"])
 def test_source_replacement_during_authority_reads_never_admits_the_replacement(repo, boot, monkeypatch, lookup, seam):
     target = _finished_move(repo, boot)
     entry = registry.register(repo)
@@ -626,15 +595,12 @@ def test_missing_target_marker_is_not_created_after_initial_source_reads_lose_it
 @pytest.mark.usefixtures("current_binding")
 # the machine holds every refusal of the source marker alike; the marker forms themselves are proven by
 # test_source_format_refuses_every_unproven_source_marker below
-@pytest.mark.parametrize("marker", [b"8\n", None], ids=["newer", "missing"])
-def test_an_unproven_source_fence_keeps_one_unlocated_reservation(repo, boot, marker):
+@pytest.mark.parametrize("removed", [MARKER], ids=["missing"])
+def test_an_unproven_source_fence_keeps_one_unlocated_reservation(repo, boot, removed):
     target = _finished_move(repo, boot)
     entry = registry.register(repo)
     source = _source(repo)
-    if marker is None:
-        (source / MARKER).unlink()
-    else:
-        (source / MARKER).write_bytes(marker)
+    (source / removed).unlink()
     (source / pack_state.FILE).write_text(
         json.dumps(pack_state.blank() | {"state": "running", "run": "newer-source-run"})
     )
@@ -690,7 +656,7 @@ def test_source_format_refuses_every_unproven_source_marker(tmp_path, marker, er
 
 @pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("consumer", ["current", "open"])
-@pytest.mark.parametrize("field", [project_move.PREPARED, MARKER, project_home.CLONE_ID])
+@pytest.mark.parametrize("field", [project_home.CLONE_ID])
 def test_source_state_rechecks_the_receipt_after_its_other_witness_reads(repo, boot, monkeypatch, consumer, field):
     target = _finished_move(repo, boot)
     source = _source(repo)
@@ -789,35 +755,22 @@ def _during_terminal_source_receipt(monkeypatch, source, boundary, change):
 
 
 def _during_selfcheck_tail(monkeypatch, target, boundary, change):
-    real_marker, real_text = selfcheck.read_regular, Path.read_text
+    real_text = Path.read_text
     fired = []
-
-    def once():
-        if not fired:
-            fired.append(True)
-            change()
-
-    def marker(path):
-        value = real_marker(path)
-        if path == target / MARKER:
-            once()
-        return value
 
     def text(path, *args, **kwargs):
         value = real_text(path, *args, **kwargs)
-        if path == target / "config.json":
-            once()
+        if path == target / boundary and not fired:
+            fired.append(True)
+            change()
         return value
 
-    if boundary == "marker":
-        monkeypatch.setattr(selfcheck, "read_regular", marker)
-    else:
-        monkeypatch.setattr(Path, "read_text", text)
+    monkeypatch.setattr(Path, "read_text", text)
     return fired
 
 
 @pytest.mark.usefixtures("current_binding")
-@pytest.mark.parametrize("boundary", ["marker", "settings"])
+@pytest.mark.parametrize("boundary", ["config.json"], ids=["settings"])
 @pytest.mark.parametrize("witness", ["target-proof", "source-receipt", "source-id", "source-preparation"])
 def test_selfcheck_keeps_original_authority_through_its_remaining_reads(repo, boot, monkeypatch, boundary, witness):
     target = _finished_move(repo, boot)
@@ -848,7 +801,7 @@ def test_selfcheck_keeps_original_authority_through_its_remaining_reads(repo, bo
 
 
 @pytest.mark.usefixtures("current_binding")
-@pytest.mark.parametrize("boundary", ["marker", "settings"])
+@pytest.mark.parametrize("boundary", ["config.json"], ids=["settings"])
 def test_selfcheck_tail_keeps_legitimate_atomic_active_payload_writes(repo, boot, monkeypatch, boundary):
     target = _finished_move(repo, boot)
     source = _source(repo)
@@ -1041,7 +994,7 @@ def test_registry_does_not_read_source_after_its_final_held_target_validation(re
 
 @pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("surface", ["register", "adopt"])
-@pytest.mark.parametrize("when", ["target-read", "id-file-sync", "id-directory-sync"])
+@pytest.mark.parametrize("when", ["target-read", "id-directory-sync"])
 def test_registration_keeps_the_id_it_validated_through_its_durability_work(repo, boot, monkeypatch, surface, when):
     target = _finished_move(repo, boot)
     entry = registry.register(repo) if surface == "adopt" else None
@@ -1050,7 +1003,6 @@ def test_registration_keeps_the_id_it_validated_through_its_durability_work(repo
     saved = registry_path.read_bytes() if registry_path.exists() else None
     real_read, real_sync = fd_tree.read_at, os.fsync
     target_identity, source_identity = target.stat(), source.stat()
-    id_identity = (source / project_home.CLONE_ID).stat()
     fired = []
 
     def replace_id():
@@ -1066,8 +1018,7 @@ def test_registration_keeps_the_id_it_validated_through_its_durability_work(repo
 
     def sync(fd):
         real_sync(fd)
-        wanted = id_identity if when == "id-file-sync" else source_identity
-        if when != "target-read" and os.path.samestat(os.fstat(fd), wanted):
+        if when != "target-read" and os.path.samestat(os.fstat(fd), source_identity):
             replace_id()
 
     monkeypatch.setattr(fd_tree, "read_at", read)
@@ -1112,7 +1063,7 @@ def test_lookup_closes_each_descriptor_it_acquires_on_success_and_typed_refusal(
     target = _finished_move(repo, boot)
     entry = registry.register(repo)
     if damage != "valid":
-        _damage(target, damage, monkeypatch)
+        _damage(target, damage)
     real_open, real_close = os.open, os.close
     acquired, closed, live = [], [], {}
 

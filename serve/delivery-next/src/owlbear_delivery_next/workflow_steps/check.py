@@ -87,12 +87,35 @@ class Ran:
     why: str = ""  # why it has no exit: it did not start, or did not finish in time
 
 
+@dataclass(frozen=True)
+class CommandResult:
+    """The observed result of one journaled command, including successful trial evidence."""
+
+    reason: str
+    output: str
+    exit_code: int | None
+    elapsed_seconds: float
+
+
 def run(argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: Mapping[str, str] | None = None) -> str:
     """Run one command the owner made known in its own group, within ``WITHIN``; a note if it failed, else empty."""
     done, cmd = execute(argv, cwd, log, WITHIN, env), shlex.join(argv)
     if done.exit is None:
         return done.why
     return f"`{cmd}` failed: {done.output.strip()}" if done.exit else ""
+
+
+def measured(
+    argv: list[str], cwd: Path, log: Callable[[dict[str, Any]], None], env: Mapping[str, str] | None = None
+) -> CommandResult:
+    """Keep trial evidence from the same journaled executor used by checks and repairs."""
+    done, cmd = execute(argv, cwd, log, WITHIN, env), shlex.join(argv)
+    output = done.output.strip()
+    if done.exit is None:
+        reason = f"{done.why} in {cwd}; it printed: {output or 'nothing'}"
+    else:
+        reason = f"`{cmd}` failed: {output}" if done.exit else ""
+    return CommandResult(reason, output, done.exit, done.seconds)
 
 
 def execute(
@@ -114,6 +137,7 @@ def execute(
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True, env=env,
         )  # fmt: skip
     except OSError as exc:
+        _diagnostic(log, "check-command-failed", f"`{cmd}` in {cwd}", exc)
         return Ran(None, 0.0, "", f"`{cmd}` did not start: {failure(exc)}")
     born = created(proc.pid)
     try:
@@ -384,6 +408,16 @@ def failed(reason: str) -> loop.StepResult:
     """Preparation or readiness failed: the check is prepared again."""
     cause = failures.cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, "environment")
     return loop.StepResult(exit=Exit.RETRY, cause=cause, reason=reason)
+
+
+def failed_cleanup(result: loop.StepResult, reason: str) -> loop.StepResult:
+    """Show cleanup failure without discarding an existing stop's remediation gate."""
+    if result.exit != Exit.STOP:
+        return failed(reason)
+    result.reason = f"{result.reason}\n{reason}"
+    if result.stop is not None:
+        result.stop.reason = result.reason
+    return result
 
 
 def settle(c: Change, now: datetime, paths: Mapping[str, str]) -> Change:

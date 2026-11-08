@@ -286,13 +286,7 @@ def test_maintenance_holds_curation_and_a_test_review_only_where_work_may_not_st
     expect(page.get_by_role("button", name="Review tests")).to_be_enabled(timeout=WAIT)
     expect(page.locator("#tests-blocked")).to_have_count(0)
 
-
-@pytest.mark.browser
-@pytest.mark.usefixtures("data")
-def test_a_folder_refused_for_unset_settings_says_how_many_and_an_unreadable_reason_stays_whole(host) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    page, base, a = host.page, host.base, host.ids["alpha"]
+    # a past run refused while no folder waits now: its reason, not a current block, shows at the next poll
     unreadable = "settings can't be read: state of config is unreadable"
     refused = {"state": "failed", "entries": [], "blocked": "", "unset": [], "unset_reason": ""}
     stub = {"available": True, "queue": [], "folders": [
@@ -301,12 +295,9 @@ def test_a_folder_refused_for_unset_settings_says_how_many_and_an_unreadable_rea
         {"folder": "beta", "reason": unreadable, "reason_unset": 0, **refused},
     ]}  # fmt: skip
     page.route("**/api/next/curation", lambda route: route.fulfill(json=stub))
-    page.goto(f"{base}/#token=t")
-    page.goto(f"{base}/maintenance?project={a}")
-    rows = page.locator("#curation li")
-    expect(rows.nth(0)).to_contain_text(UNSET, timeout=WAIT)  # alpha's refusal, in the pages' words
+    expect(rows.nth(1)).to_contain_text(unreadable, timeout=WAIT)  # beta's stays whole; only the stub says it
+    expect(rows.nth(0)).to_contain_text(UNSET)  # alpha's refusal, in the pages' words
     expect(rows.nth(0)).not_to_contain_text(GAP)
-    expect(rows.nth(1)).to_contain_text(unreadable)  # beta's stays whole
 
 
 @pytest.mark.browser

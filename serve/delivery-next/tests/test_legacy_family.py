@@ -91,9 +91,9 @@ def test_the_registry_move_changes_only_the_current_read_set() -> None:
             "local_system/data_place.py",
             (
                 '    root = Path(record["repository"]).expanduser().resolve()\n'
-                '    if _top(root) != root:\n        msg = f"{root}, named in {path}'
+                '    if _top(root, diagnose=True) != root:\n        msg = f"{root}, named in {path}'
             ),
-            '    root = Path.cwd()\n    if _top(root) != root:\n        msg = f"{root}, named in {path}',
+            '    root = Path.cwd()\n    if _top(root, diagnose=True) != root:\n        msg = f"{root}, named in {path}',
         ),
         (
             "local_system/git_run.py",

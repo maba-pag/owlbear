@@ -1170,7 +1170,9 @@ def test_read_back_decision_records_only_a_confirmation_and_a_stale_revision_is_
     assert ("confirmed" in read_back, "answer" in read_back) == (True, False)
 
 
-def test_the_tools_say_why_when_the_host_is_down(chat):
+def test_the_tools_say_why_when_the_host_is_down(tmp_path, monkeypatch):
+    chat = chat_client.Chat(Path(), tmp_path)
+    monkeypatch.setitem(mcp_server._STATE, "chat", chat)  # noqa: SLF001 - the server's one chat
     chat.call = lambda *_a, **_k: (503, {"error": "the host is not running"})
     assert tool("find_decisions") == {"found": False, "error": "the host is not running"}
     assert tool("record_decision", title="x", statement="x")["error"] == "the host is not running"

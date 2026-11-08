@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next.change_contracts import check_hint
+from owlbear_delivery_next.change_contracts import build_tools, question_tools
+from owlbear_delivery_next.change_contracts.option_records import OptionAction
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -38,7 +39,10 @@ def _f(limit: int, description: str, example: object, least: int = 1) -> Any:  #
     return Field(min_length=least, max_length=limit, description=description, examples=[example])
 
 
-bounded = _f  # the same helper for the owner chat's brief schema (brief_tools)
+bounded = _f
+check_build = build_tools.check_build
+check_question = question_tools.check_question
+_few = build_tools.few
 
 
 class CheckRun(Args):
@@ -87,22 +91,44 @@ class BuildResult(Args):
 
 
 class AskOption(Args):
-    """One answer the owner can choose and where it leads."""
+    """One answer, its exact promise and the existing engine action that carries it."""
 
     label: str = _f(200, "The answer as the owner picks it", "German")
-    effect: str = _f(300, "What you will do if it is chosen", "greet() returns 'Hallo, <name>!'")
+    effect: str = _f(300, "The exact consequence, subject to existing brief approval and checks", "Use German")
+    action: OptionAction | None = Field(
+        default=None,
+        description="Required for new questions: continue with this product choice, retry this whole step, "
+        "pause or abandon. No action waives a failed check or opens a separate PR.",
+        examples=["continue"],
+    )
+    check: str = Field(
+        default="",
+        max_length=1000,
+        description="For a check-related recommendation: the exact declared check to trial before offering it; "
+        "empty otherwise. Never a new command or a claimed result.",
+        examples=[EXAMPLE_CHECK],
+    )
 
 
 class AskQuestion(Args):
-    """``ask_question``: one question for the owner; the step ends and resumes with the answer."""
+    """``ask_question`` submits a proposal; Delivery checks it before asking the owner."""
 
     question: str = _f(500, "One question", "Which language should greet() use?")
-    why: str = _f(500, "Why you cannot decide it yourself", "The brief calls the greeting language a product decision.")
+    why: str = _f(500, "Why you cannot decide it yourself", "The brief reserves the language for the owner.")
     options: list[AskOption] = _f(
         5,
-        "Two to five distinct answers, each leading somewhere",
-        [{"label": "German", "effect": "Hallo"}, {"label": "English", "effect": "Hello"}],
+        "Two to five distinct answers mapped to existing actions",
+        [
+            {"label": "German", "effect": "Use German", "action": "continue"},
+            {"label": "English", "effect": "Use English", "action": "continue"},
+        ],
         least=2,
+    )
+    recommended: int | None = Field(
+        default=None,
+        ge=0,
+        description="The zero-based index of the recommended option, if any; checked before it is offered",
+        examples=[0],
     )
 
 
@@ -312,7 +338,9 @@ SUBMIT = Spec(
 )
 ASK = Spec(
     "ask_question",
-    "Ask the owner one question when a decision is theirs. Your step ends; it resumes with the answer.",
+    "Propose one owner question with exact executable actions. Delivery admits every promise before asking; "
+    "a refusal returns field errors to you. Mark the recommended index; a check recommendation names its exact "
+    "declared check for a measured trial. Your step ends; it resumes with the refusal or owner answer.",
     AskQuestion,
     "ask",
 )
@@ -385,59 +413,6 @@ class Worktree:
     base: str
     dirty: tuple[str, ...] = ()
     changed: tuple[str, ...] = ()
-
-
-def _few(paths: Sequence[str]) -> str:
-    return ", ".join(paths[:5]) + (f" and {len(paths) - 5} more" if len(paths) > 5 else "")  # noqa: PLR2004
-
-
-def _response(result: BuildResult, item: ItemRef | None) -> list[str]:
-    """Errors of the ``response`` field: required for a conversation task answering *item*, refused otherwise."""
-    r = result.response
-    if item is None:
-        return ["response: only for a pull-request conversation task - remove it"] if r else []
-    if r is None:
-        return ['response: required for this conversation task - e.g. {"how": "answered", "text": "..."}']
-    if r.how == "no-action" and not item.notice:
-        return ["response.how: no-action is only for a bot's comment or review - fix it or answer it"]
-    return []
-
-
-def check_build(result: BuildResult, tree: Worktree, checks: Sequence[str], item: ItemRef | None = None) -> list[str]:
-    """Return field errors for a build result against the worktree HEAD the runner derives and the task's checks.
-
-    *item* is the conversation item the task answers, if any; an answer or no-action needs no commit, nor does a
-    result that rejects findings (``disputes.check`` then demands every finding rejected).
-    """
-    errors = _response(result, item)
-    reply = (result.response is not None and result.response.how != "fixed") or bool(result.rejected)
-    if reply and tree.head == tree.base and not tree.dirty:
-        return errors
-    if tree.head == tree.base:
-        errors.append(
-            f"changes: no commit since the task's base {tree.base[:12]}; commit your changes, then submit again"
-        )
-    if tree.dirty:
-        errors.append(f"changes: uncommitted files ({_few(tree.dirty)}); commit them, then submit again")
-    errors.extend(
-        f"checks[{i}].exit_code: {c.exit_code} - fix the failure, commit, run it again, then submit"
-        for i, c in enumerate(result.checks)
-        if c.exit_code != 0
-    )
-    errors.extend(
-        check_hint.missing(cmd)
-        for cmd in checks
-        if not any(check_hint.ran(cmd, c.command, checks) for c in result.checks)
-    )
-    return errors
-
-
-def check_question(question: AskQuestion) -> list[str]:
-    """Return field errors for a question whose options do not lead to distinct answers."""
-    labels = [o.label.strip().lower() for o in question.options]
-    if len(set(labels)) < len(labels):
-        return ["options: labels repeat - give each option a distinct answer"]
-    return []
 
 
 def check_review(review: ReviewResult, tree: Worktree, *, visual: bool = False) -> list[str]:
