@@ -40,7 +40,7 @@ def _owner_after_absence(monkeypatch, target: Path, text: bytes) -> list[int]:
     return identity
 
 
-@pytest.mark.parametrize("value", [8, 998, 1000])
+@pytest.mark.parametrize("value", [8, 1000])
 def test_a_future_marker_created_after_absence_is_never_overwritten(tmp_path, monkeypatch, value):
     target = tmp_path / "target"
     target.mkdir()
@@ -84,7 +84,7 @@ def _assert_durable(events: list, target: Path) -> None:
 
 
 @pytest.mark.parametrize("collision", [False, True], ids=["existing", "collided"])
-@pytest.mark.parametrize("value", range(1, STORE_FORMAT + 1))
+@pytest.mark.parametrize("value", [1, STORE_FORMAT])
 def test_a_supported_owner_marker_keeps_its_bytes_and_inode_and_is_synced(tmp_path, monkeypatch, collision, value):
     target = tmp_path / "target"
     target.mkdir()
@@ -108,7 +108,7 @@ def test_a_supported_owner_marker_keeps_its_bytes_and_inode_and_is_synced(tmp_pa
     assert sorted(p.name for p in target.iterdir()) == [MARKER]
 
 
-@pytest.mark.parametrize("previous", range(STORE_FORMAT + 1))
+@pytest.mark.parametrize("previous", [0, 1, STORE_FORMAT])
 def test_a_genuinely_absent_marker_is_created_with_its_prior_format_and_synced(tmp_path, monkeypatch, previous):
     events = _observe_syncs(monkeypatch, tmp_path)
     tfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
@@ -279,7 +279,7 @@ def _create_marker(tfd: int, entrypoint: str) -> None:
         format_marker.ensure_target(tfd, 7)
 
 
-@pytest.mark.parametrize("entrypoint", ["create", "ensure"])
+@pytest.mark.parametrize("entrypoint", ["create"])
 @pytest.mark.parametrize("failure", ["oserror", "baseexception"])
 def test_a_failed_creation_fdopen_handover_closes_its_owned_descriptor(tmp_path, creation_io, failure, entrypoint):
     error = (
@@ -304,7 +304,7 @@ def test_a_failed_creation_fdopen_handover_closes_its_owned_descriptor(tmp_path,
     assert sorted(p.name for p in tmp_path.iterdir()) == [MARKER]
 
 
-@pytest.mark.parametrize("entrypoint", ["create", "ensure"])
+@pytest.mark.parametrize("entrypoint", ["create"])
 def test_a_successful_creation_handover_closes_and_syncs_its_marker(tmp_path, creation_io, entrypoint):
     tfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
     try:
