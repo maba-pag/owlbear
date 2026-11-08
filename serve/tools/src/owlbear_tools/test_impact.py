@@ -276,7 +276,7 @@ class _Selection:
         for node in {node for item in self.maps for node in item.skipped}:
             if node_path(node) in relevant_tests | footprint_tests:
                 self.add(node, f"recorded platform/skip consumer: {source}")
-        for node in self.consumers.platform_nodes({source, *relevant_tests, *footprint_tests}):
+        for node in self.consumers.platform_nodes({*relevant_callers, *relevant_tests, *footprint_tests}):
             self.add(node, f"current platform branch consumer: {source}")
         symbols = changed_symbols(before, current)
         affected = self.consumers.affected(source, symbols or set(self.consumers.definitions.get(source, {})))
