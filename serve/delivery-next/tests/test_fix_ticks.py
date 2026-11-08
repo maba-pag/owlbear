@@ -249,19 +249,21 @@ def test_a_failure_leaves_the_fixes_as_they_were_and_cleanup_finishes_with_a_not
     fix = entry(shared, FIX, ["a.py"])
     before = github.issues[int(fix)]["body"]
     github.down = failure == "github"
-    real_bytes, failed = cleanup._bytes, []  # noqa: SLF001
+    diff = [worktree.GIT, "diff", "--name-only", "--no-renames", "-z", f"{missing}^1", missing]
+    real_run, failed = subprocess.run, []
 
-    def longer_error(path, *args):  # the real command fails; a long whole error is added to its own
+    def longer_error(command, *args, **kwargs):  # the real diff fails; a long whole error is added to its own
         try:
-            return real_bytes(path, *args)
+            return real_run(command, *args, **kwargs)
         except subprocess.CalledProcessError as exc:
-            failed.append((exc.cmd, exc.returncode, exc.stderr))
-            exc.stderr += whole_error.encode()
+            if command == diff:
+                failed.append((exc.cmd, exc.returncode, exc.stderr))
+                exc.stderr += whole_error.encode()
             raise
 
     with pytest.MonkeyPatch.context() as patched:
         if failure == "diff":
-            patched.setattr(cleanup, "_bytes", longer_error)
+            patched.setattr(subprocess, "run", longer_error)
         cx = finish(repo.parent, shared, repo, Gh(pr(sha if failure == "github" else missing)))
 
     github.down = False
@@ -270,7 +272,6 @@ def test_a_failure_leaves_the_fixes_as_they_were_and_cleanup_finishes_with_a_not
     if failure == "github":
         assert event["notice"].startswith("the decision fixes of c1 were not updated: ")
         return
-    diff = [worktree.GIT, "diff", "--name-only", "--no-renames", "-z", f"{missing}^1", missing]
     [(command, status, said)] = failed
     assert (command, status) == (diff, 128)
     assert missing.encode() in said  # Git's own error, naming the missing merge, is what the notice carries
