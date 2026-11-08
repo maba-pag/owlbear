@@ -59,8 +59,7 @@ def commands_for_task(
     """Union affected consumers and required targets, never bootstrap the full suite."""
     workspace = _workspace_packages()
     forced, python, packages, required = _targets(paths, workspace)
-    explicit = task_scope.explicit_targets(_REPOSITORY_ROOT, targets)
-    required.update(explicit)
+    required.update(task_scope.explicit_targets(_REPOSITORY_ROOT, targets))
     for package in packages:
         forced.update(_relative_paths(_neighbour_tests(package, workspace)))
         forced.update(
