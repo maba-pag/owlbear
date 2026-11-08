@@ -172,6 +172,10 @@ def coordinator(
 
 class TestFetchErrorPropagation:
     # ------------------------------------------------------------------
+    # AC1 — FetchErrors mapped to RefreshErrors in RefreshResult.errors
+    # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
     # AC2 — partial success: update_source called, errors still captured
     # ------------------------------------------------------------------
 
