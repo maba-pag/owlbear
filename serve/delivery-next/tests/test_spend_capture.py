@@ -77,6 +77,12 @@ def project(tmp_path) -> Store:
     return store
 
 
+@pytest.fixture
+def shop(tmp_path) -> Store:
+    """The same project with no Change, for the tests that need only its place."""
+    return Store(tmp_path / "projects" / "0123456789abcdef", None, "shop")
+
+
 def test_earlier_spend_is_imported_once_as_a_union_never_twice(project) -> None:
     spend_ledger.started("live", "s1", agent="builder", job="", model="m1", before={})  # the race: live first
     spend_ledger.ended("live", "s1", usage=used(3.0), ending="result")
@@ -782,11 +788,11 @@ def spotter_view(lines: list[dict]) -> tuple[set[str], float, int]:
     return {p["project"] for p in pieces}, spent, len({p["run"] for p in pieces})
 
 
-def test_a_looks_own_lines_written_before_its_recovery_keep_its_place(project, monkeypatch) -> None:
+def test_a_looks_own_lines_written_before_its_recovery_keep_its_place(shop, monkeypatch) -> None:
     """Sol's counterexample: a pass snapshots the ledger, the writer then appends the look's own lines, and the pass
     appends its recovery after them: the recovered line's place and run overrode the look's own."""
-    written, place = recorded(monkeypatch), Where.of(project)
-    places = {project.root.name: place}
+    written, place = recorded(monkeypatch), Where.of(shop)
+    places = {shop.root.name: place}
     look_session("spotter-a", "L1", checkpoint("2026-10-28T09:00:00Z", 0.3e9))
     checked: dict = {}
     pending: dict = {}
@@ -804,13 +810,13 @@ def test_a_looks_own_lines_written_before_its_recovery_keep_its_place(project, m
     assert spotter_view(lines) == ({"shop"}, 0.3, 1)
 
 
-def test_a_looks_delayed_start_after_two_recovered_checkpoints_is_one_run(project, monkeypatch) -> None:
+def test_a_looks_delayed_start_after_two_recovered_checkpoints_is_one_run(shop, monkeypatch) -> None:
     """Sol's counterexample: the second checkpoint's continuation kept the recovered run's id and no place, so a
     delayed start alone made shop 0.1 in its run and Project unknown 0.2 in log:spotter-a."""
-    written, place = recorded(monkeypatch), Where.of(project)
+    written, place = recorded(monkeypatch), Where.of(shop)
     look_session("spotter-a", "L1", checkpoint("2026-10-28T09:00:00Z", 0.1e9),
                  checkpoint("2026-10-28T09:20:00Z", 0.3e9))  # fmt: skip
-    recovered = spend_logs.found([], {project.root.name: place}, {}, {})
+    recovered = spend_logs.found([], {shop.root.name: place}, {}, {})
     assert len(recovered) == 2
     spend_ledger.started("R", "spotter-a", agent="spotter", job="look", model="m1", before={}, place=place, look="L1")
     lines = [*recovered, *written]  # its end never came
@@ -821,28 +827,28 @@ def test_a_looks_delayed_start_after_two_recovered_checkpoints_is_one_run(projec
 
 
 @pytest.mark.parametrize("order", ["recovered, end", "end, recovered"])
-def test_a_looks_own_end_alone_keeps_the_agent_its_recovery_named(project, monkeypatch, order) -> None:
+def test_a_looks_own_end_alone_keeps_the_agent_its_recovery_named(shop, monkeypatch, order) -> None:
     """Sol's counterexample: an own end line names no agent, and the recovered line's was dropped with its place, so
     the look's 0.3 credits fell out of the spotter agent's metrics."""
-    written, place = recorded(monkeypatch), Where.of(project)
+    written, place = recorded(monkeypatch), Where.of(shop)
     look_session("spotter-a", "L1", checkpoint("2026-10-28T09:00:00Z", 0.3e9))
-    recovered = spend_logs.found([], {project.root.name: place}, {}, {})
+    recovered = spend_logs.found([], {shop.root.name: place}, {}, {})
     spend_ledger.ended("R", "spotter-a", usage=used(0.3), ending="finished", place=place, look="L1")  # its start lost
     lines = [*recovered, *written] if order == "recovered, end" else [*written, *recovered]
     assert spotter_spend(spend_shares.derive(lines)) == ([("shop", 0.3, 1)], 1, 0.3)
 
 
 @pytest.mark.parametrize("order", ["start first", "start last"])
-def test_a_looks_own_agent_wins_over_the_one_its_recovery_named(project, monkeypatch, order) -> None:
-    written, place = recorded(monkeypatch), Where.of(project)
+def test_a_looks_own_agent_wins_over_the_one_its_recovery_named(shop, monkeypatch, order) -> None:
+    written, place = recorded(monkeypatch), Where.of(shop)
     look_session("spotter-a", "L1", checkpoint("2026-10-28T09:00:00Z", 0.3e9))
-    recovered = spend_logs.found([], {project.root.name: place}, {}, {})
+    recovered = spend_logs.found([], {shop.root.name: place}, {}, {})
     spend_ledger.started("R", "spotter-a", agent="retro-review", job="", model="m1", before={}, place=place, look="L1")
     lines = [*written, *recovered] if order == "start first" else [*recovered, *written]
     assert {p["role"] for p in spend_shares.derive(lines)} == {"retro-review"}
 
 
-def test_a_record_file_cut_inside_a_character_still_names_the_owners_of_its_whole_lines(project) -> None:
+def test_a_record_file_cut_inside_a_character_still_names_the_owners_of_its_whole_lines(shop) -> None:
     """CodeRabbit's review: a records file whose last line was cut inside a multibyte character raised out of the
     log source, so no session was recovered that pass."""
     folder = local_home.root() / "spotter"
@@ -851,7 +857,7 @@ def test_a_record_file_cut_inside_a_character_still_names_the_owners_of_its_whol
     cut = json.dumps(look_record("L2", note="déjà vu"), ensure_ascii=False).encode()
     (folder / "records-2026-10-28.jsonl").write_bytes((json.dumps(rec) + "\n").encode() + cut[: cut.index(b"\xc3") + 1])
     look_session("spotter-a", "L1", checkpoint("2026-10-28T09:00:00Z", 0.3e9))
-    found = spend_logs.found([], {project.root.name: Where.of(project)}, {}, {})
+    found = spend_logs.found([], {shop.root.name: Where.of(shop)}, {}, {})
     assert [(x["project"], x["session"]) for x in found] == [("shop", "spotter-a")]
 
 
