@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import dataclasses
-import errno
 import functools
 import http.server
 import subprocess
@@ -973,7 +972,7 @@ def test_a_visual_accept_without_the_model_check_is_withdrawn_once_the_capture_m
 
     flow.mp.setattr(runner.sdk_adapter, "run", unread)
     log = flow.store.log
-    refused = PermissionError(errno.EACCES, "Permission denied", str(flow.store.db.root))  # opening its directory
+    refused = PermissionError("Permission denied")  # as opening the store's directory raises it
     flow.mp.setattr(flow.store, "log", lambda *_a: (_ for _ in ()).throw(refused))
     with pytest.raises(PermissionError, match="Permission denied"):  # the gate is written before the runs are logged
         runner._step(flow.store, Lock("c1"), c, c.step, flow.clone)  # noqa: SLF001
