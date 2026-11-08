@@ -425,11 +425,8 @@ class TestStorageRead:
         for name, content in bad_files:
             f = tmp_path / name
             f.write_text(content, encoding="utf-8")
-            try:
-                result = storage.read_entry(f)
-                assert result is None, f"{name}: expected None for malformed file, got {result!r}"
-            except Exception as exc:  # noqa: BLE001
-                pytest.fail(f"{name}: read_entry raised {type(exc).__name__}: {exc}")
+            result = storage.read_entry(f)
+            assert result is None, f"{name}: expected None for malformed file, got {result!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -439,16 +436,6 @@ class TestStorageRead:
 
 class TestStorageWrite:
     """AC4: write_entry creates files atomically with containment and symlink guards."""
-
-    def test_write_entry_creates_file_at_path(self, tmp_path: Path) -> None:
-        """Happy: write_entry creates the target file on disk."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        target = memory_dir / "entry.md"
-        entry = _make_valid_entry()
-        storage.write_entry(target, entry, memory_dir=memory_dir)
-        assert target.exists()
-        assert target.is_file()
 
     def test_write_entry_produces_file_parseable_by_read_entry(self, tmp_path: Path) -> None:
         """Happy: file written by write_entry is parseable back to a MemoryEntry."""
@@ -641,7 +628,6 @@ class TestStorageWrite:
         mock_mkstemp.assert_called_once()
         mock_fsync.assert_called()
         assert target.exists(), "Target file was not created after atomic replace"
-        assert len(_mkstemp_results) == 1, "mkstemp capturing function was not called"
         tmp_path_used = Path(_mkstemp_results[0][1])
         assert not tmp_path_used.exists(), "Temp file should be consumed by atomic replace (os.replace/Path.replace)"
 
