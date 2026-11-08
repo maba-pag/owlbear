@@ -435,7 +435,9 @@ class _Consumers:
                     for node in ast.walk(definition)
                     if isinstance(node, ast.JoinedStr)
                     and any(
-                        isinstance(part, ast.Constant) and isinstance(part.value, str) and part.value
+                        isinstance(part, ast.Constant)
+                        and isinstance(part.value, str)
+                        and any(suffix and suffix in part.value for suffix in suffixes)
                         for part in node.values
                     )
                     for label in labels
