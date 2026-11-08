@@ -655,18 +655,6 @@ def test_the_selfcheck_refuses_a_module_only_another_module_imports(monkeypatch)
     assert selfcheck.problems() == ["the pages' assets are missing: pages/changes/list.mjs"]
 
 
-def test_the_selfcheck_refuses_a_clones_unmoved_settings_newer_than_it_reads(tmp_path):
-    clone = registered(tmp_path)
-    folder = project_home.clone_dir(clone)
-    folder.mkdir(exist_ok=True)
-    (folder / "config.json").write_text(json.dumps({"format": 99}))
-
-    found = selfcheck.problems()
-
-    said = f"its settings in {folder / 'config.json'} have format 99, newer than this version's {CONFIG_FORMAT}"
-    assert found == [f"{clone}: {said}"]
-
-
 def test_the_selfcheck_reads_settings_in_format_23_and_refuses_the_next_one(tmp_path):
     clone = registered(tmp_path)
     folder = project_home.clone_dir(clone)
