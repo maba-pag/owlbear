@@ -3180,8 +3180,11 @@ def test_a_failed_fetch_keeps_gits_whole_output(clone, whole_error, monkeypatch)
     assert (result.exit, result.reason) == (Exit.RETRY, said)
 
 
-def _remote_failures(clone: Path, monkeypatch, whole_error: str) -> dict[str, Exception]:
-    """Each remote Git failure whose detail stays the same while Git said more; its output names the network."""
+def _remote_failure(path: Path, monkeypatch, whole_error: str, which: str) -> Exception:
+    """The remote Git failure *which*, whose detail stays the same while Git said more; its output names the network.
+
+    Every Git command it would run is replaced, so *path* is only named, never read.
+    """
     said = b"fatal: unable to access 'https://github.com/o/r/': Connection timed out\n"
 
     def refused(_path, argv, **_k):
@@ -3196,28 +3199,23 @@ def _remote_failures(clone: Path, monkeypatch, whole_error: str) -> dict[str, Ex
     def no_remote(argv, **_k):
         return subprocess.CompletedProcess(argv, 2, f"OUT-BEGIN\n{whole_error}\nOUT-END".encode(), NO_REMOTE.encode())
 
-    found: dict[str, Exception] = {}
-    for name, kind in (("read-timeout", "read"), ("write-timeout", "write")):
-        found[name] = _stalled(clone, monkeypatch, kind, stalled_streams(whole_error))
-    for name, ran in (("refused", refused), ("invalid", invalid)):
-        monkeypatch.setattr(remote_git, "run_remote_git", ran)
+    if which.endswith("-timeout"):
+        return _stalled(path, monkeypatch, which.removesuffix("-timeout"), stalled_streams(whole_error))
+    if which == "write":
+        return RemoteGitWriteUnknown(
+            "remote Git write did not confirm its outcome", timed_out=False,
+            result=subprocess.CompletedProcess(["git", "push", "origin", "CMD-MARK"], 1, b"", said),
+        )  # fmt: skip
+    if which in {"refused", "invalid"}:
+        monkeypatch.setattr(remote_git, "run_remote_git", refused if which == "refused" else invalid)
         with pytest.raises(remote_git.RemoteGitFailed) as raised:
-            read_remote_ref(clone, "origin", "refs/heads/CMD-MARK", access=Access.LOCAL)
-        found[name] = raised.value
-    found["write"] = RemoteGitWriteUnknown(
-        "remote Git write did not confirm its outcome", timed_out=False,
-        result=subprocess.CompletedProcess(["git", "push", "origin", "CMD-MARK"], 1, b"", said),
-    )  # fmt: skip
-    with monkeypatch.context() as m:
-        m.setattr(git_access.subprocess, "run", no_remote)
-        with pytest.raises(remote_git.RemoteGitError) as raised:
-            Access("ada", "chosen", "github.com", "tok", "gh").destinations(clone, "CMD-MARK", 5)
-    found["urls-refused"] = raised.value
-    monkeypatch.setattr(git_access.subprocess, "run", slow)
+            read_remote_ref(path, "origin", "refs/heads/CMD-MARK", access=Access.LOCAL)
+        return raised.value
+    urls = which == "urls"
+    monkeypatch.setattr(git_access.subprocess, "run", slow if urls else no_remote)
     with pytest.raises(remote_git.RemoteGitError) as raised:
-        Access("ada", "chosen", "github.com", "tok", "gh").destinations(clone, "origin", 5)
-    found["urls"] = raised.value
-    return found
+        Access("ada", "chosen", "github.com", "tok", "gh").destinations(path, "origin" if urls else "CMD-MARK", 5)
+    return raised.value
 
 
 NO_REMOTE = "error: No such remote 'CMD-MARK'"
@@ -3253,14 +3251,14 @@ def _stalled(clone: Path, monkeypatch, kind: str, streams: tuple[str, str]) -> E
 @pytest.mark.parametrize(
     "which", ["refused", "invalid", "write", "urls", "urls-refused", "read-timeout", "write-timeout"]
 )
-def test_a_remote_git_failure_is_whole_and_retries_as_its_detail_always_did(clone, monkeypatch, whole_error, which):
+def test_a_remote_git_failure_is_whole_and_retries_as_its_detail_always_did(tmp_path, monkeypatch, whole_error, which):
     """#971 R7: the reason says what Git printed, but the cause and the wait still read the detail alone: Git
     saying "Connection timed out" never turns a defect into a network episode."""
-    exc = _remote_failures(clone, monkeypatch, whole_error)[which]
+    exc = _remote_failure(tmp_path, monkeypatch, whole_error, which)
     out, err = stalled_streams(whole_error)
     said = "fatal: unable to access 'https://github.com/o/r/': Connection timed out"
-    git_url = (resolve_git_executable(), "-C", str(clone), "remote", "get-url", "--push", "--all", "origin")
-    fetch = (resolve_git_executable(), "-C", str(clone), "fetch", "origin")
+    git_url = (resolve_git_executable(), "-C", str(tmp_path), "remote", "get-url", "--push", "--all", "origin")
+    fetch = (resolve_git_executable(), "-C", str(tmp_path), "fetch", "origin")
     ls = ("ls-remote", "--exit-code", "--refs", "origin", "refs/heads/CMD-MARK")
     push = ["git", "push", "origin", "CMD-MARK"]
     no_remote = (*git_url[:-1], "CMD-MARK")
@@ -3270,10 +3268,10 @@ def test_a_remote_git_failure_is_whole_and_retries_as_its_detail_always_did(clon
         "invalid": f"RemoteGitFailed: remote ref response is invalid\nCommand '{ls}' returned exit status 0.\n{said}",
         "write": "RemoteGitWriteUnknown: remote Git write did not confirm its outcome\n"
         f"CalledProcessError: Command '{push}' returned non-zero exit status 1.\n{said}",
-        "urls-refused": f"RemoteGitError: the push URLs of CMD-MARK in {clone} could not be read: {NO_REMOTE}\n"
+        "urls-refused": f"RemoteGitError: the push URLs of CMD-MARK in {tmp_path} could not be read: {NO_REMOTE}\n"
         f"CalledProcessError: Command '{no_remote}' returned non-zero exit status 2.\n"
         f"stderr:\n{NO_REMOTE}\nstdout:\nOUT-BEGIN\n{whole_error}\nOUT-END",
-        "urls": f"RemoteGitError: the push URLs of origin in {clone} could not be read in 5 s\n"
+        "urls": f"RemoteGitError: the push URLs of origin in {tmp_path} could not be read in 5 s\n"
         f"TimeoutExpired: Command '{git_url}' timed out after 5 seconds\n{said}",
     } | {
         f"{kind}-timeout": f"{name}: remote Git {kind} exceeded 120 s\nTimeoutExpired: Command '{fetch}' timed out "

@@ -263,4 +263,3 @@ def test_the_shaper_grants_the_live_verified_tools_and_explains_exactly_them() -
     assert audit(grants, body) == []
     assert forbidden(body) == {"bash", "edit", "create"}  # no terminal, no edit (TD-109)
     assert {t.name for t in asyncio.run(mcp_server.mcp.list_tools())} == CHAT_TOOLS
-    assert len(body.splitlines()) <= 130

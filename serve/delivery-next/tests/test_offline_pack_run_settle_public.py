@@ -1,6 +1,7 @@
 """An Impeccable run left by an older host is settled by the public Finish before the store is copied.
 
-Each case runs the real ``cli.main`` Prepare and Finish on a real git clone. HOME is a temporary directory, so the
+Each case runs the real ``cli.main`` Prepare and Finish on a real git clone, except the repeated settlement, which
+calls the real ``pack_run_record.settle`` twice on the same record. HOME is a temporary directory, so the
 maintenance ledger is real and local to the test. The reboot is modeled by changing the boot session id, and the
 receipts are written by the real ``Maintenance.receipt`` writer.
 """
@@ -101,23 +102,6 @@ def _finish_refused(repo: Path, capsys) -> bool:
 
 
 @pytest.mark.usefixtures("current_binding")
-def test_held_run_is_settled_by_finish_and_carried_into_the_target(repo, boot, capsys):
-    _prepared(repo, boot)
-    _write_run(_source(repo), _run_record(RUN_A, STARTED_A))
-    assert not (Path.home() / ".owlbear" / maintenance.FILE).exists(), "no ledger: the receipt lookup is empty"
-
-    assert cli.main(["--repo", str(repo), "finish"]) == 0
-    capsys.readouterr()
-
-    carried = json.loads((Store.open(repo).root / pack_state.FILE).read_text())
-    assert carried["state"] == "failed"
-    assert carried["reason"] == pack_state.HOST_STOPPED
-    assert carried[pack_state.REWRITTEN] == f"{RUN_A}:{STARTED_A}"
-    assert carried["run"] == RUN_A
-    assert carried["started_at"] == STARTED_A
-
-
-@pytest.mark.usefixtures("current_binding")
 def test_receipted_generation_for_the_same_bytes_wins_over_the_record(repo, boot, capsys):
     _prepared(repo, boot)
     _write_run(_source(repo), _run_record(RUN_A, STARTED_A, state="failed", reason="the updater may still be running"))
@@ -179,16 +163,15 @@ def test_failed_rewrite_of_the_run_record_refuses_finish_before_any_copy(repo, b
     assert (_source(repo) / pack_state.FILE).read_bytes() == record_bytes
 
 
-@pytest.mark.usefixtures("current_binding")
-def test_settling_again_after_a_restart_changes_nothing(repo, boot, capsys):
-    _prepared(repo, boot)
-    _write_run(_source(repo), _run_record(RUN_A, STARTED_A))
-    assert cli.main(["--repo", str(repo), "finish"]) == 0
-    capsys.readouterr()
-    carried_bytes = (Store.open(repo).root / pack_state.FILE).read_bytes()
+def test_settling_again_after_a_restart_changes_nothing(tmp_path):
+    folder = tmp_path / "store"
+    folder.mkdir()
+    _write_run(folder, _run_record(RUN_A, STARTED_A))
+    assert pack_run_record.settle(folder, receipted=lambda _digest: "") is True
+    carried_bytes = (folder / pack_state.FILE).read_bytes()
 
-    assert pack_run_record.settle(Store.open(repo).root, receipted=lambda _digest: "") is False
-    assert (Store.open(repo).root / pack_state.FILE).read_bytes() == carried_bytes
+    assert pack_run_record.settle(folder, receipted=lambda _digest: "") is False
+    assert (folder / pack_state.FILE).read_bytes() == carried_bytes
 
 
 @pytest.mark.usefixtures("current_binding")

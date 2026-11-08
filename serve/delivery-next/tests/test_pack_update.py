@@ -617,7 +617,7 @@ def running_host(monkeypatch):
     """The CLI's project and a loopback host; *serve* sets what the host answers to the replay."""
     _Answers.seen, _Answers.old = [], False
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Answers)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True).start()
     record = HostFound(
         url=f"http://127.0.0.1:{server.server_port}/",
         token="tok",  # noqa: S106 - a loopback test token

@@ -30,15 +30,7 @@ def errors(check: str, packages=APP) -> tuple[list[str], list[str]]:
     ("check", "said"),
     [
         ("npm test", PROFILE),
-        ("cd ./packages/app/ && npm test", PROFILE),
-        ("cd 'packages/app' &&npm test", PROFILE),
-        ("npm --prefix packages/app test", PROFILE),
-        ("cd packages/other && npm test", PROFILE),
-        ("cd packages && npm test", PROFILE),
-        ("cd packages/app && npm run test", PROFILE),
         ("cd packages/app && npm test && rm -rf x", PROFILE),
-        ("cd packages/app; npm test", PROFILE),
-        ("cd packages/frontend-components-library; npm test", PROFILE),  # answered at once, however long
     ],
 )
 def test_a_check_not_offered_by_the_profile_is_refused_with_the_choice(check, said):

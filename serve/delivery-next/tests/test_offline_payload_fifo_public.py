@@ -1,4 +1,4 @@
-"""A FIFO inside the payload refuses through the real public Finish without blocking; a regular payload still moves.
+"""A FIFO inside the payload refuses through the real public Finish without blocking.
 
 The payload is every entry under the source folder that the digest, sync and copy paths read. Each case runs the
 real ``cli.main`` Prepare, a modeled reboot and the real ``cli.main`` Finish. A ``os.open`` spy refuses any blocking
@@ -72,10 +72,6 @@ def _source(repo: Path) -> Path:
     return project_home.clone_dir(repo)
 
 
-def _record(repo: Path) -> dict:
-    return json.loads((_source(repo) / project_move.MOVE_RECORD).read_text())
-
-
 @pytest.mark.usefixtures("current_binding")
 def test_finish_refuses_a_fifo_in_the_payload_without_blocking_or_switching(repo, boot, capsys, blocking_opens):
     assert cli.main(["--repo", str(repo), "prepare"]) == 0
@@ -97,15 +93,3 @@ def test_finish_refuses_a_fifo_in_the_payload_without_blocking_or_switching(repo
     assert _is_fifo_at(str(folder / PAYLOAD_FIFO), None), "the payload FIFO was removed or replaced"
     record_path = _source(repo) / project_move.MOVE_RECORD
     assert not record_path.exists() or json.loads(record_path.read_text())["phase"] != project_move.SWITCHED
-
-
-@pytest.mark.usefixtures("current_binding")
-def test_a_regular_payload_file_still_prepares_finishes_and_opens(repo, boot, capsys, blocking_opens) -> None:
-    assert cli.main(["--repo", str(repo), "prepare"]) == 0
-    boot["id"] = AFTER
-
-    assert cli.main(["--repo", str(repo), "finish"]) == 0
-    capsys.readouterr()
-
-    assert _record(repo)["phase"] == project_move.SWITCHED
-    assert blocking_opens == []

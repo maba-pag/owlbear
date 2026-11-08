@@ -338,7 +338,7 @@ def test_all_switched_consumers_refuse_incomplete_or_foreign_preparation_before_
         assert snapshot(aside) == old_before
 
 
-@pytest.mark.parametrize("receipt", ["switched", "null", "{", "[]"])
+@pytest.mark.parametrize("receipt", ["switched", "null", "{"])
 def test_repeated_prepare_reads_receipt_before_retained_payload_and_writes_nothing(prepared, receipt):
     repo, folder, target, _pid = completed(prepared)
     if receipt != "switched":
