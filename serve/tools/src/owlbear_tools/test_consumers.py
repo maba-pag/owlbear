@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 from testmon.process_code import Module, bytes_to_string_and_fsha, methods_to_checksums
 
 from owlbear_tools.test_dependencies import is_test_module
-from owlbear_tools.test_symbols import _definitions, _names, fixture_names
+from owlbear_tools.test_symbols import _definitions, _names, fixture_names, http_get
 
 
 def changed_symbols(before: Module | None, current: Module | None) -> set[str]:
@@ -342,7 +342,7 @@ class _Consumers:
             or any(path.startswith(f"{Path(page).parent}/pages/{Path(page).stem}/") for path in changed)
         }
 
-    def outside_nodes(self, paths: set[str], candidates: set[str]) -> set[str]:
+    def outside_nodes(self, paths: set[str], candidates: set[str], *, required: bool = True) -> set[str]:
         """Named page, source-reader and child-process consumers supplied by the ordinary router."""
         python = {path for path in paths if path.endswith(".py")}
         pages = paths - python
@@ -425,7 +425,7 @@ class _Consumers:
                 navigates = any(
                     isinstance(node, ast.Call)
                     and isinstance(node.func, ast.Attribute)
-                    and node.func.attr in {"goto", "get"}
+                    and (node.func.attr == "goto" or http_get(node, definition, self.trees[test]))
                     and node.args
                     and routes
                     and ((route := _navigation_route(node.args[0])) is None or route in routes)
@@ -435,7 +435,7 @@ class _Consumers:
                     symbols.add(symbol)
             if symbols:
                 selected.update(self.test_nodes(self.affected(test, symbols)))
-        if pages and not selected:
+        if required and pages and not selected:
             msg = f"No current file-reading/page/import consumers resolved for task paths {sorted(pages)}"
             raise RuntimeError(msg)
         return selected

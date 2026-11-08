@@ -74,3 +74,59 @@ def _definitions(tree: ast.AST) -> dict[str, ast.AST]:
         elif isinstance(node, (ast.Import, ast.ImportFrom)):
             definitions.update((alias.asname or alias.name.split(".")[0], node) for alias in node.names)
     return definitions
+
+
+def _http_constructors(tree: ast.AST) -> set[str]:
+    constructors: set[str] = set()
+    kinds = {"TestClient", "Client", "AsyncClient", "Session"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
+            ("httpx", "requests", "fastapi.testclient", "starlette.testclient")
+        ):
+            constructors.update(alias.asname or alias.name for alias in node.names if alias.name in kinds)
+        elif isinstance(node, ast.Import):
+            constructors.update(
+                f"{alias.asname or alias.name}.{kind}"
+                for alias in node.names
+                if alias.name in {"httpx", "requests"}
+                for kind in kinds
+            )
+    return constructors
+
+
+def _http_response(call: ast.Call, definition: ast.AST) -> bool:
+    properties = {"status_code", "headers", "text", "content", "json", "raise_for_status"}
+    references = _names(definition)
+    for node in ast.walk(definition):
+        if isinstance(node, ast.Attribute) and node.value is call and node.attr in properties:
+            return True
+        if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is call:
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(
+                f"{name}.{attribute}" in references
+                for target in targets
+                for name in _names(target)
+                for attribute in properties
+            ):
+                return True
+    return False
+
+
+def http_get(call: ast.Call, definition: ast.AST, tree: ast.AST) -> bool:
+    """HTTP response use or a constructed HTTP client, never an arbitrary mapping's get."""
+    if not isinstance(call.func, ast.Attribute) or call.func.attr != "get":
+        return False
+    if _http_response(call, definition):
+        return True
+    constructors = _http_constructors(tree)
+    receiver = call.func.value
+    values: list[ast.expr | None] = [receiver]
+    for node in ast.walk(definition):
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(ast.unparse(target) == ast.unparse(receiver) for target in targets):
+                values.append(node.value)
+        elif isinstance(node, ast.withitem) and node.optional_vars is not None:
+            if ast.unparse(node.optional_vars) == ast.unparse(receiver):
+                values.append(node.context_expr)
+    return any(isinstance(value, ast.Call) and ast.unparse(value.func) in constructors for value in values)
