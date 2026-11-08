@@ -432,7 +432,23 @@ class _Consumers:
                         ),
                         label,
                     )
-                    for node in ast.walk(definition)
+                    for expression in ast.walk(definition)
+                    if (isinstance(expression, ast.BinOp) and isinstance(expression.op, ast.Div))
+                    or (
+                        isinstance(expression, ast.Call)
+                        and (
+                            (
+                                isinstance(expression.func, ast.Name)
+                                and expression.func.id in {"Path", "PurePath", "open"}
+                            )
+                            or (
+                                isinstance(expression.func, ast.Attribute)
+                                and expression.func.attr
+                                in {"joinpath", "read_text", "read_bytes", "open", "glob", "rglob"}
+                            )
+                        )
+                    )
+                    for node in ast.walk(expression)
                     if isinstance(node, ast.JoinedStr)
                     and any(
                         isinstance(part, ast.Constant)
