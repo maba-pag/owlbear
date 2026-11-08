@@ -232,7 +232,9 @@ class _Selection:
 
     def __post_init__(self) -> None:
         self.recorded = self.maps[0].inputs
-        self.rows = [row for item in self.maps for row in item.observations]
+        self.rows = [
+            row for item in self.maps for row in item.observations if node_path(row.test) in self.consumers.tests
+        ]
         self.reasons: dict[str, set[str]] = defaultdict(set)
 
     def add(self, node: str, reason: str) -> None:

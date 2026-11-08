@@ -478,10 +478,13 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
 
     source = "serve/demo/src/demo/tables.py"
     entry = "serve/demo/src/demo/entry.py"
+    orphan = "serve/demo/src/demo/deleted_only.py"
+    orphan_before = Module(source_code="def only():\n    return 1\n")
     fixture = "serve/demo/tests/conftest.py"
     test = "serve/demo/tests/test_consumer.py"
     texts = {
         source: "CURRENT = 2\nimport demo.entry as hop\n\ndef forwarding():\n    return hop.load()\n",
+        orphan: "def only():\n    return 2\n",
         "serve/demo/src/demo/project_host/pages.py": "PAGES = (('/', 'Changes', 'changes.html'),)\n",
         "serve/demo/src/demo/web/changes.html": (
             '<script type="module" src="/assets/page/changes/main.mjs"></script>'
@@ -551,6 +554,7 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
         (
             Observation(f"{test}::test_current", entry, tuple(load)),
             Observation(f"{test}::test_other", entry, tuple(unknown)),
+            Observation("serve/demo/tests/test_deleted.py::test_only", orphan, tuple(orphan_before.checksums)),
         ),
     )
     selection = test_impact._Selection(tmp_path, [source], consumers, [evidence], dict.fromkeys(texts, "same"))  # noqa: SLF001
@@ -607,3 +611,8 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     assert consumers.outside_nodes({"serve/demo/tests/fixtures/chat_contract_1.json"}, {test}) == {
         f"{test}::test_computed"
     }
+    with (
+        patch.object(test_impact, "_revision", return_value={orphan: orphan_before}),
+        pytest.raises(RuntimeError, match="no resolved current consumers"),
+    ):
+        selection.fingerprints({orphan}, set(), "base")
