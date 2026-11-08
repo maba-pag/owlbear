@@ -15,18 +15,18 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.state_store import decision_batch, decision_transaction
 
 
-def test_an_empty_git_folder_answer_with_success_is_a_journal_error(picking, monkeypatch):
+def test_an_empty_git_folder_answer_with_success_is_a_journal_error(shared_repo, monkeypatch):
     def empty(_self, *_args: str, until: float | None = None) -> subprocess.CompletedProcess[str]:
         assert until is None
         return subprocess.CompletedProcess(args=(), returncode=0, stdout="\n", stderr="")
 
     monkeypatch.setattr(DataRepo, "git", empty)
     with pytest.raises(decision_batch.JournalError, match="cannot be found"):
-        decision_batch._admin(picking.shared)  # noqa: SLF001 - the probe itself is the regression
+        decision_batch._admin(DataRepo(shared_repo[0]))  # noqa: SLF001 - the probe itself is the regression
 
 
-def test_the_git_folder_of_a_real_repository_is_still_found(picking):
-    admin = decision_batch._admin(picking.shared)  # noqa: SLF001
+def test_the_git_folder_of_a_real_repository_is_still_found(shared_repo):
+    admin = decision_batch._admin(DataRepo(shared_repo[0]))  # noqa: SLF001
     assert admin.is_absolute()
     assert (admin / "HEAD").is_file()
 
@@ -62,8 +62,9 @@ def test_removing_a_file_from_an_existing_folder_still_fsyncs_its_parent(tmp_pat
     assert [os.path.samestat(found, folder.stat()) for found in synced] == [True]  # the folder held open, once
 
 
-def test_an_empty_publication_outcome_is_not_a_known_refusal_and_stays_interrupted(picking):
-    shared = picking.shared
+def test_an_empty_publication_outcome_is_not_a_known_refusal_and_stays_interrupted(shared_repo):
+    shared = DataRepo(shared_repo[0])
+    shared.claim("shop-site", "github.com/acme/shop-site")
     target = shared.root / "shop-site" / "changes" / "note.json"
     target.parent.mkdir(parents=True)
 
@@ -79,8 +80,9 @@ def test_an_empty_publication_outcome_is_not_a_known_refusal_and_stays_interrupt
     assert target.is_file()  # never restored or completed on a guess
 
 
-def test_a_known_refusal_with_unmoved_head_puts_the_files_back_and_completes(picking):
-    shared = picking.shared
+def test_a_known_refusal_with_unmoved_head_puts_the_files_back_and_completes(shared_repo):
+    shared = DataRepo(shared_repo[0])
+    shared.claim("shop-site", "github.com/acme/shop-site")
     target = shared.root / "shop-site" / "changes" / "refused.json"
     target.parent.mkdir(parents=True)
 
