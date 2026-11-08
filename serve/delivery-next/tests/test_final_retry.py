@@ -260,7 +260,7 @@ def test_accept_as_done_names_the_criteria_the_open_findings_report_unmet():
     ]
     c = Change(
         slug="c1",
-        brief=Brief(version=1),
+        brief=Brief(version=1, criteria=[Criterion(id=i, text=f"rule {i}") for i in ("AC-1", "AC-2", "AC-10")]),
         plan=Plan(tasks=[t1, t2, t3, t4, t5]),
         names=Names(branch="owlbear/c1", target="main"),
         step=Step(kind=K.BUILD, task="t5"),
@@ -269,7 +269,6 @@ def test_accept_as_done_names_the_criteria_the_open_findings_report_unmet():
         consent=MergeConsent(head=head, at=NOW),
     )
     ask(c, round_flow.question(lp, t5), NOW)
-    c.brief = Brief(version=1, criteria=[Criterion(id=i, text=f"rule {i}") for i in ("AC-1", "AC-2", "AC-10")])
     found = c.loops[FINAL].findings
     found[0].text, found[2].text = "x.txt:1: AC-2 broken - fix: f", "y.txt:2: AC-1 not met - fix: f"
     assert rebuilds.shown(c, c.questions[0])["unmet"] == ["AC-1: rule AC-1"]
