@@ -17,6 +17,7 @@ import tomllib
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
+from traceback import format_exception_only
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import check_hint, evidence, permissions, repair_tools, tools
@@ -295,8 +296,9 @@ def _check_hold(path: str, witness: tuple[str, ...], source: Path) -> str:
     """Incomplete original-source discovery holds the fix with the whole error, never applies it."""
     try:
         named = _named(path, witness, source)
-    except (OSError, SyntaxError) as error:
-        return f"cannot inspect the unchanged check for {path}: {error}; its altered witness proves nothing alone"
+    except (OSError, SyntaxError, tomllib.TOMLDecodeError) as error:
+        detail = "".join(format_exception_only(error)).strip()
+        return f"cannot inspect the unchanged check for {path}: {detail}; its altered witness proves nothing alone"
     return f"changes {path}, which the step's check runs, so it proves nothing alone" if named else ""
 
 
@@ -338,7 +340,11 @@ def _console_script(path: str, words: list[str], source: Path) -> bool:
     manifests = worktree.git(source, "ls-files", "*pyproject.toml").splitlines()
     for name in manifests:
         manifest = source / name
-        project = tomllib.loads(manifest.read_text(encoding="utf-8")).get("project", {})
+        try:
+            project = tomllib.loads(manifest.read_text(encoding="utf-8")).get("project", {})
+        except tomllib.TOMLDecodeError as error:
+            error.add_note(f"unchanged check manifest: {manifest}")
+            raise
         scripts = project.get("scripts", {})
         for command in invoked & scripts.keys():
             module = scripts[command].split(":", 1)[0]
