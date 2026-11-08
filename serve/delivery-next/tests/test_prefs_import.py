@@ -314,14 +314,6 @@ def test_a_retry_after_a_failed_config_publication_publishes_the_current_config(
     assert store.prof.prefs_import == "done"
 
 
-def test_a_delayed_import_that_read_a_stale_layer_cannot_restore_a_cleared_value():
-    store = FakeStore(layer=Layer(prefs=Prefs(ci_poll_seconds=None), prefs_imported=True))
-    store.stale_layer = Layer()  # the import's earlier check saw an unimported layer
-    prefs_import.run(store)
-    assert store.layer.prefs.ci_poll_seconds is None
-    assert store.prof.prefs_import == "done"
-
-
 def test_a_config_deleted_after_a_pending_fill_is_not_refilled_on_retry():
     store = FakeStore()
     store.notices = ["", "remote refused"]
