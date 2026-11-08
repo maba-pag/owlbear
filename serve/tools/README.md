@@ -71,6 +71,7 @@ to named consumers. Page consumers follow served HTML and relative module import
 navigation routes, including the root Changes page and shared assets. Unresolved page consumers raise an error.
 Named navigation consumers with an indirect, unresolved route remain selected, as do the users of
 source inventories that combine a wildcard with a filename-suffix filter.
+Test-data-only changes use the same named reader/fixture selection, not a mandatory whole-package fallback.
 Literal test-module, directory or pytest-node targets selected by the Planner stay in the bound command and
 remain required even when the task has no edited paths. For example,
 `uv run test --changed serve/tools/tests/test_todo.py --task-base OLD --target TARGET`

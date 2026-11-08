@@ -423,6 +423,6 @@ class _Consumers:
             if symbols:
                 selected.update(self.test_nodes(self.affected(test, symbols)))
         if pages and not selected:
-            msg = f"No current page/import consumers resolved for task paths {sorted(pages)}"
+            msg = f"No current file-reading/page/import consumers resolved for task paths {sorted(pages)}"
             raise RuntimeError(msg)
         return selected

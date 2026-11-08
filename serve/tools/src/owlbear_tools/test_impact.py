@@ -331,12 +331,9 @@ class _Selection:
     def helper(self, helper: str) -> None:
         associated = self.consumers.tests_for({helper})
         if not helper.endswith(".py"):
-            mentions = {Path(helper).name, Path(helper).parent.name}
-            associated = {
-                test
-                for test, text in self.consumers.texts.items()
-                if test in self.consumers.tests and any(mention in text for mention in mentions)
-            }
+            for node in self.consumers.outside_nodes({helper}, self.consumers.tests):
+                self.add(node, f"current test-data reader: {helper}")
+            return
         module = _module(self.consumers.texts.get(helper)) if helper.endswith(".py") else None
         observed = {block for row in self.rows if row.source == helper for block in row.blocks}
         historical = (
@@ -389,7 +386,7 @@ def select(
     importing = consumers.tests_for(callers)
     suites = _suites({*all_paths, *importing, *(node_path(node) for node in forced)})
     selection = _Selection(
-        root, paths, consumers, _load(root, context.target, context.maps_dir, suites), inputs(root, files)
+        root, all_paths, consumers, _load(root, context.target, context.maps_dir, suites), inputs(root, files)
     )
     for node in scope.tests:
         selection.add(node, "caller-supplied invariant/source-reading/subprocess/neighbor")

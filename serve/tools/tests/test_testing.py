@@ -385,6 +385,19 @@ def test_changed_runs_git_scope_and_accepts_explicit_base(options: list[str]) ->
         assert select.call_args.args[1] == []
         assert scope.paths == [page]
         assert set(scope.tests) == {target, "tests/test_package_boundary.py"}
+        data = "serve/delivery-next/tests/fixtures/ahp/version-negotiation.json"
+        with (
+            patch.object(sys, "argv", ["test", "--changed", "--task-base", "base", "--target", "target"]),
+            patch("owlbear_tools.task_scope.commit", return_value="target"),
+            patch("owlbear_tools.task_scope.changed", return_value=[data]),
+            patch("owlbear_tools.test_impact.select", return_value=[target]) as select_data,
+            patch("owlbear_tools.testing.subprocess.call", return_value=0),
+            pytest.raises(SystemExit, match="0"),
+        ):
+            run_test()
+        scope = select_data.call_args.args[4]
+        assert scope.paths == [data]
+        assert scope.tests == ["tests/test_package_boundary.py"]
 
 
 def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() -> None:
@@ -493,6 +506,7 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
             "def test_root_browser(page):\n    opened(page, 'http://localhost')\n"
             "INVENTORY = [p for p in Path('web').rglob('*') if p.suffix == '.mjs']\n\n"
             "def test_inventory():\n    return INVENTORY\n\n"
+            "def test_data():\n    return Path('fixtures/input.json').read_text()\n\n"
             "def indirect(page, base, path):\n    page.goto(f'{base}{path}#token=t')\n\n"
             "def test_indirect_route(page):\n    indirect(page, 'http://localhost', '/updates/owlbear')\n"
         ),
@@ -550,3 +564,6 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     selection.add(f"{test}::test_other", "caller-supplied explicit target")
     assert test in selection.reasons
     assert f"{test}::test_other" in selection.reasons
+    selection.current_hashes[test] = "same"
+    selection.helper("serve/demo/tests/fixtures/input.json")
+    assert f"{test}::test_data" in selection.reasons

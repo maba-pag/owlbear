@@ -17,6 +17,7 @@ from owlbear_tools.testing import (
     _page_scope,
     _python_scope,
     _relative_paths,
+    _root_tests,
     _unseen_by_testmon,
     _workspace_packages,
     _WorkspacePackage,
@@ -42,6 +43,8 @@ def _targets(paths: list[str], workspace: _Packages) -> tuple[set[str], list[str
                 python.append(path)
                 if package:
                     packages[package.namespace] = package
+        elif "/tests/" in path or path.startswith("tests/"):
+            forced.update(_relative_paths(_package_tests(package) if package else _root_tests()))
         elif (
             path.endswith((".py", ".sh", ".bash", ".zsh", ".js", ".mjs", ".cjs"))
             or (scope := _python_scope(path, workspace)) is None
@@ -66,7 +69,7 @@ def commands_for_task(
             _relative_paths(path for path in _package_tests(package) if _unseen_by_testmon(path, package.namespace))
         )
     selected = sorted(forced | required) if paths or targets else []
-    if python or any(path.startswith(_PAGES) for path in paths):
+    if python or any(path.startswith((_PAGES, "tests/")) or "/tests/" in path for path in paths):
         from owlbear_tools import test_impact  # noqa: PLC0415 - task evidence only, never ordinary test startup.
 
         selected = test_impact.select(
