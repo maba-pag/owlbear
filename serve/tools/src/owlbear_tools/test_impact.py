@@ -241,8 +241,10 @@ class _Selection:
         module = node_path(node)
         if not (self.root / module).is_file():
             return  # Historical consumers of a deleted source survive; deleted tests are not executable.
-        if not reason.startswith("caller-supplied") and self.current_hashes.get(module) != self.recorded.get(module):
-            node = module
+        if not reason.startswith("caller-supplied"):
+            node = node.split("[", 1)[0]
+            if self.current_hashes.get(module) != self.recorded.get(module):
+                node = module
         self.reasons[node].add(reason)
 
     def fingerprints(self, touched: set[str], callers: set[str], base: str, after: str | None = None) -> None:

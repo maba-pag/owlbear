@@ -565,5 +565,10 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     assert test in selection.reasons
     assert f"{test}::test_other" in selection.reasons
     selection.current_hashes[test] = "same"
+    selection.add(f"{test}::test_current[removed-state]", "native footprint")
+    selection.add(f"{test}::test_other[explicit-state]", "caller-supplied explicit target")
+    assert f"{test}::test_current[removed-state]" not in selection.reasons
+    assert f"{test}::test_current" in selection.reasons
+    assert f"{test}::test_other[explicit-state]" in selection.reasons
     selection.helper("serve/demo/tests/fixtures/input.json")
     assert f"{test}::test_data" in selection.reasons

@@ -72,6 +72,8 @@ navigation routes, including the root Changes page and shared assets. Unresolved
 Named navigation consumers with an indirect, unresolved route remain selected, as do the users of
 source inventories that combine a wildcard with a filename-suffix filter.
 Test-data-only changes use the same named reader/fixture selection, not a mandatory whole-package fallback.
+Automatically selected parametrized consumers run their current function's cases, so a production inventory
+change cannot retain a removed case or omit a new one. Literal caller-selected case IDs remain exact.
 Literal test-module, directory or pytest-node targets selected by the Planner stay in the bound command and
 remain required even when the task has no edited paths. For example,
 `uv run test --changed serve/tools/tests/test_todo.py --task-base OLD --target TARGET`
