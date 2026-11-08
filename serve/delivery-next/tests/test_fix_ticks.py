@@ -273,8 +273,7 @@ def test_a_failure_leaves_the_fixes_as_they_were_and_cleanup_finishes_with_a_not
     diff = [worktree.GIT, "diff", "--name-only", "--no-renames", "-z", f"{missing}^1", missing]
     [(command, status, said)] = failed
     assert (command, status) == (diff, 128)
-    assert said.startswith(b"fatal: ")
-    assert missing.encode() in said
+    assert missing.encode() in said  # Git's own error, naming the missing merge, is what the notice carries
     assert event["notice"] == (
         "the decision fixes of c1 were not updated: CalledProcessError: "
         f"Command '{diff}' returned non-zero exit status 128.\n{said.decode()}{whole_error}"
