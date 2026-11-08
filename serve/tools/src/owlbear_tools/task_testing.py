@@ -39,10 +39,9 @@ def _targets(paths: list[str], workspace: _Packages) -> tuple[set[str], list[str
             current_test = "/tests/" in path or path.startswith("tests/")
             if current_test and Path(path).name.startswith("test_") and (_REPOSITORY_ROOT / path).is_file():
                 required.add(path)
-            else:
-                python.append(path)
-                if package:
-                    packages[package.namespace] = package
+            python.append(path)
+            if package:
+                packages[package.namespace] = package
         elif "/tests/" in path or path.startswith("tests/"):
             forced.update(_relative_paths(_package_tests(package) if package else _root_tests()))
         elif (

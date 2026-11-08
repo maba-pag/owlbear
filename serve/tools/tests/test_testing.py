@@ -14,7 +14,8 @@ import pytest
 
 from owlbear_tools import task_scope
 from owlbear_tools import testing as testing_module
-from owlbear_tools.testing import _commands_for_paths, _require_development_checkout
+from owlbear_tools.task_testing import _targets
+from owlbear_tools.testing import _commands_for_paths, _require_development_checkout, _workspace_packages
 from owlbear_tools.testing import test_main as run_test
 
 _ROOT = Path(__file__).resolve().parents[3]
@@ -398,6 +399,10 @@ def test_changed_runs_git_scope_and_accepts_explicit_base(options: list[str]) ->
         scope = select_data.call_args.args[4]
         assert scope.paths == [data]
         assert scope.tests == ["tests/test_package_boundary.py"]
+        module = target.split("::", 1)[0]
+        _, python, _, required = _targets([module], _workspace_packages())
+        assert python == [module]
+        assert module in required
 
 
 def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() -> None:
