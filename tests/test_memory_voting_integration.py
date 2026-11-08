@@ -149,6 +149,84 @@ class TestMemoryVotingLifecycle:
     score formula, counter tracking, and recall sort after assessment.
     """
 
+    @pytest.mark.asyncio
+    async def test_recall_exercises_explore_pool_with_lowest_activity_entries(self, tmp_path: Path) -> None:
+        """Explore pool (2 slots) filled by entries with lowest total assessment activity.
+
+        Entry A and B have zero activity; C through V have high total activity.
+        A and B must appear in recall result; the pool logic must include them.
+        """
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
+
+        # Two entries with zero activity → will land in explore pool
+        entry_low_a = _make_approved_entry(_ID_SCORE_A, "Low Activity A", confidence=0.7)
+        entry_low_b = _make_approved_entry(_ID_SCORE_B, "Low Activity B", confidence=0.7)
+        _write_entry(tmp_path, entry_low_a)
+        _write_entry(tmp_path, entry_low_b)
+
+        # 20 more entries with high didnt_use activity
+        for i, entry_id in enumerate(_IDS_BULK[:20]):
+            entry = _make_approved_entry(
+                entry_id,
+                f"High Activity {i:02d}",
+                confidence=0.8,
+                didnt_use_count=10,
+            )
+            _write_entry(tmp_path, entry)
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        ctx = _make_ctx(engine)
+
+        result = await recall_memory(ctx, agent=_AGENT, limit=20)
+        titles = _recall_titles(result)
+
+        assert "Low Activity A" in titles
+        assert "Low Activity B" in titles
+
+    @pytest.mark.asyncio
+    async def test_recall_exercises_challenge_pool_with_lowest_outstanding_entries(self, tmp_path: Path) -> None:
+        """Challenge pool (2 slots) filled by entries with lowest outstanding_count not in explore pool.
+
+        Two entries have zero outstanding but non-zero didnt_use → excluded from explore by tiebreak.
+        Twenty entries have high outstanding → go to regular pool.
+        The zero-outstanding entries appear in challenge pool.
+        """
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
+
+        # Give these two entries some total activity (didnt_use=1) so they're
+        # NOT the lowest-activity entries (explore pool gets truly-zero ones).
+        # We seed 20 entries with no activity (→ explore candidates by activity=0),
+        # but only 2 explore slots available. The next 2 lowest by outstanding=0 go to challenge.
+        # Seed 2 entries with outstanding=0, didnt_use=5 (some activity but no outstanding)
+        entry_ch_a = _make_approved_entry(
+            _ID_SCORE_A, "Challenge A", confidence=0.8, outstanding_count=0, didnt_use_count=5
+        )
+        entry_ch_b = _make_approved_entry(
+            _ID_SCORE_B, "Challenge B", confidence=0.8, outstanding_count=0, didnt_use_count=5
+        )
+        _write_entry(tmp_path, entry_ch_a)
+        _write_entry(tmp_path, entry_ch_b)
+
+        # 20 entries with zero activity → will fill explore pool (only 2 slots)
+        # and overflow into regular pool
+        for i, entry_id in enumerate(_IDS_BULK[:20]):
+            entry = _make_approved_entry(
+                entry_id,
+                f"Zero Activity {i:02d}",
+                confidence=0.8,
+                outstanding_count=3,  # high outstanding → go to regular pool
+            )
+            _write_entry(tmp_path, entry)
+
+        engine = MemoryEngine(memory_dir=tmp_path)
+        ctx = _make_ctx(engine)
+
+        result = await recall_memory(ctx, agent=_AGENT, limit=20)
+        titles = _recall_titles(result)
+
+        assert "Challenge A" in titles
+        assert "Challenge B" in titles
+
     def test_score_formula_confidence_plus_outstanding_minus_unremarkable(self, tmp_path: Path) -> None:
         """The score is confidence + (outstanding x 0.1) - (unremarkable x 0.01), worked out from the points given."""
         entry = _make_approved_entry(_ID_SCORE_A, "Score Test", confidence=0.8)
