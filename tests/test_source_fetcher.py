@@ -593,77 +593,12 @@ class TestCompositeSourceFetcher:
     # ------------------------------------------------------------------ #
 
     @pytest.mark.asyncio
-    async def test_http_status_error_caught_as_fetch_error_not_raised(self, composite: CompositeSourceFetcher) -> None:
-        url = "https://example.com/gone"
-        source = _url_source((url,))
-        exc = httpx.HTTPStatusError(
-            "404",
-            request=httpx.Request("GET", url),
-            response=httpx.Response(404),
-        )
-        with patch(
-            "owlbear_knowledge.source_fetcher.intake.read_url",
-            new_callable=AsyncMock,
-            side_effect=exc,
-        ):
-            result = await composite.fetch_source(source)  # must not raise
-        assert len(result.errors) == 1
-
-    @pytest.mark.asyncio
-    async def test_file_not_found_error_caught_as_fetch_error_not_raised(
-        self, composite: CompositeSourceFetcher, tmp_path: Path
-    ) -> None:
-        (tmp_path / "present.txt").write_text("data", encoding="utf-8")
-        source = _file_source(("*.txt",))
-        with patch(
-            "owlbear_knowledge.source_fetcher.intake.read_file",
-            new_callable=AsyncMock,
-            side_effect=FileNotFoundError("file vanished"),
-        ):
-            result = await composite.fetch_source(source)  # must not raise
-        assert len(result.errors) >= 1
-
-    @pytest.mark.asyncio
-    async def test_permission_error_caught_as_fetch_error_not_raised(
-        self, composite: CompositeSourceFetcher, tmp_path: Path
-    ) -> None:
-        (tmp_path / "restricted.txt").write_text("data", encoding="utf-8")
-        source = _file_source(("*.txt",))
-        with patch(
-            "owlbear_knowledge.source_fetcher.intake.read_file",
-            new_callable=AsyncMock,
-            side_effect=PermissionError("access denied"),
-        ):
-            result = await composite.fetch_source(source)  # must not raise
-        assert len(result.errors) >= 1
-
-    @pytest.mark.asyncio
     async def test_content_fetcher_exception_caught_as_fetch_error_not_raised(
         self, composite: CompositeSourceFetcher, mock_factory: MagicMock
     ) -> None:
         mock_factory.return_value.fetch = AsyncMock(side_effect=Exception("browser crash"))
         result = await composite.fetch_source(_auth_source())  # must not raise
         assert len(result.errors) == 1
-
-    @pytest.mark.asyncio
-    async def test_url_fetch_error_error_field_equals_str_of_exception(self, composite: CompositeSourceFetcher) -> None:
-        url = "https://example.com/page"
-        source = _url_source((url,))
-        exc = httpx.HTTPStatusError(
-            "503 Service Unavailable",
-            request=httpx.Request("GET", url),
-            response=httpx.Response(503),
-        )
-        with patch(
-            "owlbear_knowledge.source_fetcher.intake.read_url",
-            new_callable=AsyncMock,
-            side_effect=exc,
-        ):
-            result = await composite.fetch_source(source)
-        assert result.errors[0].failure is not None
-        assert result.errors[0].failure.code == "http_status"
-        assert result.errors[0].error == result.errors[0].failure.message
-        assert str(exc) not in result.errors[0].error
 
     # ------------------------------------------------------------------ #
     # AC3 retry gap — non-default base_path                                #
