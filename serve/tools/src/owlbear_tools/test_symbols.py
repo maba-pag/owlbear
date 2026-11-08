@@ -94,6 +94,48 @@ def _http_constructors(tree: ast.AST) -> set[str]:
     return constructors
 
 
+def resource_aliases(definitions: dict[str, ast.AST], names: set[str]) -> set[str]:
+    """Transport path aliases through direct assignments, not dependent functions or classes."""
+    aliases = set(names)
+    while True:
+        additions = {
+            symbol
+            for symbol, node in definitions.items()
+            if isinstance(node, (ast.Assign, ast.AnnAssign))
+            and isinstance(node.value, (ast.Name, ast.Attribute))
+            and ast.unparse(node.value) in aliases
+        }
+        if not additions - aliases:
+            return aliases
+        aliases.update(additions)
+
+
+def resource_reads(definitions: dict[str, ast.AST], aliases: set[str]) -> set[str]:
+    """Individual functions reading an exact resolved path alias."""
+    return {
+        symbol
+        for symbol, definition in definitions.items()
+        if isinstance(definition, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and any(
+            isinstance(node, ast.Call)
+            and (
+                (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr in {"read_text", "read_bytes", "open"}
+                    and ast.unparse(node.func.value) in aliases
+                )
+                or (
+                    isinstance(node.func, ast.Name)
+                    and node.func.id == "open"
+                    and node.args
+                    and ast.unparse(node.args[0]) in aliases
+                )
+            )
+            for node in ast.walk(definition)
+        )
+    }
+
+
 def _http_response(call: ast.Call, definition: ast.AST) -> bool:
     properties = {"status_code", "headers", "text", "content", "json", "raise_for_status"}
     references = _names(definition)

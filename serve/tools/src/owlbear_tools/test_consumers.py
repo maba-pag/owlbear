@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 from testmon.process_code import Module, bytes_to_string_and_fsha, methods_to_checksums
 
 from owlbear_tools.test_dependencies import is_test_module
-from owlbear_tools.test_symbols import _definitions, _names, fixture_names, http_get
+from owlbear_tools.test_symbols import _definitions, _names, fixture_names, http_get, resource_aliases, resource_reads
 
 
 def changed_symbols(before: Module | None, current: Module | None) -> set[str]:
@@ -347,6 +347,7 @@ class _Consumers:
         prefix = resource.split("/src/", 1)[0] + "/src/"
         basename = Path(resource).name
         affected: dict[str, set[str]] = defaultdict(set)
+        aliases: dict[str, set[str]] = defaultdict(set)
         for path, definitions in self.references.items():
             symbols = {
                 symbol
@@ -355,6 +356,24 @@ class _Consumers:
             }
             if symbols:
                 affected[path].update(self.affected(path, symbols).get(path, set()))
+                aliases[path].update(
+                    symbol
+                    for symbol in symbols
+                    if isinstance(self.definitions[path].get(symbol), (ast.Assign, ast.AnnAssign))
+                )
+        pending = [path for path, names in aliases.items() if names]
+        while pending:
+            dependency = pending.pop()
+            for caller in self.reverse.get(dependency, set()):
+                names = self._dependent_names(caller, dependency, aliases[dependency])
+                names &= self.local_symbols.get(caller, set())
+                names = resource_aliases(self.definitions.get(caller, {}), names | aliases[caller])
+                if names - aliases[caller]:
+                    aliases[caller].update(names)
+                    pending.append(caller)
+                reads = resource_reads(self.definitions.get(caller, {}), names)
+                if reads:
+                    affected[caller].update(reads)
         if not affected:
             msg = f"No current runtime-resource readers resolved for {resource} in {self.root}"
             raise RuntimeError(msg)
