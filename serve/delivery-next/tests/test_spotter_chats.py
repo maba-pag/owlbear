@@ -515,14 +515,15 @@ def test_a_look_keeps_the_settings_it_was_admitted_with(world):
         return await World.judge(world, card, ctx, meter)
 
     async def scenario() -> None:
-        world.follower.judge = slow
-        await world.passes()
-        world.chat("c", [asked("go"), ev("assistant.turn_start"), reply("plan", tools=1)])
-        await world.follower._pass()  # noqa: SLF001
-        world.ctx = dataclasses.replace(world.ctx, model="m2")
-        await world.follower._pass()  # noqa: SLF001
+        spot = spotter.Spotter(world.ctx, lambda: "c", slow)
+        for d in (asked("go"), ev("assistant.turn_start"), reply("plan", tools=1)):
+            spot.seen(d)  # the reply is the turn's plan: its look is admitted and waits
+        spot.ctx = dataclasses.replace(spot.ctx, model="m2")  # the settings change, with no new event
+        await asyncio.sleep(0)  # a later turn of the loop, the look still waiting
         release.set()
-        await world.settled(world.follower)
+        if spot.tasks:
+            await asyncio.wait(set(spot.tasks), timeout=10)
+        assert spotter.WORK.settled(5)
 
     asyncio.run(scenario())
     assert [r["model"] for r in records()] == ["m1"]

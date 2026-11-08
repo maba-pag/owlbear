@@ -5,12 +5,14 @@ import json
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts.held_records import HeldRecord
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
@@ -778,25 +780,24 @@ def test_a_held_file_with_an_unknown_nested_run_field_is_refused_and_never_rewri
     assert path.read_text() == text
 
 
-def test_a_change_fallback_with_an_unknown_nested_run_field_is_refused_when_read_back(tmp_path, clone, monkeypatch):
-    git(clone, "branch", "main")
-    store = Store(tmp_path / "store")
-    names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
+def test_a_change_fallback_with_an_unknown_nested_run_field_is_refused_when_read_back(tmp_path):
+    names = Names(branch="owlbear/c1", target="main", worktree=str(tmp_path / "work"))
     plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
     change = Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=K.BUILD, task="t1"), names=names)
-    store.write(Lock("c1"), change)
-
-    async def unread(cfg):
-        return built(cfg, commit(clone, "b.txt"), unread=True)
-
-    def disk_full(*_args, **_kwargs):
-        msg = "disk full"
-        raise OSError(msg)
-
-    monkeypatch.setattr(held, "atomic_write", disk_full)
-    monkeypatch.setattr(runner.sdk_adapter, "run", unread)
-    runner._step(store, Lock("c1"), change, change.step, clone)  # noqa: SLF001
-    data = json.loads(store.read("c1").model_dump_json())
+    run = built(SimpleNamespace(session_id="s1"), "f" * 40, unread=True)
+    gated = loop.apply(change, session_result.usage_gate(run, K.BUILD, accept=True), NOW)
+    s = gated.step
+    gated.held_fallback = HeldRecord(
+        question=gated.outcome.question or "",
+        kind=s.kind,
+        task=s.task,
+        mode=s.mode,
+        brief=gated.brief.version,
+        head=run.head,
+        at=NOW,
+        run=held.dump_run(run),
+    )
+    data = json.loads(gated.model_dump_json())
     assert data["held_fallback"]["run"]
     data["held_fallback"]["run"]["surprise"] = True
     with pytest.raises(ValidationError, match="surprise"):

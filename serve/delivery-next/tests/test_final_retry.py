@@ -236,10 +236,39 @@ def test_the_console_shows_the_task_list_and_rebuilds_only_what_it_was_shown(tmp
     assert (c.loops[FINAL].rebuild, at(c)) == (["t1", "t2"], (K.REVIEW, None, round_flow.RETRY))
 
 
-def test_accept_as_done_names_the_criteria_the_open_findings_report_unmet(clone):
+def test_accept_as_done_names_the_criteria_the_open_findings_report_unmet():
     """TD-341: an open finding naming AC-1 lists it; a fixed one naming AC-2 and the look-alike AC-10 do not."""
-    c = asked(clone)
-    c.brief = Brief(version=1, criteria=[Criterion(id=i, text=f"rule {i}") for i in ("AC-1", "AC-2", "AC-10")])
+    t1 = Task(id="t1", title="one", scope=["x.txt"], checks=["cd . && check one"])
+    t3 = Task(id="t3", title="fix", origin="review", fixes="t1")
+    t2 = Task(id="t2", title="two", scope=["y.txt"], checks=["cd . && check two"])
+    t4 = Task(id="t4", title="fix final", origin="review", fixes=FINAL)
+    t5 = Task(id="t5", title="fix final", origin="review", fixes=FINAL)
+    sha = [str(n) * 40 for n in range(6)]  # the base, then each build's commit, in `asked`'s order
+    for n, task in enumerate((t1, t3, t2, t4, t5)):  # one build session each, as `build` records it
+        task.base, task.done, task.spans = sha[n], True, [f"{sha[n]}..{sha[n + 1]}"]
+    findings = [
+        RoundFinding(id="F1", text="x.txt:1: p - fix: f", raised=1, tasks=["t1"], state="fixed", repair="t4"),
+        RoundFinding(id="F2", text="y.txt:1: p - fix: f", raised=1, tasks=["t2"], state="fixed", repair="t5"),
+        RoundFinding(id="F3", text="y.txt:2: p - fix: f", raised=1, tasks=["t2"]),
+    ]
+    head = sha[5]
+    lp = RoundLoop(subject=FINAL, policy=RoundPolicy(max_rounds=1), round=1, found=8, last=True, findings=findings)
+    lp.completion, lp.head = Completion(head=head), end(t3)
+    covered = [
+        Review(task="t3", commit=head, inputs=Inputs(paths={"x.txt": "b"}), verdict="pass"),
+        Review(task="t2", commit=head, inputs=Inputs(paths={"y.txt": "b", "x.txt": "b"}), verdict="pass"),
+    ]
+    c = Change(
+        slug="c1",
+        brief=Brief(version=1, criteria=[Criterion(id=i, text=f"rule {i}") for i in ("AC-1", "AC-2", "AC-10")]),
+        plan=Plan(tasks=[t1, t2, t3, t4, t5]),
+        names=Names(branch="owlbear/c1", target="main"),
+        step=Step(kind=K.BUILD, task="t5"),
+        loops={FINAL: lp, "t1": RoundLoop(subject="t1", since=1, policy=RoundPolicy(), ended="clean")},
+        reviews=covered,
+        consent=MergeConsent(head=head, at=NOW),
+    )
+    ask(c, round_flow.question(lp, t5), NOW)
     found = c.loops[FINAL].findings
     found[0].text, found[2].text = "x.txt:1: AC-2 broken - fix: f", "y.txt:2: AC-1 not met - fix: f"
     assert rebuilds.shown(c, c.questions[0])["unmet"] == ["AC-1: rule AC-1"]
