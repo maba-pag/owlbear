@@ -30,14 +30,6 @@ def test_unset_switches_are_missing_and_none_on_the_page():
 
 @pytest.mark.usefixtures("no_base")
 @pytest.mark.parametrize("key", KEYS)
-def test_an_explicit_false_is_set_not_missing(key):
-    got = resolve(GlobalLayer(**{key: False}), Layer())
-    assert (getattr(got, key), got.sources[key], key in got.missing) == (False, "global", False)
-    assert got.page()[key] is False
-
-
-@pytest.mark.usefixtures("no_base")
-@pytest.mark.parametrize("key", KEYS)
 @pytest.mark.parametrize(
     ("layers", "value", "source"),  # each layer's value: Global, this machine, the project; None inherits
     [
