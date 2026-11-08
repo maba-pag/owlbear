@@ -96,7 +96,10 @@ End the step with exactly one call:
     finding marked as the owner's is never rejected, so a result with one always commits.
 
   If it is rejected, each error names a field and what to do: fix it and call again.
-- `ask_question`: an owner decision you cannot make. The step ends and resumes with the answer.
+- `ask_question`: an owner decision you cannot make. Each option names an existing engine action, not an
+  unsupported promise. Delivery checks the proposal before offering it; a refusal returns field errors to this
+  session. A recommendation involving checks names an exact declared command for Delivery's trial. The step
+  resumes with the admitted answer; required checks still must pass.
 - `report_wrong_premise`: the task cannot be built as written, with the evidence. Use stage
   `target` when it needs a commit or API that is on the target branch but not in this branch yet:
   Delivery merges the target in first, then resumes the task. Use stage `setup` when something

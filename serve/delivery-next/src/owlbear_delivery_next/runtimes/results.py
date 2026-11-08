@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 
 ENDED = "The step has already ended. Stop now."
 ACCEPTED = "Accepted. Your step has ended: stop now and start nothing else."
+SUBMITTED = "Submitted for engine admission before the owner is asked. Your step has ended: stop now."
 
 
 class Gate:
@@ -158,7 +159,7 @@ class Gate:
                 submitted = report if isinstance(report, str) else arguments
                 errors = [*errors, f"submitted audit {label}:\n{submitted}"]
             return None, errors, None, "invalid"
-        errors, tree = tools.check_question(args) if isinstance(args, tools.AskQuestion) else [], None
+        errors, tree = tools.check_question(args, self.cfg.checks) if isinstance(args, tools.AskQuestion) else [], None
         errors += amendments.check(args, self.cfg.amendable)  # a premise's brief items (TD-185)
         order: list[str] = []
         if spec is self.cfg.submit or spec is self.cfg.first_look:
@@ -212,7 +213,7 @@ class Gate:
             self.run.first = args
             return f"Recorded. {self.cfg.reveal}".strip(), True
         self._finish(spec.ending, args, "")
-        return ACCEPTED, True
+        return SUBMITTED if isinstance(args, tools.AskQuestion) else ACCEPTED, True
 
     def _order(self, spec: tools.Spec) -> list[str]:
         """A first look comes once, and before the final result."""

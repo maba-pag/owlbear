@@ -34,6 +34,17 @@ SPOTTER_OPTIONS = [
 ]
 
 
+def answer_text(question: Question) -> str:
+    """The full chosen answer, or its confirmed clarification even after promotion to a brief change."""
+    a = question.answer
+    if a is None:
+        return ""
+    if a.statement or a.kind == "clarification":
+        return a.statement
+    label = next((o.label for o in question.options if o.id == a.option), "")
+    return " - ".join(part for part in (label, a.text) if part)
+
+
 def logged(c: Change, items: Iterable[InboxItem], now: datetime) -> list[dict[str, Any]]:
     """An activity event per classed answer *c* recorded from *items*: the question's history shows its class."""
     kept = {(q.id, q.answer.at) for q in c.questions if q.answer and q.answer.kind}

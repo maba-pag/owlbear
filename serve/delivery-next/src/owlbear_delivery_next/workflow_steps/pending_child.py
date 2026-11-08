@@ -253,6 +253,15 @@ def fits(change: Change) -> bool:
         return False  # its own brief generation is gone, or it was never bound to one
     if pending.label in AMENDING:
         return pending.parent == amending(change)
+    if pending.label == "question-admission":
+        q = change.pending_question
+        return bool(
+            q
+            and pending.parent == q.run.session_id
+            and pending.step == (s.kind, s.task, s.mode)
+            and q.step == pending.step
+            and q.brief == change.brief.version
+        )
     planned = change.plan is not None and str(change.plan.version) == pending.parent
     return planned and s.kind == StepKind.PLAN and s.mode in {plan_rounds.CHALLENGE, RECHECK}
 
