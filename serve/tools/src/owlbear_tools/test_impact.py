@@ -382,8 +382,7 @@ class _Selection:
                 for source, names in self.consumers.affected(reader, symbols).items():
                     if names:
                         affected.setdefault(source, set()).update(names)
-            module = _module(self.consumers.texts.get(reader))
-            self.supplements(reader, module, module, symbols)
+            self.supplements(reader, None, None, symbols)
         self.named_consumers(resource, affected)
 
 
