@@ -147,11 +147,7 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
         for p, how in changed
         if (edit := check_weakening.weakened(repair_copy.git, at, r.base, p, how)[1])
     ]
-    r.held += [
-        f"changes {p}, which the step's check runs, so it proves nothing alone"
-        for p in r.paths
-        if _named(p, witness, path)
-    ]
+    r.held += [reason for p in r.paths if (reason := _check_hold(p, witness, path))]
     r.held += [f"changes {p}, outside the brief's scope" for p in r.paths if not _in_scope(change, p)]
     if not r.held:
         _apply(store, lock, change, path, prof)
@@ -293,6 +289,15 @@ def _witness(change: Change, prof: Profile, source: Path) -> tuple[str, ...]:
 
 def _installs(change: Change, prof: Profile) -> tuple[str, ...]:
     return tuple(check_hint.qualified(p, c) for p, c in worktree.installs(prof, change.brief.scope or ["."]))
+
+
+def _check_hold(path: str, witness: tuple[str, ...], source: Path) -> str:
+    """Incomplete original-source discovery holds the fix with the whole error, never applies it."""
+    try:
+        named = _named(path, witness, source)
+    except (OSError, SyntaxError) as error:
+        return f"cannot inspect the unchanged check for {path}: {error}; its altered witness proves nothing alone"
+    return f"changes {path}, which the step's check runs, so it proves nothing alone" if named else ""
 
 
 def _named(path: str, witness: tuple[str, ...], source: Path | None = None) -> bool:
