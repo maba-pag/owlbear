@@ -356,16 +356,12 @@ def test_a_wal_store_moves_with_its_committed_rows(clone, monkeypatch):
 def test_a_store_operation_in_flight_is_not_moved(clone, monkeypatch):
     # Store holds migrate.lock shared for each database operation; the move's exclusive fence refuses it.
     repo, folder = clone
-    writer = sqlite3.connect(folder / "delivery.db", isolation_level=None)
-    writer.execute("PRAGMA journal_mode=WAL")
-    writer.execute("CREATE TABLE t (v TEXT)")
     operation = hold(folder / "migrate.lock", shared=True)
     try:
         with pytest.raises(StoreError, match=r"held by a running process"):
             move(repo, monkeypatch)
     finally:
         os.close(operation)
-        writer.close()
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert not (project_home.home(SOURCE_ID) / "changes").exists()
 
