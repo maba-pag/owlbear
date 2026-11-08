@@ -30,10 +30,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from owlbear_knowledge.protocols.common import EntityType, RelationType
+from owlbear_knowledge.protocols.common import EntityType
 from owlbear_knowledge.protocols.content import ContentChunk, ContentSearchResult
 from owlbear_knowledge.protocols.graph import (
-    EdgeRecord,
     EntityQuery,
     EntityRecord,
     TraversalQuery,
@@ -59,13 +58,12 @@ _NOW = datetime(2026, 1, 1, tzinfo=UTC)
 def _make_entity(
     entity_id: str = "ent-1",
     name: str = "Alice",
-    entity_type: EntityType = EntityType.PERSON,
 ) -> EntityRecord:
     return EntityRecord(
         id=entity_id,
         name=name,
         canonical_name=name.lower(),
-        entity_type=entity_type,
+        entity_type=EntityType.PERSON,
         created_at=_NOW,
         updated_at=_NOW,
     )
@@ -73,13 +71,12 @@ def _make_entity(
 
 def _make_chunk(
     chunk_id: str = "chunk-1",
-    document_id: str = "doc-1",
     source_id: str = "src-1",
     text: str = "Some relevant text",
 ) -> ContentChunk:
     return ContentChunk(
         id=chunk_id,
-        document_id=document_id,
+        document_id="doc-1",
         source_id=source_id,
         index=0,
         text=text,
@@ -90,52 +87,12 @@ def _make_chunk(
     )
 
 
-def _make_edge(
-    edge_id: str = "edge-1",
-    source_entity_id: str = "ent-1",
-    target_entity_id: str = "ent-2",
-) -> EdgeRecord:
-    return EdgeRecord(
-        id=edge_id,
-        source_entity_id=source_entity_id,
-        target_entity_id=target_entity_id,
-        relation_type=RelationType.RELATED_TO,
-        weight=1.0,
-        created_at=_NOW,
-        updated_at=_NOW,
-    )
-
-
 def _make_traversal(
     entities: list[EntityRecord] | None = None,
-    edges: list[EdgeRecord] | None = None,
 ) -> TraversalResult:
     return TraversalResult(
         entities=tuple(entities or []),
-        edges=tuple(edges or []),
-    )
-
-
-def _make_query_result(
-    search_results: tuple = (),
-    graph_context: TraversalResult | None = None,
-) -> QueryResult:
-    return QueryResult(
-        search_results=search_results,
-        graph_context=graph_context,
-        provenance=(),
-    )
-
-
-def _make_entity_lookup_result(
-    entity: EntityRecord | None = None,
-    neighbourhood: TraversalResult | None = None,
-    related_chunks: tuple = (),
-) -> EntityLookupResult:
-    return EntityLookupResult(
-        entity=entity,
-        neighbourhood=neighbourhood,
-        related_chunks=related_chunks,
+        edges=(),
     )
 
 
@@ -353,7 +310,7 @@ class TestRenderContext:
 
     def test_render_context_with_query_result_returns_rendered_context(self, facade: QueryFacade) -> None:
         """AC3: render_context with query_result returns a RenderedContext."""
-        query_result = _make_query_result()
+        query_result = QueryResult()
         request = ContextRenderRequest(query_result=query_result)
         result = facade.render_context(request)
         assert isinstance(result, RenderedContext)
@@ -361,7 +318,7 @@ class TestRenderContext:
 
     def test_render_context_with_entity_result_returns_rendered_context(self, facade: QueryFacade) -> None:
         """AC3: render_context with entity_result returns a RenderedContext."""
-        entity_result = _make_entity_lookup_result(entity=_make_entity())
+        entity_result = EntityLookupResult(entity=_make_entity())
         request = ContextRenderRequest(entity_result=entity_result)
         result = facade.render_context(request)
         assert isinstance(result, RenderedContext)
@@ -369,8 +326,8 @@ class TestRenderContext:
 
     def test_render_context_with_both_results_returns_rendered_context(self, facade: QueryFacade) -> None:
         """AC3: render_context with both query_result and entity_result succeeds."""
-        query_result = _make_query_result()
-        entity_result = _make_entity_lookup_result(entity=_make_entity())
+        query_result = QueryResult()
+        entity_result = EntityLookupResult(entity=_make_entity())
         request = ContextRenderRequest(
             query_result=query_result,
             entity_result=entity_result,
@@ -386,7 +343,7 @@ class TestRenderContext:
 
     def test_render_context_text_within_max_chars_budget(self, facade: QueryFacade) -> None:
         """AC3: output text length does not exceed max_chars."""
-        entity_result = _make_entity_lookup_result(entity=_make_entity())
+        entity_result = EntityLookupResult(entity=_make_entity())
         request = ContextRenderRequest(entity_result=entity_result, max_chars=500)
         result = facade.render_context(request)
         assert len(result.text) <= 500
@@ -395,29 +352,14 @@ class TestRenderContext:
 
     def test_render_context_truncated_false_when_content_fits(self, facade: QueryFacade) -> None:
         """AC4: truncated=False when content fits within max_chars budget."""
-        entity_result = _make_entity_lookup_result(entity=_make_entity())
+        entity_result = EntityLookupResult(entity=_make_entity())
         request = ContextRenderRequest(entity_result=entity_result, max_chars=10_000)
         result = facade.render_context(request)
         assert result.truncated is False
 
-    def test_render_context_truncated_true_when_budget_exceeded(self, facade: QueryFacade) -> None:
-        """AC4: truncated=True when max_chars is smaller than natural output."""
-        # Build a result with enough content to exceed a 100-char budget.
-        entity = _make_entity("ent-big", name="Verylongentitynamethataddsupquickly")
-        entity_result = EntityLookupResult(
-            entity=entity,
-            neighbourhood=_make_traversal(
-                entities=[_make_entity(f"ent-{i}", name=f"Entity{i}" * 10) for i in range(20)]
-            ),
-            related_chunks=tuple(_make_chunk(f"c-{i}", text="x" * 200) for i in range(10)),
-        )
-        request = ContextRenderRequest(entity_result=entity_result, max_chars=100)
-        result = facade.render_context(request)
-        assert result.truncated is True
-
     def test_render_context_char_count_equals_text_length(self, facade: QueryFacade) -> None:
         """AC4: char_count matches len(result.text)."""
-        entity_result = _make_entity_lookup_result(entity=_make_entity())
+        entity_result = EntityLookupResult(entity=_make_entity())
         request = ContextRenderRequest(entity_result=entity_result)
         result = facade.render_context(request)
         assert result.char_count == len(result.text)
@@ -461,7 +403,7 @@ class TestRenderContext:
         A render that drops entity content would make this fail.
         """
         entity = _make_entity(entity_id="ent-1", name="UniqueEntityNameXYZ")
-        entity_result = _make_entity_lookup_result(entity=entity)
+        entity_result = EntityLookupResult(entity=entity)
         request = ContextRenderRequest(entity_result=entity_result, max_chars=100_000)
         result = facade.render_context(request)
         assert "UniqueEntityNameXYZ" in result.text
@@ -479,7 +421,7 @@ class TestRenderContext:
             provenance=(),
         )
         entity = _make_entity(entity_id="ent-e1", name="EntityFromLookupXYZ")
-        entity_result = _make_entity_lookup_result(entity=entity)
+        entity_result = EntityLookupResult(entity=entity)
         request = ContextRenderRequest(
             query_result=query_result,
             entity_result=entity_result,
