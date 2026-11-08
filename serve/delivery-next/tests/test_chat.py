@@ -659,20 +659,6 @@ def test_a_refusal_from_open_chat_reaches_the_new_change_page_whole(tmp_path):
     assert "(code -32005)" in state["reason"]
 
 
-def test_a_failed_follow_up_is_kept_whole_and_logged(caplog):
-    def done(_launch, _out):
-        raise RuntimeError("d" * 400)
-
-    kept = launches.Launches(0, time.monotonic)
-    launch = kept.start(lambda: {"state": "open"}, done=done)
-    end = time.monotonic() + 5
-    while (state := kept.state(launch))["state"] == "opening" and time.monotonic() < end:
-        time.sleep(0.01)
-    assert state == {"state": "open", "warning": "RuntimeError: " + "d" * 400}
-    [record] = [r for r in caplog.records if r.name == launches.__name__]
-    assert (record.levelname, record.exc_info is not None) == ("ERROR", True)
-
-
 @pytest.mark.parametrize("where", ["launch", "follow-up"])
 def test_a_failed_launch_or_follow_up_keeps_its_whole_error(caplog, whole_error, where):
     """What the page reads of a launch that raised, or of its follow-up, is the error whole, and it is logged (#971)."""
