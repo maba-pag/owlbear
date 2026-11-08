@@ -64,7 +64,7 @@ def test_a_selector_fix_is_held_even_when_its_own_empty_check_passes(repo, tmp_p
     source.mkdir(parents=True)
     (package / "pyproject.toml").write_text('[project.scripts]\ntest = "owlbear_tools.testing:test_main"\n')
     for name, text in {
-        "testing.py": "from owlbear_tools import task_scope\n",
+        "testing.py": "from owlbear_tools import task_scope, missing_selector\n",
         "task_scope.py": "from . import task_testing\n",
         "task_testing.py": "from .test_impact import select\n\ndef commands():\n    return ['tests/test_a.py']\n",
         "test_impact.py": "from owlbear_tools import test_dependencies\n",
@@ -96,6 +96,9 @@ def test_a_selector_fix_is_held_even_when_its_own_empty_check_passes(repo, tmp_p
         step_repair._named(f"serve/tools/src/owlbear_tools/{name}.py", witness, repo)  # noqa: SLF001
         for name in ("testing", "task_scope", "task_testing", "test_impact", "test_dependencies")
     )
+    missing = "serve/tools/src/owlbear_tools/missing_selector.py"
+    assert not (repo / missing).exists()
+    assert step_repair._named(missing, witness, repo)  # noqa: SLF001
 
 
 def test_a_fix_reaches_the_branch_without_touching_the_steps_unfinished_edits(repo, tmp_path) -> None:

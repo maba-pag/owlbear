@@ -360,11 +360,11 @@ def _selector_inputs(source: Path, package: Path, entry: str) -> set[str]:
         name = module.replace(".", "/")
         for root in (source / package / "src", source / package):
             for path in (root / f"{name}.py", root / name / "__init__.py"):
+                found.add(path.relative_to(source).as_posix())
                 if not path.is_file():
                     continue
-                found.add(path.relative_to(source).as_posix())
                 parent = module.split(".") if path.name == "__init__.py" else module.split(".")[:-1]
-                for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"), filename=str(path))):
                     if isinstance(node, ast.Import):
                         pending.extend(alias.name for alias in node.names)
                     elif isinstance(node, ast.ImportFrom):
