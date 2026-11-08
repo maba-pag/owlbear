@@ -677,7 +677,6 @@ def test_each_matrix_shard_keeps_its_own_cached_pass_and_results(name: str) -> N
         steps = job["steps"]
         templates = [
             next(s for s in steps if s.get("id") == "reuse")["with"]["key"],
-            steps[-1]["with"]["key"],
             *(s["with"]["name"] for s in steps if str(s.get("uses", "")).startswith("actions/upload-artifact@")),
         ]
         for variable, values in ((job.get("strategy") or {}).get("matrix") or {}).items():
