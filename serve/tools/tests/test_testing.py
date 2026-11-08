@@ -484,6 +484,9 @@ def test_page_consumers_keep_real_indirect_http_but_not_dictionary_gets(tmp_path
             "def test_http(client):\n    return opened(client, '/')\n\n"
             "def test_constructed(route):\n    client = TestClient(None)\n    client.get(route)\n\n"
             "def test_browser(page, route):\n    page.goto(route)\n"
+            "def test_link(page, base, project):\n"
+            "    page.goto('/elsewhere')\n    page.get_by_role('link').click()\n"
+            "    expect(page).to_have_url(f'{base}/?project={project}')\n"
         ),
         other: ("FAILING = {}\n\ndef test_lookup(parent, word):\n    return FAILING.get(word, parent.get(word))\n"),
     }
@@ -496,6 +499,7 @@ def test_page_consumers_keep_real_indirect_http_but_not_dictionary_gets(tmp_path
         f"{test}::test_http",
         f"{test}::test_constructed",
         f"{test}::test_browser",
+        f"{test}::test_link",
     }
 
 

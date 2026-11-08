@@ -76,7 +76,8 @@ Reflective module readers (`getattr`/`hasattr`/`vars`) retain named consumers, i
 Changed test modules remain required and also feed dependency analysis for their imported helpers and fixtures.
 Deleted test modules cannot supply observed coverage; unresolved current consumers fail explicitly.
 Named browser/HTTP navigation consumers with an indirect, unresolved route remain selected;
-dictionary lookups are not navigation. Users of source inventories that combine a wildcard with a
+destination URL assertions also retain link-driven navigation. Dictionary lookups are not navigation.
+Users of source inventories that combine a wildcard with a
 filename-suffix filter also remain selected.
 Test-data-only changes follow named readers, imported test helpers and fixtures, not a mandatory whole-package fallback.
 Module/class autouse fixtures and module-level fixture marks retain their implicitly affected tests within

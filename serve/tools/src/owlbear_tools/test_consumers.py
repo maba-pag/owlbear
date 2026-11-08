@@ -425,7 +425,10 @@ class _Consumers:
                 navigates = bool(routes) and any(
                     isinstance(node, ast.Call)
                     and isinstance(node.func, ast.Attribute)
-                    and (node.func.attr == "goto" or http_get(node, definition, self.trees[test]))
+                    and (
+                        node.func.attr in {"goto", "wait_for_url", "to_have_url"}
+                        or http_get(node, definition, self.trees[test])
+                    )
                     and node.args
                     and ((route := _navigation_route(node.args[0])) is None or route in routes)
                     for node in ast.walk(definition)
