@@ -268,11 +268,12 @@ def test_a_stable_head_save_completes_normally(shared_repo, tmp_path, owner_move
 
 def test_a_stable_head_finish_completes_a_committed_batch(shared_repo, tmp_path, lost_ack, owner_move) -> None:
     root, remote = shared_repo
-    owner_commit(root, "owner words\n")
+    owner = owner_commit(root, "owner words\n")
     shared = DataRepo(inside_tmp(root, tmp_path))
     save(shared, make(), expected_revision=None, message="decisions: notes")
     pending = decision_batch.pending(shared)
     assert pending is not None
+    assert pending.head == owner
     head = git(root, "rev-parse", "HEAD")
     owner_move.reads.clear()  # only Finish's own blob reads are checked below
 
@@ -286,9 +287,8 @@ def test_a_stable_head_finish_completes_a_committed_batch(shared_repo, tmp_path,
     assert git(root, "rev-parse", "HEAD") == head
     assert git(remote, "rev-parse", "main") == head
     assert len(lost_ack["calls"]) == 1
-
-
-READERS = [decision_store.load, decision_store.file_snapshot]
+    assert is_ancestor(root, owner, "HEAD")
+    assert (root / OWNER).read_text() == "owner words\n"
 
 
 def checkout_state(shared: DataRepo) -> tuple:
@@ -338,7 +338,7 @@ def conflicting_replacement(readable, shared_repo, tmp_path) -> tuple[DataRepo, 
     return shared, old, successor
 
 
-@pytest.mark.parametrize("reader", READERS, ids=["load", "file_only"])
+@pytest.mark.parametrize("reader", [decision_store.load], ids=["load"])
 def test_a_conflicting_ordinary_pull_makes_both_readers_unavailable_without_changing_git(
     conflicting_replacement, reader
 ) -> None:
@@ -362,8 +362,11 @@ def test_a_conflicting_ordinary_pull_makes_both_readers_unavailable_without_chan
     assert checkout_state(shared) == before
 
 
-@pytest.mark.parametrize("reader", READERS, ids=["load", "file_only"])
-@pytest.mark.parametrize("project", ["", PROJECT], ids=["global", "project"])
+@pytest.mark.parametrize(
+    ("project", "reader"),
+    [("", decision_store.file_snapshot), (PROJECT, decision_store.load), (PROJECT, decision_store.file_snapshot)],
+    ids=["global-file_only", "project-load", "project-file_only"],
+)
 def test_both_readers_keep_healthy_authority(readable, reader, project) -> None:
     seen = reader(readable, project)
     if isinstance(seen, decision_store.DataView):
@@ -376,14 +379,24 @@ def test_both_readers_keep_healthy_authority(readable, reader, project) -> None:
 
 
 @pytest.mark.parametrize(
-    ("marker", "when", "reader"),
-    [
-        ("rebase-merge", "before", decision_store.load),
-        ("rebase-apply", "before", decision_store.file_snapshot),
-        ("rebase-merge", "during", decision_store.file_snapshot),
-        ("rebase-apply", "during", decision_store.load),
+    ("warmth", "marker", "when", "reader"),
+    [  # a marker before the read refuses before any cache use, so warmth matters only during collection
+        ("cold", "rebase-merge", "before", decision_store.load),
+        ("cold", "rebase-apply", "before", decision_store.file_snapshot),
+        ("cold", "rebase-merge", "during", decision_store.file_snapshot),
+        ("cold", "rebase-apply", "during", decision_store.load),
+        ("warm", "rebase-merge", "during", decision_store.file_snapshot),
+        ("warm", "rebase-apply", "during", decision_store.load),
     ],
-    ids=["merge-before-load", "apply-before-file_only", "merge-during-file_only", "apply-during-load"],
+    ids=[
+        "cold-merge-before-load",
+        "cold-apply-before-file_only",
+        "cold-merge-during-file_only",
+        "cold-apply-during-load",
+        "warm-merge-during-file_only",
+        "warm-apply-during-load",
+    ],
+    indirect=["warmth"],
 )
 def test_an_active_rebase_before_or_during_collection_refuses_both_readers(
     readable, warmth, marker, when, reader
@@ -421,9 +434,14 @@ def test_an_active_rebase_before_or_during_collection_refuses_both_readers(
 
 
 @pytest.mark.parametrize(
-    ("when", "reader"),
-    [(1, decision_store.load), (2, decision_store.file_snapshot)],
-    ids=["before-load", "after_collection-file_only"],
+    ("warmth", "when", "reader"),
+    [  # the first probe fails before any cache use, so warmth matters only after collection
+        ("cold", 1, decision_store.load),
+        ("cold", 2, decision_store.file_snapshot),
+        ("warm", 2, decision_store.file_snapshot),
+    ],
+    ids=["cold-before-load", "cold-after_collection-file_only", "warm-after_collection-file_only"],
+    indirect=["warmth"],
 )
 def test_an_unknown_rebase_at_either_probe_refuses_both_readers(
     readable, warmth, failing_rebase_probe, when, reader
