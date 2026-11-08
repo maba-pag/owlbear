@@ -333,16 +333,18 @@ class _Selection:
                 raise RuntimeError(msg)
 
     def helper(self, helper: str, relevant: set[str] | None = None) -> None:
-        associated = self.consumers.tests_for({helper})
         if not helper.endswith(".py"):
-            self.data_helper(helper, relevant)
+            for node in self.consumers.outside_nodes({helper}, self.consumers.tests, required=helper in self.paths):
+                if relevant is None or node_path(node) in relevant:
+                    self.add(node, f"current test-data reader: {helper}")
             return
-        if relevant is not None:
-            associated.intersection_update(relevant)
-            if not associated and not any(
-                row.source == helper and node_path(row.test) in relevant for row in self.rows
-            ):
-                return
+        associated = {test for test in self.consumers.tests_for({helper}) if relevant is None or test in relevant}
+        if (
+            relevant is not None
+            and not associated
+            and not any(row.source == helper and node_path(row.test) in relevant for row in self.rows)
+        ):
+            return
         module = _module(self.consumers.texts.get(helper))
         observed = {block for row in self.rows if row.source == helper for block in row.blocks}
         historical = (
@@ -362,11 +364,6 @@ class _Selection:
         if not associated and helper in self.paths and unresolved:
             msg = f"Unresolved current fixture/helper consumers in {self.root}: {helper}"
             raise RuntimeError(msg)
-
-    def data_helper(self, helper: str, relevant: set[str] | None) -> None:
-        for node in self.consumers.outside_nodes({helper}, self.consumers.tests, required=helper in self.paths):
-            if relevant is None or node_path(node) in relevant:
-                self.add(node, f"current test-data reader: {helper}")
 
 
 @dataclass(frozen=True)
