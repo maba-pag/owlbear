@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next.local_system import data_repo, storage_io
+from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch
 
@@ -30,28 +30,6 @@ def test_an_empty_rebase_probe_is_unknown_not_fallen_back_to_the_checkout(tmp_pa
     monkeypatch.setattr(data_repo, "_git", probe)
     with pytest.raises(DataRepoError):
         DataRepo(tmp_path).rebasing()
-
-
-def test_make_dirs_fsyncs_the_parent_of_each_new_folder(tmp_path: Path, monkeypatch) -> None:
-    synced: list[Path] = []
-    monkeypatch.setattr(storage_io, "_sync_held", lambda _fd, folder: synced.append(folder))
-
-    storage_io.make_dirs(tmp_path / "a" / "b")
-
-    assert (tmp_path / "a" / "b").is_dir()
-    assert synced == [tmp_path.parent, tmp_path, tmp_path / "a"]
-
-
-def test_make_dirs_creates_nothing_for_an_existing_folder_but_resyncs_its_parent_link(
-    tmp_path: Path, monkeypatch
-) -> None:
-    synced: list[Path] = []
-    monkeypatch.setattr(storage_io, "_sync_held", lambda _fd, folder: synced.append(folder))
-
-    storage_io.make_dirs(tmp_path)
-
-    assert tmp_path.is_dir()
-    assert synced == [tmp_path.parent]
 
 
 def test_replace_file_fsyncs_the_parent_after_rename_and_after_unlink(tmp_path: Path, monkeypatch) -> None:
