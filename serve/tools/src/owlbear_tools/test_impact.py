@@ -273,7 +273,6 @@ class _Selection:
         relevant_tests = self.consumers.tests_for(relevant_callers)
         relevant_tests.update({source} & self.consumers.tests)
         footprint_tests = {node_path(row.test) for row in self.rows if row.source in relevant_callers}
-        footprint_tests.intersection_update(self.consumers.tests)
         for node in {node for item in self.maps for node in item.skipped}:
             if node_path(node) in relevant_tests | footprint_tests:
                 self.add(node, f"recorded platform/skip consumer: {source}")
