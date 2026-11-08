@@ -46,51 +46,28 @@ from owlbear_knowledge.protocols.sources import (
 # ---------------------------------------------------------------------------
 
 
-def _make_source(
-    source_id: str = "src-1",
-    *,
-    refreshable: bool = True,
-    enrich: bool = False,
-) -> ConfiguredSourceRecord:
+def _make_source() -> ConfiguredSourceRecord:
     return ConfiguredSourceRecord(
-        id=source_id,
-        name=f"Source {source_id}",
+        id="src-1",
+        name="Source src-1",
         state=SourceState.ACTIVE,
         kind=SourceKind.INLINE,
         fetch_method=FetchTransport.NONE,
         config=InlineConfig(),
         health=SourceHealth.UNKNOWN,
-        refreshable=refreshable,
-        enrich=enrich,
+        refreshable=True,
+        enrich=False,
         created_at=datetime.now(tz=UTC),
         updated_at=datetime.now(tz=UTC),
     )
 
 
-def _make_fetched_doc(uri: str = "https://example.com/doc") -> FetchedDocument:
+def _make_fetched_doc() -> FetchedDocument:
     return FetchedDocument(
         title="Doc Title",
         text="Doc body text.",
-        uri=uri,
+        uri="https://example.com/doc",
         external_id="ext-1",
-    )
-
-
-def _make_ingest_result(
-    source_id: str = "src-1",
-    *,
-    documents_processed: int = 1,
-    documents_created: int = 1,
-    errors: tuple[KnowledgeFailure, ...] = (),
-) -> IngestResult:
-    now = datetime.now(tz=UTC)
-    return IngestResult(
-        source_id=source_id,
-        documents_processed=documents_processed,
-        documents_created=documents_created,
-        errors=errors,
-        started_at=now,
-        completed_at=now,
     )
 
 
@@ -154,11 +131,14 @@ def coordinator(
 
     async def ingest(request: IngestRequest) -> IngestResult:
         errors = tuple(item.failure for item in request.acquisition_failures)
-        return _make_ingest_result(
-            request.source_id,
+        now = datetime.now(tz=UTC)
+        return IngestResult(
+            source_id=request.source_id,
             documents_processed=len(request.documents) + len(errors),
             documents_created=len(request.documents),
             errors=errors,
+            started_at=now,
+            completed_at=now,
         )
 
     c.ingest = AsyncMock(side_effect=ingest)
