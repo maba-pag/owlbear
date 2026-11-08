@@ -405,10 +405,10 @@ def select(
     )
     for node in scope.tests:
         selection.add(node, "caller-supplied invariant/source-reading/subprocess/neighbor")
-    reading_paths = [set(all_paths) - resources, *({resource} for resource in sorted(resources))]
-    for reading in reading_paths:
-        for node in consumers.outside_nodes(reading, {node_path(node) for node in forced}):
-            selection.add(node, "current named page/source-reading/subprocess consumer")
+    for node in consumers.outside_nodes(set(all_paths) - resources, {node_path(node) for node in forced}):
+        selection.add(node, "current named page/source-reading/subprocess consumer")
+    for resource in sorted(resources):
+        selection.named_consumers(resource, consumers.resource_readers(resource))
     selection.fingerprints(touched, callers, context.base)
     for span in context.kept_spans:
         kept = touched & _kept_paths(root, span, context.target)

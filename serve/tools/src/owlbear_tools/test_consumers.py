@@ -342,6 +342,25 @@ class _Consumers:
             or any(path.startswith(f"{Path(page).parent}/pages/{Path(page).stem}/") for path in changed)
         }
 
+    def resource_readers(self, resource: str) -> dict[str, set[str]]:
+        """Owned runtime readers, not temporary test corpora sharing a filename suffix."""
+        prefix = resource.split("/src/", 1)[0] + "/src/"
+        basename = Path(resource).name
+        affected: dict[str, set[str]] = defaultdict(set)
+        for path, definitions in self.references.items():
+            symbols = {
+                symbol
+                for symbol, references in definitions.items()
+                if resource in references or (path.startswith(prefix) and basename in references)
+            }
+            if symbols:
+                for source, names in self.affected(path, symbols).items():
+                    affected[source].update(names)
+        if not affected:
+            msg = f"No current runtime-resource readers resolved for {resource} in {self.root}"
+            raise RuntimeError(msg)
+        return dict(affected)
+
     def outside_nodes(self, paths: set[str], candidates: set[str], *, required: bool = True) -> set[str]:
         """Named page, source-reader and child-process consumers supplied by the ordinary router."""
         python = {path for path in paths if path.endswith(".py")}

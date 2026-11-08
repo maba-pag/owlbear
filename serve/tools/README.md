@@ -74,6 +74,8 @@ to named consumers. Documentation-only inputs retain the ordinary router's exclu
 Markdown test fixtures and package runtime resources remain consumer inputs.
 Runtime-resource package fallbacks are candidates, not required whole-package tests; resource-only
 tasks also use reader discovery, and each runtime resource must resolve readers independently.
+Runtime readers follow owned source references (or direct full-path test references) into current
+named/native consumers, not unrelated temporary corpora that merely glob the same filename suffix.
 Page consumers follow served HTML and relative module imports to their real browser
 navigation routes, including the root Changes page and shared assets. Unresolved page consumers raise an error.
 Reflective module readers (`getattr`/`hasattr`/`vars`) retain named consumers, including computed attribute names.

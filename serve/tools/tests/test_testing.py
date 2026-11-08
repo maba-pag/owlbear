@@ -448,7 +448,10 @@ def test_a_known_source_reader_cannot_hide_an_unresolved_runtime_resource(tmp_pa
     texts = {
         source: "VALUE = 1\n",
         resource: "",
-        test: f"from pathlib import Path\n\ndef test_source():\n    Path('{source}').read_text()\n",
+        test: (
+            f"from pathlib import Path\n\ndef test_source():\n    Path('{source}').read_text()\n"
+            "def test_other_corpus(tmp_path):\n    list(tmp_path.glob('*.bin'))\n"
+        ),
     }
     for name, text in texts.items():
         path = tmp_path / name
@@ -458,7 +461,7 @@ def test_a_known_source_reader_cannot_hide_an_unresolved_runtime_resource(tmp_pa
     with (
         patch("owlbear_tools.test_impact.git", return_value="\0".join(texts)),
         patch("owlbear_tools.test_impact._load", return_value=[evidence]),
-        pytest.raises(RuntimeError, match=r"No current file-reading/page/import consumers.*no-reader\.bin"),
+        pytest.raises(RuntimeError, match=r"No current runtime-resource readers.*no-reader\.bin"),
     ):
         test_impact.select(
             tmp_path,
