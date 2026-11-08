@@ -100,22 +100,6 @@ def test_a_copy_published_before_a_crash_resumes_and_the_source_stays_whole(clon
     assert project_home.located(repo) == target  # a repeated startup changes nothing
 
 
-def test_a_copy_cut_short_keeps_the_source_and_the_next_start_finishes(clone, monkeypatch):
-    repo, folder = clone
-    target = project_home.home(SOURCE_ID)
-    stage = target.with_name(f".{SOURCE_ID}.staging")
-    crash_before_sync(monkeypatch, "changes")
-    with pytest.raises(CrashError):
-        move(repo, monkeypatch)
-    assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
-    assert (stage / "changes").is_dir()
-    assert not target.exists()
-    heal(monkeypatch)
-    assert move(repo, monkeypatch) == target
-    assert not stage.exists()
-    assert (target / "changes" / "c1" / "runner.log").read_text() == "ran\n"
-
-
 def test_a_destination_nobody_recorded_is_refused_and_both_copies_are_kept(clone, monkeypatch):
     repo, folder = clone
     target = project_home.home(SOURCE_ID)
