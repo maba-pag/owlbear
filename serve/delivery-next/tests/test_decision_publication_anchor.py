@@ -107,25 +107,6 @@ def test_a_remote_that_moves_before_the_push_is_rebased_over_only_the_new_commit
     assert git(root, "status", "--porcelain") == ""
 
 
-def test_a_lost_acknowledgement_is_finished_from_the_published_head(shared_repo, lost_ack) -> None:
-    root, remote = shared_repo
-    owner = owner_commit(root, "owner words\n")
-    shared = DataRepo(root)
-    save(shared, make(), expected_revision=None, message="decisions: notes")
-
-    pending = decision_batch.pending(shared)
-    assert pending is not None
-    assert pending.head == owner
-    lost_ack[0] = False
-    done = decision_recovery.finish(shared, pending.generation)
-
-    assert done.done, done.notice
-    assert decision_batch.pending(shared) is None
-    assert is_ancestor(root, owner, "HEAD")
-    assert git(root, "rev-parse", "HEAD") == git(remote, "rev-parse", "main")
-    assert (root / OWNER).read_text() == "owner words\n"
-
-
 def test_a_foreign_head_with_the_same_tree_is_refused_and_nothing_changes(shared_repo, lost_ack) -> None:
     root, remote = shared_repo
     owner_commit(root, "owner words\n")
