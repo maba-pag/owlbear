@@ -709,9 +709,11 @@ def test_a_request_whose_limits_cannot_be_read_is_kept_failed_never_lost(monkeyp
     assert not case_replay.queued()
 
 
-def test_a_failed_publication_is_kept_with_its_spend(monkeypatch, shared_repo, whole_error) -> None:
+def test_a_failed_publication_is_kept_with_its_spend(monkeypatch, tmp_path, whole_error) -> None:
     j = Job(monkeypatch)
-    j.job.shared = lambda: DataRepo(shared_repo[0])
+    root = tmp_path / "owlbear-data"  # the review fails before any write reaches the repository
+    root.mkdir()
+    j.job.shared = lambda: DataRepo(root)
 
     async def failing(_text, meter, _role) -> str:
         spend(meter, 0.2)
