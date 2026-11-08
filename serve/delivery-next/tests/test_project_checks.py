@@ -321,11 +321,11 @@ def test_a_failed_save_raises_before_any_session_and_the_rerun_saves(store, chan
     write = store.write_profile
 
     def broken(_prof, **_kw):
-        msg = "profile: disk said no"
+        msg = "state of profile is unreadable: Expecting value: line 1 column 1 (char 0)"
         raise StoreError(msg)
 
     monkeypatch.setattr(store, "write_profile", broken)
-    with pytest.raises(StoreError, match="disk said no"):
+    with pytest.raises(StoreError, match="state of profile is unreadable"):
         step(store, change_repo)
     assert fake.told == []
     monkeypatch.setattr(store, "write_profile", write)
