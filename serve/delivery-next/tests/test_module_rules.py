@@ -75,5 +75,8 @@ def test_every_agent_tool_is_described_small_and_flat() -> None:
     schemas = [(f"{s.name}:{s.model.__name__}", s.model.model_json_schema()) for s in specs]
     schemas += [(t.name, t.input_schema) for t in asyncio.run(mcp_server.mcp.list_tools())]
     assert {s.name for s in specs} >= {"submit_result", "ask_question", "report_wrong_premise", "report_missing_tool"}
+    assert tools.MISSING in tools.SPECS
+    assert (tools.MISSING.name, tools.MISSING.ending) == ("report_missing_tool", "missing-tool")
+    assert tools.MISSING.description
     problems = [p for name, schema in schemas for p in _shape(name, schema, schema.get("$defs", {}))]
     assert problems == []
