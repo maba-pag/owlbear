@@ -339,22 +339,6 @@ class TestFromAC_IdentityBearingFormat:
         assert result == (
             f"## Format Pin Test\nEntry ID: `{entry.id}`\nRevision: `{entry.revision}`\nPinned body text."
         )
-        for field_name in (
-            "state",
-            "confidence",
-            "categories",
-            "scope_agents",
-            "approved_at",
-            "created_at",
-            "updated_at",
-        ):
-            assert field_name not in result, f"metadata field {field_name!r} leaked into output"
-        assert "curated" not in result  # state value
-        assert "0.92" not in result  # confidence value
-        assert "domain-knowledge" not in result  # category value
-        assert "recall-scope-tester" not in result  # scope_agents value
-        assert "2026-01-15T08:30:00Z" not in result  # created_at value
-        assert "2026-02-20T14:15:00Z" not in result  # updated_at value
 
     @pytest.mark.asyncio
     async def test_revision_refreshes_after_edit_from_second_engine(self, tmp_path: Path) -> None:
