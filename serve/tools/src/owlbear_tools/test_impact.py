@@ -337,9 +337,7 @@ class _Selection:
         module = _module(self.consumers.texts.get(helper))
         observed = {block for row in self.rows if row.source == helper for block in row.blocks}
         historical = (
-            _module(git(self.root, "show", f"{self.maps[0].head}:{helper}"))
-            if helper in self.recorded
-            else None
+            _module(git(self.root, "show", f"{self.maps[0].head}:{helper}")) if helper in self.recorded else None
         )
         if Path(helper).name != "conftest.py" or _unobserved(historical, module, observed):
             for test in associated:
