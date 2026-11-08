@@ -229,12 +229,13 @@ def test_each_change_of_one_key_keeps_its_own_entry(world):
     assert [n.id for n in again.notices] == [got.notices[i].id for i in (0, 2, 3)]
 
 
-def test_a_memory_value_changed_elsewhere_is_noticed_under_its_own_key(world):
-    world.push(**builder("A"))
-    reader = world.reader()
-    assert reader.read().notices == []
-    world.push(**builder("A"), memory={"purge_days": 14, "stale_factor": 50})
-    assert [(n.key, n.old, n.new) for n in reader.read().notices] == [
+def test_a_memory_value_changed_elsewhere_is_noticed_under_its_own_key(tmp_path):
+    """Global as two reads find it, flattened and recorded as a read does; the pull is the per-key entry test's."""
+    ledger, at = settings_seen.Ledger(tmp_path / NAME, [].append), datetime.now().astimezone()
+    tuned = {"format": CONFIG_FORMAT, **builder("A"), "memory": {"purge_days": 14, "stale_factor": 50}}
+    assert ledger.finish(settings_seen.flatten(as_saved("A")), [], unshared=False, at=at).notices == []
+    got = ledger.finish(settings_seen.flatten(GlobalLayer.model_validate(tuned)), [], unshared=False, at=at)
+    assert [(n.key, n.old, n.new) for n in got.notices] == [
         ("memory.purge_days", None, "14"),
         ("memory.stale_factor", None, "50"),
     ]
