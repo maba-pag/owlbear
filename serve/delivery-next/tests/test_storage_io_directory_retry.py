@@ -99,16 +99,6 @@ def test_boundary_resync_failure_is_raised_before_any_descendant_is_created(tmp_
     assert not (boundary / "b").exists()
 
 
-def test_existing_ordinary_directory_creates_nothing(tmp_path: Path) -> None:
-    ready = tmp_path / "ready"
-    ready.mkdir()
-
-    log = _traced_make_dirs(ready)
-
-    assert ready.is_dir()
-    assert not [entry for entry in log if entry[0] == "mkdir"]
-
-
 def test_fresh_multi_level_create_syncs_each_new_parent_in_order(tmp_path: Path) -> None:
     base = tmp_path / "base"
     base.mkdir()

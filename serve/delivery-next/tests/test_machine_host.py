@@ -1012,7 +1012,8 @@ def test_a_refused_registration_answers_its_whole_reason(  # noqa: PLR0913, PLR0
 
 
 def test_malformed_or_unrelated_server_entries_never_count_as_setup(tmp_path):
-    work = clone(tmp_path / "a")
+    work = (tmp_path / "a").resolve()
+    work.mkdir()
     (work / ".mcp.json").write_text(json.dumps({"mcpServers": {setup.SERVER: {"args": None}}}))
     assert setup.registered(work) is False
     setup.user_mcp(Path.home()).parent.mkdir(parents=True)
@@ -1031,7 +1032,8 @@ def test_malformed_or_unrelated_server_entries_never_count_as_setup(tmp_path):
 
 
 def test_a_server_entry_naming_its_folder_as_repo_equals_counts_as_setup(tmp_path):
-    work = clone(tmp_path / "a")
+    work = (tmp_path / "a").resolve()
+    work.mkdir()
     joined = {"mcpServers": {"x": {"args": ["-m", "owlbear_delivery_next", "mcp", f"--repo={work}"]}}}
     (work / ".mcp.json").write_text(json.dumps(joined))
     assert setup.registered(work)
@@ -1069,7 +1071,8 @@ def mcp_file(place: str, work: Path, monkeypatch) -> tuple[Path, str]:
 def test_an_entry_counts_only_with_one_exact_binding_or_none_in_the_projects_own_file(
     place, row, tmp_path, monkeypatch
 ):
-    work = clone(tmp_path / "a")
+    work = (tmp_path / "a").resolve()
+    work.mkdir()
     binding, counts = BINDINGS[row]
     path, key = mcp_file(place, work, monkeypatch)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1080,7 +1083,8 @@ def test_an_entry_counts_only_with_one_exact_binding_or_none_in_the_projects_own
 
 def test_copilots_shared_file_is_read_from_the_home_copilot_folder_without_copilot_home(tmp_path):
     assert "COPILOT_HOME" not in os.environ  # the autouse fixture removes it
-    work = clone(tmp_path / "a")
+    work = (tmp_path / "a").resolve()
+    work.mkdir()
     shared = Path.home() / ".copilot" / "mcp-config.json"
     shared.parent.mkdir(exist_ok=True)
     shared.write_text("// mine\n" + json.dumps({"mcpServers": setup.with_server({}, "/py", work)["mcpServers"]}))
