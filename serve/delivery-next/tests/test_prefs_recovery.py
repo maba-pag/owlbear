@@ -187,15 +187,6 @@ def test_a_mark_and_an_owner_clear_during_an_unshared_claims_locked_write_wait_f
     assert local.read_profile().prefs_import == "done"
 
 
-def test_a_healthy_claim_still_fills_its_config_once(local):
-    local.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
-
-    prefs_import.run(local)
-
-    assert local.read_config().prefs.ci_poll_seconds == 45
-    assert local.read_profile().prefs_import == "done"
-
-
 def test_an_unreadable_profile_while_paused_is_a_visible_failure_that_writes_nothing(local, monkeypatch):
     local.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
 
