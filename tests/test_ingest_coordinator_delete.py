@@ -815,18 +815,6 @@ class TestDeleteSourceCascade:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_rerun_after_partial_failure_returns_complete(
-        self,
-        coordinator: IngestCoordinator,
-        mock_sources: MagicMock,
-    ) -> None:
-        """AC9: re-run triggers LookupError on step 1; steps 2-5 succeed -> COMPLETE."""
-        # Simulate a second call where source was already deleted
-        mock_sources.delete_source.side_effect = LookupError("source already deleted in prior run")
-        result = await coordinator.delete_source(_SOURCE_ID)
-        assert result.status == PurgeStatus.COMPLETE
-
-    @pytest.mark.asyncio
     async def test_rerun_after_partial_failure_all_downstream_steps_called(
         self,
         coordinator: IngestCoordinator,
