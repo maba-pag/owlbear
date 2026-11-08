@@ -135,9 +135,9 @@ def test_same_rule_label_does_not_hide_a_changed_state_or_value(tmp_path, known)
     assert any(profile.STRICT in line for line in diffs)
 
 
-def test_fingerprint_survives_json_and_reconfirmation_has_no_nested_evidence(tmp_path):
-    repo = clone(tmp_path, "shop")
-    once = profile.confirm(profile.detect(repo, GitHub(), None), profile.STRICT, "no", NOW)
+def test_fingerprint_survives_json_and_reconfirmation_has_no_nested_evidence():
+    detected = ProfileEntry(state="known", value="no", evidence="same observation label")  # GitHub()'s STRICT
+    once = profile.confirm(Profile(version=1, entries={profile.STRICT: detected}), profile.STRICT, "no", NOW)
     back = Profile.model_validate_json(once.model_dump_json())
     twice = profile.confirm(back, profile.STRICT, "no", NOW)
     assert twice.entries[profile.STRICT] == once.entries[profile.STRICT]
