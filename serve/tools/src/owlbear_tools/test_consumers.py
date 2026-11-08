@@ -100,6 +100,22 @@ def _asset_reference(path: str, literal: str) -> str | None:
     return posixpath.normpath(str(Path(path).parent / reference)) if reference.startswith(".") else None
 
 
+def _navigation_route(argument: ast.expr) -> str | None:
+    if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+        text = argument.value
+    elif isinstance(argument, ast.JoinedStr):
+        text = ""
+        for index, part in enumerate(argument.values):
+            if isinstance(part, ast.Constant) and isinstance(part.value, str):
+                text += part.value
+            elif index and "?" not in text and "#" not in text:
+                return None
+    else:
+        return None
+    path = urlsplit(text).path
+    return re.sub(r"^/p/[^/]*(?=/|$)", "", path) or ("/" if path else None)
+
+
 class _Consumers:
     """Real imports, named uses and requested/autouse conftest fixtures."""
 
@@ -398,15 +414,8 @@ class _Consumers:
                     and isinstance(node.func, ast.Attribute)
                     and node.func.attr in {"goto", "get"}
                     and node.args
-                    and urlsplit(
-                        "".join(
-                            item.value
-                            for item in ast.walk(node.args[0])
-                            if isinstance(item, ast.Constant) and isinstance(item.value, str)
-                        )
-                        or "/"
-                    ).path
-                    in routes
+                    and routes
+                    and ((route := _navigation_route(node.args[0])) is None or route in routes)
                     for node in ast.walk(definition)
                 )
                 if named or wildcard or child or navigates:

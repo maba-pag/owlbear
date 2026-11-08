@@ -493,6 +493,8 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
             "def test_root_browser(page):\n    opened(page, 'http://localhost')\n"
             "INVENTORY = [p for p in Path('web').rglob('*') if p.suffix == '.mjs']\n\n"
             "def test_inventory():\n    return INVENTORY\n\n"
+            "def indirect(page, base, path):\n    page.goto(f'{base}{path}#token=t')\n\n"
+            "def test_indirect_route(page):\n    indirect(page, 'http://localhost', '/updates/owlbear')\n"
         ),
     }
     for path, text in texts.items():
@@ -532,13 +534,16 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     assert consumers.outside_nodes({"serve/demo/src/demo/web/pages/changes/forms.mjs"}, {test}) == {
         f"{test}::test_root_browser",
         f"{test}::test_inventory",
+        f"{test}::test_indirect_route",
     }
     assert consumers.outside_nodes({"serve/demo/src/demo/web/pds/load.mjs"}, {test}) == {
         f"{test}::test_root_browser",
         f"{test}::test_inventory",
+        f"{test}::test_indirect_route",
     }
     assert consumers.outside_nodes({"serve/demo/src/demo/web/vendor/lit-html/lit-html.js"}, {test}) == {
         f"{test}::test_root_browser",
+        f"{test}::test_indirect_route",
     }
     selection.current_hashes[test] = "changed"
     selection.add(f"{test}::test_current", "native footprint")
