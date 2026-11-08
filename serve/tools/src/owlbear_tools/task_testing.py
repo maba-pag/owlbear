@@ -46,7 +46,8 @@ def _targets(paths: list[str], workspace: _Packages) -> tuple[set[str], list[str
             path.endswith((".py", ".sh", ".bash", ".zsh", ".js", ".mjs", ".cjs"))
             or (scope := _python_scope(path, workspace)) is None
         ):
-            raise task_scope.unsupported(path)
+            msg = f"Task test scope unsupported for {path}; use repair to establish its consumers, not the full suite"
+            raise task_scope.ScopeError(msg)
         else:
             required.update(scope)
     return forced | required, python, list(packages.values()), required

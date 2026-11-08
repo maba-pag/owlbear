@@ -33,13 +33,6 @@ class ScopeError(ValueError):
     """The task's recorded scope cannot be derived from its Git objects."""
 
 
-def unsupported(path: str) -> ScopeError:
-    """Unknown executable inputs need an evidenced check, not a local full-suite fallback."""
-    return ScopeError(
-        f"Task test scope unsupported for {path}; use repair to establish its consumers, not the full suite"
-    )
-
-
 def text(run: Run, arguments: list[str]) -> str:
     """A Git query, with its command and error retained rather than interpreted as an empty result."""
     completed = run(arguments)
