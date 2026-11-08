@@ -173,10 +173,6 @@ def _load(root: Path, target: str, directory: Path | None, required: set[str]) -
     raise RuntimeError(msg)
 
 
-def _source(data: bytes) -> str:
-    return bytes_to_string_and_fsha(data)[0]
-
-
 def _module(source: str | None) -> Module | None:
     if source is None:
         return None
@@ -187,7 +183,9 @@ def _module(source: str | None) -> Module | None:
 def _revision(root: Path, reference: str, paths: set[str]) -> dict[str, Module | None]:
     tracked = set(git(root, "ls-tree", "-rz", "--name-only", reference).split("\0")) - {""}
     return {
-        path: _module(_source(git(root, "show", f"{reference}:{path}").encode())) if path in tracked else None
+        path: _module(bytes_to_string_and_fsha(git(root, "show", f"{reference}:{path}").encode())[0])
+        if path in tracked
+        else None
         for path in paths
     }
 
