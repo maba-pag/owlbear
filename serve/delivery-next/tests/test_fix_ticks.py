@@ -173,11 +173,11 @@ def test_a_change_that_merged_nothing_ticks_nothing_and_reopens_its_fixes(tmp_pa
 
 @pytest.mark.usefixtures("github")
 def test_an_abandoning_change_whose_pr_merged_anyway_credits_nothing(tmp_path, shared, change_repo):
-    fix = entry(shared, FIX, ["a.py"])
+    fix = entry(shared, FIX, ["a.txt"])  # the file the fixture's HEAD changed, so a wrong credit would tick it
 
     finish(tmp_path, shared, change_repo, Gh(pr(git(change_repo, "rev-parse", "HEAD"))), "abandon")
 
-    assert (now(shared, fix).status, ticks(now(shared, fix).text)) == ("open", {"a.py": False})
+    assert (now(shared, fix).status, ticks(now(shared, fix).text)) == ("open", {"a.txt": False})
 
 
 def scheduled(shared: DataRepo, impact: Impact, change: str) -> str:
