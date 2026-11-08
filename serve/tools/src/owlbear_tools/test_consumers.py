@@ -422,12 +422,11 @@ class _Consumers:
                     or ("*" in literals and bool(suffixes & literals))
                 )
                 child = subprocess and any(namespace in literal for namespace in namespaces for literal in literals)
-                navigates = any(
+                navigates = bool(routes) and any(
                     isinstance(node, ast.Call)
                     and isinstance(node.func, ast.Attribute)
                     and (node.func.attr == "goto" or http_get(node, definition, self.trees[test]))
                     and node.args
-                    and routes
                     and ((route := _navigation_route(node.args[0])) is None or route in routes)
                     for node in ast.walk(definition)
                 )
