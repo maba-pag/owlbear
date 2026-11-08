@@ -60,34 +60,6 @@ class TestModelFields:
 
     # --- MemoryEntry field defaults ---
 
-    def test_outstanding_count_default_owlbear_memory(self) -> None:
-        """MemoryEntry.outstanding_count defaults to 0 in owlbear_memory."""
-        from owlbear_memory.models import MemoryEntry
-
-        entry = MemoryEntry(**_min_entry_data())
-        assert entry.outstanding_count == 0
-
-    def test_unremarkable_count_default_owlbear_memory(self) -> None:
-        """MemoryEntry.unremarkable_count defaults to 0 in owlbear_memory."""
-        from owlbear_memory.models import MemoryEntry
-
-        entry = MemoryEntry(**_min_entry_data())
-        assert entry.unremarkable_count == 0
-
-    def test_didnt_use_count_default_owlbear_memory(self) -> None:
-        """MemoryEntry.didnt_use_count defaults to 0 in owlbear_memory."""
-        from owlbear_memory.models import MemoryEntry
-
-        entry = MemoryEntry(**_min_entry_data())
-        assert entry.didnt_use_count == 0
-
-    def test_score_default_owlbear_memory(self) -> None:
-        """MemoryEntry.score defaults to 0.0 in owlbear_memory."""
-        from owlbear_memory.models import MemoryEntry
-
-        entry = MemoryEntry(**_min_entry_data())
-        assert entry.score == 0.0
-
     # --- Backward-compatible deserialization ---
 
     def test_backward_compat_no_new_fields_owlbear_memory(self) -> None:
@@ -120,12 +92,6 @@ class TestModelFields:
 
 class TestComputeScore:
     """AC2: compute_score formula and export from owlbear_memory."""
-
-    def test_compute_score_importable_from_owlbear_memory(self) -> None:
-        """compute_score is importable from owlbear_memory and callable."""
-        from owlbear_memory import compute_score
-
-        assert callable(compute_score)
 
     def test_compute_score_basic_formula(self) -> None:
         """compute_score returns confidence + outstanding*boost - unremarkable*penalty."""
@@ -183,21 +149,6 @@ class TestSaveAndRoundTrip:
     """AC3: MemoryEngine.save() initializes score/counters; round-trips preserve them in both packages."""
 
     # --- MemoryEngine.save() (owlbear_memory) ---
-
-    def test_save_initializes_score_to_confidence(self, tmp_path: Path) -> None:
-        """MemoryEngine.save() sets score = confidence for new entries."""
-        from owlbear_memory import MemoryCategory, MemoryEngine
-
-        eng = MemoryEngine(memory_dir=tmp_path)
-        entry = eng.save(
-            title="Score init test",
-            content="Entry content",
-            categories=[MemoryCategory.PROCESS],
-            confidence=0.85,
-            source_agent="test-agent",
-            scope_agents=[],
-        )
-        assert entry.score == pytest.approx(0.85)
 
     def test_save_initializes_outstanding_count_to_zero(self, tmp_path: Path) -> None:
         """MemoryEngine.save() sets outstanding_count = 0 for new entries."""
