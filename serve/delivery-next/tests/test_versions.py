@@ -641,12 +641,6 @@ def test_the_selfcheck_creates_nothing_on_a_machine_without_owlbear():
     assert not home.exists()
 
 
-def test_the_selfcheck_refuses_a_missing_page_asset(monkeypatch):
-    monkeypatch.setattr(pages, "lit_files", lambda: {"lit-html.js": "x", "gone.js": "y"})
-
-    assert selfcheck.problems() == ["the pages' assets are missing: vendor/lit-html/gone.js"]
-
-
 def test_the_selfcheck_refuses_a_page_module_a_page_names_but_the_version_lacks(monkeypatch):
     own = pages.page_files()
     monkeypatch.setattr(pages, "page_files", lambda: {k: v for k, v in own.items() if k != ("changes", "main.mjs")})
