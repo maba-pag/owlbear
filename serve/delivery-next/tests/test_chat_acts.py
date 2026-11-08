@@ -427,37 +427,21 @@ def test_a_note_whose_wait_for_the_log_the_follower_stops_stays_unconfirmed_and_
 ) -> None:
     monkeypatch.setattr(spotter, "DRAIN", 0.1)
 
-    async def main() -> chat_acts.ChatActor:
+    async def main() -> tuple[Host, chat_acts.ChatActor]:
         host = Host(Clock())
         actor = chat(tmp_path, host)
         actor.spot.look("plan", 1.0, {"kind": "plan", "call": "x"})
         await until(lambda: actor.waiting)  # sent; the log has not shown it
         await actor.spot.drain()  # the follower stops reading the chat
-        return actor
+        return host, actor
 
-    actor = asyncio.run(main())
+    host, actor = asyncio.run(main())
     assert spotter.WORK.settled(5)
+    steer, withdrawn = host.actions  # withdrawn on the Spotter's own thread, over a connection of its own
+    assert withdrawn == {"type": "chat/pendingMessageRemoved", "kind": "steering", "id": steer["id"]}
+    assert (host.opened, host.closed) == (2, 2)
     act = act_of(actor)
     assert (act.act, act.delivery, act.error) == (
         "steer", "unconfirmed",
         "the follower stopped reading the chat before its log showed it; its withdrawal was requested")  # fmt: skip
     assert acts.counts(actor.spot.folder, act.session, act.scope)[0] == 1
-
-
-def test_a_note_whose_wait_the_follower_stops_is_withdrawn_on_the_spotters_thread(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(spotter, "DRAIN", 0.1)
-
-    async def main() -> tuple[Host, chat_acts.ChatActor]:
-        host = Host(Clock())
-        actor = chat(tmp_path, host)
-        actor.spot.look("plan", 1.0, {"kind": "plan", "call": "x"})
-        await until(lambda: actor.waiting)
-        await actor.spot.drain()
-        return host, actor
-
-    host, actor = asyncio.run(main())
-    assert spotter.WORK.settled(5)
-    steer, withdrawn = host.actions
-    assert withdrawn == {"type": "chat/pendingMessageRemoved", "kind": "steering", "id": steer["id"]}
-    assert (host.opened, host.closed) == (2, 2)
-    assert act_of(actor).delivery == "unconfirmed"  # never claimed withdrawn: nothing waited for the host's answer
