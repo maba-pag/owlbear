@@ -57,14 +57,17 @@ It contains no environment contents or transcripts. Identical-input cache hits c
 Task selection reads complete successful CI maps at ancestors of the explicit integration target,
 using read-only `gh` queries and downloads into this checkout's `.owlbear/scratch/dependency-maps/`.
 All required shards share a run, attempt and checkout. Historical inputs are checked against Git
-objects; current test modules, helpers, fixtures, production callers and platform/skipped consumers
-supplement those observations. Footprints are compared with both task-before and current code, so
+objects; current task-reachable test modules, helpers, fixtures, production callers and platform/skipped consumers
+supplement those observations. Earlier unrelated test/helper edits do not enter a later task's check.
+Explicit and retained consumers remain required; a changed selected test module runs in full.
+Footprints are compared with both task-before and current code, so
 restoring a mapped version does not erase the task's checked scope. Source-reading, subprocess and
 invariant selectors supplied by the task runner remain in the union.
 Unobserved changes follow the names read by current callers to their executed function blocks, rather
 than selecting every importer through a shared fixture or import-time global block. Missing observations
 use named current tests and requested conftest fixtures. Platform branches and recorded skips remain
-independent supplements at test-function/node scope; a changed historical test module runs in full.
+independent supplements at test-function/node scope, including guarded production callers even when
+Linux observed the changed function through another test.
 Internally, `test_impact.RequiredScope` separates full task paths and required explicit/invariant/configuration
 targets from automatic router candidates, so page, source-reader and child-process candidates narrow
 to named consumers. Page consumers follow served HTML and relative module imports to their real browser
@@ -72,8 +75,9 @@ navigation routes, including the root Changes page and shared assets. Unresolved
 Reflective module readers (`getattr`/`hasattr`/`vars`) retain named consumers, including computed attribute names.
 Changed test modules remain required and also feed dependency analysis for their imported helpers and fixtures.
 Deleted test modules cannot supply observed coverage; unresolved current consumers fail explicitly.
-Named navigation consumers with an indirect, unresolved route remain selected, as do the users of
-source inventories that combine a wildcard with a filename-suffix filter.
+Named browser/HTTP navigation consumers with an indirect, unresolved route remain selected;
+dictionary lookups are not navigation. Users of source inventories that combine a wildcard with a
+filename-suffix filter also remain selected.
 Test-data-only changes follow named readers, imported test helpers and fixtures, not a mandatory whole-package fallback.
 Module/class autouse fixtures and module-level fixture marks retain their implicitly affected tests within
 the correct scope. Computed data filenames match their constant prefixes/suffixes and retain their reader users.

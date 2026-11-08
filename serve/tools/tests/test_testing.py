@@ -470,6 +470,89 @@ def test_dependency_artifacts_cannot_name_tests_outside_the_checkout(tmp_path: P
         task_scope.explicit_targets(_ROOT, [node])
 
 
+def test_page_consumers_keep_real_indirect_http_but_not_dictionary_gets(tmp_path: Path) -> None:
+    from owlbear_tools.test_consumers import _Consumers  # noqa: PLC0415
+
+    test, other = "serve/demo/tests/test_web.py", "serve/demo/tests/test_other.py"
+    page = "serve/demo/src/demo/web/changes.html"
+    texts = {
+        "serve/demo/src/demo/project_host/pages.py": "PAGES = (('/', 'Changes', 'changes.html'),)\n",
+        page: "<h1>Changes</h1>",
+        test: (
+            "from starlette.testclient import TestClient\n\n"
+            "def opened(client, route):\n    return client.get(route).text\n\n"
+            "def test_http(client):\n    return opened(client, '/')\n\n"
+            "def test_constructed(route):\n    client = TestClient(None)\n    client.get(route)\n\n"
+            "def test_browser(page, route):\n    page.goto(route)\n"
+        ),
+        other: ("FAILING = {}\n\ndef test_lookup(parent, word):\n    return FAILING.get(word, parent.get(word))\n"),
+    }
+    for name, text in texts.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    consumers = _Consumers(tmp_path, set(texts))
+    assert consumers.outside_nodes({page}, {test}) == {
+        f"{test}::test_http",
+        f"{test}::test_constructed",
+        f"{test}::test_browser",
+    }
+
+
+def test_observed_changes_keep_platform_callers_and_only_relevant_test_drift(tmp_path: Path) -> None:
+    from testmon.process_code import Module  # noqa: PLC0415
+
+    from owlbear_tools.test_consumers import _Consumers  # noqa: PLC0415
+    from owlbear_tools.test_dependencies import Evidence, Observation  # noqa: PLC0415
+    from owlbear_tools.test_impact import _Selection  # noqa: PLC0415
+
+    source, caller = "serve/demo/src/demo/source.py", "serve/demo/src/demo/caller.py"
+    test, guarded, newer, other = (f"serve/demo/tests/test_{name}.py" for name in ("direct", "guard", "new", "other"))
+    helper, data = "serve/demo/tests/other_helper.py", "serve/demo/tests/other.json"
+    before = Module(source_code="def work():\n    return 1\n")
+    texts = {
+        source: "def work():\n    return 2\n",
+        caller: "import sys\nfrom demo.source import work\n\ndef guarded():\n"
+        "    return work() if sys.platform == 'darwin' else 1\n",
+        test: "from demo.source import work\n\ndef test_direct():\n    return work()\n",
+        guarded: "from demo.caller import guarded\n\ndef test_guard():\n    return guarded()\n",
+        newer: "from demo.source import work\n\ndef test_new():\n    return work()\n",
+        other: "from other_helper import value\n\ndef test_other():\n    return value()\n",
+        helper: "DATA = Path('other.json').read_text()\n\ndef value():\n    return DATA\n",
+    }
+    for name, text in texts.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    (tmp_path / data).write_text("{}")
+    consumers = _Consumers(tmp_path, set(texts) | {data})
+    recorded = dict.fromkeys(set(texts) - {newer, helper}, "same")
+    current = dict.fromkeys(set(texts) | {data}, "same") | {other: "changed"}
+    evidence = Evidence(
+        "map",
+        1,
+        1,
+        "python",
+        1,
+        4,
+        recorded,
+        frozenset(),
+        (
+            Observation(f"{test}::test_direct", source, tuple(before.checksums)),
+            Observation(f"{guarded}::test_guard", caller, tuple(Module(source_code=texts[caller]).checksums)),
+        ),
+    )
+    selection = _Selection(tmp_path, [source], consumers, [evidence], current)
+    selection.supplements(source, before, Module(source_code=texts[source]))
+    selection.reconcile()
+    assert f"{guarded}::test_guard" in selection.reasons
+    assert newer in selection.reasons
+    assert other not in selection.reasons
+    selection.add(f"{other}::test_other", "caller-supplied explicit target")
+    selection.reconcile()
+    assert other in selection.reasons
+
+
 def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules(tmp_path: Path) -> None:
     from testmon.process_code import Module  # noqa: PLC0415 - exercise native footprint identities.
 

@@ -310,7 +310,10 @@ class _Selection:
             raise RuntimeError(msg)
 
     def reconcile(self) -> None:
-        for test in self.consumers.tests:
+        python = {path for path in self.paths if path.endswith(".py")}
+        relevant = self.consumers.tests_for(self.consumers.callers(python))
+        relevant.update(node_path(node) for node in self.reasons)
+        for test in relevant & self.consumers.tests:
             if self.current_hashes[test] != self.recorded.get(test):
                 self.add(test, "current test differs from map")
         helpers = {
@@ -321,7 +324,7 @@ class _Selection:
             and not _is_test(path)
         }
         for helper in helpers:
-            self.helper(helper)
+            self.helper(helper, None if helper in self.paths else relevant)
         for config in self.recorded:
             if (
                 config.endswith("pyproject.toml") or config in {"uv.lock", ".python-version"}
@@ -329,12 +332,17 @@ class _Selection:
                 msg = f"Dependency configuration {config} differs from map {self.maps[0].head}; collect current CI maps"
                 raise RuntimeError(msg)
 
-    def helper(self, helper: str) -> None:
+    def helper(self, helper: str, relevant: set[str] | None = None) -> None:
         associated = self.consumers.tests_for({helper})
         if not helper.endswith(".py"):
-            for node in self.consumers.outside_nodes({helper}, self.consumers.tests):
-                self.add(node, f"current test-data reader: {helper}")
+            self.data_helper(helper, relevant)
             return
+        if relevant is not None:
+            associated.intersection_update(relevant)
+            if not associated and not any(
+                row.source == helper and node_path(row.test) in relevant for row in self.rows
+            ):
+                return
         module = _module(self.consumers.texts.get(helper))
         observed = {block for row in self.rows if row.source == helper for block in row.blocks}
         historical = (
@@ -344,12 +352,21 @@ class _Selection:
             for test in associated:
                 self.add(test, f"current helper/fixture: {helper}")
         for row in self.rows:
-            if row.source == helper and (module is None or not match_fingerprint(module, row.blocks)):
+            if (
+                row.source == helper
+                and (relevant is None or node_path(row.test) in relevant)
+                and (module is None or not match_fingerprint(module, row.blocks))
+            ):
                 self.add(row.test, f"current helper footprint: {helper}")
         unresolved = _unobserved(historical, module, observed) or not any(row.source == helper for row in self.rows)
         if not associated and helper in self.paths and unresolved:
             msg = f"Unresolved current fixture/helper consumers in {self.root}: {helper}"
             raise RuntimeError(msg)
+
+    def data_helper(self, helper: str, relevant: set[str] | None) -> None:
+        for node in self.consumers.outside_nodes({helper}, self.consumers.tests, required=helper in self.paths):
+            if relevant is None or node_path(node) in relevant:
+                self.add(node, f"current test-data reader: {helper}")
 
 
 @dataclass(frozen=True)
@@ -391,11 +408,11 @@ def select(
         selection.add(node, "caller-supplied invariant/source-reading/subprocess/neighbor")
     for node in consumers.outside_nodes(set(all_paths), {node_path(node) for node in forced}):
         selection.add(node, "current named page/source-reading/subprocess consumer")
-    selection.reconcile()
     selection.fingerprints(touched, callers, context.base)
     for span in context.kept_spans:
         kept = touched & _kept_paths(root, span, context.target)
         selection.fingerprints(kept, consumers.callers(kept), *span.split(".."))
+    selection.reconcile()
     if not selection.reasons:
         msg = f"No executable tests resolved for task paths {list(paths)} in {root}; refusing empty check"
         raise RuntimeError(msg)
