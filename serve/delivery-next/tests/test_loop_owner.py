@@ -1,6 +1,7 @@
 """The actual synchronous SDK caller cannot wait forever for a cancellation-resistant asynchronous request."""
 
 import asyncio
+import gc
 import json
 import os
 import subprocess
@@ -150,6 +151,7 @@ def test_synchronous_sdk_boundary_stays_bounded_and_keeps_its_real_accounting(tm
 def test_an_asynchronous_shutdown_failure_keeps_its_whole_error(monkeypatch, caplog, whole_error, stage):
     """A shutdown failure reaches the returned Run's problems and the host log, or the primary's notes, whole (#951)."""
     monkeypatch.setattr(loop_owner, "SHUTDOWN", 1.0)
+    owned = []  # The SDK owns its background tasks; asyncio's task registry holds only weak references.
 
     async def failing_on_cancel():
         try:
@@ -160,8 +162,11 @@ def test_an_asynchronous_shutdown_failure_keeps_its_whole_error(monkeypatch, cap
     async def main():
         if stage == "task":
             left = asyncio.create_task(failing_on_cancel())  # left running: the owner's shutdown cancels it
+            owned.append(left)
             await asyncio.sleep(0)
             assert not left.done()
+            del left
+            gc.collect()
         if stage == "shutdown":
             msg = "synthetic primary"
             raise LookupError(msg)
