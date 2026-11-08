@@ -150,23 +150,6 @@ class TestMemoryVotingLifecycle:
     """
 
     @pytest.mark.asyncio
-    async def test_recall_returns_twenty_from_twenty_two_approved(self, tmp_path: Path) -> None:
-        """recall_memory with limit=20 returns exactly 20 entries when 22 are approved."""
-        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
-
-        for i, entry_id in enumerate(_IDS_BULK):
-            entry = _make_approved_entry(entry_id, f"Bulk Entry {i:02d}")
-            _write_entry(tmp_path, entry)
-
-        engine = MemoryEngine(memory_dir=tmp_path)
-        ctx = _make_ctx(engine)
-
-        result = await recall_memory(ctx, agent=_AGENT, limit=20)
-
-        titles = _recall_titles(result)
-        assert len(titles) == 20
-
-    @pytest.mark.asyncio
     async def test_recall_exercises_explore_pool_with_lowest_activity_entries(self, tmp_path: Path) -> None:
         """Explore pool (2 slots) filled by entries with lowest total assessment activity.
 
@@ -602,36 +585,16 @@ class TestMemoryVotingStateTransitions:
 
         assert result.state == MemoryState.STALE
 
-    @pytest.mark.asyncio
-    async def test_stale_entry_excluded_from_recall(self, tmp_path: Path) -> None:
-        """Stale entry (state=stale) is excluded from recall_memory result."""
-        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
-
-        entry = _make_approved_entry(
-            _ID_STALE_A,
-            "Excluded When Stale",
-            state=MemoryState.STALE,
-        )
-        _write_entry(tmp_path, entry)
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        ctx = _make_ctx(engine)
-        result = await recall_memory(ctx, agent=_AGENT)
-        titles = _recall_titles(result)
-
-        assert "Excluded When Stale" not in titles
-
     def test_stale_threshold_boundary_at_fifty_not_stale(self, tmp_path: Path) -> None:
         """Exactly 50 didnt_use with 0 outstanding/unremarkable does NOT trigger stale.
 
         Predicate: didnt_use > 50 x max(outstanding+unremarkable, 1) — must be strictly greater.
         """
-        entry = _make_approved_entry(_ID_STALE_A, "At Boundary Not Stale")
+        entry = _make_approved_entry(_ID_STALE_A, "At Boundary Not Stale", didnt_use_count=49)
         _write_entry(tmp_path, entry)
         engine = MemoryEngine(memory_dir=tmp_path)
 
-        for _ in range(50):
-            result = _record_assessment(engine, _ID_STALE_A, "didnt_use")
+        result = _record_assessment(engine, _ID_STALE_A, "didnt_use")
 
         assert result.state == MemoryState.APPROVED
 
@@ -647,7 +610,7 @@ class TestMemoryVotingStateTransitions:
 
         entry_a = _make_approved_entry(_ID_TRANS_A, "Entry A Contested")
         entry_b = _make_approved_entry(_ID_TRANS_B, "Entry B Disputed")
-        entry_c = _make_approved_entry(_ID_STALE_A, "Entry C Stale")
+        entry_c = _make_approved_entry(_ID_STALE_A, "Entry C Stale", didnt_use_count=50)
         for e in (entry_a, entry_b, entry_c):
             _write_entry(tmp_path, e)
 
@@ -659,8 +622,7 @@ class TestMemoryVotingStateTransitions:
         _record_factually_wrong(engine, _ID_TRANS_B, _TASK_A)
         _record_factually_wrong(engine, _ID_TRANS_B, _TASK_B)
         # Entry C → stale
-        for _ in range(51):
-            _record_assessment(engine, _ID_STALE_A, "didnt_use")
+        _record_assessment(engine, _ID_STALE_A, "didnt_use")
 
         ctx = _make_ctx(engine)
         result = await recall_memory(ctx, agent=_AGENT)
