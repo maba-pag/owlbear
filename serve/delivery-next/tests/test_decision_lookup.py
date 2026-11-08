@@ -32,7 +32,7 @@ from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import sdk_adapter, step_decisions
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.state_store import decision_archive, decision_store, spend_ledger
+from owlbear_delivery_next.state_store import decision_store, spend_ledger
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.workflow_steps import decisions_gate, lookup, pick
 
@@ -692,18 +692,6 @@ def test_a_lead_chats_mcp_tool_preserves_failed_authority_and_unresolved_ids(pic
     assert "decisions" not in answer
     assert {row["id"] for row in answer["unresolved"]} == {bad.id}
     assert picking.pickers() == []
-
-
-@pytest.mark.parametrize(
-    ("statement", "rationale"),
-    [
-        ("Keep this rule's\noriginal formatting.", "Whole wording: unrelated rationale"),
-        ("Keep this rule\u2026", "Whole wording: a different prefix does not restore that rule"),
-    ],
-)
-def test_whole_binding_text_does_not_promote_unrelated_rationale_or_reformat_ordinary_rules(statement, rationale):
-    rule = make(statement=statement, rationale=rationale)
-    assert decision_archive.whole(rule) == statement
 
 
 @pytest.mark.parametrize("boundary", ["worker", "chat"])

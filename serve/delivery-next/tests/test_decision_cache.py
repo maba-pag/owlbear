@@ -225,7 +225,7 @@ def test_a_read_error_is_not_kept_so_the_next_read_recovers(seeded, parses, monk
     def flaky(path):
         if not failed and path.name == f"{seeded.notes.id}.md":
             failed.append(path)
-            raise OSError(errno.EIO, "input/output error")
+            raise PermissionError(errno.EACCES, "permission denied")
         return real(path)
 
     monkeypatch.setattr(storage, "_regular_text", flaky)

@@ -575,9 +575,12 @@ def test_a_real_rebase_paused_by_exec_blocks_a_new_save_and_is_never_aborted(sha
 
     assert not receipt.saved
     assert "rebase is in progress" in receipt.notice
+    assert "nothing was written" in receipt.notice
     assert not {"fetch", "push", "pull", "rebase", "commit", "rebase --abort"} & set(commands)
     assert git(root, "rev-parse", "HEAD") == head
     assert tree_bytes(root) == before
+    assert decision_batch.pending(shared) is None
+    assert (root / OWNER).read_text() == "owner words\n"
     assert (root / ".git" / "rebase-merge").is_dir()
 
 
@@ -587,25 +590,6 @@ def test_a_detached_head_with_no_rebase_is_not_mistaken_for_one(shared_repo) -> 
     git(root, "checkout", "-q", "--detach")
     assert not (root / ".git" / "rebase-merge").exists()
     assert DataRepo(root).rebasing() is False
-
-
-def test_a_rebase_in_progress_refuses_a_new_save_before_writing_anything(shared_repo, monkeypatch) -> None:
-    root, _ = shared_repo
-    owner_commit(root, "owner words\n")
-    (root / ".git" / "rebase-merge").mkdir()
-    shared = DataRepo(root)
-    head = git(root, "rev-parse", "HEAD")
-    commands = recorded_git(monkeypatch)
-
-    receipt = save(shared, make(), expected_revision=None, message="decisions: notes")
-
-    assert not receipt.saved
-    assert "rebase is in progress" in receipt.notice
-    assert "nothing was written" in receipt.notice
-    assert not {"fetch", "push", "pull", "rebase", "commit"} & set(commands)
-    assert git(root, "rev-parse", "HEAD") == head
-    assert decision_batch.pending(shared) is None
-    assert (root / OWNER).read_text() == "owner words\n"
 
 
 def test_an_owner_commit_during_a_paused_rebase_is_never_rolled_back_by_the_publisher(shared_repo, monkeypatch) -> None:
