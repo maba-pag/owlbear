@@ -69,7 +69,7 @@ Internally, `test_impact.RequiredScope` separates full task paths and required e
 targets from automatic router candidates, so page, source-reader and child-process candidates narrow
 to named consumers. Page consumers follow served HTML and relative module imports to their real browser
 navigation routes, including the root Changes page and shared assets. Unresolved page consumers raise an error.
-Reflective module readers (`getattr`/`hasattr`) retain named consumers, including computed attribute names.
+Reflective module readers (`getattr`/`hasattr`/`vars`) retain named consumers, including computed attribute names.
 Changed test modules remain required and also feed dependency analysis for their imported helpers and fixtures.
 Deleted test modules cannot supply observed coverage; unresolved current consumers fail explicitly.
 Named navigation consumers with an indirect, unresolved route remain selected, as do the users of

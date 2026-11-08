@@ -45,11 +45,12 @@ def _names(node: ast.AST) -> set[str]:
         elif (
             isinstance(item, ast.Call)
             and isinstance(item.func, ast.Name)
-            and item.func.id in {"getattr", "hasattr"}
-            and item.args[1:]
+            and item.func.id in {"getattr", "hasattr", "vars"}
+            and item.args
+            and (item.func.id == "vars" or item.args[1:])
             and isinstance(item.args[0], (ast.Name, ast.Attribute))
         ):
-            attribute = item.args[1]
+            attribute = None if item.func.id == "vars" else item.args[1]
             name = attribute.value if isinstance(attribute, ast.Constant) and isinstance(attribute.value, str) else "*"
             names.add(f"{ast.unparse(item.args[0])}.{name}")
     return names

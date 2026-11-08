@@ -520,6 +520,7 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
             "def shared_helper():\n    return load()\n\n"
             "def test_reflective():\n    return getattr(api, 'load')()\n\n"
             "def test_dynamic(name):\n    return getattr(api, name)()\n\n"
+            "def test_namespace():\n    return vars(api).values()\n\n"
             "def test_page_source():\n    return Path('web/metrics.html').read_text()\n\n"
             "def test_other_page_source():\n    return Path('web/settings.html').read_text()\n"
             "def opened(page, base):\n    page.goto(f'{base}/?change=c1')\n\n"
@@ -575,6 +576,7 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
         f"{test}::test_fixture",
         f"{test}::test_reflective",
         f"{test}::test_dynamic",
+        f"{test}::test_namespace",
         f"{shared}::test_shared",
         skipped,
     }
