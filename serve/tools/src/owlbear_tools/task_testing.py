@@ -71,8 +71,13 @@ def commands_for_task(
     if python or any(path.startswith((_PAGES, "tests/")) or "/tests/" in path for path in paths):
         from owlbear_tools import test_impact  # noqa: PLC0415 - task evidence only, never ordinary test startup.
 
+        consumer_paths = [
+            path
+            for path in paths
+            if path in python or path.startswith("tests/") or "/tests/" in path or _python_scope(path, workspace) != []
+        ]
         selected = test_impact.select(
-            _REPOSITORY_ROOT, python, context, selected, test_impact.RequiredScope(paths, sorted(required))
+            _REPOSITORY_ROOT, python, context, selected, test_impact.RequiredScope(consumer_paths, sorted(required))
         )
     print(f"Task paths: {', '.join(paths) or 'none'}")  # noqa: T201
     if not selected:

@@ -70,7 +70,9 @@ independent supplements at test-function/node scope, including guarded productio
 Linux observed the changed function through another test.
 Internally, `test_impact.RequiredScope` separates full task paths and required explicit/invariant/configuration
 targets from automatic router candidates, so page, source-reader and child-process candidates narrow
-to named consumers. Page consumers follow served HTML and relative module imports to their real browser
+to named consumers. Documentation-only inputs retain the ordinary router's exclusion in mixed tasks;
+Markdown test fixtures and package runtime resources remain consumer inputs.
+Page consumers follow served HTML and relative module imports to their real browser
 navigation routes, including the root Changes page and shared assets. Unresolved page consumers raise an error.
 Reflective module readers (`getattr`/`hasattr`/`vars`) retain named consumers, including computed attribute names.
 Changed test modules remain required and also feed dependency analysis for their imported helpers and fixtures.

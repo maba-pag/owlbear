@@ -405,6 +405,23 @@ def test_changed_runs_git_scope_and_accepts_explicit_base(options: list[str]) ->
         assert module in required
 
 
+def test_task_consumers_exclude_docs_but_keep_markdown_fixtures_and_runtime_resources() -> None:
+    fixture = "tests/fixtures/task-note.md"
+    resource = "serve/tools/src/owlbear_tools/prompt.md"
+    target = "serve/tools/tests/test_todo.py::test_todo_ignores_binary_files"
+    with (
+        patch.object(sys, "argv", ["test", "--changed", "--task-base", "base", "--target", "target"]),
+        patch("owlbear_tools.task_scope.commit", return_value="target"),
+        patch("owlbear_tools.task_scope.changed", return_value=[_LOOP, "docs/task-notes.md", fixture, resource]),
+        patch("owlbear_tools.test_impact.select", return_value=[target]) as selected,
+        patch("owlbear_tools.testing.subprocess.call", return_value=0),
+        pytest.raises(SystemExit, match="0"),
+    ):
+        run_test()
+    assert selected.call_args.args[1] == [_LOOP]
+    assert selected.call_args.args[4].paths == [_LOOP, fixture, resource]
+
+
 def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() -> None:
     with (
         patch.object(sys, "argv", ["test", "--changed"]),
