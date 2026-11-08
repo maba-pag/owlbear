@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, cast
 from testmon.process_code import Module, bytes_to_string_and_fsha, match_fingerprint
 
 from owlbear_tools import task_scope
+from owlbear_tools.test_consumers import _Consumers, changed_symbols
 from owlbear_tools.test_dependencies import (
     REPOSITORY,
     SUITES,
@@ -205,122 +206,6 @@ def _kept_paths(root: Path, span: str, target: str) -> set[str]:
     )
 
 
-class _Consumers:
-    """Current file imports, including explicit test helpers and requested conftest fixtures."""
-
-    def __init__(self, root: Path, files: set[str]) -> None:
-        self.texts = {
-            name: _source((root / name).read_bytes())
-            for name in files
-            if name.endswith(".py")
-            and (root / name).is_file()
-            and (name.startswith(("serve/", "tests/")) or name == "conftest.py")
-        }
-        self.trees = {name: ast.parse(text, filename=name) for name, text in self.texts.items()}
-        self.tests = {name for name in self.texts if _is_test(name)}
-        self.reverse: dict[str, set[str]] = defaultdict(set)
-        modules: dict[str, set[str]] = defaultdict(set)
-        identities: dict[str, str] = {}
-        for name in (path for path in files if path.endswith(".py")):
-            parts = Path(name).with_suffix("").parts
-            parts = parts[parts.index("src") + 1 :] if "src" in parts else parts
-            identity = ".".join(parts)
-            identities[name] = identity
-            modules[identity.removesuffix(".__init__")].add(name)
-            if "/tests/" in name or name.startswith("tests/"):
-                modules[Path(name).stem].add(name)
-        for name, tree in self.trees.items():
-            for dependency in self._imports(tree, identities[name]):
-                parts = dependency.split(".")
-                for index in range(1, len(parts) + 1):
-                    choices = modules.get(".".join(parts[:index]), set())
-                    local = {path for path in choices if Path(path).parent == Path(name).parent}
-                    for path in local or choices:
-                        if path != name:
-                            self.reverse[path].add(name)
-        self._fixtures()
-
-    @staticmethod
-    def _imports(tree: ast.AST, identity: str) -> set[str]:
-        imports: set[str] = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                imports.update(alias.name for alias in node.names)
-            elif isinstance(node, ast.ImportFrom):
-                prefix = identity.split(".")[: -node.level] if node.level else []
-                module = ".".join([*prefix, node.module or ""]).strip(".")
-                imports.add(module)
-                imports.update(f"{module}.{alias.name}".strip(".") for alias in node.names)
-            elif (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "import_module"
-                and node.args
-                and isinstance(node.args[0], ast.Constant)
-                and isinstance(node.args[0].value, str)
-            ):
-                imports.add(node.args[0].value)
-        return imports
-
-    def _fixtures(self) -> None:
-        for path, tree in self.trees.items():
-            if Path(path).name != "conftest.py":
-                continue
-            fixtures, autouse = _fixture_names(tree)
-            for test in self.tests:
-                if not Path(test).is_relative_to(Path(path).parent):
-                    continue
-                requests = {node.arg for node in ast.walk(self.trees[test]) if isinstance(node, ast.arg)}
-                literals = {
-                    node.value
-                    for node in ast.walk(self.trees[test])
-                    if isinstance(node, ast.Constant) and isinstance(node.value, str)
-                }
-                if autouse or fixtures & (requests | literals):
-                    self.reverse[path].add(test)
-
-    def callers(self, paths: set[str]) -> set[str]:
-        found, pending = set(paths), list(paths)
-        while pending:
-            for caller in self.reverse.get(pending.pop(), set()):
-                if "/src/" in caller and caller not in found:
-                    found.add(caller)
-                    pending.append(caller)
-        return found
-
-    def tests_for(self, paths: set[str]) -> set[str]:
-        found, pending, tests = set(paths), list(paths), set()
-        while pending:
-            for caller in self.reverse.get(pending.pop(), set()):
-                if caller in self.tests:
-                    tests.add(caller)
-                elif "/src/" not in caller and Path(caller).name != "conftest.py" and caller not in found:
-                    found.add(caller)
-                    pending.append(caller)
-        return tests
-
-
-def _fixture_names(tree: ast.AST) -> tuple[set[str], bool]:
-    fixtures: set[str] = set()
-    autouse = False
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            for decorator in node.decorator_list:
-                called = decorator.func if isinstance(decorator, ast.Call) else decorator
-                if (isinstance(called, ast.Attribute) and called.attr == "fixture") or (
-                    isinstance(called, ast.Name) and called.id == "fixture"
-                ):
-                    fixtures.add(node.name)
-                    if isinstance(decorator, ast.Call):
-                        autouse |= any(
-                            keyword.arg == "autouse"
-                            and isinstance(keyword.value, ast.Constant)
-                            and keyword.value.value is True
-                            for keyword in decorator.keywords
-                        )
-    return fixtures, autouse
-
-
 def _unobserved(before: Module | None, current: Module | None, observed: set[int]) -> bool:
     old = before.checksums if before is not None else []
     new = current.checksums if current is not None else []
@@ -353,7 +238,8 @@ class _Selection:
         self.reasons: dict[str, set[str]] = defaultdict(set)
 
     def add(self, node: str, reason: str) -> None:
-        if not (self.root / node_path(node)).is_file():
+        module = node_path(node)
+        if not (self.root / module).is_file():
             return  # Historical consumers of a deleted source survive; deleted tests are not executable.
         self.reasons[node].add(reason)
 
@@ -382,36 +268,43 @@ class _Selection:
         relevant_callers = self.consumers.callers({source})
         relevant_tests = self.consumers.tests_for(relevant_callers)
         relevant_tests.update({source} & self.consumers.tests)
-        package = source.split("/src/", 1)[0] + "/tests/"
-        forced = {
-            node_path(node)
-            for node, reasons in self.reasons.items()
-            if any(reason.startswith("caller-supplied") for reason in reasons)
-            and (node.startswith(package) or source in self.consumers.texts.get(node_path(node), ""))
-        }
         footprint_tests = {node_path(row.test) for row in self.rows if row.source in relevant_callers}
         footprint_tests.intersection_update(self.consumers.tests)
-        platforms = any(
-            token in self.consumers.texts.get(path, "")
-            for path in relevant_callers | relevant_tests
-            for token in ("sys.platform", "platform.system(", "os.name", "mark.skip")
-        )
         for node in {node for item in self.maps for node in item.skipped}:
             if node_path(node) in relevant_tests | footprint_tests:
                 self.add(node, f"recorded platform/skip consumer: {source}")
-        if platforms:
-            for test in relevant_tests | footprint_tests:
-                self.add(test, f"current platform branch consumer: {source}")
+        for node in self.consumers.platform_nodes({source, *relevant_tests, *footprint_tests}):
+            self.add(node, f"current platform branch consumer: {source}")
+        symbols = changed_symbols(before, current)
+        affected = self.consumers.affected(source, symbols or set(self.consumers.definitions.get(source, {})))
+        fixtures = set(affected) & self.consumers.fixtures.keys()
+        for node in self.consumers.platform_nodes(fixtures, affected):
+            self.add(node, f"current platform fixture consumer: {source}")
         if _unobserved(before, current, observed):
-            supplements = relevant_tests | footprint_tests | forced
-            for row in self.rows:
-                if row.source in relevant_callers - {source} and row.blocks:
-                    self.add(row.test, f"unobserved block via current production caller: {source}")
-            for test in relevant_tests | footprint_tests:
-                self.add(test, f"unobserved block current importing test: {source}")
-            if not supplements:
-                msg = f"Unobserved task blocks in {self.root}/{source} have no resolved current consumers"
-                raise RuntimeError(msg)
+            self.named_consumers(source, affected)
+
+    def named_consumers(self, source: str, affected: dict[str, set[str]]) -> None:
+        historical = _revision(self.root, self.maps[0].head, set(affected) - self.consumers.tests)
+        hashes = {
+            path: (
+                self.consumers.block_hashes(path, symbols)
+                | self.consumers.block_hashes(path, symbols, historical.get(path))
+            )
+            for path, symbols in affected.items()
+            if path not in self.consumers.tests
+        }
+        mapped: set[str] = set()
+        for row in self.rows:
+            if set(row.blocks) & hashes.get(row.source, set()):
+                self.add(row.test, f"unobserved block via current production caller: {source}")
+                mapped.add(row.test)
+        direct = self.consumers.test_nodes(affected)
+        for node in direct:
+            if not any(test == node or test.startswith((f"{node}[", f"{node}::")) for test in mapped):
+                self.add(node, f"unobserved block current named consumer: {source}")
+        if not mapped and not direct:
+            msg = f"Unobserved task blocks in {self.root}/{source} have no resolved current consumers"
+            raise RuntimeError(msg)
 
     def reconcile(self) -> None:
         for test in self.consumers.tests:
@@ -461,10 +354,26 @@ class _Selection:
             raise RuntimeError(msg)
 
 
-def select(root: Path, paths: Sequence[str], context: Context, forced: Sequence[str]) -> list[str]:
+@dataclass(frozen=True)
+class RequiredScope:
+    """Full task paths and explicit/invariant/configuration selectors, separate from router candidates."""
+
+    paths: Sequence[str]
+    tests: Sequence[str]
+
+
+def select(
+    root: Path,
+    paths: Sequence[str],
+    context: Context,
+    forced: Sequence[str],
+    scope: RequiredScope | None = None,
+) -> list[str]:
     """Return one union of current pytest node/module selectors, never a bootstrap full suite."""
     root = root.resolve()
-    for path in paths:
+    all_paths = paths if scope is None else scope.paths
+    required = None if scope is None else scope.tests
+    for path in {*paths, *all_paths}:
         if not relative(path):
             msg = f"Invalid task dependency path in {root}: {path!r}"
             raise ValueError(msg)
@@ -477,12 +386,15 @@ def select(root: Path, paths: Sequence[str], context: Context, forced: Sequence[
     consumers = _Consumers(root, files | touched)
     callers = consumers.callers(touched)
     importing = consumers.tests_for(callers)
-    required = _suites({*paths, *importing, *(node_path(node) for node in forced)})
+    suites = _suites({*all_paths, *importing, *(node_path(node) for node in forced)})
     selection = _Selection(
-        root, paths, consumers, _load(root, context.target, context.maps_dir, required), inputs(root, files)
+        root, paths, consumers, _load(root, context.target, context.maps_dir, suites), inputs(root, files)
     )
-    for node in forced:
+    for node in forced if required is None else required:
         selection.add(node, "caller-supplied invariant/source-reading/subprocess/neighbor")
+    if required is not None:
+        for node in consumers.outside_nodes(set(all_paths), {node_path(node) for node in forced}):
+            selection.add(node, "current named page/source-reading/subprocess consumer")
     selection.reconcile()
     selection.fingerprints(touched, callers, context.base)
     for span in context.kept_spans:

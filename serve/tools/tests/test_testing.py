@@ -371,6 +371,20 @@ def test_changed_runs_git_scope_and_accepts_explicit_base(options: list[str]) ->
         assert "tests/test_package_boundary.py" in task_command
         assert "--testmon" not in task_command
         assert task_command[-2:] == ["-o", "session_timeout="]
+        page = "serve/delivery-next/src/owlbear_delivery_next/web/metrics.html"
+        with (
+            patch.object(sys, "argv", ["test", "--changed", target, "--task-base", "base", "--target", "target"]),
+            patch("owlbear_tools.task_scope.commit", return_value="target"),
+            patch("owlbear_tools.task_scope.changed", return_value=[page]),
+            patch("owlbear_tools.test_impact.select", return_value=[target]) as select,
+            patch("owlbear_tools.testing.subprocess.call", return_value=0),
+            pytest.raises(SystemExit, match="0"),
+        ):
+            run_test()
+        scope = select.call_args.args[4]
+        assert select.call_args.args[1] == []
+        assert scope.paths == [page]
+        assert set(scope.tests) == {target, "tests/test_package_boundary.py"}
 
 
 def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() -> None:
@@ -436,3 +450,67 @@ def test_dependency_artifacts_cannot_name_tests_outside_the_checkout(tmp_path: P
         read_evidence(artifact)
     with pytest.raises(task_scope.ScopeError, match="checkout-relative test module"):
         task_scope.explicit_targets(_ROOT, [node])
+
+
+def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules(tmp_path: Path) -> None:
+    from testmon.process_code import Module  # noqa: PLC0415 - exercise native footprint identities.
+
+    from owlbear_tools import test_impact  # noqa: PLC0415 - task-only selection machinery.
+    from owlbear_tools.test_dependencies import Evidence, Observation  # noqa: PLC0415
+
+    source = "serve/demo/src/demo/tables.py"
+    entry = "serve/demo/src/demo/entry.py"
+    fixture = "serve/demo/tests/conftest.py"
+    test = "serve/demo/tests/test_consumer.py"
+    texts = {
+        source: "CURRENT = 2\n",
+        entry: "from demo.tables import CURRENT\n\ndef load():\n    return CURRENT\n\ndef unrelated():\n    return 3\n",
+        fixture: (
+            "import sys\nimport pytest\nfrom demo.entry import load\n\n"
+            "@pytest.fixture\ndef loaded():\n    return load() if sys.platform == 'darwin' else 2\n"
+        ),
+        test: (
+            "import sys\nimport pytest\nfrom demo.entry import load, unrelated\n\n"
+            "def test_current():\n    assert load() == 2\n\n"
+            "def test_other():\n    assert unrelated() == 3\n\n"
+            "@pytest.mark.skipif(sys.platform == 'linux', reason='Mac consumer')\n"
+            "def test_platform():\n    assert load() == 2\n\n"
+            "def test_fixture(loaded):\n    assert loaded == 2\n"
+            "def test_page_source():\n    return Path('web/metrics.html').read_text()\n\n"
+            "def test_other_page_source():\n    return Path('web/settings.html').read_text()\n"
+        ),
+    }
+    for path, text in texts.items():
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text)
+    consumers = test_impact._Consumers(tmp_path, set(texts))  # noqa: SLF001
+    load = consumers.block_hashes(entry, {"load"})
+    unknown = set(Module(source_code=texts[entry]).checksums) - consumers.block_hashes(entry, {"load", "unrelated"})
+    skipped = f"{test}::test_platform"
+    evidence = Evidence(
+        "map",
+        1,
+        1,
+        "python",
+        1,
+        4,
+        dict.fromkeys(texts, "same"),
+        frozenset({skipped}),
+        (
+            Observation(f"{test}::test_current", entry, tuple(load)),
+            Observation(f"{test}::test_other", entry, tuple(unknown)),
+        ),
+    )
+    selection = test_impact._Selection(tmp_path, [source], consumers, [evidence], dict.fromkeys(texts, "same"))  # noqa: SLF001
+
+    def historical(_root, _head, paths):
+        return {path: Module(source_code=texts[path]) for path in paths}
+
+    with patch.object(test_impact, "_revision", side_effect=historical):
+        selection.supplements(source, Module(source_code="CURRENT = 1\n"), Module(source_code=texts[source]))
+    assert consumers.tests_for({entry}) == {test}
+    assert set(selection.reasons) == {f"{test}::test_current", f"{test}::test_fixture", skipped}
+    assert any("current platform branch" in reason for reason in selection.reasons[skipped])
+    assert any("platform fixture" in reason for reason in selection.reasons[f"{test}::test_fixture"])
+    assert consumers.outside_nodes({"serve/demo/src/demo/web/metrics.html"}, {test}) == {f"{test}::test_page_source"}

@@ -23,20 +23,23 @@ from owlbear_tools.testing import (
 )
 
 
-def _targets(paths: list[str], workspace: _Packages) -> tuple[set[str], list[str], list[_WorkspacePackage]]:
+def _targets(paths: list[str], workspace: _Packages) -> tuple[set[str], list[str], list[_WorkspacePackage], set[str]]:
     forced: set[str] = set(_INVARIANT_TESTS)
+    required = set(forced)
     python: list[str] = []
     packages: dict[str, _WorkspacePackage] = {}
     for path in paths:
         package = _package_for_path(path, workspace)
         if path in _CONFIG_TESTS:
             forced.update(_CONFIG_TESTS[path])
+            required.update(_CONFIG_TESTS[path])
         elif package and path.startswith(_PAGES):
             forced.update(_page_scope(package, workspace))
         elif path.endswith(".py") and (package or path.startswith("tests/")):
             current_test = "/tests/" in path or path.startswith("tests/")
             if current_test and Path(path).name.startswith("test_") and (_REPOSITORY_ROOT / path).is_file():
                 forced.add(path)
+                required.add(path)
             else:
                 python.append(path)
                 if package:
@@ -48,7 +51,8 @@ def _targets(paths: list[str], workspace: _Packages) -> tuple[set[str], list[str
             raise task_scope.unsupported(path)
         else:
             forced.update(scope)
-    return forced, python, list(packages.values())
+            required.update(scope)
+    return forced, python, list(packages.values()), required
 
 
 def commands_for_task(
@@ -56,18 +60,22 @@ def commands_for_task(
 ) -> list[tuple[list[str], Path]]:
     """Union affected consumers and required targets, never bootstrap the full suite."""
     workspace = _workspace_packages()
-    forced, python, packages = _targets(paths, workspace)
-    forced.update(task_scope.explicit_targets(_REPOSITORY_ROOT, targets))
+    forced, python, packages, required = _targets(paths, workspace)
+    explicit = task_scope.explicit_targets(_REPOSITORY_ROOT, targets)
+    forced.update(explicit)
+    required.update(explicit)
     for package in packages:
         forced.update(_relative_paths(_neighbour_tests(package, workspace)))
         forced.update(
             _relative_paths(path for path in _package_tests(package) if _unseen_by_testmon(path, package.namespace))
         )
     selected = sorted(forced) if paths or targets else []
-    if python:
+    if python or any(path.startswith(_PAGES) for path in paths):
         from owlbear_tools import test_impact  # noqa: PLC0415 - task evidence only, never ordinary test startup.
 
-        selected = test_impact.select(_REPOSITORY_ROOT, python, context, selected)
+        selected = test_impact.select(
+            _REPOSITORY_ROOT, python, context, selected, test_impact.RequiredScope(paths, sorted(required))
+        )
     print(f"Task paths: {', '.join(paths) or 'none'}")  # noqa: T201
     if not selected:
         return []

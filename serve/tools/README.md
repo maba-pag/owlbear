@@ -61,6 +61,13 @@ objects; current test modules, helpers, fixtures, production callers and platfor
 supplement those observations. Footprints are compared with both task-before and current code, so
 restoring a mapped version does not erase the task's checked scope. Source-reading, subprocess and
 invariant selectors supplied by the task runner remain in the union.
+Unobserved changes follow the names read by current callers to their executed function blocks, rather
+than selecting every importer through a shared fixture or import-time global block. Missing observations
+use named current tests and requested conftest fixtures. Platform branches and recorded skips remain
+independent supplements at test-function/node scope; a changed historical test module runs in full.
+Internally, `test_impact.RequiredScope` separates full task paths and required explicit/invariant/configuration
+targets from automatic router candidates. With that distinction, page, source-reader and child-process
+candidates narrow to named consumers; callers that omit it retain every supplied selector.
 Literal test-module, directory or pytest-node targets selected by the Planner stay in the bound command and
 remain required even when the task has no edited paths. For example,
 `uv run test --changed serve/tools/tests/test_todo.py --task-base OLD --target TARGET`
