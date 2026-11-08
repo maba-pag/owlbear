@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_decisions import Decision, Origin, Scope, State, new_id
+from owlbear_decisions import Decision, Origin, Scope, State, new_id, snapshot, write
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.state_store import decision_cache, decision_search, decision_store
@@ -32,16 +32,15 @@ def make(**changes) -> Decision:
 
 
 @pytest.mark.parametrize("fts", [True, False], ids=["fts5", "like"])
-def test_search_finds_every_word_and_hides_retired_decisions(shared_repo, monkeypatch, fts) -> None:
+def test_search_finds_every_word_and_hides_retired_decisions(tmp_path, monkeypatch, fts) -> None:
     monkeypatch.setattr(decision_search, "FTS", fts and decision_search.FTS)
-    shared = DataRepo(shared_repo[0])
     notes = make()
     gone = make(title="Notes in files", statement="Notes live in files.", state=State.WITHDRAWN)
     lint = make(title="Lint once", statement="Code is linted at submission.", scope=Scope.GLOBAL, project="")
     other = make(project="other-site")
-    for decision in (notes, gone, lint, other):
-        save(shared, decision, expected_revision=None, message="m")
-    index = decision_search.Index(decision_store.load(shared, PROJECT).snapshot)
+    for decision, folder in ((notes, PROJECT), (gone, PROJECT), (lint, ""), (other, "other-site")):
+        write(decision, tmp_path / folder, None)
+    index = decision_search.Index(snapshot(tmp_path, PROJECT))
     assert index.fts is (fts and decision_search.FTS)
 
     def ids(text: str, *, include_retired: bool = False) -> frozenset[str]:
