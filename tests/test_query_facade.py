@@ -437,30 +437,6 @@ class TestRenderContext:
         # Provenance adds content; text with provenance must differ from without.
         assert with_prov.text != without_prov.text
 
-    def test_render_context_entity_count_reflects_entities_rendered(self, facade: QueryFacade) -> None:
-        """AC4: entity_count is populated from entities present in the rendered result."""
-        entities = [_make_entity(f"ent-{i}") for i in range(3)]
-        entity_result = EntityLookupResult(
-            entity=entities[0],
-            neighbourhood=_make_traversal(entities=entities[1:]),
-            related_chunks=(),
-        )
-        request = ContextRenderRequest(entity_result=entity_result, max_chars=100_000)
-        result = facade.render_context(request)
-        assert result.entity_count >= 1
-
-    def test_render_context_chunk_count_reflects_chunks_rendered(self, facade: QueryFacade) -> None:
-        """AC4: chunk_count is populated from chunks present in the rendered result."""
-        chunks = tuple(_make_chunk(f"c-{i}", text=f"Chunk text {i}") for i in range(3))
-        entity_result = EntityLookupResult(
-            entity=_make_entity(),
-            neighbourhood=None,
-            related_chunks=chunks,
-        )
-        request = ContextRenderRequest(entity_result=entity_result, max_chars=100_000)
-        result = facade.render_context(request)
-        assert result.chunk_count >= 1
-
     # --- AC3 retry gaps: rendered content assertions ---
 
     def test_render_context_query_text_contains_chunk_content(self, facade: QueryFacade) -> None:
@@ -516,11 +492,7 @@ class TestRenderContext:
     # --- AC4 retry gaps: exact counts and query provenance ---
 
     def test_render_context_entity_count_exact(self, facade: QueryFacade) -> None:
-        """AC4 retry gap: entity_count equals the exact number of unique entities rendered.
-
-        The existing test only asserts >= 1; this asserts the exact count so
-        broken attribution or under/over-counting would cause a failure.
-        """
+        """AC4 retry gap: entity_count equals the exact number of unique entities rendered."""
         entities = [_make_entity(f"ent-ex-{i}", name=f"ExactEntity{i}") for i in range(3)]
         entity_result = EntityLookupResult(
             entity=entities[0],
@@ -532,11 +504,7 @@ class TestRenderContext:
         assert result.entity_count == 3
 
     def test_render_context_chunk_count_exact(self, facade: QueryFacade) -> None:
-        """AC4 retry gap: chunk_count equals the exact number of chunks rendered.
-
-        The existing test only asserts >= 1; this asserts the exact count so
-        missing or extra chunk entries would cause a failure.
-        """
+        """AC4 retry gap: chunk_count equals the exact number of chunks rendered."""
         chunks = tuple(_make_chunk(f"c-ex-{i}", text=f"Exact chunk text {i}") for i in range(3))
         entity_result = EntityLookupResult(
             entity=_make_entity(),

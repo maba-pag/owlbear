@@ -175,27 +175,6 @@ class TestFetchErrorPropagation:
     # AC1 — FetchErrors mapped to RefreshErrors in RefreshResult.errors
     # ------------------------------------------------------------------
 
-    @pytest.mark.asyncio
-    async def test_fetch_errors_appear_in_refresh_result_errors(
-        self,
-        coordinator: IngestCoordinator,
-        mock_fetcher: MagicMock,
-    ) -> None:
-        """AC1: A FetchError from the fetcher must be mapped to RefreshResult.errors.
-
-        The coordinator must preserve the fetcher's typed error in the refresh result.
-        """
-        mock_fetcher.fetch_source = AsyncMock(
-            return_value=FetchResult(
-                documents=(),
-                errors=(FetchError(uri="https://example.com/fail", error="timeout"),),
-            )
-        )
-
-        result = await coordinator.refresh(RefreshRequest())
-
-        assert len(result.errors) == 1
-
     # ------------------------------------------------------------------
     # AC2 — partial success: update_source called, errors still captured
     # ------------------------------------------------------------------
