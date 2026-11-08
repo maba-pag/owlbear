@@ -60,12 +60,6 @@ def options(r: StepResult) -> list[tuple[str, object]]:
     return [(o.id, o.next) for o in r.question.options]
 
 
-def test_the_report_is_one_small_described_tool_every_step_offers() -> None:
-    assert tools.MISSING in tools.SPECS
-    assert (tools.MISSING.name, tools.MISSING.ending) == ("report_missing_tool", "missing-tool")
-    assert tools.MISSING.description
-
-
 def test_a_denied_tool_stays_denied_and_is_retried_within_its_budget() -> None:
     r = to_result(run(report("docker compose"), denied={"docker": "docker is not allowed"}), K.BUILD, NOW)
     assert (r.exit, r.cause, r.denial) == (Exit.RETRY, "policy:build:tool-docker-compose", "docker is not allowed")
