@@ -341,8 +341,14 @@ def test_a_reviewed_case_is_published_with_only_its_local_id(shared_repo) -> Non
         ),
     ],
 )
-def test_a_review_that_fails_validation_stays_here_owner_only(shared_repo, answer, why) -> None:
-    root, _ = shared_repo
+def test_a_review_that_fails_validation_stays_here_owner_only(tmp_path, monkeypatch, answer, why) -> None:
+    root = tmp_path / "owlbear-data"  # refused in the review, before any write reaches the repository
+    root.mkdir()
+
+    def locked(*_args, **_kwargs):
+        pytest.fail("a refused review took the shared repository's lock to write")
+
+    monkeypatch.setattr(DataRepo, "locked", locked)
     cid = reviewed()
     ask, _seen = asker([answer])
     out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
@@ -708,9 +714,11 @@ def test_a_request_whose_limits_cannot_be_read_is_kept_failed_never_lost(monkeyp
     assert not case_replay.queued()
 
 
-def test_a_failed_publication_is_kept_with_its_spend(monkeypatch, shared_repo, whole_error) -> None:
+def test_a_failed_publication_is_kept_with_its_spend(monkeypatch, tmp_path, whole_error) -> None:
     j = Job(monkeypatch)
-    j.job.shared = lambda: DataRepo(shared_repo[0])
+    root = tmp_path / "owlbear-data"  # the review fails before any write reaches the repository
+    root.mkdir()
+    j.job.shared = lambda: DataRepo(root)
 
     async def failing(_text, meter, _role) -> str:
         spend(meter, 0.2)

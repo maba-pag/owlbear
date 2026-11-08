@@ -87,6 +87,7 @@ def test_a_held_run_survives_the_public_move_into_a_new_root_and_two_restarts(re
     _prepared(repo, boot)
     source = _source(repo)
     _write_run(source, _run_record(RUN_A, STARTED_A))
+    assert not (local_home.root() / maintenance.FILE).exists(), "no ledger: the receipt lookup is empty"
 
     assert cli.main(["--repo", str(repo), "finish"]) == 0
     capsys.readouterr()

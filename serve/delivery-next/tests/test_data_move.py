@@ -48,6 +48,25 @@ def source(tmp_path: Path, monkeypatch) -> Path:
     return root
 
 
+@pytest.fixture
+def dirty(tmp_path: Path, monkeypatch) -> Path:
+    """The owner's checkout outside OwlBear's folder with a tracked edit and an untracked note, nothing more."""
+    remote, root = tmp_path / "remote.git", tmp_path / "Projects" / "owlbear-data"
+    git(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
+    git(tmp_path, "clone", "-q", str(remote), str(root))
+    (root / "config.json").write_text("{}\n")
+    git(root, "add", "config.json")
+    git(root, "commit", "-qm", "start")
+    git(root, "push", "-q", "origin", "HEAD")
+    (root / "memory").mkdir()
+    (root / "memory" / "note.md").write_text("kept\n")
+    (root / "config.json").write_text('{"b": 2}\n')
+    local_home.root().mkdir(parents=True, exist_ok=True)
+    data_place.pointer().write_text(json.dumps({"repository": str(root)}))
+    monkeypatch.setattr(data_move, "_processes", list)  # this machine's own OwlBear runs beside the tests
+    return root
+
+
 def record() -> dict[str, str]:
     return json.loads(data_place.pointer().read_text())
 
@@ -209,7 +228,7 @@ def test_a_refused_move_changes_nothing(tmp_path: Path, source: Path, monkeypatc
 
 @pytest.mark.parametrize("failing", ["process", "permission", "stores", "store", "changes", "maintenance", "pointer"])
 def test_a_refused_move_says_each_failure_whole(
-    tmp_path: Path, source: Path, monkeypatch, whole_error: str, failing: str
+    tmp_path: Path, dirty: Path, monkeypatch, whole_error: str, failing: str
 ) -> None:
     """#971: a move refused because something could not be read says the error whole, its type and notes included."""
     kind = {"pointer": data_repo.DataRepoError, "maintenance": maintenance.MaintenanceError, "permission": SystemError}
@@ -230,7 +249,7 @@ def test_a_refused_move_says_each_failure_whole(
             proc = SimpleNamespace(pid=7, uids=lambda: ids, cmdline=raising)
             line += f"\ncaused by PermissionError: [Errno 13] {denied}"
         monkeypatch.setattr(data_move.psutil, "process_iter", lambda: [proc])
-        monkeypatch.setattr(data_move, "_processes", processes)  # the source fixture's stub put back
+        monkeypatch.setattr(data_move, "_processes", processes)  # the dirty fixture's stub put back
     elif failing == "stores":
         monkeypatch.setattr(data_move.registry, "load", raising)
         line = f"the project stores cannot be listed: {whole}"
@@ -246,13 +265,13 @@ def test_a_refused_move_says_each_failure_whole(
         line = whole
     else:
         monkeypatch.setattr(data_place, "settle", raising)
-    pointer, before, said = record(), state(source), []
+    pointer, before, said = record(), state(dirty), []
     assert data_move.main(["--move"], said.append) == 1
     if failing == "pointer":
         assert said == [f"not moved: {whole}"]
     else:
         assert said[-2:] == ["not moved, something may still write it; end it, then try again:", f"  {line}"]
-    assert (record(), state(source)) == (pointer, before)
+    assert (record(), state(dirty)) == (pointer, before)
 
 
 def test_a_writer_found_after_the_pointer_names_the_move_refuses_it_and_readers_meanwhile_resolve_nothing(

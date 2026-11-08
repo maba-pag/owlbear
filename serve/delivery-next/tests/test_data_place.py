@@ -141,7 +141,7 @@ def test_data_url_adopts_the_checkout_already_in_use_and_refuses_another_reposit
 
 def test_a_path_in_or_around_owlbears_folder_is_refused_except_its_data_place(tmp_path: Path, url: str) -> None:
     for inside in ("versions/v1.70/data", "runtime/data", "projects/x"):
-        git(tmp_path, "clone", "-q", url, str(home() / inside))
+        (home() / inside).mkdir(parents=True)  # refused as misplaced before any git look, so no clone is needed
         with pytest.raises(data_repo.DataRepoError, match="updates and uninstalling clear"):
             data_place.point(home() / inside)
     for around in (home(), home().parent):
