@@ -341,8 +341,9 @@ def test_a_reviewed_case_is_published_with_only_its_local_id(shared_repo) -> Non
         ),
     ],
 )
-def test_a_review_that_fails_validation_stays_here_owner_only(shared_repo, answer, why) -> None:
-    root, _ = shared_repo
+def test_a_review_that_fails_validation_stays_here_owner_only(tmp_path, answer, why) -> None:
+    root = tmp_path / "owlbear-data"  # refused in the review, before any write reaches the repository
+    root.mkdir()
     cid = reviewed()
     ask, _seen = asker([answer])
     out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
