@@ -16,15 +16,13 @@ from owlbear_delivery_next.state_store import decision_batch, decision_transacti
 
 
 def test_an_empty_git_folder_answer_with_success_is_a_journal_error(shared_repo, monkeypatch):
-    shared = DataRepo(shared_repo[0])
-
     def empty(_self, *_args: str, until: float | None = None) -> subprocess.CompletedProcess[str]:
         assert until is None
         return subprocess.CompletedProcess(args=(), returncode=0, stdout="\n", stderr="")
 
     monkeypatch.setattr(DataRepo, "git", empty)
     with pytest.raises(decision_batch.JournalError, match="cannot be found"):
-        decision_batch._admin(shared)  # noqa: SLF001 - the probe itself is the regression
+        decision_batch._admin(DataRepo(shared_repo[0]))  # noqa: SLF001 - the probe itself is the regression
 
 
 def test_the_git_folder_of_a_real_repository_is_still_found(shared_repo):
