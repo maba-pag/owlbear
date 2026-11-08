@@ -161,7 +161,7 @@ def checks(c: Change, lp: RoundLoop, profile: Profile, undone: Sequence[Task]) -
                 retained.append(check)
             else:
                 # Previous retry flags can still name repairs this rebuild undoes.
-                roots.setdefault(root[0], []).extend(task.spans if task is not last else [])
+                roots.setdefault(root[0], []).extend(task.spans if task is not last and task.id not in removed else [])
     selected = [
         *(
             check_hint.freeze(check_hint.qualified(".", runner), [*spans, *repair_spans])
@@ -170,6 +170,21 @@ def checks(c: Change, lp: RoundLoop, profile: Profile, undone: Sequence[Task]) -
         *retained,
     ]
     return list(dict.fromkeys(selected))
+
+
+def refresh(c: Change, task: Task) -> None:
+    """Bind earlier rebuilt work only after it has new completed spans."""
+    lp = c.loops.get(FINAL)
+    if not lp or lp.ended != "retried" or not lp.rebuild or subject_of(c, task) != lp.rebuild[-1]:
+        return
+    earlier = set(lp.rebuild[:-1])
+    spans = [
+        span
+        for built in (c.plan.tasks if c.plan else [])
+        if built.done and built.base is not None and subject_of(c, built) in earlier
+        for span in built.spans
+    ]
+    task.checks = [check_hint.freeze(check, spans) for check in task.checks]
 
 
 def rotated(c: Change, lp: RoundLoop, undone: list[Task], required: Sequence[str]) -> None:
@@ -193,7 +208,7 @@ def rotated(c: Change, lp: RoundLoop, undone: list[Task], required: Sequence[str
         fresh(c, t)
     if picked:
         picked[-1].checks = list(required)
-    lp.ended, lp.rebuild, lp.completion, c.consent = "retried", [], None, None
+    lp.ended, lp.rebuild, lp.completion, c.consent = "retried", [t.id for t in picked], None, None
     if nxt := open_task(c):
         go(c, StepKind.BUILD, nxt.id)
     else:

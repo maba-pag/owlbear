@@ -27,7 +27,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_contracts.round_records import FINAL, Completion, RoundFinding, RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_flow import loop, rebuilds, round_flow
+from owlbear_delivery_next.change_flow import loop, rebuilds, round_flow, stuck
 from owlbear_delivery_next.change_flow.moves import ask
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import cli, runner
@@ -37,7 +37,7 @@ from owlbear_delivery_next.runtimes import step_input
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.profile import confirm
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import held, publish, retry, review
+from owlbear_delivery_next.workflow_steps import held, publish, retry, review, step_repair
 
 NOW = datetime(2026, 10, 17, 3, tzinfo=UTC)
 K = StepKind
@@ -309,9 +309,63 @@ def test_a_rebuild_undoes_the_ticked_tasks_own_work_and_builds_them_again(tmp_pa
     assert t1.checks == ["cd . && check one", "cd . && check two"]  # the last rebuilt task runs all kept checks
     assert t1.scope == ["x.txt"]  # its planned scope stays
     lp = c.loops[FINAL]
-    assert (lp.ended, lp.rebuild, lp.completion, lp.undo, c.consent) == ("retried", [], None, "", None)
+    assert (lp.ended, lp.rebuild, lp.completion, lp.undo, c.consent) == ("retried", ["t1"], None, "", None)
     assert (c.loops["t1"].attempt, c.loops["t1"].since, [h.ended for h in c.loops["t1"].history]) == (2, 5, ["retried"])
     assert at(c) == (K.BUILD, "t1", None)
+
+
+def test_a_multi_rebuild_binds_new_earlier_spans_not_the_undone_module(tmp_path, clone):
+    profile = confirm(Profile(), "check:.", "uv run test --changed", NOW)
+    command = "cd . && uv run test --changed"
+    t1 = build(clone, Task(id="t1", title="one", scope=["."], checks=[command]), "old_module.py", "v = 1\n")
+    t2 = build(clone, Task(id="t2", title="two", scope=["."], checks=[command]), "second.py", "v = 2\n")
+    old = t1.spans[0]
+    lp = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1", "t2"])
+    c = Change(
+        slug="c1",
+        brief=Brief(version=1),
+        plan=Plan(tasks=[t1, t2]),
+        names=Names(branch="owlbear/c1", target="main"),
+        loops={FINAL: lp, "t2": RoundLoop(subject="t2", policy=RoundPolicy())},
+    )
+    undone, why = rebuilds.undoing(c, lp)
+    assert why == ""
+    required = rebuilds.checks(c, lp, profile, undone)
+    root = check_hint.changed_runner(required[0])
+    assert root is not None
+    assert root[1] == []
+    assert retry._taken(clone, c, lp, undone, git(clone, "rev-parse", "HEAD")) == ""  # noqa: SLF001
+    rebuilds.rotated(c, lp, undone, required)
+    build(clone, t1, "replacement.py", "v = 3\n")
+    c.step = Step(kind=K.BUILD, task="t2")
+    settings = Store(tmp_path / "settings").settings()
+    review.started(c, t2, clone, settings)
+    parts = step_input.session(c, profile, clone, {})
+    root = check_hint.changed_runner(parts.checks[0])
+    assert root is not None
+    assert root[1] == t1.spans
+    assert old not in parts.checks[0]
+    t2.checks = list(required)
+    stuck.start(c, "project-env:build:check-pytest", "check needs repair", NOW)
+    repair = c.repairs.current
+    assert repair is not None
+    repair.base = t2.base
+    witness = step_repair._witness(c, profile, clone)  # noqa: SLF001
+    root = check_hint.changed_runner(witness[0])
+    assert root is not None
+    assert root[1] == t1.spans
+    (clone / "serve/tools").mkdir(parents=True)
+    (clone / "serve/tools/pyproject.toml").write_text("[project\n")
+    git(clone, "add", "serve/tools/pyproject.toml")
+    git(clone, "commit", "-qm", "malformed original runner manifest")
+    t2.checks = list(required)
+    witness = step_repair._witness(c, profile, clone)  # noqa: SLF001
+    assert f"--keep-span {t1.spans[0]}" in witness[0]
+    assert witness[0].count("--keep-span") == len(t1.spans)
+    assert "TOMLDecodeError" in repair.evidence
+    c.step = Step(kind=K.REVIEW, mode="final")
+    review.started(c, None, clone, settings)
+    assert lp.rebuild == []
 
 
 def test_a_promoted_undo_is_never_repeated_even_after_new_commits(clone):

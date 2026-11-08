@@ -10,7 +10,7 @@ from owlbear_delivery_next.change_contracts import round_records, tools
 from owlbear_delivery_next.change_contracts.failures import signature
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Inputs, Review, Score, StepKind, Task
 from owlbear_delivery_next.change_contracts.round_records import FINAL, RECHECK
-from owlbear_delivery_next.change_flow import disputes, loop, worktree
+from owlbear_delivery_next.change_flow import disputes, loop, rebuilds, worktree
 from owlbear_delivery_next.change_flow.moves import loop_of, subject_of
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.workflow_steps import reconsider, retry
@@ -40,11 +40,11 @@ def started(c: Change, task: Task | None, path: Path, settings: Settings) -> Non
         return
     head = worktree.head(path)
     task.spans.append(f"{head}..")
-    if task.base is not None:
-        return
-    task.base = head
-    if _subject(c, task) == task.id and task.id not in c.loops:
-        rounds.loop(c, task.id, settings).since = len(c.plan.tasks) if c.plan else 0
+    if task.base is None:
+        task.base = head
+        if _subject(c, task) == task.id and task.id not in c.loops:
+            rounds.loop(c, task.id, settings).since = len(c.plan.tasks) if c.plan else 0
+    rebuilds.refresh(c, task)
 
 
 def _final(c: Change, settings: Settings) -> None:
@@ -56,7 +56,7 @@ def _final(c: Change, settings: Settings) -> None:
     if lp is None and not any(v.task is None for v in c.reviews):  # an earlier final review keeps the old rules
         rounds.loop(c, FINAL, settings)
     elif lp is not None and lp.ended:
-        lp.ended, lp.last, lp.reentry, lp.completion = "", False, True, None
+        lp.ended, lp.last, lp.reentry, lp.completion, lp.rebuild = "", False, True, None, []
         lp.extra = max(lp.extra, lp.round + 1 - lp.policy.max_rounds)
 
 

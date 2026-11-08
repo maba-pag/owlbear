@@ -25,7 +25,7 @@ from owlbear_delivery_next.change_contracts.failures import ENVIRONMENT, WRONG_M
 from owlbear_delivery_next.change_contracts.models import Exit, Outcome, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.repair_records import KEPT, Tried, Witness
-from owlbear_delivery_next.change_flow import budgets, stuck, worktree
+from owlbear_delivery_next.change_flow import budgets, rebuilds, stuck, worktree
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import sdk_adapter, session_result
 from owlbear_delivery_next.settings import profile, roles
@@ -300,6 +300,8 @@ def _resolved_witness(change: Change, prof: Profile, source: Path) -> tuple[str,
     tasks = change.plan.tasks if change.plan else []
     r = change.repairs.current
     task = next((t for t in tasks if r and t.id == r.task), None)
+    if task:
+        rebuilds.refresh(change, task)
     pairs = worktree.checks(profile.vouched(prof))
     if task and task.checks and r is not None:
         bound = task if task.base is not None else task.model_copy(update={"base": r.base})
