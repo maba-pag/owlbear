@@ -349,16 +349,6 @@ class TestFromAC_NavigateDNSFailure:
     """
 
     @pytest.mark.asyncio
-    async def test_dns_failure_raises_tool_error(self) -> None:
-        """socket.getaddrinfo raises OSError → must raise ToolError (not propagate OSError)."""
-        ctx = _make_ctx()
-        with (
-            patch("socket.getaddrinfo", side_effect=OSError("Name or service not known")),
-            pytest.raises(ToolError),
-        ):
-            await navigate(ctx, f"https://{_ALLOWED_HOST}/")
-
-    @pytest.mark.asyncio
     async def test_dns_failure_message_contains_hostname(self) -> None:
         """ToolError message must include the hostname to aid diagnostics."""
         ctx = _make_ctx()
@@ -391,16 +381,3 @@ class TestFromAC_NavigatePassthrough:
         mock_dns.assert_called()
         assert result is not None
         page.goto.assert_awaited_once_with(f"https://{_ALLOWED_HOST}/page", wait_until="domcontentloaded")
-
-    @pytest.mark.asyncio
-    async def test_allowed_domain_https_reaches_live_page(self) -> None:
-        """navigate() reaches the live page for an allowed URL with a public IP.
-
-        This also acts as a regression guard: the SSRF check must not block public IPs.
-        """
-        ctx = _make_ctx()
-        page = ctx.request_context.lifespan_context.page
-        with patch("socket.getaddrinfo", return_value=_addr4("93.184.216.34")) as mock_dns:
-            await navigate(ctx, f"https://{_ALLOWED_HOST}/index.html")
-        mock_dns.assert_called()
-        page.goto.assert_awaited_once_with(f"https://{_ALLOWED_HOST}/index.html", wait_until="domcontentloaded")
