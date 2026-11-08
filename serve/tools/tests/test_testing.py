@@ -514,3 +514,8 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     assert any("current platform branch" in reason for reason in selection.reasons[skipped])
     assert any("platform fixture" in reason for reason in selection.reasons[f"{test}::test_fixture"])
     assert consumers.outside_nodes({"serve/demo/src/demo/web/metrics.html"}, {test}) == {f"{test}::test_page_source"}
+    selection.current_hashes[test] = "changed"
+    selection.add(f"{test}::test_current", "native footprint")
+    selection.add(f"{test}::test_other", "caller-supplied explicit target")
+    assert test in selection.reasons
+    assert f"{test}::test_other" in selection.reasons
