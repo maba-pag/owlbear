@@ -465,9 +465,16 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     texts = {
         source: "CURRENT = 2\n",
         "serve/demo/src/demo/project_host/pages.py": "PAGES = (('/', 'Changes', 'changes.html'),)\n",
-        "serve/demo/src/demo/web/changes.html": '<script type="module" src="/assets/page/changes/main.mjs"></script>',
-        "serve/demo/src/demo/web/pages/changes/main.mjs": "import {show} from './forms.mjs';\n",
+        "serve/demo/src/demo/web/changes.html": (
+            '<script type="module" src="/assets/page/changes/main.mjs"></script>'
+            '<script type="module" src="/assets/pds/<!-- pds -->/load.mjs"></script>'
+        ),
+        "serve/demo/src/demo/web/pages/changes/main.mjs": (
+            "import {show} from './forms.mjs';\nimport {html} from '/assets/lit-html/3.3.3/lit-html.js';\n"
+        ),
         "serve/demo/src/demo/web/pages/changes/forms.mjs": "export function show() {}\n",
+        "serve/demo/src/demo/web/pds/load.mjs": "export const load = () => {};\n",
+        "serve/demo/src/demo/web/vendor/lit-html/lit-html.js": "export const html = () => {};\n",
         entry: "from demo.tables import CURRENT\n\ndef load():\n    return CURRENT\n\ndef unrelated():\n    return 3\n",
         fixture: (
             "import sys\nimport pytest\nfrom demo.entry import load\n\n"
@@ -521,6 +528,10 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     assert any("platform fixture" in reason for reason in selection.reasons[f"{test}::test_fixture"])
     assert consumers.outside_nodes({"serve/demo/src/demo/web/metrics.html"}, {test}) == {f"{test}::test_page_source"}
     assert consumers.outside_nodes({"serve/demo/src/demo/web/pages/changes/forms.mjs"}, {test}) == {
+        f"{test}::test_root_browser"
+    }
+    assert consumers.outside_nodes({"serve/demo/src/demo/web/pds/load.mjs"}, {test}) == {f"{test}::test_root_browser"}
+    assert consumers.outside_nodes({"serve/demo/src/demo/web/vendor/lit-html/lit-html.js"}, {test}) == {
         f"{test}::test_root_browser"
     }
     selection.current_hashes[test] = "changed"

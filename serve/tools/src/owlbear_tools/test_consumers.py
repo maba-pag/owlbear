@@ -90,6 +90,10 @@ def changed_symbols(before: Module | None, current: Module | None) -> set[str]:
 def _asset_reference(path: str, literal: str) -> str | None:
     reference = literal.split("?", 1)[0]
     web = path.split("/web/", 1)[0] + "/web"
+    for kind, directory in (("lit-html", "vendor/lit-html"), ("pds", "pds")):
+        prefix = f"/assets/{kind}/"
+        if reference.startswith(prefix):
+            return f"{web}/{directory}/" + reference.removeprefix(prefix).split("/", 1)[1]
     for prefix, replacement in (("/assets/page/", f"{web}/pages/"), ("/assets/", f"{web}/")):
         if reference.startswith(prefix):
             return replacement + reference.removeprefix(prefix)
