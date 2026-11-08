@@ -382,27 +382,6 @@ def test_a_branch_switch_before_the_update_leaves_both_branches_alone(repos, mon
     assert not (repo / "b.txt").exists()
 
 
-def test_a_failing_checkout_filter_restores_the_local_copy_and_a_retry_succeeds(repos):
-    repo, other = repos
-    commit(repo, ".gitattributes", "*.x filter=x\n")
-    git(repo, "push", "-q", "origin", "main")
-    git(other, "pull", "-q")
-    git(repo, "config", "filter.x.smudge", "false")
-    git(repo, "config", "filter.x.required", "true")
-    before = full(repo)
-    commit(other, "a.txt")
-    commit(other, "z.x")
-    git(other, "push", "-q", "origin", "main")
-    head = git(other, "rev-parse", "HEAD")
-    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
-    assert (result.state, "external filter 'false' failed" in result.reason) == ("behind", True)
-    assert "partial update" not in result.reason
-    assert full(repo) == before
-    git(repo, "config", "filter.x.smudge", "cat")
-    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
-    assert (result.state, git(repo, "rev-parse", "HEAD"), (repo / "z.x").read_text()) == ("updated", head, "x\n")
-
-
 GIT_TIMEOUT = subprocess.TimeoutExpired("git", 120)
 
 
@@ -549,6 +528,7 @@ def test_a_temporary_worktree_that_survives_cleanup_is_reported(repos, monkeypat
 
 
 def test_a_failed_tree_update_undoes_type_changes_directories_and_filtered_files(repos):
+    """The failed update puts the whole local copy back, and a retry once the filter works updates the target."""
     repo, other = repos
     (repo / "l").symlink_to(".gitignore")
     commit(repo, "d", "file\n")
@@ -560,17 +540,23 @@ def test_a_failed_tree_update_undoes_type_changes_directories_and_filtered_files
     for key, value in [("x.smudge", "false"), ("x.required", "true"), ("y.smudge", "tr a-z A-Z"), ("y.clean", "cat")]:
         git(repo, "config", f"filter.{key}", value)
     before = full(repo)
+    commit(other, "a.txt")  # an unfiltered root file the update writes before z.x stops it
     git(other, "rm", "-q", "d", "l")
     (other / "l").write_text(".gitignore")
     (other / "d").mkdir()
     for name in ("l", "d/f", "a.y", "z.x"):
         commit(other, name, (other / name).read_text() if name == "l" else "lower\n")
     git(other, "push", "-q", "origin", "main")
+    head = git(other, "rev-parse", "HEAD")
     result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, "external filter 'false' failed" in result.reason) == ("behind", True)
     assert ("kept" in result.reason, "partial update" in result.reason) == (False, False)
     assert (full(repo), (repo / "l").is_symlink(), (repo / "d").read_text()) == (before, True, "file\n")
+    assert not (repo / "a.txt").exists()
     assert not (repo / "a.y").exists()
+    git(repo, "config", "filter.x.smudge", "cat")
+    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
+    assert (result.state, git(repo, "rev-parse", "HEAD"), (repo / "z.x").read_text()) == ("updated", head, "lower\n")
 
 
 def test_a_filesystem_error_leaves_the_target_behind(repos, monkeypatch):
