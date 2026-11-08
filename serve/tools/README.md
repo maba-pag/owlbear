@@ -66,8 +66,8 @@ than selecting every importer through a shared fixture or import-time global blo
 use named current tests and requested conftest fixtures. Platform branches and recorded skips remain
 independent supplements at test-function/node scope; a changed historical test module runs in full.
 Internally, `test_impact.RequiredScope` separates full task paths and required explicit/invariant/configuration
-targets from automatic router candidates. With that distinction, page, source-reader and child-process
-candidates narrow to named consumers; callers that omit it retain every supplied selector.
+targets from automatic router candidates, so page, source-reader and child-process candidates narrow
+to named consumers.
 Literal test-module, directory or pytest-node targets selected by the Planner stay in the bound command and
 remain required even when the task has no edited paths. For example,
 `uv run test --changed serve/tools/tests/test_todo.py --task-base OLD --target TARGET`
@@ -77,7 +77,7 @@ Kept tasks also compare their original `OLD..NEW` source versions, even when the
 restored before the current task began. The span's own paths use the same target-import exclusions
 as task Git scoping, and the selected consumers execute on the current tree.
 
-`owlbear_tools.test_impact.select(root, paths, context, forced)` receives a frozen task context with
+`owlbear_tools.test_impact.select(root, paths, context, candidates, required_scope)` receives a frozen task context with
 the base, integration target, optional candidate map directory and original kept spans.
 An explicit map directory supports disposable candidate
 proof before merge. It prints **candidate evidence**, not installed acceptance; the default loader

@@ -369,12 +369,11 @@ def select(
     paths: Sequence[str],
     context: Context,
     forced: Sequence[str],
-    scope: RequiredScope | None = None,
+    scope: RequiredScope,
 ) -> list[str]:
     """Return one union of current pytest node/module selectors, never a bootstrap full suite."""
     root = root.resolve()
-    all_paths = paths if scope is None else scope.paths
-    required = None if scope is None else scope.tests
+    all_paths = scope.paths
     for path in {*paths, *all_paths}:
         if not relative(path):
             msg = f"Invalid task dependency path in {root}: {path!r}"
@@ -392,11 +391,10 @@ def select(
     selection = _Selection(
         root, paths, consumers, _load(root, context.target, context.maps_dir, suites), inputs(root, files)
     )
-    for node in forced if required is None else required:
+    for node in scope.tests:
         selection.add(node, "caller-supplied invariant/source-reading/subprocess/neighbor")
-    if required is not None:
-        for node in consumers.outside_nodes(set(all_paths), {node_path(node) for node in forced}):
-            selection.add(node, "current named page/source-reading/subprocess consumer")
+    for node in consumers.outside_nodes(set(all_paths), {node_path(node) for node in forced}):
+        selection.add(node, "current named page/source-reading/subprocess consumer")
     selection.reconcile()
     selection.fingerprints(touched, callers, context.base)
     for span in context.kept_spans:
