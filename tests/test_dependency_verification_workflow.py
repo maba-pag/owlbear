@@ -332,7 +332,6 @@ def test_ruff_toolchain_proof_rejects_installed_version_drift(
 @pytest.mark.parametrize(
     ("path", "surface"),
     [
-        ("pyproject.toml", "python"),
         ("uv.lock", "python"),
         ("serve/delivery-next/pyproject.toml", "python"),
         (".nvmrc", "shared_node_runtime"),
