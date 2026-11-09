@@ -520,9 +520,8 @@ def test_observed_runtime_readers_do_not_expand_unrelated_importer_methods(tmp_p
         (Observation(f"{test}::test_value", reader, value), Observation(f"{other}::test_other", common, unrelated)),
     )
     selection = _Selection(tmp_path, [resource], consumers, [evidence], hashes)
-    with patch("owlbear_tools.test_impact._revision", return_value={reader: Module(source_code=texts[reader])}):
-        selection.resource(resource)
-        selection.reconcile()
+    selection.resource(resource)
+    selection.reconcile()
     assert f"{test}::test_value" in selection.reasons
     assert f"{direct}::test_direct" in selection.reasons
     assert not any(node.startswith(other) for node in selection.reasons)
@@ -548,15 +547,12 @@ def test_observed_runtime_readers_do_not_expand_unrelated_importer_methods(tmp_p
         ],
         hashes | {reader: "changed"},
     )
-    with patch("owlbear_tools.test_impact._revision", return_value={reader: old_reader}):
-        stale.resource(resource)
+    stale.resource(resource)
     assert not any(node.startswith(test) for node in stale.reasons)
     assert f"{direct}::test_direct" in stale.reasons
 
 
 def test_a_module_level_resource_value_retains_importing_tests_without_function_footprints(tmp_path: Path) -> None:
-    from testmon.process_code import Module  # noqa: PLC0415
-
     from owlbear_tools.test_consumers import _Consumers  # noqa: PLC0415
     from owlbear_tools.test_dependencies import Evidence  # noqa: PLC0415
     from owlbear_tools.test_impact import _Selection  # noqa: PLC0415
@@ -579,8 +575,7 @@ def test_a_module_level_resource_value_retains_importing_tests_without_function_
         [Evidence("map", 1, 1, "python", 1, 1, hashes, frozenset(), ())],
         hashes,
     )
-    with patch("owlbear_tools.test_impact._revision", return_value={reader: Module(source_code=texts[reader])}):
-        selection.resource(resource)
+    selection.resource(resource)
     assert f"{test}::test_data" in selection.reasons
 
 
