@@ -254,10 +254,9 @@ class _Consumers:
                 return names
             names.update(additions)
 
-    def block_hashes(self, path: str, symbols: set[str], module: Module | None = None) -> set[int]:
+    def block_hashes(self, path: str, symbols: set[str]) -> set[int]:
         """Native integer checksums of the named functions, never the unknown/global block."""
-        if module is None:
-            module = Module(source_code=self.texts[path]) if path in self.texts else None
+        module = Module(source_code=self.texts[path]) if path in self.texts else None
         if module is None:
             return set()
         names = {symbol.rsplit(".", 1)[-1] for symbol in symbols}
