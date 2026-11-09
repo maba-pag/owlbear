@@ -393,6 +393,9 @@ class _Consumers:
 
     def outside_nodes(self, paths: set[str], candidates: set[str], *, required: bool = True) -> set[str]:
         """Named page, source-reader and child-process consumers supplied by the ordinary router."""
+        if required and len(paths) > 1:
+            for page in sorted(path for path in paths if "/web/" in path):
+                self.outside_nodes({page}, candidates)
         python = {path for path in paths if path.endswith(".py")}
         pages = paths - python
         routes = self.page_routes(pages)

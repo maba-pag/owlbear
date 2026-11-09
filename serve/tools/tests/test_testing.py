@@ -671,12 +671,16 @@ def test_page_consumers_keep_real_indirect_http_but_not_dictionary_gets(tmp_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
     consumers = _Consumers(tmp_path, set(texts))
-    assert consumers.outside_nodes({page}, {test}) == {
+    expected = {
         f"{test}::test_http",
         f"{test}::test_constructed",
         f"{test}::test_browser",
         f"{test}::test_link",
     }
+    assert consumers.outside_nodes({page}, {test}) == expected
+    assert consumers.outside_nodes({page, ".pre-commit-config.yaml"}, {test}) == expected
+    with pytest.raises(RuntimeError, match=r"No current file-reading/page/import consumers.*web/unread\.js"):
+        consumers.outside_nodes({page, "serve/demo/src/demo/web/unread.js"}, {test})
 
 
 def test_observed_changes_keep_platform_callers_and_only_relevant_test_drift(tmp_path: Path) -> None:

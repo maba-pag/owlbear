@@ -83,6 +83,8 @@ Observed runtime readers select their own native footprints, with current/platfo
 unobserved readers use named current consumers rather than expanding every unchanged importer.
 Page consumers follow served HTML and relative module imports to their real browser
 navigation routes, including the root Changes page and shared assets. Unresolved page consumers raise an error.
+Required web inputs resolve independently before their selectors are combined; explicit configuration
+checks do not acquire a separate file-reader requirement.
 Reflective module readers (`getattr`/`hasattr`/`vars`) retain named consumers, including computed attribute names.
 Changed test modules remain required and also feed dependency analysis for their imported helpers and fixtures.
 Deleted test modules cannot supply observed coverage; unresolved current consumers fail explicitly.
