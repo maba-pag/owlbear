@@ -78,7 +78,8 @@ Runtime readers follow owned source references (or direct full-path test referen
 named/native consumers, not unrelated temporary corpora that merely glob the same filename suffix.
 Source-relative paths and literal `importlib.resources.files(...).joinpath(...)` readers match
 the exact resource, not an unread sibling with the same filename.
-Computed package filenames retain their fixed path prefixes and suffixes. Module constants,
+Computed package filenames retain their fixed path prefixes and suffixes; plain string
+interpolations resolve known bindings rather than widening static filenames. Module constants,
 direct assignments and single-return path helpers resolve against the same tracked package roots;
 an unrelated unrooted string pattern cannot claim a runtime resource.
 Path constructors join every resolved argument, not only the first.

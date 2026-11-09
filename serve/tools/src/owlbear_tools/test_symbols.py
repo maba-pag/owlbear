@@ -179,10 +179,7 @@ def resource_path(
         unvisited = {name: value for name, value in module_bindings.items() if value is not definition}
         return resource_path(value, source, modules, remaining, unvisited) if value is not None else None
     if isinstance(node, ast.JoinedStr):
-        return "".join(
-            part.value if isinstance(part, ast.Constant) and isinstance(part.value, str) else "*"
-            for part in node.values
-        )
+        return _resource_template(node, source, modules, definitions, module_bindings)
     if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or):
         return next(
             (
@@ -193,6 +190,27 @@ def resource_path(
             None,
         )
     return _resource_literal(node, source, modules, definitions, module_bindings)
+
+
+def _resource_template(
+    node: ast.JoinedStr,
+    source: str,
+    modules: dict[str, set[str]],
+    definitions: dict[str, ast.AST],
+    module_bindings: dict[str, ast.AST],
+) -> str | None:
+    parts: list[str] = []
+    for part in node.values:
+        if isinstance(part, ast.Constant) and isinstance(part.value, str):
+            parts.append(part.value)
+        elif isinstance(part, ast.FormattedValue) and part.conversion == -1 and part.format_spec is None:
+            value = resource_path(part.value, source, modules, definitions, module_bindings)
+            if value is None and isinstance(part.value, ast.Name) and part.value.id in definitions:
+                return None
+            parts.append(value if value is not None else "*")
+        else:
+            return None
+    return "".join(parts)
 
 
 def _resource_literal(
