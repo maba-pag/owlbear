@@ -320,19 +320,17 @@ def test_an_unreadable_state_file_is_said_and_rebuilt(world, whole_error):
     with pytest.raises(ValidationError) as invalid:
         settings_seen.Seen.model_validate_json(text)
     expected = f"ValidationError: {invalid.value}"
-    [failure] = client(world.alone, reader).post("/api/next/config/read").json()["reads"]["failures"]
+    rebuilt = client(world.alone, reader).post("/api/next/config/read").json()["reads"]
+    [failure] = rebuilt["failures"]
     assert (failure["source"], failure["error"]) == ("read state", expected)
+    assert rebuilt["notices"] == []
     assert [line for line in world.said if line.startswith("settings read: read state")] == [
         f"settings read: read state failed at {path}: {expected}; it is rebuilt"
     ]
 
-    path.write_text(text)
-    rebuilt = reader.read()
     world.push(**builder("B"))
     after = reader.read()
 
-    assert ([f.source for f in rebuilt.failures], rebuilt.notices) == (["read state"], [])
-    assert any(line.startswith("settings read: read state failed") for line in world.said)
     assert [(n.key, n.old, n.new) for n in after.notices] == [("agents.builder.model", '"A"', '"B"')]
 
 
