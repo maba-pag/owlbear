@@ -74,7 +74,7 @@ class OutsideAnswers:
 
     @staticmethod
     def model(price: float) -> dict:
-        return {"models": [model_choices.shown(offered("m1", price))], "error": ""}
+        return {"models": [model_choices.shown(offered(price))], "error": ""}
 
     def layer(self, project: str) -> dict:
         response = self.clients[project].get("/api/next/config")
@@ -487,13 +487,13 @@ def test_a_read_answered_after_dismissal_refreshes_current_notices(answers, pds)
         assert entries.count() == 0
 
 
-def offered(model_id: str, price: float) -> rpc.Model:
+def offered(price: float) -> rpc.Model:
     """A model the Copilot CLI offers, at *price* per million input tokens."""
     prices = rpc.ModelBillingTokenPrices(input_price=price, output_price=15)
     limits = rpc.ModelCapabilitiesLimits(max_context_window_tokens=200_000)
     return rpc.Model(
-        id=model_id,
-        name=model_id,
+        id="m1",
+        name="m1",
         supported_reasoning_efforts=["low", "medium"],
         default_reasoning_effort="low",
         billing=rpc.ModelBilling(token_prices=prices),
@@ -523,7 +523,7 @@ class Outside:
             if price is None:
                 msg = "the CLI is gone"
                 raise RuntimeError(msg)
-            return [offered("m1", price)]
+            return [offered(price)]
 
         self.mp.setattr(model_choices, "_read", read)
 
@@ -538,13 +538,12 @@ class Outside:
 
         self.mp.setattr(pack_files, "fetch", fetch)
 
-    def push(self, rel: str, *, whole: bool = False, **fields: object) -> None:
-        """Another machine sets *fields* in the layer *rel* of the shared repository, as pulled, and pushes it; *whole*:
-        the layer becomes *fields* alone, every other setting unset."""
+    def push(self, rel: str, **fields: object) -> None:
+        """Another machine sets *fields* in the layer *rel* of the shared repository, as pulled, and pushes it."""
         _git(self.other, "pull", "-q")
         path = self.other / rel
         path.parent.mkdir(exist_ok=True)
-        layer = {} if whole or not path.exists() else json.loads(path.read_text())
+        layer = json.loads(path.read_text()) if path.exists() else {}
         path.write_text(json.dumps(layer | {"format": CONFIG_FORMAT, **fields}))
         _git(self.other, "add", rel)
         _git(self.other, "commit", "-q", "-m", f"elsewhere: {rel}")
