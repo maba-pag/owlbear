@@ -5,9 +5,6 @@ from __future__ import annotations
 import contextlib
 import json
 import re
-import socket
-import threading
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,7 +12,6 @@ from typing import TYPE_CHECKING
 
 import httpx
 import pytest
-import uvicorn
 from copilot.generated import rpc
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -35,6 +31,7 @@ from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store
 
 from .test_machine_pages import _git, browsing, clone, errors, until
 from .test_settings_page import Host as ProjectHost
+from .test_shared_pages import serving
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
@@ -177,13 +174,7 @@ def focused_app(answers):
 @contextlib.contextmanager
 def focused_page(answers, pds):
     """Serve the real Settings page and its assets against controlled outside answers."""
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(focused_app(answers), log_level="warning", timeout_keep_alive=60))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    server, base = serving(focused_app(answers))
     try:
         with sync_playwright() as pw:
             try:
