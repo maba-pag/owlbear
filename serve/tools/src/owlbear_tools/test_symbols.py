@@ -189,7 +189,7 @@ def _resource_call(
     node: ast.Call, source: str, modules: dict[str, set[str]], definitions: dict[str, ast.AST] | None
 ) -> str | None:
     if isinstance(node.func, ast.Name):
-        return _resource_named_call(node, source, modules, definitions)
+        return _resource_named_call(node.func.id, node.args, source, modules, definitions)
     if isinstance(node.func, ast.Attribute):
         parent = resource_path(node.func.value, source, modules, definitions)
         if parent is not None and node.func.attr == "joinpath":
@@ -204,27 +204,27 @@ def _resource_call(
 
 
 def _resource_named_call(
-    node: ast.Call, source: str, modules: dict[str, set[str]], definitions: dict[str, ast.AST] | None
+    name: str,
+    args: list[ast.expr],
+    source: str,
+    modules: dict[str, set[str]],
+    definitions: dict[str, ast.AST] | None,
 ) -> str | None:
-    if (
-        definitions
-        and isinstance(node.func, ast.Name)
-        and isinstance(definition := definitions.get(node.func.id), (ast.FunctionDef, ast.AsyncFunctionDef))
-    ):
+    if definitions and isinstance(definition := definitions.get(name), (ast.FunctionDef, ast.AsyncFunctionDef)):
         returns = [statement.value for statement in definition.body if isinstance(statement, ast.Return)]
-        remaining = {name: value for name, value in definitions.items() if name != node.func.id}
+        remaining = {symbol: value for symbol, value in definitions.items() if symbol != name}
         if len(returns) == 1 and returns[0] is not None:
             return resource_path(returns[0], source, modules, remaining)
-    if isinstance(node.func, ast.Name) and node.func.id == "files" and node.args:
-        package = resource_path(node.args[0], source, modules, definitions)
+    if name == "files" and args:
+        package = resource_path(args[0], source, modules, definitions)
         roots = {
             str(PurePosixPath(path).parent)
             for path in modules.get(package or "", set())
             if path.endswith("/__init__.py")
         }
         return next(iter(roots)) if len(roots) == 1 else None
-    if isinstance(node.func, ast.Name) and node.func.id in {"Path", "PurePath", "PurePosixPath", "str"} and node.args:
-        return resource_path(node.args[0], source, modules, definitions)
+    if name in {"Path", "PurePath", "PurePosixPath", "str"} and args:
+        return resource_path(args[0], source, modules, definitions)
     return None
 
 
