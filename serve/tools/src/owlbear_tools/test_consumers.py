@@ -20,6 +20,7 @@ from owlbear_tools.test_symbols import (
     resource_aliases,
     resource_path,
     resource_reads,
+    resource_scope,
 )
 
 
@@ -360,7 +361,7 @@ class _Consumers:
                 for symbol, references in definitions.items()
                 if resource in references
                 or any(
-                    (pattern := resource_path(node, path, self.modules, scope | _definitions(scope[symbol]), scope))
+                    (pattern := resource_path(node, path, self.modules, resource_scope(scope[symbol], scope), scope))
                     is not None
                     and pattern.startswith(resource.split("/src/", 1)[0] + "/src/")
                     and PurePosixPath(resource).full_match(pattern)

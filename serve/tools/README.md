@@ -96,6 +96,8 @@ Literal tuple/list filename assignments resolve each named target separately. A 
 filename does not become a dynamic wildcard reader. Reader and path-helper local bindings shadow
 module bindings in the same resolution.
 Helper free names retain their defining scope rather than inheriting the caller's locals.
+Formal parameters shadow module constants. Parameter-dependent helper returns remain unresolved
+rather than borrowing a same-named global value.
 Computed path wildcards match one path component, not descendant files under a returned directory.
 Each helper or assignment expansion removes its definition from module-resolution contexts;
 recursive bindings cannot abort unrelated resource discovery.

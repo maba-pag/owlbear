@@ -193,6 +193,18 @@ def resource_path(
     return _resource_literal(node, source, modules, definitions, module_bindings)
 
 
+def resource_scope(node: ast.AST, module: dict[str, ast.AST]) -> dict[str, ast.AST]:
+    """Keep formal parameters from inheriting same-named module paths."""
+    local = _definitions(node)
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        local = {
+            parameter.arg: parameter
+            for parameter in ast.walk(node.args)
+            if isinstance(parameter, ast.arg) and parameter.arg in module
+        } | local
+    return module | local
+
+
 def _resource_template(
     node: ast.JoinedStr,
     source: str,
@@ -272,7 +284,10 @@ def _resource_named_call(
     if definitions and isinstance(definition := definitions.get(name), (ast.FunctionDef, ast.AsyncFunctionDef)):
         returns = [statement.value for statement in definition.body if isinstance(statement, ast.Return)]
         defining = module_bindings if module_bindings and module_bindings.get(name) is definition else definitions
-        remaining = defining | _definitions(definition)
+        remaining = resource_scope(definition, defining)
+        remaining.update(
+            (parameter.arg, parameter) for parameter in ast.walk(definition.args) if isinstance(parameter, ast.arg)
+        )
         del remaining[name]
         unvisited = {symbol: value for symbol, value in module_bindings.items() if value is not definition}
         if len(returns) == 1 and returns[0] is not None:
