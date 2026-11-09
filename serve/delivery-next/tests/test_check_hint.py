@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next.change_contracts import tool_schema, tools
+from owlbear_delivery_next.change_contracts import check_hint, tool_schema, tools
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Step, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
@@ -40,6 +40,20 @@ def test_a_check_not_offered_by_the_profile_is_refused_with_the_choice(check, sa
 def test_the_hint_needs_the_profile_s_packages():
     assert errors("npm test", ())[1][0].endswith(PROFILE)
     assert errors(CHOICE) == ([CHOICE], [])
+    target = "cd ./packages/app && {\nnpm test -- tests/metrics.test.js\n}"
+    assert errors(target) == ([target], [])
+    root = check_hint.qualified(".", "uv run test --changed")
+    target = check_hint.qualified(".", "uv run test --changed -- serve/tools/tests/test_todo.py")
+    plan, _ = tool_schema.parse(
+        PlanResult, {"tasks": [{"title": "t", "goal": "AC-1", "scope": ["serve/tools"], "checks": [target]}]}
+    )
+    assert tools.check_plan(plan, Worktree("a", "a"), [root], (), ((".", "uv run test --changed"),)) == []
+    frozen = check_hint.freeze(plan.tasks[0].checks[0], ["before..after"])
+    assert check_hint.task_command(frozen, "base", "target") == check_hint.qualified(
+        ".",
+        "uv run test --changed serve/tools/tests/test_todo.py --task-base base --target target"
+        " --keep-span before..after",
+    )
 
 
 def test_the_hint_names_the_profile_s_command_as_written():

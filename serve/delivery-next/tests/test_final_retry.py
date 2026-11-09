@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts import check_hint, tools
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
@@ -27,7 +27,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_contracts.round_records import FINAL, Completion, RoundFinding, RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_flow import loop, rebuilds, round_flow
+from owlbear_delivery_next.change_flow import loop, rebuilds, round_flow, stuck
 from owlbear_delivery_next.change_flow.moves import ask
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import cli, runner
@@ -37,7 +37,7 @@ from owlbear_delivery_next.runtimes import step_input
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.profile import confirm
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import held, publish, retry, review
+from owlbear_delivery_next.workflow_steps import held, publish, retry, review, step_repair
 
 NOW = datetime(2026, 10, 17, 3, tzinfo=UTC)
 K = StepKind
@@ -309,9 +309,63 @@ def test_a_rebuild_undoes_the_ticked_tasks_own_work_and_builds_them_again(tmp_pa
     assert t1.checks == ["cd . && check one", "cd . && check two"]  # the last rebuilt task runs all kept checks
     assert t1.scope == ["x.txt"]  # its planned scope stays
     lp = c.loops[FINAL]
-    assert (lp.ended, lp.rebuild, lp.completion, lp.undo, c.consent) == ("retried", [], None, "", None)
+    assert (lp.ended, lp.rebuild, lp.completion, lp.undo, c.consent) == ("retried", ["t1"], None, "", None)
     assert (c.loops["t1"].attempt, c.loops["t1"].since, [h.ended for h in c.loops["t1"].history]) == (2, 5, ["retried"])
     assert at(c) == (K.BUILD, "t1", None)
+
+
+def test_a_multi_rebuild_binds_new_earlier_spans_not_the_undone_module(tmp_path, clone):
+    profile = confirm(Profile(), "check:.", "uv run test --changed", NOW)
+    command = "cd . && uv run test --changed"
+    t1 = build(clone, Task(id="t1", title="one", scope=["."], checks=[command]), "old_module.py", "v = 1\n")
+    t2 = build(clone, Task(id="t2", title="two", scope=["."], checks=[command]), "second.py", "v = 2\n")
+    old = t1.spans[0]
+    lp = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1", "t2"])
+    c = Change(
+        slug="c1",
+        brief=Brief(version=1),
+        plan=Plan(tasks=[t1, t2]),
+        names=Names(branch="owlbear/c1", target="main"),
+        loops={FINAL: lp, "t2": RoundLoop(subject="t2", policy=RoundPolicy())},
+    )
+    undone, why = rebuilds.undoing(c, lp)
+    assert why == ""
+    required = rebuilds.checks(c, lp, profile, undone)
+    root = check_hint.changed_runner(required[0])
+    assert root is not None
+    assert root[1] == []
+    assert retry._taken(clone, c, lp, undone, git(clone, "rev-parse", "HEAD")) == ""  # noqa: SLF001
+    rebuilds.rotated(c, lp, undone, required)
+    build(clone, t1, "replacement.py", "v = 3\n")
+    c.step = Step(kind=K.BUILD, task="t2")
+    settings = Store(tmp_path / "settings").settings()
+    review.started(c, t2, clone, settings)
+    parts = step_input.session(c, profile, clone, {})
+    root = check_hint.changed_runner(parts.checks[0])
+    assert root is not None
+    assert root[1] == t1.spans
+    assert old not in parts.checks[0]
+    t2.checks = list(required)
+    stuck.start(c, "project-env:build:check-pytest", "check needs repair", NOW)
+    repair = c.repairs.current
+    assert repair is not None
+    repair.base = t2.base
+    witness = step_repair._witness(c, profile, clone)  # noqa: SLF001
+    root = check_hint.changed_runner(witness[0])
+    assert root is not None
+    assert root[1] == t1.spans
+    (clone / "serve/tools").mkdir(parents=True)
+    (clone / "serve/tools/pyproject.toml").write_text("[project\n")
+    git(clone, "add", "serve/tools/pyproject.toml")
+    git(clone, "commit", "-qm", "malformed original runner manifest")
+    t2.checks = list(required)
+    witness = step_repair._witness(c, profile, clone)  # noqa: SLF001
+    assert f"--keep-span {t1.spans[0]}" in witness[0]
+    assert witness[0].count("--keep-span") == len(t1.spans)
+    assert "TOMLDecodeError" in repair.evidence
+    c.step = Step(kind=K.REVIEW, mode="final")
+    review.started(c, None, clone, settings)
+    assert lp.rebuild == []
 
 
 def test_a_promoted_undo_is_never_repeated_even_after_new_commits(clone):
@@ -393,6 +447,66 @@ def test_a_repair_of_an_earlier_plan_never_counts_for_the_current_one():
     old = RoundLoop(subject=FINAL, policy=RoundPolicy(), ended="replanned", findings=[theirs])
     lp = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"], findings=[mine], history=[old])
     assert [t.id for t in rebuilds.undoing(c, lp)[0]] == ["t1", "t3"]
+    t2 = Task(id="t2", title="kept", base="b" * 40, spans=[f"{'b' * 40}..{'d' * 40}"])
+    t4 = Task(
+        id="t4",
+        title="kept task repair",
+        origin="review",
+        fixes="t2",
+        base="d" * 40,
+        spans=[f"{'d' * 40}..{'e' * 40}"],
+    )
+    t5 = Task(
+        id="t5",
+        title="kept final repair",
+        origin="review",
+        fixes=FINAL,
+        base="e" * 40,
+        spans=[f"{'e' * 40}..{'f' * 40}"],
+    )
+    t6 = Task(
+        id="t6",
+        title="earlier plan repair",
+        origin="review",
+        fixes=FINAL,
+        base="f" * 40,
+        spans=[f"{'f' * 40}..{'a' * 40}"],
+    )
+    lp.findings.append(RoundFinding(id="F2", text="kept", raised=1, tasks=["t2"], state="fixed", repair="t5"))
+    old.findings.append(RoundFinding(id="F3", text="old", raised=1, tasks=["t2"], state="fixed", repair="t6"))
+    c.plan.tasks = [t1, t2, t3, t4, t5, t6]
+    for task in c.plan.tasks:
+        task.done = True
+    t1.checks = t2.checks = ["cd . && uv run test --changed"]
+    profile = Profile(entries={"check:.": ProfileEntry(state="known", value="uv run test --changed")})
+    undone, why = rebuilds.undoing(c, lp)
+    assert why == ""
+    expected = check_hint.freeze(t1.checks[0], [*t2.spans, *t4.spans, *t5.spans])
+    required = rebuilds.checks(c, lp, profile, undone)
+    assert required == [expected]
+    rebuilds.rotated(c, lp, undone, required)
+    assert t1.checks == [expected]
+    assert t3.spans == []
+    t1.base, t1.spans, t1.done = "a" * 40, [f"{'a' * 40}..{'c' * 40}"], True
+    t7 = Task(
+        id="t7",
+        title="repair inheriting frozen checks",
+        origin="review",
+        fixes="t1",
+        base="c" * 40,
+        spans=[f"{'c' * 40}..{'e' * 40}"],
+        checks=list(t1.checks),
+        done=True,
+    )
+    c.plan.tasks.append(t7)
+    again = lp.model_copy(update={"rebuild": ["t2"]})
+    undone, why = rebuilds.undoing(c, again)
+    assert why == ""
+    expected = check_hint.freeze(t2.checks[0], [*t1.spans, *t7.spans])
+    required = rebuilds.checks(c, again, profile, undone)
+    assert required == [expected]
+    rebuilds.rotated(c, again, undone, required)
+    assert all((root := check_hint.changed_runner(task.checks[0])) is not None and root[1] == [] for task in (t1, t7))
 
 
 def test_a_task_whose_commits_are_not_recorded_is_not_undone():
@@ -503,7 +617,7 @@ def test_a_kept_check_runs_from_each_package_of_its_task(change_repo, monkeypatc
     t3 = Task(id="t3", title="three", scope=["docs/z.md"], checks=["cd docs && make docs"])
     c = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[t1, t2, t3]))
     lp = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"])
-    rebuilds.rotated(c, lp, [], rebuilds.checks(c, lp.rebuild, profile))
+    rebuilds.rotated(c, lp, [], rebuilds.checks(c, lp, profile, []))
     assert t1.checks == [
         "cd packages/a && npm test",  # its own too: a report from another package never stands in for it
         "cd packages/b && npm test",
@@ -514,11 +628,12 @@ def test_a_kept_check_runs_from_each_package_of_its_task(change_repo, monkeypatc
     a = Task(id="t1", title="one", scope=["src/a.ts"], checks=["cd . && npm test"])
     twice = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[a, Task(**t2.model_dump())]))
     for _ in range(2):  # a second retry places the checks as the first did
+        again = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"])
         rebuilds.rotated(
             twice,
-            RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"]),
+            again,
             [],
-            rebuilds.checks(twice, ["t1"], profile),
+            rebuilds.checks(twice, again, profile, []),
         )
         assert a.checks == ["cd . && npm test", "cd packages/b && npm test", "cd packages/c && uv run pytest"]
     ran = tools.BuildResult(summary="b", checks=[{"command": "cd packages/b && npm test", "exit_code": 0}])
@@ -535,10 +650,12 @@ def test_a_kept_check_runs_from_each_package_of_its_task(change_repo, monkeypatc
     t4 = Task(id="t4", title="four", scope=["my app/q.ts"], checks=["cd 'my app' && npm test"])
     spaced = Profile(entries={"check:my app": ProfileEntry(state="known", value="npm test")})
     c.plan = Plan(tasks=[t4])
-    assert rebuilds.checks(c, ["t4"], spaced) == ["cd 'my app' && npm test"]
+    lp.rebuild = ["t4"]
+    assert rebuilds.checks(c, lp, spaced, []) == ["cd 'my app' && npm test"]
     t5 = Task(id="t5", title="five", scope=["packages/ab/z.ts"], checks=["cd . && npm test"])
     c.plan = Plan(tasks=[t5])
-    assert rebuilds.checks(c, ["t5"], profile) == ["cd . && npm test"]  # never relocate a selected check
+    lp.rebuild = ["t5"]
+    assert rebuilds.checks(c, lp, profile, []) == ["cd . && npm test"]  # never relocate a selected check
     both = ["cd packages/b && npm test", "cd packages/b && npm test:unit"]
     ran = tools.BuildResult(summary="b", checks=[{"command": k, "exit_code": 0} for k in both])
     assert [e for e in tools.check_build(ran, tree, both) if "missing" in e] == []

@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import os
 import shlex
+import tomllib
 import uuid
 from datetime import UTC, datetime
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
+from traceback import format_exception_only
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import check_hint, evidence, permissions, repair_tools, tools
@@ -22,7 +24,7 @@ from owlbear_delivery_next.change_contracts.failures import ENVIRONMENT, WRONG_M
 from owlbear_delivery_next.change_contracts.models import Exit, Outcome, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.repair_records import KEPT, Tried, Witness
-from owlbear_delivery_next.change_flow import budgets, stuck, worktree
+from owlbear_delivery_next.change_flow import budgets, rebuilds, stuck, worktree
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import sdk_adapter, session_result
 from owlbear_delivery_next.settings import profile, roles
@@ -35,10 +37,9 @@ from owlbear_delivery_next.workflow_steps import (
     sessions,
     watched,
 )
+from owlbear_delivery_next.workflow_steps.check_sources import console_script as _console_script
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.change_contracts.repair_records import Repair
     from owlbear_delivery_next.runtimes.session_result import Run
@@ -78,7 +79,7 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
     store.write(lock, change)
     done: Run | None = None
     try:
-        witness = _witness(change, prof)
+        witness = _witness(change, prof, path)
         asked = lookup.Asked(store, lock, lambda: change)  # the repairer's and its Spotter's lookups (TD-456)
         try:
             cfg = _session(store, lock, change, (at, asked), settings, witness)
@@ -147,9 +148,7 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
         for p, how in changed
         if (edit := check_weakening.weakened(repair_copy.git, at, r.base, p, how)[1])
     ]
-    r.held += [
-        f"changes {p}, which the step's check runs, so it proves nothing alone" for p in r.paths if _named(p, witness)
-    ]
+    r.held += [reason for p in r.paths if (reason := _check_hold(p, witness, path))]
     r.held += [f"changes {p}, outside the brief's scope" for p in r.paths if not _in_scope(change, p)]
     if not r.held:
         _apply(store, lock, change, path, prof)
@@ -273,32 +272,74 @@ def _message(change: Change, witness: tuple[str, ...]) -> str:
     ])  # fmt: skip
 
 
-def _witness(change: Change, prof: Profile) -> tuple[str, ...]:
+def _witness(change: Change, prof: Profile, source: Path) -> tuple[str, ...]:
     """The commands that must pass: the task's resolved checks, else the confirmed checks of the brief's packages."""
+    try:
+        return _resolved_witness(change, prof, source)
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        r = change.repairs.current
+        if r is None:
+            raise
+        detail = "".join(format_exception_only(error)).strip()
+        r.evidence += f"\nUnchanged runner ownership in {source}/serve/tools/pyproject.toml: {detail}"
+        task = next((t for t in change.plan.tasks if t.id == r.task), None) if change.plan else None
+        pairs = worktree.checks(profile.vouched(prof))
+        selected = (
+            check_hint.resolve(task.checks, pairs)
+            if task and task.checks
+            else [check_hint.qualified(p, c) for p, c in pairs if _in_scope(change, p)]
+        )
+        target = worktree.git(
+            source, "rev-parse", f"{worktree.tracking(source, change.names.target)}^{{commit}}"
+        ).strip()
+        base = task.base if task and task.base is not None else r.base
+        return tuple(check_hint.task_command(command, base, target) for command in selected)
+
+
+def _resolved_witness(change: Change, prof: Profile, source: Path) -> tuple[str, ...]:
     tasks = change.plan.tasks if change.plan else []
     r = change.repairs.current
     task = next((t for t in tasks if r and t.id == r.task), None)
+    if task:
+        rebuilds.refresh(change, task)
     pairs = worktree.checks(profile.vouched(prof))
-    if task and task.checks:
-        return tuple(check_hint.resolve(task.checks, pairs))
-    return tuple(check_hint.qualified(p, c) for p, c in pairs if _in_scope(change, p))
+    if task and task.checks and r is not None:
+        bound = task if task.base is not None else task.model_copy(update={"base": r.base})
+        return tuple(worktree.task_checks(profile.vouched(prof), bound, source, change.names.target))
+    selected = [check_hint.qualified(p, c) for p, c in pairs if _in_scope(change, p)]
+    if r is None or not worktree.owns_changed_runner(source):
+        return tuple(selected)
+    target = worktree.git(source, "rev-parse", f"{worktree.tracking(source, change.names.target)}^{{commit}}").strip()
+    return tuple(check_hint.task_command(command, r.base, target) for command in selected)
 
 
 def _installs(change: Change, prof: Profile) -> tuple[str, ...]:
     return tuple(check_hint.qualified(p, c) for p, c in worktree.installs(prof, change.brief.scope or ["."]))
 
 
-def _named(path: str, witness: tuple[str, ...]) -> bool:
+def _check_hold(path: str, witness: tuple[str, ...], source: Path) -> str:
+    """Incomplete original-source discovery holds the fix with the whole error, never applies it."""
+    try:
+        named = _named(path, witness, source)
+    except (OSError, SyntaxError, tomllib.TOMLDecodeError) as error:
+        detail = "".join(format_exception_only(error)).strip()
+        return f"cannot inspect the unchanged check for {path}: {detail}; its altered witness proves nothing alone"
+    return f"changes {path}, which the step's check runs, so it proves nothing alone" if named else ""
+
+
+def _named(path: str, witness: tuple[str, ...], source: Path | None = None) -> bool:
     """Whether a check command names *path*: a fix to the check it is proven by needs the owner (never weakened).
 
-    A script by its path, or a Python module run with ``-m`` by its file; a command that can't be parsed names every
-    path.
+    A script by its path, a Python module run with ``-m`` by its file, or the root selector's imported machinery;
+    a command that can't be parsed names every path.
     """
     for one in witness:
         where, command = _split(one)
         try:
             words = list(shlex.shlex(command, posix=True, punctuation_chars=True))
         except ValueError:
+            return True
+        if source is not None and _console_script(path, words, source):
             return True
         for before, word in zip(["", *words], words, strict=False):
             found = [word.strip("{}")]

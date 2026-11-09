@@ -58,8 +58,8 @@ def test_each_recorded_oversized_goal_now_passes_or_says_what_to_cut(session, le
         ),
         (
             tools.BuildResult,
-            {"summary": "s", "checks": [{"command": "x" * 1001, "exit_code": 0}]},
-            "checks[0].command: 1001 characters, at most 1000 - shorten it",
+            {"summary": "s", "checks": [{"command": "x" * 16001, "exit_code": 0}]},
+            "checks[0].command: 16001 characters, at most 16000 - shorten it",
         ),
         (
             tools.BuildResult,
@@ -97,6 +97,12 @@ def test_a_limit_error_names_the_path_the_length_the_limit_and_what_to_cut(model
     result, errors = tool_schema.parse(model, args)
     assert result is None  # refused whole: nothing is cut to fit
     assert error in errors
+    if error.startswith("checks[0].command:"):
+        result, errors = tool_schema.parse(
+            model, {"summary": "s", "checks": [{"command": args["checks"][0]["command"][:-1], "exit_code": 0}]}
+        )
+        assert errors == []
+        assert len(result.checks[0].command) == 16000
 
 
 def test_other_errors_give_the_nested_field_s_own_example():

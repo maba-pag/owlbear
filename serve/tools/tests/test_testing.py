@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import fcntl
+import json
 import sys
 import threading
+from dataclasses import replace
+from importlib.metadata import version
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
+from owlbear_tools import task_scope
 from owlbear_tools import testing as testing_module
-from owlbear_tools.testing import _commands_for_paths, _require_development_checkout
+from owlbear_tools.task_testing import _targets
+from owlbear_tools.testing import _commands_for_paths, _require_development_checkout, _workspace_packages
 from owlbear_tools.testing import test_main as run_test
 
 _ROOT = Path(__file__).resolve().parents[3]
@@ -354,6 +359,296 @@ def test_changed_runs_git_scope_and_accepts_explicit_base(options: list[str]) ->
     else:
         assert commands[1][0] == "env"
         assert "--testmon" in commands[1]
+        target = "serve/tools/tests/test_todo.py::test_todo_ignores_binary_files"
+        with (
+            patch.object(sys, "argv", ["test", "--changed", target, "--task-base", "base", "--target", "target"]),
+            patch("owlbear_tools.task_scope.commit", return_value="target"),
+            patch("owlbear_tools.task_scope.changed", return_value=[]),
+            patch("owlbear_tools.testing.subprocess.call", return_value=0) as task_call,
+            pytest.raises(SystemExit, match="0"),
+        ):
+            run_test()
+        task_command = task_call.call_args.args[0]
+        assert target in task_command
+        assert "tests/test_package_boundary.py" in task_command
+        assert "--testmon" not in task_command
+        assert task_command[-2:] == ["-o", "session_timeout="]
+        page = "serve/delivery-next/src/owlbear_delivery_next/web/metrics.html"
+        with (
+            patch.object(sys, "argv", ["test", "--changed", target, "--task-base", "base", "--target", "target"]),
+            patch("owlbear_tools.task_scope.commit", return_value="target"),
+            patch("owlbear_tools.task_scope.changed", return_value=[page]),
+            patch("owlbear_tools.test_impact.select", return_value=[target]) as select,
+            patch("owlbear_tools.testing.subprocess.call", return_value=0),
+            pytest.raises(SystemExit, match="0"),
+        ):
+            run_test()
+        scope = select.call_args.args[4]
+        assert select.call_args.args[1] == []
+        assert scope.paths == [page]
+        assert set(scope.tests) == {target, "tests/test_package_boundary.py"}
+        data = "serve/delivery-next/tests/fixtures/ahp/version-negotiation.json"
+        with (
+            patch.object(sys, "argv", ["test", "--changed", "--task-base", "base", "--target", "target"]),
+            patch("owlbear_tools.task_scope.commit", return_value="target"),
+            patch("owlbear_tools.task_scope.changed", return_value=[data]),
+            patch("owlbear_tools.test_impact.select", return_value=[target]) as select_data,
+            patch("owlbear_tools.testing.subprocess.call", return_value=0),
+            pytest.raises(SystemExit, match="0"),
+        ):
+            run_test()
+        scope = select_data.call_args.args[4]
+        assert scope.paths == [data]
+        assert scope.tests == ["tests/test_package_boundary.py"]
+        module = target.split("::", 1)[0]
+        _, python, _, required, resources = _targets([module], _workspace_packages())
+        assert python == [module]
+        assert module in required
+        assert resources == []
+
+
+def test_task_consumers_exclude_docs_but_keep_markdown_fixtures_and_runtime_resources() -> None:
+    fixture = "tests/fixtures/task-note.md"
+    resource = "serve/tools/src/owlbear_tools/prompt.md"
+    target = "serve/tools/tests/test_todo.py::test_todo_ignores_binary_files"
+    with (
+        patch.object(sys, "argv", ["test", "--changed", "--task-base", "base", "--target", "target"]),
+        patch("owlbear_tools.task_scope.commit", return_value="target"),
+        patch("owlbear_tools.task_scope.changed", return_value=[_LOOP, "docs/task-notes.md", fixture, resource]),
+        patch("owlbear_tools.test_impact.select", return_value=[target]) as selected,
+        patch("owlbear_tools.testing.subprocess.call", return_value=0),
+        pytest.raises(SystemExit, match="0"),
+    ):
+        run_test()
+    assert selected.call_args.args[1] == [_LOOP]
+    assert selected.call_args.args[4].paths == [_LOOP, fixture, resource]
+    assert selected.call_args.args[4].resources == [resource]
+    assert selected.call_args.args[4].tests == ["tests/test_package_boundary.py"]
+    with (
+        patch.object(sys, "argv", ["test", "--changed", "--task-base", "base", "--target", "target"]),
+        patch("owlbear_tools.task_scope.commit", return_value="target"),
+        patch("owlbear_tools.task_scope.changed", return_value=[resource]),
+        patch("owlbear_tools.test_impact.select", return_value=[target]) as selected,
+        patch("owlbear_tools.testing.subprocess.call", return_value=0),
+        pytest.raises(SystemExit, match="0"),
+    ):
+        run_test()
+    assert selected.call_args.args[1] == []
+    assert selected.call_args.args[4].resources == [resource]
+    assert selected.call_args.args[4].tests == ["tests/test_package_boundary.py"]
+
+
+def test_a_known_source_reader_cannot_hide_an_unresolved_runtime_resource(tmp_path: Path) -> None:
+    from owlbear_tools import test_impact  # noqa: PLC0415
+    from owlbear_tools.task_scope import Context  # noqa: PLC0415
+    from owlbear_tools.test_dependencies import Evidence  # noqa: PLC0415
+
+    source = "serve/demo/src/demo/read.py"
+    resource = "serve/demo/src/demo/no-reader.bin"
+    test = "serve/demo/tests/test_reader.py"
+    texts = {
+        source: "VALUE = 1\n",
+        resource: "",
+        test: (
+            f"from pathlib import Path\n\ndef test_source():\n    Path('{source}').read_text()\n"
+            "def test_other_corpus(tmp_path):\n    list(tmp_path.glob('*.bin'))\n"
+        ),
+    }
+    for name, text in texts.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    evidence = Evidence("map", 1, 1, "python", 1, 1, {}, frozenset(), ())
+    with (
+        patch("owlbear_tools.test_impact.git", return_value="\0".join(texts)),
+        patch("owlbear_tools.test_impact._load", return_value=[evidence]),
+        pytest.raises(RuntimeError, match=r"No current runtime-resource readers.*no-reader\.bin"),
+    ):
+        test_impact.select(
+            tmp_path,
+            [],
+            Context("before", "target"),
+            [test],
+            test_impact.RequiredScope([source, resource], [], [resource]),
+        )
+
+
+def test_observed_runtime_readers_do_not_expand_unrelated_importer_methods(tmp_path: Path) -> None:
+    from testmon.process_code import Module, methods_to_checksums  # noqa: PLC0415
+
+    from owlbear_tools.test_consumers import _Consumers  # noqa: PLC0415
+    from owlbear_tools.test_dependencies import Evidence, Observation  # noqa: PLC0415
+    from owlbear_tools.test_impact import _Selection  # noqa: PLC0415
+
+    reader = "serve/demo/src/demo/reader.py"
+    common = "serve/demo/src/demo/common.py"
+    resource = "serve/demo/src/demo/data.md"
+    test, other = "serve/demo/tests/test_reader.py", "serve/demo/tests/test_other.py"
+    direct = "serve/demo/tests/test_direct.py"
+    texts = {
+        reader: "from pathlib import Path\nDATA = Path(__file__).with_name('data.md')\nPUBLIC = DATA\n"
+        "def value():\n    return DATA.read_text()\n",
+        common: "from demo.reader import value, PUBLIC\nPATH = PUBLIC\nclass Common:\n"
+        "    def read(self):\n        return value()\n"
+        "    def unrelated(self):\n        return 2\n",
+        test: "from demo.reader import value\ndef test_value():\n    return value()\n",
+        other: "from demo.common import Common\ndef test_other():\n    return Common().unrelated()\n",
+        direct: "from demo.common import PATH\ndef test_direct():\n    return PATH.read_text()\n",
+        resource: "data",
+    }
+    for name, text in texts.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    consumers = _Consumers(tmp_path, set(texts))
+    value = tuple(methods_to_checksums(b.code for b in Module(source_code=texts[reader]).blocks if b.name == "value"))
+    unrelated = tuple(
+        methods_to_checksums(b.code for b in Module(source_code=texts[common]).blocks if b.name == "unrelated")
+    )
+    assert value
+    assert unrelated
+    hashes = dict.fromkeys(texts, "same")
+    evidence = Evidence(
+        "map",
+        1,
+        1,
+        "python",
+        1,
+        1,
+        hashes,
+        frozenset(),
+        (Observation(f"{test}::test_value", reader, value), Observation(f"{other}::test_other", common, unrelated)),
+    )
+    selection = _Selection(tmp_path, [resource], consumers, [evidence], hashes)
+    with patch("owlbear_tools.test_impact._revision", return_value={reader: Module(source_code=texts[reader])}):
+        selection.resource(resource)
+        selection.reconcile()
+    assert f"{test}::test_value" in selection.reasons
+    assert f"{direct}::test_direct" in selection.reasons
+    assert not any(node.startswith(other) for node in selection.reasons)
+
+    old_reader = Module(source_code=texts[reader] + "def active():\n    return value()\n")
+    (tmp_path / reader).write_text(texts[reader] + "def active():\n    return 'not reading the resource'\n")
+    (tmp_path / test).write_text("from demo.reader import active\ndef test_value():\n    return active()\n")
+    stale = _Selection(
+        tmp_path,
+        [resource],
+        _Consumers(tmp_path, set(texts)),
+        [
+            replace(
+                evidence,
+                observations=(
+                    Observation(
+                        f"{test}::test_value",
+                        reader,
+                        tuple(methods_to_checksums(b.code for b in old_reader.blocks if b.name in {"value", "active"})),
+                    ),
+                ),
+            )
+        ],
+        hashes | {reader: "changed"},
+    )
+    with patch("owlbear_tools.test_impact._revision", return_value={reader: old_reader}):
+        stale.resource(resource)
+    assert not any(node.startswith(test) for node in stale.reasons)
+    assert f"{direct}::test_direct" in stale.reasons
+
+
+def test_a_module_level_resource_value_retains_importing_tests_without_function_footprints(tmp_path: Path) -> None:
+    from testmon.process_code import Module  # noqa: PLC0415
+
+    from owlbear_tools.test_consumers import _Consumers  # noqa: PLC0415
+    from owlbear_tools.test_dependencies import Evidence  # noqa: PLC0415
+    from owlbear_tools.test_impact import _Selection  # noqa: PLC0415
+
+    reader, resource = "serve/demo/src/demo/value.py", "serve/demo/src/demo/data.md"
+    test = "serve/demo/tests/test_value.py"
+    texts = {
+        reader: "from pathlib import Path\nDATA = Path(__file__).with_name('data.md').read_text()\n",
+        test: "from demo.value import DATA\ndef test_data():\n    assert DATA == 'data'\n",
+    }
+    for name, text in texts.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    hashes = dict.fromkeys(texts, "same")
+    selection = _Selection(
+        tmp_path,
+        [resource],
+        _Consumers(tmp_path, set(texts)),
+        [Evidence("map", 1, 1, "python", 1, 1, hashes, frozenset(), ())],
+        hashes,
+    )
+    with patch("owlbear_tools.test_impact._revision", return_value={reader: Module(source_code=texts[reader])}):
+        selection.resource(resource)
+    assert f"{test}::test_data" in selection.reasons
+
+
+def test_source_relative_resource_paths_do_not_claim_an_unread_sibling_with_the_same_name(tmp_path: Path) -> None:
+    from owlbear_tools.test_consumers import _Consumers  # noqa: PLC0415
+    from owlbear_tools.test_dependencies import Evidence  # noqa: PLC0415
+    from owlbear_tools.test_impact import _Selection  # noqa: PLC0415
+
+    reader = "serve/demo/src/demo/a/reader.py"
+    resource, sibling = "serve/demo/src/demo/a/data.md", "serve/demo/src/demo/b/data.md"
+    packaged = "serve/demo/src/demo/packaged.py"
+    texts = {
+        "serve/demo/src/demo/__init__.py": "",
+        reader: "from pathlib import Path\nDATA = Path(__file__).with_name('data.md')\n"
+        "def value():\n    return DATA.read_text()\n",
+        packaged: "from importlib.resources import files\nfrom pathlib import Path\nROOT = 'a'\n"
+        "EARLIER = Path('elsewhere')\nLATER = EARLIER\nEARLIER = LATER / 'unused'\n"
+        "GLOBAL, UNUSED_GLOBAL = 'data.md', 'unread.md'\n"
+        "def directory():\n    return Path(str(files('demo')), ROOT)\n"
+        "def first(done=False):\n    if done:\n        return directory()\n    return second(True)\n"
+        "def second(done=False):\n    if done:\n        return directory()\n    return first(True)\n"
+        "def global_value():\n    return (directory() / GLOBAL).read_text()\n"
+        "def static_value():\n    return files('demo').joinpath('a', f'{GLOBAL}').read_text()\n"
+        "def unsupported():\n    return files('demo').joinpath('a', f'{1}.md').read_text()\n"
+        "def value(folder=None):\n    ROOT = 'b'\n    FILE, UNUSED = 'data.md', 'unread.md'\n"
+        "    return ((folder or directory()) / FILE).read_text()\n"
+        "def computed(name):\n    return files('demo').joinpath('a', f'data{name}.md').read_text()\n",
+        "serve/demo/src/demo/a/rebound.py": "from pathlib import Path\n"
+        "FILE = 'data.md'\nFILE = Path(__file__).parent / FILE\n"
+        "def value():\n    return FILE.read_text()\n",
+        "serve/demo/src/demo/a/parameter.py": "from pathlib import PurePosixPath\nFILE = 'unread.md'\n"
+        "def locate(FILE):\n    return PurePosixPath(__file__).parent / FILE\n"
+        "def value():\n    return locate('data.md').read_text()\n",
+    }
+    for name, text in texts.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    consumers = _Consumers(tmp_path, set(texts))
+    assert "value" in consumers.resource_readers(resource)[reader]
+    assert "value" in consumers.resource_readers(resource)[packaged]
+    assert "global_value" in consumers.resource_readers(resource)[packaged]
+    assert "static_value" in consumers.resource_readers(resource)[packaged]
+    assert "computed" in consumers.resource_readers(resource)[packaged]
+    with pytest.raises(RuntimeError, match=r"No current runtime-resource readers.*demo/b/data\.md"):
+        consumers.resource_readers(sibling)
+    with pytest.raises(RuntimeError, match=r"No current runtime-resource readers.*demo/a/unread\.md"):
+        consumers.resource_readers("serve/demo/src/demo/a/unread.md")
+
+    parameter = "serve/demo/src/demo/a/parameter.py"
+    test = "serve/demo/tests/test_parameter.py"
+    (tmp_path / parameter).write_text(
+        "from pathlib import Path\nFILE = Path(__file__).with_name('unread.md')\n"
+        "def locate(FILE):\n    return FILE.read_text()\n"
+        "def value():\n    return locate(Path(__file__).with_name('data.md'))\n"
+    )
+    (tmp_path / test).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / test).write_text("from demo.a.parameter import value\ndef test_data():\n    assert value() == 'data'\n")
+    hashes = dict.fromkeys({*texts, test}, "same")
+    selection = _Selection(
+        tmp_path,
+        [],
+        _Consumers(tmp_path, set(hashes)),
+        [Evidence("map", 1, 1, "python", 1, 1, hashes, frozenset(), ())],
+        hashes,
+    )
+    with pytest.raises(RuntimeError, match="no resolved current consumers"):
+        selection.resource("serve/demo/src/demo/a/unread.md")
 
 
 def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() -> None:
@@ -390,3 +685,350 @@ def test_commands_reject_consumer_checkouts(tmp_path: Path, monkeypatch: pytest.
 
     with pytest.raises(RuntimeError, match="development checkout root"):
         _require_development_checkout()
+
+
+def test_dependency_artifacts_cannot_name_tests_outside_the_checkout(tmp_path: Path) -> None:
+    from owlbear_tools.test_dependencies import read_evidence  # noqa: PLC0415 - exercise the artifact boundary.
+
+    node = "serve/tools/tests/../../../outside.py::test_escape"
+    artifact = tmp_path / "dependencies.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "format": 1,
+                "testmon": version("pytest-testmon"),
+                "python": f"{sys.version_info.major}.{sys.version_info.minor}",
+                "platform": "linux",
+                "repo": "maba-pag/owlbear",
+                "complete": True,
+                "failed": [],
+                "inputs": {"serve/tools/tests/test_testing.py": "0" * 64},
+                "nodes": [node],
+                "completed": [node],
+                "skipped": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="Invalid dependency test identity"):
+        read_evidence(artifact)
+    with pytest.raises(task_scope.ScopeError, match="checkout-relative test module"):
+        task_scope.explicit_targets(_ROOT, [node])
+
+
+def test_page_consumers_keep_real_indirect_http_but_not_dictionary_gets(tmp_path: Path) -> None:
+    from owlbear_tools.test_consumers import _Consumers  # noqa: PLC0415
+
+    test, other = "serve/demo/tests/test_web.py", "serve/demo/tests/test_other.py"
+    page = "serve/demo/src/demo/web/changes.html"
+    texts = {
+        "serve/demo/src/demo/project_host/pages.py": "PAGES = (('/', 'Changes', 'changes.html'),)\n",
+        page: "<h1>Changes</h1>",
+        test: (
+            "from starlette.testclient import TestClient\n\n"
+            "def opened(client, route):\n    return client.get(route).text\n\n"
+            "def test_http(client):\n    return opened(client, '/')\n\n"
+            "def test_constructed(route):\n    client = TestClient(None)\n    client.get(route)\n\n"
+            "def test_browser(page, route):\n    page.goto(route)\n"
+            "def test_link(page, base, project):\n"
+            "    page.goto('/elsewhere')\n    page.get_by_role('link').click()\n"
+            "    expect(page).to_have_url(f'{base}/?project={project}')\n"
+        ),
+        other: ("FAILING = {}\n\ndef test_lookup(parent, word):\n    return FAILING.get(word, parent.get(word))\n"),
+    }
+    for name, text in texts.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    consumers = _Consumers(tmp_path, set(texts))
+    expected = {
+        f"{test}::test_http",
+        f"{test}::test_constructed",
+        f"{test}::test_browser",
+        f"{test}::test_link",
+    }
+    assert consumers.outside_nodes({page}, {test}) == expected
+    assert consumers.outside_nodes({page, ".pre-commit-config.yaml"}, {test}) == expected
+    with pytest.raises(RuntimeError, match=r"No current file-reading/page/import consumers.*web/unread\.js"):
+        consumers.outside_nodes({page, "serve/demo/src/demo/web/unread.js"}, {test})
+
+
+def test_observed_changes_keep_platform_callers_and_only_relevant_test_drift(tmp_path: Path) -> None:
+    from testmon.process_code import Module  # noqa: PLC0415
+
+    from owlbear_tools.test_consumers import _Consumers  # noqa: PLC0415
+    from owlbear_tools.test_dependencies import Evidence, Observation  # noqa: PLC0415
+    from owlbear_tools.test_impact import _Selection  # noqa: PLC0415
+
+    source, caller = "serve/demo/src/demo/source.py", "serve/demo/src/demo/caller.py"
+    test, guarded, newer, other = (f"serve/demo/tests/test_{name}.py" for name in ("direct", "guard", "new", "other"))
+    helper, data = "serve/demo/tests/other_helper.py", "serve/demo/tests/other.json"
+    before = Module(source_code="def work():\n    return 1\n")
+    texts = {
+        source: "def work():\n    return 2\n",
+        caller: "import sys\nfrom demo.source import work\n\ndef guarded():\n"
+        "    return work() if sys.platform == 'darwin' else 1\n",
+        test: "from demo.source import work\n\ndef test_direct():\n    return work()\n",
+        guarded: "from demo.caller import guarded\n\ndef test_guard():\n    return guarded()\n",
+        newer: "from demo.source import work\n\ndef test_new():\n    return work()\n",
+        other: "from other_helper import value\n\ndef test_other():\n    return value()\n",
+        helper: "DATA = Path('other.json').read_text()\n\ndef value():\n    return DATA\n",
+    }
+    for name, text in texts.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    (tmp_path / data).write_text("{}")
+    consumers = _Consumers(tmp_path, set(texts) | {data})
+    recorded = dict.fromkeys(set(texts) - {newer, helper}, "same")
+    current = dict.fromkeys(set(texts) | {data}, "same") | {other: "changed"}
+    evidence = Evidence(
+        "map",
+        1,
+        1,
+        "python",
+        1,
+        4,
+        recorded,
+        frozenset(),
+        (
+            Observation(f"{test}::test_direct", source, tuple(before.checksums)),
+            Observation(f"{guarded}::test_guard", caller, tuple(Module(source_code=texts[caller]).checksums)),
+        ),
+    )
+    selection = _Selection(tmp_path, [source], consumers, [evidence], current)
+    selection.supplements(source, before, Module(source_code=texts[source]))
+    selection.reconcile()
+    assert f"{guarded}::test_guard" in selection.reasons
+    assert newer in selection.reasons
+    assert other not in selection.reasons
+    selection.add(f"{other}::test_other", "caller-supplied explicit target")
+    selection.reconcile()
+    assert other in selection.reasons
+
+    (tmp_path / test).write_text("def test_direct():\n    assert True\n")
+    (tmp_path / caller).write_text("def guarded():\n    return 1\n")
+    old_caller = Module(source_code="from demo.source import work\n\ndef guarded():\n    return work()\n")
+    with patch("owlbear_tools.test_impact._revision", return_value={source: before, caller: old_caller}):
+        drifted = _Selection(
+            tmp_path,
+            [source],
+            _Consumers(tmp_path, set(texts) | {data}),
+            [
+                replace(
+                    evidence,
+                    observations=(
+                        Observation(f"{test}::test_direct", source, tuple(before.checksums)),
+                        Observation(f"{guarded}::test_guard", source, tuple(before.checksums)),
+                        Observation(f"{guarded}::test_guard", caller, tuple(old_caller.checksums)),
+                    ),
+                )
+            ],
+            current | {test: "changed", caller: "changed"},
+        )
+        drifted.fingerprints({source}, "before")
+    drifted.reconcile()
+    assert test not in drifted.reasons
+    assert not any(node.startswith(guarded) for node in drifted.reasons)
+    assert newer in drifted.reasons
+
+    same_before = Module(source_code="def work():\n    return 1\n\ndef active():\n    return 1\n")
+    same_mapped = Module(source_code="def work():\n    return 1\n\ndef active():\n    return work()\n")
+    (tmp_path / source).write_text("def work():\n    return 2\n\ndef active():\n    return 1\n")
+    (tmp_path / guarded).write_text("from demo.source import active\n\ndef test_guard():\n    return active()\n")
+    same_file = _Selection(
+        tmp_path,
+        [source],
+        _Consumers(tmp_path, set(texts) | {data}),
+        [
+            replace(
+                evidence,
+                observations=(Observation(f"{guarded}::test_guard", source, tuple(same_mapped.checksums)),),
+            )
+        ],
+        current | {source: "changed", test: "changed"},
+    )
+    with patch("owlbear_tools.test_impact._revision", return_value={source: same_before}):
+        same_file.fingerprints({source}, "before")
+    same_file.reconcile()
+    assert not any(node.startswith(guarded) for node in same_file.reasons)
+    assert newer in same_file.reasons
+
+
+def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules(tmp_path: Path) -> None:
+    from testmon.process_code import Module  # noqa: PLC0415 - exercise native footprint identities.
+
+    from owlbear_tools import test_impact  # noqa: PLC0415 - task-only selection machinery.
+    from owlbear_tools.test_dependencies import Evidence, Observation  # noqa: PLC0415
+
+    source = "serve/demo/src/demo/tables.py"
+    entry = "serve/demo/src/demo/entry.py"
+    orphan = "serve/demo/src/demo/deleted_only.py"
+    orphan_before = Module(source_code="def only():\n    return 1\n")
+    fixture, test, shared, data_helper = (
+        "serve/demo/tests/conftest.py",
+        "serve/demo/tests/test_consumer.py",
+        "serve/demo/tests/test_shared_user.py",
+        "serve/demo/tests/shared_reader.py",
+    )
+    texts = {
+        source: "CURRENT = 2\nimport demo.entry as hop\n\ndef forwarding():\n    return hop.load()\n",
+        orphan: "def only():\n    return 2\n",
+        shared: (
+            "from test_consumer import shared_helper\nfrom shared_reader import shared_value\n\n"
+            "def test_shared():\n    return shared_helper()\n\n"
+            "def test_shared_data():\n    return shared_value() + Path('fixtures/imported.json').read_text()\n"
+        ),
+        data_helper: (
+            "import pytest\nDATA = Path('fixtures/shared.json').read_text()\n\ndef shared_value():\n    return DATA\n"
+            "@pytest.fixture(autouse=True)\ndef shared_data():\n    return Path('fixtures/imported.json').read_text()\n"
+        ),
+        "serve/demo/tests/star_fixtures.py": "from shared_reader import shared_data as imported_data\n",
+        "serve/demo/src/demo/project_host/pages.py": "PAGES = (('/', 'Changes', 'changes.html'),)\n",
+        "serve/demo/src/demo/web/changes.html": (
+            '<script type="module" src="/assets/page/changes/main.mjs"></script>'
+            '<script type="module" src="/assets/pds/<!-- pds -->/load.mjs"></script>'
+        ),
+        "serve/demo/src/demo/web/pages/changes/main.mjs": (
+            "import {show} from './forms.mjs';\nimport {html} from '/assets/lit-html/3.3.3/lit-html.js';\n"
+        ),
+        "serve/demo/src/demo/web/pages/changes/forms.mjs": "export function show() {}\n",
+        "serve/demo/src/demo/web/pds/load.mjs": "export const load = () => {};\n",
+        "serve/demo/src/demo/web/vendor/lit-html/lit-html.js": "export const html = () => {};\n",
+        entry: (
+            "from demo.tables import CURRENT\nimport demo.tables as loop\n\ndef load():\n    return CURRENT\n"
+            "\ndef unrelated():\n    return 3\n\ndef mutual():\n    return loop.forwarding()\n"
+        ),
+        fixture: (
+            "import sys\nimport pytest\nfrom demo.entry import load\n\n"
+            "from star_fixtures import *\n"
+            "@pytest.fixture\ndef loaded():\n    return load() if sys.platform == 'darwin' else 2\n"
+            "@pytest.fixture\ndef marked():\n    return Path('fixtures/marked.json').read_text()\n"
+        ),
+        test: (
+            "import sys\nimport pytest\nfrom pytest import fixture as fx\n"
+            "import demo.entry as api\nfrom demo.entry import load, unrelated\n\n"
+            "pytestmark = pytest.mark.usefixtures('marked')\n"
+            "def test_current():\n    assert load() == 2\n\n"
+            "def test_other():\n    assert unrelated() == 3\n\n"
+            "@pytest.mark.skipif(sys.platform == 'linux', reason='Mac consumer')\n"
+            "def test_platform():\n    assert load() == 2\n\n"
+            "def test_fixture(loaded):\n    assert loaded == 2\n"
+            "def shared_helper():\n    return load()\n\n"
+            "def test_reflective():\n    return getattr(api, 'load')()\n\n"
+            "def test_dynamic(name):\n    return getattr(api, name)()\n\n"
+            "def test_namespace():\n    return vars(api).values()\n\n"
+            "def test_page_source():\n    return Path('web/metrics.html').read_text()\n\n"
+            "def test_other_page_source():\n    return Path('web/settings.html').read_text()\n"
+            "def opened(page, base):\n    page.goto(f'{base}/?change=c1')\n\n"
+            "def test_root_browser(page):\n    opened(page, 'http://localhost')\n"
+            "INVENTORY = [p for p in Path('web').rglob('*') if p.suffix == '.mjs']\n\n"
+            "def test_inventory():\n    return INVENTORY\n\n"
+            "def test_data():\n    return Path('fixtures/input.json').read_text()\n\n"
+            "@fx(autouse=True)\ndef local_data():\n    return Path('fixtures/local.json').read_text()\n\n"
+            "class TestScoped:\n"
+            "    @pytest.fixture(autouse=True)\n    def class_data(self):\n"
+            "        return Path('fixtures/class.json').read_text()\n"
+            "    def test_class(self):\n        assert True\n"
+            "def test_computed():\n    return Path(f'chat_contract_{1}.json').read_text()\n\n"
+            "def indirect(page, base, path):\n    page.goto(f'{base}{path}#token=t')\n\n"
+            "def test_indirect_route(page):\n    indirect(page, 'http://localhost', '/updates/owlbear')\n"
+        ),
+    }
+    for path, text in texts.items():
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text)
+    consumers = test_impact._Consumers(tmp_path, set(texts))  # noqa: SLF001
+    load = consumers.block_hashes(entry, {"load"})
+    unknown = set(Module(source_code=texts[entry]).checksums) - consumers.block_hashes(
+        entry, {"load", "unrelated", "mutual"}
+    )
+    skipped = f"{test}::test_platform"
+    evidence = Evidence(
+        "map",
+        1,
+        1,
+        "python",
+        1,
+        4,
+        dict.fromkeys(texts, "same"),
+        frozenset({skipped}),
+        (
+            Observation(f"{test}::test_current", entry, tuple(load)),
+            Observation(f"{test}::test_other", entry, tuple(unknown)),
+            Observation("serve/demo/tests/test_deleted.py::test_only", orphan, tuple(orphan_before.checksums)),
+        ),
+    )
+    selection = test_impact._Selection(tmp_path, [source], consumers, [evidence], dict.fromkeys(texts, "same"))  # noqa: SLF001
+
+    def historical(_root, _head, paths):
+        return {path: Module(source_code=texts[path]) for path in paths}
+
+    with patch.object(test_impact, "_revision", side_effect=historical):
+        selection.supplements(source, Module(source_code="CURRENT = 1\n"), Module(source_code=texts[source]))
+    assert (consumers.tests_for({entry}), entry in consumers.fixtures, data_helper in consumers.fixtures) == (
+        {test, shared},
+        False,
+        True,
+    )
+    assert set(selection.reasons) == {
+        f"{test}::test_current",
+        f"{test}::test_fixture",
+        f"{test}::test_reflective",
+        f"{test}::test_dynamic",
+        f"{test}::test_namespace",
+        f"{shared}::test_shared",
+        skipped,
+    }
+    assert any("current platform branch" in reason for reason in selection.reasons[skipped])
+    assert any("platform fixture" in reason for reason in selection.reasons[f"{test}::test_fixture"])
+    assert consumers.outside_nodes({"serve/demo/src/demo/web/metrics.html"}, {test}) == {f"{test}::test_page_source"}
+    assert consumers.outside_nodes({"serve/demo/src/demo/web/pages/changes/forms.mjs"}, {test}) == {
+        f"{test}::test_root_browser",
+        f"{test}::test_inventory",
+        f"{test}::test_indirect_route",
+    }
+    assert consumers.outside_nodes({"serve/demo/src/demo/web/pds/load.mjs"}, {test}) == {
+        f"{test}::test_root_browser",
+        f"{test}::test_inventory",
+        f"{test}::test_indirect_route",
+    }
+    assert consumers.outside_nodes({"serve/demo/src/demo/web/vendor/lit-html/lit-html.js"}, {test}) == {
+        f"{test}::test_root_browser",
+        f"{test}::test_indirect_route",
+    }
+    selection.current_hashes[test] = "changed"
+    selection.add(f"{test}::test_current", "native footprint")
+    selection.add(f"{test}::test_other", "caller-supplied explicit target")
+    assert test in selection.reasons
+    assert f"{test}::test_other" in selection.reasons
+    selection.current_hashes[test] = "same"
+    selection.add(f"{test}::test_current[removed-state]", "native footprint")
+    selection.add(f"{test}::test_other[explicit-state]", "caller-supplied explicit target")
+    assert f"{test}::test_current[removed-state]" not in selection.reasons
+    assert f"{test}::test_current" in selection.reasons
+    assert f"{test}::test_other[explicit-state]" in selection.reasons
+    selection.helper("serve/demo/tests/fixtures/input.json")
+    assert f"{test}::test_data" in selection.reasons
+    all_nodes = consumers.test_nodes({test: set(consumers.definitions[test])})
+    assert consumers.outside_nodes({"serve/demo/tests/fixtures/local.json"}, {test}) == all_nodes
+    assert consumers.outside_nodes({"serve/demo/tests/fixtures/class.json"}, {test}) == {
+        f"{test}::TestScoped::test_class"
+    }
+    assert consumers.outside_nodes({"serve/demo/tests/fixtures/marked.json"}, {test}) == all_nodes
+    assert consumers.outside_nodes({"serve/demo/tests/fixtures/chat_contract_1.json"}, {test}) == {
+        f"{test}::test_computed"
+    }
+    assert (
+        consumers.outside_nodes({"serve/demo/tests/fixtures/shared.json"}, {test, shared}),
+        consumers.outside_nodes({"serve/demo/tests/fixtures/imported.json"}, {test, shared}),
+    ) == (
+        {f"{shared}::test_shared_data"},
+        all_nodes | consumers.test_nodes({shared: set(consumers.definitions[shared])}),
+    )
+    with (
+        patch.object(test_impact, "_revision", return_value={orphan: orphan_before}),
+        pytest.raises(RuntimeError, match="no resolved current consumers"),
+    ):
+        selection.fingerprints({orphan}, "base")
