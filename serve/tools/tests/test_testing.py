@@ -485,9 +485,9 @@ def test_observed_runtime_readers_do_not_expand_unrelated_importer_methods(tmp_p
     test, other = "serve/demo/tests/test_reader.py", "serve/demo/tests/test_other.py"
     direct = "serve/demo/tests/test_direct.py"
     texts = {
-        reader: "from pathlib import Path\nDATA = Path(__file__).with_name('data.md')\n"
+        reader: "from pathlib import Path\nDATA = Path(__file__).with_name('data.md')\nPUBLIC = DATA\n"
         "def value():\n    return DATA.read_text()\n",
-        common: "from demo.reader import value, DATA\nPATH = DATA\nclass Common:\n"
+        common: "from demo.reader import value, PUBLIC\nPATH = PUBLIC\nclass Common:\n"
         "    def read(self):\n        return value()\n"
         "    def unrelated(self):\n        return 2\n",
         test: "from demo.reader import value\ndef test_value():\n    return value()\n",
