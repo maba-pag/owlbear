@@ -158,6 +158,7 @@ def focused_page(answers, pds):
             pds.only(page, base)
             page.clock.install()
             page.add_init_script("""{
+                window.settingsReadsFinished = 0;
                 const every = window.setInterval;
                 window.setInterval = (fn, ms, ...args) => {
                     if (ms !== 5000) return every(fn, ms, ...args);
@@ -168,18 +169,18 @@ def focused_page(answers, pds):
                     }, ms);
                 };
             }""")  # observe the real timer's next tick, without changing its interval or calling it ourselves
-            finished = {"post": 0, "models": 0}
+            def observe_read_again(route):
+                response = route.fetch()
+                body = response.text()
+                end = "    showIdle();\n"
+                assert body.count(end) == 1
+                # Observe readAgain's actual finally, after refresh/readModels and rendering, without calling it.
+                body = body.replace(end, end + "    window.settingsReadsFinished++;\n")
+                route.fulfill(response=response, body=body)
 
-            def observed(response):
-                if response.url.endswith("/config/read") and response.request.method == "POST":
-                    finished["post"] += 1
-                elif response.url.endswith("/config/models"):
-                    finished["models"] += 1
-
-            page.on("response", observed)
+            page.route("**/assets/pages/config/reads.mjs", observe_read_again)
             page.goto(f"{base}/config?project=alpha#token=tok")
-            until(page, lambda: finished["post"] and finished["models"] >= 2, READS_TIME)
-            page.wait_for_load_state("networkidle")
+            until(page, lambda: page.evaluate("window.settingsReadsFinished") == 1, READS_TIME)
             expect(page.locator("#reads-status")).to_contain_text("all sources")
             expect(page.get_by_role("button", name="Read again")).to_be_enabled()
             yield page, base
@@ -311,9 +312,9 @@ def test_older_model_rates_cannot_replace_a_newer_read(answers, pds):
         pds.group(page, "agents")
         expect(rates(page)).to_contain_text("in 7 ")
         hold_polls(page)
-        with page.expect_response("**/config/models"):
-            models[0][0].fulfill(response=models[0][1])
-        page.wait_for_timeout(200)
+        page.wait_for_function("window.settingsReadsFinished === 2")
+        models[0][0].fulfill(response=models[0][1])
+        page.wait_for_function("window.settingsReadsFinished === 3")
         expect(rates(page)).to_contain_text("in 7 ")
 
 
@@ -329,11 +330,12 @@ def test_a_second_read_stays_busy_when_the_first_refresh_finishes(answers, pds):
         again.click()
         until(page, lambda: second)
         expect(again).to_be_disabled()
-        with page.expect_response("**/config/models"):
-            layers[0][0].continue_()
-        page.wait_for_timeout(200)
+        hold_polls(page)
+        layers[0][0].continue_()
+        page.wait_for_function("window.settingsReadsFinished === 2")
         assert again.is_disabled()
         second[0][0].continue_()
+        page.wait_for_function("window.settingsReadsFinished === 3")
         expect(again).to_be_enabled()
 
 
