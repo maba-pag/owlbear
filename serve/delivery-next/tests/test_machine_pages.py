@@ -200,6 +200,70 @@ def until(page: Page, done: Callable[[], object], seconds: float = 8) -> None:
         page.wait_for_timeout(100)
 
 
+def machine_poll_clock(page: Page) -> Callable[[], None]:
+    """Advance only this page to its registered machine poll, with HTTP and timer continuations settled."""
+    pending = set()
+
+    def started(request):
+        if request.is_navigation_request() and request.frame == page.main_frame:
+            pending.clear()  # the previous document's abandoned assets no longer hold this page's poll
+        pending.add(request)
+
+    def ended(request):
+        pending.discard(request)
+
+    page.on("request", started)
+    page.on("requestfinished", ended)
+    page.on("requestfailed", ended)
+    page.clock.install()
+    page.add_init_script("""{
+        window.machinePoll = { next: {}, busy: 0, finished: 0 };
+        const every = window.setInterval;
+        window.setInterval = (fn, ms, ...args) => {
+            if (ms !== 5000 && ms !== 3000) return every(fn, ms, ...args);
+            window.machinePoll.next[ms] = Date.now() + ms;
+            return every(async () => {
+                window.machinePoll.next[ms] += ms;
+                window.machinePoll.busy++;
+                try {
+                    await fn(...args);
+                    if (ms === 5000) window.machinePoll.finished++;
+                } finally {
+                    window.machinePoll.busy--;
+                }
+            }, ms);
+        };
+    }""")
+
+    def drain() -> None:
+        end = time.monotonic() + 8
+        while pending or page.evaluate("window.machinePoll.busy !== 0"):
+            assert time.monotonic() < end, (
+                [request.url for request in pending],
+                page.evaluate("window.machinePoll"),
+            )
+            page.wait_for_timeout(100)
+
+    def tick(ms: int) -> None:
+        page.clock.pause_at(page.evaluate("ms => new Date(window.machinePoll.next[ms]).toISOString()", ms))
+        drain()
+
+    def poll() -> None:
+        until(page, lambda: page.evaluate("Boolean(window.machinePoll.next[5000])"))
+        drain()
+        finished = page.evaluate("window.machinePoll.finished")
+        while page.evaluate("window.machinePoll.next[3000] < window.machinePoll.next[5000]"):
+            tick(3000)
+        tick(5000)
+        assert page.evaluate("window.machinePoll.finished") > finished
+        # Changes renders its forms on its own poll, after the machine's block state arrives.
+        if page.evaluate("Boolean(window.machinePoll.next[3000])"):
+            tick(3000)
+        page.clock.resume()
+
+    return poll
+
+
 def replaced(path: Path) -> registry.Project:
     """A project whose clone at *path* was deleted and cloned again: the registered one, now replaced."""
     old = registry.register(clone(path))
