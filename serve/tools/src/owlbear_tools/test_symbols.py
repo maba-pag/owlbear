@@ -141,12 +141,10 @@ def resource_path(
     node: ast.AST,
     source: str,
     modules: dict[str, set[str]],
-    definitions: dict[str, ast.AST] | None = None,
-    module_bindings: dict[str, ast.AST] | None = None,
+    definitions: dict[str, ast.AST],
+    module_bindings: dict[str, ast.AST],
 ) -> str | None:
     """Resolve literal source/package-relative paths without consulting the filesystem."""
-    if module_bindings is None:
-        module_bindings = definitions
     if isinstance(node, ast.Name) and node.id == "__file__":
         return source
     if (
@@ -193,8 +191,8 @@ def _resource_literal(
     node: ast.AST,
     source: str,
     modules: dict[str, set[str]],
-    definitions: dict[str, ast.AST] | None,
-    module_bindings: dict[str, ast.AST] | None,
+    definitions: dict[str, ast.AST],
+    module_bindings: dict[str, ast.AST],
 ) -> str | None:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
@@ -216,8 +214,8 @@ def _resource_call(
     node: ast.Call,
     source: str,
     modules: dict[str, set[str]],
-    definitions: dict[str, ast.AST] | None,
-    module_bindings: dict[str, ast.AST] | None,
+    definitions: dict[str, ast.AST],
+    module_bindings: dict[str, ast.AST],
 ) -> str | None:
     if isinstance(node.func, ast.Name):
         return _resource_named_call(node, source, modules, definitions, module_bindings)
@@ -238,8 +236,8 @@ def _resource_named_call(
     node: ast.Call,
     source: str,
     modules: dict[str, set[str]],
-    definitions: dict[str, ast.AST] | None,
-    module_bindings: dict[str, ast.AST] | None,
+    definitions: dict[str, ast.AST],
+    module_bindings: dict[str, ast.AST],
 ) -> str | None:
     if not isinstance(node.func, ast.Name):
         return None
