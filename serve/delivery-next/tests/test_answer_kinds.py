@@ -240,7 +240,7 @@ def test_a_confirmed_clarification_within_the_brief_becomes_a_change_decision_in
             Option(id="again", label="Retry", next="retry", action="retry"),
         ),
     )
-    assert run.answer(kind="clarification", statement=f"  {SAID} ", confirmed=True).status_code == 200
+    assert run.answer(kind="clarification", text=WORDS, statement=f"  {SAID} ", confirmed=True).status_code == 200
     picking.picks.append(verdict())
 
     c = run.step()
