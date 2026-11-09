@@ -236,15 +236,11 @@ def _current_observations(
             (module := modules[row.source]) is None or not match_fingerprint(module, row.blocks)
         ):
             stale[row.test].add(row.source)
-    # A changed callee does not erase entry through an otherwise unchanged caller.
-    callers = {
-        source: consumers.callers({source}) for source in {row.source for row in rows if stale[row.test] - {row.source}}
-    }
     return [
         row
         for row in rows
         if current_hashes.get(node_path(row.test)) == recorded.get(node_path(row.test))
-        and (not stale[row.test] - {row.source} or not (stale[row.test] - {row.source}) & callers[row.source])
+        and not stale[row.test] - {row.source}
     ]
 
 

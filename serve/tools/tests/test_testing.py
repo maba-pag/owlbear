@@ -784,7 +784,7 @@ def test_observed_changes_keep_platform_callers_and_only_relevant_test_drift(tmp
     assert other in selection.reasons
 
     (tmp_path / test).write_text("def test_direct():\n    assert True\n")
-    (tmp_path / caller).write_text("from demo.source import work\n\ndef guarded():\n    return 1\n")
+    (tmp_path / caller).write_text("def guarded():\n    return 1\n")
     drifted = _Selection(
         tmp_path,
         [source],
@@ -820,7 +820,7 @@ def test_observed_changes_keep_platform_callers_and_only_relevant_test_drift(tmp
         drifted.fingerprints({source}, drifted.consumers.callers({source}), "before")
     drifted.reconcile()
     assert test not in drifted.reasons
-    assert guarded not in drifted.reasons
+    assert not any(node.startswith(guarded) for node in drifted.reasons)
     assert newer in drifted.reasons
 
     same_before = Module(source_code="def work():\n    return 1\n\ndef active():\n    return 1\n")
@@ -849,7 +849,7 @@ def test_observed_changes_keep_platform_callers_and_only_relevant_test_drift(tmp
     with patch("owlbear_tools.test_impact._revision", return_value={source: same_before}):
         same_file.fingerprints({source}, same_file.consumers.callers({source}), "before")
     same_file.reconcile()
-    assert guarded not in same_file.reasons
+    assert not any(node.startswith(guarded) for node in same_file.reasons)
     assert newer in same_file.reasons
 
 
