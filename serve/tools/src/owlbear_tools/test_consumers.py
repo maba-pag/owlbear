@@ -101,7 +101,11 @@ class _Consumers:
             path: set(self.definitions[path]) | set().union(*references.values())
             for path, references in self.references.items()
         }
-        self.fixtures = fixture_registry(self.trees, self.bindings)
+        self.fixtures = {
+            path: metadata
+            for path, metadata in fixture_registry(self.trees, self.bindings).items()
+            if metadata[0] or Path(path).name == "conftest.py" or path in self.tests
+        }
         for path, (fixtures, autouse) in self.fixtures.items():
             for test in self.tests:
                 if (

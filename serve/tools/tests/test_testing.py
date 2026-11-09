@@ -944,7 +944,11 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
 
     with patch.object(test_impact, "_revision", side_effect=historical):
         selection.supplements(source, Module(source_code="CURRENT = 1\n"), Module(source_code=texts[source]))
-    assert consumers.tests_for({entry}) == {test, shared}
+    assert (consumers.tests_for({entry}), entry in consumers.fixtures, data_helper in consumers.fixtures) == (
+        {test, shared},
+        False,
+        True,
+    )
     assert set(selection.reasons) == {
         f"{test}::test_current",
         f"{test}::test_fixture",
