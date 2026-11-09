@@ -360,7 +360,7 @@ class _Consumers:
                 for symbol, references in definitions.items()
                 if resource in references
                 or any(
-                    resource_path(node, path) == resource
+                    resource_path(node, path, self.modules) == resource
                     for node in ast.walk(self.definitions[path][symbol])
                     if isinstance(node, (ast.Call, ast.BinOp))
                 )

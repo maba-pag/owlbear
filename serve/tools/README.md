@@ -76,7 +76,8 @@ Runtime-resource package fallbacks are candidates, not required whole-package te
 tasks also use reader discovery, and each runtime resource must resolve readers independently.
 Runtime readers follow owned source references (or direct full-path test references) into current
 named/native consumers, not unrelated temporary corpora that merely glob the same filename suffix.
-Source-relative paths match the exact resource, not an unread sibling with the same filename.
+Source-relative paths and literal `importlib.resources.files(...).joinpath(...)` readers match
+the exact resource, not an unread sibling with the same filename.
 Direct path aliases follow local assignments and imports; import-time loaded values retain their named consumers.
 Observed runtime readers select their own native footprints, with current/platform supplements;
 unobserved readers use named current consumers rather than expanding every unchanged importer.
