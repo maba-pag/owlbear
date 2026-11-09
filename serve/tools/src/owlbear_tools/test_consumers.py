@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import fnmatch
 import posixpath
 import re
 from collections import defaultdict
@@ -360,7 +361,9 @@ class _Consumers:
                 for symbol, references in definitions.items()
                 if resource in references
                 or any(
-                    resource_path(node, path, self.modules) == resource
+                    (pattern := resource_path(node, path, self.modules, self.definitions[path])) is not None
+                    and pattern.startswith(resource.split("/src/", 1)[0] + "/src/")
+                    and fnmatch.fnmatchcase(resource, pattern)
                     for node in ast.walk(self.definitions[path][symbol])
                     if isinstance(node, (ast.Call, ast.BinOp))
                 )

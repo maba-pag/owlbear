@@ -137,44 +137,95 @@ def resource_reads(definitions: dict[str, ast.AST], aliases: set[str]) -> set[st
     }
 
 
-def resource_path(node: ast.AST, source: str, modules: dict[str, set[str]]) -> str | None:
+def resource_path(
+    node: ast.AST,
+    source: str,
+    modules: dict[str, set[str]],
+    definitions: dict[str, ast.AST] | None = None,
+) -> str | None:
     """Resolve literal source/package-relative paths without consulting the filesystem."""
     if isinstance(node, ast.Name) and node.id == "__file__":
         return source
+    if (
+        definitions
+        and isinstance(node, ast.Name)
+        and isinstance(definition := definitions.get(node.id), (ast.Assign, ast.AnnAssign))
+    ):
+        remaining = {name: value for name, value in definitions.items() if name != node.id}
+        return resource_path(definition.value, source, modules, remaining)
+    if isinstance(node, ast.JoinedStr):
+        return "".join(
+            part.value if isinstance(part, ast.Constant) and isinstance(part.value, str) else "*"
+            for part in node.values
+        )
+    if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or):
+        return next(
+            (path for value in node.values if (path := resource_path(value, source, modules, definitions)) is not None),
+            None,
+        )
+    return _resource_literal(node, source, modules, definitions)
+
+
+def _resource_literal(
+    node: ast.AST, source: str, modules: dict[str, set[str]], definitions: dict[str, ast.AST] | None
+) -> str | None:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
     if isinstance(node, ast.Attribute) and node.attr == "parent":
-        parent = resource_path(node.value, source, modules)
+        parent = resource_path(node.value, source, modules, definitions)
         return str(PurePosixPath(parent).parent) if parent is not None else None
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
-        parent, child = resource_path(node.left, source, modules), resource_path(node.right, source, modules)
+        parent = resource_path(node.left, source, modules, definitions)
+        child = resource_path(node.right, source, modules, definitions)
+        if child is None and isinstance(node.right, ast.Name):
+            child = "*"
         return str(PurePosixPath(parent) / child) if parent is not None and child is not None else None
     if not isinstance(node, ast.Call):
         return None
-    return _resource_call(node, source, modules)
+    return _resource_call(node, source, modules, definitions)
 
 
-def _resource_call(node: ast.Call, source: str, modules: dict[str, set[str]]) -> str | None:
+def _resource_call(
+    node: ast.Call, source: str, modules: dict[str, set[str]], definitions: dict[str, ast.AST] | None
+) -> str | None:
+    if isinstance(node.func, ast.Name):
+        return _resource_named_call(node, source, modules, definitions)
+    if isinstance(node.func, ast.Attribute):
+        parent = resource_path(node.func.value, source, modules, definitions)
+        if parent is not None and node.func.attr == "joinpath":
+            parts = [resource_path(arg, source, modules, definitions) for arg in node.args]
+            resolved = (part for part in parts if part is not None)
+            return str(PurePosixPath(parent, *resolved)) if None not in parts else None
+        if parent is not None and node.func.attr in {"read_text", "read_bytes", "open", "resolve"}:
+            return parent
+        if parent is not None and node.func.attr == "with_name" and node.args:
+            name = resource_path(node.args[0], source, modules, definitions)
+            return str(PurePosixPath(parent).with_name(name)) if name is not None else None
+    return None
+
+
+def _resource_named_call(
+    node: ast.Call, source: str, modules: dict[str, set[str]], definitions: dict[str, ast.AST] | None
+) -> str | None:
+    if (
+        definitions
+        and isinstance(node.func, ast.Name)
+        and isinstance(definition := definitions.get(node.func.id), (ast.FunctionDef, ast.AsyncFunctionDef))
+    ):
+        returns = [statement.value for statement in definition.body if isinstance(statement, ast.Return)]
+        remaining = {name: value for name, value in definitions.items() if name != node.func.id}
+        if len(returns) == 1 and returns[0] is not None:
+            return resource_path(returns[0], source, modules, remaining)
     if isinstance(node.func, ast.Name) and node.func.id == "files" and node.args:
-        package = resource_path(node.args[0], source, modules)
+        package = resource_path(node.args[0], source, modules, definitions)
         roots = {
             str(PurePosixPath(path).parent)
             for path in modules.get(package or "", set())
             if path.endswith("/__init__.py")
         }
         return next(iter(roots)) if len(roots) == 1 else None
-    if isinstance(node.func, ast.Name) and node.func.id in {"Path", "PurePath", "PurePosixPath"} and node.args:
-        return resource_path(node.args[0], source, modules)
-    if isinstance(node.func, ast.Attribute):
-        parent = resource_path(node.func.value, source, modules)
-        if parent is not None and node.func.attr == "joinpath":
-            parts = [arg.value for arg in node.args if isinstance(arg, ast.Constant) and isinstance(arg.value, str)]
-            return str(PurePosixPath(parent, *parts)) if len(parts) == len(node.args) else None
-        if parent is not None and node.func.attr in {"read_text", "read_bytes", "open", "resolve"}:
-            return parent
-        if parent is not None and node.func.attr == "with_name" and node.args:
-            name = resource_path(node.args[0], source, modules)
-            return str(PurePosixPath(parent).with_name(name)) if name is not None else None
+    if isinstance(node.func, ast.Name) and node.func.id in {"Path", "PurePath", "PurePosixPath", "str"} and node.args:
+        return resource_path(node.args[0], source, modules, definitions)
     return None
 
 

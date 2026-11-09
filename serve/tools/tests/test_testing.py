@@ -567,8 +567,10 @@ def test_source_relative_resource_paths_do_not_claim_an_unread_sibling_with_the_
         "serve/demo/src/demo/__init__.py": "",
         reader: "from pathlib import Path\nDATA = Path(__file__).with_name('data.md')\n"
         "def value():\n    return DATA.read_text()\n",
-        packaged: "from importlib.resources import files\n"
-        "def value():\n    return files('demo').joinpath('a', 'data.md').read_text()\n",
+        packaged: "from importlib.resources import files\nfrom pathlib import Path\nROOT = 'a'\n"
+        "def directory():\n    return Path(str(files('demo').joinpath(ROOT)))\n"
+        "def value(folder=None):\n    return ((folder or directory()) / 'data.md').read_text()\n"
+        "def computed(name):\n    return files('demo').joinpath('a', f'data{name}.md').read_text()\n",
     }
     for name, text in texts.items():
         path = tmp_path / name
@@ -577,6 +579,7 @@ def test_source_relative_resource_paths_do_not_claim_an_unread_sibling_with_the_
     consumers = _Consumers(tmp_path, set(texts))
     assert "value" in consumers.resource_readers(resource)[reader]
     assert "value" in consumers.resource_readers(resource)[packaged]
+    assert "computed" in consumers.resource_readers(resource)[packaged]
     with pytest.raises(RuntimeError, match=r"No current runtime-resource readers.*demo/b/data\.md"):
         consumers.resource_readers(sibling)
 
