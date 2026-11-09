@@ -2207,7 +2207,6 @@ def test_settings_show_a_failed_source_the_models_and_global_s_machine_settings_
         assert failed in source.text_content()
         pds.group(page, "agents")
         models = page.locator("#models-note")
-        expect(models).to_have_text(f"Could not read the offered models ({failed}); type a model name.")
         expect(models).to_have_js_property(
             "textContent", f"Could not read the offered models ({failed}); type a model name."
         )
