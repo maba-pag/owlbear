@@ -569,7 +569,7 @@ def test_source_relative_resource_paths_do_not_claim_an_unread_sibling_with_the_
         "def value():\n    return DATA.read_text()\n",
         packaged: "from importlib.resources import files\nfrom pathlib import Path\nROOT = 'a'\n"
         "GLOBAL, UNUSED_GLOBAL = 'data.md', 'unread.md'\n"
-        "def directory():\n    return Path(str(files('demo').joinpath(ROOT)))\n"
+        "def directory():\n    return Path(str(files('demo')), ROOT)\n"
         "def first(done=False):\n    if done:\n        return directory()\n    return second(True)\n"
         "def second(done=False):\n    if done:\n        return directory()\n    return first(True)\n"
         "def global_value():\n    return (directory() / GLOBAL).read_text()\n"
@@ -794,7 +794,8 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
             "@pytest.fixture\ndef marked():\n    return Path('fixtures/marked.json').read_text()\n"
         ),
         test: (
-            "import sys\nimport pytest\nimport demo.entry as api\nfrom demo.entry import load, unrelated\n\n"
+            "import sys\nimport pytest\nfrom pytest import fixture as fx\n"
+            "import demo.entry as api\nfrom demo.entry import load, unrelated\n\n"
             "pytestmark = pytest.mark.usefixtures('marked')\n"
             "def test_current():\n    assert load() == 2\n\n"
             "def test_other():\n    assert unrelated() == 3\n\n"
@@ -812,7 +813,7 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
             "INVENTORY = [p for p in Path('web').rglob('*') if p.suffix == '.mjs']\n\n"
             "def test_inventory():\n    return INVENTORY\n\n"
             "def test_data():\n    return Path('fixtures/input.json').read_text()\n\n"
-            "@pytest.fixture(autouse=True)\ndef local_data():\n    return Path('fixtures/local.json').read_text()\n\n"
+            "@fx(autouse=True)\ndef local_data():\n    return Path('fixtures/local.json').read_text()\n\n"
             "class TestScoped:\n"
             "    @pytest.fixture(autouse=True)\n    def class_data(self):\n"
             "        return Path('fixtures/class.json').read_text()\n"

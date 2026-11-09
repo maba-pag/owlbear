@@ -8,6 +8,13 @@ from pathlib import PurePosixPath
 
 def fixture_names(tree: ast.AST) -> tuple[set[str], set[str]]:
     """Fixture identities, including those applied without an explicit request."""
+    aliases = {
+        alias.asname or alias.name
+        for node in getattr(tree, "body", [])
+        if isinstance(node, ast.ImportFrom) and node.module == "pytest"
+        for alias in node.names
+        if alias.name == "fixture"
+    }
     fixtures, autouse = set(), set()
     for symbol, node in _definitions(tree).items():
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -15,7 +22,7 @@ def fixture_names(tree: ast.AST) -> tuple[set[str], set[str]]:
         for decorator in node.decorator_list:
             called = decorator.func if isinstance(decorator, ast.Call) else decorator
             if (isinstance(called, ast.Attribute) and called.attr == "fixture") or (
-                isinstance(called, ast.Name) and called.id == "fixture"
+                isinstance(called, ast.Name) and called.id in {"fixture", *aliases}
             ):
                 fixtures.add(symbol)
                 if isinstance(decorator, ast.Call) and any(
@@ -258,8 +265,11 @@ def _resource_named_call(
             if path.endswith("/__init__.py")
         }
         return next(iter(roots)) if len(roots) == 1 else None
-    if name in {"Path", "PurePath", "PurePosixPath", "str"} and args:
+    if name == "str" and args:
         return resource_path(args[0], source, modules, definitions, module_bindings)
+    if name in {"Path", "PurePath", "PurePosixPath"} and args:
+        parts = [resource_path(arg, source, modules, definitions, module_bindings) for arg in args]
+        return str(PurePosixPath(*filter(None, parts))) if None not in parts else None
     return None
 
 

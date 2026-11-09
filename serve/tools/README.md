@@ -81,6 +81,7 @@ the exact resource, not an unread sibling with the same filename.
 Computed package filenames retain their fixed path prefixes and suffixes. Module constants,
 direct assignments and single-return path helpers resolve against the same tracked package roots;
 an unrelated unrooted string pattern cannot claim a runtime resource.
+Path constructors join every resolved argument, not only the first.
 Literal tuple/list filename assignments resolve each named target separately. A declared but unresolved
 filename does not become a dynamic wildcard reader. Reader and path-helper local bindings shadow
 module bindings in the same resolution.
@@ -104,7 +105,8 @@ Users of source inventories that combine a wildcard with a
 filename-suffix filter also remain selected.
 Test-data-only changes follow named readers, imported test helpers and fixtures, not a mandatory whole-package fallback.
 Module/class autouse fixtures and module-level fixture marks retain their implicitly affected tests within
-the correct scope. Computed data filenames match their constant prefixes/suffixes and retain their reader users.
+the correct scope, including fixtures imported from pytest under another name.
+Computed data filenames match their constant prefixes/suffixes and retain their reader users.
 Automatically selected parametrized consumers run their current function's cases, so a production inventory
 change cannot retain a removed case or omit a new one. Literal caller-selected case IDs remain exact.
 Literal test-module, directory or pytest-node targets selected by the Planner stay in the bound command and
