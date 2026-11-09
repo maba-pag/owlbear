@@ -15,7 +15,7 @@ from owlbear_tools.test_dependencies import is_test_module
 from owlbear_tools.test_symbols import (
     _definitions,
     _names,
-    fixture_names,
+    fixture_registry,
     http_get,
     resource_aliases,
     resource_path,
@@ -101,11 +101,7 @@ class _Consumers:
             path: set(self.definitions[path]) | set().union(*references.values())
             for path, references in self.references.items()
         }
-        self.fixtures = {
-            path: fixture_names(tree)
-            for path, tree in self.trees.items()
-            if Path(path).name == "conftest.py" or path in self.tests
-        }
+        self.fixtures = fixture_registry(self.trees, self.bindings)
         for path, (fixtures, autouse) in self.fixtures.items():
             for test in self.tests:
                 if (

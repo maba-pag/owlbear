@@ -855,9 +855,12 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
         shared: (
             "from test_consumer import shared_helper\nfrom shared_reader import shared_value\n\n"
             "def test_shared():\n    return shared_helper()\n\n"
-            "def test_shared_data():\n    return shared_value()\n"
+            "def test_shared_data():\n    return shared_value() + Path('fixtures/imported.json').read_text()\n"
         ),
-        data_helper: ("DATA = Path('fixtures/shared.json').read_text()\n\ndef shared_value():\n    return DATA\n"),
+        data_helper: (
+            "import pytest\nDATA = Path('fixtures/shared.json').read_text()\n\ndef shared_value():\n    return DATA\n"
+            "@pytest.fixture(autouse=True)\ndef shared_data():\n    return Path('fixtures/imported.json').read_text()\n"
+        ),
         "serve/demo/src/demo/project_host/pages.py": "PAGES = (('/', 'Changes', 'changes.html'),)\n",
         "serve/demo/src/demo/web/changes.html": (
             '<script type="module" src="/assets/page/changes/main.mjs"></script>'
@@ -875,6 +878,7 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
         ),
         fixture: (
             "import sys\nimport pytest\nfrom demo.entry import load\n\n"
+            "from shared_reader import shared_data as imported_data\n"
             "@pytest.fixture\ndef loaded():\n    return load() if sys.platform == 'darwin' else 2\n"
             "@pytest.fixture\ndef marked():\n    return Path('fixtures/marked.json').read_text()\n"
         ),
@@ -989,9 +993,13 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
     assert consumers.outside_nodes({"serve/demo/tests/fixtures/chat_contract_1.json"}, {test}) == {
         f"{test}::test_computed"
     }
-    assert consumers.outside_nodes({"serve/demo/tests/fixtures/shared.json"}, {test, shared}) == {
-        f"{shared}::test_shared_data"
-    }
+    assert (
+        consumers.outside_nodes({"serve/demo/tests/fixtures/shared.json"}, {test, shared}),
+        consumers.outside_nodes({"serve/demo/tests/fixtures/imported.json"}, {test, shared}),
+    ) == (
+        {f"{shared}::test_shared_data"},
+        all_nodes | consumers.test_nodes({shared: set(consumers.definitions[shared])}),
+    )
     with (
         patch.object(test_impact, "_revision", return_value={orphan: orphan_before}),
         pytest.raises(RuntimeError, match="no resolved current consumers"),

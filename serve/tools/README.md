@@ -119,6 +119,7 @@ filename-suffix filter also remain selected.
 Test-data-only changes follow named readers, imported test helpers and fixtures, not a mandatory whole-package fallback.
 Module/class autouse fixtures and module-level fixture marks retain their implicitly affected tests within
 the correct scope, including fixtures imported from pytest under another name.
+Fixtures imported or re-exported into conftest retain their local identities and autouse metadata.
 Computed data filenames match their constant prefixes/suffixes and retain their reader users.
 Automatically selected parametrized consumers run their current function's cases, so a production inventory
 change cannot retain a removed case or omit a new one. Literal caller-selected case IDs remain exact.

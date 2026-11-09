@@ -33,6 +33,28 @@ def fixture_names(tree: ast.AST) -> tuple[set[str], set[str]]:
     return fixtures, autouse
 
 
+def fixture_registry(
+    trees: dict[str, ast.Module], bindings: dict[str, dict[str, set[tuple[str, str]]]]
+) -> dict[str, tuple[set[str], set[str]]]:
+    """Resolve current imported fixture identities, including re-exported autouse metadata."""
+    registry = {path: fixture_names(tree) for path, tree in trees.items()}
+    while True:
+        size = sum(len(names) for pair in registry.values() for names in pair)
+        for path, imports in bindings.items():
+            definitions = _definitions(trees[path])
+            for local, choices in imports.items():
+                if not isinstance(definitions.get(local), (ast.Import, ast.ImportFrom)):
+                    continue
+                for dependency, symbol in choices:
+                    for target, names in zip(registry[path], registry.get(dependency, (set(), set())), strict=True):
+                        if symbol == "*":
+                            target.update(names)
+                        elif symbol in names:
+                            target.add(local)
+        if size == sum(len(names) for pair in registry.values() for names in pair):
+            return registry
+
+
 def _names(node: ast.AST) -> set[str]:
     names: set[str] = set()
     for item in ast.walk(node):
