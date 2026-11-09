@@ -119,40 +119,13 @@ class OutsideAnswers:
         }
         return {
             "paused": False,
-            "waiting": 0,
-            "ending": False,
             "reads": polled,
-            "left": [],
-            "stop_error": "",
-            "update_while_paused": False,
-            "update": {"phase": "idle", "detail": "", "version": "", "at": None},
-            "updated": "v0.1.0",
-            "announce": None,
-            "pack": {
-                "install": None,
-                "unkept": "",
-                "release": {
-                    "state": "unknown",
-                    "version": "",
-                    "pack": "",
-                    "running_pack": "",
-                    "checked_at": None,
-                    "detail": "",
-                },
-            },
-            "unretried": "",
-            "unshared": "",
-            "undecided": [],
             "projects": [
                 {
                     "id": name,
                     "name": name,
                     "path": f"/{name}",
                     "state": "loaded",
-                    "kind": "consumer",
-                    "unset": [],
-                    "unset_reason": "",
-                    "blocked": "",
                 }
                 for name in ("alpha", "beta")
             ],
