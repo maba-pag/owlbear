@@ -1269,14 +1269,6 @@ def _refuse_config_once(monkeypatch, config_path: Path) -> None:
     monkeypatch.setattr(data_repo.DataRepo, "publish", refuse)
 
 
-@pytest.fixture
-def pending_shared(store) -> Store:
-    """A shared project whose legacy preference import is pending: its review is what Settings must complete."""
-    store.write_profile(Profile())
-    store.mark_prefs_import("", "pending", "absent")
-    return store
-
-
 def _fresh(tmp_path: Path, remote: Path) -> Store:
     second = tmp_path / "fresh"
     subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
@@ -1285,7 +1277,7 @@ def _fresh(tmp_path: Path, remote: Path) -> Store:
 
 @pytest.fixture
 def pending(store) -> Store:
-    """An unshared project whose legacy preference import is pending: for the page's review intent alone."""
+    """A shared project whose legacy preference import is pending."""
     store.write_profile(Profile())
     store.mark_prefs_import("", "pending", "absent")
     return store
@@ -1364,12 +1356,12 @@ def test_cancelled_review_preserves_previous_intent(pending, pds, prior_edit) ->
 
 
 @pytest.mark.browser
-def test_explicit_review_waits_for_publication(pending_shared, tmp_path, monkeypatch, shared_repo, pds) -> None:
+def test_explicit_review_waits_for_publication(pending, tmp_path, monkeypatch, shared_repo, pds) -> None:
     """While a save runs, no earlier notice stands as its outcome; once it settles, the offered retry is taken."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    _refuse_config_once(monkeypatch, pending_shared.config_path)
-    with settings_page(pending_shared, pds) as page:
+    _refuse_config_once(monkeypatch, pending.config_path)
+    with settings_page(pending, pds) as page:
         sent, held = _project_puts(page), []
 
         def hold_first_put(route) -> None:
@@ -1390,7 +1382,7 @@ def test_explicit_review_waits_for_publication(pending_shared, tmp_path, monkeyp
         expect(page.locator("#error")).to_be_visible()
         expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
         assert page.evaluate("() => document.querySelector('#save').loading") is False
-        assert pending_shared.read_profile().prefs_import == "pending"
+        assert pending.read_profile().prefs_import == "pending"
 
         page.locator("#save").click()  # the offered retry carries no new edit and is taken
         pds.modal(page).get_by_role("button", name="Save project settings").click()
@@ -1398,7 +1390,7 @@ def test_explicit_review_waits_for_publication(pending_shared, tmp_path, monkeyp
         expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
 
     assert [body["prefs_reviewed"] for body in sent] == [True, True]
-    assert pending_shared.read_profile().prefs_import == "done"
+    assert pending.read_profile().prefs_import == "done"
     assert _fresh(tmp_path, shared_repo[1]).read_config().prefs is None
 
 
