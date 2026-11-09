@@ -356,12 +356,14 @@ class _Consumers:
         affected: dict[str, set[str]] = defaultdict(set)
         aliases: dict[str, set[str]] = defaultdict(set)
         for path, definitions in self.references.items():
+            bindings = self.definitions[path]
             symbols = {
                 symbol
                 for symbol, references in definitions.items()
                 if resource in references
                 or any(
-                    (pattern := resource_path(node, path, self.modules, self.definitions[path])) is not None
+                    (pattern := resource_path(node, path, self.modules, bindings | _definitions(bindings[symbol])))
+                    is not None
                     and pattern.startswith(resource.split("/src/", 1)[0] + "/src/")
                     and fnmatch.fnmatchcase(resource, pattern)
                     for node in ast.walk(self.definitions[path][symbol])

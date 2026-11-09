@@ -227,7 +227,9 @@ def _resource_named_call(
 ) -> str | None:
     if definitions and isinstance(definition := definitions.get(name), (ast.FunctionDef, ast.AsyncFunctionDef)):
         returns = [statement.value for statement in definition.body if isinstance(statement, ast.Return)]
-        remaining = {symbol: value for symbol, value in definitions.items() if symbol != name}
+        remaining = {
+            symbol: value for symbol, value in (definitions | _definitions(definition)).items() if symbol != name
+        }
         if len(returns) == 1 and returns[0] is not None:
             return resource_path(returns[0], source, modules, remaining)
     if name == "files" and args:
