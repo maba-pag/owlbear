@@ -1350,15 +1350,8 @@ def test_explicit_review_waits_for_publication(pending, tmp_path, monkeypatch, s
 
     _refuse_config_once(monkeypatch, pending.config_path)
     with settings_page(pending, pds) as page:
-        sent, held = _project_puts(page), []
-
-        def hold_first_put(route) -> None:
-            if route.request.method == "PUT" and not held:
-                held.append(route)  # the refused save stays in flight until the test lets it go
-            else:
-                route.fallback()
-
-        page.route("**/api/next/config/project", hold_first_put)
+        sent = _project_puts(page)
+        held = hold_first(page, "**/api/next/config/project", "PUT", fetch=False)
         expect(page.locator("#error")).to_be_visible()  # the page's standing notice of the pending import
         page.get_by_role("button", name="Confirm merge preferences reviewed").click()
         pds.modal(page).get_by_role("button", name="Save project settings").click()
@@ -1366,7 +1359,7 @@ def test_explicit_review_waits_for_publication(pending, tmp_path, monkeypatch, s
         expect(page.locator("#status")).to_have_text("Saving…")
         expect(page.locator("#error")).to_be_hidden()  # nothing offers a retry the running save would ignore
 
-        held[0].fallback()
+        held[0][0].fallback()
         expect(page.locator("#error")).to_be_visible()
         expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
         assert page.evaluate("() => document.querySelector('#save').loading") is False
