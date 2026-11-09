@@ -179,7 +179,7 @@ def focused_page(answers, pds):
                 body = body.replace(end, end + "    window.settingsReadsFinished++;\n")
                 route.fulfill(response=response, body=body)
 
-            page.route("**/assets/pages/config/reads.mjs", observe_read_again)
+            page.route("**/assets/page/config/reads.mjs", observe_read_again)
             page.goto(f"{base}/config?project=alpha#token=tok")
             until(page, lambda: page.evaluate("window.settingsReadsFinished") == 1, READS_TIME)
             expect(page.locator("#reads-status")).to_contain_text("all sources")
