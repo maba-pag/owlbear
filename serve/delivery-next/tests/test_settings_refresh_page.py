@@ -169,6 +169,7 @@ def focused_page(answers, pds):
                     }, ms);
                 };
             }""")  # observe the real timer's next tick, without changing its interval or calling it ourselves
+
             def observe_read_again(route):
                 response = route.fetch()
                 body = response.text()
@@ -669,6 +670,38 @@ def test_a_layer_that_does_not_read_still_shows_the_read(tmp_path: Path, monkeyp
         assert [s for s in said if "409" not in s] == []  # the opening read of the layer is refused, as said
 
 
+def notice_tabs_keep_the_draft(page, pds, base, alpha, beta):
+    pds.group(page, "agents")
+    minutes = page.get_by_label("Minutes per session, builder")
+    minutes.fill("31")
+    expect(page.locator("#pending")).not_to_have_text("No unsaved edits.")
+    pds.group(page, "overview")
+    entry = page.locator("#reads-changed li")
+    page.context.add_init_script("sessionStorage.setItem('token', 't')")  # a new tab has no token of its own
+    for name, layer, value in (
+        ("builder · Minutes per session", "global", "50"),
+        ("this machine", "machine", "33"),
+        ("beta", "project", "20"),
+    ):
+        with page.context.expect_page() as opened:  # a new tab loads the address, which names the layer
+            entry.get_by_role("link", name=name).click(modifiers=["ControlOrMeta"])
+        tab = opened.value
+        if name == "beta":
+            expect(tab).to_have_url(f"{base}/config?project={beta.id}#agents")
+        expect(pds.select(tab, "Layer")).to_have_js_property("value", layer, timeout=READS_TIME * 1000)
+        expect(tab.get_by_label("Minutes per session, builder")).to_have_value(value)
+        tab.close()
+    expect(page).to_have_url(f"{base}/config?project={alpha.id}#overview")
+    expect(page.locator("#error")).to_be_hidden()  # no unsaved-edit refusal for a modifier click
+    expect(pds.select(page, "Layer")).to_have_js_property("value", "project")  # this page stays as it was
+    pds.group(page, "agents")
+    expect(minutes).to_have_value("31")
+    expect(page.locator("#pending")).not_to_have_text("No unsaved edits.")
+    minutes.fill("30")
+    expect(page.locator("#pending")).to_have_text("No unsaved edits.")
+    pds.group(page, "overview")
+
+
 @pytest.mark.browser
 @pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
 def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
@@ -691,38 +724,12 @@ def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
         entry = page.locator("#reads-changed li")
         expect(entry).to_contain_text("builder · Minutes per session: 45 → 50", timeout=READS_TIME * 1000)
         expect(entry).to_contain_text("Set apart by this machine, alpha, beta, so it does not apply there.")
-        pds.group(page, "agents")
-        minutes = page.get_by_label("Minutes per session, builder")
-        minutes.fill("31")
-        expect(page.locator("#pending")).not_to_have_text("No unsaved edits.")
-        pds.group(page, "overview")
-        page.context.add_init_script("sessionStorage.setItem('token', 't')")  # a new tab has no token of its own
-        for name, layer, value in (
-            ("builder · Minutes per session", "global", "50"),
-            ("this machine", "machine", "33"),
-            ("beta", "project", "20"),
-        ):
-            with page.context.expect_page() as opened:  # a new tab loads the address, which names the layer
-                entry.get_by_role("link", name=name).click(modifiers=["ControlOrMeta"])
-            tab = opened.value
-            if name == "beta":
-                expect(tab).to_have_url(f"{base}/config?project={b.id}#agents")
-            expect(pds.select(tab, "Layer")).to_have_js_property("value", layer, timeout=READS_TIME * 1000)
-            expect(tab.get_by_label("Minutes per session, builder")).to_have_value(value)
-            tab.close()
-        expect(page).to_have_url(f"{base}/config?project={a.id}#overview")
-        expect(page.locator("#error")).to_be_hidden()  # no unsaved-edit refusal for a modifier click
-        expect(pds.select(page, "Layer")).to_have_js_property("value", "project")  # this page stays as it was
-        pds.group(page, "agents")
-        expect(minutes).to_have_value("31")
-        expect(page.locator("#pending")).not_to_have_text("No unsaved edits.")
-        minutes.fill("30")
-        expect(page.locator("#pending")).to_have_text("No unsaved edits.")
-        pds.group(page, "overview")
+        notice_tabs_keep_the_draft(page, pds, base, a, b)
         entry.get_by_role("link", name="builder · Minutes per session").focus()
         page.keyboard.press("Enter")
         expect(pds.select(page, "Layer")).to_have_js_property("value", "global")
         expect(page.locator("#groups a[href='#agents']")).to_have_attribute("aria-current", "page")
+        minutes = page.get_by_label("Minutes per session, builder")
         expect(minutes).to_be_focused()
         expect(minutes).to_be_in_viewport()
         expect(minutes).to_have_value("50")
