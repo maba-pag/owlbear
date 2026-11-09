@@ -176,6 +176,7 @@ def resource_path(
             )
         defining = module_bindings if module_bindings and module_bindings.get(node.id) is definition else definitions
         remaining = {name: value for name, value in defining.items() if name != node.id}
+        remaining[node.id] = node
         unvisited = {name: value for name, value in module_bindings.items() if value is not definition}
         return resource_path(value, source, modules, remaining, unvisited) if value is not None else None
     if isinstance(node, ast.JoinedStr):

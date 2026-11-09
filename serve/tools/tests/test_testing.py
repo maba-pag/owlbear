@@ -606,6 +606,9 @@ def test_source_relative_resource_paths_do_not_claim_an_unread_sibling_with_the_
         "def value(folder=None):\n    ROOT = 'b'\n    FILE, UNUSED = 'data.md', 'unread.md'\n"
         "    return ((folder or directory()) / FILE).read_text()\n"
         "def computed(name):\n    return files('demo').joinpath('a', f'data{name}.md').read_text()\n",
+        "serve/demo/src/demo/a/rebound.py": "from pathlib import Path\n"
+        "FILE = 'data.md'\nFILE = Path(__file__).parent / FILE\n"
+        "def value():\n    return FILE.read_text()\n",
     }
     for name, text in texts.items():
         path = tmp_path / name
