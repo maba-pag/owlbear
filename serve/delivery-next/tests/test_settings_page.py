@@ -1152,6 +1152,12 @@ def _saved_by_keyboard(page, pds, button: str, whose: str) -> None:
 def test_guardrail_controls_serialize(store, pds, monkeypatch) -> None:
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
 
+    actions = {
+        "hand_off_fitness": "refuse-hand-off",
+        "course_and_constraints": "stop-and-ask",
+        "outside_state_changes": "stop-and-resume",
+        "irreversible_harm": "stop-and-ask",
+    }
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update=dict.fromkeys((*USER_KEYS, "guard_level"))))
     with settings_page(store, pds) as page:
         pds.group(page, "overview")
@@ -1167,7 +1173,7 @@ def test_guardrail_controls_serialize(store, pds, monkeypatch) -> None:
                 "inherit",
                 *ALLOWED[category],
             ]
-            pds.pick(page, label, ALLOWED[category][-1])
+            pds.pick(page, label, actions[field])
         for label, value in ((INSTRUCTIONS, "on"), (SKILLS, "off"), (MEMORY, "on"), (GUARD, "lenient")):
             pds.pick(page, label, value)
             big_enough(pds.select(page, label).get_by_role("combobox"))
@@ -1176,9 +1182,7 @@ def test_guardrail_controls_serialize(store, pds, monkeypatch) -> None:
     saved = store.read_config()
     assert [getattr(saved, key) for key in USER_KEYS] == [True, False, True]
     assert saved.guard_level == "lenient"
-    assert {field: getattr(saved.spotter, field) for field in CATEGORY_LABELS} == {
-        field: ALLOWED[category][-1] for category, field in CATEGORIES.items()
-    }
+    assert {field: getattr(saved.spotter, field) for field in CATEGORY_LABELS} == actions
 
 
 GUARD = "Shell guard level"
