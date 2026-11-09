@@ -754,11 +754,7 @@ def test_an_older_read_s_layers_answered_last_never_replace_a_newer_read_s(store
 
         page.route("**/api/next/config", hold)
         page.locator("#read-again").click()
-        for _ in range(400):
-            if held:
-                break
-            page.wait_for_timeout(50)
-        assert held
+        until(page, lambda: held, seconds=20)
         store.config_path.parent.mkdir(parents=True, exist_ok=True)
         store.config_path.write_text(json.dumps({"format": CONFIG_FORMAT, "agents": {"builder": {"minutes": 45}}}))
         page.locator("#read-again").click()  # the second read's refresh shows the change
@@ -791,11 +787,7 @@ def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, 
         page.route("**/api/next/config", hold)
         for count in (1, 2):
             page.locator("#read-again").click()
-            for _ in range(400):
-                if len(held) == count:
-                    break
-                page.wait_for_timeout(50)
-            assert len(held) == count
+            until(page, lambda: len(held) == count, seconds=20)
         (older, found), (newer, _) = held
         hold_polls(page)
         message = f"the layers could not be read:\n{whole_error}\nreload note"
@@ -838,11 +830,7 @@ def test_an_older_read_s_failed_layers_never_speak_over_a_newer_read_s(store, pd
         page.route("**/api/next/config", hold)
         for count in (1, 2):
             page.locator("#read-again").click()
-            for _ in range(400):
-                if len(held) == count:
-                    break
-                page.wait_for_timeout(50)
-            assert len(held) == count
+            until(page, lambda: len(held) == count, seconds=20)
         older, newer = held
         hold_polls(page)
         with page.expect_request("**/api/next/config/models"):  # the newer refresh is done with the layers
