@@ -486,7 +486,7 @@ def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row
         pds.group(page, "agents")
         page.get_by_label("Rounds at most, builder").fill("4")
         page.get_by_label(WAIT).fill("20")  # the shaper's row alone has the cell; the others say n/a
-        assert min(page.get_by_label(WAIT).bounding_box()[side] for side in ("width", "height")) >= 24  # WCAG 2.5.8
+        big_enough(page.get_by_label(WAIT))
         expect(page.locator("#set-rounds-planner")).to_contain_text("n/a")
         pds.pick(page, "Show", "unsaved")
         expect(rows).to_have_count(3)  # the final review follows the builder's rounds, so it changes too
@@ -876,9 +876,7 @@ def test_recommendations_fill_only_globals_blanks_and_keep_saved_values_and_exis
         expect(recommended).to_have_count(1)
         recommended.click()
         expect(recommended).to_be_focused()
-        box = recommended.bounding_box()
-        assert box is not None
-        assert min(box["width"], box["height"]) >= 24
+        big_enough(recommended)
         expect(page.locator("#status")).to_contain_text("nothing has been saved")
         expect(page.get_by_label("Agent sessions at once in one project")).to_have_value("")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("66")
@@ -1144,8 +1142,7 @@ def test_the_github_account_shows_the_account_it_resolves_to_in_each_layer(store
         expect(field).to_be_focused()
         expect(row.locator("p-text[color='error']")).to_have_text("GitHub account")
         pds.pick(page, "Layer", "global")
-        box = field.bounding_box()
-        assert min(box["width"], box["height"]) >= 24  # WCAG 2.5.8 target size
+        big_enough(field)
         field.fill("repository-owner")
         expect(_in_use(page, "set-github_account")).to_have_text(f"in use: {FALLBACK}, from global")
         expect(page.locator("#pending")).to_have_text("Unsaved: GitHub account: unset → repository-owner.")
