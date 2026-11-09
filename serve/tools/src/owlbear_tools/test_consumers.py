@@ -371,8 +371,7 @@ class _Consumers:
                 if names - aliases[caller]:
                     aliases[caller].update(names)
                     pending.append(caller)
-                reads = resource_reads(self.definitions.get(caller, {}), names)
-                if reads:
+                if reads := resource_reads(self.definitions.get(caller, {}), names):
                     affected[caller].update(reads)
         if not affected:
             msg = f"No current runtime-resource readers resolved for {resource} in {self.root}"
