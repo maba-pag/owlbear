@@ -958,6 +958,8 @@ def test_recommendations_fill_only_globals_blanks_and_keep_saved_values_and_exis
         pds.group(page, "checks")
         expect(page.get_by_label(LABELS)).to_have_value("none")
         expect(pds.select(page, "The line Opened by OwlBear Delivery")).to_have_js_property("value", "off")
+        pds.group(page, "memory")
+        expect(page.get_by_label(MEMORY_LABELS["outstanding_boost"])).to_have_value("0.1")
         for layer in ("project", "machine"):
             pds.pick(page, "Layer", layer)
             expect(recommended).to_be_disabled()
@@ -971,6 +973,13 @@ def test_recommendations_fill_only_globals_blanks_and_keep_saved_values_and_exis
         recommended.click()
         expect(page.get_by_label("Minutes per session, auditor")).to_have_value("")
         assert {name: path.read_bytes() for name, path in paths.items()} == before
+        _saved(page, pds, "Save global defaults", "the global")
+    written = json.loads(paths["global"].read_text())
+    assert written["memory"]["outstanding_boost"] == 0.1
+    assert (written["agents"]["builder"]["minutes"], written["agents"]["auditor"]["minutes"]) == (66, None)
+    assert (written["sessions"], written["load_user_memory"]) == (None, False)
+    assert (written["pr_marker"], written["pr_labels"], written["spotter"]["steer_share"]) == (False, [], 0)
+    assert all(paths[name].read_bytes() == before[name] for name in ("project", "machine"))
 
 
 @pytest.mark.browser
