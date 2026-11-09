@@ -145,6 +145,7 @@ Runner switches and Python module entries keep that ownership; uncertain uv synt
 holds the repair rather than silently losing the original selector.
 Opaque inline interpreter commands are held rather than treated as evidence that
 no owned selector source runs.
+Implicit interpreter stdin, including here-documents, keeps the same opaque-command hold.
 A repair that changes this selection machinery cannot prove itself with its altered check alone;
 it retains the existing owner hold rather than being applied automatically.
 

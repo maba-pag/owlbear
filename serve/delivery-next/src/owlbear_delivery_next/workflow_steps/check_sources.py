@@ -28,23 +28,27 @@ PYTHON_SWITCHES = frozenset({"-I", "-S", "-s", "-E", "-B", "-O", "-OO", "-u", "-
 
 def _inline_python(rest: list[str]) -> bool:
     while rest:
-        if (option := rest[0]) == "-" or option.startswith("-c"):
+        if (option := rest[0]) == "-" or option.startswith(("-c", "<", ">", "|", "&", ";")):
             return True
         if option == "-m" or not option.startswith("-"):
-            break
+            return False
         if option in {"-W", "-X", "--check-hash-based-pycs"}:
             rest = rest[2:]
         elif option in PYTHON_SWITCHES or option.startswith(("-W", "-X")):
             rest = rest[1:]
         else:
             return True
-    return False
+    return True
 
 
 def _inline_shell(rest: list[str]) -> bool:
     while rest:
         option = rest[0]
-        if option == "--command" or (option.startswith("-") and not option.startswith("--") and "c" in option):
+        if (
+            option.startswith(("<", ">", "|", "&", ";"))
+            or option == "--command"
+            or (option.startswith("-") and not option.startswith("--") and "c" in option)
+        ):
             return True
         if option in {"-o", "+o", "--rcfile", "--init-file"}:
             rest = rest[2:]
@@ -57,11 +61,9 @@ def _inline_shell(rest: list[str]) -> bool:
             "--verbose",
         }:
             rest = rest[1:]
-        elif option.startswith("-"):
-            return True
         else:
-            break
-    return False
+            return option.startswith("-")
+    return True
 
 
 def _opaque_interpreter(words: list[str]) -> bool:

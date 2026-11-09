@@ -108,7 +108,13 @@ def test_a_selector_fix_is_held_even_when_its_own_empty_check_passes(repo, tmp_p
     assert not (repo / missing).exists()
     assert step_repair._named(missing, witness, repo)  # noqa: SLF001
     assert step_repair._named(path, ("python -m owlbear_tools.testing --changed",), repo)  # noqa: SLF001
-    assert step_repair._named(path, ('python -c "from owlbear_tools.testing import test_main; test_main()"',), repo)  # noqa: SLF001
+    assert all(
+        step_repair._named(path, (command,), repo)  # noqa: SLF001
+        for command in (
+            'python -c "from owlbear_tools.testing import test_main; test_main()"',
+            "python <<'PY'\nfrom owlbear_tools.testing import test_main\ntest_main()\nPY",
+        )
+    )
     assert step_repair._named(path, ('sh -c "uv run test --changed"',), repo)  # noqa: SLF001
     (source / "task_scope.py").write_text("def broken(\n")
     reason = step_repair._check_hold(path, witness, repo)  # noqa: SLF001
