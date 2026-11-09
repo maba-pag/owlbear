@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 import uvicorn
 from fastapi.testclient import TestClient
+from playwright.sync_api import expect
 from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile
@@ -838,8 +839,6 @@ def test_an_older_read_s_layers_answered_last_never_replace_a_newer_read_s(store
 @pytest.mark.parametrize("order", ["failure first", "failure last"])
 def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, order: str) -> None:
     """#810: of two reads' refreshes, the newer one's layers fail; the older one's, answered before or after, show."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with settings_page(store, pds) as page:
         pds.group(page, "overview")
         expect(page.locator("#reads-status")).to_contain_text("Last read")
@@ -863,12 +862,20 @@ def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, 
             assert len(held) == count
         (older, found), (newer, _) = held
         failed = {"status": 503, "json": {"detail": "the layers could not be read"}}
-        steps = [lambda: newer.fulfill(**failed), lambda: older.fulfill(response=found)]
-        for step in steps if order == "failure first" else steps[::-1]:
-            with page.expect_response("**/api/next/config"):
-                step()
         pds.group(page, "agents")
-        expect(page.get_by_label("Minutes per session, builder")).to_have_value("45")
+        minutes = page.get_by_label("Minutes per session, builder")
+        error = page.locator("#error")
+        if order == "failure first":
+            newer.fulfill(**failed)
+            expect(error).to_contain_text("the layers could not be read")
+            older.fulfill(response=found)
+        else:
+            older.fulfill(response=found)
+            expect(minutes).to_have_value("45")
+            newer.fulfill(**failed)
+        # The changed value witnesses reload's success, including its error-clearing decision, not just HTTP arrival.
+        expect(minutes).to_have_value("45")
+        expect(error).to_contain_text("the layers could not be read")
 
 
 @pytest.mark.browser

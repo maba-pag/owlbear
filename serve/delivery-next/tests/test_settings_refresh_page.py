@@ -339,28 +339,6 @@ def test_a_second_read_stays_busy_when_the_first_refresh_finishes(answers, pds):
 
 @pytest.mark.browser
 @pytest.mark.timeout(120)
-def test_old_layers_cannot_clear_a_newer_reload_failure(answers, pds):
-    with focused_page(answers, pds) as (page, _base):
-        layers = hold_first(page, "**/p/alpha/api/next/config")
-        answers.at(1)
-        start_polled_refresh(page)
-        until(page, lambda: layers)
-        page.route(
-            "**/p/alpha/api/next/config",
-            lambda route: route.fulfill(status=503, json={"detail": "the layers could not be read"}),
-        )
-        answers.at(2)
-        poll(page)
-        error = page.locator("#error")
-        expect(error).to_contain_text("could not be read")
-        hold_polls(page)
-        layers[0][0].fulfill(response=layers[0][1])
-        page.wait_for_timeout(500)
-        assert "could not be read" in error.inner_text()
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)
 def test_unreadable_state_without_a_read_date_shows_its_failure(answers, pds):
     with focused_page(answers, pds) as (page, _base):
         answers.at(1, failure=True, no_date=True)
