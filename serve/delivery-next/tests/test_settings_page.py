@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
-from fastapi.testclient import TestClient
 from playwright.sync_api import expect
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile
@@ -19,14 +18,13 @@ from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import data_place, data_repo, leases, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import versions
-from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.runtimes import model_choices, settings_seen
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
 from owlbear_delivery_next.settings.improvement import ALLOWED, CATEGORIES
 from owlbear_delivery_next.state_store import registry, settings_carry
 from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store
 
-from .test_config_api import Host, offered_model, prices
+from .test_config_api import offered_model, prices
 from .test_machine_pages import _git, browsing, clone, errors, until
 
 if TYPE_CHECKING:
@@ -351,16 +349,17 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with settings_page(store, pds) as page:
-        c = TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1",
-                       headers={"authorization": "Bearer t"})  # fmt: skip
+        endpoint = f"{page.url.split('/config?', 1)[0]}/p/{store.root.name}/api/next/config"
 
         def intervene(route) -> None:
             assert route.request.method == "PUT"
-            got = c.get("/api/next/config").json()
+            response = page.request.get(endpoint, headers=TOKEN)
+            assert response.status == 200
+            got = response.json()
             assert route.request.post_data_json["rev"] == got["project_rev"]
             newer = got["project"] | {"widths": [1600]}
-            changed = c.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": newer})
-            assert changed.status_code == 200
+            changed = page.request.put(f"{endpoint}/project", headers=TOKEN, data={"rev": got["project_rev"], "layer": newer})
+            assert changed.status == 200
             assert changed.json()["project_rev"] != got["project_rev"]
             route.continue_()
 
