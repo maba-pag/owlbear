@@ -280,7 +280,7 @@ class _Selection:
                 and match_fingerprint(before[row.source], row.blocks)
                 and any(
                     module is None or not match_fingerprint(module, row.blocks)
-                    for module in (before[row.source], original[row.source], current[row.source])
+                    for module in (original[row.source], current[row.source])
                 )
             ):
                 self.add(row.test, f"native footprint: {label} {row.source}")
