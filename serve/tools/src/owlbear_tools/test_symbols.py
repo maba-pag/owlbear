@@ -194,8 +194,7 @@ def _resource_call(
         parent = resource_path(node.func.value, source, modules, definitions)
         if parent is not None and node.func.attr == "joinpath":
             parts = [resource_path(arg, source, modules, definitions) for arg in node.args]
-            resolved = (part for part in parts if part is not None)
-            return str(PurePosixPath(parent, *resolved)) if None not in parts else None
+            return str(PurePosixPath(parent, *filter(None, parts))) if None not in parts else None
         if parent is not None and node.func.attr in {"read_text", "read_bytes", "open", "resolve"}:
             return parent
         if parent is not None and node.func.attr == "with_name" and node.args:
