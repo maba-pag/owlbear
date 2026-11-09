@@ -4,93 +4,157 @@ from __future__ import annotations
 
 import contextlib
 import json
-import socket
 import subprocess
-import threading
-import time
 from datetime import UTC, datetime
-from types import SimpleNamespace
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import pytest
-import uvicorn
 from fastapi.testclient import TestClient
 from playwright.sync_api import expect
-from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.local_system import data_repo, local_home
-from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.project_host import api, config_routes
-from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.impeccable import pack_files
+from owlbear_delivery_next.local_system import data_place, data_repo, leases, local_home
+from owlbear_delivery_next.local_system.storage_io import atomic_write
+from owlbear_delivery_next.machine_host import versions
+from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.runtimes import model_choices, settings_seen
-from owlbear_delivery_next.runtimes.settings_seen import STATE
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
 from owlbear_delivery_next.settings.improvement import ALLOWED, CATEGORIES
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store import registry, settings_carry
+from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store
+
+from .test_config_api import Host, offered_model, prices
+from .test_machine_pages import _git, browsing, clone, errors, until
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
-    from pathlib import Path
+    from collections.abc import Iterator
+
+    from playwright.sync_api import Page
 
 SESSIONS = "Agent sessions at once in one project"  # the row's name; its key is `sessions`
 LOOKS = "Spotter · Looks (hand-off, plan, state-change, sample)"
-
-MODELS = {
-    "models": [
-        {"id": "claude-opus-5.5", "name": "Opus", "efforts": ["low", "medium", "high"], "default_effort": "medium",
-         "context": 200_000, "rates": None, "long": {"context": 1_000_000, "rates": None}},  # the test curator's
-        {"id": "gpt-6.1-sol", "name": "Sol", "efforts": ["low", "medium", "high", "xhigh"], "default_effort": "low",
-         "context": 272_000, "rates": None, "long": None},
-        {"id": "tiny", "name": "Tiny", "efforts": [], "default_effort": "", "context": 200_000, "rates": None,
-         "long": None},
-    ],
-    "error": "",
-}  # fmt: skip
+TOKEN = {"authorization": "Bearer t"}
+READS_TIME = 60
 
 
-class Host:
-    maintenance = None
-    failed = ""
-    wake = SimpleNamespace(set=lambda: None)
-    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
-    repo = None
+def hold_first(page, url, method="GET", *, fetch=True):
+    held = []
+
+    def intercept(route):
+        if held or route.request.method != method:
+            route.fallback()
+        else:
+            held.append((route, route.fetch() if fetch else None))
+
+    page.route(url, intercept)
+    return held
+
+
+def hold_polls(page):
+    page.route("**/api/next/projects", lambda _route: None)
+
+
+@contextlib.contextmanager
+def refresh_page(store, pds):
+    with pytest.MonkeyPatch.context() as mp, browsing(mp, pds) as (page, base):
+        page.clock.install()
+        page.add_init_script("""{
+            window.settingsReadsFinished = 0;
+            const every = window.setInterval;
+            window.setInterval = (fn, ms, ...args) => {
+                if (ms !== 5000) return every(fn, ms, ...args);
+                window.settingsPollAt = Date.now() + ms;
+                return every(() => {
+                    window.settingsPollAt += ms;
+                    return fn(...args);
+                }, ms);
+            };
+        }""")
+
+        def observe(route):
+            response = route.fetch()
+            body = response.text()
+            end = "    showIdle();\n"
+            assert body.count(end) == 1
+            route.fulfill(response=response, body=body.replace(end, end + "    window.settingsReadsFinished++;\n"))
+
+        page.route("**/assets/page/config/reads.mjs", observe)
+        project = next(p for p in registry.load().projects if p.id == store.root.name)
+        page.goto(f"{base}/config?project={project.id}#token=t")
+        until(page, lambda: page.evaluate("window.settingsReadsFinished") == 1, READS_TIME)
+        yield page, base
+
+
+def poll(page):
+    """Run the registered poll, before the held GET's later request deadline."""
+    page.clock.pause_at(page.evaluate("() => new Date(window.settingsPollAt).toISOString()"))
+
+
+def start_polled_refresh(page):
+    projects = hold_first(page, "**/api/next/projects", fetch=False)
+    poll(page)
+    until(page, lambda: projects)
+    page.clock.run_for(1)
+    projects[0][0].continue_()
+
+
+def polled_read(page, base, *, failure=False):
+    with pytest.MonkeyPatch.context() as mp:
+        if failure:
+
+            def fail(*_args, **_kwargs):
+                message = "could not read"
+                raise OSError(message)
+
+            mp.setattr(pack_files, "fetch", fail)
+        Outside.read(base, registry.load().projects[0].id)
+    held = hold_first(page, "**/config/read")
+    start_polled_refresh(page)
+    until(page, lambda: held)
+    return held[0]
+
+
+def fail_read_state(route):
+    route.fulfill(status=503, json={"detail": "the read state could not be read"})
 
 
 @pytest.fixture
-def store(tmp_path: Path, monkeypatch) -> Store:
-    monkeypatch.setattr(model_choices.Offered, "__call__", lambda _self: MODELS)
-    s = Store(tmp_path / "store")
-    s.global_path = tmp_path / "global" / "config.json"
-    return s
+def store(tmp_path: Path, shared_repo, monkeypatch) -> Store:
+    monkeypatch.setenv(data_repo.VIEW, str(shared_repo[0]))
+    _git(shared_repo[0], "commit", "--allow-empty", "-m", settings_carry.MESSAGE)
+    _git(shared_repo[0], "push")
+    monkeypatch.setattr(
+        model_choices,
+        "_read",
+        lambda: [
+            offered_model(
+                "claude-opus-5.5", ["low", "medium", "high"], tiers=prices(200_000, 3, 15, prices(1_000_000, 6, 30))
+            ),
+            offered_model("gpt-6.1-sol", ["low", "medium", "high", "xhigh"]),
+            offered_model("tiny", None),
+        ],
+    )
+    monkeypatch.setattr(pack_files, "fetch", lambda *_args, **_kwargs: b"[]")
+    repo = clone(tmp_path / "this-project", origin="https://github.com/acme/this-project.git")
+    registry.register(repo)
+    with registry.locked():
+        machine = registry.load()
+        machine.settings_moved = True
+        registry.save(machine)
+    return Store.open(repo)
 
 
 @contextlib.contextmanager
 def settings_page(store: Store, pds: Any) -> Iterator[Any]:
-    """The Settings page in a real browser: only the test host and the PDS CDN answer."""
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            page.goto(f"{base}/config#token=tok")
-            opened(page, pds)
-            yield page
-            browser.close()
-    finally:
-        server.should_exit = True
+    """Use the machine pages' native host, registered clone and real Stores."""
+    with pytest.MonkeyPatch.context() as mp, browsing(mp, pds) as (page, base):
+        project = next(p for p in registry.load().projects if p.id == store.root.name)
+        page.goto(f"{base}/config?project={project.id}#token=t")
+        opened(page, pds)
+        yield page
 
 
 def opened(page, pds, group: str = "agents") -> None:
@@ -190,9 +254,9 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
         expect(message).to_have_count(0)
         minutes.fill("60")
         page.get_by_role("button", name="Save project settings").click()
-        expect(pds.modal(page)).to_contain_text("These apply to this project only")  # TD-396
+        expect(pds.modal(page)).to_contain_text("These apply to this-project only")  # TD-396
         pds.answer(page, "Save project settings")
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
     agents = store.read_config().agents
     assert (agents["builder"].model, agents["reviewer"].model, agents["reviewer"].effort) == (
         "tiny", "claude-opus-5.5", "high"
@@ -202,23 +266,16 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
 
 
 @pytest.mark.browser
-def test_the_pending_line_names_a_final_review_and_a_merge_edit_by_their_rows_words(store, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    with settings_page(store, pds) as page:
-        page.get_by_label("Rounds at most, final review").fill("5")
-        pds.group(page, "checks")
-        page.get_by_label("CI poll interval (seconds)").fill("30")
-        expect(page.locator("#pending")).to_have_text(
-            "Unsaved: Final review · Rounds at most: inherited → 5; CI poll interval (seconds): inherited → 30."
-        )
-
-
-@pytest.mark.browser
 def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(store, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with settings_page(store, pds) as page:
+        options = pds.select(page, "Layer").locator("p-select-option")
+        expect(options.filter(has_text="synced to shared repository")).to_have_count(2)
+        expect(page.locator("#storage-note")).to_contain_text("Save commits and pushes")
+        pds.pick(page, "Layer", "machine")
+        expect(page.locator("#storage-note")).to_contain_text("local files, never pushed")
+        pds.pick(page, "Layer", "project")
         rounds = page.get_by_label("Rounds at most, builder")
         rounds.fill("4")
         pds.pick(page, "Layer", "global")
@@ -237,10 +294,10 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         pds.group(page, "agents")  # the draft stays while another group shows
         expect(rounds).to_have_value("4")
         pds.group(page, "checks")
+        merge_preferences_are_edited(page, pds)
         labels = page.get_by_label("Labels, comma-separated; none for no labels")
         labels.fill("inherit")  # a label may be named so: typing it never means "inherit"
         expect(labels).to_have_value("inherit")
-        labels.fill("release:minor, owlbear")
         pds.pick(page, "The line Opened by OwlBear Delivery", "off")
         looks = the_spotter_is_edited(page, pds)
         pds.group(page, "agents")
@@ -249,7 +306,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         at_once.fill("3")
         page.get_by_role("button", name="Save project settings").click()
         pds.answer(page, "Save project settings")
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
         pds.group(page, "guardrails")
         a_list_keeps_its_text_as_typed_and_counts_only_new_items(page, looks)
         the_global_layer_kept_its_edit_and_takes_one_more(page, pds)
@@ -257,7 +314,15 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
     assert (project.agents["builder"].max_rounds, project.design_failures, project.agents["builder"].minutes) == (
         4, "back", None
     )  # fmt: skip
-    assert (project.pr_labels, project.pr_marker, project.sessions) == (["release:minor", "owlbear"], False, 3)
+    assert (project.pr_labels, project.pr_marker, project.sessions) == (["inherit"], False, 3)
+    assert project.final_review.max_rounds == 5
+    assert project.prefs.model_dump(mode="json") == {
+        "merge_method": "squash",
+        "delete_remote_branch": False,
+        "ci_poll_seconds": 45,
+        "ci_start_window_seconds": 320,
+        "ask_before_merge": True,
+    }
     assert (project.spotter.switch, project.spotter.looks, project.spotter.sample_rate) == (
         "off",
         ["hand-off", "sample"],
@@ -266,6 +331,19 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
     assert project.spotter.look_credit_limit == 0.05
     assert project.spotter.steer_share is None  # the rest still inherit
     assert not store.global_path.exists()
+
+
+def merge_preferences_are_edited(page, pds) -> None:
+    pds.pick(page, "Merge method", "squash")
+    pds.pick(page, "Delete the remote branch after merging", "off")
+    pds.pick(page, "Ask before merging", "on")
+    page.get_by_label("CI poll interval (seconds)").fill("45")
+    page.get_by_label("CI start window (seconds)").fill("320")
+    pds.group(page, "agents")
+    page.get_by_label("Rounds at most, final review").fill("5")
+    expect(page.locator("#pending")).to_contain_text("Final review · Rounds at most: inherited → 5")
+    expect(page.locator("#pending")).to_contain_text("CI poll interval (seconds): inherited → 45")
+    pds.group(page, "checks")
 
 
 @pytest.mark.browser
@@ -312,7 +390,7 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
         with page.expect_response("**/api/next/config/project") as accepted:
             pds.answer(page, "Save project settings")
         assert accepted.value.status == 200
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
         expect(unsaved).to_have_count(0)
     saved = json.loads(store.config_path.read_text())
     minutes = (saved["agents"]["reviewer"]["minutes"], saved["agents"]["builder"]["minutes"])
@@ -437,7 +515,7 @@ def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row
         pds.group(page, "agents")
         page.get_by_role("button", name="Save project settings").click()
         pds.answer(page, "Save project settings")
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
         expect(rows).to_have_count(0)  # saved: no longer an edit
         pds.pick(page, "Show", "set")
         expect(rows).to_have_count(2)  # this project sets the builder's rounds and the shaper's wait, nothing else
@@ -465,7 +543,7 @@ def test_the_unsaved_filter_shows_a_row_whose_draft_is_only_spelled_differently(
         sessions.fill("2")
         page.get_by_role("button", name="Save project settings").click()
         pds.answer(page, "Save project settings")
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
         sessions.fill("02")
         expect(page.locator("#pending")).to_contain_text(f"{SESSIONS}: 2 \u2192 02")
         pds.pick(page, "Show", "unsaved")
@@ -499,52 +577,6 @@ def test_the_unsaved_filter_keeps_a_row_whose_edit_is_undone_until_the_filter_ch
         expect(row).to_be_hidden()
 
 
-@pytest.mark.browser
-def test_the_overview_counts_each_group_s_unset_names_its_first_three_and_opens_the_group_for_more(
-    store, pds, monkeypatch
-) -> None:
-    """D-01M66B6GS0HKACV9C4R4QKFX7T: the unset settings by group, each with its count and its first three, each linking
-    its row, then "and N more" opening the group; a group with none is left out."""
-    import re  # noqa: PLC0415
-
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-
-    monkeypatch.setattr(config, "BASE", None)
-    with settings_page(store, pds) as page:
-        url = page.url.split("#")[0]
-        pds.group(page, "overview")
-        groups = page.locator("#unset-groups > li")
-        expect(groups).to_have_count(4)  # this machine's are set; the project's folder needs no setting
-        expect(page.locator("#unset-project, #unset-this-machine, #unset-overview")).to_have_count(0)
-        agents = page.locator("#unset-agents")
-        expect(agents).to_have_text(
-            re.compile(
-                r"^Agents and runs, (\d+) unset: planner · Model, planner · Effort, planner · Context and \d+ more$"
-            )
-        )
-        total = sum(_unset_count(page, group) for group in ("agents", "guardrails", "memory", "checks"))
-        expect(page.locator("#unset > p-text").first).to_contain_text(f"{total} settings are unset.")
-        for group in ("agents", "guardrails", "memory", "checks"):
-            links = page.locator(f"#unset-{group} a")
-            expect(links).to_have_count(4)
-            expect(links.last).to_have_text(f"and {_unset_count(page, group) - 3} more")
-            expect(links.last).to_have_attribute("href", f"#{group}")
-        expect(agents.locator("a").first).to_have_attribute("href", "#set-agents-planner")
-        page.locator("#unset-agents").get_by_role("link", name=re.compile(r"^and \d+ more$")).click()
-        expect(page).to_have_url(f"{url}#agents")
-        expect(page.locator("#groups a[href='#agents']")).to_have_attribute("aria-current", "page")
-        expect(page.locator("#agents-title")).to_be_focused()
-        expect(page.locator("#set-sessions p-text[color='error']")).to_have_count(1)  # the group names every one red
-        pds.group(page, "overview")
-        page.locator("#unset-guardrails").get_by_role("link", name=re.compile(r"^and \d+ more$")).click()
-        expect(page).to_have_url(f"{url}#guardrails")
-        expect(page.locator("#groups a[href='#guardrails']")).to_have_attribute("aria-current", "page")
-        expect(page.locator("#spotter-title")).to_be_focused()
-        expect(page.locator("#set-guard_level p-text[color='error']")).to_have_count(1)
-
-
 # The most characters on one rendered line of an element's text, counted one character at a time.
 LONGEST_LINE = """(el) => {
   const lines = new Map(), range = document.createRange(), walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -575,6 +607,16 @@ def test_running_text_stops_at_about_75_characters_a_line_and_a_table_keeps_its_
             page.set_viewport_size({"width": width, "height": 900})
             assert 65 <= text.evaluate(LONGEST_LINE) <= 80, width
             assert table.bounding_box()["width"] > 2 * text.bounding_box()["width"], width
+        page.set_viewport_size({"width": 390, "height": 800})
+        pds.pick(page, "Layer", "global")
+        page.get_by_role("button", name="Use recommended", exact=True).click()
+        expect(page.locator("#status")).to_contain_text("nothing has been saved")
+        assert page.evaluate("document.documentElement.scrollWidth") <= 390
+        assert page.locator(".bar").evaluate("e => e.getBoundingClientRect().height") < 400
+        pending = page.locator("#pending")
+        pending.focus()
+        pending.press("End")
+        page.wait_for_function("document.querySelector('#pending').scrollTop > 0")
 
 
 @pytest.mark.browser
@@ -611,194 +653,88 @@ Response.prototype.json = function () {
 @pytest.mark.browser
 def test_models_arriving_while_a_model_name_is_typed_wait_until_the_field_is_left(store, monkeypatch, pds) -> None:
     """Sol, TD-264: the offered models replace the typed field only once the owner leaves it."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
-    arrive = threading.Event()
-
-    def slow(_self: object) -> dict[str, Any]:
-        arrive.wait()  # released by the test once the field is in use, or by its cleanup
-        return MODELS
-
-    monkeypatch.setattr(model_choices.Offered, "__call__", slow)
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            page.add_init_script(MODELS_HANDLED)
-            pds.only(page, base)
-            page.goto(f"{base}/config#token=tok")
-            pds.group(page, "agents")
-            typed = page.locator('p-input-text[label="Model for builder"]').get_by_label("Model for builder")
-            typed.click()
-            typed.press_sequentially("my-model")
-            expect(page.locator("#models-note")).to_contain_text("Reading the models")
-            arrive.set()
-            page.wait_for_function("window.modelsHandled === true")  # the models arrived while the field is in use
-            typed.press_sequentially("-2")
-            expect(typed).to_be_focused()
-            expect(typed).to_have_value("my-model-2")
-            pds.select(page, "Layer").get_by_role("combobox").focus()  # leaving the settings lets the models in
-            expect(page.locator("#models-note")).to_contain_text("as this machine's Copilot offers them")
-            chosen = pds.select(page, "Model for builder")
-            expect(chosen).to_have_js_property("value", "my-model-2")
-            said = "my-model-2 (not offered here)"
-            expect(chosen.get_by_role("option", name=said, selected=True, include_hidden=True)).to_have_count(1)
-            pds.pick(page, "Model for builder", "claude-opus-5.5")
-            expect(chosen.get_by_role("combobox")).to_be_focused()
-            browser.close()
-    finally:
-        arrive.set()
-        server.should_exit = True
+    _layered(store, monkeypatch, GLOBAL, {}, {})
+    with browsing(monkeypatch, pds) as (page, base):
+        page.add_init_script(MODELS_HANDLED)
+        held = hold_first(page, "**/config/models")
+        page.goto(f"{base}/config?project={registry.load().projects[0].id}#token=t")
+        pds.group(page, "agents")
+        planner = page.locator('p-input-text[label="Model for planner"]').get_by_label("Model for planner")
+        pds.pick(page, "Layer", "global")
+        expect(planner).to_have_attribute("placeholder", "Unset")
+        expect(_option(page, pds, "Context for planner")).to_have_text("Unset")
+        pds.pick(page, "Layer", "project")
+        expect(planner).to_have_attribute("placeholder", "inherit (unset)")
+        expect(_option(page, pds, "Context for builder")).to_have_text("inherit (long)")
+        typed = page.locator('p-input-text[label="Model for builder"]').get_by_label("Model for builder")
+        typed.click()
+        typed.press_sequentially("my-model")
+        expect(page.locator("#models-note")).to_contain_text("Reading the models")
+        until(page, lambda: held)
+        held[0][0].fulfill(response=held[0][1])
+        page.wait_for_function("window.modelsHandled === true")
+        typed.press_sequentially("-2")
+        expect(typed).to_be_focused()
+        expect(typed).to_have_value("my-model-2")
+        pds.select(page, "Layer").get_by_role("combobox").focus()
+        expect(page.locator("#models-note")).to_contain_text("as this machine's Copilot offers them")
+        chosen = pds.select(page, "Model for builder")
+        expect(chosen).to_have_js_property("value", "my-model-2")
+        said = "my-model-2 (not offered here)"
+        expect(chosen.get_by_role("option", name=said, selected=True, include_hidden=True)).to_have_count(1)
+        pds.pick(page, "Model for builder", "claude-opus-5.5")
+        expect(chosen.get_by_role("combobox")).to_be_focused()
 
 
 @pytest.mark.browser
-def test_models_arriving_during_a_save_apply_once_it_ends(store, monkeypatch, pds) -> None:
+@pytest.mark.usefixtures("store")
+def test_models_arriving_during_a_save_apply_once_it_ends(monkeypatch, pds) -> None:
     """Sol, TD-264: a save under way when the models arrive leaves them for its end, never for good."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
-    arrive, saved = threading.Event(), threading.Event()
-
-    def slow(_self: object) -> dict[str, Any]:
-        arrive.wait(10)
-        return MODELS
-
-    monkeypatch.setattr(model_choices.Offered, "__call__", slow)
-    real = config_routes._save  # noqa: SLF001 - the save the route runs
-
-    def save(*args: Any, **kwargs: Any) -> str:
-        arrive.set()  # the models answer while this save runs
-        time.sleep(1.0)
-        saved.set()
-        return real(*args, **kwargs)
-
-    monkeypatch.setattr(config_routes, "_save", save)
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            page.goto(f"{base}/config#token=tok")
-            pds.group(page, "agents")
-            page.get_by_label("Minutes per session, builder").fill("50")
-            page.get_by_role("button", name="Save project settings").click()
-            pds.answer(page, "Save project settings")
-            expect(page.locator("#status")).to_have_text(
-                "Saved this project's settings. They apply to the next session.", timeout=10_000
-            )
-            pds.group(page, "agents")
-            expect(page.locator("#models-note")).to_contain_text("as this machine's Copilot offers them")
-            expect(pds.select(page, "Model for builder")).to_be_visible()
-            browser.close()
-    finally:
-        server.should_exit = True
-    assert saved.is_set()
-
-
-@pytest.mark.browser
-def test_a_refresh_answered_after_a_save_keeps_the_saved_values(store, pds) -> None:
-    """#810: a read's refresh that the host answered before a save, arriving after it, never shows the older layers."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    with settings_page(store, pds) as page:
-        pds.group(page, "overview")
-        expect(page.locator("#reads-status")).to_contain_text("Last read")
-        held: list[tuple[Any, Any]] = []
-
-        def hold(route: Any) -> None:
-            if route.request.method != "GET" or held:
-                route.continue_()
-                return
-            held.append((route, route.fetch()))  # the layers as they are before the save
-
-        page.route("**/api/next/config", hold)
-        page.locator("#read-again").click()
-        for _ in range(200):  # the old layers are in hand before the save starts
-            if held:
-                break
-            page.wait_for_timeout(50)
-        assert held
+    with browsing(monkeypatch, pds) as (page, base):
+        page.add_init_script(MODELS_HANDLED)
+        models = hold_first(page, "**/config/models")
+        page.goto(f"{base}/config?project={registry.load().projects[0].id}#token=t")
         pds.group(page, "agents")
         page.get_by_label("Minutes per session, builder").fill("50")
+        save = hold_first(page, "**/config/project", "PUT", fetch=False)
         page.get_by_role("button", name="Save project settings").click()
         pds.answer(page, "Save project settings")
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
-        route, before = held[0]
-        with page.expect_response("**/config/models"):  # the refresh goes on past the layers it read
-            route.fulfill(response=before)
-        expect(page.get_by_label("Minutes per session, builder")).to_have_value("50")
-
-
-@pytest.mark.browser
-def test_a_refresh_begun_during_a_save_keeps_the_saved_values(store, pds, monkeypatch) -> None:
-    """#810: a read answered while a save runs reloads the layers then; that older answer never replaces the save's."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    go = threading.Event()
-    real = config_routes._save  # noqa: SLF001 - the save the route runs
-
-    def save(*args: Any, **kwargs: Any) -> str:
-        go.wait(30)
-        return real(*args, **kwargs)
-
-    monkeypatch.setattr(config_routes, "_save", save)
-    with settings_page(store, pds) as page:
-        pds.group(page, "overview")
-        expect(page.locator("#reads-status")).to_contain_text("Last read")
-        read: list[tuple[Any, Any]] = []
-        layers: list[tuple[Any, Any]] = []
-
-        def hold(into: list[tuple[Any, Any]], method: str) -> Callable[[Any], None]:
-            def handle(route: Any) -> None:
-                if route.request.method != method or into:
-                    route.continue_()
-                    return
-                into.append((route, route.fetch()))
-
-            return handle
-
-        def held(into: list[tuple[Any, Any]]) -> tuple[Any, Any]:
-            for _ in range(400):
-                if into:
-                    return into[0]
-                page.wait_for_timeout(50)
-            pytest.fail("the request never came")
-
-        page.route("**/api/next/config/read", hold(read, "POST"))
-        page.locator("#read-again").click()
-        route, answer = held(read)
-        pds.group(page, "agents")
-        page.get_by_label("Minutes per session, builder").fill("50")
-        page.get_by_role("button", name="Save project settings").click()
-        pds.answer(page, "Save project settings")
+        until(page, lambda: save and models)
         expect(page.locator("#status")).to_have_text("Saving…")
-        page.route("**/api/next/config", hold(layers, "GET"))
-        route.fulfill(response=answer)  # the read's refresh starts while the save runs
-        route, before = held(layers)  # the layers as they are before the save writes
-        go.set()
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
-        with page.expect_response("**/config/models"):  # the refresh goes on past the layers it read
-            route.fulfill(response=before)
-        expect(page.get_by_label("Minutes per session, builder")).to_have_value("50")
+        models[0][0].fulfill(response=models[0][1])
+        page.wait_for_function("window.modelsHandled === true")
+        save[0][0].continue_()
+        expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
+        expect(page.locator("#models-note")).to_contain_text("as this machine's Copilot offers them")
+        expect(pds.select(page, "Model for builder")).to_be_visible()
+
+
+@pytest.mark.browser
+def test_a_save_blocks_old_layers_before_its_across_read_finishes(store, pds) -> None:
+    with refresh_page(store, pds) as (page, _base):
+        read = hold_first(page, "**/config/read", "POST")
+        page.get_by_role("button", name="Read again").click()
+        until(page, lambda: read)
+        save = hold_first(page, "**/config/project", "PUT", fetch=False)
+        pds.group(page, "agents")
+        field = page.get_by_label("Minutes per session, builder")
+        field.fill("50")
+        page.get_by_role("button", name="Save project settings").click()
+        pds.answer(page, "Save project settings")
+        until(page, lambda: save)
+        layers = hold_first(page, "**/api/next/config")
+        read[0][0].fulfill(response=read[0][1])
+        until(page, lambda: layers)
+        machine = hold_first(page, "**/api/next/machine")
+        save[0][0].continue_()
+        until(page, lambda: machine)
+        hold_polls(page)
+        with page.expect_request("**/api/next/machine"):
+            layers[0][0].fulfill(response=layers[0][1])
+        expect(field).to_have_value("50")
+        assert page.locator("#status").inner_text() == "Saving…"
+        machine[0][0].fulfill(response=machine[0][1])
+        expect(page.locator("#status")).to_contain_text("Saved this-project's settings")
 
 
 @pytest.mark.browser
@@ -806,7 +742,7 @@ def test_an_older_read_s_layers_answered_last_never_replace_a_newer_read_s(store
     """#810: two reads' refreshes overlap; the first one's layers, answered after the second's, are not shown."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    with settings_page(store, pds) as page:
+    with refresh_page(store, pds) as (page, _base):
         pds.group(page, "overview")
         expect(page.locator("#reads-status")).to_contain_text("Last read")
         held: list[tuple[Any, Any]] = []
@@ -829,17 +765,18 @@ def test_an_older_read_s_layers_answered_last_never_replace_a_newer_read_s(store
         page.locator("#read-again").click()  # the second read's refresh shows the change
         pds.group(page, "agents")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("45")
+        hold_polls(page)
         route, before = held[0]
-        with page.expect_response("**/config/models"):  # the first refresh goes on past the layers it read
+        with page.expect_request("**/config/models"):  # the first refresh goes on past the layers it read
             route.fulfill(response=before)
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("45")
 
 
 @pytest.mark.browser
 @pytest.mark.parametrize("order", ["failure first", "failure last"])
-def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, order: str) -> None:
+def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, order: str, whole_error) -> None:
     """#810: of two reads' refreshes, the newer one's layers fail; the older one's, answered before or after, show."""
-    with settings_page(store, pds) as page:
+    with refresh_page(store, pds) as (page, _base):
         pds.group(page, "overview")
         expect(page.locator("#reads-status")).to_contain_text("Last read")
         store.config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -861,13 +798,17 @@ def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, 
                 page.wait_for_timeout(50)
             assert len(held) == count
         (older, found), (newer, _) = held
-        failed = {"status": 503, "json": {"detail": "the layers could not be read"}}
+        hold_polls(page)
+        message = f"the layers could not be read:\n{whole_error}\nreload note"
+        failed = {"status": 503, "json": {"detail": message}}
+        expected = "T" + message[1:]
         pds.group(page, "agents")
         minutes = page.get_by_label("Minutes per session, builder")
         error = page.locator("#error")
         if order == "failure first":
             newer.fulfill(**failed)
-            expect(error).to_have_text("The layers could not be read")
+            expect(error).to_have_text(expected)
+            assert error.text_content().strip() == expected
             older.fulfill(response=found)
         else:
             older.fulfill(response=found)
@@ -875,7 +816,8 @@ def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, 
             newer.fulfill(**failed)
         # The changed value witnesses reload's success, including its error-clearing decision, not just HTTP arrival.
         expect(minutes).to_have_value("45")
-        expect(error).to_have_text("The layers could not be read")
+        expect(error).to_have_text(expected)
+        assert error.text_content().strip() == expected
 
 
 @pytest.mark.browser
@@ -883,7 +825,7 @@ def test_an_older_read_s_failed_layers_never_speak_over_a_newer_read_s(store, pd
     """#810: of two reads' refreshes, the older one's layers fail after the newer one's showed; no error is said."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    with settings_page(store, pds) as page:
+    with refresh_page(store, pds) as (page, _base):
         pds.group(page, "overview")
         expect(page.locator("#reads-status")).to_contain_text("Last read")
         held: list[Any] = []
@@ -903,6 +845,7 @@ def test_an_older_read_s_failed_layers_never_speak_over_a_newer_read_s(store, pd
                 page.wait_for_timeout(50)
             assert len(held) == count
         older, newer = held
+        hold_polls(page)
         with page.expect_request("**/api/next/config/models"):  # the newer refresh is done with the layers
             newer.continue_()
         with page.expect_request("**/api/next/config/models"):  # asked right after the failed answer is handled
@@ -937,7 +880,7 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
         pds.pick(page, "Model for reviewer", "claude-opus-5.5")  # its effort unset: listed, never blocking the save
         page.get_by_role("button", name="Save project settings").click()
         pds.answer(page, "Save project settings")
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
         pds.group(page, "overview")
         expect(page.locator("#unset-agents")).to_contain_text(
             f"Agents and runs, {agents - 5} unset:"
@@ -976,47 +919,6 @@ GLOBAL = {
 }
 
 
-def recommended_drafts_keep_saved_controls(page, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415
-
-    pds.group(page, "guardrails")
-    expect(pds.select(page, "Copilot Memory in Delivery sessions")).to_have_js_property("value", "off")
-    expect(page.get_by_label("Steered share", exact=True)).to_have_value("0")
-    expect(page.get_by_label("Verbose until", exact=True)).to_have_value("")
-    pds.group(page, "checks")
-    expect(page.get_by_label("Labels, comma-separated; none for no labels")).to_have_value("none")
-    expect(pds.select(page, "The line Opened by OwlBear Delivery")).to_have_js_property("value", "off")
-
-
-MEMORY_RECOMMENDED = {
-    "outstanding_boost": 0.1, "unremarkable_penalty": 0.01, "stale_factor": 50, "purge_days": 30,
-    "preflight_cap": 5, "preflight_budget": 2000, "recall_limit": 20, "explore_slots": 2, "challenge_slots": 2,
-}  # fmt: skip  # what the code held before the Memory group: the recommendations offer them, nothing resolves them
-
-
-def the_memory_group_is_filled_with_the_values_the_code_held(page, pds) -> None:
-    """Use recommended drafts all nine memory values on Global, decimals as typed, and the group counts them."""
-    from playwright.sync_api import expect  # noqa: PLC0415
-
-    pds.group(page, "memory")
-    for field, label in MEMORY_LABELS.items():
-        expect(page.get_by_label(label)).to_have_value(str(MEMORY_RECOMMENDED[field]))
-    expect(page.locator("#groups a[href='#memory'] p-tag")).to_have_text("10 unsaved")  # the nine and the threshold
-
-
-def lower_layers_cannot_use_recommended(page, pds) -> None:
-    """On This machine and a project the button is disabled and says why."""
-    from playwright.sync_api import expect  # noqa: PLC0415
-
-    recommended = page.get_by_role("button", name="Use recommended", exact=True)
-    for layer in ("project", "machine"):
-        pds.pick(page, "Layer", layer)
-        expect(recommended).to_be_disabled()
-        expect(page.locator("#recommend-note")).to_contain_text("available on Global only")
-        pds.group(page, "agents")
-        expect(page.get_by_label("Minutes per session, auditor")).to_have_value("")
-
-
 @pytest.mark.browser
 def test_recommendations_fill_only_globals_blanks_and_keep_saved_values_and_existing_drafts(
     store, pds, monkeypatch
@@ -1050,69 +952,33 @@ def test_recommendations_fill_only_globals_blanks_and_keep_saved_values_and_exis
         recommended.click()
         expect(page.locator("#pending")).to_have_text(pending)
         assert {name: path.read_bytes() for name, path in paths.items()} == before
-        recommended_drafts_keep_saved_controls(page, pds)
-        the_memory_group_is_filled_with_the_values_the_code_held(page, pds)
-        lower_layers_cannot_use_recommended(page, pds)
+        pds.group(page, "guardrails")
+        expect(pds.select(page, MEMORY)).to_have_js_property("value", "off")
+        expect(page.get_by_label("Steered share", exact=True)).to_have_value("0")
+        pds.group(page, "checks")
+        expect(page.get_by_label(LABELS)).to_have_value("none")
+        expect(pds.select(page, "The line Opened by OwlBear Delivery")).to_have_js_property("value", "off")
+        for layer in ("project", "machine"):
+            pds.pick(page, "Layer", layer)
+            expect(recommended).to_be_disabled()
+            expect(page.locator("#recommend-note")).to_contain_text("available on Global only")
         pds.pick(page, "Layer", "global")
         page.locator("#save").click()
         pds.answer(page, "Keep editing")
         assert {name: path.read_bytes() for name, path in paths.items()} == before
-        _saved_by_keyboard(page, pds, "Save global defaults", "the global")
-    written = json.loads(paths["global"].read_text())
-    assert (written["agents"]["builder"]["minutes"], written["sessions"]) == (66, None)
-    assert (written["agents"]["auditor"]["minutes"], written["guard_level"]) == (40, "lenient")
-    assert (written["pr_marker"], written["pr_labels"], written["spotter"]["steer_share"]) == (False, [], 0)
-    assert "curator_threshold" in written
-    assert "machine" in written
-    assert written["memory"] == MEMORY_RECOMMENDED  # decimals and whole numbers as they were typed into the drafts
-    assert all(paths[name].read_bytes() == before[name] for name in ("project", "machine"))
-
-
-@pytest.mark.browser
-def test_recommended_drafts_fit_a_phone_and_their_unsaved_list_scrolls_by_keyboard(store, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415
-
-    with settings_page(store, pds) as page:
-        page.set_viewport_size({"width": 390, "height": 800})
-        pds.pick(page, "Layer", "global")
-        page.get_by_role("button", name="Use recommended", exact=True).click()
-        expect(page.locator("#status")).to_contain_text("nothing has been saved")
-        assert page.evaluate("document.documentElement.scrollWidth") <= 390
-        assert page.locator(".bar").evaluate("e => e.getBoundingClientRect().height") < 400
-        pending = page.locator("#pending")
-        pending.focus()
-        pending.press("End")
-        page.wait_for_function("document.querySelector('#pending').scrollTop > 0")
-
-
-@pytest.mark.browser
-def test_a_recommended_value_cleared_again_is_not_filled_by_the_next_click(store, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415
-
-    with settings_page(store, pds) as page:
-        pds.pick(page, "Layer", "global")
-        sessions = page.get_by_label("Agent sessions at once in one project")
-        recommended = page.get_by_role("button", name="Use recommended", exact=True)
+        pds.group(page, "agents")
+        page.get_by_label("Minutes per session, auditor").fill("")
         recommended.click()
-        expect(sessions).to_have_value("2")
-        sessions.fill("")  # the owner rejects this one suggestion: its draft equals the saved blank and goes
-        recommended.click()
-        expect(page.locator("#status")).to_contain_text("No unset settings in Global to fill")
-        expect(sessions).to_have_value("")
+        expect(page.get_by_label("Minutes per session, auditor")).to_have_value("")
+        assert {name: path.read_bytes() for name, path in paths.items()} == before
 
 
 @pytest.mark.browser
-def test_storage_labels_distinguish_shared_layers_from_local_only_without_a_shared_repository(store, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415
-
-    with settings_page(store, pds) as page:
-        options = pds.select(page, "Layer").locator("p-select-option")
-        expect(options.filter(has_text="synced to shared repository")).to_have_count(2)
-        expect(page.locator("#storage-note")).to_contain_text("Save commits and pushes")
-        pds.pick(page, "Layer", "machine")
-        expect(page.locator("#storage-note")).to_contain_text("local files, never pushed")
-    store.global_path = None
-    with settings_page(store, pds) as page:
+def test_unshared_storage_scope(tmp_path, monkeypatch, pds) -> None:
+    project = registry.register(clone(tmp_path / "alpha"))
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/config?project={project.id}#token=t")
+        pds.group(page, "agents")
         expect(page.locator("#storage-note")).to_contain_text("This Mac only: project settings stay local")
         expect(pds.select(page, "Layer").locator('p-select-option[value="project"]')).to_contain_text("this Mac only")
         expect(pds.select(page, "Layer").locator('p-select-option[value="global"]')).to_have_attribute("disabled", "")
@@ -1131,223 +997,13 @@ def _option(page, pds, label: str) -> Any:
 WARNED = "Unset: every machine or project must then set its own"
 
 
-def global_s_agents_clear_to_unset_and_warn_where_needed(page, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    pds.pick(page, "Layer", "global")
-    expect(_option(page, pds, "Model for builder")).to_have_text("Unset")
-    expect(_option(page, pds, "Effort for builder")).to_have_text("Unset")
-    builder = page.locator("#set-agents-builder")
-    expect(builder.get_by_role("button", name="Unset")).to_be_visible()  # its own long context
-    expect(builder.locator("p-text[color='warning']")).to_have_count(1)  # only its subagents, which GLOBAL leaves unset
-    expect(builder.locator("#set-agents-builder-subagents p-text[color='warning']")).to_have_count(1)
-    expect(page.locator("#set-agents-planner")).to_contain_text(WARNED)
-    expect(_option(page, pds, "Built-in subagents, builder")).to_have_text("Unset")
-    pds.group(page, "guardrails")
-    expect(_option(page, pds, "On or off")).to_have_text("Unset")  # the Spotter's switch
-    expect(page.locator("#set-spotter-switch")).to_contain_text(WARNED)
-    expect(page.get_by_label("Looks", exact=True)).to_have_value("hand-off")
-    for unneeded in ("verbose_until", "sample_rate"):  # never needed; needed only for a sample look
-        expect(page.locator(f"#set-spotter-{unneeded} p-text[color='warning']")).to_have_count(0)
-    expect(_option(page, pds, INSTRUCTIONS)).to_have_text("Unset")
-
-
-def global_s_rounds_curation_and_checks_clear_to_unset_and_warn_where_needed(page, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    pds.group(page, "agents")
-    expect(page.get_by_label("Rounds at most, final review")).to_have_attribute("placeholder", "Unset")
-    expect(page.locator("#set-rounds-final_review")).to_contain_text("Unset: it then takes the builder's value")
-    at_once = page.get_by_label("Agent sessions at once in one project")
-    expect(at_once).to_have_attribute("placeholder", "Unset")
-    expect(page.locator("#set-sessions p-text[color='warning']")).to_have_count(0)
-    at_once.fill("")  # the warning follows the edit, before any save
-    expect(page.locator("#set-sessions")).to_contain_text(WARNED)
-    expect(page.locator("#pending")).to_contain_text(f"{SESSIONS}: 2 → unset")
-    at_once.fill("2")
-    expect(page.locator("#set-sessions p-text[color='warning']")).to_have_count(0)
-    pds.group(page, "memory")
-    threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")
-    expect(threshold).to_have_attribute("placeholder", "Unset")
-    expect(page.locator("#set-curator_threshold")).to_contain_text(
-        "Unset: no machine or project can set it, so it stays unset"
-    )
-    pds.group(page, "checks")
-    widths = page.get_by_label("Screenshot widths in px, comma-separated (1280 to 2400)")
-    expect(widths).to_have_attribute("placeholder", "Unset")
-    expect(_option(page, pds, "When the design judge fails a change")).to_have_text("Unset")
-    expect(_option(page, pds, "Merge method")).to_have_text("Unset")
-    expect(page.get_by_label("CI poll interval (seconds)")).to_have_attribute("placeholder", "Unset")
-    expect(page.get_by_label(LABELS)).to_have_attribute("placeholder", "Unset")
-    expect(page.locator("#set-pr_labels")).to_contain_text(WARNED)
-    expect(_option(page, pds, "The line Opened by OwlBear Delivery")).to_have_text("Unset")
-    expect(page.locator("#set-pr_marker p-text[color='warning']")).to_have_count(0)
-
-
-def the_machine_and_the_project_inherit_and_never_warn(page, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    warnings, labels = page.locator("main p-text[color='warning']"), page.get_by_label(LABELS)
-    at_once = page.get_by_label("Agent sessions at once in one project")
-    pds.pick(page, "Layer", "machine")
-    expect(warnings).to_have_count(0)
-    expect(labels).to_have_attribute("placeholder", "inherit (unset)")
-    expect(_option(page, pds, "The line Opened by OwlBear Delivery")).to_have_text("inherit (on)")
-    pds.group(page, "agents")
-    expect(at_once).to_have_attribute("placeholder", "inherit (2)")
-    pds.pick(page, "Layer", "project")
-    expect(warnings).to_have_count(0)
-    expect(at_once).to_have_attribute("placeholder", "inherit (3)")
-    pds.group(page, "checks")
-    expect(labels).to_have_attribute("placeholder", "inherit (m)")
-    pds.group(page, "agents")
-    expect(_option(page, pds, "Model for builder")).to_have_text("inherit (claude-opus-5.5)")
-    page.locator("#set-agents-builder p-segmented-control-item[value=default]").click()
-    expect(page.locator("#set-agents-builder").get_by_role("button", name="Use inherited")).to_be_visible()
-
-
-def with_the_models_unread_a_typed_name_and_a_chosen_tier_clear_alike(page, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    held = []
-
-    def hold(route) -> None:
-        held.append(route)  # this machine's models stay unread: typed names, chosen tiers
-
-    page.route("**/config/models", hold)
-    page.reload()
-    pds.pick(page, "Layer", "global")
-    typed = page.locator('p-input-text[label="Model for planner"]').get_by_label("Model for planner")
-    expect(typed).to_have_attribute("placeholder", "Unset")
-    expect(_option(page, pds, "Context for planner")).to_have_text("Unset")
-    pds.pick(page, "Layer", "project")
-    expect(typed).to_have_attribute("placeholder", "inherit (unset)")
-    expect(_option(page, pds, "Context for builder")).to_have_text("inherit (long)")
-    expect(page.locator("main p-text[color='warning']")).to_have_count(0)
-
-
-@pytest.mark.browser
-def test_global_s_clear_option_is_unset_and_warns_while_the_other_layers_inherit(store, pds, monkeypatch) -> None:
-    """D-01M61SEXPFT9MXZGQHYVYFQ77C: nothing lies under Global, so clearing its value leaves it unset, which each
-    needed setting warns about; a machine or a project clears to what it inherits and never warns."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    _layered(store, monkeypatch, GLOBAL, {"sessions": 3, "pr_labels": ["m"]}, {"sessions": 4})
-    with settings_page(store, pds) as page:
-        expect(page.locator("main p-text[color='warning']")).to_have_count(0)  # This project
-        global_s_agents_clear_to_unset_and_warn_where_needed(page, pds)
-        global_s_rounds_curation_and_checks_clear_to_unset_and_warn_where_needed(page, pds)
-        the_machine_and_the_project_inherit_and_never_warn(page, pds)
-        with_the_models_unread_a_typed_name_and_a_chosen_tier_clear_alike(page, pds)
-
-
 def _in_use(page, row: str) -> Any:
     """The in-use line of the setting row *row*."""
     return page.locator(f"#{row} p-text[size='xs']").filter(has_text="in use")
 
 
-def the_project_s_edit_shows_what_its_save_would_give(page, pds) -> None:
-    """Each layer below the project in turn, then the project's own value again once the edit is undone."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    pds.group(page, "agents")
-    at_once, line = page.get_by_label("Agent sessions at once in one project"), _in_use(page, "set-sessions")
-    expect(line).to_have_text("in use: 4, from this project")
-    at_once.fill("")
-    expect(line).to_have_text("in use: 3, from this machine")  # the machine's, not Global's 2
-    at_once.fill("6")
-    expect(line).to_have_text("in use: 6, from this project")
-    pds.pick(page, "Layer", "global")  # another layer's draft is no edit of the shown one
-    expect(line).to_have_text("in use: 4, from this project")
-    pds.pick(page, "Layer", "project")
-    at_once.fill("4")
-    expect(line).to_have_text("in use: 4, from this project")
-    expect(page.locator("#pending")).to_have_text("No unsaved edits.")
-    final = _in_use(page, "set-rounds-final_review")
-    rounds = page.get_by_label("Rounds at most, final review")
-    rounds.fill("")
-    expect(final.first).to_have_text("in use: 3, from the builder's value")
-    rounds.fill("2")
-    expect(final.first).to_have_text("in use: 2, from this project")
-    pds.group(page, "checks")
-    marker = _in_use(page, "set-pr_marker")
-    expect(marker).to_have_text("in use: no, from this project")
-    pds.pick(page, "The line Opened by OwlBear Delivery", "inherit")
-    expect(marker).to_have_text("in use: yes, from global")
-    pds.pick(page, "The line Opened by OwlBear Delivery", "off")
-    expect(marker).to_have_text("in use: no, from this project")
-
-
-def the_machine_s_edit_shows_what_its_save_would_give(page, pds) -> None:
-    """A machine edit shows where no project value masks it; the project's line never counts the machine's draft."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    pds.pick(page, "Layer", "machine")
-    pds.group(page, "checks")
-    labels, line = page.get_by_label(LABELS), _in_use(page, "set-pr_labels")
-    expect(line).to_have_text("in use: m, from this machine")
-    labels.fill("")
-    expect(line).to_have_text("in use: unset")  # Global sets none
-    labels.fill("a")
-    expect(line).to_have_text("in use: a, from this machine")
-    labels.fill("m")
-    expect(line).to_have_text("in use: m, from this machine")
-    pds.group(page, "agents")
-    at_once, sessions = page.get_by_label("Agent sessions at once in one project"), _in_use(page, "set-sessions")
-    at_once.fill("6")
-    expect(sessions).to_have_text("in use: 4, from this project")  # the project's own masks it
-    pds.pick(page, "Layer", "project")
-    at_once.fill("")
-    expect(sessions).to_have_text("in use: 3, from this machine")  # the machine's saved 3, not its unsaved 6
-    at_once.fill("4")
-    pds.pick(page, "Layer", "machine")
-    at_once.fill("3")
-    expect(page.locator("#pending")).to_have_text("No unsaved edits.")
-
-
-def global_s_edit_shows_what_its_save_would_give(page, pds) -> None:
-    """A builder's value fills the final review's unset one; the curator's threshold; the Spotter's sample rate is
-    needed only while the looks include a sample."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    pds.pick(page, "Layer", "global")
-    pds.group(page, "agents")
-    findings = page.get_by_label("New findings per round at most, builder")
-    final = page.locator("#set-rounds-final_review")
-    expect(final.get_by_text("in use", exact=False)).to_have_count(3)  # its findings: unset, the builder's too
-    findings.fill("5")
-    expect(final).to_contain_text("in use: 5, from the builder's value")
-    findings.fill("")
-    expect(final.get_by_text("in use", exact=False)).to_have_count(3)
-    pds.group(page, "memory")
-    threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")
-    line = _in_use(page, "set-curator_threshold")
-    expect(line).to_have_count(0)
-    threshold.fill("90")
-    expect(line).to_have_text("in use: 90, from global")
-    threshold.fill("")
-    expect(line).to_have_count(0)
-    pds.group(page, "guardrails")
-    looks, sample = page.get_by_label("Looks", exact=True), page.locator("#set-spotter-sample_rate")
-    expect(sample.locator("p-text[color='warning']")).to_have_count(0)
-    looks.fill("hand-off, sample")
-    expect(_in_use(page, "set-spotter-looks")).to_have_text("in use: hand-off, sample, from global")
-    expect(sample).to_contain_text("Unset: every machine or project must then set its own")
-    looks.fill("hand-off")
-    expect(sample.locator("p-text[color='warning']")).to_have_count(0)
-    pds.group(page, "agents")
-    builder = page.locator("#set-agents-builder")
-    pds.pick(page, "Effort for builder", "low")  # no lower layer sets it
-    expect(builder).to_contain_text("in use: low, from global")
-    pds.pick(page, "Effort for builder", "inherit")
-    expect(builder).to_contain_text("in use: unset")
-    pds.pick(page, "Effort for builder", "high")
-    expect(builder).not_to_contain_text("in use: unset")
-    expect(page.locator("#pending")).to_have_text("No unsaved edits.")
-
-
 @pytest.mark.browser
-def test_the_in_use_line_follows_an_unsaved_edit_and_returns_once_it_is_undone(store, pds, monkeypatch) -> None:
+def test_preview_and_unset_lines_follow_the_shown_layer(store, pds, monkeypatch) -> None:
     """#809: the line under a setting says what saving the shown layer would give, from the layers as they are saved
     and that layer's own edits; another layer's edits never show there."""
     builder = {"max_rounds": 3, "last_round_at": 1, "ask_owner_at": 4}
@@ -1356,9 +1012,63 @@ def test_the_in_use_line_follows_an_unsaved_edit_and_returns_once_it_is_undone(s
     machine = {"sessions": 3, "pr_labels": ["m"]}
     _layered(store, monkeypatch, glob, machine, {"sessions": 4, "pr_marker": False, "final_review": final})
     with settings_page(store, pds) as page:
-        the_project_s_edit_shows_what_its_save_would_give(page, pds)
-        the_machine_s_edit_shows_what_its_save_would_give(page, pds)
-        global_s_edit_shows_what_its_save_would_give(page, pds)
+        sessions, line = page.get_by_label(SESSIONS), _in_use(page, "set-sessions")
+        sessions.fill("")
+        expect(line).to_have_text("in use: 3, from this machine")
+        sessions.fill("6")
+        expect(line).to_have_text("in use: 6, from this project")
+        pds.pick(page, "Layer", "global")
+        expect(line).to_have_text("in use: 4, from this project")
+        results = page.evaluate("""async () => {
+          const { state, drafts } = await import("/assets/page/config/state.mjs");
+          const { preview } = await import("/assets/page/config/layers.mjs");
+          const results = [];
+          for (const [layer, key, value, path] of [
+            ["project", "sessions", "", "sessions"],
+            ["machine", "sessions", "6", "sessions"],
+            ["global", "sessions", "7", "sessions"],
+            ["machine", "pr_labels", "", "pr_labels"],
+            ["global", "builder.max_findings", "5", "final_review.max_findings"],
+            ["project", "pr_marker", "", "pr_marker"]
+          ]) {
+            state.layer = layer;
+            drafts[layer][key] = value;
+            results.push(preview(path));
+            delete drafts[layer][key];
+          }
+          state.layer = "global";
+          return results;
+        }""")
+        assert results == [
+            {"value": 3, "from": "machine"},
+            {"value": 4, "from": "project"},
+            {"value": 4, "from": "project"},
+            {"value": None},
+            {"value": 5, "from": "builder"},
+            {"value": True, "from": "global"},
+        ]
+        sessions.fill("")
+        expect(page.locator("#set-sessions")).to_contain_text(WARNED)
+        sessions.fill("2")
+        expect(page.locator("#set-sessions p-text[color='warning']")).to_have_count(0)
+        expect(_option(page, pds, "Model for builder")).to_have_text("Unset")
+        expect(_option(page, pds, "Effort for builder")).to_have_text("Unset")
+        expect(page.locator("#set-agents-builder").get_by_role("button", name="Unset")).to_be_visible()
+        expect(page.locator("#set-rounds-final_review")).to_contain_text("Unset: it then takes the builder's value")
+        pds.group(page, "guardrails")
+        looks, sample = page.get_by_label("Looks", exact=True), page.locator("#set-spotter-sample_rate")
+        expect(sample.locator("p-text[color='warning']")).to_have_count(0)
+        looks.fill("hand-off, sample")
+        expect(sample).to_contain_text(WARNED)
+        looks.fill("hand-off")
+        expect(sample.locator("p-text[color='warning']")).to_have_count(0)
+        pds.group(page, "checks")
+        expect(_option(page, pds, "Merge method")).to_have_text("Unset")
+        expect(page.locator("#set-pr_labels")).to_contain_text(WARNED)
+        for layer, placeholder in (("machine", "inherit (unset)"), ("project", "inherit (m)")):
+            pds.pick(page, "Layer", layer)
+            expect(page.locator("main p-text[color='warning']")).to_have_count(0)
+            expect(page.get_by_label(LABELS)).to_have_attribute("placeholder", placeholder)
 
 
 @pytest.mark.browser
@@ -1399,31 +1109,6 @@ def test_the_curator_threshold_shows_read_only_with_its_value_off_global(store, 
         expect(page.locator("#pending")).to_contain_text("All projects: 1 more unsaved")  # Global's edit is kept
 
 
-@pytest.mark.browser
-def test_merge_and_cleanup_preferences_save_reload_and_clear_back_to_inherit(store, pds) -> None:
-    """R15: the five optional preferences save into the shown layer, survive a reload, and clear to inherit."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    with settings_page(store, pds) as page:
-        pds.group(page, "checks")
-        pds.pick(page, "Merge method", "squash")
-        page.get_by_label("CI poll interval (seconds)").fill("45")
-        pds.pick(page, "Ask before merging", "on")
-        page.get_by_role("button", name="Save project settings").click()
-        pds.modal(page).get_by_role("button", name="Save project settings").click()
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
-        page.reload()
-        opened(page, pds, "checks")
-        expect(page.get_by_label("CI poll interval (seconds)")).to_have_value("45")
-        pds.pick(page, "Merge method", "inherit")  # the inherit choice clears the layer's own value
-        page.get_by_role("button", name="Save project settings").click()
-        pds.modal(page).get_by_role("button", name="Save project settings").click()
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
-    prefs = store.read_config().prefs
-    assert prefs.merge_method is None
-    assert (prefs.ci_poll_seconds, prefs.ask_before_merge) == (45, True)
-
-
 INSTRUCTIONS, SKILLS = "Your instructions in Delivery steps", "Your skills in Delivery steps"
 LABELS = "Labels, comma-separated; none for no labels"
 MEMORY = "Copilot Memory in Delivery sessions"
@@ -1454,123 +1139,40 @@ def _saved_by_keyboard(page, pds, button: str, whose: str) -> None:
     page.wait_for_function("document.activeElement?.closest('.bar') !== null", timeout=5000)
 
 
-def _user_layers(store: Store) -> tuple[list[list[bool | None]], list[tuple[bool, str]]]:
-    """Each layer's own user-config values, and each value in use with the layer it comes from."""
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-    from owlbear_delivery_next.state_store.store import read_layer  # noqa: PLC0415
-
-    layers = (store.read_config(), read_layer(store.machine_path, config.MachineLayer),
-              read_layer(store.global_path, config.GlobalLayer))  # fmt: skip
-    resolved = store.settings()
-    return [[getattr(layer, k) for k in USER_KEYS] for layer in layers], [
-        (getattr(resolved, k), resolved.sources[k]) for k in USER_KEYS
-    ]
-
-
 @pytest.mark.browser
-def test_the_user_config_switches_save_in_each_layer_reload_and_clear_back_to_inherit(store, pds, monkeypatch) -> None:
-    """D-01M5YE4P5317N1HWD0QN6N05E0, D-01M69EBRBBW97001KZ43C0BJM1: no default; Global, this machine and the project
-    set them; the project wins."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
+def test_guardrail_controls_serialize(store, pds, monkeypatch) -> None:
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
 
-    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update=dict.fromkeys(USER_KEYS)))
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update=dict.fromkeys((*USER_KEYS, "guard_level"))))
     with settings_page(store, pds) as page:
-        shown = page.locator("#user-config")
         pds.group(page, "overview")
         expect(page.locator("#unset")).to_contain_text(f"{INSTRUCTIONS}, {SKILLS}, {MEMORY}")
+        expect(page.locator("#unset-guardrails")).to_contain_text("4 unset")
         pds.group(page, "guardrails")
-        for key in USER_KEYS:  # GW8RT6: a red name, no line saying it is unset
+        for key in (*USER_KEYS, "guard_level"):
             expect(page.locator(f"#set-{key} p-text[color='error']")).to_have_count(1)
-        expect(shown).not_to_contain_text("unset: set it here")
-        pds.pick(page, "Layer", "global")
-        expect(shown).to_contain_text("Unset")
-        pds.pick(page, INSTRUCTIONS, "off")
-        pds.pick(page, SKILLS, "off")
-        pds.pick(page, MEMORY, "off")
-        box = pds.select(page, MEMORY).get_by_role("combobox").bounding_box()
-        assert min(box["width"], box["height"]) >= 24  # WCAG 2.5.8 target size
-        _saved_by_keyboard(page, pds, "Save global defaults", "the global")
-        pds.pick(page, "Layer", "machine")
-        expect(pds.select(page, INSTRUCTIONS)).to_have_js_property("value", "inherit")
-        expect(shown).to_contain_text("inherit (off)")
-        pds.pick(page, INSTRUCTIONS, "on")
-        pds.pick(page, MEMORY, "on")
-        _saved(page, pds, "Save this machine's preferences", "this machine's")
-        pds.pick(page, "Layer", "project")
-        pds.pick(page, SKILLS, "on")
-        _saved(page, pds, "Save project settings", "this project's")
+        for field, label in CATEGORY_LABELS.items():
+            select = pds.select(page, label)
+            category = next(c for c, f in CATEGORIES.items() if f == field)
+            assert select.locator("p-select-option").evaluate_all("os => os.map(o => o.value)") == [
+                "inherit",
+                *ALLOWED[category],
+            ]
+            pds.pick(page, label, ALLOWED[category][-1])
+        for label, value in ((INSTRUCTIONS, "on"), (SKILLS, "off"), (MEMORY, "on"), (GUARD, "lenient")):
+            pds.pick(page, label, value)
+            big_enough(pds.select(page, label).get_by_role("combobox"))
+        _saved_by_keyboard(page, pds, "Save project settings", "this-project's")
         expect(page.locator("#user-config p-text[color='error']")).to_have_count(0)
-        pds.group(page, "overview")
-        expect(page.locator("#unset")).to_have_count(0)
-        expect(page.locator("#unset-none")).to_be_visible()
-
-        page.reload()
-        opened(page, pds, "guardrails")
-        expect(pds.select(page, INSTRUCTIONS)).to_have_js_property("value", "inherit")
-        expect(pds.select(page, SKILLS)).to_have_js_property("value", "on")
-        expect(pds.select(page, MEMORY)).to_have_js_property("value", "inherit")
-        expect(page.locator("#set-load_user_memory")).to_contain_text("in use: on, from this machine")
-        expect(shown).to_contain_text("in use: on, from this machine")
-        expect(shown).to_contain_text("in use: on, from this project")
-        pds.pick(page, SKILLS, "inherit")  # the project's own value is cleared: Global's off applies again
-        _saved(page, pds, "Save project settings", "this project's")
-        expect(shown).to_contain_text("in use: off, from global")
-        pds.pick(page, "Layer", "machine")
-        pds.pick(page, MEMORY, "inherit")  # the machine's own value is cleared: Global's off applies again
-        _saved(page, pds, "Save this machine's preferences", "this machine's")
-        expect(page.locator("#set-load_user_memory")).to_contain_text("in use: off, from global")
-    assert _user_layers(store) == (
-        [[None, None, None], [True, None, None], [False, False, False]],  # project, this machine, Global
-        [(True, "machine"), (False, "global"), (False, "global")],  # in use, and from where
-    )
+    saved = store.read_config()
+    assert [getattr(saved, key) for key in USER_KEYS] == [True, False, True]
+    assert saved.guard_level == "lenient"
+    assert {field: getattr(saved.spotter, field) for field in CATEGORY_LABELS} == {
+        field: ALLOWED[category][-1] for category, field in CATEGORIES.items()
+    }
 
 
 GUARD = "Shell guard level"
-
-
-@pytest.mark.browser
-def test_the_guard_level_saves_in_each_layer_as_a_level_and_clears_back_to_inherit(store, pds, monkeypatch) -> None:
-    """D-01M6DX04FRP680Z4GGHK5B9VRC: no default, unset until a layer sets it; the project wins."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-    from owlbear_delivery_next.state_store.store import read_layer  # noqa: PLC0415
-
-    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"guard_level": None}))
-    with settings_page(store, pds) as page:
-        row = page.locator("#set-guard_level")
-        pds.group(page, "overview")
-        expect(page.locator("#unset")).to_contain_text("Shell guard level")
-        pds.group(page, "guardrails")
-        expect(row.locator("p-text[color='error']")).to_have_count(1)
-        pds.pick(page, "Layer", "global")
-        box = pds.select(page, GUARD).bounding_box()
-        assert min(box["width"], box["height"]) >= 24  # WCAG 2.5.8 target size
-        pds.pick(page, GUARD, "strict")
-        _saved_by_keyboard(page, pds, "Save global defaults", "the global")
-        pds.pick(page, "Layer", "machine")
-        expect(row).to_contain_text("inherit (strict)")
-        pds.pick(page, GUARD, "standard")
-        _saved(page, pds, "Save this machine's preferences", "this machine's")
-        pds.pick(page, "Layer", "project")
-        pds.pick(page, GUARD, "lenient")
-        _saved(page, pds, "Save project settings", "this project's")
-        pds.group(page, "overview")
-        expect(page.locator("#unset-none")).to_be_visible()
-
-        page.reload()
-        opened(page, pds, "guardrails")
-        expect(pds.select(page, GUARD)).to_have_js_property("value", "lenient")
-        expect(row).to_contain_text("in use: lenient, from this project")
-        pds.pick(page, GUARD, "inherit")
-        _saved(page, pds, "Save project settings", "this project's")
-        expect(row).to_contain_text("in use: standard, from this machine")
-    layers = (store.read_config(), read_layer(store.machine_path, config.MachineLayer),
-              read_layer(store.global_path, config.GlobalLayer))  # fmt: skip
-    assert [layer.guard_level for layer in layers] == [None, "standard", "strict"]
-    assert (store.settings().guard_level, store.settings().sources["guard_level"]) == ("standard", "machine")
 
 
 ACCOUNT = "GitHub account: a login, or repository-owner"
@@ -1579,20 +1181,13 @@ FALLBACK = "maba-pag (gh has no account for the owner acme)"
 
 @pytest.mark.browser
 @pytest.mark.timeout(90)  # one walk through both layers, a reload and the error state takes about 40 s
-def test_the_github_account_shows_the_account_it_resolves_to_in_each_layer(
-    store, pds, monkeypatch, fake_gh, tmp_path
-) -> None:
+def test_the_github_account_shows_the_account_it_resolves_to_in_each_layer(store, pds, monkeypatch, fake_gh) -> None:
     """TD-402: unset until a layer sets it; repository-owner shows the account TD-402's rule gives on the origin."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
     from owlbear_delivery_next.state_store.store import read_layer  # noqa: PLC0415
 
-    clone = tmp_path / "tools"
-    origin = "https://github.com/acme/tools.git"
-    subprocess.run(("git", "init", "-q", str(clone)), check=True)  # noqa: S603, S607
-    subprocess.run(("git", "-C", str(clone), "remote", "add", "origin", origin), check=True)  # noqa: S603, S607
-    monkeypatch.setattr(Host, "repo", clone)
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"github_account": None}))
     with settings_page(store, pds) as page:
         url, row = page.url.split("#")[0], page.locator("#set-github_account")
@@ -1613,7 +1208,7 @@ def test_the_github_account_shows_the_account_it_resolves_to_in_each_layer(
         expect(field).to_have_attribute("placeholder", "inherit (repository-owner)")
         field.fill("octo-writer")
         expect(_in_use(page, "set-github_account")).to_have_text("in use: octo-writer, from this project")
-        _saved(page, pds, "Save project settings", "this project's")
+        _saved(page, pds, "Save project settings", "this-project's")
 
         page.reload()
         opened(page, pds, "checks")
@@ -1621,7 +1216,7 @@ def test_the_github_account_shows_the_account_it_resolves_to_in_each_layer(
         expect(_in_use(page, "set-github_account")).to_have_text("in use: octo-writer, from this project")
         field.fill("")
         expect(_in_use(page, "set-github_account")).to_have_text(f"in use: {FALLBACK}, from global")
-        _saved(page, pds, "Save project settings", "this project's")
+        _saved(page, pds, "Save project settings", "this-project's")
         expect(_in_use(page, "set-github_account")).to_have_text(f"in use: {FALLBACK}, from global")
 
         fake_gh.set({"github.com": {"boecht": "success"}}, {"github.com": "boecht"})
@@ -1643,40 +1238,6 @@ CATEGORY_LABELS = {
 }
 
 
-@pytest.mark.browser
-def test_each_category_offers_its_allowed_actions_saves_reloads_and_clears_to_the_wider_value(store, pds) -> None:
-    """The four categories' actions (D-01M5WP8Z4ADZ5FN7RJDR17RQQ5): the server's matrix, layered field by field."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    with settings_page(store, pds) as page:
-        pds.group(page, "guardrails")
-        for field, label in CATEGORY_LABELS.items():
-            select = pds.select(page, label)
-            expect(select).to_have_count(1)
-            offered = select.locator("p-select-option").evaluate_all("os => os.map((o) => o.value)")
-            category = next(c for c, f in CATEGORIES.items() if f == field)
-            assert offered == ["inherit", *ALLOWED[category]], field
-        pds.pick(page, "Hand-off fitness", "refuse-hand-off")
-        pds.pick(page, "Irreversible harm", "stop-and-ask")
-        page.get_by_role("button", name="Save project settings").click()
-        pds.answer(page, "Save project settings")
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
-        page.reload()
-        opened(page, pds, "guardrails")
-        expect(page.locator("#spotter")).to_contain_text("in use: refuse-hand-off, from this project")
-        expect(page.locator("#spotter")).to_contain_text("in use: stop-and-ask, from this project")
-        pds.pick(page, "Hand-off fitness", "inherit")  # clears the project's own value
-        page.get_by_role("button", name="Save project settings").click()
-        pds.answer(page, "Save project settings")
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
-    project = store.read_config().spotter
-    assert (project.hand_off_fitness, project.irreversible_harm) == (None, "stop-and-ask")
-    resolved = store.settings()
-    assert (resolved.spotter.hand_off_fitness, resolved.sources["spotter.hand_off_fitness"]) == ("record", "default")
-    assert (resolved.spotter.irreversible_harm, resolved.sources["spotter.irreversible_harm"]) == (
-        "stop-and-ask", "project")  # fmt: skip
-
-
 def _refuse_config_once(monkeypatch, config_path: Path) -> None:
     """The remote refuses the first publication of the project settings file; later ones are real."""
     real, refused = data_repo.DataRepo.publish, []
@@ -1691,21 +1252,17 @@ def _refuse_config_once(monkeypatch, config_path: Path) -> None:
 
 
 @pytest.fixture
-def pending_shared(tmp_path: Path, monkeypatch, shared_repo) -> Store:
+def pending_shared(store) -> Store:
     """A shared project whose legacy preference import is pending: its review is what Settings must complete."""
-    monkeypatch.setattr(model_choices.Offered, "__call__", lambda _self: MODELS)
-    root, _remote = shared_repo
-    s = Store(tmp_path / "store", data_repo.DataRepo(root), "shop-site")
-    s.global_path = tmp_path / "global" / "config.json"
-    s.write_profile(Profile())
-    s.mark_prefs_import("", "pending", "absent")
-    return s
+    store.write_profile(Profile())
+    store.mark_prefs_import("", "pending", "absent")
+    return store
 
 
 def _fresh(tmp_path: Path, remote: Path) -> Store:
     second = tmp_path / "fresh"
     subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
-    return Store(tmp_path / "fresh-store", data_repo.DataRepo(second), "shop-site")
+    return Store(tmp_path / "fresh-store", data_repo.DataRepo(second), "this-project")
 
 
 @pytest.fixture
@@ -1740,31 +1297,9 @@ def test_a_refused_save_of_an_already_empty_clear_keeps_the_review_until_the_ret
         assert pending.read_profile().prefs_import == "pending"
         page.locator("#save").click()
         pds.modal(page).get_by_role("button", name="Save project settings").click()
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
     assert [body["prefs_reviewed"] for body in sent] == [True, True]
     assert pending.read_profile().prefs_import == "done"
-
-
-@pytest.mark.browser
-def test_a_pending_import_is_settled_by_the_explicit_review_action_without_inventing_a_value(
-    pending_shared, tmp_path, monkeypatch, shared_repo, pds
-) -> None:
-    """With no edit, the review button settles a pending import; a refused publication keeps it until a retry."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    _refuse_config_once(monkeypatch, pending_shared.config_path)
-    with settings_page(pending_shared, pds) as page:
-        review = page.get_by_role("button", name="Confirm merge preferences reviewed")
-        expect(review).to_be_visible()
-        review.click()
-        pds.modal(page).get_by_role("button", name="Save project settings").click()
-        expect(page.locator("#error")).to_be_visible()
-        assert pending_shared.read_profile().prefs_import == "pending"
-        review.click()
-        pds.modal(page).get_by_role("button", name="Save project settings").click()
-        expect(review).to_have_count(0)
-    assert pending_shared.read_profile().prefs_import == "done"
-    assert _fresh(tmp_path, shared_repo[1]).read_config().prefs is None
 
 
 def _project_puts(page) -> list[dict]:
@@ -1780,12 +1315,16 @@ def _project_puts(page) -> list[dict]:
 
 
 @pytest.mark.browser
-def test_a_cancelled_review_is_not_sent_with_a_later_unrelated_save(pending, pds) -> None:
+@pytest.mark.parametrize("prior_edit", [False, True])
+def test_cancelled_review_preserves_previous_intent(pending, pds, prior_edit) -> None:
     """Keep editing on the review's confirmation is no review: a later unrelated save leaves the import pending."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with settings_page(pending, pds) as page:
         sent = _project_puts(page)
+        if prior_edit:
+            pds.group(page, "checks")
+            pds.pick(page, "Merge method", "squash")
         page.get_by_role("button", name="Confirm merge preferences reviewed").click()
         pds.modal(page).get_by_role("button", name="Keep editing").click()
         expect(page.get_by_role("dialog")).to_have_count(0)  # the page takes edits again once it has closed
@@ -1794,39 +1333,20 @@ def test_a_cancelled_review_is_not_sent_with_a_later_unrelated_save(pending, pds
         expect(page.locator("#pending")).to_contain_text("Task reviews (builder) · Rounds at most: inherited → 4")
         page.locator("#save").click()  # the cancelled confirmation may still be fading out
         pds.modal(page).get_by_role("button", name="Save project settings").click()
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
-        expect(page.get_by_role("button", name="Confirm merge preferences reviewed")).to_be_visible()
+        expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
+        expect(page.get_by_role("button", name="Confirm merge preferences reviewed")).to_have_count(
+            0 if prior_edit else 1
+        )
 
-    assert [body["prefs_reviewed"] for body in sent] == [False]
-    assert pending.read_profile().prefs_import == "pending"
+    assert [body["prefs_reviewed"] for body in sent] == [prior_edit]
+    assert pending.read_profile().prefs_import == ("done" if prior_edit else "pending")
     assert pending.read_config().agents["builder"].max_rounds == 4
+    if prior_edit:
+        assert pending.read_config().prefs.merge_method == "squash"
 
 
 @pytest.mark.browser
-def test_an_earlier_preference_edit_stays_a_review_after_a_cancelled_review_button(pending, pds) -> None:
-    """Cancelling the review button never drops an earlier preference edit's review: its save still settles."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    with settings_page(pending, pds) as page:
-        sent = _project_puts(page)
-        pds.group(page, "checks")
-        pds.pick(page, "Merge method", "squash")
-        page.get_by_role("button", name="Confirm merge preferences reviewed").click()
-        pds.modal(page).get_by_role("button", name="Keep editing").click()
-        expect(page.get_by_role("dialog")).to_have_count(0)  # the page takes edits again once it has closed
-        page.locator("#save").click()  # the cancelled confirmation may still be fading out
-        pds.modal(page).get_by_role("button", name="Save project settings").click()
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
-
-    assert [body["prefs_reviewed"] for body in sent] == [True]
-    assert pending.read_profile().prefs_import == "done"
-    assert pending.read_config().prefs.merge_method == "squash"
-
-
-@pytest.mark.browser
-def test_a_refused_save_offers_its_retry_only_once_it_has_settled(
-    pending_shared, tmp_path, monkeypatch, shared_repo, pds
-) -> None:
+def test_explicit_review_waits_for_publication(pending_shared, tmp_path, monkeypatch, shared_repo, pds) -> None:
     """While a save runs, no earlier notice stands as its outcome; once it settles, the offered retry is taken."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -1842,9 +1362,7 @@ def test_a_refused_save_offers_its_retry_only_once_it_has_settled(
 
         page.route("**/api/next/config/project", hold_first_put)
         expect(page.locator("#error")).to_be_visible()  # the page's standing notice of the pending import
-        pds.group(page, "checks")
-        pds.pick(page, "Merge method", "squash")
-        page.locator("#save").click()
+        page.get_by_role("button", name="Confirm merge preferences reviewed").click()
         pds.modal(page).get_by_role("button", name="Save project settings").click()
         page.wait_for_function("() => document.querySelector('#save')?.loading === true")
         expect(page.locator("#status")).to_have_text("Saving…")
@@ -1852,38 +1370,46 @@ def test_a_refused_save_offers_its_retry_only_once_it_has_settled(
 
         held[0].fallback()
         expect(page.locator("#error")).to_be_visible()
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
         assert page.evaluate("() => document.querySelector('#save').loading") is False
         assert pending_shared.read_profile().prefs_import == "pending"
 
         page.locator("#save").click()  # the offered retry carries no new edit and is taken
         pds.modal(page).get_by_role("button", name="Save project settings").click()
         expect(page.locator("#error")).to_be_hidden()
-        expect(page.locator("#status")).to_have_text("Saved this project's settings. They apply to the next session.")
+        expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
 
     assert [body["prefs_reviewed"] for body in sent] == [True, True]
     assert pending_shared.read_profile().prefs_import == "done"
-    assert _fresh(tmp_path, shared_repo[1]).read_config().prefs.merge_method == "squash"
+    assert _fresh(tmp_path, shared_repo[1]).read_config().prefs is None
 
 
-def _rates(inp: float, out: float, cache: float, write: float, hour: float | None = None) -> dict[str, float | None]:
-    return {"input": inp, "output": out, "cache": cache, "cache_write": write, "cache_write_1h": hour}
+@pytest.fixture
+def store_with_priced_models(store, monkeypatch):
+    cache = prices(200_000, 200, 1000, prices(1_000_000, 200, 1000))
+    cache.cache_write_price = cache.long_context.cache_write_price = 250
+    cache.long_context.cache_read_price = 20
+    opus = prices(200_000, 300, 1500, prices(1_000_000, 300, 1500, hour=800), hour=800)
+    opus.cache_read_price = opus.long_context.cache_read_price = 30
+    opus.cache_write_price = opus.long_context.cache_write_price = 375
+    unknown = prices(200_000, 0, 0, prices(1_000_000, 0, 0))
+    unknown.input_price = unknown.long_context.input_price = None
+    crossing = prices(200_000, 200, 1000, prices(1_000_000, 400, 1000))
+    crossing.cache_read_price, crossing.long_context.cache_read_price = 20, 10
+    crossing.cache_write_price = crossing.long_context.cache_write_price = 250
+    monkeypatch.setattr(
+        model_choices,
+        "_read",
+        lambda: [
+            offered_model("cache-only", ["low", "high"], tiers=cache),
+            offered_model("claude-opus-5.5", ["low", "high"], tiers=opus),
+            offered_model("unpriced", None, tiers=unknown),
+            offered_model("crossing", None, tiers=crossing),
+        ],
+    )
+    return store
 
 
-PRICED = {
-    "models": [
-        {"id": "cache-only", "name": "Cache", "efforts": ["low", "high"], "default_effort": "low", "context": 200_000,
-         "rates": _rates(200, 1000, 10, 250), "long": {"context": 1_000_000, "rates": _rates(200, 1000, 20, 250)}},
-        {"id": "claude-opus-5.5", "name": "Opus", "efforts": ["low", "high"], "default_effort": "low",
-         "context": 200_000, "rates": _rates(300, 1500, 30, 375, 800),
-         "long": {"context": 1_000_000, "rates": _rates(300, 1500, 30, 375, 800)}},
-        {"id": "unpriced", "name": "Unpriced", "efforts": [], "default_effort": "", "context": 200_000, "rates": None,
-         "long": {"context": 1_000_000, "rates": None}},
-        {"id": "crossing", "name": "Crossing", "efforts": [], "default_effort": "", "context": 200_000,
-         "rates": _rates(200, 1000, 20, 250), "long": {"context": 1_000_000, "rates": _rates(400, 1000, 10, 250)}},
-    ],
-    "error": "",
-}  # fmt: skip
 RANKS = """async () => {
   const { levels, arrows } = await import("/assets/page/config/cost.mjs");
   const base = { input: 2, output: 8, cache: 1, cache_write: 3, cache_write_1h: 4 };
@@ -1902,11 +1428,10 @@ RANKS = """async () => {
 
 
 @pytest.mark.browser
-def test_cost_arrows_rank_every_rate_and_leave_models_efforts_and_rates_unmarked(store, pds, monkeypatch) -> None:
+def test_cost_arrows_rank_every_rate_and_leave_models_efforts_and_rates_unmarked(store_with_priced_models, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    monkeypatch.setattr(model_choices.Offered, "__call__", lambda _self: PRICED)
-    with settings_page(store, pds) as page:
+    with settings_page(store_with_priced_models, pds) as page:
         row = page.locator("#set-agents-builder")
         tier = row.locator("p-segmented-control-item")
         pds.pick(page, "Model for builder", "cache-only")  # only its long tier's cache read is higher
@@ -1933,26 +1458,6 @@ def test_cost_arrows_rank_every_rate_and_leave_models_efforts_and_rates_unmarked
         "equal": [0, 0], "single": [[0, 1]] * 3, "three": [1, 2, 0], "repeated": [0, 0, 1], "unknown": [0, 0, 1],
         "crossing": [1, 1], "arrows": ["", "\u00a0\u2191", "\u00a0\u2191\u2191"],
     }  # fmt: skip
-
-
-def test_an_unreadable_seen_state_keeps_its_whole_error(store, whole_error) -> None:
-    """#895: a read state that fails validation is said and shown with its whole error, the same words in both."""
-    said: list[str] = []
-    host = Host()
-    host.say = said.append
-    path = local_home.root() / settings_seen.NAME
-    text = json.dumps({whole_error: 1})
-    path.write_text(text)
-    with pytest.raises(ValidationError) as invalid:
-        settings_seen.Seen.model_validate_json(text)
-    expected = f"ValidationError: {invalid.value}"  # pydantic's whole message, the unknown key the test's text
-    c = TestClient(api.create_app(store, "t", host), base_url="http://127.0.0.1",
-                   headers={"authorization": "Bearer t"})  # fmt: skip
-    [failure] = [f for f in c.post("/api/next/config/read").json()["reads"]["failures"] if f["source"] == STATE]
-    assert failure["error"] == expected
-    assert [s for s in said if s.startswith(f"settings read: {STATE}")] == [
-        f"settings read: {STATE} failed at {path}: {expected}; it is rebuilt"
-    ]
 
 
 MEMORY_LABELS = {
@@ -1992,7 +1497,7 @@ def test_every_memory_value_is_saved_to_global_exactly_and_shown_again_after_a_r
         _saved(page, pds, "Save global defaults", "the global")
         assert json.loads(store.global_path.read_text())["memory"] == MEMORY_VALUES
 
-        page.goto(f"{url}?layer=global#memory")  # a reload shows what the file holds
+        page.goto(f"{url}&layer=global#memory")  # a reload shows what the file holds
         for field, label in MEMORY_LABELS.items():
             expect(page.get_by_label(label)).to_have_value(str(MEMORY_VALUES[field]))
 
@@ -2022,6 +1527,10 @@ def test_memory_values_are_read_only_off_global_and_the_filter_lists_the_unset_o
             expect(page.locator("#set-memory-stale_factor")).to_contain_text("set on Global")
             expect(page.locator("#set-memory-purge_days")).to_contain_text("set on Global")
             expect(page.get_by_label(MEMORY_LABELS["purge_days"])).to_be_disabled()
+        pds.pick(page, "Layer", "global")
+        page.get_by_label(MEMORY_LABELS["stale_factor"]).fill("8")
+        pds.pick(page, "Layer", "project")
+        expect(page.get_by_label(MEMORY_LABELS["stale_factor"])).to_have_value("7")
         pds.pick(page, "Layer", "global")
         rows = page.locator("main p-table-row[data-setting]:visible")
         pds.pick(page, "Show", "unset")
@@ -2102,3 +1611,712 @@ def test_a_global_save_not_recorded_as_seen_says_why_whole(store, pds, monkeypat
         expect(page.locator("#error")).to_be_visible()
         assert page.locator("#error").text_content().strip() == said
     assert '"minutes":50' in store.global_path.read_text().replace(" ", "")
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_older_other_project_values_cannot_replace_a_newer_read(store, pds, tmp_path):
+    beta = registry.register(clone(tmp_path / "beta"))
+    other = Store.open(Path(beta.path))
+    other.config_path.write_text(json.dumps({"format": CONFIG_FORMAT, "agents": {"builder": {"minutes": 20}}}))
+    with refresh_page(store, pds) as (page, _base):
+        expect(page.locator("#across-table")).to_contain_text("beta: 20")
+        held = hold_first(page, f"**/p/{beta.id}/api/next/config")
+        again = page.get_by_role("button", name="Read again")
+        again.click()
+        until(page, lambda: held)
+        other.config_path.write_text(json.dumps({"format": CONFIG_FORMAT, "agents": {"builder": {"minutes": 45}}}))
+        again.click()
+        expect(page.locator("#across-table")).to_contain_text("beta: 45")
+        hold_polls(page)
+        with page.expect_request("**/config/models"):
+            held[0][0].fulfill(response=held[0][1])
+        expect(page.locator("#across-table")).to_contain_text("beta: 45")
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_older_model_rates_cannot_replace_a_newer_read(store, pds, monkeypatch):
+    with refresh_page(store, pds) as (page, _base):
+        models = hold_first(page, "**/config/models")
+        again = page.get_by_role("button", name="Read again")
+        again.click()
+        until(page, lambda: models)
+        monkeypatch.setattr(
+            model_choices,
+            "_read",
+            lambda: [offered_model("claude-opus-5.5", ["low", "medium", "high"], tiers=prices(200_000, 7, 15))],
+        )
+        again.click()
+        pds.group(page, "agents")
+        expect(rates(page)).to_contain_text("in 7 ")
+        hold_polls(page)
+        page.wait_for_function("window.settingsReadsFinished === 2")
+        models[0][0].fulfill(response=models[0][1])
+        page.wait_for_function("window.settingsReadsFinished === 3")
+        expect(rates(page)).to_contain_text("in 7 ")
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_a_second_read_stays_busy_when_the_first_refresh_finishes(store, pds):
+    with refresh_page(store, pds) as (page, _base):
+        layers = hold_first(page, "**/api/next/config", fetch=False)
+        again = page.get_by_role("button", name="Read again")
+        again.click()
+        until(page, lambda: layers)
+        second = hold_first(page, "**/config/read", "POST", fetch=False)
+        again.click()
+        until(page, lambda: second)
+        expect(again).to_be_disabled()
+        hold_polls(page)
+        layers[0][0].continue_()
+        page.wait_for_function("window.settingsReadsFinished === 2")
+        assert again.is_disabled()
+        second[0][0].continue_()
+        page.wait_for_function("window.settingsReadsFinished === 3")
+        expect(again).to_be_enabled()
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_unreadable_state_without_a_read_date_shows_its_failure(store, pds):
+    with refresh_page(store, pds) as (page, _base):
+        (local_home.root() / settings_seen.NAME).write_text("{not json")
+        poll(page)
+        expect(page.locator(".reads-failure")).to_contain_text("read state")
+        expect(page.locator("#reads-status")).to_contain_text("No read is on record")
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+@pytest.mark.parametrize("old_fails", [False, True], ids=["source-failure", "old-503"])
+def test_old_read_state_cannot_hide_a_newer_partial_read(store, pds, monkeypatch, old_fails):
+    with refresh_page(store, pds) as (page, base):
+        route, response = polled_read(page, base)
+
+        def fail(*_args, **_kwargs):
+            message = "could not read"
+            raise OSError(message)
+
+        monkeypatch.setattr(pack_files, "fetch", fail)
+        page.get_by_role("button", name="Read again").click()
+        failure = page.locator(".reads-failure")
+        expect(failure).to_contain_text("Impeccable")
+        hold_polls(page)
+        with page.expect_request("**/api/next/config"):
+            if old_fails:
+                fail_read_state(route)
+            else:
+                route.fulfill(response=response)
+        assert "Impeccable" in " ".join(failure.all_inner_texts())
+        assert page.locator("#reads-error").count() == 0
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_old_read_state_keeps_data_without_clearing_a_newer_get_failure(store, pds):
+    with refresh_page(store, pds) as (page, base):
+        route, response = polled_read(page, base, failure=True)
+        page.route("**/config/read", fail_read_state)
+        poll(page)
+        error = page.locator("#reads-error")
+        expect(error).to_contain_text("could not be read")
+        hold_polls(page)
+        route.fulfill(response=response)
+        expect(page.locator(".reads-failure")).to_contain_text("Impeccable")
+        assert "could not be read" in error.inner_text()
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_old_read_state_cannot_clear_a_failed_manual_read(store, pds):
+    with refresh_page(store, pds) as (page, base):
+        route, response = polled_read(page, base, failure=True)
+        page.route(
+            "**/config/read", lambda route: route.fulfill(status=503, json={"detail": "the read could not start"})
+        )
+        page.get_by_role("button", name="Read again").click()
+        error = page.locator("#reads-error")
+        expect(error).to_contain_text("could not start")
+        hold_polls(page)
+        route.fulfill(response=response)
+        expect(page.locator(".reads-failure")).to_contain_text("Impeccable")
+        assert "could not start" in error.inner_text()
+
+
+def notice_on_disk() -> None:
+    atomic_write(
+        local_home.root() / settings_seen.NAME,
+        settings_seen.Seen(
+            notices=[
+                settings_seen.Notice(
+                    id="0000000000000001", key="agents.builder.minutes", old="45", new="50", at=datetime.now(UTC)
+                )
+            ]
+        ).model_dump_json(),
+    )
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+@pytest.mark.parametrize("reread_fails", [False, True], ids=["dismiss-GET", "dismiss-reread-503"])
+def test_a_dismissal_blocks_older_read_state_even_if_rereading_fails(store, pds, reread_fails):
+    notice_on_disk()
+    with refresh_page(store, pds) as (page, base):
+        entries = page.locator("#reads-changed li")
+        expect(entries).to_have_count(1)
+        route, response = polled_read(page, base)
+        if reread_fails:
+            page.route("**/config/read", fail_read_state)
+        entries.first.get_by_role("button", name="Dismiss the change of builder · Minutes per session").click()
+        if reread_fails:
+            expect(page.locator("#reads-error")).to_contain_text("could not be read")
+        expect(entries).to_have_count(0)
+        hold_polls(page)
+        with page.expect_request("**/api/next/config"):
+            route.fulfill(response=response)
+        assert entries.count() == 0
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_a_read_answered_after_dismissal_refreshes_current_notices(store, pds):
+    notice_on_disk()
+    with refresh_page(store, pds) as (page, _base):
+        entries = page.locator("#reads-changed li")
+        expect(entries).to_have_count(1)
+        held = hold_first(page, "**/config/read", "POST")
+        page.get_by_role("button", name="Read again").click()
+        until(page, lambda: held)
+        entries.first.get_by_role("button", name="Dismiss the change of builder · Minutes per session").click()
+        expect(entries).to_have_count(0)
+        hold_polls(page)
+        with page.expect_request("**/config/models"):
+            held[0][0].fulfill(response=held[0][1])
+        assert entries.count() == 0
+
+
+class Outside:
+    """A real shared Git remote, model-list seam and upstream release seam."""
+
+    def __init__(self, shared_repo, tmp_path: Path, monkeypatch) -> None:
+        self.root, remote = shared_repo
+        self.other, self.mp = tmp_path / "other", monkeypatch
+        _git(tmp_path, "clone", "-q", str(remote), str(self.other))
+        monkeypatch.setenv(data_repo.VIEW, str(self.root))
+        self.push("config.json", agents={"builder": {"model": "m1"}})
+        _git(self.root, "pull", "-q")
+        self.models(3)
+        self.releases(b"[]")
+
+    def models(self, price: float | None) -> None:
+        def read():
+            if price is None:
+                message = "the CLI is gone"
+                raise RuntimeError(message)
+            return [offered_model("m1", ["low", "medium"], tiers=prices(200_000, price, 15))]
+
+        self.mp.setattr(model_choices, "_read", read)
+
+    def releases(self, answer: bytes | None) -> None:
+        def fetch(url: str, *_args, **_kwargs) -> bytes:
+            if answer is None:
+                message = f"not reached: {url}"
+                raise OSError(message)
+            return answer
+
+        self.mp.setattr(pack_files, "fetch", fetch)
+
+    def push(self, rel: str, **fields: object) -> None:
+        _git(self.other, "pull", "-q")
+        path = self.other / rel
+        path.parent.mkdir(exist_ok=True)
+        layer = json.loads(path.read_text()) if path.exists() else {}
+        path.write_text(json.dumps(layer | {"format": CONFIG_FORMAT, **fields}))
+        _git(self.other, "add", rel)
+        _git(self.other, "commit", "-q", "-m", f"elsewhere: {rel}")
+        _git(self.other, "push", "-q")
+
+    @staticmethod
+    def read(base: str, of: str) -> dict:
+        answer = httpx.post(f"{base}/p/{of}/api/next/config/read", headers=TOKEN, timeout=120)
+        answer.raise_for_status()
+        return answer.json()["reads"]
+
+    @staticmethod
+    def notices(base: str) -> list[str]:
+        answer = httpx.get(f"{base}/api/next/projects", headers=TOKEN, timeout=30)
+        answer.raise_for_status()
+        return answer.json()["reads"]["notices"]
+
+
+@pytest.fixture
+def outside(shared_repo, tmp_path: Path, monkeypatch) -> Outside:
+    return Outside(shared_repo, tmp_path, monkeypatch)
+
+
+def big_enough(target) -> None:
+    box = target.bounding_box()
+    assert box is not None
+    assert box["width"] >= 24, box
+    assert box["height"] >= 24, box
+
+
+def rates(page: Page):
+    return page.locator("#set-agents-builder p-table-cell").nth(1)
+
+
+def machine_layer(**fields: object) -> None:
+    (local_home.root() / MACHINE_SETTINGS).write_text(json.dumps({"format": CONFIG_FORMAT, **fields}))
+
+
+def opening_read_shows_partial_sources(page, pds) -> None:
+    expect(page.locator("#reads-status")).to_contain_text("last full read never", timeout=READS_TIME * 1000)
+    expect(page.locator(".reads-failure")).to_contain_text("Could not read: Impeccable releases — GitHub's")
+    pds.group(page, "agents")
+    expect(rates(page)).to_contain_text("in 4 ")
+    pds.pick(page, "Layer", "global")
+    expect(page.get_by_label("Minutes per session, builder")).to_have_value("41")
+    pds.pick(page, "Layer", "project")
+    pds.group(page, "checks")
+    expect(page.locator("#impeccable")).to_contain_text("releases upstream unknown")
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_read_again_updates_every_surface_and_keeps_drafts(tmp_path: Path, monkeypatch, pds, outside) -> None:
+    a, _b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
+    outside.releases(None)
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 41}})
+        outside.models(4)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        opening_read_shows_partial_sources(page, pds)
+        pds.group(page, "agents")
+        page.get_by_label("Minutes per session, reviewer").fill("50")
+        pds.group(page, "this-machine")
+        pds.pick(page, "Layer", "machine")
+        versions = pds.select(page, "Versions this machine takes")
+        channel = "minor" if versions.evaluate("e => e.value") == "major" else "major"
+        pds.pick(page, "Versions this machine takes", channel)
+        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
+        outside.push("alpha/config.json", agents={"builder": {"minutes": 30}})
+        outside.push("beta/config.json", agents={"builder": {"minutes": 20}})
+        machine_layer(agents={"builder": {"minutes": 33}})
+        outside.models(5)
+        outside.releases(b"[]")
+        pds.group(page, "overview")
+        again = page.get_by_role("button", name="Read again")
+        big_enough(again)
+        again.focus()
+        page.keyboard.press("Enter")
+        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        expect(page.locator(".reads-failure")).to_have_count(0)
+        for value in ("45 (global)", "33", "alpha: 30", "beta: 20"):
+            expect(page.locator("#across-table")).to_contain_text(value)
+        pds.group(page, "checks")
+        expect(page.locator("#impeccable")).to_contain_text("0 releases behind")
+        pds.group(page, "agents")
+        expect(rates(page)).to_contain_text("in 5 ")
+        pds.pick(page, "Layer", "project")
+        expect(page.get_by_label("Minutes per session, builder")).to_have_value("30")
+        expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("50")
+        pds.pick(page, "Layer", "machine")
+        pds.group(page, "this-machine")
+        expect(versions).to_have_js_property("value", channel)
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_an_open_page_follows_reads_and_dismissals_made_elsewhere(tmp_path: Path, monkeypatch, pds, outside) -> None:
+    import re  # noqa: PLC0415
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        status = page.locator("#reads-status")
+        expect(status).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        full = re.search(r"Last read (.+), all sources", status.inner_text()).group(1)
+        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
+        outside.releases(None)
+        outside.models(6)
+        Outside.read(base, a.id)
+        changed = page.locator("#reads-changed li")
+        expect(changed).to_have_count(1, timeout=READS_TIME * 1000)
+        expect(changed).to_contain_text("builder · Minutes per session: unset → 45")
+        expect(changed.get_by_role("button", name="Dismiss the change of builder · Minutes per session")).to_have_count(
+            1
+        )
+        expect(page.locator(".reads-failure")).to_contain_text("Could not read: Impeccable releases")
+        expect(status).to_contain_text(re.compile(rf"last full read\s+{re.escape(full)}"))
+        pds.group(page, "agents")
+        expect(rates(page)).to_contain_text("in 6 ")
+        pds.group(page, "overview")
+        httpx.post(
+            f"{base}/api/next/settings-read/dismiss", json={"ids": Outside.notices(base)}, headers=TOKEN
+        ).raise_for_status()
+        expect(changed).to_have_count(0, timeout=READS_TIME * 1000)
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_a_layer_that_does_not_read_still_shows_the_read(tmp_path: Path, monkeypatch, pds, outside) -> None:
+    a = registry.register(clone(tmp_path / "alpha"))
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        status = page.locator("#reads-status")
+        expect(status).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        pds.group(page, "agents")
+        page.get_by_label("Minutes per session, reviewer").fill("50")
+        mine = local_home.root() / MACHINE_SETTINGS
+        mine.write_text("{not json")
+        outside.models(7)
+        Outside.read(base, a.id)
+        failure = page.locator(".reads-failure")
+        pds.group(page, "overview")
+        expect(failure).to_contain_text(f"Could not read: this machine's settings — {mine}", timeout=READS_TIME * 1000)
+        expect(status).to_contain_text("last full read")
+        pds.group(page, "agents")
+        expect(rates(page)).to_contain_text("in 7 ")
+        expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("50")
+        pds.group(page, "overview")
+        page.get_by_role("button", name="Read again").click()
+        expect(failure).to_contain_text(f"Could not read: this machine's settings — {mine}", timeout=READS_TIME * 1000)
+        fresh = page.context.browser.new_page()
+        said = errors(fresh)
+        pds.only(fresh, base)
+        fresh.goto(f"{base}/config?project={a.id}#token=t")
+        expect(fresh.locator(".reads-failure")).to_contain_text("this machine's settings", timeout=READS_TIME * 1000)
+        expect(fresh.locator("#groups")).to_have_count(0)
+        mine.unlink()
+        outside.models(None)
+        fresh.get_by_role("button", name="Read again").click()
+        expect(fresh.locator("#reads-status")).to_contain_text("last full read", timeout=READS_TIME * 1000)
+        expect(fresh.locator(".reads-failure")).to_contain_text("Could not read: models")
+        pds.group(fresh, "agents")
+        expect(fresh.locator("#models-note")).to_contain_text("Models as last read; reading them again failed")
+        expect(rates(fresh)).to_contain_text("in 7 ")
+        assert [s for s in said if "409" not in s] == []
+
+
+def notice_tabs_keep_the_draft(page, pds, base, alpha, beta):
+    pds.group(page, "agents")
+    minutes = page.get_by_label("Minutes per session, builder")
+    minutes.fill("31")
+    expect(page.locator("#pending")).not_to_have_text("No unsaved edits.")
+    pds.group(page, "overview")
+    entry = page.locator("#reads-changed li")
+    page.context.add_init_script("sessionStorage.setItem('token', 't')")
+    for name, layer, value in (
+        ("builder · Minutes per session", "global", "50"),
+        ("this machine", "machine", "33"),
+        ("beta", "project", "20"),
+    ):
+        with page.context.expect_page() as opened:
+            entry.get_by_role("link", name=name).click(modifiers=["ControlOrMeta"])
+        tab = opened.value
+        if name == "beta":
+            expect(tab).to_have_url(f"{base}/config?project={beta.id}#agents")
+        expect(pds.select(tab, "Layer")).to_have_js_property("value", layer, timeout=READS_TIME * 1000)
+        expect(tab.get_by_label("Minutes per session, builder")).to_have_value(value)
+        tab.close()
+    expect(page).to_have_url(f"{base}/config?project={alpha.id}#overview")
+    expect(page.locator("#error")).to_be_hidden()
+    expect(pds.select(page, "Layer")).to_have_js_property("value", "project")
+    pds.group(page, "agents")
+    expect(minutes).to_have_value("31")
+    expect(page.locator("#pending")).not_to_have_text("No unsaved edits.")
+    minutes.fill("30")
+    expect(page.locator("#pending")).to_have_text("No unsaved edits.")
+    pds.group(page, "overview")
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)
+def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
+    tmp_path: Path, monkeypatch, pds, outside
+) -> None:
+    a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
+        outside.push("alpha/config.json", agents={"builder": {"minutes": 30}})
+        outside.push("beta/config.json", agents={"builder": {"minutes": 20}})
+        machine_layer(agents={"builder": {"minutes": 33}})
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 50}})
+        page.get_by_role("button", name="Read again").click()
+        entry = page.locator("#reads-changed li")
+        expect(entry).to_contain_text("builder · Minutes per session: 45 → 50", timeout=READS_TIME * 1000)
+        expect(entry).to_contain_text("Set apart by this machine, alpha, beta, so it does not apply there.")
+        notice_tabs_keep_the_draft(page, pds, base, a, b)
+        entry.get_by_role("link", name="builder · Minutes per session").focus()
+        page.keyboard.press("Enter")
+        expect(pds.select(page, "Layer")).to_have_js_property("value", "global")
+        expect(page.locator("#groups a[href='#agents']")).to_have_attribute("aria-current", "page")
+        minutes = page.get_by_label("Minutes per session, builder")
+        expect(minutes).to_be_focused()
+        expect(minutes).to_be_in_viewport()
+        expect(minutes).to_have_value("50")
+        pds.group(page, "overview")
+        entry.get_by_role("link", name="this machine").click()
+        expect(pds.select(page, "Layer")).to_have_js_property("value", "machine")
+        expect(minutes).to_have_value("33")
+        pds.group(page, "overview")
+        entry.get_by_role("link", name="alpha").click()
+        expect(pds.select(page, "Layer")).to_have_js_property("value", "project")
+        expect(minutes).to_have_value("30")
+        pds.group(page, "overview")
+        entry.get_by_role("link", name="beta").click()
+        expect(page).to_have_url(f"{base}/config?project={b.id}#agents")
+        expect(minutes).to_have_value("20")
+        expect(minutes).to_be_focused()
+        assert said == []
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(180)
+@pytest.mark.usefixtures("outside")
+def test_dismiss_one_in_settings_and_all_from_changes(tmp_path: Path, monkeypatch, pds) -> None:
+    import re  # noqa: PLC0415
+
+    a = registry.register(clone(tmp_path / "alpha"))
+    with browsing(monkeypatch, pds) as (page, base):
+        said, batches = errors(page), []
+        page.on(
+            "request",
+            lambda r: (
+                batches.append(r.post_data_json["ids"])
+                if r.method == "POST" and r.url.endswith("/settings-read/dismiss")
+                else None
+            ),
+        )
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        Outside.read(base, a.id)
+        path = local_home.root() / settings_seen.NAME
+        seen = settings_seen.Seen.model_validate_json(path.read_bytes())
+        seen.notices = [
+            settings_seen.Notice(id=f"{i:016x}", key="agents.builder.minutes", old="45", new="50", at=datetime.now(UTC))
+            for i in range(202)
+        ]
+        atomic_write(path, seen.model_dump_json(indent=1) + "\n")
+        reads = Outside.read(base, a.id)
+        assert not reads["failures"], reads["failures"]
+        n = len(reads["notices"])
+        assert n == 202
+        entries = page.locator("#reads-changed li")
+        expect(entries).to_have_count(n, timeout=READS_TIME * 1000)
+        one = entries.first.get_by_role("button", name=re.compile(r"^Dismiss the change of "))
+        big_enough(one)
+        one.focus()
+        page.keyboard.press("Enter")
+        expect(entries).to_have_count(n - 1)
+        assert len(Outside.notices(base)) == n - 1
+        page.goto(f"{base}/?project={a.id}")
+        banner = page.locator("#elsewhere")
+        expect(banner).to_contain_text(f"{n - 1} Global settings changed elsewhere", timeout=READS_TIME * 1000)
+        banner.get_by_role("link", name="Show in Settings").click()
+        expect(page).to_have_url(f"{base}/config?project={a.id}#overview")
+        expect(page.locator("#groups")).to_be_visible(timeout=READS_TIME * 1000)
+        expect(page.locator("#reads-changed")).to_be_focused()
+        expect(entries).to_have_count(n - 1)
+        page.go_back()
+        dismiss = banner.get_by_role("button", name="Dismiss")
+        big_enough(dismiss)
+        dismiss.focus()
+        page.keyboard.press("Enter")
+        expect(banner).to_have_count(0, timeout=READS_TIME * 1000)
+        assert Outside.notices(base) == []
+        assert [len(batch) for batch in batches] == [1, 200, 1]
+        page.goto(f"{base}/config?project={a.id}")
+        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
+        expect(entries).to_have_count(0)
+        assert said == []
+
+
+@pytest.mark.browser
+def test_settings_say_this_machine_s_settings_could_not_be_read_and_read_them_again(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
+    a = registry.register(clone(tmp_path / "alpha"))
+    with browsing(monkeypatch, pds) as (page, base):
+        page.add_init_script("window.machineListenersAsked = 0; window.machineListenersDone = [];")
+
+        def observe(route):
+            response = route.fetch()
+            body = response.text()
+            end = "  await readMachine();\n  show();"
+            assert body.count(end) == 1
+            body = body.replace(
+                end,
+                "  const observed = ++window.machineListenersAsked;\n"
+                + end
+                + "\n  window.machineListenersDone.push(observed);",
+            )
+            route.fulfill(response=response, body=body)
+
+        def busy(route):
+            if route.request.method == "GET":
+                route.fulfill(status=503, json={"detail": "the machine host is busy"})
+            else:
+                route.fallback()
+
+        page.route("**/assets/page/config/main.mjs", observe)
+        page.route("**/api/next/machine", busy)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        expect(page.locator("#unset-machine, #unset-none")).to_contain_text("could not be read")
+        pds.group(page, "this-machine")
+        unread = page.locator("#machine-unread")
+        expect(unread).to_contain_text("Could not read this machine's settings")
+        expect(unread).to_contain_text("tries again when the machine's state changes")
+        page.unroute("**/api/next/machine", busy)
+        page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
+        expect(page.locator("#machine-login")).to_contain_text("Start at login")
+        expect(unread).to_have_count(0)
+        page.route("**/api/next/machine", busy)
+        page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
+        stale = page.locator("#machine-stale")
+        expect(stale).to_contain_text("Could not read this machine's settings again")
+        expect(page.locator("#machine-login")).to_contain_text("Start at login")
+        machine_saved(page, pds, "major")
+        expect(stale).to_have_count(0)
+        page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
+        expect(stale).to_be_visible()
+        page.unroute("**/api/next/machine", busy)
+        page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
+        expect(stale).to_have_count(0)
+        late_machine_read_keeps_the_save(page, pds)
+
+
+def late_machine_read_keeps_the_save(page, pds) -> None:
+    held = []
+
+    def hold(route):
+        if route.request.method == "GET":
+            held.append(route)
+        else:
+            route.fallback()
+
+    page.route("**/api/next/machine", hold)
+    page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
+    until(page, lambda: held)
+    observed = page.evaluate("window.machineListenersAsked")
+    older = len(held)
+    machine_saved(page, pds, "minor")
+    for route in held[:older]:
+        route.abort()
+    page.unroute("**/api/next/machine", hold)
+    for route in held[older:]:
+        route.fallback()
+    page.wait_for_function("(n) => window.machineListenersDone.includes(n)", arg=observed)
+    expect(page.locator("#machine-stale")).to_have_count(0)
+
+
+def machine_saved(page, pds, channel: str) -> None:
+    pds.pick(page, "Layer", "machine")
+    pds.pick(page, "Versions this machine takes", channel)
+    page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings").click()
+    pds.answer(page, "Save machine settings")
+    expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
+
+
+@pytest.mark.browser
+def test_settings_say_a_failed_read_of_the_shared_repository_whole(
+    tmp_path: Path, monkeypatch, pds, shared_repo, whole_error
+) -> None:
+    shared = shared_repo[0]
+    monkeypatch.setenv(data_place.VIEW, str(shared))
+    a = registry.register(clone(tmp_path / "alpha"))
+    stderr, stdout = f"fatal: {shared / '.git' / 'index'} cannot be read\n{whole_error}", "OUT begins\nOUT ends"
+    real = data_repo._git  # noqa: SLF001 - the repository's own Git calls are the boundary
+    read = ("status", "--porcelain", "--", ".", f":(exclude)*/{data_repo.MEMORY}/*")
+
+    def git(cwd, *args, until=None):
+        if args[:1] != ("status",):
+            return real(cwd, *args, until=until)
+        return subprocess.CompletedProcess(["git", *args], 128, f"{stdout}\n", f"{stderr}\n")
+
+    monkeypatch.setattr(data_repo, "_git", git)
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        notice = page.locator("#error")
+        expect(notice).to_be_visible()
+        failed = f"CalledProcessError: Command '{['git', *read]}' returned non-zero exit status 128."
+        why = f"{failed}\nstderr:\n{stderr}\nstdout:\n{stdout}"
+        assert notice.text_content().strip() == f"The shared settings repository {shared} cannot be read: {why}"
+        assert said == []
+
+
+@pytest.mark.browser
+def test_settings_say_why_the_old_runtime_stays_whole(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
+    a = registry.register(clone(tmp_path / "alpha"))
+    kept = local_home.root() / local_home.VERSIONS / "legacy-c1c1c1c1c1c1"
+    kept.mkdir(parents=True)
+    error = versions.VersionError(whole_error)
+    error.add_note("a note on the failure")
+
+    def refusing(_path):
+        raise error
+
+    monkeypatch.setattr(versions, "legacy", lambda: [kept])
+    monkeypatch.setattr(leases, "unpinned", list)
+    monkeypatch.setattr(versions, "keep_data", refusing)
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        pds.group(page, "this-machine")
+        page.get_by_role("button", name="Remove the old runtime").click()
+        pds.answer(page, "Remove it")
+        notice = page.locator("#error")
+        expect(notice).to_be_visible()
+        assert notice.text_content().strip() == f"VersionError: {whole_error}\na note on the failure"
+        assert said == ["Failed to load resource: the server responded with a status of 409 (Conflict)"]
+    assert kept.is_dir()
+
+
+@pytest.mark.browser
+def test_settings_show_a_failed_source_the_models_and_global_s_machine_settings_whole(
+    tmp_path: Path, monkeypatch, pds, whole_error
+) -> None:
+    a = registry.register(clone(tmp_path / "alpha"))
+    failed = f"RuntimeError: {whole_error}"
+    unreadable = f"the global settings are unreadable: {whole_error}"
+
+    def fail(*_args, **_kwargs):
+        raise RuntimeError(whole_error)
+
+    monkeypatch.setattr(pack_files, "fetch", fail)
+    monkeypatch.setattr(model_choices, "_read", fail)
+
+    def machine(route):
+        body = route.fetch().json()
+        body["resolved"]["notice"] = unreadable
+        route.fulfill(json=body)
+
+    with browsing(monkeypatch, pds) as (page, base):
+        said = errors(page)
+        page.route(f"{base}/api/next/machine", lambda r: machine(r) if r.request.method == "GET" else r.fallback())
+        page.goto(f"{base}/config?project={a.id}#token=t")
+        page.evaluate("() => import('/assets/page/config/main.mjs')")
+        source = page.locator(".reads-failure").filter(has_text="Impeccable releases")
+        expect(source).to_be_visible()
+        assert failed in source.text_content()
+        pds.group(page, "agents")
+        models = page.locator("#models-note")
+        expect(models).to_have_text(f"Could not read the offered models ({failed}); type a model name.")
+        expect(models).to_have_js_property(
+            "textContent", f"Could not read the offered models ({failed}); type a model name."
+        )
+        pds.group(page, "this-machine")
+        notice = page.locator("#machine-notice")
+        expect(notice).to_be_visible()
+        assert notice.text_content() == unreadable
+        assert said == []
