@@ -526,6 +526,39 @@ def test_observed_runtime_readers_do_not_expand_unrelated_importer_methods(tmp_p
     assert f"{direct}::test_direct" in selection.reasons
     assert not any(node.startswith(other) for node in selection.reasons)
 
+    old_reader = Module(source_code=texts[reader] + "def active():\n    return value()\n")
+    (tmp_path / reader).write_text(texts[reader] + "def active():\n    return 'not reading the resource'\n")
+    (tmp_path / test).write_text("from demo.reader import active\ndef test_value():\n    return active()\n")
+    stale = _Selection(
+        tmp_path,
+        [resource],
+        _Consumers(tmp_path, set(texts)),
+        [
+            Evidence(
+                "map",
+                1,
+                1,
+                "python",
+                1,
+                1,
+                hashes,
+                frozenset(),
+                (
+                    Observation(
+                        f"{test}::test_value",
+                        reader,
+                        tuple(methods_to_checksums(b.code for b in old_reader.blocks if b.name in {"value", "active"})),
+                    ),
+                ),
+            )
+        ],
+        hashes | {reader: "changed"},
+    )
+    with patch("owlbear_tools.test_impact._revision", return_value={reader: old_reader}):
+        stale.resource(resource)
+    assert not any(node.startswith(test) for node in stale.reasons)
+    assert f"{direct}::test_direct" in stale.reasons
+
 
 def test_a_module_level_resource_value_retains_importing_tests_without_function_footprints(tmp_path: Path) -> None:
     from testmon.process_code import Module  # noqa: PLC0415
@@ -749,6 +782,75 @@ def test_observed_changes_keep_platform_callers_and_only_relevant_test_drift(tmp
     selection.add(f"{other}::test_other", "caller-supplied explicit target")
     selection.reconcile()
     assert other in selection.reasons
+
+    (tmp_path / test).write_text("def test_direct():\n    assert True\n")
+    (tmp_path / caller).write_text("from demo.source import work\n\ndef guarded():\n    return 1\n")
+    drifted = _Selection(
+        tmp_path,
+        [source],
+        _Consumers(tmp_path, set(texts) | {data}),
+        [
+            Evidence(
+                "map",
+                1,
+                1,
+                "python",
+                1,
+                4,
+                recorded,
+                frozenset(),
+                (
+                    Observation(f"{test}::test_direct", source, tuple(before.checksums)),
+                    Observation(f"{guarded}::test_guard", source, tuple(before.checksums)),
+                    Observation(
+                        f"{guarded}::test_guard",
+                        caller,
+                        tuple(
+                            Module(
+                                source_code="from demo.source import work\n\ndef guarded():\n    return work()\n"
+                            ).checksums
+                        ),
+                    ),
+                ),
+            )
+        ],
+        current | {test: "changed", caller: "changed"},
+    )
+    with patch("owlbear_tools.test_impact._revision", return_value={source: before}):
+        drifted.fingerprints({source}, drifted.consumers.callers({source}), "before")
+    drifted.reconcile()
+    assert test not in drifted.reasons
+    assert guarded not in drifted.reasons
+    assert newer in drifted.reasons
+
+    same_before = Module(source_code="def work():\n    return 1\n\ndef active():\n    return 1\n")
+    same_mapped = Module(source_code="def work():\n    return 1\n\ndef active():\n    return work()\n")
+    (tmp_path / source).write_text("def work():\n    return 2\n\ndef active():\n    return 1\n")
+    (tmp_path / guarded).write_text("from demo.source import active\n\ndef test_guard():\n    return active()\n")
+    same_file = _Selection(
+        tmp_path,
+        [source],
+        _Consumers(tmp_path, set(texts) | {data}),
+        [
+            Evidence(
+                "map",
+                1,
+                1,
+                "python",
+                1,
+                4,
+                recorded,
+                frozenset(),
+                (Observation(f"{guarded}::test_guard", source, tuple(same_mapped.checksums)),),
+            )
+        ],
+        current | {source: "changed", test: "changed"},
+    )
+    with patch("owlbear_tools.test_impact._revision", return_value={source: same_before}):
+        same_file.fingerprints({source}, same_file.consumers.callers({source}), "before")
+    same_file.reconcile()
+    assert guarded not in same_file.reasons
+    assert newer in same_file.reasons
 
 
 def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules(tmp_path: Path) -> None:

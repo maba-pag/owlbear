@@ -59,6 +59,13 @@ using read-only `gh` queries and downloads into this checkout's `.owlbear/scratc
 All required shards share a run, attempt and checkout. Historical inputs are checked against Git
 objects; current task-reachable test modules, helpers, fixtures, production callers and platform/skipped consumers
 supplement those observations. Earlier unrelated test/helper edits do not enter a later task's check.
+An observation is not reused after its test module changes or an intervening executed
+caller's blocks drift. Changed callees do not erase an otherwise valid entry observation.
+The subject's footprint must match the task-before code to select it natively; current
+named consumers replace stale relations. An unrelated replacement test cannot stand in
+for the old call. Changed production callers use their current named links, not merely
+an import left behind. Named observations, including resource readers, also require
+their executed blocks still to match current code.
 Explicit and retained consumers remain required; a changed selected test module runs in full.
 Footprints are compared with both task-before and current code, so
 restoring a mapped version does not erase the task's checked scope. Source-reading, subprocess and

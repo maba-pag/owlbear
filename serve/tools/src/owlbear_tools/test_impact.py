@@ -21,6 +21,7 @@ from owlbear_tools.test_dependencies import (
     REPOSITORY,
     SUITES,
     Evidence,
+    Observation,
     git,
     historical_inputs,
     inputs,
@@ -222,6 +223,31 @@ def _suites(paths: set[str]) -> set[str]:
     return required
 
 
+def _current_observations(
+    consumers: _Consumers, maps: Sequence[Evidence], current_hashes: dict[str, str]
+) -> list[Observation]:
+    recorded = maps[0].inputs
+    rows = [row for item in maps for row in item.observations if node_path(row.test) in consumers.tests]
+    changed = {row.source for row in rows if current_hashes.get(row.source) != recorded.get(row.source)}
+    modules = {source: _module(consumers.texts.get(source)) for source in changed}
+    stale: dict[str, set[str]] = defaultdict(set)
+    for row in rows:
+        if row.source in changed and (
+            (module := modules[row.source]) is None or not match_fingerprint(module, row.blocks)
+        ):
+            stale[row.test].add(row.source)
+    # A changed callee does not erase entry through an otherwise unchanged caller.
+    callers = {
+        source: consumers.callers({source}) for source in {row.source for row in rows if stale[row.test] - {row.source}}
+    }
+    return [
+        row
+        for row in rows
+        if current_hashes.get(node_path(row.test)) == recorded.get(node_path(row.test))
+        and (not stale[row.test] - {row.source} or not (stale[row.test] - {row.source}) & callers[row.source])
+    ]
+
+
 @dataclass
 class _Selection:
     root: Path
@@ -232,9 +258,7 @@ class _Selection:
 
     def __post_init__(self) -> None:
         self.recorded = self.maps[0].inputs
-        self.rows = [
-            row for item in self.maps for row in item.observations if node_path(row.test) in self.consumers.tests
-        ]
+        self.rows = _current_observations(self.consumers, self.maps, self.current_hashes)
         self.reasons: dict[str, set[str]] = defaultdict(set)
         self.resource_sources: set[str] = set()
 
@@ -254,24 +278,36 @@ class _Selection:
         original = _revision(self.root, after, touched) if after is not None else current
         label = f"kept span {base}..{after}" if after is not None else "task-before/current"
         for row in self.rows:
-            if row.source in touched and any(
-                module is None or not match_fingerprint(module, row.blocks)
-                for module in (before[row.source], original[row.source], current[row.source])
+            if (
+                row.source in touched
+                and before[row.source] is not None
+                and match_fingerprint(before[row.source], row.blocks)
+                and any(
+                    module is None or not match_fingerprint(module, row.blocks)
+                    for module in (before[row.source], original[row.source], current[row.source])
+                )
             ):
                 self.add(row.test, f"native footprint: {label} {row.source}")
-            elif (
-                row.source in callers
-                and self.current_hashes.get(row.source) != self.recorded.get(row.source)
-                and (current[row.source] is None or not match_fingerprint(current[row.source], row.blocks))
-            ):
-                self.add(row.test, f"stale current production caller: {row.source}")
         for source in touched:
-            self.supplements(source, before[source], original[source])
+            observed = {
+                block
+                for row in self.rows
+                if row.source == source and before[source] is not None and match_fingerprint(before[source], row.blocks)
+                for block in row.blocks
+            }
+            self.supplements(source, before[source], original[source], observed=observed)
 
     def supplements(
-        self, source: str, before: Module | None, current: Module | None, symbols: set[str] | None = None
+        self,
+        source: str,
+        before: Module | None,
+        current: Module | None,
+        symbols: set[str] | None = None,
+        *,
+        observed: set[int] | None = None,
     ) -> None:
-        observed = {block for row in self.rows if row.source == source for block in row.blocks}
+        if observed is None:
+            observed = {block for row in self.rows if row.source == source for block in row.blocks}
         relevant_callers = self.consumers.callers({source})
         relevant_tests = self.consumers.tests_for(relevant_callers)
         relevant_tests.update({source} & self.consumers.tests)
@@ -287,22 +323,26 @@ class _Selection:
         fixtures = set(affected) & self.consumers.fixtures.keys()
         for node in self.consumers.platform_nodes(fixtures, affected):
             self.add(node, f"current platform fixture consumer: {source}")
-        if _unobserved(before, current, observed):
+        if _unobserved(before, current, observed) or any(
+            path != source
+            and path not in self.consumers.tests
+            and self.current_hashes.get(path) != self.recorded.get(path)
+            for path in affected
+        ):
             self.named_consumers(source, affected)
 
     def named_consumers(self, source: str, affected: dict[str, set[str]]) -> None:
-        historical = _revision(self.root, self.maps[0].head, set(affected) - self.consumers.tests)
         hashes = {
-            path: (
-                self.consumers.block_hashes(path, symbols)
-                | self.consumers.block_hashes(path, symbols, historical.get(path))
-            )
+            path: self.consumers.block_hashes(path, symbols)
             for path, symbols in affected.items()
             if path not in self.consumers.tests
         }
+        current = {path: _module(self.consumers.texts.get(path)) for path in hashes}
         mapped: set[str] = set()
         for row in self.rows:
-            if set(row.blocks) & hashes.get(row.source, set()):
+            if set(row.blocks) & hashes.get(row.source, set()) and (
+                (module := current.get(row.source)) is not None and match_fingerprint(module, row.blocks)
+            ):
                 self.add(row.test, f"unobserved block via current production caller: {source}")
                 mapped.add(row.test)
         direct = self.consumers.test_nodes(affected)
