@@ -171,8 +171,6 @@ def _unset_count(page, group: str) -> int:
 
 def a_look_s_credit_limit_is_typed_as_an_amount(page) -> None:
     """D-01M5XCD49YHHR1NQKKY8TQD0C3: it inherits Global's, and keystrokes keep a fraction as typed."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     look_limit = page.get_by_label("Credit limit per look", exact=True)
     expect(look_limit).to_have_attribute("placeholder", "inherit (0.75)")
     look_limit.press_sequentially("0.05")
@@ -181,8 +179,6 @@ def a_look_s_credit_limit_is_typed_as_an_amount(page) -> None:
 
 def the_spotter_is_edited(page, pds) -> Any:
     """The spotter's switch, looks, sample and credit limit, edited in the Guardrails group; returns the looks field."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     pds.group(page, "guardrails")
     expect(page.locator("#spotter")).to_contain_text("inherit (on)")  # the switch, as Global sets it
     pds.pick(page, "On or off", "off")
@@ -196,8 +192,6 @@ def the_spotter_is_edited(page, pds) -> Any:
 
 def the_global_layer_kept_its_edit_and_takes_one_more(page, pds) -> None:
     """Global's draft stays through a project save; the curator's threshold is Global's alone (TD-400)."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     pds.pick(page, "Layer", "global")
     pds.group(page, "agents")
     expect(page.get_by_label("Minutes per session, builder")).to_have_value("60")
@@ -217,8 +211,6 @@ def the_global_layer_kept_its_edit_and_takes_one_more(page, pds) -> None:
 
 def a_list_keeps_its_text_as_typed_and_counts_only_new_items(page, looks) -> None:
     """Copilot, #662: a saved list written differently is no edit; extending it by keyboard keeps the comma."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     looks.fill("hand-off,sample")
     expect(page.locator("#pending")).to_contain_text("No unsaved edits.")  # the global edit stays apart
     looks.press_sequentially(",")
@@ -230,8 +222,6 @@ def a_list_keeps_its_text_as_typed_and_counts_only_new_items(page, looks) -> Non
 
 @pytest.mark.browser
 def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_save(store, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with settings_page(store, pds) as page:
         rows = page.locator("#agents-rows")  # TD-286: a worker role's minutes; a look has none
         expect(rows.locator("#set-agents-builder-minutes")).to_be_visible()
@@ -265,8 +255,6 @@ def test_a_model_choice_brings_its_efforts_and_an_effort_it_lacks_blocks_the_sav
 
 @pytest.mark.browser
 def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(store, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with settings_page(store, pds) as page:
         options = pds.select(page, "Layer").locator("p-select-option")
         expect(options.filter(has_text="synced to shared repository")).to_have_count(2)
@@ -346,8 +334,6 @@ def merge_preferences_are_edited(page, pds) -> None:
 
 @pytest.mark.browser
 def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(store, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with settings_page(store, pds) as page:
         endpoint = f"{page.url.split('/config?', 1)[0]}/p/{store.root.name}/api/next/config"
 
@@ -403,8 +389,6 @@ def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(store, p
     """Each group has an address, back and forward follow them; an old address of a section or row, or of the former
     Runs group, opens its group there, and the overview's unset list links each setting's row (GW8RT6); a group with
     three or fewer unset names them all (D-01M66B6GS0HKACV9C4R4QKFX7T)."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
 
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"sessions": None}))
@@ -474,8 +458,6 @@ def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row
 ) -> None:
     """A group's rows can be narrowed to the unset ones, those the layer sets and its unsaved edits; a panel left
     without a row goes too, and a link to a row names it whatever the filter hid."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
 
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"sessions": None}))
@@ -532,8 +514,6 @@ def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row
 @pytest.mark.browser
 def test_the_unsaved_filter_shows_a_row_whose_draft_is_only_spelled_differently(store, pds, monkeypatch) -> None:
     """The pending line counts "02" over a saved 2 as an unsaved edit, so the filter shows its row too."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
 
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"sessions": None}))
@@ -553,8 +533,6 @@ def test_the_unsaved_filter_shows_a_row_whose_draft_is_only_spelled_differently(
 def test_the_unsaved_filter_keeps_a_row_whose_edit_is_undone_until_the_filter_changes(store, pds, monkeypatch) -> None:
     """Backspacing the only character of a draft must not hide its row and take the focus before a replacement can be
     typed; the row goes once the filter, or a save, changes."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
 
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"sessions": None}))
@@ -594,8 +572,6 @@ LONGEST_LINE = """(el) => {
 @pytest.mark.browser
 def test_running_text_stops_at_about_75_characters_a_line_and_a_table_keeps_its_width(store, pds) -> None:
     """D-01M66D205WV75ZGAPVVYHCTADY: on a wide window a paragraph wraps at about 75 characters; a table does not."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with settings_page(store, pds) as page:
         scope = page.get_by_role("region", name="Where you edit")
         scope.get_by_text("How the layers combine").click()
@@ -621,8 +597,6 @@ def test_running_text_stops_at_about_75_characters_a_line_and_a_table_keeps_its_
 @pytest.mark.browser
 def test_the_owner_s_own_tab_after_an_unset_link_keeps_its_focus(store, pds, monkeypatch) -> None:
     """Copilot review of #813: the focus put on a linked row's control is never put back after the owner moves it."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
 
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"sessions": None}))
@@ -739,8 +713,6 @@ def test_a_save_blocks_old_layers_before_its_across_read_finishes(store, pds) ->
 @pytest.mark.browser
 def test_an_older_read_s_layers_answered_last_never_replace_a_newer_read_s(store, pds) -> None:
     """#810: two reads' refreshes overlap; the first one's layers, answered after the second's, are not shown."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with refresh_page(store, pds) as (page, _base):
         pds.group(page, "overview")
         expect(page.locator("#reads-status")).to_contain_text("Last read")
@@ -814,8 +786,6 @@ def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, 
 @pytest.mark.browser
 def test_an_older_read_s_failed_layers_never_speak_over_a_newer_read_s(store, pds) -> None:
     """#810: of two reads' refreshes, the older one's layers fail after the newer one's showed; no error is said."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with refresh_page(store, pds) as (page, _base):
         pds.group(page, "overview")
         expect(page.locator("#reads-status")).to_contain_text("Last read")
@@ -845,8 +815,6 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
     store, pds, monkeypatch
 ) -> None:
     """Code ships no defaults (2026-10-23): unset values are errors on the page, never filled from code."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
 
     monkeypatch.setattr(config, "BASE", None)
@@ -910,8 +878,6 @@ GLOBAL = {
 def test_recommendations_fill_only_globals_blanks_and_keep_saved_values_and_existing_drafts(
     store, pds, monkeypatch
 ) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415
-
     saved = {
         "sessions": 3, "pr_marker": False, "pr_labels": [], "load_user_memory": False,
         "spotter": {"steer_share": 0}, "agents": {"builder": {"minutes": 55}},
@@ -1071,8 +1037,6 @@ def test_preview_and_unset_lines_follow_the_shown_layer(store, pds, monkeypatch)
 def test_the_curator_threshold_shows_read_only_with_its_value_off_global(store, pds, monkeypatch) -> None:
     """#809: every layer shows the curator's threshold; one that can't hold it shows the saved value read-only, with
     its in-use line and where it is set; its unset link focuses the row; Global's unsaved edit stays Global's."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     _layered(store, monkeypatch, GLOBAL, {}, {})
     with settings_page(store, pds) as page:
         threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")
@@ -1118,8 +1082,6 @@ USER_KEYS = ("load_user_instructions", "load_user_skills", "load_user_memory")
 
 
 def _saved(page, pds, button: str, whose: str) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     page.locator(".bar").get_by_role("button", name=button).click()
     pds.answer(page, button)
     expect(page.locator("#status")).to_have_text(f"Saved {whose} settings. They apply to the next session.")
@@ -1127,8 +1089,6 @@ def _saved(page, pds, button: str, whose: str) -> None:
 
 def _saved_by_keyboard(page, pds, button: str, whose: str) -> None:
     """As _saved, and the save's dialog holds the keyboard focus until it closes, then gives it back to the bar."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     page.locator(".bar").get_by_role("button", name=button).click()
     expect(pds.modal(page)).to_be_visible()
     inside = "document.activeElement?.closest('p-modal') !== null"
@@ -1189,8 +1149,6 @@ FALLBACK = "maba-pag (gh has no account for the owner acme)"
 @pytest.mark.timeout(90)  # one walk through both layers, a reload and the error state takes about 40 s
 def test_the_github_account_shows_the_account_it_resolves_to_in_each_layer(store, pds, monkeypatch, fake_gh) -> None:
     """TD-402: unset until a layer sets it; repository-owner shows the account TD-402's rule gives on the origin."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
     from owlbear_delivery_next.state_store.store import read_layer  # noqa: PLC0415
 
@@ -1276,8 +1234,6 @@ def test_a_refused_save_of_an_already_empty_clear_keeps_the_review_until_the_ret
     pending, monkeypatch, pds
 ) -> None:
     """Clearing a preference that is already empty is still a review, and the retry must not drop it."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     real, notices = Store.save, iter(["remote refused"])
 
     def refuse_once(self, path, *args, **kw) -> str:
@@ -1316,8 +1272,6 @@ def _project_puts(page) -> list[dict]:
 @pytest.mark.parametrize("prior_edit", [False, True])
 def test_cancelled_review_preserves_previous_intent(pending, pds, prior_edit) -> None:
     """Keep editing on the review's confirmation is no review: a later unrelated save leaves the import pending."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with settings_page(pending, pds) as page:
         sent = _project_puts(page)
         if prior_edit:
@@ -1346,8 +1300,6 @@ def test_cancelled_review_preserves_previous_intent(pending, pds, prior_edit) ->
 @pytest.mark.browser
 def test_explicit_review_waits_for_publication(pending, tmp_path, monkeypatch, shared_repo, pds) -> None:
     """While a save runs, no earlier notice stands as its outcome; once it settles, the offered retry is taken."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     _refuse_config_once(monkeypatch, pending.config_path)
     with settings_page(pending, pds) as page:
         sent = _project_puts(page)
@@ -1420,8 +1372,6 @@ RANKS = """async () => {
 
 @pytest.mark.browser
 def test_cost_arrows_rank_every_rate_and_leave_models_efforts_and_rates_unmarked(store_with_priced_models, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with settings_page(store_with_priced_models, pds) as page:
         row = page.locator("#set-agents-builder")
         tier = row.locator("p-segmented-control-item")
@@ -1471,8 +1421,6 @@ MEMORY_VALUES = {
 @pytest.mark.browser
 def test_every_memory_value_is_saved_to_global_exactly_and_shown_again_after_a_reload(store, pds, monkeypatch) -> None:
     """The Memory group: nine values, each unset until saved on Global; decimals and zero reach the file as typed."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     _layered(store, monkeypatch, GLOBAL, {}, {})
     with settings_page(store, pds) as page:
         url = page.url.split("#")[0]
@@ -1505,8 +1453,6 @@ def test_every_memory_value_is_saved_to_global_exactly_and_shown_again_after_a_r
 
 @pytest.mark.browser
 def test_memory_values_are_read_only_off_global_and_the_filter_lists_the_unset_ones(store, pds, monkeypatch) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     _layered(store, monkeypatch, GLOBAL | {"memory": {"stale_factor": 7}}, {}, {})
     with settings_page(store, pds) as page:
         pds.group(page, "memory")
@@ -1534,8 +1480,6 @@ def test_memory_values_are_read_only_off_global_and_the_filter_lists_the_unset_o
 
 @pytest.mark.browser
 def test_a_refused_memory_save_keeps_the_typed_values_and_says_why(store, pds, monkeypatch) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     _layered(store, monkeypatch, GLOBAL, {}, {})
     before = store.global_path.read_bytes()
     with settings_page(store, pds) as page:
@@ -1557,8 +1501,6 @@ def test_a_refused_memory_save_keeps_the_typed_values_and_says_why(store, pds, m
 @pytest.mark.browser
 def test_a_global_save_not_recorded_as_seen_says_why_whole(store, pds, monkeypatch, whole_error) -> None:
     """#971 P16: the save stands; its notice says whole why the next read may take it for a change from elsewhere."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     _layered(store, monkeypatch, GLOBAL, {}, {})
     seen = local_home.root() / settings_seen.NAME
     seen.parent.mkdir(parents=True, exist_ok=True)
