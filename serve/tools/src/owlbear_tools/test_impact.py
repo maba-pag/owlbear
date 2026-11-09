@@ -378,7 +378,7 @@ class _Selection:
                 continue
             hashes = self.consumers.block_hashes(reader, symbols)
             observed = {block for row in self.rows if row.source == reader for block in row.blocks}
-            if hashes - observed:
+            if not hashes or hashes - observed:
                 for source, names in self.consumers.affected(reader, symbols).items():
                     if names:
                         affected.setdefault(source, set()).update(names)

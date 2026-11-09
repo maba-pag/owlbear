@@ -527,6 +527,37 @@ def test_observed_runtime_readers_do_not_expand_unrelated_importer_methods(tmp_p
     assert not any(node.startswith(other) for node in selection.reasons)
 
 
+def test_a_module_level_resource_value_retains_importing_tests_without_function_footprints(tmp_path: Path) -> None:
+    from testmon.process_code import Module  # noqa: PLC0415
+
+    from owlbear_tools.test_consumers import _Consumers  # noqa: PLC0415
+    from owlbear_tools.test_dependencies import Evidence  # noqa: PLC0415
+    from owlbear_tools.test_impact import _Selection  # noqa: PLC0415
+
+    reader, resource = "serve/demo/src/demo/value.py", "serve/demo/src/demo/data.md"
+    test = "serve/demo/tests/test_value.py"
+    texts = {
+        reader: "from pathlib import Path\nDATA = Path(__file__).with_name('data.md').read_text()\n",
+        resource: "data",
+        test: "from demo.value import DATA\ndef test_data():\n    assert DATA == 'data'\n",
+    }
+    for name, text in texts.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    hashes = dict.fromkeys(texts, "same")
+    selection = _Selection(
+        tmp_path,
+        [resource],
+        _Consumers(tmp_path, set(texts)),
+        [Evidence("map", 1, 1, "python", 1, 1, hashes, frozenset(), ())],
+        hashes,
+    )
+    with patch("owlbear_tools.test_impact._revision", return_value={reader: Module(source_code=texts[reader])}):
+        selection.resource(resource)
+    assert f"{test}::test_data" in selection.reasons
+
+
 def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() -> None:
     with (
         patch.object(sys, "argv", ["test", "--changed"]),
