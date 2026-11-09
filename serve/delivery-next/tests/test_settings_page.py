@@ -80,8 +80,7 @@ def refresh_page(store, pds):
             route.fulfill(response=response, body=body.replace(end, end + "    window.settingsReadsFinished++;\n"))
 
         page.route("**/assets/page/config/reads.mjs", observe)
-        project = next(p for p in registry.load().projects if p.id == store.root.name)
-        page.goto(f"{base}/config?project={project.id}#token=t")
+        page.goto(f"{base}/config?project={store.root.name}#token=t")
         until(page, lambda: page.evaluate("window.settingsReadsFinished") == 1, READS_TIME)
         yield page, base
 
@@ -149,8 +148,7 @@ def store(tmp_path: Path, shared_repo, monkeypatch) -> Store:
 def settings_page(store: Store, pds: Any) -> Iterator[Any]:
     """Use the machine pages' native host, registered clone and real Stores."""
     with pytest.MonkeyPatch.context() as mp, browsing(mp, pds) as (page, base):
-        project = next(p for p in registry.load().projects if p.id == store.root.name)
-        page.goto(f"{base}/config?project={project.id}#token=t")
+        page.goto(f"{base}/config?project={store.root.name}#token=t")
         opened(page, pds)
         yield page
 
