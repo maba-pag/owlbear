@@ -1240,9 +1240,7 @@ def _project_puts(page) -> list[dict]:
     sent: list[dict] = []
     page.on(
         "request",
-        lambda r: (
-            sent.append(r.post_data_json) if r.method == "PUT" and r.url.endswith("/config/project") else None
-        ),
+        lambda r: sent.append(r.post_data_json) if r.method == "PUT" and r.url.endswith("/config/project") else None,
     )
     return sent
 
