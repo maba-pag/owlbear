@@ -558,6 +558,27 @@ def test_a_module_level_resource_value_retains_importing_tests_without_function_
     assert f"{test}::test_data" in selection.reasons
 
 
+def test_source_relative_resource_paths_do_not_claim_an_unread_sibling_with_the_same_name(tmp_path: Path) -> None:
+    from owlbear_tools.test_consumers import _Consumers  # noqa: PLC0415
+
+    reader = "serve/demo/src/demo/a/reader.py"
+    resource, sibling = "serve/demo/src/demo/a/data.md", "serve/demo/src/demo/b/data.md"
+    texts = {
+        reader: "from pathlib import Path\nDATA = Path(__file__).with_name('data.md')\n"
+        "def value():\n    return DATA.read_text()\n",
+        resource: "data",
+        sibling: "unread",
+    }
+    for name, text in texts.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    consumers = _Consumers(tmp_path, set(texts))
+    assert "value" in consumers.resource_readers(resource)[reader]
+    with pytest.raises(RuntimeError, match=r"No current runtime-resource readers.*demo/b/data\.md"):
+        consumers.resource_readers(sibling)
+
+
 def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() -> None:
     with (
         patch.object(sys, "argv", ["test", "--changed"]),

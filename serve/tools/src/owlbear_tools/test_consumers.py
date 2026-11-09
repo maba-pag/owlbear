@@ -12,7 +12,15 @@ from urllib.parse import urlsplit
 from testmon.process_code import Module, bytes_to_string_and_fsha, methods_to_checksums
 
 from owlbear_tools.test_dependencies import is_test_module
-from owlbear_tools.test_symbols import _definitions, _names, fixture_names, http_get, resource_aliases, resource_reads
+from owlbear_tools.test_symbols import (
+    _definitions,
+    _names,
+    fixture_names,
+    http_get,
+    resource_aliases,
+    resource_path,
+    resource_reads,
+)
 
 
 def changed_symbols(before: Module | None, current: Module | None) -> set[str]:
@@ -344,15 +352,18 @@ class _Consumers:
 
     def resource_readers(self, resource: str) -> dict[str, set[str]]:
         """Owned runtime readers, not temporary test corpora sharing a filename suffix."""
-        prefix = resource.split("/src/", 1)[0] + "/src/"
-        basename = Path(resource).name
         affected: dict[str, set[str]] = defaultdict(set)
         aliases: dict[str, set[str]] = defaultdict(set)
         for path, definitions in self.references.items():
             symbols = {
                 symbol
                 for symbol, references in definitions.items()
-                if resource in references or (path.startswith(prefix) and basename in references)
+                if resource in references
+                or any(
+                    resource_path(node, path) == resource
+                    for node in ast.walk(self.definitions[path][symbol])
+                    if isinstance(node, (ast.Call, ast.BinOp))
+                )
             }
             if symbols:
                 affected[path].update(self.affected(path, symbols).get(path, set()))

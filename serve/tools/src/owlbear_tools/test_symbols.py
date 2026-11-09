@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+from pathlib import PurePosixPath
 
 
 def fixture_names(tree: ast.AST) -> tuple[set[str], set[str]]:
@@ -134,6 +135,36 @@ def resource_reads(definitions: dict[str, ast.AST], aliases: set[str]) -> set[st
             for node in ast.walk(definition)
         )
     }
+
+
+def resource_path(node: ast.AST, source: str) -> str | None:
+    """Resolve literal source-relative Path expressions without consulting the filesystem."""
+    if isinstance(node, ast.Name) and node.id == "__file__":
+        return source
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Attribute) and node.attr == "parent":
+        parent = resource_path(node.value, source)
+        return str(PurePosixPath(parent).parent) if parent is not None else None
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        parent, child = resource_path(node.left, source), resource_path(node.right, source)
+        return str(PurePosixPath(parent) / child) if parent is not None and child is not None else None
+    if not isinstance(node, ast.Call):
+        return None
+    return _resource_call(node, source)
+
+
+def _resource_call(node: ast.Call, source: str) -> str | None:
+    if isinstance(node.func, ast.Name) and node.func.id in {"Path", "PurePath", "PurePosixPath"} and node.args:
+        return resource_path(node.args[0], source)
+    if isinstance(node.func, ast.Attribute):
+        parent = resource_path(node.func.value, source)
+        if parent is not None and node.func.attr in {"read_text", "read_bytes", "open", "resolve"}:
+            return parent
+        if parent is not None and node.func.attr == "with_name" and node.args:
+            name = resource_path(node.args[0], source)
+            return str(PurePosixPath(parent).with_name(name)) if name is not None else None
+    return None
 
 
 def _http_response(call: ast.Call, definition: ast.AST) -> bool:
