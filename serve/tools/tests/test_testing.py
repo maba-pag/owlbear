@@ -861,6 +861,7 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
             "import pytest\nDATA = Path('fixtures/shared.json').read_text()\n\ndef shared_value():\n    return DATA\n"
             "@pytest.fixture(autouse=True)\ndef shared_data():\n    return Path('fixtures/imported.json').read_text()\n"
         ),
+        "serve/demo/tests/star_fixtures.py": "from shared_reader import shared_data as imported_data\n",
         "serve/demo/src/demo/project_host/pages.py": "PAGES = (('/', 'Changes', 'changes.html'),)\n",
         "serve/demo/src/demo/web/changes.html": (
             '<script type="module" src="/assets/page/changes/main.mjs"></script>'
@@ -878,7 +879,7 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
         ),
         fixture: (
             "import sys\nimport pytest\nfrom demo.entry import load\n\n"
-            "from shared_reader import shared_data as imported_data\n"
+            "from star_fixtures import *\n"
             "@pytest.fixture\ndef loaded():\n    return load() if sys.platform == 'darwin' else 2\n"
             "@pytest.fixture\ndef marked():\n    return Path('fixtures/marked.json').read_text()\n"
         ),

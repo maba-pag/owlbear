@@ -107,6 +107,7 @@ class _Consumers:
             if metadata[0] or Path(path).name == "conftest.py" or path in self.tests
         }
         for path, (fixtures, autouse) in self.fixtures.items():
+            self.local_symbols[path].update(fixtures)
             for test in self.tests:
                 if (
                     test == path or (Path(path).name == "conftest.py" and Path(test).is_relative_to(Path(path).parent))
