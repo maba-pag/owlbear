@@ -759,7 +759,7 @@ def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, 
         page.route("**/api/next/config", hold)
         for count in (1, 2):
             page.locator("#read-again").click()
-            until(page, lambda: len(held) == count, seconds=20)
+            until(page, lambda count=count: len(held) == count, seconds=20)
         (older, found), (newer, _) = held
         hold_polls(page)
         message = f"the layers could not be read:\n{whole_error}\nreload note"
@@ -800,7 +800,7 @@ def test_an_older_read_s_failed_layers_never_speak_over_a_newer_read_s(store, pd
         page.route("**/api/next/config", hold)
         for count in (1, 2):
             page.locator("#read-again").click()
-            until(page, lambda: len(held) == count, seconds=20)
+            until(page, lambda count=count: len(held) == count, seconds=20)
         older, newer = held
         hold_polls(page)
         with page.expect_request("**/api/next/config/models"):  # the newer refresh is done with the layers
@@ -895,8 +895,7 @@ def test_recommendations_fill_only_globals_blanks_and_keep_saved_values_and_exis
         expect(recommended).to_be_focused()
         box = recommended.bounding_box()
         assert box is not None
-        assert box["width"] >= 24
-        assert box["height"] >= 24
+        assert min(box["width"], box["height"]) >= 24
         expect(page.locator("#status")).to_contain_text("nothing has been saved")
         expect(page.get_by_label("Agent sessions at once in one project")).to_have_value("")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("66")
