@@ -140,6 +140,8 @@ never automatically accepts an unmerged map. Missing, incompatible or unresolved
 an error instead of bootstrapping the full suite or returning an empty passing check.
 Block observations are not line or branch coverage, and Linux maps alone do not prove macOS behavior.
 Repair witnesses recognize the root selector and its in-package imports from unchanged source.
+Runner switches and Python module entries keep that ownership; uncertain uv syntax
+holds the repair rather than silently losing the original selector.
 A repair that changes this selection machinery cannot prove itself with its altered check alone;
 it retains the existing owner hold rather than being applied automatically.
 

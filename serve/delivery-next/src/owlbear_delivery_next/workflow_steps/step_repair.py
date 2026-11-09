@@ -10,7 +10,6 @@ the repair's spend. A defect in OwlBear's own code gets an issue (``defect_issue
 
 from __future__ import annotations
 
-import ast
 import os
 import shlex
 import tomllib
@@ -38,6 +37,7 @@ from owlbear_delivery_next.workflow_steps import (
     sessions,
     watched,
 )
+from owlbear_delivery_next.workflow_steps.check_sources import console_script as _console_script
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change
@@ -355,60 +355,6 @@ def _named(path: str, witness: tuple[str, ...], source: Path | None = None) -> b
                 if not where and PurePosixPath(name).name == path:
                     return True
     return False
-
-
-def _console_script(path: str, words: list[str], source: Path) -> bool:
-    """A workspace console script from the unchanged source, not the repair's replacement manifest."""
-    invoked = {words[i + 2] for i in range(len(words) - 2) if words[i : i + 2] == ["uv", "run"]}
-    if not invoked:
-        return False
-    manifests = worktree.git(source, "ls-files", "*pyproject.toml").splitlines()
-    for name in manifests:
-        manifest = source / name
-        try:
-            project = tomllib.loads(manifest.read_text(encoding="utf-8")).get("project", {})
-        except tomllib.TOMLDecodeError as error:
-            error.add_note(f"unchanged check manifest: {manifest}")
-            raise
-        scripts = project.get("scripts", {})
-        for command in invoked & scripts.keys():
-            module = scripts[command].split(":", 1)[0]
-            package = manifest.parent.relative_to(source)
-            filename = module.replace(".", "/") + ".py"
-            for relative in (package / "src" / filename, package / filename):
-                if relative.as_posix() == path:
-                    return True
-            if module == "owlbear_tools.testing" and path in _selector_inputs(source, package, module):
-                return True
-    return False
-
-
-def _selector_inputs(source: Path, package: Path, entry: str) -> set[str]:
-    """The root selector's in-package imports from unchanged source, not tests it loads dynamically."""
-    found: set[str] = set()
-    seen: set[str] = set()
-    pending = [entry]
-    while pending:
-        module = pending.pop()
-        if module in seen or not (module == "owlbear_tools" or module.startswith("owlbear_tools.")):
-            continue
-        seen.add(module)
-        name = module.replace(".", "/")
-        for root in (source / package / "src", source / package):
-            for path in (root / f"{name}.py", root / name / "__init__.py"):
-                found.add(path.relative_to(source).as_posix())
-                if not path.is_file():
-                    continue
-                parent = module.split(".") if path.name == "__init__.py" else module.split(".")[:-1]
-                for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"), filename=str(path))):
-                    if isinstance(node, ast.Import):
-                        pending.extend(alias.name for alias in node.names)
-                    elif isinstance(node, ast.ImportFrom):
-                        prefix = parent[: len(parent) - node.level + 1] if node.level else []
-                        imported = ".".join([*prefix, *([node.module] if node.module else [])])
-                        pending.append(imported)
-                        pending.extend(f"{imported}.{alias.name}" for alias in node.names if alias.name != "*")
-    return found
 
 
 def _split(check: str) -> tuple[str | None, str]:
