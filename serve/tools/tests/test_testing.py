@@ -586,6 +586,8 @@ def test_a_module_level_resource_value_retains_importing_tests_without_function_
 
 def test_source_relative_resource_paths_do_not_claim_an_unread_sibling_with_the_same_name(tmp_path: Path) -> None:
     from owlbear_tools.test_consumers import _Consumers  # noqa: PLC0415
+    from owlbear_tools.test_dependencies import Evidence  # noqa: PLC0415
+    from owlbear_tools.test_impact import _Selection  # noqa: PLC0415
 
     reader = "serve/demo/src/demo/a/reader.py"
     resource, sibling = "serve/demo/src/demo/a/data.md", "serve/demo/src/demo/b/data.md"
@@ -627,6 +629,26 @@ def test_source_relative_resource_paths_do_not_claim_an_unread_sibling_with_the_
         consumers.resource_readers(sibling)
     with pytest.raises(RuntimeError, match=r"No current runtime-resource readers.*demo/a/unread\.md"):
         consumers.resource_readers("serve/demo/src/demo/a/unread.md")
+
+    parameter = "serve/demo/src/demo/a/parameter.py"
+    test = "serve/demo/tests/test_parameter.py"
+    (tmp_path / parameter).write_text(
+        "from pathlib import Path\nFILE = Path(__file__).with_name('unread.md')\n"
+        "def locate(FILE):\n    return FILE.read_text()\n"
+        "def value():\n    return locate(Path(__file__).with_name('data.md'))\n"
+    )
+    (tmp_path / test).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / test).write_text("from demo.a.parameter import value\ndef test_data():\n    assert value() == 'data'\n")
+    hashes = dict.fromkeys({*texts, test}, "same")
+    selection = _Selection(
+        tmp_path,
+        [],
+        _Consumers(tmp_path, set(hashes)),
+        [Evidence("map", 1, 1, "python", 1, 1, hashes, frozenset(), ())],
+        hashes,
+    )
+    with pytest.raises(RuntimeError, match="no resolved current consumers"):
+        selection.resource("serve/demo/src/demo/a/unread.md")
 
 
 def test_changed_scope_falls_back_to_full_suite_when_git_scope_is_unavailable() -> None:

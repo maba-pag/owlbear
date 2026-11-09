@@ -17,6 +17,7 @@ from owlbear_tools.test_symbols import (
     _names,
     fixture_registry,
     http_get,
+    reference_map,
     resource_aliases,
     resource_path,
     resource_reads,
@@ -93,21 +94,20 @@ class _Consumers:
                 self.modules[Path(name).stem].add(name)
         self.bindings = {name: self._bindings(name, tree) for name, tree in self.trees.items()}
         self.definitions = {name: _definitions(tree) for name, tree in self.trees.items()}
-        self.references = {
-            name: {symbol: _names(node) for symbol, node in definitions.items()}
-            for name, definitions in self.definitions.items()
-        }
-        self.local_symbols = {
-            path: set(self.definitions[path]) | set().union(*references.values())
-            for path, references in self.references.items()
-        }
         self.fixtures = {
             path: metadata
             for path, metadata in fixture_registry(self.trees, self.bindings).items()
             if metadata[0] or Path(path).name == "conftest.py" or path in self.tests
         }
+        self.references = {
+            name: reference_map(definitions, self.fixtures.get(name, (set(), set()))[0])
+            for name, definitions in self.definitions.items()
+        }
+        self.local_symbols = {
+            path: set().union(self.definitions[path], self.fixtures.get(path, (set(), set()))[0], *references.values())
+            for path, references in self.references.items()
+        }
         for path, (fixtures, autouse) in self.fixtures.items():
-            self.local_symbols[path].update(fixtures)
             for test in self.tests:
                 if (
                     test == path or (Path(path).name == "conftest.py" and Path(test).is_relative_to(Path(path).parent))

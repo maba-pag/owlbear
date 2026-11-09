@@ -142,23 +142,25 @@ def resource_aliases(definitions: dict[str, ast.AST], names: set[str]) -> set[st
 
 def resource_reads(definitions: dict[str, ast.AST], aliases: set[str]) -> set[str]:
     """Individual functions reading an exact resolved path alias."""
+    references = reference_map(definitions, set())
     return {
         symbol
         for symbol, definition in definitions.items()
         if isinstance(definition, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and any(
+        for owned in [aliases & references[symbol]]
+        if any(
             isinstance(node, ast.Call)
             and (
                 (
                     isinstance(node.func, ast.Attribute)
                     and node.func.attr in {"read_text", "read_bytes", "open"}
-                    and ast.unparse(node.func.value) in aliases
+                    and ast.unparse(node.func.value) in owned
                 )
                 or (
                     isinstance(node.func, ast.Name)
                     and node.func.id == "open"
                     and node.args
-                    and ast.unparse(node.args[0]) in aliases
+                    and ast.unparse(node.args[0]) in owned
                 )
             )
             for node in ast.walk(definition)
@@ -224,6 +226,19 @@ def resource_scope(node: ast.AST, module: dict[str, ast.AST]) -> dict[str, ast.A
             if isinstance(parameter, ast.arg) and parameter.arg in module
         } | local
     return module | local
+
+
+def reference_map(module: dict[str, ast.AST], fixtures: set[str]) -> dict[str, set[str]]:
+    """Module references with lexical shadowing distinct from fixture injection."""
+    return {symbol: _reference_names(node, module, fixtures) for symbol, node in module.items()}
+
+
+def _reference_names(node: ast.AST, module: dict[str, ast.AST], fixtures: set[str]) -> set[str]:
+    """Keep global dependencies separate from shadowing locals and fixture requests."""
+    scope = resource_scope(node, module)
+    declared = {name for item in ast.walk(node) if isinstance(item, ast.Global) for name in item.names}
+    hidden = {name for name in module.keys() - fixtures - declared if scope.get(name) is not module[name]}
+    return {name for name in _names(node) if name.split(".", 1)[0] not in hidden}
 
 
 def _resource_template(
