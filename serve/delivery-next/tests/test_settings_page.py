@@ -707,15 +707,7 @@ def test_an_older_read_s_layers_answered_last_never_replace_a_newer_read_s(store
     with refresh_page(store, pds) as (page, _base):
         pds.group(page, "overview")
         expect(page.locator("#reads-status")).to_contain_text("Last read")
-        held: list[tuple[Any, Any]] = []
-
-        def hold(route: Any) -> None:
-            if route.request.method != "GET" or held:
-                route.continue_()
-                return
-            held.append((route, route.fetch()))  # the layers before the change below
-
-        page.route("**/api/next/config", hold)
+        held = hold_first(page, "**/api/next/config")
         page.locator("#read-again").click()
         until(page, lambda: held, seconds=20)
         store.config_path.parent.mkdir(parents=True, exist_ok=True)
