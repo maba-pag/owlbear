@@ -538,7 +538,6 @@ def test_a_module_level_resource_value_retains_importing_tests_without_function_
     test = "serve/demo/tests/test_value.py"
     texts = {
         reader: "from pathlib import Path\nDATA = Path(__file__).with_name('data.md').read_text()\n",
-        resource: "data",
         test: "from demo.value import DATA\ndef test_data():\n    assert DATA == 'data'\n",
     }
     for name, text in texts.items():
@@ -566,8 +565,6 @@ def test_source_relative_resource_paths_do_not_claim_an_unread_sibling_with_the_
     texts = {
         reader: "from pathlib import Path\nDATA = Path(__file__).with_name('data.md')\n"
         "def value():\n    return DATA.read_text()\n",
-        resource: "data",
-        sibling: "unread",
     }
     for name, text in texts.items():
         path = tmp_path / name
