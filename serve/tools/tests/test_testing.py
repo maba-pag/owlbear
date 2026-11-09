@@ -570,6 +570,8 @@ def test_source_relative_resource_paths_do_not_claim_an_unread_sibling_with_the_
         packaged: "from importlib.resources import files\nfrom pathlib import Path\nROOT = 'a'\n"
         "GLOBAL, UNUSED_GLOBAL = 'data.md', 'unread.md'\n"
         "def directory():\n    return Path(str(files('demo').joinpath(ROOT)))\n"
+        "def first(done=False):\n    if done:\n        return directory()\n    return second(True)\n"
+        "def second(done=False):\n    if done:\n        return directory()\n    return first(True)\n"
         "def global_value():\n    return (directory() / GLOBAL).read_text()\n"
         "def value(folder=None):\n    ROOT = 'b'\n    FILE, UNUSED = 'data.md', 'unread.md'\n"
         "    return ((folder or directory()) / FILE).read_text()\n"

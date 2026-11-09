@@ -247,8 +247,9 @@ def _resource_named_call(
         defining = module_bindings if module_bindings and module_bindings.get(name) is definition else definitions
         remaining = defining | _definitions(definition)
         del remaining[name]
+        unvisited = {symbol: value for symbol, value in module_bindings.items() if value is not definition}
         if len(returns) == 1 and returns[0] is not None:
-            return resource_path(returns[0], source, modules, remaining, module_bindings)
+            return resource_path(returns[0], source, modules, remaining, unvisited)
     if name == "files" and args:
         package = resource_path(args[0], source, modules, definitions, module_bindings)
         roots = {
