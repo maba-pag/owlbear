@@ -28,8 +28,7 @@ PYTHON_SWITCHES = frozenset({"-I", "-S", "-s", "-E", "-B", "-O", "-OO", "-u", "-
 
 def _inline_python(rest: list[str]) -> bool:
     while rest:
-        option = rest[0]
-        if option in {"-c", "-"} or option.startswith("-c"):
+        if (option := rest[0]) == "-" or option.startswith("-c"):
             return True
         if option == "-m" or not option.startswith("-"):
             break
