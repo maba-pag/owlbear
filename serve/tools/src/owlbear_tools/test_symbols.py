@@ -306,7 +306,7 @@ def _resource_named_call(
     if definitions and isinstance(definition := definitions.get(name), (ast.FunctionDef, ast.AsyncFunctionDef)):
         returns = [statement.value for statement in definition.body if isinstance(statement, ast.Return)]
         defining = module_bindings if module_bindings and module_bindings.get(name) is definition else definitions
-        remaining = resource_scope(definition, defining)
+        remaining = defining | _definitions(definition)
         remaining.update(
             (parameter.arg, parameter) for parameter in ast.walk(definition.args) if isinstance(parameter, ast.arg)
         )
