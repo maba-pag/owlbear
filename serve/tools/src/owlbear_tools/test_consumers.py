@@ -372,7 +372,7 @@ class _Consumers:
                     for symbol in symbols
                     if isinstance(self.definitions[path].get(symbol), (ast.Assign, ast.AnnAssign))
                 )
-        for path, names in list(aliases.items()):
+        for path, names in aliases.items():
             aliases[path] = resource_aliases(self.definitions.get(path, {}), names)
         pending = [path for path, names in aliases.items() if names]
         while pending:
