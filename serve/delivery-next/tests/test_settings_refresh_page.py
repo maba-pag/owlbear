@@ -216,12 +216,7 @@ def focused_page(answers, pds):
 
 
 def hold_polls(page):
-    pending = []
-
-    def hold(route):
-        pending.append(route)
-
-    page.route("**/api/next/projects", hold)
+    page.route("**/api/next/projects", lambda _route: None)
 
 
 def hold_first(page, url, method="GET", *, fetch=True):
