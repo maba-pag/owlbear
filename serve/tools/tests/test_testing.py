@@ -568,6 +568,7 @@ def test_source_relative_resource_paths_do_not_claim_an_unread_sibling_with_the_
         reader: "from pathlib import Path\nDATA = Path(__file__).with_name('data.md')\n"
         "def value():\n    return DATA.read_text()\n",
         packaged: "from importlib.resources import files\nfrom pathlib import Path\nROOT = 'a'\n"
+        "EARLIER = Path('elsewhere')\nLATER = EARLIER\nEARLIER = LATER / 'unused'\n"
         "GLOBAL, UNUSED_GLOBAL = 'data.md', 'unread.md'\n"
         "def directory():\n    return Path(str(files('demo')), ROOT)\n"
         "def first(done=False):\n    if done:\n        return directory()\n    return second(True)\n"
