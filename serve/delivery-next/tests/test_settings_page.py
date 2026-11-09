@@ -867,7 +867,7 @@ def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, 
         error = page.locator("#error")
         if order == "failure first":
             newer.fulfill(**failed)
-            expect(error).to_contain_text("the layers could not be read")
+            expect(error).to_have_text("The layers could not be read")
             older.fulfill(response=found)
         else:
             older.fulfill(response=found)
@@ -875,7 +875,7 @@ def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, 
             newer.fulfill(**failed)
         # The changed value witnesses reload's success, including its error-clearing decision, not just HTTP arrival.
         expect(minutes).to_have_value("45")
-        expect(error).to_contain_text("the layers could not be read")
+        expect(error).to_have_text("The layers could not be read")
 
 
 @pytest.mark.browser
