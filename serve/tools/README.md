@@ -81,6 +81,8 @@ the exact resource, not an unread sibling with the same filename.
 Computed package filenames retain their fixed path prefixes and suffixes. Module constants,
 direct assignments and single-return path helpers resolve against the same tracked package roots;
 an unrelated unrooted string pattern cannot claim a runtime resource.
+Literal tuple/list filename assignments resolve each named target separately. A declared but unresolved
+filename does not become a dynamic wildcard reader.
 Direct path aliases follow local assignments and imports; import-time loaded values retain their named consumers.
 Observed runtime readers select their own native footprints, with current/platform supplements;
 unobserved readers use named current consumers rather than expanding every unchanged importer.

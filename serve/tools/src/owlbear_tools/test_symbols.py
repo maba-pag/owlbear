@@ -151,8 +151,23 @@ def resource_path(
         and isinstance(node, ast.Name)
         and isinstance(definition := definitions.get(node.id), (ast.Assign, ast.AnnAssign))
     ):
+        value = definition.value
+        if (
+            isinstance(definition, ast.Assign)
+            and len(definition.targets) == 1
+            and isinstance(definition.targets[0], (ast.Tuple, ast.List))
+            and isinstance(value, (ast.Tuple, ast.List))
+        ):
+            value = next(
+                (
+                    item
+                    for target, item in zip(definition.targets[0].elts, value.elts, strict=True)
+                    if isinstance(target, ast.Name) and target.id == node.id
+                ),
+                None,
+            )
         remaining = {name: value for name, value in definitions.items() if name != node.id}
-        return resource_path(definition.value, source, modules, remaining)
+        return resource_path(value, source, modules, remaining) if value is not None else None
     if isinstance(node, ast.JoinedStr):
         return "".join(
             part.value if isinstance(part, ast.Constant) and isinstance(part.value, str) else "*"
@@ -177,7 +192,7 @@ def _resource_literal(
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
         parent = resource_path(node.left, source, modules, definitions)
         child = resource_path(node.right, source, modules, definitions)
-        if child is None and isinstance(node.right, ast.Name):
+        if child is None and isinstance(node.right, ast.Name) and node.right.id not in (definitions or {}):
             child = "*"
         return str(PurePosixPath(parent) / child) if parent is not None and child is not None else None
     if not isinstance(node, ast.Call):
