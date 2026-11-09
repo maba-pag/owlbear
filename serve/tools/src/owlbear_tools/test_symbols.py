@@ -205,7 +205,7 @@ def _resource_template(
             parts.append(part.value)
         elif isinstance(part, ast.FormattedValue) and part.conversion == -1 and part.format_spec is None:
             value = resource_path(part.value, source, modules, definitions, module_bindings)
-            if value is None and isinstance(part.value, ast.Name) and part.value.id in definitions:
+            if value is None and (not isinstance(part.value, ast.Name) or part.value.id in definitions):
                 return None
             parts.append(value if value is not None else "*")
         else:

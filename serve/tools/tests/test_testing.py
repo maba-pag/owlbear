@@ -602,6 +602,7 @@ def test_source_relative_resource_paths_do_not_claim_an_unread_sibling_with_the_
         "def second(done=False):\n    if done:\n        return directory()\n    return first(True)\n"
         "def global_value():\n    return (directory() / GLOBAL).read_text()\n"
         "def static_value():\n    return files('demo').joinpath('a', f'{GLOBAL}').read_text()\n"
+        "def unsupported():\n    return files('demo').joinpath('a', f'{1}.md').read_text()\n"
         "def value(folder=None):\n    ROOT = 'b'\n    FILE, UNUSED = 'data.md', 'unread.md'\n"
         "    return ((folder or directory()) / FILE).read_text()\n"
         "def computed(name):\n    return files('demo').joinpath('a', f'data{name}.md').read_text()\n",

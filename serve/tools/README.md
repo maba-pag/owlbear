@@ -90,6 +90,7 @@ Computed package filenames retain their fixed path prefixes and suffixes; plain 
 interpolations resolve known bindings rather than widening static filenames. Module constants,
 direct assignments and single-return path helpers resolve against the same tracked package roots;
 an unrelated unrooted string pattern cannot claim a runtime resource.
+Unresolved non-name expressions do not become wildcard filenames.
 Path constructors join every resolved argument, not only the first.
 Literal tuple/list filename assignments resolve each named target separately. A declared but unresolved
 filename does not become a dynamic wildcard reader. Reader and path-helper local bindings shadow
