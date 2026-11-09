@@ -4,6 +4,7 @@ the clone a Change starts in; each shared folder's memory once, beside Global me
 from __future__ import annotations
 
 import json
+import re
 import socket
 import threading
 import time
@@ -945,6 +946,7 @@ def every_name_is_what_its_row_shows(page, pds) -> None:
     the name table itself); the row sits in the group the list links to; a key with no row is named as written."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
+    grouped_unset_overview(page, pds, page.url.split("/config")[0], expect)
     retired = {"id": "n1", "key": "machine.spotter_budget", "old": "5", "new": None, "at": "2026-11-04T09:00:00Z"}
     expect(page.locator("#reads-status")).to_contain_text("Last read", timeout=30_000)  # none lands over the notice
     page.evaluate(RETIRED_NOTICE, [retired])  # it is shown as its key and can be dismissed, never a failure to draw
@@ -969,6 +971,35 @@ def every_name_is_what_its_row_shows(page, pds) -> None:
     nothing = page.evaluate(NO_ROW)
     assert (nothing["count"], nothing["wrong"]) == (56, [])  # the repairer's four round keys among them
     assert "agents.planner.bogus" in nothing["unknown"]
+
+
+def grouped_unset_overview(page, pds, base: str, expect) -> None:
+    expect(page.locator("#unset-groups > li")).to_have_count(5)
+    expect(page.locator("#unset-project, #unset-overview")).to_have_count(0)
+    expect(page.locator("#unset-agents")).to_have_text(
+        re.compile(r"^Agents and runs, \d+ unset: planner · Model, planner · Effort, planner · Context and \d+ more$")
+    )
+    total = 0
+    for group in ("agents", "guardrails", "memory", "checks", "this-machine"):
+        item = page.locator(f"#unset-{group}")
+        count = int(item.inner_text().split(", ", 1)[1].split(" ", 1)[0])
+        total += count
+        links = item.locator("a")
+        expect(links).to_have_count(4)
+        expect(links.last).to_have_text(f"and {count - 3} more")
+        expect(links.last).to_have_attribute("href", f"#{group}")
+    expect(page.locator("#unset > p-text").first).to_contain_text(f"{total} settings are unset.")
+    expect(page.locator("#unset-agents a").first).to_have_attribute("href", "#set-agents-planner")
+    for group, heading, row in (
+        ("agents", "agents-title", "set-sessions"),
+        ("guardrails", "spotter-title", "set-guard_level"),
+    ):
+        page.locator(f"#unset-{group} a").last.click()
+        expect(page).to_have_url(f"{base}/config?project={DOCS}#{group}")
+        expect(page.locator(f"#groups a[href='#{group}']")).to_have_attribute("aria-current", "page")
+        expect(page.locator(f"#{heading}")).to_be_focused()
+        expect(page.locator(f"#{row} p-text[color='error']")).to_have_count(1)
+        pds.group(page, "overview")
 
 
 @pytest.mark.browser
