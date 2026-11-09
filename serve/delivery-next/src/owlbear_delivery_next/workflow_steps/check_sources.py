@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 import tomllib
 from pathlib import Path, PurePosixPath
 
@@ -22,6 +23,56 @@ UV_SWITCHES = frozenset(
         "-v",
     }
 )
+PYTHON_SWITCHES = frozenset({"-I", "-S", "-s", "-E", "-B", "-O", "-OO", "-u", "-q", "-v", "-h", "-V"})
+
+
+def _inline_python(rest: list[str]) -> bool:
+    while rest:
+        option = rest[0]
+        if option in {"-c", "-"} or option.startswith("-c"):
+            return True
+        if option == "-m" or not option.startswith("-"):
+            break
+        if option in {"-W", "-X", "--check-hash-based-pycs"}:
+            rest = rest[2:]
+        elif option in PYTHON_SWITCHES or option.startswith(("-W", "-X")):
+            rest = rest[1:]
+        else:
+            return True
+    return False
+
+
+def _inline_shell(rest: list[str]) -> bool:
+    while rest:
+        option = rest[0]
+        if option == "--command" or (option.startswith("-") and not option.startswith("--") and "c" in option):
+            return True
+        if option in {"-o", "+o", "--rcfile", "--init-file"}:
+            rest = rest[2:]
+        elif (option.startswith("-") and not option.startswith("--")) or option in {
+            "--noprofile",
+            "--norc",
+            "--noediting",
+            "--restricted",
+            "--posix",
+            "--verbose",
+        }:
+            rest = rest[1:]
+        elif option.startswith("-"):
+            return True
+        else:
+            break
+    return False
+
+
+def _opaque_interpreter(words: list[str]) -> bool:
+    for index, word in enumerate(words):
+        name = PurePosixPath(word).name
+        if re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", name) and _inline_python(words[index + 1 :]):
+            return True
+        if name in {"sh", "bash", "zsh", "dash", "fish"} and _inline_shell(words[index + 1 :]):
+            return True
+    return False
 
 
 def _uv_scripts(words: list[str]) -> set[str] | None:
@@ -50,7 +101,7 @@ def _uv_scripts(words: list[str]) -> set[str] | None:
 def console_script(path: str, words: list[str], source: Path) -> bool:
     """Names owned by the unchanged command; uncertain uv parsing conservatively holds every path."""
     invoked = _uv_scripts(words)
-    if invoked is None:
+    if invoked is None or _opaque_interpreter(words):
         return True
     modules = {words[i + 1] for i in range(len(words) - 1) if words[i] == "-m"}
     if not invoked and not modules:

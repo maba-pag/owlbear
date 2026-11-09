@@ -89,8 +89,15 @@ def test_a_selector_fix_is_held_even_when_its_own_empty_check_passes(repo, tmp_p
         ),
     )
     store = SimpleNamespace(log=lambda *_: None, write=lambda *_: None)
-    flagged = tuple(command.replace("uv run ", "uv run --locked ", 1) for command in witness)
-    step_repair._proven(store, None, c, (repo, at), flagged, 60.0, Profile())  # noqa: SLF001
+    step_repair._proven(  # noqa: SLF001
+        store,
+        None,
+        c,
+        (repo, at),
+        tuple(command.replace("uv run ", "uv run --locked ", 1) for command in witness),
+        60.0,
+        Profile(),
+    )
     assert worktree.git(repo, "rev-parse", "HEAD") == head
     assert r.held == [f"changes {path}, which the step's check runs, so it proves nothing alone"]
     assert all(
@@ -100,8 +107,9 @@ def test_a_selector_fix_is_held_even_when_its_own_empty_check_passes(repo, tmp_p
     missing = "serve/tools/src/owlbear_tools/missing_selector.py"
     assert not (repo / missing).exists()
     assert step_repair._named(missing, witness, repo)  # noqa: SLF001
-    assert step_repair._named(path, ("uv run --locked test --changed",), repo)  # noqa: SLF001
     assert step_repair._named(path, ("python -m owlbear_tools.testing --changed",), repo)  # noqa: SLF001
+    assert step_repair._named(path, ('python -c "from owlbear_tools.testing import test_main; test_main()"',), repo)  # noqa: SLF001
+    assert step_repair._named(path, ('sh -c "uv run test --changed"',), repo)  # noqa: SLF001
     (source / "task_scope.py").write_text("def broken(\n")
     reason = step_repair._check_hold(path, witness, repo)  # noqa: SLF001
     assert "cannot inspect the unchanged check" in reason
