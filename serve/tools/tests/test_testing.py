@@ -6,6 +6,7 @@ import fcntl
 import json
 import sys
 import threading
+from dataclasses import replace
 from importlib.metadata import version
 from pathlib import Path
 from unittest.mock import patch
@@ -534,16 +535,9 @@ def test_observed_runtime_readers_do_not_expand_unrelated_importer_methods(tmp_p
         [resource],
         _Consumers(tmp_path, set(texts)),
         [
-            Evidence(
-                "map",
-                1,
-                1,
-                "python",
-                1,
-                1,
-                hashes,
-                frozenset(),
-                (
+            replace(
+                evidence,
+                observations=(
                     Observation(
                         f"{test}::test_value",
                         reader,
@@ -785,38 +779,24 @@ def test_observed_changes_keep_platform_callers_and_only_relevant_test_drift(tmp
 
     (tmp_path / test).write_text("def test_direct():\n    assert True\n")
     (tmp_path / caller).write_text("def guarded():\n    return 1\n")
-    drifted = _Selection(
-        tmp_path,
-        [source],
-        _Consumers(tmp_path, set(texts) | {data}),
-        [
-            Evidence(
-                "map",
-                1,
-                1,
-                "python",
-                1,
-                4,
-                recorded,
-                frozenset(),
-                (
-                    Observation(f"{test}::test_direct", source, tuple(before.checksums)),
-                    Observation(f"{guarded}::test_guard", source, tuple(before.checksums)),
-                    Observation(
-                        f"{guarded}::test_guard",
-                        caller,
-                        tuple(
-                            Module(
-                                source_code="from demo.source import work\n\ndef guarded():\n    return work()\n"
-                            ).checksums
-                        ),
+    old_caller = Module(source_code="from demo.source import work\n\ndef guarded():\n    return work()\n")
+    with patch("owlbear_tools.test_impact._revision", return_value={source: before, caller: old_caller}):
+        drifted = _Selection(
+            tmp_path,
+            [source],
+            _Consumers(tmp_path, set(texts) | {data}),
+            [
+                replace(
+                    evidence,
+                    observations=(
+                        Observation(f"{test}::test_direct", source, tuple(before.checksums)),
+                        Observation(f"{guarded}::test_guard", source, tuple(before.checksums)),
+                        Observation(f"{guarded}::test_guard", caller, tuple(old_caller.checksums)),
                     ),
-                ),
-            )
-        ],
-        current | {test: "changed", caller: "changed"},
-    )
-    with patch("owlbear_tools.test_impact._revision", return_value={source: before}):
+                )
+            ],
+            current | {test: "changed", caller: "changed"},
+        )
         drifted.fingerprints({source}, "before")
     drifted.reconcile()
     assert test not in drifted.reasons
@@ -832,16 +812,9 @@ def test_observed_changes_keep_platform_callers_and_only_relevant_test_drift(tmp
         [source],
         _Consumers(tmp_path, set(texts) | {data}),
         [
-            Evidence(
-                "map",
-                1,
-                1,
-                "python",
-                1,
-                4,
-                recorded,
-                frozenset(),
-                (Observation(f"{guarded}::test_guard", source, tuple(same_mapped.checksums)),),
+            replace(
+                evidence,
+                observations=(Observation(f"{guarded}::test_guard", source, tuple(same_mapped.checksums)),),
             )
         ],
         current | {source: "changed", test: "changed"},
