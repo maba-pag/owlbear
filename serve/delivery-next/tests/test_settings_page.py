@@ -1093,6 +1093,12 @@ def test_the_curator_threshold_shows_read_only_with_its_value_off_global(store, 
         url = page.url.split("#")[0]
         pds.group(page, "overview")
         expect(page.locator("#unset-memory")).to_contain_text("unset")
+        assert _unset_count(page, "memory") == 10
+        page.locator("#unset-memory").get_by_role("link", name="Points an outstanding rating adds", exact=True).click()
+        expect(page).to_have_url(f"{url}#memory")
+        expect(page.locator("#set-memory-outstanding_boost p-text[color='error']")).to_have_count(1)
+        expect(page.get_by_label(MEMORY_LABELS["outstanding_boost"])).to_be_disabled()
+        expect(page.locator("#set-memory-outstanding_boost")).to_be_focused()
         page.goto(f"{url}#set-curator_threshold")  # an unset link's address; Memory lists only its first three
         expect(row).to_be_focused()  # the disabled field can't take the focus
         expect(threshold).to_be_disabled()
@@ -1552,22 +1558,6 @@ def test_memory_values_are_read_only_off_global_and_the_filter_lists_the_unset_o
         pds.pick(page, "Show", "set")
         expect(rows).to_have_count(1)
         expect(page.locator("#set-memory-stale_factor")).to_be_visible()
-
-
-@pytest.mark.browser
-def test_an_unset_memory_value_is_listed_by_the_overview_and_its_link_opens_the_row(store, pds, monkeypatch) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    _layered(store, monkeypatch, GLOBAL, {}, {})
-    with settings_page(store, pds) as page:
-        url = page.url.split("#")[0]
-        pds.group(page, "overview")
-        assert _unset_count(page, "memory") == 10  # nine memory values and the curator's threshold
-        page.locator("#unset-memory").get_by_role("link", name="Points an outstanding rating adds", exact=True).click()
-        expect(page).to_have_url(f"{url}#memory")
-        expect(page.locator("#set-memory-outstanding_boost p-text[color='error']")).to_have_count(1)
-        expect(page.get_by_label(MEMORY_LABELS["outstanding_boost"])).to_be_disabled()  # the project layer: read-only
-        expect(page.locator("#set-memory-outstanding_boost")).to_be_focused()
 
 
 @pytest.mark.browser
