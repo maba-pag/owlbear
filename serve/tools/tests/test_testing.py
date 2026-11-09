@@ -571,7 +571,7 @@ def test_source_relative_resource_paths_do_not_claim_an_unread_sibling_with_the_
         "GLOBAL, UNUSED_GLOBAL = 'data.md', 'unread.md'\n"
         "def directory():\n    return Path(str(files('demo').joinpath(ROOT)))\n"
         "def global_value():\n    return (directory() / GLOBAL).read_text()\n"
-        "def value(folder=None):\n    FILE, UNUSED = 'data.md', 'unread.md'\n"
+        "def value(folder=None):\n    ROOT = 'b'\n    FILE, UNUSED = 'data.md', 'unread.md'\n"
         "    return ((folder or directory()) / FILE).read_text()\n"
         "def computed(name):\n    return files('demo').joinpath('a', f'data{name}.md').read_text()\n",
     }

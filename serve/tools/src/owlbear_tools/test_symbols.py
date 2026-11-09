@@ -142,8 +142,11 @@ def resource_path(
     source: str,
     modules: dict[str, set[str]],
     definitions: dict[str, ast.AST] | None = None,
+    module_bindings: dict[str, ast.AST] | None = None,
 ) -> str | None:
     """Resolve literal source/package-relative paths without consulting the filesystem."""
+    if module_bindings is None:
+        module_bindings = definitions
     if isinstance(node, ast.Name) and node.id == "__file__":
         return source
     if (
@@ -166,8 +169,9 @@ def resource_path(
                 ),
                 None,
             )
-        remaining = {name: value for name, value in definitions.items() if name != node.id}
-        return resource_path(value, source, modules, remaining) if value is not None else None
+        defining = module_bindings if module_bindings and module_bindings.get(node.id) is definition else definitions
+        remaining = {name: value for name, value in defining.items() if name != node.id}
+        return resource_path(value, source, modules, remaining, module_bindings) if value is not None else None
     if isinstance(node, ast.JoinedStr):
         return "".join(
             part.value if isinstance(part, ast.Constant) and isinstance(part.value, str) else "*"
@@ -175,65 +179,80 @@ def resource_path(
         )
     if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or):
         return next(
-            (path for value in node.values if (path := resource_path(value, source, modules, definitions)) is not None),
+            (
+                path
+                for value in node.values
+                if (path := resource_path(value, source, modules, definitions, module_bindings)) is not None
+            ),
             None,
         )
-    return _resource_literal(node, source, modules, definitions)
+    return _resource_literal(node, source, modules, definitions, module_bindings)
 
 
 def _resource_literal(
-    node: ast.AST, source: str, modules: dict[str, set[str]], definitions: dict[str, ast.AST] | None
+    node: ast.AST,
+    source: str,
+    modules: dict[str, set[str]],
+    definitions: dict[str, ast.AST] | None,
+    module_bindings: dict[str, ast.AST] | None,
 ) -> str | None:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
     if isinstance(node, ast.Attribute) and node.attr == "parent":
-        parent = resource_path(node.value, source, modules, definitions)
+        parent = resource_path(node.value, source, modules, definitions, module_bindings)
         return str(PurePosixPath(parent).parent) if parent is not None else None
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
-        parent = resource_path(node.left, source, modules, definitions)
-        child = resource_path(node.right, source, modules, definitions)
+        parent = resource_path(node.left, source, modules, definitions, module_bindings)
+        child = resource_path(node.right, source, modules, definitions, module_bindings)
         if child is None and isinstance(node.right, ast.Name) and node.right.id not in (definitions or {}):
             child = "*"
         return str(PurePosixPath(parent) / child) if parent is not None and child is not None else None
     if not isinstance(node, ast.Call):
         return None
-    return _resource_call(node, source, modules, definitions)
+    return _resource_call(node, source, modules, definitions, module_bindings)
 
 
 def _resource_call(
-    node: ast.Call, source: str, modules: dict[str, set[str]], definitions: dict[str, ast.AST] | None
+    node: ast.Call,
+    source: str,
+    modules: dict[str, set[str]],
+    definitions: dict[str, ast.AST] | None,
+    module_bindings: dict[str, ast.AST] | None,
 ) -> str | None:
     if isinstance(node.func, ast.Name):
-        return _resource_named_call(node.func.id, node.args, source, modules, definitions)
+        return _resource_named_call(node, source, modules, definitions, module_bindings)
     if isinstance(node.func, ast.Attribute):
-        parent = resource_path(node.func.value, source, modules, definitions)
+        parent = resource_path(node.func.value, source, modules, definitions, module_bindings)
         if parent is not None and node.func.attr == "joinpath":
-            parts = [resource_path(arg, source, modules, definitions) for arg in node.args]
+            parts = [resource_path(arg, source, modules, definitions, module_bindings) for arg in node.args]
             return str(PurePosixPath(parent, *filter(None, parts))) if None not in parts else None
         if parent is not None and node.func.attr in {"read_text", "read_bytes", "open", "resolve"}:
             return parent
         if parent is not None and node.func.attr == "with_name" and node.args:
-            name = resource_path(node.args[0], source, modules, definitions)
+            name = resource_path(node.args[0], source, modules, definitions, module_bindings)
             return str(PurePosixPath(parent).with_name(name)) if name is not None else None
     return None
 
 
 def _resource_named_call(
-    name: str,
-    args: list[ast.expr],
+    node: ast.Call,
     source: str,
     modules: dict[str, set[str]],
     definitions: dict[str, ast.AST] | None,
+    module_bindings: dict[str, ast.AST] | None,
 ) -> str | None:
+    if not isinstance(node.func, ast.Name):
+        return None
+    name, args = node.func.id, node.args
     if definitions and isinstance(definition := definitions.get(name), (ast.FunctionDef, ast.AsyncFunctionDef)):
         returns = [statement.value for statement in definition.body if isinstance(statement, ast.Return)]
-        remaining = {
-            symbol: value for symbol, value in (definitions | _definitions(definition)).items() if symbol != name
-        }
+        defining = module_bindings if module_bindings and module_bindings.get(name) is definition else definitions
+        remaining = defining | _definitions(definition)
+        del remaining[name]
         if len(returns) == 1 and returns[0] is not None:
-            return resource_path(returns[0], source, modules, remaining)
+            return resource_path(returns[0], source, modules, remaining, module_bindings)
     if name == "files" and args:
-        package = resource_path(args[0], source, modules, definitions)
+        package = resource_path(args[0], source, modules, definitions, module_bindings)
         roots = {
             str(PurePosixPath(path).parent)
             for path in modules.get(package or "", set())
@@ -241,7 +260,7 @@ def _resource_named_call(
         }
         return next(iter(roots)) if len(roots) == 1 else None
     if name in {"Path", "PurePath", "PurePosixPath", "str"} and args:
-        return resource_path(args[0], source, modules, definitions)
+        return resource_path(args[0], source, modules, definitions, module_bindings)
     return None
 
 

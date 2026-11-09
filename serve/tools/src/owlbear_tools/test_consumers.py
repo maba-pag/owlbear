@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import ast
-import fnmatch
 import posixpath
 import re
 from collections import defaultdict
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit
 
 from testmon.process_code import Module, bytes_to_string_and_fsha, methods_to_checksums
@@ -356,16 +355,16 @@ class _Consumers:
         affected: dict[str, set[str]] = defaultdict(set)
         aliases: dict[str, set[str]] = defaultdict(set)
         for path, definitions in self.references.items():
-            bindings = self.definitions[path]
+            scope = self.definitions[path]
             symbols = {
                 symbol
                 for symbol, references in definitions.items()
                 if resource in references
                 or any(
-                    (pattern := resource_path(node, path, self.modules, bindings | _definitions(bindings[symbol])))
+                    (pattern := resource_path(node, path, self.modules, scope | _definitions(scope[symbol]), scope))
                     is not None
                     and pattern.startswith(resource.split("/src/", 1)[0] + "/src/")
-                    and fnmatch.fnmatchcase(resource, pattern)
+                    and PurePosixPath(resource).full_match(pattern)
                     for node in ast.walk(self.definitions[path][symbol])
                     if isinstance(node, (ast.Call, ast.BinOp))
                 )

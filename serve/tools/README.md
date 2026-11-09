@@ -84,6 +84,8 @@ an unrelated unrooted string pattern cannot claim a runtime resource.
 Literal tuple/list filename assignments resolve each named target separately. A declared but unresolved
 filename does not become a dynamic wildcard reader. Reader and path-helper local bindings shadow
 module bindings in the same resolution.
+Helper free names retain their defining scope rather than inheriting the caller's locals.
+Computed path wildcards match one path component, not descendant files under a returned directory.
 Direct path aliases follow local assignments and imports; import-time loaded values retain their named consumers.
 Observed runtime readers select their own native footprints, with current/platform supplements;
 unobserved readers use named current consumers rather than expanding every unchanged importer.
