@@ -342,7 +342,9 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
             got = response.json()
             assert route.request.post_data_json["rev"] == got["project_rev"]
             newer = got["project"] | {"widths": [1600]}
-            changed = page.request.put(f"{endpoint}/project", headers=TOKEN, data={"rev": got["project_rev"], "layer": newer})
+            changed = page.request.put(
+                f"{endpoint}/project", headers=TOKEN, data={"rev": got["project_rev"], "layer": newer}
+            )
             assert changed.status == 200
             assert changed.json()["project_rev"] != got["project_rev"]
             route.continue_()
