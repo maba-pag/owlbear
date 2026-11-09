@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,7 +15,6 @@ import httpx
 import pytest
 from copilot.generated import rpc
 from fastapi import FastAPI, Request
-from fastapi.testclient import TestClient
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import expect, sync_playwright
 
@@ -22,8 +22,8 @@ from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import app as machine_app
-from owlbear_delivery_next.project_host import api, config_routes, pages
-from owlbear_delivery_next.runtimes import model_choices, settings_seen
+from owlbear_delivery_next.project_host import api, config_routes
+from owlbear_delivery_next.runtimes import model_choices, settings_read, settings_seen
 from owlbear_delivery_next.runtimes.settings_seen import NAME as SEEN
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
 from owlbear_delivery_next.state_store import registry
@@ -42,8 +42,13 @@ class OutsideAnswers:
 
     def __init__(self, path: Path, monkeypatch) -> None:
         self.stores = {}
-        self.layers = {}
-        self.clients = {}
+        self.apps = {}
+        self.price = 3
+        monkeypatch.setattr(model_choices, "_read", lambda: [offered(self.price)])
+        monkeypatch.setattr(pack_files, "fetch", lambda *_args, **_kwargs: b"[]")
+        reader = settings_read.Reader(logging.getLogger(__name__).info, lambda: list(self.stores.values()))
+        # Only the read-state envelope is scripted for ordering; reads, model refreshes and saves still run.
+        monkeypatch.setattr(reader, "shown", lambda: self.reads)
         monkeypatch.setattr(
             config_routes, "_github_rule", lambda _repo, _until: {"error": "AccountMissing: project has no origin"}
         )
@@ -57,12 +62,9 @@ class OutsideAnswers:
                 json.dumps({"format": CONFIG_FORMAT, "agents": {"builder": {"minutes": minutes}}})
             )
             self.stores[project] = store
-            self.clients[project] = TestClient(
-                api.create_app(store, "tok", ProjectHost()),
-                base_url="http://127.0.0.1",
-                headers={"authorization": "Bearer tok"},
-            )
-            self.layers[project] = self.layer(project)
+            host = ProjectHost()
+            host.reads = reader
+            self.apps[project] = api.create_app(store, "tok", host)
         monkeypatch.setattr(machine_app.control, "autostarts", lambda: "off")
         monkeypatch.setattr(machine_app.versions, "legacy", list)
         self.machine = machine_app.machine_values(SimpleNamespace(paused=False))
@@ -70,21 +72,10 @@ class OutsideAnswers:
             read_at=datetime(2026, 1, 1, tzinfo=UTC),
             succeeded_at=datetime(2026, 1, 1, tzinfo=UTC),
         ).model_dump(mode="json", exclude={"seen"})
-        self.models = self.model(3)
-
-    @staticmethod
-    def model(price: float) -> dict:
-        return {"models": [model_choices.shown(offered(price))], "error": ""}
-
-    def layer(self, project: str) -> dict:
-        response = self.clients[project].get("/api/next/config")
-        response.raise_for_status()
-        return response.json()
 
     def beta(self, minutes: int) -> None:
         store = self.stores["beta"]
         store.config_path.write_text(json.dumps({"format": CONFIG_FORMAT, "agents": {"builder": {"minutes": minutes}}}))
-        self.layers["beta"] = self.layer("beta")
 
     def at(self, second: int, *, failure: bool = False, no_date: bool = False) -> None:
         self.reads["read_at"] = None if no_date else f"2026-01-01T00:00:{second:02d}Z"
@@ -131,21 +122,6 @@ class OutsideAnswers:
     def machine_values(self) -> dict:
         return self.machine
 
-    def layers_for(self, project: str) -> dict:
-        return self.layers[project]
-
-    async def save(self, project: str, request: Request) -> dict:
-        body = await request.json()
-        self.stores[project].config_path.write_text(json.dumps(body["layer"]))
-        self.layers[project] = self.layer(project) | {"unpublished": ""}
-        return self.layers[project]
-
-    def read(self) -> dict:
-        return {"reads": self.reads}
-
-    def offered_models(self) -> dict:
-        return self.models
-
     async def dismiss(self, request: Request) -> dict:
         ids = (await request.json())["ids"]
         self.reads["notices"] = [n for n in self.reads["notices"] if n["id"] not in ids]
@@ -159,15 +135,12 @@ def answers(tmp_path, monkeypatch):
 
 def focused_app(answers):
     app = FastAPI()
-    pages.assets(app)
-    app.add_api_route("/config", api.fixed_page(pages.pages()["/config"]), methods=["GET"])
     app.add_api_route("/api/next/projects", answers.projects, methods=["GET"])
     app.add_api_route("/api/next/machine", answers.machine_values, methods=["GET"])
-    app.add_api_route("/p/{project}/api/next/config", answers.layers_for, methods=["GET"])
-    app.add_api_route("/p/{project}/api/next/config/project", answers.save, methods=["PUT"])
-    app.add_api_route("/p/{project}/api/next/config/read", answers.read, methods=["GET", "POST"])
-    app.add_api_route("/p/{project}/api/next/config/models", answers.offered_models, methods=["GET"])
     app.add_api_route("/api/next/settings-read/dismiss", answers.dismiss, methods=["POST"])
+    for project, producer in answers.apps.items():
+        app.mount(f"/p/{project}", producer)
+    app.mount("/", answers.apps["alpha"])
     return app
 
 
@@ -333,7 +306,7 @@ def test_older_model_rates_cannot_replace_a_newer_read(answers, pds):
         again = page.get_by_role("button", name="Read again")
         again.click()
         until(page, lambda: models)
-        answers.models = answers.model(7)
+        answers.price = 7
         again.click()
         pds.group(page, "agents")
         expect(rates(page)).to_contain_text("in 7 ")
