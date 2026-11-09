@@ -268,9 +268,9 @@ class _Selection:
                 node = module
         self.reasons[node].add(reason)
 
-    def fingerprints(self, touched: set[str], callers: set[str], base: str, after: str | None = None) -> None:
+    def fingerprints(self, touched: set[str], base: str, after: str | None = None) -> None:
         before = _revision(self.root, base, touched)
-        current = {path: _module(self.consumers.texts.get(path)) for path in touched | callers}
+        current = {path: _module(self.consumers.texts.get(path)) for path in touched}
         original = _revision(self.root, after, touched) if after is not None else current
         label = f"kept span {base}..{after}" if after is not None else "task-before/current"
         for row in self.rows:
@@ -465,10 +465,10 @@ def select(
         selection.add(node, "current named page/source-reading/subprocess consumer")
     for resource in sorted(resources):
         selection.resource(resource)
-    selection.fingerprints(touched, callers, context.base)
+    selection.fingerprints(touched, context.base)
     for span in context.kept_spans:
         kept = touched & _kept_paths(root, span, context.target)
-        selection.fingerprints(kept, consumers.callers(kept), *span.split(".."))
+        selection.fingerprints(kept, *span.split(".."))
     selection.reconcile()
     if not selection.reasons:
         msg = f"No executable tests resolved for task paths {list(paths)} in {root}; refusing empty check"

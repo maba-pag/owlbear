@@ -817,7 +817,7 @@ def test_observed_changes_keep_platform_callers_and_only_relevant_test_drift(tmp
         current | {test: "changed", caller: "changed"},
     )
     with patch("owlbear_tools.test_impact._revision", return_value={source: before}):
-        drifted.fingerprints({source}, drifted.consumers.callers({source}), "before")
+        drifted.fingerprints({source}, "before")
     drifted.reconcile()
     assert test not in drifted.reasons
     assert not any(node.startswith(guarded) for node in drifted.reasons)
@@ -847,7 +847,7 @@ def test_observed_changes_keep_platform_callers_and_only_relevant_test_drift(tmp
         current | {source: "changed", test: "changed"},
     )
     with patch("owlbear_tools.test_impact._revision", return_value={source: same_before}):
-        same_file.fingerprints({source}, same_file.consumers.callers({source}), "before")
+        same_file.fingerprints({source}, "before")
     same_file.reconcile()
     assert not any(node.startswith(guarded) for node in same_file.reasons)
     assert newer in same_file.reasons
@@ -1016,4 +1016,4 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
         patch.object(test_impact, "_revision", return_value={orphan: orphan_before}),
         pytest.raises(RuntimeError, match="no resolved current consumers"),
     ):
-        selection.fingerprints({orphan}, set(), "base")
+        selection.fingerprints({orphan}, "base")
