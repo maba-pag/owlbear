@@ -264,6 +264,35 @@ def machine_poll_clock(page: Page) -> Callable[[], None]:
     return poll
 
 
+def pds_poll_clock(page: Page, base: str) -> Callable[[], None]:
+    """Witness the run timer's actual readPack continuation, alongside the machine's checks poll."""
+    poll = machine_poll_clock(page)
+    page.add_init_script("""{
+        window.pdsPoll = { scheduled: false, finished: 0 };
+        const later = window.setTimeout;
+        window.setTimeout = (fn, ms, ...args) => {
+            if (fn.name !== "readPack") return later(fn, ms, ...args);
+            window.pdsPoll.scheduled = true;
+            return later(async () => {
+                await fn(...args);
+                window.pdsPoll.finished++;
+            }, ms);
+        };
+    }""")
+    page.goto(f"{base}/updates/pds#token=t")
+
+    def refresh() -> None:
+        until(page, lambda: page.evaluate("window.pdsPoll.scheduled"))
+        finished = page.evaluate("window.pdsPoll.finished")
+        for _ in range(4):  # the idle run timer is 15 s; the machine's registered poll is 5 s
+            poll()
+            if page.evaluate("window.pdsPoll.finished") > finished:
+                break
+        assert page.evaluate("window.pdsPoll.finished") > finished
+
+    return refresh
+
+
 def replaced(path: Path) -> registry.Project:
     """A project whose clone at *path* was deleted and cloned again: the registered one, now replaced."""
     old = registry.register(clone(path))
@@ -2380,13 +2409,14 @@ def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_wa
     ]  # fmt: skip
     try:
         with browsing(monkeypatch, pds) as (page, base):
+            refresh = pds_poll_clock(page, base)
             for record, state, level, tags, run in journey:
                 if record:
                     ran(**record)
-                if record and record["state"] != "running" and held is not None:
-                    os.close(held)
-                    held = None
-                page.goto(f"{base}/updates/pds#token=t")
+                    if record["state"] != "running" and held is not None:
+                        os.close(held)
+                        held = None
+                    refresh()
                 expect(page.locator("#check-state")).to_have_text(state)
                 expect(page.locator("#pack-state")).to_contain_text(run)
                 expect(page.locator("#menu-dot")).to_have_count(1 if "available" in level else 0)
