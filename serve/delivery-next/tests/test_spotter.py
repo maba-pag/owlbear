@@ -1430,6 +1430,10 @@ def test_a_state_change_finding_asks_the_conflict_check_after_acting_and_its_ans
 
     async def dispatch(_record: spotter.Record, act: acts.Act) -> None:
         order.append(f"act {act.act}")
+        if fails:
+            exc = RuntimeError(whole_error)
+            exc.add_note("the runtime refused the note")
+            raise exc
 
     def conflicts(change: str) -> str:
         order.append(f"check {change}")
@@ -1453,6 +1457,9 @@ def test_a_state_change_finding_asks_the_conflict_check_after_acting_and_its_ans
     assert order == ["act stop-and-ask", "check rm -rf ~/backups"]
     [act] = acts.acts(spotter.root()).values()
     failed = {"failed": f"RuntimeError: {whole_error}\nthe decisions lookup ended early"}
+    assert (act.delivery, act.error) == (
+        ("failed", f"RuntimeError: {whole_error}\nthe runtime refused the note") if fails else ("pending", "")
+    )
     assert json.loads(act.conflict) == (failed if fails else {"decisions": [{"id": "D-1", "conflict": "none"}]})
     assert act.harm
 
