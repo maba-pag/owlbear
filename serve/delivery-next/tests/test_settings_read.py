@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pytest
 from copilot.generated import rpc
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import data_repo, local_home
@@ -309,19 +310,27 @@ def test_overrides_name_this_machine_and_its_projects(world):
     }
 
 
-def test_an_unreadable_state_file_is_said_and_rebuilt(world):
+def test_an_unreadable_state_file_is_said_and_rebuilt(world, whole_error):
     reader = world.reader()
     world.push(**builder("A"))
     reader.read()
-    (local_home.root() / NAME).write_text("{not json")
-    assert [f["source"] for f in reader.shown()["failures"]] == ["read state"]
+    path = local_home.root() / NAME
+    text = json.dumps({whole_error: 1})
+    path.write_text(text)
+    with pytest.raises(ValidationError) as invalid:
+        settings_seen.Seen.model_validate_json(text)
+    expected = f"ValidationError: {invalid.value}"
+    rebuilt = client(world.alone, reader).post("/api/next/config/read").json()["reads"]
+    [failure] = rebuilt["failures"]
+    assert (failure["source"], failure["error"]) == ("read state", expected)
+    assert rebuilt["notices"] == []
+    assert [line for line in world.said if line.startswith("settings read: read state")] == [
+        f"settings read: read state failed at {path}: {expected}; it is rebuilt"
+    ]
 
-    rebuilt = reader.read()
     world.push(**builder("B"))
     after = reader.read()
 
-    assert ([f.source for f in rebuilt.failures], rebuilt.notices) == (["read state"], [])
-    assert any(line.startswith("settings read: read state failed") for line in world.said)
     assert [(n.key, n.old, n.new) for n in after.notices] == [("agents.builder.model", '"A"', '"B"')]
 
 

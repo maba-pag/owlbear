@@ -670,8 +670,31 @@ def test_this_machine_s_layer_sits_between_global_and_project_and_stays_local(st
     got = c.get("/api/next/config").json()
     assert (got["machine"]["agents"], got["inherited"]["machine"]["agents"]["builder"]["effort"]) == ({}, "medium")
     glob = {"format": F, "agents": {"builder": {"effort": "high", "minutes": 50}, "planner": {"effort": "low"}}}
+    switches = ("load_user_instructions", "load_user_skills", "load_user_memory")
+    glob |= dict.fromkeys(switches, False) | {
+        "guard_level": "strict",
+        "github_account": "repository-owner",
+        "prefs": {
+            "merge_method": "squash",
+            "delete_remote_branch": False,
+            "ci_poll_seconds": 45,
+            "ci_start_window_seconds": 400,
+            "ask_before_merge": True,
+        },
+    }
     got = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": glob}).json()
     machine = {"format": F, "agents": {"builder": {"effort": "xhigh", "minutes": 60}}}
+    machine |= dict.fromkeys(switches, True) | {
+        "guard_level": "standard",
+        "github_account": "machine-writer",
+        "prefs": {
+            "merge_method": "merge",
+            "delete_remote_branch": True,
+            "ci_poll_seconds": 30,
+            "ci_start_window_seconds": 350,
+            "ask_before_merge": False,
+        },
+    }
     saved = c.put("/api/next/config/machine", json={"rev": got["machine_rev"], "layer": machine})
     assert saved.status_code == 200
     s, sources = saved.json()["settings"], saved.json()["settings"]["sources"]
@@ -680,12 +703,40 @@ def test_this_machine_s_layer_sits_between_global_and_project_and_stays_local(st
     assert saved.json()["inherited"]["project"]["agents"]["builder"]["minutes"] == 60  # a blank project field
     assert saved.json()["inherited"]["machine"]["agents"]["builder"]["minutes"] == 50  # a blank machine field
     project = {"format": F, "agents": {"builder": {"effort": "low"}}}
+    project |= dict.fromkeys(switches, False) | {
+        "guard_level": "lenient",
+        "github_account": "project-writer",
+        "prefs": {
+            "merge_method": "rebase",
+            "delete_remote_branch": False,
+            "ci_poll_seconds": 25,
+            "ci_start_window_seconds": 320,
+            "ask_before_merge": True,
+        },
+    }
     mine = c.put("/api/next/config/project", json={"rev": saved.json()["project_rev"], "layer": project}).json()
     assert (mine["settings"]["agents"]["builder"]["effort"], mine["settings"]["sources"]["agents.builder.minutes"]) == (
         "low", "machine"
     )  # fmt: skip
     assert json.loads(store.machine_path.read_text())["agents"]["builder"]["effort"] == "xhigh"
     assert store.settings().sources["agents.builder.minutes"] == "machine"  # the runners resolve it too
+    reloaded = c.get("/api/next/config").json()
+    fields = (*switches, "guard_level", "github_account")
+    for name, values, path in (
+        ("global", glob, store.global_path),
+        ("machine", machine, store.machine_path),
+        ("project", project, store.config_path),
+    ):
+        written = json.loads(path.read_text())
+        assert {k: written[k] for k in fields} == {k: values[k] for k in fields}
+        assert written["prefs"] == values["prefs"]
+        assert {k: reloaded[name][k] for k in fields} == {k: values[k] for k in fields}
+        assert reloaded[name]["prefs"] == values["prefs"]
+    for key in fields:
+        assert (reloaded["settings"][key], reloaded["settings"]["sources"][key]) == (project[key], "project")
+        assert reloaded["inherited"]["project"][key] == machine[key]
+        assert reloaded["inherited"]["machine"][key] == glob[key]
+    assert reloaded["settings"]["prefs"] == project["prefs"]
     shown = subprocess.run(  # noqa: S603
         ["git", "--git-dir", str(remote), "log", "--format=%s", "main"],  # noqa: S607
         check=True, capture_output=True, text=True,
@@ -694,6 +745,17 @@ def test_this_machine_s_layer_sits_between_global_and_project_and_stays_local(st
     assert not list(root.glob("**/settings.json"))
     stale = c.put("/api/next/config/machine", json={"rev": got["machine_rev"], "layer": {"format": F}})
     assert stale.status_code == 409
+    for cleared, wider, values in (("project", "machine", machine), ("machine", "global", glob)):
+        cleared_response = c.put(
+            f"/api/next/config/{cleared}", json={"rev": reloaded[f"{cleared}_rev"], "layer": {"format": F}}
+        )
+        assert cleared_response.status_code == 200
+        reloaded = c.get("/api/next/config").json()
+        for key in fields:
+            assert reloaded[cleared][key] is None
+            assert (reloaded["settings"][key], reloaded["settings"]["sources"][key]) == (values[key], wider)
+        assert reloaded[cleared]["prefs"] is None
+        assert reloaded["settings"]["prefs"] == values["prefs"]
 
 
 @pytest.mark.parametrize(
