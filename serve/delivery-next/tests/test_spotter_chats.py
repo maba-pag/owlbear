@@ -857,13 +857,21 @@ def test_a_failed_pass_is_told_whole(world, whole_error):
     f = chats.Follower(lambda: False, told.append, read=unreadable, judge=world.judge, poll=0.01,
                        sessions=world.state)  # fmt: skip
     f.start()
-    deadline = time.monotonic() + 5
-    while not told and time.monotonic() < deadline:
-        time.sleep(0.02)
-    f.close()
-    assert f.join(chats.CLOSE)
-    said = f"RuntimeError: {whole_error}\nthe chats' settings were being written"
-    assert (told, f.failed) == ([f"chats follower: a pass failed: {said}"], said)  # said once, while it repeats
+    try:
+        deadline = time.monotonic() + 5
+        while (not told or not f.failed) and time.monotonic() < deadline:
+            time.sleep(0.02)
+        said = f"RuntimeError: {whole_error}\nthe chats' settings were being written"
+        assert (told, f.failed) == ([f"chats follower: a pass failed: {said}"], said)  # said once, while it repeats
+        f.read = lambda: chat_settings.Plan(world.ctx, ())
+        deadline = time.monotonic() + 5
+        while f.failed and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert f.failed == ""
+        assert told == [f"chats follower: a pass failed: {said}"]
+    finally:
+        f.close()
+        assert f.join(chats.CLOSE)
 
 
 def test_a_lock_that_cannot_be_opened_is_told_whole(world, monkeypatch, whole_error):
