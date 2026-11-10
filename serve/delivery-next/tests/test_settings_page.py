@@ -291,6 +291,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
         page.get_by_role("button", name="Save project settings").click()
         pds.answer(page, "Save project settings")
         expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
+        saved_merge_method_is_cleared_without_losing_preferences(page, pds, store)
         pds.group(page, "guardrails")
         a_list_keeps_its_text_as_typed_and_counts_only_new_items(page, looks)
         the_global_layer_kept_its_edit_and_takes_one_more(page, pds)
@@ -301,7 +302,7 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
     assert (project.pr_labels, project.pr_marker, project.sessions) == (["inherit"], False, 3)
     assert project.final_review.max_rounds == 5
     assert project.prefs.model_dump(mode="json") == {
-        "merge_method": "squash",
+        "merge_method": None,
         "delete_remote_branch": False,
         "ci_poll_seconds": 45,
         "ci_start_window_seconds": 320,
@@ -315,6 +316,13 @@ def test_each_layer_keeps_its_own_drafts_and_a_save_sends_only_the_shown_layer(s
     assert project.spotter.look_credit_limit == 0.05
     assert project.spotter.steer_share is None  # the rest still inherit
     assert not store.global_path.exists()
+
+
+def saved_merge_method_is_cleared_without_losing_preferences(page, pds, store) -> None:
+    assert store.read_config().prefs.merge_method == "squash"
+    pds.group(page, "checks")
+    pds.pick(page, "Merge method", "inherit")
+    _saved(page, pds, "Save project settings", "this-project's")
 
 
 def merge_preferences_are_edited(page, pds) -> None:
