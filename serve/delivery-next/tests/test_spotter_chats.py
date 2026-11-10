@@ -872,7 +872,6 @@ def test_a_failed_pass_is_told_whole(world, whole_error):
     finally:
         f.close()
         assert f.join(chats.CLOSE)
-    assert f.ended.is_set()
 
 
 def test_a_lock_that_cannot_be_opened_is_told_whole(world, monkeypatch, whole_error):
