@@ -1101,6 +1101,7 @@ def test_a_failed_act_conflict_check_and_withdrawal_show_their_whole_error(
                 skipped=f"RuntimeError: {error}" if rid == skipped else "",
             )
             spotter.store(folder, record, None)
+        withdrawal = f"not taken within 60 s; its withdrawal failed: OSError: {error}"
         for rid, arm, action in ((harmed, "silent", "stop-and-ask"), (withdrawn, "steered", "refuse-hand-off")):
             acts.write(
                 folder,
@@ -1116,22 +1117,11 @@ def test_a_failed_act_conflict_check_and_withdrawal_show_their_whole_error(
                     act=action,
                     why="setting",
                     harm=rid == harmed,
-                    delivery="pending",
+                    delivery="failed" if rid == harmed else "unconfirmed",
+                    error=f"OSError: {error}" if rid == harmed else withdrawal,
+                    conflict=json.dumps({"failed": f"OSError: {error}"}) if rid == harmed else "",
                 ),
             )
-        acts.update(
-            folder,
-            harmed,
-            delivery="failed",
-            error=f"OSError: {error}",
-            conflict=json.dumps({"failed": f"OSError: {error}"}),
-        )
-        acts.update(
-            folder,
-            withdrawn,
-            delivery="unconfirmed",
-            error=f"not taken within 60 s; its withdrawal failed: OSError: {error}",
-        )
         page = improvement(w, pds)
         tag = page.locator(f"#look-{skipped} p-tag").first
         assert tag.evaluate("e => e.textContent") == f"Skipped: RuntimeError: {error}"
@@ -1140,7 +1130,6 @@ def test_a_failed_act_conflict_check_and_withdrawal_show_their_whole_error(
             return page.locator(f"#look-{rid} p.meta", has_text=start).evaluate(BARE)
 
         shown = (line(harmed, "Its error:"), line(harmed, "Decision check:"), line(withdrawn, "Its act:"))
-        withdrawal = f"not taken within 60 s; its withdrawal failed: OSError: {error}"
         assert shown == (
             f"Its error: OSError: {error}",
             f"Decision check: failed: OSError: {error}",
