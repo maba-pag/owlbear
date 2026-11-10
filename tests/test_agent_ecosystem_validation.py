@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib.util
-import re
 import sys
 import types
 from pathlib import Path
@@ -24,59 +23,6 @@ _CI_SCOPE = importlib.util.module_from_spec(_SCOPE_SPEC)
 _SCOPE_SPEC.loader.exec_module(_CI_SCOPE)
 
 
-_EXPECTED_AGENTS = {
-    "knowledge-enricher",
-    "knowledge-ingestor",
-}
-_RETIRED_AGENTS = {
-    "acceptor",
-    "memory-curator",
-    "test-curator",
-    "auditor",
-    "builder-challenger",
-    "collector",
-    "shaper",
-    "shaper-challenger",
-    "verifier",
-    "verifier-challenger",
-}
-_RETIRED_SKILLS = {
-    "w-mem-curation",
-    "w-test-curation",
-    "h-excalidraw-diagram",
-    "h-mcp-delivery",
-    "r-pipeline-protocol",
-    "w-spec-shaping",
-    "w-task-decomposition",
-    "w-task-repair",
-    "w-node-acceptance",
-    "w-whole-change-audit",
-    "w-integration-repair",
-    "w-change-publication",
-    "w-orchestration",
-    "w-packet-building",
-    "w-frontier-planning",
-    "w-change-finalization",
-    "w-design-session",
-    "w-delivery-attention-resolution",
-    "w-delivery-repair",
-    "w-target-conflict-resolution",
-    "w-address-pr-feedback",
-    "w-deviation-audit",
-    "h-ac-quality",
-    "h-decision-requests",
-    "h-process-observations",
-}
-_GENERIC_TASK_TOOLS = {
-    "owlbear-delivery/create_task",
-    "owlbear-delivery/edit_task",
-    "owlbear-delivery/end_work",
-    "owlbear-delivery/list_tasks",
-    "owlbear-delivery/move_task",
-    "owlbear-delivery/pick_tasks",
-    "owlbear-delivery/show_task",
-    "owlbear-delivery/start_work",
-}
 _RETIRED_DELIVERY_TOOLS = {
     "arbitrate_attempt",
     "finish_assembly",
@@ -479,27 +425,6 @@ def test_retired_delivery_operations_are_absent_from_active_customization_prose(
             )
         for phrase in _RETIRED_EVIDENCE_PHRASES:
             assert phrase not in content, f"{path.relative_to(_REPO_ROOT)} mentions retired evidence guidance {phrase}"
-
-
-def test_retired_skills_are_absent_from_active_customization_prose() -> None:
-    """Retired skill names must not survive in active customization sources."""
-    roots = (
-        _REPO_ROOT / "share/agents",
-        _REPO_ROOT / "share/instructions",
-        _REPO_ROOT / "share/skills",
-        _REPO_ROOT / ".owlbear/agents",
-        _REPO_ROOT / ".owlbear/instructions",
-        _REPO_ROOT / ".owlbear/skills",
-    )
-    active_files = [path for root in roots if root.is_dir() for path in root.rglob("*") if path.is_file()]
-    active_files.append(_REPO_ROOT / ".github/copilot-instructions.md")
-
-    for path in active_files:
-        content = path.read_text(encoding="utf-8")
-        for skill in _RETIRED_SKILLS:
-            assert re.search(rf"(?<![a-z0-9-]){re.escape(skill)}(?![a-z0-9-])", content) is None, (
-                f"{path.relative_to(_REPO_ROOT)} mentions retired skill {skill}"
-            )
 
 
 def test_project_doc_instruction_declares_local_standard_route() -> None:

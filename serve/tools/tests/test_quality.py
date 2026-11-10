@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import patch
 
@@ -18,7 +19,6 @@ from owlbear_tools.quality import (
     _precommit_hook_names,
     _run_biome,
     _run_leaf,
-    _run_named,
     format_commands,
     format_eof,
     format_whitespace,
@@ -44,8 +44,12 @@ def _ecosystem_hooks() -> set[str]:
     }
 
 
-def _static_ci_hooks(monkeypatch: pytest.MonkeyPatch) -> tuple[set[str], set[str]]:
-    """Return the hooks CI's Static suite passes to pre-commit and those it covers, fixers via check twins."""
+def test_validators_left_out_of_static_are_run_by_the_agent_ecosystem_workflow() -> None:
+    assert _ecosystem_hooks() >= ELSEWHERE_HOOKS
+
+
+def test_static_ci_runs_configured_hooks_without_fixers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A hook added to the config runs in CI without a second list (TD-409); unsafe fixes never do."""
     monkeypatch.chdir(_ROOT)
     with (
         patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
@@ -64,23 +68,8 @@ def _static_ci_hooks(monkeypatch: pytest.MonkeyPatch) -> tuple[set[str], set[str
     for name, (fixer, check, _unsafe) in _PRECOMMIT_FIX_HOOKS.items():
         if (check in passed) or (not check and name in leaves):
             covered.add(fixer)
-    return passed, covered
-
-
-def test_validators_left_out_of_static_are_run_by_the_agent_ecosystem_workflow() -> None:
-    assert _ecosystem_hooks() >= ELSEWHERE_HOOKS
-
-
-def test_static_ci_runs_every_precommit_hook(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A hook added to the config runs in CI without a second list (TD-409); unsafe fixes never do."""
-    _, covered = _static_ci_hooks(monkeypatch)
 
     assert set(_precommit_hook_names()) - covered == {"ruff-unsafe-fix"}
-
-
-def test_static_ci_runs_only_hooks_the_config_defines(monkeypatch: pytest.MonkeyPatch) -> None:
-    passed, _ = _static_ci_hooks(monkeypatch)
-
     assert passed <= set(_precommit_hook_names())
     assert set(_DIRECT_HOOKS) <= set(_precommit_hook_names())
     assert not passed & {fixer for fixer, _check, _unsafe in _PRECOMMIT_FIX_HOOKS.values()}
@@ -145,37 +134,34 @@ def test_lint_staged_passes_staged_files_to_every_local_leaf() -> None:
     assert biome_command[2:] == ["check", "--staged", "--no-errors-on-unmatched", "--write"]
 
 
-def test_lint_python_exposes_safe_no_fix_and_unsafe_modes() -> None:
-    for option, hook in (([], "ruff-fix"), (["--no-fix"], "ruff-check"), (["--unsafe-fix"], "ruff-unsafe-fix")):
-        with (
-            patch.object(sys, "argv", ["lint-python", *option]),
-            patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
-            pytest.raises(SystemExit, match="0"),
-        ):
-            lint_python()
-
-        assert call.call_args.args[0] == ["pre-commit", "run", hook, "--hook-stage", "manual", "--all-files"]
-
-
 @pytest.mark.parametrize(
-    ("options", "flags"),
-    [([], ["--write"]), (["--no-fix"], []), (["--unsafe-fix"], ["--write", "--unsafe"])],
+    ("command", "options", "expected"),
+    [
+        (lint_python, [], ["pre-commit", "run", "ruff-fix", "--hook-stage", "manual", "--all-files"]),
+        (lint_python, ["--no-fix"], ["pre-commit", "run", "ruff-check", "--hook-stage", "manual", "--all-files"]),
+        (
+            lint_python,
+            ["--unsafe-fix"],
+            ["pre-commit", "run", "ruff-unsafe-fix", "--hook-stage", "manual", "--all-files"],
+        ),
+        (lint_biome, [], ["node", "node_modules/@biomejs/biome/bin/biome", "check", ".", "--write"]),
+        (lint_biome, ["--no-fix"], ["node", "node_modules/@biomejs/biome/bin/biome", "check", "."]),
+        (
+            lint_biome,
+            ["--unsafe-fix"],
+            ["node", "node_modules/@biomejs/biome/bin/biome", "check", ".", "--write", "--unsafe"],
+        ),
+    ],
 )
-def test_lint_biome_forwards_fix_policy(options: list[str], flags: list[str]) -> None:
+def test_lint_leaves_forward_fix_policy(command: Callable[[], None], options: list[str], expected: list[str]) -> None:
     with (
-        patch.object(sys, "argv", ["lint-biome", *options]),
+        patch.object(sys, "argv", ["command", *options]),
         patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
         pytest.raises(SystemExit, match="0"),
     ):
-        lint_biome()
+        command()
 
-    assert call.call_args.args[0] == [
-        "node",
-        "node_modules/@biomejs/biome/bin/biome",
-        "check",
-        ".",
-        *flags,
-    ]
+    assert call.call_args.args[0] == expected
 
 
 @pytest.mark.parametrize("staged", [False, True])
@@ -186,30 +172,23 @@ def test_biome_formatter_preserves_selection_without_lint_fixes(*, staged: bool)
     assert call.call_args.args[0][2:] == ["format", *selection, "--write"]
 
 
-def test_quality_runs_format_then_lint_checks() -> None:
+@pytest.mark.parametrize("options", [[], ["--no-fix"]])
+def test_quality_runs_format_then_lint_and_todo_last(options: list[str]) -> None:
     with (
-        patch.object(sys, "argv", ["quality", "--no-fix"]),
+        patch.object(sys, "argv", ["quality", *options]),
         patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
+        patch("owlbear_tools.quality._check_text_files", return_value=0),
+        patch("owlbear_tools.quality.run_todo", return_value=0),
+        patch("owlbear_tools.quality._run_leaf", wraps=_run_leaf) as leaf,
         pytest.raises(SystemExit, match="0"),
     ):
         quality()
 
-    commands = [item.args[0] for item in call.call_args_list]
-    assert commands[0][:3] == ["pre-commit", "run", "ruff-format-check"]
-    assert ["pre-commit", "run", "ruff-check"] in [command[:3] for command in commands]
-
-
-def test_quality_executes_todo_last() -> None:
-    executed: list[str] = []
-
-    def record(name: str, **_: object) -> int:
-        executed.append(name)
-        return 0
-
-    with patch("owlbear_tools.quality._run_leaf", side_effect=record):
-        assert _run_named("quality", staged=False, fix_mode=FixMode.SAFE) == 0
-
-    assert executed == [
+    if options:
+        commands = [item.args[0] for item in call.call_args_list]
+        assert commands[0][:3] == ["pre-commit", "run", "ruff-format-check"]
+        assert ["pre-commit", "run", "ruff-check"] in [command[:3] for command in commands]
+    assert [item.args[0] for item in leaf.call_args_list] == [
         "format-python",
         "format-biome",
         "format-whitespace",
