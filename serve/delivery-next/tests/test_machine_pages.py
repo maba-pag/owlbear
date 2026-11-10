@@ -268,11 +268,10 @@ def pds_poll_clock(page: Page, base: str) -> Callable[[], None]:
     """Witness the run timer's actual readPack continuation, alongside the machine's checks poll."""
     poll = machine_poll_clock(page)
     page.add_init_script("""{
-        window.pdsPoll = { scheduled: false, finished: 0 };
+        window.pdsPoll = { finished: 0 };
         const later = window.setTimeout;
         window.setTimeout = (fn, ms, ...args) => {
             if (fn.name !== "readPack") return later(fn, ms, ...args);
-            window.pdsPoll.scheduled = true;
             return later(async () => {
                 await fn(...args);
                 window.pdsPoll.finished++;
@@ -282,7 +281,6 @@ def pds_poll_clock(page: Page, base: str) -> Callable[[], None]:
     page.goto(f"{base}/updates/pds#token=t")
 
     def refresh() -> None:
-        until(page, lambda: page.evaluate("window.pdsPoll.scheduled"))
         finished = page.evaluate("window.pdsPoll.finished")
         for _ in range(4):  # the idle run timer is 15 s; the machine's registered poll is 5 s
             poll()
