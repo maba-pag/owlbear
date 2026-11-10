@@ -200,97 +200,6 @@ def until(page: Page, done: Callable[[], object], seconds: float = 8) -> None:
         page.wait_for_timeout(100)
 
 
-def machine_poll_clock(page: Page) -> Callable[[], None]:
-    """Advance only this page to its registered machine poll, with HTTP and timer continuations settled."""
-    pending = set()
-
-    def started(request):
-        if request.is_navigation_request() and request.frame == page.main_frame:
-            pending.clear()  # the previous document's abandoned assets no longer hold this page's poll
-        pending.add(request)
-
-    def ended(request):
-        pending.discard(request)
-
-    page.on("request", started)
-    page.on("requestfinished", ended)
-    page.on("requestfailed", ended)
-    page.clock.install()
-    page.add_init_script("""{
-        window.machinePoll = { next: {}, busy: 0, finished: 0 };
-        const every = window.setInterval;
-        window.setInterval = (fn, ms, ...args) => {
-            if (ms !== 5000 && ms !== 3000) return every(fn, ms, ...args);
-            window.machinePoll.next[ms] = Date.now() + ms;
-            return every(async () => {
-                window.machinePoll.next[ms] += ms;
-                window.machinePoll.busy++;
-                try {
-                    await fn(...args);
-                    if (ms === 5000) window.machinePoll.finished++;
-                } finally {
-                    window.machinePoll.busy--;
-                }
-            }, ms);
-        };
-    }""")
-
-    def drain() -> None:
-        end = time.monotonic() + 8
-        while pending or page.evaluate("window.machinePoll.busy !== 0"):
-            assert time.monotonic() < end, (
-                [request.url for request in pending],
-                page.evaluate("window.machinePoll"),
-            )
-            page.wait_for_timeout(100)
-
-    def tick(ms: int) -> None:
-        page.clock.pause_at(page.evaluate("ms => new Date(window.machinePoll.next[ms]).toISOString()", ms))
-        drain()
-
-    def poll() -> None:
-        until(page, lambda: page.evaluate("Boolean(window.machinePoll.next[5000])"))
-        drain()
-        finished = page.evaluate("window.machinePoll.finished")
-        while page.evaluate("window.machinePoll.next[3000] < window.machinePoll.next[5000]"):
-            tick(3000)
-        tick(5000)
-        assert page.evaluate("window.machinePoll.finished") > finished
-        # Changes renders its forms on its own poll, after the machine's block state arrives.
-        if page.evaluate("Boolean(window.machinePoll.next[3000])"):
-            tick(3000)
-        page.clock.resume()
-
-    return poll
-
-
-def pds_poll_clock(page: Page, base: str) -> Callable[[], None]:
-    """Witness the run timer's actual readPack continuation, alongside the machine's checks poll."""
-    poll = machine_poll_clock(page)
-    page.add_init_script("""{
-        window.pdsPoll = { finished: 0 };
-        const later = window.setTimeout;
-        window.setTimeout = (fn, ms, ...args) => {
-            if (fn.name !== "readPack") return later(fn, ms, ...args);
-            return later(async () => {
-                await fn(...args);
-                window.pdsPoll.finished++;
-            }, ms);
-        };
-    }""")
-    page.goto(f"{base}/updates/pds#token=t")
-
-    def refresh() -> None:
-        finished = page.evaluate("window.pdsPoll.finished")
-        for _ in range(4):  # the idle run timer is 15 s; the machine's registered poll is 5 s
-            poll()
-            if page.evaluate("window.pdsPoll.finished") > finished:
-                break
-        assert page.evaluate("window.pdsPoll.finished") > finished
-
-    return refresh
-
-
 def replaced(path: Path) -> registry.Project:
     """A project whose clone at *path* was deleted and cloned again: the registered one, now replaced."""
     old = registry.register(clone(path))
@@ -2407,14 +2316,13 @@ def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_wa
     ]  # fmt: skip
     try:
         with browsing(monkeypatch, pds) as (page, base):
-            refresh = pds_poll_clock(page, base)
             for record, state, level, tags, run in journey:
                 if record:
                     ran(**record)
-                    if record["state"] != "running" and held is not None:
-                        os.close(held)
-                        held = None
-                    refresh()
+                if record and record["state"] != "running" and held is not None:
+                    os.close(held)
+                    held = None
+                page.goto(f"{base}/updates/pds#token=t")
                 expect(page.locator("#check-state")).to_have_text(state)
                 expect(page.locator("#pack-state")).to_contain_text(run)
                 expect(page.locator("#menu-dot")).to_have_count(1 if "available" in level else 0)

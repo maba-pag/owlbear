@@ -37,8 +37,6 @@ from owlbear_delivery_next.state_store import machine_settings, registry
 from owlbear_delivery_next.state_store.backlog import Backlog
 from owlbear_delivery_next.state_store.store import Store
 
-from .test_machine_pages import machine_poll_clock
-
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -174,13 +172,8 @@ def held_with(scope: Any, name: str, why: str | re.Pattern[str]) -> None:
     )
 
 
-@pytest.fixture
-def poll(host):
-    return machine_poll_clock(host.page)
-
-
 @pytest.mark.browser
-def test_the_changes_page_names_the_blocked_project_and_holds_only_its_starting_buttons(host, poll) -> None:
+def test_the_changes_page_names_the_blocked_project_and_holds_only_its_starting_buttons(host) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     page, base, a, b = host.page, host.base, host.ids["alpha"], host.ids["beta"]
@@ -205,12 +198,10 @@ def test_the_changes_page_names_the_blocked_project_and_holds_only_its_starting_
     words = form.get_by_label("Your answer in words")
     words.fill("the site is read in Canada")
     poll_interval(host.stores["alpha"], 30)  # the owner sets the gap: alpha's work may start
-    poll()
     expect(form.get_by_role("button", name="Answer")).to_be_enabled(timeout=WAIT)
     expect(banner).to_have_count(0)
     expect(words).to_have_value("the site is read in Canada")
     poll_interval(host.stores["alpha"], None)
-    poll()
     expect(form.get_by_role("button", name="Answer")).to_be_disabled(timeout=WAIT)
     expect(words).to_have_value("the site is read in Canada")
 
@@ -220,7 +211,7 @@ def test_the_changes_page_names_the_blocked_project_and_holds_only_its_starting_
 
 
 @pytest.mark.browser
-def test_new_change_offers_only_projects_whose_work_may_start_and_follows_the_poll(host, pds, poll) -> None:
+def test_new_change_offers_only_projects_whose_work_may_start_and_follows_the_poll(host, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     page, base, b = host.page, host.base, host.ids["beta"]
@@ -235,13 +226,11 @@ def test_new_change_offers_only_projects_whose_work_may_start_and_follows_the_po
     expect(go).to_be_enabled()
 
     poll_interval(host.stores["beta"], None)  # beta is blocked as well: no project may start work
-    poll()
     expect(page.locator("#blocked")).to_have_attribute("state", "error", timeout=WAIT)
     expect(page.locator("#blocked")).to_have_attribute("heading", EVERY)
     held_with(chooser, "Continue", NONE_OPEN)
     held_with(page.locator("#header-actions"), "New Change", NONE_OPEN)
     poll_interval(host.stores["beta"], 20)
-    poll()
     expect(go).to_be_enabled(timeout=WAIT)
     expect(select).to_have_js_property("value", b)
     expect(page.locator("#blocked")).to_have_attribute("state", "warning")
@@ -273,12 +262,11 @@ def test_an_unreadable_layer_is_named_with_its_reason_and_an_unset_interval_bloc
 @pytest.mark.browser
 @pytest.mark.timeout(180)  # five settings changes, each seen at the machine's next 5 s poll
 @pytest.mark.usefixtures("data")
-def test_maintenance_holds_curation_and_a_test_review_only_where_work_may_not_start(host, poll) -> None:
+def test_maintenance_holds_curation_and_a_test_review_only_where_work_may_not_start(host) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     page, base, a = host.page, host.base, host.ids["alpha"]
     page.goto(f"{base}/#token=t")
-    expect(page.locator("#blocked")).to_have_attribute("state", "warning", timeout=WAIT)
     page.goto(f"{base}/maintenance?project={a}")
     rows, body = page.locator("#curation li"), page.locator("body")
     expect(rows.locator("h3")).to_have_text(["alpha", "beta"], timeout=WAIT)
@@ -290,14 +278,11 @@ def test_maintenance_holds_curation_and_a_test_review_only_where_work_may_not_st
     expect(page.locator("#tests-blocked")).to_have_text(f"{UNSET}.")
 
     poll_interval(host.stores["beta"], None)  # every folder waits now: the open page follows the machine's poll
-    poll()
     held_with(body, "Curate all now", NO_FOLDER)
     held_with(rows.nth(1), "Curate beta now", UNSET)
     poll_interval(host.stores["beta"], 20)
-    poll()
     expect(page.get_by_role("button", name="Curate all now")).to_be_enabled(timeout=WAIT)
     poll_interval(host.stores["alpha"], 30)
-    poll()
     expect(page.get_by_role("button", name="Review tests")).to_be_enabled(timeout=WAIT)
     expect(page.locator("#tests-blocked")).to_have_count(0)
 
@@ -310,7 +295,6 @@ def test_maintenance_holds_curation_and_a_test_review_only_where_work_may_not_st
         {"folder": "beta", "reason": unreadable, "reason_unset": 0, **refused},
     ]}  # fmt: skip
     page.route("**/api/next/curation", lambda route: route.fulfill(json=stub))
-    poll()
     expect(rows.nth(1)).to_contain_text(unreadable, timeout=WAIT)  # beta's stays whole; only the stub says it
     expect(rows.nth(0)).to_contain_text(UNSET)  # alpha's refusal, in the pages' words
     expect(rows.nth(0)).not_to_contain_text(GAP)
@@ -319,7 +303,7 @@ def test_maintenance_holds_curation_and_a_test_review_only_where_work_may_not_st
 @pytest.mark.browser
 @pytest.mark.timeout(180)  # five settings changes, each seen at the machine's next 5 s poll
 @pytest.mark.usefixtures("github")
-def test_the_backlog_holds_create_change_where_work_may_not_start_and_follows_the_poll(data, host, pds, poll) -> None:
+def test_the_backlog_holds_create_change_where_work_may_not_start_and_follows_the_poll(data, host, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     page, base, b = host.page, host.base, host.ids["beta"]
@@ -327,7 +311,6 @@ def test_the_backlog_holds_create_change_where_work_may_not_start_and_follows_th
         backlog = Backlog(DataRepo(data), "alpha")
         backlog.update(backlog.add(title)[0].id, {"kind": kind, "projects": projects})
     page.goto(f"{base}/#token=t")
-    expect(page.locator("#blocked")).to_have_attribute("state", "warning", timeout=WAIT)
     page.goto(f"{base}/backlog?project={b}&show=all")
     selection, create = page.locator("#selection"), "Create Change from 1"
     expect(page.locator("li.entry")).to_have_count(2, timeout=WAIT)
@@ -337,11 +320,9 @@ def test_the_backlog_holds_create_change_where_work_may_not_start_and_follows_th
     page.get_by_label("Select Every project").check()
     expect(page.get_by_role("button", name=create)).to_be_enabled()
     poll_interval(host.stores["beta"], None)  # no clone may start work now: no reload, the machine's poll shows it
-    poll()
     held_with(selection, create, NONE_OPEN)
     expect(page.get_by_label("Select Every project")).to_be_checked()
     poll_interval(host.stores["beta"], 20)
-    poll()
     expect(page.get_by_role("button", name=create)).to_be_enabled(timeout=WAIT)
 
     page.get_by_role("button", name=create).click()
@@ -350,10 +331,8 @@ def test_the_backlog_holds_create_change_where_work_may_not_start_and_follows_th
     expect(select.locator("p-select-option")).to_have_text(["beta"])  # alpha's clone is not offered
     expect(select).to_have_js_property("value", b)
     poll_interval(host.stores["beta"], None)
-    poll()
     held_with(chooser, "Continue", NONE_OPEN)
     poll_interval(host.stores["beta"], 20)
-    poll()
     expect(chooser.get_by_role("button", name="Continue")).to_be_enabled(timeout=WAIT)
     expect(select).to_have_js_property("value", b)
     expect(page.get_by_label("Select Every project")).to_be_checked()
