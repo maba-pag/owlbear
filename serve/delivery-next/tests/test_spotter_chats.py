@@ -859,7 +859,7 @@ def test_a_failed_pass_is_told_whole(world, whole_error):
     f.start()
     try:
         deadline = time.monotonic() + 5
-        while not told and time.monotonic() < deadline:
+        while (not told or not f.failed) and time.monotonic() < deadline:
             time.sleep(0.02)
         said = f"RuntimeError: {whole_error}\nthe chats' settings were being written"
         assert (told, f.failed) == ([f"chats follower: a pass failed: {said}"], said)  # said once, while it repeats
