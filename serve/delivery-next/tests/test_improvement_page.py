@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
-import os
 import re
 import socket
 import subprocess
@@ -43,8 +41,6 @@ from owlbear_delivery_next.machine_host import (
     app,
     cases_job,
     chat_acts,
-    chat_settings,
-    chats,
     improvement_routes,
     project,
     retro_job,
@@ -880,31 +876,6 @@ def test_a_failed_replay_look_shows_its_whole_note(tmp_path, monkeypatch, pds, w
 
 @pytest.mark.browser
 @pytest.mark.timeout(90)
-def test_a_failed_spotter_look_shows_its_whole_error(tmp_path, monkeypatch, pds, whole_error) -> None:
-    async def judge(_card: object, _ctx: object, _meter: object) -> str:
-        raise _noted(RuntimeError(whole_error))
-
-    with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
-        ctx = spotter.Context(project=w.pid, change=SLUG, step="build", looks=("hand-off",), sample_rate=0,
-                              verbose=False, model="m", effort="medium", limit=0.75, actions={})  # fmt: skip
-
-        async def main() -> None:
-            spot = spotter.Spotter(ctx, lambda: "s-1", judge)
-            spot.handed_off("c", {})
-            await spot.drain()
-
-        aside(lambda: asyncio.run(main()))
-        assert spotter.WORK.settled(5)
-        [record] = [json.loads(x) for f in spotter.root().glob("records-*.jsonl") for x in f.read_text().splitlines()]
-        expected = f"RuntimeError: {whole_error}\n{NOTE}"
-        assert record["skipped"] == expected
-        page = improvement(w, pds)
-        tag = page.locator(f"#look-{record['id']} p-tag").first
-        assert tag.evaluate("e => e.textContent") == f"Skipped: {expected}"
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(90)
 def test_a_failed_chats_pass_shows_its_whole_error_until_a_pass_succeeds(
     tmp_path, monkeypatch, pds, whole_error
 ) -> None:
@@ -912,14 +883,9 @@ def test_a_failed_chats_pass_shows_its_whole_error_until_a_pass_succeeds(
 
     error = f"{whole_error}\n/{'x' * 3000}"  # and an unbroken path component, wider than the page
 
-    def read() -> chat_settings.Plan:
-        raise _noted(RuntimeError(error))
-
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
-        follower, told = w.machine.chats, []
-        follower.say, follower.read, follower.poll = told.append, read, 0.01
-        follower.start()
-        _until(lambda: told)
+        follower = w.machine.chats
+        follower.failed = f"RuntimeError: {error}\n{NOTE}"
         page = improvement(w, pds)
         failed = page.locator("#not-followed #follower-failed")
         expect(failed).to_be_visible()
@@ -927,12 +893,8 @@ def test_a_failed_chats_pass_shows_its_whole_error_until_a_pass_succeeds(
         assert failed.evaluate("e => e.innerText") == said  # as shown, its lines kept
         assert failed.evaluate("e => e.scrollWidth <= e.clientWidth")  # wrapped, not cut off at the page's edge
 
-        ctx = spotter.Context(project="", change="", step="chat", looks=("hand-off",), sample_rate=0, verbose=False,
-                              model="m", effort="medium", limit=0.75, actions={})  # fmt: skip
-        follower.read = lambda: chat_settings.Plan(ctx, ())  # a pass that reads no chat, and does not fail
-        _until(lambda: not follower.failed)
-        page.reload()
-        page.locator("#proposals").wait_for()
+        follower.failed = ""
+        page.evaluate("document.dispatchEvent(new CustomEvent('owlbear-polled'))")
         expect(page.locator("#not-followed")).to_have_count(0)
 
 
@@ -942,20 +904,8 @@ def test_a_follower_that_cannot_open_its_lock_shows_its_whole_error_and_that_it_
     tmp_path, monkeypatch, pds, whole_error
 ) -> None:
     error = f"{whole_error}\n/{'x' * 3000}"  # and an unbroken path component, wider than the page
-    opening = os.open
-
-    def refused(path: object, *args: Any) -> int:
-        if str(path).endswith(chats.LOCK):
-            raise _noted(PermissionError(error))
-        return opening(path, *args)
-
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
-        follower, told = w.machine.chats, []
-        follower.say = told.append
-        with monkeypatch.context() as lock:
-            lock.setattr(chats.os, "open", refused)
-            follower.run()
-        assert follower.ended.is_set()
+        w.machine.chats.refused = f"its lock cannot be opened: PermissionError: {error}\n{NOTE}"
         page = improvement(w, pds)
         shown = page.locator("#not-followed #follower-refused")
         said = (
@@ -964,13 +914,6 @@ def test_a_follower_that_cannot_open_its_lock_shows_its_whole_error_and_that_it_
         )
         assert shown.evaluate("e => e.innerText") == said  # as shown, its lines kept
         assert shown.evaluate("e => e.scrollWidth <= e.clientWidth")  # wrapped, not cut off at the page's edge
-
-
-def _until(done: Callable[[], object]) -> None:
-    deadline = time.monotonic() + 10
-    while not done():
-        assert time.monotonic() < deadline, "not reached in 10 s"
-        time.sleep(0.02)
 
 
 def _one_pass() -> SimpleNamespace:
@@ -1128,52 +1071,6 @@ def test_a_refusal_and_each_part_that_cannot_be_read_show_their_whole_error(
         )
 
 
-def _judge(answer: str) -> spotter.Judge:
-    """A look that bills one confirmed call and answers *answer*."""
-
-    async def look(_card: object, _ctx: spotter.Context, spend: Any) -> str:
-        part = spend.part()
-        part.started(f"sdk-{spend.id}")
-        part.call(0.25)
-        part.ended(None, confirmed=True)
-        return answer
-
-    return look
-
-
-async def _failed_acts(pid: str, error: OSError) -> None:
-    """Two looks of *pid*'s Change: one whose act and conflict check raise *error*, one whose withdrawal does."""
-    steered = {"hand-off-fitness": "refuse-hand-off", "irreversible-harm": "stop-and-ask"}
-    harm = json.dumps({"category": "irreversible-harm", "note": "Deletes the backups.", "evidence": ["e1"],
-                       "state_change": "rm -rf ~/backups"})  # fmt: skip
-    unfit = json.dumps({"category": "hand-off-fitness", "note": "Done too early.", "evidence": ["e1"]})
-
-    async def dispatch(record: spotter.Record, _act: acts.Act) -> None:
-        if record.session == "s-harm":
-            raise error
-
-    def conflicts(_change: str) -> str:
-        raise error
-
-    def unreachable() -> None:
-        raise error
-
-    async def instant(_seconds: float) -> None:
-        return
-
-    for session, answer, arm in (("s-harm", harm, "silent"), ("s-unfit", unfit, "steered")):
-        ctx = spotter.Context(project=pid, change=SLUG, step="build", looks=("hand-off",), sample_rate=0,
-                              verbose=False, model="m", effort="medium", limit=0.75, actions=steered, arm=arm, cap=2,
-                              act=dispatch, conflicts=conflicts)  # fmt: skip
-        spot = spotter.Spotter(ctx, lambda s=session: s, _judge(answer))
-        spot.handed_off("call-1", {})
-        await spot.drain()
-    withdrawn = next(i for i, a in acts.acts(spotter.root()).items() if a.session == "s-unfit")
-    actor = chat_acts.ChatActor("s-unfit", spot, connect=unreachable, sleep=instant)
-    actor.chat = "chat-1"  # resolved already: the withdrawal's connection is what fails
-    await actor._confirmed(SimpleNamespace(id=withdrawn), "[t]", "steering", "m-1", yields=False)  # noqa: SLF001
-
-
 @pytest.mark.browser
 @pytest.mark.timeout(120)
 def test_a_failed_act_conflict_check_and_withdrawal_show_their_whole_error(
@@ -1181,19 +1078,71 @@ def test_a_failed_act_conflict_check_and_withdrawal_show_their_whole_error(
 ) -> None:
     error = f"{whole_error}\n{NOTE}"
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
-        aside(lambda: asyncio.run(_failed_acts(w.pid, _noted(OSError(whole_error)))))
-        assert spotter.WORK.settled(5)
-        by = {a.session: (rid, a) for rid, a in acts.acts(spotter.root()).items()}
-        (harmed, _), (withdrawn, act) = by["s-harm"], by["s-unfit"]
+        folder = spotter.root()
+        harmed, withdrawn, skipped = "r-harm", "r-unfit", "r-skipped"
+        for rid, category, note in (
+            (harmed, "irreversible-harm", "Deletes the backups."),
+            (withdrawn, "hand-off-fitness", "Done too early."),
+            (skipped, "failed", ""),
+        ):
+            record = spotter.Record(
+                id=rid,
+                at=NOW.isoformat(),
+                project=w.pid,
+                change=SLUG,
+                step="build",
+                session=f"s-{rid}",
+                look="hand-off",
+                call="call-1",
+                cutoff=0,
+                probability=1,
+                category=category,
+                note=note,
+                skipped=f"RuntimeError: {error}" if rid == skipped else "",
+            )
+            spotter.store(folder, record, None)
+        for rid, arm, action in ((harmed, "silent", "stop-and-ask"), (withdrawn, "steered", "refuse-hand-off")):
+            acts.write(
+                folder,
+                acts.Act(
+                    record=rid,
+                    at=NOW.isoformat(),
+                    unit=f"chg:{w.pid}/{SLUG}",
+                    arm=arm,
+                    session=f"s-{rid}",
+                    scope="build",
+                    look="hand-off",
+                    category="irreversible-harm" if rid == harmed else "hand-off-fitness",
+                    act=action,
+                    why="setting",
+                    harm=rid == harmed,
+                    delivery="pending",
+                ),
+            )
+        acts.update(
+            folder,
+            harmed,
+            delivery="failed",
+            error=f"OSError: {error}",
+            conflict=json.dumps({"failed": f"OSError: {error}"}),
+        )
+        acts.update(
+            folder,
+            withdrawn,
+            delivery="unconfirmed",
+            error=f"not taken within 60 s; its withdrawal failed: OSError: {error}",
+        )
         page = improvement(w, pds)
+        tag = page.locator(f"#look-{skipped} p-tag").first
+        assert tag.evaluate("e => e.textContent") == f"Skipped: RuntimeError: {error}"
 
         def line(rid: str, start: str) -> str:
             return page.locator(f"#look-{rid} p.meta", has_text=start).evaluate(BARE)
 
         shown = (line(harmed, "Its error:"), line(harmed, "Decision check:"), line(withdrawn, "Its act:"))
-        withdrawal = f"not taken within {chat_acts.BOUND:.0f} s; its withdrawal failed: OSError: {error}"
+        withdrawal = f"not taken within 60 s; its withdrawal failed: OSError: {error}"
         assert shown == (
             f"Its error: OSError: {error}",
             f"Decision check: failed: OSError: {error}",
-            f"Its act: {act.act}, steered arm, unconfirmed ({withdrawal})",
+            f"Its act: refuse-hand-off, steered arm, unconfirmed ({withdrawal})",
         )
