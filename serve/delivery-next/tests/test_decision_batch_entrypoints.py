@@ -109,6 +109,10 @@ def test_a_null_before_image_for_a_new_file_is_accepted_and_finishes(picking, mo
 
 WRONG_FILE_LISTS = [
     pytest.param(lambda record: record["files"][0].__setitem__("path", 7), id="path-not-string"),
+    pytest.param(
+        lambda record: record["files"][0].update(before=record["files"][0]["after"], after=None),
+        id="null-after-existing-file",
+    ),
     pytest.param(lambda record: record.__setitem__("files", {"path": "decisions/x.md"}), id="files-not-list"),
     pytest.param(lambda record: record.__setitem__("files", ["decisions/x.md"]), id="file-entry-not-object"),
     pytest.param(lambda record: record.__setitem__("files", []), id="ids-without-files"),

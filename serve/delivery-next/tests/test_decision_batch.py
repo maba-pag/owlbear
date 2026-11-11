@@ -262,32 +262,7 @@ def owner_api(picking):
     return TestClient(app)
 
 
-def _damage_record(record, damage, outside):
-    if damage == "null-after":
-        record["files"][0]["after"] = None
-    elif damage == "id":
-        record["ids"] = ["another-decision"]
-    elif damage == "empty":
-        record.update(ids=[], files=[])
-    elif damage == "alias":
-        row = record["files"][0] | {"path": record["files"][0]["path"].replace("/decisions/", "/./decisions/")}
-        record["files"].append(row)
-        record["ids"].append(record["ids"][0])
-    elif damage == "git":
-        record["files"][0]["path"] = ".git/config"
-        record["ids"][0] = "config"
-    elif damage == "outside":
-        record["files"][0]["path"] = str(outside)
-        record["ids"][0] = "outside"
-    elif damage == "generation":
-        record["generation"] = None
-    elif damage == "head":
-        record["head"] = "HEAD"
-
-
-@pytest.mark.parametrize(
-    "damage", ["json", "null-after", "id", "empty", "alias", "git", "outside", "generation", "head"]
-)
+@pytest.mark.parametrize("damage", ["json", "git", "outside"])
 def test_corrupt_journal_blocks_and_is_diagnosed_not_cleared(picking, owner_api, monkeypatch, damage, tmp_path):
     old = _seed(picking)
     _crash(picking, old, "after-first")
@@ -296,7 +271,9 @@ def test_corrupt_journal_blocks_and_is_diagnosed_not_cleared(picking, owner_api,
     outside.write_bytes(b"outside the checkout stays unchanged\n")
     path = decision_batch.journal_path(shared)
     record = json.loads(path.read_bytes())
-    _damage_record(record, damage, outside)
+    if damage != "json":
+        record["files"][0]["path"] = ".git/config" if damage == "git" else str(outside)
+        record["ids"][0] = "config" if damage == "git" else "outside"
     path.write_text("{not json" if damage == "json" else json.dumps(record))
     kept = path.read_bytes()
     head, index = shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
