@@ -69,15 +69,9 @@ def _seed(picking) -> None:
 
 def _interrupt(picking, monkeypatch, items: list[Decision]) -> None:
     """Save *items* as one batch and stop it before anything lands: the journal stays in flight."""
-    calls = {"n": 0}
-    real_write = decision_store.write
-
-    def interrupted_write(decision, folder, expected=None, **fence):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            msg = "interrupted before the first write"
-            raise RuntimeError(msg)
-        return real_write(decision, folder, expected, **fence)
+    def interrupted_write(*_args, **_kwargs):
+        msg = "interrupted before the first write"
+        raise RuntimeError(msg)
 
     with monkeypatch.context() as m:
         m.setattr(decision_store, "write", interrupted_write)
