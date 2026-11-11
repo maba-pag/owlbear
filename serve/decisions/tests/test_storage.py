@@ -10,11 +10,12 @@ import pytest
 
 from owlbear_decisions import storage
 from owlbear_decisions.errors import ConcurrencyError, DecisionFileError, ImmutableError
-from owlbear_decisions.models import State, new_id
+from owlbear_decisions.models import Origin, State, new_id
 from owlbear_decisions.storage import decision_path, load_folder, read, serialize, write
 
 
-def test_decision_lifecycle_survives_reopen(tmp_path, make):
+@pytest.mark.parametrize("ending", [State.REPLACED, State.SPENT])
+def test_decision_lifecycle_survives_reopen(tmp_path, make, ending):
     first = make(state=State.DRAFT)
     path = decision_path(first, tmp_path)
     with pytest.raises(ConcurrencyError, match="no file"):
@@ -40,18 +41,18 @@ def test_decision_lifecycle_survives_reopen(tmp_path, make):
     for changes, message in (
         ({"statement": "Edited wording."}, "successor"),
         ({"state": State.DRAFT}, "cannot go from in_force to draft"),
-        ({"origin": "autonomous"}, "origin"),
+        ({"origin": Origin.AUTONOMOUS}, "origin"),
     ):
         with pytest.raises(ImmutableError, match=message):
             write(accepted.model_copy(update=changes), tmp_path, accepted.revision)
         assert path.read_bytes() == before
         assert read(path).revision == accepted.revision
-    spent = accepted.model_copy(update={"state": State.SPENT})
+    spent = accepted.model_copy(update={"state": ending})
     write(spent, tmp_path, accepted.revision)
     assert read(path) == spent
     before = path.read_bytes()
     for changes, message in (
-        ({"state": State.IN_FORCE, "statement": "Revived."}, "cannot go from spent to in_force"),
+        ({"state": State.IN_FORCE, "statement": "Revived."}, f"cannot go from {ending.value} to in_force"),
         ({"statement": "Rewritten."}, "statement"),
     ):
         with pytest.raises(ImmutableError, match=message):
