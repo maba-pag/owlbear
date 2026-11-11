@@ -185,7 +185,7 @@ def test_a_brief_challenge_without_the_tool_makes_it_the_rounds_finding_for_the_
 
 def test_the_quota_never_overrides_a_report() -> None:
     r = to_result(run(report("matlab", "license server unknown"), quota=True), K.BUILD, NOW)
-    assert (r.exit, r.back_to) == (Exit.BACK, K.PLAN)
+    assert (r.exit, r.setup, r.back_to) == (Exit.RETRY, True, None)
 
 
 def test_the_plan_challenge_passes_an_operational_step_back_on_and_keeps_a_premise_its_own() -> None:
@@ -335,13 +335,16 @@ def test_denials_record_the_programs_they_name() -> None:
     assert st.run.denied == {}  # a later allowed use of the program supersedes its denial
 
 
-def test_a_conversation_task_missing_a_tool_asks_instead_of_replanning() -> None:
+def test_a_conversation_task_repairs_setup_and_keeps_window_tools_reserved() -> None:
     ref = ItemRef(id="t1", kind="thread", version="v", task="pr-t1-v", url="https://x/pull/7#r1")
     task = Task(id="pr-t1-v", title="answer", item=ref, detail="boecht: add a docker test\n\nhttps://x/pull/7#r1")
     p = report("matlab", "matlab: license server unknown")
-    asked = conversation.disputed(task, p, to_result(run(p), K.BUILD, NOW))
-    assert (asked.exit, [o.next for o in asked.question.options]) == (Exit.ASK, [K.BUILD, K.BUILD, "pause"])
-    assert "needs matlab" in asked.question.text
+    result = conversation.disputed(task, p, to_result(run(p), K.BUILD, NOW))
+    assert (result.exit, result.setup, result.question) == (Exit.RETRY, True, None)
+    c = change(task=task.id)
+    c.plan.tasks = [task]
+    repaired = loop.apply(c, result, NOW)
+    assert (repaired.repairs.current.task, repaired.step.task, repaired.questions) == (task.id, task.id, [])
     other = report("browser", "no browser tool in this session")
     window = conversation.disputed(task, other, to_result(run(other), K.BUILD, NOW))
     assert options(window) == [("decline", K.BUILD), ("pause", "pause")]
