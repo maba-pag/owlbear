@@ -19,13 +19,13 @@ function source(key, inUse, needed = true, format = (v) => v) {
 }
 
 // D-01M61SEXPFT9MXZGQHYVYFQ77C: what an unset Global value leaves to the layers below, while Global's own is unset.
+// None while the repairer's model, effort and context follow the builder's: its row and in-use lines say so.
 function unsetWarning(key) {
   if (state.layer !== "global" || layerValue("global", key) !== null || !required(key)) return nothing;
+  if (/^agents\.repairer\.(model|effort|context)$/.test(key) && followsBuilder()) return nothing;
   const text = key === "curator_threshold" || key.startsWith("memory.")
     ? "Unset: no machine or project can set it, so it stays unset"
     : key.startsWith("final_review.") ? "Unset: it then takes the builder's value"
-      : /^agents\.repairer\.(model|effort|context)$/.test(key) && followsBuilder()
-        ? "Unset: it then takes the builder's model, effort and context, while all three stay unset"
       : "Unset: every machine or project must then set its own";
   return html`<p-text size="sm" color="warning">${text}</p-text>`;
 }
