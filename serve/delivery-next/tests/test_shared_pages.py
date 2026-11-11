@@ -250,7 +250,6 @@ def test_a_failed_backlog_launch_shows_its_warning_whole(
     monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
     registry.register(clone(tmp_path / "shop", origin="https://github.com/acme/shop-site.git"))
     docs = registry.register(clone(tmp_path / "docs", origin="https://github.com/acme/docs-site.git"))
-    registry.register(clone(tmp_path / "twin", origin="https://github.com/acme/shop-site.git"))
     launched = chats(monkeypatch)
     launched.release.set()
     shop = Backlog(DataRepo(shared_repo[0]), "shop-site")
@@ -419,9 +418,7 @@ def test_memory_shows_unreadable_settings_and_a_failed_move_whole(
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
-    registry.register(clone(tmp_path / "shop", origin="https://github.com/acme/shop-site.git"))
     docs = registry.register(clone(tmp_path / "docs", origin="https://github.com/acme/docs-site.git"))
-    registry.register(clone(tmp_path / "twin", origin="https://github.com/acme/shop-site.git"))
     folder = shared_repo[0] / "docs-site" / "memory"
     curated(folder, "Pin the runtime")
     curated(folder, "Old lesson")
@@ -1052,8 +1049,6 @@ def test_maintenance_curates_a_memory_folder_now_and_shows_its_report(
     root = shared_repo[0]
     monkeypatch.setenv(data_place.VIEW, str(root))
     shop = registry.register(clone(tmp_path / "shop", origin="https://github.com/acme/shop-site.git"))
-    registry.register(clone(tmp_path / "docs", origin="https://github.com/acme/docs-site.git"))
-    registry.register(clone(tmp_path / "twin", origin="https://github.com/acme/shop-site.git"))
     curated(root / "shop-site" / "memory", "Run ruff first")
     from owlbear_delivery_next.machine_host import project  # noqa: PLC0415
     from owlbear_delivery_next.project_host.host import Host as ProjectHost  # noqa: PLC0415
