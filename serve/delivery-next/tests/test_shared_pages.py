@@ -24,8 +24,6 @@ from owlbear_delivery_next.local_system import data_place
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import curation
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -107,20 +105,8 @@ def machine(tmp_path: Path, shared: Path) -> tuple[Starlette, dict[str, Launch]]
             return JSONResponse({"detail": str(exc)}, status_code=409)
         return values(request)
 
-    report = MemoryCurationResult(summary="1 promoted, nothing left for you", entries=[])
-    job = curation.Curation(
-        Slots(lambda: 1), shared=lambda: DataRepo(shared),
-        run=lambda cfg: Run(cfg.session_id, ending="result", payload=report, termination=Termination(confirmed=True)),
-    )  # fmt: skip
-
-    async def curating(request):
-        if request.method == "POST":
-            job.start((await request.json())["folder"])
-        return JSONResponse(job.read())
-
     routes = [Route("/api/next/projects", projects), Route("/api/next/machine", values)]
     routes += [Route("/api/next/machine/settings", configure, methods=["PUT"])]
-    routes += [Route("/api/next/curation", curating, methods=["GET", "POST"])]
     routes += [Mount(f"/p/{pid}", app) for pid, app in apps.items()]
     return Starlette(routes=[*routes, Mount("/", apps[SHOP])]), launches
 
