@@ -74,52 +74,42 @@ def tree_bytes(root: Path) -> dict[str, bytes]:
 
 
 class OwnerMove:
-    """Observes every Git command at the production boundary and, once armed, moves HEAD at the landing proof.
+    """Forward each real proof, observing its captured-SHA reads only inside that call."""
 
-    The landing phase is the one ancestry command `merge-base --is-ancestor <batch head> HEAD` that succeeds while the
-    journal is pending with that head and HEAD is the commit it checked. Preparation checks run before the journal is
-    written or against the remote, so they never match. The move is a parentless commit with HEAD's exact tree, set by
-    a compare-and-swap `update-ref`, so the index and worktree are not touched. Snapshots taken at the move let a test
-    assert that nothing was undone afterwards.
-    """
-
-    def __init__(self, tmp_path: Path) -> None:
+    def __init__(self, tmp_path: Path, monkeypatch) -> None:
         self.tmp_path = tmp_path
-        self.real = DataRepo.git
-        self.armed = False
-        self.window = False  # open from a landing ancestry check until the proof re-reads HEAD
-        self.files: set[str] = set()  # the batch's paths, once a landing proof has been seen
-        self.reads: list[str] = []  # the commit each blob read of the batch's files used, in order
-        self.moved: str | None = None  # the owner's unrelated commit, once injected
-        self.head_at_move: str | None = None
-        self.generation: str | None = None
-        self.journal: bytes | None = None
-        self.index: bytes | None = None
-        self.worktree: dict[str, bytes] = {}
+        self.armed = ""
+        self.moved = self.head_at_move = self.generation = self.journal = self.index = None
+        self.worktree = {}
+        self.reads = {"committed": [], "landed": []}
+        self.ancestry = {"committed": [], "landed": []}
+        for module, name, proof in (
+            (decision_recovery, "_committed", "committed"),
+            (decision_transaction, "landed", "landed"),
+        ):
+            real = getattr(module, name)
+            monkeypatch.setattr(module, name, self.observer(real, proof, monkeypatch))
 
-    def __call__(
-        self, shared: DataRepo, *args: str, until: float | None = None, **kwargs
-    ) -> subprocess.CompletedProcess[str]:
-        said = self.real(shared, *args, until=until, **kwargs)  # a push's guard goes on to the real wrapper
-        if args[:2] == ("merge-base", "--is-ancestor") and not said.returncode and self._landing(shared, args):
-            self.window = True
-            if self.armed and self.moved is None:
-                self._move(shared, args[3])
-        elif self.window and args == ("rev-parse", "--verify", "-q", "HEAD"):
-            self.window = False
-        elif self.window and args[:1] == ("show",) and args[1].partition(":")[2] in self.files:
-            self.reads.append(args[1].partition(":")[0])
-        return said
+    def observer(self, real, proof, monkeypatch):
+        def observed(shared, *args):
+            files = args[0].files if proof == "committed" else args[1]
+            paths = {rel for rel, _, _ in files}
+            real_git = DataRepo.git
 
-    def _landing(self, shared: DataRepo, args: tuple[str, ...]) -> bool:
-        pending = decision_batch.pending(shared)
-        if pending is None or pending.head != args[2]:
-            return False
-        current = self.real(shared, "rev-parse", "--verify", "-q", "HEAD")
-        if current.stdout.strip() != args[3]:
-            return False
-        self.files = {rel for rel, _, _ in pending.files}
-        return True
+            def forwarding(repo, *command, **kwargs):
+                said = real_git(repo, *command, **kwargs)
+                if command[:2] == ("merge-base", "--is-ancestor") and not said.returncode:
+                    self.ancestry[proof].append(command[3])
+                    if self.armed == proof and self.moved is None:
+                        self._move(repo, command[3])
+                if command[:1] == ("show",) and command[1].partition(":")[2] in paths:
+                    self.reads[proof].append(command[1].partition(":")[0])
+                return said
+
+            with monkeypatch.context() as scoped:
+                scoped.setattr(DataRepo, "git", forwarding)
+                return real(shared, *args)
+        return observed
 
     def _move(self, shared: DataRepo, head: str) -> None:
         root = inside_tmp(shared.root, self.tmp_path)
@@ -137,14 +127,8 @@ class OwnerMove:
 
 @pytest.fixture
 def owner_move(tmp_path, monkeypatch) -> Iterator[OwnerMove]:
-    move = OwnerMove(tmp_path)
-
-    def git(shared: DataRepo, *args: str, until: float | None = None, **kwargs) -> subprocess.CompletedProcess[str]:
-        return move(shared, *args, until=until, **kwargs)
-
     with monkeypatch.context() as patched:
-        patched.setattr(DataRepo, "git", git)
-        yield move
+        yield OwnerMove(tmp_path, patched)
 
 
 @pytest.fixture
@@ -163,15 +147,25 @@ def lost_ack(monkeypatch) -> Iterator[dict[str, list]]:
         yield switch
 
 
-def test_an_owner_head_move_after_ancestry_refuses_the_save_and_keeps_the_journal(
-    shared_repo, tmp_path, owner_move
+@pytest.mark.parametrize("moved", [False, True], ids=["healthy", "owner-head-move"])
+def test_save_landing_requires_one_stable_commit(
+    shared_repo, tmp_path, owner_move, moved
 ) -> None:
     root, remote = shared_repo
     pre = owner_commit(root, "owner words\n")
     shared = DataRepo(inside_tmp(root, tmp_path))
-    owner_move.armed = True
+    owner_move.armed = "landed" if moved else ""
 
     receipt = save(shared, make(), expected_revision=None, message="decisions: notes")
+    if not moved:
+        head = git(root, "rev-parse", "HEAD")
+        assert (receipt.saved, receipt.committed, receipt.published) == (True, True, True), receipt.notice
+        assert owner_move.moved is None
+        assert owner_move.ancestry["landed"] == owner_move.reads["landed"] == [head]
+        assert git(remote, "rev-parse", "main") == head
+        assert git(root, "status", "--porcelain") == ""
+        assert decision_batch.pending(shared) is None
+        return
 
     moved, batch_commit = owner_move.moved, owner_move.head_at_move
     assert moved is not None
@@ -181,7 +175,7 @@ def test_an_owner_head_move_after_ancestry_refuses_the_save_and_keeps_the_journa
     assert not is_ancestor(root, pre, moved)
     # ...yet with the same tree
     assert git(root, "rev-parse", f"{moved}^{{tree}}") == git(root, "rev-parse", f"{batch_commit}^{{tree}}")
-    assert owner_move.reads == [batch_commit]  # every blob read used the SHA the proof pinned, never the owner's
+    assert owner_move.ancestry["landed"] == owner_move.reads["landed"] == [batch_commit]
 
     assert receipt.saved is False
     assert receipt.commit == moved
@@ -212,8 +206,9 @@ def test_an_owner_head_move_after_ancestry_refuses_the_save_and_keeps_the_journa
     assert decision_batch.journal_path(shared).read_bytes() == owner_move.journal
 
 
-def test_an_owner_head_move_after_the_committed_ancestry_check_stops_finish(
-    shared_repo, tmp_path, lost_ack, owner_move
+@pytest.mark.parametrize("moved", [False, True], ids=["healthy", "owner-head-move"])
+def test_committed_finish_requires_one_stable_commit(
+    shared_repo, tmp_path, lost_ack, owner_move, moved
 ) -> None:
     root, remote = shared_repo
     pre = owner_commit(root, "owner words\n")
@@ -230,65 +225,39 @@ def test_an_owner_head_move_after_the_committed_ancestry_check_stops_finish(
 
     journal = decision_batch.journal_path(shared).read_bytes()
     worktree = tree_bytes(root)
-    owner_move.armed = True
+    owner_move.reads["landed"].clear()
+    owner_move.ancestry["landed"].clear()
+    if not moved:
+        done = decision_recovery.finish(shared, pending.generation)
+        assert done.done, done.notice
+        assert owner_move.moved is None
+        for proof in ("committed", "landed"):
+            assert owner_move.ancestry[proof] == owner_move.reads[proof] == [committed]
+        assert decision_batch.pending(shared) is None
+        assert git(root, "rev-parse", "HEAD") == git(remote, "rev-parse", "main") == committed
+        assert len(lost_ack["calls"]) == 1
+        assert is_ancestor(root, pre, "HEAD")
+        assert (root / OWNER).read_text() == "owner words\n"
+        return
+    owner_move.armed = "committed"
     with pytest.raises(DecisionsUnavailable):
         decision_recovery.finish(shared, pending.generation)
 
     moved = owner_move.moved
     assert moved is not None
     assert owner_move.head_at_move == committed
-    assert owner_move.reads == [committed]  # Finish's ancestry and blob reads used the one SHA it captured
+    assert owner_move.ancestry["committed"] == owner_move.reads["committed"] == [committed]
     assert not is_ancestor(root, pre, moved)
     assert git(root, "rev-parse", f"{moved}^{{tree}}") == git(root, "rev-parse", f"{committed}^{{tree}}")
     assert git(root, "rev-parse", "HEAD") == moved
     assert git(remote, "rev-parse", "main") == committed
     assert len(lost_ack["calls"]) == 1
     assert tree_bytes(root) == worktree
+    assert (root / git(root, "rev-parse", "--git-path", "index")).read_bytes() == owner_move.index
     pending_after = decision_batch.pending(shared)
     assert pending_after is not None
     assert pending_after.generation == pending.generation
     assert decision_batch.journal_path(shared).read_bytes() == journal
-
-
-def test_a_stable_head_save_completes_normally(shared_repo, tmp_path, owner_move) -> None:
-    root, remote = shared_repo
-    owner_commit(root, "owner words\n")
-    shared = DataRepo(inside_tmp(root, tmp_path))
-
-    receipt = save(shared, make(), expected_revision=None, message="decisions: notes")
-
-    head = git(root, "rev-parse", "HEAD")
-    assert (receipt.saved, receipt.committed, receipt.published) == (True, True, True), receipt.notice
-    assert owner_move.moved is None
-    assert owner_move.reads == [head]  # the one SHA every blob read used is the final HEAD
-    assert git(remote, "rev-parse", "main") == head
-    assert git(root, "status", "--porcelain") == ""
-    assert decision_batch.pending(shared) is None
-
-
-def test_a_stable_head_finish_completes_a_committed_batch(shared_repo, tmp_path, lost_ack, owner_move) -> None:
-    root, remote = shared_repo
-    owner = owner_commit(root, "owner words\n")
-    shared = DataRepo(inside_tmp(root, tmp_path))
-    save(shared, make(), expected_revision=None, message="decisions: notes")
-    pending = decision_batch.pending(shared)
-    assert pending is not None
-    assert pending.head == owner
-    head = git(root, "rev-parse", "HEAD")
-    owner_move.reads.clear()  # only Finish's own blob reads are checked below
-
-    done = decision_recovery.finish(shared, pending.generation)
-
-    assert done.done, done.notice
-    assert owner_move.moved is None
-    assert owner_move.reads
-    assert set(owner_move.reads) == {head}  # both of Finish's proofs read the one SHA they pinned
-    assert decision_batch.pending(shared) is None
-    assert git(root, "rev-parse", "HEAD") == head
-    assert git(remote, "rev-parse", "main") == head
-    assert len(lost_ack["calls"]) == 1
-    assert is_ancestor(root, owner, "HEAD")
-    assert (root / OWNER).read_text() == "owner words\n"
 
 
 def checkout_state(shared: DataRepo) -> tuple:

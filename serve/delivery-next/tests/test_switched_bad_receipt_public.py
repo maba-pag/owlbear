@@ -98,7 +98,7 @@ CORRUPTIONS = [
 
 
 @pytest.mark.usefixtures("current_binding")
-def test_a_valid_switched_receipt_is_accepted_by_every_public_consumer(repo, boot) -> None:
+def test_prepared_move_is_admitted_without_read_only_repairs(repo, boot) -> None:
     target = _finished_move(repo, boot)
     pid = registry.clone_id(_source(repo))
     assert pid is not None
@@ -106,17 +106,34 @@ def test_a_valid_switched_receipt_is_accepted_by_every_public_consumer(repo, boo
     assert selfcheck._project(pid, repo) == []  # noqa: SLF001
     assert registry.canonical(repo) == (repo, _source(repo))
     assert registry.register(repo).id == pid
+    assert registry.adopt(pid).id == pid
+    assert project_home.current(repo) == target
     assert Store.open(repo).root == target
+    (target / MARKER).unlink()
+    source_before, target_before = _snapshot(_source(repo)), _snapshot(target)
+    assert project_home.current(repo) == target
+    assert registry.canonical(repo) == (repo, _source(repo))
+    assert registry.adopt(pid).id == pid
+    registry.remove(pid)
+    assert registry.register(repo).id == pid
+    assert selfcheck.problems() == []
+    assert _snapshot(_source(repo)) == source_before
+    assert _snapshot(target) == target_before
+    assert not (target / MARKER).exists()
+    assert Store.open(repo).root == target
+    assert (target / MARKER).read_text() == "7\n"
 
 
 @pytest.mark.usefixtures("current_binding")
-def test_an_unreadable_switched_source_marker_refuses_store_open_without_writes(repo, boot):
+@pytest.mark.parametrize("marker", [b"\xff\n", b"1000\n"], ids=["unreadable", "future-1000"])
+def test_source_marker_public_refusals_preserve_the_completed_move(repo, boot, marker):
     target = _finished_move(repo, boot)
     source = _source(repo)
-    (source / MARKER).write_bytes(b"\xff\n")
+    assert (source / MARKER).read_text() == f"{project_move.FENCE}\n"
+    (source / MARKER).write_bytes(marker)
     source_before, target_before = _snapshot(source), _snapshot(target)
 
-    with pytest.raises(StoreError, match=r"switched source.*unreadable"):
+    with pytest.raises(StoreError, match=r"switched source.*unreadable" if marker == b"\xff\n" else None):
         Store.open(repo)
 
     assert _snapshot(source) == source_before
@@ -148,22 +165,6 @@ def test_a_corrupt_switched_receipt_is_refused_by_registration_adoption_selfchec
     assert receipt.read_bytes() == bad, "a consumer rewrote the corrupt receipt"
     assert _snapshot(_source(repo)) == source_before, "a consumer changed the retained source"
     assert _snapshot(target) == target_before, "a consumer changed the active store"
-
-
-@pytest.mark.usefixtures("current_binding")
-@pytest.mark.parametrize("marker", [pytest.param("1000\n", id="future-1000")])
-def test_a_valid_switched_receipt_with_an_unknown_source_marker_is_refused_and_nothing_is_written(repo, boot, marker):
-    target = _finished_move(repo, boot)
-    source = _source(repo)
-    assert (source / MARKER).read_text() == f"{project_move.FENCE}\n"
-    (source / MARKER).write_text(marker)
-    source_before, target_before = _snapshot(source), _snapshot(target)
-
-    with pytest.raises(StoreError):
-        Store.open(repo)
-
-    assert _snapshot(source) == source_before, "a refused open rewrote the switched source"
-    assert _snapshot(target) == target_before, "a refused open changed the active store"
 
 
 TARGET_DAMAGE = [
@@ -217,27 +218,6 @@ def test_current_and_every_admission_refuse_an_unproven_target_without_writes(re
     assert _snapshot(target.parent) == target_before
 
 
-@pytest.mark.usefixtures("current_binding")
-def test_read_only_current_registration_and_selfcheck_leave_a_missing_target_marker_for_store_open(repo, boot):
-    target = _finished_move(repo, boot)
-    entry = registry.register(repo)
-    (target / MARKER).unlink()
-    source_before, target_before = _snapshot(_source(repo)), _snapshot(target)
-
-    assert project_home.current(repo) == target
-    assert registry.canonical(repo) == (repo, _source(repo))
-    assert registry.adopt(entry.id).id == entry.id
-    registry.remove(entry.id)
-    assert registry.register(repo).id == entry.id
-    assert selfcheck.problems() == []
-    assert _snapshot(_source(repo)) == source_before
-    assert _snapshot(target) == target_before
-    assert not (target / MARKER).exists()
-
-    assert Store.open(repo).root == target
-    assert (target / MARKER).read_text() == "7\n"
-
-
 def _machine() -> Machine:
     record = HostRecord(
         url="http://127.0.0.1:9/",
@@ -253,13 +233,22 @@ def _machine() -> Machine:
 
 
 @pytest.mark.usefixtures("current_binding")
-@pytest.mark.parametrize("switched", [False, True], ids=["legacy", "switched"])
-def test_an_unreadable_clone_id_refuses_registration_and_adoption_with_an_actionable_status(repo, boot, switched):
+@pytest.mark.parametrize("kind", ["legacy", "switched", "readable-disagreement"])
+def test_clone_identity_refusals_preserve_registration_and_store_state(repo, boot, kind):
+    switched = kind != "legacy"
     if switched:
         _finished_move(repo, boot)
     entry = registry.register(repo)
     source = _source(repo)
     target = project_home.home(entry.id)
+    if kind == "readable-disagreement":
+        (source / project_home.CLONE_ID).write_text("foreign-owner\n")
+        with pytest.raises(StoreError):
+            project_home.current(repo)
+        problems = selfcheck.problems()
+        assert problems
+        assert any(str(repo) in problem for problem in problems)
+        return
     (source / project_home.CLONE_ID).write_text("replacement\n")
     machine = _machine()
     try:
@@ -291,27 +280,42 @@ def test_an_unreadable_clone_id_refuses_registration_and_adoption_with_an_action
 
 
 @pytest.mark.usefixtures("current_binding")
-# unloaded holds every refusal, FormatTooNewError included, in one except clause; each damage's own refusal is proven
-# by test_current_and_every_admission_refuse_an_unproven_target_without_writes, so one StoreError suffices
-@pytest.mark.parametrize("damage", ["missing-proof"])
-def test_a_failed_public_project_load_holds_unlocated_instead_of_reading_the_unproven_target(repo, boot, damage):
+@pytest.mark.parametrize("kind", ["target-proof", "source-fence"])
+def test_unproven_source_or_target_retains_one_unlocated_reservation(repo, boot, kind):
     target = _finished_move(repo, boot)
     entry = registry.register(repo)
-    _damage(target, damage)
+    source = _source(repo)
+    if kind == "target-proof":
+        _damage(target, "missing-proof")
+    else:
+        (source / MARKER).unlink()
+        (source / pack_state.FILE).write_text(
+            json.dumps(pack_state.blank() | {"state": "running", "run": "newer-source-run"})
+        )
+        workspace = source / pack_run.UPDATER
+        workspace.mkdir()
+        (workspace / "sentinel").write_text("keep original workspace")
     assert not (target / pack_state.FILE).exists()
     source_before, target_before = _snapshot(_source(repo)), _snapshot(target.parent)
     machine = _machine()
     try:
         machine.load_all()
+        if kind == "source-fence":
+            machine.retry()
         assert machine.projects[entry.id].state == "failed"
         (lease,) = machine.maintenance.read()["sessions"]
         assert (lease["state"], lease["project"], lease["workspace"]) == ("held", entry.id, str(repo))
         ledger = json.loads((local_home.root() / maintenance.FILE).read_text())
         assert ledger["imported"] == [f"{entry.id}:unlocated"]
         assert machine.slots.counts(entry.id) == (1, 1, 1)
-        machine.retry()
+        if kind == "target-proof":
+            machine.retry()
         assert machine.maintenance.read()["sessions"] == [lease]
         assert machine.slots.take("another-project", "work", 1, 1) == 0
+        if kind == "source-fence":
+            with pytest.raises(StoreError):
+                project_home.current(repo)
+            assert _snapshot(source) == source_before
     finally:
         machine.stop_all()
     assert machine.maintenance.read()["sessions"] == [lease]
@@ -590,41 +594,6 @@ def test_missing_target_marker_is_not_created_after_initial_source_reads_lose_it
     assert fired == [True]
     assert not (target / MARKER).exists()
     assert {path: _snapshot(path) for path in owners} == owners
-
-
-@pytest.mark.usefixtures("current_binding")
-# the machine holds every refusal of the source marker alike; the marker forms themselves are proven by
-# test_source_format_refuses_every_unproven_source_marker below
-@pytest.mark.parametrize("removed", [MARKER], ids=["missing"])
-def test_an_unproven_source_fence_keeps_one_unlocated_reservation(repo, boot, removed):
-    target = _finished_move(repo, boot)
-    entry = registry.register(repo)
-    source = _source(repo)
-    (source / removed).unlink()
-    (source / pack_state.FILE).write_text(
-        json.dumps(pack_state.blank() | {"state": "running", "run": "newer-source-run"})
-    )
-    workspace = source / pack_run.UPDATER
-    workspace.mkdir()
-    (workspace / "sentinel").write_text("keep original workspace")
-    assert not (target / pack_state.FILE).exists()
-    before = _snapshot(source)
-    machine = _machine()
-    try:
-        machine.load_all()
-        machine.retry()
-        assert machine.projects[entry.id].state == "failed"
-        (lease,) = machine.maintenance.read()["sessions"]
-        assert (lease["state"], lease["project"], lease["workspace"]) == ("held", entry.id, str(repo))
-        ledger = json.loads((local_home.root() / maintenance.FILE).read_text())
-        assert ledger["imported"] == [f"{entry.id}:unlocated"]
-        assert machine.slots.take("another-project", "work", 1, 1) == 0
-        with pytest.raises(StoreError):
-            project_home.current(repo)
-        assert _snapshot(source) == before
-    finally:
-        machine.stop_all()
-    assert machine.maintenance.read()["sessions"] == [lease]
 
 
 @pytest.mark.parametrize(
@@ -1032,19 +1001,6 @@ def test_registration_keeps_the_id_it_validated_through_its_durability_work(repo
     assert (registry_path.read_bytes() if registry_path.exists() else None) == saved
     assert not project_home.home("foreign-owner").exists()
     assert json.loads((source / project_move.MOVE_RECORD).read_text())["target"] == str(target)
-
-
-@pytest.mark.usefixtures("current_binding")
-def test_selfcheck_refuses_a_readable_clone_id_that_disagrees_with_its_registered_receipt(repo, boot):
-    _finished_move(repo, boot)
-    registry.register(repo)
-    (_source(repo) / project_home.CLONE_ID).write_text("foreign-owner\n")
-
-    with pytest.raises(StoreError):
-        project_home.current(repo)
-    problems = selfcheck.problems()
-    assert problems
-    assert any(str(repo) in problem for problem in problems)
 
 
 @pytest.mark.usefixtures("current_binding")

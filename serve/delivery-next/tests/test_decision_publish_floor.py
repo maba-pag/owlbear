@@ -143,31 +143,25 @@ def lost_before_commit(monkeypatch) -> list[list[Path]]:
     return calls
 
 
-def test_a_record_behind_its_remote_is_caught_up_before_its_commit_is_journalled(shared_repo, tmp_path) -> None:
+@pytest.mark.parametrize("producer", ["record", "archive"])
+def test_every_archive_writer_establishes_its_publication_floor(shared_repo, tmp_path, producer) -> None:
     root, remote = shared_repo
     owner_commit(root, "owner words\n")
     advance_remote(tmp_path, remote, "elsewhere.txt")
 
-    assert change_record.save(Store(root), finished(), MERGED, AT) == ""
+    if producer == "record":
+        assert change_record.save(Store(root), finished(), MERGED, AT) == ""
+        assert (root / PROJECT / "changes" / f"{STEM}.json").is_file()
+    else:
+        files, left = decision_archive.archive(root, PROJECT, finished(), STEM, "merged")
+        assert files
+        assert not left
 
     assert decision_batch.pending(DataRepo(root)) is None
     assert "owner: notes" in git(root, "log", "--format=%s")  # rebased once under a new SHA, never lost
     assert git(root, "rev-parse", "HEAD") == git(remote, "rev-parse", "main")
     assert (root / OWNER).read_text() == "owner words\n"
     assert list((root / PROJECT).rglob("decisions/*.md"))
-
-
-def test_an_archive_behind_its_remote_is_caught_up_before_its_commit_is_journalled(shared_repo, tmp_path) -> None:
-    root, remote = shared_repo
-    owner_commit(root, "owner words\n")
-    advance_remote(tmp_path, remote, "elsewhere.txt")
-
-    _files, left = decision_archive.archive(root, PROJECT, finished(), STEM, "merged")
-
-    assert not left
-    assert decision_batch.pending(DataRepo(root)) is None
-    assert git(root, "rev-parse", "HEAD") == git(remote, "rev-parse", "main")
-    assert (root / OWNER).read_text() == "owner words\n"
 
 
 def test_a_remote_that_moves_between_catch_up_and_proof_is_caught_up_again(shared_repo, tmp_path, monkeypatch) -> None:
@@ -403,8 +397,9 @@ def recorded_git(monkeypatch) -> list[str]:
 
 
 @pytest.mark.usefixtures("lost_before_commit")
-def test_an_archive_refuses_an_interrupted_uncommitted_batch_before_any_remote_work(
-    shared_repo, tmp_path, monkeypatch
+@pytest.mark.parametrize("producer", ["archive", "record"])
+def test_pending_uncommitted_generation_blocks_new_writers_before_remote_work(
+    shared_repo, tmp_path, monkeypatch, producer
 ) -> None:
     root, remote = shared_repo
     owner_commit(root, "owner words\n")
@@ -416,33 +411,13 @@ def test_an_archive_refuses_an_interrupted_uncommitted_batch_before_any_remote_w
     head, before, remote_head = git(root, "rev-parse", "HEAD"), tree_bytes(root), git(remote, "rev-parse", "main")
     commands = recorded_git(monkeypatch)
 
-    with pytest.raises(DecisionsUnavailable, match="finished or abandoned"):
-        decision_archive.archive(root, PROJECT, finished(), STEM, "merged")
+    if producer == "archive":
+        with pytest.raises(DecisionsUnavailable, match="finished or abandoned"):
+            decision_archive.archive(root, PROJECT, finished(), STEM, "merged")
+    else:
+        notice = change_record.save(Store(root), finished(), MERGED, AT)
+        assert "finished or abandoned" in notice
 
-    assert not {"fetch", "push", "pull", "rebase"} & set(commands)
-    assert git(root, "rev-parse", "HEAD") == head
-    assert git(remote, "rev-parse", "main") == remote_head
-    assert tree_bytes(root) == before
-    assert decision_batch.pending(shared).generation == pending.generation
-
-
-@pytest.mark.usefixtures("lost_before_commit")
-def test_a_record_refuses_an_interrupted_uncommitted_batch_before_any_remote_work(
-    shared_repo, tmp_path, monkeypatch
-) -> None:
-    root, remote = shared_repo
-    owner_commit(root, "owner words\n")
-    shared = DataRepo(root)
-    save(shared, make(), expected_revision=None, message="decisions: notes")
-    pending = decision_batch.pending(shared)
-    assert pending is not None
-    advance_remote(tmp_path, remote, "elsewhere.txt")
-    head, before, remote_head = git(root, "rev-parse", "HEAD"), tree_bytes(root), git(remote, "rev-parse", "main")
-    commands = recorded_git(monkeypatch)
-
-    notice = change_record.save(Store(root), finished(), MERGED, AT)
-
-    assert "finished or abandoned" in notice
     assert not {"fetch", "push", "pull", "rebase", "commit"} & set(commands)
     assert git(root, "rev-parse", "HEAD") == head
     assert git(remote, "rev-parse", "main") == remote_head
@@ -560,9 +535,15 @@ def test_an_owned_file_that_is_a_symlink_is_never_followed_while_a_plain_file_st
     assert link.is_symlink()
 
 
-def test_a_real_rebase_paused_by_exec_blocks_a_new_save_and_is_never_aborted(shared_repo, monkeypatch) -> None:
+@pytest.mark.parametrize("active", [True, False], ids=["paused-rebase", "idle-detached"])
+def test_rebase_admission_distinguishes_detached_head_from_active_operation(shared_repo, monkeypatch, active) -> None:
     root, _ = shared_repo
     owner_commit(root, "owner words\n")
+    if not active:
+        git(root, "checkout", "-q", "--detach")
+        assert not (root / ".git" / "rebase-merge").exists()
+        assert DataRepo(root).rebasing() is False
+        return
     paused = subprocess.run(["git", "rebase", "--exec", "false", "HEAD~1"], cwd=root, check=False, capture_output=True)  # noqa: S607
     assert paused.returncode != 0
     assert (root / ".git" / "rebase-merge").is_dir()
@@ -582,14 +563,6 @@ def test_a_real_rebase_paused_by_exec_blocks_a_new_save_and_is_never_aborted(sha
     assert decision_batch.pending(shared) is None
     assert (root / OWNER).read_text() == "owner words\n"
     assert (root / ".git" / "rebase-merge").is_dir()
-
-
-def test_a_detached_head_with_no_rebase_is_not_mistaken_for_one(shared_repo) -> None:
-    root, _ = shared_repo
-    owner_commit(root, "owner words\n")
-    git(root, "checkout", "-q", "--detach")
-    assert not (root / ".git" / "rebase-merge").exists()
-    assert DataRepo(root).rebasing() is False
 
 
 def test_an_owner_commit_during_a_paused_rebase_is_never_rolled_back_by_the_publisher(shared_repo, monkeypatch) -> None:
