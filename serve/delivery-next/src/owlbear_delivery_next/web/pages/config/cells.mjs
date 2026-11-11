@@ -378,8 +378,9 @@ export function contextCell(role) {
         aria=${`{ 'aria-label': '${aria}' }`}>${said}</p-segmented-control-item>`)}</p-segmented-control>`;
   } else if (model) {
     const wrong = tierMismatch(role) || (tierOf(role) ? "" : "no layer sets a context tier");
+    const fill = (e) => { edit(key, "default"); handOff(e, label); };
     control = html`<p-text size="sm">${tokens(model.context)} \u00b7 only tier</p-text>${wrong ? html`
-      <p-text size="xs" color="error">${wrong}</p-text>${pure("Use the default tier", () => edit(key, "default"))}`
+      <p-text size="xs" color="error">${wrong}</p-text>${pure("Use the default tier", fill)}`
       : nothing}`;  // the default tier fills an unset one and overrides an inherited long one
   } else {
     control = choose(label, [[INHERIT, clear(below(role, "context"))], ["default", "default"], ["long", "long"]],
