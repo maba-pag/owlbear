@@ -120,7 +120,7 @@ def test_merge_history_confirms_built_effect_from_a_merged_record_and_from_a_bas
     old, new = pair()
     publish(shared, old, new, records={"20261020-090000-c1": merged(old.id),
                                        "20261020-100000-c2": merged(old.id) | {"outcome": "abandoned"}})  # fmt: skip
-    repo = clone(tmp_path, "shop", ["notes/db.py", "tests/test_notes.py"])
+    repo = tmp_path / "shop"
     by_record = decision_impact.report(shared, PROJECT, new.id, [Place(PROJECT, repo, store)])
     [only] = by_record.projects
     assert (only.status, only.changes) == ("confirmed", (
@@ -142,7 +142,7 @@ def test_merge_history_confirms_built_effect_from_a_merged_record_and_from_a_bas
 def test_a_rule_no_change_built_under_is_unknown_and_a_withdrawn_one_reports_itself(tmp_path, shared, store):
     whole, whole_new = pair()
     publish(shared, whole, whole_new)
-    here = [Place(PROJECT, clone(tmp_path, "shop", ["src/app.py", "README.md"]), store)]
+    here = [Place(PROJECT, tmp_path / "shop", store)]
 
     assert verdicts(decision_impact.report(shared, PROJECT, whole_new.id, here))[PROJECT] == (
         "unknown", decision_impact.WHOLE)  # fmt: skip
@@ -169,7 +169,7 @@ def test_a_global_change_covers_every_known_project_and_owlbears_folder(tmp_path
     (shared.root / "owlbear").mkdir()
     write(make(project="owlbear", title="Lint once", statement="Linted once."), shared.root / "owlbear")
     publish(shared, old, new)
-    places = [Place(PROJECT, clone(tmp_path, "shop", ["web/a.js"])), Place(OTHER, clone(tmp_path, "blog", ["a.md"]))]
+    places = [Place(PROJECT, tmp_path / "shop"), Place(OTHER, tmp_path / "blog")]
 
     report = decision_impact.report(shared, PROJECT, new.id, places)
 
@@ -182,7 +182,7 @@ def test_the_shown_report_names_both_rules_and_what_the_change_means(tmp_path, s
     old, new = pair()
     publish(shared, old, new)
     shown = decision_impact.shown(decision_impact.report(shared, PROJECT, new.id, [
-        Place(PROJECT, clone(tmp_path, "shop", ["src/m.py"]), store)]))  # fmt: skip
+        Place(PROJECT, tmp_path / "shop", store)]))  # fmt: skip
     [p] = shown["projects"]
     assert (p["paths"], p["tests"], "paths" in shown["old"]) == ([], [], False)
     assert (shown["old"]["id"], shown["new"]["id"], shown["effect"], shown["fixes"]) == (
@@ -224,7 +224,7 @@ def test_the_owner_marks_a_replacement_and_its_successor_records_it(tmp_path, sh
 def test_scheduling_makes_one_grouped_entry_per_project_with_revisions_and_a_checklist(tmp_path, shared, github):
     old, new = pair(scope=Scope.GLOBAL, project="")
     publish(shared, old, new)
-    places = [Place(PROJECT, clone(tmp_path, "shop", ["web/a.js"])), Place(OTHER, clone(tmp_path, "blog", ["a.md"]))]
+    places = [Place(PROJECT, tmp_path / "shop"), Place(OTHER, tmp_path / "blog")]
     report = decision_impact.report(shared, PROJECT, new.id, places)
 
     made = decision_fixes.schedule(shared, report, new.revision)

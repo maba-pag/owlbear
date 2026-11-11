@@ -9,7 +9,7 @@ from owlbear_decisions import Decision, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.change_contracts import pick_tools, tools
 from owlbear_delivery_next.change_contracts.models import Exit, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_flow import loop, status
+from owlbear_delivery_next.change_flow import brief_rounds, loop, status
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
@@ -162,8 +162,10 @@ def unreviewed(picking) -> None:
         picking.store.write(lock, c)
     picking.ask(1)
     picking.picks += [picked(rule.id)] * 2
-    picking.verdicts.append(verdict("AC-1"))
-    picking.step()
+    with picking.store.lock(picking.slug) as lock:
+        c = pick.run(picking.store, lock, picking.change())
+        brief_rounds.counted(c, ["AC-1"], {}, AT)
+        picking.store.write(lock, c)
     picking.save(criteria=["farewell('Ada') returns exactly 'Bye, Ada!'"])
     picking.ask(2)
     picking.step()  # v2's pick, no challenger

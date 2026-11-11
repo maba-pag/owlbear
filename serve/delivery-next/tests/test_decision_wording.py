@@ -22,7 +22,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
 )
 from owlbear_delivery_next.commands import runner
-from owlbear_delivery_next.state_store import decision_actions, decision_archive, decision_origin, decision_store
+from owlbear_delivery_next.state_store import decision_archive, decision_store
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.workflow_steps import brief_round, decision_publication, decisions_gate, lookup, pick
 
@@ -66,67 +66,52 @@ def test_new_short_archives_with_a_literal_terminal_ellipsis_never_expand_the_re
 
 
 @pytest.mark.parametrize("legacy", [False, True])
-def test_actual_origin_correction_preserves_proven_binding_or_refuses_ambiguity_before_writing(monkeypatch, legacy):
+def test_actual_origin_correction_preserves_proven_binding_or_refuses_ambiguity_before_writing(picking, legacy):
     rule = archived().model_copy(update={"origin": Origin.APPROVED})
     if legacy:
         rule = rule.model_copy(update={"rationale": f"From Change notes (approved).\n\nWhole wording: {TEXT}"})
-    saved = []
-    monkeypatch.setattr(decision_store, "load", lambda *_args: object())
-    monkeypatch.setattr(decision_origin, "_entry", lambda *_args: type("Entry", (), {"decision": rule})())
-    monkeypatch.setattr(decision_origin, "_stale", lambda *_args: None)
-    monkeypatch.setattr(decision_origin, "rivals", lambda *_args: [])
-
-    def retire(_shared, successor, _old, _message):
-        saved.append(successor)
-        return []
-
-    monkeypatch.setattr(decision_origin, "_retire", retire)
-
-    def correcting():
-        return decision_origin.correct_origin(
-            None,
-            PROJECT,
-            rule.id,
-            rule.revision,
-            origin=Origin.AUTONOMOUS,
-            reason="This was an agent choice",
-            confirmed=True,
-            by="owner",
-        )
-
+    picking.put(rule)
+    before = publish(picking.shared.root)
+    path = picking.shared.root / PROJECT / "decisions" / f"{rule.id}.md"
+    text = path.read_bytes()
+    got = picking.http.post(
+        f"/api/next/decisions/{rule.id}/correct-origin",
+        json={
+            "revision": rule.revision,
+            "origin": "autonomous",
+            "reason": "This was an agent choice",
+            "confirmed": True,
+        },
+    )
     if legacy:
-        with pytest.raises(decision_wording.WordingError, match="ambiguous legacy"):
-            correcting()
-        assert saved == []
+        assert got.status_code == 409, got.text
+        assert "ambiguous legacy" in got.json()["detail"]
+        assert path.read_bytes() == text
+        assert head(picking.shared.root) == before
         return
-    correcting()
-    assert len(saved) == 1
-    assert saved[0].statement == rule.statement
-    assert saved[0].origin is Origin.AUTONOMOUS
-    assert decision_archive.whole(parse(serialize(saved[0]))) == TEXT
-    assert decision_wording.problem(saved[0]) == ""
+    assert got.status_code == 200, got.text
+    successor = stored(picking, got.json()["receipts"][0]["id"])
+    assert successor.statement == rule.statement
+    assert successor.origin is Origin.AUTONOMOUS
+    assert decision_archive.whole(parse(serialize(successor))) == TEXT
+    assert decision_wording.problem(successor) == ""
 
 
-def test_literal_metadata_headings_inside_binding_survive_real_promotion(monkeypatch):
+def test_literal_metadata_headings_inside_binding_survive_real_promotion(picking):
     text = TEXT + "\n\nWhy it changed: this paragraph IS binding.\n\nWhole wording: this one is binding too."
     rule = archived(text, reason=f"Whole wording: quoted explanation {text}")
-    saved = []
-    view = object()
-    monkeypatch.setattr(decision_store, "load", lambda *_args: view)
-    monkeypatch.setattr(decision_actions, "_entry", lambda *_args: type("Entry", (), {"decision": rule})())
-    monkeypatch.setattr(decision_actions, "_stale", lambda *_args: None)
-
-    def retire(_shared, wider, _source, _message):
-        saved.append(wider)
-        return []
-
-    monkeypatch.setattr(decision_actions, "_retire", retire)
-    decision_actions.promote(None, PROJECT, rule.id, rule.revision, reason="Apply this to all projects")
-    assert len(saved) == 1
-    assert saved[0].scope is Scope.GLOBAL
-    assert saved[0].statement == rule.statement
-    assert decision_archive.whole(parse(serialize(saved[0]))) == text
-    assert "Apply this to all projects" in saved[0].rationale
+    picking.put(rule)
+    publish(picking.shared.root)
+    got = picking.http.post(
+        f"/api/next/decisions/{rule.id}/promote",
+        json={"revision": rule.revision, "reason": "Apply this to all projects"},
+    )
+    assert got.status_code == 200, got.text
+    wider = stored(picking, got.json()["receipts"][0]["id"])
+    assert wider.scope is Scope.GLOBAL
+    assert wider.statement == rule.statement
+    assert decision_archive.whole(parse(serialize(wider))) == text
+    assert "Apply this to all projects" in wider.rationale
 
 
 def legacy_ambiguous():
