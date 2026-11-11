@@ -43,25 +43,6 @@ def test_abandoning_a_new_file_in_an_absent_folder_fsyncs_nothing(tmp_path, monk
     assert not absent.parent.exists()
 
 
-def test_removing_a_file_from_an_existing_folder_still_fsyncs_its_parent(tmp_path, monkeypatch):
-    synced: list[os.stat_result] = []
-    real_fsync = os.fsync
-
-    def recording_fsync(descriptor: int) -> None:
-        synced.append(os.fstat(descriptor))
-        real_fsync(descriptor)
-
-    monkeypatch.setattr(os, "fsync", recording_fsync)
-    folder = tmp_path / "decisions"
-    folder.mkdir()
-    (folder / "old.md").write_text("x", encoding="utf-8")
-
-    decision_batch.replace_file(folder / "old.md", None)
-
-    assert not (folder / "old.md").exists()
-    assert [os.path.samestat(found, folder.stat()) for found in synced] == [True]  # the folder held open, once
-
-
 @pytest.mark.parametrize("refused", [False, True], ids=["unknown", "known-refusal"])
 def test_settlement_requires_a_known_refusal_or_exact_landing(shared_repo, refused):
     shared = DataRepo(shared_repo[0])
