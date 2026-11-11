@@ -72,6 +72,7 @@ def _seed(picking) -> None:
 
 def _interrupt(picking, monkeypatch, items: list[Decision]) -> None:
     """Save *items* as one batch and stop it before anything lands: the journal stays in flight."""
+
     def interrupted_write(*_args, **_kwargs):
         msg = "interrupted before the first write"
         raise RuntimeError(msg)
@@ -366,9 +367,7 @@ def test_a_refused_flag_batch_finishes_once_every_rival_is_flagged_and_publishes
     assert all(seen.get(i).decision.conflict for i in (a.id, b.id))
 
 
-def test_a_flag_batch_with_an_unflagged_competitor_is_refused_and_keeps_its_generation(
-    picking, monkeypatch
-) -> None:
+def test_a_flag_batch_with_an_unflagged_competitor_is_refused_and_keeps_its_generation(picking, monkeypatch) -> None:
     shared = picking.shared
     old, _, _, pending = _two_rivals_with_refused_flags(shared, monkeypatch)
     write(replacing(old, title="Notes in C"), shared.root / PROJECT)
@@ -1751,9 +1750,7 @@ def test_an_unfenced_write_lands_with_no_temporary_left(tmp_path, writer):
 # `test_a_save_whose_temporary_name_is_substituted_installs_nothing` a real decisions save.
 @pytest.mark.parametrize("sync_fails", [False, True], ids=["synced", "sync-failed"])
 @pytest.mark.usefixtures("closed_writer_descriptors")
-def test_an_installed_file_moved_back_to_its_temporary_name_is_never_cleaned_up(
-    tmp_path, monkeypatch, sync_fails
-):
+def test_an_installed_file_moved_back_to_its_temporary_name_is_never_cleaned_up(tmp_path, monkeypatch, sync_fails):
     """After the real rename, the owner moves that same open inode back during directory fsync, which may fail."""
     folder = tmp_path / "layer" / "decisions"
     held, moved, checks = {}, [], []
@@ -2967,9 +2964,7 @@ def test_an_owner_commit_made_while_the_push_is_refused_is_never_rebased(picking
     _no_authority(picking)
 
 
-def test_an_owner_commit_before_publication_is_never_adopted_as_the_batch_base(
-    picking, shared_repo, monkeypatch
-):
+def test_an_owner_commit_before_publication_is_never_adopted_as_the_batch_base(picking, shared_repo, monkeypatch):
     """After the batch's last write and before its publication reads HEAD, the owner commits the batch's own files as
     written. HEAD then holds every after image, but it is not the batch's journalled head, so nothing is staged,
     committed or pushed and the batch stays interrupted. An unrelated owner commit fails the same head check."""
