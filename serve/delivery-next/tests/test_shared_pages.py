@@ -317,7 +317,6 @@ def test_the_backlog_page_says_whole_why_github_could_not_be_read(
     monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
     shop_clone = registry.register(clone(tmp_path / "shop", origin="https://github.com/acme/shop-site.git"))
     registry.register(clone(tmp_path / "docs", origin="https://github.com/acme/docs-site.git"))
-    registry.register(clone(tmp_path / "twin", origin="https://github.com/acme/shop-site.git"))
     Backlog(DataRepo(shared_repo[0]), "shop-site").add("Found in the shop", source="review")
     read = f"the backlog could not be read from GitHub (acme/owlbear-data): ProviderError: list_issues: {whole_error}"
     reads = Backlog.read
