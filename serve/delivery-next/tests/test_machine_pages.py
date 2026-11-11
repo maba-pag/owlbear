@@ -121,7 +121,9 @@ def serve() -> tuple[Machine, uvicorn.Server, str]:
 
 
 @contextmanager
-def page_at(base: str, pds, width: int = 1280, height: int = 720, *, details: bool = False) -> Iterator[Page]:
+def page_at(
+    base: str, pds, size: tuple[int, int] = (1280, 720), *, details: bool = False, required: bool = False
+) -> Iterator[Page]:
     """One actual Chromium Page, its viewport and PDS access; the caller owns the server and navigation."""
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
@@ -129,8 +131,11 @@ def page_at(base: str, pds, width: int = 1280, height: int = 720, *, details: bo
         try:
             browser = pw.chromium.launch()
         except Error as exc:
+            if required:
+                raise
             pytest.skip(f"no Playwright Chromium: {exc}")
         try:
+            width, height = size
             page = browser.new_page(viewport={"width": width, "height": height})
             if details:
                 page.add_init_script("localStorage.setItem('owlbear-improvement-detail', 'on');")
@@ -148,7 +153,7 @@ def browsing(monkeypatch, pds, width: int = 1280, *, details: bool = False) -> I
     monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
     machine, server, base = serve()
     try:
-        with page_at(base, pds, width, 800, details=details) as page:
+        with page_at(base, pds, (width, 800), details=details) as page:
             yield page, base
     finally:
         server.should_exit = True
@@ -1392,7 +1397,7 @@ def test_projects_refresh_after_the_data_command_repairs_the_pointer_without_res
         host_start._provisioned(machine)  # noqa: SLF001 - the real startup failure, not a supplied UI notice
         original = machine.unshared
         assert original
-        with page_at(base, pds, 1280, 800) as page:
+        with page_at(base, pds, (1280, 800), required=True) as page:
             said = errors(page)
             page.goto(f"{base}/projects#token=t")
             expect(page.locator("#unshared")).to_have_text(f"Shared data: {original}")
@@ -1689,7 +1694,7 @@ def test_projects_lists_a_detection_read_failure_from_the_real_readiness_pass(
     monkeypatch.setattr(Host, "_launch", lambda *_args: False)
     machine, server, base = serve()  # actual readiness.ready → Project._ready → HostRecord.ready
     try:
-        with page_at(base, pds, 1280, 800) as page:
+        with page_at(base, pds, (1280, 800), required=True) as page:
             said = errors(page)
             page.goto(f"{base}/projects#token=t")
             row = page.get_by_role("listitem", name="shop")

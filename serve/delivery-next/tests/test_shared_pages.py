@@ -143,7 +143,7 @@ def test_changes_show_the_current_unreadable_profile_note_beside_fresh_cards(c1,
     store, app = c1
     server, base = serving(app)
     try:
-        with page_at(base, pds, 1440, 1000) as page:
+        with page_at(base, pds, (1440, 1000)) as page:
             errors: list[str] = []
             page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
             page.on("pageerror", lambda e: errors.append(str(e)))
