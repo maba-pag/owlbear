@@ -12,13 +12,14 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import check_hint
 from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.change_flow import curation_flow
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
 
-    from owlbear_delivery_next.change_contracts.models import Task
+    from owlbear_delivery_next.change_contracts.models import Change, Task
     from owlbear_delivery_next.change_contracts.profile_record import Profile
 
 GIT = shutil.which("git") or "git"
@@ -123,6 +124,13 @@ def task_checks(profile: Profile, task: Task, path: Path, target: str) -> list[s
         )
         found.append(adapted)
     return found
+
+
+def build_checks(profile: Profile, change: Change, task: Task, path: Path) -> list[str]:
+    """Confirmed build checks; a curator measures its selected packages without task-base adaptation."""
+    if change.tests is not None and change.step.task == curation_flow.CURATE:
+        return [check_hint.qualified(p, c) for p, c in checks(profile) if p == "." or p in change.tests.packages]
+    return task_checks(profile, task, path, change.names.target)
 
 
 def head(path: Path) -> str:

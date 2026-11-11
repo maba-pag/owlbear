@@ -10,7 +10,6 @@ from owlbear_delivery_next.change_contracts.models import VISUAL, Exit, PersonCh
 from owlbear_delivery_next.change_contracts.preparation import Preparing
 from owlbear_delivery_next.change_flow import (
     brief_rounds,
-    curation_flow,
     disputes,
     plan_rounds,
     round_flow,
@@ -496,13 +495,6 @@ def session(
         person = next((p for p in change.checks if p.id == s.task), None) or _visual_check(change)
         message = check(change, person, path, pairs, preparing)
         return Parts(message, write=True, checks=(), submit=tools.RECIPE, task=task)
-    if change.tests is not None and s.task == curation_flow.CURATE:
-        checks = [
-            check_hint.qualified(p, c)
-            for p, c in wt.checks(project_profile.vouched(profile))
-            if p == "." or p in change.tests.packages
-        ]
-    else:
-        checks = wt.task_checks(project_profile.vouched(profile), task, path, change.names.target)
+    checks = wt.build_checks(project_profile.vouched(profile), change, task, path)
     message = build(change, task.model_copy(update={"checks": checks}), path, pairs)
     return Parts(message, write=True, checks=tuple(checks), submit=tools.SUBMIT, task=task)
