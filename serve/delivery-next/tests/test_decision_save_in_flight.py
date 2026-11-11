@@ -489,7 +489,8 @@ def test_lost_answer_matching_distinguishes_layer_age_and_changed_rows(tmp_path,
         return (200, {"available": True, "decisions": [row]}) if path.startswith("/decisions?") else (200, row)
 
     monkeypatch.setattr(chat, "call", read)
-    out = getattr(chat, "_settled")(body, started, clock.t - 1, fenced=True)
+    method = "_settled"
+    out = getattr(chat, method)(body, started, clock.t - 1, fenced=True)
     assert calls[0] == ("GET", "/decisions?where=all&retired=true")
     if kind in {"global", "change"}:
         assert out == {"saved": False, "error": chat_client.NOT_SAVED}
@@ -524,7 +525,8 @@ def test_found_decision_requires_current_matching_detail(tmp_path, monkeypatch, 
         return 200, detail
 
     monkeypatch.setattr(chat, "call", read)
-    out = getattr(chat, "_found")(body, [row])
+    method = "_found"
+    out = getattr(chat, method)(body, [row])
     assert calls == [("GET", f"/decisions/{row['id']}")]
     assert detail["id"] == row["id"]
     if kind == "matching":
