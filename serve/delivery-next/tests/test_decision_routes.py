@@ -205,8 +205,10 @@ def test_the_owner_replaces_a_decision_with_his_successor_and_gets_its_receipts(
     seed(shared, old)
     head = git(shared.root, "rev-parse", "HEAD")
 
-    stale = owner.post(f"/api/next/decisions/{old.id}/replace",
-                       json={"revision": "0" * 64, "statement": "Other.", "reason": "r", "confirmed": True})  # fmt: skip
+    stale = owner.post(
+        f"/api/next/decisions/{old.id}/replace",
+        json={"revision": "0" * 64, "statement": "Other.", "reason": "r", "confirmed": True},
+    )
     assert stale.status_code == 200
     refused = stale.json()
     assert (refused["saved"], refused["receipts"][0]["saved"]) == (False, False)
@@ -450,14 +452,8 @@ def test_a_read_back_records_only_the_owners_confirmation_and_never_changes_the_
     assert "keep the table" not in answered.text
     assert (git(shared.root, "rev-parse", "HEAD"), now(shared, rule.id)) == (head, rule)  # nothing written
 
-    got = act(client(store, CHAT), rule, "read-back", confirmed=True).json()
-
-    read = now(shared, rule.id)
-    assert got["saved"] is True
-    assert (read.read_back, read.origin, read.statement, read.inherited) == (
-        today(), Origin.AUTONOMOUS, rule.statement, False)  # fmt: skip
-    assert git(shared.root, "log", "-1", "--format=%B") == f"decisions: read-back {rule.id} (chat)"
     assert act(client(store, CHAT), gone, "read-back", confirmed=True).status_code == 409
+    assert (git(shared.root, "rev-parse", "HEAD"), now(shared, gone.id)) == (head, gone)
 
 
 def test_withdrawing_a_draft_or_a_decision_in_force_keeps_it_in_history(owner, shared):
@@ -1139,17 +1135,45 @@ def test_correct_decision_origin_sends_the_confirmation_and_the_lower_origin(sha
 
 @pytest.mark.usefixtures("chat")
 def test_read_back_decision_records_only_a_confirmation_and_a_stale_revision_is_refused(shared):
-    rule = make()
+    rule = make(inherited=True)
     seed(shared, rule)
+    head = git(shared.root, "rev-parse", "HEAD")
 
     stale = tool("read_back_decision", decision=rule.id, revision="0" * 64, confirmed=True)
     unconfirmed = tool("read_back_decision", decision=rule.id, revision=rule.revision)
     assert (unconfirmed["saved"], "replacement he confirms" in unconfirmed["error"]) == (False, True)
-    assert now(shared, rule.id) == rule
-    got = tool("read_back_decision", decision=rule.id, revision=rule.revision, confirmed=True)
-
-    assert (stale["saved"], got["saved"]) == (False, True)
-    assert now(shared, rule.id).read_back == datetime.now(UTC).date().isoformat()
+    assert stale["saved"] is False
+    assert (git(shared.root, "rev-parse", "HEAD"), now(shared, rule.id)) == (head, rule)
+    queued = tool("queue_read_back", decision=rule.id, revision=rule.revision,
+                  why="A second team now edits notes.", kind="uncertain")  # fmt: skip
+    assert queued["saved"] is True
+    waiting = now(shared, rule.id)
+    assert (waiting.read_back, waiting.read_back_why, waiting.read_back_kind) == (
+        "pending",
+        "A second team now edits notes.",
+        ReadBackKind.UNCERTAIN,
+    )
+    assert (waiting.origin, waiting.statement, waiting.state, waiting.inherited) == (
+        rule.origin,
+        rule.statement,
+        rule.state,
+        rule.inherited,
+    )
+    subject = git(shared.root, "log", "-1", "--format=%B")
+    assert subject == f"decisions: queue-read-back {rule.id} (uncertain)"
+    assert waiting.read_back_why not in subject
+    got = tool("read_back_decision", decision=rule.id, revision=waiting.revision, confirmed=True)
+    assert got["saved"] is True
+    read = now(shared, rule.id)
+    assert (read.read_back, read.origin, read.statement, read.state, read.inherited) == (
+        today(),
+        Origin.AUTONOMOUS,
+        rule.statement,
+        rule.state,
+        False,
+    )
+    assert read.rule_revision == rule.rule_revision
+    assert git(shared.root, "log", "-1", "--format=%B") == f"decisions: read-back {rule.id} (chat)"
     params = asyncio.run(mcp_server.mcp.list_tools())
     read_back = next(t for t in params if t.name == "read_back_decision").input_schema["properties"]
     assert ("confirmed" in read_back, "answer" in read_back) == (True, False)
