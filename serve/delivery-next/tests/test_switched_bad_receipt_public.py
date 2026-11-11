@@ -394,9 +394,8 @@ def _replace_after_authority_read(repo, monkeypatch, changed, seam, *, current_o
 
 @pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("lookup", ["current", "register", "adopt", "selfcheck", "unloaded"])
-@pytest.mark.parametrize("seam", [MARKER], ids=["marker"])
 def test_target_replacement_during_authority_reads_refuses_and_keeps_uncertain_ownership(
-    repo, boot, monkeypatch, lookup, seam
+    repo, boot, monkeypatch, lookup
 ):
     target = _finished_move(repo, boot)
     entry = registry.register(repo)
@@ -408,7 +407,7 @@ def test_target_replacement_during_authority_reads_refuses_and_keeps_uncertain_o
         lock = os.open(target / "host.lock", os.O_CREAT | os.O_RDWR, 0o600)
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     fired, expected, moved = _replace_after_authority_read(
-        repo, monkeypatch, "target", seam, current_only=lookup == "unloaded"
+        repo, monkeypatch, "target", MARKER, current_only=lookup == "unloaded"
     )
     try:
         if machine is not None:
@@ -446,13 +445,12 @@ def test_target_replacement_during_authority_reads_refuses_and_keeps_uncertain_o
 
 @pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("lookup", ["current", "register", "adopt", "selfcheck", "open"])
-@pytest.mark.parametrize("seam", [MARKER], ids=["marker"])
-def test_source_replacement_during_authority_reads_never_admits_the_replacement(repo, boot, monkeypatch, lookup, seam):
+def test_source_replacement_during_authority_reads_never_admits_the_replacement(repo, boot, monkeypatch, lookup):
     target = _finished_move(repo, boot)
     entry = registry.register(repo)
     if lookup == "register":
         registry.remove(entry.id)
-    fired, expected, moved = _replace_after_authority_read(repo, monkeypatch, "source", seam)
+    fired, expected, moved = _replace_after_authority_read(repo, monkeypatch, "source", MARKER)
 
     if lookup == "selfcheck":
         assert selfcheck.problems()
@@ -625,8 +623,7 @@ def test_source_format_refuses_every_unproven_source_marker(tmp_path, marker, er
 
 @pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("consumer", ["current", "open"])
-@pytest.mark.parametrize("field", [project_home.CLONE_ID])
-def test_source_state_rechecks_the_receipt_after_its_other_witness_reads(repo, boot, monkeypatch, consumer, field):
+def test_source_state_rechecks_the_receipt_after_its_other_witness_reads(repo, boot, monkeypatch, consumer):
     target = _finished_move(repo, boot)
     source = _source(repo)
     held = source.stat()
@@ -646,7 +643,7 @@ def test_source_state_rechecks_the_receipt_after_its_other_witness_reads(repo, b
 
     def read(fd, name):
         text = real_read(fd, name)
-        if active == [wanted] and not fired and name == field and os.path.samestat(os.fstat(fd), held):
+        if active == [wanted] and not fired and name == project_home.CLONE_ID and os.path.samestat(os.fstat(fd), held):
             fired.append(True)
             (source / project_move.MOVE_RECORD).write_text(owner)
         return text
@@ -739,9 +736,8 @@ def _during_selfcheck_tail(monkeypatch, target, boundary, change):
 
 
 @pytest.mark.usefixtures("current_binding")
-@pytest.mark.parametrize("boundary", ["config.json"], ids=["settings"])
 @pytest.mark.parametrize("witness", ["target-proof", "source-receipt", "source-id", "source-preparation"])
-def test_selfcheck_keeps_original_authority_through_its_remaining_reads(repo, boot, monkeypatch, boundary, witness):
+def test_selfcheck_keeps_original_authority_through_its_remaining_reads(repo, boot, monkeypatch, witness):
     target = _finished_move(repo, boot)
     source = _source(repo)
     pid = registry.clone_id(source)
@@ -761,17 +757,16 @@ def test_selfcheck_keeps_original_authority_through_its_remaining_reads(repo, bo
         path.write_text(text)
         owners.update({source: _snapshot(source), target: _snapshot(target)})
 
-    fired = _during_selfcheck_tail(monkeypatch, target, boundary, change)
+    fired = _during_selfcheck_tail(monkeypatch, target, "config.json", change)
     problems = selfcheck._project(pid, repo)  # noqa: SLF001 - execute the complete per-project selfcheck
 
     assert fired == [True]
-    assert problems, f"selfcheck accepted {witness} changed during its {boundary} read"
+    assert problems, f"selfcheck accepted {witness} changed during its settings read"
     assert {path: _snapshot(path) for path in owners} == owners
 
 
 @pytest.mark.usefixtures("current_binding")
-@pytest.mark.parametrize("boundary", ["config.json"], ids=["settings"])
-def test_selfcheck_tail_keeps_legitimate_atomic_active_payload_writes(repo, boot, monkeypatch, boundary):
+def test_selfcheck_tail_keeps_legitimate_atomic_active_payload_writes(repo, boot, monkeypatch):
     target = _finished_move(repo, boot)
     source = _source(repo)
     pid = registry.clone_id(source)
@@ -783,7 +778,7 @@ def test_selfcheck_tail_keeps_legitimate_atomic_active_payload_writes(repo, boot
         temporary.write_text(edited)
         temporary.replace(target / "config.json")
 
-    fired = _during_selfcheck_tail(monkeypatch, target, boundary, change)
+    fired = _during_selfcheck_tail(monkeypatch, target, "config.json", change)
     assert selfcheck._project(pid, repo) == []  # noqa: SLF001
     assert fired == [True]
     assert (target / "config.json").read_text() == edited

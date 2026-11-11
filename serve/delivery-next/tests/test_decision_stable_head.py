@@ -109,6 +109,7 @@ class OwnerMove:
             with monkeypatch.context() as scoped:
                 scoped.setattr(DataRepo, "git", forwarding)
                 return real(shared, *args)
+
         return observed
 
     def _move(self, shared: DataRepo, head: str) -> None:
@@ -148,9 +149,7 @@ def lost_ack(monkeypatch) -> Iterator[dict[str, list]]:
 
 
 @pytest.mark.parametrize("moved", [False, True], ids=["healthy", "owner-head-move"])
-def test_save_landing_requires_one_stable_commit(
-    shared_repo, tmp_path, owner_move, moved
-) -> None:
+def test_save_landing_requires_one_stable_commit(shared_repo, tmp_path, owner_move, moved) -> None:
     root, remote = shared_repo
     pre = owner_commit(root, "owner words\n")
     shared = DataRepo(inside_tmp(root, tmp_path))
@@ -207,9 +206,7 @@ def test_save_landing_requires_one_stable_commit(
 
 
 @pytest.mark.parametrize("moved", [False, True], ids=["healthy", "owner-head-move"])
-def test_committed_finish_requires_one_stable_commit(
-    shared_repo, tmp_path, lost_ack, owner_move, moved
-) -> None:
+def test_committed_finish_requires_one_stable_commit(shared_repo, tmp_path, lost_ack, owner_move, moved) -> None:
     root, remote = shared_repo
     pre = owner_commit(root, "owner words\n")
     shared = DataRepo(inside_tmp(root, tmp_path))
@@ -307,9 +304,8 @@ def conflicting_replacement(readable, shared_repo, tmp_path) -> tuple[DataRepo, 
     return shared, old, successor
 
 
-@pytest.mark.parametrize("reader", [decision_store.load], ids=["load"])
 def test_a_conflicting_ordinary_pull_makes_both_readers_unavailable_without_changing_git(
-    conflicting_replacement, reader
+    conflicting_replacement,
 ) -> None:
     shared, old, successor = conflicting_replacement
     assert "rebase is in progress" in shared.pull()
@@ -325,7 +321,7 @@ def test_a_conflicting_ordinary_pull_makes_both_readers_unavailable_without_chan
     before = checkout_state(shared)
 
     with pytest.raises(DecisionsUnavailable, match="rebase") as raised:
-        reader(shared, PROJECT)
+        decision_store.load(shared, PROJECT)
 
     assert raised.value.action == decision_store.REPAIR
     assert checkout_state(shared) == before
