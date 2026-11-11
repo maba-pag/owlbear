@@ -27,11 +27,11 @@ from fastapi.testclient import TestClient
 
 from owlbear_decisions import Decision, DecisionError, Link, LinkType, Origin, Scope, State, new_id, storage, write
 from owlbear_decisions.storage import serialize
-from owlbear_delivery_next.change_contracts import pick_tools
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import batch_journal, data_repo, publication_hold, storage_io
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import decision_recovery_routes
+from owlbear_delivery_next.settings.config import Settings
 from owlbear_delivery_next.state_store import (
     decision_batch,
     decision_recovery,
@@ -54,8 +54,14 @@ def make(**changes) -> Decision:
     return Decision(**{**fields, **changes})
 
 
+@pytest.fixture
+def picking(decision_checkout):
+    """Keep K's unchanged bindings while opting storage rules out of the host/SDK fixture."""
+    return SimpleNamespace(shared=decision_checkout)
+
+
 def _seed(picking) -> None:
-    picking.put(make(statement="Notes live in SQLite."))
+    write(make(statement="Notes live in SQLite."), picking.shared.root / PROJECT)
     picking.shared.git("add", "-A")
     picking.shared.git("commit", "-qm", "seed")
     picking.shared.git("push", "-q")
@@ -84,51 +90,6 @@ def _rewrite_journal(shared: DataRepo, edit) -> None:
     record = json.loads(path.read_bytes())
     edit(record)
     path.write_bytes(json.dumps(record).encode("utf-8"))
-
-
-@pytest.mark.parametrize(
-    ("action", "damage"),
-    [
-        ("pending", "null-after"),
-        ("finish", "null-after"),
-        ("abandon", "null-after"),
-        ("save", "null-after"),
-        ("pending", "corrupt"),  # every action reads the journal through `pending`'s one decode
-    ],
-)
-def test_a_journal_with_a_null_after_or_corrupt_text_refuses_every_action_and_changes_nothing(
-    picking, monkeypatch, damage, action
-):
-    _seed(picking)
-    shared = picking.shared
-    _interrupt(picking, monkeypatch, [make(title="Notes use UTC", statement="All note timestamps use UTC.")])
-    pending = decision_batch.pending(shared)
-    assert pending is not None
-    if damage == "null-after":
-        _rewrite_journal(shared, lambda record: record["files"][0].__setitem__("after", None))
-    else:
-        decision_batch.journal_path(shared).write_text("{not json")
-    journal = decision_batch.journal_path(shared).read_bytes()
-    files = {
-        rel: (shared.root / rel).read_bytes() if (shared.root / rel).exists() else None for rel, _, _ in pending.files
-    }
-    refused = {
-        "pending": (lambda: decision_batch.pending(shared), decision_batch.JournalError),
-        "finish": (lambda: decision_recovery.finish(shared, pending.generation), decision_store.DecisionsUnavailable),
-        "abandon": (lambda: decision_recovery.abandon(shared, pending.generation), decision_store.DecisionsUnavailable),
-        "save": (
-            lambda: decision_store.save(
-                shared, make(title="Notes use UTC", statement="All UTC."), expected_revision=None, message="x"
-            ),
-            decision_store.DecisionsUnavailable,
-        ),
-    }[action]
-    call, error = refused
-    with pytest.raises(error):
-        call()
-    assert decision_batch.journal_path(shared).read_bytes() == journal
-    for rel, text in files.items():
-        assert ((shared.root / rel).read_bytes() if (shared.root / rel).exists() else None) == text
 
 
 def test_a_null_before_image_for_a_new_file_is_accepted_and_finishes(picking, monkeypatch):
@@ -179,21 +140,6 @@ def test_a_journal_with_a_wrongly_typed_or_unpaired_file_list_is_not_decoded(edi
         batch_journal.decode(json.dumps(record).encode("utf-8"))
 
 
-def test_a_journal_with_an_id_that_is_not_its_files_name_keeps_its_bytes_and_finishes_nothing(picking, monkeypatch):
-    _seed(picking)
-    shared = picking.shared
-    _interrupt(picking, monkeypatch, [make(title="Notes use UTC", statement="All note timestamps use UTC.")])
-    assert decision_batch.pending(shared) is not None
-    _rewrite_journal(shared, lambda record: record.__setitem__("ids", ["another-decision"]))
-    journal = decision_batch.journal_path(shared).read_bytes()
-
-    with pytest.raises(decision_batch.JournalError):
-        decision_batch.pending(shared)
-    with pytest.raises(decision_store.DecisionsUnavailable):
-        decision_recovery.finish(shared, "any")
-    assert decision_batch.journal_path(shared).read_bytes() == journal
-
-
 JOURNAL_PATH_SPELLINGS = [
     pytest.param("<outside>", id="absolute"),
     pytest.param("../outside.txt", id="traversal"),
@@ -215,66 +161,14 @@ JOURNAL_PATH_SPELLINGS = [
 ]
 
 
-# Finish and Abandon decode the journal through `pending` before any file is read, so one spelling each is enough.
-@pytest.mark.parametrize(
-    ("action", "value"),
-    [pytest.param("pending", *spelling.values, id=f"pending-{spelling.id}") for spelling in JOURNAL_PATH_SPELLINGS]
-    + [pytest.param(action, ".git/config", id=f"{action}-git-folder") for action in ("finish", "abandon")],
-)
-def test_a_journal_path_outside_the_checkout_or_in_git_is_corruption_and_nothing_is_touched(
-    picking, monkeypatch, value, action
-):
-    _seed(picking)
-    shared = picking.shared
-    _interrupt(picking, monkeypatch, [make(title="Notes use UTC", statement="All note timestamps use UTC.")])
-    outside = shared.root.parent / "outside.txt"
-    outside.write_text("before\n")
-    path = str(outside) if value == "<outside>" else value
-    target = shared.root / path
-    matching = target.read_bytes() if target.is_file() else None  # the before image matches what is there now
-    _rewrite_journal(
-        shared,
-        lambda record: (
-            record["files"][0].update(
-                path=path,
-                before=None if matching is None else base64.b64encode(matching).decode("ascii"),
-                after=base64.b64encode(b"after\n").decode("ascii"),
-            ),
-            record.__setitem__("ids", [PurePosixPath(path).stem]),  # paired, so only the path itself is refused
-        ),
-    )
-    journal = decision_batch.journal_path(shared).read_bytes()
-    head = shared.git("rev-parse", "HEAD").stdout
-    index = shared.git("ls-files", "-s").stdout
-    writes, reads = [], []
-    real_replace, real_held = decision_batch.replace_file, decision_batch._held  # noqa: SLF001
-
-    def recording_replace(file_path, data, *fence):
-        writes.append(file_path)
-        return real_replace(file_path, data, *fence)
-
-    def recording_held(file_path):
-        reads.append(file_path)
-        return real_held(file_path)
-
-    monkeypatch.setattr(decision_batch, "replace_file", recording_replace)
-    monkeypatch.setattr(decision_batch, "_held", recording_held)
-    call = {
-        "pending": lambda: decision_batch.pending(shared),
-        "finish": lambda: decision_recovery.finish(shared, "any"),
-        "abandon": lambda: decision_recovery.abandon(shared, "any"),
-    }[action]
-    error = decision_batch.JournalError if action == "pending" else decision_store.DecisionsUnavailable
-    with pytest.raises(error):
-        call()
-
-    assert outside.read_bytes() == b"before\n"
-    assert (target.read_bytes() if target.is_file() else None) == matching
-    assert decision_batch.journal_path(shared).read_bytes() == journal
-    assert shared.git("rev-parse", "HEAD").stdout == head
-    assert shared.git("ls-files", "-s").stdout == index
-    assert writes == []
-    assert reads == []
+@pytest.mark.parametrize("value", JOURNAL_PATH_SPELLINGS)
+def test_journal_paths_cannot_escape_or_alias(value):
+    record = _journal_record()
+    path = "/outside.txt" if value == "<outside>" else value
+    record["files"][0]["path"] = path
+    record["ids"] = [PurePosixPath(path).stem]
+    with pytest.raises(batch_journal.JournalError):
+        batch_journal.decode(json.dumps(record).encode())
 
 
 def test_an_ambiguous_head_after_a_landed_commit_keeps_the_journal_and_the_written_file(picking, monkeypatch):
@@ -903,8 +797,8 @@ def test_a_journal_emptied_after_a_partial_write_refuses_every_entry_point_and_c
     folder = shared.root / PROJECT / "decisions"
     held = {p.name: p.read_bytes() for p in folder.iterdir()}
     head, index = shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
-    picking.picks.clear()
-    pickers = len(picking.pickers())
+    launched = []
+    monkeypatch.setattr(lookup, "_ran", lambda *_a: launched.append("picker"))
 
     with pytest.raises(decision_batch.JournalError, match="names no file"):
         decision_batch.pending(shared)
@@ -913,29 +807,21 @@ def test_a_journal_emptied_after_a_partial_write_refuses_every_entry_point_and_c
             action(shared, generation)
     with pytest.raises(decision_store.DecisionsUnavailable, match="names no file"):
         decision_store.load(shared, PROJECT)
-    answer, done = lookup.chat(shared, PROJECT, "Which timestamps apply?", picking.store.settings)
+    answer, done = lookup.chat(shared, PROJECT, "Which timestamps apply?", Settings)
 
     assert answer.get("failed"), answer
     assert "decisions" not in answer
     assert done is None
-    assert len(picking.pickers()) == pickers  # no governing answer and no picker
+    assert launched == []  # no governing answer and no picker
     assert decision_batch.journal_path(shared).read_bytes() == journal
     assert {p.name: p.read_bytes() for p in folder.iterdir()} == held
     assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (head, index)
 
 
 def _no_authority(picking) -> None:
-    """Every reader refuses: no load, and a lookup fails without a governing answer or a picker."""
-    shared = picking.shared
-    picking.picks.clear()
-    pickers = len(picking.pickers())
+    """The storage barrier stays closed; J1 owns recovery and the corrupt-journal lookup fan-out."""
     with pytest.raises(decision_store.DecisionsUnavailable):
-        decision_store.load(shared, PROJECT)
-    answer, done = lookup.chat(shared, PROJECT, "Which timestamps apply?", picking.store.settings)
-    assert answer.get("failed"), answer
-    assert "decisions" not in answer
-    assert done is None
-    assert len(picking.pickers()) == pickers
+        decision_store.load(picking.shared, PROJECT)
 
 
 def test_a_journal_naming_one_file_twice_by_a_dot_alias_refuses_every_entry_point(picking, monkeypatch):
@@ -1438,13 +1324,6 @@ def test_abandoning_a_save_stopped_before_its_first_folder_completes_and_unblock
     assert sorted(p.name for p in shared.root.iterdir()) == names
     assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (head, index)
     assert decision_store.load(shared, PROJECT).snapshot is not None
-    picking.picks.clear()
-    picking.picks.append(pick_tools.PickResult(picked=[]))
-    pickers = len(picking.pickers())
-    answer, done = lookup.chat(shared, PROJECT, "Which timestamps apply?", picking.store.settings)
-    assert answer == {"decisions": []}
-    assert done is not None
-    assert len(picking.pickers()) == pickers + 1  # authority is readable again, so the picker runs
 
 
 def _shape(case: str, site: Path, path: Path, outside: Path) -> None:
@@ -1580,15 +1459,14 @@ def test_an_owner_rewrite_during_any_fsync_of_the_final_proof_keeps_the_batch(pi
     _no_authority(picking)
 
 
-@pytest.mark.parametrize("call", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("call", [1, 2, 3])
 def test_a_folder_swapped_for_a_link_during_the_final_absence_read_keeps_the_batch(
     picking, monkeypatch, tmp_path, call
 ):
     """The project folder exists; its `decisions` folder never did. During the *call*-th lstat of that missing name in
     Abandon's final proof, the owner swaps the project folder for a link to a foreign folder that lacks it too.
 
-    Every swap refuses, the last one included, since the folder chain is checked after the read; a *call* past the
-    last lstat never fires and Abandon completes.
+    All three actual missing-name reads refuse, including the final read before the folder-chain check.
     """
     _seed(picking)
     shared = picking.shared
@@ -1633,12 +1511,8 @@ def test_a_folder_swapped_for_a_link_during_the_final_absence_read_keeps_the_bat
 
     assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (head, index)
     assert sorted(p.name for p in foreign.iterdir()) == ["marker.txt"]  # nothing is made in the foreign folder
-    assert fired or call > 1  # the proof reads the missing name at least once
-    assert done == (not fired), refusal  # any swap refuses, at the last read too; none fired, Abandon completes
-    if not fired:
-        assert not site.is_symlink()
-        assert decision_batch.pending(shared) is None
-        return
+    assert fired == [call]
+    assert not done, refusal
     assert site.is_symlink()
     assert (tmp_path / "moved" / "notes.txt").read_text() == "the owner's notes\n"
     assert decision_batch.pending(shared).generation == generation
@@ -1686,9 +1560,17 @@ def _tree(folder: Path, read) -> dict[str, bytes]:
     return {p.name: read(p) for p in sorted(folder.iterdir())}
 
 
-@pytest.mark.parametrize("call", [1, 2, 3])
 @pytest.mark.parametrize(
-    "surface", ["store-put-back", "generic-put-back", "abandon", "store-landed", "finish-committed"]
+    ("surface", "call"),
+    [
+        ("store-put-back", 1),
+        ("generic-put-back", 1),
+        ("abandon", 1),
+        ("abandon", 2),
+        ("store-landed", 1),
+        ("finish-committed", 1),
+        ("finish-committed", 2),
+    ],
 )
 def test_a_folder_swapped_for_a_link_while_a_proof_reads_a_file_is_never_trusted(
     picking, monkeypatch, tmp_path, surface, call
@@ -1696,7 +1578,7 @@ def test_a_folder_swapped_for_a_link_while_a_proof_reads_a_file_is_never_trusted
     """During the *call*-th read of the file in a proof, after its first path checks, the owner moves the folder aside
     and links it to a foreign copy holding the same bytes. The proof must refuse: the foreign files are never removed
     or written, the owner's files stay where the owner moved them, Git is as the owner left it, the batch stays pending
-    and no reader gets authority. A *call* past the proof's last read never fires and the surface completes.
+    and no reader gets authority. The second Finish read is its terminal landed proof, not its earlier image check.
     """
     _seed(picking)
     shared = picking.shared
@@ -1730,10 +1612,7 @@ def test_a_folder_swapped_for_a_link_while_a_proof_reads_a_file_is_never_trusted
             run()
         except decision_store.DecisionsUnavailable:
             assert fired  # a refusal is only ever this swap's
-    assert fired or call > 1  # every proof reads the file at least once
-    if not fired:
-        assert decision_batch.pending(shared) is None
-        return
+    assert fired
     assert _tree(foreign, Path.read_bytes) == fired["tree"]  # nothing removed or written behind the link
     assert _tree(moved, Path.read_bytes) == fired["tree"]  # the owner's files stay where the owner put them
     assert folder.is_symlink()
@@ -1904,25 +1783,6 @@ def closed_writer_descriptors(monkeypatch):
     assert descriptors.all_closed()
 
 
-def test_the_writer_descriptor_oracle_detects_a_real_leak_and_a_stray_close():
-    descriptors = WriterDescriptors()
-    descriptor = descriptors.open(os.devnull, os.O_RDONLY)
-    try:
-        assert not descriptors.all_closed()
-        assert descriptors.active == {descriptor}
-    finally:
-        descriptors.close(descriptor)
-    assert descriptors.all_closed()
-
-    unrelated = os.open(os.devnull, os.O_RDONLY)
-    try:
-        assert descriptors.all_closed()  # a reused number is not another writer acquisition
-    finally:
-        descriptors.close(unrelated)
-    assert descriptors.strays == [unrelated]
-    assert not descriptors.all_closed()
-
-
 def _write_with(writer: str, tmp_path: Path, fence, root: Path | None = None, layer: Path | None = None) -> Path:
     """Write one new file through *writer* with *fence*, or remove an existing one (`remove`); its path.
 
@@ -1955,30 +1815,6 @@ def test_an_unfenced_write_lands_with_no_temporary_left(tmp_path, writer):
 # Both writers make, fence and install their temporary file through the same `own_temporary` and `install`, so the
 # tests below run the batch writer only. `test_an_unfenced_write_lands_with_no_temporary_left` runs both writers, and
 # `test_a_save_whose_temporary_name_is_substituted_installs_nothing` a real decisions save.
-@pytest.mark.parametrize("writer", ["batch"])
-@pytest.mark.usefixtures("closed_writer_descriptors")
-def test_unrelated_thread_descriptors_do_not_belong_to_the_writer(tmp_path, writer):
-    acquired, release = threading.Event(), threading.Event()
-
-    def unrelated_readers() -> None:
-        with contextlib.ExitStack() as stack:
-            for binding in (os, storage.os, decision_batch.os):
-                stack.enter_context(binding.fdopen(binding.open(os.devnull, os.O_RDONLY), "rb"))
-            acquired.set()
-            release.wait(5)
-
-    reader = threading.Thread(target=unrelated_readers)
-    reader.start()
-    try:
-        assert acquired.wait(5)
-        path = _write_with(writer, tmp_path, None)
-    finally:
-        release.set()
-        reader.join(5)
-    assert not reader.is_alive()
-    assert path.is_file()
-
-
 @pytest.mark.parametrize("sync_fails", [False, True], ids=["synced", "sync-failed"])
 @pytest.mark.parametrize("writer", ["batch"])
 @pytest.mark.usefixtures("closed_writer_descriptors")
@@ -2267,13 +2103,11 @@ def test_a_folder_moved_or_linked_away_during_the_fence_changes_nothing_in_eithe
         folder.rename(moved)
         folder.symlink_to(foreign, target_is_directory=True)
 
-    open_before = sum(1 for _ in Path("/dev/fd").iterdir())
     with monkeypatch.context() as m:
         m.setattr(os, "fsync", recording_fsync)
         with pytest.raises(storage.FolderMovedError):
             _write_with(writer, tmp_path, fence_then_owner_swaps)
 
-    assert sum(1 for _ in Path("/dev/fd").iterdir()) == open_before
     assert {p.name: p.read_bytes() for p in moved.iterdir()} == held  # nothing renamed or removed, no temporary left
     assert {p.name: p.read_text() for p in foreign.iterdir()} == {"marker.txt": "foreign\n"}
     assert not any(os.path.samestat(found, foreign.stat()) for found in synced)

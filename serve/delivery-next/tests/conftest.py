@@ -698,6 +698,14 @@ def shared_repo(tmp_path: Path, _shared_template: Path) -> tuple[Path, Path]:
     return tmp_path / "owlbear-data", tmp_path / "remote.git"
 
 
+@pytest.fixture
+def decision_checkout(shared_repo) -> DataRepo:
+    """An isolated data-only checkout for storage rules, without a target, host or SDK."""
+    shared = DataRepo(shared_repo[0])
+    shared.claim("shop-site", "github.com/acme/shop-site")
+    return shared
+
+
 @pytest.fixture(scope="session")
 def _seeded() -> dict[str, Path]:
     return {}
