@@ -138,12 +138,9 @@ def _nowhere(tool: str, said: str, enclosing: StepKind, subject: str) -> StepRes
     A brief challenge's step back becomes its round's finding (``steps.brief_round``); the brief changes in chat.
     """
     reason = f"needs {said}, which no runtime here provides"
-    back = {
-        StepKind.SHAPE: StepKind.SHAPE,
-    }
     cause = cause_key(ErrorKind.SCOPE, enclosing, subject)
     if enclosing in {StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW}:
         return setup(cause, f"the {enclosing} {reason}")
-    if to := back.get(enclosing):
-        return StepResult(exit=Exit.BACK, back_to=to, cause=cause, reason=reason, operational=True)
+    if enclosing == StepKind.SHAPE:
+        return StepResult(exit=Exit.BACK, back_to=StepKind.SHAPE, cause=cause, reason=reason, operational=True)
     return _ask(enclosing, f"The step {reason}.", cause, [*_without(enclosing, tool), PAUSE])
