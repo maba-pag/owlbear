@@ -259,11 +259,30 @@ export function layerValue(layer, path) {
   return at(built[layer].value, path) ?? null;
 }
 
+const IDENTITY = ["model", "effort", "context"];
+
+// D-01M6SY11CY5SN5ZKYJNM0K6BDM: whether the repairer's model, effort and context are unset at every layer, the edited
+// layer's unsaved edits applied, so that all three are the builder's (config.py's _repairer). The edited layer's own
+// *cleared* field counts as unset: what clearing it would give.
+export function followsBuilder(cleared) {
+  return IDENTITY.every((field) => ["project", "machine", "global"].every((layer) => {
+    const path = `agents.repairer.${field}`;
+    if (layer !== state.layer) return (at(state.loaded[layer], path) ?? null) === null;
+    return field === cleared || layerValue(layer, path) === null;
+  }));
+}
+
 // What *path* resolves to once the edited layer's unsaved edits are saved, as { value, from }; null while they leave
-// it as saved. The final review's values fall back to the builder's, as the server resolves them.
+// it as saved. The final review's values and the repairer's model, effort and context fall back to the builder's, as
+// the server resolves them.
 export function preview(path) {
   const layer = state.layer, saved = state.loaded[layer];
   const moved = (p) => JSON.stringify(layerValue(layer, p)) !== JSON.stringify(at(saved, p) ?? null);
+  const [head, role, field] = path.split(".");
+  if (head === "agents" && role === "repairer" && IDENTITY.includes(field)) {
+    if (!IDENTITY.some((f) => moved(`agents.repairer.${f}`) || moved(`agents.builder.${f}`))) return null;
+    return (followsBuilder() ? walk(`agents.builder.${field}`, "builder") : walk(path)) ?? { value: null };
+  }
   const builder = path.startsWith("final_review.") ? `agents.builder.${path.slice("final_review.".length)}` : null;
   if (!moved(path) && !(builder && moved(builder))) return null;
   return walk(path) ?? (builder && walk(builder, "builder")) ?? { value: null };

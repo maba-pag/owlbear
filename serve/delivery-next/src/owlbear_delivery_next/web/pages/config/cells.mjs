@@ -2,7 +2,7 @@ import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
 import { EFFORTS, INHERIT, SOURCES, state, shown } from "./state.mjs";
-import { own, inherited, edit, layerValue, preview, drafted } from "./layers.mjs";
+import { own, inherited, edit, layerValue, preview, drafted, followsBuilder } from "./layers.mjs";
 import { levels, arrows } from "./cost.mjs";
 import { at } from "./sections.mjs";
 import { PLAIN_NAMES, PREF_NAMES, USER_NAMES } from "./names.mjs";
@@ -24,6 +24,8 @@ function unsetWarning(key) {
   const text = key === "curator_threshold" || key.startsWith("memory.")
     ? "Unset: no machine or project can set it, so it stays unset"
     : key.startsWith("final_review.") ? "Unset: it then takes the builder's value"
+      : /^agents\.repairer\.(model|effort|context)$/.test(key) && followsBuilder()
+        ? "Unset: it then takes the builder's model, effort and context, while all three stay unset"
       : "Unset: every machine or project must then set its own";
   return html`<p-text size="sm" color="warning">${text}</p-text>`;
 }
@@ -94,13 +96,7 @@ export function table(caption, heads, body, rows, { id, hidden = false } = {}) {
 function choose(label, options, value, chosen, { key, disabled = false, filter = false, wrong } = {}) {
   const changed = (e) => {
     chosen(e.target.value);
-    if (!e.currentTarget.isConnected) {
-      const next = document.querySelector(`p-select[label="${CSS.escape(label)}"]`);
-      const focused = document.activeElement;
-      Promise.resolve(next?.componentOnReady?.()).then(() => {
-        if (next?.isConnected && document.activeElement === focused) next.focus({ preventScroll: true });
-      });
-    }
+    handOff(e, label);
   };
   const items = options.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`);
   const checked = wrong === undefined ? nothing : wrong ? "error" : "none";
@@ -109,6 +105,16 @@ function choose(label, options, value, chosen, { key, disabled = false, filter =
     () => html`<p-select label=${label} hide-label="true" data-key=${key ?? nothing}
       filter=${filter ? "true" : nothing} state=${checked} message=${wrong || nothing} ?disabled=${disabled}
       .value=${live(value)} @change=${changed}>${items}</p-select>`);
+}
+
+// When a choice replaced its own control, the focus moves to the control that took its place under the same *label*.
+function handOff(e, label) {
+  if (e.currentTarget.isConnected) return;
+  const next = document.querySelector(`[label="${CSS.escape(label)}"]`);
+  const focused = document.activeElement;
+  Promise.resolve(next?.componentOnReady?.()).then(() => {
+    if (next?.isConnected && document.activeElement === focused) next.focus({ preventScroll: true });
+  });
 }
 
 function typed(label, value, onInput, { key, placeholder, inputmode, disabled = false } = {}) {
@@ -321,9 +327,18 @@ export function subagentsCell(role) {
   source(`agents.${key}`, state.loaded.settings.agents[role].subagents));
 }
 
+// What a blank model, effort or context of *role* gives in the edited layer. The repairer's are the builder's as
+// edited while all three of its own are unset; once one is set, an inherited builder value no longer applies
+// (D-01M6SY11CY5SN5ZKYJNM0K6BDM).
+function below(role, field) {
+  if (role !== "repairer") return inherited().agents[role][field];
+  if (followsBuilder(field)) return own(`builder.${field}`).trim() || inherited().agents.builder[field];
+  return inherited().sources[`agents.repairer.${field}`] === "builder" ? null : inherited().agents.repairer[field];
+}
+
 // The model a role runs with in the edited layer: its own draft or saved value, else what it inherits.
 function modelOf(role) {
-  return own(`${role}.model`).trim() || inherited().agents[role].model;
+  return own(`${role}.model`).trim() || below(role, "model");
 }
 
 function offeredModel(role) {
@@ -333,13 +348,13 @@ function offeredModel(role) {
 // Why the role's effort, its own or inherited, cannot run with its model; empty when it can or nothing is known.
 export function mismatch(role) {
   const model = offeredModel(role), mine = own(`${role}.effort`);
-  const effort = mine || inherited().agents[role].effort;
+  const effort = mine || below(role, "effort");
   if (!effort || !model || !model.efforts.length || model.efforts.includes(effort)) return "";  // unset: listed
   return `${model.id} does not offer effort ${effort}${mine ? "" : " (inherited)"}; choose one it offers`;
 }
 
 function tierOf(role) {
-  return own(`${role}.context`) || inherited().agents[role].context;
+  return own(`${role}.context`) || below(role, "context");
 }
 
 // Why the role's context tier cannot run with its model; empty when it can or nothing is known.
@@ -357,7 +372,8 @@ export function contextCell(role) {
     const items = [["default", model.context, low], ["long", model.long.context, high]].map(([v, size, level]) => [
       v, `${tokens(size)}${arrows(level)}`, `${tokens(size)}, ${v} context${level ? ", higher rates per token" : ""}`]);
     control = html`<p-segmented-control label=${label} hide-label="true" compact="true" columns="2" data-key=${key}
-      ?disabled=${state.saving} .value=${live(tierOf(role))} @change=${(e) => edit(key, e.target.value)}>
+      ?disabled=${state.saving} .value=${live(tierOf(role))}
+      @change=${(e) => { edit(key, e.target.value); handOff(e, label); }}>
       ${items.map(([v, said, aria]) => html`<p-segmented-control-item value=${v}
         aria=${`{ 'aria-label': '${aria}' }`}>${said}</p-segmented-control-item>`)}</p-segmented-control>`;
   } else if (model) {
@@ -366,8 +382,7 @@ export function contextCell(role) {
       <p-text size="xs" color="error">${wrong}</p-text>${pure("Use the default tier", () => edit(key, "default"))}`
       : nothing}`;  // the default tier fills an unset one and overrides an inherited long one
   } else {
-    const below = inherited().agents[role].context;
-    control = choose(label, [[INHERIT, clear(below)], ["default", "default"], ["long", "long"]],
+    control = choose(label, [[INHERIT, clear(below(role, "context"))], ["default", "default"], ["long", "long"]],
       mine || INHERIT, (v) => edit(key, v), { key, disabled: state.saving });
   }
   const reset = model && mine
@@ -388,19 +403,19 @@ function ratesNote(role) {
   const write = rates.cache_write ? ` \u00b7 cache\u00a0write\u00a0${amount(rates.cache_write)}` : "";
   const flow = `in\u00a0${amount(rates.input)} \u00b7 out\u00a0${amount(rates.output)}`;
   const line = `${flow} \u00b7 cache\u00a0${rates.cache == null ? "not known" : amount(rates.cache)}${write}`;
-  const effort = own(`${role}.effort`) || inherited().agents[role].effort;
+  const effort = own(`${role}.effort`) || below(role, "effort");
   return html`<p-text size="xs">AI credits per 1M tokens: ${line}</p-text><p-text size="xs"
     color="contrast-medium">effort\u00a0${said(effort)}: same rates at every effort</p-text>`;
 }
 
 export function editable(role, field) {
-  const key = `${role}.${field}`, below = inherited().agents[role][field], value = own(key);
+  const key = `${role}.${field}`, blank = below(role, field), value = own(key);
   const label = `${field === "model" ? "Model" : "Effort"} for ${role}`, model = offeredModel(role);
   const set = (v) => edit(key, v), common = { key, disabled: state.saving };
   let control, note = nothing;
   if (field === "effort") {
     const efforts = model?.efforts.length ? model.efforts : EFFORTS;  // a model without efforts ignores the value
-    const options = [[INHERIT, clear(below)],
+    const options = [[INHERIT, clear(blank)],
       ...efforts.map((e) => [e, e === model?.default_effort ? `${e} (model default)` : e])];
     if (value && !efforts.includes(value)) {
       options.push([value, `${value} (not offered by ${model?.id ?? "this model"})`]);
@@ -411,7 +426,7 @@ export function editable(role, field) {
         this one</p-text>`;
     }
   } else if (state.offered?.length) {
-    const options = [[INHERIT, clear(below)], ...state.offered.map((m) => {
+    const options = [[INHERIT, clear(blank)], ...state.offered.map((m) => {
       const long = m.long ? ` / ${tokens(m.long.context)} long` : "";
       const sizes = m.context ? ` \u00b7 ${tokens(m.context)}${long} context` : "";
       return [m.id, `${m.name} (${m.id})${sizes}`];
@@ -419,7 +434,7 @@ export function editable(role, field) {
     if (value && !state.offered.some((m) => m.id === value)) options.push([value, `${value} (not offered here)`]);
     control = choose(label, options, value || INHERIT, set, { ...common, filter: true });
   } else {
-    control = typed(label, value, set, { ...common, placeholder: clear(below) });
+    control = typed(label, value, set, { ...common, placeholder: clear(blank) });
   }
   return cell(control, note, source(`agents.${key}`, state.loaded.settings.agents[role][field]),
     field === "model" ? ratesNote(role) : nothing);
