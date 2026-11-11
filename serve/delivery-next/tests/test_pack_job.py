@@ -741,7 +741,8 @@ def test_a_reconsideration_needs_the_owners_note_and_a_fresh_challenger_settles_
         assert state["questions"][0]["kind"] == "end"
 
 
-def test_rounds_ending_without_a_pass_wait_and_a_discard_changes_nothing(tmp_path, checkout, clone):
+@pytest.mark.parametrize("option", ["discard", "activate"])
+def test_rounds_ending_without_a_pass_wait_and_a_discard_changes_nothing(tmp_path, checkout, clone, option):
     fakes, store = Fakes(clone, verdict="fix"), Store(tmp_path / "store")
     fakes.edits = [{}, {REVIEW_SKILL: "repaired\n"}]
     before = snapshot(checkout)
@@ -756,12 +757,20 @@ def test_rounds_ending_without_a_pass_wait_and_a_discard_changes_nothing(tmp_pat
     with pytest.raises(pack_job.Busy, match="waits for your answers"):
         job.start()
 
-    state = answered(job, "discard")
+    again = pack_job.Job(store, fakes.live(checkout))
+    assert again.read() == state
+    state = answered(again, option)
 
-    assert (state["state"], state["reason"]) == ("discarded", "discarded by you; nothing changed")
-    assert (state["questions"], snapshot(checkout)) == ([], before)
+    assert state["questions"] == []
+    if option == "activate":
+        assert state["state"] == "passed", state["reason"]
+        assert shown(checkout, PACKAGED) == "repaired\n"
+        assert snapshot(checkout)[:3] == before[:3]
+    else:
+        assert (state["state"], state["reason"]) == ("discarded", "discarded by you; nothing changed")
+        assert snapshot(checkout) == before
+        assert results(state)["commit"] == "not-reached"
     assert not (store.root / "design-pack-updater").exists()
-    assert results(state)["commit"] == "not-reached"
 
 
 def test_activation_publishes_only_the_candidate_the_owner_was_asked_about(tmp_path, checkout, clone):
@@ -1519,19 +1528,6 @@ def test_the_owners_fix_is_fixed_even_if_the_updater_lists_it_as_rejected():
 
     assert pack_rounds.revised(lp, {"F1": "no", "F2": "no"}, "x") == "challenge"
     assert [(f.id, f.state) for f in lp.findings] == [("F1", "fixed"), ("F2", "rejected")]
-
-
-def test_a_waiting_run_survives_a_host_restart_and_goes_on_from_its_answer(tmp_path, checkout, clone):
-    store = Store(tmp_path / "store")
-    fakes = Fakes(clone, verdict="fix")
-    fakes.edits = [{}, {REVIEW_SKILL: "repaired\n"}]
-    waiting = run(pack_job.Job(store, fakes.live(checkout)))
-
-    again = pack_job.Job(store, fakes.live(checkout))
-
-    assert again.read() == waiting
-    assert answered(again, "activate")["state"] == "passed"
-    assert shown(checkout, PACKAGED) == "repaired\n"
 
 
 def test_a_skill_restored_to_its_start_replaces_the_earlier_edit_in_the_candidate(tmp_path, checkout, clone):
