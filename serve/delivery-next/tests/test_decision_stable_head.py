@@ -26,7 +26,6 @@ from owlbear_delivery_next.state_store import (
 from owlbear_delivery_next.state_store.decision_store import DecisionsUnavailable, save
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
     from pathlib import Path
 
 AT = datetime(2026, 10, 21, 9, tzinfo=UTC)
@@ -127,13 +126,12 @@ class OwnerMove:
 
 
 @pytest.fixture
-def owner_move(tmp_path, monkeypatch) -> Iterator[OwnerMove]:
-    with monkeypatch.context() as patched:
-        yield OwnerMove(tmp_path, patched)
+def owner_move(tmp_path, monkeypatch) -> OwnerMove:
+    return OwnerMove(tmp_path, monkeypatch)
 
 
 @pytest.fixture
-def lost_ack(monkeypatch) -> Iterator[dict[str, list]]:
+def lost_ack(monkeypatch) -> dict[str, list]:
     """Publishing lands in Git and on the remote, but the acknowledgement is lost while `lost` is set."""
     real = decision_sync.publish
     switch: dict[str, list] = {"lost": [True], "calls": []}
@@ -143,9 +141,8 @@ def lost_ack(monkeypatch) -> Iterator[dict[str, list]]:
         sent = real(shared, paths, message, until, head)
         return decision_sync.Sent(notice="acknowledgement lost", ambiguous=True) if switch["lost"][0] else sent
 
-    with monkeypatch.context() as patched:
-        patched.setattr(decision_sync, "publish", publish)
-        yield switch
+    monkeypatch.setattr(decision_sync, "publish", publish)
+    return switch
 
 
 @pytest.mark.parametrize("moved", [False, True], ids=["healthy", "owner-head-move"])
