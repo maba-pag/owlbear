@@ -30,8 +30,9 @@ from owlbear_delivery_next.state_store import (
 )
 from owlbear_delivery_next.workflow_steps import lookup
 
-from .test_decision_routes import shared as shared
+from . import test_decision_routes
 
+shared = test_decision_routes.shared
 PROJECT = "shop-site"
 AT = datetime(2026, 10, 21, 9, tzinfo=UTC)
 

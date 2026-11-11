@@ -26,9 +26,10 @@ from owlbear_delivery_next.state_store import decision_archive, decision_store
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.workflow_steps import brief_round, decision_publication, decisions_gate, lookup, pick
 
-from .test_decision_routes import shared as shared
-from .test_decision_routes import store as store
+from . import test_decision_routes
 
+shared = test_decision_routes.shared
+store = test_decision_routes.store
 AT = datetime(2026, 10, 22, 9, tzinfo=UTC)
 PROJECT = "shop-site"
 TEXT = "A note is stored only in the project's own table. " * 6 + "Never keep payment-card numbers."

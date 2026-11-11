@@ -13,14 +13,15 @@ from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.state_store import decision_actions, decision_batch, decision_recovery, decision_store
 from owlbear_delivery_next.state_store.store import Store
 
+from . import test_decision_batch, test_decision_routes
 from .test_decision_batch import _crash, _seed
-from .test_decision_batch import picking as picking
-from .test_decision_routes import shared as shared
 from .test_decisions_page import Host, decisions_page
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+picking = test_decision_batch.picking
+shared = test_decision_routes.shared
 PROJECT = "shop-site"
 
 
