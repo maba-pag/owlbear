@@ -724,32 +724,6 @@ def _unavailable(reason: str, note: str = "NOTE-MARK"):
 
 
 @pytest.mark.parametrize("fails", ["save", "items"])
-def test_a_recovery_that_fails_waits_with_its_whole_reason(picking, monkeypatch, whole_error, fails):
-    approvable(picking, 1, LASTING)
-
-    def crashed(*_args, **_kwargs):
-        raise Crash
-
-    monkeypatch.setattr(decision_store, "save_all", crashed)
-    with pytest.raises(Crash):
-        picking.approve(1)
-    if fails == "save":
-        monkeypatch.setattr(decision_store, "save_all", _unavailable(whole_error))
-        why = f"DecisionsUnavailable: {whole_error}\nNOTE-MARK"
-    else:
-        monkeypatch.setattr(decision_publication.decision_archive, "lasting", _unavailable(whole_error))
-        why = f"DecisionsUnavailable: {whole_error}\nNOTE-MARK"
-    monkeypatch.setattr(runner, "_run", lambda *_a: pytest.fail("no step works before the saves"))
-
-    waiting = stepped(picking, picking.slug)
-
-    reason = f"{decision_publication.UNSAVED}: {why}"
-    assert waiting.outcome.reason == reason
-    (event,) = [e for e in picking.store.events(picking.slug) if e.get("event") == "decisions-unsaved"]
-    assert event["reason"] == reason
-
-
-@pytest.mark.parametrize("fails", ["save", "items"])
 def test_a_day_of_the_same_failed_recovery_asks_though_its_notes_said_different_words(
     picking, monkeypatch, whole_error, fails
 ):
@@ -764,14 +738,24 @@ def test_a_day_of_the_same_failed_recovery_asks_though_its_notes_said_different_
     with pytest.raises(Crash):
         picking.approve(1)
     target = (decision_store, "save_all") if fails == "save" else (decision_publication.decision_archive, "lasting")
-    for at, note in ((AT, "the push was refused"), (AT + EPISODE_ASK, "the fetch was cut off")):
-        monkeypatch.setattr(*target, _unavailable(whole_error, note))
-        with picking.store.lock(picking.slug) as lock:
-            assert decision_publication.resume(picking.store, lock, picking.store.read(picking.slug), at) is None
+    monkeypatch.setattr(*target, _unavailable(whole_error))
+    monkeypatch.setattr(runner, "_run", lambda *_a: pytest.fail("no step works before the saves"))
+    waiting = stepped(picking, picking.slug)
+    reason = f"{decision_publication.UNSAVED}: DecisionsUnavailable: {whole_error}\nNOTE-MARK"
+    assert waiting.outcome.reason == reason
+    (event,) = [e for e in picking.store.events(picking.slug) if e.get("event") == "decisions-unsaved"]
+    assert event["reason"] == reason
+
+    first_at = waiting.outcome.at
+    monkeypatch.setattr(*target, _unavailable(whole_error, "the fetch was cut off"))
+    with picking.store.lock(picking.slug) as lock:
+        assert decision_publication.resume(
+            picking.store, lock, picking.store.read(picking.slug), first_at + EPISODE_ASK
+        ) is None
 
     c = picking.store.read(picking.slug)
     budget = c.budgets.causes[f"network:{c.step.kind}:decisions"]
-    assert (budget.since, budget.attempts, c.outcome.exit) == (AT, 2, Exit.ASK)
+    assert (budget.since, budget.attempts, c.outcome.exit) == (first_at, 2, Exit.ASK)
     reason = f"{decision_publication.UNSAVED}: DecisionsUnavailable: {whole_error}\nthe fetch was cut off"
-    since = f"{AT:%Y-%m-%d %H:%M}"
+    since = f"{first_at:%Y-%m-%d %H:%M}"
     assert loop.open_question(c).text == f"network keeps failing for {c.step.kind} since {since}; last error: {reason}"
