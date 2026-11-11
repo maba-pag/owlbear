@@ -10,6 +10,7 @@ import threading
 import time
 import urllib.error
 import urllib.parse
+import urllib.response
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,20 +20,24 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next.change_contracts import chat_contract
+from owlbear_delivery_next.change_contracts import chat_contract, tools
 from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline
 from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
+from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.commands import chat_client, cli, mcp_server, replay_client, setup
 from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay, pack_run
 from owlbear_delivery_next.improvement import improvement_view
-from owlbear_delivery_next.local_system import codebase, data_place, local_home, maintenance
+from owlbear_delivery_next.local_system import codebase, data_place, local_home, maintenance, processes
 from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.machine_host import app, project, serve
+from owlbear_delivery_next.machine_host import app, curation, project, serve
 from owlbear_delivery_next.machine_host import machine as machine_module
-from owlbear_delivery_next.machine_host.machine import Machine
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.machine_host.machine import UNPROVEN, UNPROVEN_PACK, Machine
+from owlbear_delivery_next.pds_runs import job as pds_job
+from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.host import ENDING, Host, HostRecord, RunnerRecord, running
+from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import decision_store, profile_share, project_home, registry, spotter_test
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
@@ -58,7 +63,8 @@ def machine(monkeypatch):
 
 @pytest.fixture
 def http(machine):
-    return TestClient(app.create(machine), base_url="http://127.0.0.1", headers=AUTH)
+    served = app.create(machine)
+    return TestClient(served, base_url="http://127.0.0.1", headers={"authorization": served.expected.decode()})
 
 
 def add(http, path: Path) -> dict:
@@ -158,30 +164,13 @@ def test_a_failing_asset_read_answers_the_generic_500_even_to_a_caller_with_the_
 
 def test_the_chat_server_calls_its_projects_api_on_the_machine_host(tmp_path, http, monkeypatch):
     p = add(http, clone(tmp_path / "a"))
-    sent = []
-
-    class Answer(io.BytesIO):
-        status = 200
-
-    class Opener:
-        def open(self, request, **_kw):
-            sent.append((request.full_url, request.headers.get("X-owlbear-chat")))
-            if request.full_url.endswith("/chat/contract"):
-                return Answer(f'{{"supported": [{chat_contract.CHAT}]}}'.encode())
-            raise OSError
-
-    monkeypatch.setattr(chat_client, "_LOCAL", Opener())
+    loopback = Loopback(http)
+    monkeypatch.setattr(chat_client, "_LOCAL", loopback)
     chat = chat_client.workspace(Path(p["path"]))
-    chat.call("GET", "/changes")
+    assert chat.call("GET", "/changes") == (200, [])
     spoken = str(chat_contract.CHAT)
-    assert sent == [("http://127.0.0.1:9/api/next/chat/contract", spoken),
+    assert loopback.sent == [("http://127.0.0.1:9/api/next/chat/contract", spoken),
                     (f"http://127.0.0.1:9/p/{p['id']}/api/next/changes", spoken)]  # fmt: skip
-
-
-class Answer(io.BytesIO):
-    def __init__(self, data: bytes, status: int) -> None:
-        super().__init__(data)
-        self.status = status
 
 
 class Loopback:
@@ -189,15 +178,17 @@ class Loopback:
 
     def __init__(self, http: TestClient, replied=lambda *_a: None) -> None:
         self.http, self.replied = http, replied
+        self.sent = []
 
     def open(self, request, **_kw):
+        self.sent.append((request.full_url, request.headers.get("X-owlbear-chat")))
         url = urllib.parse.urlsplit(request.full_url)
         r = self.http.request(request.get_method(), f"{url.path}?{url.query}", content=request.data,
                               headers=dict(request.header_items()))  # fmt: skip
         if r.status_code >= 400:
             raise urllib.error.HTTPError(request.full_url, r.status_code, "", r.headers, io.BytesIO(r.content))
         self.replied(request.get_method(), url.path, r.json())
-        return Answer(r.content, r.status_code)
+        return urllib.response.addinfourl(io.BytesIO(r.content), r.headers, request.full_url, r.status_code)
 
 
 def chat_tool(name: str, **args: object) -> dict:
@@ -447,21 +438,6 @@ def test_an_unreadable_pack_record_of_an_unloaded_project_is_held_not_taken_for_
     assert machine.slots.take(good.id, "probe", 1, 1) == 0
 
 
-class _LoopbackToApp:
-    """The CLI's local transport, answered by the machine app's own handler instead of a socket."""
-
-    def __init__(self, client: TestClient) -> None:
-        self.client = client
-
-    def open(self, request, timeout):  # noqa: ARG002 - urllib's opener signature
-        out = self.client.post(urllib.parse.urlsplit(request.full_url).path)
-        if out.status_code >= 400:
-            raise urllib.error.HTTPError(
-                request.full_url, out.status_code, out.reason_phrase, out.headers, io.BytesIO(out.content)
-            )
-        return io.BytesIO(out.content)
-
-
 def test_a_manual_replay_of_another_project_waits_for_a_failed_projects_legacy_pack_even_with_a_free_slot(
     tmp_path, http, machine, monkeypatch, capsys
 ):
@@ -484,7 +460,7 @@ def test_a_manual_replay_of_another_project_waits_for_a_failed_projects_legacy_p
     monkeypatch.setattr(replay_client.project_home, "clone_id", lambda _dir: good.id)
     record = HostFound(url="http://127.0.0.1:9/", token="t", pid=1, started_at=datetime.now(UTC), project=good.id)  # noqa: S106
     monkeypatch.setattr(replay_client.host, "running_at", lambda _root, _model: record)
-    loopback = _LoopbackToApp(TestClient(app.create(machine), base_url="http://127.0.0.1", headers=AUTH))
+    loopback = Loopback(http)
     monkeypatch.setattr(replay_client, "_LOCAL", loopback)
     assert cli.main(["--repo", str(good.path), "impeccable", "--replay"]) == 1
     assert capsys.readouterr().out.splitlines()[-1] == reason  # the host's own log lines come first
@@ -1252,16 +1228,7 @@ def test_a_decision_lists_the_changes_of_every_loaded_project_whose_baseline_pin
 
 def test_the_maintenance_button_curates_a_memory_folder_now_also_while_paused(http, machine, shared_repo, monkeypatch):
     """Item 5 slice 4: the machine's curation lists the shared repository's memory folders and runs one at once."""
-    from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryCurationResult  # noqa: PLC0415
-    from owlbear_delivery_next.local_system.processes import Termination  # noqa: PLC0415
-    from owlbear_delivery_next.runtimes.session_result import Run  # noqa: PLC0415
-
-    (shared_repo[0] / "shop" / "memory").mkdir(parents=True)
-    monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
-    machine.slots.open()
-    report = MemoryCurationResult(summary="nothing pending", entries=[])
-    machine.curation.run = lambda cfg: Run(cfg.session_id, ending="result", payload=report,
-                                           termination=Termination(confirmed=True))  # fmt: skip
+    _curation_runs(machine, shared_repo, monkeypatch)
     assert machine.paused  # the button runs also while paused (the owner, 2026-10-22)
 
     listed = http.get("/api/next/curation").json()
@@ -1270,14 +1237,11 @@ def test_the_maintenance_button_curates_a_memory_folder_now_also_while_paused(ht
     fenced = http.post("/api/next/curation", json={"folder": "shop"})
     machine.updating = ""
     started = http.post("/api/next/curation", json={"folder": "shop"})
-    for _ in range(200):
-        if not machine.curation.working():
-            break
-        time.sleep(0.02)
+    _curation_finished(machine)
 
     assert [f["folder"] for f in listed["folders"]] == ["shop"]
     assert (unknown.status_code, fenced.status_code, started.json()["started"]) == (409, 503, ["shop"])
-    assert http.get("/api/next/curation").json()["folders"][0]["summary"] == "nothing pending"
+    assert http.get("/api/next/curation").json()["folders"][0]["summary"] == "ok"
 
 
 HELD_SLOT = "0123456789abcdef"
@@ -1286,8 +1250,6 @@ HELD_SLOT = "0123456789abcdef"
 def _curation_runs(machine, shared_repo, monkeypatch, gate=None) -> list:
     """Machine curation with a synthetic run that records each start; *gate* holds it open until set."""
     from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryCurationResult  # noqa: PLC0415
-    from owlbear_delivery_next.local_system.processes import Termination  # noqa: PLC0415
-    from owlbear_delivery_next.runtimes.session_result import Run  # noqa: PLC0415
 
     (shared_repo[0] / "shop" / "memory").mkdir(parents=True)
     monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
@@ -1299,7 +1261,7 @@ def _curation_runs(machine, shared_repo, monkeypatch, gate=None) -> list:
         if gate is not None:
             gate.wait(5)
         return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
-                   termination=Termination(confirmed=True))  # fmt: skip
+                   termination=processes.Termination(confirmed=True))  # fmt: skip
 
     machine.curation.run = run
     return ran
@@ -1391,3 +1353,147 @@ def test_format_4s_one_curation_switch_becomes_a_setting_per_trigger(old, both) 
     settings = registry.Settings.model_validate(raw)
     assert (settings.curate_after_merge, settings.curate_when_idle) == (both, both)
     assert "curate_while_paused" not in settings.model_dump()
+
+
+CHAT_USE = {chat_contract.HEADER: str(chat_contract.CHAT), "x-owlbear-use": "chat"}
+
+
+def global_curation_hold(machine):
+    """The machine-wide curation run an older host left uncertain: a lease under the curation slot, no project."""
+    return machine.maintenance.adopt_uncertain("curation:legacy-run", curation.SLOT, "curation", workspace="")
+
+
+def assert_recoverable_by_its_owner_only(machine, http, lease) -> None:
+    sessions = http.get("/api/next/maintenance/sessions")
+    assert sessions.status_code == 200, sessions.text
+    assert [(s["id"], s["state"]) for s in sessions.json()["sessions"]] == [(lease.id, "held")]
+
+    path = f"/api/next/maintenance/sessions/{lease.id}/recover"
+    assert http.post(path, json={"rebooted": True}, headers={**dict(http.headers), **CHAT_USE}).status_code == 403
+    assert http.post(path, json={"rebooted": False}).status_code == 400
+    assert http.post(path, json={"rebooted": True}).status_code == 409  # no reboot since the hold: refused
+    assert http.get("/api/next/maintenance/sessions").json()["sessions"][0]["state"] == "held"
+
+    booted = machine.maintenance.boot
+    machine.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the hold
+    answer = http.post(path, json={"rebooted": True})
+    assert answer.status_code == 200, answer.text
+    assert [(s["id"], s["state"]) for s in http.get("/api/next/maintenance/sessions").json()["sessions"]] == [
+        (lease.id, "recovered")
+    ]
+
+
+def test_a_machine_with_no_projects_shows_and_recovers_its_global_curation_hold_to_its_owner(machine, http):
+    machine.load_all()
+    listed = http.get("/api/next/projects")
+    assert (listed.status_code, listed.json().get("projects")) == (200, []), listed.text
+    assert_recoverable_by_its_owner_only(machine, http, global_curation_hold(machine))
+
+
+def test_a_machine_whose_every_project_store_fails_still_shows_and_recovers_its_global_curation_hold(
+    tmp_path, machine, http
+):
+    bad = registry.register(clone(tmp_path / "bad"))
+    (Path(bad.path) / ".git" / "owlbear-delivery" / "format").write_text("99\n")
+    machine.load_all()
+    shown = http.get("/api/next/projects").json()["projects"]
+    assert [p["state"] for p in shown] == ["failed"]
+    assert_recoverable_by_its_owner_only(machine, http, global_curation_hold(machine))
+
+
+def session(root: Path) -> sdk_adapter.Session:
+    return sdk_adapter.Session(
+        kind=StepKind.REVIEW,
+        worktree=root,
+        session_id="pack-update",
+        message="Update the pack",
+        resume=False,
+        policy=Policy(root),
+        observe=lambda: tools.Worktree("", ""),
+        checks=(),
+        model="synthetic-model",
+    )
+
+
+IDENTIFIED = Run(  # its one process is identified by PID and birth, and survived the session's end
+    "synthetic",
+    ending="result",
+    runtime_pid=4242,
+    pids={4242: 1.0},
+    termination=processes.Termination(confirmed=False, survivors=(4242,)),
+)
+UNIDENTIFIED = Run(  # the SDK returned, but nothing proves which processes it started
+    "synthetic", ending="result", termination=processes.Termination(confirmed=False, problems=("request task pending",))
+)
+
+
+def waiting_for(name: str) -> list[str]:
+    return [f"{name}: {UNPROVEN_PACK}"]
+
+
+@pytest.mark.parametrize("run", [IDENTIFIED, UNIDENTIFIED], ids=["identified", "unidentified"])
+def test_a_returned_unconfirmed_pack_session_keeps_the_update_and_the_stop_waiting_after_its_project_goes(
+    tmp_path, machine, http, run
+):
+    machine.maintenance.observe = lambda _pid, _created: True  # synthetic: the session's process is still there
+    entry = registry.register(clone(tmp_path / "a"))
+    machine.slots.total = lambda: 2
+    machine.load_all()
+    loaded = machine.projects[entry.id]
+    job = session_slots.packed(loaded.host, pack_job.Job(loaded.store, pack_job.Live(update=lambda _s, _cfg: run)))
+    (root := tmp_path / "wt").mkdir()
+    assert job.live.update(loaded.store, session(root)) is run
+    assert (job.busy(), loaded.working(stopping=True)) == (False, [])  # the job and its project no longer count it
+    stopped: list[bool] = []
+    machine.on_stop = lambda: stopped.append(True)
+    assert machine.busy() == waiting_for("a")  # an update and an automatic update wait for it
+    assert machine.fence("synthetic update") == waiting_for("a")
+    machine.unfence()
+    assert http.post("/api/next/pause-stop").json() == {"paused": True, "ending": True}
+    assert http.get("/api/next/projects").json()["left"] == waiting_for("a")
+    assert (machine.idle_stop(), stopped) == (False, [])
+
+    assert http.delete(f"/api/next/projects/{entry.id}").json() == {"removed": entry.id}  # no project is loaded now
+    assert (machine.projects, machine.left(), machine.busy()) == ({}, waiting_for(entry.id), waiting_for(entry.id))
+    assert (machine.idle_stop(), stopped) == (False, [])
+
+    machine.maintenance.observe = lambda _pid, _created: False  # every process it could have is gone
+    if run is UNIDENTIFIED:  # absence of unidentified processes proves nothing: only a recovery after a reboot does
+        assert (machine.busy(), machine.idle_stop()) == (waiting_for(entry.id), False)
+        [held] = machine.maintenance.read()["sessions"]
+        booted = machine.maintenance.boot
+        machine.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the session
+        machine.maintenance.recover(held["id"], rebooted=True)
+    assert (machine.busy(), machine.left(), machine.idle_stop(), stopped) == ([], [], True, [True])
+    [ended] = machine.maintenance.read()["sessions"]
+    assert ended["state"] == ("released" if run is IDENTIFIED else "recovered")
+
+
+def test_a_returned_unconfirmed_pds_session_keeps_the_update_and_the_stop_waiting_until_its_processes_are_gone(
+    tmp_path, machine, http
+):
+    """#777: a PDS update's sessions are held as the machine's ``pds`` maintenance, as an Impeccable update's are."""
+    machine.maintenance.observe = lambda _pid, _created: True  # synthetic: the session's process is still there
+    entry = registry.register(clone(tmp_path / "a"))
+    machine.slots.total = lambda: 2
+    machine.load_all()
+    loaded = machine.projects[entry.id]
+    job = session_slots.pds_packed(
+        loaded.host, pds_job.Job(loaded.store, pds_job.Live(session=lambda _s, _c: IDENTIFIED))
+    )
+    (root := tmp_path / "wt").mkdir()
+    assert job.live.session(loaded.store, session(root)) is IDENTIFIED
+    assert (job.busy(), loaded.working(stopping=True)) == (False, [])
+    held = [f"a: {UNPROVEN['pds']}"]
+    assert (machine.busy(), machine.fence("synthetic update")) == (held, held)
+    machine.unfence()
+    stopped: list[bool] = []
+    machine.on_stop = lambda: stopped.append(True)
+    assert http.post("/api/next/pause-stop").json() == {"paused": True, "ending": True}
+    assert http.get("/api/next/projects").json()["left"] == held
+    assert (machine.idle_stop(), stopped) == (False, [])
+
+    machine.maintenance.observe = lambda _pid, _created: False
+    assert (machine.busy(), machine.left(), machine.idle_stop(), stopped) == ([], [], True, [True])
+    [ended] = machine.maintenance.read()["sessions"]
+    assert (ended["kind"], ended["state"]) == ("pds", "released")
