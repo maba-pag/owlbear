@@ -26,6 +26,9 @@ from owlbear_delivery_next.state_store import decision_archive, decision_store
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.workflow_steps import brief_round, decision_publication, decisions_gate, lookup, pick
 
+from .test_decision_routes import shared as shared
+from .test_decision_routes import store as store
+
 AT = datetime(2026, 10, 22, 9, tzinfo=UTC)
 PROJECT = "shop-site"
 TEXT = "A note is stored only in the project's own table. " * 6 + "Never keep payment-card numbers."
@@ -196,7 +199,7 @@ def test_damaged_framed_authority_is_a_visible_fault(damage):
 
 
 @pytest.mark.parametrize("boundary", ["worker", "chat"])
-def test_ambiguous_legacy_authority_refuses_the_whole_lookup_before_a_picker(picking, monkeypatch, boundary):
+def test_ambiguous_legacy_authority_refuses_the_whole_lookup_before_a_picker(shared, store, monkeypatch, boundary):
     good = Decision(
         id=new_id(),
         title="Other rule",
@@ -208,16 +211,15 @@ def test_ambiguous_legacy_authority_refuses_the_whole_lookup_before_a_picker(pic
         actor="shaper",
         created_at=AT,
     )
-    picking.put(good)
-    bad = picking.put(legacy_ambiguous())
+    write(good, shared.root / PROJECT)
+    bad = legacy_ambiguous()
+    write(bad, shared.root / PROJECT)
     calls = []
     monkeypatch.setattr(lookup, "_ran", lambda *_args: calls.append("must not run"))
     if boundary == "worker":
-        from owlbear_delivery_next.state_store.store import Lock  # noqa: PLC0415 - only the worker boundary
-
-        result, done = lookup.worker(picking.store, Lock("notes"), Change(slug="notes"), "Which rules?")
+        result, done = lookup.worker(store, Lock("notes"), Change(slug="notes"), "Which rules?")
     else:
-        result, done = lookup.chat(picking.shared, PROJECT, "Which rules?", picking.store.settings)
+        result, done = lookup.chat(shared, PROJECT, "Which rules?", store.settings)
     assert result["failed"]
     assert "decisions" not in result
     assert {row["id"] for row in result["unresolved"]} == {bad.id}
@@ -226,21 +228,20 @@ def test_ambiguous_legacy_authority_refuses_the_whole_lookup_before_a_picker(pic
     assert calls == []
 
 
-def test_ambiguous_wording_refuses_shaping_pick_without_starting_an_sdk_session(picking, monkeypatch):
-    from owlbear_delivery_next.state_store.store import Lock  # noqa: PLC0415 - the actual pick's write boundary
-
-    bad = picking.put(legacy_ambiguous())
+def test_ambiguous_wording_refuses_shaping_pick_without_starting_an_sdk_session(shared, store, monkeypatch):
+    bad = legacy_ambiguous()
+    write(bad, shared.root / PROJECT)
     monkeypatch.setattr(pick, "_session", lambda *_args: pytest.fail("ambiguous authority cannot reach a picker"))
-    after = pick.run(picking.store, Lock("notes"), Change(slug="notes"))
+    after = pick.run(store, Lock("notes"), Change(slug="notes"))
     assert after.brief.picked.status == "failed"
     assert bad.id in after.brief.picked.reason
 
 
-def test_a_foreign_project_legacy_ambiguity_does_not_poison_this_projects_lookup(picking):
-    other = picking.shared.root / "elsewhere"
+def test_a_foreign_project_legacy_ambiguity_does_not_poison_this_projects_lookup(shared, store):
+    other = shared.root / "elsewhere"
     other.mkdir()
     write(legacy_ambiguous().model_copy(update={"project": "elsewhere"}), other)
-    result, done = lookup.chat(picking.shared, PROJECT, "Which rules?", picking.store.settings)
+    result, done = lookup.chat(shared, PROJECT, "Which rules?", store.settings)
     assert result == {"decisions": [], "note": lookup.NONE}
     assert done is None
 
@@ -271,32 +272,34 @@ def test_unusable_inherited_binding_never_becomes_a_new_rule_and_its_note_surviv
     assert kept == ("" if damage == "unknown-version" else note)
 
 
-def test_unreadable_wording_stops_the_brief_challenge_before_a_worktree_or_challenger(picking, monkeypatch):
-    bad = picking.put(legacy_ambiguous())
+def test_unreadable_wording_stops_the_brief_challenge_before_a_worktree_or_challenger(shared, store, monkeypatch):
+    bad = legacy_ambiguous()
+    write(bad, shared.root / PROJECT)
     monkeypatch.setattr(brief_round.worktree, "ensure", lambda *_: pytest.fail("an unreadable rule starts no worktree"))
     monkeypatch.setattr(
         brief_round.sessions, "review_run", lambda *_a, **_k: pytest.fail("no challenger on bad wording")
     )
-    brief_round.run(picking.store, Lock("notes"), Change(slug="notes"), picking.shared.root)
-    stored = picking.store.read("notes")
+    brief_round.run(store, Lock("notes"), Change(slug="notes"), shared.root)
+    stored = store.read("notes")
     assert stored.stop.kind is ErrorKind.STATE
     assert bad.id in stored.stop.reason
 
 
-def test_an_approval_refuses_an_unreadable_selected_rule_before_its_baseline_reads_it(picking):
-    bad = picking.put(legacy_ambiguous())
-    message = decisions_gate.unworded(decisions_gate.loaded(picking.store), Change(slug="notes"))
+def test_an_approval_refuses_an_unreadable_selected_rule_before_its_baseline_reads_it(shared, store):
+    bad = legacy_ambiguous()
+    write(bad, shared.root / PROJECT)
+    message = decisions_gate.unworded(decisions_gate.loaded(store), Change(slug="notes"))
     assert bad.id in message
     assert "unresolved" in message
 
 
 def test_an_approval_refused_for_an_unreadable_rule_says_and_logs_its_whole_fault(
-    picking, monkeypatch, caplog, whole_error
+    shared, store, monkeypatch, caplog, whole_error
 ):
     """#895: the wording fault the gate stops on whole reaches the approval's refusal and host.log whole too."""
-    picking.put(legacy_ambiguous())
+    write(legacy_ambiguous(), shared.root / PROJECT)
     monkeypatch.setattr(decisions_gate, "problem", lambda _d: whole_error)
-    message = decisions_gate.unworded(decisions_gate.loaded(picking.store), Change(slug="notes"))
+    message = decisions_gate.unworded(decisions_gate.loaded(store), Change(slug="notes"))
     expected = f"the full decision wording is unresolved: {whole_error}"
     assert message == expected
     assert [r.getMessage() for r in caplog.records if r.name == decisions_gate.__name__] == [
