@@ -310,7 +310,7 @@ def test_the_machine_host_reports_on_every_project_it_serves(tmp_path, shared, m
 def test_older_or_unreadable_change_records_are_listed_as_incomplete(tmp_path, shared, store):
     old, new = pair()
     publish(shared, old, new, records={"20261019-090000-c0": merged("D-ELSE") | {"slug": "c0"}})
-    here = [Place(PROJECT, clone(tmp_path, "shop", ["src/app.py"]), store)]
+    here = [Place(PROJECT, tmp_path / "shop", store)]
     changes = shared.root / PROJECT / "changes"
     found = verdicts(decision_impact.report(shared, PROJECT, new.id, here))
     assert found[PROJECT] == ("unknown", decision_impact.WHOLE)
@@ -339,7 +339,7 @@ def test_keeping_existing_code_is_refused_when_the_rule_changed_after_the_report
 ):
     old, new = pair()
     publish(shared, old, new, records={"20261020-090000-c1": merged(old.id)})
-    report = decision_impact.report(shared, PROJECT, new.id, [Place(PROJECT, clone(tmp_path, "shop", []), store)])
+    report = decision_impact.report(shared, PROJECT, new.id, [Place(PROJECT, tmp_path / "shop", store)])
     peer = tmp_path / "peer"
     git(tmp_path, "clone", "-q", str(shared_repo[1]), str(peer))
     write(new.model_copy(update={"state": State.WITHDRAWN}), peer / PROJECT, new.revision)
@@ -361,7 +361,7 @@ def test_keeping_existing_code_is_taken_back_when_the_rule_changed_between_catch
 ):
     old, new = pair()
     publish(shared, old, new, records={"20261020-090000-c1": merged(old.id)})
-    report = decision_impact.report(shared, PROJECT, new.id, [Place(PROJECT, clone(tmp_path, "shop", []), store)])
+    report = decision_impact.report(shared, PROJECT, new.id, [Place(PROJECT, tmp_path / "shop", store)])
     peer, caught_up = tmp_path / "peer", decision_sync.catch_up
     git(tmp_path, "clone", "-q", str(shared_repo[1]), str(peer))
 
