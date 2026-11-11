@@ -515,24 +515,6 @@ def test_a_committed_finish_refuses_a_symlinked_parent_with_matching_images(pick
     assert decision_batch.journal_path(shared).read_bytes() == journal
 
 
-def test_a_healthy_abandon_still_puts_the_files_back(picking, monkeypatch):
-    _seed(picking)
-    shared = picking.shared
-    new = make(title="Use UTC", statement="All timestamps use UTC.")
-    _interrupt(picking, monkeypatch, [new])
-    generation = decision_batch.pending(shared).generation
-    write(new, shared.root / PROJECT)
-    rel = shared.root / f"{PROJECT}/decisions/{new.id}.md"
-    head = shared.git("rev-parse", "HEAD").stdout
-
-    recovery = decision_recovery.abandon(shared, generation)
-
-    assert recovery.done
-    assert not rel.exists()
-    assert shared.git("rev-parse", "HEAD").stdout == head
-    assert decision_batch.pending(shared) is None
-
-
 @pytest.mark.parametrize("owner_commits", [True, False], ids=["owner-commit-first", "unmoved-positive"])
 def test_a_refused_publish_after_an_owner_commit_keeps_the_batch_and_the_owner_commit(
     picking, monkeypatch, owner_commits
@@ -2088,7 +2070,8 @@ def test_a_folder_swapped_during_the_fences_head_probe_never_loses_a_file_to_a_r
     owner moves the folder aside and links its path to a foreign copy holding the same after bytes. HEAD is unchanged,
     so the fence passes; the removal must still change nothing: the foreign file and the owner's moved files stay,
     Git is as at the swap, the batch stays pending and no reader gets authority. Without the swap it completes; the
-    healthy Abandon and store put-back are `test_a_healthy_abandon_still_puts_the_files_back` and
+    healthy Abandon is `test_abandon_completes_only_when_every_file_holds_exactly_its_before_image[none]`;
+    the healthy store put-back is
     `test_a_refused_publish_after_an_owner_commit_keeps_the_batch_and_the_owner_commit[unmoved-positive]`."""
     _seed(picking)
     shared = picking.shared
