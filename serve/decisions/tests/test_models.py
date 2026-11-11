@@ -59,8 +59,6 @@ def test_file_and_rule_revision_keep_legacy_identity(make):
     # Pinned Changes and read revisions retain the pre-migration identity.
     assert make().revision == "1fa20ebda080643d149934ca8d9e8718e8841deca1204b7e3fb68175b08aff21"
     assert make().rule_revision == "5b698142e3773945405c3829a75622618a2b41e012170b41b98157026f9f4b39"
-    assert make().revision == make().revision
-    assert len(make().revision) == 64
     assert make(statement="Another wording.").revision != make().revision
     assert make(rationale="  padded  \n").revision == make(rationale="padded").revision
     assert make(consequences="Pages change.").revision != make().revision
