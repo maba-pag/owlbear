@@ -4,40 +4,27 @@ action when the journal is corrupt (DEC-01). Synthetic journal and provider only
 
 from __future__ import annotations
 
-import contextlib
 import os
-import socket
 import subprocess
 import sys
-import threading
-import time
 from datetime import UTC, datetime
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_decisions import Decision, Origin, Scope, State, new_id
-from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
-from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.state_store import decision_actions, decision_batch, decision_recovery, decision_store
 from owlbear_delivery_next.state_store.store import Store
 
+from .test_decisions_page import Host, decisions_page
+
 if TYPE_CHECKING:
-    from collections.abc import Iterator
     from pathlib import Path
 
 PROJECT = "shop-site"
 AT = datetime(2026, 10, 21, 9, tzinfo=UTC)
-
-
-class Host:
-    wake = SimpleNamespace(set=lambda: None)
-    repo = None  # the impact report then says it cannot read the clone
-    maintenance = None
-    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
 
 
 def make(**changes) -> Decision:
@@ -98,34 +85,6 @@ def _crash(picking: Any, old: Decision, point: str) -> None:
         [sys.executable, "-c", CRASH_CODE], env=env, capture_output=True, text=True, check=False
     )
     assert process.returncode == 73, process.stderr
-
-
-@contextlib.contextmanager
-def decisions_page(store: Store, pds: Any) -> Iterator[Any]:
-    """The Decisions page in a real browser: only the test host and the PDS CDN answer."""
-    import uvicorn  # noqa: PLC0415
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            page.goto(f"{base}/decisions#token=tok")
-            yield page
-            browser.close()
-    finally:
-        server.should_exit = True
 
 
 def _interrupt(picking: Any) -> tuple[Any, str]:
