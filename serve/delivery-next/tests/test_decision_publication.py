@@ -133,9 +133,7 @@ def approved_binding(c, root, choice, answer):
 
 
 @pytest.mark.parametrize("ending", ["merged", "unchanged", "abandoned"])
-def test_approved_rule_is_visible_replaced_and_retained_at_end(
-    picking, shared_repo, monkeypatch, ending
-):
+def test_approved_rule_is_visible_replaced_and_retained_at_end(picking, shared_repo, monkeypatch, ending):
     root, remote = shared_repo
     answer = (
         "Notes live in one SQLite table. " * 6
@@ -192,7 +190,8 @@ def test_approved_rule_is_visible_replaced_and_retained_at_end(
     (kept,) = root.rglob(f"{own.id}.md")
     stem = decisions_gate.stem(a)
     assert (kept.parent.parent.name, read(kept).state) == (
-        stem, State.WITHDRAWN if ending == "abandoned" else State.SPENT
+        stem,
+        State.WITHDRAWN if ending == "abandoned" else State.SPENT,
     )
     record = f"{PROJECT}/changes/{stem}.json"
     assert git(remote, "log", "-1", "--format=%H", "main", "--", record) == git(
@@ -462,9 +461,7 @@ def test_a_refused_conflict_flag_commit_after_the_approvals_commit_keeps_the_app
 
 
 @pytest.mark.parametrize("mutation", ["withdrawn", "title", "read-back"])
-def test_external_rule_changes_do_not_rewrite_own_publication_receipts(
-    picking, shared_repo, monkeypatch, mutation
-):
+def test_external_rule_changes_do_not_rewrite_own_publication_receipts(picking, shared_repo, monkeypatch, mutation):
     root, _ = shared_repo
     (first,) = approvable(picking, 1, LASTING).brief.decisions
     assert picking.approve(1).status_code == 200
@@ -513,9 +510,7 @@ def test_external_rule_changes_do_not_rewrite_own_publication_receipts(
 
 
 @pytest.mark.parametrize("narrowed", [True, False], ids=["project-to-change", "change-to-project"])
-def test_scope_transitions_publish_no_dangling_predecessor_link(
-    picking, shared_repo, narrowed
-):
+def test_scope_transitions_publish_no_dangling_predecessor_link(picking, shared_repo, narrowed):
     root, _ = shared_repo
     decision = LASTING if narrowed else OWN
     (first,) = approvable(picking, 1, decision).brief.decisions
@@ -570,9 +565,7 @@ def reviewed_legacy_decisions(picking, field: str, value: str, count: int) -> Ch
 
 
 @pytest.mark.parametrize("case", [("question", "   ", 1), ("answer", "\t\n", 2), ("shared", "", 1)])
-def test_current_id_bearing_rules_require_buildable_shared_authority(
-    picking, shared_repo, monkeypatch, case
-):
+def test_current_id_bearing_rules_require_buildable_shared_authority(picking, shared_repo, monkeypatch, case):
     """The last decision is unbuildable: alone, and after a valid one that a check of only the first would pass."""
     root, remote = shared_repo
     field, value, count = case
@@ -749,9 +742,10 @@ def test_a_day_of_the_same_failed_recovery_asks_though_its_notes_said_different_
     first_at = waiting.outcome.at
     monkeypatch.setattr(*target, _unavailable(whole_error, "the fetch was cut off"))
     with picking.store.lock(picking.slug) as lock:
-        assert decision_publication.resume(
-            picking.store, lock, picking.store.read(picking.slug), first_at + EPISODE_ASK
-        ) is None
+        assert (
+            decision_publication.resume(picking.store, lock, picking.store.read(picking.slug), first_at + EPISODE_ASK)
+            is None
+        )
 
     c = picking.store.read(picking.slug)
     budget = c.budgets.causes[f"network:{c.step.kind}:decisions"]

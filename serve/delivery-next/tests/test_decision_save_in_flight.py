@@ -274,16 +274,17 @@ def untouched(shared: DataRepo, was: tuple[str, str]) -> None:
 
 
 @pytest.mark.parametrize(
-    "case", [(-1.0, False), (60.0, True), (None, True), ("soon", False), ("crossing", False)],
+    "case",
+    [(-1.0, False), (60.0, True), (None, True), ("soon", False), ("crossing", False)],
     ids=["past", "ahead", "page", "malformed", "crossing-journal-lock"],
 )
 def test_initial_admission_checks_deadline_at_the_journal_boundary(shared, owner, clock, monkeypatch, case):
     after, saved = case
     was = state(shared)
     if after == "soon":
-        assert owner.post(
-            "/api/next/decisions/propose", json=PROPOSAL, headers=CHAT | {ADMIT: "soon"}
-        ).status_code == 422
+        assert (
+            owner.post("/api/next/decisions/propose", json=PROPOSAL, headers=CHAT | {ADMIT: "soon"}).status_code == 422
+        )
         untouched(shared, was)
         return
     if after == "crossing":
@@ -470,9 +471,11 @@ def test_lost_answer_matching_distinguishes_layer_age_and_changed_rows(tmp_path,
     body = PROPOSAL | ({"confirmed": False} if kind == "edited-draft" else {})
     fields = {"title": TITLE, "statement": PROPOSAL["statement"], "origin": Origin.DECIDED, "created_at": started}
     if kind in {"global", "change"}:
-        fields |= {"scope": Scope.GLOBAL, "project": ""} if kind == "global" else {
-            "scope": Scope.CHANGE, "change": "notes-move", "state": State.DRAFT
-        }
+        fields |= (
+            {"scope": Scope.GLOBAL, "project": ""}
+            if kind == "global"
+            else {"scope": Scope.CHANGE, "change": "notes-move", "state": State.DRAFT}
+        )
     elif kind == "older":
         fields["created_at"] = started - timedelta(days=1)
     elif kind == "clock-back":
@@ -513,9 +516,12 @@ def test_found_decision_requires_current_matching_detail(tmp_path, monkeypatch, 
         decision = decision.model_copy(update={"state": State.DRAFT, "origin": Origin.AUTONOMOUS})
     row = shown(decision, tmp_path)
     changes = {
-        "matching": {}, "wrong-link": {"links": (Link(type=LinkType.REPLACES, target=new_id()),)},
-        "wrong-state": {"state": State.DRAFT}, "wrong-origin": {"origin": Origin.APPROVED},
-        "withdrawn": {"state": State.WITHDRAWN}, "reworded-draft": {"statement": "Notes live in two Postgres tables."},
+        "matching": {},
+        "wrong-link": {"links": (Link(type=LinkType.REPLACES, target=new_id()),)},
+        "wrong-state": {"state": State.DRAFT},
+        "wrong-origin": {"origin": Origin.APPROVED},
+        "withdrawn": {"state": State.WITHDRAWN},
+        "reworded-draft": {"statement": "Notes live in two Postgres tables."},
     }[kind]
     detail = shown(decision.model_copy(update=changes), tmp_path)
     chat, calls = chat_client.Chat(Path("shop"), tmp_path), []
@@ -532,9 +538,10 @@ def test_found_decision_requires_current_matching_detail(tmp_path, monkeypatch, 
     if kind == "matching":
         assert out["saved"] is True
     else:
-        assert out == {"saved": None, "error": chat_client.UNCLEAR.format(
-            why=f"{row['id']} matches it in part; ask the owner"
-        )}
+        assert out == {
+            "saved": None,
+            "error": chat_client.UNCLEAR.format(why=f"{row['id']} matches it in part; ask the owner"),
+        }
 
 
 def test_a_host_without_the_fence_never_has_a_lost_save_called_not_saved(wire):

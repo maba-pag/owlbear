@@ -64,9 +64,12 @@ def test_identity_uniqueness_is_not_alias_uniqueness(tmp_path, make, duplicate):
 )
 def test_links_respect_visibility_replacement_and_promotion_scope(tmp_path, make, case):
     link, target, source, expected = case
-    old = entry(tmp_path, make, **(target or {}), state=State.REPLACED if link in {
-        LinkType.REPLACES, LinkType.PROMOTED_FROM
-    } else State.IN_FORCE)
+    old = entry(
+        tmp_path,
+        make,
+        **(target or {}),
+        state=State.REPLACED if link in {LinkType.REPLACES, LinkType.PROMOTED_FROM} else State.IN_FORCE,
+    )
     successor = entry(tmp_path, make, **source, links=(Link(type=link, target=old.decision.id),))
     findings = check([old, successor] if target is not None else [successor])
     assert sorted(f.rule for f in findings) == expected
@@ -78,30 +81,56 @@ def test_links_respect_visibility_replacement_and_promotion_scope(tmp_path, make
 def test_successor_count_includes_only_eligible_live_successors(tmp_path, make, kind):
     old = entry(tmp_path, make, state=State.REPLACED)
     link = Link(type=LinkType.PROMOTED_FROM if "promotion" in kind else LinkType.REPLACES, target=old.decision.id)
-    first = entry(tmp_path, make, scope=Scope.GLOBAL if "promotion" in kind else Scope.PROJECT,
-                  state=State.DRAFT if kind == "draft" else State.IN_FORCE,
-                  links=(link, link) if kind == "repeated" else (link,))
+    first = entry(
+        tmp_path,
+        make,
+        scope=Scope.GLOBAL if "promotion" in kind else Scope.PROJECT,
+        state=State.DRAFT if kind == "draft" else State.IN_FORCE,
+        links=(link, link) if kind == "repeated" else (link,),
+    )
     entries = [old, first]
     expected = []
     if kind in {"two-live", "two-promotions", "mixed"}:
-        second = entry(tmp_path, make, Scope.GLOBAL if kind in {"two-promotions", "mixed"} else Scope.PROJECT,
-                       links=(Link(type=LinkType.PROMOTED_FROM if kind != "two-live" else LinkType.REPLACES,
-                                   target=old.decision.id),))
-        entries += [second, entry(tmp_path, make, Scope.GLOBAL if kind == "two-promotions" else Scope.PROJECT,
-                                  state=State.WITHDRAWN, links=(link,))]
+        second = entry(
+            tmp_path,
+            make,
+            Scope.GLOBAL if kind in {"two-promotions", "mixed"} else Scope.PROJECT,
+            links=(
+                Link(type=LinkType.PROMOTED_FROM if kind != "two-live" else LinkType.REPLACES, target=old.decision.id),
+            ),
+        )
+        entries += [
+            second,
+            entry(
+                tmp_path,
+                make,
+                Scope.GLOBAL if kind == "two-promotions" else Scope.PROJECT,
+                state=State.WITHDRAWN,
+                links=(link,),
+            ),
+        ]
         expected = ["two-successors"] * 2
     elif kind == "draft":
         expected = ["no-successor"]
     elif kind == "promotion-draft":
         proposed = entry(tmp_path, make, state=State.REPLACED)
-        entries += [proposed, entry(tmp_path, make, Scope.GLOBAL, state=State.DRAFT,
-                                   links=(Link(type=LinkType.PROMOTED_FROM, target=proposed.decision.id),))]
+        entries += [
+            proposed,
+            entry(
+                tmp_path,
+                make,
+                Scope.GLOBAL,
+                state=State.DRAFT,
+                links=(Link(type=LinkType.PROMOTED_FROM, target=proposed.decision.id),),
+            ),
+        ]
         expected = ["no-successor"]
     findings = check(entries)
     assert sorted(f.rule for f in findings) == expected
     if kind in {"two-live", "two-promotions", "mixed"}:
         assert {f.involves for f in findings} == {
-            (first.decision.id, old.decision.id), (second.decision.id, old.decision.id)
+            (first.decision.id, old.decision.id),
+            (second.decision.id, old.decision.id),
         }
     elif kind in {"draft", "promotion-draft"}:
         assert findings[0].involves == ((old if kind == "draft" else proposed).decision.id,)
@@ -109,15 +138,17 @@ def test_successor_count_includes_only_eligible_live_successors(tmp_path, make, 
 
 @pytest.mark.parametrize("kind", ["240", "241", "outside-change", "wrong-project"])
 def test_placement_and_statement_limit_are_independent_findings(tmp_path, make, kind):
-    found = entry(tmp_path, make, statement="x" * int(kind)) if kind.isdigit() else entry(
-        tmp_path, make, Scope.CHANGE if kind == "outside-change" else Scope.PROJECT, project="q"
+    found = (
+        entry(tmp_path, make, statement="x" * int(kind))
+        if kind.isdigit()
+        else entry(tmp_path, make, Scope.CHANGE if kind == "outside-change" else Scope.PROJECT, project="q")
     )
     if not kind.isdigit():
         found = Entry(found.path, Layer(tmp_path / "p", Scope.PROJECT, "p"), found.decision)
     findings = check([found])
-    assert [f.rule for f in findings] == ([] if kind == "240" else [
-        "statement-length" if kind == "241" else "placement"
-    ])
+    assert [f.rule for f in findings] == (
+        [] if kind == "240" else ["statement-length" if kind == "241" else "placement"]
+    )
     if kind == "outside-change":
         assert "outside a change folder" in findings[0].message
 

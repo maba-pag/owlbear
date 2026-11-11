@@ -125,7 +125,10 @@ def test_brief_question_identity_and_successor_rules(tmp_path) -> None:
     assert problems == []
     old, new = [d for d, _, _ in planned]
     assert (old.state, old.statement, new.state, new.statement) == (
-        State.REPLACED, "Yes, 800", State.SPENT, "Yes, 1000"
+        State.REPLACED,
+        "Yes, 800",
+        State.SPENT,
+        "Yes, 1000",
     )
     assert [(link.type, link.target) for link in new.links] == [("replaces", first.id)]
     assert list(tmp_path.rglob("*")) == []
@@ -148,10 +151,15 @@ def test_archive_plan_endings_scope_and_provenance(tmp_path, ending) -> None:
     limit, where, ui = [d for d, _, _ in planned]
     assert {d.title: d.state for d, _, _ in planned} == {LIMIT: brief, WHERE: lasting, UI: brief}
     assert [(d.scope, d.change) for d, _, _ in planned] == [
-        (Scope.CHANGE, STEM), (Scope.PROJECT, ""), (Scope.CHANGE, STEM)
+        (Scope.CHANGE, STEM),
+        (Scope.PROJECT, ""),
+        (Scope.CHANGE, STEM),
     ]
     assert (limit.statement, limit.topic, limit.actor, limit.read_back) == (
-        "Yes, 800 characters", "Notes", "owner", AT.date().isoformat()
+        "Yes, 800 characters",
+        "Notes",
+        "owner",
+        AT.date().isoformat(),
     )
     assert (where.actor, where.read_back, where.created_at) == ("shaper", "none", AT)
     assert where.source == "Change notes, brief v2 approved 2026-10-15T09:00:00+00:00"
@@ -159,7 +167,8 @@ def test_archive_plan_endings_scope_and_provenance(tmp_path, ending) -> None:
     (published,) = decision_archive.lasting("shop-site", c, STEM)
     assert why in published.rationale
     assert (ui.read_back, ui.rationale) == (
-        (AT + timedelta(hours=1)).date().isoformat(), f"From Change notes ({outcome})."
+        (AT + timedelta(hours=1)).date().isoformat(),
+        f"From Change notes ({outcome}).",
     )
     for d, _, _ in planned:
         assert "applies_to" not in d.content()

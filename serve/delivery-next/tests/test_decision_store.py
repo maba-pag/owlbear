@@ -146,10 +146,12 @@ def test_decision_read_and_write_adapters_preserve_complete_failure_details(
         with pytest.raises(DecisionsUnavailable) as refused:
             load(shared, PROJECT)
         assert (len(bad), str(refused.value)) == (
-            4, f"4 file(s) among the decisions of {PROJECT} cannot be used: {named}"
+            4,
+            f"4 file(s) among the decisions of {PROJECT} cannot be used: {named}",
         )
         return
     if site == "every":
+
         def unreadable(_layers: object) -> None:
             raise OSError(whole_error)
 
@@ -371,7 +373,8 @@ def require_current_revisions(shared, second, draft, old, remote):
     assert [r.saved for r in said] == [False, False]
     assert git(remote, "rev-parse", "main") == published
     assert {e.decision.id: e.decision for e in load(second, PROJECT).snapshot.entries} == {
-        old.id: edited, draft.id: withdrawn
+        old.id: edited,
+        draft.id: withdrawn,
     }
     assert git(second.root, "status", "--porcelain", "--untracked-files=all") == ""
 
@@ -387,7 +390,11 @@ def test_two_checkouts_require_current_revisions_and_owner_resolution(
     old = make(rationale="First line.\n\nSecond line.\n\nThird line.")
     receipt = save(shared, old, expected_revision=None, message="decisions: held")
     assert (receipt.saved, receipt.committed, receipt.published, receipt.active, receipt.conflict) == (
-        True, True, True, True, False
+        True,
+        True,
+        True,
+        True,
+        False,
     )
     assert (receipt.revision, receipt.notice) == (old.revision, "")
     assert receipt.commit == git(shared.root, "rev-parse", "HEAD") == git(remote, "rev-parse", "main")
