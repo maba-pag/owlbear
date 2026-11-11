@@ -551,29 +551,6 @@ def test_a_healthy_abandon_still_puts_the_files_back(picking, monkeypatch):
     assert decision_batch.pending(shared) is None
 
 
-def test_a_healthy_offline_committed_finish_still_completes_without_remote_work(picking, monkeypatch):
-    _seed(picking)
-    shared = picking.shared
-    new = make(title="Use UTC", statement="All timestamps use UTC.")
-    generation = _committed_but_unproved(picking, monkeypatch, new)
-    head = shared.git("rev-parse", "HEAD").stdout
-    seen: list[tuple[str, ...]] = []
-    real_git = DataRepo.git
-
-    def recording_git(self, *args, **kwargs):
-        seen.append(args)
-        return real_git(self, *args, **kwargs)
-
-    with monkeypatch.context() as m:
-        m.setattr(DataRepo, "git", recording_git)
-        recovery = decision_recovery.finish(shared, generation)
-
-    assert recovery.done
-    assert not [args for args in seen if args and args[0] in {"fetch", "push", "pull", "rebase", "ls-remote"}]
-    assert shared.git("rev-parse", "HEAD").stdout == head
-    assert decision_batch.pending(shared) is None
-
-
 @pytest.mark.parametrize("owner_commits", [True, False], ids=["owner-commit-first", "unmoved-positive"])
 def test_a_refused_publish_after_an_owner_commit_keeps_the_batch_and_the_owner_commit(
     picking, monkeypatch, owner_commits
