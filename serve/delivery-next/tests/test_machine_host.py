@@ -10,6 +10,7 @@ import threading
 import time
 import urllib.error
 import urllib.parse
+import urllib.response
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -172,12 +173,6 @@ def test_the_chat_server_calls_its_projects_api_on_the_machine_host(tmp_path, ht
                     (f"http://127.0.0.1:9/p/{p['id']}/api/next/changes", spoken)]  # fmt: skip
 
 
-class Answer(io.BytesIO):
-    def __init__(self, data: bytes, status: int) -> None:
-        super().__init__(data)
-        self.status = status
-
-
 class Loopback:
     """The chat server's opener, answered in-process by the machine host."""
 
@@ -193,7 +188,7 @@ class Loopback:
         if r.status_code >= 400:
             raise urllib.error.HTTPError(request.full_url, r.status_code, "", r.headers, io.BytesIO(r.content))
         self.replied(request.get_method(), url.path, r.json())
-        return Answer(r.content, r.status_code)
+        return urllib.response.addinfourl(io.BytesIO(r.content), r.headers, request.full_url, r.status_code)
 
 
 def chat_tool(name: str, **args: object) -> dict:
