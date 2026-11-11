@@ -15,6 +15,7 @@ from owlbear_delivery_next.state_store.store import Store
 
 from .test_decision_batch import _crash, _seed
 from .test_decision_batch import picking as picking
+from .test_decision_routes import shared as shared
 from .test_decisions_page import Host, decisions_page
 
 if TYPE_CHECKING:

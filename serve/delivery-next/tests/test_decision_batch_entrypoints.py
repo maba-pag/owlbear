@@ -41,6 +41,8 @@ from owlbear_delivery_next.state_store import (
 )
 from owlbear_delivery_next.workflow_steps import lookup
 
+from .test_decision_routes import shared as shared
+
 PROJECT = "shop-site"
 AT = datetime(2026, 10, 21, 9, tzinfo=UTC)
 
@@ -55,9 +57,9 @@ def make(**changes) -> Decision:
 
 
 @pytest.fixture
-def picking(decision_checkout):
+def picking(shared):
     """Keep K's unchanged bindings while opting storage rules out of the host/SDK fixture."""
-    return SimpleNamespace(shared=decision_checkout)
+    return SimpleNamespace(shared=shared)
 
 
 def _seed(picking) -> None:
