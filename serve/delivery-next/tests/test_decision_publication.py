@@ -30,6 +30,7 @@ from owlbear_delivery_next.change_flow import loop, status
 from owlbear_delivery_next.change_flow.budgets import EPISODE_ASK
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.commands.runner import _run
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.project_host import api
@@ -143,7 +144,7 @@ def test_approved_rule_is_visible_replaced_and_retained_at_end(
     )
     lasting, own = shape(picking, 1, LASTING | {"answer": answer}, OWN).brief.decisions
     running(picking.store)
-    before = len(commits(remote))
+    before, owner_status = len(commits(remote)), git(root, "status", "--porcelain", "--untracked-files=all")
 
     assert picking.approve(1).status_code == 200
 
@@ -164,11 +165,12 @@ def test_approved_rule_is_visible_replaced_and_retained_at_end(
     assert (again.id, again.published, again.revision) == (lasting.id, True, rule.revision)
     stepped(picking, picking.slug)
     assert ran == [picking.slug]  # its own decision asks nothing of it
+    monkeypatch.setattr(runner, "_run", _run)
     reshape(picking)
     successor_answer = answer + "\nThe successor also keeps restore instructions."
     later, kept_own = shape(picking, 2, LASTING | {"answer": successor_answer}, OWN).brief.decisions
     assert (later.replaces, kept_own.id) == (lasting.id, own.id)
-    assert picking.approve(2).status_code == 200
+    assert (accepted := picking.approve(2)).status_code == 200, accepted.json()
     a = picking.approved()
     old, new = read(root / rel(lasting.id)), approved_binding(a, root, later, successor_answer)
     assert (old.state, new.state) == (State.REPLACED, State.IN_FORCE)
@@ -185,8 +187,7 @@ def test_approved_rule_is_visible_replaced_and_retained_at_end(
     if ending == "unchanged":
         a.tests = TestReview(commit="c" * 40, packages=[], shares=[], unchanged=True)
     assert change_record.save(picking.store, a, MERGED if ending == "merged" else None, AT + timedelta(days=1)) == ""
-    assert (root / rel(later.id)).read_bytes() == published
-    assert read(root / rel(later.id)) == new
+    assert ((root / rel(later.id)).read_bytes(), read(root / rel(later.id))) == (published, new)
     assert len(commits(remote, rel(later.id))) == 1
     (kept,) = root.rglob(f"{own.id}.md")
     stem = decisions_gate.stem(a)
@@ -198,7 +199,7 @@ def test_approved_rule_is_visible_replaced_and_retained_at_end(
         remote, "log", "-1", "--format=%H", "main", "--", kept.relative_to(root).as_posix()
     )
     assert validate_repo(root) == []
-    assert git(root, "status", "--porcelain") == ""
+    assert git(root, "status", "--porcelain", "--untracked-files=all") == owner_status
 
 
 def test_failed_approval_preserves_shape_and_reports_its_whole_reason(picking, shared_repo, monkeypatch, whole_error):
