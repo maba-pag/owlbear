@@ -104,4 +104,3 @@ def test_long_statement_still_loads(make):
 def test_a_change_folder_holds_a_delivery_record_stem(make):
     stem = f"20261020-090000-{'a' * 64}"  # the approval second and the longest slug Delivery accepts
     assert make(scope=Scope.CHANGE, change=stem).change == stem
-
