@@ -342,16 +342,22 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
     monkeypatch.setattr(config, "BASE", base.model_copy(update={"agents": base.agents | {"builder": builder}}))
     step(curating)
     [cfg] = curating.seen
+    c = curating.store.read(curating.slug)
     assert (cfg.role, cfg.model, cfg.effort, cfg.context, cfg.submit) == (
         "test-curator", "claude-opus-5.5", "high", "long", TEST_CURATION
     )  # fmt: skip
     assert cfg.user == user_on
-    assert cfg.checks == (check_hint.qualified(".", "uv run test . web"),)
+    assert cfg.checks == (
+        check_hint.task_command(
+            check_hint.qualified(".", "uv run test --changed tests web/tests"),
+            c.tests.commit,
+            c.tests.commit,
+        ),
+    )
     assert cfg.checks[0] in cfg.message
     assert "tests/test_a.py::old: retire" in cfg.message
     assert "share 2 (web/src/b.test.ts" not in cfg.message  # every share ended
     assert "::slow" not in cfg.message  # rewrite-lower waits (TD-312)
-    c = curating.store.read(curating.slug)
     assert (c.tests.report.applied[0].test, c.tests.unchanged, c.step.kind) == (
         "tests/test_a.py::old", False, StepKind.REVIEW
     )  # fmt: skip

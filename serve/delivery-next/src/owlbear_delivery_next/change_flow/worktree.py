@@ -128,18 +128,19 @@ def task_checks(profile: Profile, task: Task, path: Path, target: str) -> list[s
 
 
 def build_checks(profile: Profile, change: Change, task: Task, path: Path) -> list[str]:
-    """Confirmed build checks; a curator measures its selected packages without task-base adaptation."""
+    """Confirmed build checks; curator measurements require their selected suites even before edits."""
     if change.tests is not None and change.step.task == curation_flow.CURATE:
         found = []
         for package, command in checks(profile):
             if package != "." and package not in change.tests.packages:
                 continue
             root = check_hint.changed_runner(check_hint.qualified(package, command))
-            adapted = command
+            adapted = check_hint.qualified(package, command)
             if root and owns_changed_runner(path, root[0].split()[2]):
-                runner = root[0].replace(" --changed", "", 1)
-                adapted = f"{runner} {shlex.join(change.tests.packages)}"
-            found.append(check_hint.qualified(package, adapted))
+                targets = shlex.join((Path(p) / "tests").as_posix() for p in change.tests.packages)
+                adapted = check_hint.freeze(check_hint.qualified(package, f"{root[0]} {targets}"), root[1])
+                adapted = check_hint.task_command(adapted, change.tests.commit, change.tests.commit)
+            found.append(adapted)
         return found
     return task_checks(profile, task, path, change.names.target)
 
