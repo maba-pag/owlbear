@@ -187,35 +187,6 @@ def test_a_remote_that_moves_between_catch_up_and_proof_is_caught_up_again(share
     assert (root / OWNER).read_text() == "owner words\n"
 
 
-def test_a_committed_generation_completes_offline_without_fetch_push_or_rebase(
-    shared_repo, tmp_path, lost_ack, monkeypatch
-) -> None:
-    root, _remote = shared_repo
-    owner_commit(root, "owner words\n")
-    shared = DataRepo(root)
-    save(shared, make(), expected_revision=None, message="decisions: notes")
-    pending = decision_batch.pending(shared)
-    assert pending is not None
-    git(root, "remote", "set-url", "origin", str(tmp_path / "gone"))  # the remote is unreachable from here on
-
-    commands: list[str] = []
-    real_git = DataRepo.git
-
-    def recording(self, *args, **kwargs):
-        commands.append(args[0] if args else "")
-        return real_git(self, *args, **kwargs)
-
-    monkeypatch.setattr(DataRepo, "git", recording)
-    lost_ack[0] = False
-    done = decision_recovery.finish(shared, pending.generation)
-
-    assert done.done
-    assert "committed locally" in done.notice
-    assert not {"fetch", "push", "pull", "rebase"} & set(commands)
-    assert decision_batch.pending(shared) is None
-    assert (root / OWNER).read_text() == "owner words\n"
-
-
 def _rebase_state_fault(scoped, root: Path, state: str, seen: dict[str, str]) -> None:
     """Change the rebase state after ancestry, only inside the Store and Finish proofs, never the publisher's own."""
     armed, unknown = [False], [False]
@@ -253,7 +224,7 @@ def _rebase_state_fault(scoped, root: Path, state: str, seen: dict[str, str]) ->
 
 @pytest.mark.parametrize("path", ["store", "finish"])
 # the healthy store and finish are proven by test_a_remote_that_moves_between_catch_up_and_proof_is_caught_up_again
-# and test_a_committed_generation_completes_offline_without_fetch_push_or_rebase
+# and test_decision_batch.test_owner_recovers_interrupted_decision_batch[after-publish-finish]
 @pytest.mark.parametrize("state", ["active", "unknown"])
 def test_a_rebase_state_change_after_ancestry_never_completes_a_committed_batch(
     shared_repo, lost_ack, monkeypatch, path, state
