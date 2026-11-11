@@ -1250,8 +1250,6 @@ HELD_SLOT = "0123456789abcdef"
 def _curation_runs(machine, shared_repo, monkeypatch, gate=None) -> list:
     """Machine curation with a synthetic run that records each start; *gate* holds it open until set."""
     from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryCurationResult  # noqa: PLC0415
-    from owlbear_delivery_next.local_system.processes import Termination  # noqa: PLC0415
-    from owlbear_delivery_next.runtimes.session_result import Run  # noqa: PLC0415
 
     (shared_repo[0] / "shop" / "memory").mkdir(parents=True)
     monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
@@ -1263,7 +1261,7 @@ def _curation_runs(machine, shared_repo, monkeypatch, gate=None) -> list:
         if gate is not None:
             gate.wait(5)
         return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
-                   termination=Termination(confirmed=True))  # fmt: skip
+                   termination=processes.Termination(confirmed=True))  # fmt: skip
 
     machine.curation.run = run
     return ran
