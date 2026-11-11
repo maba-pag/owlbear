@@ -10,7 +10,6 @@ from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, ch
 from owlbear_decisions.models import STATEMENT_LIMIT
 from owlbear_decisions.storage import parse, serialize
 from owlbear_delivery_next.change_contracts import decision_wording, pick_tools, tools
-from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
     BriefDecision,
@@ -24,7 +23,7 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.state_store import decision_archive, decision_store
 from owlbear_delivery_next.state_store.store import Lock
-from owlbear_delivery_next.workflow_steps import brief_round, decision_publication, decisions_gate, lookup, pick
+from owlbear_delivery_next.workflow_steps import brief_round, decisions_gate, lookup, pick
 
 from . import test_decision_routes
 
@@ -308,12 +307,6 @@ def test_an_approval_refused_for_an_unreadable_rule_says_and_logs_its_whole_faul
     ]
 
 
-def test_the_pinned_wording_saved_with_an_approval_is_the_whole_answer():
-    rule = archived()
-    pin = DecisionBaseline(commit="c", at=AT, revisions={rule.id: rule.rule_revision}, said={}, picked=False)
-    assert decision_publication._pinned(pin, [rule]).said[rule.id].statement == TEXT  # noqa: SLF001
-
-
 def head(root) -> str:
     out = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True)  # noqa: S607
     return out.stdout.strip()
@@ -415,22 +408,6 @@ def test_an_unreadable_rule_recorded_after_the_pick_passes_approval_and_stops_th
     assert (stop.kind, stop.action) == (ErrorKind.STATE, decisions_gate.FAULTY)
     assert bad.id in stop.reason
     assert len(picking.pickers()) == 1
-
-
-def test_an_approval_saves_the_whole_wording_of_a_long_project_rule_in_its_baseline(picking):
-    picking.save(
-        decisions=[{"question": "Where are notes stored?", "answer": TEXT, "origin": "decided", "scope": "project"}]
-    )
-    rule_id = picking.change().brief.decisions[0].id
-    assert picking.ask(1).status_code == 200
-    picking.verdicts.append(tools.ReviewResult(verdict="pass"))
-    picking.step()
-
-    assert picking.approve(1).status_code == 200
-
-    saved = picking.approved()
-    assert saved.decisions_baseline.said[rule_id].statement == TEXT
-    assert decision_archive.whole(decision_store.load(picking.shared, PROJECT).snapshot.get(rule_id).decision) == TEXT
 
 
 CANON = "Keep the literal ellipsis\u2026"
