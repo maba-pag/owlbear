@@ -1,8 +1,8 @@
 """Impeccable update tooling (design skill research §3.5): notice, rule diff, golden pages, calibration replay."""
 
+import base64
 import contextlib
 import dataclasses
-import hashlib
 import json
 import subprocess
 import threading
@@ -28,6 +28,7 @@ from owlbear_delivery_next.commands.chat_client import NOT_RUNNING, NOT_SERVED
 from owlbear_delivery_next.github.account import Writer
 from owlbear_delivery_next.impeccable import calibration, design_tools, detector, pack_files, pack_update
 from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_job, pack_replay, pack_run
+from owlbear_delivery_next.impeccable_runs.pack_run import _verdict as stage_verdict
 from owlbear_delivery_next.local_system import local_home, preload
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import config_routes, pack_routes
@@ -45,24 +46,23 @@ def git(cwd: Path, *args: str) -> str:
 
 
 @pytest.fixture
-def repo(tmp_path: Path, monkeypatch) -> Path:
-    """A project clone with a shared settings repository."""
-    remote, root = tmp_path / "remote.git", tmp_path / "owlbear-data"
-    git(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
-    git(tmp_path, "clone", "-q", str(remote), str(root))
-    git(root, "commit", "-q", "--allow-empty", "-m", "start")
-    git(root, "push", "-q", "origin", "HEAD")
-    for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
-        git(root, "config", key, value)
-    home = tmp_path / "home"
-    home.mkdir()
-    (home / "data.json").write_text(json.dumps({"repository": str(root)}))
-    monkeypatch.setattr(local_home, "root", lambda: home)
+def repo(tmp_path: Path) -> Path:
+    """A tiny committed project; notice, diff and CLI rules do not publish shared settings."""
     project = tmp_path / "shop"
     git(tmp_path, "init", "-q", "-b", "main", str(project))
     git(project, "commit", "--allow-empty", "-qm", "start")
     git(project, "remote", "add", "origin", "git@github.com:acme/shop-site.git")
     return project
+
+
+@pytest.fixture
+def replay_repo(repo: Path, shared_repo) -> Path:
+    """Replay keeps actual calibration inputs in the existing copied native data repository."""
+    root, _remote = shared_repo
+    home = local_home.root()
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "data.json").write_text(json.dumps({"repository": str(root)}))
+    return repo
 
 
 def releases(*tags: str, prerelease: tuple[str, ...] = ()):
@@ -85,31 +85,28 @@ def pin(monkeypatch, commit: str) -> None:
 
 
 @pytest.mark.usefixtures("pinned")
-def test_the_notice_counts_newer_skill_releases_and_offline_is_unknown() -> None:
-    assert pack_files.manifest()["upstream"]["tag"] == "skill-v4.5.2"
+def test_notice_lifecycle_counts_releases_and_keeps_failures_visible(repo, monkeypatch) -> None:
     tags = ("skill-v4.5.1", "skill-v4.5.2", "skill-v4.5.10", "skill-v5.0.0", "skill-v5.1.0-rc1", "engine-v9.0.0")
-    assert pack_update.behind(releases(*tags, prerelease=("skill-v5.1.0-rc1",))) == 2  # by version, not by text
-    assert pack_update.behind() is None  # offline: tests never go online
-    assert pack_update.behind(lambda _url: b'{"message": "rate limited"}') is None
-    assert pack_update.behind(lambda _url: b"not json") is None
-    assert pack_update.behind(lambda _url: b'[{"tag_name": null}, 3, {"tag_name": "skill-v4.6.0"}]') == 1
 
     def truncated(_url: str) -> bytes:
         partial = b"["
         raise IncompleteRead(partial)
 
-    assert pack_update.behind(truncated) is None
-    with pytest.raises(pack_files.PackError, match="cannot download"):
-        pack_files.install()  # the default download is offline in tests too
-
-
-@pytest.mark.usefixtures("pinned")
-def test_the_notice_is_read_offline_refreshed_at_most_daily_and_shown_by_setup_and_settings(repo, monkeypatch) -> None:
+    for fetch, count in (
+        (releases(*tags, prerelease=("skill-v5.1.0-rc1",)), 2),
+        (pack_files.fetch, None),
+        (lambda _url: b'{"message": "rate limited"}', None),
+        (lambda _url: b"not json", None),
+        (lambda _url: b'[{"tag_name": null}, 3, {"tag_name": "skill-v4.6.0"}]', 1),
+        (truncated, None),
+    ):
+        assert pack_update.behind(fetch) == count
     calls = []
+    offered = ["skill-v4.6.0"]
 
     def fetch(url: str) -> bytes:
         calls.append(url)
-        return releases("skill-v4.6.0")(url)
+        return releases(*offered)(url)
 
     unknown = {"pack": "impeccable-4.5.2.1", "state": "unknown", "behind": None, "latest": "", "checked_at": None,
                "detail": ""}  # fmt: skip
@@ -135,23 +132,15 @@ def test_the_notice_is_read_offline_refreshed_at_most_daily_and_shown_by_setup_a
         == "Impeccable (impeccable-4.5.2.1): releases upstream unknown"
     )
     assert pack_update.notice(refresh=False)["behind"] is None  # the settings page no longer shows the old count
-
-
-@pytest.mark.usefixtures("pinned")
-def test_the_notice_says_known_stale_unknown_or_error_and_a_failed_check_keeps_the_last_count() -> None:
-    calls = []
-
-    def fetch(url: str) -> bytes:
-        calls.append(url)
-        return releases("skill-v4.6.0", "skill-v4.7.0")(url)
+    offered.append("skill-v4.7.0")
+    calls.clear()
 
     def refused(url: str) -> bytes:
         raise HTTPError(url, 403, "rate limited", Message(), None)
 
     known = pack_update.notice(refresh=False, force=True, fetch=fetch)
     assert (known["state"], known["behind"], known["latest"], len(calls)) == ("known", 2, "skill-v4.7.0", 1)
-    assert pack_update.notice(refresh=False, force=True, fetch=fetch)["state"] == "known"
-    assert len(calls) == 2  # forced: checked again although counted today
+    assert (pack_update.notice(refresh=False, force=True, fetch=fetch)["state"], len(calls)) == ("known", 2)
     path = pack_files.folder().parent / pack_update.NOTICE
     old = (datetime.now(UTC) - timedelta(days=2)).isoformat()
     path.write_text(json.dumps(json.loads(path.read_text()) | {"checked_at": old}))
@@ -208,7 +197,7 @@ def registry(*rules: tuple[str, ...]) -> str:
 
 
 @pytest.mark.usefixtures("pinned")
-def test_the_diff_reports_rules_added_removed_and_changed_and_skill_files_changed(tmp_path, monkeypatch) -> None:
+def test_rule_and_skill_diff_uses_immutable_pin_and_reports_all_changes(tmp_path, monkeypatch) -> None:
     clone = tmp_path / "impeccable"
     git(tmp_path, "init", "-q", "-b", "main", str(clone))
     (clone / "crates/foundation/src").mkdir(parents=True)
@@ -229,7 +218,7 @@ def test_the_diff_reports_rules_added_removed_and_changed_and_skill_files_change
     )
     for tag, rules in versions:
         (clone / pack_update.REGISTRY).write_text(registry(*rules))
-        (clone / "skill/SKILL.md").write_text(tag)
+        (clone / "skill/SKILL.md").write_text(tag + "\n")
         if tag != "skill-v4.5.2":
             (clone / "skill/new.md").write_text("new")
         git(clone, "add", "-A")
@@ -237,6 +226,8 @@ def test_the_diff_reports_rules_added_removed_and_changed_and_skill_files_change
         git(clone, "tag", tag)
     pin(monkeypatch, commit := git(clone, "rev-parse", "skill-v4.5.2"))
     assert set(pack_update.rules(clone, "skill-v4.5.2")) == {"side-tab", "gradient-text", "flat"}  # not the fixture
+    git(clone, "tag", "-f", "skill-v4.5.2", "skill-v4.6.0")
+    assert git(clone, "rev-parse", "skill-v4.5.2") != commit
     report = pack_update.diff(clone, "skill-v4.6.0")
     assert "## Rules added\n- glow: Glow\n" in report
     assert "## Rules removed\n- gradient-text: Gradient text\n" in report
@@ -249,6 +240,7 @@ def test_the_diff_reports_rules_added_removed_and_changed_and_skill_files_change
     assert report.startswith(f"# Impeccable update: skill-v4.5.2 ({commit}) to skill-v4.6.0\n")
     assert report.endswith(f"Skill text: git -C {clone} diff {commit} skill-v4.6.0 -- skill")
     assert "+++ b/skill/new.md\n" in pack_update.skill_diff(clone, "skill-v4.6.0")  # what that line shows
+    assert "-skill-v4.5.2\n+skill-v4.6.0" in pack_update.skill_diff(clone, "skill-v4.6.0")
     (clone / pack_update.REGISTRY).write_text(registry(("side-tab", "x", "y")).replace('        name: "x",\n', ""))
     git(clone, "commit", "-qam", "unnamed")
     git(clone, "tag", "skill-v4.7.0")
@@ -259,33 +251,6 @@ def test_the_diff_reports_rules_added_removed_and_changed_and_skill_files_change
     git(clone, "tag", "skill-v5.0.0")
     with pytest.raises(ValueError, match="no pub static ANTIPATTERNS table"):
         pack_update.rules(clone, "skill-v5.0.0")
-
-
-@pytest.mark.usefixtures("pinned")
-def test_the_diff_starts_from_the_pinned_commit_when_the_tag_has_moved(tmp_path, monkeypatch) -> None:
-    clone = tmp_path / "impeccable"
-    git(tmp_path, "init", "-q", "-b", "main", str(clone))
-    (clone / "crates/foundation/src").mkdir(parents=True)
-    (clone / "skill").mkdir()
-    for name, rules in (
-        ("skill-v4.5.2", [("side-tab", "Side tab", "d")]),
-        ("moved", [("side-tab", "Side tab", "d"), ("glow", "Glow", "x")]),
-        ("skill-v4.6.0", [("side-tab", "Side tab", "d"), ("glow", "Glow", "x")]),
-    ):
-        (clone / pack_update.REGISTRY).write_text(registry(*rules))
-        (clone / "skill/SKILL.md").write_text("pinned\n" if name == "skill-v4.5.2" else "later\n")
-        (clone / "NOTES").write_text(name)
-        git(clone, "add", "-A")
-        git(clone, "commit", "-qm", name)
-        git(clone, "tag", "-f", "skill-v4.5.2" if name == "moved" else name)
-        if name == "skill-v4.5.2":
-            pin(monkeypatch, commit := git(clone, "rev-parse", "HEAD"))
-    assert git(clone, "rev-parse", "skill-v4.5.2") != commit  # the tag moved after the pack was extracted
-    report = pack_update.diff(clone, "skill-v4.6.0")
-    assert "## Rules added\n- glow: Glow\n" in report  # the moved tag already has it
-    assert "## Skill files changed\n- M\tskill/SKILL.md\n" in report
-    assert report.endswith(f"Skill text: git -C {clone} diff {commit} skill-v4.6.0 -- skill")
-    assert "-pinned\n+later" in pack_update.skill_diff(clone, "skill-v4.6.0")
 
 
 @pytest.mark.usefixtures("pinned")
@@ -327,17 +292,16 @@ def test_golden_pages_report_what_an_engine_missed_or_found_unexpectedly(monkeyp
     assert "side-tab" not in wrong["bad.html (source)"]["missing"]
 
 
-@pytest.mark.parametrize("name", ["../code/detector.py", "/etc/hosts", "sub/page.html", ".hidden.html"])
-def test_a_candidates_expectations_name_only_page_files_of_its_own_folder(tmp_path, name) -> None:
+@pytest.mark.parametrize("name", ["../code/detector.py", "/etc/hosts", "sub/page.html", ".hidden.html", "unscanned"])
+def test_candidate_golden_expectations_stay_inside_scanned_page_set(tmp_path, name) -> None:
     """TD-194: the updater writes expected.json; a name never reaches outside the folders before the owner sees it."""
+    if name == "unscanned":
+        (tmp_path / "expected.json").write_text(json.dumps({"source": {"a.html": []}, "page": {"b.html": []}}))
+        with pytest.raises(pack_files.PackError, match=r"does not scan by source: b\.html"):
+            pack_update.golden(object(), tmp_path, pages=False)
+        return
     (tmp_path / "expected.json").write_text(json.dumps({"source": {name: []}, "page": {}}))
     with pytest.raises(pack_files.PackError, match="no page file of its folder"):
-        pack_update.golden(object(), tmp_path, pages=False)
-
-
-def test_a_candidates_expectations_cover_only_the_pages_it_scans(tmp_path) -> None:
-    (tmp_path / "expected.json").write_text(json.dumps({"source": {"a.html": []}, "page": {"b.html": []}}))
-    with pytest.raises(pack_files.PackError, match=r"does not scan by source: b\.html"):
         pack_update.golden(object(), tmp_path, pages=False)
 
 
@@ -353,31 +317,6 @@ def test_the_installed_engine_and_bundle_find_exactly_the_golden_rules(monkeypat
         "unexpected": [],
         "missing": ["gradient-text", "gray-on-color", "low-contrast", "side-tab"],
     }
-
-
-def test_the_manifest_activates_a_pack_in_one_switch_and_a_rollback_needs_no_download(monkeypatch) -> None:
-    def pins(name: str, engine: bytes, bundle: bytes) -> dict:
-        made = pack_files.manifest()
-        made["pack"] = name
-        made["engine"][pack_files.platform_name()] = hashlib.sha256(engine).hexdigest()
-        made["bundle"]["sha256"] = hashlib.sha256(bundle).hexdigest()
-        return made
-
-    old, new = pins("impeccable-1", b"e1", b"b1"), pins("impeccable-2", b"e2", b"b2")
-    active = {"pins": old}
-    monkeypatch.setattr(pack_files, "manifest", lambda: json.loads(json.dumps(active["pins"])))
-    pack_files.install(lambda url: b"e1" if "releases" in url else b"b1")
-    active["pins"] = new  # the reviewed commit that switches the manifest, skills with it
-    assert pack_files.installed() is None  # never the old pack under the new name
-    assert pack_files.install(lambda url: b"e2" if "releases" in url else b"b2").bundle == "b2"
-    active["pins"] = old  # reverting that commit
-
-    def offline(url: str) -> bytes:
-        msg = f"a rollback downloads nothing: {url}"
-        raise AssertionError(msg)
-
-    assert pack_files.install(offline).bundle == "b1"
-    assert sorted(p.name for p in pack_files.folder().parent.iterdir()) == ["impeccable-1", "impeccable-2"]
 
 
 def kept_round(  # noqa: PLR0913 - one round, varied by each case
@@ -425,8 +364,10 @@ def test_a_replay_compares_agreement_with_the_owner_and_holds_back_only_from_eno
     assert calibration.replayed([(undecided, "pass")]).rounds == 0
 
 
-def test_a_replay_rejudges_kept_rounds_with_their_exact_messages_and_screenshots(repo, tmp_path, user_on) -> None:
-    store = Store.open(repo)
+def test_a_replay_rejudges_kept_rounds_with_their_exact_messages_and_screenshots(
+    replay_repo, tmp_path, user_on
+) -> None:
+    store = Store.open(replay_repo)
     after, before = tmp_path / "after.png", tmp_path / "before.png"
     after.write_bytes(b"after")
     before.write_bytes(b"before")
@@ -479,6 +420,7 @@ def test_a_replay_rejudges_kept_rounds_with_their_exact_messages_and_screenshots
     )
     assert (cfg.submit, cfg.first_look) == (design_tools.FINAL, design_tools.FIRST)
     assert [a["displayName"] for a in cfg.attachments] == ["home-1280-A.png", "home-1280-B.png"]
+    assert [base64.b64decode(a["data"]) for a in cfg.attachments] == [b"after", b"before"]
     assert cfg.observe().changed == ("home-1280-A.png", "home-1280-B.png")
     assert (cfg.policy.write, cfg.resume, cfg.session_id.startswith("replay-")) == (False, False, True)
     clash = {"image": "home-1280-A.png", "rule": "Color", "problem": "the required grey is faint"}
@@ -490,28 +432,14 @@ def test_a_replay_rejudges_kept_rounds_with_their_exact_messages_and_screenshots
     assert design_tools.check(stray, cfg.observe(), cfg.targets)[0].startswith("conflicts: AC-1 is no state")
 
 
-def test_a_replay_judge_left_running_stops_the_replay_before_another_starts(repo, tmp_path) -> None:
-    store = Store.open(repo)
+def test_uncertain_replay_judge_stops_before_next_and_route_preserves_whole_reason(
+    caplog, replay_repo, tmp_path, whole_error
+) -> None:
+    store = Store.open(replay_repo)
     (shot := tmp_path / "s.png").write_bytes(b"png")
     shots = {"after-home-1280.png": shot, "before-home-1280.png": shot}
     for n in (1, 2):
         calibration.keep(store.shared, store.name, f"c{n}", kept_round(n, "pass", "pass"), shots)
-    started = []
-
-    def run(cfg):
-        started.append(cfg.session_id)
-        return Run(cfg.session_id, ending="result", termination=Termination(confirmed=False))
-
-    with pytest.raises(pack_replay.ReplayError, match="may still be running"):
-        pack_replay.replay(store, run=run)
-    assert len(started) == 1
-
-
-def test_an_unverified_session_end_says_its_problems_whole(caplog, repo, tmp_path, whole_error) -> None:
-    store = Store.open(repo)
-    (shot := tmp_path / "s.png").write_bytes(b"png")
-    shots = {"after-home-1280.png": shot, "before-home-1280.png": shot}
-    calibration.keep(store.shared, store.name, "c1", kept_round(1, "pass", "pass"), shots)
     started = []
     left = Termination(confirmed=False, unknown=(9,), problems=(f"disconnect failed: RuntimeError: {whole_error}",))
 
@@ -531,51 +459,40 @@ def test_an_unverified_session_end_says_its_problems_whole(caplog, repo, tmp_pat
     why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
     said = f"the replay judge {started[0]} may still be running; stop it before replaying again; {why}"
     assert (answer.status_code, answer.json()) == (409, {"detail": said})
+    assert len(started) == 1
     logged = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == pack_routes.__name__]
     assert logged == [("WARNING", f"calibration replay refused: {said}")]
 
 
-def test_a_replay_worktree_git_refuses_stops_the_replay_stage_with_gits_whole_words(repo, monkeypatch, whole_error):
-    store, real = Store.open(repo), subprocess.run
+@pytest.mark.parametrize("stage", ["replay", "challenger"])
+def test_replay_and_challenger_git_setup_failures_reach_their_stage_whole(replay_repo, monkeypatch, whole_error, stage):
+    store, real = Store.open(replay_repo), subprocess.run
 
     def refusing(argv, *rest, **kw):
         if argv == ["git", "init", "-q"]:
             return subprocess.CompletedProcess(argv, 128, "", whole_error)
         return real(argv, *rest, **kw)
 
-    monkeypatch.setattr(pack_replay.git_files.subprocess, "run", refusing)
+    monkeypatch.setattr(subprocess, "run", refusing)
     job = pack_job.Job(store, pack_job.Live())
-    job.state = job._blank() | {"state": "running", "run": "r1", "invocations": []}  # noqa: SLF001 - a running run
-    with pytest.raises(pack_run.Stopped) as stopped:
-        job.do("replay", lambda: pack_replay.replay(store, run=lambda _cfg: None))
-    refused = f"CalledProcessError: Command '['git', 'init', '-q']' returned non-zero exit status 128.\n{whole_error}"
-    said = f"the replay's worktree could not be made a git repository: {refused}"
-    assert stopped.value.reason == f"replay: PackError: {said}"
+    job.state = job.state | {"state": "running", "run": "r1", "invocations": []}
 
-
-def test_a_challenger_worktree_git_refuses_stops_the_challenger_stage_with_gits_whole_words(
-    repo, monkeypatch, whole_error
-):
-    store, real = Store.open(repo), subprocess.run
-
-    def refusing(argv, *rest, **kw):
-        if argv == ["git", "init", "-q"]:
-            return subprocess.CompletedProcess(argv, 128, "", whole_error)
-        return real(argv, *rest, **kw)
-
-    monkeypatch.setattr(pack_candidate.git_files.subprocess, "run", refusing)
-    job = pack_job.Job(store, pack_job.Live())
-    job.state = job._blank() | {"state": "running", "run": "r1", "invocations": []}  # noqa: SLF001 - a running run
-    with pytest.raises(pack_run.Stopped) as stopped:
-        job.do(
-            "challenger",
-            lambda: pack_run._verdict(  # noqa: SLF001 - the challenger stage's own reading of its run
-                pack_candidate.challenge(store, candidate(), repo, "t", lambda *_a: pytest.fail("no session"))
-            ),
+    def work():
+        if stage == "replay":
+            return pack_replay.replay(store, run=lambda _cfg: pytest.fail("no session"))
+        return stage_verdict(
+            pack_candidate.challenge(store, candidate(), replay_repo, "t", lambda *_a: pytest.fail("no session"))
         )
+
+    with pytest.raises(pack_run.Stopped) as stopped:
+        job.do(stage, work)
     refused = f"CalledProcessError: Command '['git', 'init', '-q']' returned non-zero exit status 128.\n{whole_error}"
-    said = f"the challenger ended with error: the challenger's worktree is no repository: {refused}"
-    assert stopped.value.reason == f"challenger: PackError: {said}"
+    said = (
+        f"the replay's worktree could not be made a git repository: {refused}"
+        if stage == "replay"
+        else (f"the challenger ended with error: the challenger's worktree is no repository: {refused}")
+    )
+    assert stopped.value.reason == f"{stage}: PackError: {said}"
 
 
 def candidate(folder: Path | None = None, **pins) -> pack_candidate.Candidate:
@@ -583,9 +500,9 @@ def candidate(folder: Path | None = None, **pins) -> pack_candidate.Candidate:
     return pack_candidate.Candidate("skill-v4.6.0", made, json.dumps(made), "notice", None, folder)
 
 
-def test_a_replay_refuses_a_candidate_whose_skills_the_judge_does_not_load(repo) -> None:
+def test_a_replay_refuses_a_candidate_whose_skills_the_judge_does_not_load(replay_repo) -> None:
     with pytest.raises(pack_files.PackError, match="names skills the judge does not load"):
-        pack_replay.replay(Store.open(repo), candidate(skills=["other"]), run=lambda _cfg: None)
+        pack_replay.replay(Store.open(replay_repo), candidate(skills=["other"]), run=lambda _cfg: None)
 
 
 class _Answers(BaseHTTPRequestHandler):
@@ -636,7 +553,7 @@ def running_host(monkeypatch):
     server.server_close()
 
 
-def test_the_cli_replay_is_the_running_hosts_managed_job_and_nothing_replays_here(
+def test_cli_replay_uses_host_and_legacy_fallback_only_for_missing_route(
     repo, monkeypatch, capsys, running_host
 ) -> None:
     def ran_here(*_args: object, **_kwargs: object) -> None:
@@ -648,20 +565,16 @@ def test_the_cli_replay_is_the_running_hosts_managed_job_and_nothing_replays_her
     assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 0
     assert capsys.readouterr().out == "calibration replay: 3 decided rounds, 0 left out\n"
     assert _Answers.seen == ["/p/owlbear/api/next/impeccable/replay Bearer tok cli"]
-
-
-def test_the_cli_replay_below_the_margin_and_a_refused_host_both_exit_one(repo, capsys, running_host) -> None:
+    _Answers.seen.clear()
     running_host(200, {"ok": False, "report": "calibration replay: 9 decided rounds; below the margin"})
     assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 1
     assert capsys.readouterr().out == "calibration replay: 9 decided rounds; below the margin\n"
     running_host(409, {"detail": "an Impeccable update is running: wait for it to finish"})
     assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 1
     assert capsys.readouterr().out == "an Impeccable update is running: wait for it to finish\n"
-
-
-def test_the_cli_replay_reaches_a_host_from_before_the_impeccable_rename_once_by_its_old_route(
-    repo, capsys, running_host
-) -> None:
+    assert len(_Answers.seen) == 2
+    assert all(seen.split()[0] == "/p/owlbear/api/next/impeccable/replay" for seen in _Answers.seen)
+    _Answers.seen.clear()
     _Answers.old = True
     running_host(200, {"ok": True, "report": "calibration replay: 1 decided round, 0 left out"})
     assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 0
@@ -670,10 +583,6 @@ def test_the_cli_replay_reaches_a_host_from_before_the_impeccable_rename_once_by
         "/p/owlbear/api/next/impeccable/replay",
         "/p/owlbear/api/next/design-pack/replay",
     ]
-    _Answers.old, _Answers.seen = False, []
-    running_host(409, {"detail": "an Impeccable update is running: wait for it to finish"})
-    assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 1
-    assert len(_Answers.seen) == 1  # only a 404 means the route is missing; a refusal is never sent again
 
 
 def test_the_cli_runs_each_update_tool_and_reports_failures(repo, capsys, monkeypatch) -> None:

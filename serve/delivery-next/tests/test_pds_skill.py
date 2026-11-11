@@ -1,6 +1,7 @@
 """#777: the PDS knowledge skill a project's session preloads, chosen from its worktree."""
 
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -52,16 +53,7 @@ def pages(project: Path, *tracked: str, untracked: str = "") -> Path:
     return project
 
 
-def test_a_project_depending_on_a_pds_package_gets_its_installed_skill_or_the_reason(tmp_path, owlbear) -> None:
-    chosen = react(tmp_path / "app")
-    assert pds_skill.choose(tmp_path / "app", owlbear) == pds_skill.Choice("pds-knowledge-react", chosen)
-    react(tmp_path / "bare", installed=False)
-    assert pds_skill.choose(tmp_path / "bare", owlbear) == pds_skill.Choice(
-        reason="the project's PDS package is not installed"
-    )
-
-
-def test_pages_loading_owlbear_s_pinned_release_get_its_vendored_skill_any_other_none(tmp_path, owlbear) -> None:
+def test_tracked_cdn_version_selects_vendored_skill_or_explains_absence(tmp_path, owlbear) -> None:
     cdn = "https://cdn.ui.porsche.com/porsche-design-system/components/porsche-design-system.v{}.abc.js"
     at_pin = pages(tmp_path / "pinned", cdn.format("4.10.1"), untracked=cdn.format("3.0.0"))  # untracked: not read
     assert pds_skill.choose(at_pin, owlbear) == pds_skill.Choice("pds-knowledge-js", owlbear / pds_skill.VENDORED)
@@ -69,9 +61,6 @@ def test_pages_loading_owlbear_s_pinned_release_get_its_vendored_skill_any_other
     assert pds_skill.choose(other, owlbear) == pds_skill.Choice(
         reason="the project loads PDS 4.10.1, 4.9.0; OwlBear's skill is for 4.10.1"
     )
-
-
-def test_a_project_that_names_no_pds_is_not_a_pds_project(tmp_path, owlbear) -> None:
     assert pds_skill.choose(pages(tmp_path / "plain", "app.js"), owlbear) is None
     assert pds_skill.choose(tmp_path / "missing", owlbear) is None  # not a git checkout either
 
@@ -107,11 +96,14 @@ def step(cfg: sdk_adapter.Session) -> sdk_adapter._Step:
         ({"role": "challenger", "skills": preload.directory()}, False),  # a pack candidate's session: its own only
     ],
 )
-def test_the_sdk_options_preload_the_chosen_skill_for_the_roles_that_judge_or_build_a_ui(
-    tmp_path, fields, loads
-) -> None:
+def test_pds_preload_roles_and_candidate_skill_isolation(tmp_path, fields, loads) -> None:
     chosen = react(tmp_path / "app")
-    opts = step(session(tmp_path / "app", **fields)).options()
+    cfg = session(tmp_path / "app", **fields)
+    role = sdk_adapter.role_of(cfg)
+    assert pds_skill.wanted(role, ui=cfg.ui, skills=cfg.skills) is loads
+    if loads:
+        cfg = replace(cfg, pds=pds_skill.Choice("pds-knowledge-react", chosen))
+    opts = step(cfg).options()
     assert (str(chosen) in opts["skill_directories"]) is loads
     assert ("pds-knowledge-react" in opts["custom_agents"][0]["skills"]) is loads
 
@@ -120,8 +112,12 @@ def event(kind: str, **data) -> SimpleNamespace:
     return SimpleNamespace(type=SimpleNamespace(value=kind), data=SimpleNamespace(**data))
 
 
-def test_only_the_chosen_skill_s_own_load_satisfies_the_first_turn_check(tmp_path) -> None:
+def test_installed_skill_reaches_sdk_and_only_its_own_load_counts(tmp_path, owlbear) -> None:
     chosen = react(tmp_path / "app")
+    assert pds_skill.choose(tmp_path / "app", owlbear) == pds_skill.Choice("pds-knowledge-react", chosen)
+    opts = step(session(tmp_path / "app")).options()
+    assert str(chosen) in opts["skill_directories"]
+    assert "pds-knowledge-react" in opts["custom_agents"][0]["skills"]
     elsewhere = skill(tmp_path / "copy" / "pds-knowledge-react", "pds-knowledge-react")
     for folder, done in ((elsewhere, True), (chosen, False)):
         st = step(session(tmp_path / "app"))
@@ -133,10 +129,10 @@ def test_only_the_chosen_skill_s_own_load_satisfies_the_first_turn_check(tmp_pat
         st.on_event(event("assistant.turn_start"))
         assert st.done is done
         assert st.run.detail == ("skills not preloaded: pds-knowledge-react" if done else "")
-
-
-def test_a_pds_project_without_its_skill_is_told_why_and_a_resume_still_finds_the_message(tmp_path) -> None:
     react(tmp_path / "bare", installed=False)
+    assert pds_skill.choose(tmp_path / "bare", owlbear) == pds_skill.Choice(
+        reason="the project's PDS package is not installed"
+    )
     st = step(session(tmp_path / "bare"))
     first = pds_skill.noted("Review the change.", st.pds)
     assert first.splitlines()[0] == f"{pds_skill.NOTE}the project's PDS package is not installed."

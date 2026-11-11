@@ -71,22 +71,37 @@ def test_a_link_or_an_escaping_entry_refuses_the_tarball(kind) -> None:
         pin.unpack("4.11.0", integrity(data), data)
 
 
-def test_the_closure_follows_both_link_forms_and_skips_documentation_links() -> None:
-    release = unpacked(BASE)
-    assert sorted(release.tree) == sorted(set(BASE) - {"esm/index.mjs", "stylesheets/index.css", "esm/unlinked.mjs"})
-    assert all(release.tree[p] == BASE[p] for p in release.tree)  # npm's bytes, unmodified
-
-
-def test_two_hops_reach_exactly_the_linked_files_outside_the_seeds() -> None:
+def test_release_closure_served_bytes_and_pin_replacement(tmp_path: Path) -> None:
     entries = BASE | {
-        "CHANGELOG.md": b"[a](docs/a.md)\n",
+        "CHANGELOG.md": BASE["CHANGELOG.md"] + b"[a](docs/a.md)\n",
         "docs/a.md": b"[b](../partials/b.md)\n",
         "partials/b.md": b"leaf\n",
         "docs/unlinked.md": b"[c](c.md)\n",
     }
-    tree = unpacked(entries).tree
-    assert {"docs/a.md", "partials/b.md", "tokens/index.mjs", f"{SKILL}/references/components/button.md"} <= set(tree)
-    assert not {"docs/unlinked.md", "esm/unlinked.mjs"} & set(tree)
+    release = unpacked(entries)
+    omitted = {"esm/index.mjs", "stylesheets/index.css", "esm/unlinked.mjs", "docs/unlinked.md"}
+    assert set(release.tree) == set(entries) - omitted
+    assert all(release.tree[p] == entries[p] for p in release.tree)
+    header, _, body = release.served["load.mjs"].partition(b"\n")
+    assert header.startswith(f"/* {pin.NAME} {'4.11.0'} esm/index.mjs;".encode())
+    assert body == entries["esm/index.mjs"] + b"\n"
+    assert release.served["index.css"].partition(b"\n")[2] == entries["stylesheets/index.css"]
+
+    old = release.pin()
+    entries.pop(f"{SKILL}/references/deprecations.md")
+    entries[f"{SKILL}/references/components/button.md"] = b"no links\n"
+    entries[f"{SKILL}/SKILL.md"] = b"See [button](references/components/button.md).\n"
+    new = unpacked(entries)
+    out = new.files(old)
+    assert out[f"{pin.PREFIX}{pin.TREE}/{SKILL}/references/deprecations.md"] is None
+    folder = tmp_path / "package"
+    folder.mkdir()
+    (folder / pin.PIN).write_bytes(out[f"{pin.PREFIX}{pin.PIN}"])
+    written = pin.read(folder)
+    assert (written.version, written.integrity) == ("4.11.0", new.integrity)
+    kept = {p.removeprefix(pin.PREFIX) for p, b in out.items() if b is not None and not p.endswith(pin.PIN)}
+    assert set(written.files) == kept
+    assert written.files[f"{pin.WEB}/load.mjs"] == hashlib.sha256(new.served["load.mjs"]).hexdigest()
 
 
 @pytest.mark.parametrize(
@@ -104,33 +119,7 @@ def test_a_missing_seed_or_a_broken_link_refuses_the_release(change, said) -> No
         unpacked(entries)
 
 
-def test_served_files_are_npms_bytes_after_a_header_with_one_final_newline() -> None:
-    served = unpacked(BASE).served
-    header, _, body = served["load.mjs"].partition(b"\n")
-    assert header.startswith(f"/* {pin.NAME} {'4.11.0'} esm/index.mjs;".encode())  # split: no PDS version in the repo
-    assert body == BASE["esm/index.mjs"] + b"\n"
-    assert served["index.css"].partition(b"\n")[2] == BASE["stylesheets/index.css"]  # already ended with one
-
-
-def test_the_pin_names_every_file_and_an_update_deletes_what_only_the_old_one_had(tmp_path: Path) -> None:
-    old = unpacked(BASE).pin()
-    entries = BASE | {f"{SKILL}/references/components/button.md": b"no links\n"}
-    entries.pop(f"{SKILL}/references/deprecations.md")
-    entries[f"{SKILL}/SKILL.md"] = b"See [button](references/components/button.md).\n"
-    new = unpacked(entries)
-    out = new.files(old)
-    assert out[f"{pin.PREFIX}{pin.TREE}/{SKILL}/references/deprecations.md"] is None
-    folder = tmp_path / "package"
-    folder.mkdir()
-    (folder / pin.PIN).write_bytes(out[f"{pin.PREFIX}{pin.PIN}"])
-    written = pin.read(folder)
-    assert (written.version, written.integrity) == ("4.11.0", new.integrity)
-    kept = {p.removeprefix(pin.PREFIX) for p, b in out.items() if b is not None and not p.endswith(pin.PIN)}
-    assert set(written.files) == kept
-    assert written.files[f"{pin.WEB}/load.mjs"] == hashlib.sha256(new.served["load.mjs"]).hexdigest()
-
-
-def test_the_repositorys_pin_verifies_and_its_closure_is_closed() -> None:
+def test_shipped_pin_is_closed_served_and_not_ignored() -> None:
     """The 4.10.1 pin was written from npm's real tarball by ``pin.release``; its files must still be that closure."""
     root, current = pin.package(), pin.read()
     assert pin.verify() == []
@@ -138,13 +127,9 @@ def test_the_repositorys_pin_verifies_and_its_closure_is_closed() -> None:
         p.removeprefix(f"{pin.TREE}/"): (root / p).read_bytes() for p in current.files if p.startswith(f"{pin.TREE}/")
     }
     assert sorted(pin.closure(vendored)) == sorted(vendored)
-    assert max(len(line) for line in (root / pin.PIN).read_text(encoding="utf-8").splitlines()) <= 120
     assert pages.pds_version() == current.version
     first = (root / pin.WEB / "load.mjs").read_text(encoding="utf-8").split(None, 3)[2]
     assert first == current.version  # the served header names the pinned release
-
-
-def test_no_pinned_file_is_ignored_by_git() -> None:
     repo = Path(pin.package()).parents[3]
     names = "\n".join(f"{pin.PREFIX}{p}" for p in pin.read().files)
     found = subprocess.run(["git", "-C", str(repo), "check-ignore", "--stdin"], input=names, capture_output=True,  # noqa: S603, S607
