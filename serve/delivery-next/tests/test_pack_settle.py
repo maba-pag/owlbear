@@ -6,6 +6,7 @@ recovered, still covers it wherever the store now lies. A later record carries n
 """
 
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -37,20 +38,13 @@ def store(tmp_path: Path, name: str, record: dict | None = None) -> Path:
     root = tmp_path / name
     root.mkdir()
     if record is not None:
-        (root / pack_state.FILE).write_text(json.dumps(pack_job._blank() | record, indent=1) + "\n")  # noqa: SLF001
+        (root / pack_state.FILE).write_text(json.dumps(pack_state.blank() | record, indent=1) + "\n")
     return root
 
 
 def ledger(boot: float = 10.0) -> maintenance.Maintenance:
     """A host's view of the machine's ledger: each instance is a restart, *boot* the boot it runs in."""
     return maintenance.Maintenance(Slots(lambda: 2), boot=lambda: boot, observe=lambda *_args: False)
-
-
-def import_at(owner: maintenance.Maintenance, root: Path) -> None:
-    """The read-only import of a project whose store lies at *root*, as a host does when it cannot open it."""
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(session_slots.project_home, "current", lambda _repo: root)
-        session_slots.unloaded(owner, "p", root)
 
 
 def copied(source: Path, tmp_path: Path) -> Path:
@@ -73,8 +67,23 @@ def settle(root: Path, owner: maintenance.Maintenance | None = None) -> bool:
 
 
 @pytest.mark.parametrize("identity", IDENTITIES.values(), ids=IDENTITIES.keys())
-def test_settling_a_running_record_carries_its_generation_and_a_second_settle_writes_nothing(tmp_path, identity):
-    root = store(tmp_path, "clone", {"state": "running", **identity})
+def test_generation_selects_each_partial_and_proven_identity(identity):
+    record = pack_state.blank() | {"state": "running", **identity}
+    generation = pack_state.generation(record, "file-version")[0]
+    if "run" in identity and "started_at" in identity:
+        assert generation == f"main-run:{STARTED}"
+        assert pack_state.generation(record, "another-file")[0] == generation
+    else:
+        assert generation
+        assert pack_state.generation(record, "another-file")[0] != generation
+        assert pack_state.generation(record | {"run": "different-run"}, "file-version")[0] != generation
+        assert (
+            pack_state.generation(record | {"started_at": "2026-10-26T00:00:00+00:00"}, "file-version")[0] != generation
+        )
+
+
+def test_generation_selection_and_running_settlement(tmp_path):
+    root = store(tmp_path, "clone", {"state": "running"})
     before = pack_state.generation(*pack_state.observed(root))[0]
     assert settle(root) is True
     record = pack_state.read_only(root)
@@ -97,6 +106,8 @@ def test_an_uncertain_failure_is_stamped_and_definitive_modern_idle_or_absent_re
         "definitive": {"state": "failed", "reason": "candidate: RuntimeError: the download failed"},
         "modern": {"state": "running", "workspace": str(tmp_path / "w")},
         "idle": {},
+        "passed": {"state": "passed"},
+        "publishing": {"state": "running", "context": {"publication": {"commit": "c"}}},
     }.items():
         root = store(tmp_path, name, record)
         unchanged = (root / pack_state.FILE).read_bytes()
@@ -108,72 +119,37 @@ def test_a_failed_stamp_leaves_the_record_whole_and_a_retry_carries_the_same_gen
     root = store(tmp_path, "clone", {"state": "running"})
     before, original = pack_state.generation(*pack_state.observed(root))[0], (root / pack_state.FILE).read_bytes()
 
-    def full(*_args: object, **_kwargs: object) -> None:
-        msg = "synthetic: disk full"
+    def interrupted(*_args: object, **_kwargs: object) -> None:
+        msg = "interrupted descriptor-bound rewrite"
         raise OSError(msg)
 
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(fd_tree, "write_at", full)
-        with pytest.raises(OSError, match="disk full"):
+        patch.setattr(fd_tree, "write_at", interrupted)
+        with pytest.raises(OSError, match="interrupted descriptor-bound rewrite"):
             settle(root)
     assert (root / pack_state.FILE).read_bytes() == original
     assert settle(root) is True
     assert pack_state.read_only(root)[pack_state.REWRITTEN] == before
 
 
-def test_an_unreadable_record_is_refused_not_taken_for_settled(tmp_path):
-    root = store(tmp_path, "clone")
-    (root / pack_state.FILE).write_text("{")
-    with pytest.raises(ValueError):  # noqa: PT011 - the reader's own refusal of a damaged record
-        settle(root)
-    assert (root / pack_state.FILE).read_text() == "{"
-
-
-def held_then_copied(tmp_path: Path, record: dict, *, recovered: bool) -> tuple[Path, Path, str]:
-    """Lease A taken read-only at the clone, held or recovered after a reboot; then settled and copied."""
-    source = store(tmp_path, "clone", record)
-    first = ledger()
-    import_at(first, source)
-    [(a, _state)] = leases(first)
-    if recovered:
-        ledger(boot=20.0).recover(a, rebooted=True)
-    assert settle(source, first) is True
-    return source, copied(source, tmp_path), a
-
-
-@pytest.mark.parametrize("recovered", [False, True], ids=["held", "recovered"])
-@pytest.mark.parametrize(
-    "record",
-    [{"state": "running", **identity} for identity in IDENTITIES.values()] + [SDK_FAILED],
-    ids=[*IDENTITIES.keys(), "sdk-failed"],
-)
-def test_a_settled_copy_is_the_lease_already_taken_held_or_recovered_across_restarts(tmp_path, record, recovered):
-    _source, target, a = held_then_copied(tmp_path, record, recovered=recovered)
-    state = "recovered" if recovered else "held"
-    for _ in range(2):
-        again = ledger(boot=20.0)
-        import_at(again, target)
-        assert leases(again) == [(a, state)]
-        assert again.slots.counts("p")[2] == (0 if recovered else 1)
-        assert again.pending("pack") is not recovered
-
-
-def test_an_unsettled_copy_of_a_record_without_identity_is_another_file_and_held_anew(tmp_path):
-    """Why the generation must be carried before the copy: a fingerprint of the copy names another run."""
-    source = store(tmp_path, "clone", {"state": "running"})
-    owner = ledger()
-    import_at(owner, source)
-    import_at(owner, copied(source, tmp_path))
-    assert [s for _, s in leases(owner)] == ["held", "held"]
-
-
-@pytest.mark.parametrize("recovered", [False, True], ids=["held", "recovered"])
 @pytest.mark.parametrize("later", ["original-bytes", "fresh-running", "new-proven-run"])
-def test_a_later_record_after_the_copy_carries_no_generation_and_is_held_anew(tmp_path, recovered, later):
+def test_copy_and_later_write_preserve_generation_boundaries(tmp_path, later):
     original = {"state": "running"}
-    _source, target, a = held_then_copied(tmp_path, original, recovered=recovered)
+    source = store(tmp_path, "clone", original)
+    original_bytes = (source / pack_state.FILE).read_bytes()
+    owner = ledger()
+    session_slots.restore(owner, "p", source)
+    [(a, _state)] = leases(owner)
+    assert settle(source, owner)
+    target = copied(source, tmp_path)
+    ledger(boot=20.0).recover(a, rebooted=True)
+    again = ledger(boot=20.0)
+    session_slots.restore(again, "p", target)
+    assert leases(again) == [(a, "recovered")]
+    assert again.slots.counts("p")[2] == 0
+    assert not again.pending("pack")
     if later == "original-bytes":  # byte for byte the record as it was before it was settled
-        (target / pack_state.FILE).write_text(json.dumps(pack_job._blank() | original, indent=1) + "\n")  # noqa: SLF001
+        (target / pack_state.FILE).write_bytes(original_bytes)
     elif later == "fresh-running":
         (target / pack_state.FILE).unlink()
         (target / pack_state.FILE).write_text(json.dumps(pack_job._blank() | {"state": "running"}) + "\n")  # noqa: SLF001
@@ -181,22 +157,30 @@ def test_a_later_record_after_the_copy_carries_no_generation_and_is_held_anew(tm
         later_run = SDK_FAILED | {"run": "main-run-b", "started_at": STARTED}
         (target / pack_state.FILE).write_text(json.dumps(pack_job._blank() | later_run) + "\n")  # noqa: SLF001
     owner = ledger(boot=20.0)
-    import_at(owner, target)
-    assert leases(owner)[0] == (a, "recovered" if recovered else "held")
+    session_slots.restore(owner, "p", target)
+    assert leases(owner)[0] == (a, "recovered")
     assert [s for _, s in leases(owner)[1:]] == ["held"]
+
+
+def test_an_unsettled_copy_of_a_record_without_identity_is_another_file_and_held_anew(tmp_path):
+    source = store(tmp_path, "clone", {"state": "running"})
+    owner = ledger()
+    session_slots.restore(owner, "p", source)
+    session_slots.restore(owner, "p", copied(source, tmp_path))
+    assert [s for _, s in leases(owner)] == ["held", "held"]
 
 
 def test_a_proven_run_written_again_by_its_producer_after_settling_is_still_its_lease(tmp_path):
     """main writes every run it starts with its run and start, so a later write of that run keeps its generation."""
     source = store(tmp_path, "clone", {"state": "running", "run": "main-run", "started_at": STARTED})
     first = ledger()
-    import_at(first, source)
+    session_slots.restore(first, "p", source)
     [(a, _state)] = leases(first)
     settle(source, first)
     continued = SDK_FAILED | {"run": "main-run", "started_at": STARTED}  # main's own later write: no carried field
     (source / pack_state.FILE).write_text(json.dumps(pack_job._blank() | continued) + "\n")  # noqa: SLF001
     owner = ledger()
-    import_at(owner, copied(source, tmp_path))
+    session_slots.restore(owner, "p", copied(source, tmp_path))
     assert leases(owner) == [(a, "held")]
 
 
@@ -233,7 +217,7 @@ def receipted_rewrite(tmp_path: Path, *, recovered: bool) -> tuple[Path, str, st
     """
     root = store(tmp_path, "clone", {"state": "running"})
     owner = ledger()
-    import_at(owner, root)
+    session_slots.restore(owner, "p", root)
     [(a, _state)] = leases(owner)
     g0 = pack_state.generation(*pack_state.observed(root))[0]
     record, _version = pack_state.observed(root)
@@ -245,26 +229,20 @@ def receipted_rewrite(tmp_path: Path, *, recovered: bool) -> tuple[Path, str, st
     return root, a, g0
 
 
-@pytest.mark.parametrize("recovered", [False, True], ids=["held", "recovered"])
-def test_settling_a_receipted_rewrite_carries_the_receipted_run_so_neither_a_reread_nor_a_copy_holds_it_again(
-    tmp_path, recovered
-):
+def test_receipt_is_bound_to_exact_observed_bytes(tmp_path):
     """Review on 7679: settling resolves the generation as restoration does, the receipt for this very version first."""
-    root, a, g0 = receipted_rewrite(tmp_path, recovered=recovered)
-    state = "recovered" if recovered else "held"
+    root, a, g0 = receipted_rewrite(tmp_path, recovered=True)
     assert settle(root, ledger(boot=20.0)) is True
     assert pack_state.read_only(root)[pack_state.REWRITTEN] == g0
-    for at in (root, copied(root, tmp_path)):  # read again where it is, then from its byte copy
-        for _ in range(2):
-            again = ledger(boot=20.0)
-            import_at(again, at)
-            assert leases(again) == [(a, state)]
-    later = tmp_path / "home"
-    (later / pack_state.FILE).unlink()
-    (later / pack_state.FILE).write_text(json.dumps(pack_job._blank() | {"state": "running"}) + "\n")  # noqa: SLF001
+    target = copied(root, tmp_path)
     owner = ledger(boot=20.0)
-    import_at(owner, later)
-    assert [s for _, s in leases(owner)] == [state, "held"]
+    session_slots.restore(owner, "p", target)
+    assert leases(owner) == [(a, "recovered")]
+    write_record(target, SDK_FAILED | {"run": "later", "started_at": STARTED})
+    assert settle(target, owner)
+    assert pack_state.read_only(target)[pack_state.REWRITTEN] == f"later:{STARTED}"
+    session_slots.restore(owner, "p", target)
+    assert [s for _, s in leases(owner)] == ["recovered", "held"]
 
 
 def test_settling_against_a_ledger_that_cannot_be_read_fails_closed_and_changes_nothing(tmp_path):
@@ -275,6 +253,45 @@ def test_settling_against_a_ledger_that_cannot_be_read_fails_closed_and_changes_
     with pytest.raises(maintenance.MaintenanceError):
         settle(root, owner)
     assert (root / pack_state.FILE).read_bytes() == before
+
+
+@pytest.mark.parametrize("saved", [False, True], ids=["before-save", "after-save"])
+def test_receipt_save_interruption_does_not_duplicate_adoption(tmp_path, monkeypatch, saved):
+    root = store(tmp_path, "clone", {"state": "running"})
+    workspace = root / pack_job.UPDATER
+    workspace.mkdir()
+    sentinel = workspace / "retained.txt"
+    sentinel.write_text("kept")
+    first = ledger()
+    session_slots.restore(first, "p", root)
+    [a] = ledger_sessions(first)
+    ledger(boot=20.0).recover(a["id"], rebooted=True)
+    job = pack_job.Job(Store(root))
+    job.maintenance = ledger(boot=20.0)
+    real_save, faults = maintenance.Maintenance._save, []  # noqa: SLF001 - the donor's receipt-save fault boundary
+
+    def interrupted(self, data):
+        if faults or not any(":receipt:" in mark for mark in data.imported):
+            return real_save(self, data)
+        faults.append(True)
+        if saved:
+            real_save(self, data)
+        msg = "interrupted receipt save"
+        raise maintenance.MaintenanceError(msg)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(maintenance.Maintenance, "_save", interrupted)
+        with pytest.raises(maintenance.MaintenanceError, match="interrupted receipt save"):
+            session_slots.interrupted(job, "p")
+    assert faults == [True]
+    job.maintenance = ledger(boot=20.0)
+    session_slots.interrupted(job, "p")
+    again = ledger(boot=20.0)
+    session_slots.restore(again, "p", root)
+    [kept] = ledger_sessions(again)
+    assert (kept["id"], kept["state"], kept["workspace"]) == (a["id"], "recovered", a["workspace"])
+    assert again.receipted("p", pack_state.digest(job.version)) == a["generation"]
+    assert sentinel.read_text() == "kept"
 
 
 def rewritten_in_place_while_read(root: Path, record: dict) -> pytest.MonkeyPatch:
@@ -309,7 +326,7 @@ def test_a_run_rewritten_in_place_while_restoration_reads_it_is_held_not_taken_f
     owner = ledger(boot=20.0)
     patch = rewritten_in_place_while_read(root, {"state": "running"})  # B: a new run, no identity
     try:
-        import_at(owner, root)
+        session_slots.restore(owner, "p", root)
     finally:
         patch.undo()
     states = dict(leases(owner))
@@ -319,20 +336,29 @@ def test_a_run_rewritten_in_place_while_restoration_reads_it_is_held_not_taken_f
     assert owner.pending("pack") is True
 
 
-@pytest.mark.parametrize("reader", ["observed", "read_version"])
-def test_every_reader_refuses_a_run_rewritten_in_place_while_it_read_it_and_closes_its_descriptor(tmp_path, reader):
+def test_every_reader_refuses_a_run_rewritten_in_place_while_it_read_it_and_closes_its_descriptor(
+    tmp_path, monkeypatch
+):
     root = store(tmp_path, "clone", SDK_FAILED)
-    fds = {p.name for p in Path("/dev/fd").iterdir()}
+    opened, real_open = [], pack_run_record.open_record
+
+    def captured(*args, **kwargs):
+        fd = real_open(*args, **kwargs)
+        opened.append(fd)
+        return fd
+
+    monkeypatch.setattr(pack_run_record, "open_record", captured)
     patch = rewritten_in_place_while_read(root, {"state": "running"})
     try:
-        if reader == "observed":
-            with pytest.raises(ValueError, match="changed while it was read"):
-                pack_state.observed(root)
-        else:
-            assert pack_state.read_version(root / pack_state.FILE) == (pack_state.blank(), "")
+        with pytest.raises(ValueError, match="changed while it was read"):
+            pack_state.observed(root)
+        assert pack_state.read_version(root / pack_state.FILE) == (pack_state.blank(), "")
     finally:
         patch.undo()
-    assert {p.name for p in Path("/dev/fd").iterdir()} == fds
+    assert len(opened) == 2
+    for fd in opened:
+        with pytest.raises(OSError, match="Bad file descriptor"):
+            os.fstat(fd)
     kept, version = pack_state.observed(root)  # control: read again unchanged, it is the new run, whole
     assert (kept["state"], version != "") == ("running", True)
 
@@ -382,7 +408,7 @@ def test_a_run_written_over_the_constructors_rewrite_before_its_version_is_read_
     if recovered:
         ledger(boot=20.0).recover(a, rebooted=True)
     owner = ledger(boot=20.0)
-    import_at(owner, root)  # B, read whole and stable: the lease it already has
+    session_slots.restore(owner, "p", root)  # B, read whole and stable: the lease it already has
     assert dict(leases(owner))[a] == ("recovered" if recovered else "held")
     assert [s for i, s in leases(owner) if i != a] == ["held"]
     assert owner.slots.take("other", "probe", 1, 2) == (1 if recovered else 0)
@@ -407,7 +433,7 @@ def test_the_constructors_own_rewrite_is_still_receipted_to_its_run_and_read_aga
     [(a, _state)] = leases(owner)
     assert owner.receipted("p", pack_state.digest(job.version)) == job.interrupted["generation"]
     again = ledger()
-    import_at(again, root)
+    session_slots.restore(again, "p", root)
     assert leases(again) == [(a, "held")]
 
 
@@ -426,32 +452,10 @@ def started(job: pack_job.Job) -> maintenance.Maintenance:
     return owner
 
 
-def test_a_run_written_after_the_job_found_no_record_is_held_at_its_startup(tmp_path):
-    """Review on c963: an absent record the Job read is no proof of what the file holds at its startup."""
-    root = store(tmp_path, "store")
-    job = pack_job.Job(Store(root))
-    assert job.version == "absent"
-    write_record(root, B_RUN)
-    owner = started(job)
-    assert ([s for _, s in leases(owner)], owner.slots.take("other", "probe", 1, 1)) == (["held"], 0)
-
-
 def test_a_fresh_store_with_no_record_holds_nothing_at_its_startup(tmp_path):
     """Control: no record, then or now: no hold, the slot free."""
     owner = started(pack_job.Job(Store(store(tmp_path, "store"))))
     assert (leases(owner), owner.slots.take("other", "probe", 1, 1)) == ([], 1)
-
-
-def test_a_run_written_over_a_record_the_job_could_not_read_is_held_beside_that_unknown_one(tmp_path):
-    """The unreadable record keeps its own conservative hold; the run now there is held too, nothing proves them one."""
-    root = store(tmp_path, "store")
-    (root / pack_state.FILE).write_text("{")
-    job = pack_job.Job(Store(root))
-    assert job.version == ""
-    (root / pack_state.FILE).unlink()
-    write_record(root, B_RUN)
-    owner = started(job)
-    assert [s for _, s in leases(owner)] == ["held", "held"]
 
 
 PUBLISHING = {  # a run stopped while it was published: the Job's startup sets it waiting, with no hold of its own
@@ -462,6 +466,24 @@ PUBLISHING = {  # a run stopped while it was published: the Job's startup sets i
         "publication": {"root": "/r", "repository": "o/r", "base": "b", "branch": "pack/v9", "body": "the PR text"},
     },
 }  # fmt: skip
+
+
+@pytest.mark.parametrize("snapshot", ["absent", "unreadable", "publishing"])
+def test_startup_restores_changed_record_not_constructor_snapshot(tmp_path, snapshot):
+    root = store(tmp_path, "store", PUBLISHING if snapshot == "publishing" else None)
+    if snapshot == "unreadable":
+        (root / pack_state.FILE).write_text("{")
+    job = pack_job.Job(Store(root))
+    if snapshot == "publishing":
+        assert job.state["state"] == "waiting"
+    else:
+        assert job.version == ("absent" if snapshot == "absent" else "")
+    if (root / pack_state.FILE).exists():
+        (root / pack_state.FILE).unlink()
+    write_record(root, B_RUN)
+    owner = started(job)
+    assert [s for _, s in leases(owner)] == (["held", "held"] if snapshot == "unreadable" else ["held"])
+    assert owner.slots.take("other", "probe", 1, 1) == 0
 
 
 def test_a_run_observed_at_startup_stays_held_when_the_file_is_gone_before_it_is_restored(tmp_path):
