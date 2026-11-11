@@ -374,40 +374,34 @@ def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
 ) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
     a, b = (registry.register(clone(tmp_path / n, "same")) for n in ("alpha", "beta"))
-    machine, server, base = serve()
-    try:
-        with page_at(base, pds) as page:
-            page.goto(f"{base}/#token=t")
-            cards = page.locator("#changes li.card")
-            expect(cards).to_have_count(2)
-            cards.filter(has_text="beta").locator("a.open").click()
-            expect(page).to_have_url(f"{base}/?change={b.id}%2Fsame")
-            expect(page.locator("#detail")).to_contain_text("in beta")
-            page.reload()
-            expect(page.locator("#detail")).to_contain_text("in beta")
-            page.locator("#detail").get_by_role("button", name="Pause").click()
-            expect(page.locator("#started")).to_contain_text("Pause requested")
-            paused = {Path(p.path).name: Store.open(Path(p.path)).read("same").intent.paused_at for p in (a, b)}
-            assert (paused["alpha"], paused["beta"] is not None) == (None, True)  # only beta's Change
-            page.go_back()
-            expect(page).to_have_url(f"{base}/")
-            page.get_by_role("button", name="New Change").click()
-            chooser = pds.select(page.locator("#choose"), "Shape the new Change in")
-            expect(chooser).to_have_js_property("value", a.id)
-            page.get_by_role("button", name="Cancel").click()
-            expect(page.locator("#choose")).to_have_count(0)
-            page.get_by_role("button", name="New Change").click()
-            pds.pick(page.locator("#choose"), "Shape the new Change in", b.id)
-            page.get_by_role("button", name="Continue").click()
-            pds.answer(page, "Not now")
-            expect(page.locator("#choose")).to_have_count(0)  # declined: nothing is left to click
-            _alpha_does_not_answer(page, base, a.id, expect)
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+    with browsing(monkeypatch, pds) as (page, base):
+        page.set_viewport_size({"width": 1280, "height": 720})
+        page.goto(f"{base}/#token=t")
+        cards = page.locator("#changes li.card")
+        expect(cards).to_have_count(2)
+        cards.filter(has_text="beta").locator("a.open").click()
+        expect(page).to_have_url(f"{base}/?change={b.id}%2Fsame")
+        expect(page.locator("#detail")).to_contain_text("in beta")
+        page.reload()
+        expect(page.locator("#detail")).to_contain_text("in beta")
+        page.locator("#detail").get_by_role("button", name="Pause").click()
+        expect(page.locator("#started")).to_contain_text("Pause requested")
+        paused = {Path(p.path).name: Store.open(Path(p.path)).read("same").intent.paused_at for p in (a, b)}
+        assert (paused["alpha"], paused["beta"] is not None) == (None, True)  # only beta's Change
+        page.go_back()
+        expect(page).to_have_url(f"{base}/")
+        page.get_by_role("button", name="New Change").click()
+        chooser = pds.select(page.locator("#choose"), "Shape the new Change in")
+        expect(chooser).to_have_js_property("value", a.id)
+        page.get_by_role("button", name="Cancel").click()
+        expect(page.locator("#choose")).to_have_count(0)
+        page.get_by_role("button", name="New Change").click()
+        pds.pick(page.locator("#choose"), "Shape the new Change in", b.id)
+        page.get_by_role("button", name="Continue").click()
+        pds.answer(page, "Not now")
+        expect(page.locator("#choose")).to_have_count(0)  # declined: nothing is left to click
+        _alpha_does_not_answer(page, base, a.id, expect)
 
 
 def _alpha_does_not_answer(page, base: str, alpha: str, expect) -> None:
