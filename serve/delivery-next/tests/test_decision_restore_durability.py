@@ -225,30 +225,14 @@ def _trace_syncs(monkeypatch, root: Path, events: list[str]) -> None:
     monkeypatch.setattr(storage_io, "_sync_held", traced_sync)
 
 
-def test_a_new_project_folder_and_its_parent_are_fsynced_before_the_record_is_published(shared_repo, monkeypatch):
+@pytest.mark.parametrize("existing", [False, True], ids=["new-project", "existing-project"])
+def test_project_directory_links_are_durable_before_the_record_is_published(shared_repo, monkeypatch, existing):
     root, _ = shared_repo
     store = _Store(root)
-    events: list[str] = []
-    real_publish = decision_sync.publish
-
-    def traced_publish(*args, **kwargs):
-        events.append("publish")
-        return real_publish(*args, **kwargs)
-
-    assert not (root / PROJECT).exists()
-    _trace_syncs(monkeypatch, root, events)
-    monkeypatch.setattr(decision_sync, "publish", traced_publish)
-
-    change_record.save(store, _finished_change(), None, AT)
-
-    assert events.index("fsync .") < events.index("fsync " + PROJECT) < events.index("publish")
-    assert (root / PROJECT / "changes").is_dir()
-
-
-def test_an_existing_project_folder_publishes_without_refsyncing_the_root(shared_repo, monkeypatch):
-    root, _ = shared_repo
-    store = _Store(root)
-    (root / PROJECT / "changes").mkdir(parents=True)
+    if existing:
+        (root / PROJECT / "changes").mkdir(parents=True)
+    else:
+        assert not (root / PROJECT).exists()
     events: list[str] = []
     real_publish = decision_sync.publish
 
@@ -261,9 +245,13 @@ def test_an_existing_project_folder_publishes_without_refsyncing_the_root(shared
 
     assert change_record.save(store, _finished_change(), None, AT) == ""
 
-    assert "fsync ." not in events
-    assert f"fsync {PROJECT}" in events  # the existing folder's own link is re-synced, so the trace saw make_dirs
-    assert "publish" in events
+    if existing:
+        assert "fsync ." not in events
+        assert f"fsync {PROJECT}" in events
+        assert "publish" in events
+    else:
+        assert events.index("fsync .") < events.index("fsync " + PROJECT) < events.index("publish")
+    assert (root / PROJECT / "changes").is_dir()
 
 
 @pytest.mark.parametrize("site", ["leaf", "parent"])
