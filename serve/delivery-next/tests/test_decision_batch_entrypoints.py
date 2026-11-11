@@ -363,14 +363,12 @@ def test_a_refused_flag_batch_finishes_once_every_rival_is_flagged_and_publishes
     assert all(seen.get(i).decision.conflict for i in (a.id, b.id))
 
 
-@pytest.mark.parametrize("competitors", [("Notes in C",)])  # one unflagged rival already fails the all-flagged check
 def test_a_flag_batch_with_an_unflagged_competitor_is_refused_and_keeps_its_generation(
-    picking, monkeypatch, competitors
+    picking, monkeypatch
 ) -> None:
     shared = picking.shared
     old, _, _, pending = _two_rivals_with_refused_flags(shared, monkeypatch)
-    for title in competitors:  # unflagged competitors on disk; HEAD and the journal stay as they were
-        write(replacing(old, title=title), shared.root / PROJECT)
+    write(replacing(old, title="Notes in C"), shared.root / PROJECT)
     head = shared.git("rev-parse", "HEAD").stdout
 
     with pytest.raises(decision_store.DecisionsUnavailable, match="does not validate"):
@@ -656,12 +654,8 @@ def test_an_unknown_publication_keeps_its_whole_notice(picking, whole_error):
     assert notice == f"{whole_error}; interrupted batch {generation}: finish or abandon it in Decisions"
 
 
-@pytest.mark.parametrize(
-    "rel",
-    [f"{PROJECT}/changes/add-notes/decisions/a1.md"],  # project decisions and JSON records decode in other tests
-    ids=["change-decision"],
-)
-def test_each_producer_shaped_journal_still_decodes(picking, rel):
+def test_each_producer_shaped_journal_still_decodes(picking):
+    rel = f"{PROJECT}/changes/add-notes/decisions/a1.md"
     shared = picking.shared
     head = shared.git("rev-parse", "HEAD").stdout.strip()
     stem = PurePosixPath(rel).stem
@@ -855,8 +849,7 @@ def _record_checkout_writes(m: pytest.MonkeyPatch, shared: DataRepo, seen: list[
 
 
 @pytest.mark.parametrize("image", ["third", "after"])
-@pytest.mark.parametrize("_parent", ["missing"])
-def test_an_owner_commit_while_finish_makes_the_folder_is_never_overwritten(picking, monkeypatch, _parent, image):
+def test_an_owner_commit_while_finish_makes_the_folder_is_never_overwritten(picking, monkeypatch, image):
     """The owner writes and commits the file during the folder's final fsync, after Finish's first epoch check.
 
     The folder's parent is missing too; an existing parent reaches the same final check of the file and HEAD.
@@ -1349,10 +1342,9 @@ def _within_restored(m: pytest.MonkeyPatch) -> list[bool]:
     return inside
 
 
-@pytest.mark.parametrize("call", [1])
 @pytest.mark.parametrize("order", ["predecessor-first", "successor-first"])
-def test_an_owner_rewrite_during_any_fsync_of_the_final_proof_keeps_the_batch(picking, monkeypatch, order, call):
-    """During the *call*-th fsync of Abandon's final proof, the owner writes the updated file's after image back.
+def test_an_owner_rewrite_during_any_fsync_of_the_final_proof_keeps_the_batch(picking, monkeypatch, order):
+    """During the first fsync of Abandon's final proof, the owner writes the updated file's after image back.
 
     No fsync may follow a row's read, in either row order: a rewrite at the fsync refuses. Both files share one
     folder, which the proof fsyncs once, so there is no later fsync to probe; Abandon's healthy completion of both
@@ -1382,8 +1374,8 @@ def test_an_owner_rewrite_during_any_fsync_of_the_final_proof_keeps_the_batch(pi
             real_fsync(path)
             if inside[0]:
                 calls[0] += 1
-                if calls[0] == call:
-                    fired.append(call)
+                if calls[0] == 1:
+                    fired.append(1)
                     updated.write_bytes(rewritten)
 
         m.setattr(decision_batch, "fsync_dir", fsync_then_owner_rewrites)
@@ -1391,7 +1383,7 @@ def test_an_owner_rewrite_during_any_fsync_of_the_final_proof_keeps_the_batch(pi
 
     assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (head, index)
     assert not added.exists()
-    assert fired or call > 1  # the proof fsyncs at least once
+    assert fired
     assert done == (not fired), refusal  # any rewrite at an fsync refuses
     assert updated.read_bytes() == rewritten  # the owner's bytes stay
     assert decision_batch.pending(shared).generation == generation
@@ -1755,10 +1747,9 @@ def test_an_unfenced_write_lands_with_no_temporary_left(tmp_path, writer):
 # tests below run the batch writer only. `test_an_unfenced_write_lands_with_no_temporary_left` runs both writers, and
 # `test_a_save_whose_temporary_name_is_substituted_installs_nothing` a real decisions save.
 @pytest.mark.parametrize("sync_fails", [False, True], ids=["synced", "sync-failed"])
-@pytest.mark.parametrize("writer", ["batch"])
 @pytest.mark.usefixtures("closed_writer_descriptors")
 def test_an_installed_file_moved_back_to_its_temporary_name_is_never_cleaned_up(
-    tmp_path, monkeypatch, writer, sync_fails
+    tmp_path, monkeypatch, sync_fails
 ):
     """After the real rename, the owner moves that same open inode back during directory fsync, which may fail."""
     folder = tmp_path / "layer" / "decisions"
@@ -1793,10 +1784,10 @@ def test_an_installed_file_moved_back_to_its_temporary_name_is_never_cleaned_up(
     monkeypatch.setattr(os, "fsync", owner_moves_during_directory_fsync)
     if sync_fails:
         with pytest.raises(OSError, match="directory fsync failed") as refused:
-            _write_with(writer, tmp_path, remember_temporary)
+            _write_with("batch", tmp_path, remember_temporary)
         assert refused.value.errno == errno.EIO
     else:
-        _write_with(writer, tmp_path, remember_temporary)
+        _write_with("batch", tmp_path, remember_temporary)
 
     assert len(moved) == 1
     assert held["path"].is_file()
@@ -1807,9 +1798,8 @@ def test_an_installed_file_moved_back_to_its_temporary_name_is_never_cleaned_up(
 
 
 @pytest.mark.parametrize("case", ["own", "replaced-name", "unknown"])
-@pytest.mark.parametrize("writer", ["batch"])
 @pytest.mark.usefixtures("closed_writer_descriptors")
-def test_a_refused_write_removes_only_its_own_temporary(tmp_path, monkeypatch, writer, case):
+def test_a_refused_write_removes_only_its_own_temporary(tmp_path, monkeypatch, case):
     """`own`: the refused write's temporary is removed. `replaced-name`: someone else's file now holds that name and is
     left as it is. `unknown`: whether the temporary is still its own cannot be read, so the error is raised.
     """
@@ -1840,7 +1830,7 @@ def test_a_refused_write_removes_only_its_own_temporary(tmp_path, monkeypatch, w
     with monkeypatch.context() as m:
         scope.append(m)
         with pytest.raises(error):
-            _write_with(writer, tmp_path, refusing_fence)
+            _write_with("batch", tmp_path, refusing_fence)
 
     left = {p.name: p.read_bytes() for p in folder.iterdir()}
     if case == "own":
@@ -1864,9 +1854,8 @@ def _substitute(folder: Path, data: bytes) -> str:
     return temporary.name
 
 
-@pytest.mark.parametrize("writer", ["batch"])
 @pytest.mark.usefixtures("closed_writer_descriptors")
-def test_a_temporary_name_holding_another_file_when_the_fence_passes_is_never_installed(tmp_path, writer):
+def test_a_temporary_name_holding_another_file_when_the_fence_passes_is_never_installed(tmp_path):
     folder = tmp_path / "layer" / "decisions"
     substitute = b"someone else's file\n"
     names: list[str] = []
@@ -1875,7 +1864,7 @@ def test_a_temporary_name_holding_another_file_when_the_fence_passes_is_never_in
         names.append(_substitute(folder, substitute))
 
     with pytest.raises(storage.TemporaryReplacedError):
-        _write_with(writer, tmp_path, passing_fence_after_a_substitute)
+        _write_with("batch", tmp_path, passing_fence_after_a_substitute)
 
     assert {p.name: p.read_bytes() for p in folder.iterdir()} == {names[0]: substitute}  # nothing moved or removed
 
@@ -1903,9 +1892,8 @@ def test_a_save_whose_temporary_name_is_substituted_installs_nothing(picking, mo
     assert decision_store.load(shared, PROJECT).snapshot.get(old.id).decision.revision == old.revision
 
 
-@pytest.mark.parametrize("writer", ["batch"])
 @pytest.mark.usefixtures("closed_writer_descriptors")
-def test_a_recreated_temporary_name_is_left_while_the_write_still_holds_its_file_open(tmp_path, monkeypatch, writer):
+def test_a_recreated_temporary_name_is_left_while_the_write_still_holds_its_file_open(tmp_path, monkeypatch):
     """The owner removes the temporary and makes another file at its name; the write's descriptor is still open, so
     that file cannot have the same device and inode, and the cleanup leaves it."""
     folder = tmp_path / "layer" / "decisions"
@@ -1928,7 +1916,7 @@ def test_a_recreated_temporary_name_is_left_while_the_write_still_holds_its_file
     with monkeypatch.context() as m:
         m.setattr(storage.Temporary, "holds_name", holds_with_a_live_descriptor)
         with pytest.raises(RuntimeError, match="fence refused"):
-            _write_with(writer, tmp_path, recreating_fence)
+            _write_with("batch", tmp_path, recreating_fence)
 
     ((live, identity),) = held
     assert live
@@ -1939,9 +1927,8 @@ def test_a_recreated_temporary_name_is_left_while_the_write_still_holds_its_file
 
 
 @pytest.mark.parametrize("fault", ["first-fstat", "write"])
-@pytest.mark.parametrize("writer", ["batch"])
 def test_a_fault_while_the_temporary_is_made_leaks_no_descriptor(
-    tmp_path, monkeypatch, writer, fault, closed_writer_descriptors
+    tmp_path, monkeypatch, fault, closed_writer_descriptors
 ):
     """`first-fstat`: the file's identity cannot be read, so its name is left rather than guessed at. `write`: the
     identity is known, so the file is removed. Either way every descriptor is closed and the error is raised."""
@@ -1975,7 +1962,7 @@ def test_a_fault_while_the_temporary_is_made_leaks_no_descriptor(
         m.setattr(descriptors, "fstat", failing_fstat)
         m.setattr(descriptors, "write", failing_write)
         with pytest.raises(OSError, match="Input/output error"):
-            _write_with(writer, tmp_path, None)
+            _write_with("batch", tmp_path, None)
 
     assert descriptors.all_closed()
     assert made
@@ -1988,9 +1975,8 @@ def test_a_fault_while_the_temporary_is_made_leaks_no_descriptor(
 
 
 @pytest.mark.parametrize("fault", ["file-fsync", "rename"])
-@pytest.mark.parametrize("writer", ["batch"])
 @pytest.mark.usefixtures("closed_writer_descriptors")
-def test_a_failure_before_install_removes_the_owned_temporary(tmp_path, monkeypatch, writer, fault):
+def test_a_failure_before_install_removes_the_owned_temporary(tmp_path, monkeypatch, fault):
     real_fsync, real_replace = os.fsync, os.replace
     failed = []
 
@@ -2010,7 +1996,7 @@ def test_a_failure_before_install_removes_the_owned_temporary(tmp_path, monkeypa
     monkeypatch.setattr(os, "replace", failing_replace)
     error = PermissionError if fault == "rename" else OSError
     with pytest.raises(error, match="failed") as refused:
-        _write_with(writer, tmp_path, None)
+        _write_with("batch", tmp_path, None)
 
     assert refused.value.errno == (errno.EACCES if fault == "rename" else errno.EIO)
     assert failed == [fault]
@@ -2978,9 +2964,8 @@ def test_an_owner_commit_made_while_the_push_is_refused_is_never_rebased(picking
     _no_authority(picking)
 
 
-@pytest.mark.parametrize("_owner", ["the-batch-files"])
 def test_an_owner_commit_before_publication_is_never_adopted_as_the_batch_base(
-    picking, shared_repo, monkeypatch, _owner
+    picking, shared_repo, monkeypatch
 ):
     """After the batch's last write and before its publication reads HEAD, the owner commits the batch's own files as
     written. HEAD then holds every after image, but it is not the batch's journalled head, so nothing is staged,

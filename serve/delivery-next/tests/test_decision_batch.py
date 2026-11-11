@@ -245,13 +245,12 @@ def _race(warmth, shared: DataRepo, message: str) -> None:
     warmth.monkeypatch.setattr(target, name, raced)
 
 
-@pytest.mark.parametrize("reader", [decision_store.load], ids=["load"])  # file_snapshot only returns load's snapshot
-def test_a_batch_that_begins_and_completes_while_the_decisions_are_read_is_refused(picking, warmth, reader):
+def test_a_batch_that_begins_and_completes_while_the_decisions_are_read_is_refused(picking, warmth):
     _seed(picking)
     warmth.ready(picking.shared, PROJECT)
     _race(warmth, picking.shared, "decisions: raced")
     with pytest.raises(decision_store.DecisionsUnavailable, match="changed while they were read"):
-        reader(picking.shared, PROJECT)
+        decision_store.load(picking.shared, PROJECT)
     assert warmth.parses == warmth.collected(PROJECT) * 2  # read again once no writer holds the lock, and raced again
 
 
