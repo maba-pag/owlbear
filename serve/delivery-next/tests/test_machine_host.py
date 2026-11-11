@@ -1434,19 +1434,6 @@ UNIDENTIFIED = Run(  # the SDK returned, but nothing proves which processes it s
 )
 
 
-def returned_unconfirmed(tmp_path: Path, machine: Machine, run: Run) -> registry.Project:
-    """A loaded project's real pack job whose update session the SDK returned from without confirming its end."""
-    entry = registry.register(clone(tmp_path / "a"))
-    machine.slots.total = lambda: 2
-    machine.load_all()
-    loaded = machine.projects[entry.id]
-    job = session_slots.packed(loaded.host, pack_job.Job(loaded.store, pack_job.Live(update=lambda _s, _cfg: run)))
-    (root := tmp_path / "wt").mkdir()
-    assert job.live.update(loaded.store, session(root)) is run
-    assert (job.busy(), loaded.working(stopping=True)) == (False, [])  # the job and its project no longer count it
-    return entry
-
-
 def waiting_for(name: str) -> list[str]:
     return [f"{name}: {UNPROVEN_PACK}"]
 
@@ -1456,7 +1443,14 @@ def test_a_returned_unconfirmed_pack_session_keeps_the_update_and_the_stop_waiti
     tmp_path, machine, http, run
 ):
     machine.maintenance.observe = lambda _pid, _created: True  # synthetic: the session's process is still there
-    entry = returned_unconfirmed(tmp_path, machine, run)
+    entry = registry.register(clone(tmp_path / "a"))
+    machine.slots.total = lambda: 2
+    machine.load_all()
+    loaded = machine.projects[entry.id]
+    job = session_slots.packed(loaded.host, pack_job.Job(loaded.store, pack_job.Live(update=lambda _s, _cfg: run)))
+    (root := tmp_path / "wt").mkdir()
+    assert job.live.update(loaded.store, session(root)) is run
+    assert (job.busy(), loaded.working(stopping=True)) == (False, [])  # the job and its project no longer count it
     stopped: list[bool] = []
     machine.on_stop = lambda: stopped.append(True)
     assert machine.busy() == waiting_for("a")  # an update and an automatic update wait for it
