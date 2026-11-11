@@ -10,10 +10,10 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.settings.config import Layer
-from owlbear_delivery_next.state_store import config_save, profile_share
+from owlbear_delivery_next.state_store import config_save, prefs_import, profile_share
 from owlbear_delivery_next.state_store.pending_intents import pending_file, pending_intents
 from owlbear_delivery_next.state_store.profile_share import CONFIG_WAITING
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store.store import Store, StoreError
 
 CONFIG_NAME = "config.json"
 SHARED_CONFIG = "shop-site/config.json"
@@ -32,13 +32,18 @@ def clone(remote: Path, where: Path, name: str) -> Store:
 
 
 def remote_bytes(remote: Path, rel: str) -> bytes:
-    """The file's bytes on the remote's main branch; empty when it is not published yet."""
-    shown = subprocess.run(  # noqa: S603
-        ["git", f"--git-dir={remote}", "show", f"main:{rel}"],  # noqa: S607
-        check=False,
-        capture_output=True,
-    )
-    return shown.stdout if shown.returncode == 0 else b""
+    """Return empty only for an absent path in a successfully read remote tree."""
+
+    def read(*args):
+        return subprocess.run(  # noqa: S603
+            ["git", f"--git-dir={remote}", *args],  # noqa: S607
+            check=True,
+            capture_output=True,
+        ).stdout
+
+    if not read("ls-tree", "-z", "main", "--", rel):
+        return b""
+    return read("show", f"main:{rel}")
 
 
 def confirmed(value: str) -> ProfileEntry:
@@ -50,6 +55,11 @@ def widths(value: int):
         return cur.model_copy(update={"widths": [value]})
 
     return change
+
+
+def in_place(cur: Layer) -> Layer:
+    cur.widths = [1300]
+    return cur
 
 
 @pytest.fixture
@@ -127,69 +137,129 @@ def test_an_automatic_config_change_waits_behind_another_clones_pending_owner_in
     refusing[0] = None
     config_publishes.clear()
     assert b.save(b.config_path, Layer, widths(1300), "automatic", owner=False) == CONFIG_WAITING
+    for cached in (widths(1300), lambda cur: cur.model_copy(update={"widths": None}), in_place):
+        assert b.update_config(cached, "automatic") == CONFIG_WAITING
     assert config_publishes == []
     assert not b.config_path.exists()
     assert remote_bytes(remote, SHARED_CONFIG) == before
     assert profile_share._shared_pending(b) == pending  # noqa: SLF001
 
-    # A completion retry, with a different local value or a local removal, never publishes the config
-    with b.shared.locked():
-        assert profile_share.publish_config_unlocked(b) == CONFIG_WAITING
-    b.config_path.unlink(missing_ok=True)
+    # An absent-local-config completion retry never publishes the config
     with b.shared.locked():
         assert profile_share.publish_config_unlocked(b) == CONFIG_WAITING
     assert config_publishes == []
     assert remote_bytes(remote, SHARED_CONFIG) == before
     assert profile_share._shared_pending(b) == pending  # noqa: SLF001
 
-    # A matching automatic change is not held: it publishes and clears the pending intent
-    refusing[0] = None
     assert b.save(b.config_path, Layer, widths(1600), "matching", owner=False) == ""
     assert profile_share._shared_pending(b) == ""  # noqa: SLF001
     assert b"1600" in remote_bytes(remote, SHARED_CONFIG)
-
-
-@pytest.mark.usefixtures("no_network")
-def test_an_owner_value_supersedes_the_held_pending_intent_and_publishes(shared_repo, tmp_path, refusing):
-    root, remote = shared_repo
-    a = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
     refusing[0] = "notice"
-    assert a.save(a.config_path, Layer, widths(1600), "owner edit", owner=True)
-    b = clone(remote, tmp_path / "b", "b")
-    assert profile_share._shared_pending(a)  # noqa: SLF001
-
+    assert b.save(b.config_path, Layer, widths(1650), "owner edit", owner=True)
+    assert profile_share._shared_pending(b)  # noqa: SLF001
+    fresh = clone(remote, tmp_path / "fresh", "fresh")
+    assert pending_intents(fresh)
     refusing[0] = None
-    assert a.save(a.config_path, Layer, widths(1700), "owner new value", owner=True) == ""
-    assert profile_share._shared_pending(a) == ""  # noqa: SLF001
+    assert b.save(b.config_path, Layer, widths(1700), "owner new value", owner=True) == ""
+    assert profile_share._shared_pending(b) == ""  # noqa: SLF001
     assert b"1700" in remote_bytes(remote, SHARED_CONFIG)
-    assert b.shared.pull() == ""  # the clone syncs as startup does; its stale pending copy is not an intent
-    assert pending_intents(b) == set()
-    readiness.ready(b, tmp_path / "b-store", carry=True)  # a fresh start reads the owner value, not the cleared intent
-    assert b"1700" in b.config_path.read_bytes()
+    assert fresh.shared.pull() == ""
+    assert pending_intents(fresh) == set()
+    readiness.ready(fresh, tmp_path / "fresh-store", carry=True)
+    assert fresh.read_config().widths == [1700]
 
 
 @pytest.mark.usefixtures("no_network")
-def test_a_stop_after_the_local_done_write_is_retried_by_a_fresh_startup(shared_repo, tmp_path, monkeypatch):
+@pytest.mark.parametrize("failure", ["returned", "raised", "stopped"])
+def test_a_stop_after_the_local_done_write_is_retried_by_a_fresh_startup(shared_repo, tmp_path, monkeypatch, failure):
     root, remote = shared_repo
     a = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
-    real, stopped = DataRepo.publish, [True]
+    if failure != "stopped":
+        a.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    real = DataRepo.publish
 
     def publish(self, path, message, until=None):
-        if path.name == profile_share.PROFILE and stopped[0]:
-            stopped[0] = False
+        if path.name == profile_share.PROFILE and (failure == "stopped" or message.endswith("import done")):
+            assert profile_share.unpublished(a)
+            if failure != "stopped":
+                assert b"45" in remote_bytes(remote, SHARED_CONFIG)
+            if failure == "returned":
+                return "remote refused"
+            if failure == "raised":
+                message = "remote unavailable"
+                raise DataRepoError(message)
             raise Stop
         return real(self, path, message, until)
 
-    monkeypatch.setattr(DataRepo, "publish", publish)
-    with pytest.raises(Stop):
-        a.write_profile(Profile(entries={profile.POLL: confirmed("45")}, prefs_import="done"))
+    with monkeypatch.context() as patch:
+        patch.setattr(DataRepo, "publish", publish)
+
+        def attempt():
+            if failure == "stopped":
+                a.write_profile(Profile(entries={profile.POLL: confirmed("45")}, prefs_import="done"))
+            else:
+                prefs_import.run(a)
+
+        with pytest.raises(Stop if failure == "stopped" else StoreError):
+            attempt()
     assert profile_share.unpublished(a)  # the retry flag was durable before DONE was written
     assert b'"done"' not in remote_bytes(remote, SHARED_PROFILE)  # the remote profile never got DONE
 
     fresh = Store(tmp_path / "a-store", DataRepo(root), "shop-site")  # a new start on the same local store
-    readiness.ready(fresh, tmp_path / "a-store", carry=True)
+    if failure == "stopped":
+        readiness.ready(fresh, tmp_path / "a-store", carry=True)
+    else:
+        prefs_import.run(fresh)
+        assert fresh.read_config().prefs.ci_poll_seconds == 45
     assert not profile_share.unpublished(fresh)
     assert b'"done"' in remote_bytes(remote, SHARED_PROFILE)
+
+
+@pytest.mark.usefixtures("no_network")
+def test_a_done_marker_from_a_clone_without_the_flag_waits_for_the_refused_config_removal(
+    shared_repo, tmp_path, monkeypatch
+):
+    root, remote = shared_repo
+    a = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
+    a.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
+    real = DataRepo.publish
+
+    def refuse_done(self, path, message, until=None):
+        if path == profile_share.path(a) and message.endswith("import done"):
+            return "remote refused"
+        return real(self, path, message, until)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(DataRepo, "publish", refuse_done)
+        with pytest.raises(StoreError):
+            prefs_import.run(a)
+    assert profile_share.unpublished(a)
+    assert b"45" in remote_bytes(remote, SHARED_CONFIG)
+    a.config_path.unlink()
+
+    def refuse_removal(self, path, message, until=None):
+        if path == a.config_path and message.endswith("project layer removed"):
+            return "remote refused"
+        return real(self, path, message, until)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(DataRepo, "publish", refuse_removal)
+        with pytest.raises(StoreError):
+            prefs_import.republish(a)
+    b = clone(remote, tmp_path / "b", "b")
+    assert not profile_share.unpublished(b)
+    assert b.read_profile().prefs_import == "pending"
+    _, notice, applied = b.mark_prefs_import("pending", "done")
+    assert applied
+    assert notice
+    assert b'"done"' not in remote_bytes(remote, SHARED_PROFILE)
+    assert b"45" in remote_bytes(remote, SHARED_CONFIG)
+    prefs_import.run(a)
+    assert not profile_share.unpublished(a)
+    fresh = clone(remote, tmp_path / "fresh", "fresh")
+    assert fresh.read_profile().prefs_import == "done"
+    assert not fresh.config_path.exists()
+    assert remote_bytes(remote, SHARED_CONFIG) == b""
 
 
 @pytest.mark.usefixtures("no_network")
@@ -268,40 +338,6 @@ def test_a_stale_automatic_payload_cannot_replace_a_newer_owner_value(
 
 
 @pytest.mark.usefixtures("no_network")
-@pytest.mark.parametrize("kind", ["widths", "null", "in-place"])
-def test_an_unprepared_cached_automatic_change_cannot_resurrect_an_old_config(
-    shared_repo, tmp_path, refusing, config_publishes, kind
-):
-    root, remote = shared_repo
-    a = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
-    refusing[0] = "notice"
-    assert a.save(a.config_path, Layer, widths(1600), "owner edit", owner=True)  # pending, not published
-    b = clone(remote, tmp_path / "b", "b")
-
-    def in_place(cur):
-        cur.widths = [1300]
-        return cur
-
-    cached = {
-        "widths": widths(1300),
-        "null": lambda cur: cur.model_copy(update={"widths": None}),
-        "in-place": in_place,
-    }[kind]
-    assert b.update_config(cached, "automatic") == CONFIG_WAITING  # held behind A's pending owner value
-
-    refusing[0] = None
-    assert a.save(a.config_path, Layer, widths(1700), "owner new value", owner=True) == ""
-    assert b.shared.pull() == ""
-    readiness.ready(b, tmp_path / "b-store", carry=True)  # B's healthy startup reads the newer config
-    config_publishes.clear()
-    assert b.update_config(cached, "automatic") == config_save.STALE  # the unprepared old payload is refused
-    assert config_publishes == []
-    assert b"1700" in remote_bytes(remote, SHARED_CONFIG)
-    assert b"1300" not in remote_bytes(remote, SHARED_CONFIG)
-    assert b"1700" in b.config_path.read_bytes()
-
-
-@pytest.mark.usefixtures("no_network")
 def test_an_unknown_shared_pending_lookup_holds_the_automatic_change(shared_repo, tmp_path, refusing, config_publishes):
     root, remote = shared_repo
     a = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
@@ -362,19 +398,21 @@ def test_a_failed_shared_lookup_holds_the_automatic_change_without_a_local_copy(
     assert remote_bytes(remote, SHARED_CONFIG) == before
 
 
-def test_an_unshared_store_refuses_a_stale_automatic_write_after_an_owner_save(tmp_path):
+@pytest.mark.parametrize("kind", ["widths", "null", "in-place"])
+def test_an_unshared_store_refuses_a_stale_automatic_write_after_an_owner_save(tmp_path, kind):
     store = Store(tmp_path / "store")
     assert store.update_config(config_save.Prepared(profile_share.config_digest(store.config_path), widths(1300))) == ""
+    assert Store(store.root).read_config().widths == [1300]
     cached = config_save.Prepared(profile_share.config_digest(store.config_path), widths(1300))
     assert store.save(store.config_path, Layer, widths(1700), "owner", owner=True) == ""
 
-    assert store.update_config(widths(1300)) != ""  # an unprepared changed automatic write is refused
-    assert store.update_config(cached) != ""  # a prepared basis from before the owner save no longer matches
-    assert store.read_config().widths == [1700]
-
-
-def test_an_unshared_store_still_carries_a_prepared_first_change(tmp_path):
-    store = Store(tmp_path / "store")
-    basis = profile_share.config_digest(store.config_path)
-    assert store.update_config(config_save.Prepared(basis, widths(1500))) == ""
-    assert Store(tmp_path / "store").read_config().widths == [1500]
+    unprepared = {
+        "widths": widths(1300),
+        "null": lambda cur: cur.model_copy(update={"widths": None}),
+        "in-place": in_place,
+    }[kind]
+    before = store.config_path.read_bytes()
+    assert store.update_config(unprepared) == config_save.STALE
+    assert store.update_config(cached) == config_save.STALE
+    assert store.config_path.read_bytes() == before
+    assert Store(store.root).read_config().widths == [1700]
