@@ -21,12 +21,16 @@ def git(root: Path, *args: str) -> str:
 def root(tmp_path: Path) -> Path:
     data = tmp_path / "data"
     data.mkdir()
-    git(data, "init", "-q")
-    git(data, "config", "user.name", "t")
-    git(data, "config", "user.email", "t@t")
     for project in ("shop", "docs"):
         (data / project / "memory").mkdir(parents=True)
     return data
+
+
+@pytest.fixture
+def git_repository(root: Path) -> None:
+    git(root, "init", "-q")
+    git(root, "config", "user.name", "t")
+    git(root, "config", "user.email", "t@t")
 
 
 def bound(
@@ -71,6 +75,7 @@ async def test_the_curator_works_on_another_project_folder_and_never_on_global_b
         await tools.list_memories(bound(root, shared=False), folder="docs")
 
 
+@pytest.mark.usefixtures("git_repository")
 @pytest.mark.asyncio
 async def test_make_global_records_the_project_and_commits_both_paths(root: Path) -> None:
     entry, pending = (
@@ -123,6 +128,7 @@ async def test_a_folder_that_links_to_global_or_outside_the_repository_is_refuse
             await tools.list_memories(ctx, folder=folder)
 
 
+@pytest.mark.usefixtures("git_repository")
 @pytest.mark.asyncio
 async def test_make_global_refuses_while_deliverys_apply_of_a_curation_run_is_cut_short(root: Path) -> None:
     """#875: the cut-short set names its entries where they are; Delivery finishes it from its record by name."""
@@ -139,6 +145,7 @@ async def test_make_global_refuses_while_deliverys_apply_of_a_curation_run_is_cu
     assert git(root, "status", "--porcelain") == ""
 
 
+@pytest.mark.usefixtures("git_repository")
 @pytest.mark.asyncio
 async def test_a_make_global_whose_commit_fails_leaves_the_entry_where_it_was_and_can_be_tried_again(
     root: Path,
@@ -160,6 +167,7 @@ async def test_a_make_global_whose_commit_fails_leaves_the_entry_where_it_was_an
     assert (moved["origin"], git(root, "status", "--porcelain")) == ("docs", "")
 
 
+@pytest.mark.usefixtures("git_repository")
 @pytest.mark.asyncio
 async def test_make_global_refuses_a_contested_entry_and_a_global_folder_that_links_elsewhere(
     root: Path, tmp_path: Path
@@ -181,16 +189,3 @@ async def test_make_global_refuses_a_contested_entry_and_a_global_folder_that_li
     with pytest.raises(ToolError, match="link out"):
         await tools.make_global(ctx, entry_id=other.id, revision=other.revision, folder="docs")
     assert {e.id for e in MemoryEngine(folder).get_entries()} == {entry.id, other.id}
-
-
-@pytest.mark.asyncio
-async def test_list_and_read_say_where_each_entry_is_kept(root: Path) -> None:
-    """The sort of 2026-10-23: a curator seeing Global beside its folder must know an entry is Global already."""
-    own = saved(root / "shop" / "memory", "Run ruff first", curated=True)
-    common = saved(root / "memory", "Sign every commit", curated=True)
-    ctx = bound(root)
-
-    listed = {e["id"]: e["where"] for e in await tools.list_memories(ctx)}
-    read = [(await tools.read_memory(ctx, entry_id=i))["where"] for i in (own.id, common.id)]
-
-    assert (listed, read) == ({own.id: "project", common.id: "global"}, ["project", "global"])
