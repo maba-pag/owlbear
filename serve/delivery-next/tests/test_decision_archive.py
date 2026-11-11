@@ -23,7 +23,6 @@ from owlbear_decisions import (
     storage,
     write,
 )
-from owlbear_delivery_next.change_contracts.curation_records import TestReview
 from owlbear_delivery_next.change_contracts.models import Brief, BriefDecision, Change, Decision, Exit, Step, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import brief_tools
@@ -69,15 +68,15 @@ def store(shared_repo) -> Store:
     return Store(shared_repo[0])
 
 
-def finished(*, ids: bool = True, unchanged: bool = False) -> Change:
-    mint = (lambda: new_id(AT)) if ids else (lambda: "")
-    decided = BriefDecision(id=mint(), question=LIMIT, answer="Yes, 800 characters", origin="decided")
-    lasting = BriefDecision(id=mint(), question=WHERE, answer="One SQLite table", origin="autonomous", scope="project")
+def finished() -> Change:
+    decided = BriefDecision(id=new_id(AT), question=LIMIT, answer="Yes, 800 characters", origin="decided")
+    lasting = BriefDecision(
+        id=new_id(AT), question=WHERE, answer="One SQLite table", origin="autonomous", scope="project"
+    )
     approved = Brief(version=2, title="Notes", outcome="Owners keep notes", decisions=[decided, lasting])
     c = Change(slug="notes", handle="c4", brief=Brief(version=2, approved_at=AT, approved=[approved]))
     at = AT + timedelta(hours=1)
-    c.decisions.append(Decision(id=mint(), text=UI, origin="decided", at=at, paths=["web/app.css"]))
-    c.tests = TestReview(commit="c" * 40, packages=[], shares=[], unchanged=True) if unchanged else None
+    c.decisions.append(Decision(id=new_id(AT), text=UI, origin="decided", at=at, paths=["web/app.css"]))
     return c
 
 
@@ -135,16 +134,15 @@ def test_brief_question_identity_and_successor_rules(tmp_path) -> None:
 
 
 @pytest.mark.parametrize(
-    "ending",
+    ("outcome", "brief", "lasting"),
     [
-        (MERGED, False, "merged", State.SPENT, State.IN_FORCE),
-        (None, True, "unchanged", State.SPENT, State.IN_FORCE),
-        (None, False, "abandoned", State.WITHDRAWN, State.DRAFT),
+        ("merged", State.SPENT, State.IN_FORCE),
+        ("unchanged", State.SPENT, State.IN_FORCE),
+        ("abandoned", State.WITHDRAWN, State.DRAFT),
     ],
 )
-def test_archive_plan_endings_scope_and_provenance(tmp_path, ending) -> None:
-    _pr, unchanged, outcome, brief, lasting = ending
-    c, why = finished(unchanged=unchanged), "One table keeps the notes in the backup with the rest"
+def test_archive_plan_endings_scope_and_provenance(tmp_path, outcome, brief, lasting) -> None:
+    c, why = finished(), "One table keeps the notes in the backup with the rest"
     c.brief.approved[0].decisions[1].reason = why
     planned, problems = decision_archive.plan(tmp_path, "shop-site", c, STEM, outcome)
     assert problems == []
