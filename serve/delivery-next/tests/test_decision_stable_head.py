@@ -131,18 +131,17 @@ def owner_move(tmp_path, monkeypatch) -> OwnerMove:
 
 
 @pytest.fixture
-def lost_ack(monkeypatch) -> dict[str, list]:
-    """Publishing lands in Git and on the remote, but the acknowledgement is lost while `lost` is set."""
-    real = decision_sync.publish
-    switch: dict[str, list] = {"lost": [True], "calls": []}
+def lost_ack(monkeypatch) -> list[str]:
+    """Publishing lands in Git and on the remote, but its acknowledgement is lost."""
+    real, calls = decision_sync.publish, []
 
     def publish(shared, paths, message, until, head):
-        switch["calls"].append(head)
-        sent = real(shared, paths, message, until, head)
-        return decision_sync.Sent(notice="acknowledgement lost", ambiguous=True) if switch["lost"][0] else sent
+        calls.append(head)
+        real(shared, paths, message, until, head)
+        return decision_sync.Sent(notice="acknowledgement lost", ambiguous=True)
 
     monkeypatch.setattr(decision_sync, "publish", publish)
-    return switch
+    return calls
 
 
 @pytest.mark.parametrize("moved", [False, True], ids=["healthy", "owner-head-move"])
@@ -215,7 +214,7 @@ def test_committed_finish_requires_one_stable_commit(shared_repo, tmp_path, lost
     assert pending.head == pre
     assert is_ancestor(root, pre, committed)
     assert git(remote, "rev-parse", "main") == committed
-    assert len(lost_ack["calls"]) == 1  # the save published once, and Finish's committed path pushes nothing
+    assert len(lost_ack) == 1  # the save published once, and Finish's committed path pushes nothing
 
     journal = decision_batch.journal_path(shared).read_bytes()
     worktree = tree_bytes(root)
@@ -229,7 +228,7 @@ def test_committed_finish_requires_one_stable_commit(shared_repo, tmp_path, lost
             assert owner_move.ancestry[proof] == owner_move.reads[proof] == [committed]
         assert decision_batch.pending(shared) is None
         assert git(root, "rev-parse", "HEAD") == git(remote, "rev-parse", "main") == committed
-        assert len(lost_ack["calls"]) == 1
+        assert len(lost_ack) == 1
         assert is_ancestor(root, pre, "HEAD")
         assert (root / OWNER).read_text() == "owner words\n"
         return
@@ -245,7 +244,7 @@ def test_committed_finish_requires_one_stable_commit(shared_repo, tmp_path, lost
     assert git(root, "rev-parse", f"{moved}^{{tree}}") == git(root, "rev-parse", f"{committed}^{{tree}}")
     assert git(root, "rev-parse", "HEAD") == moved
     assert git(remote, "rev-parse", "main") == committed
-    assert len(lost_ack["calls"]) == 1
+    assert len(lost_ack) == 1
     assert tree_bytes(root) == worktree
     assert (root / git(root, "rev-parse", "--git-path", "index")).read_bytes() == owner_move.index
     pending_after = decision_batch.pending(shared)
