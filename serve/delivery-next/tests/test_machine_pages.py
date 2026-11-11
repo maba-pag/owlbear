@@ -2424,8 +2424,7 @@ def test_old_update_addresses_open_the_updates_pages_and_back_and_reload_keep_th
 
 
 def decided(shared: Path, folder: str, *statements: str, **more) -> None:
-    """In force in *folder* of the shared repository (Global's when empty), committed and published; *more* sets other
-    fields."""
+    """Write fixture decisions in *folder* of the shared repository (Global's when empty); *more* sets other fields."""
     from owlbear_decisions import Decision, Origin, Scope, State, new_id, write  # noqa: PLC0415 - the decisions' own
 
     scope = Scope.PROJECT if folder else Scope.GLOBAL
@@ -2433,6 +2432,9 @@ def decided(shared: Path, folder: str, *statements: str, **more) -> None:
         write(Decision(id=new_id(), title=said, statement=said, scope=scope, project=folder, origin=Origin.AUTONOMOUS,
                        actor="shaper", created_at=datetime.now(UTC), **{"state": State.IN_FORCE} | more),
               shared / folder if folder else shared)  # fmt: skip
+
+
+def publish_decisions(shared: Path) -> None:
     for args in (("add", "-A"), ("commit", "-qm", "seed"), ("push", "-q", "origin", "HEAD")):
         subprocess.run(["git", *args], cwd=shared, check=True, capture_output=True)  # noqa: S603, S607
 
@@ -2459,6 +2461,7 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
     decided(shared, "owlbear", "Lint once.")
     decided(shared, "alpha", "Notes live in SQLite.")
     decided(shared, "alpha", "Notes sync nightly.", state=State.DRAFT)
+    publish_decisions(shared)
     with browsing(monkeypatch, pds, 390) as (page, base):
         held: list = []
 
@@ -2529,6 +2532,7 @@ def test_owlbears_fixed_scope_stays_its_one_row_once_its_own_project_is_register
     shared = shared_repo[0]
     monkeypatch.setenv(data_place.VIEW, str(shared))
     decided(shared, "owlbear", "Lint once.")
+    publish_decisions(shared)
     registry.register(clone(tmp_path / "alpha"))
     registry.register(clone(tmp_path / "mine", origin=OWLBEAR_ORIGIN))
     with browsing(monkeypatch, pds, 390) as (page, base):
@@ -3039,6 +3043,7 @@ def test_a_picked_decision_opens_in_its_project_from_all_projects(
     alpha, _beta = (registry.register(clone(tmp_path / n, "c1")) for n in ("alpha", "beta"))
     store = Store.open(Path(alpha.path))
     decided(shared, store.name, "Lint once.")
+    publish_decisions(shared)
     (rule,) = [
         e.decision
         for e in decision_store.load(store.shared, store.name).snapshot.entries
