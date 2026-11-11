@@ -26,7 +26,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow import loop, worktree
 from owlbear_delivery_next.change_flow.brief_rounds import ready
 from owlbear_delivery_next.change_flow.curation_flow import CURATE
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
@@ -335,6 +335,7 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
     prof = profile.confirm(Profile(), "check:.", "uv run test --changed", NOW)
     prof = profile.confirm(prof, "check:api", "npm test", NOW)
     curating.store.write_profile(prof)
+    monkeypatch.setattr(worktree, "owns_changed_runner", lambda *_: True)
     curating.curate = curated(applied=True)
     base = config.BASE  # the builder's own session values unset: the curator's build never needs them
     builder = base.agents["builder"].model_copy(update={"model": None, "effort": None, "minutes": None})
@@ -345,7 +346,7 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
         "test-curator", "claude-opus-5.5", "high", "long", TEST_CURATION
     )  # fmt: skip
     assert cfg.user == user_on
-    assert cfg.checks == (check_hint.qualified(".", "uv run test --changed"),)
+    assert cfg.checks == (check_hint.qualified(".", "uv run test . web"),)
     assert cfg.checks[0] in cfg.message
     assert "tests/test_a.py::old: retire" in cfg.message
     assert "share 2 (web/src/b.test.ts" not in cfg.message  # every share ended

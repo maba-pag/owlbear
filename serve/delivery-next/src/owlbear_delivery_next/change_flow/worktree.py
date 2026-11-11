@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shlex
 import shutil
 import subprocess
 import tomllib
@@ -129,7 +130,17 @@ def task_checks(profile: Profile, task: Task, path: Path, target: str) -> list[s
 def build_checks(profile: Profile, change: Change, task: Task, path: Path) -> list[str]:
     """Confirmed build checks; a curator measures its selected packages without task-base adaptation."""
     if change.tests is not None and change.step.task == curation_flow.CURATE:
-        return [check_hint.qualified(p, c) for p, c in checks(profile) if p == "." or p in change.tests.packages]
+        found = []
+        for package, command in checks(profile):
+            if package != "." and package not in change.tests.packages:
+                continue
+            root = check_hint.changed_runner(check_hint.qualified(package, command))
+            adapted = command
+            if root and owns_changed_runner(path, root[0].split()[2]):
+                runner = root[0].replace(" --changed", "", 1)
+                adapted = f"{runner} {shlex.join(change.tests.packages)}"
+            found.append(check_hint.qualified(package, adapted))
+        return found
     return task_checks(profile, task, path, change.names.target)
 
 
