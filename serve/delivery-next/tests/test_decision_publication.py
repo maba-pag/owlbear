@@ -224,7 +224,7 @@ def test_a_failed_push_lets_approval_proceed_shows_on_the_card_and_the_next_save
     root, remote = shared_repo
     git(root, "add", "-A")
     git(root, "commit", "-qm", "settings: shop-site claimed")  # as setup publishes it
-    (lasting,) = shape(picking, 1, LASTING).brief.decisions
+    (lasting,) = approvable(picking, 1, LASTING).brief.decisions
     away = remote.rename(remote.with_name("away.git"))
 
     assert picking.approve(1).status_code == 200
@@ -281,7 +281,7 @@ def test_approve_on_a_version_saved_after_its_loop_ended_challenges_it_then_the_
 
 def test_a_commit_a_hook_refuses_puts_the_files_back_and_refuses_the_approval(picking, shared_repo):
     root, _ = shared_repo
-    shape(picking, 1, LASTING)
+    approvable(picking, 1, LASTING)
     hook = root / ".git" / "hooks" / "pre-commit"
     hook.parent.mkdir(exist_ok=True)
     hook.write_text("#!/bin/sh\necho refused by policy >&2\nexit 1\n")
@@ -301,7 +301,7 @@ def test_a_commit_a_hook_refuses_puts_the_files_back_and_refuses_the_approval(pi
 
 
 def test_the_brief_cannot_change_while_its_approval_publishes(picking, monkeypatch):
-    shape(picking, 1, LASTING)
+    approvable(picking, 1, LASTING)
     real, said = decision_store.save_all, []
 
     def saving(*args, **kwargs):
@@ -323,7 +323,7 @@ class Crash(Exception):  # noqa: N818 - the host process dies
 
 def test_an_approval_interrupted_after_its_commit_stays_and_its_next_step_saves(picking, shared_repo, monkeypatch):
     root, remote = shared_repo
-    (lasting,) = shape(picking, 1, LASTING).brief.decisions
+    (lasting,) = approvable(picking, 1, LASTING).brief.decisions
     real = decision_store.save_all
 
     def crashed(*args, **kwargs):
@@ -355,13 +355,13 @@ def test_an_interrupted_later_approval_keeps_the_receipt_of_an_unchanged_own_dec
     picking, shared_repo, monkeypatch
 ):
     root, _ = shared_repo
-    (lasting,) = shape(picking, 1, LASTING).brief.decisions
+    (lasting,) = approvable(picking, 1, LASTING).brief.decisions
     assert picking.approve(1).status_code == 200
     (v1,) = picking.approved().decisions_published
     reshape(picking)
     more = {"question": "How long is a note?", "answer": "A note is one paragraph.", "origin": "decided",
             "scope": "project"}  # fmt: skip
-    added = shape(picking, 2, LASTING, more).brief.decisions[1]
+    added = approvable(picking, 2, LASTING, more).brief.decisions[1]
     real = decision_store.save_all
 
     def crashed(*args, **kwargs):
@@ -391,7 +391,7 @@ def test_a_recovery_that_fails_waits_with_its_reason_and_the_next_step_saves_bef
     picking, shared_repo, monkeypatch
 ):
     root, remote = shared_repo
-    (lasting,) = shape(picking, 1, LASTING).brief.decisions
+    (lasting,) = approvable(picking, 1, LASTING).brief.decisions
     real, tries = decision_store.save_all, []
 
     def crashed(*_args, **_kwargs):
@@ -430,7 +430,7 @@ def test_a_recovery_that_fails_waits_with_its_reason_and_the_next_step_saves_bef
 
 def test_a_refused_conflict_flag_commit_after_the_approvals_commit_keeps_the_approval(picking, shared_repo):
     root, _ = shared_repo
-    (first,) = shape(picking, 1, LASTING).brief.decisions
+    (first,) = approvable(picking, 1, LASTING).brief.decisions
     assert picking.approve(1).status_code == 200
     picking.approved()
     reshape(picking)
@@ -438,7 +438,7 @@ def test_a_refused_conflict_flag_commit_after_the_approvals_commit_keeps_the_app
                      project=PROJECT, origin=Origin.APPROVED, actor="shaper", state=State.IN_FORCE, created_at=AT,
                      links=(Link(type=LinkType.REPLACES, target=first.id),))  # fmt: skip
     assert decision_store.save(picking.shared, rival, expected_revision=None, message="decisions: rival").published
-    (later,) = shape(picking, 2, LASTING | {"answer": "Notes live in Postgres."}).brief.decisions
+    (later,) = approvable(picking, 2, LASTING | {"answer": "Notes live in Postgres."}).brief.decisions
     hook = root / ".git" / "hooks" / "commit-msg"  # refuses only the conflict flags, after the approval's commit
     hook.parent.mkdir(exist_ok=True)
     hook.write_text('#!/bin/sh\nif grep -q "conflict on" "$1"; then echo flags refused >&2; exit 1; fi\n')
@@ -646,7 +646,7 @@ def test_corrected_approval_omits_only_proven_never_published_history(picking, s
 
 def test_correction_preserves_the_published_predecessor_across_an_omitted_history_record(picking, shared_repo):
     root, _ = shared_repo
-    (first,) = shape(picking, 1, LASTING).brief.decisions
+    (first,) = approvable(picking, 1, LASTING).brief.decisions
     assert picking.approve(1).status_code == 200
     picking.approved()
     reshape(picking)
@@ -659,7 +659,7 @@ def test_correction_preserves_the_published_predecessor_across_an_omitted_histor
         picking.store.write(lock, c)
     legacy_approved(picking, 2)
     reshape(picking)
-    (current,) = shape(picking, 3, LASTING | {"answer": "A corrected current rule."}).brief.decisions
+    (current,) = approvable(picking, 3, LASTING | {"answer": "A corrected current rule."}).brief.decisions
     assert current.replaces == omitted.id
 
     assert picking.approve(3).status_code == 200
@@ -674,22 +674,16 @@ def test_correction_preserves_the_published_predecessor_across_an_omitted_histor
 
 def test_a_published_predecessor_retires_from_authority_without_rewriting_malformed_history(picking, shared_repo):
     root, _ = shared_repo
-    (first,) = shape(picking, 1, LASTING).brief.decisions
+    (first,) = approvable(picking, 1, LASTING).brief.decisions
     assert picking.approve(1).status_code == 200
     picking.approved()
     reshape(picking)
-    assert picking.save(decisions=[])["version"] == 2
+    approvable(picking, 2)
     with picking.store.lock(picking.slug) as lock:
         c = picking.store.read(picking.slug)
         old = c.brief.approved[0].decisions[0]
         c.brief.approved[0].decisions[0] = old.model_copy(update={"answer": "   "})
         picking.store.write(lock, c)
-    assert picking.ask(2).status_code == 200
-    picking.picks.append(pick_tools.PickResult(picked=[]))
-    picking.verdicts.append(tools.ReviewResult(verdict="pass", findings=[]))
-    picking.step()
-    picking.picks.clear()
-
     assert picking.approve(2).status_code == 200
 
     rule = read(root / rel(first.id))
@@ -706,7 +700,7 @@ def test_unavailable_authority_is_not_proof_that_malformed_history_was_never_pub
     reviewed_legacy_decisions(picking, "answer", "   ", 1)
     legacy_approved(picking, 1)
     reshape(picking)
-    shape(picking, 2)
+    approvable(picking, 2)
     if missing == "decisions-link":
         (root / PROJECT / "decisions").symlink_to(root / "missing-decisions", target_is_directory=True)
     else:
@@ -731,7 +725,7 @@ def _unavailable(reason: str, note: str = "NOTE-MARK"):
 
 @pytest.mark.parametrize("fails", ["save", "items"])
 def test_a_recovery_that_fails_waits_with_its_whole_reason(picking, monkeypatch, whole_error, fails):
-    shape(picking, 1, LASTING)
+    approvable(picking, 1, LASTING)
 
     def crashed(*_args, **_kwargs):
         raise Crash
@@ -761,7 +755,7 @@ def test_a_day_of_the_same_failed_recovery_asks_though_its_notes_said_different_
 ):
     """#971: a failed save's notes differ each time; the wait signs the error without them, so a day of it asks,
     showing the last one whole."""
-    shape(picking, 1, LASTING)
+    approvable(picking, 1, LASTING)
 
     def crashed(*_args, **_kwargs):
         raise Crash
