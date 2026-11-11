@@ -18,7 +18,7 @@ def waiting(make, kind: str, why: str = "New evidence.", **changes):
     return make(id=new_id(), read_back="pending", read_back_why=why, read_back_kind=kind, **changes)
 
 
-def test_a_pending_read_back_needs_why_and_kind_an_answered_one_keeps_them_and_none_has_none(make):
+def test_readback_metadata_schema(make):
     held = waiting(make, "blocked", "  The vendor changed its terms.  ")
     assert (held.read_back_why, held.read_back_kind) == ("The vendor changed its terms.", ReadBackKind.BLOCKED)
     assert parse(serialize(held)) == held
@@ -37,52 +37,32 @@ def test_a_pending_read_back_needs_why_and_kind_an_answered_one_keeps_them_and_n
             make(read_back="none", **wrong)
     with pytest.raises(ValidationError):
         make(read_back="pending", read_back_why="x", read_back_kind="someday")
-
-
-def test_the_rule_revision_ignores_the_read_back_and_the_revision_does_not(make):
-    rule = make()
-    held = make(id=rule.id, read_back="pending", read_back_why="New data.", read_back_kind="safety")
-    answered = held.model_copy(update={"read_back": "2026-10-20"})
-    inherited = make(id=rule.id, inherited=True)
-    assert {rule.rule_revision, held.rule_revision, answered.rule_revision, inherited.rule_revision} == {
-        rule.rule_revision}  # fmt: skip
-    assert len({rule.revision, held.revision, answered.revision, inherited.revision}) == 4
-    assert make(id=rule.id, statement="Something else.").rule_revision != rule.rule_revision
-
-
-def test_a_file_without_the_reason_loads_and_keeps_its_revision(make):
-    plain = make()
-    text = serialize(plain)
-    assert "read_back_why" not in text
-    assert "read_back_kind" not in text
-    assert "read_back_why" not in plain.content()
-    assert parse(text).revision == plain.revision
-
-
-def test_empty_settled_history_is_omitted_from_legacy_canonical_content_and_files(make):
-    plain = make()
-    assert "read_back_settled" not in plain.content()
-    assert "read_back_settled" not in serialize(plain)
-    assert parse(serialize(plain)).revision == plain.revision
-
-
-def test_settled_history_round_trips_as_metadata_without_changing_the_rule(make):
-    plain = make()
-    history = plain.model_copy(update={"read_back_settled": ("first reason", "second reason")})
-    assert history.revision != plain.revision
-    assert history.rule_revision == plain.rule_revision
-    assert history.content()["read_back_settled"] == ["first reason", "second reason"]
-    assert parse(serialize(history)) == history
-
-
-def test_settled_history_requires_a_readback_and_nonblank_keys(make):
     with pytest.raises(ValidationError):
         make(read_back="none", read_back_settled=("first reason",))
     with pytest.raises(ValidationError):
         make(read_back_settled=("   ",))
 
 
-def test_the_queue_orders_by_kind_then_oldest_and_puts_ignored_ones_last(make):
+def test_readback_metadata_changes_only_file_revision(make):
+    rule = make()
+    held = make(id=rule.id, read_back="pending", read_back_why="New data.", read_back_kind="safety")
+    answered = held.model_copy(update={"read_back": "2026-10-20"})
+    inherited = make(id=rule.id, inherited=True)
+    history = rule.model_copy(update={"read_back_settled": ("first reason", "second reason")})
+    variants = (rule, held, answered, inherited, history)
+    assert {d.rule_revision for d in variants} == {rule.rule_revision}
+    assert len({d.revision for d in variants}) == 5
+    for decision in variants:
+        assert parse(serialize(decision)) == decision
+    assert history.content()["read_back_settled"] == ["first reason", "second reason"]
+    assert make(id=rule.id, statement="Something else.").rule_revision != rule.rule_revision
+    for omitted in ("read_back_why", "read_back_kind", "read_back_settled"):
+        assert omitted not in rule.content()
+        assert omitted not in serialize(rule)
+    assert parse(serialize(rule)).revision == rule.revision
+
+
+def test_queue_priority_age_deferral_and_derived_conflict(make):
     later = AT + timedelta(days=1)
     old_gap = waiting(make, "improvement", created_at=AT)
     new_doubt = waiting(make, "uncertain", created_at=later)
@@ -96,10 +76,6 @@ def test_the_queue_orders_by_kind_then_oldest_and_puts_ignored_ones_last(make):
     assert [q.decision for q in found] == [danger, flagged, old_doubt, new_doubt, old_gap]
     last = queue([old_gap, new_doubt, old_doubt, danger], last={danger.id})
     assert [q.decision for q in last] == [old_doubt, new_doubt, old_gap, danger]
-
-
-def test_a_conflict_is_queued_as_blocked_work_without_being_written(make):
-    flagged = make(conflict=True)
     q = queued(flagged)
     assert (q.kind, q.why, q.derived) == (ReadBackKind.BLOCKED, CONFLICT, True)
     assert flagged.read_back == "2026-10-20"  # nothing on the decision changed

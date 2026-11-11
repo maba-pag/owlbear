@@ -87,73 +87,80 @@ def held(shared: DataRepo, remote: Path, path: Path) -> tuple[Decision, DataRepo
     return decision, checkout(path, remote)
 
 
-def test_no_data_repository_stops_instead_of_giving_no_decisions() -> None:
-    with pytest.raises(DecisionsUnavailable, match="no shared data repository"):
-        load(None, PROJECT)
-    with pytest.raises(DecisionsUnavailable, match="no shared data repository"):
-        save(None, make(), expected_revision=None, message="m")
-
-
-@pytest.mark.parametrize("where", ["decisions", f"{PROJECT}/decisions", PROJECT])
-def test_a_decisions_path_that_is_a_file_stops_loading(shared, where) -> None:
-    if where != PROJECT:
-        set_up(shared)
-    (shared.root / where).write_text("not a folder\n")
-    with pytest.raises(DecisionsUnavailable, match="not a folder") as raised:
-        load(shared, PROJECT)
-    assert raised.value.action == READ
-
-
-def test_a_project_without_its_folder_stops_loading_one_without_decisions_has_none(shared) -> None:
-    with pytest.raises(DecisionsUnavailable, match="has no folder") as raised:
-        load(shared, PROJECT)
-    assert raised.value.action == SET_UP_PROJECT
-    assert load(set_up(shared), PROJECT).snapshot.entries == ()
-
-
-def test_a_checkout_git_cannot_read_stops_loading(shared, tmp_path) -> None:
-    plain = tmp_path / "plain"
-    plain.mkdir()
-    with pytest.raises(DecisionsUnavailable, match="Git cannot read"):
-        load(DataRepo(plain), PROJECT)
-    (shared.root / ".git" / "HEAD").write_text("garbage\n")
-    with pytest.raises(DecisionsUnavailable, match="Git cannot read") as raised:
-        load(shared, PROJECT)
-    assert raised.value.stop(AT).kind == "state"
-
-
-@pytest.mark.parametrize("locked", [f"{PROJECT}/decisions", PROJECT])
-def test_an_unreadable_decisions_folder_stops_loading(shared, locked) -> None:
-    assert save(shared, make(), expected_revision=None, message="m").saved
-    folder = shared.root / locked
-    folder.chmod(0)
-    try:
-        with pytest.raises(DecisionsUnavailable, match="cannot be read"):
+@pytest.mark.parametrize(
+    "kind", ["missing", "project", "plain", "head", "access", "decisions", f"{PROJECT}/decisions", PROJECT]
+)
+def test_authority_requires_a_readable_checkout_and_project(shared, tmp_path, kind) -> None:
+    if kind == "missing":
+        with pytest.raises(DecisionsUnavailable, match="no shared data repository"):
+            load(None, PROJECT)
+        with pytest.raises(DecisionsUnavailable, match="no shared data repository"):
+            save(None, make(), expected_revision=None, message="m")
+    elif kind == "project":
+        with pytest.raises(DecisionsUnavailable, match="has no folder") as raised:
             load(shared, PROJECT)
-    finally:
-        folder.chmod(0o755)
-
-
-def test_a_checkout_folder_the_disk_refuses_says_the_whole_error(shared) -> None:
-    root = shared.root
-    assert save(shared, make(), expected_revision=None, message="m").saved
-    root.parent.chmod(0)
-    try:
-        with pytest.raises(DecisionsUnavailable) as raised:
+        assert raised.value.action == SET_UP_PROJECT
+        assert load(set_up(shared), PROJECT).snapshot.entries == ()
+    elif kind in {"plain", "head"}:
+        if kind == "plain":
+            plain = tmp_path / "plain"
+            plain.mkdir()
+            shared = DataRepo(plain)
+        else:
+            (shared.root / ".git" / "HEAD").write_text("garbage\n")
+        with pytest.raises(DecisionsUnavailable, match="Git cannot read") as raised:
             load(shared, PROJECT)
-    finally:
-        root.parent.chmod(0o755)
-    cause = raised.value.__cause__
-    said = f"{type(cause).__name__}: {cause}"
-    assert str(raised.value) == f"the shared data repository {root} cannot be read: {said}"
+        if kind == "head":
+            assert raised.value.stop(AT).kind == "state"
+    elif kind == "access":
+        root = shared.root
+        root.parent.chmod(0)
+        try:
+            with pytest.raises(DecisionsUnavailable) as raised:
+                load(shared, PROJECT)
+        finally:
+            root.parent.chmod(0o755)
+        cause = raised.value.__cause__
+        assert str(raised.value) == f"the shared data repository {root} cannot be read: {type(cause).__name__}: {cause}"
+    else:
+        if kind != PROJECT:
+            set_up(shared)
+        (shared.root / kind).write_text("not a folder\n")
+        with pytest.raises(DecisionsUnavailable, match="not a folder") as raised:
+            load(shared, PROJECT)
+        assert raised.value.action == READ
 
 
-@pytest.mark.parametrize("site", ["folder", "files", "whole", "save"])
-def test_a_decisions_read_or_write_the_disk_refuses_says_the_whole_error(
+@pytest.mark.parametrize("site", ["folder", "files", "whole", "save", "every", "unusable"])
+def test_decision_read_and_write_adapters_preserve_complete_failure_details(
     shared, monkeypatch, whole_error, site
 ) -> None:
     root, decision = shared.root, make()
-    assert save(shared, decision, expected_revision=None, message="m").saved
+    if site == "unusable":
+        folder = root / PROJECT / "decisions"
+        folder.mkdir(parents=True)
+        for n in range(4):
+            (folder / f"{make().id}.md").write_text(f"nothing {n}\n")
+        bad = snapshot(root, PROJECT).unreadable
+        named = "; ".join(f"{f.path}: {f.message}" for f in bad)
+        with pytest.raises(DecisionsUnavailable) as refused:
+            load(shared, PROJECT)
+        assert (len(bad), str(refused.value)) == (
+            4,
+            f"4 file(s) among the decisions of {PROJECT} cannot be used: {named}",
+        )
+        return
+    if site == "every":
+
+        def unreadable(_layers: object) -> None:
+            raise OSError(whole_error)
+
+        monkeypatch.setattr(decision_actions, "read_layers", unreadable)
+        with pytest.raises(DecisionsUnavailable) as refused:
+            decision_actions.every(shared)
+        assert str(refused.value) == f"the decisions in {root} cannot be read: OSError: {whole_error}"
+        return
+    write(decision, set_up(shared).root / PROJECT)
     decision_cache.clear()
 
     def refused(*_args: object, **_kwargs: object) -> None:
@@ -176,16 +183,6 @@ def test_a_decisions_read_or_write_the_disk_refuses_says_the_whole_error(
     assert str(raised.value) == f"{where}: OSError: {whole_error}"
 
 
-def test_every_decision_that_cannot_be_read_is_refused_with_the_whole_error(shared, monkeypatch, whole_error) -> None:
-    def unreadable(_layers: object) -> None:
-        raise OSError(whole_error)
-
-    monkeypatch.setattr(decision_actions, "read_layers", unreadable)
-    with pytest.raises(DecisionsUnavailable) as refused:
-        decision_actions.every(shared)
-    assert str(refused.value) == f"the decisions in {shared.root} cannot be read: OSError: {whole_error}"
-
-
 def test_a_commit_or_rebase_that_cannot_tell_a_rebase_is_ambiguous_and_says_why_whole(
     shared, monkeypatch, whole_error
 ) -> None:
@@ -201,11 +198,20 @@ def test_a_commit_or_rebase_that_cannot_tell_a_rebase_is_ambiguous_and_says_why_
     assert (sent.notice, sent.ambiguous) == (f"{rebased}; DataRepoError: {whole_error}", True)
 
 
-@pytest.mark.parametrize("broken", ["invalid", "unreadable"])
-def test_an_unusable_decision_file_stops_loading(shared, broken) -> None:
+@pytest.mark.parametrize("broken", ["invalid", "unreadable", f"{PROJECT}/decisions", PROJECT])
+def test_unreadable_files_never_lend_partial_authority(shared, broken) -> None:
     kept, bad = make(), make()
     for decision in (kept, bad):
-        save(shared, decision, expected_revision=None, message="m")
+        write(decision, set_up(shared).root / PROJECT)
+    if broken in {PROJECT, f"{PROJECT}/decisions"}:
+        folder = shared.root / broken
+        folder.chmod(0)
+        try:
+            with pytest.raises(DecisionsUnavailable, match="cannot be read"):
+                load(shared, PROJECT)
+        finally:
+            folder.chmod(0o755)
+        return
     path = shared.root / PROJECT / "decisions" / f"{bad.id}.md"
     if broken == "invalid":
         path.write_text("nothing\n")
@@ -223,18 +229,6 @@ def test_an_unusable_decision_file_stops_loading(shared, broken) -> None:
         path.chmod(0o644)
 
 
-def test_a_save_reports_saved_committed_published_and_active(shared_repo, shared) -> None:
-    decision = make()
-    said = save(shared, decision, expected_revision=None, message="decisions: notes")
-    assert (said.saved, said.committed, said.published, said.active, said.conflict) == (True, True, True, True, False)
-    assert (said.revision, said.notice) == (decision.revision, "")
-    assert said.commit == git(shared.root, "rev-parse", "HEAD") == git(shared_repo[1], "rev-parse", "main")
-
-    draft = make(state=State.DRAFT)
-    said = save(shared, draft, expected_revision=None, message="decisions: a draft")
-    assert (said.saved, said.published, said.active) == (True, True, False)
-
-
 def test_a_failed_push_is_saved_and_committed_but_not_published(tmp_path) -> None:
     local = checkout(tmp_path / "local")
     said = save(local, make(), expected_revision=None, message="decisions: notes")
@@ -242,37 +236,7 @@ def test_a_failed_push_is_saved_and_committed_but_not_published(tmp_path) -> Non
     assert "push" in said.notice
 
 
-def test_a_stale_expected_revision_is_refused_without_writing(shared) -> None:
-    decision = make()
-    save(shared, decision, expected_revision=None, message="m")
-    path, head = shared.root / PROJECT / "decisions" / f"{decision.id}.md", git(shared.root, "rev-parse", "HEAD")
-    text = path.read_text()
-    withdrawn = decision.model_copy(update={"state": State.WITHDRAWN})
-    for expected in ("0" * 64, None):
-        said = save(shared, withdrawn, expected_revision=expected, message="m")
-        assert (said.saved, said.committed, said.published, said.active) == (False, False, False, False)
-        assert decision.revision in said.notice
-    assert path.read_text() == text
-    assert git(shared.root, "rev-parse", "HEAD") == head
-    said = save(shared, withdrawn, expected_revision=decision.revision, message="decisions: withdrawn")
-    assert (said.saved, said.published, said.active) == (True, True, False)
-
-
 EDITED = "First line.\n\nSecond line.\n\nThird line, edited."
-
-
-def test_an_expected_revision_is_checked_against_the_remotes_file(shared_repo, shared, tmp_path) -> None:
-    decision, second = held(shared, shared_repo[1], tmp_path / "second")
-    withdrawn = decision.model_copy(update={"state": State.WITHDRAWN})
-    assert save(shared, withdrawn, expected_revision=decision.revision, message="decisions: withdrawn").published
-
-    edited = decision.model_copy(update={"rationale": EDITED})
-    said = save(second, edited, expected_revision=decision.revision, message="decisions: edited")
-
-    assert (said.saved, said.committed, said.published, said.active) == (False, False, False, False)
-    assert withdrawn.revision in said.notice
-    assert git(second.root, "rev-parse", "HEAD") == git(shared_repo[1], "rev-parse", "main")
-    assert load(second, PROJECT).snapshot.get(decision.id).decision == withdrawn
 
 
 @pytest.mark.parametrize("moved", ["before", "during"])
@@ -280,7 +244,7 @@ def test_a_save_of_several_files_writes_all_or_none(shared_repo, shared, tmp_pat
     decision, second = held(shared, shared_repo[1], tmp_path / "second")
     withdrawn = decision.model_copy(update={"state": State.WITHDRAWN})
     assert save(shared, withdrawn, expected_revision=decision.revision, message="decisions: withdrawn").published
-    if moved == "during":  # the remote moves after the check: the push is rejected and the commit taken back whole
+    if moved == "during":  # a rejected push retains the unpublished local commit and journal
         monkeypatch.setattr(decision_sync, "catch_up", lambda *_: "")
     successor = replacing(decision)
     retired = decision.model_copy(update={"state": State.REPLACED})
@@ -305,21 +269,6 @@ def test_a_save_of_several_files_writes_all_or_none(shared_repo, shared, tmp_pat
         assert set(pending.ids) == {successor.id, decision.id}  # all before/after evidence is retained
         with pytest.raises(DecisionsUnavailable):  # no partial settled authority is read
             load(second, PROJECT)
-
-
-def test_a_replacement_whose_predecessor_changed_remotely_writes_neither_file(shared_repo, shared, tmp_path) -> None:
-    decision, second = held(shared, shared_repo[1], tmp_path / "second")
-    edited = decision.model_copy(update={"rationale": EDITED})
-    assert save(shared, edited, expected_revision=decision.revision, message="decisions: edited").published
-    remote = git(shared_repo[1], "rev-parse", "main")
-
-    said = decision_actions.replace(second, PROJECT, decision.id, decision.revision, title="", statement="Postgres.",
-                                    rationale="", reason="It grew.", redecided=False)  # fmt: skip
-
-    assert [r.saved for r in said] == [False, False]
-    assert git(shared_repo[1], "rev-parse", "main") == remote  # nothing published
-    assert [e.decision for e in load(second, PROJECT).snapshot.entries] == [edited]  # no successor, edit kept
-    assert git(second.root, "status", "--porcelain", "--untracked-files=all") == ""
 
 
 def test_a_write_that_fails_midway_puts_back_every_file_of_the_batch(shared, monkeypatch) -> None:
@@ -395,12 +344,62 @@ def test_the_receipt_is_read_back_under_the_lock(shared, monkeypatch) -> None:
     assert held_lock == [True]
 
 
+def require_current_revisions(shared, second, draft, old, remote):
+    """The already-cloned second checkout cannot acknowledge stale edits or replacement."""
+    path = shared.root / PROJECT / "decisions" / f"{draft.id}.md"
+    text, head = path.read_bytes(), git(shared.root, "rev-parse", "HEAD")
+    withdrawn = draft.model_copy(update={"state": State.WITHDRAWN})
+    for expected in ("0" * 64, None):
+        said = save(shared, withdrawn, expected_revision=expected, message="decisions: stale")
+        assert (said.saved, said.committed, said.published, said.active) == (False, False, False, False)
+        assert draft.revision in said.notice
+        assert path.read_bytes() == text
+        assert git(shared.root, "rev-parse", "HEAD") == head
+    receipt = save(shared, withdrawn, expected_revision=draft.revision, message="decisions: withdrawn")
+    assert (receipt.saved, receipt.published, receipt.active) == (True, True, False)
+    published = git(remote, "rev-parse", "main")
+    said = save(
+        second, draft.model_copy(update={"rationale": EDITED}), expected_revision=draft.revision, message="stale"
+    )
+    assert (said.saved, said.committed, said.published, said.active) == (False, False, False, False)
+    assert withdrawn.revision in said.notice
+    assert git(second.root, "rev-parse", "HEAD") == git(remote, "rev-parse", "main") == published
+    assert load(second, PROJECT).snapshot.get(draft.id).decision == withdrawn
+    edited = old.model_copy(update={"rationale": EDITED})
+    assert save(shared, edited, expected_revision=old.revision, message="decisions: edited").published
+    published = git(remote, "rev-parse", "main")
+    said = decision_actions.replace(second, PROJECT, old.id, old.revision, title="", statement="Postgres.",
+                                    rationale="", reason="It grew.", redecided=False)  # fmt: skip
+    assert [r.saved for r in said] == [False, False]
+    assert git(remote, "rev-parse", "main") == published
+    assert {e.decision.id: e.decision for e in load(second, PROJECT).snapshot.entries} == {
+        old.id: edited,
+        draft.id: withdrawn,
+    }
+    assert git(second.root, "status", "--porcelain", "--untracked-files=all") == ""
+
+
 @pytest.mark.parametrize("race", [False, True])
-def test_two_checkouts_replacing_one_decision_both_end_flagged_as_a_conflict(
+def test_two_checkouts_require_current_revisions_and_owner_resolution(
     shared_repo, shared, tmp_path, monkeypatch, race
 ) -> None:
     remote = shared_repo[1]
-    old, second = held(shared, remote, tmp_path / "second")
+    draft = make(state=State.DRAFT)
+    receipt = save(shared, draft, expected_revision=None, message="decisions: a draft")
+    assert (receipt.saved, receipt.committed, receipt.published, receipt.active) == (True, True, True, False)
+    old = make(rationale="First line.\n\nSecond line.\n\nThird line.")
+    receipt = save(shared, old, expected_revision=None, message="decisions: held")
+    assert (receipt.saved, receipt.committed, receipt.published, receipt.active, receipt.conflict) == (
+        True,
+        True,
+        True,
+        True,
+        False,
+    )
+    assert (receipt.revision, receipt.notice) == (old.revision, "")
+    assert receipt.commit == git(shared.root, "rev-parse", "HEAD") == git(remote, "rev-parse", "main")
+    second = checkout(tmp_path / "owlbear data", remote)
+    require_current_revisions(shared, second, draft, old, remote)
     one, two = replacing(old, title="Notes in one table"), replacing(old, title="Notes in two tables")
 
     first_said = save(shared, one, expected_revision=None, message="decisions: one")
@@ -432,6 +431,11 @@ def test_two_checkouts_replacing_one_decision_both_end_flagged_as_a_conflict(
     seen = load(shared, PROJECT).snapshot
     assert seen.findings == ()
     assert not seen.active(two.id)  # its flag holds until the owner clears it
+    kept = decision_actions.keep(shared, PROJECT, two.id, {two.id: flagged(two).revision}, reason="Keep two tables.")
+    assert all(r.saved and r.published for r in kept)
+    assert load(shared, PROJECT).snapshot.active(two.id)
+    assert refresh(second) == ""
+    assert load(second, PROJECT).snapshot.active(two.id)
 
 
 def test_conflict_flags_reach_a_competitor_that_arrives_while_they_publish(
@@ -566,7 +570,7 @@ def test_no_rebase_of_the_checkout_combines_two_versions_of_a_decision(shared_re
 
 
 @pytest.mark.parametrize("broken", ["file", "symlink"])
-def test_a_changes_path_that_is_not_a_real_folder_stops_loading(shared, tmp_path, broken) -> None:
+def test_change_layer_paths_must_be_real_folders(shared, tmp_path, broken) -> None:
     set_up(shared)
     changes = shared.root / PROJECT / "changes"
     if broken == "file":
@@ -578,13 +582,6 @@ def test_a_changes_path_that_is_not_a_real_folder_stops_loading(shared, tmp_path
         (changes / "20261021-090000-notes").symlink_to(elsewhere.parent)
     with pytest.raises(DecisionsUnavailable):
         load(shared, PROJECT)
-
-
-def test_a_data_repository_path_with_spaces_loads_and_saves(tmp_path) -> None:
-    local = set_up(checkout(tmp_path / "owlbear data"))
-    said = save(local, make(), expected_revision=None, message="decisions: notes")
-    assert (said.saved, said.committed) == (True, True)
-    assert len(load(local, PROJECT).snapshot.entries) == 1
 
 
 def test_a_lock_that_cannot_be_opened_makes_refresh_unavailable_not_a_crash(shared, monkeypatch) -> None:
@@ -639,19 +636,6 @@ def test_each_git_failure_of_a_save_is_said_whole(shared, monkeypatch, whole_err
         held = f"(interrupted batch {generation}: finish or abandon it in Decisions)"
         expected = f"saved, but not committed: {git()} {held}"
     assert said.notice == expected
-
-
-def test_every_unusable_decision_file_is_named(shared) -> None:
-    """Four unusable files are each named with their whole finding, not the first three."""
-    folder = shared.root / PROJECT / "decisions"
-    folder.mkdir(parents=True)
-    for n in range(4):
-        (folder / f"{make().id}.md").write_text(f"nothing {n}\n")
-    bad = snapshot(shared.root, PROJECT).unreadable
-    named = "; ".join(f"{f.path}: {f.message}" for f in bad)
-    with pytest.raises(DecisionsUnavailable) as refused:
-        load(shared, PROJECT)
-    assert (len(bad), str(refused.value)) == (4, f"4 file(s) among the decisions of {PROJECT} cannot be used: {named}")
 
 
 @pytest.mark.parametrize("site", ["interrupted", "stamp", "journal", "held", "refused"])

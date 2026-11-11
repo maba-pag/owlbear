@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from email.message import Message
 from pathlib import Path
+from sys import _getframe
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
@@ -23,12 +24,15 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id
+from owlbear_decisions.snapshot import Snapshot
+from owlbear_decisions.validate import Entry, Layer
 from owlbear_delivery_next.change_contracts import chat_contract
 from owlbear_delivery_next.commands import chat_client
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host.decision_routes import _linked, _row
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.state_store import decision_batch, decision_errors, decision_store, decision_sync
 from owlbear_delivery_next.state_store.store import Store
@@ -113,22 +117,6 @@ def held_publish(monkeypatch) -> Iterator[Held]:
 def saving(shared: DataRepo, decision: Decision) -> Callable[[], object]:
     said = f"decisions: held {decision.id}"
     return lambda: decision_store.save(shared, decision, expected_revision=None, message=said)
-
-
-def made_now(shared: DataRepo, **changes: object) -> Callable[[], None]:
-    """Save a decision made when it is called: after the chat's propose started."""
-
-    def save() -> None:
-        assert saving(shared, make(**changes, created_at=datetime.now(UTC)))().saved
-
-    return save
-
-
-def withdraw(shared: DataRepo) -> None:
-    """The owner withdraws the one decision titled like the chat's."""
-    made = decision_store.load(shared, PROJECT).snapshot.get(titled(shared)[0]).decision
-    gone = made.model_copy(update={"state": State.WITHDRAWN})
-    assert decision_store.save(shared, gone, expected_revision=made.revision, message="decisions: gone").saved
 
 
 def test_a_save_held_in_publish_reads_as_in_progress_never_as_interrupted(shared, owner, held_publish):
@@ -285,9 +273,30 @@ def untouched(shared: DataRepo, was: tuple[str, str]) -> None:
     assert (decision_batch.pending(shared), titled(shared)) == (None, [])
 
 
-@pytest.mark.parametrize(("after", "saved"), [(-1.0, False), (60.0, True), (None, True)], ids=["past", "ahead", "page"])
-def test_a_save_past_its_chats_deadline_is_refused_before_anything_is_written(shared, owner, after, saved):
+@pytest.mark.parametrize(
+    "case",
+    [(-1.0, False), (60.0, True), (None, True), ("soon", False), ("crossing", False)],
+    ids=["past", "ahead", "page", "malformed", "crossing-journal-lock"],
+)
+def test_initial_admission_checks_deadline_at_the_journal_boundary(shared, owner, clock, monkeypatch, case):
+    after, saved = case
     was = state(shared)
+    if after == "soon":
+        assert (
+            owner.post("/api/next/decisions/propose", json=PROPOSAL, headers=CHAT | {ADMIT: "soon"}).status_code == 422
+        )
+        untouched(shared, was)
+        return
+    if after == "crossing":
+        begin = Held(monkeypatch, decision_batch, "_locked", lambda: _getframe(2).f_code.co_name == "begin")
+        sent = CHAT | {ADMIT: repr(clock.t + 10)}
+        begin.start(lambda: owner.post("/api/next/decisions/propose", json=PROPOSAL, headers=sent))
+        clock.t += 11
+        assert titled(shared) == []
+        out = begin.finish().json()
+        assert (out["saved"], out["receipts"][0]["notice"]) == (False, decision_store.LATE)
+        untouched(shared, was)
+        return
     sent = {} if after is None else {ADMIT: repr(decision_batch._now() + after)}  # noqa: SLF001
     out = owner.post("/api/next/decisions/propose", json=PROPOSAL, headers=CHAT | sent).json()
     assert out["saved"] is saved
@@ -296,12 +305,6 @@ def test_a_save_past_its_chats_deadline_is_refused_before_anything_is_written(sh
     else:
         assert out["receipts"][0]["notice"] == decision_store.LATE
         untouched(shared, was)
-
-
-def test_a_deadline_that_is_not_a_time_is_refused(shared, owner):
-    was = state(shared)
-    assert owner.post("/api/next/decisions/propose", json=PROPOSAL, headers=CHAT | {ADMIT: "soon"}).status_code == 422
-    untouched(shared, was)
 
 
 class Clock:
@@ -327,21 +330,7 @@ def clock(monkeypatch) -> Clock:
     return now
 
 
-def test_a_save_that_reaches_its_journal_after_the_deadline_writes_nothing(shared, owner, clock, monkeypatch):
-    was = state(shared)
-    begin = Held(monkeypatch, decision_batch, "_locked", lambda: sys._getframe(2).f_code.co_name == "begin")  # noqa: SLF001
-    sent = CHAT | {ADMIT: repr(clock.t + 10)}
-    begin.start(lambda: owner.post("/api/next/decisions/propose", json=PROPOSAL, headers=sent))
-    clock.t += 11
-
-    assert titled(shared) == []  # read past the deadline, while the save holds the lock before its journal
-    out = begin.finish().json()
-
-    assert (out["saved"], out["receipts"][0]["notice"]) == (False, decision_store.LATE)
-    untouched(shared, was)
-
-
-def test_a_save_admitted_in_time_still_flags_its_competitors_after_the_deadline(shared, clock, monkeypatch):
+def test_admitted_save_can_complete_conflict_flags_after_its_deadline(shared, clock, monkeypatch):
     source = make(state=State.REPLACED)
     rival = make(title="Narrow", links=(Link(type=LinkType.REPLACES, target=source.id),))
     for d in (source, rival):
@@ -423,15 +412,31 @@ def wire(tmp_path, shared, clock, monkeypatch) -> Callable[..., tuple[chat_clien
     return chat
 
 
-def test_an_answered_save_waits_for_its_answer_and_names_its_deadline(shared, wire, clock):
-    chat, loop = wire(lose=False)
-    out = chat.propose(PROPOSAL)
-    assert (out["saved"], titled(shared)) == (True, [out["receipts"][0]["id"]])
-    (_, _, timeout, headers), = [s for s in loop.seen if s[0] == "POST"]  # fmt: skip
-    assert (timeout, float(headers[ADMIT.lower()])) == (chat_client.WRITE, clock.t + chat_client.ADMIT)
-
-
-def test_a_save_whose_answer_was_lost_is_found_saved_once_it_settles(shared, wire, clock, monkeypatch):
+@pytest.mark.parametrize("kind", ["answered", "lost-after-publication", "late-before-admission"])
+def test_chat_save_is_sent_once_and_settles_saved_or_late(shared, wire, clock, monkeypatch, kind):
+    if kind == "answered":
+        chat, loop = wire(lose=False)
+        out = chat.propose(PROPOSAL)
+        assert (out["saved"], titled(shared)) == (True, [out["receipts"][0]["id"]])
+        (_, _, timeout, headers), = [s for s in loop.seen if s[0] == "POST"]  # fmt: skip
+        assert (timeout, float(headers[ADMIT.lower()])) == (chat_client.WRITE, clock.t + chat_client.ADMIT)
+        return
+    if kind == "late-before-admission":
+        held = Held(monkeypatch, decision_sync, "prepare", lambda: True)
+        chat, loop = wire(held=held)
+        admit_by, times = clock.t + chat_client.ADMIT, []
+        clock.paused = lambda: times.append(clock.t)
+        out = chat.propose(PROPOSAL)
+        assert (out["saved"], out["error"]) == (False, chat_client.NOT_SAVED)
+        assert len(times) > chat_client.ADMIT // chat_client.POLL
+        assert max(times) <= admit_by < clock.t
+        held.release.set()
+        loop.thread.join(60)
+        answered = loop.answer["out"].json()
+        assert (answered["saved"], answered["receipts"][0]["notice"]) == (False, decision_store.LATE)
+        assert titled(shared) == []
+        assert len([s for s in loop.seen if s[0] == "POST"]) == 1
+        return
     held = Held(monkeypatch, decision_sync, "publish", lambda: True)
     chat, loop = wire(held=held)
     admit_by = clock.t + chat_client.ADMIT
@@ -452,123 +457,91 @@ def test_a_save_whose_answer_was_lost_is_found_saved_once_it_settles(shared, wir
     assert not [s for s in loop.seen if "recovery" in s[1]]
 
 
-def test_a_save_held_past_its_deadline_is_refused_and_the_chat_says_not_saved_only_after_it(
-    shared, wire, clock, monkeypatch
-):
-    held = Held(monkeypatch, decision_sync, "prepare", lambda: True)
-    chat, loop = wire(held=held)
-    admit_by, times = clock.t + chat_client.ADMIT, []
-    clock.paused = lambda: times.append(clock.t)
-
-    out = chat.propose(PROPOSAL)
-
-    assert (out["saved"], out["error"]) == (False, chat_client.NOT_SAVED)
-    assert len(times) > chat_client.ADMIT // chat_client.POLL  # read again until the deadline, answered only after it
-    assert max(times) <= admit_by < clock.t
-    held.release.set()
-    loop.thread.join(60)
-    answered = loop.answer["out"].json()
-    assert (answered["saved"], answered["receipts"][0]["notice"]) == (False, decision_store.LATE)
-    assert titled(shared) == []
-    assert len([s for s in loop.seen if s[0] == "POST"]) == 1
+def shown(decision, root):
+    """The route's actual row and linked-detail producers, without a host or publication."""
+    entry = Entry(root / f"{decision.id}.md", Layer(root, decision.scope, decision.project, decision.change), decision)
+    view = decision_store.DataView(Snapshot(root, PROJECT, (), (entry,), ()), "a" * 40)
+    row = _row(view, entry)
+    return row | {"links": _linked(view, entry)[0], "rationale": decision.rationale}
 
 
-def test_a_decision_like_it_in_another_layer_is_never_taken_for_it(shared, wire):
-    chat, _ = wire(after=made_now(shared, title=TITLE, statement=PROPOSAL["statement"], scope=Scope.GLOBAL, project=""))
+@pytest.mark.parametrize("kind", ["global", "change", "older", "clock-back", "edited-draft", "equal", "newer"])
+def test_lost_answer_matching_distinguishes_layer_age_and_changed_rows(tmp_path, monkeypatch, clock, kind):
+    started = datetime(2026, 10, 21, 9, tzinfo=UTC)
+    body = PROPOSAL | ({"confirmed": False} if kind == "edited-draft" else {})
+    fields = {"title": TITLE, "statement": PROPOSAL["statement"], "origin": Origin.DECIDED, "created_at": started}
+    if kind in {"global", "change"}:
+        fields |= (
+            {"scope": Scope.GLOBAL, "project": ""}
+            if kind == "global"
+            else {"scope": Scope.CHANGE, "change": "notes-move", "state": State.DRAFT}
+        )
+    elif kind == "older":
+        fields["created_at"] = started - timedelta(days=1)
+    elif kind == "clock-back":
+        started += timedelta(hours=1)
+    elif kind == "edited-draft":
+        fields |= {"title": "Notes in two tables", "state": State.DRAFT, "origin": Origin.AUTONOMOUS}
+    elif kind == "newer":
+        fields["created_at"] += timedelta(seconds=1)
+    row = shown(make(**fields), tmp_path)
+    chat, calls = chat_client.Chat(Path("shop"), tmp_path), []
 
-    out = chat.propose(REFUSED)
+    def read(method, path):
+        calls.append((method, path))
+        return (200, {"available": True, "decisions": [row]}) if path.startswith("/decisions?") else (200, row)
 
-    assert (out["saved"], out["error"]) == (False, chat_client.NOT_SAVED)
-
-
-def test_a_decision_like_it_made_before_it_was_sent_is_never_taken_for_it_nor_called_not_saved(shared, wire):
-    older = make(title=TITLE, statement=PROPOSAL["statement"])
-    assert saving(shared, older)().saved
-    chat, _ = wire()
-    out = chat.propose(REFUSED)
-    assert (out["saved"], out["error"]) == (None, unclear(older.id))
-
-
-def unclear(ids: str) -> str:
-    return chat_client.UNCLEAR.format(why=chat_client.OLDER.format(ids=ids))
-
-
-def test_a_save_that_reads_as_made_before_it_was_sent_after_the_clock_went_back_is_unclear(shared, wire, monkeypatch):
-    back = SimpleNamespace(now=lambda tz: datetime.now(tz) + timedelta(hours=1), fromisoformat=datetime.fromisoformat)
-    monkeypatch.setattr(chat_client, "datetime", back)  # the propose started an hour "after" its save
-    chat, _ = wire()
-    out = chat.propose(PROPOSAL)
-    (made,) = titled(shared)
-    assert (out["saved"], out["error"]) == (None, unclear(made))
-
-
-def test_a_found_decision_that_is_not_the_one_sent_is_unclear_never_saved(shared, wire):
-    chat, _ = wire(after=lambda: withdraw(shared))
-    out = chat.propose(PROPOSAL)
-    assert out["saved"] is None
-    assert decision_store.load(shared, PROJECT).snapshot.entries[0].decision.id in out["error"]
-
-    other = make(title="Notes use UTC", statement="All note timestamps use UTC.")
-    assert saving(shared, other)().saved
-    rival, link = new_id(), (Link(type=LinkType.REPLACES, target=other.id),)
-    chat, _ = wire(after=made_now(shared, id=rival, title=TITLE, statement=PROPOSAL["statement"], state=State.DRAFT,
-                                  links=link))  # fmt: skip
-    out = chat.propose(REFUSED)
-    assert (out["saved"], rival in out["error"]) == (None, True)
+    monkeypatch.setattr(chat, "call", read)
+    method = "_settled"
+    out = getattr(chat, method)(body, started, clock.t - 1, fenced=True)
+    assert calls[0] == ("GET", "/decisions?where=all&retired=true")
+    if kind in {"global", "change"}:
+        assert out == {"saved": False, "error": chat_client.NOT_SAVED}
+    elif kind in {"older", "clock-back", "edited-draft"}:
+        why = chat_client.CHANGED if kind == "edited-draft" else chat_client.OLDER
+        assert out == {"saved": None, "error": chat_client.UNCLEAR.format(why=why.format(ids=row["id"]))}
+    else:
+        assert out["saved"] is True
+        assert out["receipts"] == [{"id": row["id"], "saved": True}]
+        assert calls[1] == ("GET", f"/decisions/{row['id']}")
 
 
-def test_a_found_decision_the_owner_withdraws_before_its_detail_is_read_is_unclear(shared, wire, monkeypatch):
-    chat, _ = wire()
-    read = chat.call
+@pytest.mark.parametrize(
+    "kind", ["matching", "wrong-link", "wrong-state", "wrong-origin", "withdrawn", "reworded-draft"]
+)
+def test_found_decision_requires_current_matching_detail(tmp_path, monkeypatch, kind):
+    body = PROPOSAL | ({"confirmed": False} if kind in {"wrong-link", "reworded-draft"} else {})
+    decision = make(title=TITLE, statement=PROPOSAL["statement"], origin=Origin.DECIDED)
+    if not body["confirmed"]:
+        decision = decision.model_copy(update={"state": State.DRAFT, "origin": Origin.AUTONOMOUS})
+    row = shown(decision, tmp_path)
+    changes = {
+        "matching": {},
+        "wrong-link": {"links": (Link(type=LinkType.REPLACES, target=new_id()),)},
+        "wrong-state": {"state": State.DRAFT},
+        "wrong-origin": {"origin": Origin.APPROVED},
+        "withdrawn": {"state": State.WITHDRAWN},
+        "reworded-draft": {"statement": "Notes live in two Postgres tables."},
+    }[kind]
+    detail = shown(decision.model_copy(update=changes), tmp_path)
+    chat, calls = chat_client.Chat(Path("shop"), tmp_path), []
 
-    def call(method: str, path: str, *args: object, **kwargs: object) -> object:
-        if method == "GET" and path.startswith("/decisions/"):  # the list found it; its detail is read next
-            withdraw(shared)
-        return read(method, path, *args, **kwargs)
+    def read(method, path):
+        calls.append((method, path))
+        return 200, detail
 
-    monkeypatch.setattr(chat, "call", call)
-    out = chat.propose(PROPOSAL)
-    assert (out["saved"], titled(shared)[0] in out["error"]) == (None, True)
-
-
-def test_a_found_draft_reworded_before_its_detail_is_read_is_unclear(shared, wire, monkeypatch):
-    chat, _ = wire()
-    read = chat.call
-
-    def call(method: str, path: str, *args: object, **kwargs: object) -> object:
-        if method == "GET" and path.startswith("/decisions/"):  # the owner edits the draft the list found
-            made = decision_store.load(shared, PROJECT).snapshot.get(titled(shared)[0]).decision
-            edited = made.model_copy(update={"statement": "Notes live in two Postgres tables."})
-            assert decision_store.save(shared, edited, expected_revision=made.revision, message="decisions: edit").saved
-        return read(method, path, *args, **kwargs)
-
-    monkeypatch.setattr(chat, "call", call)
-    out = chat.propose(PROPOSAL | {"confirmed": False})
-    assert (out["saved"], titled(shared)[0] in out["error"]) == (None, True)
-
-
-def test_a_saved_draft_reworded_before_the_decisions_are_read_is_never_called_not_saved(shared, wire, monkeypatch):
-    chat, _ = wire()
-    read = chat.call
-
-    def call(method: str, path: str, *args: object, **kwargs: object) -> object:
-        if method == "GET" and path.startswith("/decisions?") and (made := titled(shared)):
-            snapshot = decision_store.load(shared, PROJECT).snapshot.get(made[0]).decision
-            edited = snapshot.model_copy(update={"title": "Notes in two tables"})
-            assert decision_store.save(shared, edited, expected_revision=snapshot.revision, message="edit").saved
-        return read(method, path, *args, **kwargs)
-
-    monkeypatch.setattr(chat, "call", call)
-    out = chat.propose(PROPOSAL | {"confirmed": False})
-    assert out["saved"] is None
-    assert any(e.decision.id in out["error"] for e in decision_store.load(shared, PROJECT).snapshot.entries)
-
-
-def test_a_decision_like_a_new_one_in_a_change_is_never_taken_for_it(shared, wire):
-    chat, _ = wire(after=made_now(shared, title=TITLE, statement=PROPOSAL["statement"], scope=Scope.CHANGE,
-                                  change="notes-move", state=State.DRAFT))  # fmt: skip
-    out = chat.propose(REFUSED)
-    assert (out["saved"], out["error"]) == (False, chat_client.NOT_SAVED)
+    monkeypatch.setattr(chat, "call", read)
+    method = "_found"
+    out = getattr(chat, method)(body, [row])
+    assert calls == [("GET", f"/decisions/{row['id']}")]
+    assert detail["id"] == row["id"]
+    if kind == "matching":
+        assert out["saved"] is True
+    else:
+        assert out == {
+            "saved": None,
+            "error": chat_client.UNCLEAR.format(why=f"{row['id']} matches it in part; ask the owner"),
+        }
 
 
 def test_a_host_without_the_fence_never_has_a_lost_save_called_not_saved(wire):

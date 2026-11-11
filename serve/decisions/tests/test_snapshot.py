@@ -14,8 +14,35 @@ def put(root, make, scope=Scope.PROJECT, project="owlbear", change="", **changes
     return decision
 
 
-def test_a_snapshot_holds_global_and_one_projects_layers_with_their_findings(tmp_path, make):
+@pytest.mark.parametrize("view", ["local", "foreign-replacement", "foreign-promotion", "nonfolder"])
+def test_snapshot_visibility_and_local_completeness(tmp_path, make, view):
     rule = put(tmp_path, make, Scope.GLOBAL)
+    if view == "foreign-replacement":
+        replaces = (Link(type=LinkType.REPLACES, target=rule.id),)
+        first = put(tmp_path, make, project="a", links=replaces)
+        second = put(tmp_path, make, project="b", links=replaces)
+        put(tmp_path, make, project="c")
+        seen = snapshot(tmp_path, "c")
+        assert {(f.rule, f.involves) for f in seen.findings} == {
+            (code, (d.id, rule.id)) for code in ("replace-scope", "two-successors") for d in (first, second)
+        }
+        assert not seen.active(rule.id)
+        return
+    if view == "foreign-promotion":
+        source = put(tmp_path, make, project="shop")
+        promoted = put(tmp_path, make, Scope.GLOBAL, links=(Link(type=LinkType.PROMOTED_FROM, target=source.id),))
+        seen = snapshot(tmp_path, "owlbear")
+        assert seen.findings == ()
+        assert seen.active(promoted.id)
+        return
+    if view == "nonfolder":
+        (tmp_path / "owlbear").mkdir()
+        (tmp_path / "owlbear" / "decisions").write_text("", encoding="utf-8")
+        seen = snapshot(tmp_path, "owlbear")
+        assert [f.message for f in seen.findings] == ["not a folder: decisions must be a real folder"]
+        assert not seen.complete
+        assert [layer.scope for layer in snapshot(tmp_path, "absent").layers] == [Scope.GLOBAL]
+        return
     own = put(tmp_path, make, links=(Link(type=LinkType.EXCEPTION_TO, target=rule.id),))
     spent = put(tmp_path, make, Scope.CHANGE, change="20261020-090000-notes", state=State.SPENT)
     other = put(tmp_path, make, project="shop")
@@ -38,7 +65,14 @@ def test_a_snapshot_holds_global_and_one_projects_layers_with_their_findings(tmp
     assert not seen.active(spent.id)
 
 
-def test_two_in_force_successors_involve_both_and_what_they_replace(tmp_path, make):
+@pytest.mark.parametrize("flagged", [False, True], ids=["competing-successors", "conflict-without-findings"])
+def test_snapshot_activity_requires_force_and_clear_graph(tmp_path, make, flagged):
+    if flagged:
+        decision = put(tmp_path, make, conflict=True)
+        seen = snapshot(tmp_path, "owlbear")
+        assert seen.findings == ()
+        assert not seen.active(decision.id)
+        return
     old = put(tmp_path, make)
     first = put(tmp_path, make, links=(Link(type=LinkType.REPLACES, target=old.id),))
     second = put(tmp_path, make, links=(Link(type=LinkType.REPLACES, target=old.id),))
@@ -50,50 +84,6 @@ def test_two_in_force_successors_involve_both_and_what_they_replace(tmp_path, ma
     assert len(seen.findings_for(old.id)) == 2
     assert not seen.active(first.id)
     assert not seen.active(second.id)
-
-
-def test_a_conflict_flag_keeps_a_decision_out_of_force_without_any_finding(tmp_path, make):
-    flagged = put(tmp_path, make, conflict=True)
-
-    seen = snapshot(tmp_path, "owlbear")
-
-    assert seen.findings == ()
-    assert not seen.active(flagged.id)
-
-
-def test_findings_follow_the_decisions_they_involve_not_where_their_files_lie(tmp_path, make):
-    rule = put(tmp_path, make, Scope.GLOBAL)
-    replaces = (Link(type=LinkType.REPLACES, target=rule.id),)
-    in_a, in_b = put(tmp_path, make, project="a", links=replaces), put(tmp_path, make, project="b", links=replaces)
-    put(tmp_path, make, project="c")
-
-    seen = snapshot(tmp_path, "c")
-
-    assert {(f.rule, f.involves) for f in seen.findings} == {
-        ("replace-scope", (in_a.id, rule.id)), ("replace-scope", (in_b.id, rule.id)),
-        ("two-successors", (in_a.id, rule.id)), ("two-successors", (in_b.id, rule.id)),
-    }  # fmt: skip
-    assert not seen.active(rule.id)
-
-
-def test_links_are_judged_over_the_whole_repository(tmp_path, make):
-    source = put(tmp_path, make, project="shop")
-    promoted = put(tmp_path, make, Scope.GLOBAL, links=(Link(type=LinkType.PROMOTED_FROM, target=source.id),))
-
-    seen = snapshot(tmp_path, "owlbear")
-
-    assert seen.findings == ()
-    assert seen.active(promoted.id)
-
-
-def test_a_decisions_path_that_is_a_file_is_a_finding_and_a_missing_project_has_no_layer(tmp_path):
-    (tmp_path / "owlbear").mkdir()
-    (tmp_path / "owlbear" / "decisions").write_text("", encoding="utf-8")
-
-    seen = snapshot(tmp_path, "owlbear")
-    assert [f.message for f in seen.findings] == ["not a folder: decisions must be a real folder"]
-    assert not seen.complete
-    assert [layer.scope for layer in snapshot(tmp_path, "absent").layers] == [Scope.GLOBAL]
 
 
 @pytest.mark.parametrize(
@@ -139,7 +129,7 @@ def test_another_projects_unreadable_folder_is_a_finding_outside_the_view_not_a_
     assert seen.active(rule.id)
 
 
-def test_a_readable_layer_beside_an_unreadable_one_still_counts(tmp_path, make):
+def test_readable_foreign_layer_still_counts_beside_an_unreadable_layer(tmp_path, make):
     rule = put(tmp_path, make, Scope.GLOBAL)
     put(tmp_path, make, project="shop", links=(Link(type=LinkType.REPLACES, target=rule.id),))
     put(tmp_path, make, Scope.CHANGE, project="shop", change="20261020-090000-notes")
@@ -151,6 +141,8 @@ def test_a_readable_layer_beside_an_unreadable_one_still_counts(tmp_path, make):
 
     assert not seen.active(rule.id)  # shop's readable replacement of a Global rule is still a finding here
     assert "replace-scope" in {f.rule for f in seen.findings}
+    assert not seen.unreadable
+    assert [(layer.project, finding.rule) for layer, finding in seen.outside] == [("shop", "unreadable")]
 
 
 def test_another_projects_unreadable_folder_keeps_its_whole_error(tmp_path, make, monkeypatch):
