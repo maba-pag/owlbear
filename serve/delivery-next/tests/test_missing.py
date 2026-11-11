@@ -25,7 +25,7 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_flow import brief_rounds, budgets, loop, plan_rounds, worktree
+from owlbear_delivery_next.change_flow import brief_rounds, budgets, loop, plan_rounds, stuck, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.commands import runner, worker_input
 from owlbear_delivery_next.git.command_failure import failure
@@ -83,12 +83,12 @@ def test_a_denied_tool_stays_denied_and_is_retried_within_its_budget() -> None:
         ("postgres", "postgres is not running on port 5432"),
     ],
 )
-def test_an_absent_tool_asks_the_owner_to_set_it_up_and_rerun(tool, error) -> None:
+def test_an_absent_tool_starts_setup_repair_on_its_first_report(tool, error) -> None:
     r = to_result(run(report(tool, error)), K.BUILD, NOW)
-    assert (r.exit, r.cause, r.operational) == (Exit.ASK, f"project-env:build:tool-{missing.slug(tool)}", True)
-    assert r.question.text.startswith(f"Set up {tool} on this machine (install or start it)")
-    assert error in r.question.text
-    assert options(r) == [("done", "retry"), ("pause", "pause")]
+    assert (r.exit, r.cause, r.setup) == (Exit.RETRY, f"project-env:build:tool-{missing.slug(tool)}", True)
+    c = loop.apply(change(), r, NOW)
+    assert error in c.repairs.current.evidence
+    assert (c.step.kind, c.repairs.current.step, c.questions) == (K.BUILD, K.BUILD, [])
 
 
 @pytest.mark.parametrize(
@@ -104,10 +104,10 @@ def test_an_absent_file_or_another_program_is_not_this_tool_missing(tool, error)
     assert not missing.absent(tool, error)
 
 
-def test_an_unset_package_goes_back_to_planning() -> None:
+def test_an_unset_package_starts_setup_repair() -> None:
     error = "npm ERR! enoent ENOENT: no such file or directory, open '/w/web/package.json'"
     r = to_result(run(report("npm", error, "install the web package")), K.BUILD, NOW)
-    assert (r.exit, r.back_to) == (Exit.BACK, K.PLAN)  # no runtime here can install a package that is not set up
+    assert (r.exit, r.setup, r.back_to) == (Exit.RETRY, True, None)
 
 
 def test_a_temporary_failure_retries_at_once_then_after_growing_pauses() -> None:
@@ -152,8 +152,8 @@ def test_a_window_only_tool_changes_the_plan_or_the_brief_only_where_they_can_ch
 @pytest.mark.parametrize(
     ("enclosing", "exit_", "target"),
     [
-        (K.BUILD, Exit.BACK, K.PLAN),
-        (K.REVIEW, Exit.BACK, K.PLAN),
+        (K.BUILD, Exit.RETRY, None),
+        (K.REVIEW, Exit.RETRY, None),
         (K.CHECK, Exit.ASK, K.PLAN),
         (K.FOLLOW, Exit.ASK, K.PLAN),
     ],
@@ -163,11 +163,13 @@ def test_a_tool_no_runtime_has_changes_the_work_that_asked_for_it(enclosing, exi
     r = to_result(run(p), K.REVIEW, NOW, enclosing)
     assert (r.exit, r.cause) == (exit_, f"scope:{enclosing}:tool-matlab")
     assert "needs matlab for run the integration tests: matlab: license server unknown" in r.reason
-    if exit_ == Exit.BACK:
-        assert r.back_to == target
+    if exit_ == Exit.RETRY:
+        assert (r.setup, r.back_to) == (True, None)
     else:
         assert options(r) == [("replan", target), ("pause", "pause")]
-    loop.apply(change(enclosing), r, NOW)  # every case is an exit its step defines
+    c = loop.apply(change(enclosing), r, NOW)
+    if exit_ == Exit.RETRY:
+        assert (c.repairs.current.step, c.questions) == (enclosing, [])
 
 
 def test_a_brief_challenge_without_the_tool_makes_it_the_rounds_finding_for_the_shaper() -> None:
@@ -263,7 +265,13 @@ def test_a_plan_missing_an_outside_pr_is_repaired_never_sent_back_to_the_brief(s
 
 
 def test_the_planner_reads_why_the_change_is_planned_again() -> None:
-    c = loop.apply(change(), to_result(run(report("matlab", "license server unknown")), K.BUILD, NOW), NOW)
+    r = StepResult(
+        exit=Exit.BACK,
+        back_to=K.PLAN,
+        cause="scope:build:premise",
+        reason="needs matlab for run the integration tests",
+    )
+    c = loop.apply(change(), r, NOW)
     assert c.step.kind == K.PLAN
     text = step_input.plan(c, Profile(), Path("/w"), {})
     assert "## Why the Change is planned again" in text
@@ -273,14 +281,13 @@ def test_the_planner_reads_why_the_change_is_planned_again() -> None:
 def test_installed_and_rerun_resumes_the_same_task() -> None:
     r = to_result(run(report("docker", "zsh: command not found: docker")), K.BUILD, NOW)
     c = loop.apply(change(), r, NOW)
-    q = c.questions[-1]
-    assert loop.owner_gated(c)
-    c = loop.fold(c, [AnswerItem(at=NOW, channel="status-view", question=q.id, option="done")], NOW)
+    assert c.repairs.current is not None
+    stuck.applied(c, "fixed-setup")
     assert (c.step.kind, c.step.task, loop.next_step(c, NOW)) == (K.BUILD, "t1", c.step)
 
 
 def test_pause_is_never_delivered_to_the_session_after_resume() -> None:
-    r = to_result(run(report("docker", "zsh: command not found: docker")), K.BUILD, NOW)
+    r = to_result(run(report("browser", "unknown tool")), K.BUILD, NOW)
     c = loop.apply(change(), r, NOW)
     q = c.questions[-1]
     c = loop.fold(c, [AnswerItem(at=NOW, channel="status-view", question=q.id, option="pause")], NOW)

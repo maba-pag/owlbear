@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next.change_contracts import curation_tools, tools
+from owlbear_delivery_next.change_contracts import check_hint, curation_tools, tools
 from owlbear_delivery_next.change_contracts.curation_records import TestReview
 from owlbear_delivery_next.change_contracts.curation_tools import TEST_CURATION, TestCurationResult, TestReviewResult
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
@@ -37,7 +37,7 @@ from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.state_store import identities
 from owlbear_delivery_next.state_store.briefs import new_slug
 from owlbear_delivery_next.state_store.store import Store
@@ -332,6 +332,9 @@ def curated(applied: bool):  # noqa: FBT001 - one switch per test
 
 
 def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(curating, monkeypatch, user_on):
+    prof = profile.confirm(Profile(), "check:.", "uv run test --changed", NOW)
+    prof = profile.confirm(prof, "check:api", "npm test", NOW)
+    curating.store.write_profile(prof)
     curating.curate = curated(applied=True)
     base = config.BASE  # the builder's own session values unset: the curator's build never needs them
     builder = base.agents["builder"].model_copy(update={"model": None, "effort": None, "minutes": None})
@@ -342,6 +345,8 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
         "test-curator", "claude-opus-5.5", "high", "long", TEST_CURATION
     )  # fmt: skip
     assert cfg.user == user_on
+    assert cfg.checks == (check_hint.qualified(".", "uv run test --changed"),)
+    assert cfg.checks[0] in cfg.message
     assert "tests/test_a.py::old: retire" in cfg.message
     assert "share 2 (web/src/b.test.ts" not in cfg.message  # every share ended
     assert "::slow" not in cfg.message  # rewrite-lower waits (TD-312)

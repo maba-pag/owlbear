@@ -39,7 +39,6 @@ if TYPE_CHECKING:
 RETRY_LIMIT = 3
 FLAKE_LIMIT = 1
 ROUND_LIMIT = 2
-REPLAN_LIMIT = 3
 DEFECT_LIMIT = 3  # the same Delivery defect in a row before asking
 REPAIR_AT = 2  # one cause stopping a step this often starts its repair (D-01M6RT5QHXFM58C9BPQXEK3QFB)
 WRONG_MODEL_LIMIT = 2  # wrong models in a row before asking: one rerun (owner decision 2026-10-15)
@@ -263,7 +262,7 @@ def _alternative(c: Change, r: StepResult, now: datetime) -> bool:
     b = c.budgets.causes.get(r.cause or "")
     if b is None or b.alternative or kind_of(r.cause) not in SPLITTABLE or c.plan is None:
         return False
-    if c.step.kind in {StepKind.SHAPE, StepKind.PLAN} or c.budgets.replans >= REPLAN_LIMIT:
+    if c.step.kind in {StepKind.SHAPE, StepKind.PLAN}:
         return False
     c.budgets.replans += 1
     c.budgets.causes[r.cause or ""] = b.model_copy(update={"alternative": True})  # the next exhaustion asks
@@ -346,7 +345,7 @@ def retry(c: Change, r: StepResult, now: datetime) -> None:
 
 
 def back(c: Change, r: StepResult, now: datetime) -> None:
-    """Apply a back exit to an allowed earlier step; re-planning too often asks the owner.
+    """Apply a back exit; the current cause's count governs repair and exhaustion, not unrelated re-plans.
 
     Raises:
         ValueError: The back exit has no cause.
@@ -367,12 +366,4 @@ def back(c: Change, r: StepResult, now: datetime) -> None:
         return
     if target == StepKind.PLAN:
         c.budgets.replans += 1
-        if c.budgets.replans > REPLAN_LIMIT:
-            options = [
-                Option(id="revise", label="Narrow or split the brief", next=StepKind.SHAPE),
-                Option(id="pause", label="Pause this Change", next="pause"),
-            ]
-            text = f"Re-planned {REPLAN_LIMIT} times: {r.reason}"
-            ask(c, Question(step=s.kind, text=text, options=options, cause=r.cause), now)
-            return
     enter(c, target, fix_task(c, r) if target == StepKind.BUILD else None)

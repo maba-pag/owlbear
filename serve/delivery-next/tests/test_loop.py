@@ -275,11 +275,15 @@ def test_renamed_task_with_the_same_scope_keeps_its_review_rounds():
     assert c.outcome.exit == Exit.ASK
 
 
-def test_fourth_replan_asks():
+def test_unrelated_replans_do_not_preempt_a_new_cause_or_its_repair():
     c = change()
-    c.budgets.replans = budgets.REPLAN_LIMIT
-    c = loop.apply(c, StepResult(exit=Exit.BACK, back_to=K.PLAN, cause="scope:build:x"), NOW)
-    assert (c.step.kind, c.outcome.exit) == (K.BUILD, Exit.ASK)
+    c.budgets.replans = 3
+    r = StepResult(exit=Exit.BACK, back_to=K.PLAN, cause="scope:build:x")
+    c = loop.apply(c, r, NOW)
+    assert (c.step.kind, c.budgets.replans, c.questions) == (K.PLAN, 4, [])
+    c.step = Step(kind=K.BUILD, task="t1")
+    c = loop.apply(c, r, NOW)
+    assert (c.step.kind, c.repairs.current.cause, c.questions) == (K.BUILD, r.cause, [])
 
 
 def _asked(c):
