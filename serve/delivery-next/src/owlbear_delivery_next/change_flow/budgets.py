@@ -350,10 +350,9 @@ def back(c: Change, r: StepResult, now: datetime) -> None:
     Raises:
         ValueError: The back exit has no cause.
     """
-    s = c.step
     target = r.back_to
     if r.cause is None:
-        msg = f"{s.kind} back needs a cause"
+        msg = f"{c.step.kind} back needs a cause"
         raise ValueError(msg)
     if c.tests is not None and target in curation_flow.FIXED:  # never counted, never a re-plan (TD-390)
         curation_flow.stop(c, r.reason or f"it would go back to {target}", r.cause, now)
