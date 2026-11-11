@@ -38,7 +38,7 @@ def test_identity_uniqueness_is_not_alias_uniqueness(tmp_path, make, duplicate):
 
 
 @pytest.mark.parametrize(
-    ("link", "target", "source", "expected"),
+    "case",
     [
         (LinkType.REPLACES, {"scope": Scope.GLOBAL}, {"scope": Scope.GLOBAL}, []),
         (LinkType.REPLACES, {}, {}, []),
@@ -62,7 +62,8 @@ def test_identity_uniqueness_is_not_alias_uniqueness(tmp_path, make, duplicate):
         (LinkType.DEPENDS_ON, None, {}, ["link-target"]),
     ],
 )
-def test_links_respect_visibility_replacement_and_promotion_scope(tmp_path, make, link, target, source, expected):
+def test_links_respect_visibility_replacement_and_promotion_scope(tmp_path, make, case):
+    link, target, source, expected = case
     old = entry(tmp_path, make, **(target or {}), state=State.REPLACED if link in {
         LinkType.REPLACES, LinkType.PROMOTED_FROM
     } else State.IN_FORCE)
@@ -99,7 +100,9 @@ def test_successor_count_includes_only_eligible_live_successors(tmp_path, make, 
     findings = check(entries)
     assert sorted(f.rule for f in findings) == expected
     if kind in {"two-live", "two-promotions", "mixed"}:
-        assert {f.involves for f in findings} == {(first.decision.id, old.decision.id), (second.decision.id, old.decision.id)}
+        assert {f.involves for f in findings} == {
+            (first.decision.id, old.decision.id), (second.decision.id, old.decision.id)
+        }
     elif kind in {"draft", "promotion-draft"}:
         assert findings[0].involves == ((old if kind == "draft" else proposed).decision.id,)
 
