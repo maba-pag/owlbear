@@ -175,25 +175,7 @@ def test_an_ambiguous_head_after_a_landed_commit_keeps_the_journal_and_the_writt
     _seed(picking)
     shared = picking.shared
     new = make(title="Use UTC", statement="All timestamps use UTC.")
-    real_commit = DataRepo.commit
-    real_rev = decision_sync._rev  # noqa: SLF001 - wrapped to make HEAD unreadable after the commit lands
-    state = {"committed": False}
-
-    def commit_lands_but_reports_failure(self, *args, **kwargs):
-        real_commit(self, *args, **kwargs)
-        state["committed"] = True
-        return "the hook reported a failure after the commit"
-
-    def head_unreadable_after_the_commit(shared_repo, ref, until):
-        if state["committed"] and ref == "HEAD":
-            return None
-        return real_rev(shared_repo, ref, until)
-
-    monkeypatch.setattr(DataRepo, "commit", commit_lands_but_reports_failure)
-    monkeypatch.setattr(decision_sync, "_rev", head_unreadable_after_the_commit)
-    receipt = decision_store.save(shared, new, expected_revision=None, message="decisions: ambiguous")
-
-    assert not receipt.saved
+    _committed_but_unproved(picking, monkeypatch, new)
     pending = decision_batch.pending(shared)
     assert pending is not None
     rel = f"{PROJECT}/decisions/{new.id}.md"
