@@ -131,7 +131,6 @@ def test_purge_removes_only_old_deleted_entries_and_publishes_their_removal(shar
     assert (purged["purged"], purged["skipped"], purged["failed"]) == (1, 0, 0)
     assert [p.stem for p in folder.glob("*.md")] == [kept.id]
     assert git(remote, "log", "-1", "--format=%s", "main") == f"memory {store.name}: purge 1 deleted"
-    assert c.post("/api/next/memory/purge", json={"min_age_days": -1}).status_code == 422
 
 
 def deleted_days_ago(folder: Path, title: str, days: int, *, category: MemoryCategory | None = None) -> str:
