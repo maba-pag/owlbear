@@ -131,6 +131,11 @@ remain required even when the task has no edited paths. For example,
 `uv run test --changed serve/tools/tests/test_todo.py --task-base OLD --target TARGET`
 unions that module with the task's affected checks. Positional targets with ordinary `--changed`
 still require task context rather than silently replacing branch scope.
+Curator measurements use `-m` (`--measurement`) with that same task context and pinned suite targets.
+Membership comes from both the original task commit and current tree: every surviving module still runs,
+while retired members remain inputs to consumer analysis rather than nonexistent pytest arguments.
+Ordinary task targets still must exist. Locally validated explicit targets may use discovered layouts outside
+the conventional test directories; this does not widen which test identities CI artifacts may supply.
 Kept tasks also compare their original `OLD..NEW` source versions, even when their bytes were
 restored before the current task began. The span's own paths use the same target-import exclusions
 as task Git scoping, and the selected consumers execute on the current tree.

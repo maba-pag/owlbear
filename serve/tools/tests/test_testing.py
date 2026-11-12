@@ -415,7 +415,7 @@ def test_required_discovered_suites_survive_edits_and_module_retirement(tmp_path
         module = tmp_path / name
         module.parent.mkdir(parents=True, exist_ok=True)
         module.write_text("def test_value():\n    assert True\n")
-    context = task_scope.Context("base", "base")
+    context = task_scope.Context("base", "base", measurement=True)
     targets = ["serve/demo/test", "tests"]
     with (
         patch.object(task_testing, "_REPOSITORY_ROOT", tmp_path),
@@ -436,6 +436,8 @@ def test_required_discovered_suites_survive_edits_and_module_retirement(tmp_path
         assert retired not in after
         assert select.call_args.args[1] == [retired]
         assert retired not in select.call_args.args[4].tests
+        with pytest.raises(task_scope.ScopeError, match="existing checkout-relative"):
+            task_testing.commands_for_task([retired], replace(context, measurement=False), targets, coverage=False)
     with pytest.raises(task_scope.ScopeError, match="existing checkout-relative"):
         task_scope.explicit_targets(tmp_path, ["serve/demo/test"])
 
@@ -716,7 +718,7 @@ def test_commands_reject_consumer_checkouts(tmp_path: Path, monkeypatch: pytest.
 
 
 def test_dependency_artifacts_cannot_name_tests_outside_the_checkout(tmp_path: Path) -> None:
-    from owlbear_tools.test_dependencies import read_evidence  # noqa: PLC0415 - exercise the artifact boundary.
+    from owlbear_tools.test_dependencies import node_path, read_evidence  # noqa: PLC0415 - the artifact boundary.
 
     node = "serve/tools/tests/../../../outside.py::test_escape"
     artifact = tmp_path / "dependencies.json"
@@ -742,6 +744,12 @@ def test_dependency_artifacts_cannot_name_tests_outside_the_checkout(tmp_path: P
         read_evidence(artifact)
     with pytest.raises(task_scope.ScopeError, match="checkout-relative test module"):
         task_scope.explicit_targets(_ROOT, [node])
+    with pytest.raises(ValueError, match="Invalid dependency test identity"):
+        node_path(node, local=frozenset({node.split("::", 1)[0]}))
+    local = ".github/skills/session-review/tests/test_extract_transcript.py"
+    assert node_path(local, local=frozenset({local})) == local
+    with pytest.raises(ValueError, match="Invalid dependency test identity"):
+        node_path(local)
 
 
 def test_page_consumers_keep_real_indirect_http_but_not_dictionary_gets(tmp_path: Path) -> None:

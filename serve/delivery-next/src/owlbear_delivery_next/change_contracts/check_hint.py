@@ -108,8 +108,11 @@ def changed_runner(command: str) -> tuple[str, list[str]] | None:
             continue
         words = iter(shlex.split(rest))
         targets, spans = [], []
+        measurement = False
         for word in words:
-            if word == "--keep-span":
+            if word in {"-m", "--measurement"}:
+                measurement = True
+            elif word == "--keep-span":
                 if (span := next(words, None)) is None:
                     return None
                 spans.append(span)
@@ -118,7 +121,7 @@ def changed_runner(command: str) -> tuple[str, list[str]] | None:
         if targets and not _literal_targets(targets):
             return None
         suffix = "".join(f" {shlex.quote(target)}" for target in targets if target != "--")
-        return runner + suffix, spans
+        return runner + (" -m" if measurement else "") + suffix, spans
     return None
 
 

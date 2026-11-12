@@ -428,7 +428,7 @@ def test_main() -> None:
         target = task_scope.commit(_run_git, args.target)
         paths = task_scope.changed(_run_git, _git_paths, args.task_base, args.keep_span, target)
         maps_dir = Path(args.maps_dir) if args.maps_dir is not None else None
-        context = task_scope.Context(args.task_base, target, maps_dir, tuple(args.keep_span))
+        context = task_scope.Context(args.task_base, target, maps_dir, tuple(args.keep_span), args.measurement)
         commands = commands_for_task(paths, context, args.paths, coverage=args.coverage)
     elif args.changed:
         try:

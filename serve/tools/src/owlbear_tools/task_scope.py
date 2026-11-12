@@ -27,6 +27,7 @@ class Context:
     target: str
     maps_dir: Path | None = None
     kept_spans: tuple[str, ...] = ()
+    measurement: bool = False
 
 
 class ScopeError(ValueError):
@@ -149,6 +150,7 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--target", help="The resolved integration-target commit for task dependency evidence")
     parser.add_argument("--keep-span", action="append", default=[], help="An original kept task's OLD..NEW scope")
     parser.add_argument("--maps-dir", help="Explicit candidate CI-map directory for disposable proof")
+    parser.add_argument("-m", "--measurement", action="store_true", help="Measure the surviving pinned suite members")
     parser.add_argument("--coverage", action="store_true")
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args()
@@ -162,6 +164,8 @@ def arguments() -> argparse.Namespace:
         parser.error("--task-base requires --changed")
     if args.task_base is not None and args.target is None:
         parser.error("--task-base requires --target")
+    if args.measurement and args.task_base is None:
+        parser.error("--measurement requires --task-base and --target")
     if any((args.target is not None, args.keep_span, args.maps_dir is not None)) and args.task_base is None:
         parser.error("--target, --keep-span and --maps-dir require --task-base")
     return args

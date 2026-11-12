@@ -358,7 +358,7 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
     assert cfg.user == user_on
     assert cfg.checks == (
         check_hint.task_command(
-            check_hint.qualified(".", "uv run test --changed tests"),
+            check_hint.qualified(".", "uv run test --changed -m tests"),
             c.tests.commit,
             c.tests.commit,
         ),

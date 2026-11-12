@@ -68,7 +68,11 @@ def commands_for_task(
 ) -> list[tuple[list[str], Path]]:
     """Union affected consumers and required targets, never bootstrap the full suite."""
     workspace = _workspace_packages()
-    recorded = _git_paths(["ls-tree", "-r", "--name-only", "-z", f"{context.base}^{{commit}}"]) if targets else set()
+    recorded = (
+        _git_paths(["ls-tree", "-r", "--name-only", "-z", f"{context.base}^{{commit}}"])
+        if targets and context.measurement
+        else set()
+    )
     explicit = task_scope.explicit_targets(_REPOSITORY_ROOT, targets, sorted(recorded))
     forced, python, packages, required, resources = _targets(paths, workspace, explicit)
     required.update(test for test in explicit if (_REPOSITORY_ROOT / test.split("::", 1)[0]).is_file())
@@ -91,7 +95,7 @@ def commands_for_task(
             python,
             context,
             selected,
-            test_impact.RequiredScope(consumer_paths, sorted(required), resources),
+            test_impact.RequiredScope(consumer_paths, sorted(required), resources, sorted(explicit)),
         )
     print(f"Task paths: {', '.join(paths) or 'none'}")  # noqa: T201
     if not selected:

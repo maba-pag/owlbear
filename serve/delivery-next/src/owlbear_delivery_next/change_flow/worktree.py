@@ -161,7 +161,8 @@ def build_checks(profile: Profile, change: Change, task: Task, path: Path) -> li
                 if not targets:
                     continue
                 chosen = shlex.join(sorted(targets))
-                adapted = check_hint.freeze(check_hint.qualified(package, f"{root[0]} {chosen}"), root[1])
+                runner = root[0] if "-m" in shlex.split(root[0]) else f"{root[0]} -m"
+                adapted = check_hint.freeze(check_hint.qualified(package, f"{runner} {chosen}"), root[1])
                 adapted = check_hint.task_command(adapted, change.tests.commit, change.tests.commit)
             found.append(adapted)
         return found

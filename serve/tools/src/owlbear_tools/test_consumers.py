@@ -70,17 +70,17 @@ def _navigation_route(argument: ast.expr) -> str | None:
 class _Consumers:
     """Real imports, named uses and requested/autouse conftest fixtures."""
 
-    def __init__(self, root: Path, files: set[str]) -> None:
+    def __init__(self, root: Path, files: set[str], local: frozenset[str] = frozenset()) -> None:
         self.root, self.files = root, files
         self.texts = {
             name: bytes_to_string_and_fsha((root / name).read_bytes())[0]
             for name in files
             if name.endswith(".py")
             and (root / name).is_file()
-            and (name.startswith(("serve/", "tests/")) or name == "conftest.py")
+            and (name.startswith(("serve/", "tests/")) or name == "conftest.py" or name in local)
         }
         self.trees = {name: ast.parse(text, filename=name) for name, text in self.texts.items()}
-        self.tests = {name for name in self.texts if is_test_module(name)}
+        self.tests = {name for name in self.texts if is_test_module(name) or name in local}
         self.reverse: dict[str, set[str]] = defaultdict(set)
         self.modules: dict[str, set[str]] = defaultdict(set)
         self.identities: dict[str, str] = {}
