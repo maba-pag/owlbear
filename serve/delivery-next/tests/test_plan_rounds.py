@@ -343,10 +343,12 @@ def test_an_already_asked_dispute_is_reconsidered_once_and_an_unsure_one_is_deli
     c = step(store, change_repo)
     assert "The owner's note: the brief says one task" in mp.said("reconsider")
     assert (loop.open_question(c), len(c.questions)) == (None, 1)  # reconsidered once, then decided, never asked
-    assert (c.loops[PLAN].findings[0].state, c.loops[PLAN].findings[0].note) == ("owner-fix", plan_rounds.DELEGATED)
+    f = c.loops[PLAN].findings[0]
+    assert (f.state, f.clarified) == ("owner-fix", "")
+    assert f.note == f"{plan_rounds.DELEGATED}. The challenger was unsure: only the owner knows"
     c = step(store, change_repo)
     assert mp.kinds() == ["plan", "challenge", "plan", "challenge", "reconsider", "plan"]
-    assert plan_rounds.DELEGATED in mp.said("plan")
+    assert f"> F1. {f.text}" in mp.said("plan")  # the original finding, not the challenger's doubt
 
 
 def test_an_already_asked_disputes_reconsidered_premise_is_decided_by_delivery_as_unsure(store, change_repo, mp):
@@ -364,7 +366,8 @@ def test_an_already_asked_disputes_reconsidered_premise_is_decided_by_delivery_a
     c = step(store, change_repo)
     f = c.loops[PLAN].findings[0]
     assert [q for q in c.questions if q.answer is None] == []
-    assert (f.state, f.clarified) == ("owner-fix", "premise: AC-1 contradicts AC-2")
+    assert (f.state, f.clarified) == ("owner-fix", "")
+    assert f.note.endswith("The challenger was unsure: premise: AC-1 contradicts AC-2")
 
 
 def test_the_planner_whose_rejection_delivery_overrules_revises_with_its_own_repair_chance(store, change_repo, mp):

@@ -238,8 +238,10 @@ def delegated(c: Change) -> bool:
     """After approval a rejection the challenger upheld is Delivery's, decided as the owner's Revise (#1062)."""
     lp = current(c)
     found = [f for f in lp.findings if f.state == "escalated" and f.reconsider != "due"] if lp else []
-    for f in found:
-        f.state, f.note, f.reconsider = "owner-fix", DELEGATED, ""
+    for f in found:  # an unsure challenger's doubt is no finding to fix: the planner gets the original, the doubt noted
+        doubt = f". The challenger was unsure: {f.clarified}" if f.reconsider == "unsure" and f.clarified else ""
+        f.clarified = "" if doubt else f.clarified
+        f.state, f.note, f.reconsider = "owner-fix", f"{DELEGATED}{doubt}", ""
     return bool(found)
 
 
