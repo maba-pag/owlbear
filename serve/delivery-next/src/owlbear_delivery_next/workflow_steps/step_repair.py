@@ -227,9 +227,10 @@ def _question(r: Repair) -> str:
     w, last = r.witness, r.tried[-1].outcome if r.tried else "nothing"
     proof = (f"{', '.join(w.commands)} passed in a throwaway copy (exit 0 in {w.seconds:.0f} s)" if w else
              f"the repairer reports it passed ({last}); Delivery runs it only once you confirm it")  # fmt: skip
+    what = f"`{r.command}` for {r.package}" if r.fix == "profile-check" else (r.tried[-1].fix if r.tried else "")
     diff = f"\n\nThe fix:\n{r.diff}" if r.diff else ""
     return (  # the proposal and its consequence first; the diagnosis after it (#1062)
-        f"Delivery found a fix for what stopped the work: {stuck.obstruction(r.found)}. It needs your yes because "
+        f"Delivery found a fix for what stopped the work: {what.rstrip('.')}. It needs your yes because "
         f"it {'; '.join(r.held)}. {ASKED[r.fix]}\n\nDetails: the step was stopped by: {r.evidence}\n"
         f"Delivery's repair found: {r.found}\nWith its fix, {proof}.{_defect(r)}{diff}"
     )

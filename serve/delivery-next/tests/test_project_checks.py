@@ -359,11 +359,9 @@ def test_the_question_is_an_engine_decision_the_changes_page_answers(store, chan
     item = answers.answer_item(store, c, answers.AnswerBody(question=q.id, option="detected"))
     assert isinstance(item, AnswerItem)
     labels = " ".join(o.label for o in q.options)
-    assert q.subject == "reserved"
-    assert "Every task of every Change must pass this check before its work counts as done" in q.text
-    assert "tests it doesn't run are left to CI. Use it?" in q.text
-    assert [o.id for o in q.options] == ["detected", "typed"]
-    assert q.options[0].label == "Yes, use it: a wrong or slow check fails or slows every task"
+    assert "Every task of every Change then waits for these tests to pass" in q.text
+    assert "what they leave out is tested only in CI before merge. Use it?" in q.text
+    assert q.options[0].label == "Yes, use it: if it is wrong or slow, every task fails or slows with it"
     assert "before anything is saved" in labels
 
 

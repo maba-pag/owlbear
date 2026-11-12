@@ -155,10 +155,11 @@ def _first(prof: Profile, missing: list[str], cause: str) -> loop.StepResult:
         return result
     named = "; ".join(f"`{c}` for {'every package' if h == ROOT else f'`{h}`'}" for h, c in proposed.items())
     text = (
-        f"Delivery will check this project's work with {named}. Every task of every Change must pass this check before "
-        "its work counts as done; tests it doesn't run are left to CI. Use it?"
+        f"Before a task's work counts as done, Delivery runs this project's own tests on it. It found {named} "
+        "for that. Every task of every Change then waits for these tests to pass; what they leave out is tested only "
+        "in CI before merge. Use it?"
     )
-    detected = "Yes, use it: a wrong or slow check fails or slows every task"
+    detected = "Yes, use it: if it is wrong or slow, every task fails or slows with it"
     options = [Option(id="detected", label=detected, next="retry"), Option(id="typed", label=typed, next="retry")]
     result = engine.ask(StepKind.PLAN, text, cause, options)
     if result.question is not None:
