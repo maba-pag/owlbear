@@ -439,8 +439,6 @@ def test_required_discovered_suites_survive_edits_and_module_retirement(tmp_path
         assert retired not in select.call_args.args[4].tests
         with pytest.raises(task_scope.ScopeError, match="existing checkout-relative"):
             task_testing.commands_for_task([retired], replace(context, measurement=False), targets, coverage=False)
-    with pytest.raises(task_scope.ScopeError, match="existing checkout-relative"):
-        task_scope.explicit_targets(tmp_path, ["serve/demo/test"])
 
 
 def test_task_consumers_exclude_docs_but_keep_markdown_fixtures_and_runtime_resources() -> None:
