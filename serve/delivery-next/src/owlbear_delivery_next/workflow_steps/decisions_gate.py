@@ -364,6 +364,9 @@ def _judged(view: DataView, c: Change, now: datetime, store: Store, lock: Lock |
         update = {"decisions_baseline": current, "decisions_unpinned_at": None, "decisions_offered": None}
         c = c.model_copy(update=update)
     if lock is not None and (later := _later(seen, c)):
+        if adopted:  # its picker checkpoints the new baseline: the record goes first, so no restart loses it
+            _adopted(store, lock, c, adopted, now)
+            adopted = []
         c, result = _reassessed(store, lock, view, c, later)
         if result is not None:
             return Gate(c, result, adopted=adopted)  # the adoption already holds: its record goes with it
@@ -413,10 +416,14 @@ def _reassessed(
     return c, None
 
 
+def _adopted(store: Store, lock: Lock, c: Change, lines: list[str], now: datetime) -> None:
+    at = now.isoformat(timespec="milliseconds")
+    store.log(lock, c.slug, {"event": "decisions-adopted", "at": at, "step": c.step.kind, "lines": lines})
+
+
 def _record(store: Store, lock: Lock, gate: Gate, now: datetime) -> None:
     if gate.adopted:
-        c, at = gate.change, now.isoformat(timespec="milliseconds")
-        store.log(lock, c.slug, {"event": "decisions-adopted", "at": at, "step": c.step.kind, "lines": gate.adopted})
+        _adopted(store, lock, gate.change, gate.adopted, now)
     if gate.refresh_error:
         c = gate.change
         store.log(
