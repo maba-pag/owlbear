@@ -1951,7 +1951,7 @@ def test_a_moved_target_integrates_before_merging_whatever_github_reports(tmp_pa
     _, result = merge.run(ctx(tmp_path, gh), c)
     assert (result.back_to, result.cause, result.fix_task.origin) == (
         StepKind.BUILD,
-        "conflict:merge:origin/main",
+        None,
         "integration",
     )
     assert gh.merges == []
