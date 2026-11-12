@@ -114,9 +114,8 @@ def relisted(c: Change, body: str) -> str:
     A marker counts only as a whole line: a finding or the owner's text that quotes one is on a longer line.
     """
     now = section(c)
-    if SECTION.search(body):
-        return SECTION.sub(lambda _: now, body, count=1)
-    return f"{body.rstrip()}\n\n{now}" if now else body
+    spliced, found = SECTION.subn(lambda _: now, body, count=1)
+    return spliced if found or not now else f"{body.rstrip()}\n\n{now}"
 
 
 def labelled(ctx: Ctx, c: Change, pr: PullRequest, labels: list[str]) -> None:
