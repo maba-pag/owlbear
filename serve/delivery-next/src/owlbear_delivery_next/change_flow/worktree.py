@@ -135,8 +135,8 @@ def build_checks(profile: Profile, change: Change, task: Task, path: Path) -> li
         for package, command in pairs:
             if package != "." and package not in change.tests.packages:
                 continue
-            root = check_hint.changed_runner(check_hint.qualified(package, command))
             adapted = check_hint.qualified(package, command)
+            root = check_hint.changed_runner(adapted)
             if root and owns_changed_runner(path, root[0].split()[2]):
                 targets, covered = set[str](), set[str]()
                 packages = sorted(change.tests.packages, key=len, reverse=True)
