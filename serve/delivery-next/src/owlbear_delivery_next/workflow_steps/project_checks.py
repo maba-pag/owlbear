@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import Answer, ErrorKind, Option, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.change_flow import asking, loop, worktree
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import github_writer
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 ROOT = "."
-TYPED = "-typed-"
+TYPED = asking.READ_BACK
 PREFIX = cause_key(ErrorKind.GATE, StepKind.PLAN, "checks-")
 _PAUSE = Option(id="pause", label="Pause this Change; nothing is planned until you answer", next="pause")
 
@@ -141,21 +141,29 @@ def _answered(
 
 
 def _first(prof: Profile, missing: list[str], cause: str) -> loop.StepResult:
-    named = ", ".join(
-        f"`{h}` ({f'detected: `{c}`' if (c := _detected(prof, h)) else 'none detected'})" for h in missing
-    )
-    text = (
-        "Which commands check this project's code? Every planned task runs them before its work counts as done; "
-        f"tests no command runs are left to CI. Not confirmed yet: {named}. Nothing is planned until you answer."
-    )
+    """Once per project: yes or no on the detected commands (#1062); none detected is Delivery's to repair."""
     typed = (
-        "Use commands I type in the answer, one `package: command` per line (`.: command` covers every package); "
+        "No, I'll type the commands: one `package: command` per line (`.: command` covers every package); "
         "you see them again before anything is saved"
     )
-    detected = "Use the detected commands: every task runs them, and a wrong or slow one fails or slows every task"
-    options = [Option(id="detected", label=detected, next="retry")] if all(_detected(prof, h) for h in missing) else []
-    options += [Option(id="typed", label=typed, next="retry"), _PAUSE]
-    return engine.ask(StepKind.PLAN, text, cause, options)
+    if not all(_detected(prof, h) for h in missing):
+        named = ", ".join(f"`{h}`" for h in missing if not _detected(prof, h))
+        text = f"No check command was detected for {named}: propose one for the project profile."
+        result = engine.ask(StepKind.PLAN, text, cause)
+        if result.question is not None:
+            result.question.subject = "internal"  # its repair proposes a profile check, his yes or no
+        return result
+    named = "; ".join(f"`{_detected(prof, h)}` for `{h}`" for h in missing)
+    text = (
+        f"Delivery will check this project's work with {named}. Every task of every Change runs them before its work "
+        "counts as done; tests they don't run are left to CI. Use them?"
+    )
+    detected = "Yes, use them: a wrong or slow command fails or slows every task"
+    options = [Option(id="detected", label=detected, next="retry"), Option(id="typed", label=typed, next="retry")]
+    result = engine.ask(StepKind.PLAN, text, cause, options)
+    if result.question is not None:
+        result.question.subject = "reserved"
+    return result
 
 
 def _read_back(prof: Profile, missing: list[str], first: Question, cause: str) -> loop.StepResult:
