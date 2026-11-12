@@ -308,7 +308,7 @@ def _resolved_witness(change: Change, prof: Profile, source: Path) -> tuple[str,
     if task:
         rebuilds.refresh(change, task)
     pairs = worktree.checks(profile.vouched(prof))
-    if task and r is not None and (task.checks or change.tests is not None):
+    if task and r is not None and (task.checks or (change.tests is not None and r.task == curation_flow.CURATE)):
         bound = task if task.base is not None else task.model_copy(update={"base": r.base})
         return tuple(worktree.build_checks(profile.vouched(prof), change, bound, source))
     selected = [check_hint.qualified(p, c) for p, c in pairs if _in_scope(change, p)]

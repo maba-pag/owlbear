@@ -458,6 +458,12 @@ def test_only_the_curation_task_is_the_curator_s_and_its_pr_text_fits(curating):
     step(curating)
     [cfg] = curating.seen
     assert (cfg.role, cfg.submit) == ("", tools.SUBMIT)  # a repair is an ordinary build; the report stays t1's
+    repair = c.model_copy(deep=True)
+    stuck.start(repair, "project-env:build:follow-up", "the follow-up check cannot finish", NOW)
+    prof = profile.confirm(Profile(), "check:.", "uv run pytest", NOW)
+    assert step_repair._witness(repair, prof, cfg.worktree) == (  # noqa: SLF001
+        check_hint.qualified(".", "uv run pytest"),
+    )
     many = [{"test": f"tests/test_{i}.py::" + "x" * 280, "action": "retire", "change": "y" * 480} for i in range(100)]
     head = "a" * 40
     c.tests.report = TestCurationResult.model_validate({
