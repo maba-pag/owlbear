@@ -24,7 +24,8 @@ const cell = (row, key) => key === "success" ? (row.success == null ? "–" : `$
 
 function row(name, r, columns) {
   const marked = pick.marked?.key === query() && pick.marked.tool === name && name === r.tool;
-  return html`<p-table-row data-tool=${r.tool ?? nothing} class=${marked ? "marked" : nothing}><p-table-cell>${name}</p-table-cell>${columns.map(([k]) =>
+  return html`<p-table-row data-tool=${r.tool ?? nothing} class=${marked ? "marked" : nothing}>
+    <p-table-cell>${name}</p-table-cell>${columns.map(([k]) =>
     html`<p-table-cell class="num">${cell(r, k)}</p-table-cell>`)}</p-table-row>`;
 }
 
