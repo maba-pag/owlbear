@@ -303,7 +303,7 @@ function walk(path, as) {
 const answers = turns(), models = turns();  // the layers' reloads, saves and renames
 
 function standingNotice(loaded) {
-  const notice = loaded.write_notice ? "" : loaded.notice;
+  const notice = loaded.notice === loaded.write_notice ? "" : loaded.notice;
   return notice ? notice.charAt(0).toUpperCase() + notice.slice(1) : "";
 }
 

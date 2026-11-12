@@ -1520,6 +1520,16 @@ def test_a_global_save_not_recorded_as_seen_says_why_whole(store, pds, monkeypat
 
     def write(path: Path, text: str) -> None:
         if path == seen and refusing:
+            store.machine_path.write_text(
+                json.dumps(
+                    {
+                        "format": CONFIG_FORMAT,
+                        "agents": {
+                            "builder": {"max_rounds": 3, "max_findings": 10, "last_round_at": 8, "ask_owner_at": 7}
+                        },
+                    }
+                )
+            )
             raise full
         real(path, text)
 
@@ -1532,10 +1542,14 @@ def test_a_global_save_not_recorded_as_seen_says_why_whole(store, pds, monkeypat
         pds.pick(page, "Layer", "global")
         pds.group(page, "agents")
         page.get_by_label("Minutes per session, builder").fill("50")
-        _saved(page, pds, "Save global defaults", "the global")
+        with page.expect_response("**/config/global") as saved:
+            _saved(page, pds, "Save global defaults", "the global")
         said = f"The saved Global values could not be recorded as seen: OSError: [Errno 28] {whole_error}\nNOTE-MARK"
+        payload = saved.value.json()
+        assert payload["write_notice"] == said[0].lower() + said[1:]
+        assert payload["notice"].startswith("The challenge-round values in use here do not fit together")
         expect(page.locator("#error")).to_be_visible()
-        assert page.locator("#error").text_content().strip() == said
+        expect(page.locator("#error")).to_have_text(f"{said}\n\n{payload['notice']}")
         refusing.clear()
         pds.group(page, "overview")
         with page.expect_response("**/api/next/config") as refreshed:
