@@ -212,7 +212,8 @@ def rules_changed(ctx: Ctx, c: Change) -> tuple[StepResult | None, Rules]:
     cause = failures.cause_key(ErrorKind.GATE, kind, f"rules-{shown}")
     agreed = (q for q in c.questions if q.cause == cause and q.answer and not q.effect_observed_at)
     if (q := next(agreed, None)) is not None and q.answer and q.answer.option == "yes":
-        ctx.profile = profile.adopt(ctx.profile, rules, ctx.now)
+        latest = ctx.store.read_profile() or ctx.profile  # entries another Change confirmed meanwhile stay
+        ctx.profile = profile.adopt(latest, rules, ctx.now)
         ctx.store.write_profile(ctx.profile)
         q.effect_observed_at = ctx.now
         ctx.log(c.slug, "profile-confirmed", key="branch rules", value="; ".join(diffs))
