@@ -214,7 +214,7 @@ def settled(
     if verdict is not None and verdict.follows and _followed(c, verdict) is None:  # #1064: never a silent bypass
         verdict, errors = None, [f"options: admission named {verdict.follows}, which is no answered question"]
     if verdict is not None and verdict.subject == "internal" and not stale:  # its field errors don't matter
-        return routed(c, proposed, verdict)
+        return routed(c, proposed, verdict, errors)
     errors = [*errors, *stale]
     return refused(c, errors) if errors or verdict is None else admitted(c, proposed, verdict, proof)
 
@@ -289,9 +289,14 @@ def refused(c: Change, errors: Sequence[str]) -> loop.StepResult:
     )
 
 
-def routed(c: Change, proposed: tools.AskQuestion, verdict: pick_tools.QuestionJudgment) -> loop.StepResult:
-    """A question about Delivery's own problem never reaches the owner: the step's repair takes it (#1062)."""
-    said = f"{proposed.question} (why: {proposed.why}) Admission: {verdict.why}"
+def routed(
+    c: Change, proposed: tools.AskQuestion, verdict: pick_tools.QuestionJudgment, seen: Sequence[str] = ()
+) -> loop.StepResult:
+    """A question about Delivery's own problem never reaches the owner: the step's repair takes it (#1062).
+
+    *seen* is what admission observed, such as a failed trial of the recommended check: the repairer's evidence.
+    """
+    said = "\n".join([f"{proposed.question} (why: {proposed.why}) Admission: {verdict.why}", *seen])
     subject = f"question-{signature(ErrorKind.PROJECT_ENV, str(c.step.kind), proposed.question)[:8]}"
     cause = cause_key(ErrorKind.PROJECT_ENV, c.step.kind, subject)
     prev = _followed(c, verdict)
