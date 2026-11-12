@@ -1,12 +1,12 @@
 ---
-description: "Review criteria for GitHub's built-in Copilot pull-request reviewer and CodeRabbit"
+description: "Review criteria for GitHub's built-in Copilot pull-request reviewer"
 applyTo: "**"
 ---
 
 # GitHub Copilot Code Review
 
-Scope: GitHub's built-in pull-request reviewer and CodeRabbit, which `.coderabbit.yaml` points here. In
-other environments, follow that environment's review or implementation instructions.
+Scope: GitHub's built-in pull-request reviewer. In other environments, follow that environment's review or
+implementation instructions.
 
 - Evaluate the changed behavior against the requested outcome and relevant acceptance criteria.
   Use plans referenced by the task to establish its scope. Read the owning implementation and
