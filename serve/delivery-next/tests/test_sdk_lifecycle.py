@@ -1037,37 +1037,48 @@ def test_a_failed_sessions_retry_shows_its_last_try_whole_on_the_changes_page(wo
         store.write(Lock("c1"), loop.apply(c, result.model_copy(update={"reason": why}), NOW))
 
     retrying(result.reason)
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    app = api.create_app(store, "tok", Host())
-    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_keep_alive=60))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    machine_list = f"{base}/api/next/projects"  # served by the machine host, which this project host runs without
-    errors: list[str] = []
-    with sync_playwright() as pw:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        app = api.create_app(store, "tok", Host())
+        server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_keep_alive=60))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
         try:
-            browser = pw.chromium.launch()
-        except Error as exc:
-            pytest.skip(f"no Playwright Chromium: {exc}")
-        page = browser.new_page()
-        page.on("console", lambda m: m.type == "error" and m.location["url"] != machine_list and errors.append(m.text))
-        page.on("pageerror", lambda e: errors.append(str(e)))
-        pds.only(page, base)
-        page.add_init_script("sessionStorage.setItem('token', 'tok');")
-        for why, tail in [(result.reason, f" · last try failed: RuntimeError: {whole_error}"), ("", "")]:
-            retrying(why)
-            page.goto(f"{base}/?change=c1")
-            line = page.locator("#detail p-text", has_text="not running: starting builder")
-            line.wait_for()
-            assert line.first.text_content().endswith(f"not running: starting builder{tail}")
-            tag, said = line.first.locator("xpath=..").locator("p-tag").bounding_box(), line.first.bounding_box()
-            assert abs(tag["y"] - said["y"]) < tag["height"]  # beside the first line, however long
-        assert errors == []
-        browser.close()
-    server.should_exit = True
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+            # Served by the machine host, which this project host runs without.
+            machine_list = f"{base}/api/next/projects"
+            errors: list[str] = []
+            with sync_playwright() as pw:
+                try:
+                    browser = pw.chromium.launch()
+                except Error as exc:
+                    pytest.skip(f"no Playwright Chromium: {exc}")
+                page = browser.new_page()
+                page.on(
+                    "console",
+                    lambda m: m.type == "error" and m.location["url"] != machine_list and errors.append(m.text),
+                )
+                page.on("pageerror", lambda e: errors.append(str(e)))
+                pds.only(page, base)
+                page.add_init_script("sessionStorage.setItem('token', 'tok');")
+                for why, tail in [(result.reason, f" · last try failed: RuntimeError: {whole_error}"), ("", "")]:
+                    retrying(why)
+                    page.goto(f"{base}/?change=c1")
+                    line = page.locator("#detail p-text", has_text="not running: starting builder")
+                    line.wait_for()
+                    assert line.first.text_content().endswith(f"not running: starting builder{tail}")
+                    tag = line.first.locator("xpath=..").locator("p-tag").bounding_box()
+                    said = line.first.bounding_box()
+                    assert abs(tag["y"] - said["y"]) < tag["height"]  # beside the first line, however long
+                assert errors == []
+                browser.close()
+        finally:
+            server.should_exit = True
+            thread.join(5)
+            assert not thread.is_alive(), "the owned page server did not stop"
 
 
 def test_a_session_that_cannot_be_noted_as_ours_is_never_created(world, monkeypatch):

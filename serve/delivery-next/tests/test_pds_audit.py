@@ -687,29 +687,33 @@ def test_a_failed_hand_audit_shows_its_whole_reason(tmp_path, monkeypatch, caplo
     reason = f"RuntimeError: {whole_error}\nthe session's teardown also failed: OSError: {whole_error}"
     assert settled(h)["reason"] == reason
     assert [r.getMessage() for r in caplog.records] == [f"PDS hand audit failed: {reason}"]  # with no page reading
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(api.create_app(Store(h.store.root), "tok", Host()), log_level="warning"))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            page.add_init_script("sessionStorage.setItem('token', 'tok');")
-            page.goto(f"{base}/updates/pds")
-            shown = page.locator("#audit-reason")
-            expect(shown).to_be_visible()
-            assert shown.text_content() == f"{reason[0].upper()}{reason[1:]}."
-            browser.close()
-    finally:
-        server.should_exit = True
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        server = uvicorn.Server(uvicorn.Config(api.create_app(Store(h.store.root), "tok", Host()), log_level="warning"))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+            with sync_playwright() as pw:
+                try:
+                    browser = pw.chromium.launch()
+                except Error as exc:
+                    pytest.skip(f"no Playwright Chromium: {exc}")
+                page = browser.new_page()
+                pds.only(page, base)
+                page.add_init_script("sessionStorage.setItem('token', 'tok');")
+                page.goto(f"{base}/updates/pds")
+                shown = page.locator("#audit-reason")
+                expect(shown).to_be_visible()
+                assert shown.text_content() == f"{reason[0].upper()}{reason[1:]}."
+                browser.close()
+        finally:
+            server.should_exit = True
+            thread.join(5)
+            assert not thread.is_alive(), "the owned page server did not stop"
 
 
 def test_an_unreadable_saved_audit_answers_and_logs_its_whole_reason(tmp_path, caplog, whole_error):

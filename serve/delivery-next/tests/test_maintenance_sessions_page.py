@@ -46,48 +46,52 @@ def test_a_held_session_is_released_only_after_a_confirmed_reboot_by_its_capture
 ) -> None:
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(api.create_app(Store(tmp_path), "tok", None), log_level="warning"))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    posted: list[tuple[str, str | None]] = []
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        server = uvicorn.Server(uvicorn.Config(api.create_app(Store(tmp_path), "tok", None), log_level="warning"))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+            posted: list[tuple[str, str | None]] = []
+            with sync_playwright() as pw:
+                try:
+                    browser = pw.chromium.launch()
+                except Error as exc:
+                    pytest.skip(f"no Playwright Chromium: {exc}")
+                page = browser.new_page()
+                pds.only(page, base)
 
-            def sessions(route) -> None:
-                if route.request.method == "POST":
-                    posted.append((route.request.url, route.request.post_data))
-                    route.fulfill(status=409, json={"detail": "this maintenance session is no longer held"})
-                    return
-                route.fulfill(json=HELD if still_held or not posted else EMPTY)
+                def sessions(route) -> None:
+                    if route.request.method == "POST":
+                        posted.append((route.request.url, route.request.post_data))
+                        route.fulfill(status=409, json={"detail": "this maintenance session is no longer held"})
+                        return
+                    route.fulfill(json=HELD if still_held or not posted else EMPTY)
 
-            page.route("**/maintenance/sessions**", sessions)
-            page.goto(f"{base}/maintenance#token=tok")
-            expect(page.locator("#sessions > li")).to_have_count(1)
-            release = page.get_by_role("button", name="Release this session")
-            expect(release).to_be_disabled()
-            page.get_by_label("The computer has rebooted since this session failed").check()
-            expect(release).to_be_enabled()
-            release.click()
-            page.get_by_role("button", name="Release", exact=True).click()
-            expect(page.get_by_text("no longer held")).to_be_visible()
-            assert len(posted) == 1
-            url, body = posted[0]
-            assert url.endswith("/maintenance/sessions/s-1/recover")
-            assert body is not None
-            assert '"rebooted":true' in body.replace(" ", "")
-            browser.close()
-    finally:
-        server.should_exit = True
+                page.route("**/maintenance/sessions**", sessions)
+                page.goto(f"{base}/maintenance#token=tok")
+                expect(page.locator("#sessions > li")).to_have_count(1)
+                release = page.get_by_role("button", name="Release this session")
+                expect(release).to_be_disabled()
+                page.get_by_label("The computer has rebooted since this session failed").check()
+                expect(release).to_be_enabled()
+                release.click()
+                page.get_by_role("button", name="Release", exact=True).click()
+                expect(page.get_by_text("no longer held")).to_be_visible()
+                assert len(posted) == 1
+                url, body = posted[0]
+                assert url.endswith("/maintenance/sessions/s-1/recover")
+                assert body is not None
+                assert '"rebooted":true' in body.replace(" ", "")
+                browser.close()
+        finally:
+            server.should_exit = True
+            thread.join(5)
+            assert not thread.is_alive(), "the owned page server did not stop"
 
 
 class Stuck:
@@ -125,26 +129,30 @@ def test_a_held_session_shows_its_whole_reason(tmp_path: Path, monkeypatch, pds,
     reason = f"the end of Spotter cases sessions was not confirmed: {', '.join(names)}"
     assert said == [f"Spotter cases: {reason}; the job waits until Maintenance recovers it"]
 
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(api.create_app(Store(tmp_path), "tok", None), log_level="warning"))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            page.route("**/maintenance/sessions**", lambda route: route.fulfill(json=job.maintenance.read()))
-            page.goto(f"{base}/maintenance#token=tok")
-            shown = page.locator("#sessions > li p-text", has_text="The end of Spotter cases")
-            shown.wait_for()
-            assert shown.evaluate("e => e.textContent") == f"T{reason[1:]}."
-            browser.close()
-    finally:
-        server.should_exit = True
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        server = uvicorn.Server(uvicorn.Config(api.create_app(Store(tmp_path), "tok", None), log_level="warning"))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+            with sync_playwright() as pw:
+                try:
+                    browser = pw.chromium.launch()
+                except Error as exc:
+                    pytest.skip(f"no Playwright Chromium: {exc}")
+                page = browser.new_page()
+                pds.only(page, base)
+                page.route("**/maintenance/sessions**", lambda route: route.fulfill(json=job.maintenance.read()))
+                page.goto(f"{base}/maintenance#token=tok")
+                shown = page.locator("#sessions > li p-text", has_text="The end of Spotter cases")
+                shown.wait_for()
+                assert shown.evaluate("e => e.textContent") == f"T{reason[1:]}."
+                browser.close()
+        finally:
+            server.should_exit = True
+            thread.join(5)
+            assert not thread.is_alive(), "the owned page server did not stop"

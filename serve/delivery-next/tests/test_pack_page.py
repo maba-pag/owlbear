@@ -82,21 +82,33 @@ def served(tmp_path: Path) -> Iterator[Callable[..., tuple[pack_job.Job, str]]]:
     def serve(lp: RoundLoop | None = None, job: pack_job.Job | None = None) -> tuple[pack_job.Job, str]:
         job = job or waiting(Store(tmp_path), lp)
         sock = socket.socket()
-        sock.bind(("127.0.0.1", 0))
-        server = uvicorn.Server(uvicorn.Config(api.create_app(job.store, "tok", Host(), pack=job), log_level="warning"))
-        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
-        thread.start()
-        while not server.started:
-            time.sleep(0.05)
+        try:
+            sock.bind(("127.0.0.1", 0))
+            server = uvicorn.Server(
+                uvicorn.Config(api.create_app(job.store, "tok", Host(), pack=job), log_level="warning")
+            )
+            thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+            thread.start()
+        except BaseException:
+            sock.close()
+            raise
         servers.append((server, thread, sock))
+        while not server.started:
+            assert thread.is_alive(), "the owned page server stopped before startup"
+            time.sleep(0.05)
         return job, f"http://127.0.0.1:{sock.getsockname()[1]}"
 
-    yield serve
-    for server, thread, sock in servers:
-        server.should_exit = True
-        thread.join(5)
-        assert not thread.is_alive(), "the owned page server did not stop"
-        sock.close()
+    try:
+        yield serve
+    finally:
+        for server, _thread, _sock in servers:
+            server.should_exit = True
+        with contextlib.ExitStack() as cleanup:
+            for _server, thread, sock in reversed(servers):
+                cleanup.callback(sock.close)
+                cleanup.callback(thread.join, 5)
+        for _server, thread, _sock in servers:
+            assert not thread.is_alive(), "the owned page server did not stop"
 
 
 @contextlib.contextmanager

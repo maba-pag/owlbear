@@ -105,19 +105,30 @@ def clone(path: Path, slug: str = "", origin: str = "") -> Path:
     return path.resolve()
 
 
-def serve() -> tuple[Machine, uvicorn.Server, str]:
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    now = datetime.now(UTC)
-    machine = Machine(HostRecord(url=f"{base}/", token="t", pid=1, started_at=now, code=codebase.CURRENT))  # noqa: S106
-    machine.load_all()
-    # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
-    server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning", timeout_keep_alive=60))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    return machine, server, base
+@contextmanager
+def serve() -> Iterator[tuple[Machine, uvicorn.Server, str]]:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+        now = datetime.now(UTC)
+        machine = Machine(HostRecord(url=f"{base}/", token="t", pid=1, started_at=now, code=codebase.CURRENT))  # noqa: S106
+        machine.load_all()
+        # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
+        server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning", timeout_keep_alive=60))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            yield machine, server, base
+        finally:
+            server.should_exit = True
+            try:
+                machine.stop_all()
+            finally:
+                thread.join(5)
+                assert not thread.is_alive(), "the owned page server did not stop"
 
 
 @contextmanager
@@ -151,13 +162,8 @@ def browsing(monkeypatch, pds, width: int = 1280, *, details: bool = False) -> I
     registered projects and the PDS CDN, and the host's address; the scheduler runs, no runner starts."""
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
-    machine, server, base = serve()
-    try:
-        with page_at(base, pds, (width, 800), details=details) as page:
-            yield page, base
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+    with serve() as (_machine, _server, base), page_at(base, pds, (width, 800), details=details) as page:
+        yield page, base
 
 
 @contextmanager
@@ -251,75 +257,70 @@ def test_changes_of_all_projects_or_one_the_top_row_switches_and_resumes_and_pro
     monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)  # the scheduler runs; no runner starts
     a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
     third = clone(tmp_path / "gamma")
-    machine, server, base = serve()
-    try:
-        with page_at(base, pds) as page:
-            page.goto(f"{base}/#token=t")
-            expect(page.locator("#changes")).to_contain_text("alpha-1")  # All: every project's Changes
-            expect(page.locator("#changes")).to_contain_text("beta-1")
-            expect(page).to_have_url(f"{base}/")
-            expect(page.locator("#changes .project")).to_have_text(["alpha", "beta"])
-            head = page.locator("#changes .card .top").first  # a card's header is not styled as the top row
-            assert head.evaluate("e => getComputedStyle(e).borderBottomStyle") == "none"
-            expect(page.locator("#machine .paused")).to_contain_text("2 Changes would continue")
-            expect(page.locator("#changes")).to_contain_text("Delivery is paused: continues after Resume")
-            top = page.locator("#top")  # the project and Pause; the pause banner sits under it
-            pds.pick(top, "Project", b.id)
-            expect(page.locator("#changes")).to_contain_text("beta-1")
-            expect(page.locator("#changes")).not_to_contain_text("alpha-1")
-            expect(page.get_by_role("link", name="Backlog")).to_have_attribute("href", f"/backlog?project={b.id}")
-            page.locator("#changes a.open").first.click()
-            expect(page).to_have_url(f"{base}/?project={b.id}&change={b.id}%2Fbeta-1")
-            page.reload()
-            expect(pds.select(top, "Project")).to_have_js_property("value", b.id)
-            page.get_by_role("button", name="Resume").click()
-            expect(page.locator("#machine .paused")).to_have_count(0)
-            assert (machine.paused, registry.load().resumed_at is not None) == (False, True)
-            pause = page.get_by_role("button", name="Pause Delivery")
-            tip = top.locator("p-button", has=pause)  # the tooltip is on the PDS button, around its inner button
-            expect(tip).to_have_attribute("title", re.compile("may still update"))  # TD-288
-            pause.click()
-            expect(page.locator("#machine .paused")).to_contain_text("Delivery is paused: 2 Changes would continue")
-            stop = page.get_by_role("button", name="Pause and stop when idle")
-            expect(page.locator("#machine p-button", has=stop)).to_have_attribute("title", re.compile("stops"))
-            stop.click()
-            pds.answer(page, "Pause and stop")
-            expect(page.locator("#machine .paused")).to_contain_text("OwlBear stops once nothing runs")
-            assert (machine.paused, machine.ending) == (True, True)
-            page.get_by_role("button", name="Resume").click()
-            expect(page.locator("#machine .paused")).to_have_count(0)
-            assert (machine.paused, machine.ending) == (False, False)
-            page.get_by_role("button", name="Menu").click()  # Projects adds and removes (D-01M63C8DA1D95Z7M9ZYWVYYNF7)
-            page.locator("p-drilldown").get_by_role("link", name="Projects").click()
-            expect(page).to_have_url(f"{base}/projects?project={b.id}")
-            page.request.post(
-                f"{base}/api/next/projects", data={"path": str(third)}, headers={"Authorization": "Bearer t"}
-            )  # Add a project's dialog has its own tests
-            page.reload()
-            added = next(p for p in registry.load().projects if p.path == str(third))
-            expect(pds.select(top, "Project").locator(f'p-select-option[value="{added.id}"]')).to_have_text("gamma")
-            pds.pick(top, "Project", added.id)
-            expect(page).to_have_url(f"{base}/projects?project={added.id}")
-            gamma = page.get_by_role("listitem", name="gamma")
-            expect(gamma.locator("p-tag")).to_have_text("shown now")
-            gamma.get_by_role("button", name="Remove project").click()
-            expect(pds.modal(page)).to_contain_text("nothing is deleted")
-            pds.answer(page, "Remove project")
-            expect(page).to_have_url(f"{base}/projects")  # back to All
-            assert [p.id for p in registry.load().projects] == [a.id, b.id]
-            expect(page.locator("#projects > li")).to_have_count(2)
-            page.locator("#top").get_by_role("link", name="Backlog").click()
-            expect(page).to_have_url(f"{base}/backlog")  # the backlog too shows all projects (TD-241)
-            page.get_by_role("button", name="Menu").click()
-            page.locator("p-drilldown").get_by_role("button", name="Settings").click()
-            page.locator("p-drilldown").get_by_role("link", name="Overview").click()
-            expect(page).to_have_url(f"{base}/config?project={a.id}#overview")  # a project page opens the first project
-            page.goto(f"{base}/memory")  # under All, the link to the Memory settings keeps the Global layer it names
-            page.get_by_role("link", name="Memory settings").click()
-            expect(page).to_have_url(f"{base}/config?project={a.id}&layer=global#memory")
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+    with serve() as (machine, _server, base), page_at(base, pds) as page:
+        page.goto(f"{base}/#token=t")
+        expect(page.locator("#changes")).to_contain_text("alpha-1")  # All: every project's Changes
+        expect(page.locator("#changes")).to_contain_text("beta-1")
+        expect(page).to_have_url(f"{base}/")
+        expect(page.locator("#changes .project")).to_have_text(["alpha", "beta"])
+        head = page.locator("#changes .card .top").first  # a card's header is not styled as the top row
+        assert head.evaluate("e => getComputedStyle(e).borderBottomStyle") == "none"
+        expect(page.locator("#machine .paused")).to_contain_text("2 Changes would continue")
+        expect(page.locator("#changes")).to_contain_text("Delivery is paused: continues after Resume")
+        top = page.locator("#top")  # the project and Pause; the pause banner sits under it
+        pds.pick(top, "Project", b.id)
+        expect(page.locator("#changes")).to_contain_text("beta-1")
+        expect(page.locator("#changes")).not_to_contain_text("alpha-1")
+        expect(page.get_by_role("link", name="Backlog")).to_have_attribute("href", f"/backlog?project={b.id}")
+        page.locator("#changes a.open").first.click()
+        expect(page).to_have_url(f"{base}/?project={b.id}&change={b.id}%2Fbeta-1")
+        page.reload()
+        expect(pds.select(top, "Project")).to_have_js_property("value", b.id)
+        page.get_by_role("button", name="Resume").click()
+        expect(page.locator("#machine .paused")).to_have_count(0)
+        assert (machine.paused, registry.load().resumed_at is not None) == (False, True)
+        pause = page.get_by_role("button", name="Pause Delivery")
+        tip = top.locator("p-button", has=pause)  # the tooltip is on the PDS button, around its inner button
+        expect(tip).to_have_attribute("title", re.compile("may still update"))  # TD-288
+        pause.click()
+        expect(page.locator("#machine .paused")).to_contain_text("Delivery is paused: 2 Changes would continue")
+        stop = page.get_by_role("button", name="Pause and stop when idle")
+        expect(page.locator("#machine p-button", has=stop)).to_have_attribute("title", re.compile("stops"))
+        stop.click()
+        pds.answer(page, "Pause and stop")
+        expect(page.locator("#machine .paused")).to_contain_text("OwlBear stops once nothing runs")
+        assert (machine.paused, machine.ending) == (True, True)
+        page.get_by_role("button", name="Resume").click()
+        expect(page.locator("#machine .paused")).to_have_count(0)
+        assert (machine.paused, machine.ending) == (False, False)
+        page.get_by_role("button", name="Menu").click()  # Projects adds and removes (D-01M63C8DA1D95Z7M9ZYWVYYNF7)
+        page.locator("p-drilldown").get_by_role("link", name="Projects").click()
+        expect(page).to_have_url(f"{base}/projects?project={b.id}")
+        page.request.post(
+            f"{base}/api/next/projects", data={"path": str(third)}, headers={"Authorization": "Bearer t"}
+        )  # Add a project's dialog has its own tests
+        page.reload()
+        added = next(p for p in registry.load().projects if p.path == str(third))
+        expect(pds.select(top, "Project").locator(f'p-select-option[value="{added.id}"]')).to_have_text("gamma")
+        pds.pick(top, "Project", added.id)
+        expect(page).to_have_url(f"{base}/projects?project={added.id}")
+        gamma = page.get_by_role("listitem", name="gamma")
+        expect(gamma.locator("p-tag")).to_have_text("shown now")
+        gamma.get_by_role("button", name="Remove project").click()
+        expect(pds.modal(page)).to_contain_text("nothing is deleted")
+        pds.answer(page, "Remove project")
+        expect(page).to_have_url(f"{base}/projects")  # back to All
+        assert [p.id for p in registry.load().projects] == [a.id, b.id]
+        expect(page.locator("#projects > li")).to_have_count(2)
+        page.locator("#top").get_by_role("link", name="Backlog").click()
+        expect(page).to_have_url(f"{base}/backlog")  # the backlog too shows all projects (TD-241)
+        page.get_by_role("button", name="Menu").click()
+        page.locator("p-drilldown").get_by_role("button", name="Settings").click()
+        page.locator("p-drilldown").get_by_role("link", name="Overview").click()
+        expect(page).to_have_url(f"{base}/config?project={a.id}#overview")  # a project page opens the first project
+        page.goto(f"{base}/memory")  # under All, the link to the Memory settings keeps the Global layer it names
+        page.get_by_role("link", name="Memory settings").click()
+        expect(page).to_have_url(f"{base}/config?project={a.id}&layer=global#memory")
 
 
 OWLBEAR_ORIGIN = "https://github.com/maba-pag/owlbear.git"
@@ -784,17 +785,20 @@ def test_a_paused_page_runs_updates_now_shows_the_update_and_says_once_which_ver
     """TD-288, TD-352, TD-299: Run updates now on the paused bar; the version taken is said once."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    machine, server, base = serve()
-    machine.updated = "v0.2"
-    asked: list[bool] = []
+    with serve() as (machine, _server, base):
+        machine.updated = "v0.2"
+        asked: list[bool] = []
 
-    def run_now() -> dict:
-        asked.append(True)
-        machine.updater.state |= {"phase": "waiting", "detail": "waits for p: c1: a running step", "version": "v0.3"}
-        return machine.updater.read()
+        def run_now() -> dict:
+            asked.append(True)
+            machine.updater.state |= {
+                "phase": "waiting",
+                "detail": "waits for p: c1: a running step",
+                "version": "v0.3",
+            }
+            return machine.updater.read()
 
-    machine.updater.run_now = run_now
-    try:
+        machine.updater.run_now = run_now
         with page_at(base, pds) as page:
             page.goto(f"{base}/#token=t")
             expect(page.locator("#update-done")).to_contain_text("OwlBear now runs v0.2")
@@ -809,9 +813,6 @@ def test_a_paused_page_runs_updates_now_shows_the_update_and_says_once_which_ver
             page.reload()
             expect(page.locator("#update-state")).to_be_visible()
             expect(page.locator("#update-done")).to_have_count(0)  # told once
-    finally:
-        server.should_exit = True
-        machine.stop_all()
 
 
 @pytest.mark.browser
@@ -819,18 +820,14 @@ def test_an_announced_update_counts_down_on_every_page_and_postpone_cancels_it(p
     """TD-301: open pages announce it 2 minutes ahead with Postpone; Postpone is use."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    machine, server, base = serve()
-    machine.auto.target, machine.auto.deadline = "v0.3", machine.auto.mono() + 105
-    try:
+    with serve() as (machine, _server, base):
+        machine.auto.target, machine.auto.deadline = "v0.3", machine.auto.mono() + 105
         with page_at(base, pds) as page:
             page.goto(f"{base}/#token=t")
             expect(page.locator("#update-announce")).to_contain_text("OwlBear updates to v0.3 in 1:4")
             page.locator("#update-announce").get_by_role("button", name="Postpone").click()
             expect(page.locator("#update-announce")).to_have_count(0)
             assert machine.auto.deadline is None
-    finally:
-        server.should_exit = True
-        machine.stop_all()
 
 
 PACK = {
@@ -845,18 +842,17 @@ def test_every_page_shows_the_impeccable_banners_and_install_says_refused_runnin
     """D-01M61GW2EAHFFRFHF014A14K98: Install while this version's pack is missing; Update now for a newer one."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    machine, server, base = serve()
-    state = {"install": dict(PACK["install"]), "release": dict(PACK["release"])}
-    answers = iter([{"refused": "an update runs; it installs the pack of the version it takes"}, {}])
+    with serve() as (machine, _server, base):
+        state = {"install": dict(PACK["install"]), "release": dict(PACK["release"])}
+        answers = iter([{"refused": "an update runs; it installs the pack of the version it takes"}, {}])
 
-    def install() -> dict:
-        said = next(answers)
-        if not said:
-            state["install"] = state["install"] | {"state": "installing"}
-        return dict(state) | said
+        def install() -> dict:
+            said = next(answers)
+            if not said:
+                state["install"] = state["install"] | {"state": "installing"}
+            return dict(state) | said
 
-    machine.impeccable.read, machine.impeccable.install = (lambda: dict(state)), install
-    try:
+        machine.impeccable.read, machine.impeccable.install = (lambda: dict(state)), install
         with page_at(base, pds) as page:
             page.goto(f"{base}/#token=t")
             missing, newer = page.locator("#pack-install-banner"), page.locator("#pack-release-banner")
@@ -883,9 +879,6 @@ def test_every_page_shows_the_impeccable_banners_and_install_says_refused_runnin
             expect(newer.get_by_role("link")).to_have_text("Updates → OwlBear")  # the pages' one separator
             newer.get_by_role("button", name="Update now").click()
             expect(pds.modal(page)).to_contain_text("Run updates now?")
-    finally:
-        server.should_exit = True
-        machine.stop_all()
 
 
 @pytest.mark.browser
@@ -908,12 +901,13 @@ def test_updates_impeccable_with_no_project_answers_a_loaded_projects_run_with_i
         "state": "waiting", "started_at": datetime.now(UTC).isoformat(), "run": "r1", "questions": [question],
     }  # fmt: skip
     job._save()  # noqa: SLF001
-    machine, server, base = serve()
-    failed = {"state": "failed", "version": "v0.3", "pack": "", "detail": "cannot download", "at": None}
-    unread = {"state": "unknown", "version": "", "pack": "", "running_pack": "impeccable-4.8.0.1", "checked_at": None,
-              "detail": "GitHub did not answer"}  # fmt: skip
-    machine.impeccable.read = lambda: {"install": failed, "release": unread}  # a newer version's pack
-    try:
+    with serve() as (machine, _server, base):
+        failed = {"state": "failed", "version": "v0.3", "pack": "", "detail": "cannot download", "at": None}
+        unread = {
+            "state": "unknown", "version": "", "pack": "", "running_pack": "impeccable-4.8.0.1",
+            "checked_at": None, "detail": "GitHub did not answer",
+        }  # fmt: skip
+        machine.impeccable.read = lambda: {"install": failed, "release": unread}  # a newer version's pack
         with page_at(base, pds) as page:
             page.goto(f"{base}/updates/impeccable#token=t")
             assert "project=" not in page.url  # no project picked for the owner
@@ -927,9 +921,6 @@ def test_updates_impeccable_with_no_project_answers_a_loaded_projects_run_with_i
                 "Impeccable of OwlBear v0.3 failed to install on this machine: cannot download."
             )
             expect(page.locator("#pack-release")).to_have_text("Not known yet: GitHub did not answer.")
-    finally:
-        server.should_exit = True
-        machine.stop_all()
 
 
 @pytest.mark.browser
@@ -957,22 +948,21 @@ def test_updates_impeccable_says_an_install_failure_it_could_not_keep_whole(
         return unlink(self, *args, **kwargs)
 
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    machine, server, base = serve()
-    running = versions.running()  # its pack is not installed here, so its failure applies
-    machine.impeccable.failed(running, "cannot download")
-    monkeypatch.setattr(Path, "write_text", writing)
-    monkeypatch.setattr(Path, "unlink", unlinking)
-    if fails == "write":
-        machine.impeccable.failed(running, "cannot download again")
-    else:
-        machine.impeccable.ready(running)
-    monkeypatch.setattr(Path, "write_text", write)
-    monkeypatch.setattr(Path, "unlink", unlink)
-    assert broken == [path.with_name(f".{machine_impeccable.FAILED}.tmp") if fails == "write" else path]
-    unkept = f"the failure could not be {'kept in' if fails == 'write' else 'removed from'} {path}: OSError: "
-    unkept += whole_error
-    logged = capsys.readouterr().out
-    try:
+    with serve() as (machine, _server, base):
+        running = versions.running()  # its pack is not installed here, so its failure applies
+        machine.impeccable.failed(running, "cannot download")
+        monkeypatch.setattr(Path, "write_text", writing)
+        monkeypatch.setattr(Path, "unlink", unlinking)
+        if fails == "write":
+            machine.impeccable.failed(running, "cannot download again")
+        else:
+            machine.impeccable.ready(running)
+        monkeypatch.setattr(Path, "write_text", write)
+        monkeypatch.setattr(Path, "unlink", unlink)
+        assert broken == [path.with_name(f".{machine_impeccable.FAILED}.tmp") if fails == "write" else path]
+        unkept = f"the failure could not be {'kept in' if fails == 'write' else 'removed from'} {path}: OSError: "
+        unkept += whole_error
+        logged = capsys.readouterr().out
         with page_at(base, pds) as page:
             said = errors(page)
             page.goto(f"{base}/updates/impeccable#token=t")
@@ -981,9 +971,6 @@ def test_updates_impeccable_says_an_install_failure_it_could_not_keep_whole(
             expect(shown).to_be_visible()
             assert shown.text_content() == f"{unkept[0].upper()}{unkept[1:]}."
             assert said == []
-    finally:
-        server.should_exit = True
-        machine.stop_all()
     line = r"^\d\d:\d\d:\d\dZ Impeccable: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"  # up to the host log's next line
     assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [unkept]
 
@@ -1011,12 +998,11 @@ def test_updates_say_a_release_look_that_could_not_read_the_versions_whole(
         monkeypatch.setattr(versions, "pins", failing)
         detail = f"v9.9's Impeccable is unreadable: VersionError: {whole_error}\na note on the failure"
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    machine, server, base = serve()
-    for _ in range(2):  # a failure shows after two in a row
-        assert machine.checks.start("owlbear")
-        assert machine.checks.drain(10)
-    logged = capsys.readouterr().out
-    try:
+    with serve() as (machine, _server, base):
+        for _ in range(2):  # a failure shows after two in a row
+            assert machine.checks.start("owlbear")
+            assert machine.checks.drain(10)
+        logged = capsys.readouterr().out
         with page_at(base, pds) as page:
             said = errors(page)
             page.goto(f"{base}/updates/impeccable#token=t")
@@ -1034,9 +1020,6 @@ def test_updates_say_a_release_look_that_could_not_read_the_versions_whole(
                 expect(shown).to_be_visible()
                 assert shown.text_content() == f"v9.9 ({detail})"
             assert said == []
-    finally:
-        server.should_exit = True
-        machine.stop_all()
     line = r"^\d\d:\d\d:\d\dZ update check of OwlBear failed: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
     assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == ([detail] * 2 if unread == "versions" else [])
 
@@ -1058,10 +1041,9 @@ def test_updates_owlbear_says_an_update_whose_versions_could_not_be_read_whole(
     monkeypatch.setattr(versions, "target", failing)
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     detail = f"the versions could not be read: VersionError: {whole_error}\na note on the failure"
-    machine, server, base = serve()
-    machine.updater._update()  # noqa: SLF001 - the update thread's work, run here
-    logged = capsys.readouterr().out
-    try:
+    with serve() as (machine, _server, base):
+        machine.updater._update()  # noqa: SLF001 - the update thread's work, run here
+        logged = capsys.readouterr().out
         with page_at(base, pds) as page:
             said = errors(page)
             page.goto(f"{base}/updates/owlbear#token=t")
@@ -1069,9 +1051,6 @@ def test_updates_owlbear_says_an_update_whose_versions_could_not_be_read_whole(
             expect(shown).to_be_visible()
             assert re.fullmatch(r"The update failed \([^)]*\): " + re.escape(detail), shown.text_content())
             assert said == []
-    finally:
-        server.should_exit = True
-        machine.stop_all()
     line = r"^\d\d:\d\d:\d\dZ update: failed: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
     assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [detail]
 
@@ -1150,41 +1129,39 @@ def test_updates_say_update_checks_that_could_not_be_kept_set_or_looked_at_whole
     monkeypatch.setitem(update_checks.CHECKS, "pds", lambda: newer)
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     released = threading.Event()
-    machine, server, base = serve()
-    try:
-        whole = f"OSError: {whole_error}\na note on the failure"
-        if failing == "unkept":
-            monkeypatch.setattr(update_checks, "atomic_write", raising)
-            assert machine.checks.start("pds")
-            assert machine.checks.drain(10)
-            told = f"The check results are not kept: {machine.checks.path} could not be written: {whole}."
-            logged = f"update checks: {machine.checks.path} could not be written: {whole}"
-        elif failing == "unsettled":
-            monkeypatch.setattr(
-                update_checks,
-                "machine_settings",
-                SimpleNamespace(
-                    current=raising,
-                    update_check_inputs=lambda *_sources: (),
-                    update_check_sources=lambda: ((), ""),
-                ),
-            )
-            told = f"The machine settings could not be fully read: {whole}."
-            logged = f"update checks: the machine settings could not be read: {whole}"
-        else:
-            _tick_fails_once(monkeypatch, machine, error, released)
-            told = f"The last look whether a check is due failed: {whole}."
-            logged = f"update checks failed: {whole}"
-        with page_at(base, pds) as page:
-            said = errors(page)
-            page.goto(f"{base}/updates/owlbear#token=t")
-            shown = page.locator("#check-settings")
-            expect(shown).to_be_visible()
-            text = shown.text_content()
-    finally:
-        released.set()
-        server.should_exit = True
-        machine.stop_all()
+    with serve() as (machine, _server, base):
+        try:
+            whole = f"OSError: {whole_error}\na note on the failure"
+            if failing == "unkept":
+                monkeypatch.setattr(update_checks, "atomic_write", raising)
+                assert machine.checks.start("pds")
+                assert machine.checks.drain(10)
+                told = f"The check results are not kept: {machine.checks.path} could not be written: {whole}."
+                logged = f"update checks: {machine.checks.path} could not be written: {whole}"
+            elif failing == "unsettled":
+                monkeypatch.setattr(
+                    update_checks,
+                    "machine_settings",
+                    SimpleNamespace(
+                        current=raising,
+                        update_check_inputs=lambda *_sources: (),
+                        update_check_sources=lambda: ((), ""),
+                    ),
+                )
+                told = f"The machine settings could not be fully read: {whole}."
+                logged = f"update checks: the machine settings could not be read: {whole}"
+            else:
+                _tick_fails_once(monkeypatch, machine, error, released)
+                told = f"The last look whether a check is due failed: {whole}."
+                logged = f"update checks failed: {whole}"
+            with page_at(base, pds) as page:
+                said = errors(page)
+                page.goto(f"{base}/updates/owlbear#token=t")
+                shown = page.locator("#check-settings")
+                expect(shown).to_be_visible()
+                text = shown.text_content()
+        finally:
+            released.set()
     lead = r"It looks [^\n]*\.\s+How often is set in Settings → This machine\. "
     assert re.fullmatch(lead + re.escape(told), text)
     assert said == []
@@ -1211,8 +1188,7 @@ def test_updates_pds_says_a_newer_release_whose_projects_runs_could_not_be_read_
     monkeypatch.setitem(update_checks.CHECKS, "pds", lambda: newer)
     monkeypatch.setattr(update_checks, "_pds_runs", raising)  # the PDS page's own run list reads them apart
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    machine, server, base = serve()
-    try:
+    with serve() as (machine, _server, base):
         assert machine.checks.start("pds")
         assert machine.checks.drain(10)
         with page_at(base, pds) as page:
@@ -1221,9 +1197,6 @@ def test_updates_pds_says_a_newer_release_whose_projects_runs_could_not_be_read_
             shown = page.locator("#check-latest")
             expect(shown).to_be_visible()
             text = shown.text_content()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
     whole = f"OSError: {whole_error}\na note on the failure"
     assert text == f"999.0.0 (whether a project already takes it could not be read: {whole})"
     assert said == []
@@ -1248,10 +1221,9 @@ def test_updates_owlbear_logs_update_steps_that_could_not_be_kept_whole(monkeypa
 
     monkeypatch.setattr(update_steps, "atomic_write", raising)
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    machine, server, base = serve()
-    path = local_home.root() / update_steps.RECORD
-    line = f"its steps could not be kept in {path}: OSError: {whole_error}\na note on the failure"
-    try:
+    with serve() as (machine, _server, base):
+        path = local_home.root() / update_steps.RECORD
+        line = f"its steps could not be kept in {path}: OSError: {whole_error}\na note on the failure"
         machine.updater.steps.begin()
         machine.updater.steps.mark("looking", "running", "fetching the versions")
         with page_at(base, pds) as page:
@@ -1261,9 +1233,6 @@ def test_updates_owlbear_logs_update_steps_that_could_not_be_kept_whole(monkeypa
             shown = page.locator("#owlbear-log")
             expect(shown).to_be_visible()
             text = shown.text_content()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
     looking = r"[^\n]*? · Looking for a newer version: "
     assert re.fullmatch(f"{looking}{re.escape(line)}\n{looking}fetching the versions", text)
     assert said == []
@@ -1302,8 +1271,7 @@ def test_updates_owlbear_says_old_versions_it_could_not_remove_at_the_start_whol
         monkeypatch.setattr(versions, "keep_data", refusing)
         left = alias.complete()
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    machine, server, base = serve()
-    try:
+    with serve() as (machine, _server, base):
         machine.updater.unpruned, machine.updater.unmigrated = unpruned, left  # as the host's start sets them
         if failing == "both":  # an update that failed after the start: its error ends before the start's notes
             machine.updater.state |= {"phase": "failed", "detail": f"OSError: {whole_error}", "version": "v0.3"}
@@ -1313,9 +1281,6 @@ def test_updates_owlbear_says_old_versions_it_could_not_remove_at_the_start_whol
             shown = page.locator("#owlbear-state")
             expect(shown).to_be_visible()
             text = shown.text_content()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
     told = "No update has run since OwlBear started."
     if failing == "both":
         told = f"The update to v0.3 failed: OSError: {whole_error}."
@@ -1359,8 +1324,7 @@ def test_projects_says_why_the_shared_data_and_a_pass_loading_projects_again_fai
         raise unprovided
 
     monkeypatch.setattr(data_place, "provision", provision)
-    machine, server, base = serve()
-    try:
+    with serve() as (machine, _server, base):
         host_start._provisioned(machine)  # noqa: SLF001 - the start's own step
         machine.unretried = unretried = f"RuntimeError: {whole_error}\na note on the pass"  # as the retry loop sets it
         with page_at(base, pds) as page:
@@ -1370,9 +1334,6 @@ def test_projects_says_why_the_shared_data_and_a_pass_loading_projects_again_fai
             expect(unshared_line).to_be_visible()
             expect(unretried_line).to_be_visible()
             shared, retried = unshared_line.text_content(), unretried_line.text_content()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
     unshared = f"at this start, DataRepoError: {whole_error}\na note on the place; `owlbear restart` looks again"
     assert (machine.unshared, shared, retried) == (
         unshared, f"Shared data: {unshared}", f"Loading the failed projects again failed: {unretried}"
@@ -1392,8 +1353,7 @@ def test_projects_refresh_after_the_data_command_repairs_the_pointer_without_res
     source, dest = clone(tmp_path / "old-data"), data_place.default()
     subprocess.run(["git", "clone", "-q", str(source), str(dest)], check=True)  # noqa: S603, S607
     data_place.pointer().write_text(json.dumps({"moving_from": str(source), "moving_to": str(dest)}))
-    machine, server, base = serve()
-    try:
+    with serve() as (machine, _server, base):
         host_start._provisioned(machine)  # noqa: SLF001 - the real startup failure, not a supplied UI notice
         original = machine.unshared
         assert original
@@ -1421,9 +1381,6 @@ def test_projects_refresh_after_the_data_command_repairs_the_pointer_without_res
             assert machine.projects[entry.id].store is loaded
             assert targets(page.locator("#projects a, #projects button")) == []
             assert said == []
-    finally:
-        server.should_exit = True
-        machine.stop_all()
 
 
 @pytest.mark.browser
@@ -1447,8 +1404,7 @@ def test_decisions_says_what_the_start_could_not_do_about_decisions_whole(monkey
     def unplaced() -> Path:
         raise unlocated
 
-    machine, server, base = serve()
-    try:
+    with serve() as (machine, _server, base):
         with monkeypatch.context() as removing:  # only the removal refuses; the fixtures' overrides stay
             removing.setattr(Path, "unlink", refusing)
             host_start._retired_index(machine, local_home.root())  # noqa: SLF001 - the start's own step
@@ -1460,9 +1416,6 @@ def test_decisions_says_what_the_start_could_not_do_about_decisions_whole(monkey
             shown = page.locator("#error")
             expect(shown).to_be_visible()
             text = shown.text_content()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
     lines = [
         (
             f"the retired decision index file decisions.sqlite could not be removed: OSError: {named}"
@@ -1692,29 +1645,24 @@ def test_projects_lists_a_detection_read_failure_from_the_real_readiness_pass(
     monkeypatch.setattr(readiness.pack_update, "notice", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(readiness.pack_update, "said", lambda _notice: "fixture packs not checked")
     monkeypatch.setattr(Host, "_launch", lambda *_args: False)
-    machine, server, base = serve()  # actual readiness.ready → Project._ready → HostRecord.ready
-    try:
-        with page_at(base, pds, (1280, 800), required=True) as page:
-            said = errors(page)
-            page.goto(f"{base}/projects#token=t")
-            row = page.get_by_role("listitem", name="shop")
-            checks = row.get_by_role("list", name="Failed readiness checks")
-            expect(checks).to_be_visible()
-            page.screenshot(path=str(tmp_path / "projects-detection.png"), full_page=True)
-            detected = checks.get_by_role("listitem").filter(has_text="profile detection:")
-            assert detected.count() == 1  # the visible list is the completed readiness pass
-            assert detected.text_content() == (
-                f"profile detection: StoreError: the project profile could not be detected: {failure(error)} · fix: "
-                "Resolve the profile detection or publication error reported above, then restart Delivery"
-            )
-            assert detected.evaluate("e => getComputedStyle(e).whiteSpace") == "pre-wrap"
-            assert store.read_profile().entries[profile.HOST].value == "git.enterprise.invalid"
-            page.set_viewport_size({"width": 375, "height": 800})
-            assert page.evaluate("document.documentElement.scrollWidth") <= 375
-            assert said == []
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+    with serve() as (_machine, _server, base), page_at(base, pds, (1280, 800), required=True) as page:
+        said = errors(page)
+        page.goto(f"{base}/projects#token=t")
+        row = page.get_by_role("listitem", name="shop")
+        checks = row.get_by_role("list", name="Failed readiness checks")
+        expect(checks).to_be_visible()
+        page.screenshot(path=str(tmp_path / "projects-detection.png"), full_page=True)
+        detected = checks.get_by_role("listitem").filter(has_text="profile detection:")
+        assert detected.count() == 1  # the visible list is the completed readiness pass
+        assert detected.text_content() == (
+            f"profile detection: StoreError: the project profile could not be detected: {failure(error)} · fix: "
+            "Resolve the profile detection or publication error reported above, then restart Delivery"
+        )
+        assert detected.evaluate("e => getComputedStyle(e).whiteSpace") == "pre-wrap"
+        assert store.read_profile().entries[profile.HOST].value == "git.enterprise.invalid"
+        page.set_viewport_size({"width": 375, "height": 800})
+        assert page.evaluate("document.documentElement.scrollWidth") <= 375
+        assert said == []
 
 
 @pytest.mark.browser
