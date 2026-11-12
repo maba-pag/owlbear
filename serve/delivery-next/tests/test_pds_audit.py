@@ -132,7 +132,7 @@ def no_render(monkeypatch):
 
 
 @pytest.mark.parametrize("changed", ["schema", "template", "missing-template"])
-def test_an_unsupported_report_format_stops_before_the_auditor_starts(sources, changed):
+def test_unsupported_audit_format_never_starts_or_renders(sources, changed):
     if changed == "schema":
         schema = json.loads((sources.tree / audit.SCHEMA).read_text(encoding="utf-8"))
         schema["properties"]["schemaVersion"]["const"] = "2.0.0"
@@ -154,7 +154,7 @@ def test_an_unsupported_report_format_stops_before_the_auditor_starts(sources, c
     assert not done.markdown
 
 
-def test_rendering_preserves_fields_order_counts_and_markdown_sensitive_values(sources):
+def test_report_renderer_preserves_rich_fields_and_literal_blocks():
     first = finding()
     first["title"] += " #"
     first["deprecationMessage"] = ""
@@ -181,20 +181,20 @@ def test_rendering_preserves_fields_order_counts_and_markdown_sensitive_values(s
     second["evidence"][0].pop("valueResolution")
     manual = follow_up("Unresolved value #")
     manual["ruleId"] = "dynamic/value"
-    body = report(findings=[first, second], follow_ups=[manual])
+    limitations = ["---", "- literal", "+ literal", "1. literal", "1) literal"]
+    body = report(findings=[first, second], follow_ups=[manual], limitations=limitations)
     jsonschema.Draft202012Validator(SCHEMA).validate(body)
-    done = audited(sources, body)
-    text = done.markdown
-    assert done.report == body
+    text = audit_markdown.render(body, TEMPLATE)
     assert "- **2** findings across **3** locations\n- **1** manual follow-ups" in text
-    assert "| `trivial` | 1 |\n| `medium` | 1 |" in text
-    assert "| `high` | 1 |\n| `medium` | 1 |" in text
+    assert all(row in text for row in ("| `trivial` | 1 |\n| `medium` | 1 |", "| `high` | 1 |\n| `medium` | 1 |"))
     assert text.index("### 1. Deprecated value") < text.index("### 2. Second finding")
     assert "- **Effort:** `medium` (observed \u2014 baseline `large`)" in text
-    assert text.count("- **Effort rationale:**") == 1
-    assert "- **Effort rationale:** The second location" in text
-    assert text.count("- **Deprecation message:**") == 1
-    assert "- **Deprecation message:** \n" in text
+    assert [line for line in text.splitlines() if line.startswith("- **Effort rationale:**")] == [
+        "- **Effort rationale:** The second location"
+    ]
+    assert [line for line in text.splitlines() if line.startswith("- **Deprecation message:**")] == [
+        "- **Deprecation message:** "
+    ]
     assert text.count("- **Replacement:**") == 1
     assert " \u2192 `` size=`xs` ``" in text
     assert "    ````\n    const size = `x-small`;\n    ```\n    ````" in text
@@ -225,15 +225,6 @@ def test_rendering_preserves_fields_order_counts_and_markdown_sensitive_values(s
     ]
     assert f"1. {first['title']}" in headings
     assert f"1. {manual['subject']}" in headings
-
-
-def test_limitation_text_remains_literal_without_markdown_blocks(sources):
-    limitations = ["---", "- literal", "+ literal", "1. literal", "1) literal"]
-    body = report(limitations=limitations)
-    jsonschema.Draft202012Validator(SCHEMA).validate(body)
-    done = audited(sources, body)
-    assert done.verdict.outcome == "stop"
-    tokens = MarkdownIt("commonmark").parse(done.markdown)
     start = next(i for i, token in enumerate(tokens) if token.content == "Limitations")
     end = next(i for i, token in enumerate(tokens) if token.content == "Summary")
     shown = tokens[start + 2 : end - 1]
@@ -243,10 +234,10 @@ def test_limitation_text_remains_literal_without_markdown_blocks(sources):
     ] == [[("text", value)] for value in limitations]
 
 
-def test_the_copy_holds_the_authored_pages_the_manifest_and_the_release_never_the_vendored_folders(sources):
-    calls, session = submitted(report())
+def test_authored_copy_maps_findings_using_release_skills(sources):
+    calls, session = submitted(report(findings=[finding()]))
     sources.at.mkdir()
-    audit.audit(sources.at, web=sources.web, tree=sources.tree, version=VERSION, session=session)
+    done = audit.audit(sources.at, web=sources.web, tree=sources.tree, version=VERSION, session=session)
     [(at, skills, message)] = calls
     assert (at / "web/pages/demo.mjs").read_text(encoding="utf-8") == PAGE
     assert not (at / "web/pds").exists()
@@ -255,34 +246,18 @@ def test_the_copy_holds_the_authored_pages_the_manifest_and_the_release_never_th
     assert skills == at / audit.PACKAGE / "skills"
     assert (skills / audit.SKILL / "references/report.schema.json").is_file()
     assert VERSION in message
-    assert "write no file" in message
-
-
-def test_the_real_pages_copy_without_their_vendored_folders(tmp_path):
-    audit.lay_out(tmp_path, pin.package() / "web", tmp_path / "none", VERSION)
-    assert (tmp_path / "web/pages/updates/pds.mjs").is_file()
-    assert not (tmp_path / "web/pds").exists()
-    assert not (tmp_path / "web/vendor").exists()
-
-
-def test_a_planted_deprecated_value_is_a_finding_at_its_repository_path_and_line(sources):
-    done = audited(sources, report(findings=[finding()]))
     assert done.verdict.outcome == "findings"
     [found] = done.verdict.findings
     assert (found.path, found.line) == (f"{pin.PREFIX}web/pages/demo.mjs", 2)
     assert found.replacement == {"from": 'size="x-small"', "to": 'size="xs"'}
     assert 'size="x-small"' in PAGE.splitlines()[found.line - 1]
-
-
-def test_an_absolute_path_inside_the_copy_maps_like_a_relative_one(sources):
-    sources.at.mkdir()
     absolute = str(sources.at.resolve() / "web/pages/demo.mjs")
     verdict = audit.judge(report(findings=[finding(path=absolute)], included=[str(sources.at)]), schema=SCHEMA,
                           version=VERSION, at=sources.at)  # fmt: skip
     assert verdict.findings[0].path == f"{pin.PREFIX}web/pages/demo.mjs"
 
 
-def test_only_a_completed_clean_report_passes_and_its_files_hold_what_was_submitted(sources, tmp_path):
+def test_clean_audit_writes_submitted_json_and_host_markdown(sources, tmp_path):
     clean = json.dumps(report(), indent=1)
     done = audited(sources, clean)
     assert done.verdict == audit.Verdict("pass")
@@ -305,12 +280,17 @@ def test_only_a_completed_clean_report_passes_and_its_files_hold_what_was_submit
     assert done.markdown.endswith(expected_footer.replace("<audit.pdsVersion>", VERSION) + "\n")
 
 
-def test_follow_ups_are_their_own_outcome_and_each_subject_its_own_identity(sources):
+def test_followup_identity_preserves_subject_and_normalizes_evidence(tmp_path):
     same = "html`<p-text   size=${s}>`"  # whitespace apart from the other evidence
-    done = audited(sources, report(follow_ups=[follow_up("p-text size"), follow_up("p-text weight", snippet=same)]))
-    assert done.verdict.outcome == "follow-ups"
-    assert not done.verdict.findings
-    one, two = done.verdict.follow_ups
+    verdict = audit.judge(
+        report(follow_ups=[follow_up("p-text size"), follow_up("p-text weight", snippet=same)]),
+        schema=SCHEMA,
+        version=VERSION,
+        at=tmp_path,
+    )
+    assert verdict.outcome == "follow-ups"
+    assert not verdict.findings
+    one, two = verdict.follow_ups
     assert one.evidence == two.evidence
     assert one.key != two.key
     again = audit.follow_up(follow_up("p-text size", snippet=same))
@@ -319,25 +299,49 @@ def test_follow_ups_are_their_own_outcome_and_each_subject_its_own_identity(sour
 
 
 @pytest.mark.parametrize(
-    ("body", "why"),
-    [
-        (report(version="4.9.0"), "pdsVersion '4.9.0'"),
-        (report(result="partial", limitations=["one package unread"]), "ended partial"),
-        (report(result="failed", limitations=["no package.json"]), "ended failed"),
-        ({**report(), "summary": {"result": "done"}}, "breaks its schema"),
-        ({k: v for k, v in report().items() if k != "findings"}, "breaks its schema"),
-        ("not json", "not JSON"),
-        (report(limitations=["templates in .html not read"]), "disclosed gaps: templates"),
-        (report(skipped=["web/pages/big.mjs"]), "web/pages/big.mjs skipped"),
-        (report(excluded=["web/pages"]), "left out web/pages"),
-        (report(included=["web"]), "did not include the project root"),
-    ],
-    ids=["version", "partial", "failed", "result", "missing", "text", "limitation", "skipped", "excluded", "root"],
+    "cause",
+    ["version", "partial", "failed", "result", "missing", "text", "limitation", "skipped", "excluded", "root", "gaps"],
 )
-def test_a_report_short_of_complete_and_clean_stops(sources, body, why):
+def test_incomplete_report_refusals_preserve_reason_and_available_artifacts(sources, whole_error, cause):
+    body, why = {
+        "version": (report(version="4.9.0"), "pdsVersion '4.9.0'"),
+        "partial": (report(result="partial", limitations=["one package unread"]), "ended partial"),
+        "failed": (report(result="failed", limitations=["no package.json"]), "ended failed"),
+        "result": ({**report(), "summary": {"result": whole_error}}, ""),
+        "missing": ({k: v for k, v in report().items() if k != "findings"}, "breaks its schema"),
+        "text": (whole_error, ""),
+        "limitation": (report(limitations=["templates in .html not read"]), "disclosed gaps: templates"),
+        "gaps": (
+            report(skipped=["web/a.mjs"], limitations=[whole_error]),
+            f"the audit disclosed gaps: web/a.mjs skipped (unreadable); {whole_error}",
+        ),
+        "skipped": (report(skipped=["web/pages/big.mjs"]), "web/pages/big.mjs skipped"),
+        "excluded": (report(excluded=["web/pages"]), ""),
+        "root": (report(included=["web"]), "did not include the project root"),
+    }[cause]
+    if cause == "result":
+        [error] = jsonschema.Draft202012Validator(SCHEMA).iter_errors(body)
+        why = (
+            f"the audit report breaks its schema at summary/result: {error.message}\n"
+            f"submitted audit report:\n{json.dumps(body)}"
+        )
+        assert len(why) > 300
+    elif cause == "text":
+        with pytest.raises(json.JSONDecodeError, match="Expecting value") as raised:
+            json.loads(whole_error)
+        why = (
+            f"the audit report is not JSON: {type(raised.value).__name__}: {raised.value}\n"
+            f"submitted audit report:\n{whole_error}"
+        )
+    elif cause == "excluded":
+        body["scope"]["excludedPaths"][-1]["reason"] = whole_error
+        why = f"the audit left out web/pages ({whole_error})"
     done = audited(sources, body)
     assert done.verdict.outcome == "stop"
-    assert why in done.verdict.reason
+    if cause in {"result", "text", "gaps", "excluded"}:
+        assert done.verdict.reason == why
+    else:
+        assert why in done.verdict.reason
     out = sources.at.parent / "out"
     audit.write(out, done)
     folder = out / audit.REPORTS / done.run_id
@@ -354,35 +358,36 @@ def test_a_report_short_of_complete_and_clean_stops(sources, body, why):
 
 
 @pytest.mark.parametrize(
-    "edit",
+    ("edit", "uncertain"),
     [
-        lambda at: (at / audit.PACKAGE / "skills" / audit.SKILL / "references/deprecations.md").write_text("# none\n"),
-        lambda at: (at / "web/pages/demo.mjs").write_text(PAGE.replace("x-small", "xs")),
-        lambda at: (at / ".pds").mkdir() or (at / ".pds/note.md").write_text("x"),
+        (
+            lambda at: (at / audit.PACKAGE / "skills" / audit.SKILL / "references/deprecations.md").write_text(
+                "# none\n"
+            ),
+            False,
+        ),
+        (lambda at: (at / "web/pages/demo.mjs").write_text(PAGE.replace("x-small", "xs")), False),
+        (lambda at: (at / ".pds").mkdir() or (at / ".pds/note.md").write_text("x"), False),
+        (lambda at: (at / "web/pages/demo.mjs").write_text(PAGE.replace("x-small", "xs")), True),
     ],
-    ids=["index", "page", "added"],
+    ids=["index", "page", "added", "page-unverified-end"],
 )
 @pytest.mark.usefixtures("no_render")
-def test_a_session_that_changed_its_copy_stops_even_with_a_clean_report(sources, edit):
-    done = audited(sources, report(), edit=edit)
+def test_mutated_audit_copy_is_void_and_retains_uncertain_end(sources, edit, uncertain, whole_error):
+    end = (
+        Termination(confirmed=False, survivors=(4242,), problems=(whole_error,))
+        if uncertain
+        else (Termination(confirmed=True))
+    )
+    done = audited(sources, report(), edit=edit, termination=end)
     assert done.verdict.outcome == "stop"
     assert "changed its copy" in done.verdict.reason
     assert done.report is None
-
-
-@pytest.mark.usefixtures("no_render")
-def test_a_changed_copy_whose_session_is_not_proven_ended_says_both_whole(sources, whole_error):
-    end = Termination(confirmed=False, survivors=(4242,), problems=(whole_error,))
-
-    def edit(at) -> None:
-        (at / "web/pages/demo.mjs").write_text(PAGE.replace("x-small", "xs"))
-
-    done = audited(sources, report(), edit=edit, termination=end)
-    moved = "web/pages/demo.mjs"
-    assert (done.verdict.outcome, done.verdict.reason) == (
-        "stop",
-        f"the auditor changed its copy: {moved}; termination unverified: processes 4242 still present; {whole_error}",
-    )
+    if uncertain:
+        assert done.verdict.reason == (
+            "the auditor changed its copy: web/pages/demo.mjs; termination unverified: processes 4242 still present; "
+            f"{whole_error}"
+        )
 
 
 UNENDED = "the auditor's processes are not proven ended; recover the session on the Maintenance page; "
@@ -403,7 +408,13 @@ UNENDED += "termination unverified: "
     ids=["no-result", "unconfirmed", "no-termination", "usage"],
 )
 @pytest.mark.usefixtures("no_render")
-def test_a_session_that_did_not_end_cleanly_stops_whatever_it_reported(sources, run, why):
+def test_unclean_auditor_session_never_accepts_clean_report(sources, run, why, whole_error):
+    if run.get("ending") == "error":
+        run = run | {"detail": whole_error}
+        why = f"no usable audit report was accepted: ended error; {whole_error}"
+    elif "usage_unread" in run:
+        run = run | {"usage_unread": whole_error}
+        why = f"the auditor's model is unknown: {whole_error}"
     verdict = audited(sources, report(), **run).verdict
     assert (verdict.outcome, verdict.reason) == ("stop", why)
 
@@ -415,7 +426,9 @@ def auditor_settings(**auditor: object) -> config.Settings:
     return resolve(base.model_copy(update={"agents": agents, **switches}), Layer())
 
 
-def test_the_auditor_session_reads_confined_with_its_own_settings_and_no_question_or_shell(tmp_path):
+def test_auditor_sdk_policy_uses_configured_role_and_refuses_unset(tmp_path, production):
+    with pytest.raises(SettingsUnset, match=r"agents\.auditor\.model"):
+        sessions.auditor(production, tmp_path, tmp_path / "skills", "audit it")
     settings = auditor_settings(model="claude-opus-5.5", effort="low", context="long", minutes=7,
                                 subagents=False)  # fmt: skip
     cfg = sessions.auditor(settings, tmp_path, tmp_path / "skills", "audit it")
@@ -431,7 +444,7 @@ def test_the_auditor_session_reads_confined_with_its_own_settings_and_no_questio
                                                                                          "long_context")  # fmt: skip
 
 
-def test_the_auditor_corrects_a_report_its_schema_refuses_before_its_session_ends(sources):
+def test_audit_submit_gate_allows_correction_and_reports_exhaustion_whole(sources, whole_error):
     """D-01M5DW3X00DR0Q4AC9294F0W9T: the tool checks the report against the copy's schema while it can be fixed."""
     sources.at.mkdir()
     skills = audit.lay_out(sources.at, sources.web, sources.tree, VERSION)
@@ -455,12 +468,6 @@ def test_the_auditor_corrects_a_report_its_schema_refuses_before_its_session_end
     assert not errors
     text, ok = gate.call(audit_tools.SUBMIT, parsed)
     assert (ok, text, gate.done) == (True, ACCEPTED, True)
-
-
-def test_a_report_refused_until_the_limit_ends_the_session_with_its_whole_errors(sources, whole_error):
-    sources.at.mkdir()
-    skills = audit.lay_out(sources.at, sources.web, sources.tree, VERSION)
-    cfg = sessions.auditor(auditor_settings(model="claude-opus-5.5"), sources.at, skills, "audit it")
     gate = Gate(cfg, run := Run("s"), lambda **_e: None, lambda: None)
     for _ in range(3):
         text, ok = gate.call(audit_tools.SUBMIT, AuditResult(report=json.dumps(report(result=whole_error))))
@@ -477,11 +484,6 @@ def production(monkeypatch) -> config.Settings:
     """A carried Global layer with no test layer under it: the auditor's row is unset until the owner fills it."""
     monkeypatch.setattr(config, "BASE", None)
     return auditor_settings()
-
-
-def test_an_unset_auditor_refuses_the_session_naming_its_settings(production, tmp_path):
-    with pytest.raises(SettingsUnset, match=r"agents\.auditor\.model"):
-        sessions.auditor(production, tmp_path, tmp_path / "skills", "audit it")
 
 
 class Ownership:
@@ -512,6 +514,8 @@ def hand(tmp_path, body=None, *, settings=None, gate=None, unproven=False):
     def run(cfg) -> Run:
         seen.append(cfg)
         assert (cfg.worktree / "web/pages/updates/pds.mjs").is_file()  # the installed pages, copied
+        assert not (cfg.worktree / "web/pds").exists()
+        assert not (cfg.worktree / "web/vendor").exists()
         if gate is not None:
             gate.wait(10)
         payload = AuditResult(report=json.dumps(body or report()))
@@ -531,8 +535,9 @@ def settled(h) -> dict:
     return h.read()
 
 
-def test_the_hand_audit_audits_the_installed_pages_and_keeps_the_version_commit_and_reports(tmp_path):
-    h, http, seen = hand(tmp_path, report(findings=[finding()]))
+def test_installed_hand_audit_persists_result_stop_and_interrupted_restart(tmp_path):
+    body = report(findings=[finding()])
+    h, http, seen = hand(tmp_path, body)
     assert http.get("/pds/audit").json() == {"state": "none"}
     assert http.post("/pds/audit").json()["state"] == "running"
     kept = settled(h)
@@ -548,56 +553,60 @@ def test_the_hand_audit_audits_the_installed_pages_and_keeps_the_version_commit_
     assert (cfg.role, cfg.job, cfg.model) == ("auditor", "pds-audit", "claude-opus-5.5")
     assert not h.maintenance.used[0].exists()
     assert not (tmp_path / "store" / ".pds").exists()  # the hand audit keeps its reports in its state alone
-
-
-@pytest.mark.parametrize(
-    ("body", "why"),
-    [
-        (report(version="4.9.0"), "4.9.0"),
-        (report(result="partial", limitations=["one package unread"]), "ended partial"),
-        (report(result="failed", limitations=["no package.json"]), "ended failed"),
-    ],
-    ids=["version", "partial", "failed"],
-)
-def test_a_hand_audit_that_stops_is_failed_with_the_reason(tmp_path, body, why):
-    h, http, _seen = hand(tmp_path, body)
+    body.clear()
+    body.update(report(result="partial", limitations=["one package unread"]))
     http.post("/pds/audit")
     kept = settled(h)
     assert (kept["state"], kept["outcome"]) == ("failed", "stop")
-    assert why in kept["reason"]
+    assert "ended partial" in kept["reason"]
     assert kept["report"] == body
-    assert f"- **Result:** `{body['summary']['result']}`" in kept["markdown"]
+    assert "- **Result:** `partial`" in kept["markdown"]
     assert "## How to act on this report" in kept["markdown"]
-
-
-def test_one_hand_audit_runs_at_a_time_and_it_holds_the_machine_lock(tmp_path):
-    gate = threading.Event()
-    h, http, _seen = hand(tmp_path, gate=gate)
-    http.post("/pds/audit")
-    try:
-        assert http.post("/pds/audit").status_code == 409
-        assert http.get("/pds/audit").json()["state"] == "running"
-        with pytest.raises(machine_lock.HeldError, match=r"shop \(PDS audit\)"):
-            os.close(machine_lock.take(local_home.root() / MACHINE_LOCK, "other", lambda: None))
-    finally:
-        gate.set()
+    h.path.write_text(json.dumps({"state": "running", "started_at": "2026-11-01T00:00:00+00:00"}), encoding="utf-8")
+    assert http.get("/pds/audit").json()["reason"] == hand_audit.INTERRUPTED
+    body.clear()
+    body.update(report())
+    assert http.post("/pds/audit").json()["state"] == "running"
     assert settled(h)["state"] == "done"
+    assert all(not at.exists() for at in h.maintenance.used)
 
 
-def test_a_hand_audit_is_refused_while_another_update_holds_the_machine_lock(tmp_path):
-    held = machine_lock.take(local_home.root() / MACHINE_LOCK, "garage", lambda: None)
-    try:
-        h, http, seen = hand(tmp_path)
+@pytest.mark.parametrize("why", ["running", "other-update", "unproven", "unbound", "unset"])
+def test_hand_audit_exclusion_refuses_before_session_or_state_change(tmp_path, production, why):
+    if why == "running":
+        gate = threading.Event()
+        h, http, seen = hand(tmp_path, gate=gate)
+        http.post("/pds/audit")
+        try:
+            assert http.post("/pds/audit").status_code == 409
+            assert http.get("/pds/audit").json()["state"] == "running"
+            with pytest.raises(machine_lock.HeldError, match=r"shop \(PDS audit\)"):
+                os.close(machine_lock.take(local_home.root() / MACHINE_LOCK, "other", lambda: None))
+        finally:
+            gate.set()
+        assert settled(h)["state"] == "done"
+        assert len(seen) == 1
+        released = machine_lock.take(local_home.root() / MACHINE_LOCK, "other", lambda: None)
+        os.close(released)
+        return
+    if why == "other-update":
+        held = machine_lock.take(local_home.root() / MACHINE_LOCK, "garage", lambda: None)
+        try:
+            h, http, seen = hand(tmp_path)
+            refused = http.post("/pds/audit")
+        finally:
+            os.close(held)
+        assert refused.status_code == 409
+        assert "an update runs for garage" in refused.json()["detail"]
+        assert (seen, h.read()) == ([], {"state": "none"})
+        return
+    if why == "unset":
+        h, http, seen = hand(tmp_path, settings=production)
         refused = http.post("/pds/audit")
-    finally:
-        os.close(held)
-    assert refused.status_code == 409
-    assert "an update runs for garage" in refused.json()["detail"]
-    assert (seen, h.read()) == ([], {"state": "none"})
-
-
-@pytest.mark.parametrize("why", ["unproven", "unbound"])
-def test_a_hand_audit_is_refused_while_a_pds_session_is_unproven_or_ownership_is_unbound(tmp_path, why):
+        assert refused.status_code == 409
+        assert "agents.auditor.model" in refused.json()["detail"]
+        assert (seen, h.read()) == ([], {"state": "none"})
+        return
     h, http, seen = hand(tmp_path, unproven=why == "unproven")
     if why == "unbound":
         h.maintenance = None
@@ -605,59 +614,6 @@ def test_a_hand_audit_is_refused_while_a_pds_session_is_unproven_or_ownership_is
     assert refused.status_code == 409
     assert ("unproven" if why == "unproven" else "not bound") in refused.json()["detail"]
     assert (seen, h.read()) == ([], {"state": "none"})
-
-
-def test_an_unset_auditor_refuses_the_hand_audit_before_any_session(production, tmp_path):
-    h, http, seen = hand(tmp_path, settings=production)
-    refused = http.post("/pds/audit")
-    assert refused.status_code == 409
-    assert "agents.auditor.model" in refused.json()["detail"]
-    assert (seen, h.read()) == ([], {"state": "none"})
-
-
-def test_a_running_audit_the_host_lost_reads_as_failed(tmp_path):
-    h, http, _seen = hand(tmp_path)
-    h.path.parent.mkdir(parents=True)
-    h.path.write_text(json.dumps({"state": "running", "started_at": "2026-11-01T00:00:00+00:00"}), encoding="utf-8")
-    assert http.get("/pds/audit").json()["reason"] == hand_audit.INTERRUPTED
-    assert http.post("/pds/audit").json()["state"] == "running"
-    assert settled(h)["state"] == "done"
-
-
-@pytest.mark.parametrize("cause", ["text", "ended", "usage", "schema", "gaps", "left-out"])
-def test_a_stopped_audit_keeps_its_whole_reason(sources, whole_error, cause):
-    """The gate's stop carries the auditor's or the schema's whole words (#895)."""
-    body: object = report()
-    run: dict[str, object] = {}
-    if cause == "text":
-        body = whole_error
-        try:
-            json.loads(whole_error)
-        except ValueError as exc:
-            why = f"the audit report is not JSON: {type(exc).__name__}: {exc}\nsubmitted audit report:\n{whole_error}"
-    elif cause == "ended":
-        run = {"ending": "error", "payload": None, "detail": whole_error}
-        why = f"no usable audit report was accepted: ended error; {whole_error}"
-    elif cause == "usage":
-        run = {"usage_unread": whole_error}
-        why = f"the auditor's model is unknown: {whole_error}"
-    elif cause == "gaps":
-        body = report(skipped=["web/a.mjs"], limitations=[whole_error])
-        why = f"the audit disclosed gaps: web/a.mjs skipped (unreadable); {whole_error}"
-    elif cause == "left-out":
-        body = report()
-        body["scope"]["excludedPaths"].append({"path": "web", "reason": whole_error})
-        why = f"the audit left out web ({whole_error})"
-    else:
-        body = {**report(), "summary": {"result": whole_error}}
-        [error] = jsonschema.Draft202012Validator(SCHEMA).iter_errors(body)
-        why = (
-            f"the audit report breaks its schema at summary/result: {error.message}\n"
-            f"submitted audit report:\n{json.dumps(body)}"
-        )
-        assert len(why) > 300  # longer than the cut it had
-    verdict = audited(sources, body, **run).verdict
-    assert (verdict.outcome, verdict.reason) == ("stop", why)
 
 
 class Host:
@@ -687,29 +643,33 @@ def test_a_failed_hand_audit_shows_its_whole_reason(tmp_path, monkeypatch, caplo
     reason = f"RuntimeError: {whole_error}\nthe session's teardown also failed: OSError: {whole_error}"
     assert settled(h)["reason"] == reason
     assert [r.getMessage() for r in caplog.records] == [f"PDS hand audit failed: {reason}"]  # with no page reading
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(api.create_app(Store(h.store.root), "tok", Host()), log_level="warning"))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            page.add_init_script("sessionStorage.setItem('token', 'tok');")
-            page.goto(f"{base}/updates/pds")
-            shown = page.locator("#audit-reason")
-            expect(shown).to_be_visible()
-            assert shown.text_content() == f"{reason[0].upper()}{reason[1:]}."
-            browser.close()
-    finally:
-        server.should_exit = True
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        server = uvicorn.Server(uvicorn.Config(api.create_app(Store(h.store.root), "tok", Host()), log_level="warning"))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+            with sync_playwright() as pw:
+                try:
+                    browser = pw.chromium.launch()
+                except Error as exc:
+                    pytest.skip(f"no Playwright Chromium: {exc}")
+                page = browser.new_page()
+                pds.only(page, base)
+                page.add_init_script("sessionStorage.setItem('token', 'tok');")
+                page.goto(f"{base}/updates/pds")
+                shown = page.locator("#audit-reason")
+                expect(shown).to_be_visible()
+                assert shown.text_content() == f"{reason[0].upper()}{reason[1:]}."
+                browser.close()
+        finally:
+            server.should_exit = True
+            thread.join(5)
+            assert not thread.is_alive(), "the owned page server did not stop"
 
 
 def test_an_unreadable_saved_audit_answers_and_logs_its_whole_reason(tmp_path, caplog, whole_error):

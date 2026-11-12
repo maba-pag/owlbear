@@ -18,6 +18,7 @@ const AGENT_NAMES = {
   "design-judge": "design-judge", preparer: "preparer", shaper: "shaper (a recommendation)", updater: "updater",
   "test-reviewer": "test-reviewer", "test-curator": "test-curator", picker: "picker", curator: "curator",
   spotter: "spotter", retro: "retro", "retro-review": "retro-review", auditor: "auditor",
+  repairer: "repairer (the builder's while its model, effort and context are unset)",
 };
 export function agentName(role) {
   if (!Object.hasOwn(AGENT_NAMES, role)) throw new Error(`No Settings name is known for the agent "${role}"`);

@@ -112,6 +112,12 @@ jobs:
           CI_SHARD_DURATIONS: ${{ runner.temp }}/ci-durations.json
           CI_WORKERS: ${{ inputs.workers }}
           OWLBEAR_FLAKY_REPORT: ${{ runner.temp }}/test-results/flaky.json
+          OWLBEAR_DEPENDENCIES_OUT: ${{ runner.temp }}/test-results/dependencies.json
+          OWLBEAR_DEPENDENCIES_SUITE: python
+          OWLBEAR_DEPENDENCIES_SHARD: ${{ matrix.shard }}
+          OWLBEAR_DEPENDENCIES_SHARDS: 4
+          TESTMON_DATAFILE: ${{ runner.temp }}/dependencies.db
+          COVERAGE_CORE: ctrace
           # Agent shells set safe.bareRepository=explicit; a test relying on finding a bare repository fails here too.
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: safe.bareRepository
@@ -120,8 +126,9 @@ jobs:
           plugin_dir="$RUNNER_TEMP/ci-plugins"
           mkdir -p "$plugin_dir"
           cp .github/scripts/ci_shard.py "$plugin_dir/"
-          PYTHONPATH="$plugin_dir" uv run --no-sync pytest tests serve -p ci_shard \
+          PYTHONPATH="$plugin_dir:$GITHUB_WORKSPACE/serve/tools/src" uv run --no-sync pytest tests serve -p ci_shard \
             -m "not model and not browser" -n "${CI_WORKERS:-6}" --dist worksteal \
+            -p owlbear_tools.test_dependencies --testmon --testmon-noselect \
             --junitxml="$RUNNER_TEMP/test-results/junit.xml"
 
       - name: Upload test results

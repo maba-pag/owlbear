@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pytest
 from copilot.generated import rpc
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import data_repo, local_home
@@ -52,14 +53,11 @@ def model(model_id: str) -> rpc.Model:
     return rpc.Model(id=model_id, name=model_id, capabilities=rpc.ModelCapabilities(limits=limits))
 
 
-class World:
-    """A shared repository this machine reads, another machine's clone of it, and every outside source answering."""
+class Sources:
+    """Every outside source answering and this machine's reader of them, with no shared repository set up."""
 
-    def __init__(self, shared_repo: tuple[Path, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        self.root, self.remote, self.mp = *shared_repo, monkeypatch
-        self.other = tmp_path / "other"
-        git(tmp_path, "clone", "-q", str(self.remote), str(self.other))
-        monkeypatch.setenv(data_repo.VIEW, str(self.root))
+    def __init__(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.mp = monkeypatch
         self.alone = Store(tmp_path / "alone")  # a project on this machine without a shared repository
         self.alone.root.mkdir()
         self.said: list[str] = []
@@ -80,6 +78,17 @@ class World:
     def reader(self, *stores: Store) -> Reader:
         return Reader(self.said.append, lambda: [self.alone, *stores])
 
+
+class World(Sources):
+    """A shared repository this machine reads, another machine's clone of it, and every outside source answering."""
+
+    def __init__(self, shared_repo: tuple[Path, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.root, self.remote = shared_repo
+        self.other = tmp_path / "other"
+        git(tmp_path, "clone", "-q", str(self.remote), str(self.other))
+        monkeypatch.setenv(data_repo.VIEW, str(self.root))
+        super().__init__(tmp_path, monkeypatch)
+
     def push(self, rel: str = "config.json", **fields: object) -> None:
         publish(self.other, rel, layer(**fields))
 
@@ -96,6 +105,11 @@ def client(store: Store, reads: Reader) -> TestClient:
 @pytest.fixture
 def world(shared_repo, tmp_path, monkeypatch) -> World:
     return World(shared_repo, tmp_path, monkeypatch)
+
+
+@pytest.fixture
+def sources(tmp_path, monkeypatch) -> Sources:
+    return Sources(tmp_path, monkeypatch)
 
 
 def ids(reader: Reader) -> list[str]:
@@ -229,12 +243,13 @@ def test_each_change_of_one_key_keeps_its_own_entry(world):
     assert [n.id for n in again.notices] == [got.notices[i].id for i in (0, 2, 3)]
 
 
-def test_a_memory_value_changed_elsewhere_is_noticed_under_its_own_key(world):
-    world.push(**builder("A"))
-    reader = world.reader()
-    assert reader.read().notices == []
-    world.push(**builder("A"), memory={"purge_days": 14, "stale_factor": 50})
-    assert [(n.key, n.old, n.new) for n in reader.read().notices] == [
+def test_a_memory_value_changed_elsewhere_is_noticed_under_its_own_key(tmp_path):
+    """Global as two reads find it, flattened and recorded as a read does; the pull is the per-key entry test's."""
+    ledger, at = settings_seen.Ledger(tmp_path / NAME, [].append), datetime.now().astimezone()
+    tuned = {"format": CONFIG_FORMAT, **builder("A"), "memory": {"purge_days": 14, "stale_factor": 50}}
+    assert ledger.finish(settings_seen.flatten(as_saved("A")), [], unshared=False, at=at).notices == []
+    got = ledger.finish(settings_seen.flatten(GlobalLayer.model_validate(tuned)), [], unshared=False, at=at)
+    assert [(n.key, n.old, n.new) for n in got.notices] == [
         ("memory.purge_days", None, "14"),
         ("memory.stale_factor", None, "50"),
     ]
@@ -295,29 +310,37 @@ def test_overrides_name_this_machine_and_its_projects(world):
     }
 
 
-def test_an_unreadable_state_file_is_said_and_rebuilt(world):
+def test_an_unreadable_state_file_is_said_and_rebuilt(world, whole_error):
     reader = world.reader()
     world.push(**builder("A"))
     reader.read()
-    (local_home.root() / NAME).write_text("{not json")
-    assert [f["source"] for f in reader.shown()["failures"]] == ["read state"]
+    path = local_home.root() / NAME
+    text = json.dumps({whole_error: 1})
+    path.write_text(text)
+    with pytest.raises(ValidationError) as invalid:
+        settings_seen.Seen.model_validate_json(text)
+    expected = f"ValidationError: {invalid.value}"
+    rebuilt = client(world.alone, reader).post("/api/next/config/read").json()["reads"]
+    [failure] = rebuilt["failures"]
+    assert (failure["source"], failure["error"]) == ("read state", expected)
+    assert rebuilt["notices"] == []
+    assert [line for line in world.said if line.startswith("settings read: read state")] == [
+        f"settings read: read state failed at {path}: {expected}; it is rebuilt"
+    ]
 
-    rebuilt = reader.read()
     world.push(**builder("B"))
     after = reader.read()
 
-    assert ([f.source for f in rebuilt.failures], rebuilt.notices) == (["read state"], [])
-    assert any(line.startswith("settings read: read state failed") for line in world.said)
     assert [(n.key, n.old, n.new) for n in after.notices] == [("agents.builder.model", '"A"', '"B"')]
 
 
-def test_unreached_impeccable_releases_are_said_whole_with_their_type(world, whole_error):
-    world.releases(PermissionError(whole_error))
+def test_unreached_impeccable_releases_are_said_whole_with_their_type(sources, whole_error):
+    sources.releases(PermissionError(whole_error))
     place = f"GitHub's releases of {pack_files.manifest()['pack']}"
     why = f"GitHub was not reached: PermissionError: {whole_error}"
-    reader = world.reader()
+    reader = sources.reader()
     reader.read()
-    assert f"settings read: {settings_read.IMPECCABLE} failed at {place}: {why}" in world.said
+    assert f"settings read: {settings_read.IMPECCABLE} failed at {place}: {why}" in sources.said
     failed = {f["source"]: f["error"] for f in reader.shown()["failures"]}
     assert failed[settings_read.IMPECCABLE] == f"{place}: {why}"
 
@@ -404,8 +427,8 @@ def test_a_save_published_before_the_sync_never_hides_a_change_the_sync_pulls(wo
     assert got.seen["agents.builder.model"] == '"C"'
 
 
-def test_a_read_is_dated_when_it_ends(world, monkeypatch):
-    reader, mid = world.reader(), []
+def test_a_read_is_dated_when_it_ends(sources, monkeypatch):
+    reader, mid = sources.reader(), []
     real = reader._models  # noqa: SLF001
     monkeypatch.setattr(reader, "_models", lambda: mid.append(datetime.now(UTC)) or real())
 
@@ -439,7 +462,7 @@ def test_a_read_never_takes_an_own_save_for_one_from_elsewhere_before_its_hook_r
     assert reader.read().notices == []
 
 
-def test_a_source_s_whole_error_is_said_and_shown(world, tmp_path, monkeypatch, whole_error):
+def test_a_source_s_whole_error_is_said_and_shown(sources, tmp_path, monkeypatch, whole_error):
     """#921 D1: a source's unexpected failure, type included, uncut in the read state and the host's log."""
 
     def broken(**_kwargs: object) -> dict[str, object]:
@@ -448,23 +471,23 @@ def test_a_source_s_whole_error_is_said_and_shown(world, tmp_path, monkeypatch, 
         raise exc
 
     monkeypatch.setattr(settings_read.pack_update, "notice", broken)
-    c = client(Store(tmp_path / "shop"), world.reader())
+    c = client(Store(tmp_path / "shop"), sources.reader())
     expected = f"RuntimeError: {whole_error}\nNOTE-MARK"  # #971: its notes too
 
     [failure] = c.post("/api/next/config/read").json()["reads"]["failures"]
 
     assert (failure["source"], failure["error"]) == (settings_read.IMPECCABLE, expected)
-    assert f"settings read: {settings_read.IMPECCABLE} failed: {expected}" in world.said
+    assert f"settings read: {settings_read.IMPECCABLE} failed: {expected}" in sources.said
 
 
-def test_a_failed_model_read_is_shown_and_logged_whole(world, tmp_path, monkeypatch, caplog, whole_error):
+def test_a_failed_model_read_is_shown_and_logged_whole(sources, tmp_path, monkeypatch, caplog, whole_error):
     """#921 D2: the runtime's whole error, type included, in Settings' models answer and the host's log."""
 
     def broken() -> list[rpc.Model]:
         raise RuntimeError(whole_error)
 
     monkeypatch.setattr(model_choices, "_read", broken)
-    c = client(Store(tmp_path / "shop"), world.reader())
+    c = client(Store(tmp_path / "shop"), sources.reader())
     expected = f"RuntimeError: {whole_error}"
 
     with caplog.at_level(logging.WARNING, logger=model_choices.__name__):

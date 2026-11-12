@@ -29,7 +29,7 @@ _HANDING = {
 }  # fmt: skip
 _WORKING = {
     "builder": "implementing", "reviewer": "reviewing", "planner": "planning", "preparer": "preparing",
-    "test-curator": "curating the tests",
+    "test-curator": "curating the tests", "repairer": "repairing",
 }  # fmt: skip
 
 

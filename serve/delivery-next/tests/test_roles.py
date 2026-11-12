@@ -145,7 +145,10 @@ def test_every_role_runs_autopilot_and_only_delivery_can_ask_the_owner(kind):
     question = {
         "question": "Which key?",
         "why": "owner's",
-        "options": [{"label": "A", "effect": "a"}, {"label": "B", "effect": "b"}],
+        "options": [
+            {"label": "A", "effect": "a", "action": "continue"},
+            {"label": "B", "effect": "b", "action": "continue"},
+        ],
     }
     asked = st._handle(tools.ASK, SimpleNamespace(arguments=question))  # noqa: SLF001
     late = st._handle(tools.ASK, SimpleNamespace(arguments=question))  # noqa: SLF001

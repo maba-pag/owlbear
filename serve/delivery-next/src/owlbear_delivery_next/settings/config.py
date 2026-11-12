@@ -277,6 +277,26 @@ class Effective(Record):
 LOOPED: tuple[Role, ...] = ("shaper", "planner", "builder", "updater")  # whose work runs a challenge loop (TD-209)
 UNTIMED: tuple[Role, ...] = ("shaper", "spotter")  # the shaping chat has no session limit; a Spotter look is no session
 TIMED = ("minutes", "subagents")
+IDENTITY = ("model", "effort", "context")
+REPAIR_ONLY = "agents.repairer."  # unset, these hold only a repair (D-01M6SY11CY5SN5ZKYJNM0K6BDM)
+
+
+def holds_work(key: str) -> bool:
+    """Whether an unset *key* holds a project's work, or only the repairs that read it."""
+    return not key.startswith(REPAIR_ONLY)
+
+
+def _repairer(roles: dict[Role, dict[str, Any]], sources: dict[str, Source]) -> None:
+    """The repairer's model, effort and context, all unset at every level, are the builder's.
+
+    One of them set makes the three its own: the others must then be set too (D-01M6SY11CY5SN5ZKYJNM0K6BDM).
+    """
+    own, builder = roles["repairer"], roles["builder"]
+    if all(own[n] is None for n in IDENTITY):
+        for n in IDENTITY:
+            own[n] = builder[n]
+            if builder[n] is not None:
+                sources[f"agents.repairer.{n}"] = "builder"
 
 
 def used(role: Role) -> tuple[str, ...]:
@@ -387,6 +407,7 @@ def resolve(glob: GlobalLayer | None, project: Layer, machine: MachineLayer | No
         }
         for role in ROLES
     }  # fmt: skip
+    _repairer(roles, sources)
     every = {r: Effective.model_validate(v) for r, v in roles.items()}  # set round values hold together, used or not
     agents = {r: e for r, e in every.items() if all(roles[r][n] is not None for n in used(r))}
     general = {

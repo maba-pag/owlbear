@@ -28,10 +28,10 @@ ENGINE_JSON = [
 ]  # fmt: skip
 
 
-def fake_engine(tmp_path: Path, code: int, out: str, sleep: float = 0) -> pack_files.Installed:
+def fake_engine(tmp_path: Path, code: int, out: str) -> pack_files.Installed:
     script = tmp_path / "impeccable"
     script.write_text(f"#!/bin/sh\nenv > {tmp_path / 'env.txt'}\necho $* > {tmp_path / 'args.txt'}\n"
-                      f"sleep {sleep}\ncat <<'EOF'\n{out}\nEOF\nexit {code}\n")  # fmt: skip
+                      f"cat <<'EOF'\n{out}\nEOF\nexit {code}\n")  # fmt: skip
     script.chmod(script.stat().st_mode | stat.S_IEXEC)
     digest = hashlib.sha256(script.read_bytes()).hexdigest()
     return pack_files.Installed(engine=script, engine_sha256=digest, bundle="window.x = 1")
@@ -44,7 +44,7 @@ def pinned(monkeypatch, engine: bytes, bundle: bytes) -> None:
     monkeypatch.setattr(pack_files, "manifest", lambda: json.loads(json.dumps(pins)))
 
 
-def test_the_pack_pins_every_platform_its_skills_and_the_licence_text() -> None:
+def test_shipped_pack_identity_covers_platforms_skills_and_licence(monkeypatch, tmp_path) -> None:
     pins = pack_files.manifest()
     assert set(pins["engine"]) == {"darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64"}
     assert all(len(d) == 64 and int(d, 16) >= 0 for d in [*pins["engine"].values(), pins["bundle"]["sha256"]])
@@ -53,9 +53,10 @@ def test_the_pack_pins_every_platform_its_skills_and_the_licence_text() -> None:
     licence = preload.directory() / "IMPECCABLE-LICENSE"
     assert hashlib.sha256(licence.read_bytes()).hexdigest() == pins["licence"]["IMPECCABLE-LICENSE"]
     assert pins["upstream"]["commit"] in (preload.directory() / "NOTICE.md").read_text()
-
-
-def test_the_pack_identity_covers_its_skills(monkeypatch, tmp_path) -> None:
+    assert preload.required("builder", ui=True) == (*preload.REQUIRED["builder"], "owlbear-interface-design")
+    assert preload.required("reviewer", ui=True) == preload.REQUIRED["reviewer"]
+    assert "owlbear-interface-design" in sdk_adapter.agent(StepKind.BUILD, ui=True)["skills"]
+    assert "owlbear-interface-design" not in sdk_adapter.agent(StepKind.BUILD)["skills"]
     before = pack_files.identity()
     assert before.startswith(pack_files.manifest()["pack"] + "+")
     for name in pack_files.manifest()["skills"]:  # a candidate's own skill folder, as the package holds it
@@ -69,8 +70,11 @@ def test_the_pack_identity_covers_its_skills(monkeypatch, tmp_path) -> None:
     assert pack_files.identity() != before
 
 
-def test_install_keeps_only_files_that_match_their_digests(monkeypatch) -> None:
+def test_verified_install_reuses_bytes_rejects_tampering_and_rolls_back(monkeypatch) -> None:
     pinned(monkeypatch, b"engine", b"bundle")
+    old = pack_files.manifest() | {"pack": "impeccable-1"}
+    active = {"pins": old}
+    monkeypatch.setattr(pack_files, "manifest", lambda: json.loads(json.dumps(active["pins"])))
     fetched: list[str] = []
 
     def fetch(url: str) -> bytes:
@@ -90,6 +94,21 @@ def test_install_keeps_only_files_that_match_their_digests(monkeypatch) -> None:
     found.engine.write_bytes(b"swapped after verification")
     with pytest.raises(pack_files.PackError, match="no longer matches"):
         found.verified_engine()
+    pack_files.install(fetch)  # restore the old pack before switching versions
+    new = json.loads(json.dumps(old))
+    new["pack"] = "impeccable-2"
+    new["engine"][pack_files.platform_name()] = hashlib.sha256(b"e2").hexdigest()
+    new["bundle"]["sha256"] = hashlib.sha256(b"b2").hexdigest()
+    active["pins"] = new
+    assert pack_files.installed() is None
+    assert pack_files.install(lambda url: b"e2" if "releases" in url else b"b2").bundle == "b2"
+    active["pins"] = old
+
+    def offline(url: str) -> bytes:
+        pytest.fail(f"a rollback downloads nothing: {url}")
+
+    assert pack_files.install(offline).bundle == "bundle"
+    assert sorted(p.name for p in pack_files.folder().parent.iterdir()) == ["impeccable-1", "impeccable-2"]
 
 
 def test_an_older_runtime_installs_impeccable_through_the_hidden_design_pack_command(monkeypatch) -> None:
@@ -128,6 +147,8 @@ def test_a_download_that_does_not_match_is_refused_and_not_kept(monkeypatch) -> 
 
     with pytest.raises(pack_files.PackError, match="cannot download"):
         pack_files.install(offline)
+    with pytest.raises(pack_files.PackError, match="cannot download"):
+        pack_files.install()  # the default downloader is offline too
 
 
 def test_an_unsupported_machine_is_named(monkeypatch) -> None:
@@ -178,16 +199,25 @@ def test_only_web_addresses_and_absolute_paths_reach_the_engine(tmp_path) -> Non
     assert not (tmp_path / "args.txt").exists()
 
 
-def test_a_scan_that_hangs_ends(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(detector, "SECONDS", 0.2)
-    with pytest.raises(detector.DetectorError, match="did not finish"):
-        detector.scan_source(fake_engine(tmp_path, 0, "[]", sleep=5), [tmp_path / "a.html"], tmp_path)
-
-
-@pytest.mark.parametrize("cause", ["unverified", "unstarted", "hung", "failed", "unreadable", "shapeless"])
-def test_a_scan_that_did_not_complete_says_its_whole_error(tmp_path, monkeypatch, whole_error, cause) -> None:
+@pytest.mark.parametrize(
+    "cause", ["unverified", "unstarted", "hung", "failed", "unreadable", "shapeless", "stdout", "stderr"]
+)
+def test_failed_detector_keeps_streams_and_execution_errors_whole(tmp_path, monkeypatch, whole_error, cause) -> None:
     """#971: what the engine printed, and the whole error of a check, a start or a wait, is the scan's error."""
     (tmp_path / "said").write_text(whole_error)
+    if cause in {"stdout", "stderr"}:
+        engine = tmp_path / "impeccable"
+        engine.write_text(f"#!/bin/sh\ncat {tmp_path / 'said'}{' >&2' if cause == 'stderr' else ''}\n")
+        engine.chmod(engine.stat().st_mode | stat.S_IEXEC)
+        pack = pack_files.Installed(engine, hashlib.sha256(engine.read_bytes()).hexdigest(), "")
+        command = [str(engine), "detect", "--json", "--no-config", str(tmp_path / "a.html")]
+        with pytest.raises(detector.DetectorError) as caught:
+            detector.scan_source(pack, [tmp_path / "a.html"], tmp_path)
+        assert str(caught.value) == (
+            "the design detector's answer is not JSON: JSONDecodeError: Expecting value: line 1 column 1 (char 0)\n"
+            f"Command '{command}' exited 0 and printed:\n{cause}:\n{whole_error}"
+        )
+        return
     (tmp_path / "printed").write_text("what the engine printed")
     logged, answer = f"the engine's log\n{whole_error}", json.dumps({"error": whole_error})
     (tmp_path / "logged").write_text(logged)
@@ -198,7 +228,7 @@ def test_a_scan_that_did_not_complete_says_its_whole_error(tmp_path, monkeypatch
         if cause in {"unreadable", "shapeless"}
         else f"#!/bin/sh\ncat {tmp_path / 'printed'}\ncat {tmp_path / 'said'} >&2\n"
     )
-    engine.write_text(engine.read_text() + {"hung": "sleep 60\n", "failed": "exit 1\n"}.get(cause, ""))
+    engine.write_text(engine.read_text() + {"hung": "exec sleep 60\n", "failed": "exit 1\n"}.get(cause, ""))
     engine.chmod(engine.stat().st_mode | stat.S_IEXEC)
     pack = pack_files.Installed(engine, hashlib.sha256(engine.read_bytes()).hexdigest(), "")
     command = [str(engine), "detect", "--json", "--no-config", str(tmp_path / "a.html")]
@@ -226,38 +256,6 @@ def test_a_scan_that_did_not_complete_says_its_whole_error(tmp_path, monkeypatch
     }[cause]
     with pytest.raises(detector.DetectorError) as caught:
         detector.scan_source(pack, [tmp_path / "a.html"], tmp_path)
-    assert str(caught.value) == said
-
-
-@pytest.mark.parametrize("stream", ["stdout", "stderr"])
-def test_an_unreadable_answer_on_one_stream_names_that_stream(tmp_path, whole_error, stream) -> None:
-    """#971: a bad answer printed on one stream only says which stream it was, its text whole."""
-    (tmp_path / "said").write_text(whole_error)
-    engine = tmp_path / "impeccable"
-    engine.write_text(f"#!/bin/sh\ncat {tmp_path / 'said'}{' >&2' if stream == 'stderr' else ''}\n")
-    engine.chmod(engine.stat().st_mode | stat.S_IEXEC)
-    pack = pack_files.Installed(engine, hashlib.sha256(engine.read_bytes()).hexdigest(), "")
-    command = [str(engine), "detect", "--json", "--no-config", str(tmp_path / "a.html")]
-    with pytest.raises(detector.DetectorError) as caught:
-        detector.scan_source(pack, [tmp_path / "a.html"], tmp_path)
-    assert str(caught.value) == (
-        "the design detector's answer is not JSON: JSONDecodeError: Expecting value: line 1 column 1 (char 0)\n"
-        f"Command '{command}' exited 0 and printed:\n{stream}:\n{whole_error}"
-    )
-
-
-def test_a_page_that_refuses_the_detector_says_its_whole_error(tmp_path, whole_error) -> None:
-    """#971: the page's whole refusal, with the notes added on its way up, is the scan's error."""
-    error = RuntimeError(whole_error)
-    error.add_note("a note added on the way up")
-
-    def refuse(_js: str) -> None:
-        raise error
-
-    pack = pack_files.Installed(tmp_path / "e", "0" * 64, "window.detector = 1")
-    with pytest.raises(detector.DetectorError) as caught:
-        detector.scan_page(SimpleNamespace(evaluate=refuse, add_script_tag=print), pack)
-    said = f"the page refused the design detector: RuntimeError: {whole_error}\na note added on the way up"
     assert str(caught.value) == said
 
 
@@ -289,7 +287,7 @@ def test_the_detector_keeps_the_callers_session(tmp_path) -> None:
             os.kill(left, signal.SIGKILL)
 
 
-def test_the_in_page_detector_runs_without_overlay_and_a_refusing_page_is_an_error(tmp_path) -> None:
+def test_in_page_detector_uses_verified_bundle_without_overlay_and_preserves_refusal(tmp_path, whole_error) -> None:
     calls: list[str] = []
     groups = [{"selector": "h1", "findings": [{"type": "gradient-text", "category": "slop", "advisory": False}]}]
     page = SimpleNamespace(
@@ -302,16 +300,14 @@ def test_the_in_page_detector_runs_without_overlay_and_a_refusing_page_is_an_err
     assert calls[0] == "window.__IMPECCABLE_CONFIG__ = {autoScan: false}"
     assert calls[1] == "script window.detector = 1"  # the verified text itself, never a path
 
-    def refuse(_js: str) -> None:
-        msg = "detector core unavailable: wasm-unsafe-eval"
-        raise RuntimeError(msg)
+    error = RuntimeError(whole_error)
+    error.add_note("a note added on the way up")
 
-    with pytest.raises(detector.DetectorError, match="refused the design detector"):
-        detector.scan_page(SimpleNamespace(evaluate=refuse, add_script_tag=print), pack)
+    def refuse_whole(_js: str) -> None:
+        raise error
 
-
-def test_a_ui_change_gives_its_builder_the_design_skill() -> None:
-    assert preload.required("builder", ui=True) == (*preload.REQUIRED["builder"], "owlbear-interface-design")
-    assert preload.required("reviewer", ui=True) == preload.REQUIRED["reviewer"]
-    assert "owlbear-interface-design" in sdk_adapter.agent(StepKind.BUILD, ui=True)["skills"]
-    assert "owlbear-interface-design" not in sdk_adapter.agent(StepKind.BUILD)["skills"]
+    with pytest.raises(detector.DetectorError) as caught:
+        detector.scan_page(SimpleNamespace(evaluate=refuse_whole, add_script_tag=print), pack)
+    assert str(caught.value) == (
+        f"the page refused the design detector: RuntimeError: {whole_error}\na note added on the way up"
+    )

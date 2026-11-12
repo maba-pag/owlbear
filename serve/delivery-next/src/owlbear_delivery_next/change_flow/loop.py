@@ -56,6 +56,7 @@ from owlbear_delivery_next.change_flow import (
     rebuilds,
     round_flow,
     shaping_capture,
+    stuck,
 )
 from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go, open_task, resolved, resume
 
@@ -123,6 +124,8 @@ class StepResult(Record):
     operational: bool = False  # about the session's tools, not its work: a plan challenge passes it on as it is
     challenged: bool = False  # the plan challenge's findings sent the plan back (TD-188)
     ungated: bool = False  # a task loop or the owner's Fix it governs the repair: no round gate (TD-193, TD-208)
+    setup: bool = False  # a setup problem: no retry, no step back; it goes to repair (#1065)
+    root: str = ""  # the owner question's cause a setup result repairs, so its repair's question counts with it (#1064)
 
 
 def waiting_consent(c: Change) -> bool:
@@ -153,7 +156,7 @@ def usage_gated(c: Change) -> bool:
     return bool(o and o.exit == Exit.ASK and (o.cause or "").endswith(f":{UNREAD}"))
 
 
-DECISIONS = frozenset({"retry", "accept", "repair", "reconsider", "another", "rebuild"})  # engine decisions only
+DECISIONS = frozenset({"retry", "accept", "repair", "reconsider", "another", "rebuild", stuck.APPLY, stuck.DECLINE})
 
 
 def owner_gated(c: Change) -> bool:
@@ -290,8 +293,8 @@ def _intent(c: Change, item: IntentItem) -> None:
 
 
 def _target(q: Question, option: str | None) -> str | None:
-    """Where the chosen option leads; a question whose every option reruns the step does so on any answer."""
-    if q.options and all(o.next == "retry" for o in q.options):
+    """The chosen move; only legacy menus and engine gates implicitly retry on any answer."""
+    if not owner_answers.admitted(q) and q.options and all(o.next == "retry" for o in q.options):
         return "retry"
     return next((o.next for o in q.options if o.id == option), None)
 
@@ -310,7 +313,7 @@ def _answer(c: Change, item: AnswerItem, now: datetime) -> str:
     said = {"kind": kind, "statement": item.statement if kind == "clarification" else ""}
     q.answer = Answer(option=item.option, text=item.text, channel=item.channel, at=item.at, tasks=item.tasks, **said)
     target = _target(q, item.option)
-    if _refused(q, target, item.text):
+    if owner_answers.refused(q, target, item, DECISIONS):
         q.answer = None  # settled only by one of its options; a reconsideration needs the owner's note (TD-193)
         return f"question {q.id} is settled only by one of its options, a reconsideration by a note"
     if gate and (target != "pause" or c.step.kind != StepKind.CLEANUP):
@@ -339,12 +342,6 @@ def _moved(c: Change, q: Question, item: AnswerItem, target: str, now: datetime)
         _entered(c, q, target)
 
 
-def _refused(q: Question, target: str | None, text: str) -> bool:
-    """An answer that settles nothing: a decision or a round gate needs one of its options, a reconsideration a note."""
-    unchosen = target is None and bool({o.next for o in q.options} & DECISIONS or q.repair)
-    return unchosen or (target == "reconsider" and not text.strip())
-
-
 def _entered(c: Change, q: Question, target: str) -> None:
     """Move to the answer's step; the round gate's Fix builds the review's held findings as its repair."""
     if target == StepKind.BUILD and q.repair:
@@ -359,7 +356,9 @@ def _decided(c: Change, q: Question, item: AnswerItem, target: str, *, gate: boo
     q.effect_observed_at = item.at
     if not gate:
         return  # the Change moved on since it asked
-    if (q.cause or "").startswith(disputes.PREFIX):  # TD-176: the owner's decision on one upheld finding
+    if stuck.owned(c, q.id):  # #1066: the owner's yes or no on a proven fix
+        stuck.decided(c, target, item.at)
+    elif (q.cause or "").startswith(disputes.PREFIX):  # TD-176: the owner's decision on one upheld finding
         disputes.decided(c, q, target, item.at, item.text)
     elif (q.cause or "").startswith(round_flow.PREFIX):  # TD-208: another round, or a retry of the work
         round_flow.decided(c, q, target)
@@ -406,6 +405,10 @@ def apply(change: Change, result: StepResult, now: datetime) -> Change:
                         waiting=result.waiting, wake_at=result.wake_at, denial=result.denial,
                         challenged=result.challenged, at=now)  # fmt: skip
     budgets.streaks(c, result)
+    if result.setup:  # D-01M6RT5QHWHB0ZHBBY0BE34FBE: never retried as temporary, never back to the brief
+        stuck.start(c, result.cause or "", result.reason, now, root=result.root)
+        curation_flow.fixed(c, change.step, now)
+        return c
     match result.exit:
         case Exit.DONE:
             c.stop = None

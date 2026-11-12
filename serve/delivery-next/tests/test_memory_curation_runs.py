@@ -695,30 +695,36 @@ def test_a_failed_folder_s_whole_reason_shows_on_maintenance(root, pds, whole_er
         listed = f"{curation_tree.LISTED}: DataRepoError: git worktree failed: locked\n{whole_error}\n{note}"
         reason = f"RuntimeError: {listed}; {reason}"
     assert {f["folder"]: f["reason"] for f in read["folders"]}["owlbear"] == reason
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    app = api.create_app(Store(root.parent, name="shop"), "tok", None)
-    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_keep_alive=60))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            page.route("**/api/next/curation", lambda route: route.fulfill(json=read))
-            page.goto(f"{base}/maintenance#token=tok")
-            row = page.locator("#curation > li", has=page.get_by_role("heading", name="owlbear", exact=True))
-            expect(row).to_be_visible()
-            assert row.locator('p-text[size="xs"]:not(.blocked)').first.text_content() == reason
-            browser.close()
-    finally:
-        server.should_exit = True
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        server = uvicorn.Server(
+            uvicorn.Config(
+                api.create_app(Store(root.parent, name="shop"), "tok", None), log_level="warning", timeout_keep_alive=60
+            )
+        )
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            with sync_playwright() as pw:
+                try:
+                    browser = pw.chromium.launch()
+                except Error as exc:
+                    pytest.skip(f"no Playwright Chromium: {exc}")
+                page = browser.new_page()
+                pds.only(page, f"http://127.0.0.1:{sock.getsockname()[1]}")
+                page.route("**/api/next/curation", lambda route: route.fulfill(json=read))
+                page.goto(f"http://127.0.0.1:{sock.getsockname()[1]}/maintenance#token=tok")
+                row = page.locator("#curation > li", has=page.get_by_role("heading", name="owlbear", exact=True))
+                expect(row).to_be_visible()
+                assert row.locator('p-text[size="xs"]:not(.blocked)').first.text_content() == reason
+                browser.close()
+        finally:
+            server.should_exit = True
+            thread.join(5)
+            assert not thread.is_alive(), "the owned page server did not stop"
 
 
 def test_a_run_waiting_for_a_slot_never_starts_once_an_update_or_a_stop_fences_it(root) -> None:

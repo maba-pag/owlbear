@@ -4,18 +4,23 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shlex
 import shutil
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.change_contracts import check_hint
 from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.change_flow import curation_flow
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import local_home
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
 
+    from owlbear_delivery_next.change_contracts.models import Change, Task
     from owlbear_delivery_next.change_contracts.profile_record import Profile
 
 GIT = shutil.which("git") or "git"
@@ -80,6 +85,97 @@ def checks(profile: Profile) -> list[tuple[str, str]]:
     """Return ``(package, command)`` per known check entry of the profile; plans may name only these commands."""
     found = ((k.removeprefix("check:"), e) for k, e in profile.entries.items() if k.startswith("check:"))
     return sorted((p, e.value) for p, e in found if e.state == "known" and e.value)
+
+
+def owns_changed_runner(path: Path, name: str = "test") -> bool:
+    """Whether the checkout declares OwlBear's root test console script."""
+    manifest = path / "serve/tools/pyproject.toml"
+    if not manifest.is_file():
+        return False
+    scripts = tomllib.loads(manifest.read_text(encoding="utf-8")).get("project", {}).get("scripts", {})
+    return scripts.get(name) == "owlbear_tools.testing:test_main"
+
+
+def plan_checks(profile: Profile, path: Path) -> list[tuple[str, str]]:
+    """Confirmed test runners offered to the Planner; root lint already belongs to submission."""
+    pairs = checks(profile)
+    if not owns_changed_runner(path):
+        return pairs
+    found = []
+    for package, command in pairs:
+        root = check_hint.changed_runner(check_hint.qualified(package, command))
+        adapted = root[0] if root and owns_changed_runner(path, root[0].split()[2]) else command
+        found.append((package, adapted))
+    return found
+
+
+def task_checks(profile: Profile, task: Task, path: Path, target: str) -> list[str]:
+    """Exact checks for one task, bound to its recorded base and the actual integration target."""
+    selected = check_hint.resolve(task.checks, checks(profile))
+    if not owns_changed_runner(path) or not any(check_hint.changed_runner(command) for command in selected):
+        return selected
+    commit = git(path, "rev-parse", f"{tracking(path, target)}^{{commit}}").strip()
+    found = []
+    for command in selected:
+        root = check_hint.changed_runner(command)
+        adapted = (
+            check_hint.task_command(command, task.base, commit)
+            if root and owns_changed_runner(path, root[0].split()[2])
+            else command
+        )
+        found.append(adapted)
+    return found
+
+
+def build_checks(profile: Profile, change: Change, task: Task, path: Path) -> list[str]:
+    """Confirmed build checks; curator measurements require their selected suites even before edits."""
+    if change.tests is not None and change.step.task == curation_flow.CURATE:
+        pairs = [pair for pair in checks(profile) if pair[0] in {".", *change.tests.packages}]
+        confirmed = {p for p, _ in pairs}
+        missing = set(change.tests.packages) - confirmed if "." not in confirmed else set()
+        if missing:
+            msg = f"Selected curator suites lack confirmed checks: {', '.join(sorted(missing))}"
+            raise ValueError(msg)
+        found = []
+        for package, command in pairs:
+            adapted = check_hint.qualified(package, command)
+            root = check_hint.changed_runner(adapted)
+            if root and owns_changed_runner(path, root[0].split()[2]):
+                targets, covered, unsupported = set[str](), set[str](), set[str]()
+                packages = sorted(change.tests.packages, key=len, reverse=True)
+                for name in (name for share in change.tests.shares for name in share.paths):
+                    module = Path(name)
+                    owner = next((p for p in packages if p != "." and name.startswith(f"{p}/")), ".")
+                    prefix = module.name.startswith("test_")
+                    outside_helper = not prefix and not (
+                        name.startswith("tests/") or (name.startswith("serve/") and "/tests/" in name)
+                    )
+                    if module.suffix != ".py" or (module.name.endswith("_test.py") and not prefix) or outside_helper:
+                        unsupported.add(owner)
+                        continue
+                    if not prefix:
+                        continue
+                    covered.add(owner)
+                    target = owner if owner != "." else module.parent.as_posix() if module.parent != Path() else name
+                    targets.add(target)
+                # Every changed runner sees the entire curation diff, including other checks' suites.
+                needed = set(packages) | unsupported if unsupported else set(packages) - covered
+                missing = needed - (confirmed - {"."})
+                if missing:
+                    msg = (
+                        f"The confirmed Python runner cannot measure selected suites: {', '.join(sorted(missing))}; "
+                        "confirm their package checks before curation"
+                    )
+                    raise ValueError(msg)
+                if unsupported or not targets:
+                    continue
+                chosen = shlex.join(sorted(targets))
+                runner = root[0] if "-m" in shlex.split(root[0]) else f"{root[0]} -m"
+                adapted = check_hint.freeze(check_hint.qualified(package, f"{runner} {chosen}"), root[1])
+                adapted = check_hint.task_command(adapted, change.tests.commit, change.tests.commit)
+            found.append(adapted)
+        return found
+    return task_checks(profile, task, path, change.names.target)
 
 
 def head(path: Path) -> str:

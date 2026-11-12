@@ -24,6 +24,10 @@ flowchart LR
     C -->|you approve the merge| D[Done]
 ```
 
+Plans select package-qualified test runners you confirmed, with literal targets for the changed code
+and its consumers. Task checks must pass; changed files are linted once, at submission. Your required
+CI checks still gate merging; OwlBear's own repository keeps its full test suite in CI.
+
 When a step needs a decision or gets stuck, OwlBear asks on the Changes page instead of guessing.
 Once the pull request's checks and your branch rules pass, OwlBear merges it; when it needs your
 consent, it asks on the Changes page and you can also merge in GitHub.

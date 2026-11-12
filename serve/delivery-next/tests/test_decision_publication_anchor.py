@@ -1,7 +1,6 @@
 """A batch's journalled head stays on the remote, so a rebase replays only the batch's own later commit (F7).
 
-Each test drives the public save and finish paths over a real disposable Git remote; only the remote's movement and the
-acknowledgement loss are injected.
+Public save and Finish witnesses use a real disposable Git remote, with distinct publication and identity windows.
 """
 
 from __future__ import annotations
@@ -78,12 +77,28 @@ def lost_ack(monkeypatch) -> list[bool]:
     return lost
 
 
-def test_a_remote_that_moves_before_the_push_is_rebased_over_only_the_new_commit(
-    shared_repo, tmp_path, monkeypatch
+@pytest.mark.parametrize("dirty", [False, True], ids=["rejected-push", "dirty-divergence"])
+def test_publication_floor_preserves_owner_history_or_refuses_dirty_divergence(
+    shared_repo, tmp_path, monkeypatch, dirty
 ) -> None:
     root, remote = shared_repo
     owner = owner_commit(root, "owner words\n")
     other = checkout(tmp_path / "other", remote)
+    if dirty:
+        (root / OWNER).write_text("owner edit not committed\n")
+        (other.root / "rewritten.txt").write_text("rewritten\n")
+        git(other.root, "add", "rewritten.txt")
+        git(other.root, "commit", "-q", "-m", "rewritten")
+        git(other.root, "push", "-q", "origin", "HEAD:main")
+        before, published = tree_bytes(root), git(remote, "rev-parse", "main")
+        shared = DataRepo(root)
+        receipt = save(shared, make(), expected_revision=None, message="decisions: notes")
+        assert not receipt.saved
+        assert decision_batch.pending(shared) is None
+        assert tree_bytes(root) == before
+        assert git(root, "rev-parse", "HEAD") == owner
+        assert git(remote, "rev-parse", "main") == published
+        return
     real_commit, moved = DataRepo.commit, []
 
     def move_remote_first(self, paths, message, until):
@@ -107,25 +122,6 @@ def test_a_remote_that_moves_before_the_push_is_rebased_over_only_the_new_commit
     assert git(root, "status", "--porcelain") == ""
 
 
-def test_a_lost_acknowledgement_is_finished_from_the_published_head(shared_repo, lost_ack) -> None:
-    root, remote = shared_repo
-    owner = owner_commit(root, "owner words\n")
-    shared = DataRepo(root)
-    save(shared, make(), expected_revision=None, message="decisions: notes")
-
-    pending = decision_batch.pending(shared)
-    assert pending is not None
-    assert pending.head == owner
-    lost_ack[0] = False
-    done = decision_recovery.finish(shared, pending.generation)
-
-    assert done.done, done.notice
-    assert decision_batch.pending(shared) is None
-    assert is_ancestor(root, owner, "HEAD")
-    assert git(root, "rev-parse", "HEAD") == git(remote, "rev-parse", "main")
-    assert (root / OWNER).read_text() == "owner words\n"
-
-
 def test_a_foreign_head_with_the_same_tree_is_refused_and_nothing_changes(shared_repo, lost_ack) -> None:
     root, remote = shared_repo
     owner_commit(root, "owner words\n")
@@ -144,25 +140,4 @@ def test_a_foreign_head_with_the_same_tree_is_refused_and_nothing_changes(shared
     assert decision_batch.pending(shared).generation == pending.generation
     assert tree_bytes(root) == before
     assert git(root, "rev-parse", "HEAD") == foreign
-    assert git(remote, "rev-parse", "main") == published
-
-
-def test_a_dirty_checkout_behind_a_remote_that_moved_on_is_refused_before_the_journal(shared_repo, tmp_path) -> None:
-    root, remote = shared_repo
-    owner_commit(root, "owner words\n")
-    (root / OWNER).write_text("owner edit not committed\n")
-    other = checkout(tmp_path / "rewriter", remote)
-    (other.root / "rewritten.txt").write_text("rewritten\n")
-    git(other.root, "add", "rewritten.txt")
-    git(other.root, "commit", "-q", "-m", "rewritten")
-    git(other.root, "push", "-q", "origin", "HEAD:main")
-    before, head, published = tree_bytes(root), git(root, "rev-parse", "HEAD"), git(remote, "rev-parse", "main")
-
-    shared = DataRepo(root)
-    receipt = save(shared, make(), expected_revision=None, message="decisions: notes")
-
-    assert not receipt.saved
-    assert decision_batch.pending(shared) is None
-    assert tree_bytes(root) == before
-    assert git(root, "rev-parse", "HEAD") == head
     assert git(remote, "rev-parse", "main") == published

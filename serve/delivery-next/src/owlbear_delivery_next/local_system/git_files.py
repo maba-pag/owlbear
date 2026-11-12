@@ -20,6 +20,10 @@ class Probe(Protocol):
         """Its exit code and what it printed, or its whole failure; *env* replaces the process's environment."""
 
 
+class GitInspectionError(RuntimeError):
+    """Git could not establish whether a local file is tracked."""
+
+
 def probe_in(cwd: Path) -> Probe:
     """Run one command in *cwd*, bounded: what it printed, or its whole failure; a missing program is exit 127."""
 
@@ -45,9 +49,13 @@ def git_common_dir(cwd: Path) -> Path:
 
 
 def untracked(repo: Path, path: Path) -> bool:
-    """Whether git reports *path* as not tracked; any other answer counts as tracked."""
+    """Whether git reports *path* as not tracked; failed inspection never grants a write."""
     rel = path.relative_to(repo).as_posix()
-    return probe_in(repo)(["git", "ls-files", "--error-unmatch", "--", rel])[0] == 1
+    code, said = probe_in(repo)(["git", "ls-files", "--error-unmatch", "--", rel])
+    if code not in {0, 1}:
+        msg = f"{path} could not be checked for tracking in {repo}: {said}"
+        raise GitInspectionError(msg)
+    return code == 1
 
 
 def exclude(repo: Path, path: Path) -> None:

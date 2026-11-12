@@ -30,10 +30,8 @@ AT = datetime(2026, 10, 25, tzinfo=UTC)
 
 
 def host_with(tmp_path, slots):
-    path = tmp_path / "repo"
-    path.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=path, check=True, capture_output=True)  # noqa: S607
-    store = Store.open(path)
+    store = Store(tmp_path / "store")
+    store.root.mkdir()
     host = Host(store, tmp_path / "host", spawn=lambda _s: None, members=lambda _ids: {})
     host.slots = slots
     host.maintenance = maintenance.Maintenance(slots, boot=lambda: 10.0, observe=lambda *_args: False)
@@ -54,7 +52,7 @@ def session(root):
     )
 
 
-def test_unknown_pack_session_keeps_its_slot_and_blocks_its_successor(tmp_path):
+def test_unproven_session_retains_capacity_and_workspace(tmp_path):
     slots = Slots(lambda: 1)
     host, store = host_with(tmp_path, slots)
     unknown = Run(
@@ -64,39 +62,33 @@ def test_unknown_pack_session_keeps_its_slot_and_blocks_its_successor(tmp_path):
     job = pack_job.Job(store, pack_job.Live(update=lambda _store, _cfg: unknown))
     session_slots.packed(host, job)
 
-    root = tmp_path / "wt"
-    root.mkdir()
-    assert job.live.update(store, session(root)) is unknown
+    job.state |= {"state": "running", "run": "run-one", "workspace": str(job.workspace)}
+    job.workspace.mkdir(parents=True)
+    assert job.live.update(store, session(job.workspace)) is unknown
+    job._finish("failed", "the update ended")  # noqa: SLF001 - the update's own end
+    assert job.workspace.is_dir()
 
     project = session_slots.project(host)
     assert slots.take(project, "successor", 1, 1) == 0
     assert host.maintenance.pending(kind="pack")
+    with pytest.raises(pack_job.Busy):
+        job._claim(job._alone)  # noqa: SLF001 - a starting run's claim
 
 
-def test_an_unknown_pack_workspace_outlives_its_job_until_its_processes_are_proven_gone(tmp_path):
-    host, store = host_with(tmp_path, Slots(lambda: 2))
-    job = pack_job.Job(store, pack_job.Live())
-    session_slots.packed(host, job)
-    job.state |= {"state": "running", "run": "run-one", "workspace": str(job.workspace)}
-    job.workspace.mkdir(parents=True)
-
-    ident = host.maintenance.begin(session_slots.project(host), "pack:one", "pack", str(job.workspace))
-    host.maintenance.failed(ident, "RuntimeError: the session ended without a result")
-    job._finish("failed", "the update ended")  # noqa: SLF001 - the update's own end, as the run calls it
-    assert job.workspace.is_dir()
-
-
-def test_a_proven_pack_workspace_is_removed_when_its_job_ends(tmp_path):
-    host, store = host_with(tmp_path, Slots(lambda: 2))
-    job = pack_job.Job(store, pack_job.Live())
+def test_proven_session_releases_capacity_and_workspace(tmp_path):
+    slots = Slots(lambda: 1)
+    host, store = host_with(tmp_path, slots)
+    proven = Run("synthetic", termination=processes.Termination(confirmed=True))
+    job = pack_job.Job(store, pack_job.Live(update=lambda _store, _cfg: proven))
     session_slots.packed(host, job)
     job.state |= {"state": "running", "run": "run-two", "workspace": str(job.workspace)}
     job.workspace.mkdir(parents=True)
 
-    ident = host.maintenance.begin(session_slots.project(host), "pack:two", "pack", str(job.workspace))
-    host.maintenance.finished(ident, Run("synthetic", termination=processes.Termination(confirmed=True)))
+    assert job.live.update(store, session(job.workspace)) is proven
     job._finish("failed", "the update ended")  # noqa: SLF001 - the update's own end, as the run calls it
     assert not job.workspace.exists()
+    assert not host.maintenance.pending("pack")
+    assert slots.take(session_slots.project(host), "successor", 1, 1) == 1
 
 
 def test_a_legacy_running_updater_root_is_adopted_before_it_can_be_deleted(tmp_path):
@@ -126,17 +118,6 @@ def test_an_unproven_challenger_scratch_outlives_its_call_and_a_proven_one_is_re
 
     assert unproven.is_dir()
     assert not done.exists()
-
-
-def test_the_machine_pack_lock_stays_blocked_while_a_pack_lease_is_unproven(tmp_path):
-    host, store = host_with(tmp_path, Slots(lambda: 2))
-    job = pack_job.Job(store, pack_job.Live())
-    session_slots.packed(host, job)
-    ident = host.maintenance.begin(session_slots.project(host), "pack:three", "pack", str(tmp_path / "w"))
-    host.maintenance.failed(ident, "RuntimeError: the session ended without a result")
-
-    with pytest.raises(pack_job.Busy):
-        job._claim(job._alone)  # noqa: SLF001 - the claim a starting run takes
 
 
 def usage_unread(termination: processes.Termination | None) -> sessions.UsageUnreadError:
@@ -188,8 +169,9 @@ def test_a_session_error_without_confirmed_termination_still_holds_its_slot(tmp_
     session_slots.packed(host, job)
     root = tmp_path / "wt"
     root.mkdir()
-    with pytest.raises(type(raised)):
+    with pytest.raises(type(raised)) as caught:
         job.live.update(store, session(root))
+    assert caught.value is raised
     [lease] = host.maintenance.read()["sessions"]
     assert (lease["state"], host.maintenance.pending("pack")) == ("held", True)
     assert slots.take(session_slots.project(host), "successor", 1, 1) == 0
@@ -262,6 +244,7 @@ def test_a_start_refused_by_an_unreadable_registry_record_or_pull_request_list_s
         job.start()
     whole = f"{type(error).__name__}: {whole_error}\na note added on the way up"
     assert str(refused.value) == said.format(whole)
+    assert not (job.store.root / pack_job.FILE).exists()
 
 
 def test_a_waiting_run_goes_on_only_as_itself_alone_and_with_no_pack_pull_request_but_its_own(tmp_path):
@@ -276,6 +259,13 @@ def test_a_waiting_run_goes_on_only_as_itself_alone_and_with_no_pack_pull_reques
         resumed(run="r-other", branch="pack/r-alpha")
     with pytest.raises(pack_admission.Refused, match="another Impeccable pull request is open"):
         resumed(run="r-alpha", branch="")  # before its publication, any pack pull request competes
+    (root / pack_job.FILE).write_text(waiting("r-alpha") + "\n")
+    with pytest.raises(pack_admission.Refused, match="record changed"):
+        resumed(run="r-alpha", branch="pack/r-alpha")
+    (root / pack_job.FILE).write_text(waiting("r-alpha"))
+    resumed = functools.partial(
+        pack_admission.resumed, root, "alpha", version=pack_run_record.observed(root)[1], github=own
+    )
     project_home.home("gamma").mkdir(parents=True)
     (project_home.home("gamma") / pack_job.FILE).write_text(waiting("r-gamma"))
     with pytest.raises(pack_admission.Refused, match="also open in gamma"):

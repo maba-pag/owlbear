@@ -16,7 +16,7 @@ from owlbear_delivery_next.state_store.store import Store
 AT = datetime(2026, 10, 17, 2, tzinfo=UTC)
 
 
-def test_the_section_shows_the_open_run_where_it_started_and_says_an_unreadable_record_by_name(tmp_path) -> None:
+def test_machine_view_selects_open_run_and_never_settles(tmp_path) -> None:
     left = pack_state.blank() | {"state": "running", "run": "r-alpha", "started_at": "2026-10-17T02:00:00+00:00",
                                  "context": {"sid": "kept out of the page"}}  # fmt: skip
     projects = [registry.Project(id=n, path=str(tmp_path / n), added_at=AT) for n in ("alpha", "beta", "gamma")]
@@ -44,7 +44,7 @@ def test_the_section_shows_the_open_run_where_it_started_and_says_an_unreadable_
 
 
 @pytest.mark.parametrize("where", ["registry", "record"])
-def test_an_unreadable_registry_or_run_record_is_said_whole(tmp_path, monkeypatch, whole_error, where) -> None:
+def test_overview_reports_registry_and_record_errors_whole(tmp_path, monkeypatch, whole_error, where) -> None:
     projects = [registry.Project(id=n, path=str(tmp_path / n), added_at=AT) for n in ("beta", "gamma")]
     with registry.locked():
         registry.save(registry.Machine(projects=projects))

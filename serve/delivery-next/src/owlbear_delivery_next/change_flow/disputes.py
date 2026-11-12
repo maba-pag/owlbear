@@ -275,6 +275,24 @@ def _settle(c: Change, task: Task | None, payload: object, result: StepResult) -
     return result.model_copy(update=update | {"score": None})
 
 
+DELEGATED = "upheld by the independent reviewer after the builder's rejection: Delivery decided it (#1062)"
+
+
+def delegated(c: Change, task: Task | None) -> bool:
+    """After approval a rejection the reviewer upheld is Delivery's, decided as his Fix (D-01M6RT4ADHEEH6FFAF6HVW55QZ).
+
+    The review then completes from its held verdict, as after his answers (``workflow_steps.review.disputed``).
+    """
+    judged = target(c, task)
+    if judged is None or c.brief.approved_version is None or _open(judged) is None:
+        return False
+    while (d := _open(judged)) is not None:
+        d.owner, d.note = "fix", DELEGATED
+        mark(c, judged, d.key, "owner-fix", note=DELEGATED)
+    go(c, StepKind.REVIEW, c.step.task, DISPUTED)
+    return True
+
+
 def _open(task: Task) -> Dispute | None:
     """The next rejection the owner decides: one the reviewer did not accept, or one a reconsideration left unsure."""
     return next((d for d in task.disputes if not d.owner and d.upheld), None)
@@ -305,6 +323,8 @@ def decided(c: Change, q: Question, target: str, at: datetime, note: str = "") -
         d.reconsidered, d.clarified = "", ""
     else:
         mark(c, task, key, "owner-fix" if d.owner == "fix" else "owner-drop", note=d.note)
+    if delegated(c, task):  # a later upheld rejection is Delivery's, as after approval it always is (#1062)
+        return
     if (later := _open(task)) is not None:
         ask(c, question(task, later), at)
     else:

@@ -76,7 +76,7 @@ def judged(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
         return True
     disputes.judged(change, task, done.payload)
     unsure = next((d for d in task.disputes if d.reconsidered == "unsure" and not d.owner), None)
-    if unsure is not None:
+    if unsure is not None and not disputes.delegated(change, task):  # #1062: Delivery's after approval
         ask(change, disputes.question(task, unsure), now)
     store.write(lock, change)
     return unsure is not None

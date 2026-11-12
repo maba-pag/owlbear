@@ -163,6 +163,12 @@ def _processes() -> list[str]:
         except (psutil.Error, OSError) as exc:
             found.append(f"process {proc.pid} cannot be read: {failure(exc)}")
             continue
+        except SystemError as exc:
+            # psutil 7.2.2 on macOS returns from cmdline() with its permission refusal still set (psutil#2854)
+            if not isinstance(exc.__cause__, PermissionError):
+                raise
+            found.append(f"process {proc.pid} cannot be read: {failure(exc)}\ncaused by {failure(exc.__cause__)}")
+            continue
         if any(_OWLBEAR.search(w) for w in words) or any(Path(w).name in _COMMANDS for w in words[:2]):
             found.append(f"process {proc.pid}: {' '.join(words)[:200]}")
     return found

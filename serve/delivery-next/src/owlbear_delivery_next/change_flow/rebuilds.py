@@ -137,15 +137,54 @@ def fresh(c: Change, task: Task) -> None:
     task.done, task.base, task.spans, task.built_by, task.earlier = False, None, [], "", ""
 
 
-def checks(c: Change, rebuild: Sequence[str], profile: Profile) -> list[str]:
+def checks(c: Change, lp: RoundLoop, profile: Profile, undone: Sequence[Task]) -> list[str]:
     """Resolve the last rebuilt task's complete check set before any Git undo or task mutation."""
     tasks = c.plan.tasks if c.plan else []
-    picked = [t for t in tasks if t.id in rebuild]
+    picked = [t for t in tasks if t.id in lp.rebuild]
     if not picked:
         return []
     last = picked[-1]
+    plan = {t.id for t in tasks if t.origin == "plan"}
+    named, removed = _named(lp), {t.id for t in undone}
+    repairs = [
+        t
+        for t in tasks
+        if t.fixes and t.base is not None and t.id not in removed and (subject_of(c, t) in plan or t.id in named)
+    ]
+    repair_spans = [span for task in repairs for span in task.spans]
     others = [t for t in tasks if t.origin == "plan" and t is not last and t.checks]
-    return check_hint.resolve([check for task in (last, *others) for check in task.checks], worktree.checks(profile))
+    roots: dict[str, list[str]] = {}
+    retained = []
+    for task in (last, *others):
+        for check in check_hint.resolve(task.checks, worktree.checks(profile)):
+            if (root := check_hint.changed_runner(check)) is None:
+                retained.append(check)
+            else:
+                # Previous retry flags can still name repairs this rebuild undoes.
+                roots.setdefault(root[0], []).extend(task.spans if task is not last and task.id not in removed else [])
+    selected = [
+        *(
+            check_hint.freeze(check_hint.qualified(".", runner), [*spans, *repair_spans])
+            for runner, spans in roots.items()
+        ),
+        *retained,
+    ]
+    return list(dict.fromkeys(selected))
+
+
+def refresh(c: Change, task: Task) -> None:
+    """Bind earlier rebuilt work only after it has new completed spans."""
+    lp = c.loops.get(FINAL)
+    if not lp or lp.ended != "retried" or not lp.rebuild or subject_of(c, task) != lp.rebuild[-1]:
+        return
+    earlier = set(lp.rebuild[:-1])
+    spans = [
+        span
+        for built in (c.plan.tasks if c.plan else [])
+        if built.done and built.base is not None and subject_of(c, built) in earlier
+        for span in built.spans
+    ]
+    task.checks = [check_hint.freeze(check, spans) for check in task.checks]
 
 
 def rotated(c: Change, lp: RoundLoop, undone: list[Task], required: Sequence[str]) -> None:
@@ -158,13 +197,18 @@ def rotated(c: Change, lp: RoundLoop, undone: list[Task], required: Sequence[str
     """
     tasks = c.plan.tasks if c.plan else []
     picked = [t for t in tasks if t.id in lp.rebuild]
+    for task in tasks:
+        task.checks = [
+            check_hint.qualified(".", root[0]) if (root := check_hint.changed_runner(check)) and root[1] else check
+            for check in task.checks
+        ]
     for t in undone:
         t.base, t.spans = None, []
     for t in picked:
         fresh(c, t)
     if picked:
         picked[-1].checks = list(required)
-    lp.ended, lp.rebuild, lp.completion, c.consent = "retried", [], None, None
+    lp.ended, lp.rebuild, lp.completion, c.consent = "retried", [t.id for t in picked], None, None
     if nxt := open_task(c):
         go(c, StepKind.BUILD, nxt.id)
     else:

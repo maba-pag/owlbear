@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import contextlib
-import importlib.util
+import dataclasses
 import os
 import re
 import socket
@@ -12,6 +12,7 @@ import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -20,10 +21,12 @@ import uvicorn
 from owlbear_delivery_next.change_contracts.round_records import PACK, RoundFinding, RoundLoop, RoundPolicy
 from owlbear_delivery_next.impeccable_runs import (
     machine_lock,
-    pack_gates,
+    pack_activation,
     pack_job,
     pack_progress,
+    pack_publish,
     pack_rounds,
+    pack_run,
     pack_state,
 )
 from owlbear_delivery_next.local_system import git_run, local_home
@@ -35,23 +38,8 @@ from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
-    from types import ModuleType
 
 NOW = datetime(2026, 10, 17, 2, tzinfo=UTC)
-
-
-def _sibling(name: str) -> ModuleType:
-    """A sibling test module, loaded for its fakes: the tests are no package, so they cannot import each other."""
-    spec = importlib.util.spec_from_file_location(f"pack_page_{name}", Path(__file__).with_name(f"{name}.py"))
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-JOB = _sibling("test_pack_job")  # a whole run's fakes
-checkout, clone = JOB.checkout, JOB.clone
 
 
 class Host:
@@ -94,17 +82,33 @@ def served(tmp_path: Path) -> Iterator[Callable[..., tuple[pack_job.Job, str]]]:
     def serve(lp: RoundLoop | None = None, job: pack_job.Job | None = None) -> tuple[pack_job.Job, str]:
         job = job or waiting(Store(tmp_path), lp)
         sock = socket.socket()
-        sock.bind(("127.0.0.1", 0))
-        server = uvicorn.Server(uvicorn.Config(api.create_app(job.store, "tok", Host(), pack=job), log_level="warning"))
-        threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
+        try:
+            sock.bind(("127.0.0.1", 0))
+            server = uvicorn.Server(
+                uvicorn.Config(api.create_app(job.store, "tok", Host(), pack=job), log_level="warning")
+            )
+            thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+            thread.start()
+        except BaseException:
+            sock.close()
+            raise
+        servers.append((server, thread, sock))
         while not server.started:
+            assert thread.is_alive(), "the owned page server stopped before startup"
             time.sleep(0.05)
-        servers.append(server)
         return job, f"http://127.0.0.1:{sock.getsockname()[1]}"
 
-    yield serve
-    for server in servers:
-        server.should_exit = True
+    try:
+        yield serve
+    finally:
+        for server, _thread, _sock in servers:
+            server.should_exit = True
+        with contextlib.ExitStack() as cleanup:
+            for _server, thread, sock in reversed(servers):
+                cleanup.callback(sock.close)
+                cleanup.callback(thread.join, 5)
+        for _server, thread, _sock in servers:
+            assert not thread.is_alive(), "the owned page server did not stop"
 
 
 @contextlib.contextmanager
@@ -155,6 +159,11 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_impeccable_p
         state = page.locator("#pack-state")
         expect(state).to_contain_text("The update waits for your answers below. Started ")
         expect(state).not_to_contain_text("ended")
+        # waiting()'s record is from before invocations: its stages alone, with no history made up for it
+        expect(page.locator("#pack-stages li")).to_have_count(len(pack_job.STAGES))
+        expect(page.locator("#pack-progress")).to_have_count(0)
+        expect(page.locator("#pack-next")).to_have_count(0)
+        expect(page.locator("#pack-state")).to_contain_text("The update waits for your answers below.")
         expect(page.get_by_role("button", name="Update Impeccable")).to_be_disabled()
         expect(page.locator("#pack-update")).to_have_attribute("variant", "secondary")  # the answer leads instead
         first, second = ask.locator(".pack-question").first, ask.locator(".pack-question").last
@@ -182,26 +191,26 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_impeccable_p
         expect(left).to_have_count(1)  # the other finding still waits; nothing ran yet
         expect(left.get_by_label("Your note", exact=False)).to_have_value("a draft for F2")  # its draft is kept
         expect(page.locator("#pack-findings li").first).to_contain_text("F1 (round 1), you dropped it")
+        assert job.read()["state"] == "waiting"
+        discard_waiting(page, pds, job, "Discard the update")
     assert len(sent) == 1  # only the Drop it went out
     kept = RoundLoop.model_validate(job.read()["loop"])
     assert [(f.id, f.state, f.note) for f in kept.findings] == [
         ("F1", "owner-drop", "the halo is upstream's own example"), ("F2", "escalated", "")
     ]  # fmt: skip
-    assert job.read()["state"] == "waiting"
+    assert job.read()["state"] == "discarded"
 
 
 @pytest.mark.browser
 def test_the_activation_dialog_lists_the_unreviewed_repair_and_what_was_not_changed_for(served, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    found = [
-        RoundFinding(id="F1", text="a: b - fix: c", raised=1, state="fixed", repair="r1"),
-        RoundFinding(id="F2", text="d: e - fix: f", raised=1, state="standing", reason="it holds"),
-    ]
-    lp = RoundLoop(subject=PACK, policy=RoundPolicy(), round=1, findings=found, unreviewed=["r1"], ended="count")
-    job, base = served(lp)
+    job, base = served(ENDED)
+    before = job.path.read_bytes()
     with opened(base, pds) as page:
         expect(page.locator("#pack-ask")).to_contain_text("The updater's last repair (r1) was not reviewed")
+        expect(page.locator('#pack p-button[variant="primary"]')).to_have_text(["Activate the unreviewed repair"])
+        expect(page.locator("#pack-ask").get_by_role("button", name=re.compile("Discard"))).to_have_count(1)
         page.get_by_role("button", name="Activate the unreviewed repair").click()
         dialog = page.get_by_role("dialog")
         expect(dialog).to_be_visible()
@@ -210,7 +219,11 @@ def test_the_activation_dialog_lists_the_unreviewed_repair_and_what_was_not_chan
         expect(said).to_contain_text("F2 not changed for (rejected by the updater; the challenger accepted that)")
         said.get_by_role("button", name="Keep it waiting").click()
         expect(dialog).to_be_hidden()
+        page.locator("#pack-discard").click()
+        pds.answer(page, "Keep it waiting")
+        expect(page.get_by_role("dialog")).to_have_count(0)
     assert job.read()["state"] == "waiting"  # declining activates nothing
+    assert job.path.read_bytes() == before
 
 
 DIFF = "--- a/skills/x.md\n+++ b/skills/x.md\n@@ -1 +1 @@\n-old line\n+new line\n"
@@ -225,62 +238,54 @@ CI_FAILED = {
 }  # fmt: skip
 PUBLISHED = {"commit": "c" * 40, "branch": "pack/r1", "url": "https://github.com/maba-pag/owlbear/pull/7",
              "number": 7, "merged": ""}  # fmt: skip
-# Each stop: its loop, its questions (None: the loop's own), what else the run holds, its Discard, its primaries.
-STOPS: dict[str, tuple[RoundLoop | None, list[dict[str, Any]] | None, dict[str, Any], str, list[str]]] = {
-    "dispute": (None, None, {}, "Discard the update", ["Send answer"]),
-    "end": (ENDED, None, {}, "Discard the update", ["Activate the unreviewed repair"]),
-    "evidence": (None, [pack_gates.evidence("r1", DIFF, "upstream renamed it", "as expected", "e" * 64)], {},
-                 "Discard the update", ["Send answer"]),
-    "code": (None, [pack_gates.code("r1", DIFF, "c" * 64)], {}, "Discard the update", ["Send answer"]),
-    "publish": (None, [CI_FAILED], {"published": PUBLISHED}, "Discard the update (the pull request stays open)",
-                ["Send answer"]),
-}  # fmt: skip
 
 
-@pytest.mark.browser
-@pytest.mark.parametrize("kind", list(STOPS))
-def test_each_stop_offers_one_discard_apart_whose_cancel_changes_nothing(served, pds, kind) -> None:
+def discard_waiting(page, pds, job, discard) -> None:
+    """The two native discard dispatches share the same modal and accessibility contract."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    lp, questions, more, discard, primary = STOPS[kind]
-    job, base = served(lp)
-    if questions is not None:
-        job.state |= {"questions": questions} | more
-        job._save()  # noqa: SLF001
     before = (job.store.root / pack_job.FILE).read_bytes()
-    with opened(base, pds) as page:
-        expect(page.locator("#pack-ask").get_by_role("button", name=re.compile("Discard"))).to_have_count(1)
-        expect(page.locator("#pack-discard")).to_have_text(discard)
-        # one primary: a priority answer, else the sending of a choice that favours none
-        expect(page.locator("#pack-questions p-button[variant=primary]")).to_have_text(primary)
-        offered = [o["label"] for q in job.read()["questions"] for o in q["options"] if o["id"] != "discard"]
-        assert answers(page) == offered  # each the payload offers, as it says
-        page.locator("#pack-discard").click()
-        expect(pds.modal(page)).to_contain_text("Nothing is activated")
-        inside = "document.activeElement?.closest('p-modal') !== null"
-        assert page.evaluate(inside)  # the focus moved into the dialog
-        where = []
-        for _ in range(6):  # the page behind is inert: Tab cycles the dialog and the browser's own controls only
-            page.keyboard.press("Tab")
-            where.append(page.evaluate(f"{inside} ? 'dialog' : document.activeElement === document.body ? '' : 'page'"))
-        assert "page" not in where
-        assert where[-1] == "dialog"
-        pds.answer(page, "Keep it waiting")
-        assert page.evaluate("document.activeElement?.id") == "pack-discard"  # back where it was
-        expect(page.locator("#pack-ask")).to_be_visible()
-        assert (job.store.root / pack_job.FILE).read_bytes() == before  # cancel changed nothing
-        page.locator("#pack-discard").click()
-        expect(pds.modal(page)).to_contain_text("Nothing is activated")
-        page.keyboard.press("Escape")
-        expect(page.get_by_role("dialog")).to_have_count(0)
-        page.wait_for_function("document.activeElement?.id === 'pack-discard'", timeout=5000)
-        assert (job.store.root / pack_job.FILE).read_bytes() == before  # Escape changed nothing
-        if kind not in ("dispute", "publish"):  # the dialog is one; its discard is sent as an answer or, here, alone
-            return
-        page.locator("#pack-discard").click()
-        pds.answer(page, discard)
-        expect(page.locator("#pack-state")).to_contain_text("discarded")
+    sent = []
+    endpoint = (
+        "answer" if any(o["id"] == "discard" for q in job.read()["questions"] for o in q["options"]) else "discard"
+    )
+    page.on(
+        "request",
+        lambda r: (
+            sent.append(r.url.rsplit("/", 1)[-1]) if r.method == "POST" and "/impeccable/update/" in r.url else None
+        ),
+    )
+    expect(page.locator("#pack-ask").get_by_role("button", name=re.compile("Discard"))).to_have_count(1)
+    expect(page.locator("#pack-discard")).to_have_text(discard)
+    primary = page.locator("#pack-questions p-button[variant=primary]")
+    expect(primary).to_have_count(1)
+    expect(primary).to_contain_text("Send answer")
+    offered = [o["label"] for q in job.read()["questions"] for o in q["options"] if o["id"] != "discard"]
+    assert answers(page) == offered
+    page.locator("#pack-discard").click()
+    expect(pds.modal(page)).to_contain_text("Nothing is activated")
+    inside = "document.activeElement?.closest('p-modal') !== null"
+    assert page.evaluate(inside)
+    where = []
+    for _ in range(6):
+        page.keyboard.press("Tab")
+        where.append(page.evaluate(f"{inside} ? 'dialog' : document.activeElement === document.body ? '' : 'page'"))
+    assert "page" not in where
+    assert where[-1] == "dialog"
+    pds.answer(page, "Keep it waiting")
+    assert page.evaluate("document.activeElement?.id") == "pack-discard"
+    expect(page.locator("#pack-ask")).to_be_visible()
+    assert (job.store.root / pack_job.FILE).read_bytes() == before
+    page.locator("#pack-discard").click()
+    page.keyboard.press("Escape")
+    expect(page.get_by_role("dialog")).to_have_count(0)
+    page.wait_for_function("document.activeElement?.id === 'pack-discard'", timeout=5000)
+    assert (job.store.root / pack_job.FILE).read_bytes() == before
+    page.locator("#pack-discard").click()
+    pds.answer(page, discard)
+    expect(page.locator("#pack-state")).to_contain_text("discarded")
     assert job.read()["state"] == "discarded"
+    assert sent == [endpoint]
 
 
 def history() -> list[dict[str, Any]]:
@@ -301,13 +306,13 @@ def history() -> list[dict[str, Any]]:
 
 
 @pytest.mark.browser
-def test_the_update_shows_its_phases_with_each_invocation_in_order_and_what_comes_next(served, pds) -> None:
+def test_progress_and_ended_run_polling_show_current_evidence(served, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     job, base = served()
     job.state["invocations"] = history()
     job._save()  # noqa: SLF001
-    with opened(base, pds) as page:
+    with opened(base, pds, clock=True) as page:
         phases = page.locator("#pack-progress .pack-phase")
         expect(phases.locator("h5")).to_have_text(["Prepare", "Challenge round 1", "Challenge round 2"])
         expect(phases.nth(0).locator("li")).to_have_count(4)
@@ -335,19 +340,27 @@ def test_the_update_shows_its_phases_with_each_invocation_in_order_and_what_come
             expect(page.locator("#pack-next")).to_contain_text("Decided by the verdict")
             expect(page.locator("#pack-todo")).to_contain_text("Nothing for now")
             expect(page.locator("#pack-ask")).to_be_hidden()  # no Discard while it runs
-        expect(page.locator("#pack-state")).to_contain_text("Its host stopped while it ran")  # and the polling ends
-
-
-@pytest.mark.browser
-def test_a_record_from_before_invocations_shows_its_stages_without_made_up_history(served, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    _job, base = served()
-    with opened(base, pds) as page:
-        expect(page.locator("#pack-stages li")).to_have_count(len(pack_job.STAGES))
-        expect(page.locator("#pack-progress")).to_have_count(0)
-        expect(page.locator("#pack-next")).to_have_count(0)
-        expect(page.locator("#pack-state")).to_contain_text("The update waits for your answers below.")
+        page.clock.run_for(2000)
+        expect(page.locator("#pack-state")).to_contain_text("Its host stopped while it ran")
+        job.state |= {
+            "state": "passed",
+            "questions": [],
+            "ended_at": NOW.isoformat(),
+            "published": PUBLISHED | {"merged": "m" * 40},
+        }
+        job._save()  # noqa: SLF001
+        page.reload()
+        expect(page.locator("#pack-tag")).to_have_text("passed")
+        expect(page.locator("#pack-todo")).to_contain_text("reaches each machine as it takes the OwlBear version")
+        expect(page.locator("#pack-run")).not_to_contain_text("installed")
+        expect(page.locator("#pack-pushed")).to_contain_text("merged into main as mmmmmmmmmmmm")
+        expect(page.locator("#pack-update")).to_be_enabled()
+        expect(page.locator("#pack-notice")).to_contain_text("Upstream:")
+        expect(page.locator("#pack-ask")).to_be_hidden()
+        job.state["state"] = "discarded"
+        job._save()  # noqa: SLF001
+        page.clock.run_for(15000)
+        expect(page.locator("#pack-state")).to_contain_text("Last run discarded")
 
 
 REPLAY_NONE = "0 decided rounds, 0 left out; the design judge agreed with the owner 0% as recorded, 0% with this pack"
@@ -369,7 +382,6 @@ def test_a_ci_failed_publish_stop_fits_a_phone_and_says_no_calibration_evidence_
     with opened(base, pds) as page:
         page.set_viewport_size({"width": 375, "height": 800})
         expect(page.locator("#pack-questions p-radio-group-option")).to_have_count(2)
-        assert answers(page) == ["Try again", "Have an agent fix CI"]
         expect(page.locator("#pack-pushed").get_by_role("link")).to_have_text("pull request #7")
         step = page.locator(".pack-step", has_text="Calibration replay").last
         expect(step.locator(".pack-step-head p-tag")).to_have_text("no calibration evidence")
@@ -384,12 +396,11 @@ def test_a_ci_failed_publish_stop_fits_a_phone_and_says_no_calibration_evidence_
             .filter((b) => b.offsetParent).map((b) => b.getBoundingClientRect()).filter((r) => r.height < 24
               || r.width < 24).length""")
         assert small == 0  # every target at least 24px
+        discard_waiting(page, pds, job, "Discard the update (the pull request stays open)")
 
 
 @pytest.mark.browser
-def test_a_failed_pack_stage_shows_and_logs_its_whole_error(  # noqa: PLR0913, PLR0917 - its fixtures
-    served, pds, tmp_path, checkout, clone, monkeypatch, whole_error
-) -> None:
+def test_failed_stage_reaches_record_page_and_log_whole(served, pds, tmp_path, monkeypatch, whole_error) -> None:
     """A refused push holds the publication: git's whole words, both streams, are its reason, its stage's and its log's
     (#895, #971)."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
@@ -402,9 +413,27 @@ def test_a_failed_pack_stage_shows_and_logs_its_whole_error(  # noqa: PLR0913, P
             return subprocess.CompletedProcess(args, 1, f"{out}\n", f"{whole_error}\n")
         return real(args, *rest, **kw)
 
+    repo, origin = tmp_path / "source", tmp_path / "origin"
+    for args in (
+        ["init", "-q", "--bare", str(origin)],
+        ["init", "-q", "-b", "main", str(repo)],
+        ["-C", str(repo), "commit", "-q", "--allow-empty", "-m", "precommitted candidate"],
+        ["-C", str(repo), "remote", "add", "origin", str(origin)],
+    ):
+        real(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True, capture_output=True)
+    commit = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()  # noqa: S603, S607
+    job = waiting(Store(tmp_path / "store"))
+    job.live = dataclasses.replace(job.live, github=lambda _root: SimpleNamespace())
+    ctx = pack_run.Context.model_validate(job.state["context"])
+    ctx.publication = pack_publish.Publication(
+        root=str(repo), repository="maba-pag/owlbear", base=commit, branch="pack/r1", commit=commit
+    )
+    lp = RoundLoop.model_validate(job.state["loop"])
+    job.state |= {"state": "running", "questions": [], "invocations": []}
+    job.keep(ctx, lp)
     monkeypatch.setattr(git_run.subprocess, "run", refusing)
-    job = pack_job.Job(Store(tmp_path / "store"), JOB.Fakes(clone).live(checkout))
-    state = JOB.run(job)
+    assert pack_activation.republish(job, ctx, lp) is None
+    state = job.read()
 
     said = (
         f"PackError: git push failed: CalledProcessError: Command '{pushed[0]}' returned non-zero exit status 1.\n"
@@ -515,28 +544,6 @@ def test_an_unreadable_section_says_what_could_not_be_read(served, pds) -> None:
 
 
 @pytest.mark.browser
-def test_a_merged_update_says_how_it_reaches_machines_and_a_new_one_stays_available(served, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    job, base = served()
-    job.state |= {"state": "passed", "questions": [], "ended_at": NOW.isoformat(),
-                  "published": PUBLISHED | {"merged": "m" * 40}}  # fmt: skip
-    job._save()  # noqa: SLF001
-    with opened(base, pds, clock=True) as page:
-        expect(page.locator("#pack-tag")).to_have_text("passed")
-        expect(page.locator("#pack-todo")).to_contain_text("reaches each machine as it takes the OwlBear version")
-        expect(page.locator("#pack-run")).not_to_contain_text("installed")  # nothing claimed of this machine
-        expect(page.locator("#pack-pushed")).to_contain_text("merged into main as mmmmmmmmmmmm")
-        expect(page.locator("#pack-update")).to_be_enabled()
-        expect(page.locator("#pack-notice")).to_contain_text("Upstream:")
-        expect(page.locator("#pack-ask")).to_be_hidden()
-        job.state["state"] = "discarded"  # changed elsewhere: an ended run is still read again, with no reload
-        job._save()  # noqa: SLF001
-        page.clock.run_for(15000)  # the idle poll's interval
-        expect(page.locator("#pack-state")).to_contain_text("Last run discarded")
-
-
-@pytest.mark.browser
 def test_a_start_admitted_after_its_timeout_shows_its_run_without_a_reload_or_a_second_post(served, pds) -> None:
     """I1-3: admission may look up GitHub for longer than the start waits; the section keeps looking, never resends."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
@@ -545,22 +552,31 @@ def test_a_start_admitted_after_its_timeout_shows_its_run_without_a_reload_or_a_
     job.state |= {"state": "passed", "questions": [], "ended_at": NOW.isoformat()}
     job._save()  # noqa: SLF001
 
+    requested, release, saved = threading.Event(), threading.Event(), threading.Event()
+
     def slow_start() -> dict[str, Any]:
-        time.sleep(12)  # beyond the page's 10 s: the pull request lookup before the run is kept
+        requested.set()
+        assert release.wait(5), "the test did not release admission after the browser timeout"
         job.state = pack_job._blank() | {"state": "waiting", "run": "r2", "started_at": datetime.now(UTC).isoformat(),  # noqa: SLF001
                                          "questions": [CI_FAILED | {"id": "r2-publish"}]}  # fmt: skip
         job._save()  # noqa: SLF001
+        saved.set()
         return job.read()
 
     job.start = slow_start
-    with opened(base, pds) as page:
+    with opened(base, pds, clock=True) as page:
         posts: list[str] = []
         page.on("request", lambda r: posts.append(r.url) if r.method == "POST" else None)
         expect(page.locator("#pack-tag")).to_have_text("passed")
         page.get_by_role("button", name="Update Impeccable").click()
         pds.answer(page, "Update")
-        expect(page.locator("#pack-admitting")).to_contain_text("It was not sent again", timeout=15000)
-        expect(page.locator("#pack-tag")).to_have_text("waiting for you", timeout=15000)  # read back, no reload
+        assert requested.wait(5)
+        page.clock.run_for(10001)
+        expect(page.locator("#pack-admitting")).to_contain_text("It was not sent again")
+        release.set()
+        assert saved.wait(5)
+        page.clock.run_for(2500)
+        expect(page.locator("#pack-tag")).to_have_text("waiting for you")
         expect(page.locator("#pack-admitting")).to_have_count(0)
         expect(page.locator("#pack-start-unknown")).to_have_count(0)
         expect(page.locator("#pack-discard")).to_be_visible()

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from owlbear_delivery_next.change_contracts import preparation, tools
+from owlbear_delivery_next.change_contracts import pick_tools, preparation, tools
 from owlbear_delivery_next.change_contracts.models import (
     Change,
     Environment,
@@ -26,8 +26,8 @@ from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT, Layer, resolve
-from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import prepare
+from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
+from owlbear_delivery_next.workflow_steps import prepare, worker_questions
 
 TOOL = """import os, pathlib, sys
 act, snap, db = sys.argv[1], os.environ.get("OWLBEAR_SNAPSHOT", ""), os.environ.get("TEST_DB", "")
@@ -498,14 +498,262 @@ def test_a_setup_file_added_then_deleted_leaves_an_empty_patch(env):
     )
 
 
-def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env):
+def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env, monkeypatch):
     repo, store, _log, tmp = env
     c, s = change(repo, "pc1"), settings(option(tmp))
-    ctx = prepare.context(store, c, s, repo)
-    (repo / "fixtures" / "users.json").write_text("edited\n")
-    asked = loop.StepResult(exit=Exit.ASK)
-    assert prepare.chosen(store, Lock("c1"), c, repo, recipe(), ctx, asked) is asked
+    c.env, c.plan = None, Plan(tasks=[Task(id="t1", title="one", scope=["src"])])
+    c.checks = [PersonCheck(id="pc1", steps=["open the page"])]
+    store.write(Lock("c1"), c)
+    monkeypatch.setattr(store, "settings", lambda: s)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)
+
+    async def preparer(cfg):
+        (repo / "fixtures" / "users.json").write_text("edited\n")
+        return Run(
+            cfg.session_id,
+            "ask",
+            tools.AskQuestion(
+                question="Pause or abandon?",
+                why="Choose the next move.",
+                options=[
+                    {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
+                    {"label": "Abandon", "effect": "Abandon this Change.", "action": "abandon"},
+                ],
+            ),
+            termination=Termination(confirmed=True),
+            usage={"credits": 1},
+        )
+
+    calls = []
+
+    def judge(*_args, keep):
+        assert prepare.edits(repo) == []
+        calls.append(True)
+        done = Run(
+            "admission",
+            "result",
+            pick_tools.QuestionJudgment(
+                subject="product",
+                plain=True,
+                why="The owner chooses what this Change delivers.",
+                options=[
+                    {
+                        "index": i,
+                        "executable": True,
+                        "why": "Supported move.",
+                        "check_related": False,
+                        "recommends": False,
+                    }
+                    for i in range(2)
+                ],
+            ),
+            termination=Termination(confirmed=True),
+            usage={"credits": 2},
+        )
+        keep([done])
+        return done
+
+    real_write, real_discard = Store.write, prepare.discard
+
+    def discard(*args):
+        kept = store.read("c1")
+        assert kept.pending_question is not None
+        assert (kept.pending_question.inputs, kept.spend.credits) == ("", 1)
+        return real_discard(*args)
+
+    def interrupted(self, key, final):
+        if final.questions:
+            msg = "interrupted admission settlement"
+            raise StoreError(msg)
+        return real_write(self, key, final)
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", preparer)
+    monkeypatch.setattr(worker_questions, "session", judge)
+    monkeypatch.setattr(prepare, "discard", discard)
+    monkeypatch.setattr(Store, "write", interrupted)
+    with pytest.raises(StoreError, match="interrupted admission settlement"):
+        runner._agent(store, Lock("c1"), store.read("c1"), repo)  # noqa: SLF001
+    kept = store.read("c1")
+    assert not prepare.ran(store, Lock("c1"), kept, repo, runnable=True)
+    monkeypatch.setattr(Store, "write", real_write)
+    runner._agent(store, Lock("c1"), kept, repo)  # noqa: SLF001
     assert (prepare.edits(repo), prepare.read(store, "c1", "pc1")) == ([], None)
+    assert (len(calls), len(store.read("c1").questions), store.read("c1").spend.credits) == (1, 1, 3)
+    c.slug = "c2"
+    store.write(Lock("c2"), c)
+
+    def broken(*_args):
+        raise subprocess.CalledProcessError(128, "git discard", stderr=b"index.lock exists")
+
+    monkeypatch.setattr(prepare, "discard", broken)
+    runner._agent(store, Lock("c2"), store.read("c2"), repo)  # noqa: SLF001
+    failed = store.read("c2")
+    assert (failed.outcome.exit, failed.questions, failed.spend.credits, len(calls)) == (Exit.RETRY, [], 1, 1)
+    assert failed.pending_question is None
+    assert failed.outcome.reason == (
+        "the preparer's cleanup failed: CalledProcessError: Command 'git discard' returned non-zero exit status 128.\n"
+        "index.lock exists"
+    )
+    monkeypatch.setattr(prepare, "discard", real_discard)
+    prepare.stray(store, "c2", lambda _e: None)
+    assert prepare.edits(repo) == []
+
+
+def test_a_returned_reviewer_question_does_not_rebuild_its_message_before_checkpointing(env, monkeypatch):
+    repo, store, _log, tmp = env
+    c, s = change(repo), settings(option(tmp))
+    c.env = None
+    c.step = Step(kind=StepKind.REVIEW, task="t1")
+    c.names.target = git(repo, "branch", "--show-current").strip()
+    c.plan = Plan(tasks=[Task(id="t1", title="one", scope=["src"])])
+    store.write(Lock("c1"), c)
+    monkeypatch.setattr(store, "settings", lambda: s)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)
+    returned, authored = [], []
+    compose = runner.step_input.session
+
+    def parts(*args):
+        if returned:
+            raise subprocess.CalledProcessError(-9, ["git", "rev-parse", "HEAD"])
+        return compose(*args)
+
+    def reviewer(_store, _lock, _change, path, config):
+        cfg = config(path)
+        authored.append(cfg.session_id)
+        returned.append(True)
+        return Run(
+            cfg.session_id,
+            "ask",
+            tools.AskQuestion(
+                question="Pause or abandon?",
+                why="Choose the next move.",
+                options=[
+                    {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
+                    {"label": "Abandon", "effect": "Abandon this Change.", "action": "abandon"},
+                ],
+            ),
+            checks=cfg.checks,
+            termination=Termination(confirmed=True),
+            usage={"credits": 1},
+        )
+
+    def judge(_store, _lock, private, _proposed, *, keep):
+        assert private.pending_question is not None
+        assert private.pending_question.checks == []
+        assert store.read("c1").pending_question.run.session_id == authored[0]
+        assert store.read("c1").spend.credits == 1
+        done = Run(
+            "admission",
+            "result",
+            pick_tools.QuestionJudgment(
+                subject="product",
+                plain=True,
+                why="The owner chooses what this Change delivers.",
+                options=[
+                    {
+                        "index": i,
+                        "executable": True,
+                        "why": "Supported move.",
+                        "check_related": False,
+                        "recommends": False,
+                    }
+                    for i in range(2)
+                ],
+            ),
+            termination=Termination(confirmed=True),
+            usage={"credits": 2},
+        )
+        keep([done])
+        return done
+
+    monkeypatch.setattr(runner.step_input, "session", parts)
+    monkeypatch.setattr(runner, "_kept", reviewer)
+    monkeypatch.setattr(worker_questions, "session", judge)
+    runner._agent(store, Lock("c1"), store.read("c1"), repo)  # noqa: SLF001
+    done = store.read("c1")
+    assert done.outcome.exit == Exit.ASK
+    assert done.spend.credits == 3
+    assert done.pending_question is None
+    assert len(authored) == 1
+
+
+def test_a_returned_recipe_is_accounted_before_preparer_cleanup(env, monkeypatch):
+    repo, store, _log, tmp = env
+    c, s = change(repo, "pc1"), settings(option(tmp))
+    c.env, c.plan = None, Plan(tasks=[Task(id="t1", title="one", scope=["src"])])
+    c.checks = [PersonCheck(id="pc1", steps=["open the page"])]
+    store.write(Lock("c1"), c)
+    monkeypatch.setattr(store, "settings", lambda: s)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)
+    returned = []
+
+    async def preparer(cfg):
+        returned.append(cfg.session_id)
+        return Run(
+            cfg.session_id,
+            "result",
+            recipe(),
+            termination=Termination(confirmed=True),
+            usage={"credits": 1},
+            tool_calls={"submit_result": {"calls": 1}},
+        )
+
+    real_end = prepare.preparer.end
+
+    def interrupted(*_args):
+        msg = "interrupted preparer cleanup"
+        raise KeyboardInterrupt(msg)
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", preparer)
+    monkeypatch.setattr(prepare.preparer, "end", interrupted)
+    with pytest.raises(KeyboardInterrupt, match="interrupted preparer cleanup"):
+        runner._agent(store, Lock("c1"), store.read("c1"), repo)  # noqa: SLF001
+    kept = store.read("c1")
+    assert (kept.spend.credits, kept.tool_use.tools["submit_result"].calls) == (1, 1)
+    monkeypatch.setattr(prepare.preparer, "end", real_end)
+    runner._agent(store, Lock("c1"), kept, repo)  # noqa: SLF001
+    done = store.read("c1")
+    assert (len(returned), done.spend.credits, done.tool_use.tools["submit_result"].calls) == (2, 2, 2)
+    assert done.env is not None
+
+
+def test_cleanup_cannot_replace_an_unverified_preparer_stop(env, monkeypatch):
+    repo, store, _log, tmp = env
+    c, s = change(repo, "pc1"), settings(option(tmp))
+    c.env, c.plan = None, Plan(tasks=[Task(id="t1", title="one", scope=["src"])])
+    c.checks = [PersonCheck(id="pc1", steps=["open the page"])]
+    monkeypatch.setattr(store, "settings", lambda: s)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)
+
+    async def preparer(cfg):
+        (repo / "fixtures" / "users.json").write_text("edited\n")
+        commit(repo, "fixtures/users.json")
+        return Run(cfg.session_id, "error", termination=Termination(confirmed=False, survivors=(17,)),
+                   usage={"credits": 1})  # fmt: skip
+
+    def broken(*_args):
+        raise subprocess.CalledProcessError(128, "git discard", stderr=b"index.lock exists")
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", preparer)
+    real_discard = prepare.discard
+    monkeypatch.setattr(prepare, "discard", broken)
+    store.write(Lock("c1"), c)
+    runner._agent(store, Lock("c1"), store.read("c1"), repo)  # noqa: SLF001
+    stopped = store.read("c1")
+    assert (stopped.outcome.exit, stopped.stop.action, stopped.spend.credits) == (Exit.STOP, "End processes 17", 1)
+    assert stopped.stop.resume == "No process of this step remains"
+    assert "termination unverified: processes 17 still present" in stopped.outcome.reason
+    assert "index.lock exists" in stopped.outcome.reason == stopped.stop.reason
+    assert any(e.get("event") == "preparer-cleanup-failed" for e in store.events("c1"))
+
+    monkeypatch.setattr(prepare, "discard", real_discard)
+    prepare.stray(store, "c1", lambda _e: None)
+    c.slug = "c2"
+    store.write(Lock("c2"), c)
+    runner._agent(store, Lock("c2"), store.read("c2"), repo)  # noqa: SLF001
+    stopped = store.read("c2")
+    assert (stopped.outcome.exit, stopped.stop.action, stopped.spend.credits) == (Exit.STOP, "End processes 17", 1)
+    assert prepare.edits(repo) == []
 
 
 def test_a_patch_that_cannot_be_discarded_stops_the_change(env, monkeypatch):

@@ -251,18 +251,31 @@ def test_a_look_still_running_at_the_steps_end_is_recorded_skipped(monkeypatch) 
         ("the step ended while the look ran", 0.0, False)]  # fmt: skip  # its spend is unknown, never estimated
 
 
-def test_a_look_past_its_time_is_skipped_and_a_wrong_answer_fails_never_silent(monkeypatch) -> None:
+def test_a_look_past_its_time_is_skipped_and_a_wrong_answer_fails_never_silent(monkeypatch, whole_error) -> None:
     monkeypatch.setattr(spotter, "LOOK", 0.05)
+
+    async def failed(_card: object, _ctx: object, _meter: object) -> str:
+        exc = RuntimeError(whole_error)
+        exc.add_note("the runtime said more after the error")
+        raise exc
 
     async def main() -> None:
         for answer, wait in (('{"category": "none"}', 1.0), ("I think it is fine.", 0.0)):
             spot = spotter.Spotter(ctx(), lambda: "s-1", judge(answer, wait=wait))
             spot.handed_off("c", {})
             await asyncio.gather(*spot.tasks)
+        spot = spotter.Spotter(ctx(), lambda: "s-1", failed)
+        spot.handed_off("c", {})
+        await spot.drain()
 
     asyncio.run(main())
     assert spotter.WORK.settled(5)
-    assert [(r["category"], r["action"], r["skipped"][:4]) for r in records()] == [("", "", "time"), ("failed", "", "")]
+    kept = records()
+    assert [(r["category"], r["action"], r["skipped"][:4]) for r in kept[:2]] == [("", "", "time"), ("failed", "", "")]
+    assert (kept[2]["category"], kept[2]["skipped"]) == (
+        "failed",
+        f"RuntimeError: {whole_error}\nthe runtime said more after the error",
+    )
 
 
 def test_a_freeze_read_that_raises_says_so_and_leaks_no_admission(monkeypatch) -> None:
@@ -1417,6 +1430,10 @@ def test_a_state_change_finding_asks_the_conflict_check_after_acting_and_its_ans
 
     async def dispatch(_record: spotter.Record, act: acts.Act) -> None:
         order.append(f"act {act.act}")
+        if fails:
+            exc = RuntimeError(whole_error)
+            exc.add_note("the runtime refused the note")
+            raise exc
 
     def conflicts(change: str) -> str:
         order.append(f"check {change}")
@@ -1440,6 +1457,9 @@ def test_a_state_change_finding_asks_the_conflict_check_after_acting_and_its_ans
     assert order == ["act stop-and-ask", "check rm -rf ~/backups"]
     [act] = acts.acts(spotter.root()).values()
     failed = {"failed": f"RuntimeError: {whole_error}\nthe decisions lookup ended early"}
+    assert (act.delivery, act.error) == (
+        ("failed", f"RuntimeError: {whole_error}\nthe runtime refused the note") if fails else ("pending", "")
+    )
     assert json.loads(act.conflict) == (failed if fails else {"decisions": [{"id": "D-1", "conflict": "none"}]})
     assert act.harm
 

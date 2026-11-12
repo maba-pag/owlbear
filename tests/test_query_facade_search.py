@@ -134,13 +134,12 @@ def _make_claims(
 def _make_document(
     document_id: str = "doc-1",
     title: str = "Test Document",
-    uri: str | None = None,
 ) -> ContentDocument:
     return ContentDocument(
         document_id=document_id,
         source_id="src-1",
         title=title,
-        uri=uri,
+        uri=None,
         content_hash="abc123",
         ingested_at=_NOW,
     )
@@ -250,27 +249,6 @@ class TestQueryFacadeSearch:
     # --- AC2: Graph expansion with include_graph=True ---
 
     @pytest.mark.asyncio
-    async def test_graph_expansion_calls_claims_for_each_chunk(
-        self,
-        facade: QueryFacade,
-        mock_content: MagicMock,
-        mock_graph: MagicMock,
-    ) -> None:
-        """AC2: claims_for_chunk is called with each chunk.id from search results."""
-        chunk_a = _make_chunk(chunk_id="chunk-a")
-        chunk_b = _make_chunk(chunk_id="chunk-b")
-        mock_content.search.return_value = (
-            _make_search_result(chunk_a),
-            _make_search_result(chunk_b),
-        )
-        mock_graph.claims_for_chunk.return_value = _make_claims("x")
-        request = QueryRequest(text="query", include_graph=True)
-        await facade.search(request)
-        chunk_ids_called = {c.args[0] for c in mock_graph.claims_for_chunk.call_args_list}
-        assert "chunk-a" in chunk_ids_called
-        assert "chunk-b" in chunk_ids_called
-
-    @pytest.mark.asyncio
     async def test_graph_expansion_traverses_with_correct_max_hops(
         self,
         facade: QueryFacade,
@@ -306,27 +284,6 @@ class TestQueryFacadeSearch:
         await facade.search(request)
         traversal_query: TraversalQuery = mock_graph.traverse.call_args[0][0]
         assert traversal_query.relation_types == rel_types
-
-    @pytest.mark.asyncio
-    async def test_graph_expansion_deduplicates_entity_seeds(
-        self,
-        facade: QueryFacade,
-        mock_content: MagicMock,
-        mock_graph: MagicMock,
-    ) -> None:
-        """AC2: same entity_id appearing in multiple chunks is traversed only once."""
-        chunk_a = _make_chunk(chunk_id="chunk-a")
-        chunk_b = _make_chunk(chunk_id="chunk-b")
-        mock_content.search.return_value = (
-            _make_search_result(chunk_a),
-            _make_search_result(chunk_b),
-        )
-        # both chunks claim the same entity
-        mock_graph.claims_for_chunk.side_effect = lambda cid: _make_claims(cid, entity_ids=("e1",))
-        mock_graph.traverse.return_value = _make_traversal_result(entities=[_make_entity("e1")])
-        request = QueryRequest(text="query", include_graph=True)
-        await facade.search(request)
-        assert mock_graph.traverse.call_count == 1
 
     @pytest.mark.asyncio
     async def test_graph_expansion_skips_lookup_error_seeds(
@@ -663,6 +620,9 @@ class TestQueryFacadeSearch:
         mock_graph.traverse.side_effect = lambda q: _make_traversal_result(entities=[_make_entity(q.entity_id)])
         request = QueryRequest(text="query", include_graph=True)
         await facade.search(request)
+        chunk_ids_called = {c.args[0] for c in mock_graph.claims_for_chunk.call_args_list}
+        assert "chunk-a" in chunk_ids_called
+        assert "chunk-b" in chunk_ids_called
         traversed_seeds = {c.args[0].entity_id for c in mock_graph.traverse.call_args_list}
         assert traversed_seeds == {"e1", "e2", "e3"}
         assert mock_graph.traverse.call_count == 3

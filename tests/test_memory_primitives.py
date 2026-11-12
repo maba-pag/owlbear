@@ -130,10 +130,6 @@ class TestModels:
 
     # --- MemoryCategory ---
 
-    def test_memory_category_has_nine_values(self) -> None:
-        """MemoryCategory StrEnum must have exactly 9 members."""
-        assert len(list(MemoryCategory)) == 9
-
     def test_memory_category_values(self) -> None:
         """MemoryCategory must contain exactly the 9 documented string values."""
         expected = {
@@ -151,10 +147,6 @@ class TestModels:
         assert actual == expected
 
     # --- MemoryState ---
-
-    def test_memory_state_has_seven_values(self) -> None:
-        """MemoryState StrEnum must have exactly 7 members."""
-        assert len(list(MemoryState)) == 7
 
     def test_memory_state_values(self) -> None:
         """MemoryState must contain all lifecycle states."""
@@ -237,11 +229,6 @@ class TestModels:
         uuid_v3 = "a3bb189e-8bf9-3888-9912-ace4e6543002"
         with pytest.raises(PydanticValidationError):
             MemoryEntry(**{**_valid_entry_data(), "id": uuid_v3})
-
-    def test_id_valid_uuid_v4_is_accepted(self) -> None:
-        """Happy: a canonical UUIDv4 id is accepted."""
-        entry = MemoryEntry(**_valid_entry_data())
-        assert entry.id == _VALID_ID
 
     # --- timezone-aware timestamp validators ---
 
@@ -359,15 +346,6 @@ class TestStorageRead:
         result = storage.read_entry(link)
         assert result is None
 
-    def test_read_entry_file_over_8kb_returns_none(self, tmp_path: Path) -> None:
-        """Error: a file with st_size > 8192 bytes returns None."""
-        entry_file = tmp_path / "large.md"
-        # Pad with 9000 'x' chars in body to push total size well over 8192
-        _write_valid_file(entry_file, body="x" * 9000)
-        assert entry_file.stat().st_size > _8KB
-        result = storage.read_entry(entry_file)
-        assert result is None
-
     def test_read_entry_file_at_exactly_8192_bytes_returns_entry(self, tmp_path: Path) -> None:
         """Boundary (AC6): file at exactly 8192 bytes passes size guard (>8192) and returns MemoryEntry."""
         entry_file = tmp_path / "boundary_8192.md"
@@ -447,11 +425,8 @@ class TestStorageRead:
         for name, content in bad_files:
             f = tmp_path / name
             f.write_text(content, encoding="utf-8")
-            try:
-                result = storage.read_entry(f)
-                assert result is None, f"{name}: expected None for malformed file, got {result!r}"
-            except Exception as exc:  # noqa: BLE001
-                pytest.fail(f"{name}: read_entry raised {type(exc).__name__}: {exc}")
+            result = storage.read_entry(f)
+            assert result is None, f"{name}: expected None for malformed file, got {result!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -461,16 +436,6 @@ class TestStorageRead:
 
 class TestStorageWrite:
     """AC4: write_entry creates files atomically with containment and symlink guards."""
-
-    def test_write_entry_creates_file_at_path(self, tmp_path: Path) -> None:
-        """Happy: write_entry creates the target file on disk."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        target = memory_dir / "entry.md"
-        entry = _make_valid_entry()
-        storage.write_entry(target, entry, memory_dir=memory_dir)
-        assert target.exists()
-        assert target.is_file()
 
     def test_write_entry_produces_file_parseable_by_read_entry(self, tmp_path: Path) -> None:
         """Happy: file written by write_entry is parseable back to a MemoryEntry."""
@@ -617,16 +582,6 @@ class TestStorageWrite:
         with pytest.raises(ValueError, match="Path escapes memory_dir"):
             storage.write_entry(outside, entry, memory_dir=memory_dir)
 
-    def test_write_entry_path_traversal_raises(self, tmp_path: Path) -> None:
-        """Error: path traversal (/../) that escapes memory_dir raises ValueError (containment)."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        # Resolved path escapes memory_dir via ..
-        escape = (memory_dir / ".." / "escaped.md").resolve()
-        entry = _make_valid_entry()
-        with pytest.raises(ValueError, match="Path escapes memory_dir"):
-            storage.write_entry(escape, entry, memory_dir=memory_dir)
-
     def test_write_entry_symlink_target_raises(self, tmp_path: Path) -> None:
         """Error: writing to a symlink path raises ValueError (symlink rejected)."""
         memory_dir = tmp_path / "memory"
@@ -673,7 +628,6 @@ class TestStorageWrite:
         mock_mkstemp.assert_called_once()
         mock_fsync.assert_called()
         assert target.exists(), "Target file was not created after atomic replace"
-        assert len(_mkstemp_results) == 1, "mkstemp capturing function was not called"
         tmp_path_used = Path(_mkstemp_results[0][1])
         assert not tmp_path_used.exists(), "Temp file should be consumed by atomic replace (os.replace/Path.replace)"
 

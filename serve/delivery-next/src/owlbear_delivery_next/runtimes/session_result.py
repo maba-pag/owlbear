@@ -6,16 +6,25 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 
-from owlbear_delivery_next.change_contracts import amend_tools, curation_tools, dispute_tools, permissions, tools
+from owlbear_delivery_next.change_contracts import (
+    amend_tools,
+    curation_tools,
+    dispute_tools,
+    permissions,
+    pick_tools,
+    tools,
+)
 from owlbear_delivery_next.change_contracts.failures import (
     QUOTA,
     READ_ONLY,
     READ_ONLY_UNREAD,
     RO_WORKTREE,
+    SETUP,
     UNREAD,
     WRONG_MODEL,
     cause_key,
     quota,
+    signature,
     transient,
 )
 from owlbear_delivery_next.change_contracts.models import (
@@ -58,6 +67,7 @@ type Ending = Literal[
 ]
 type ModelCheck = Literal["verified", "mismatch", "unknown"]
 PROVEN: frozenset[str] = frozenset({"result", "ask", "premise", "missing-tool"})  # endings whose model must be proven
+PLAN_TARGET = (StepKind.PLAN, "target")  # a planner finding the target lacks something: setup, not the brief
 WRONG_MODEL_WAIT = timedelta(minutes=5)  # owner decision 2026-10-15: one rerun of a wrong model, after a fixed wait
 
 
@@ -73,6 +83,7 @@ class Run:
     classified: str = ""  # what retries classify and sign when ``detail`` says more: the error as it read before #971
     head: str | None = None
     changed: list[str] = field(default_factory=list)  # the paths the commits change at ``head``, as Delivery read them
+    checks: tuple[str, ...] = ()  # the session's resolved check commands: a report naming one is about a check (#1065)
     runtime_pid: int | None = None
     pids: dict[int, float | None] = field(default_factory=dict)
     usage: dict[str, Any] = field(default_factory=dict)
@@ -261,6 +272,12 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
             return StepResult(exit=Exit.DONE, reason=f"{len(p.verdicts)} verdict(s), {p.kept} test(s) kept")
         case "result" if isinstance(p, curation_tools.TestCurationResult):
             return StepResult(exit=Exit.DONE, reason=p.summary[:200])
+        case "premise" if isinstance(p, tools.WrongPremise) and (p.stage == "setup" or (kind, p.stage) == PLAN_TARGET):
+            said = " ".join(f"{p.reason} ({'; '.join(p.evidence)})".split())
+            subject = f"{SETUP}-{signature(SETUP, str(kind), p.reason)[:8]}"  # one obstruction, not every premise
+            return missing.setup(cause_key(ErrorKind.PROJECT_ENV, kind, subject), said)
+        case "result" if isinstance(p, pick_tools.QuestionJudgment):
+            return StepResult(exit=Exit.DONE, reason="option judgment returned")
         case "premise" | "missing-tool" if kind == StepKind.TESTS:  # a share retries; its plan is fixed (TD-390)
             said = p.reason if isinstance(p, tools.WrongPremise) else run.detail
             said = f"missing {p.tool}: {p.error}" if isinstance(p, tools.MissingTool) else said
@@ -275,9 +292,11 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
             ]
             return StepResult(exit=Exit.DONE, reason=f"{len(tasks)} task(s) planned", plan=Plan(tasks=tasks))
         case "ask" if isinstance(p, tools.AskQuestion):
-            options = [Option(id=f"o{i}", label=f"{o.label}: {o.effect}") for i, o in enumerate(p.options, 1)]
-            question = Question(step=kind, text=f"{p.question} (why: {p.why})", options=options)
-            return StepResult(exit=Exit.ASK, question=question)
+            return StepResult(
+                exit=Exit.RETRY,
+                cause=cause_key(ErrorKind.RESULT, kind, "question-admission"),
+                reason="options: the worker question has not passed engine action admission",
+            )
         case "spotter-ask":  # the Spotter stopped the step to ask the owner (#717)
             return StepResult(exit=Exit.ASK, question=answer_kinds.spotter(kind, run.detail))
         case "premise" if isinstance(p, tools.WrongPremise):

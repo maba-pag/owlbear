@@ -28,11 +28,26 @@ READ_ONLY_UNREAD = "read-only-unread"  # shared Git settings could not be inspec
 RO_WORKTREE = "read-only-worktree"  # the cause subject of a read-only worktree Delivery could not prepare
 _QUOTA = re.compile(r"quota|premium requests?|credits", re.IGNORECASE)
 _CAPACITY = re.compile(r"\b429\b|rate.?limit|capacity|overloaded|quota|credits", re.IGNORECASE)
-_NETWORK = re.compile(
+_LIMITED = re.compile(r"\b429\b|rate.?limit|too many requests|overloaded", re.IGNORECASE)  # in a check's output
+_TEST_ID = re.compile(r"\S+\.py::[^\s\[]+(?:\[[^\]\n]*\])?")  # a test's name and parameters, spaces included
+_COUNTS = re.compile(  # pytest's counting lines: collection and summary
+    r"\bcollected \d+ items?\b|\[\d+ items?\]"
+    r"|^[\s=]*\d+ (?:passed|failed|errors?|skipped|deselected|xfailed|xpassed|warnings?)\b"
+)
+_NETWORK = re.compile(  # any runtime or provider failure text
     r"\b(?:status|http|code|error)\W{0,3}5\d\d\b|\b5\d\d (?:internal|bad gateway|service unavailable|gateway)"
     r"|timed? ?out|timeout|connection|unreachable|temporar|runtime start|network|could not resolve",
     re.IGNORECASE,
 )
+_REMOTE = re.compile(  # a check's output that names the network itself: temporary even there (#1065)
+    r"\b(?:status|http|code|error)\W{0,3}5\d\d\b|\b5\d\d (?:internal|bad gateway|service unavailable|gateway)"
+    r"|connection ?(?:refused|reset|closed|aborted|error|timed? ?out)|(?:host|network) (?:is )?unreachable"
+    r"|network error|could not resolve|name resolution|gaierror|nodename nor servname"
+    r"|\b(?:ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|ENOTFOUND)\b|\b(?:connect|read) timed? ?out",
+    re.IGNORECASE,
+)
+CHECK = "check"  # the subject prefix of a step's own check that cannot finish: setup, never temporary (#1065)
+SETUP = "setup"  # the subject prefix of a worker's premise about something outside the brief and plan (#1065)
 _NOISE = (
     (re.compile(r"(/private)?/(tmp|var/folders)/\S*"), "<tmp>"),
     (re.compile(r"\b[0-9a-f]{7,40}\b"), "<sha>"),
@@ -49,11 +64,17 @@ def signature(kind: str, step: str, message: str) -> str:
     return hashlib.sha256(f"{kind}:{step}:{text.strip()}".encode()).hexdigest()[:16]
 
 
-def transient(text: str) -> ErrorKind | None:
-    """Classify a runtime or provider failure text as capacity, network or neither."""
-    if _CAPACITY.search(text):
+def transient(text: str, *, local: bool = False) -> ErrorKind | None:
+    """Classify a runtime or provider failure text as capacity, network or neither.
+
+    *local* is a step's own check: its timeout or interruption is the check not finishing, so only a diagnostic of the
+    network or a rate limit counts, never a word such as a test's name.
+    """
+    if local:  # a check's own progress (test ids, counts) is no diagnostic; a failure's message is
+        text = "\n".join(_TEST_ID.sub("", line) for line in text.splitlines() if not _COUNTS.search(line))
+    if (_LIMITED if local else _CAPACITY).search(text):
         return ErrorKind.CAPACITY
-    return ErrorKind.NETWORK if _NETWORK.search(text) else None
+    return ErrorKind.NETWORK if (_REMOTE if local else _NETWORK).search(text) else None
 
 
 def quota(text: str) -> bool:

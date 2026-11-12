@@ -99,17 +99,21 @@ class Host2:
 
 @contextmanager
 def _served(machine: Machine) -> Iterator[str]:
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
-    server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning", timeout_keep_alive=60))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    try:
-        yield f"http://127.0.0.1:{sock.getsockname()[1]}"
-    finally:
-        server.should_exit = True
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
+        server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning", timeout_keep_alive=60))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            yield f"http://127.0.0.1:{sock.getsockname()[1]}"
+        finally:
+            server.should_exit = True
+            thread.join(5)
+            assert not thread.is_alive(), "the owned page server did not stop"
 
 
 @pytest.fixture
@@ -286,13 +290,7 @@ def test_maintenance_holds_curation_and_a_test_review_only_where_work_may_not_st
     expect(page.get_by_role("button", name="Review tests")).to_be_enabled(timeout=WAIT)
     expect(page.locator("#tests-blocked")).to_have_count(0)
 
-
-@pytest.mark.browser
-@pytest.mark.usefixtures("data")
-def test_a_folder_refused_for_unset_settings_says_how_many_and_an_unreadable_reason_stays_whole(host) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    page, base, a = host.page, host.base, host.ids["alpha"]
+    # a past run refused while no folder waits now: its reason, not a current block, shows at the next poll
     unreadable = "settings can't be read: state of config is unreadable"
     refused = {"state": "failed", "entries": [], "blocked": "", "unset": [], "unset_reason": ""}
     stub = {"available": True, "queue": [], "folders": [
@@ -301,12 +299,9 @@ def test_a_folder_refused_for_unset_settings_says_how_many_and_an_unreadable_rea
         {"folder": "beta", "reason": unreadable, "reason_unset": 0, **refused},
     ]}  # fmt: skip
     page.route("**/api/next/curation", lambda route: route.fulfill(json=stub))
-    page.goto(f"{base}/#token=t")
-    page.goto(f"{base}/maintenance?project={a}")
-    rows = page.locator("#curation li")
-    expect(rows.nth(0)).to_contain_text(UNSET, timeout=WAIT)  # alpha's refusal, in the pages' words
+    expect(rows.nth(1)).to_contain_text(unreadable, timeout=WAIT)  # beta's stays whole; only the stub says it
+    expect(rows.nth(0)).to_contain_text(UNSET)  # alpha's refusal, in the pages' words
     expect(rows.nth(0)).not_to_contain_text(GAP)
-    expect(rows.nth(1)).to_contain_text(unreadable)  # beta's stays whole
 
 
 @pytest.mark.browser

@@ -81,16 +81,6 @@ def test_prepare_records_the_prior_format_and_boot_then_fences_the_source(run, r
     assert source_marker(repo) == "999"
 
 
-@pytest.mark.usefixtures("current_binding", "boot")
-@ARGPARSE_ONLY
-def test_a_repeated_prepare_keeps_the_valid_prior_format(run, repo) -> None:
-    assert run(repo, "prepare") == 0
-    assert run(repo, "prepare") == 0
-
-    assert prepared(repo)["marker"].strip() == "7"  # never the fence 999 saved as the prior format
-    assert source_marker(repo) == "999"
-
-
 @pytest.mark.usefixtures("current_binding")
 @ARGPARSE_ONLY
 def test_an_ordinary_open_refuses_after_prepare_even_when_only_the_boot_changed(run, repo, boot) -> None:

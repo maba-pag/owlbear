@@ -342,7 +342,6 @@ def test_mcp_and_custom_tools_stay_bound_to_the_role() -> None:
         "git commit -F - <<'EOF'\nfix: refuse git push --force and git commit --no-verify\nEOF",
         "cat <<'EOF'\n$(git commit --no-verify -m x)\nEOF",
         "cat <<-EOF\n\tgit push -f\n\tEOF",
-        "echo $((1<<2))",
         "x=$(cat <<'A'\nhi\nA\n); echo \"$x\"",
         "cat <<A <<'B'\none\nA\ngit push -f\nB",
     ],

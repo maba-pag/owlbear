@@ -280,15 +280,15 @@ def test_every_judge_ends_before_an_error_of_another_goes_on(tmp_path, change_re
     change = Change(slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.CHECK))
 
     async def fake(cfg):
-        if cfg.role == "design-judge":
-            msg = "disk full"
+        if cfg.role == "design-judge":  # journalling its usage found the Store folder replaced by a link
+            msg = "Too many levels of symbolic links"
             raise OSError(msg)
         await asyncio.sleep(0.05)
         ended.append(cfg.session_id)
         return Run(cfg.session_id, termination=Termination(confirmed=True))
 
     monkeypatch.setattr(sessions.sdk_adapter, "run", fake)
-    with pytest.raises(OSError, match="disk full"):
+    with pytest.raises(OSError, match="Too many levels of symbolic links"):
         sessions.judges(
             store,
             Lock("c1"),

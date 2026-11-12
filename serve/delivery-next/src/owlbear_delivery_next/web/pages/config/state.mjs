@@ -48,7 +48,7 @@ export function turns() {
 // the offered models once read.
 const asked = new URLSearchParams(location.search);
 export const state = {
-  loaded: null, saving: false, offered: null, modelsNote: "", error: "", status: "",
+  loaded: null, saving: false, offered: null, modelsNote: "", error: "", layerNotice: "", status: "",
   layer: ["machine", "global"].includes(asked.get("layer")) ? asked.get("layer") : "project",  // as a link names it
   group: "overview",  // the group shown; drafts of every group stay meanwhile
   folder: null,
@@ -79,7 +79,9 @@ export const back = (() => {
 export const page = { arrived: null, target: null };
 
 export function show() {
+  const focused = document.activeElement, label = focused?.getAttribute?.("label");
   render(view(), document.getElementById("page"));
+  if (label && !focused.isConnected) keepFocus(label);
   const target = page.target && document.querySelector(page.target);
   if (target) {
     page.target = null;
@@ -87,22 +89,34 @@ export function show() {
   }
 }
 
-// Focus *target*, or a row's first control, and keep it in view: the menu's dialog puts the focus back on its button as
-// it closes, and the components above it grow as they load, so the focus is put back and the control scrolled to again
-// until both have stayed a few frames, for at most a second, and never after the owner's next key, pointer press or
-// wheel, which moves them himself.
+// A control a render replaced while it held the focus (a select whose words changed with a read or an edit) hands
+// the focus to the control now under its *label*, unless the owner moved it meanwhile.
+function keepFocus(label) {
+  const next = document.querySelector(`[label="${CSS.escape(label)}"]`);
+  Promise.resolve(next?.componentOnReady?.()).then(() => {
+    if (next?.isConnected && document.activeElement === document.body) next.focus({ preventScroll: true });
+  });
+}
+
+// Focus *target*, or a row's first control, and keep it in view. A control's design-system part may still be loading,
+// so this begins once the control has rendered. Then, as the menu's dialog puts the focus back on its button as it
+// closes and the components above it grow as they load, the focus is put back and the control scrolled to again until
+// both have stayed a few frames, for at most a second. The owner's next key, pointer press or wheel, also while the
+// control still loads, ends it: he moves them himself.
 async function reveal(target) {
   const control = target.matches("p-table-row, p-table-cell, div")
     ? target.querySelector(":is([data-key], [id^='machine-'], [id^='global-machine-'], p-select, p-input-text, "
       + "p-segmented-control):not([disabled])")
     : null;  // a setting the shown layer cannot hold is read-only: its row takes the focus
   const into = control ?? target, block = control ? "center" : "start";
-  into.scrollIntoView({ block });
-  let top = into.getBoundingClientRect().top;
   const owner = new AbortController();
   for (const type of ["keydown", "pointerdown", "wheel"]) {
     addEventListener(type, () => owner.abort(), { capture: true, signal: owner.signal });
   }
+  await into.componentOnReady?.();
+  if (owner.signal.aborted) return;
+  into.scrollIntoView({ block });
+  let top = into.getBoundingClientRect().top;
   for (let frame = 0, kept = 0; frame < 60 && kept < 10 && !owner.signal.aborted; frame++) {
     if (into.getBoundingClientRect().top !== top) {
       into.scrollIntoView({ block });

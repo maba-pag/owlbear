@@ -262,31 +262,42 @@ def test_the_page_shows_why_github_could_not_be_reached_and_nothing_is_saved(sto
 
 
 @contextlib.contextmanager
-def backlog_page(store: Store, pds: Any) -> Iterator[Any]:
-    """The Backlog page in a real browser: only the test host and the PDS CDN answer."""
+def backlog_page(store: Store, pds: Any, logged: list[str] | None = None) -> Iterator[Any]:
+    """The Backlog page in a real browser: only the test host and the PDS CDN answer; *logged* gets its console and
+    page errors from before it loads."""
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    app = api.create_app(store, "tok", Host(), launch=Launch(), which=lambda _n: "/bin/code")
-    server = uvicorn.Server(uvicorn.Config(app, log_level="warning"))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            page.goto(f"{base}/backlog#token=tok")
-            yield page
-            browser.close()
-    finally:
-        server.should_exit = True
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        app = api.create_app(store, "tok", Host(), launch=Launch(), which=lambda _n: "/bin/code")
+        server = uvicorn.Server(uvicorn.Config(app, log_level="warning"))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+            with sync_playwright() as pw:
+                try:
+                    browser = pw.chromium.launch()
+                except Error as exc:
+                    pytest.skip(f"no Playwright Chromium: {exc}")
+                page = browser.new_page()
+                if logged is not None:
+                    page.on(
+                        "console",
+                        lambda m: logged.append(f"{m.text} {m.location['url']}") if m.type == "error" else None,
+                    )
+                    page.on("pageerror", lambda e: logged.append(str(e)))
+                pds.only(page, base)
+                page.goto(f"{base}/backlog#token=tok")
+                yield page
+                browser.close()
+        finally:
+            server.should_exit = True
+            thread.join(5)
+            assert not thread.is_alive(), "the owned page server did not stop"
 
 
 @pytest.mark.browser
@@ -307,7 +318,8 @@ def test_a_failed_gh_read_shows_on_the_backlog_page_whole_with_its_command_and_o
         return subprocess.CompletedProcess(argv, 1, f"{body}\n".encode(), f"gh: {whole_error}\n".encode())
 
     monkeypatch.setattr(backlog_issues, "RUNNER", gh)
-    with backlog_page(store, pds) as page:
+    logged: list[str] = []
+    with backlog_page(store, pds, logged) as page:
         expect(page.locator("#error")).to_be_visible()
         shown = page.locator("#error").text_content().strip()  # the template's own indentation around it
 
@@ -319,6 +331,8 @@ def test_a_failed_gh_read_shows_on_the_backlog_page_whole_with_its_command_and_o
         else f"{whole_error}\nCalledProcessError: Command '{argv}' returned non-zero exit status 1.\nstdout:\n{body}"
     )
     assert shown == f"The backlog could not be read from GitHub (acme/owlbear-data): ProviderError: list_issues: {said}"
+    if fails == "nonzero":  # the browser logs the failed read's status, and this project host's missing projects route
+        assert [s for s in logged if "503" not in s and "/api/next/projects" not in s] == []
 
 
 @pytest.mark.browser

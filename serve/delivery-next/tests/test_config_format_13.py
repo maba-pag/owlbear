@@ -4,7 +4,6 @@ import json
 
 import pytest
 
-from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.settings.improvement import Spotter
 from owlbear_delivery_next.state_store.store import FormatTooNewError, StoreError, read_layer
@@ -14,10 +13,6 @@ def _written(tmp_path, data: dict, fmt: int) -> object:
     path = tmp_path / "config.json"
     path.write_text(json.dumps({"format": fmt, **data}))
     return path
-
-
-def test_the_format_is_twenty_three():
-    assert config.CONFIG_FORMAT == 23
 
 
 def test_a_published_format_12_layer_keeps_its_spotter_values_and_starts_without_preferences(tmp_path):

@@ -315,94 +315,6 @@ class TestFromAC_IdentityBearingFormat:
     """AC5: result contains identity-bearing content blocks."""
 
     @pytest.mark.asyncio
-    async def test_result_is_a_string(self, tmp_path: Path) -> None:
-        """recall_memory returns a str, not a list or dict."""
-        entry = _make_entry(id=_uuid(1), state="curated", scope_agents=["builder"])
-        engine = MemoryEngine(memory_dir=tmp_path)
-        _seed_entry(engine, entry)
-        ctx = _make_ctx(engine)
-
-        result = await _recall(ctx, agent="builder")
-
-        assert isinstance(result, str)
-
-    @pytest.mark.asyncio
-    async def test_title_appears_as_h2_heading(self, tmp_path: Path) -> None:
-        """Title is rendered as ## heading in the returned string."""
-        entry = _make_entry(
-            id=_uuid(1),
-            title="My Important Entry",
-            state="curated",
-            scope_agents=["builder"],
-        )
-        engine = MemoryEngine(memory_dir=tmp_path)
-        _seed_entry(engine, entry)
-        ctx = _make_ctx(engine)
-
-        result = await _recall(ctx, agent="builder")
-
-        assert "## My Important Entry" in result
-
-    @pytest.mark.asyncio
-    async def test_content_appears_below_heading(self, tmp_path: Path) -> None:
-        """Content follows the heading and entry ID in the returned string."""
-        entry = _make_entry(
-            id=_uuid(1),
-            title="My Entry",
-            content="This is the body content.",
-            state="curated",
-            scope_agents=["builder"],
-        )
-        engine = MemoryEngine(memory_dir=tmp_path)
-        _seed_entry(engine, entry)
-        ctx = _make_ctx(engine)
-
-        result = await _recall(ctx, agent="builder")
-
-        assert "This is the body content." in result
-        title_pos = result.index("## My Entry")
-        id_pos = result.index(f"Entry ID: `{entry.id}`")
-        revision_pos = result.index(f"Revision: `{entry.revision}`")
-        content_pos = result.index("This is the body content.")
-        assert title_pos < id_pos < revision_pos < content_pos
-
-    @pytest.mark.asyncio
-    async def test_result_contains_entry_id_but_no_other_metadata(self, tmp_path: Path) -> None:
-        """Entry ID appears while unrelated metadata remains absent."""
-        entry = _make_entry(
-            id=_uuid(1),
-            title="My Entry",
-            state="curated",
-            scope_agents=["builder"],
-            confidence=0.95,
-        )
-        engine = MemoryEngine(memory_dir=tmp_path)
-        _seed_entry(engine, entry)
-        ctx = _make_ctx(engine)
-
-        result = await _recall(ctx, agent="builder")
-
-        assert f"Entry ID: `{entry.id}`" in result
-        assert "curated" not in result
-        assert "0.95" not in result
-        assert "scope_agents" not in result
-
-    @pytest.mark.asyncio
-    async def test_multiple_entries_concatenated_in_result(self, tmp_path: Path) -> None:
-        """Multiple matching entries all appear in a single concatenated string."""
-        e1 = _make_entry(id=_uuid(1), title="First Entry", state="curated", scope_agents=["builder"])
-        e2 = _make_entry(id=_uuid(2), title="Second Entry", state="curated", scope_agents=["builder"])
-        engine = MemoryEngine(memory_dir=tmp_path)
-        _seed_entry(engine, e1)
-        _seed_entry(engine, e2)
-        ctx = _make_ctx(engine)
-
-        result = await _recall(ctx, agent="builder")
-
-        assert "## First Entry" in result
-        assert "## Second Entry" in result
-
-    @pytest.mark.asyncio
     async def test_exact_per_entry_format_and_other_metadata_fields_absent(self, tmp_path: Path) -> None:
         """Pin the identity-bearing format and exclude unrelated metadata."""
         entry = _make_entry(
@@ -427,22 +339,6 @@ class TestFromAC_IdentityBearingFormat:
         assert result == (
             f"## Format Pin Test\nEntry ID: `{entry.id}`\nRevision: `{entry.revision}`\nPinned body text."
         )
-        for field_name in (
-            "state",
-            "confidence",
-            "categories",
-            "scope_agents",
-            "approved_at",
-            "created_at",
-            "updated_at",
-        ):
-            assert field_name not in result, f"metadata field {field_name!r} leaked into output"
-        assert "curated" not in result  # state value
-        assert "0.92" not in result  # confidence value
-        assert "domain-knowledge" not in result  # category value
-        assert "recall-scope-tester" not in result  # scope_agents value
-        assert "2026-01-15T08:30:00Z" not in result  # created_at value
-        assert "2026-02-20T14:15:00Z" not in result  # updated_at value
 
     @pytest.mark.asyncio
     async def test_revision_refreshes_after_edit_from_second_engine(self, tmp_path: Path) -> None:

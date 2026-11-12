@@ -2,7 +2,6 @@ import subprocess
 from datetime import UTC, datetime, timedelta
 
 from owlbear_delivery_next.change_contracts import failures
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
     Change,
@@ -17,7 +16,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.spend import Spend
-from owlbear_delivery_next.change_flow import budgets, loop
+from owlbear_delivery_next.change_flow import budgets, loop, stuck
 from owlbear_delivery_next.change_flow.budgets import EPISODE_ASK, PAUSE, PAUSE_CAP
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.change_flow.status import Activity, card, status
@@ -64,15 +63,17 @@ def test_transient_failures_never_exhaust_and_their_pauses_grow_to_the_cap():
     assert budgets.episode(c).attempts == 10
 
 
-def test_a_day_of_the_same_failure_asks_and_done_starts_a_new_episode():
+def test_a_day_of_the_same_failure_repairs_and_an_applied_fix_starts_a_new_episode():
     c = loop.apply(change(), retry(ErrorKind.NETWORK, HTTP_503), NOW)
     c = loop.apply(c, retry(ErrorKind.NETWORK, "HTTP 504 Service Unavailable"), NOW + EPISODE_ASK)  # numbers differ
-    q = loop.open_question(c)
-    assert c.outcome.exit == Exit.ASK
-    assert [o.id for o in q.options] == ["done", "pause"]
-    assert "Service Unavailable" in q.text
-    c = loop.fold(c, [AnswerItem(at=NOW + EPISODE_ASK, question=q.id, option="done")], NOW + EPISODE_ASK)
-    assert q.cause not in c.budgets.causes
+    cause = c.outcome.cause
+    assert (c.outcome.exit, c.questions) == (Exit.RETRY, [])
+    assert c.repairs.current.cause == cause
+    assert "Service Unavailable" in c.repairs.current.evidence
+    stuck.applied(c, "a" * 40)
+    assert cause not in c.budgets.causes
+    c = loop.apply(c, retry(ErrorKind.NETWORK, HTTP_503), NOW + EPISODE_ASK)
+    assert budgets.episode(c).attempts == 1
 
 
 def test_a_changed_failure_signature_restarts_the_episode():
@@ -82,7 +83,7 @@ def test_a_changed_failure_signature_restarts_the_episode():
     assert (budgets.episode(c).since, budgets.episode(c).attempts) == (NOW + EPISODE_ASK, 1)
 
 
-def test_the_same_delivery_defect_three_times_asks_with_the_error(whole_error):
+def test_the_same_delivery_defect_three_times_stops_its_existing_repair_with_the_error(whole_error):
     """#971: a whole error, with its command's output and its notes, counts as the same failure each time; its
     numbers, commit ids and temporary paths never split its signature."""
     c, signatures = change(), set()
@@ -93,16 +94,20 @@ def test_the_same_delivery_defect_three_times_asks_with_the_error(whole_error):
         c = loop.apply(c, retry(ErrorKind.TOOLING, said), NOW)
         budget = c.budgets.causes[failures.cause_key(ErrorKind.TOOLING, K.BUILD, "sdk")]
         signatures.add(budget.signature)
-        assert (budget.count, c.outcome.exit) == (n, Exit.ASK if n == 3 else Exit.RETRY)
+        assert (budget.count, c.outcome.exit) == (n, Exit.STOP if n == 3 else Exit.RETRY)
+        if n == 2:
+            evidence = c.repairs.current.evidence
+            assert evidence == said
     assert len(signatures) == 1
-    q = loop.open_question(c)
-    assert q.text == f"Delivery failed the same way 3 times (tooling:build:sdk): {said}"
-    assert [o.id for o in q.options] == ["done", "pause"]
+    assert (c.questions, c.repairs.current, c.stop.action) == ([], None, "Run the step again")
+    assert c.repairs.done[-1].evidence == evidence
+    assert evidence in c.stop.reason
+    assert c.repairs.done[-1].stopped == "its fix would put the same problem to you a third time"
 
 
-def test_a_day_of_remote_git_timeouts_that_printed_different_words_asks_with_the_last_whole_error():
+def test_a_day_of_remote_git_timeouts_that_printed_different_words_repairs_with_the_last_whole_error():
     """#971: a timed-out fetch notes what it printed before its bound, different each time; the episode signs the
-    error without it, so a day of the same timeout still asks, and the question shows the last one whole."""
+    error without it, so a day of the same timeout still repairs, with the last error kept whole."""
     c, signatures, reasons = change(), set(), []
     for at, printed in ((NOW, b"remote: Enumerating objects"), (NOW + EPISODE_ASK, b"remote: Compressing objects")):
         error = RemoteGitTimeout("remote Git read exceeded 30 s")  # as remote_git raises it
@@ -112,14 +117,18 @@ def test_a_day_of_remote_git_timeouts_that_printed_different_words_asks_with_the
         c = loop.apply(c, result, at)
         signatures.add(c.budgets.causes["network:build:git"].signature)
     budget = c.budgets.causes["network:build:git"]
-    assert (len(signatures), budget.since, budget.attempts, c.outcome.exit) == (1, NOW, 2, Exit.ASK)
+    assert (len(signatures), budget.since, budget.attempts, c.outcome.exit) == (1, NOW, 2, Exit.RETRY)
     assert reasons[1] == (
         "RemoteGitTimeout: remote Git read exceeded 30 s\n"
         "TimeoutExpired: Command '['git', 'fetch', 'origin']' timed out after 30 seconds\n"
         "stderr:\nremote: Compressing objects\nstdout:\nFetching origin"
     )
-    q = loop.open_question(c)
-    assert q.text == f"network keeps failing for build since 2026-10-10 12:00; last error: {reasons[1]}"
+    assert c.questions == []
+    assert c.repairs.current.cause == "network:build:git"
+    assert (
+        c.repairs.current.evidence
+        == f"network keeps failing for build since 2026-10-10 12:00; last error: {reasons[1]}"
+    )
 
 
 WRONG = "wrong model: a turn ran on gpt-6-sol, the step needs gpt-6-luna"
@@ -130,7 +139,7 @@ def wrong_model(kind: StepKind, at: datetime) -> StepResult:
     return session_result.to_result(run, kind, at)
 
 
-def test_a_wrong_model_reruns_once_after_its_wait_and_a_second_in_a_row_asks():
+def test_a_wrong_model_reruns_once_after_its_wait_and_a_second_in_a_row_repairs():
     c = loop.apply(change(), wrong_model(K.BUILD, NOW), NOW)
     wake = NOW + session_result.WRONG_MODEL_WAIT
     assert (c.outcome.exit, c.outcome.wake_at, c.step.attempt, c.questions) == (Exit.RETRY, wake, 2, [])
@@ -139,10 +148,9 @@ def test_a_wrong_model_reruns_once_after_its_wait_and_a_second_in_a_row_asks():
     line = status(c, Activity(host_up=True), NOW + timedelta(minutes=1)).line
     assert line.endswith(f"retrying: tooling:build:wrong-model (1 of 2) at 12:05 · {c.outcome.reason}")
     c = loop.apply(c, wrong_model(K.BUILD, wake), wake)
-    q = loop.open_question(c)
-    assert c.outcome.exit == Exit.ASK
-    assert q.text == f"The step ran on the wrong model again after one rerun: {WRONG}"
-    assert [o.id for o in q.options] == ["done", "pause"]
+    assert (c.outcome.exit, c.questions) == (Exit.RETRY, [])
+    assert c.repairs.current.cause == "tooling:build:wrong-model"
+    assert c.repairs.current.evidence == f"The step ran on the wrong model again after one rerun: {WRONG}"
 
 
 def test_a_step_between_two_wrong_models_starts_a_new_streak():
@@ -154,7 +162,7 @@ def test_a_step_between_two_wrong_models_starts_a_new_streak():
     assert (c.outcome.exit, c.questions) == (Exit.RETRY, [])
 
 
-def test_identical_check_failures_replan_once_to_split_then_ask():
+def test_identical_check_failures_replan_once_to_split_then_repair():
     c = change()
     for _ in range(budgets.RETRY_LIMIT):
         c = loop.apply(c, failing(2), NOW)
@@ -164,7 +172,7 @@ def test_identical_check_failures_replan_once_to_split_then_ask():
     assert c.outcome.reason.startswith("re-plan to split the work")
     c.step = Step(kind=K.BUILD, task="t1")
     c = loop.apply(c, failing(2), NOW)
-    assert c.outcome.exit == Exit.ASK
+    assert c.repairs.current.cause == c.outcome.cause  # then it is repaired, not asked (#1066)
 
 
 def scored(findings: list[str], satisfied: int = 0, reason: str = "test_a failed") -> StepResult:

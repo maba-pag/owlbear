@@ -30,7 +30,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import amending, answer_kinds, loop
+from owlbear_delivery_next.change_flow import amending, answer_kinds, loop, stuck
 from owlbear_delivery_next.commands import chat_client, cli, mcp_server, runner
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.processes import Termination
@@ -40,7 +40,7 @@ from owlbear_delivery_next.runtimes import session_result, step_answers, step_de
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import decision_archive
 from owlbear_delivery_next.state_store.store import Lock
-from owlbear_delivery_next.workflow_steps import clarification
+from owlbear_delivery_next.workflow_steps import clarification, session_choice, worker_questions
 
 AT = datetime(2026, 10, 22, 9, tzinfo=UTC)
 ASKED = "Which language does the greeting use?"
@@ -113,7 +113,14 @@ def inbox(picking) -> int:
 
 
 def test_an_event_is_delivered_as_before_with_its_class_in_the_history(picking, monkeypatch):
-    run = Asking(picking, monkeypatch)
+    run = Asking(
+        picking,
+        monkeypatch,
+        options=(
+            Option(id="en", label="English", action="continue"),
+            Option(id="again", label="Retry", next="retry", action="retry"),
+        ),
+    )
     assert run.answer(kind="event", option=None, text=WORDS).json() == {"accepted": "answer"}
 
     c = run.step()
@@ -123,6 +130,92 @@ def test_an_event_is_delivered_as_before_with_its_class_in_the_history(picking, 
     assert (c.decisions, len(picking.pickers())) == ([], 1)  # no decision, no check
     said = [e for e in picking.store.events(picking.slug) if e.get("event") == "answer"]
     assert [(e["question"], e["class"]) for e in said] == [(run.qid, "event")]
+
+
+def test_an_admitted_all_retry_menu_delivers_free_text_to_its_original_author(picking, monkeypatch):
+    run = Asking(
+        picking,
+        monkeypatch,
+        session="original-author",
+        options=(
+            Option(id="again", label="Retry the step", next="retry", action="retry"),
+            Option(id="later", label="Retry after inspection", next="retry", action="retry"),
+        ),
+    )
+    assert run.answer(kind="event", text=WORDS).status_code == 200
+
+    c, step = run.fold()
+
+    assert step.session == "original-author"
+    question, accepted, repair, resumed = session_choice.opening(picking.store, Lock(picking.slug), c, c.plan.tasks[0])
+    assert question.id == run.qid
+    assert question.answer.text == WORDS
+    assert question.effect_observed_at is None
+    assert (c.step.session, accepted, repair, resumed) == ("original-author", None, "", True)
+
+
+def test_an_admitted_continue_option_beside_retry_reaches_the_original_worker(picking, monkeypatch):
+    run = Asking(picking, monkeypatch)
+    proposed = tools.AskQuestion(
+        question=ASKED,
+        why="The greeting needs a language.",
+        options=[
+            {"label": "English", "effect": "Continue with the English greeting.", "action": "continue"},
+            {"label": "Retry", "effect": "Retry the whole current step.", "action": "retry"},
+        ],
+    )
+    verdict = pick_tools.QuestionJudgment(
+        subject="product",
+        plain=True,
+        why="The owner chooses what this Change delivers.",
+        options=[
+            {
+                "index": i,
+                "executable": True,
+                "why": "The current step supports it.",
+                "check_related": False,
+                "recommends": False,
+            }
+            for i in range(2)
+        ],
+    )
+    c = loop.apply(picking.change(), worker_questions.admitted(picking.change(), proposed, verdict, None), AT)
+    picking.store.write(Lock(picking.slug), c)
+    run.qid = c.outcome.question
+    assert run.answer(option="o1", kind="event").status_code == 200
+    c = run.step()
+    [(_, delivered)] = run.held
+    assert delivered.id == run.qid
+    assert delivered.answer.option == "o1"
+    assert "English: Continue with the English greeting." in step_answers.answer(delivered)
+    assert c.step.kind == StepKind.BUILD
+
+
+def test_an_admitted_pause_or_abandon_menu_does_not_resume_on_an_empty_answer(picking, monkeypatch):
+    run = Asking(
+        picking,
+        monkeypatch,
+        options=(
+            Option(id="pause", label="Pause", next="pause", action="pause"),
+            Option(id="abandon", label="Abandon", next="abandon", action="abandon"),
+        ),
+    )
+    assert run.answer(kind="event").status_code == 200
+
+    c, step = run.fold()
+
+    assert loop.open_question(c).id == run.qid
+    assert step is None
+    assert run.asked(c).answer is None
+    [dropped] = [e for e in picking.store.events(picking.slug) if e.get("event") == "answer-not-applied"]
+    assert dropped["question"] == run.qid
+    assert "settled only by one of its options" in dropped["reason"]
+    assert run.answer(kind="event", option="pause").status_code == 200
+    c, step = run.fold()
+    assert c.intent.paused_at is not None
+    assert step is None
+    assert run.asked(c).answer.option == "pause"
+    assert run.held == []
 
 
 def test_an_unclassed_answer_or_an_unconfirmed_clarification_is_refused_and_nothing_is_stored(picking, monkeypatch):
@@ -142,7 +235,14 @@ def test_an_unclassed_answer_or_an_unconfirmed_clarification_is_refused_and_noth
 
 
 def test_a_confirmed_clarification_within_the_brief_becomes_a_change_decision_in_force_at_once(picking, monkeypatch):
-    run = Asking(picking, monkeypatch)
+    run = Asking(
+        picking,
+        monkeypatch,
+        options=(
+            Option(id="en", label="English", action="continue"),
+            Option(id="again", label="Retry", next="retry", action="retry"),
+        ),
+    )
     assert run.answer(kind="clarification", text=WORDS, statement=f"  {SAID} ", confirmed=True).status_code == 200
     picking.picks.append(verdict())
 
@@ -184,6 +284,18 @@ def test_a_clarification_the_check_finds_changing_the_brief_starts_its_amendment
     assert "A French greeting is an outcome the brief lacks." in a.reason
     assert (run.asked(c).answer.kind, answer_kinds.delivered_next(c)) == ("brief_change", None)
     assert WORDS not in "\n".join(step_input.brief(c))  # no later role reads it either
+    picking.verdicts += [
+        FRENCH,
+        amend_tools.VerdictResult(verdict="weaker", reasons="French matches his confirmed intent"),
+    ]
+
+    run.step()
+    assert "It greets in French too." in picking.told[-1].message
+    assert WORDS not in picking.told[-1].message
+
+    run.step()
+    assert "It greets in French too." in picking.told[-1].message
+    assert WORDS not in picking.told[-1].message
 
 
 def test_a_check_that_fails_waits_and_runs_again_never_taken_for_a_pass(picking, monkeypatch):
@@ -272,10 +384,19 @@ def test_stopping_the_change_over_a_brief_change_abandons_it(picking, monkeypatc
 
 
 def test_a_brief_change_that_says_no_more_than_his_answer_applies_without_another_question(picking, monkeypatch):
-    run = Asking(picking, monkeypatch)
-    assert run.answer(kind="brief_change", text=WORDS).status_code == 200
+    french = "French: add a French greeting through the brief amendment first."
+    run = Asking(
+        picking,
+        monkeypatch,
+        options=(
+            Option(id="en", label="English: keep the current greeting.", action="continue"),
+            Option(id="fr", label=french, action="continue"),
+        ),
+    )
+    assert run.answer(kind="brief_change", option="fr").status_code == 200
     picking.verdicts += [FRENCH, amend_tools.VerdictResult(verdict="weaker", reasons="French is what he asked for")]
     run.step()
+    assert french in picking.told[-1].message
 
     c = run.step()
 
@@ -337,7 +458,7 @@ def failed_check(run: Asking):
     return run.step()
 
 
-def test_a_clarification_still_unchecked_after_the_network_gate_is_checked_before_any_worker_runs(picking, monkeypatch):
+def test_a_clarification_still_unchecked_after_network_repair_is_checked_before_any_worker_runs(picking, monkeypatch):
     run = Asking(picking, monkeypatch)
     c = failed_check(run)
     assert all(x not in "\n".join(step_input.brief(c)) for x in (ASKED, WORDS, SAID))  # no role reads it unchecked
@@ -345,15 +466,18 @@ def test_a_clarification_still_unchecked_after_the_network_gate_is_checked_befor
     c.budgets.causes[cause] = c.budgets.causes[cause].model_copy(update={"since": c.outcome.at - timedelta(days=2)})
     picking.store.write(Lock(picking.slug), c)
     picking.picks.append("error")
-    gate = loop.open_question(run.step(c.outcome.wake_at))  # a day of failures asks the owner
-    assert (gate.cause, run.answer(gate.id, option="done").status_code) == (cause, 200)
+    c = run.step(c.outcome.wake_at)
+    assert (c.outcome.exit, loop.open_question(c), run.held) == (Exit.RETRY, None, [])
+    assert c.repairs.current.cause == cause
+    stuck.applied(c, "a" * 40)
+    picking.store.write(Lock(picking.slug), c)
     picking.picks.append(verdict())
 
     c = run.step()
 
     assert ([d.text for d in c.decisions], len(picking.pickers())) == ([SAID], 4)  # checked before the worker
     [(section, delivered)] = run.held
-    assert (delivered.id, any(SAID in line for line in section)) == (gate.id, True)
+    assert (delivered.id, any(SAID in line for line in section)) == (run.qid, True)
 
 
 def test_a_clarification_asked_at_one_step_is_checked_before_a_worker_of_another(picking, monkeypatch):

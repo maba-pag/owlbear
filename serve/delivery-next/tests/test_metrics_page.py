@@ -7,6 +7,8 @@ import re
 import socket
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -52,18 +54,29 @@ def seeded() -> None:
     ])  # fmt: skip
 
 
-def serve() -> tuple[Machine, uvicorn.Server, str]:
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    record = HostRecord(url=f"{base}/", token="t", pid=1, started_at=datetime.now(UTC), code=codebase.CURRENT)  # noqa: S106
-    machine = Machine(record)
-    # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
-    server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning", timeout_keep_alive=60))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    return machine, server, base
+@contextmanager
+def serve() -> Iterator[tuple[Machine, uvicorn.Server, str]]:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+        record = HostRecord(url=f"{base}/", token="t", pid=1, started_at=datetime.now(UTC), code=codebase.CURRENT)  # noqa: S106
+        machine = Machine(record)
+        # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
+        server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning", timeout_keep_alive=60))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            yield machine, server, base
+        finally:
+            server.should_exit = True
+            try:
+                machine.stop_all()
+            finally:
+                thread.join(5)
+                assert not thread.is_alive(), "the owned page server did not stop"
 
 
 @pytest.mark.browser
@@ -71,93 +84,86 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     seeded()
-    machine, server, base = serve()
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page(timezone_id="Europe/Berlin")
-            pds.only(page, base)
-            page.goto(f"{base}/metrics#token=t")
-            expect(page).to_have_title("OwlBear Delivery · Metrics")
-            expect(page.locator("#total-credits")).to_contain_text("3.50 credits")
-            expect(page.locator("#total-credits")).to_contain_text("plus 1 run whose credits were not reported")
-            expect(page.locator("#total-runs")).to_have_text("3 runs")
-            expect(page.locator("#total-stopped")).to_have_text("1 stopped at their credit limit, 1 more may have been")
-            rows = page.locator("#split p-table-row")
-            expect(rows).to_have_count(4)
-            expect(rows.nth(0)).to_contain_text("builder")
-            expect(rows.nth(0)).to_contain_text("2.00")
-            expect(rows.nth(1)).to_contain_text("reviewer")
-            expect(rows.nth(2)).to_contain_text("explore (subagent)")
-            expect(rows.nth(2)).to_contain_text("0.50")
-            expect(page.locator("#runs p-table-row")).to_have_count(3)
-            expect(page.locator("#runs-count")).to_contain_text("All 3 runs.")
-            expect(page.locator("#runs p-table-row").nth(1)).to_contain_text(
-                "stopped at its credit limit of 1 (session)"
-            )
-            expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("lower bound")  # its credits unreported
-            expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("Outside a Change")
-            expect(page.locator("#runs p-table-row").nth(1)).not_to_contain_text("lower bound")
-            expect(page.locator("#runs .lower")).to_have_count(1)
-            expect(page.locator("#lower-bound")).to_contain_text("spent at least this")
-            expect(page.locator("#exact li")).to_have_text([re.compile(r"^1 run did not report its credits")])
-            for fold in ("split", "tools"):  # the tables are folded below their charts
-                page.locator(f"#{fold}-fold > summary").click()
-            expect(rows.locator(".share")).to_have_text(["57%", "29%", "14%", "0%"])  # of the 3.50 credits
-            expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("may have reached its credit limit of 0.5")
-            tools = page.locator("#tools p-table-row")  # C-28: weighted, 1 of 1 and 0 of 9 calls accepted
-            expect(tools).to_have_count(2)
-            expect(tools.nth(0)).to_contain_text("submit_result")
-            expect(tools.nth(1)).to_contain_text("All tools")
-            for cell in ("10", "10%", "3", "2", "1"):  # calls, success, invalid, failed checks, wrong moment
-                expect(tools.nth(0).locator("p-table-cell", has_text=cell).first).to_be_visible()
-            expect(page.locator("#wrong")).to_contain_text("1 call at the wrong moment")
-            expect(page.locator("#wrong")).to_contain_text("2 denials by the guard")
-            expect(page.locator("#wrong")).to_contain_text("1 turn ended without a result")
-            expect(page.locator("#wrong")).to_contain_text("1 pointless missing-tool report")
-            expect(page.locator("#tool-use-coverage")).to_contain_text("Counted for 3 runs")
-            assert spend_reconcile.settled(10)
-            page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
-            expect(page.locator("#reconcile")).to_contain_text("Earlier records last read")
+    with serve() as (_machine, _server, base), sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        page = browser.new_page(timezone_id="Europe/Berlin")
+        pds.only(page, base)
+        page.goto(f"{base}/metrics#token=t")
+        expect(page).to_have_title("OwlBear Delivery · Metrics")
+        expect(page.locator("#total-credits")).to_contain_text("3.50 credits")
+        expect(page.locator("#total-credits")).to_contain_text("plus 1 run whose credits were not reported")
+        expect(page.locator("#total-runs")).to_have_text("3 runs")
+        expect(page.locator("#total-stopped")).to_have_text("1 stopped at their credit limit, 1 more may have been")
+        rows = page.locator("#split p-table-row")
+        expect(rows).to_have_count(4)
+        expect(rows.nth(0)).to_contain_text("builder")
+        expect(rows.nth(0)).to_contain_text("2.00")
+        expect(rows.nth(1)).to_contain_text("reviewer")
+        expect(rows.nth(2)).to_contain_text("explore (subagent)")
+        expect(rows.nth(2)).to_contain_text("0.50")
+        expect(page.locator("#runs p-table-row")).to_have_count(3)
+        expect(page.locator("#runs-count")).to_contain_text("All 3 runs.")
+        expect(page.locator("#runs p-table-row").nth(1)).to_contain_text("stopped at its credit limit of 1 (session)")
+        expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("lower bound")  # its credits unreported
+        expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("Outside a Change")
+        expect(page.locator("#runs p-table-row").nth(1)).not_to_contain_text("lower bound")
+        expect(page.locator("#runs .lower")).to_have_count(1)
+        expect(page.locator("#lower-bound")).to_contain_text("spent at least this")
+        expect(page.locator("#exact li")).to_have_text([re.compile(r"^1 run did not report its credits")])
+        for fold in ("split", "tools"):  # the tables are folded below their charts
+            page.locator(f"#{fold}-fold > summary").click()
+        expect(rows.locator(".share")).to_have_text(["57%", "29%", "14%", "0%"])  # of the 3.50 credits
+        expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("may have reached its credit limit of 0.5")
+        tools = page.locator("#tools p-table-row")  # C-28: weighted, 1 of 1 and 0 of 9 calls accepted
+        expect(tools).to_have_count(2)
+        expect(tools.nth(0)).to_contain_text("submit_result")
+        expect(tools.nth(1)).to_contain_text("All tools")
+        for cell in ("10", "10%", "3", "2", "1"):  # calls, success, invalid, failed checks, wrong moment
+            expect(tools.nth(0).locator("p-table-cell", has_text=cell).first).to_be_visible()
+        expect(page.locator("#wrong")).to_contain_text("1 call at the wrong moment")
+        expect(page.locator("#wrong")).to_contain_text("2 denials by the guard")
+        expect(page.locator("#wrong")).to_contain_text("1 turn ended without a result")
+        expect(page.locator("#wrong")).to_contain_text("1 pointless missing-tool report")
+        expect(page.locator("#tool-use-coverage")).to_contain_text("Counted for 3 runs")
+        assert spend_reconcile.settled(10)
+        page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+        expect(page.locator("#reconcile")).to_contain_text("Earlier records last read")
 
-            rows.nth(0).get_by_role("button", name="Show only builder").click()  # drill down, then split by model
-            expect(page.locator("#split-title")).to_have_text("By model")
-            expect(rows).to_have_count(1)
-            expect(rows.nth(0)).to_contain_text("m1")
-            expect(page.locator("#total-credits")).to_contain_text("2.00 credits")
-            assert "agent=builder" in page.url
-            assert "by=model" in page.url
-            expect(tools.nth(0)).to_contain_text("100%")
+        rows.nth(0).get_by_role("button", name="Show only builder").click()  # drill down, then split by model
+        expect(page.locator("#split-title")).to_have_text("By model")
+        expect(rows).to_have_count(1)
+        expect(rows.nth(0)).to_contain_text("m1")
+        expect(page.locator("#total-credits")).to_contain_text("2.00 credits")
+        assert "agent=builder" in page.url
+        assert "by=model" in page.url
+        expect(tools.nth(0)).to_contain_text("100%")
 
-            pds.pick(page, "Agent", "updater")  # its spend shows under an unknown agent, its tool use under its own
-            expect(tools).to_have_count(1)
-            expect(page.locator("#wrong")).to_contain_text("1 pointless missing-tool report")
-            expect(page.locator("#wrong")).to_contain_text("0 denials by the guard")
+        pds.pick(page, "Agent", "updater")  # its spend shows under an unknown agent, its tool use under its own
+        expect(tools).to_have_count(1)
+        expect(page.locator("#wrong")).to_contain_text("1 pointless missing-tool report")
+        expect(page.locator("#wrong")).to_contain_text("0 denials by the guard")
 
-            pds.pick(page, "Agent", "")
-            pds.pick(page, "Project", "owlbear")
-            expect(page.locator("#total-credits")).to_contain_text("1.00 credits")
-            expect(tools.nth(0)).to_contain_text("0%")
-            expect(page.locator("#wrong")).to_contain_text("2 denials by the guard")
-            page.locator("#stopped").click()
-            expect(page.locator("#runs p-table-row")).to_have_count(1)
-            pds.pick(page, "Period", "custom")
-            page.locator("#from input").fill("2020-01-01")
-            page.locator("#from input").press("Enter")
-            page.locator("#to input").fill("2020-01-31")
-            page.locator("#to input").press("Enter")
-            expect(page.locator("#split-none")).to_have_text("Nothing was spent that these filters show.")
-            expect(page.locator("#tool-use-none")).to_have_text("No tool use was measured for these filters.")
-            page.reload()  # the filters stay in the address
-            expect(page.locator("#split-none")).to_be_visible()
-            expect(page.locator("#error")).to_have_count(0)
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+        pds.pick(page, "Agent", "")
+        pds.pick(page, "Project", "owlbear")
+        expect(page.locator("#total-credits")).to_contain_text("1.00 credits")
+        expect(tools.nth(0)).to_contain_text("0%")
+        expect(page.locator("#wrong")).to_contain_text("2 denials by the guard")
+        page.locator("#stopped").click()
+        expect(page.locator("#runs p-table-row")).to_have_count(1)
+        pds.pick(page, "Period", "custom")
+        page.locator("#from input").fill("2020-01-01")
+        page.locator("#from input").press("Enter")
+        page.locator("#to input").fill("2020-01-31")
+        page.locator("#to input").press("Enter")
+        expect(page.locator("#split-none")).to_have_text("Nothing was spent that these filters show.")
+        expect(page.locator("#tool-use-none")).to_have_text("No tool use was measured for these filters.")
+        page.reload()  # the filters stay in the address
+        expect(page.locator("#split-none")).to_be_visible()
+        expect(page.locator("#error")).to_have_count(0)
+        browser.close()
 
 
 @pytest.mark.browser
@@ -165,48 +171,43 @@ def test_metrics_orders_its_sections_folds_its_tables_and_loads_the_vendored_ech
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     seeded()
-    machine, server, base = serve()
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            errors: list[str] = []
-            page.on("pageerror", lambda e: errors.append(str(e)))
-            page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
-            pds.only(page, base)
-            page.goto(f"{base}/metrics#token=t")
-            expect(page.locator("#split p-table-row")).to_have_count(4)
-            assert page.locator("#page h2, #exact").evaluate_all("hs => hs.map(h => h.id)") == [
-                "totals-title", "exact", "split-title", "compaction-title", "tool-use-title", "runs-title",
-                "coverage-title"]  # fmt: skip
-            assert page.locator("script[src*=echarts]").evaluate_all("s => s.map(e => e.getAttribute('src'))") == [
-                "/assets/echarts/6.1.0/echarts.min.js"
-            ]
-            expect(page.locator("#split-chart + details#split-fold #split")).to_have_count(1)  # chart, then its fold
-            expect(page.locator("#compaction-chart + details#compaction-fold #compaction-table")).to_have_count(1)
-            expect(page.locator("#tools-chart + details#tools-fold #tools")).to_have_count(1)
-            expect(page.locator("#tools-fold #wrong")).to_have_count(1)
-            assert page.evaluate("window.echarts.version") == "6.1.0"
-            for name, table_id in (("split", "split"), ("compaction", "compaction-table"), ("tools", "tools")):
-                fold, table = page.locator(f"#{name}-fold"), page.locator(f"#{table_id}")
-                expect(fold).not_to_have_attribute("open", "")  # closed on load
-                expect(table).to_be_hidden()
-            for name, key in (("split", "Enter"), ("tools", " ")):
-                page.locator(f"#{name}-fold > summary").focus()
-                page.keyboard.press(key)
-                expect(page.locator(f"#{name}-fold")).to_have_attribute("open", "")
-                expect(page.locator(f"#{name} p-table-row").first).to_be_visible()
-            page.reload()
-            expect(page.locator("#split p-table-row")).to_have_count(4)
-            assert page.locator("details.fold").evaluate_all("ds => ds.map(d => d.open)") == [False] * 3
-            assert errors == []
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+    with serve() as (_machine, _server, base), sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        page = browser.new_page()
+        errors: list[str] = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+        pds.only(page, base)
+        page.goto(f"{base}/metrics#token=t")
+        expect(page.locator("#split p-table-row")).to_have_count(4)
+        assert page.locator("#page h2, #exact").evaluate_all("hs => hs.map(h => h.id)") == [
+            "totals-title", "exact", "split-title", "compaction-title", "tool-use-title", "runs-title",
+            "coverage-title"]  # fmt: skip
+        assert page.locator("script[src*=echarts]").evaluate_all("s => s.map(e => e.getAttribute('src'))") == [
+            "/assets/echarts/6.1.0/echarts.min.js"
+        ]
+        expect(page.locator("#split-chart + details#split-fold #split")).to_have_count(1)  # chart, then its fold
+        expect(page.locator("#compaction-chart + details#compaction-fold #compaction-table")).to_have_count(1)
+        expect(page.locator("#tools-chart + details#tools-fold #tools")).to_have_count(1)
+        expect(page.locator("#tools-fold #wrong")).to_have_count(1)
+        assert page.evaluate("window.echarts.version") == "6.1.0"
+        for name, table_id in (("split", "split"), ("compaction", "compaction-table"), ("tools", "tools")):
+            fold, table = page.locator(f"#{name}-fold"), page.locator(f"#{table_id}")
+            expect(fold).not_to_have_attribute("open", "")  # closed on load
+            expect(table).to_be_hidden()
+        for name, key in (("split", "Enter"), ("tools", " ")):
+            page.locator(f"#{name}-fold > summary").focus()
+            page.keyboard.press(key)
+            expect(page.locator(f"#{name}-fold")).to_have_attribute("open", "")
+            expect(page.locator(f"#{name} p-table-row").first).to_be_visible()
+        page.reload()
+        expect(page.locator("#split p-table-row")).to_have_count(4)
+        assert page.locator("details.fold").evaluate_all("ds => ds.map(d => d.open)") == [False] * 3
+        assert errors == []
+        browser.close()
 
 
 @pytest.mark.browser
@@ -222,43 +223,38 @@ def test_a_ledger_whose_step_events_list_their_models_renders(pds) -> None:
                  "usage": {"credits": spent, "model_mismatch": False, "models": names}}
         for n, (spent, names, step) in enumerate([(1.5, ["m1"], "build"), (0.5, ["m1", "m2"], "amend")])
     ])  # fmt: skip
-    machine, server, base = serve()
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page(timezone_id="Europe/Berlin")
-            pds.only(page, base)
-            page.goto(f"{base}/metrics?by=model#token=t")
-            expect(page.locator("#total-credits")).to_contain_text("2.00 credits")
-            rows = page.locator("#split p-table-row")
-            expect(rows).to_have_count(2)
-            expect(rows.nth(0)).to_contain_text("m1")
-            expect(rows.nth(0)).to_contain_text("1.50")
-            expect(rows.nth(1)).to_contain_text("Model unknown")
-            expect(rows.nth(1)).to_contain_text("0.50")
-            fold = page.locator("#runs p-table-row")  # one builder's consecutive runs share a row that opens
-            expect(fold).to_have_count(1)
-            expect(fold).to_have_attribute("data-runs", "2")
-            expect(fold).to_contain_text("2.00")
-            expect(fold.locator("p-table-cell").nth(2)).to_have_text("c1 · 2 steps")  # one Change, not "2 Changes"
-            button = fold.get_by_role("button", name="builder · 2 runs")
-            expect(button).to_have_attribute("aria-expanded", "false")
-            button.focus()
-            page.keyboard.press("Enter")
-            expect(button).to_have_attribute("aria-expanded", "true")
-            expect(page.locator("#runs .member")).to_have_count(2)
-            expect(page.locator("#runs .member .num")).to_have_text(["1.50", "0.50"])
-            expect(page.locator("#runs .member p-table-cell:nth-child(3)")).to_have_text(["c1 · build", "c1 · amend"])
-            page.keyboard.press("Enter")
-            expect(page.locator("#runs .member")).to_have_count(0)
-            expect(page.locator("#error")).to_have_count(0)
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+    with serve() as (_machine, _server, base), sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        page = browser.new_page(timezone_id="Europe/Berlin")
+        pds.only(page, base)
+        page.goto(f"{base}/metrics?by=model#token=t")
+        expect(page.locator("#total-credits")).to_contain_text("2.00 credits")
+        rows = page.locator("#split p-table-row")
+        expect(rows).to_have_count(2)
+        expect(rows.nth(0)).to_contain_text("m1")
+        expect(rows.nth(0)).to_contain_text("1.50")
+        expect(rows.nth(1)).to_contain_text("Model unknown")
+        expect(rows.nth(1)).to_contain_text("0.50")
+        fold = page.locator("#runs p-table-row")  # one builder's consecutive runs share a row that opens
+        expect(fold).to_have_count(1)
+        expect(fold).to_have_attribute("data-runs", "2")
+        expect(fold).to_contain_text("2.00")
+        expect(fold.locator("p-table-cell").nth(2)).to_have_text("c1 · 2 steps")  # one Change, not "2 Changes"
+        button = fold.get_by_role("button", name="builder · 2 runs")
+        expect(button).to_have_attribute("aria-expanded", "false")
+        button.focus()
+        page.keyboard.press("Enter")
+        expect(button).to_have_attribute("aria-expanded", "true")
+        expect(page.locator("#runs .member")).to_have_count(2)
+        expect(page.locator("#runs .member .num")).to_have_text(["1.50", "0.50"])
+        expect(page.locator("#runs .member p-table-cell:nth-child(3)")).to_have_text(["c1 · build", "c1 · amend"])
+        page.keyboard.press("Enter")
+        expect(page.locator("#runs .member")).to_have_count(0)
+        expect(page.locator("#error")).to_have_count(0)
+        browser.close()
 
 
 @pytest.mark.browser
@@ -276,24 +272,19 @@ def test_a_fold_counts_changes_by_project_apart_from_runs_outside_one_and_its_ro
         for line in run(f"r{n}", now + timedelta(minutes=n), spent, {"project": pid, "name": name, "change": change,
                                                                      "step": "build" if change else "", "agent": agent})
     ])  # fmt: skip
-    machine, server, base = serve()
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            page.goto(f"{base}/metrics#token=t")
-            folds = page.locator("#runs p-table-row.fold p-table-cell:nth-child(3)")
-            expect(folds).to_have_text(["1 Change and outside a Change", "2 Changes", "Outside a Change"])
-            page.get_by_role("button", name="builder · 2 runs").click()
-            expect(page.locator("#runs .member p-table-cell:nth-child(3)")).to_have_text(["ch · build", "ch · build"])
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+    with serve() as (_machine, _server, base), sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        page = browser.new_page()
+        pds.only(page, base)
+        page.goto(f"{base}/metrics#token=t")
+        folds = page.locator("#runs p-table-row.fold p-table-cell:nth-child(3)")
+        expect(folds).to_have_text(["1 Change and outside a Change", "2 Changes", "Outside a Change"])
+        page.get_by_role("button", name="builder · 2 runs").click()
+        expect(page.locator("#runs .member p-table-cell:nth-child(3)")).to_have_text(["ch · build", "ch · build"])
+        browser.close()
 
 
 @pytest.mark.browser
@@ -327,36 +318,31 @@ def test_only_a_failed_read_is_said_to_have_failed(pds, whole_error: str) -> Non
         *run("early", now - timedelta(days=40), used(2.0), place),
         *resumed,
     ])  # fmt: skip
-    machine, server, base = serve()
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            errors: list[str] = []
-            page.on("pageerror", lambda e: errors.append(str(e)))
-            pds.only(page, base)
-            page.goto(f"{base}/metrics#token=t")
-            notes = page.locator("#exact li")
-            expect(notes).to_have_count(4)
-            texts = notes.all_inner_texts()
-            assert [t.startswith("1 run ") for t in texts] == [True, True, True, False]
-            assert [("failed" in t) for t in texts].count(True) == 1
-            assert notes.nth(0).locator(".why").all_text_contents() == [unread]
-            assert notes.nth(1).locator(".why").all_text_contents() == [short]
-            assert notes.nth(3).locator(".why").all_text_contents() == [late]
-            expect(notes.nth(3)).to_contain_text("Spend of 1 run may also lie in this period (10.00 or more credits)")
-            expect(notes.nth(0)).to_contain_text("1 run did not report its credits")
-            expect(notes.nth(1)).to_contain_text("its last read failed")
-            expect(page.locator("#lower-bound")).to_contain_text("spent at least this")
-            expect(page.locator("#lower-bound")).not_to_contain_text("failed")
-            assert errors == []
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+    with serve() as (_machine, _server, base), sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        page = browser.new_page()
+        errors: list[str] = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        pds.only(page, base)
+        page.goto(f"{base}/metrics#token=t")
+        notes = page.locator("#exact li")
+        expect(notes).to_have_count(4)
+        texts = notes.all_inner_texts()
+        assert [t.startswith("1 run ") for t in texts] == [True, True, True, False]
+        assert [("failed" in t) for t in texts].count(True) == 1
+        assert notes.nth(0).locator(".why").all_text_contents() == [unread]
+        assert notes.nth(1).locator(".why").all_text_contents() == [short]
+        assert notes.nth(3).locator(".why").all_text_contents() == [late]
+        expect(notes.nth(3)).to_contain_text("Spend of 1 run may also lie in this period (10.00 or more credits)")
+        expect(notes.nth(0)).to_contain_text("1 run did not report its credits")
+        expect(notes.nth(1)).to_contain_text("its last read failed")
+        expect(page.locator("#lower-bound")).to_contain_text("spent at least this")
+        expect(page.locator("#lower-bound")).not_to_contain_text("failed")
+        assert errors == []
+        browser.close()
 
 
 @pytest.mark.browser
@@ -376,33 +362,28 @@ def test_spend_said_apart_from_the_period_never_reads_unknown_as_zero_or_a_count
         return {"credits": spent, "models": {"m1": {"credits": spent, "input": 10, "output": 1}}}
 
     spend_ledger.append([started("o", {})])
-    machine, server, base = serve()
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page(timezone_id="Europe/Berlin")
-            pds.only(page, base)
-            page.goto(f"{base}/metrics#token=t")
-            said = page.locator("#exact li").last
-            expect(said).to_contain_text("Spend of 1 run may also lie in this period (credits not known):")
-            expect(page.locator("#exact")).not_to_contain_text("0.00")
-            spend_ledger.append([started("p", used(3.0))])  # a resumed run whose end is not recorded yet
-            page.reload()
-            expect(said).to_contain_text("Spend of 2 runs may also lie in this period (3.00 or more credits):")
-            spend_ledger.append([started("r", used(3.0)), place | {  # resumed and ended: 1.00 of its own counts
-                "run": "r", "session": "s-r", "id": "end:r", "type": "end", "at": at, "usage": used(4.0),
-                "ending": "result", "limit": None, "stopped": ""}])  # fmt: skip
-            page.reload()
-            expect(page.locator("#total-runs")).to_have_text("1 run")
-            expect(said).to_contain_text("Spend of 3 runs may also lie in this period (6.00 or more credits):")
-            expect(said).to_contain_text("so it is not counted")
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+    with serve() as (_machine, _server, base), sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        page = browser.new_page(timezone_id="Europe/Berlin")
+        pds.only(page, base)
+        page.goto(f"{base}/metrics#token=t")
+        said = page.locator("#exact li").last
+        expect(said).to_contain_text("Spend of 1 run may also lie in this period (credits not known):")
+        expect(page.locator("#exact")).not_to_contain_text("0.00")
+        spend_ledger.append([started("p", used(3.0))])  # a resumed run whose end is not recorded yet
+        page.reload()
+        expect(said).to_contain_text("Spend of 2 runs may also lie in this period (3.00 or more credits):")
+        spend_ledger.append([started("r", used(3.0)), place | {  # resumed and ended: 1.00 of its own counts
+            "run": "r", "session": "s-r", "id": "end:r", "type": "end", "at": at, "usage": used(4.0),
+            "ending": "result", "limit": None, "stopped": ""}])  # fmt: skip
+        page.reload()
+        expect(page.locator("#total-runs")).to_have_text("1 run")
+        expect(said).to_contain_text("Spend of 3 runs may also lie in this period (6.00 or more credits):")
+        expect(said).to_contain_text("so it is not counted")
+        browser.close()
 
 
 HOLD = """
@@ -429,36 +410,31 @@ def test_a_show_more_answered_after_the_filters_changed_is_dropped(pds) -> None:
         *(x for n in range(55) for x in run(f"s{n}", now + timedelta(seconds=n), spent, shop)),
         *(x for n in range(3) for x in run(f"o{n}", now + timedelta(seconds=n), spent, owlbear)),
     ])  # fmt: skip
-    machine, server, base = serve()
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page(timezone_id="Europe/Berlin")
-            pds.only(page, base)
-            page.add_init_script(HOLD)
-            page.goto(f"{base}/metrics#token=t")
-            expect(page.locator("#runs-count")).to_contain_text("The newest 50 of 58 runs.")
-            assert spend_reconcile.settled(10)
-            expect(page.locator("#reconcile")).to_contain_text("Earlier records last read", timeout=10000)
-            page.evaluate("window.__hold = true")
-            page.locator("#more").click()
-            page.wait_for_function("window.__held.length === 1")  # its answer is in, held back
-            pds.pick(page, "Project", "owlbear")
-            expect(page.locator("#runs-count")).to_contain_text("All 3 runs.")
-            page.evaluate("window.__held.forEach((go) => go())")  # the old answer arrives last
-            page.wait_for_timeout(500)
-            expect(page.locator("#runs p-table-row")).to_have_count(1)  # the three reviewer runs fold
-            expect(page.locator("#runs p-table-row")).to_have_attribute("data-runs", "3")
-            expect(page.locator("#runs-count")).to_contain_text("All 3 runs.")
-            expect(page.locator("#more")).to_have_count(0)
-            expect(page.locator("#error")).to_have_count(0)
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+    with serve() as (_machine, _server, base), sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        page = browser.new_page(timezone_id="Europe/Berlin")
+        pds.only(page, base)
+        page.add_init_script(HOLD)
+        page.goto(f"{base}/metrics#token=t")
+        expect(page.locator("#runs-count")).to_contain_text("The newest 50 of 58 runs.")
+        assert spend_reconcile.settled(10)
+        expect(page.locator("#reconcile")).to_contain_text("Earlier records last read", timeout=10000)
+        page.evaluate("window.__hold = true")
+        page.locator("#more").click()
+        page.wait_for_function("window.__held.length === 1")  # its answer is in, held back
+        pds.pick(page, "Project", "owlbear")
+        expect(page.locator("#runs-count")).to_contain_text("All 3 runs.")
+        page.evaluate("window.__held.forEach((go) => go())")  # the old answer arrives last
+        page.wait_for_timeout(500)
+        expect(page.locator("#runs p-table-row")).to_have_count(1)  # the three reviewer runs fold
+        expect(page.locator("#runs p-table-row")).to_have_attribute("data-runs", "3")
+        expect(page.locator("#runs-count")).to_contain_text("All 3 runs.")
+        expect(page.locator("#more")).to_have_count(0)
+        expect(page.locator("#error")).to_have_count(0)
+        browser.close()
 
 
 @pytest.mark.browser
@@ -474,25 +450,23 @@ def test_the_page_reads_again_after_a_pass_whose_worker_started_late(pds, monkey
         return real(projects)
 
     monkeypatch.setattr(spend_reconcile, "run", late)
-    machine, server, base = serve()
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
+    with serve() as (_machine, _server, base):
+        try:
+            with sync_playwright() as pw:
+                try:
+                    browser = pw.chromium.launch()
+                except Error as exc:
+                    go.set()
+                    pytest.skip(f"no Playwright Chromium: {exc}")
+                page = browser.new_page(timezone_id="Europe/Berlin")
+                pds.only(page, base)
+                page.goto(f"{base}/metrics#token=t")
+                expect(page.locator("#reconcile")).to_contain_text("Reading earlier records")
                 go.set()
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page(timezone_id="Europe/Berlin")
-            pds.only(page, base)
-            page.goto(f"{base}/metrics#token=t")
-            expect(page.locator("#reconcile")).to_contain_text("Reading earlier records")
+                expect(page.locator("#reconcile")).to_contain_text("Earlier records last read", timeout=10000)
+                browser.close()
+        finally:
             go.set()
-            expect(page.locator("#reconcile")).to_contain_text("Earlier records last read", timeout=10000)
-            browser.close()
-    finally:
-        go.set()
-        server.should_exit = True
-        machine.stop_all()
 
 
 @pytest.mark.browser
@@ -505,33 +479,28 @@ def test_all_projects_chosen_on_a_clones_page_stays_chosen_after_a_reload(pds) -
     shop = {"project": "shop", "name": "shop", "clone": "c-shop", "change": "c1", "agent": "builder"}
     owlbear = {"project": "owlbear", "name": "owlbear", "clone": "c-owl", "change": "c2", "agent": "reviewer"}
     spend_ledger.append([*run("a", now, spent, shop), *run("b", now, spent, owlbear)])
-    machine, server, base = serve()
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page(timezone_id="Europe/Berlin")
-            pds.only(page, base)
+    with serve() as (_machine, _server, base), sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        page = browser.new_page(timezone_id="Europe/Berlin")
+        pds.only(page, base)
 
-            def listed(route) -> None:  # the bar serves the clone, so the page keeps ?project=
-                answer = route.fetch()
-                clone = {"id": "c-shop", "name": "shop", "path": "/clones/shop", "state": "loaded"}
-                route.fulfill(response=answer, json=answer.json() | {"projects": [clone]})
+        def listed(route) -> None:  # the bar serves the clone, so the page keeps ?project=
+            answer = route.fetch()
+            clone = {"id": "c-shop", "name": "shop", "path": "/clones/shop", "state": "loaded"}
+            route.fulfill(response=answer, json=answer.json() | {"projects": [clone]})
 
-            page.route("**/api/next/projects", listed)
-            page.goto(f"{base}/metrics?project=c-shop#token=t")
-            expect(page.locator("#total-credits")).to_contain_text("1.00 credits")  # the bar's clone: its project
-            pds.pick(page.get_by_role("group", name="Show only"), "Project", "")  # All projects
-            expect(page.locator("#total-credits")).to_contain_text("2.00 credits")
-            page.reload()
-            expect(page.locator("#total-credits")).to_contain_text("2.00 credits")  # still every project
-            expect(page.locator("#error")).to_have_count(0)
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+        page.route("**/api/next/projects", listed)
+        page.goto(f"{base}/metrics?project=c-shop#token=t")
+        expect(page.locator("#total-credits")).to_contain_text("1.00 credits")  # the bar's clone: its project
+        pds.pick(page.get_by_role("group", name="Show only"), "Project", "")  # All projects
+        expect(page.locator("#total-credits")).to_contain_text("2.00 credits")
+        page.reload()
+        expect(page.locator("#total-credits")).to_contain_text("2.00 credits")  # still every project
+        expect(page.locator("#error")).to_have_count(0)
+        browser.close()
 
 
 def test_a_reconcile_error_keeps_its_whole_text(tmp_path, monkeypatch, caplog, whole_error) -> None:

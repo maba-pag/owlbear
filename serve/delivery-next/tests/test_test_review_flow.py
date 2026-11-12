@@ -10,12 +10,25 @@ from typing import TYPE_CHECKING
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next.change_contracts import curation_tools, tools
+from owlbear_delivery_next.change_contracts import check_hint, curation_tools, tools
+from owlbear_delivery_next.change_contracts.curation_records import TestReview
 from owlbear_delivery_next.change_contracts.curation_tools import TEST_CURATION, TestCurationResult, TestReviewResult
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem
-from owlbear_delivery_next.change_contracts.models import Exit, Step, StepKind, Task
-from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
+from owlbear_delivery_next.change_contracts.models import (
+    Brief,
+    Change,
+    Criterion,
+    Exit,
+    Names,
+    Plan,
+    Step,
+    StepKind,
+    Task,
+)
+from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_flow import loop, stuck, worktree
 from owlbear_delivery_next.change_flow.brief_rounds import ready
+from owlbear_delivery_next.change_flow.curation_flow import CURATE
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity, status
 from owlbear_delivery_next.commands import runner
@@ -24,9 +37,18 @@ from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.settings import config, profile
+from owlbear_delivery_next.state_store import identities
+from owlbear_delivery_next.state_store.briefs import new_slug
 from owlbear_delivery_next.state_store.store import Store
-from owlbear_delivery_next.workflow_steps import curation, curation_build, curation_shares, sessions
+from owlbear_delivery_next.workflow_steps import (
+    curation,
+    curation_build,
+    curation_shares,
+    repair_copy,
+    sessions,
+    step_repair,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -109,6 +131,7 @@ def reviewed(cfg) -> Run:
 def review(repo, monkeypatch):
     """A started review of both packages, its sessions faked; ``ran`` holds each wave's shares."""
     store = Store.open(repo)
+    store.write_profile(profile.confirm(Profile(), "check:.", "uv run pytest", NOW))
     c = curation.start(store, repo, [".", "web"], NOW)
     ends, ran = {}, []
 
@@ -119,6 +142,38 @@ def review(repo, monkeypatch):
     monkeypatch.setattr(sessions.sdk_adapter, "run", session)
     monkeypatch.setattr(sessions, "GRANT", 1)
     return SimpleNamespace(store=store, slug=c.slug, ends=ends, ran=ran, repo=repo)
+
+
+@pytest.fixture
+def started(tmp_path: Path) -> SimpleNamespace:
+    """The Change ``review``'s start writes, built as the start builds it but without Git: its commit is a fixed one."""
+    store = Store(tmp_path / "store")
+    number, slug = identities.reserve(store, lambda n, taken: new_slug(f"{curation.TITLE} {n}", taken))
+    found = [
+        curation_shares.Package(".", {"tests/helpers.py": 1, "tests/test_a.py": 3}),
+        curation_shares.Package("web", {"web/src/b.test.ts": 2}),
+    ]
+    scope = [p.path for p in found]
+    criteria = [Criterion(id=f"AC-{i}", text=t) for i, t in enumerate(curation.CRITERIA, 1)]
+    brief = Brief(
+        version=1, title=curation.TITLE, outcome=curation.OUTCOME, scope=scope, criteria=criteria, challenged=1
+    )
+    brief.approved_version, brief.approved_at = 1, NOW
+    brief.approved = [brief.model_copy(deep=True)]
+    branch = f"owlbear/{slug}"
+    c = Change(
+        slug=slug,
+        handle=f"c{number}",
+        profile_version=(store.read_profile() or Profile()).version,
+        brief=brief,
+        plan=Plan(tasks=[Task(id=CURATE, title="Curate the tests", scope=scope, detail=curation.RULES)]),
+        step=Step(kind=StepKind.TESTS),
+        names=Names(branch=branch, target="main", worktree=str(tmp_path / slug)),
+        tests=TestReview(commit="c" * 40, packages=scope, shares=curation_shares.split(found)),
+    )
+    with store.lock(slug) as lock:
+        identities.publish_reserved(store, lock, c)
+    return SimpleNamespace(store=store, slug=slug, repo=tmp_path)
 
 
 def step(r) -> None:
@@ -172,8 +227,10 @@ def test_a_moved_worktree_stops_the_review_before_any_share(review):
     assert (review.ran, c.outcome.exit, "not at the commit it reviews" in c.stop.reason) == ([], Exit.STOP, True)
 
 
-def test_a_test_review_never_shapes_or_plans_and_its_status_counts_shares_and_the_owner_reruns_its_stopped_step(review):
-    c = review.store.read(review.slug)
+def test_a_test_review_never_shapes_or_plans_and_its_status_counts_shares_and_the_owner_reruns_its_stopped_step(
+    started, whole_error
+):
+    c = started.store.read(started.slug)
     line = status(c, Activity(host_up=True, runner_alive=True), NOW).line
     assert "starting: Review the tests · 0 of 2 shares done" in line  # no share has started yet (#718)
     c = c.model_copy(update={"step": Step(kind=StepKind.BUILD, task="t1")})
@@ -186,21 +243,39 @@ def test_a_test_review_never_shapes_or_plans_and_its_status_counts_shares_and_th
         'Abandon the test review, or press "Done: run the step again" on the Changes page to run its step again',
         'You pressed "Done: run the step again"',
     )  # not Resume, which clears only a pause (#754)
+    again = started.store.read(started.slug).model_copy(update={"step": Step(kind=StepKind.BUILD, task="t1")})
+    sent = StepResult(exit=Exit.BACK, back_to=StepKind.PLAN, cause="scope:build:premise", reason="the plan is wrong")
+    for _ in range(4):  # REPLAN_LIMIT and RETRY_LIMIT never reached: nothing is counted
+        again = apply(again.model_copy(update={"outcome": None, "stop": None}), sent, NOW)
+    assert (again.step.kind, again.outcome.exit, again.budgets.replans, again.budgets.causes) == (
+        StepKind.BUILD,
+        Exit.STOP,
+        0,
+        {},
+    )
+    again, step_ = loop.schedule(again.model_copy(update={"outcome": None, "stop": None}),
+                                 [IntentItem(at=NOW, intent="change", text="also docs")], NOW)  # fmt: skip
+    assert (again.step.kind, again.outcome.exit, step_) == (StepKind.BUILD, Exit.STOP, None)  # a change request too
+    whole = started.store.read(started.slug).model_copy(update={"step": Step(kind=StepKind.BUILD, task="t1")})
+    long = StepResult(exit=Exit.BACK, back_to=StepKind.PLAN, cause="scope:build:premise", reason=whole_error)
+    whole = apply(whole, long, NOW)
+    expected = f"a test review keeps its fixed brief and plan: {whole_error}"
+    assert (whole.stop.reason, whole.outcome.reason) == (expected, expected)  # the whole reason, never cut
     done = c.model_copy(update={"finished_at": NOW, "tests": c.tests.model_copy(update={"unchanged": True})})
     assert status(done, Activity(host_up=True), NOW).line == "Done · no test changed"
-    with review.store.lock(review.slug) as lock:
-        review.store.write(lock, c)
-    client = TestClient(api.create_app(review.store, "tok", Host(review.store, review.repo)),
+    with started.store.lock(started.slug) as lock:
+        started.store.write(lock, c)
+    client = TestClient(api.create_app(started.store, "tok", Host(started.store, started.repo)),
                         base_url="http://127.0.0.1", headers=AUTH)  # fmt: skip
     shown = c.stop.model_dump(mode="json", include={"action", "at"})
-    assert client.post(f"/api/next/changes/{review.slug}/recovery", json=shown).status_code == 200
-    with review.store.lock(review.slug) as lock:
-        after, _ = review.store.fold(lock, review.slug, NOW, None)
+    assert client.post(f"/api/next/changes/{started.slug}/recovery", json=shown).status_code == 200
+    with started.store.lock(started.slug) as lock:
+        after, _ = started.store.fold(lock, started.slug, NOW, None)
     assert (after.stop, loop.next_step(after, NOW), after.brief, after.plan) == (None, c.step, c.brief, c.plan)
 
 
-def test_an_unchanged_curation_goes_straight_to_cleanup_and_a_changed_one_to_its_review(review):
-    c = review.store.read(review.slug)
+def test_an_unchanged_curation_goes_straight_to_cleanup_and_a_changed_one_to_its_review(started):
+    c = started.store.read(started.slug)
     c = c.model_copy(update={"step": Step(kind=StepKind.BUILD, task="t1")})
     changed = apply(c, StepResult(exit=Exit.DONE, reason="applied 3"), NOW)
     assert (changed.step.kind, changed.step.task) == (StepKind.REVIEW, "t1")
@@ -208,11 +283,11 @@ def test_an_unchanged_curation_goes_straight_to_cleanup_and_a_changed_one_to_its
     assert apply(c, StepResult(exit=Exit.DONE, reason="nothing held"), NOW).step.kind == StepKind.CLEANUP
 
 
-def test_shares_wait_for_the_project_s_slots_like_any_step(review):
-    c = review.store.read(review.slug)
+def test_shares_wait_for_the_project_s_slots_like_any_step(started):
+    c = started.store.read(started.slug)
     host = SimpleNamespace(
         wants={c.slug: session_slots.wanted(c, c.step)}, slots=Slots(lambda: 4), asked=set(),
-        record=SimpleNamespace(project="p"), store=review.store,
+        record=SimpleNamespace(project="p"), store=started.store,
     )  # fmt: skip
     assert session_slots.reserve(host, c.slug) == 2  # the project's limit: two shares at once
 
@@ -265,20 +340,43 @@ def curated(applied: bool):  # noqa: FBT001 - one switch per test
 
 
 def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(curating, monkeypatch, user_on):
+    prof = profile.confirm(Profile(), "check:.", "uv run pytest", NOW)
+    prof = profile.confirm(prof, "check:api", "npm test", NOW)
+    prof = profile.confirm(prof, "check:web", "npm test", NOW)
+    curating.store.write_profile(prof)
     curating.curate = curated(applied=True)
     base = config.BASE  # the builder's own session values unset: the curator's build never needs them
     builder = base.agents["builder"].model_copy(update={"model": None, "effort": None, "minutes": None})
     monkeypatch.setattr(config, "BASE", base.model_copy(update={"agents": base.agents | {"builder": builder}}))
     step(curating)
     [cfg] = curating.seen
+    c = curating.store.read(curating.slug)
     assert (cfg.role, cfg.model, cfg.effort, cfg.context, cfg.submit) == (
         "test-curator", "claude-opus-5.5", "high", "long", TEST_CURATION
     )  # fmt: skip
     assert cfg.user == user_on
+    assert cfg.checks == (
+        check_hint.qualified(".", "uv run pytest"),
+        check_hint.qualified("web", "npm test"),
+    )
+    assert cfg.checks[0] in cfg.message
+    repair = c.model_copy(update={"step": Step(kind=StepKind.BUILD, task=CURATE)}, deep=True)
+    stuck.start(repair, "project-env:build:measurement", "the suite measurement cannot finish", NOW)
+    witness = step_repair._witness  # noqa: SLF001
+    assert witness(repair, prof, cfg.worktree) == cfg.checks
+    partial = profile.confirm(Profile(), "check:web", "npm test", NOW)
+    with pytest.raises(ValueError, match="lack confirmed checks"):
+        witness(repair, partial, cfg.worktree)
+    follow = repair.model_copy(deep=True)
+    follow.plan.tasks.append(Task(id="r1", title="Fix the review", scope=["."]))
+    follow.step.task = follow.repairs.current.task = "r1"
+    with monkeypatch.context() as ordinary:
+        ordinary.setattr(worktree, "owns_changed_runner", lambda *_: False)
+        confirmed = profile.confirm(Profile(), "check:.", "uv run pytest", NOW)
+        assert witness(follow, confirmed, cfg.worktree) == (check_hint.qualified(".", "uv run pytest"),)
     assert "tests/test_a.py::old: retire" in cfg.message
     assert "share 2 (web/src/b.test.ts" not in cfg.message  # every share ended
     assert "::slow" not in cfg.message  # rewrite-lower waits (TD-312)
-    c = curating.store.read(curating.slug)
     assert (c.tests.report.applied[0].test, c.tests.unchanged, c.step.kind) == (
         "tests/test_a.py::old", False, StepKind.REVIEW
     )  # fmt: skip
@@ -286,6 +384,54 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
     assert "Before: `uv run pytest -q`" in text
     assert "- tests/test_a.py::old: retire, removed" in text
     assert "Rewrite lower, for later (1):\n- tests/test_a.py::slow: b" in text
+
+
+def test_curator_measurements_refuse_a_mixed_changed_runner(curating, monkeypatch):
+    c = curating.store.read(curating.slug)
+    c.step = Step(kind=StepKind.BUILD, task=CURATE)
+    prof = profile.confirm(Profile(), "check:.", "uv run test --changed", NOW)
+    prof = profile.confirm(prof, "check:api", "uv run pytest", NOW)
+    prof = profile.confirm(prof, "check:web", "npm test", NOW)
+    owns_runner = worktree.owns_changed_runner
+    monkeypatch.setattr(worktree, "owns_changed_runner", lambda *_: True)
+    stuck.start(c, "project-env:build:measurement", "the suite measurement cannot finish", NOW)
+    witness = step_repair._witness  # noqa: SLF001
+    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
+        witness(c, prof, curating.repo)
+    python = c.model_copy(deep=True)
+    python.tests.packages = ["."]
+    python.tests.shares = python.tests.shares[:1]
+    assert witness(python, prof, curating.repo) == (
+        check_hint.task_command(
+            check_hint.qualified(".", "uv run test --changed -m tests"), c.tests.commit, c.tests.commit
+        ),
+    )
+    mixed = python.model_copy(deep=True)
+    mixed.tests.shares[0].paths.append("tests/client.test.ts")
+    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
+        witness(mixed, prof, curating.repo)
+    mixed.tests.shares[0].paths[-1] = "tests/client_test.py"
+    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
+        witness(mixed, prof, curating.repo)
+    mixed.tests.shares[0].paths[-1] = "serve/demo/test/helpers.py"
+    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
+        witness(mixed, prof, curating.repo)
+    mixed.tests.shares[0].paths[-1] = "conftest.py"
+    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
+        witness(mixed, prof, curating.repo)
+    owned = c.model_copy(deep=True)
+    owned.tests.packages = ["api", "web"]
+    owned.tests.shares[0].paths = ["api/tests/test_a.py"]
+    assert witness(owned, prof, curating.repo) == (
+        check_hint.qualified("api", "uv run pytest"),
+        check_hint.qualified("web", "npm test"),
+    )
+    manifest = curating.repo / "serve/tools/pyproject.toml"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text("[project\n")
+    monkeypatch.setattr(worktree, "owns_changed_runner", owns_runner)
+    with pytest.raises(repair_copy.RepairError, match="cannot resolve the curator's unchanged measurement"):
+        witness(python, prof, curating.repo)
 
 
 def test_a_curation_that_applies_nothing_ends_without_review_or_pr(curating):
@@ -321,19 +467,6 @@ def test_a_curation_result_must_match_what_its_commits_show():
     assert curation_tools.check(elsewhere, tools.Worktree("c" * 40, "a" * 40)) == [
         f"before.commit: measure on the commit you started from, {'a' * 12}"
     ]
-
-
-def test_a_change_request_or_a_step_back_stops_the_review_and_counts_nothing(review):
-    from owlbear_delivery_next.change_contracts.inbox import IntentItem  # noqa: PLC0415
-
-    c = review.store.read(review.slug).model_copy(update={"step": Step(kind=StepKind.BUILD, task="t1")})
-    back = StepResult(exit=Exit.BACK, back_to=StepKind.PLAN, cause="scope:build:premise", reason="the plan is wrong")
-    for _ in range(4):  # REPLAN_LIMIT and RETRY_LIMIT never reached: nothing is counted
-        c = apply(c.model_copy(update={"outcome": None, "stop": None}), back, NOW)
-    assert (c.step.kind, c.outcome.exit, c.budgets.replans, c.budgets.causes) == (StepKind.BUILD, Exit.STOP, 0, {})
-    c, step_ = loop.schedule(c.model_copy(update={"outcome": None, "stop": None}),
-                             [IntentItem(at=NOW, intent="change", text="also docs")], NOW)  # fmt: skip
-    assert (c.step.kind, c.outcome.exit, step_) == (StepKind.BUILD, Exit.STOP, None)
 
 
 def test_a_round_gated_on_one_share_keeps_the_others_reviews(review, monkeypatch):
@@ -381,11 +514,3 @@ def test_only_the_curation_task_is_the_curator_s_and_its_pr_text_fits(curating):
     text = curation_build.body(c)
     assert len(text) <= curation_build.BODY
     assert text.endswith("- \u2026 the rest is in the Change's record")
-
-
-def test_a_test_review_sent_back_stops_with_its_whole_reason(review, whole_error):
-    c = review.store.read(review.slug).model_copy(update={"step": Step(kind=StepKind.BUILD, task="t1")})
-    back = StepResult(exit=Exit.BACK, back_to=StepKind.PLAN, cause="scope:build:premise", reason=whole_error)
-    c = apply(c, back, NOW)
-    expected = f"a test review keeps its fixed brief and plan: {whole_error}"
-    assert (c.stop.reason, c.outcome.reason) == (expected, expected)

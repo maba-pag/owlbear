@@ -50,16 +50,6 @@ def step() -> sdk_adapter._Step:
     return sdk_adapter._Step(session(), SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
 
 
-def test_a_runs_counts_add_to_each_tools_total() -> None:
-    use = ToolUse().plus({"a": {"calls": 2, "rejected": 1, "retries": 1}})
-    use = use.plus({"a": {"calls": 1, "late": 1}, "b": {"calls": 3, "lint": 2}})
-    assert use.tools == {
-        "a": ToolTally(calls=3, rejected=1, late=1, retries=1),
-        "b": ToolTally(calls=3, lint=2),
-    }
-    assert ToolUse.model_validate_json(use.model_dump_json()) == use
-
-
 def test_a_refused_submit_then_an_accepted_one_counts_a_rejection_and_a_retry_and_a_late_call_counts_late() -> None:
     g = gate()
     assert g.call(tools.SUBMIT, {"summary": "x"})[1] is False
@@ -105,6 +95,13 @@ def test_a_verdict_before_the_first_look_or_a_second_look_is_the_wrong_moment() 
 
 
 def test_a_runs_wrong_choices_add_to_the_changes_and_old_refusals_stay_unsplit() -> None:
+    use = ToolUse().plus({"a": {"calls": 2, "rejected": 1, "retries": 1}})
+    use = use.plus({"a": {"calls": 1, "late": 1}, "b": {"calls": 3, "lint": 2}})
+    assert use.tools == {
+        "a": ToolTally(calls=3, rejected=1, late=1, retries=1),
+        "b": ToolTally(calls=3, lint=2),
+    }
+    assert ToolUse.model_validate_json(use.model_dump_json()) == use
     old = ToolUse.model_validate({"tools": {"a": {"calls": 2, "rejected": 2}}})  # kept before the split
     use = old.plus({"a": {"calls": 1, "rejected": 1, "invalid": 1}}, {"denied": 2})
     use = use.plus({}, {"denied": 1, "no_result": 1})

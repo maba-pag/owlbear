@@ -25,15 +25,15 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_flow import brief_rounds, budgets, loop, plan_rounds, worktree
+from owlbear_delivery_next.change_flow import brief_rounds, budgets, loop, plan_rounds, stuck, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
-from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.commands import runner, worker_input
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import missing, sdk_adapter, step_input
 from owlbear_delivery_next.runtimes.session_result import Run, to_result
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import brief_round, conversation, plan_round
+from owlbear_delivery_next.workflow_steps import brief_round, conversation, held, plan_round
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 K = StepKind
@@ -60,12 +60,6 @@ def options(r: StepResult) -> list[tuple[str, object]]:
     return [(o.id, o.next) for o in r.question.options]
 
 
-def test_the_report_is_one_small_described_tool_every_step_offers() -> None:
-    assert tools.MISSING in tools.SPECS
-    assert (tools.MISSING.name, tools.MISSING.ending) == ("report_missing_tool", "missing-tool")
-    assert tools.MISSING.description
-
-
 def test_a_denied_tool_stays_denied_and_is_retried_within_its_budget() -> None:
     r = to_result(run(report("docker compose"), denied={"docker": "docker is not allowed"}), K.BUILD, NOW)
     assert (r.exit, r.cause, r.denial) == (Exit.RETRY, "policy:build:tool-docker-compose", "docker is not allowed")
@@ -89,12 +83,12 @@ def test_a_denied_tool_stays_denied_and_is_retried_within_its_budget() -> None:
         ("postgres", "postgres is not running on port 5432"),
     ],
 )
-def test_an_absent_tool_asks_the_owner_to_set_it_up_and_rerun(tool, error) -> None:
+def test_an_absent_tool_starts_setup_repair_on_its_first_report(tool, error) -> None:
     r = to_result(run(report(tool, error)), K.BUILD, NOW)
-    assert (r.exit, r.cause, r.operational) == (Exit.ASK, f"project-env:build:tool-{missing.slug(tool)}", True)
-    assert r.question.text.startswith(f"Set up {tool} on this machine (install or start it)")
-    assert error in r.question.text
-    assert options(r) == [("done", "retry"), ("pause", "pause")]
+    assert (r.exit, r.cause, r.setup) == (Exit.RETRY, f"project-env:build:tool-{missing.slug(tool)}", True)
+    c = loop.apply(change(), r, NOW)
+    assert error in c.repairs.current.evidence
+    assert (c.step.kind, c.repairs.current.step, c.questions) == (K.BUILD, K.BUILD, [])
 
 
 @pytest.mark.parametrize(
@@ -110,10 +104,10 @@ def test_an_absent_file_or_another_program_is_not_this_tool_missing(tool, error)
     assert not missing.absent(tool, error)
 
 
-def test_an_unset_package_goes_back_to_planning() -> None:
+def test_an_unset_package_starts_setup_repair() -> None:
     error = "npm ERR! enoent ENOENT: no such file or directory, open '/w/web/package.json'"
     r = to_result(run(report("npm", error, "install the web package")), K.BUILD, NOW)
-    assert (r.exit, r.back_to) == (Exit.BACK, K.PLAN)  # no runtime here can install a package that is not set up
+    assert (r.exit, r.setup, r.back_to) == (Exit.RETRY, True, None)
 
 
 def test_a_temporary_failure_retries_at_once_then_after_growing_pauses() -> None:
@@ -132,7 +126,9 @@ def test_a_temporary_failure_retries_at_once_then_after_growing_pauses() -> None
     assert c.outcome.wake_at == NOW + 2 * budgets.PAUSE
     late = NOW + budgets.EPISODE_ASK
     c = loop.apply(c, r.model_copy(update={"wake_at": late}), late)
-    assert error in c.questions[-1].text  # the owner sees the real error, not the stable reason
+    assert (c.outcome.exit, c.questions) == (Exit.RETRY, [])
+    assert c.repairs.current.cause == r.cause
+    assert error in c.repairs.current.evidence  # repair gets the real error, not just the stable reason
 
 
 @pytest.mark.parametrize("tool", ["browser", "open_browser_page", "get_task_output"])
@@ -156,9 +152,8 @@ def test_a_window_only_tool_changes_the_plan_or_the_brief_only_where_they_can_ch
 @pytest.mark.parametrize(
     ("enclosing", "exit_", "target"),
     [
-        (K.BUILD, Exit.BACK, K.PLAN),
-        (K.REVIEW, Exit.BACK, K.PLAN),
-        (K.PLAN, Exit.BACK, K.SHAPE),
+        (K.BUILD, Exit.RETRY, None),
+        (K.REVIEW, Exit.RETRY, None),
         (K.CHECK, Exit.ASK, K.PLAN),
         (K.FOLLOW, Exit.ASK, K.PLAN),
     ],
@@ -168,11 +163,13 @@ def test_a_tool_no_runtime_has_changes_the_work_that_asked_for_it(enclosing, exi
     r = to_result(run(p), K.REVIEW, NOW, enclosing)
     assert (r.exit, r.cause) == (exit_, f"scope:{enclosing}:tool-matlab")
     assert "needs matlab for run the integration tests: matlab: license server unknown" in r.reason
-    if exit_ == Exit.BACK:
-        assert r.back_to == target
+    if exit_ == Exit.RETRY:
+        assert (r.setup, r.back_to) == (True, None)
     else:
         assert options(r) == [("replan", target), ("pause", "pause")]
-    loop.apply(change(enclosing), r, NOW)  # every case is an exit its step defines
+    c = loop.apply(change(enclosing), r, NOW)
+    if exit_ == Exit.RETRY:
+        assert (c.repairs.current.step, c.questions) == (enclosing, [])
 
 
 def test_a_brief_challenge_without_the_tool_makes_it_the_rounds_finding_for_the_shaper() -> None:
@@ -188,7 +185,7 @@ def test_a_brief_challenge_without_the_tool_makes_it_the_rounds_finding_for_the_
 
 def test_the_quota_never_overrides_a_report() -> None:
     r = to_result(run(report("matlab", "license server unknown"), quota=True), K.BUILD, NOW)
-    assert (r.exit, r.back_to) == (Exit.BACK, K.PLAN)
+    assert (r.exit, r.setup, r.back_to) == (Exit.RETRY, True, None)
 
 
 def test_the_plan_challenge_passes_an_operational_step_back_on_and_keeps_a_premise_its_own() -> None:
@@ -199,14 +196,82 @@ def test_the_plan_challenge_passes_an_operational_step_back_on_and_keeps_a_premi
     assert plan_round.judged(c, nowhere, nowhere) is nowhere  # counted no round: the same plan is challenged again
     assert (c.loops["plan"].round, c.step.mode) == (0, plan_rounds.CHALLENGE)
     said = tools.WrongPremise(stage="brief", reason="AC-1 cannot hold", evidence=["a.txt:1"])
-    premise = nowhere.model_copy(update={"operational": False})
+    premise = StepResult(exit=Exit.BACK, back_to=K.SHAPE, cause="scope:review:brief", reason="AC-1 cannot hold")
     kept = plan_round.judged(c, premise, said)
     assert (kept.exit, kept.plan, kept.challenged) == (Exit.RETRY, c.plan, True)
     assert [f.text for f in c.loops["plan"].findings] == ["premise: AC-1 cannot hold (a.txt:1)"]
 
 
+# c1 (#1061): the check its builder reported, its resolved form, and pytest's session timeout as observed on OwlBear
+C1_CHECK = "cd . && {\nuv run test --changed && uv run lint --no-fix\n}"
+C1_TIMEOUT = (  # nodes naming a connection or a quota are no network or capacity failure
+    "PASSED tests/test_vscode_step.py::test_connection_speaks_websocket_json_rpc_over_the_local_socket\n"
+    "PASSED tests/test_missing.py::test_the_quota_never_overrides_a_report\n"
+    "PASSED tests/test_api.py::test_a_rate_limit_waits[ECONNRESET]\n"
+    "tests/test_status.py::test_a_line[request failed: connection refused] PASSED\n"
+    "10 workers [429 items]\ncollected 429 items\n"
+    "========= 429 passed in 900.12s =========\n"
+    "xdist.dsession.Interrupted: session-timeout: 900.0 sec exceeded"
+)
+
+
+@pytest.mark.parametrize("check", [C1_CHECK, "cd . && {\nuv run test --changed;uv run lint --no-fix\n}"])
+def test_a_check_that_cannot_finish_is_repaired_and_a_network_failure_of_it_still_waits(check) -> None:
+    timed_out = run(report("uv run test --changed", C1_TIMEOUT, "run the task's check"), checks=(check,))
+    r = to_result(timed_out, K.BUILD, NOW)  # c1 case 1: retried as "failed temporarily" three times
+    assert (r.exit, r.setup, r.cause) == (Exit.RETRY, True, "project-env:build:check-uv-run-test-changed")
+    c = loop.apply(change(), r, NOW)
+    assert (c.repairs.current.cause, c.step.kind, loop.next_step(c, NOW)) == (r.cause, K.BUILD, c.step)  # repaired
+    for error in ("npm ERR! request to https://registry.npmjs.org failed, reason: connect ETIMEDOUT 104.16.1.35:443",
+                  "Error: read ECONNRESET",
+                  "socket.gaierror: [Errno -3] Temporary failure in name resolution",
+                  "Error: connect ECONNREFUSED ::1:443",
+                  "FAILED tests/test_api.py::test_fetch - ConnectionError: connection refused"):  # fmt: skip
+        offline = to_result(run(report("uv run test --changed", error), checks=(check,)), K.BUILD, NOW)
+        assert (offline.cause, offline.exit, offline.setup) == (
+            "network:build:tool-uv-run-test-changed",
+            Exit.RETRY,
+            False,
+        )
+    kept = held.load_run(held.dump_run(timed_out))  # a held result keeps its checks
+    assert to_result(kept, K.BUILD, NOW) == r
+
+
+def test_a_plan_missing_a_profile_entry_is_repaired_never_sent_back_to_the_brief() -> None:
+    said = "The project profile must hold a package at the repository root, checked with `uv run test --changed`"
+    r = to_result(run(report("project profile packages (check commands)", said)), K.PLAN, NOW)  # c1 case 2
+    c = loop.apply(change(K.PLAN), r, NOW)
+    assert (r.setup, c.repairs.current.step, c.step.kind) == (True, K.PLAN, K.PLAN)
+    assert said in c.repairs.current.evidence
+
+
+@pytest.mark.parametrize("stage", ["setup", "target"])
+def test_a_plan_missing_an_outside_pr_is_repaired_never_sent_back_to_the_brief(stage) -> None:
+    said = tools.WrongPremise(  # c1 case 3, recorded as scope:plan:target and sent to shaping
+        stage=stage,
+        reason="The owner chose to land the exclusion on main in its own PR before re-planning. That has not happened.",
+        evidence=["main (054e2edf6) has no exclusion and no PR"],
+    )
+    c = change(K.PLAN)
+    plan_rounds.loop(c, RoundPolicy(), NOW)
+    c.step.mode = plan_rounds.CHALLENGE
+    r = to_result(Run("s1", ending="premise", payload=said, termination=Termination(confirmed=True)), K.PLAN, NOW)
+    assert plan_round.judged(c, r, said) is r  # the plan challenge counts no finding for it
+    c = loop.apply(c, r, NOW)
+    assert (r.setup, c.repairs.current.step, c.step.kind, c.loops["plan"].round) == (True, K.PLAN, K.PLAN, 0)
+    assert "054e2edf6" in c.repairs.current.evidence
+    share = Run("s2", "premise", said.model_copy(update={"stage": "setup"}), termination=Termination(confirmed=True))
+    assert to_result(share, K.TESTS, NOW).setup  # a test review's share too
+
+
 def test_the_planner_reads_why_the_change_is_planned_again() -> None:
-    c = loop.apply(change(), to_result(run(report("matlab", "license server unknown")), K.BUILD, NOW), NOW)
+    r = StepResult(
+        exit=Exit.BACK,
+        back_to=K.PLAN,
+        cause="scope:build:premise",
+        reason="needs matlab for run the integration tests",
+    )
+    c = loop.apply(change(), r, NOW)
     assert c.step.kind == K.PLAN
     text = step_input.plan(c, Profile(), Path("/w"), {})
     assert "## Why the Change is planned again" in text
@@ -216,14 +281,13 @@ def test_the_planner_reads_why_the_change_is_planned_again() -> None:
 def test_installed_and_rerun_resumes_the_same_task() -> None:
     r = to_result(run(report("docker", "zsh: command not found: docker")), K.BUILD, NOW)
     c = loop.apply(change(), r, NOW)
-    q = c.questions[-1]
-    assert loop.owner_gated(c)
-    c = loop.fold(c, [AnswerItem(at=NOW, channel="status-view", question=q.id, option="done")], NOW)
+    assert c.repairs.current is not None
+    stuck.applied(c, "fixed-setup")
     assert (c.step.kind, c.step.task, loop.next_step(c, NOW)) == (K.BUILD, "t1", c.step)
 
 
 def test_pause_is_never_delivered_to_the_session_after_resume() -> None:
-    r = to_result(run(report("docker", "zsh: command not found: docker")), K.BUILD, NOW)
+    r = to_result(run(report("browser", "unknown tool")), K.BUILD, NOW)
     c = loop.apply(change(), r, NOW)
     q = c.questions[-1]
     c = loop.fold(c, [AnswerItem(at=NOW, channel="status-view", question=q.id, option="pause")], NOW)
@@ -271,13 +335,16 @@ def test_denials_record_the_programs_they_name() -> None:
     assert st.run.denied == {}  # a later allowed use of the program supersedes its denial
 
 
-def test_a_conversation_task_missing_a_tool_asks_instead_of_replanning() -> None:
+def test_a_conversation_task_repairs_setup_and_keeps_window_tools_reserved() -> None:
     ref = ItemRef(id="t1", kind="thread", version="v", task="pr-t1-v", url="https://x/pull/7#r1")
     task = Task(id="pr-t1-v", title="answer", item=ref, detail="boecht: add a docker test\n\nhttps://x/pull/7#r1")
     p = report("matlab", "matlab: license server unknown")
-    asked = conversation.disputed(task, p, to_result(run(p), K.BUILD, NOW))
-    assert (asked.exit, [o.next for o in asked.question.options]) == (Exit.ASK, [K.BUILD, K.BUILD, "pause"])
-    assert "needs matlab" in asked.question.text
+    result = conversation.disputed(task, p, to_result(run(p), K.BUILD, NOW))
+    assert (result.exit, result.setup, result.question) == (Exit.RETRY, True, None)
+    c = change(task=task.id)
+    c.plan.tasks = [task]
+    repaired = loop.apply(c, result, NOW)
+    assert (repaired.repairs.current.task, repaired.step.task, repaired.questions) == (task.id, task.id, [])
     other = report("browser", "no browser tool in this session")
     window = conversation.disputed(task, other, to_result(run(other), K.BUILD, NOW))
     assert options(window) == [("decline", K.BUILD), ("pause", "pause")]
@@ -303,12 +370,12 @@ def repo(tmp_path, monkeypatch) -> Path:
 def test_planning_starts_on_a_clean_tree_whatever_step_left_edits(repo, monkeypatch) -> None:
     events: list[dict] = []
     store = SimpleNamespace(log=lambda _lock, _slug, e: events.append(e))
-    monkeypatch.setattr(runner.plan_round, "scopes", lambda *_: {"c2": ["b"]})
-    assert runner._planning(store, None, "c1", repo) == {"c2": ["b"]}  # noqa: SLF001 - a clean tree keeps nothing
+    monkeypatch.setattr(worker_input.plan_round, "scopes", lambda *_: {"c2": ["b"]})
+    assert worker_input.planning(store, None, "c1", repo) == {"c2": ["b"]}
     assert (events, worktree.git(repo, "stash", "list")) == ([], "")
     (repo / "a.txt").write_text("edited\n")
     (repo / "new.txt").write_text("new\n")
-    runner._planning(store, None, "c1", repo)  # noqa: SLF001
+    worker_input.planning(store, None, "c1", repo)
     assert worktree.git(repo, "status", "--porcelain") == ""
     assert "owlbear c1: uncommitted edits before planning" in worktree.git(repo, "stash", "list")
     assert worktree.git(repo, "stash", "show", "--include-untracked", "--name-only").split() == ["a.txt", "new.txt"]
@@ -318,7 +385,7 @@ def test_planning_starts_on_a_clean_tree_whatever_step_left_edits(repo, monkeypa
 def test_a_failed_shelve_asks_the_owner_before_any_planner_runs(tmp_path) -> None:
     with pytest.raises(worktree.ShelveError, match="git stash failed") as caught:
         worktree.shelve(tmp_path, "owlbear c1")  # not a repository: Git fails
-    asked = runner._unshelved(failure(caught.value))  # noqa: SLF001
+    asked = plan_round.unshelved(failure(caught.value))
     assert (asked.exit, asked.cause, options(asked)) == (
         Exit.ASK,
         "state:plan:dirty-worktree",

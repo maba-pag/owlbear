@@ -11,17 +11,17 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import dispute_tools, tools
-from owlbear_delivery_next.change_contracts.models import Exit, StepKind
+from owlbear_delivery_next.change_contracts.failures import cause_key
+from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind, Stop
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import PLAN, RECHECK
-from owlbear_delivery_next.change_flow import loop, plan_rounds, worktree
-from owlbear_delivery_next.change_flow.moves import ask
+from owlbear_delivery_next.change_flow import asking, loop, plan_rounds, worktree
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import sdk_adapter, step_input
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.settings.profile import vouched
-from owlbear_delivery_next.workflow_steps import held_writes, overlap, pending_child, sessions
+from owlbear_delivery_next.workflow_steps import engine, held_writes, overlap, pending_child, sessions
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -74,9 +74,18 @@ def planned(  # noqa: PLR0913, PLR0917 - the planner's session, its result and w
         store = held_writes.checkpoint(store, lock, change)  # a restart challenges this plan instead of planning again
         return challenge(store, lock, change, path, profile, others, events)
     if then == "ask":
-        q = plan_rounds.last(change.loops[PLAN])
-        return loop.StepResult(exit=Exit.ASK, reason=q.text, cause=q.cause, question=q)
+        return _last(change)
     return result  # accepted unreviewed after the last round
+
+
+def _last(change: Change) -> Result:
+    """The last allowed round left many findings: a stop with all of them, never a question (#1062)."""
+    q = plan_rounds.last(change.loops[PLAN])
+    reason = f"{plan_rounds.LAST_STOP}.\n\nDetails: {q.text}"
+    stop = Stop(
+        kind=ErrorKind.REVIEW, reason=reason, action=asking.RERUN, resume="the step runs again", at=datetime.now(UTC)
+    )
+    return loop.StepResult(exit=Exit.STOP, cause=q.cause, reason=reason, stop=stop)
 
 
 def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
@@ -132,8 +141,10 @@ def judged(change: Change, verdict: Result, payload: object) -> Result:
         return verdict  # the session failed or stopped: the mode stays, so the same plan is challenged again
     then = plan_rounds.counted(change, found, upheld)
     change.step.mode = None
-    if then == "ask" and (q := plan_rounds.first(change) or plan_rounds.last(change.loops[PLAN])) is not None:
-        return loop.StepResult(exit=Exit.ASK, reason=q.text, cause=q.cause, question=q)
+    if then == "ask" and plan_rounds.delegated(change):
+        then = "revise"  # #1062: the upheld rejections are Delivery's, so the planner revises for them
+    if then == "ask":
+        return _last(change)
     if then == "revise":
         said = "; ".join(found)[:1500] or "the owner's decisions"
         update = {"reason": f"plan challenge: {said}", "challenged": True, "ungated": True}
@@ -144,8 +155,8 @@ def judged(change: Change, verdict: Result, payload: object) -> Result:
 def continued(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
     """A plan step that goes on without a planner session: its challenge, a reconsideration or its acceptance."""
     s, now = change.step, datetime.now(UTC)
-    if s.kind == StepKind.PLAN and (q := plan_rounds.first(change)) is not None and not s.mode:
-        ask(change, q, now)  # an upheld rejection is the owner's before any planning, even after a stop (TD-193)
+    if s.kind == StepKind.PLAN and not s.mode and plan_rounds.delegated(change):  # decided before planning (#1062)
+        plan_rounds.proceed(change, now)
         store.write(lock, change)
         return True
     modes = {plan_rounds.CHALLENGE, RECHECK, plan_rounds.RECONSIDER, plan_rounds.SETTLED}
@@ -217,3 +228,10 @@ def prompt(c: Change, at: Path) -> str:
         lines += [f"  Earlier recheck: {' '.join(f.judgement.split())}"] if f.judgement else []
         lines += [f"  The owner's note: {' '.join(f.note.split())}"]
     return "\n".join([*lines, "", "## Judge", JUDGE, "", "## Finish", FINISH])
+
+
+def unshelved(why: str) -> loop.StepResult:
+    """The owner clears the worktree the planner would find dirty, then planning runs again; *why* says the error."""
+    text = f"Delivery could not set aside the uncommitted edits before planning ({why}). Commit, stash or discard them."
+    cause = cause_key(ErrorKind.STATE, StepKind.PLAN, "dirty-worktree")
+    return engine.ask(StepKind.PLAN, text, cause, engine.continue_or_pause(StepKind.PLAN))

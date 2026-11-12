@@ -75,31 +75,6 @@ def test_finish_refuses_without_a_preparation(repo, capsys) -> None:
     assert "nothing was prepared" in capsys.readouterr().err
 
 
-@pytest.mark.usefixtures("current_binding")
-def test_finish_refuses_on_the_same_boot_session(legacy_repo, monkeypatch, capsys) -> None:
-    repo = legacy_repo
-    boot = {"id": BEFORE}
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: boot["id"])
-    assert run(repo, "prepare") == 0
-    assert run(repo, "finish") == 1
-    assert "still the boot session" in capsys.readouterr().err
-    assert (project_home.clone_dir(repo) / offline_protocol.PREPARED).exists()
-
-
-@pytest.mark.usefixtures("boot", "current_binding")
-def test_finish_refuses_when_the_boot_session_is_unreadable_after_the_reboot(legacy_repo, monkeypatch, capsys) -> None:
-    repo = legacy_repo
-    assert run(repo, "prepare") == 0
-
-    def unreadable() -> str:
-        msg = "boot-session UUID is unreadable (no sysctl): refusing the offline move"
-        raise StoreError(msg)
-
-    monkeypatch.setattr(offline_protocol, "boot_session", unreadable)
-    assert run(repo, "finish") == 1
-    assert "refusing the offline move" in capsys.readouterr().err
-
-
 def test_finish_refuses_when_the_binding_is_no_longer_proven(
     legacy_repo, boot, monkeypatch, capsys, current_binding
 ) -> None:

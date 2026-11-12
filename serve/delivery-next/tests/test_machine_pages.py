@@ -23,10 +23,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-import httpx
 import pytest
 import uvicorn
-from copilot.generated import rpc
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.decision_records import Pick, PickedDecision
@@ -70,7 +68,6 @@ from owlbear_delivery_next.local_system import (
     codebase,
     data_place,
     data_repo,
-    leases,
     local_home,
     maintenance,
     processes,
@@ -83,13 +80,11 @@ from owlbear_delivery_next.project_host import api, pack_routes, runner_end
 from owlbear_delivery_next.project_host import host as host_module
 from owlbear_delivery_next.project_host import leftovers as host_leftovers
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.runtimes import copilot_cli, model_choices, readiness
+from owlbear_delivery_next.runtimes import copilot_cli, readiness
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.runtimes.settings_seen import NAME as SEEN
 from owlbear_delivery_next.settings import carried, config, profile
-from owlbear_delivery_next.settings.config import CONFIG_FORMAT
 from owlbear_delivery_next.state_store import curation_runs, decision_store, registry, watch_reports
-from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store, StoreError
+from owlbear_delivery_next.state_store.store import Store, StoreError
 from owlbear_delivery_next.workflow_steps import captures, decision, design, judges, pick, publish, retry, visual
 from owlbear_delivery_next.workflow_steps.engine import Ctx
 
@@ -110,45 +105,65 @@ def clone(path: Path, slug: str = "", origin: str = "") -> Path:
     return path.resolve()
 
 
-def serve() -> tuple[Machine, uvicorn.Server, str]:
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    now = datetime.now(UTC)
-    machine = Machine(HostRecord(url=f"{base}/", token="t", pid=1, started_at=now, code=codebase.CURRENT))  # noqa: S106
-    machine.load_all()
-    # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
-    server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning", timeout_keep_alive=60))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    return machine, server, base
+@contextmanager
+def serve() -> Iterator[tuple[Machine, uvicorn.Server, str]]:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+        now = datetime.now(UTC)
+        machine = Machine(HostRecord(url=f"{base}/", token="t", pid=1, started_at=now, code=codebase.CURRENT))  # noqa: S106
+        machine.load_all()
+        # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
+        server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning", timeout_keep_alive=60))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            yield machine, server, base
+        finally:
+            server.should_exit = True
+            try:
+                machine.stop_all()
+            finally:
+                thread.join(5)
+                assert not thread.is_alive(), "the owned page server did not stop"
+
+
+@contextmanager
+def page_at(
+    base: str, pds, size: tuple[int, int] = (1280, 720), *, details: bool = False, required: bool = False
+) -> Iterator[Page]:
+    """One actual Chromium Page, its viewport and PDS access; the caller owns the server and navigation."""
+    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    with sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            if required:
+                raise
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        try:
+            width, height = size
+            page = browser.new_page(viewport={"width": width, "height": height})
+            if details:
+                page.add_init_script("localStorage.setItem('owlbear-improvement-detail', 'on');")
+            pds.only(page, base)
+            yield page
+        finally:
+            browser.close()
 
 
 @contextmanager
 def browsing(monkeypatch, pds, width: int = 1280, *, details: bool = False) -> Iterator[tuple[Page, str]]:
     """A Chromium page at *width*, the Change page's details shown or not, that reaches only a machine host serving the
     registered projects and the PDS CDN, and the host's address; the scheduler runs, no runner starts."""
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
-    machine, server, base = serve()
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page(viewport={"width": width, "height": 800})
-            if details:
-                page.add_init_script("localStorage.setItem('owlbear-improvement-detail', 'on');")
-            pds.only(page, base)
-            yield page, base
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+    with serve() as (_machine, _server, base), page_at(base, pds, (width, 800), details=details) as page:
+        yield page, base
 
 
 @contextmanager
@@ -213,92 +228,99 @@ def replaced(path: Path) -> registry.Project:
     return old
 
 
+def listed(path: Path, pid: str, **more: object) -> dict[str, Any]:
+    """The loaded consumer clone at *path*, not set up for chats yet, as ``GET /projects`` lists it (Project.info)."""
+    setup = f"owlbear setup --repo {shlex.quote(str(path))}"
+    return {"id": pid, "name": path.name, "path": str(path), "state": "loaded", "kind": "consumer", "unset": [],
+            "unset_reason": "", "blocked": "", "setup": setup} | more  # fmt: skip
+
+
+def serving(records: list[dict[str, Any]]) -> Callable[[Any], None]:
+    """A route that answers ``GET /projects`` with the machine's own answer listing *records* as they are then."""
+
+    def answer(route: Any) -> None:
+        if route.request.method != "GET":
+            route.fallback()
+            return
+        route.fulfill(json=route.fetch().json() | {"projects": records})
+
+    return answer
+
+
 @pytest.mark.browser
 def test_changes_of_all_projects_or_one_the_top_row_switches_and_resumes_and_projects_adds_and_removes(  # noqa: PLR0915 - a journey
     tmp_path: Path, monkeypatch, pds
 ) -> None:
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)  # the scheduler runs; no runner starts
     a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
     third = clone(tmp_path / "gamma")
-    machine, server, base = serve()
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            page.goto(f"{base}/#token=t")
-            expect(page.locator("#changes")).to_contain_text("alpha-1")  # All: every project's Changes
-            expect(page.locator("#changes")).to_contain_text("beta-1")
-            expect(page).to_have_url(f"{base}/")
-            expect(page.locator("#changes .project")).to_have_text(["alpha", "beta"])
-            head = page.locator("#changes .card .top").first  # a card's header is not styled as the top row
-            assert head.evaluate("e => getComputedStyle(e).borderBottomStyle") == "none"
-            expect(page.locator("#machine .paused")).to_contain_text("2 Changes would continue")
-            expect(page.locator("#changes")).to_contain_text("Delivery is paused: continues after Resume")
-            top = page.locator("#top")  # the project and Pause; the pause banner sits under it
-            pds.pick(top, "Project", b.id)
-            expect(page.locator("#changes")).to_contain_text("beta-1")
-            expect(page.locator("#changes")).not_to_contain_text("alpha-1")
-            expect(page.get_by_role("link", name="Backlog")).to_have_attribute("href", f"/backlog?project={b.id}")
-            page.locator("#changes a.open").first.click()
-            expect(page).to_have_url(f"{base}/?project={b.id}&change={b.id}%2Fbeta-1")
-            page.reload()
-            expect(pds.select(top, "Project")).to_have_js_property("value", b.id)
-            page.get_by_role("button", name="Resume").click()
-            expect(page.locator("#machine .paused")).to_have_count(0)
-            assert (machine.paused, registry.load().resumed_at is not None) == (False, True)
-            pause = page.get_by_role("button", name="Pause Delivery")
-            tip = top.locator("p-button", has=pause)  # the tooltip is on the PDS button, around its inner button
-            expect(tip).to_have_attribute("title", re.compile("may still update"))  # TD-288
-            pause.click()
-            expect(page.locator("#machine .paused")).to_contain_text("Delivery is paused: 2 Changes would continue")
-            stop = page.get_by_role("button", name="Pause and stop when idle")
-            expect(page.locator("#machine p-button", has=stop)).to_have_attribute("title", re.compile("stops"))
-            stop.click()
-            pds.answer(page, "Pause and stop")
-            expect(page.locator("#machine .paused")).to_contain_text("OwlBear stops once nothing runs")
-            assert (machine.paused, machine.ending) == (True, True)
-            page.get_by_role("button", name="Resume").click()
-            expect(page.locator("#machine .paused")).to_have_count(0)
-            assert (machine.paused, machine.ending) == (False, False)
-            page.get_by_role("button", name="Menu").click()  # Projects adds and removes (D-01M63C8DA1D95Z7M9ZYWVYYNF7)
-            page.locator("p-drilldown").get_by_role("link", name="Projects").click()
-            expect(page).to_have_url(f"{base}/projects?project={b.id}")
-            page.request.post(
-                f"{base}/api/next/projects", data={"path": str(third)}, headers={"Authorization": "Bearer t"}
-            )  # Add a project's dialog has its own tests
-            page.reload()
-            added = next(p for p in registry.load().projects if p.path == str(third))
-            expect(pds.select(top, "Project").locator(f'p-select-option[value="{added.id}"]')).to_have_text("gamma")
-            pds.pick(top, "Project", added.id)
-            expect(page).to_have_url(f"{base}/projects?project={added.id}")
-            gamma = page.get_by_role("listitem", name="gamma")
-            expect(gamma.locator("p-tag")).to_have_text("shown now")
-            gamma.get_by_role("button", name="Remove project").click()
-            expect(pds.modal(page)).to_contain_text("nothing is deleted")
-            pds.answer(page, "Remove project")
-            expect(page).to_have_url(f"{base}/projects")  # back to All
-            assert [p.id for p in registry.load().projects] == [a.id, b.id]
-            expect(page.locator("#projects > li")).to_have_count(2)
-            page.locator("#top").get_by_role("link", name="Backlog").click()
-            expect(page).to_have_url(f"{base}/backlog")  # the backlog too shows all projects (TD-241)
-            page.get_by_role("button", name="Menu").click()
-            page.locator("p-drilldown").get_by_role("button", name="Settings").click()
-            page.locator("p-drilldown").get_by_role("link", name="Overview").click()
-            expect(page).to_have_url(f"{base}/config?project={a.id}#overview")  # a project page opens the first project
-            page.goto(f"{base}/memory")  # under All, the link to the Memory settings keeps the Global layer it names
-            page.get_by_role("link", name="Memory settings").click()
-            expect(page).to_have_url(f"{base}/config?project={a.id}&layer=global#memory")
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+    with serve() as (machine, _server, base), page_at(base, pds) as page:
+        page.goto(f"{base}/#token=t")
+        expect(page.locator("#changes")).to_contain_text("alpha-1")  # All: every project's Changes
+        expect(page.locator("#changes")).to_contain_text("beta-1")
+        expect(page).to_have_url(f"{base}/")
+        expect(page.locator("#changes .project")).to_have_text(["alpha", "beta"])
+        head = page.locator("#changes .card .top").first  # a card's header is not styled as the top row
+        assert head.evaluate("e => getComputedStyle(e).borderBottomStyle") == "none"
+        expect(page.locator("#machine .paused")).to_contain_text("2 Changes would continue")
+        expect(page.locator("#changes")).to_contain_text("Delivery is paused: continues after Resume")
+        top = page.locator("#top")  # the project and Pause; the pause banner sits under it
+        pds.pick(top, "Project", b.id)
+        expect(page.locator("#changes")).to_contain_text("beta-1")
+        expect(page.locator("#changes")).not_to_contain_text("alpha-1")
+        expect(page.get_by_role("link", name="Backlog")).to_have_attribute("href", f"/backlog?project={b.id}")
+        page.locator("#changes a.open").first.click()
+        expect(page).to_have_url(f"{base}/?project={b.id}&change={b.id}%2Fbeta-1")
+        page.reload()
+        expect(pds.select(top, "Project")).to_have_js_property("value", b.id)
+        page.get_by_role("button", name="Resume").click()
+        expect(page.locator("#machine .paused")).to_have_count(0)
+        assert (machine.paused, registry.load().resumed_at is not None) == (False, True)
+        pause = page.get_by_role("button", name="Pause Delivery")
+        tip = top.locator("p-button", has=pause)  # the tooltip is on the PDS button, around its inner button
+        expect(tip).to_have_attribute("title", re.compile("may still update"))  # TD-288
+        pause.click()
+        expect(page.locator("#machine .paused")).to_contain_text("Delivery is paused: 2 Changes would continue")
+        stop = page.get_by_role("button", name="Pause and stop when idle")
+        expect(page.locator("#machine p-button", has=stop)).to_have_attribute("title", re.compile("stops"))
+        stop.click()
+        pds.answer(page, "Pause and stop")
+        expect(page.locator("#machine .paused")).to_contain_text("OwlBear stops once nothing runs")
+        assert (machine.paused, machine.ending) == (True, True)
+        page.get_by_role("button", name="Resume").click()
+        expect(page.locator("#machine .paused")).to_have_count(0)
+        assert (machine.paused, machine.ending) == (False, False)
+        page.get_by_role("button", name="Menu").click()  # Projects adds and removes (D-01M63C8DA1D95Z7M9ZYWVYYNF7)
+        page.locator("p-drilldown").get_by_role("link", name="Projects").click()
+        expect(page).to_have_url(f"{base}/projects?project={b.id}")
+        page.request.post(
+            f"{base}/api/next/projects", data={"path": str(third)}, headers={"Authorization": "Bearer t"}
+        )  # Add a project's dialog has its own tests
+        page.reload()
+        added = next(p for p in registry.load().projects if p.path == str(third))
+        expect(pds.select(top, "Project").locator(f'p-select-option[value="{added.id}"]')).to_have_text("gamma")
+        pds.pick(top, "Project", added.id)
+        expect(page).to_have_url(f"{base}/projects?project={added.id}")
+        gamma = page.get_by_role("listitem", name="gamma")
+        expect(gamma.locator("p-tag")).to_have_text("shown now")
+        gamma.get_by_role("button", name="Remove project").click()
+        expect(pds.modal(page)).to_contain_text("nothing is deleted")
+        pds.answer(page, "Remove project")
+        expect(page).to_have_url(f"{base}/projects")  # back to All
+        assert [p.id for p in registry.load().projects] == [a.id, b.id]
+        expect(page.locator("#projects > li")).to_have_count(2)
+        page.locator("#top").get_by_role("link", name="Backlog").click()
+        expect(page).to_have_url(f"{base}/backlog")  # the backlog too shows all projects (TD-241)
+        page.get_by_role("button", name="Menu").click()
+        page.locator("p-drilldown").get_by_role("button", name="Settings").click()
+        page.locator("p-drilldown").get_by_role("link", name="Overview").click()
+        expect(page).to_have_url(f"{base}/config?project={a.id}#overview")  # a project page opens the first project
+        page.goto(f"{base}/memory")  # under All, the link to the Memory settings keeps the Global layer it names
+        page.get_by_role("link", name="Memory settings").click()
+        expect(page).to_have_url(f"{base}/config?project={a.id}&layer=global#memory")
 
 
 OWLBEAR_ORIGIN = "https://github.com/maba-pag/owlbear.git"
@@ -356,49 +378,36 @@ def test_owlbears_own_project_shows_as_owlbear_apart_and_first_wherever_projects
 def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
     tmp_path: Path, monkeypatch, pds
 ) -> None:
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
     a, b = (registry.register(clone(tmp_path / n, "same")) for n in ("alpha", "beta"))
-    machine, server, base = serve()
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            page.goto(f"{base}/#token=t")
-            cards = page.locator("#changes li.card")
-            expect(cards).to_have_count(2)
-            cards.filter(has_text="beta").locator("a.open").click()
-            expect(page).to_have_url(f"{base}/?change={b.id}%2Fsame")
-            expect(page.locator("#detail")).to_contain_text("in beta")
-            page.reload()
-            expect(page.locator("#detail")).to_contain_text("in beta")
-            page.locator("#detail").get_by_role("button", name="Pause").click()
-            expect(page.locator("#started")).to_contain_text("Pause requested")
-            paused = {Path(p.path).name: Store.open(Path(p.path)).read("same").intent.paused_at for p in (a, b)}
-            assert (paused["alpha"], paused["beta"] is not None) == (None, True)  # only beta's Change
-            page.go_back()
-            expect(page).to_have_url(f"{base}/")
-            page.get_by_role("button", name="New Change").click()
-            chooser = pds.select(page.locator("#choose"), "Shape the new Change in")
-            expect(chooser).to_have_js_property("value", a.id)
-            page.get_by_role("button", name="Cancel").click()
-            expect(page.locator("#choose")).to_have_count(0)
-            page.get_by_role("button", name="New Change").click()
-            pds.pick(page.locator("#choose"), "Shape the new Change in", b.id)
-            page.get_by_role("button", name="Continue").click()
-            pds.answer(page, "Not now")
-            expect(page.locator("#choose")).to_have_count(0)  # declined: nothing is left to click
-            _alpha_does_not_answer(page, base, a.id, expect)
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+    with browsing(monkeypatch, pds) as (page, base):
+        page.set_viewport_size({"width": 1280, "height": 720})
+        page.goto(f"{base}/#token=t")
+        cards = page.locator("#changes li.card")
+        expect(cards).to_have_count(2)
+        cards.filter(has_text="beta").locator("a.open").click()
+        expect(page).to_have_url(f"{base}/?change={b.id}%2Fsame")
+        expect(page.locator("#detail")).to_contain_text("in beta")
+        page.reload()
+        expect(page.locator("#detail")).to_contain_text("in beta")
+        page.locator("#detail").get_by_role("button", name="Pause").click()
+        expect(page.locator("#started")).to_contain_text("Pause requested")
+        paused = {Path(p.path).name: Store.open(Path(p.path)).read("same").intent.paused_at for p in (a, b)}
+        assert (paused["alpha"], paused["beta"] is not None) == (None, True)  # only beta's Change
+        page.go_back()
+        expect(page).to_have_url(f"{base}/")
+        page.get_by_role("button", name="New Change").click()
+        chooser = pds.select(page.locator("#choose"), "Shape the new Change in")
+        expect(chooser).to_have_js_property("value", a.id)
+        page.get_by_role("button", name="Cancel").click()
+        expect(page.locator("#choose")).to_have_count(0)
+        page.get_by_role("button", name="New Change").click()
+        pds.pick(page.locator("#choose"), "Shape the new Change in", b.id)
+        page.get_by_role("button", name="Continue").click()
+        pds.answer(page, "Not now")
+        expect(page.locator("#choose")).to_have_count(0)  # declined: nothing is left to click
+        _alpha_does_not_answer(page, base, a.id, expect)
 
 
 def _alpha_does_not_answer(page, base: str, alpha: str, expect) -> None:
@@ -774,26 +783,23 @@ def test_show_details_holds_for_every_change_of_every_project(tmp_path: Path, mo
 @pytest.mark.browser
 def test_a_paused_page_runs_updates_now_shows_the_update_and_says_once_which_version_runs(pds) -> None:
     """TD-288, TD-352, TD-299: Run updates now on the paused bar; the version taken is said once."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    machine, server, base = serve()
-    machine.updated = "v0.2"
-    asked: list[bool] = []
+    with serve() as (machine, _server, base):
+        machine.updated = "v0.2"
+        asked: list[bool] = []
 
-    def run_now() -> dict:
-        asked.append(True)
-        machine.updater.state |= {"phase": "waiting", "detail": "waits for p: c1: a running step", "version": "v0.3"}
-        return machine.updater.read()
+        def run_now() -> dict:
+            asked.append(True)
+            machine.updater.state |= {
+                "phase": "waiting",
+                "detail": "waits for p: c1: a running step",
+                "version": "v0.3",
+            }
+            return machine.updater.read()
 
-    machine.updater.run_now = run_now
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
+        machine.updater.run_now = run_now
+        with page_at(base, pds) as page:
             page.goto(f"{base}/#token=t")
             expect(page.locator("#update-done")).to_contain_text("OwlBear now runs v0.2")
             page.locator("#update-done").get_by_role("button", name="OK").click()
@@ -807,36 +813,21 @@ def test_a_paused_page_runs_updates_now_shows_the_update_and_says_once_which_ver
             page.reload()
             expect(page.locator("#update-state")).to_be_visible()
             expect(page.locator("#update-done")).to_have_count(0)  # told once
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
 
 
 @pytest.mark.browser
 def test_an_announced_update_counts_down_on_every_page_and_postpone_cancels_it(pds) -> None:
     """TD-301: open pages announce it 2 minutes ahead with Postpone; Postpone is use."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    machine, server, base = serve()
-    machine.auto.target, machine.auto.deadline = "v0.3", machine.auto.mono() + 105
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
+    with serve() as (machine, _server, base):
+        machine.auto.target, machine.auto.deadline = "v0.3", machine.auto.mono() + 105
+        with page_at(base, pds) as page:
             page.goto(f"{base}/#token=t")
             expect(page.locator("#update-announce")).to_contain_text("OwlBear updates to v0.3 in 1:4")
             page.locator("#update-announce").get_by_role("button", name="Postpone").click()
             expect(page.locator("#update-announce")).to_have_count(0)
             assert machine.auto.deadline is None
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
 
 
 PACK = {
@@ -849,27 +840,20 @@ PACK = {
 @pytest.mark.browser
 def test_every_page_shows_the_impeccable_banners_and_install_says_refused_running_and_done(pds) -> None:
     """D-01M61GW2EAHFFRFHF014A14K98: Install while this version's pack is missing; Update now for a newer one."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    machine, server, base = serve()
-    state = {"install": dict(PACK["install"]), "release": dict(PACK["release"])}
-    answers = iter([{"refused": "an update runs; it installs the pack of the version it takes"}, {}])
+    with serve() as (machine, _server, base):
+        state = {"install": dict(PACK["install"]), "release": dict(PACK["release"])}
+        answers = iter([{"refused": "an update runs; it installs the pack of the version it takes"}, {}])
 
-    def install() -> dict:
-        said = next(answers)
-        if not said:
-            state["install"] = state["install"] | {"state": "installing"}
-        return dict(state) | said
+        def install() -> dict:
+            said = next(answers)
+            if not said:
+                state["install"] = state["install"] | {"state": "installing"}
+            return dict(state) | said
 
-    machine.impeccable.read, machine.impeccable.install = (lambda: dict(state)), install
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
+        machine.impeccable.read, machine.impeccable.install = (lambda: dict(state)), install
+        with page_at(base, pds) as page:
             page.goto(f"{base}/#token=t")
             missing, newer = page.locator("#pack-install-banner"), page.locator("#pack-release-banner")
             expect(missing).to_contain_text("Impeccable (impeccable-4.8.0.1) that this OwlBear version, v0.2, pins "
@@ -895,10 +879,6 @@ def test_every_page_shows_the_impeccable_banners_and_install_says_refused_runnin
             expect(newer.get_by_role("link")).to_have_text("Updates → OwlBear")  # the pages' one separator
             newer.get_by_role("button", name="Update now").click()
             expect(pds.modal(page)).to_contain_text("Run updates now?")
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
 
 
 @pytest.mark.browser
@@ -907,7 +887,7 @@ def test_updates_impeccable_with_no_project_answers_a_loaded_projects_run_with_i
 ) -> None:
     """D-01M63C5VGFVT3DVCC888B78K2A: the page is the same in every project; on the machine host a run whose project is
     loaded is answered from All projects too, while starting one still needs a project."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     from owlbear_delivery_next.impeccable_runs import pack_job, pack_rounds  # noqa: PLC0415
 
@@ -921,19 +901,14 @@ def test_updates_impeccable_with_no_project_answers_a_loaded_projects_run_with_i
         "state": "waiting", "started_at": datetime.now(UTC).isoformat(), "run": "r1", "questions": [question],
     }  # fmt: skip
     job._save()  # noqa: SLF001
-    machine, server, base = serve()
-    failed = {"state": "failed", "version": "v0.3", "pack": "", "detail": "cannot download", "at": None}
-    unread = {"state": "unknown", "version": "", "pack": "", "running_pack": "impeccable-4.8.0.1", "checked_at": None,
-              "detail": "GitHub did not answer"}  # fmt: skip
-    machine.impeccable.read = lambda: {"install": failed, "release": unread}  # a newer version's pack
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
+    with serve() as (machine, _server, base):
+        failed = {"state": "failed", "version": "v0.3", "pack": "", "detail": "cannot download", "at": None}
+        unread = {
+            "state": "unknown", "version": "", "pack": "", "running_pack": "impeccable-4.8.0.1",
+            "checked_at": None, "detail": "GitHub did not answer",
+        }  # fmt: skip
+        machine.impeccable.read = lambda: {"install": failed, "release": unread}  # a newer version's pack
+        with page_at(base, pds) as page:
             page.goto(f"{base}/updates/impeccable#token=t")
             assert "project=" not in page.url  # no project picked for the owner
             expect(page.locator("#pack-project")).to_contain_text("Started in alpha")
@@ -946,10 +921,6 @@ def test_updates_impeccable_with_no_project_answers_a_loaded_projects_run_with_i
                 "Impeccable of OwlBear v0.3 failed to install on this machine: cannot download."
             )
             expect(page.locator("#pack-release")).to_have_text("Not known yet: GitHub did not answer.")
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
 
 
 @pytest.mark.browser
@@ -959,7 +930,7 @@ def test_updates_impeccable_says_an_install_failure_it_could_not_keep_whole(
 ) -> None:
     """#951: a failed install's record that could not be written, or an ended one that could not be removed, says why
     whole on Updates and in the host's log."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     path = local_home.root() / pack_files.PACKS / machine_impeccable.FAILED
     broken, write, unlink = [], Path.write_text, Path.unlink
@@ -977,40 +948,29 @@ def test_updates_impeccable_says_an_install_failure_it_could_not_keep_whole(
         return unlink(self, *args, **kwargs)
 
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    machine, server, base = serve()
-    running = versions.running()  # its pack is not installed here, so its failure applies
-    machine.impeccable.failed(running, "cannot download")
-    monkeypatch.setattr(Path, "write_text", writing)
-    monkeypatch.setattr(Path, "unlink", unlinking)
-    if fails == "write":
-        machine.impeccable.failed(running, "cannot download again")
-    else:
-        machine.impeccable.ready(running)
-    monkeypatch.setattr(Path, "write_text", write)
-    monkeypatch.setattr(Path, "unlink", unlink)
-    assert broken == [path.with_name(f".{machine_impeccable.FAILED}.tmp") if fails == "write" else path]
-    unkept = f"the failure could not be {'kept in' if fails == 'write' else 'removed from'} {path}: OSError: "
-    unkept += whole_error
-    logged = capsys.readouterr().out
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
+    with serve() as (machine, _server, base):
+        running = versions.running()  # its pack is not installed here, so its failure applies
+        machine.impeccable.failed(running, "cannot download")
+        monkeypatch.setattr(Path, "write_text", writing)
+        monkeypatch.setattr(Path, "unlink", unlinking)
+        if fails == "write":
+            machine.impeccable.failed(running, "cannot download again")
+        else:
+            machine.impeccable.ready(running)
+        monkeypatch.setattr(Path, "write_text", write)
+        monkeypatch.setattr(Path, "unlink", unlink)
+        assert broken == [path.with_name(f".{machine_impeccable.FAILED}.tmp") if fails == "write" else path]
+        unkept = f"the failure could not be {'kept in' if fails == 'write' else 'removed from'} {path}: OSError: "
+        unkept += whole_error
+        logged = capsys.readouterr().out
+        with page_at(base, pds) as page:
             said = errors(page)
-            pds.only(page, base)
             page.goto(f"{base}/updates/impeccable#token=t")
             expect(page.locator("#pack-install-state")).to_be_visible()
             shown = page.locator("#pack-unkept")
             expect(shown).to_be_visible()
             assert shown.text_content() == f"{unkept[0].upper()}{unkept[1:]}."
             assert said == []
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
     line = r"^\d\d:\d\d:\d\dZ Impeccable: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"  # up to the host log's next line
     assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [unkept]
 
@@ -1022,7 +982,7 @@ def test_updates_say_a_release_look_that_could_not_read_the_versions_whole(
 ) -> None:
     """#971: the OwlBear check's look whose versions or newer pack could not be read says why whole on Updates ▸
     Impeccable and Updates ▸ OwlBear, and in the host's log."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     error = versions.VersionError(whole_error)
     error.add_note("a note on the failure")
@@ -1038,20 +998,13 @@ def test_updates_say_a_release_look_that_could_not_read_the_versions_whole(
         monkeypatch.setattr(versions, "pins", failing)
         detail = f"v9.9's Impeccable is unreadable: VersionError: {whole_error}\na note on the failure"
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    machine, server, base = serve()
-    for _ in range(2):  # a failure shows after two in a row
-        assert machine.checks.start("owlbear")
-        assert machine.checks.drain(10)
-    logged = capsys.readouterr().out
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
+    with serve() as (machine, _server, base):
+        for _ in range(2):  # a failure shows after two in a row
+            assert machine.checks.start("owlbear")
+            assert machine.checks.drain(10)
+        logged = capsys.readouterr().out
+        with page_at(base, pds) as page:
             said = errors(page)
-            pds.only(page, base)
             page.goto(f"{base}/updates/impeccable#token=t")
             shown = page.locator("#pack-release")
             expect(shown).to_be_visible()
@@ -1067,10 +1020,6 @@ def test_updates_say_a_release_look_that_could_not_read_the_versions_whole(
                 expect(shown).to_be_visible()
                 assert shown.text_content() == f"v9.9 ({detail})"
             assert said == []
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
     line = r"^\d\d:\d\d:\d\dZ update check of OwlBear failed: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
     assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == ([detail] * 2 if unread == "versions" else [])
 
@@ -1081,7 +1030,7 @@ def test_updates_owlbear_says_an_update_whose_versions_could_not_be_read_whole(
 ) -> None:
     """#971: an update whose look failed says why whole, its type and notes included, on Updates ▸ OwlBear and in the
     host's log."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     error = versions.VersionError(whole_error)
     error.add_note("a note on the failure")
@@ -1092,27 +1041,16 @@ def test_updates_owlbear_says_an_update_whose_versions_could_not_be_read_whole(
     monkeypatch.setattr(versions, "target", failing)
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     detail = f"the versions could not be read: VersionError: {whole_error}\na note on the failure"
-    machine, server, base = serve()
-    machine.updater._update()  # noqa: SLF001 - the update thread's work, run here
-    logged = capsys.readouterr().out
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
+    with serve() as (machine, _server, base):
+        machine.updater._update()  # noqa: SLF001 - the update thread's work, run here
+        logged = capsys.readouterr().out
+        with page_at(base, pds) as page:
             said = errors(page)
-            pds.only(page, base)
             page.goto(f"{base}/updates/owlbear#token=t")
             shown = page.locator("#owlbear-state")
             expect(shown).to_be_visible()
             assert re.fullmatch(r"The update failed \([^)]*\): " + re.escape(detail), shown.text_content())
             assert said == []
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
     line = r"^\d\d:\d\d:\d\dZ update: failed: (.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
     assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [detail]
 
@@ -1151,25 +1089,6 @@ def test_updates_say_update_checks_that_started_afresh_whole(monkeypatch, capsys
     assert re.findall(line, logged, re.MULTILINE | re.DOTALL) == [unrestored]
 
 
-def _checks_page(base: str, path: str, locator: str) -> tuple[str, list[str]]:
-    """The text of *locator* on the machine host's page at *path* once shown, and the page's errors."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
-    with sync_playwright() as pw:
-        try:
-            browser = pw.chromium.launch()
-        except Error as exc:
-            pytest.skip(f"no Playwright Chromium: {exc}")
-        page = browser.new_page()
-        said = errors(page)
-        page.goto(f"{base}{path}#token=t")
-        shown = page.locator(locator)
-        expect(shown).to_be_visible()
-        text = shown.text_content()
-        browser.close()
-    return text, said
-
-
 def _tick_fails_once(monkeypatch, machine: Machine, error: Exception, released: threading.Event) -> None:
     """Run *machine*'s update-check loop until its first look whether a check is due failed with *error*; its next
     look waits for *released*, so nothing clears it."""
@@ -1194,10 +1113,12 @@ def _tick_fails_once(monkeypatch, machine: Machine, error: Exception, released: 
 @pytest.mark.browser
 @pytest.mark.parametrize("failing", ["unkept", "unsettled", "unticked"])
 def test_updates_say_update_checks_that_could_not_be_kept_set_or_looked_at_whole(
-    monkeypatch, capsys, whole_error, failing
+    monkeypatch, capsys, pds, whole_error, failing
 ) -> None:
     """#971: update checks whose results could not be written, whose machine settings could not be read, or whose
     look whether one is due failed say why whole on Updates and in the host's log."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
     error = OSError(whole_error)
     error.add_note("a note on the failure")
 
@@ -1208,28 +1129,39 @@ def test_updates_say_update_checks_that_could_not_be_kept_set_or_looked_at_whole
     monkeypatch.setitem(update_checks.CHECKS, "pds", lambda: newer)
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     released = threading.Event()
-    machine, server, base = serve()
-    try:
-        whole = f"OSError: {whole_error}\na note on the failure"
-        if failing == "unkept":
-            monkeypatch.setattr(update_checks, "atomic_write", raising)
-            assert machine.checks.start("pds")
-            assert machine.checks.drain(10)
-            told = f"The check results are not kept: {machine.checks.path} could not be written: {whole}."
-            logged = f"update checks: {machine.checks.path} could not be written: {whole}"
-        elif failing == "unsettled":
-            monkeypatch.setattr(update_checks, "machine_settings", SimpleNamespace(current=raising))
-            told = f"The machine settings could not be read, so no check runs at its interval: {whole}."
-            logged = f"update checks: the machine settings could not be read: {whole}"
-        else:
-            _tick_fails_once(monkeypatch, machine, error, released)
-            told = f"The last look whether a check is due failed: {whole}."
-            logged = f"update checks failed: {whole}"
-        text, said = _checks_page(base, "/updates/owlbear", "#check-settings")
-    finally:
-        released.set()
-        server.should_exit = True
-        machine.stop_all()
+    with serve() as (machine, _server, base):
+        try:
+            whole = f"OSError: {whole_error}\na note on the failure"
+            if failing == "unkept":
+                monkeypatch.setattr(update_checks, "atomic_write", raising)
+                assert machine.checks.start("pds")
+                assert machine.checks.drain(10)
+                told = f"The check results are not kept: {machine.checks.path} could not be written: {whole}."
+                logged = f"update checks: {machine.checks.path} could not be written: {whole}"
+            elif failing == "unsettled":
+                monkeypatch.setattr(
+                    update_checks,
+                    "machine_settings",
+                    SimpleNamespace(
+                        current=raising,
+                        update_check_inputs=lambda *_sources: (),
+                        update_check_sources=lambda: ((), ""),
+                    ),
+                )
+                told = f"The machine settings could not be fully read: {whole}."
+                logged = f"update checks: the machine settings could not be read: {whole}"
+            else:
+                _tick_fails_once(monkeypatch, machine, error, released)
+                told = f"The last look whether a check is due failed: {whole}."
+                logged = f"update checks failed: {whole}"
+            with page_at(base, pds) as page:
+                said = errors(page)
+                page.goto(f"{base}/updates/owlbear#token=t")
+                shown = page.locator("#check-settings")
+                expect(shown).to_be_visible()
+                text = shown.text_content()
+        finally:
+            released.set()
     lead = r"It looks [^\n]*\.\s+How often is set in Settings → This machine\. "
     assert re.fullmatch(lead + re.escape(told), text)
     assert said == []
@@ -1240,10 +1172,12 @@ def test_updates_say_update_checks_that_could_not_be_kept_set_or_looked_at_whole
 
 @pytest.mark.browser
 def test_updates_pds_says_a_newer_release_whose_projects_runs_could_not_be_read_whole(
-    monkeypatch, capsys, whole_error
+    monkeypatch, capsys, pds, whole_error
 ) -> None:
     """#971: a newer PDS whose projects' updates could not be read says why whole beside it on Updates ▸ PDS and in
     the host's log."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
     error = OSError(whole_error)
     error.add_note("a note on the failure")
 
@@ -1254,14 +1188,15 @@ def test_updates_pds_says_a_newer_release_whose_projects_runs_could_not_be_read_
     monkeypatch.setitem(update_checks.CHECKS, "pds", lambda: newer)
     monkeypatch.setattr(update_checks, "_pds_runs", raising)  # the PDS page's own run list reads them apart
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    machine, server, base = serve()
-    try:
+    with serve() as (machine, _server, base):
         assert machine.checks.start("pds")
         assert machine.checks.drain(10)
-        text, said = _checks_page(base, "/updates/pds", "#check-latest")
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+        with page_at(base, pds) as page:
+            said = errors(page)
+            page.goto(f"{base}/updates/pds#token=t")
+            shown = page.locator("#check-latest")
+            expect(shown).to_be_visible()
+            text = shown.text_content()
     whole = f"OSError: {whole_error}\na note on the failure"
     assert text == f"999.0.0 (whether a project already takes it could not be read: {whole})"
     assert said == []
@@ -1271,10 +1206,10 @@ def test_updates_pds_says_a_newer_release_whose_projects_runs_could_not_be_read_
 
 
 @pytest.mark.browser
-def test_updates_owlbear_logs_update_steps_that_could_not_be_kept_whole(monkeypatch, capsys, whole_error) -> None:
+def test_updates_owlbear_logs_update_steps_that_could_not_be_kept_whole(monkeypatch, capsys, pds, whole_error) -> None:
     """#971: an update whose steps could not be written logs why whole, once, under its step on Updates ▸ OwlBear and in
     the host's log."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     from owlbear_delivery_next.machine_host import update_steps  # noqa: PLC0415
 
@@ -1286,28 +1221,18 @@ def test_updates_owlbear_logs_update_steps_that_could_not_be_kept_whole(monkeypa
 
     monkeypatch.setattr(update_steps, "atomic_write", raising)
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    machine, server, base = serve()
-    path = local_home.root() / update_steps.RECORD
-    line = f"its steps could not be kept in {path}: OSError: {whole_error}\na note on the failure"
-    try:
+    with serve() as (machine, _server, base):
+        path = local_home.root() / update_steps.RECORD
+        line = f"its steps could not be kept in {path}: OSError: {whole_error}\na note on the failure"
         machine.updater.steps.begin()
         machine.updater.steps.mark("looking", "running", "fetching the versions")
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
+        with page_at(base, pds) as page:
             said = errors(page)
             page.goto(f"{base}/updates/owlbear#token=t")
             page.locator("#owlbear-log-box summary").click()
             shown = page.locator("#owlbear-log")
             expect(shown).to_be_visible()
             text = shown.text_content()
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
     looking = r"[^\n]*? · Looking for a newer version: "
     assert re.fullmatch(f"{looking}{re.escape(line)}\n{looking}fetching the versions", text)
     assert said == []
@@ -1318,10 +1243,12 @@ def test_updates_owlbear_logs_update_steps_that_could_not_be_kept_whole(monkeypa
 @pytest.mark.browser
 @pytest.mark.parametrize("failing", ["prune", "migration", "both"])
 def test_updates_owlbear_says_old_versions_it_could_not_remove_at_the_start_whole(
-    monkeypatch, whole_error, failing
+    monkeypatch, pds, whole_error, failing
 ) -> None:
     """#971: old versions the host's start could not remove, and the runtime from before the first update it could not
     put away, say why whole on Updates ▸ OwlBear's update line."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
     error = OSError(whole_error)
     error.add_note("a note on the failure")
 
@@ -1344,15 +1271,16 @@ def test_updates_owlbear_says_old_versions_it_could_not_remove_at_the_start_whol
         monkeypatch.setattr(versions, "keep_data", refusing)
         left = alias.complete()
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    machine, server, base = serve()
-    try:
+    with serve() as (machine, _server, base):
         machine.updater.unpruned, machine.updater.unmigrated = unpruned, left  # as the host's start sets them
         if failing == "both":  # an update that failed after the start: its error ends before the start's notes
             machine.updater.state |= {"phase": "failed", "detail": f"OSError: {whole_error}", "version": "v0.3"}
-        text, said = _checks_page(base, "/updates/owlbear", "#owlbear-state")
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+        with page_at(base, pds) as page:
+            said = errors(page)
+            page.goto(f"{base}/updates/owlbear#token=t")
+            shown = page.locator("#owlbear-state")
+            expect(shown).to_be_visible()
+            text = shown.text_content()
     told = "No update has run since OwlBear started."
     if failing == "both":
         told = f"The update to v0.3 failed: OSError: {whole_error}."
@@ -1382,10 +1310,12 @@ def targets(scope) -> list[str]:
 
 @pytest.mark.browser
 def test_projects_says_why_the_shared_data_and_a_pass_loading_projects_again_failed_whole(
-    monkeypatch, whole_error
+    monkeypatch, pds, whole_error
 ) -> None:
     """#971: the shared data the start could not set up, said as that start's finding, and the last failed pass loading
     the failed projects again, say why whole above the Projects list."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     unprovided = data_repo.DataRepoError(whole_error)
     unprovided.add_note("a note on the place")
@@ -1394,27 +1324,28 @@ def test_projects_says_why_the_shared_data_and_a_pass_loading_projects_again_fai
         raise unprovided
 
     monkeypatch.setattr(data_place, "provision", provision)
-    machine, server, base = serve()
-    try:
+    with serve() as (machine, _server, base):
         host_start._provisioned(machine)  # noqa: SLF001 - the start's own step
         machine.unretried = unretried = f"RuntimeError: {whole_error}\na note on the pass"  # as the retry loop sets it
-        shared, said = _checks_page(base, "/projects", "#unshared")
-        retried, broke = _checks_page(base, "/projects", "#unretried")
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+        with page_at(base, pds) as page:
+            said = errors(page)
+            page.goto(f"{base}/projects#token=t")
+            unshared_line, unretried_line = page.locator("#unshared"), page.locator("#unretried")
+            expect(unshared_line).to_be_visible()
+            expect(unretried_line).to_be_visible()
+            shared, retried = unshared_line.text_content(), unretried_line.text_content()
     unshared = f"at this start, DataRepoError: {whole_error}\na note on the place; `owlbear restart` looks again"
     assert (machine.unshared, shared, retried) == (
         unshared, f"Shared data: {unshared}", f"Loading the failed projects again failed: {unretried}"
     )  # fmt: skip
-    assert said == broke == []
+    assert said == []
 
 
 @pytest.mark.browser
 def test_projects_refresh_after_the_data_command_repairs_the_pointer_without_restarting(
     tmp_path: Path, monkeypatch, pds
 ) -> None:
-    from playwright.sync_api import expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     monkeypatch.setattr(project.readiness, "ready", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(Host, "_launch", lambda *_args: False)
@@ -1422,16 +1353,12 @@ def test_projects_refresh_after_the_data_command_repairs_the_pointer_without_res
     source, dest = clone(tmp_path / "old-data"), data_place.default()
     subprocess.run(["git", "clone", "-q", str(source), str(dest)], check=True)  # noqa: S603, S607
     data_place.pointer().write_text(json.dumps({"moving_from": str(source), "moving_to": str(dest)}))
-    machine, server, base = serve()
-    try:
+    with serve() as (machine, _server, base):
         host_start._provisioned(machine)  # noqa: SLF001 - the real startup failure, not a supplied UI notice
         original = machine.unshared
         assert original
-        with sync_playwright() as pw:
-            browser = pw.chromium.launch()
-            page = browser.new_page(viewport={"width": 1280, "height": 800})
+        with page_at(base, pds, (1280, 800), required=True) as page:
             said = errors(page)
-            pds.only(page, base)
             page.goto(f"{base}/projects#token=t")
             expect(page.locator("#unshared")).to_have_text(f"Shared data: {original}")
             page.screenshot(path=str(tmp_path / "projects-before-data-repair.png"), full_page=True)
@@ -1454,16 +1381,14 @@ def test_projects_refresh_after_the_data_command_repairs_the_pointer_without_res
             assert machine.projects[entry.id].store is loaded
             assert targets(page.locator("#projects a, #projects button")) == []
             assert said == []
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
 
 
 @pytest.mark.browser
-def test_decisions_says_what_the_start_could_not_do_about_decisions_whole(monkeypatch, whole_error) -> None:
+def test_decisions_says_what_the_start_could_not_do_about_decisions_whole(monkeypatch, pds, whole_error) -> None:
     """#971: a retired decision index file the start could not remove, and decisions it could not pre-load, say why
     whole in the Decisions page's error notice; a decision id or file in the text stays as written."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     named = f"owlbear/decisions/D-01M5ZE13N37HZAGJ69VWW69X23.md: {whole_error}"
     unremoved = OSError(named)
@@ -1479,17 +1404,18 @@ def test_decisions_says_what_the_start_could_not_do_about_decisions_whole(monkey
     def unplaced() -> Path:
         raise unlocated
 
-    machine, server, base = serve()
-    try:
+    with serve() as (machine, _server, base):
         with monkeypatch.context() as removing:  # only the removal refuses; the fixtures' overrides stay
             removing.setattr(Path, "unlink", refusing)
             host_start._retired_index(machine, local_home.root())  # noqa: SLF001 - the start's own step
         monkeypatch.setattr(data_repo, "locate", unplaced)
         host_start.warm(machine)
-        text, said = _checks_page(base, "/decisions", "#error")
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+        with page_at(base, pds) as page:
+            said = errors(page)
+            page.goto(f"{base}/decisions#token=t")
+            shown = page.locator("#error")
+            expect(shown).to_be_visible()
+            text = shown.text_content()
     lines = [
         (
             f"the retired decision index file decisions.sqlite could not be removed: OSError: {named}"
@@ -1503,200 +1429,6 @@ def test_decisions_says_what_the_start_could_not_do_about_decisions_whole(monkey
     assert machine.undecided == lines
     assert text == "".join(f"At this start, {line}." for line in lines) + "\n    "
     assert said == []
-
-
-@pytest.mark.browser
-def test_settings_say_this_machine_s_settings_could_not_be_read_and_read_them_again(
-    tmp_path: Path, monkeypatch, pds
-) -> None:
-    """Partial state: the rest of Settings shows while this machine's settings cannot be read, the overview and This
-    machine say why, and the machine's next change reads them again."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    with browsing(monkeypatch, pds) as (page, base):
-
-        def busy(route) -> None:
-            if route.request.method == "GET":
-                route.fulfill(status=503, json={"detail": "the machine host is busy"})
-            else:
-                route.fallback()
-
-        page.route("**/api/next/machine", busy)
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        expect(page.locator("#unset-machine, #unset-none")).to_contain_text("could not be read")
-        pds.group(page, "this-machine")
-        unread = page.locator("#machine-unread")
-        expect(unread).to_contain_text("Could not read this machine's settings")
-        expect(unread).to_contain_text("tries again when the machine's state changes")
-        page.unroute("**/api/next/machine", busy)
-        page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
-        expect(page.locator("#machine-login")).to_contain_text("Start at login")
-        expect(unread).to_have_count(0)
-        this_machine_says_a_later_failed_read_until_one_succeeds(page, pds, busy)
-        a_read_failing_after_a_save_during_it_leaves_the_save_s_answer_unwarned(page, pds)
-
-
-@pytest.mark.browser
-def test_settings_say_a_failed_read_of_the_shared_repository_whole(
-    tmp_path: Path, monkeypatch, pds, shared_repo, whole_error
-) -> None:
-    """#921: Settings' notice shows the shared repository's failed Git read whole: the command, both streams, a path."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    shared = shared_repo[0]
-    monkeypatch.setenv(data_place.VIEW, str(shared))
-    a = registry.register(clone(tmp_path / "alpha"))
-    stderr, stdout = f"fatal: {shared / '.git' / 'index'} cannot be read\n{whole_error}", "OUT begins\nOUT ends"
-    real = data_repo._git  # noqa: SLF001 - the repository's own Git calls are the boundary
-    read = ("status", "--porcelain", "--", ".", f":(exclude)*/{data_repo.MEMORY}/*")
-
-    def git(cwd, *args, until=None):
-        if args[:1] != ("status",):
-            return real(cwd, *args, until=until)
-        return subprocess.CompletedProcess(["git", *args], 128, f"{stdout}\n", f"{stderr}\n")
-
-    monkeypatch.setattr(data_repo, "_git", git)
-    with browsing(monkeypatch, pds) as (page, base):
-        said = errors(page)
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        notice = page.locator("#error")
-        expect(notice).to_be_visible()
-        failed = f"CalledProcessError: Command '{['git', *read]}' returned non-zero exit status 128."
-        why = f"{failed}\nstderr:\n{stderr}\nstdout:\n{stdout}"
-        assert notice.text_content().strip() == f"The shared settings repository {shared} cannot be read: {why}"
-        assert said == []
-
-
-@pytest.mark.browser
-def test_settings_say_why_the_old_runtime_stays_whole(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
-    """#971: Remove the old runtime, refused because the folder may hold the shared data, says why whole in Settings'
-    notice."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    kept = local_home.root() / local_home.VERSIONS / "legacy-c1c1c1c1c1c1"
-    kept.mkdir(parents=True)
-    error = versions.VersionError(whole_error)
-    error.add_note("a note on the failure")
-
-    def refusing(_path):
-        raise error
-
-    monkeypatch.setattr(versions, "legacy", lambda: [kept])
-    monkeypatch.setattr(leases, "unpinned", list)
-    monkeypatch.setattr(versions, "keep_data", refusing)
-    with browsing(monkeypatch, pds) as (page, base):
-        said = errors(page)
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        pds.group(page, "this-machine")
-        page.get_by_role("button", name="Remove the old runtime").click()
-        pds.answer(page, "Remove it")
-        notice = page.locator("#error")
-        expect(notice).to_be_visible()
-        assert notice.text_content().strip() == f"VersionError: {whole_error}\na note on the failure"
-        assert said == ["Failed to load resource: the server responded with a status of 409 (Conflict)"]
-    assert kept.is_dir()
-
-
-@pytest.mark.browser
-def test_settings_show_a_failed_source_the_models_and_global_s_machine_settings_whole(
-    tmp_path: Path, monkeypatch, pds, whole_error
-) -> None:
-    """#921: a failed outside source, a failed read of the offered models and unreadable global machine settings each
-    show whole in their own Settings group."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    failed = f"RuntimeError: {whole_error}"
-    unreadable = f"the global settings are unreadable: {whole_error}"
-    at = datetime.now(UTC).isoformat()
-    reads = {"read_at": at, "succeeded_at": None, "notices": [],
-             "failures": [{"source": "Impeccable releases", "at": at, "error": failed}]}  # fmt: skip
-
-    def machine(route) -> None:
-        body = route.fetch().json()
-        body["resolved"]["notice"] = unreadable
-        route.fulfill(json=body)
-
-    with browsing(monkeypatch, pds) as (page, base):
-        said = errors(page)
-        page.route("**/api/next/config/read", lambda r: r.fulfill(json={"reads": reads}))
-        page.route("**/api/next/config/models", lambda r: r.fulfill(json={"models": [], "error": failed}))
-        page.route(f"{base}/api/next/machine", lambda r: machine(r) if r.request.method == "GET" else r.fallback())
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        # Both startup reads must finish; the second can replace the first error with a loading message.
-        page.evaluate("() => import('/assets/page/config/main.mjs')")
-        source = page.locator(".reads-failure")
-        expect(source).to_be_visible()
-        assert source.text_content().split() == f"Could not read: Impeccable releases — {failed}".split()
-        pds.group(page, "agents")
-        models = page.locator("#models-note")
-        expect(models).to_have_text(f"Could not read the offered models ({failed}); type a model name.")
-        expect(models).to_be_visible()
-        expect(models).to_have_js_property(
-            "textContent", f"Could not read the offered models ({failed}); type a model name."
-        )
-        pds.group(page, "this-machine")
-        notice = page.locator("#machine-notice")
-        expect(notice).to_be_visible()
-        assert notice.text_content() == unreadable
-        assert said == []
-
-
-def machine_saved(page, pds, channel: str) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    pds.pick(page, "Layer", "machine")  # #809: this machine's own values are set with it chosen
-    pds.pick(page, "Versions this machine takes", channel)
-    page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings").click()
-    pds.answer(page, "Save machine settings")
-    expect(page.locator("#status")).to_have_text("Saved this machine's settings.")
-
-
-def this_machine_says_a_later_failed_read_until_one_succeeds(page, pds, busy) -> None:
-    """CodeRabbit on #813: a later failed read keeps what was read, saying so; Copilot on #813: a save's answer is
-    read, not stale."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    page.route("**/api/next/machine", busy)
-    page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
-    stale = page.locator("#machine-stale")
-    expect(stale).to_contain_text("Could not read this machine's settings again")
-    expect(page.locator("#machine-login")).to_contain_text("Start at login")
-    machine_saved(page, pds, "major")
-    expect(stale).to_have_count(0)
-    page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
-    expect(stale).to_be_visible()  # a failed read after the save warns again
-    page.unroute("**/api/next/machine", busy)
-    page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
-    expect(stale).to_have_count(0)
-
-
-def a_read_failing_after_a_save_during_it_leaves_the_save_s_answer_unwarned(page, pds) -> None:
-    """Copilot on #813: a read that a save overtook says nothing about the save's answer, even when it fails."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    held = []
-
-    def hold(route) -> None:
-        if route.request.method == "GET":
-            held.append(route)
-        else:
-            route.fallback()
-
-    page.route("**/api/next/machine", hold)
-    page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")
-    until(page, lambda: held)
-    older = len(held)
-    machine_saved(page, pds, "minor")
-    for route in held[:older]:
-        route.abort()
-    page.unroute("**/api/next/machine", hold)
-    for route in held[older:]:
-        route.fallback()
-    page.wait_for_timeout(500)  # the aborted read's failure has been handled by now
-    expect(page.locator("#machine-stale")).to_have_count(0)
 
 
 def a_group_of_the_shown_page_opens_on_it(page, here: str) -> None:
@@ -1862,20 +1594,14 @@ def test_projects_lists_a_host_s_failed_readiness_checks_whole_under_its_reason(
         f"copilot cli: copilot: {out} · fix: {copilot_cli.FIX}",
     ]
     ready = {"checking": None, "passed": [], "failing": failed}  # "unhosted" has no host, so no ready
-    for name in ["unhosted", *ready]:
-        registry.register(clone(tmp_path / name))
-
-    def hosted(route) -> None:
-        body = route.fetch().json()
-        for p in body["projects"]:
-            p.pop("ready", None)
-            if p["name"] in ready:
-                p["ready"] = ready[p["name"]]
-        route.fulfill(json=body)
+    records = [
+        listed(tmp_path / name, f"{name}-id", **({"ready": ready[name]} if name in ready else {}))
+        for name in ["unhosted", *ready]
+    ]
 
     with browsing(monkeypatch, pds) as (page, base):
         broke = errors(page)
-        page.route(f"{base}/api/next/projects", lambda r: hosted(r) if r.request.method == "GET" else r.fallback())
+        page.route(f"{base}/api/next/projects", serving(records))
         page.goto(f"{base}/projects#token=t")
         expect(page.get_by_role("listitem", name="failing")).to_be_visible()
         for name in ["unhosted", *ready]:
@@ -1893,7 +1619,7 @@ def test_projects_lists_a_detection_read_failure_from_the_real_readiness_pass(
     tmp_path: Path, monkeypatch, pds, shared_repo, whole_error
 ) -> None:
     """#1007: a failed detector read reaches Project._ready and its real Projects readiness line."""
-    from playwright.sync_api import expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
     entry = registry.register(clone(tmp_path / "shop"))
@@ -1919,33 +1645,24 @@ def test_projects_lists_a_detection_read_failure_from_the_real_readiness_pass(
     monkeypatch.setattr(readiness.pack_update, "notice", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(readiness.pack_update, "said", lambda _notice: "fixture packs not checked")
     monkeypatch.setattr(Host, "_launch", lambda *_args: False)
-    machine, server, base = serve()  # actual readiness.ready → Project._ready → HostRecord.ready
-    try:
-        with sync_playwright() as pw:
-            browser = pw.chromium.launch()
-            page = browser.new_page(viewport={"width": 1280, "height": 800})
-            said = errors(page)
-            pds.only(page, base)
-            page.goto(f"{base}/projects#token=t")
-            row = page.get_by_role("listitem", name="shop")
-            checks = row.get_by_role("list", name="Failed readiness checks")
-            expect(checks).to_be_visible()
-            page.screenshot(path=str(tmp_path / "projects-detection.png"), full_page=True)
-            detected = checks.get_by_role("listitem").filter(has_text="profile detection:")
-            assert detected.count() == 1  # the visible list is the completed readiness pass
-            assert detected.text_content() == (
-                f"profile detection: StoreError: the project profile could not be detected: {failure(error)} · fix: "
-                "Resolve the profile detection or publication error reported above, then restart Delivery"
-            )
-            assert detected.evaluate("e => getComputedStyle(e).whiteSpace") == "pre-wrap"
-            assert store.read_profile().entries[profile.HOST].value == "git.enterprise.invalid"
-            page.set_viewport_size({"width": 375, "height": 800})
-            assert page.evaluate("document.documentElement.scrollWidth") <= 375
-            assert said == []
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+    with serve() as (_machine, _server, base), page_at(base, pds, (1280, 800), required=True) as page:
+        said = errors(page)
+        page.goto(f"{base}/projects#token=t")
+        row = page.get_by_role("listitem", name="shop")
+        checks = row.get_by_role("list", name="Failed readiness checks")
+        expect(checks).to_be_visible()
+        page.screenshot(path=str(tmp_path / "projects-detection.png"), full_page=True)
+        detected = checks.get_by_role("listitem").filter(has_text="profile detection:")
+        assert detected.count() == 1  # the visible list is the completed readiness pass
+        assert detected.text_content() == (
+            f"profile detection: StoreError: the project profile could not be detected: {failure(error)} · fix: "
+            "Resolve the profile detection or publication error reported above, then restart Delivery"
+        )
+        assert detected.evaluate("e => getComputedStyle(e).whiteSpace") == "pre-wrap"
+        assert store.read_profile().entries[profile.HOST].value == "git.enterprise.invalid"
+        page.set_viewport_size({"width": 375, "height": 800})
+        assert page.evaluate("document.documentElement.scrollWidth") <= 375
+        assert said == []
 
 
 @pytest.mark.browser
@@ -2237,19 +1954,29 @@ def test_focus_goes_to_the_same_place_after_remove_and_stays_where_the_owner_mov
     """Removing the last project focuses the Remove before it; Adopt leaves focus where the owner put it meanwhile."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    replaced(tmp_path / "epsilon")
-    for name in ("alpha", "beta", "gamma"):
-        registry.register(clone(tmp_path / name))
+    epsilon = tmp_path / "epsilon"
+    records = [  # epsilon's clone was deleted and cloned again: the registered one is replaced
+        {"id": "epsilon-old", "name": "epsilon", "path": str(epsilon), "state": "replaced", "kind": "consumer",
+         "reason": f"the clone at {epsilon} is not the one registered; Remove or Adopt it"},
+        *(listed(tmp_path / name, f"{name}-id", ready=[]) for name in ("alpha", "beta", "gamma")),
+    ]  # fmt: skip
     held = []
+
+    def remove(route) -> None:  # the machine forgets the project and answers as its DELETE does
+        gone = route.request.url.rsplit("/", 1)[1]
+        records[:] = [p for p in records if p["id"] != gone]
+        route.fulfill(json={"removed": gone})
 
     def hold(route) -> None:  # Adopt, answered once the owner has moved on
         held.append(route)
 
     with browsing(monkeypatch, pds) as (page, base):
+        page.route(f"{base}/api/next/projects", serving(records))
+        page.route(f"{base}/api/next/projects/*", lambda r: remove(r) if r.request.method == "DELETE" else r.fallback())
         page.goto(f"{base}/projects#token=t")
         items = page.get_by_role("listitem")
         expect(items).to_have_count(4)
-        assert items.last.get_attribute("aria-labelledby") == f"p-{registry.load().projects[-1].id}"
+        assert items.last.get_attribute("aria-labelledby") == f"p-{records[-1]['id']}"
         last = page.get_by_role("listitem", name="gamma")
         last.get_by_role("button", name="Remove project").click()
         pds.answer(page, "Remove project")
@@ -2258,7 +1985,9 @@ def test_focus_goes_to_the_same_place_after_remove_and_stays_where_the_owner_mov
         page.get_by_role("listitem", name="epsilon").get_by_role("button", name="Adopt the new clone").click()
         until(page, lambda: held)
         page.get_by_role("button", name="Add a project").focus()  # the owner moves on while Delivery adopts it
-        held[0].fallback()
+        adopted = listed(epsilon, "epsilon-new", ready=[])  # the clone now at its path, under that clone's own id
+        records[:] = [*(p for p in records if p["id"] != "epsilon-old"), adopted]  # the machine loads it last
+        held[0].fulfill(json=adopted)
         expect(page.locator("#page > [role=status]")).to_contain_text("epsilon now serves the clone at")
         expect(page.get_by_role("button", name="Add a project")).to_be_focused()
 
@@ -2360,8 +2089,6 @@ def test_updates_owlbear_marks_the_menu_refuses_start_while_work_runs_and_the_ma
         )
         expect(page.get_by_role("button", name="Start update now")).to_be_disabled()
         expect(page.locator("#owlbear-refused")).to_have_text("Not now: Work runs now: alpha: alpha-1: a running step.")
-        refused = page.request.post(f"{base}/api/next/update/start", headers={"Authorization": "Bearer t"})
-        assert (refused.status, refused.json()["detail"]) == (409, work[0])
         assert started == []
 
         burger.click()
@@ -2645,8 +2372,7 @@ def test_old_update_addresses_open_the_updates_pages_and_back_and_reload_keep_th
 
 
 def decided(shared: Path, folder: str, *statements: str, **more) -> None:
-    """In force in *folder* of the shared repository (Global's when empty), committed and published; *more* sets other
-    fields."""
+    """Write fixture decisions in *folder* of the shared repository (Global's when empty); *more* sets other fields."""
     from owlbear_decisions import Decision, Origin, Scope, State, new_id, write  # noqa: PLC0415 - the decisions' own
 
     scope = Scope.PROJECT if folder else Scope.GLOBAL
@@ -2654,6 +2380,9 @@ def decided(shared: Path, folder: str, *statements: str, **more) -> None:
         write(Decision(id=new_id(), title=said, statement=said, scope=scope, project=folder, origin=Origin.AUTONOMOUS,
                        actor="shaper", created_at=datetime.now(UTC), **{"state": State.IN_FORCE} | more),
               shared / folder if folder else shared)  # fmt: skip
+
+
+def publish_decisions(shared: Path) -> None:
     for args in (("add", "-A"), ("commit", "-qm", "seed"), ("push", "-q", "origin", "HEAD")):
         subprocess.run(["git", *args], cwd=shared, check=True, capture_output=True)  # noqa: S603, S607
 
@@ -2680,6 +2409,7 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
     decided(shared, "owlbear", "Lint once.")
     decided(shared, "alpha", "Notes live in SQLite.")
     decided(shared, "alpha", "Notes sync nightly.", state=State.DRAFT)
+    publish_decisions(shared)
     with browsing(monkeypatch, pds, 390) as (page, base):
         held: list = []
 
@@ -2750,6 +2480,7 @@ def test_owlbears_fixed_scope_stays_its_one_row_once_its_own_project_is_register
     shared = shared_repo[0]
     monkeypatch.setenv(data_place.VIEW, str(shared))
     decided(shared, "owlbear", "Lint once.")
+    publish_decisions(shared)
     registry.register(clone(tmp_path / "alpha"))
     registry.register(clone(tmp_path / "mine", origin=OWLBEAR_ORIGIN))
     with browsing(monkeypatch, pds, 390) as (page, base):
@@ -3036,888 +2767,12 @@ def alpha_answers_while_curation_runs(page, row, a: registry.Project) -> None:
     page.unroute("**/api/next/curation")
 
 
-def _git(cwd: Path, *args: str) -> None:
-    who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
-    subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True)  # noqa: S603, S607
-
-
-def offered(model_id: str, price: float) -> rpc.Model:
-    """A model the Copilot CLI offers, at *price* per million input tokens."""
-    prices = rpc.ModelBillingTokenPrices(input_price=price, output_price=15)
-    limits = rpc.ModelCapabilitiesLimits(max_context_window_tokens=200_000)
-    return rpc.Model(id=model_id, name=model_id, supported_reasoning_efforts=["low", "medium"],
-                     default_reasoning_effort="low", billing=rpc.ModelBilling(token_prices=prices),
-                     capabilities=rpc.ModelCapabilities(limits=limits))  # fmt: skip
-
-
-class Outside:
-    """What a machine host reads from outside (#810): a shared repository another machine pushes to, the models this
-    machine's Copilot offers (m1, Global's builder model) and Impeccable's releases, each answering until told
-    not to."""
-
-    def __init__(self, shared_repo: tuple[Path, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        self.root, remote = shared_repo
-        self.other, self.mp = tmp_path / "other", monkeypatch
-        _git(tmp_path, "clone", "-q", str(remote), str(self.other))
-        monkeypatch.setenv(data_repo.VIEW, str(self.root))
-        self.push("config.json", agents={"builder": {"model": "m1"}})
-        _git(self.root, "pull", "-q")
-        self.models(3)
-        self.releases(b"[]")
-
-    def models(self, price: float | None) -> None:
-        """Offer m1 at *price*; None: the model list cannot be read."""
-
-        def read() -> list[rpc.Model]:
-            if price is None:
-                msg = "the CLI is gone"
-                raise RuntimeError(msg)
-            return [offered("m1", price)]
-
-        self.mp.setattr(model_choices, "_read", read)
-
-    def releases(self, answer: bytes | None) -> None:
-        """GitHub's releases of Impeccable answer *answer*; None: GitHub is not reached."""
-
-        def fetch(url: str, *_args: object, **_kwargs: object) -> bytes:
-            if answer is None:
-                msg = f"not reached: {url}"
-                raise OSError(msg)
-            return answer
-
-        self.mp.setattr(pack_files, "fetch", fetch)
-
-    def push(self, rel: str, *, whole: bool = False, **fields: object) -> None:
-        """Another machine sets *fields* in the layer *rel* of the shared repository, as pulled, and pushes it; *whole*:
-        the layer becomes *fields* alone, every other setting unset."""
-        _git(self.other, "pull", "-q")
-        path = self.other / rel
-        path.parent.mkdir(exist_ok=True)
-        layer = {} if whole or not path.exists() else json.loads(path.read_text())
-        path.write_text(json.dumps(layer | {"format": CONFIG_FORMAT, **fields}))
-        _git(self.other, "add", rel)
-        _git(self.other, "commit", "-q", "-m", f"elsewhere: {rel}")
-        _git(self.other, "push", "-q")
-
-    @staticmethod
-    def read(base: str, of: str) -> dict:
-        """A read the page did not start, as the hourly one: the same read, through the project's route."""
-        answer = httpx.post(f"{base}/p/{of}/api/next/config/read", headers=TOKEN, timeout=120)
-        answer.raise_for_status()
-        return answer.json()["reads"]
-
-    @staticmethod
-    def notices(base: str) -> list[str]:
-        """The notices' ids, as every page's poll reads them."""
-        return httpx.get(f"{base}/api/next/projects", headers=TOKEN, timeout=30).json()["reads"]["notices"]
-
-
-TOKEN = {"authorization": "Bearer t"}
-
-
-@pytest.fixture
-def outside(shared_repo, tmp_path: Path, monkeypatch) -> Outside:
-    return Outside(shared_repo, tmp_path, monkeypatch)
-
-
 def errors(page: Page) -> list[str]:
     """The console errors *page* logs from now on."""
     said: list[str] = []
     page.on("console", lambda m: said.append(m.text) if m.type == "error" else None)
     page.on("pageerror", lambda e: said.append(str(e)))
     return said
-
-
-def big_enough(target) -> None:
-    """WCAG 2.5.8: a control at least 24 by 24 CSS pixels."""
-    box = target.bounding_box()
-    assert box is not None
-    assert box["width"] >= 24, box
-    assert box["height"] >= 24, box
-
-
-def rates(page: Page):
-    """The rates the builder's model costs, as Agents shows them."""
-    return page.locator("#set-agents-builder p-table-cell").nth(1)  # under the model it prices
-
-
-def machine_layer(**fields: object) -> None:
-    """This machine's preference layer in ~/.owlbear, written as the owner would by hand."""
-    (local_home.root() / MACHINE_SETTINGS).write_text(json.dumps({"format": CONFIG_FORMAT, **fields}))
-
-
-READS_TIME = 60  # a 120 s test: a read pulls the shared repository; a read the page did not start shows by its poll
-# Every wait of a page for an answer 20 times as long, so an answer a test holds outlives the next poll's ask.
-LONG_WAITS = "{ const t = AbortSignal.timeout; AbortSignal.timeout = (ms) => t.call(AbortSignal, ms * 20); }"
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_opening_settings_reads_without_a_click(tmp_path: Path, monkeypatch, pds, outside) -> None:
-    """#810: opening Settings reads every outside source, so what changed outside shows without a click."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    with browsing(monkeypatch, pds) as (page, base):
-        said = errors(page)
-        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
-        outside.models(4)
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        pds.group(page, "agents")
-        expect(rates(page)).to_contain_text("in 4 ")
-        pds.pick(page, "Layer", "global")
-        pds.group(page, "agents")
-        expect(page.get_by_label("Minutes per session, builder")).to_have_value("45")
-        assert said == []
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_read_again_updates_every_surface_and_keeps_drafts(tmp_path: Path, monkeypatch, pds, outside) -> None:
-    """#810: Read again brings Global, this project's, another project's and this machine's layers, the models'
-    rates and Impeccable's releases; a failed source is named until it reads; drafts stay."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a, _b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
-    outside.releases(None)
-    with browsing(monkeypatch, pds) as (page, base):
-        said = errors(page)
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        status = page.locator("#reads-status")
-        expect(status).to_contain_text("last full read never", timeout=READS_TIME * 1000)
-        expect(page.locator(".reads-failure")).to_contain_text("Could not read: Impeccable releases — GitHub's")
-        pds.group(page, "checks")
-        expect(page.locator("#impeccable")).to_contain_text("releases upstream unknown")
-        pds.group(page, "agents")
-        page.get_by_label("Minutes per session, reviewer").fill("50")  # a draft of this project's layer
-        pds.group(page, "this-machine")
-        pds.pick(page, "Layer", "machine")  # #809: this machine's own values are set with it chosen
-        versions = pds.select(page, "Versions this machine takes")
-        channel = "minor" if versions.evaluate("e => e.value") == "major" else "major"
-        pds.pick(page, "Versions this machine takes", channel)  # a draft of This machine
-        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
-        outside.push("alpha/config.json", agents={"builder": {"minutes": 30}})
-        outside.push("beta/config.json", agents={"builder": {"minutes": 20}})
-        machine_layer(agents={"builder": {"minutes": 33}})
-        outside.models(5)
-        outside.releases(b"[]")
-        pds.group(page, "overview")
-        again = page.get_by_role("button", name="Read again")
-        big_enough(again)
-        again.focus()
-        page.keyboard.press("Enter")
-        expect(status).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        expect(page.locator(".reads-failure")).to_have_count(0)
-        across = page.locator("#across-table")
-        for value in ("45 (global)", "33", "alpha: 30", "beta: 20"):
-            expect(across).to_contain_text(value)
-        pds.group(page, "checks")
-        expect(page.locator("#impeccable")).to_contain_text("0 releases behind")
-        pds.group(page, "agents")
-        expect(rates(page)).to_contain_text("in 5 ")
-        pds.pick(page, "Layer", "project")
-        pds.group(page, "agents")
-        expect(page.get_by_label("Minutes per session, builder")).to_have_value("30")
-        expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("50")
-        pds.pick(page, "Layer", "machine")
-        pds.group(page, "this-machine")
-        expect(versions).to_have_js_property("value", channel)
-        assert said == []
-
-
-@pytest.mark.browser
-@pytest.mark.usefixtures("outside")  # every source reads
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_a_read_s_layers_answered_while_a_save_reads_across_never_replace_the_saved(
-    tmp_path: Path, monkeypatch, pds
-) -> None:
-    """#810: a read's refresh begun while a save runs, its layers answered after the save's but before the save has
-    read the machine and the other projects, never shows the older layers."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    with browsing(monkeypatch, pds) as (page, base):
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        held: dict[str, Any] = {}
-
-        def hold(name: str, method: str = "GET") -> Callable[[Any], None]:
-            def handle(route: Any) -> None:
-                if name in held or route.request.method != method:
-                    route.continue_()
-                    return
-                held[name] = (route, None if method == "PUT" else route.fetch())  # a held save is not yet made
-
-            return handle
-
-        page.route("**/api/next/config/read", hold("read", "POST"))
-        pds.group(page, "overview")
-        page.locator("#read-again").click()
-        until(page, lambda: "read" in held, READS_TIME)
-        page.route(f"**/p/{a.id}/api/next/config/project", hold("save", "PUT"))
-        pds.group(page, "agents")
-        page.get_by_label("Minutes per session, builder").fill("50")
-        page.get_by_role("button", name="Save project settings").click()
-        pds.answer(page, "Save project settings")
-        until(page, lambda: "save" in held)  # the save has started; the host has not written it yet
-        page.route(f"**/p/{a.id}/api/next/config", hold("layers"))
-        route, answer = held["read"]
-        route.fulfill(response=answer)
-        until(page, lambda: "layers" in held)  # the layers as they are before the save writes
-        page.route("**/api/next/machine", hold("machine"))
-        held["save"][0].continue_()
-        until(page, lambda: "machine" in held)  # the save is answered and now reads across
-        route, before = held["layers"]
-        with page.expect_request("**/api/next/machine"):  # the read's refresh goes on past the layers it read
-            route.fulfill(response=before)
-        route, machine = held["machine"]
-        route.fulfill(response=machine)
-        expect(page.locator("#status")).to_contain_text("Saved alpha's settings")
-        expect(page.get_by_label("Minutes per session, builder")).to_have_value("50")
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_an_older_read_s_other_projects_answered_last_never_replace_a_newer_read_s(
-    tmp_path: Path, monkeypatch, pds, outside
-) -> None:
-    """#810: two reads' refreshes overlap; another project's settings as the first one read them, answered after the
-    second's, are not shown."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    def read_finished(response) -> bool:
-        return response.request.method == "POST" and response.url.endswith("/config/read")
-
-    a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
-    outside.push("beta/config.json", agents={"builder": {"minutes": 20}})
-    with browsing(monkeypatch, pds) as (page, base):
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        pds.group(page, "overview")
-        across = page.locator("#across-table")
-        expect(across).to_contain_text("beta: 20")
-        held: list[tuple[Any, Any]] = []
-
-        def hold(route: Any) -> None:
-            if held or route.request.method != "GET":
-                route.continue_()
-                return
-            held.append((route, route.fetch()))  # beta's settings as the first read's refresh has them
-
-        page.route(f"**/p/{b.id}/api/next/config", hold)
-        again = page.get_by_role("button", name="Read again", exact=True)
-        with page.expect_response(read_finished, timeout=READS_TIME * 1000):
-            again.click()
-        until(page, lambda: held, READS_TIME)
-        outside.push("beta/config.json", agents={"builder": {"minutes": 45}})
-        with page.expect_response(read_finished, timeout=READS_TIME * 1000):
-            again.click()
-        expect(across).to_contain_text("beta: 45")
-        route, before = held[0]
-        with page.expect_request("**/config/models"):  # the first refresh goes on past what it read
-            route.fulfill(response=before)
-        expect(across).to_contain_text("beta: 45")
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_an_older_read_s_models_answered_last_never_replace_a_newer_read_s(tmp_path: Path, monkeypatch, pds, outside):
-    """#810: two reads' refreshes overlap; the models' rates as the first one read them, answered after the second's,
-    are not shown."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    with browsing(monkeypatch, pds) as (page, base):
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        held: list[tuple[Any, Any]] = []
-
-        def hold(route: Any) -> None:
-            if held or route.request.method != "GET":
-                route.continue_()
-                return
-            held.append((route, route.fetch()))  # the models at 3, as the first read's refresh has them
-
-        page.route("**/config/models", hold)
-        pds.group(page, "overview")
-        page.get_by_role("button", name="Read again").click()
-        until(page, lambda: held, READS_TIME)
-        outside.models(7)
-        with page.expect_response("**/config/models", timeout=READS_TIME * 1000):
-            page.get_by_role("button", name="Read again").click()
-        pds.group(page, "agents")
-        expect(rates(page)).to_contain_text("in 7 ")
-        route, before = held[0]
-        with page.expect_response("**/config/models"):
-            route.fulfill(response=before)
-        page.wait_for_timeout(200)  # the answer's handler has run
-        expect(rates(page)).to_contain_text("in 7 ")
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_an_older_read_state_answered_last_never_hides_a_newer_read_s_failure(
-    tmp_path: Path, monkeypatch, pds, outside
-) -> None:
-    """#810: the page follows a read made elsewhere while its own Read again finds a failure; the state of the earlier
-    read, answered last, does not replace the newer one."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    with browsing(monkeypatch, pds) as (page, base):
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        held: list[tuple[Any, Any]] = []
-
-        def hold(route: Any) -> None:
-            if held or route.request.method != "GET":
-                route.continue_()
-                return
-            held.append((route, route.fetch()))  # the read made elsewhere, every source read
-
-        page.route("**/config/read", hold)
-        Outside.read(base, a.id)  # the page learns of it by its poll and asks for it
-        until(page, lambda: held, READS_TIME)
-        outside.releases(None)
-        pds.group(page, "overview")
-        failure = page.locator(".reads-failure")
-        page.get_by_role("button", name="Read again").click()
-        expect(failure).to_contain_text("Impeccable", timeout=READS_TIME * 1000)
-        route, before = held[0]
-        with page.expect_request(f"**/p/{a.id}/api/next/config"):  # sent right after the state is applied and shown
-            route.fulfill(response=before)
-        assert "Impeccable" in " ".join(failure.all_inner_texts())  # at once: the next poll would repair it
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_an_older_read_state_that_fails_last_never_hides_a_newer_read(
-    tmp_path: Path, monkeypatch, pds, outside
-) -> None:
-    """#810: the page's ask for a read made elsewhere fails after its own Read again is shown; the newer read stands,
-    with no error of the older ask."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    with browsing(monkeypatch, pds) as (page, base):
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        status = page.locator("#reads-status")
-        expect(status).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        held: list[Any] = []
-
-        def hold(route: Any) -> None:
-            if held or route.request.method != "GET":
-                route.continue_()
-                return
-            held.append(route)
-
-        page.route("**/config/read", hold)
-        Outside.read(base, a.id)  # the page learns of it by its poll and asks for it
-        until(page, lambda: held, READS_TIME)
-        outside.releases(None)
-        pds.group(page, "overview")
-        page.get_by_role("button", name="Read again").click()
-        expect(page.locator(".reads-failure")).to_contain_text("Impeccable", timeout=READS_TIME * 1000)
-        with page.expect_request(f"**/p/{a.id}/api/next/config"):  # sent right after the failed ask is handled
-            held[0].fulfill(status=503, json={"detail": "the read state could not be read"})
-        assert page.locator("#reads-error").count() == 0  # at once: the next poll would repair it
-        assert "Impeccable" in " ".join(page.locator(".reads-failure").all_inner_texts())
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_an_older_read_state_answered_last_never_clears_a_newer_ask_s_failure(
-    tmp_path: Path, monkeypatch, pds, outside
-) -> None:
-    """#810: the poll asks for a read made elsewhere and, its first ask still out, asks again; the later ask fails, then
-    the first answers. The read it brings shows and the failure still does."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    with browsing(monkeypatch, pds) as (page, base):
-        page.add_init_script(LONG_WAITS)
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        held: list[tuple[Any, Any]] = []
-
-        def hold(route: Any) -> None:
-            if route.request.method != "GET":
-                route.continue_()
-            elif not held:
-                held.append((route, route.fetch()))  # the read made elsewhere, as the first ask has it
-            else:
-                route.fulfill(status=503, json={"detail": "the read state could not be read"})
-
-        page.route("**/config/read", hold)
-        outside.releases(None)
-        Outside.read(base, a.id)  # the page learns of it by its poll and asks for it
-        error = page.locator("#reads-error")
-        expect(error).to_contain_text("could not be read", timeout=READS_TIME * 1000)  # the next poll's ask
-        route, answer = held[0]
-        route.fulfill(response=answer)
-        pds.group(page, "overview")
-        expect(page.locator(".reads-failure")).to_contain_text("Impeccable")  # the first ask's read is shown
-        assert "could not be read" in error.inner_text()  # at once: the next poll's failure would show it again
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_a_read_state_asked_before_a_dismissal_never_shows_its_notice_again(
-    tmp_path: Path, monkeypatch, pds, outside
-) -> None:
-    """#810: the poll's ask for a read made elsewhere answers after the owner dismissed its notice in Settings; the
-    notice stays dismissed."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    with browsing(monkeypatch, pds) as (page, base):
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
-        Outside.read(base, a.id)
-        entries = page.locator("#reads-changed li")
-        expect(entries).to_have_count(1, timeout=READS_TIME * 1000)
-        held: list[tuple[Any, Any]] = []
-
-        def hold(route: Any) -> None:
-            if held or route.request.method != "GET":
-                route.continue_()
-                return
-            held.append((route, route.fetch()))  # the notice, as the state before the dismissal has it
-
-        page.route("**/config/read", hold)
-        Outside.read(base, a.id)  # a later read: the page's poll asks for it
-        until(page, lambda: held, READS_TIME)
-        pds.group(page, "overview")
-        entries.first.get_by_role("button", name=re.compile(r"^Dismiss the change of ")).click()
-        expect(entries).to_have_count(0)
-        route, before = held[0]
-        with page.expect_request(f"**/p/{a.id}/api/next/config"):  # sent right after the state is handled
-            route.fulfill(response=before)
-        assert entries.count() == 0  # at once: the next poll would repair it
-
-
-@pytest.mark.usefixtures("outside")  # every source reads
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_a_read_state_that_does_not_read_shows_its_failure(tmp_path: Path, monkeypatch, pds) -> None:
-    """#810: the read state file breaks after a read is shown; the page's poll shows that it does not read."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    with browsing(monkeypatch, pds) as (page, base):
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        status = page.locator("#reads-status")
-        expect(status).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        (local_home.root() / SEEN).write_text("{broken")
-        expect(page.locator(".reads-failure")).to_contain_text("read state", timeout=READS_TIME * 1000)
-        expect(status).to_contain_text("No read is on record")
-
-
-@pytest.mark.usefixtures("outside")  # every source reads
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_a_second_read_again_stays_busy_while_the_first_one_s_refresh_ends(tmp_path: Path, monkeypatch, pds) -> None:
-    """#810: Read again is pressed again while the first one's refresh still runs; the button stays busy until the
-    second read answers."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    with browsing(monkeypatch, pds) as (page, base):
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        held: dict[str, Any] = {}
-
-        def hold(name: str, method: str) -> Callable[[Any], None]:
-            def handle(route: Any) -> None:
-                if name in held or route.request.method != method:
-                    route.continue_()
-                    return
-                held[name] = route
-
-            return handle
-
-        page.route(f"**/p/{a.id}/api/next/config", hold("layers", "GET"))
-        pds.group(page, "overview")
-        again = page.get_by_role("button", name="Read again")
-        again.click()
-        until(page, lambda: "layers" in held, READS_TIME)  # the first read has answered; its refresh runs
-        page.route("**/config/read", hold("second", "POST"))
-        again.click()
-        until(page, lambda: "second" in held)
-        expect(again).to_be_disabled()
-        with page.expect_response("**/config/models"):  # the first refresh ends
-            held["layers"].continue_()
-        page.wait_for_timeout(200)  # the first Read again has ended
-        assert again.is_disabled()
-        held["second"].continue_()
-        expect(again).to_be_enabled(timeout=READS_TIME * 1000)
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_an_older_reload_answered_last_never_clears_a_newer_reload_s_failure(
-    tmp_path: Path, monkeypatch, pds, outside
-) -> None:
-    """#810: the poll's refreshes for two reads made elsewhere overlap; the second one's layers fail, then the first
-    one's answer; the failure stays shown."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    with browsing(monkeypatch, pds) as (page, base):
-        page.add_init_script(LONG_WAITS)
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        held: list[tuple[Any, Any]] = []
-
-        def hold(route: Any) -> None:
-            if route.request.method != "GET":
-                route.continue_()
-            elif not held:
-                held.append((route, route.fetch()))  # the layers, as the first refresh has them
-            else:
-                route.fulfill(status=503, json={"detail": "the layers could not be read"})
-
-        page.route(f"**/p/{a.id}/api/next/config", hold)
-        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
-        Outside.read(base, a.id)  # the poll's refresh asks for the layers
-        until(page, lambda: held, READS_TIME)
-        Outside.read(base, a.id)  # and the next poll's again
-        error = page.locator("#error")
-        expect(error).to_contain_text("could not be read", timeout=READS_TIME * 1000)
-        route, answer = held[0]
-        route.fulfill(response=answer)
-        page.wait_for_timeout(500)  # the answer's handler has run; the next poll's refresh is seconds away
-        assert "could not be read" in error.inner_text()
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_a_read_answered_after_a_dismissal_never_shows_its_notice_again(
-    tmp_path: Path, monkeypatch, pds, outside
-) -> None:
-    """#810: Read again's read has ended with a notice; the owner dismisses it before the read's answer reaches the
-    page; the notice stays dismissed."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    with browsing(monkeypatch, pds) as (page, base):
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
-        Outside.read(base, a.id)
-        entries = page.locator("#reads-changed li")
-        expect(entries).to_have_count(1, timeout=READS_TIME * 1000)
-        held: list[tuple[Any, Any]] = []
-
-        def hold(route: Any) -> None:
-            if held or route.request.method != "POST":
-                route.continue_()
-                return
-            held.append((route, route.fetch(timeout=READS_TIME * 1000)))  # the read has ended; its answer waits
-
-        page.route("**/config/read", hold)
-        pds.group(page, "overview")
-        page.get_by_role("button", name="Read again").click()
-        until(page, lambda: held, READS_TIME)
-        entries.first.get_by_role("button", name=re.compile(r"^Dismiss the change of ")).click()
-        expect(entries).to_have_count(0)
-        route, answer = held[0]
-        with page.expect_request("**/config/models", timeout=READS_TIME * 1000):  # the read's refresh has run
-            route.fulfill(response=answer)
-        assert entries.count() == 0
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_a_read_state_asked_before_read_again_failed_never_clears_its_failure(
-    tmp_path: Path, monkeypatch, pds, outside
-) -> None:
-    """#810: the poll's ask for a read made elsewhere is still out when Read again fails; the ask answers after; the
-    failure stays shown."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    with browsing(monkeypatch, pds) as (page, base):
-        page.add_init_script(LONG_WAITS)
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        held: list[tuple[Any, Any]] = []
-
-        def hold(route: Any) -> None:
-            if route.request.method == "POST":
-                route.fulfill(status=503, json={"detail": "the read could not start"})
-            elif not held:
-                held.append((route, route.fetch()))  # the read made elsewhere, as the poll's ask has it
-            # a later ask stays out: an answer to it is newer than the failure
-
-        page.route("**/config/read", hold)
-        outside.releases(None)
-        Outside.read(base, a.id)  # the page learns of it by its poll and asks for it
-        until(page, lambda: held, READS_TIME)
-        pds.group(page, "overview")
-        page.get_by_role("button", name="Read again").click()
-        error = page.locator("#reads-error")
-        expect(error).to_contain_text("could not start")
-        route, answer = held[0]
-        route.fulfill(response=answer)
-        expect(page.locator(".reads-failure")).to_contain_text("Impeccable")  # the earlier ask's read is shown
-        assert "could not start" in error.inner_text()
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_a_dismissal_whose_next_ask_fails_stays_and_no_earlier_ask_undoes_it(
-    tmp_path: Path, monkeypatch, pds, outside
-) -> None:
-    """#810: the owner dismisses a notice while the poll's ask for a later read is out, and the page's ask after the
-    dismissal fails; the notice stays dismissed, also once the earlier ask answers."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    with browsing(monkeypatch, pds) as (page, base):
-        page.add_init_script(LONG_WAITS)
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
-        Outside.read(base, a.id)
-        entries = page.locator("#reads-changed li")
-        expect(entries).to_have_count(1, timeout=READS_TIME * 1000)
-        held: list[tuple[Any, Any]] = []
-
-        def hold(route: Any) -> None:
-            if route.request.method != "GET":
-                route.continue_()
-            elif not held:
-                held.append((route, route.fetch()))  # the notice, as the state before the dismissal has it
-            else:
-                route.fulfill(status=503, json={"detail": "the read state could not be read"})
-
-        page.route("**/config/read", hold)
-        Outside.read(base, a.id)  # a later read: the page's poll asks for it
-        until(page, lambda: held, READS_TIME)
-        pds.group(page, "overview")
-        entries.first.get_by_role("button", name=re.compile(r"^Dismiss the change of ")).click()
-        expect(page.locator("#reads-error")).to_contain_text("could not be read")
-        expect(entries).to_have_count(0)
-        route, before = held[0]
-        with page.expect_request(f"**/p/{a.id}/api/next/config"):  # sent right after the state is handled
-            route.fulfill(response=before)
-        assert entries.count() == 0
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_an_open_page_follows_reads_and_dismissals_made_elsewhere(tmp_path: Path, monkeypatch, pds, outside) -> None:
-    """#810: a read the page did not start (the hourly one) and a dismissal made elsewhere show through the poll."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    with browsing(monkeypatch, pds) as (page, base):
-        said = errors(page)
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        status = page.locator("#reads-status")
-        expect(status).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        full = re.search(r"Last read (.+), all sources", status.inner_text()).group(1)
-        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
-        outside.releases(None)
-        outside.models(6)
-        Outside.read(base, a.id)
-        changed = page.locator("#reads-changed li")
-        expect(changed).to_have_count(1, timeout=READS_TIME * 1000)
-        expect(changed).to_contain_text("builder · Minutes per session: unset → 45")  # the row's words, not its key
-        dismiss = changed.get_by_role("button", name="Dismiss the change of builder · Minutes per session")
-        expect(dismiss).to_have_count(1)
-        expect(page.locator(".reads-failure")).to_contain_text("Could not read: Impeccable releases")
-        expect(status).to_contain_text(re.compile(rf"last full read\s+{re.escape(full)}"))
-        pds.group(page, "agents")
-        expect(rates(page)).to_contain_text("in 6 ")
-        pds.group(page, "overview")
-        ids = Outside.notices(base)
-        httpx.post(f"{base}/api/next/settings-read/dismiss", json={"ids": ids}, headers=TOKEN).raise_for_status()
-        expect(changed).to_have_count(0, timeout=READS_TIME * 1000)
-        assert said == []
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_a_layer_that_does_not_read_still_shows_the_read(tmp_path: Path, monkeypatch, pds, outside) -> None:
-    """#810: with this machine's layer unreadable, the read still runs and says so, drafts stay, and a page opened
-    then shows the failure and Read again; models kept from an earlier read say a later read of them failed."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    with browsing(monkeypatch, pds) as (page, base):
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        status = page.locator("#reads-status")
-        expect(status).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        pds.group(page, "agents")
-        page.get_by_label("Minutes per session, reviewer").fill("50")
-        mine = local_home.root() / MACHINE_SETTINGS
-        mine.write_text("{not json")
-        outside.models(7)
-        Outside.read(base, a.id)  # not from the page: it learns of it by its poll
-        failure = page.locator(".reads-failure")
-        pds.group(page, "overview")
-        expect(failure).to_contain_text(f"Could not read: this machine's settings — {mine}", timeout=READS_TIME * 1000)
-        expect(status).to_contain_text("last full read")
-        pds.group(page, "agents")
-        expect(rates(page)).to_contain_text("in 7 ")
-        pds.group(page, "agents")
-        expect(page.get_by_label("Minutes per session, reviewer")).to_have_value("50")
-        pds.group(page, "overview")
-        page.get_by_role("button", name="Read again").click()
-        expect(failure).to_contain_text(f"Could not read: this machine's settings — {mine}", timeout=READS_TIME * 1000)
-
-        fresh = page.context.browser.new_page()  # the first keeps its draft; this one opens on the unreadable layer
-        said = errors(fresh)
-        pds.only(fresh, base)
-        fresh.goto(f"{base}/config?project={a.id}#token=t")
-        expect(fresh.locator(".reads-failure")).to_contain_text("this machine's settings", timeout=READS_TIME * 1000)
-        expect(fresh.locator("#groups")).to_have_count(0)  # no layer read
-        mine.unlink()
-        outside.models(None)
-        fresh.get_by_role("button", name="Read again").click()
-        expect(fresh.locator("#reads-status")).to_contain_text("last full read", timeout=READS_TIME * 1000)
-        expect(fresh.locator(".reads-failure")).to_contain_text("Could not read: models")
-        pds.group(fresh, "agents")
-        expect(fresh.locator("#models-note")).to_contain_text("Models as last read; reading them again failed")
-        expect(rates(fresh)).to_contain_text("in 7 ")
-        assert [s for s in said if "409" not in s] == []  # the opening read of the layer is refused, as said
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
-    tmp_path: Path, monkeypatch, pds, outside
-) -> None:
-    """#810: a Global change from elsewhere is listed old → new, with where this machine sets the key apart; its links
-    open the row in Global, in This machine's layer and in the other project, on this page or in a new tab."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
-    with browsing(monkeypatch, pds) as (page, base):
-        said = errors(page)
-        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
-        outside.push("alpha/config.json", agents={"builder": {"minutes": 30}})
-        outside.push("beta/config.json", agents={"builder": {"minutes": 20}})
-        machine_layer(agents={"builder": {"minutes": 33}})
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 50}})
-        page.get_by_role("button", name="Read again").click()
-        entry = page.locator("#reads-changed li")
-        expect(entry).to_contain_text("builder · Minutes per session: 45 → 50", timeout=READS_TIME * 1000)
-        expect(entry).to_contain_text("Set apart by this machine, alpha, beta, so it does not apply there.")
-        page.context.add_init_script("sessionStorage.setItem('token', 't')")  # a new tab has no token of its own
-        for name, layer in (("builder · Minutes per session", "global"), ("this machine", "machine")):
-            with page.context.expect_page() as opened:  # a new tab loads the address, which names the layer
-                entry.get_by_role("link", name=name).click(modifiers=["ControlOrMeta"])
-            tab = opened.value
-            expect(pds.select(tab, "Layer")).to_have_js_property("value", layer, timeout=READS_TIME * 1000)
-            expect(tab.get_by_label("Minutes per session, builder")).to_have_value("50" if layer == "global" else "33")
-            tab.close()
-        expect(pds.select(page, "Layer")).to_have_js_property("value", "project")  # this page stays as it was
-        entry.get_by_role("link", name="builder · Minutes per session").focus()
-        page.keyboard.press("Enter")
-        expect(pds.select(page, "Layer")).to_have_js_property("value", "global")
-        expect(page.locator("#groups a[href='#agents']")).to_have_attribute("aria-current", "page")
-        minutes = page.get_by_label("Minutes per session, builder")
-        expect(minutes).to_be_focused()
-        expect(minutes).to_be_in_viewport()
-        expect(minutes).to_have_value("50")
-        pds.group(page, "overview")
-        entry.get_by_role("link", name="this machine").click()
-        expect(pds.select(page, "Layer")).to_have_js_property("value", "machine")
-        expect(minutes).to_have_value("33")
-        pds.group(page, "overview")
-        entry.get_by_role("link", name="alpha").click()
-        expect(pds.select(page, "Layer")).to_have_js_property("value", "project")
-        expect(minutes).to_have_value("30")
-        pds.group(page, "overview")
-        entry.get_by_role("link", name="beta").click()
-        expect(page).to_have_url(f"{base}/config?project={b.id}#agents")
-        expect(minutes).to_have_value("20")
-        expect(minutes).to_be_focused()
-        assert said == []
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(120)  # a real browser and a host pulling a shared repository: a loaded runner needs more than 30 s
-def test_another_project_s_link_opens_in_a_new_tab_while_an_edit_is_unsaved(
-    tmp_path: Path, monkeypatch, pds, outside
-) -> None:
-    """#810: with an unsaved edit, a notice's link to another project still opens that project in a new tab."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
-    with browsing(monkeypatch, pds) as (page, base):
-        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 45}})
-        outside.push("beta/config.json", agents={"builder": {"minutes": 20}})
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        outside.push("config.json", agents={"builder": {"model": "m1", "minutes": 50}})
-        page.get_by_role("button", name="Read again").click()
-        entry = page.locator("#reads-changed li")
-        expect(entry).to_contain_text("Set apart by beta", timeout=READS_TIME * 1000)
-        pds.group(page, "agents")
-        page.get_by_label("Minutes per session, builder").fill("31")
-        expect(page.locator("#pending")).not_to_have_text("No unsaved edits.")
-        pds.group(page, "overview")
-        with page.context.expect_page() as opened:
-            entry.get_by_role("link", name="beta").click(modifiers=["ControlOrMeta"])
-        expect(opened.value).to_have_url(f"{base}/config?project={b.id}#agents")
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(180)  # two reads of 300 changes and two pages: a loaded runner needs more than 30 s
-def test_dismiss_one_in_settings_and_all_from_changes(tmp_path: Path, monkeypatch, pds, outside) -> None:
-    """#810: Settings dismisses one entry; Changes counts the rest, links to their list and dismisses every one it
-    counts, on both pages, in batches of the route's limit."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    a = registry.register(clone(tmp_path / "alpha"))
-    whole = {k: v for k, v in config.BASE.model_dump(mode="json", exclude_none=True).items() if k != "format"}
-    with browsing(monkeypatch, pds) as (page, base):
-        said = errors(page)
-        page.goto(f"{base}/config?project={a.id}#token=t")
-        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        outside.push("config.json", **whole)  # every Global setting set elsewhere
-        Outside.read(base, a.id)
-        outside.push("config.json", whole=True)  # and every one unset again
-        reads = Outside.read(base, a.id)
-        assert not reads["failures"], reads["failures"]
-        n = len(reads["notices"])
-        assert n > 200, n  # more than one batch
-        entries = page.locator("#reads-changed li")
-        expect(entries).to_have_count(n, timeout=READS_TIME * 1000)
-        one = entries.first.get_by_role("button", name=re.compile(r"^Dismiss the change of "))
-        big_enough(one)
-        one.focus()
-        page.keyboard.press("Enter")
-        expect(entries).to_have_count(n - 1)
-        assert len(Outside.notices(base)) == n - 1
-
-        page.goto(f"{base}/?project={a.id}")
-        banner = page.locator("#elsewhere")
-        expect(banner).to_contain_text(f"{n - 1} Global settings changed elsewhere", timeout=READS_TIME * 1000)
-        banner.get_by_role("link", name="Show in Settings").click()
-        expect(page).to_have_url(f"{base}/config?project={a.id}#overview")
-        expect(page.locator("#groups")).to_be_visible(timeout=READS_TIME * 1000)  # the list outlives the layers' load
-        expect(page.locator("#reads-changed")).to_be_focused()
-        expect(entries).to_have_count(n - 1)
-        page.go_back()
-        dismiss = banner.get_by_role("button", name="Dismiss")
-        big_enough(dismiss)
-        dismiss.focus()
-        page.keyboard.press("Enter")
-        expect(banner).to_have_count(0, timeout=READS_TIME * 1000)
-        assert Outside.notices(base) == []
-        page.goto(f"{base}/config?project={a.id}")
-        expect(page.locator("#reads-status")).to_contain_text("all sources", timeout=READS_TIME * 1000)
-        expect(entries).to_have_count(0)
-        assert said == []
 
 
 def test_a_long_step_error_shows_whole_on_the_status_line(tmp_path: Path, monkeypatch, whole_error: str) -> None:
@@ -4136,6 +2991,7 @@ def test_a_picked_decision_opens_in_its_project_from_all_projects(
     alpha, _beta = (registry.register(clone(tmp_path / n, "c1")) for n in ("alpha", "beta"))
     store = Store.open(Path(alpha.path))
     decided(shared, store.name, "Lint once.")
+    publish_decisions(shared)
     (rule,) = [
         e.decision
         for e in decision_store.load(store.shared, store.name).snapshot.entries

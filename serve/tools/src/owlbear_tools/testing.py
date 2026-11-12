@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import ast
 import contextlib
 import fcntl
@@ -14,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from owlbear_tools import task_scope
+
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
@@ -21,6 +22,11 @@ _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 _DOCS_ONLY_PREFIXES = ("share/", ".owlbear/")
 _INVARIANT_TESTS = ("tests/test_package_boundary.py",)
 _CONFIG_TESTS = {
+    ".github/scripts/ci_scope.py": (
+        "tests/test_ci_workflows.py",
+        "tests/test_dependency_verification_workflow.py",
+        "tests/test_agent_ecosystem_validation.py",
+    ),
     ".pre-commit-config.yaml": (
         "tests/test_linter_formatter_policy.py",
         "serve/tools/tests/test_quality.py",
@@ -89,6 +95,9 @@ class _WorkspacePackage:
     namespace: str
     project_name: str
     dependencies: tuple[str, ...]
+
+
+type _Packages = tuple[_WorkspacePackage, ...]
 
 
 class _ChangedScopeError(RuntimeError):
@@ -181,8 +190,8 @@ def _relative_paths(paths: Iterable[Path]) -> list[str]:
     return sorted({str(path.relative_to(_REPOSITORY_ROOT)) for path in paths if path.is_file()})
 
 
-def _package_scope(package: _WorkspacePackage) -> list[str]:
-    return _relative_paths([*_package_tests(package), *_neighbour_tests(package)])
+def _package_scope(package: _WorkspacePackage, packages: _Packages | None = None) -> list[str]:
+    return _relative_paths([*_package_tests(package), *_neighbour_tests(package, packages)])
 
 
 def _page_fetch() -> re.Pattern[str]:
@@ -192,17 +201,17 @@ def _page_fetch() -> re.Pattern[str]:
     return re.compile(rf"\.get\(\s*f?[\"'](?:/p/[^\"'/]*)?(?:{routes})[\"'?]")
 
 
-def _page_scope(package: _WorkspacePackage) -> list[str]:
-    tests = [*_package_tests(package), *_neighbour_tests(package)]
+def _page_scope(package: _WorkspacePackage, packages: _Packages | None = None) -> list[str]:
+    tests = [*_package_tests(package), *_neighbour_tests(package, packages)]
     fetch = _page_fetch()
     texts = {path: path.read_text(encoding="utf-8") for path in tests}
     pages = [path for path, text in texts.items() if _PAGE_TESTS.search(text) or fetch.search(text)]
     return _relative_paths([*pages, *(_REPOSITORY_ROOT / path for path in _INVARIANT_TESTS)])
 
 
-def _neighbour_tests(package: _WorkspacePackage) -> list[Path]:
+def _neighbour_tests(package: _WorkspacePackage, packages: _Packages | None = None) -> list[Path]:
     """Root and consumer tests that import the package, and the invariant tests."""
-    packages = _workspace_packages()
+    packages = packages if packages is not None else _workspace_packages()
     targets = _tests_importing(package.namespace, _root_tests())
     for consumer in _direct_consumers(package, packages):
         targets.extend(_tests_importing(package.namespace, _package_tests(consumer)))
@@ -258,8 +267,8 @@ def _testmon_commands(packages: Iterable[_WorkspacePackage], forced: set[str]) -
     return commands
 
 
-def _package_for_path(normalized: str) -> _WorkspacePackage | None:
-    for package in _workspace_packages():
+def _package_for_path(normalized: str, packages: _Packages | None = None) -> _WorkspacePackage | None:
+    for package in packages if packages is not None else _workspace_packages():
         prefix = f"serve/{package.directory.name}/"
         if normalized.startswith((f"{prefix}src/", f"{prefix}tests/")):
             return package
@@ -268,18 +277,18 @@ def _package_for_path(normalized: str) -> _WorkspacePackage | None:
     return None
 
 
-def _python_scope(path: str) -> list[str] | None:
+def _python_scope(path: str, packages: _Packages | None = None) -> list[str] | None:
     normalized = path.removeprefix("./")
     if normalized in _CONFIG_TESTS:
         return sorted({*_CONFIG_TESTS[normalized], *_INVARIANT_TESTS})
     scope: list[str] | None = None
-    package = _package_for_path(normalized)
+    package = _package_for_path(normalized, packages)
     if package is not None:
         package_prefix = f"serve/{package.directory.name}/"
         if normalized.startswith(_PAGES) and Path(normalized).suffix in {".mjs", ".html", ".css"}:
-            scope = _page_scope(package)
+            scope = _page_scope(package, packages)
         elif normalized.startswith(f"{package_prefix}src/") or normalized == f"{package_prefix}pyproject.toml":
-            scope = _package_scope(package)
+            scope = _package_scope(package, packages)
         elif normalized.startswith(f"{package_prefix}tests/"):
             candidate = _REPOSITORY_ROOT / normalized
             if candidate.exists():
@@ -409,24 +418,19 @@ def _run_commands(commands: list[tuple[list[str], Path]]) -> int:
 def test_main() -> None:
     """Run all maintained tests or suites selected by explicit paths."""
     _require_development_checkout()
-    parser = argparse.ArgumentParser(prog="test")
-    scope = parser.add_mutually_exclusive_group()
-    scope.add_argument("-a", "--all", action="store_true", dest="all_tests")
-    scope.add_argument("--changed", action="store_true")
-    parser.add_argument("--base", help="Git ref used as the committed-change baseline for --changed")
-    parser.add_argument("--coverage", action="store_true")
-    parser.add_argument("paths", nargs="*")
-    args = parser.parse_args()
-    if args.all_tests and args.paths:
-        parser.error("--all cannot be combined with paths")
-    if args.base and not args.changed:
-        parser.error("--base requires --changed")
-    if args.changed and args.paths:
-        parser.error("--changed cannot be combined with paths")
+    args = task_scope.arguments()
 
     paths = args.paths
     all_tests = args.all_tests or not args.paths
-    if args.changed:
+    if args.task_base is not None:
+        from owlbear_tools.task_testing import commands_for_task  # noqa: PLC0415 - task mode only.
+
+        target = task_scope.commit(_run_git, args.target)
+        paths = task_scope.changed(_run_git, _git_paths, args.task_base, args.keep_span, target)
+        maps_dir = Path(args.maps_dir) if args.maps_dir is not None else None
+        context = task_scope.Context(args.task_base, target, maps_dir, tuple(args.keep_span), args.measurement)
+        commands = commands_for_task(paths, context, args.paths, coverage=args.coverage)
+    elif args.changed:
         try:
             paths = _changed_paths(args.base)
             all_tests = False
@@ -434,7 +438,8 @@ def test_main() -> None:
             print(f"Changed test scope unavailable; running the full suite: {error}")  # noqa: T201
             paths = []
             all_tests = True
-    commands = _commands_for_paths(paths, all_tests=all_tests, coverage=args.coverage)
+    if args.task_base is None:
+        commands = _commands_for_paths(paths, all_tests=all_tests, coverage=args.coverage)
     if args.changed:
         for command, _cwd in commands:
             command.extend(["-o", "session_timeout="])

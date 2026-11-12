@@ -94,7 +94,14 @@ def test_a_lint_error_in_a_changed_file_refuses_the_submit_until_it_is_fixed(cha
 
 
 @pytest.mark.usefixtures("real_ruff")
-def test_lint_refusals_never_end_the_step_and_pass_with_lint_unresolved_after_the_limit(change_repo: Path) -> None:
+def test_lint_refusals_never_end_the_step_and_pass_with_lint_unresolved_after_the_limit(
+    change_repo: Path, monkeypatch
+) -> None:
+    ran = {  # what ruff reports for new.py; the test above runs the real ruff
+        "ruff check": lint.Outcome("failed", "F401 [*] `sys` imported but unused\n --> new.py:1:8\nFound 1 error."),
+        "ruff format": lint.Outcome("passed", "1 file already formatted"),
+    }
+    monkeypatch.setattr(lint, "run", lambda _root, linter, _timeout: ran[linter.name])
     commit(change_repo, {"pyproject.toml": RUFF})
     since, log = head(change_repo), []
     commit(change_repo, {"new.py": "import sys\n"})

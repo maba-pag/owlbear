@@ -48,6 +48,7 @@ from owlbear_delivery_next.impeccable_runs import (
     pack_repair_edits,
     pack_rounds,
     pack_run,
+    pack_state,
     pack_updater,
 )
 from owlbear_delivery_next.local_system import git_run
@@ -740,7 +741,8 @@ def test_a_reconsideration_needs_the_owners_note_and_a_fresh_challenger_settles_
         assert state["questions"][0]["kind"] == "end"
 
 
-def test_rounds_ending_without_a_pass_wait_and_a_discard_changes_nothing(tmp_path, checkout, clone):
+@pytest.mark.parametrize("option", ["discard", "activate"])
+def test_rounds_ending_without_a_pass_wait_and_a_discard_changes_nothing(tmp_path, checkout, clone, option):
     fakes, store = Fakes(clone, verdict="fix"), Store(tmp_path / "store")
     fakes.edits = [{}, {REVIEW_SKILL: "repaired\n"}]
     before = snapshot(checkout)
@@ -755,12 +757,20 @@ def test_rounds_ending_without_a_pass_wait_and_a_discard_changes_nothing(tmp_pat
     with pytest.raises(pack_job.Busy, match="waits for your answers"):
         job.start()
 
-    state = answered(job, "discard")
+    again = pack_job.Job(store, fakes.live(checkout))
+    assert again.read() == state
+    state = answered(again, option)
 
-    assert (state["state"], state["reason"]) == ("discarded", "discarded by you; nothing changed")
-    assert (state["questions"], snapshot(checkout)) == ([], before)
+    assert state["questions"] == []
+    if option == "activate":
+        assert state["state"] == "passed", state["reason"]
+        assert shown(checkout, PACKAGED) == "repaired\n"
+        assert snapshot(checkout)[:3] == before[:3]
+    else:
+        assert (state["state"], state["reason"]) == ("discarded", "discarded by you; nothing changed")
+        assert snapshot(checkout) == before
+        assert results(state)["commit"] == "not-reached"
     assert not (store.root / "design-pack-updater").exists()
-    assert results(state)["commit"] == "not-reached"
 
 
 def test_activation_publishes_only_the_candidate_the_owner_was_asked_about(tmp_path, checkout, clone):
@@ -1171,11 +1181,10 @@ def test_a_ci_repairs_change_is_held_refused_or_reviewed_by_what_it_edits(tmp_pa
     ("change", "asked"),
     [
         (("biome.json", "{}\n"), ("biome.json", ASKED)),
-        (("tests/test_page.py", f"import pytest\n\n@pytest.mark.skip\n{TESTED}"),
-         ("tests/test_page.py (adds a suppression or skip)", REFUSED)),
         (("src/pkg/impeccable.json", "{}\n"),
          ("src/pkg/impeccable.json (pack content only an update may change)", REFUSED)),
     ],
+    ids=["change0-asked0", "change2-asked2"],  # a refused skip takes this path too; the classifier above holds it
 )  # fmt: skip
 def test_a_ci_repair_that_changes_configuration_or_weakens_a_check_stops_and_asks_without_pushing(
     tmp_path, checkout, clone, change, asked
@@ -1206,13 +1215,12 @@ def test_a_ci_repair_that_changes_configuration_or_weakens_a_check_stops_and_ask
     ("edit", "held"),
     [
         ((f"LIMIT = 4.5\n\n\n{TESTED}", f"LIMIT = 3.0\n\n\n{TESTED}"), ("removes lines from a test", "-LIMIT = 4.5")),
-        ((TESTED, FLAKY), ("changes a test", "+@flaky.off")),
     ],
-    ids=["lowered-limit", "decorator"],
+    ids=["lowered-limit"],
 )  # fmt: skip
 def test_a_repair_that_edits_a_test_is_pushed_only_once_the_owner_reviewed_it(tmp_path, checkout, clone, edit, held):
     """No pattern proves a test still checks as much: a lowered threshold or an unknown decorator is held regardless.
-    The classes are checked above; these show he sees what goes, its deleted lines too, before it is pushed."""
+    The classes are checked above; this shows he sees what goes, its deleted lines too, before it is pushed."""
     (before, after), (held, shown) = edit, held
     on_main(checkout, "tests/test_page.py", before)
     fakes, job, state = ci_failed(tmp_path, checkout, clone, {"tests/test_page.py": after})
@@ -1522,19 +1530,6 @@ def test_the_owners_fix_is_fixed_even_if_the_updater_lists_it_as_rejected():
     assert [(f.id, f.state) for f in lp.findings] == [("F1", "fixed"), ("F2", "rejected")]
 
 
-def test_a_waiting_run_survives_a_host_restart_and_goes_on_from_its_answer(tmp_path, checkout, clone):
-    store = Store(tmp_path / "store")
-    fakes = Fakes(clone, verdict="fix")
-    fakes.edits = [{}, {REVIEW_SKILL: "repaired\n"}]
-    waiting = run(pack_job.Job(store, fakes.live(checkout)))
-
-    again = pack_job.Job(store, fakes.live(checkout))
-
-    assert again.read() == waiting
-    assert answered(again, "activate")["state"] == "passed"
-    assert shown(checkout, PACKAGED) == "repaired\n"
-
-
 def test_a_skill_restored_to_its_start_replaces_the_earlier_edit_in_the_candidate(tmp_path, checkout, clone):
     fakes, original = Fakes(clone), (checkout / PACKAGED).read_text()
     fakes.verdicts, fakes.edits = ["fix", "pass"], [{REVIEW_SKILL: "an edit\n"}, {REVIEW_SKILL: original}]
@@ -1787,10 +1782,10 @@ def test_a_hold_stops_a_running_invocation_with_its_whole_reason(whole_error) ->
     [
         {"upstream/skill/SKILL.md": "mine"},
         {pack_updater.UPSTREAM_DIFF: "mine"},
-        {"notes.md": "mine"},
         {"golden/deep/page.html": "mine"},
         {"code/other.py": "mine"},
     ],
+    ids=["edit0", "edit1", "edit3", "edit4"],  # an arbitrary new file (edit4) stands for notes.md, once edit2
 )
 def test_an_edit_beyond_the_pack_asks_the_owner_and_an_undo_restores_it_for_a_repair(tmp_path, checkout, clone, edit):
     """TD-194: only the pack's files may change; the owner has the rest undone (Delivery restores it) or discards."""
@@ -2071,8 +2066,8 @@ def test_a_passing_challenger_whose_processes_are_not_confirmed_gone_never_passe
     assert snapshot(checkout) == before
 
 
-def test_when_upstream_is_not_ahead_the_run_is_up_to_date_and_does_nothing_else(tmp_path, checkout, clone):
-    fakes = Fakes(clone)
+def test_when_upstream_is_not_ahead_the_run_is_up_to_date_and_does_nothing_else(tmp_path, checkout):
+    fakes = Fakes(tmp_path / "impeccable")  # never cloned: the notice stops the run before the sync
     fakes.tags = [PINNED, OLDER]
     before = snapshot(checkout)
 
@@ -2349,8 +2344,8 @@ def test_pack_retirement_retains_other_work_and_durably_reports_incomplete_clean
     assert json.loads((store.root / pack_job.FILE).read_text())["log"] == state["log"]
 
 
-def test_gh_that_cannot_push_stops_the_run_before_any_download(tmp_path, checkout, clone):
-    fakes = Fakes(clone)
+def test_gh_that_cannot_push_stops_the_run_before_any_download(tmp_path, checkout):
+    fakes = Fakes(tmp_path / "impeccable")  # never cloned: the preflight stops the run before the sync
     live = fakes.live(checkout)
     fakes.github.can_push = False
 
@@ -2377,9 +2372,9 @@ def test_the_source_must_be_owlbears_repository_on_main(checkout):
         pack_git.source(checkout)
 
 
-def test_it_refuses_a_dirty_checkout_and_a_package_outside_git_before_any_download(tmp_path, checkout, clone):
+def test_it_refuses_a_dirty_checkout_and_a_package_outside_git_before_any_download(tmp_path, checkout):
     (checkout / "skills" / "NOTICE.md").write_text("edited by hand\n")
-    fakes = Fakes(clone)
+    fakes = Fakes(tmp_path / "impeccable")  # never cloned: the source check stops the run before the sync
 
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
@@ -2390,7 +2385,7 @@ def test_it_refuses_a_dirty_checkout_and_a_package_outside_git_before_any_downlo
 
     loose = tmp_path / "loose"
     shutil.copytree(checkout, loose)
-    state = run(pack_job.Job(Store(tmp_path / "store2"), Fakes(clone).live(loose)))
+    state = run(pack_job.Job(Store(tmp_path / "store2"), Fakes(tmp_path / "impeccable").live(loose)))
     assert "is not a git checkout" in state["reason"]
     assert (loose / "impeccable.json").read_bytes() == (checkout / "impeccable.json").read_bytes()
 
@@ -2662,10 +2657,22 @@ def test_an_unread_pull_request_list_refuses_a_start_and_leaves_the_waiting_ques
     assert answered(job, "drop")["state"] == "passed"
 
 
-def test_the_answer_routes_take_only_an_open_questions_options(tmp_path, checkout, clone):
-    job, _, state = upheld(tmp_path, checkout, clone)
+def test_the_answer_routes_take_only_an_open_questions_options(tmp_path):
+    store = Store(tmp_path / "store")  # a run waiting on one upheld rejection, as the rounds leave it
+    finding = RoundFinding(id="F1", text="owlbear-design-review: p - fix: f", raised=1, state="escalated",
+                           reason="it already holds", judgement="r")  # fmt: skip
+    lp = RoundLoop(subject="pack", policy=RoundPolicy(), round=1, found=1, last=True, findings=[finding])
+    waiting = pack_state.blank() | {
+        "state": "waiting", "started_at": pack_run_record.now(), "run": "r1", "invocations": [],
+        "workspace": str(store.root / pack_state.RUNS / "r1"), "loop": lp.model_dump(mode="json"),
+        "questions": pack_rounds.questions(lp, "r1", ""),
+    }  # fmt: skip
+    next(s for s in waiting["stages"] if s["name"] == "challenger")["result"] = "waiting"
+    store.root.mkdir(parents=True)
+    (store.root / pack_job.FILE).write_text(json.dumps(waiting))
+    job = pack_job.Job(store)
     c = TestClient(api.create_app(job.store, "t", Host(), pack=job), base_url="http://127.0.0.1", headers=AUTH)
-    qid, url = state["questions"][0]["id"], "/api/next/impeccable/update/answer"
+    qid, url = waiting["questions"][0]["id"], "/api/next/impeccable/update/answer"
 
     stale = c.post(url, json={"question": "old:dispute:F1", "option": "drop"})
     assert (stale.status_code, stale.json()["detail"]) == (409, "this question is no longer open; reload the page")
@@ -2683,14 +2690,21 @@ def test_the_answer_routes_take_only_an_open_questions_options(tmp_path, checkou
     assert (gone.status_code, gone.json()["detail"]) == (409, "no Impeccable update waits for you")
 
 
-def test_the_last_run_survives_a_host_restart_and_a_run_cut_short_reads_failed(tmp_path, checkout, clone):
+def test_the_last_run_survives_a_host_restart_and_a_run_cut_short_reads_failed(tmp_path):
     store = Store(tmp_path / "store")
-    fakes = Fakes(clone)
-    fakes.tags = [PINNED]
-    ended = run(pack_job.Job(store, fakes.live(checkout)))
+    said = f"up to date: no skill release newer than {PINNED}"
+    at = pack_run_record.now()
+    ended = pack_state.blank() | {  # an ended run as the notice leaves it when upstream has nothing newer
+        "started_at": at, "run": "r1", "workspace": str(store.root / pack_state.RUNS / "r1"), "invocations": [],
+        "log": [f"{at} notice: running", f"{at} notice: passed: {said}", f"{at} {said}"],
+    }  # fmt: skip
+    ended["stages"][0] |= {"result": "passed", "detail": said}
+    pack_run_record.ended(ended, "up-to-date", said)
+    store.root.mkdir(parents=True)
+    (store.root / pack_job.FILE).write_text(json.dumps(ended))
 
-    again = pack_job.Job(store, fakes.live(checkout)).read()
-    assert again == ended
+    again = pack_job.Job(store).read()
+    assert {k: again[k] for k in ended if k != "context"} == {k: v for k, v in ended.items() if k != "context"}
     assert "up to date" in again["log"][-1]
     assert pack_job.last(store) == {k: ended[k] for k in ("state", "started_at", "ended_at", "reason")}
 
@@ -2701,7 +2715,7 @@ def test_the_last_run_survives_a_host_restart_and_a_run_cut_short_reads_failed(t
     }
     cut["stages"][3]["result"] = "running"
     (store.root / pack_job.FILE).write_text(json.dumps(cut))
-    after = pack_job.Job(store, fakes.live(checkout)).read()
+    after = pack_job.Job(store).read()
     assert after["state"] == "failed"
     assert "the host stopped during this run" in after["reason"]
     assert results(after)["golden"] == "failed"

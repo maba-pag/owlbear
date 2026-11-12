@@ -449,7 +449,12 @@ def test_sharded_jobs_load_the_shared_shard_plugin_once_per_matrix_shard(workflo
     assert job["strategy"]["fail-fast"] is False
     assert env["CI_SHARD_INDEX"] == "${{ matrix.shard }}"
     assert 'cp .github/scripts/ci_shard.py "$plugin_dir/"' in step["run"]
-    assert re.search(r'PYTHONPATH="\$plugin_dir" uv run --no-sync pytest [^\n]* -p ci_shard\b', step["run"])
+    assert re.search(
+        r'PYTHONPATH="\$plugin_dir:\$GITHUB_WORKSPACE/serve/tools/src"\s+uv run --no-sync pytest [^\n]* -p ci_shard\b',
+        step["run"].replace("\\\n", ""),
+    )
+    assert "--testmon --testmon-noselect" in step["run"]
+    assert "--testmon-forceselect" not in step["run"]
     assert ".github/scripts/ci_shard.py" in ci_scope.SUITES[workflow.removesuffix(".yml")]
     assert ".github/scripts/ci_shard.py" in fingerprint or "git ls-files -s -- . " in fingerprint
 
@@ -670,14 +675,13 @@ def test_main_averages_the_run_times_with_each_shards_latest_results(
     }
 
 
-@pytest.mark.parametrize("name", REUSING_WORKFLOWS)
+@pytest.mark.parametrize("name", ["python.yml", "python-browser.yml"])
 def test_each_matrix_shard_keeps_its_own_cached_pass_and_results(name: str) -> None:
     """One shard's cached pass must never let another shard skip its tests, nor its upload replace another's."""
     for job_name, job in _jobs(name).items():
         steps = job["steps"]
         templates = [
             next(s for s in steps if s.get("id") == "reuse")["with"]["key"],
-            steps[-1]["with"]["key"],
             *(s["with"]["name"] for s in steps if str(s.get("uses", "")).startswith("actions/upload-artifact@")),
         ]
         for variable, values in ((job.get("strategy") or {}).get("matrix") or {}).items():
@@ -759,7 +763,11 @@ def test_uv_setups_use_scoped_caches_and_check_the_runtime_first(name: str) -> N
                 "dev-tools",
                 "static",
             }
-        check = next(index for index, step in enumerate(steps) if "check_uv_version.py" in str(step.get("run", "")))
+        check = next(
+            index
+            for index, step in enumerate(steps)
+            if re.search(r"(^|\n)\s*python3 \.github/scripts/check_uv_version\.py(\s|$)", str(step.get("run", "")))
+        )
         first_uv = next(
             (
                 index

@@ -150,7 +150,8 @@ def question(lp: RoundLoop, task: Task) -> Question:
             "the rejected attempt archived on a branch."
         )
     text = f"{what} found {lp.found} new findings, and it was the last allowed round: {said}. {then}"
-    return Question(step=StepKind.REVIEW, text=text, options=options, cause=f"{PREFIX}{lp.subject} {task.id}")
+    cause = f"{PREFIX}{lp.subject} {task.id}"  # the answer's task; the loop's subject counts it (#1064)
+    return Question(step=StepKind.REVIEW, text=text, options=options, cause=cause, follows=f"{PREFIX}{lp.subject}")
 
 
 def _said(f: RoundFinding) -> str:

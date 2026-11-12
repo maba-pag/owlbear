@@ -422,11 +422,12 @@ def test_a_challengers_run_is_kept_when_its_settlement_fails_and_is_never_paid_a
 
     def fails(lock, change):
         if any(a.state == "applied" for a in change.amendments):
-            raise OSError(28, "the settling write fails")
+            msg = "the settling write fails"
+            raise PermissionError(msg)
         write(lock, change)
 
     monkeypatch.setattr(picking.store, "write", fails)
-    with pytest.raises(OSError, match="settling write"):
+    with pytest.raises(PermissionError, match="settling write"):
         run.step()
     monkeypatch.setattr(picking.store, "write", write)
     kept = picking.change().pending_child

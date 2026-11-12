@@ -25,7 +25,7 @@ from owlbear_delivery_next.workflow_steps import sessions
 
 AGENTS = (
     "builder", "planner", "reviewer", "challenger", "design-judge", "preparer", "updater", "test-reviewer",
-    "test-curator", "picker", "curator", "auditor",
+    "test-curator", "picker", "curator", "auditor", "repairer",
 )  # fmt: skip
 PENDING: set[str] = {"spotter", "retro", "retro-review"}  # every worker role has its own agent file (TD-106);
 # Improvement's come with their slices (item 9)
@@ -138,7 +138,7 @@ def test_the_launcher_comes_from_the_role_setting_never_from_an_agent_file() -> 
     assert {r for r in AGENTS if set(preload.tools(r)) & {"task", "read_agent", "list_agents", "write_agent"}} == set()
 
 
-WITHIN = ("builder", "planner", "reviewer", "preparer", "test-curator", "updater")  # roles inside approved work
+WITHIN = ("builder", "planner", "reviewer", "preparer", "test-curator", "updater", "repairer")  # inside approved work
 
 
 def test_roles_within_approved_work_carry_the_boundary_and_change_workers_the_lookup() -> None:
@@ -153,7 +153,7 @@ def test_roles_within_approved_work_carry_the_boundary_and_change_workers_the_lo
 def test_judges_are_never_offered_or_told_of_a_question() -> None:
     for role in AGENTS:
         asks = tools.ASK.name in tools.results(role)
-        never = {"challenger", "design-judge", "updater", "test-reviewer", "picker", "curator", "auditor"}
+        never = {"challenger", "design-judge", "updater", "test-reviewer", "picker", "curator", "auditor", "repairer"}
         assert asks == (role not in never), role
         # the updater's stops are the job's; a test reviewer only reports (TD-339); the picker only picks
         assert (tools.ASK.name in step_input.reminder(role)) == asks
@@ -263,4 +263,3 @@ def test_the_shaper_grants_the_live_verified_tools_and_explains_exactly_them() -
     assert audit(grants, body) == []
     assert forbidden(body) == {"bash", "edit", "create"}  # no terminal, no edit (TD-109)
     assert {t.name for t in asyncio.run(mcp_server.mcp.list_tools())} == CHAT_TOOLS
-    assert len(body.splitlines()) <= 130

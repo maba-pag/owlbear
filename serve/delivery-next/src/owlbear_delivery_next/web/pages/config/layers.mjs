@@ -259,14 +259,35 @@ export function layerValue(layer, path) {
   return at(built[layer].value, path) ?? null;
 }
 
+const IDENTITY = ["model", "effort", "context"];
+
+// D-01M6SY11CY5SN5ZKYJNM0K6BDM: whether the repairer's model, effort and context are unset at every layer, the edited
+// layer's unsaved edits applied, so that all three are the builder's (config.py's _repairer). The edited layer's own
+// *cleared* field counts as unset: what clearing it would give.
+export function followsBuilder(cleared) {
+  return IDENTITY.every((field) => ["project", "machine", "global"].every((layer) => {
+    const path = `agents.repairer.${field}`;
+    if (layer !== state.layer) return (at(state.loaded[layer], path) ?? null) === null;
+    return field === cleared || layerValue(layer, path) === null;
+  }));
+}
+
 // What *path* resolves to once the edited layer's unsaved edits are saved, as { value, from }; null while they leave
-// it as saved. The final review's values fall back to the builder's, as the server resolves them.
+// it as saved. The final review's values and the repairer's model, effort and context fall back to the builder's, as
+// the server resolves them; a builder edit moves them only while they take the builder's.
 export function preview(path) {
   const layer = state.layer, saved = state.loaded[layer];
   const moved = (p) => JSON.stringify(layerValue(layer, p)) !== JSON.stringify(at(saved, p) ?? null);
+  const [head, role, field] = path.split(".");
+  if (head === "agents" && role === "repairer" && IDENTITY.includes(field)) {
+    const follows = followsBuilder(), builder = IDENTITY.some((f) => moved(`agents.builder.${f}`));
+    if (!IDENTITY.some((f) => moved(`agents.repairer.${f}`)) && !(follows && builder)) return null;
+    return (follows ? walk(`agents.builder.${field}`, "builder") : walk(path)) ?? { value: null };
+  }
   const builder = path.startsWith("final_review.") ? `agents.builder.${path.slice("final_review.".length)}` : null;
-  if (!moved(path) && !(builder && moved(builder))) return null;
-  return walk(path) ?? (builder && walk(builder, "builder")) ?? { value: null };
+  const own = walk(path);
+  if (!moved(path) && !(builder && moved(builder) && own === null)) return null;
+  return own ?? (builder && walk(builder, "builder")) ?? { value: null };
 }
 
 function walk(path, as) {
@@ -274,11 +295,22 @@ function walk(path, as) {
     const value = layer === state.layer ? layerValue(layer, path) : at(state.loaded[layer], path) ?? null;
     if (value !== null) return { value, from: as ?? layer };
   }
-  const base = state.loaded.inherited.global, value = at(base, path) ?? null;  // a built-in layer, in tests only
-  return value === null ? null : { value, from: as ?? base.sources[path] };
+  // A built-in layer, in tests only; a value it resolved from the builder's is no value of its own.
+  const base = state.loaded.inherited.global, value = at(base, path) ?? null;
+  return value === null || base.sources[path] === "builder" ? null : { value, from: as ?? base.sources[path] };
 }
 
 const answers = turns(), models = turns();  // the layers' reloads, saves and renames
+
+function standingNotice(loaded) {
+  const notice = loaded.notice === loaded.write_notice ? "" : loaded.notice;
+  return notice ? notice.charAt(0).toUpperCase() + notice.slice(1) : "";
+}
+
+function writeNotice(previous, notice) {
+  const next = notice ? notice.charAt(0).toUpperCase() + notice.slice(1) : "";
+  return [previous, next].filter(Boolean).join("\n\n");
+}
 
 // The layers as the host has them now, unless a newer reload, save or rename has answered meanwhile.
 export async function reload() {
@@ -288,10 +320,13 @@ export async function reload() {
     const says = answers.says(n);
     if (!answers.take(n)) return false;
     state.loaded = loaded;
-    if (says) state.error = loaded.notice ? loaded.notice.charAt(0).toUpperCase() + loaded.notice.slice(1) : "";
+    if (says) state.layerNotice = standingNotice(loaded);
     return true;
   } catch (e) {
-    if (answers.says(n)) notify(e.message);  // a newer answer speaks for the layers
+    if (answers.says(n)) {
+      state.layerNotice = e.message.charAt(0).toUpperCase() + e.message.slice(1);
+      show();
+    }
     return false;
   }
 }
@@ -337,6 +372,7 @@ async function saveLayer(review) {
   let error = "", status = "";
   state.saving = true;
   state.error = "";
+  state.layerNotice = "";
   state.status = "Saving…";
   show();
   try {
@@ -344,10 +380,11 @@ async function saveLayer(review) {
       { method: "PUT", body: { rev: state.loaded[`${layer}_rev`], layer: edited(layer),
         prefs_reviewed: layer === "project" && state.prefsReview }, timeout: WRITE });
     answers.shown();
+    state.layerNotice = standingNotice(state.loaded);
     if (layer === "project" && !state.loaded.unpublished) state.prefsReview = false;  // kept until published
     for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
     state.kept.clear();  // what was saved is no longer an unsaved edit for the filter
-    error = state.loaded.notice ?? "";
+    error = state.loaded.write_notice ?? "";
     const whose = { global: "the global", machine: "this machine's" }[layer]
       ?? (named() ? `${named()}'s` : "this project's");
     status = `Saved ${whose} settings. They apply to the next session.`;
@@ -361,7 +398,7 @@ async function saveLayer(review) {
     }
   } finally {
     state.saving = false;
-    state.error = error ? error.charAt(0).toUpperCase() + error.slice(1) : "";
+    state.error = writeNotice(state.error, error);
     state.status = status;
     showIdle();  // models that arrived during it apply now
   }
@@ -379,20 +416,24 @@ export async function rename() {
     instead: "The folder keeps its name.",
   });
   if (!sure) return;
+  let error = "";
   state.saving = true;
+  state.error = "";
   state.status = "Renaming…";
   show();
   try {
     state.loaded = await call("/config/folder", { method: "PUT", body: { name }, timeout: WRITE });
     answers.shown();
+    state.layerNotice = standingNotice(state.loaded);
     state.folder = null;
-    state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
+    error = state.loaded.write_notice;
     state.status = `This project's folder is now ${state.loaded.folder}.`;
   } catch (e) {
     state.status = "";
-    state.error = e.message.charAt(0).toUpperCase() + e.message.slice(1);
+    error = e.message;
   } finally {
     state.saving = false;
+    state.error = writeNotice(state.error, error);
     showIdle();  // models that arrived during it apply now
   }
 }

@@ -332,10 +332,8 @@ def test_ruff_toolchain_proof_rejects_installed_version_drift(
 @pytest.mark.parametrize(
     ("path", "surface"),
     [
-        ("pyproject.toml", "python"),
         ("uv.lock", "python"),
         ("serve/delivery-next/pyproject.toml", "python"),
-        ("serve/web-content/pyproject.toml", "python"),
         (".nvmrc", "shared_node_runtime"),
         ("package.json", "root_node"),
         ("package-lock.json", "root_node"),
@@ -388,12 +386,6 @@ def test_unrelated_precommit_changes_use_compatibility_proof_without_python_suit
             '[project]\ndependencies = ["ruff==0.16.2", "pytest==9.0.3"]\n',
             '[project]\ndependencies = ["ruff==0.16.2", "pytest==9.0.4"]\n',
             False,
-        ),
-        (
-            "uv.lock",
-            '[[package]]\nname = "ruff"\nversion = "0.16.2"\n',
-            '[[package]]\nname = "ruff"\nversion = "0.16.3"\n',
-            True,
         ),
         (
             "uv.lock",

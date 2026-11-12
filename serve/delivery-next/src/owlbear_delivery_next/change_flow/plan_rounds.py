@@ -25,6 +25,7 @@ from owlbear_delivery_next.change_contracts.models import (
     StepKind,
 )
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, FINAL, PLAN, RECHECK, RoundLoop
+from owlbear_delivery_next.change_flow import asking
 from owlbear_delivery_next.change_flow.moves import ask
 
 if TYPE_CHECKING:
@@ -229,6 +230,27 @@ def question(lp: RoundLoop, f: RoundFinding) -> Question:
     return Question(step=StepKind.PLAN, text=text, options=OPTIONS, cause=cause)
 
 
+DELEGATED = "upheld by the challenger after the planner's rejection: Delivery decided it (#1062)"
+LAST_STOP = "The plan still had many findings after its last allowed challenge round"
+
+
+def delegated(c: Change) -> bool:
+    """After approval a rejection the challenger upheld is Delivery's, decided as the owner's Revise (#1062)."""
+    lp = current(c)
+    found = [f for f in lp.findings if f.state == "escalated" and f.reconsider != "due"] if lp else []
+    for f in found:  # an unsure challenger's doubt is no finding to fix: the planner gets the original, the doubt noted
+        doubt = f". The challenger was unsure: {f.clarified}" if f.reconsider == "unsure" and f.clarified else ""
+        f.clarified = "" if doubt else f.clarified
+        f.state, f.note, f.reconsider = "owner-fix", f"{DELEGATED}{doubt}", ""
+    return bool(found)
+
+
+def stopped(c: Change, lp: RoundLoop, now: datetime) -> None:
+    """The last allowed round's many findings: no question about plan quality, a stop with all of them (#1062)."""
+    q = last(lp)
+    asking.stop(c, q.cause or "", LAST_STOP, q.text, now)
+
+
 def first(c: Change) -> Question | None:
     """The owner's next decision of the plan loop in progress, if any."""
     lp = current(c)
@@ -294,6 +316,7 @@ def proceed(c: Change, now: datetime) -> None:
     lp = current(c)
     if lp is None:
         return
+    delegated(c)  # an upheld or unsure finding left after the owner's answer is Delivery's (#1062)
     if (q := first(c)) is not None:
         ask(c, q, now)
     elif any(f.reconsider == "due" for f in lp.findings):
@@ -303,7 +326,7 @@ def proceed(c: Change, now: datetime) -> None:
         c.outcome = Outcome(exit=Exit.RETRY, reason="the owner decided the disputed findings", challenged=True, at=now)
         c.budgets.loops[PLAN] = c.budgets.loops.get(PLAN, 0) + 1  # the planning round the owner sees
     elif lp.last and lp.many():
-        ask(c, last(lp), now)
+        stopped(c, lp, now)
     else:
         _mode(c, SETTLED)
 

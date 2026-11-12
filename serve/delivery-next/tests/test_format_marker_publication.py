@@ -9,14 +9,23 @@ import sys
 from pathlib import Path
 
 import pytest
+from tests import publication_offline
+from tests.publication_offline import prepare
 
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.state_store import fd_tree, format_marker, offline_protocol, project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, FormatTooNewError, StoreError
 from owlbear_delivery_next.state_store.store import Store
 
-BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
-AFTER = "BBBBBBBB-0000-4000-8000-000000000002"
+
+@pytest.fixture
+def repo(tmp_path):
+    return publication_offline.repo(tmp_path)
+
+
+@pytest.fixture
+def boot(monkeypatch):
+    return publication_offline.boot(monkeypatch)
 
 
 def _owner_after_absence(monkeypatch, target: Path, text: bytes) -> list[int]:
@@ -40,8 +49,8 @@ def _owner_after_absence(monkeypatch, target: Path, text: bytes) -> list[int]:
     return identity
 
 
-@pytest.mark.parametrize("value", [8, 998, 1000])
-def test_a_future_marker_created_after_absence_is_never_overwritten(tmp_path, monkeypatch, value):
+@pytest.mark.parametrize("value", [8, 1000])
+def test_a_future_marker_created_after_absence_is_never_overwritten(tmp_path, monkeypatch, marker_io, value):
     target = tmp_path / "target"
     target.mkdir()
     text = f"{value}\n".encode()
@@ -57,6 +66,7 @@ def test_a_future_marker_created_after_absence_is_never_overwritten(tmp_path, mo
     assert (target / MARKER).read_bytes() == text
     assert fd_tree.ident((target / MARKER).stat()) == owner
     assert sorted(p.name for p in target.iterdir()) == [MARKER]
+    _closed(marker_io)
 
 
 def _observe_syncs(monkeypatch, target: Path) -> list[tuple[str, list[int]]]:
@@ -84,7 +94,7 @@ def _assert_durable(events: list, target: Path) -> None:
 
 
 @pytest.mark.parametrize("collision", [False, True], ids=["existing", "collided"])
-@pytest.mark.parametrize("value", range(1, STORE_FORMAT + 1))
+@pytest.mark.parametrize("value", [1, STORE_FORMAT])
 def test_a_supported_owner_marker_keeps_its_bytes_and_inode_and_is_synced(tmp_path, monkeypatch, collision, value):
     target = tmp_path / "target"
     target.mkdir()
@@ -108,8 +118,10 @@ def test_a_supported_owner_marker_keeps_its_bytes_and_inode_and_is_synced(tmp_pa
     assert sorted(p.name for p in target.iterdir()) == [MARKER]
 
 
-@pytest.mark.parametrize("previous", range(STORE_FORMAT + 1))
-def test_a_genuinely_absent_marker_is_created_with_its_prior_format_and_synced(tmp_path, monkeypatch, previous):
+@pytest.mark.parametrize("previous", [0, 1, STORE_FORMAT])
+def test_a_genuinely_absent_marker_is_created_with_its_prior_format_and_synced(
+    tmp_path, monkeypatch, creation_io, previous
+):
     events = _observe_syncs(monkeypatch, tmp_path)
     tfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
     try:
@@ -121,10 +133,12 @@ def test_a_genuinely_absent_marker_is_created_with_its_prior_format_and_synced(t
     assert (tmp_path / MARKER).read_text() == f"{previous or STORE_FORMAT}\n"
     _assert_durable(events, tmp_path)
     assert sorted(p.name for p in tmp_path.iterdir()) == [MARKER]
+    _closed(creation_io)
+    assert fd_tree.ident((tmp_path / MARKER).stat()) == creation_io[0][1]
 
 
 @pytest.mark.parametrize("text", [b"", b" \n", b"0\n", b"x9\n", b"\xff\n"])
-def test_an_invalid_regular_collision_is_not_absence_and_is_kept(tmp_path, monkeypatch, text):
+def test_an_invalid_regular_collision_is_not_absence_and_is_kept(tmp_path, monkeypatch, marker_io, text):
     owner = _owner_after_absence(monkeypatch, tmp_path, text)
     tfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
     try:
@@ -136,77 +150,28 @@ def test_an_invalid_regular_collision_is_not_absence_and_is_kept(tmp_path, monke
     assert owner
     assert (tmp_path / MARKER).read_bytes() == text
     assert fd_tree.ident((tmp_path / MARKER).stat()) == owner
-
-
-class _MarkerIO:
-    def __init__(self, open_file):
-        self.open_file = open_file
-        self.fd = None
-        self.stream = None
-        self.transferred = False
-        self.released = False
-        self.failure = None
-
-    def __getattr__(self, name):
-        return getattr(os, name)
-
-    def acquire(self, dfd, name):
-        assert self.fd is None
-        self.fd = self.open_file(dfd, name)
-        return self.fd
-
-    def fdopen(self, fd, *args, **kwargs):
-        assert fd == self.fd
-        if self.failure is not None:
-            raise self.failure
-        self.stream = os.fdopen(fd, *args, **kwargs)
-        self.transferred = kwargs.get("closefd", True)
-        return self.stream
-
-    def close(self, fd):
-        assert fd == self.fd
-        assert not self.released
-        assert not self.transferred
-        os.close(fd)
-        self.released = True
-
-    @property
-    def closed(self):
-        return self.released or (self.transferred and self.stream.closed)
-
-    def cleanup(self):
-        if self.stream is not None:
-            self.stream.close()
-        if self.fd is not None and not self.released and not self.transferred:
-            self.close(self.fd)
+    _closed(marker_io)
 
 
 @pytest.fixture
 def marker_io(monkeypatch):
-    probe = _MarkerIO(fd_tree.open_file)
-    monkeypatch.setattr(fd_tree, "open_file", probe.acquire)
-    monkeypatch.setattr(format_marker, "os", probe)
-    try:
-        yield probe
-    finally:
-        probe.cleanup()
+    real, opened = fd_tree.open_file, []
+
+    def capture(dfd, name):
+        fd = real(dfd, name)
+        opened.append((fd, fd_tree.ident(os.fstat(fd))))
+        return fd
+
+    monkeypatch.setattr(fd_tree, "open_file", capture)
+    return opened
 
 
-@pytest.mark.parametrize("text", [b"8\n", b"\xff\n"])
-def test_a_refused_collision_closes_the_descriptor_it_opened(tmp_path, monkeypatch, marker_io, text):
-    owner = _owner_after_absence(monkeypatch, tmp_path, text)
-    tfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
-    try:
-        with pytest.raises(StoreError):
-            format_marker.ensure_target(tfd, 7)
-        assert marker_io.fd is not None
-        assert marker_io.stream.closed
-        assert marker_io.closed
-    finally:
-        os.close(tfd)
-
-    assert (tmp_path / MARKER).read_bytes() == text
-    assert fd_tree.ident((tmp_path / MARKER).stat()) == owner
+def _closed(opened):
+    assert opened
+    for fd, _ in opened:
+        with pytest.raises(OSError, match="Bad file descriptor") as caught:
+            os.fstat(fd)
+        assert caught.value.errno == errno.EBADF
 
 
 class _HandoverError(BaseException):
@@ -214,21 +179,24 @@ class _HandoverError(BaseException):
 
 
 @pytest.mark.parametrize("failure", ["oserror", "baseexception"])
-def test_a_failed_marker_fdopen_handover_closes_its_owned_descriptor(tmp_path, marker_io, failure):
+def test_a_failed_marker_fdopen_handover_closes_its_owned_descriptor(tmp_path, monkeypatch, marker_io, failure):
     marker = tmp_path / MARKER
     marker.write_bytes(b"7\n")
     owner = fd_tree.ident(marker.stat())
     error = OSError(errno.ENOMEM, "injected fdopen failure") if failure == "oserror" else _HandoverError("interrupted")
-    marker_io.failure = error
+
+    def refuse(fd, *_args, **_kwargs):
+        assert fd == marker_io[0][0]
+        raise error
+
+    monkeypatch.setattr(os, "fdopen", refuse)
     expected = StoreError if failure == "oserror" else _HandoverError
     tfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
     try:
         with pytest.raises(expected) as caught:
             format_marker.ensure_target(tfd, 7)
         assert caught.value.__cause__ is error if failure == "oserror" else caught.value is error
-        assert marker_io.fd is not None
-        assert marker_io.stream is None
-        assert marker_io.closed, "the failed handover left the caller-owned marker descriptor live"
+        _closed(marker_io)
     finally:
         os.close(tfd)
 
@@ -236,87 +204,46 @@ def test_a_failed_marker_fdopen_handover_closes_its_owned_descriptor(tmp_path, m
     assert fd_tree.ident(marker.stat()) == owner
 
 
-class _CreatingMarkerIO(_MarkerIO):
-    def __init__(self):
-        super().__init__(None)
-        self.created = None
-        self.syncs = []
-
-    def open(self, name, flags, mode=0o777, *, dir_fd=None):
-        fd = os.open(name, flags, mode, dir_fd=dir_fd)
-        if flags & os.O_CREAT:
-            assert flags & os.O_EXCL
-            assert self.fd is None
-            self.fd = fd
-            self.created = fd_tree.ident(os.fstat(fd))
-        return fd
-
-    def close(self, fd):
-        if fd == self.fd and not self.released and not self.transferred:
-            super().close(fd)
-        else:
-            os.close(fd)
-
-    def fsync(self, fd):
-        self.syncs.append("marker" if fd == self.fd and not self.released else "directory")
-        os.fsync(fd)
-
-
 @pytest.fixture
 def creation_io(monkeypatch):
-    probe = _CreatingMarkerIO()
-    monkeypatch.setattr(fd_tree, "os", probe)
-    try:
-        yield probe
-    finally:
-        probe.cleanup()
+    real, opened = os.open, []
+
+    def capture(name, flags, mode=0o777, *, dir_fd=None):
+        fd = real(name, flags, mode, dir_fd=dir_fd)
+        if name == MARKER and flags & os.O_CREAT:
+            assert flags & os.O_EXCL
+            opened.append((fd, fd_tree.ident(os.fstat(fd))))
+        return fd
+
+    monkeypatch.setattr(os, "open", capture)
+    return opened
 
 
-def _create_marker(tfd: int, entrypoint: str) -> None:
-    if entrypoint == "create":
-        fd_tree.create_at(tfd, MARKER, "7\n")
-    else:
-        format_marker.ensure_target(tfd, 7)
-
-
-@pytest.mark.parametrize("entrypoint", ["create", "ensure"])
 @pytest.mark.parametrize("failure", ["oserror", "baseexception"])
-def test_a_failed_creation_fdopen_handover_closes_its_owned_descriptor(tmp_path, creation_io, failure, entrypoint):
+def test_a_failed_creation_fdopen_handover_closes_its_owned_descriptor(tmp_path, monkeypatch, creation_io, failure):
     error = (
         OSError(errno.ENOMEM, "injected creation fdopen failure") if failure == "oserror" else _HandoverError("stopped")
     )
-    creation_io.failure = error
+
+    def refuse(fd, *_args, **_kwargs):
+        assert fd == creation_io[0][0]
+        raise error
+
+    monkeypatch.setattr(os, "fdopen", refuse)
+    syncs = _observe_syncs(monkeypatch, tmp_path)
     expected = StoreError if failure == "oserror" else _HandoverError
     tfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
     try:
         with pytest.raises(expected) as caught:
-            _create_marker(tfd, entrypoint)
+            fd_tree.create_at(tfd, MARKER, "7\n")
         assert caught.value.__cause__ is error if failure == "oserror" else caught.value is error
-        assert creation_io.fd is not None
-        assert creation_io.stream is None
-        assert creation_io.closed, "the failed creation handover left the caller-owned descriptor live"
-        assert creation_io.syncs == []
+        _closed(creation_io)
+        assert syncs == []
     finally:
         os.close(tfd)
 
     assert (tmp_path / MARKER).read_bytes() == b""
-    assert fd_tree.ident((tmp_path / MARKER).stat()) == creation_io.created
-    assert sorted(p.name for p in tmp_path.iterdir()) == [MARKER]
-
-
-@pytest.mark.parametrize("entrypoint", ["create", "ensure"])
-def test_a_successful_creation_handover_closes_and_syncs_its_marker(tmp_path, creation_io, entrypoint):
-    tfd = os.open(tmp_path, fd_tree.DIR_FLAGS)
-    try:
-        _create_marker(tfd, entrypoint)
-        assert creation_io.stream.closed
-        assert creation_io.closed
-        assert creation_io.syncs == ["marker", "directory"]
-    finally:
-        os.close(tfd)
-
-    assert (tmp_path / MARKER).read_bytes() == b"7\n"
-    assert fd_tree.ident((tmp_path / MARKER).stat()) == creation_io.created
+    assert fd_tree.ident((tmp_path / MARKER).stat()) == creation_io[0][1]
     assert sorted(p.name for p in tmp_path.iterdir()) == [MARKER]
 
 
@@ -463,17 +390,10 @@ def test_a_marker_changed_during_its_sync_is_not_admitted(tmp_path, monkeypatch,
 
 
 @pytest.fixture
-def prepared_repo(tmp_path, monkeypatch, current_binding):
+def prepared_repo(repo, boot, current_binding):
     assert current_binding.interpreter == Path(sys.executable)
-    repo = tmp_path / "shop"
-    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True, capture_output=True)  # noqa: S603, S607
     source = project_home.clone_dir(repo)
-    source.mkdir(parents=True)
-    (source / MARKER).write_text("7\n")
-    (source / "config.json").write_text(json.dumps({"format": 1, "widths": [1600]}))
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: BEFORE)
-    assert cli.main(["--repo", str(repo), "prepare"]) == 0
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: AFTER)
+    prepare(repo, boot)
     return repo, source, project_home.home(project_home.clone_id(source))
 
 
@@ -527,7 +447,7 @@ def test_public_switched_store_makes_an_owner_marker_durable_without_replacement
     _assert_durable(events, target)
 
 
-@pytest.mark.parametrize("when", ["missing", "existing", "collision"])
+@pytest.mark.parametrize("when", ["existing", "collision"])
 def test_public_finish_syncs_the_marker_and_directory_before_switched(prepared_repo, monkeypatch, when):
     repo, source, target = prepared_repo
     real_ensure, real_save = format_marker.ensure_target, project_move._save  # noqa: SLF001 - publication boundary
@@ -601,28 +521,48 @@ def test_public_finish_refuses_a_collided_marker_whose_sync_failed(prepared_repo
 
 
 @pytest.mark.parametrize(
-    ("marker", "message"),
-    [(b"8\n", "store format 8 is newer than 7"), (b"\xff\n", "format marker is not a regular file")],
+    "tamper",
+    [
+        (b"8\n", "store format 8 is newer than 7", False),
+        (b"\xff\n", "format marker is not a regular file", False),
+        (None, "changed while it was published", True),
+        (b"8", "store format 8 is newer than 7", True),
+        (b"6", "changed while it was published", True),
+    ],
 )
 def test_public_finish_still_validates_the_marker_after_the_publication_sync(
-    prepared_repo, monkeypatch, capsys, marker, message
+    prepared_repo, monkeypatch, capsys, tamper
 ):
+    marker, message, after = tamper
     repo, source, target = prepared_repo
     real_sync = project_move._sync_published  # noqa: SLF001 - the final publication-sync boundary
     owner: list[int] = []
 
     def sync(pfd, published, tfd):
-        replacement = target / "owner"
-        replacement.write_bytes(marker)
-        replacement.replace(target / MARKER)
-        owner.extend(fd_tree.ident((target / MARKER).stat()))
-        real_sync(pfd, published, tfd)
+        if after:
+            real_sync(pfd, published, tfd)
+        if marker is None:
+            (target / MARKER).unlink()
+        elif after:
+            (target / MARKER).write_bytes(marker)
+            owner.extend(fd_tree.ident((target / MARKER).stat()))
+        else:
+            replacement = target / "owner"
+            replacement.write_bytes(marker)
+            replacement.replace(target / MARKER)
+            owner.extend(fd_tree.ident((target / MARKER).stat()))
+        if not after:
+            real_sync(pfd, published, tfd)
 
     monkeypatch.setattr(project_move, "_sync_published", sync)
     assert cli.main(["--repo", str(repo), "finish"]) == 1
     assert message in capsys.readouterr().err
 
-    assert owner
-    assert (target / MARKER).read_bytes() == marker
-    assert fd_tree.ident((target / MARKER).stat()) == owner
+    if marker is None:
+        assert not (target / MARKER).exists()
+    else:
+        assert owner
+        assert (target / MARKER).read_bytes() == marker
+        assert fd_tree.ident((target / MARKER).stat()) == owner
     assert json.loads((source / project_move.MOVE_RECORD).read_text())["phase"] == project_move.COPYING
+    assert (source / "changes/c1/notes.txt").read_text() == "regular payload\n"

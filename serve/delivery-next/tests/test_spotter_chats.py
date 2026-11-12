@@ -515,14 +515,15 @@ def test_a_look_keeps_the_settings_it_was_admitted_with(world):
         return await World.judge(world, card, ctx, meter)
 
     async def scenario() -> None:
-        world.follower.judge = slow
-        await world.passes()
-        world.chat("c", [asked("go"), ev("assistant.turn_start"), reply("plan", tools=1)])
-        await world.follower._pass()  # noqa: SLF001
-        world.ctx = dataclasses.replace(world.ctx, model="m2")
-        await world.follower._pass()  # noqa: SLF001
+        spot = spotter.Spotter(world.ctx, lambda: "c", slow)
+        for d in (asked("go"), ev("assistant.turn_start"), reply("plan", tools=1)):
+            spot.seen(d)  # the reply is the turn's plan: its look is admitted and waits
+        spot.ctx = dataclasses.replace(spot.ctx, model="m2")  # the settings change, with no new event
+        await asyncio.sleep(0)  # a later turn of the loop, the look still waiting
         release.set()
-        await world.settled(world.follower)
+        if spot.tasks:
+            await asyncio.wait(set(spot.tasks), timeout=10)
+        assert spotter.WORK.settled(5)
 
     asyncio.run(scenario())
     assert [r["model"] for r in records()] == ["m1"]
@@ -856,13 +857,21 @@ def test_a_failed_pass_is_told_whole(world, whole_error):
     f = chats.Follower(lambda: False, told.append, read=unreadable, judge=world.judge, poll=0.01,
                        sessions=world.state)  # fmt: skip
     f.start()
-    deadline = time.monotonic() + 5
-    while not told and time.monotonic() < deadline:
-        time.sleep(0.02)
-    f.close()
-    assert f.join(chats.CLOSE)
-    said = f"RuntimeError: {whole_error}\nthe chats' settings were being written"
-    assert (told, f.failed) == ([f"chats follower: a pass failed: {said}"], said)  # said once, while it repeats
+    try:
+        deadline = time.monotonic() + 5
+        while (not told or not f.failed) and time.monotonic() < deadline:
+            time.sleep(0.02)
+        said = f"RuntimeError: {whole_error}\nthe chats' settings were being written"
+        assert (told, f.failed) == ([f"chats follower: a pass failed: {said}"], said)  # said once, while it repeats
+        f.read = lambda: chat_settings.Plan(world.ctx, ())
+        deadline = time.monotonic() + 5
+        while f.failed and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert f.failed == ""
+        assert told == [f"chats follower: a pass failed: {said}"]
+    finally:
+        f.close()
+        assert f.join(chats.CLOSE)
 
 
 def test_a_lock_that_cannot_be_opened_is_told_whole(world, monkeypatch, whole_error):

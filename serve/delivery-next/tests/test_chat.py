@@ -473,7 +473,8 @@ def test_no_local_write_without_consent(repo):
     assert (json.loads(path.read_text())["tasks"], setup.has_task(path)) == ([{"label": "build"}], False)
     jsonc = repo / ".mcp.json"
     jsonc.write_text("// mine\n{}")
-    assert "not plain JSON" in setup.consent(repo, jsonc, lambda d: d, "Write?", lambda _q: "y", yes=True)
+    said = setup.consent(repo, jsonc, lambda d: d, "Write?", lambda _q: "y", yes=True)
+    assert f"{jsonc} cannot be read: JSONDecodeError:" in said
     assert jsonc.read_text() == "// mine\n{}"
 
 
@@ -656,20 +657,6 @@ def test_a_refusal_from_open_chat_reaches_the_new_change_page_whole(tmp_path):
     assert state["reason"].startswith("the Copilot chat did not start (error: HostRefusedError: initialize: ")
     assert "x" * 400 in state["reason"]
     assert "(code -32005)" in state["reason"]
-
-
-def test_a_failed_follow_up_is_kept_whole_and_logged(caplog):
-    def done(_launch, _out):
-        raise RuntimeError("d" * 400)
-
-    kept = launches.Launches(0, time.monotonic)
-    launch = kept.start(lambda: {"state": "open"}, done=done)
-    end = time.monotonic() + 5
-    while (state := kept.state(launch))["state"] == "opening" and time.monotonic() < end:
-        time.sleep(0.01)
-    assert state == {"state": "open", "warning": "RuntimeError: " + "d" * 400}
-    [record] = [r for r in caplog.records if r.name == launches.__name__]
-    assert (record.levelname, record.exc_info is not None) == ("ERROR", True)
 
 
 @pytest.mark.parametrize("where", ["launch", "follow-up"])

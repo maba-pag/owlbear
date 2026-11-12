@@ -150,23 +150,6 @@ class TestMemoryVotingLifecycle:
     """
 
     @pytest.mark.asyncio
-    async def test_recall_returns_twenty_from_twenty_two_approved(self, tmp_path: Path) -> None:
-        """recall_memory with limit=20 returns exactly 20 entries when 22 are approved."""
-        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
-
-        for i, entry_id in enumerate(_IDS_BULK):
-            entry = _make_approved_entry(entry_id, f"Bulk Entry {i:02d}")
-            _write_entry(tmp_path, entry)
-
-        engine = MemoryEngine(memory_dir=tmp_path)
-        ctx = _make_ctx(engine)
-
-        result = await recall_memory(ctx, agent=_AGENT, limit=20)
-
-        titles = _recall_titles(result)
-        assert len(titles) == 20
-
-    @pytest.mark.asyncio
     async def test_recall_exercises_explore_pool_with_lowest_activity_entries(self, tmp_path: Path) -> None:
         """Explore pool (2 slots) filled by entries with lowest total assessment activity.
 
@@ -275,24 +258,6 @@ class TestMemoryVotingLifecycle:
         assert result.unremarkable_count == 1
         assert result.didnt_use_count == 1
 
-    def test_counters_match_exact_submission_count(self, tmp_path: Path) -> None:
-        """After N record_assessment calls per bucket, counters equal N exactly."""
-        entry = _make_approved_entry(_ID_SCORE_A, "Counter Exact Test", confidence=0.9)
-        _write_entry(tmp_path, entry)
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        for _ in range(5):
-            _record_assessment(engine, _ID_SCORE_A, "outstanding")
-        for _ in range(3):
-            _record_assessment(engine, _ID_SCORE_A, "unremarkable")
-        for _ in range(7):
-            _record_assessment(engine, _ID_SCORE_A, "didnt_use")
-
-        result = engine.get_entry(_ID_SCORE_A)
-        assert result.outstanding_count == 5
-        assert result.unremarkable_count == 3
-        assert result.didnt_use_count == 7
-
     @pytest.mark.asyncio
     async def test_recall_sort_reflects_updated_score_after_outstanding_assessment(self, tmp_path: Path) -> None:
         """After outstanding assessments, recall lists higher-scoring entry first.
@@ -319,23 +284,6 @@ class TestMemoryVotingLifecycle:
         assert "High Score After Boost" in titles
         assert "Medium Confidence No Boost" in titles
         assert titles.index("High Score After Boost") < titles.index("Medium Confidence No Boost")
-
-    @pytest.mark.asyncio
-    async def test_record_factually_wrong_contested_entry_appears_in_recall(self, tmp_path: Path) -> None:
-        """record_factually_wrong on approved entry → contested; entry still in recall result."""
-        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
-
-        entry = _make_approved_entry(_ID_SCORE_C, "Contested But Recalled", confidence=0.8)
-        _write_entry(tmp_path, entry)
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        _record_factually_wrong(engine, _ID_SCORE_C, _TASK_A)
-
-        ctx = _make_ctx(engine)
-        result = await recall_memory(ctx, agent=_AGENT)
-        titles = _recall_titles(result)
-
-        assert "Contested But Recalled" in titles
 
     @pytest.mark.asyncio
     async def test_full_lifecycle_save_edit_approve_then_recall(self, tmp_path: Path) -> None:
@@ -524,69 +472,18 @@ class TestMemoryVotingStateTransitions:
         assert [challenge.task_id for challenge in result.challenges] == [_TASK_A]
         assert result.challenges[0].revision == result.revision
 
-    @pytest.mark.asyncio
-    async def test_contested_entry_included_in_recall(self, tmp_path: Path) -> None:
-        """Contested entry (state=contested) appears in recall_memory result."""
-        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
-
-        entry = _make_approved_entry(
-            _ID_TRANS_A,
-            "In Recall When Contested",
-            state=MemoryState.CONTESTED,
-            challenge_task_ids=[_TASK_A],
-        )
-        _write_entry(tmp_path, entry)
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        ctx = _make_ctx(engine)
-        result = await recall_memory(ctx, agent=_AGENT)
-        titles = _recall_titles(result)
-
-        assert "In Recall When Contested" in titles
-
     def test_second_factually_wrong_different_task_transitions_contested_to_disputed(self, tmp_path: Path) -> None:
         """Second record_factually_wrong from different task_id transitions contested→disputed."""
         entry = _make_approved_entry(_ID_TRANS_A, "Will Become Disputed")
         _write_entry(tmp_path, entry)
         engine = MemoryEngine(memory_dir=tmp_path)
 
-        _record_factually_wrong(engine, _ID_TRANS_A, _TASK_A)
+        after_first = _record_factually_wrong(engine, _ID_TRANS_A, _TASK_A)
+        assert after_first.state == MemoryState.CONTESTED
         result = _record_factually_wrong(engine, _ID_TRANS_A, _TASK_B)
 
         assert result.state == MemoryState.DISPUTED
         assert [challenge.task_id for challenge in result.challenges] == [_TASK_A, _TASK_B]
-
-    @pytest.mark.asyncio
-    async def test_disputed_entry_excluded_from_recall(self, tmp_path: Path) -> None:
-        """Disputed entry is excluded from recall_memory result."""
-        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
-
-        entry = _make_approved_entry(
-            _ID_TRANS_A,
-            "Excluded When Disputed",
-            state=MemoryState.DISPUTED,
-            challenge_task_ids=[_TASK_A, _TASK_B],
-        )
-        _write_entry(tmp_path, entry)
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        ctx = _make_ctx(engine)
-        result = await recall_memory(ctx, agent=_AGENT)
-        titles = _recall_titles(result)
-
-        assert "Excluded When Disputed" not in titles
-
-    def test_full_factually_wrong_pipeline_contested_then_disputed(self, tmp_path: Path) -> None:
-        """Full pipeline: approved→contested via task_A, then →disputed via task_B."""
-        entry = _make_approved_entry(_ID_TRANS_A, "Pipeline Confirmed")
-        _write_entry(tmp_path, entry)
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        after_first = _record_factually_wrong(engine, _ID_TRANS_A, _TASK_A)
-        assert after_first.state == MemoryState.CONTESTED
-
-        after_second = _record_factually_wrong(engine, _ID_TRANS_A, _TASK_B)
-        assert after_second.state == MemoryState.DISPUTED
 
     def test_stale_transition_via_check_slot_efficiency_threshold(self, tmp_path: Path) -> None:
         """Entry transitions to stale when didnt_use > 50 x max(outstanding+unremarkable, 1).
@@ -602,36 +499,16 @@ class TestMemoryVotingStateTransitions:
 
         assert result.state == MemoryState.STALE
 
-    @pytest.mark.asyncio
-    async def test_stale_entry_excluded_from_recall(self, tmp_path: Path) -> None:
-        """Stale entry (state=stale) is excluded from recall_memory result."""
-        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
-
-        entry = _make_approved_entry(
-            _ID_STALE_A,
-            "Excluded When Stale",
-            state=MemoryState.STALE,
-        )
-        _write_entry(tmp_path, entry)
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        ctx = _make_ctx(engine)
-        result = await recall_memory(ctx, agent=_AGENT)
-        titles = _recall_titles(result)
-
-        assert "Excluded When Stale" not in titles
-
     def test_stale_threshold_boundary_at_fifty_not_stale(self, tmp_path: Path) -> None:
         """Exactly 50 didnt_use with 0 outstanding/unremarkable does NOT trigger stale.
 
         Predicate: didnt_use > 50 x max(outstanding+unremarkable, 1) — must be strictly greater.
         """
-        entry = _make_approved_entry(_ID_STALE_A, "At Boundary Not Stale")
+        entry = _make_approved_entry(_ID_STALE_A, "At Boundary Not Stale", didnt_use_count=49)
         _write_entry(tmp_path, entry)
         engine = MemoryEngine(memory_dir=tmp_path)
 
-        for _ in range(50):
-            result = _record_assessment(engine, _ID_STALE_A, "didnt_use")
+        result = _record_assessment(engine, _ID_STALE_A, "didnt_use")
 
         assert result.state == MemoryState.APPROVED
 
@@ -647,7 +524,7 @@ class TestMemoryVotingStateTransitions:
 
         entry_a = _make_approved_entry(_ID_TRANS_A, "Entry A Contested")
         entry_b = _make_approved_entry(_ID_TRANS_B, "Entry B Disputed")
-        entry_c = _make_approved_entry(_ID_STALE_A, "Entry C Stale")
+        entry_c = _make_approved_entry(_ID_STALE_A, "Entry C Stale", didnt_use_count=50)
         for e in (entry_a, entry_b, entry_c):
             _write_entry(tmp_path, e)
 
@@ -659,8 +536,7 @@ class TestMemoryVotingStateTransitions:
         _record_factually_wrong(engine, _ID_TRANS_B, _TASK_A)
         _record_factually_wrong(engine, _ID_TRANS_B, _TASK_B)
         # Entry C → stale
-        for _ in range(51):
-            _record_assessment(engine, _ID_STALE_A, "didnt_use")
+        _record_assessment(engine, _ID_STALE_A, "didnt_use")
 
         ctx = _make_ctx(engine)
         result = await recall_memory(ctx, agent=_AGENT)

@@ -8,7 +8,13 @@ from typing import TYPE_CHECKING, NamedTuple
 from owlbear_delivery_next.change_contracts import check_hint, evidence, pick_tools, preparation, tools
 from owlbear_delivery_next.change_contracts.models import VISUAL, Exit, PersonCheck, StepKind
 from owlbear_delivery_next.change_contracts.preparation import Preparing
-from owlbear_delivery_next.change_flow import brief_rounds, disputes, plan_rounds, round_flow, shaping_capture
+from owlbear_delivery_next.change_flow import (
+    brief_rounds,
+    disputes,
+    plan_rounds,
+    round_flow,
+    shaping_capture,
+)
 from owlbear_delivery_next.change_flow import worktree as wt
 from owlbear_delivery_next.runtimes import step_answers, step_decisions
 from owlbear_delivery_next.settings import profile as project_profile
@@ -62,6 +68,8 @@ CONTINUE = (
 def reminder(role: str, *, judging: bool = False) -> str:
     """The one nudge after a turn that ended without a result; a judge or judgement has no question (TD-108)."""
     ask = "ask_question, " if tools.asks(role, judging=judging) else ""
+    if role == "repairer":
+        return "Your turn ended without a result. Call submit_result with the cause and every fix you tried."
     return pick_tools.REMINDER if role == tools.PICKER else REMINDER.format(ask=ask)
 
 
@@ -343,9 +351,9 @@ def _flat(text: str) -> str:
     return " ".join(text.split())
 
 
-def _packages(profile: Profile) -> list[str]:
+def _packages(profile: Profile, path: Path) -> list[str]:
     inst = {k.removeprefix("install:"): e.value for k, e in profile.entries.items() if k.startswith("install:")}
-    chk = {p: check_hint.qualified(p, c) for p, c in wt.checks(profile)}
+    chk = {p: check_hint.qualified(p, c) for p, c in wt.plan_checks(profile, path)}
     return [f"- `{p}`: install `{inst.get(p, 'none')}`, check `{chk.get(p, 'none')}`" for p in sorted({*inst, *chk})]
 
 
@@ -366,8 +374,12 @@ def plan(change: Change, profile: Profile, worktree: Path, others: Mapping[str, 
         f"Scope: {', '.join(change.brief.scope) or 'not limited'}",
         "",
         "## Packages (project profile)",
-        *(_packages(profile) or ["- none: no package has a confirmed check command"]),
-        "Select each task's checks exactly as listed, including the directory prefix; do not alter the commands.",
+        *(_packages(profile, worktree) or ["- none: no package has a confirmed check command"]),
+        "Keep each check's runner and directory prefix; append only literal test targets, including consumers.",
+        (
+            "Inspect the runner's targeting interface. If it cannot select touched tests, report setup; never run the "
+            "full suite per task. Root changed checks receive task scope from Delivery. Lint runs at submission."
+        ),
         *_others(others),
     ]
     if change.checks:
@@ -394,13 +406,14 @@ def plan_challenge(
             *_brief(change, own=disputes.PLAN_FOUND, complete=True),
             "",
             "## Packages (project profile; check choices are complete repository-root commands)",
-            *(_packages(profile) or ["- none known"]),
+            *(_packages(profile, worktree) or ["- none known"]),
             *_others(others),
             "",
             "## Judge",
             (
-                "Every criterion is met by a task's goal and its checks would catch a failure; tasks are in a "
-                "buildable order and each fits one session; scopes match the code and touch other open Changes' "
+                "Every criterion is named by a task's goal that says the real run showing it met, and its checks "
+                "run the existing tests the change touches; no new test per criterion. Tasks are in a buildable "
+                "order and each fits one session; scopes match the code and touch other open Changes' "
                 "scopes only where the brief needs it. Findings only for what must change."
             ),
             *plan_rounds.challenge_lines(change),
@@ -467,7 +480,7 @@ def session(
     s, tasks = change.step, change.plan.tasks if change.plan else []
     task = next((t for t in tasks if t.id == s.task), None)
     if s.kind == StepKind.PLAN:
-        pairs, message = tuple(wt.checks(profile)), plan(change, profile, path, others)
+        pairs, message = tuple(wt.plan_checks(profile, path)), plan(change, profile, path, others)
         checks = tuple(dict.fromkeys(check_hint.qualified(p, c) for p, c in pairs))
         return Parts(message, write=False, checks=checks, submit=tools.PLAN, task=None, packages=pairs)
     if s.kind == StepKind.REVIEW:
@@ -482,6 +495,6 @@ def session(
         person = next((p for p in change.checks if p.id == s.task), None) or _visual_check(change)
         message = check(change, person, path, pairs, preparing)
         return Parts(message, write=True, checks=(), submit=tools.RECIPE, task=task)
-    checks = check_hint.resolve(task.checks, wt.checks(project_profile.vouched(profile)))
+    checks = wt.build_checks(project_profile.vouched(profile), change, task, path)
     message = build(change, task.model_copy(update={"checks": checks}), path, pairs)
     return Parts(message, write=True, checks=tuple(checks), submit=tools.SUBMIT, task=task)

@@ -3,20 +3,23 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import subprocess
 import sys
 import threading
 import time
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from owlbear_decisions import Decision, Origin, Scope, State, new_id
+from owlbear_decisions import Decision, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import decision_routes
+from owlbear_delivery_next.settings.config import Settings
 from owlbear_delivery_next.state_store import (
     decision_batch,
     decision_cache,
@@ -25,7 +28,11 @@ from owlbear_delivery_next.state_store import (
     decision_sync,
     decision_transaction,
 )
+from owlbear_delivery_next.workflow_steps import lookup
 
+from . import test_decision_routes
+
+shared = test_decision_routes.shared
 PROJECT = "shop-site"
 AT = datetime(2026, 10, 21, 9, tzinfo=UTC)
 
@@ -37,6 +44,12 @@ def make(**changes) -> Decision:
         "state": State.IN_FORCE, "created_at": AT,
     }  # fmt: skip
     return Decision(**{**fields, **changes})
+
+
+@pytest.fixture
+def picking(shared):
+    """Retain the storage tests' binding name without constructing Picking."""
+    return SimpleNamespace(shared=shared)
 
 
 CRASH_CODE = """
@@ -70,7 +83,8 @@ decision_actions.replace(
 
 
 def _seed(picking):
-    old = picking.put(make(statement="Notes live in SQLite."))
+    old = make(statement="Notes live in SQLite.")
+    write(old, picking.shared.root / PROJECT)
     picking.shared.git("add", "-A")
     picking.shared.git("commit", "-qm", "seed")
     picking.shared.git("push", "-q")
@@ -95,73 +109,108 @@ def _statements(shared) -> set[str]:
     return {e.decision.statement for e in view.entries if view.active(e.decision.id)}
 
 
-@pytest.mark.parametrize("point", ["before-first", "after-first"])
-def test_interrupted_batch_fails_closed_until_abandoned(picking, point, owner_api):
+def _refused_recovery_requests(owner_api, generation):
+    body = {"generation": generation, "confirmed": True}
+    for action in ("finish", "abandon"):
+        assert (
+            owner_api.post(f"/decisions/recovery/{action}", json=body, headers={"X-OwlBear-Use": "chat"}).status_code
+            == 403
+        )
+        assert owner_api.post(f"/decisions/recovery/{action}", json={"generation": generation}).status_code == 422
+        assert owner_api.post(f"/decisions/recovery/{action}", json=body | {"generation": "0" * 16}).status_code == 409
+
+
+def _recovered_images(shared, pending, action):
+    for rel, before, after in pending.files:
+        path = shared.root / rel
+        expected = before if action == "abandon" else after
+        assert (path.read_bytes() if path.exists() else None) == expected
+    assert _statements(shared) == {"Notes live in SQLite." if action == "abandon" else "Notes live in Postgres."}
+
+
+def _finish_published(shared, owner_api, body, monkeypatch):
+    remote = shared.root.parent / "remote.git"
+    away = remote.with_name("remote-away.git")
+    owner = shared.root / "owner.txt"
+    owner.write_bytes(b"the owner's work stays here\n")
+    assert owner_api.post("/decisions/recovery/abandon", json=body).status_code == 409
+    head, index = shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
+    seen, real_git = [], DataRepo.git
+
+    def observe(self, *args, **kwargs):
+        seen.append(args)
+        return real_git(self, *args, **kwargs)
+
+    remote.rename(away)
+    try:
+        with monkeypatch.context() as m:
+            m.setattr(DataRepo, "git", observe)
+            done = owner_api.post("/decisions/recovery/finish", json=body)
+    finally:
+        away.rename(remote)
+    assert done.status_code == 200, done.text
+    assert "committed locally; no push/rebase retried" in done.json()["notice"]
+    assert not [args for args in seen if args[0] in {"fetch", "push", "pull", "rebase", "ls-remote", "commit"}]
+    assert owner.read_bytes() == b"the owner's work stays here\n"
+    assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (head, index)
+    return done
+
+
+@pytest.mark.parametrize(
+    ("point", "action"),
+    [("before-first", "abandon"), ("after-first", "abandon"), ("after-first", "finish"), ("after-publish", "finish")],
+)
+def test_owner_recovers_interrupted_decision_batch(picking, monkeypatch, point, action, owner_api):
     old = _seed(picking)
+    shared = picking.shared
+    before_head = shared.git("rev-parse", "HEAD").stdout
+    before_index = shared.git("ls-files", "-s").stdout
     _crash(picking, old, point)
-    pending = decision_batch.pending(picking.shared)
+    pending = decision_batch.pending(shared)
     assert pending is not None
     assert pending.project == PROJECT
+    assert any(before is None for _, before, _ in pending.files)
+    journal = decision_batch.journal_path(shared).read_bytes()
+    shown = owner_api.get("/decisions/recovery").json()
+    assert (shown["interrupted"], shown["corrupt"], shown["generation"]) == (True, False, pending.generation)
 
     with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch") as exc:
-        decision_store.load(picking.shared, PROJECT)
+        decision_store.load(shared, PROJECT)
     assert exc.value.action == decision_store.RECOVER
-    assert owner_api.get("/decisions/recovery").json()["interrupted"] is True
     with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
-        decision_store.file_snapshot(picking.shared, PROJECT)
+        decision_store.file_snapshot(shared, PROJECT)
     unrelated = make(title="Notes use UTC", statement="All note timestamps use UTC.")
     with pytest.raises(decision_store.DecisionsUnavailable, match="interrupted decision batch"):
-        decision_store.save(picking.shared, unrelated, expected_revision=None, message="decisions: unrelated")
+        decision_store.save(shared, unrelated, expected_revision=None, message="decisions: unrelated")
 
-    with pytest.raises(decision_store.DecisionsUnavailable, match="generation"):
-        decision_recovery.abandon(picking.shared, "not-the-generation")
-    notice = decision_recovery.abandon(picking.shared, pending.generation).notice
-    assert "abandoned" in notice
-    assert _statements(picking.shared) == {"Notes live in SQLite."}
-    assert "??" not in picking.shared.git("status", "--porcelain").stdout
-    assert decision_batch.pending(picking.shared) is None
+    body = {"generation": pending.generation, "confirmed": True}
+    _refused_recovery_requests(owner_api, pending.generation)
+    assert decision_batch.journal_path(shared).read_bytes() == journal
 
-    receipt = decision_store.save(picking.shared, unrelated, expected_revision=None, message="decisions: unrelated")
-    assert receipt.committed
-
-
-def test_interrupted_batch_is_finished_by_its_generation(picking):
-    old = _seed(picking)
-    _crash(picking, old, "after-first")
-    pending = decision_batch.pending(picking.shared)
-    assert pending is not None
-
-    done = decision_recovery.finish(picking.shared, pending.generation)
-    assert done.done
-    assert _statements(picking.shared) == {"Notes live in Postgres."}
-    assert decision_batch.pending(picking.shared) is None
-    assert "??" not in picking.shared.git("status", "--porcelain").stdout
-
-
-def test_finish_after_publication_only_completes_the_marker(picking):
-    old = _seed(picking)
-    _crash(picking, old, "after-publish")
-    pending = decision_batch.pending(picking.shared)
-    assert pending is not None
-
-    done = decision_recovery.finish(picking.shared, pending.generation)
-    assert done.done
-    assert "committed locally; no push/rebase retried" in done.notice  # the exact after-images were proved first
-    assert decision_batch.pending(picking.shared) is None
-    assert _statements(picking.shared) == {"Notes live in Postgres."}
-
-
-def test_completed_generation_cannot_be_replayed(picking):
-    old = _seed(picking)
-    _crash(picking, old, "after-first")
-    pending = decision_batch.pending(picking.shared)
-    assert pending is not None
-    stale_copy = decision_batch.journal_path(picking.shared).read_bytes()
-    decision_recovery.finish(picking.shared, pending.generation)
-
-    decision_batch.journal_path(picking.shared).write_bytes(stale_copy)
-    assert decision_batch.pending(picking.shared) is None
-    assert _statements(picking.shared) == {"Notes live in Postgres."}
+    done = (
+        _finish_published(shared, owner_api, body, monkeypatch)
+        if point == "after-publish"
+        else owner_api.post(f"/decisions/recovery/{action}", json=body)
+    )
+    assert done.status_code == 200, done.text
+    assert done.json()["done"]
+    assert done.json()["generation"] == pending.generation
+    assert decision_batch.pending(shared) is None
+    assert owner_api.get("/decisions/recovery").json()["interrupted"] is False
+    _recovered_images(shared, pending, action)
+    if action == "abandon":
+        assert "abandoned" in done.json()["notice"]
+        assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (
+            before_head,
+            before_index,
+        )
+        assert "??" not in shared.git("status", "--porcelain").stdout
+        assert decision_store.save(shared, unrelated, expected_revision=None, message="decisions: unrelated").committed
+    elif point == "after-first":
+        assert "??" not in shared.git("status", "--porcelain").stdout
+        decision_batch.journal_path(shared).write_bytes(journal)
+        assert decision_batch.pending(shared) is None
+        assert _statements(shared) == {"Notes live in Postgres."}
 
 
 def test_refused_batch_leaves_no_journal(picking):
@@ -180,6 +229,14 @@ def _one_file(project: str) -> tuple[list[str], list[tuple[str, bytes | None, by
 
 def _race(warmth, shared: DataRepo, message: str) -> None:
     """Begin and complete a batch once the files are collected; a kept snapshot is never parsed, so once it is found."""
+    if not warmth.warm:
+        real_files = decision_cache.files
+
+        def cold(*args, **kwargs):
+            decision_cache.clear()
+            return real_files(*args, **kwargs)
+
+        warmth.monkeypatch.setattr(decision_cache, "files", cold)
     target, name = (decision_cache, "fingerprint") if warmth.warm else (decision_store, "_files")
     real = getattr(target, name)
 
@@ -193,13 +250,12 @@ def _race(warmth, shared: DataRepo, message: str) -> None:
     warmth.monkeypatch.setattr(target, name, raced)
 
 
-@pytest.mark.parametrize("reader", [decision_store.load, decision_store.file_snapshot], ids=["load", "file_only"])
-def test_a_batch_that_begins_and_completes_while_the_decisions_are_read_is_refused(picking, warmth, reader):
+def test_a_batch_that_begins_and_completes_while_the_decisions_are_read_is_refused(picking, warmth):
     _seed(picking)
     warmth.ready(picking.shared, PROJECT)
     _race(warmth, picking.shared, "decisions: raced")
     with pytest.raises(decision_store.DecisionsUnavailable, match="changed while they were read"):
-        reader(picking.shared, PROJECT)
+        decision_store.load(picking.shared, PROJECT)
     assert warmth.parses == warmth.collected(PROJECT) * 2  # read again once no writer holds the lock, and raced again
 
 
@@ -210,47 +266,50 @@ def owner_api(picking):
     return TestClient(app)
 
 
-def test_owner_route_shows_and_finishes_by_generation(picking, owner_api):
+@pytest.mark.parametrize("damage", ["json", "git", "outside"])
+def test_corrupt_journal_blocks_and_is_diagnosed_not_cleared(picking, owner_api, monkeypatch, damage, tmp_path):
     old = _seed(picking)
     _crash(picking, old, "after-first")
-    shown = owner_api.get("/decisions/recovery").json()
-    assert shown["interrupted"]
-    assert not shown["corrupt"]
-    generation = shown["generation"]
-
-    assert owner_api.post("/decisions/recovery/finish", json={"generation": generation}).status_code == 422
-    stale = owner_api.post("/decisions/recovery/finish", json={"generation": "0" * 16, "confirmed": True})
-    assert stale.status_code == 409
-    done = owner_api.post("/decisions/recovery/finish", json={"generation": generation, "confirmed": True})
-    assert done.status_code == 200
-    assert done.json()["done"]
-    assert _statements(picking.shared) == {"Notes live in Postgres."}
-    assert owner_api.get("/decisions/recovery").json()["interrupted"] is False
-
-
-def test_chat_cannot_finish_or_abandon(picking, owner_api):
-    old = _seed(picking)
-    _crash(picking, old, "after-first")
-    generation = decision_batch.pending(picking.shared).generation
-    body = {"generation": generation, "confirmed": True}
-    for action in ("finish", "abandon"):
-        refused = owner_api.post(f"/decisions/recovery/{action}", json=body, headers={"X-OwlBear-Use": "chat"})
-        assert refused.status_code == 403
-    assert decision_batch.pending(picking.shared) is not None
-
-
-def test_corrupt_journal_blocks_and_is_diagnosed_not_cleared(picking, owner_api):
-    old = _seed(picking)
-    _crash(picking, old, "after-first")
-    decision_batch.journal_path(picking.shared).write_text("{not json")
+    shared = picking.shared
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(b"outside the checkout stays unchanged\n")
+    path = decision_batch.journal_path(shared)
+    record = json.loads(path.read_bytes())
+    if damage != "json":
+        record["files"][0]["path"] = ".git/config" if damage == "git" else str(outside)
+        record["ids"][0] = "config" if damage == "git" else "outside"
+    path.write_text("{not json" if damage == "json" else json.dumps(record))
+    kept = path.read_bytes()
+    head, index = shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
+    config = (shared.root / ".git" / "config").read_bytes()
+    files = {p: p.read_bytes() for p in (shared.root / PROJECT / "decisions").iterdir()}
+    launched = []
+    monkeypatch.setattr(lookup, "_ran", lambda *_a: launched.append("picker"))
     shown = owner_api.get("/decisions/recovery").json()
     assert shown["corrupt"]
     assert shown["diagnosis"]
+    assert shown["generation"] == ""
+    with pytest.raises(decision_batch.JournalError):
+        decision_batch.pending(shared)
     with pytest.raises(decision_store.DecisionsUnavailable):
-        decision_store.load(picking.shared, PROJECT)
-    refused = owner_api.post("/decisions/recovery/abandon", json={"generation": "a" * 16, "confirmed": True})
-    assert refused.status_code == 409
-    assert decision_batch.journal_path(picking.shared).exists()
+        decision_store.load(shared, PROJECT)
+    with pytest.raises(decision_store.DecisionsUnavailable):
+        decision_store.save(shared, make(), expected_revision=None, message="decisions: refused")
+    for action in ("abandon", "finish"):
+        refused = owner_api.post(
+            f"/decisions/recovery/{action}", json={"generation": record["generation"] or "a" * 16, "confirmed": True}
+        )
+        assert refused.status_code == 409
+    answer, done = lookup.chat(shared, PROJECT, "Which timestamps apply?", Settings)
+    assert answer["failed"]
+    assert "decisions" not in answer
+    assert done is None
+    assert launched == []
+    assert path.read_bytes() == kept
+    assert {p: p.read_bytes() for p in files} == files
+    assert (shared.root / ".git" / "config").read_bytes() == config
+    assert outside.read_bytes() == b"outside the checkout stays unchanged\n"
+    assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (head, index)
 
 
 def test_ambiguous_stale_publish_stays_interrupted(picking, monkeypatch):
@@ -268,6 +327,7 @@ def test_ambiguous_stale_publish_stays_interrupted(picking, monkeypatch):
 
 
 @pytest.mark.parametrize("held", [False, True], ids=["crashed", "writer-holds-the-lock"])
+@pytest.mark.parametrize("warmth", ["warm"], indirect=True)  # the first stamp precedes any collection: cold adds none
 def test_a_batch_already_pending_at_the_first_stamp_is_refused(picking, monkeypatch, warmth, writing, held):
     _seed(picking)
     warmth.ready(picking.shared, PROJECT)

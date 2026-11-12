@@ -10,7 +10,6 @@ from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, ch
 from owlbear_decisions.models import STATEMENT_LIMIT
 from owlbear_decisions.storage import parse, serialize
 from owlbear_delivery_next.change_contracts import decision_wording, pick_tools, tools
-from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
     BriefDecision,
@@ -22,10 +21,15 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
 )
 from owlbear_delivery_next.commands import runner
-from owlbear_delivery_next.state_store import decision_actions, decision_archive, decision_origin, decision_store
+from owlbear_delivery_next.state_store import decision_archive, decision_store
 from owlbear_delivery_next.state_store.store import Lock
-from owlbear_delivery_next.workflow_steps import brief_round, decision_publication, decisions_gate, lookup, pick
+from owlbear_delivery_next.workflow_steps import brief_round, decisions_gate, lookup, pick
 
+from . import test_decision_routes
+
+shared = test_decision_routes.shared
+store = test_decision_routes.store
+owner = test_decision_routes.owner
 AT = datetime(2026, 10, 22, 9, tzinfo=UTC)
 PROJECT = "shop-site"
 TEXT = "A note is stored only in the project's own table. " * 6 + "Never keep payment-card numbers."
@@ -66,67 +70,52 @@ def test_new_short_archives_with_a_literal_terminal_ellipsis_never_expand_the_re
 
 
 @pytest.mark.parametrize("legacy", [False, True])
-def test_actual_origin_correction_preserves_proven_binding_or_refuses_ambiguity_before_writing(monkeypatch, legacy):
+def test_actual_origin_correction_preserves_proven_binding_or_refuses_ambiguity_before_writing(owner, shared, legacy):
     rule = archived().model_copy(update={"origin": Origin.APPROVED})
     if legacy:
         rule = rule.model_copy(update={"rationale": f"From Change notes (approved).\n\nWhole wording: {TEXT}"})
-    saved = []
-    monkeypatch.setattr(decision_store, "load", lambda *_args: object())
-    monkeypatch.setattr(decision_origin, "_entry", lambda *_args: type("Entry", (), {"decision": rule})())
-    monkeypatch.setattr(decision_origin, "_stale", lambda *_args: None)
-    monkeypatch.setattr(decision_origin, "rivals", lambda *_args: [])
-
-    def retire(_shared, successor, _old, _message):
-        saved.append(successor)
-        return []
-
-    monkeypatch.setattr(decision_origin, "_retire", retire)
-
-    def correcting():
-        return decision_origin.correct_origin(
-            None,
-            PROJECT,
-            rule.id,
-            rule.revision,
-            origin=Origin.AUTONOMOUS,
-            reason="This was an agent choice",
-            confirmed=True,
-            by="owner",
-        )
-
+    write(rule, shared.root / PROJECT)
+    before = publish(shared.root)
+    path = shared.root / PROJECT / "decisions" / f"{rule.id}.md"
+    text = path.read_bytes()
+    got = owner.post(
+        f"/api/next/decisions/{rule.id}/correct-origin",
+        json={
+            "revision": rule.revision,
+            "origin": "autonomous",
+            "reason": "This was an agent choice",
+            "confirmed": True,
+        },
+    )
     if legacy:
-        with pytest.raises(decision_wording.WordingError, match="ambiguous legacy"):
-            correcting()
-        assert saved == []
+        assert got.status_code == 409, got.text
+        assert "ambiguous legacy" in got.json()["detail"]
+        assert path.read_bytes() == text
+        assert head(shared.root) == before
         return
-    correcting()
-    assert len(saved) == 1
-    assert saved[0].statement == rule.statement
-    assert saved[0].origin is Origin.AUTONOMOUS
-    assert decision_archive.whole(parse(serialize(saved[0]))) == TEXT
-    assert decision_wording.problem(saved[0]) == ""
+    assert got.status_code == 200, got.text
+    successor = test_decision_routes.now(shared, got.json()["receipts"][0]["id"])
+    assert successor.statement == rule.statement
+    assert successor.origin is Origin.AUTONOMOUS
+    assert decision_archive.whole(parse(serialize(successor))) == TEXT
+    assert decision_wording.problem(successor) == ""
 
 
-def test_literal_metadata_headings_inside_binding_survive_real_promotion(monkeypatch):
+def test_literal_metadata_headings_inside_binding_survive_real_promotion(owner, shared):
     text = TEXT + "\n\nWhy it changed: this paragraph IS binding.\n\nWhole wording: this one is binding too."
     rule = archived(text, reason=f"Whole wording: quoted explanation {text}")
-    saved = []
-    view = object()
-    monkeypatch.setattr(decision_store, "load", lambda *_args: view)
-    monkeypatch.setattr(decision_actions, "_entry", lambda *_args: type("Entry", (), {"decision": rule})())
-    monkeypatch.setattr(decision_actions, "_stale", lambda *_args: None)
-
-    def retire(_shared, wider, _source, _message):
-        saved.append(wider)
-        return []
-
-    monkeypatch.setattr(decision_actions, "_retire", retire)
-    decision_actions.promote(None, PROJECT, rule.id, rule.revision, reason="Apply this to all projects")
-    assert len(saved) == 1
-    assert saved[0].scope is Scope.GLOBAL
-    assert saved[0].statement == rule.statement
-    assert decision_archive.whole(parse(serialize(saved[0]))) == text
-    assert "Apply this to all projects" in saved[0].rationale
+    write(rule, shared.root / PROJECT)
+    publish(shared.root)
+    got = owner.post(
+        f"/api/next/decisions/{rule.id}/promote",
+        json={"revision": rule.revision, "reason": "Apply this to all projects"},
+    )
+    assert got.status_code == 200, got.text
+    wider = test_decision_routes.now(shared, got.json()["receipts"][0]["id"])
+    assert wider.scope is Scope.GLOBAL
+    assert wider.statement == rule.statement
+    assert decision_archive.whole(parse(serialize(wider))) == text
+    assert "Apply this to all projects" in wider.rationale
 
 
 def legacy_ambiguous():
@@ -164,15 +153,31 @@ def test_a_single_legacy_marker_cannot_distinguish_a_full_answer_from_a_quoted_r
             decision_archive.whole(candidate)
 
 
-@pytest.mark.parametrize("text", ["ordinary\nformatting", TEXT, "Keep the literal ellipsis\u2026"])
-def test_genuine_canonical_wording_is_not_rewritten_or_expanded_from_an_unrelated_reason(text):
-    rule = archived().model_copy(
-        update={
-            "statement": text,
-            "source": "the owner's confirmed intent",
-            "rationale": f"Whole wording: {TEXT}\n\nWhole wording: quoted reason",
-        }
-    )
+INTENT, QUOTED = "the owner's confirmed intent", f"Whole wording: {TEXT}\n\nWhole wording: quoted reason"
+
+
+@pytest.mark.parametrize(
+    ("text", "source", "reason"),
+    [
+        pytest.param("ordinary\nformatting", INTENT, QUOTED, id="ordinary\nformatting"),
+        pytest.param(TEXT, INTENT, QUOTED, id="text1"),
+        pytest.param("Keep the literal ellipsis\u2026", INTENT, QUOTED, id="Keep the literal ellipsis\u2026"),
+        pytest.param(  # moved from test_decision_lookup: the blank source a generic Decision has
+            "Keep this rule's\noriginal formatting.",
+            "",
+            "Whole wording: unrelated rationale",
+            id="Keep this rule's\noriginal formatting.-Whole wording: unrelated rationale",
+        ),
+        pytest.param(
+            "Keep this rule\u2026",
+            "",
+            "Whole wording: a different prefix does not restore that rule",
+            id="Keep this rule\u2026-Whole wording: a different prefix does not restore that rule",
+        ),
+    ],
+)
+def test_genuine_canonical_wording_is_not_rewritten_or_expanded_from_an_unrelated_reason(text, source, reason):
+    rule = archived().model_copy(update={"statement": text, "source": source, "rationale": reason})
     assert decision_archive.whole(rule) == text
 
 
@@ -195,7 +200,7 @@ def test_damaged_framed_authority_is_a_visible_fault(damage):
 
 
 @pytest.mark.parametrize("boundary", ["worker", "chat"])
-def test_ambiguous_legacy_authority_refuses_the_whole_lookup_before_a_picker(picking, monkeypatch, boundary):
+def test_ambiguous_legacy_authority_refuses_the_whole_lookup_before_a_picker(shared, store, monkeypatch, boundary):
     good = Decision(
         id=new_id(),
         title="Other rule",
@@ -207,16 +212,15 @@ def test_ambiguous_legacy_authority_refuses_the_whole_lookup_before_a_picker(pic
         actor="shaper",
         created_at=AT,
     )
-    picking.put(good)
-    bad = picking.put(legacy_ambiguous())
+    write(good, shared.root / PROJECT)
+    bad = legacy_ambiguous()
+    write(bad, shared.root / PROJECT)
     calls = []
     monkeypatch.setattr(lookup, "_ran", lambda *_args: calls.append("must not run"))
     if boundary == "worker":
-        from owlbear_delivery_next.state_store.store import Lock  # noqa: PLC0415 - only the worker boundary
-
-        result, done = lookup.worker(picking.store, Lock("notes"), Change(slug="notes"), "Which rules?")
+        result, done = lookup.worker(store, Lock("notes"), Change(slug="notes"), "Which rules?")
     else:
-        result, done = lookup.chat(picking.shared, PROJECT, "Which rules?", picking.store.settings)
+        result, done = lookup.chat(shared, PROJECT, "Which rules?", store.settings)
     assert result["failed"]
     assert "decisions" not in result
     assert {row["id"] for row in result["unresolved"]} == {bad.id}
@@ -225,21 +229,20 @@ def test_ambiguous_legacy_authority_refuses_the_whole_lookup_before_a_picker(pic
     assert calls == []
 
 
-def test_ambiguous_wording_refuses_shaping_pick_without_starting_an_sdk_session(picking, monkeypatch):
-    from owlbear_delivery_next.state_store.store import Lock  # noqa: PLC0415 - the actual pick's write boundary
-
-    bad = picking.put(legacy_ambiguous())
+def test_ambiguous_wording_refuses_shaping_pick_without_starting_an_sdk_session(shared, store, monkeypatch):
+    bad = legacy_ambiguous()
+    write(bad, shared.root / PROJECT)
     monkeypatch.setattr(pick, "_session", lambda *_args: pytest.fail("ambiguous authority cannot reach a picker"))
-    after = pick.run(picking.store, Lock("notes"), Change(slug="notes"))
+    after = pick.run(store, Lock("notes"), Change(slug="notes"))
     assert after.brief.picked.status == "failed"
     assert bad.id in after.brief.picked.reason
 
 
-def test_a_foreign_project_legacy_ambiguity_does_not_poison_this_projects_lookup(picking):
-    other = picking.shared.root / "elsewhere"
+def test_a_foreign_project_legacy_ambiguity_does_not_poison_this_projects_lookup(shared, store):
+    other = shared.root / "elsewhere"
     other.mkdir()
     write(legacy_ambiguous().model_copy(update={"project": "elsewhere"}), other)
-    result, done = lookup.chat(picking.shared, PROJECT, "Which rules?", picking.store.settings)
+    result, done = lookup.chat(shared, PROJECT, "Which rules?", store.settings)
     assert result == {"decisions": [], "note": lookup.NONE}
     assert done is None
 
@@ -270,43 +273,39 @@ def test_unusable_inherited_binding_never_becomes_a_new_rule_and_its_note_surviv
     assert kept == ("" if damage == "unknown-version" else note)
 
 
-def test_unreadable_wording_stops_the_brief_challenge_before_a_worktree_or_challenger(picking, monkeypatch):
-    bad = picking.put(legacy_ambiguous())
+def test_unreadable_wording_stops_the_brief_challenge_before_a_worktree_or_challenger(shared, store, monkeypatch):
+    bad = legacy_ambiguous()
+    write(bad, shared.root / PROJECT)
     monkeypatch.setattr(brief_round.worktree, "ensure", lambda *_: pytest.fail("an unreadable rule starts no worktree"))
     monkeypatch.setattr(
         brief_round.sessions, "review_run", lambda *_a, **_k: pytest.fail("no challenger on bad wording")
     )
-    brief_round.run(picking.store, Lock("notes"), Change(slug="notes"), picking.shared.root)
-    stored = picking.store.read("notes")
+    brief_round.run(store, Lock("notes"), Change(slug="notes"), shared.root)
+    stored = store.read("notes")
     assert stored.stop.kind is ErrorKind.STATE
     assert bad.id in stored.stop.reason
 
 
-def test_an_approval_refuses_an_unreadable_selected_rule_before_its_baseline_reads_it(picking):
-    bad = picking.put(legacy_ambiguous())
-    message = decisions_gate.unworded(decisions_gate.loaded(picking.store), Change(slug="notes"))
+def test_an_approval_refuses_an_unreadable_selected_rule_before_its_baseline_reads_it(shared, store):
+    bad = legacy_ambiguous()
+    write(bad, shared.root / PROJECT)
+    message = decisions_gate.unworded(decisions_gate.loaded(store), Change(slug="notes"))
     assert bad.id in message
     assert "unresolved" in message
 
 
 def test_an_approval_refused_for_an_unreadable_rule_says_and_logs_its_whole_fault(
-    picking, monkeypatch, caplog, whole_error
+    shared, store, monkeypatch, caplog, whole_error
 ):
     """#895: the wording fault the gate stops on whole reaches the approval's refusal and host.log whole too."""
-    picking.put(legacy_ambiguous())
+    write(legacy_ambiguous(), shared.root / PROJECT)
     monkeypatch.setattr(decisions_gate, "problem", lambda _d: whole_error)
-    message = decisions_gate.unworded(decisions_gate.loaded(picking.store), Change(slug="notes"))
+    message = decisions_gate.unworded(decisions_gate.loaded(store), Change(slug="notes"))
     expected = f"the full decision wording is unresolved: {whole_error}"
     assert message == expected
     assert [r.getMessage() for r in caplog.records if r.name == decisions_gate.__name__] == [
         f"brief approval refused: {expected}"
     ]
-
-
-def test_the_pinned_wording_saved_with_an_approval_is_the_whole_answer():
-    rule = archived()
-    pin = DecisionBaseline(commit="c", at=AT, revisions={rule.id: rule.rule_revision}, said={}, picked=False)
-    assert decision_publication._pinned(pin, [rule]).said[rule.id].statement == TEXT  # noqa: SLF001
 
 
 def head(root) -> str:
@@ -410,22 +409,6 @@ def test_an_unreadable_rule_recorded_after_the_pick_passes_approval_and_stops_th
     assert (stop.kind, stop.action) == (ErrorKind.STATE, decisions_gate.FAULTY)
     assert bad.id in stop.reason
     assert len(picking.pickers()) == 1
-
-
-def test_an_approval_saves_the_whole_wording_of_a_long_project_rule_in_its_baseline(picking):
-    picking.save(
-        decisions=[{"question": "Where are notes stored?", "answer": TEXT, "origin": "decided", "scope": "project"}]
-    )
-    rule_id = picking.change().brief.decisions[0].id
-    assert picking.ask(1).status_code == 200
-    picking.verdicts.append(tools.ReviewResult(verdict="pass"))
-    picking.step()
-
-    assert picking.approve(1).status_code == 200
-
-    saved = picking.approved()
-    assert saved.decisions_baseline.said[rule_id].statement == TEXT
-    assert decision_archive.whole(decision_store.load(picking.shared, PROJECT).snapshot.get(rule_id).decision) == TEXT
 
 
 CANON = "Keep the literal ellipsis\u2026"

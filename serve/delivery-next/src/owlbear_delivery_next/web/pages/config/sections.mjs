@@ -158,10 +158,13 @@ function unsetSection() {
     ? html` <a href=${`#${id}`}>and ${keys.length - FIRST} more</a>` : nothing;
   const item = ([id, label], keys) => html`<li id=${`unset-${id}`}><strong>${label}</strong>, ${
     keys.length} unset: ${keys.slice(0, FIRST).map(link)}${more(id, keys)}</li>`;
+  const repairs = unset.filter((key) => key.startsWith("agents.repairer.")).length;  // D-01M6SY11CY5SN5ZKYJNM0K6BDM
+  const waits = repairs === unset.length ? "until then only a stuck step's repair waits; other work goes on"
+    : `until then the project's work waits${repairs ? " (the repairer's hold only a repair)" : ""}`;
   return html`<section class="panel" id="unset" aria-labelledby="unset-title">${heading}
     <p-text color="error">${unset.length} setting${unset.length === 1 ? " is" : "s are"} unset. Code ships no
-      defaults: set ${unset.length === 1 ? "it" : "each"} in its group, best in the global layer; until then the
-      project's work waits. Each name below opens its setting.</p-text>
+      defaults: set ${unset.length === 1 ? "it" : "each"} in its group, best in the global layer; ${waits}.
+      Each name below opens its setting.</p-text>
     <ul id="unset-groups">${GROUPS.map((g) => [g, unset.filter((key) => groupOf(rowOf(key)) === g[0])])
       .filter(([, keys]) => keys.length).map(([g, keys]) => item(g, keys))}</ul>
     ${unread ? html`<p-text size="xs" id="unset-machine">${state.machineUnread ? "This machine's settings could not "
@@ -268,11 +271,13 @@ export function route(initial = false) {
 
 export function view() {
   const loaded = state.loaded;
+  const error = [state.error, state.layerNotice].filter(Boolean).join("\n\n");
   if (loaded && !loaded.global_location && state.layer === "global") state.layer = "project";
   // The outside reads keep one slot before and after the layers load, so their list keeps its nodes and the focus an
   // address gave it; a layer that does not read keeps Read again and why.
   return html`
-    <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
+    <p-inline-notification id="error" class="failure-detail" state="error" dismiss-button="false"
+      ?hidden=${state.saving || !error}>${error}
     </p-inline-notification>
     <p-text id="status" role="status" aria-live="polite">${state.status}</p-text>
     ${loaded ? html`${scopeSection()}${groupNav()}${filterBar()}` : nothing}

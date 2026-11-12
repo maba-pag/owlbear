@@ -91,17 +91,23 @@ def tightening_asked() -> m.Change:
 def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
     store = Store(tmp_path)
     store.write(Lock(SLUG), approved())
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
-    server = uvicorn.Server(
-        uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning", timeout_keep_alive=60)
-    )
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    yield store, f"http://127.0.0.1:{sock.getsockname()[1]}"
-    server.should_exit = True
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
+        server = uvicorn.Server(
+            uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning", timeout_keep_alive=60)
+        )
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            yield store, f"http://127.0.0.1:{sock.getsockname()[1]}"
+        finally:
+            server.should_exit = True
+            thread.join(5)
+            assert not thread.is_alive(), "the owned page server did not stop"
 
 
 @contextlib.contextmanager

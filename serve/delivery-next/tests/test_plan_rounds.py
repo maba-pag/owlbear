@@ -19,7 +19,6 @@ from owlbear_delivery_next.change_contracts.models import (
     Exit,
     Names,
     Plan,
-    Question,
     Step,
     StepKind,
     Task,
@@ -34,7 +33,7 @@ from owlbear_delivery_next.change_contracts.round_records import (
     Verdict,
 )
 from owlbear_delivery_next.change_contracts.tools import Worktree
-from owlbear_delivery_next.change_flow import disputes, loop, plan_rounds, round_flow, round_marks, versions
+from owlbear_delivery_next.change_flow import disputes, loop, plan_rounds, round_flow, round_marks
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
@@ -130,7 +129,7 @@ def review(*places: str, upheld: dict[str, bool] | None = None) -> tools.ReviewR
                               rechecked=judged)  # fmt: skip
 
 
-def test_a_rejection_the_next_round_upholds_goes_to_the_owner_and_his_fix_is_never_rejected(store, change_repo, mp):
+def test_a_rejection_the_next_round_upholds_is_delegated_and_its_fix_is_never_rejected(store, change_repo, mp):
     s = mp
     s.plans += [plan(1), plan(1, {"F1": "t1's check covers it"}), plan(2)]
     s.reviews += [review("t1"), review(upheld={"F1": True})]
@@ -146,16 +145,14 @@ def test_a_rejection_the_next_round_upholds_goes_to_the_owner_and_his_fix_is_nev
     assert "## Rejections to judge" in challenger
     assert "Planner's reason: t1's check covers it" in challenger
     assert s.told[-1][1].rechecks == ("F1",)
-    assert c.outcome.exit == Exit.ASK
-    q = next(q for q in c.questions if q.answer is None)
-    assert [o.id for o in q.options] == ["fix", "reconsider", "drop"]
-    assert (c.loops[PLAN].round, c.loops[PLAN].findings[0].state) == (2, "escalated")
-    c = answer(store, "fix", "keep one task per check")
+    assert (c.outcome.exit, c.questions) == (Exit.RETRY, [])
+    assert (c.loops[PLAN].round, c.loops[PLAN].findings[0].state) == (2, "owner-fix")
+    assert c.loops[PLAN].findings[0].note == plan_rounds.DELEGATED
     assert (c.step.kind, c.step.mode, c.loops[PLAN].findings[0].state) == (K.PLAN, None, "owner-fix")
     c = step(store, change_repo)
     planner = s.said("plan")
     assert "[the owner's]" in planner
-    assert "keep one task per check" in planner
+    assert plan_rounds.DELEGATED in planner
     assert "## Rejecting" not in planner
     assert s.told[-1][1].rejectable == ()
     assert s.told[-1][1].settled == ("F1",)
@@ -277,67 +274,56 @@ def test_a_wrong_premise_in_the_check_is_revised_for_and_the_check_never_runs_ag
     )
 
 
-def test_a_check_at_the_maximum_whose_upheld_rejection_the_owner_drops_ends_the_loop_at_max(store, change_repo, mp):
+def test_a_check_at_the_maximum_whose_upheld_rejection_delivery_keeps_is_revised_at_max(store, change_repo, mp):
     c = store.read("c1")
     c.loops[PLAN].policy = RoundPolicy(max_rounds=1, max_findings=5, last_round_at=0, ask_owner_at=2)
     store.write(Lock("c1"), c)
-    mp.plans += [plan(1), plan(2, {"F1": "no"})]
+    mp.plans += [plan(1), plan(2, {"F1": "no"}), plan(3)]
     mp.reviews += [review("t1"), review(upheld={"F1": True})]
     step(store, change_repo)
-    step(store, change_repo)
-    answer(store, "drop", "fine as planned")
+    c = step(store, change_repo)
+    assert (c.questions, c.loops[PLAN].findings[0].state) == ([], "owner-fix")
     c = step(store, change_repo)
     lp = c.loops[PLAN]
     assert (lp.findings[0].state, lp.round, lp.unreviewed, lp.ended, c.step.kind) == (
-        "owner-drop", 1, ["r1"], "max", K.BUILD
+        "fixed", 1, ["r1"], "max", K.BUILD
     )  # fmt: skip
 
 
-def test_after_the_last_round_the_owner_has_another_round_or_a_new_plan(store, change_repo, mp):
+def test_after_the_last_round_many_findings_stop_without_asking_for_another_round(store, change_repo, mp):
     c = store.read("c1")
     c.loops[PLAN].policy = RoundPolicy(max_rounds=1, max_findings=5, last_round_at=0, ask_owner_at=1)
     store.write(Lock("c1"), c)
-    mp.plans += [plan(1), plan(1, {"F1": "no"}), plan(3)]
-    mp.reviews += [review("t1"), review(upheld={"F1": False}), review()]
+    mp.plans += [plan(1), plan(1, {"F1": "no"})]
+    mp.reviews += [review("t1"), review(upheld={"F1": False})]
     step(store, change_repo)
     c = step(store, change_repo)
-    assert (mp.told[-1][1].cap, mp.told[-1][1].rechecks) == (0, ("F1",))  # TD-330: judged before the owner
-    q = next(q for q in c.questions if q.answer is None)
-    assert [o.id for o in q.options] == ["another", "retry"]
-    assert "F1 rejected; the challenger accepted that (no)" in q.text
-    assert versions.plan(c)["versions"][-1]["state"] == "waits"  # the Change page marks the version the owner holds
-    c = answer(store, "another")
-    assert (c.step.mode, c.loops[PLAN].extra) == ("challenge", 1)
-    c = step(store, change_repo)
-    assert mp.kinds()[-1] == "challenge"  # no planner session for another round
-    assert (c.loops[PLAN].findings[0].state, c.loops[PLAN].round, c.step.kind) == ("standing", 2, K.BUILD)
+    assert (mp.told[-1][1].cap, mp.told[-1][1].rechecks) == (0, ("F1",))
+    assert (c.outcome.exit, c.questions, c.stop.action) == (Exit.STOP, [], "Run the step again")
+    assert c.stop.reason.startswith(plan_rounds.LAST_STOP)
+    assert "F1 rejected; the challenger accepted that (no)" in c.stop.reason
+    assert (c.loops[PLAN].findings[0].state, c.loops[PLAN].round) == ("standing", 1)
+    assert loop.next_step(c, datetime.now(UTC)) is None
 
 
-def test_plan_again_from_the_brief_is_a_new_attempt_told_why_without_the_old_plan(store, change_repo, mp):
+def test_a_last_round_stop_keeps_the_plan_and_attempt_instead_of_starting_a_new_plan(store, change_repo, mp):
     c = store.read("c1")
     c.loops[PLAN].policy = RoundPolicy(max_rounds=1, max_findings=5, last_round_at=0, ask_owner_at=1)
     store.write(Lock("c1"), c)
-    mp.plans += [plan(1), plan(1), plan(4)]
-    mp.reviews += [review("t1"), review()]
+    mp.plans += [plan(1), plan(1)]
+    mp.reviews += [review("t1")]
     step(store, change_repo)
-    step(store, change_repo)
-    c = store.read("c1")
-    orphan = Question(step=K.PLAN, text="old", options=plan_rounds.OPTIONS, cause=f"{plan_rounds.DISPUTE}1 F9")
-    c.questions.append(orphan.model_copy(update={"id": "q9"}))
-    store.write(Lock("c1"), c)
-    c = answer(store, "retry")
-    assert c.questions[-1].answer.option == plan_rounds.RETIRED  # a question of the attempt that ended
+    c = step(store, change_repo)
     lp = c.loops[PLAN]
-    assert (lp.attempt, lp.round, [h.ended for h in lp.history]) == (2, 0, ["retried"])
-    c = step(store, change_repo)
-    planner = mp.said("plan")
-    assert "## Why the Change is planned again" in planner
-    assert "challenge round 1" in planner
-    assert "## Your previous plan" not in planner
-    assert (c.step.kind, len(c.plan.tasks)) == (K.BUILD, 4)
+    assert (c.outcome.exit, c.questions, lp.attempt, lp.round, lp.history) == (Exit.STOP, [], 1, 1, [])
+    assert c.stop.reason.startswith(plan_rounds.LAST_STOP)
+    assert "F1 revised for, not challenged again" in c.stop.reason
+    assert (c.plan.version, len(c.plan.tasks)) == (2, 1)
+    assert mp.kinds() == ["plan", "challenge", "plan"]
+    assert loop.next_step(c, datetime.now(UTC)) is None
 
 
-def test_a_reconsideration_clarifies_or_returns_unsure_once_and_a_drop_settles_the_plan(store, change_repo, mp):
+def test_an_already_asked_dispute_is_reconsidered_once_and_an_unsure_one_is_delivery_s(store, change_repo, mp):
     mp.plans += [plan(1, scope="lib"), plan(1, {"F1": "no"}), plan(2)]
     mp.reviews += [review("t1"), review(upheld={"F1": True})]
     mp.reconsiders += [
@@ -345,42 +331,52 @@ def test_a_reconsideration_clarifies_or_returns_unsure_once_and_a_drop_settles_t
     ]
     step(store, change_repo)
     step(store, change_repo)
+    c = store.read("c1")
+    lp = c.loops[PLAN]
+    lp.findings[0].state, lp.findings[0].note = "escalated", ""
+    loop.ask(c, plan_rounds.question(lp, lp.findings[0]), NOW)  # a dispute persisted before delegation was introduced
+    store.write(Lock("c1"), c)
     c = answer(store, "reconsider")
     assert c.outcome.exit == Exit.ASK  # a reconsideration needs the owner's note
     c = answer(store, "reconsider", "the brief says one task")
     assert c.step.mode == "reconsider"
     c = step(store, change_repo)
     assert "The owner's note: the brief says one task" in mp.said("reconsider")
-    q = next(q for q in c.questions if q.answer is None)
-    assert [o.id for o in q.options] == ["fix", "drop"]  # reconsidered once
-    c = answer(store, "drop", "fine as is")
-    assert (c.step.mode, c.loops[PLAN].findings[0].state) == ("settled", "owner-drop")
+    assert (loop.open_question(c), len(c.questions)) == (None, 1)  # reconsidered once, then decided, never asked
+    f = c.loops[PLAN].findings[0]
+    assert (f.state, f.clarified) == ("owner-fix", "")
+    assert f.note == f"{plan_rounds.DELEGATED}. The challenger was unsure: only the owner knows"
     c = step(store, change_repo)
-    assert mp.kinds() == ["plan", "challenge", "plan", "challenge", "reconsider"]
-    assert (c.step.kind, len(c.plan.tasks)) == (K.BUILD, 1)
-    assert [o.other for o in c.overlaps] == ["c2"]  # recorded with the plan, before its challenge asked
+    assert mp.kinds() == ["plan", "challenge", "plan", "challenge", "reconsider", "plan"]
+    assert f"> F1. {f.text}" in mp.said("plan")  # the original finding, not the challenger's doubt
 
 
-def test_a_premise_the_reconsidering_challenger_reports_goes_to_the_owner_as_unsure(store, change_repo, mp):
+def test_an_already_asked_disputes_reconsidered_premise_is_decided_by_delivery_as_unsure(store, change_repo, mp):
     mp.plans += [plan(1), plan(1, {"F1": "no"})]
     mp.reviews += [review("t1"), review(upheld={"F1": True})]
     mp.reconsiders += [tools.WrongPremise(stage="brief", reason="AC-1 contradicts AC-2", evidence=["brief"])]
     step(store, change_repo)
     step(store, change_repo)
+    c = store.read("c1")
+    lp = c.loops[PLAN]
+    lp.findings[0].state, lp.findings[0].note = "escalated", ""
+    loop.ask(c, plan_rounds.question(lp, lp.findings[0]), NOW)  # a dispute persisted before delegation was introduced
+    store.write(Lock("c1"), c)
     answer(store, "reconsider", "look again")
     c = step(store, change_repo)
-    q = next(q for q in c.questions if q.answer is None)
-    assert ([o.id for o in q.options], c.loops[PLAN].findings[0].clarified) == (
-        ["fix", "drop"], "premise: AC-1 contradicts AC-2"
-    )  # fmt: skip
+    f = c.loops[PLAN].findings[0]
+    assert [q for q in c.questions if q.answer is None] == []
+    assert (f.state, f.clarified) == ("owner-fix", "")
+    assert f.note.endswith("The challenger was unsure: premise: AC-1 contradicts AC-2")
 
 
-def test_the_planner_whose_rejection_the_owner_overrules_revises_with_its_own_repair_chance(store, change_repo, mp):
+def test_the_planner_whose_rejection_delivery_overrules_revises_with_its_own_repair_chance(store, change_repo, mp):
     mp.plans += [plan(1), plan(1), plan(1, {"F2": "no"}), plan(2)]
     mp.reviews += [review("t1"), review("t2"), review(upheld={"F2": True})]
     for _ in range(3):
         step(store, change_repo)
-    answer(store, "fix")
+    assert store.read("c1").questions == []
+    assert store.read("c1").loops[PLAN].findings[-1].note == plan_rounds.DELEGATED
     c = step(store, change_repo)
     planners = [cfg for k, cfg in mp.told if k == "plan"]
     assert [cfg.resume for cfg in planners] == [False, True, False, True]  # each producer once (TD-123)
@@ -388,7 +384,7 @@ def test_the_planner_whose_rejection_the_owner_overrules_revises_with_its_own_re
     assert c.step.kind == K.BUILD
 
 
-def test_a_clarified_finding_goes_to_the_planner_as_the_owners(store, change_repo, mp):
+def test_an_already_asked_disputes_clarified_finding_goes_to_the_planner_as_the_owners(store, change_repo, mp):
     mp.plans += [plan(1), plan(1, {"F1": "no"}), plan(2)]
     mp.reviews += [review("t1"), review(upheld={"F1": True})]
     mp.reconsiders += [
@@ -398,6 +394,11 @@ def test_a_clarified_finding_goes_to_the_planner_as_the_owners(store, change_rep
     ]
     step(store, change_repo)
     step(store, change_repo)
+    c = store.read("c1")
+    lp = c.loops[PLAN]
+    lp.findings[0].state, lp.findings[0].note = "escalated", ""
+    loop.ask(c, plan_rounds.question(lp, lp.findings[0]), NOW)  # a dispute persisted before delegation was introduced
+    store.write(Lock("c1"), c)
     answer(store, "reconsider", "narrow it")
     c = step(store, change_repo)
     assert (c.step.mode, c.loops[PLAN].findings[0].state) == (None, "owner-fix")
@@ -405,16 +406,17 @@ def test_a_clarified_finding_goes_to_the_planner_as_the_owners(store, change_rep
     assert "> F1. t1: AC-1 edge [the owner's]" in mp.said("plan")
 
 
-def test_an_upheld_rejection_whose_question_a_stop_replaced_is_asked_again_before_any_planning(store, change_repo, mp):
-    mp.plans += [plan(1), plan(1, {"F1": "no"})]
+def test_a_delegated_upheld_rejection_survives_replaced_outcome_without_asking_again(store, change_repo, mp):
+    mp.plans += [plan(1), plan(1, {"F1": "no"}), plan(2)]
     mp.reviews += [review("t1"), review(upheld={"F1": True})]
     step(store, change_repo)
     c = step(store, change_repo)
-    c.outcome = None  # a stop and its recovery took the question's place
+    c.outcome = None  # a stop and its recovery took the delegated outcome's place
     store.write(Lock("c1"), c)
     c = step(store, change_repo)
-    assert (mp.kinds(), c.outcome.exit) == (["plan", "challenge", "plan", "challenge"], Exit.ASK)
-    assert [q.cause for q in c.questions if q.answer is None] == [f"{plan_rounds.DISPUTE}1 F1"] * 2
+    assert mp.kinds() == ["plan", "challenge", "plan", "challenge", "plan"]
+    assert (c.questions, c.step.kind, c.loops[PLAN].findings[0].state) == ([], K.BUILD, "fixed")
+    assert plan_rounds.DELEGATED in mp.said("plan")
 
 
 def test_a_plan_question_settles_only_while_it_is_the_open_one_and_retires_with_its_attempt():
@@ -429,7 +431,7 @@ def test_a_plan_question_settles_only_while_it_is_the_open_one_and_retires_with_
     assert (c.questions[0].answer, c.loops[PLAN].findings[1].state) == (None, "escalated")  # not the open question
     c = loop.fold(c, [AnswerItem(at=NOW, question="q2", option="drop")], NOW)
     assert c.loops[PLAN].findings[0].state == "owner-drop"
-    assert c.outcome.question == "q3"  # the next undecided finding, asked anew
+    assert (c.loops[PLAN].findings[1].state, c.outcome.exit) == ("owner-fix", Exit.RETRY)  # Delivery's, not asked
     c.loops[PLAN].ended = "replanned"
     plan_rounds.accepted(c, NOW)
     assert all(q.answer is not None for q in c.questions)  # retired with the attempt

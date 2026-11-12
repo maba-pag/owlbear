@@ -182,11 +182,18 @@ def test_batch_rejects_physical_deletion_of_live_reviewed_entry(tmp_path: Path) 
     untracked_relative = str(untracked_path.relative_to(tmp_path))
     _git(tmp_path, "add", "--", relative_path)
     _git(tmp_path, "commit", "-m", "initial memory")
+    initial_head = _git(tmp_path, "rev-parse", "HEAD")
     reviewed_path.unlink()
 
-    with pytest.raises(ValueError, match="physical deletion is only allowed"):
+    with pytest.raises(ValueError, match="physical deletion is only allowed") as raised:
         commit_batch(memory_dir, session_type="curation")
 
+    message = str(raised.value)
+    assert message.startswith("memory batch validation failed:")
+    assert f"pending or deleted entries {relative_path}; HEAD state is approved" in message
+    assert f"Restore the file from HEAD with `git restore --source=HEAD -- {relative_path}`" in message
+    assert "soft-delete it, commit the batch, then purge" in message
+    assert _git(tmp_path, "rev-parse", "HEAD") == initial_head
     assert _git(tmp_path, "diff", "--cached", "--name-only") == ""
     status = _git(tmp_path, "status", "--porcelain", "--", ".owlbear/memory")
     assert f"D {relative_path}" in status

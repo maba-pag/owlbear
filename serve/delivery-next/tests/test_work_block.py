@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from typing import TYPE_CHECKING
 
 import pytest
@@ -34,12 +33,7 @@ def poll_unset(monkeypatch):
 
 @pytest.fixture
 def store(tmp_path: Path) -> Store:
-    for args in (
-        ["init", "-q"],
-        ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"],
-    ):
-        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)  # noqa: S603, S607
-    return Store.open(tmp_path)
+    return Store(tmp_path)
 
 
 def polls(store: Store, seconds: int) -> None:

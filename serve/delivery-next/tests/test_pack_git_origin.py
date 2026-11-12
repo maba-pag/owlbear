@@ -55,9 +55,8 @@ def assert_no_tracking_ref(bare):
     assert absent.returncode == 1
 
 
-@pytest.mark.parametrize("rev", ["HEAD~1", "HEAD"])
-def test_installed_detached_runtime_on_main_needs_no_tracking_reference(origin, tmp_path, rev):
-    pinned = git(origin, "rev-parse", rev)
+def test_detached_install_uses_pinned_main_without_tracking_ref(origin, tmp_path):
+    pinned = git(origin, "rev-parse", "HEAD~1")
     runtime = installed(tmp_path, pinned)
     assert git(versions.repo(), "show-ref", "--verify", "refs/heads/main")
     assert_no_tracking_ref(versions.repo())
@@ -69,6 +68,11 @@ def test_installed_detached_runtime_on_main_needs_no_tracking_reference(origin, 
     assert git(runtime, "rev-parse", "HEAD") == pinned
     assert git(runtime, "status", "--porcelain") == before
     assert_no_tracking_ref(versions.repo())
+    clone = tmp_path / "normal"
+    git(tmp_path, "clone", "-q", GITHUB, str(clone))
+    normal = pack_git.source(clone)
+    assert normal.base == git(origin, "rev-parse", "HEAD")
+    assert git(clone, "rev-parse", "origin/main") == normal.base
 
 
 def test_installed_runtime_off_main_is_refused(origin, tmp_path):
@@ -121,50 +125,30 @@ def test_a_failed_exact_fetch_remains_an_explicit_refusal(origin, tmp_path):
     assert len(attempted) == 1
 
 
-def test_normal_clone_still_works(origin, tmp_path):
-    clone = tmp_path / "normal"
-    git(tmp_path, "clone", "-q", GITHUB, str(clone))
-    source = pack_git.source(clone)
-    assert source.base == git(origin, "rev-parse", "HEAD")
-    assert git(clone, "rev-parse", "origin/main") == source.base
-
-
-def test_a_newer_main_after_fetch_cannot_replace_the_fetched_snapshot(origin, tmp_path):
-    clone = tmp_path / "normal"
-    git(tmp_path, "clone", "-q", GITHUB, str(clone))
+@pytest.mark.parametrize("layout", ["normal-after-fetch", "installed-before-fetch"])
+def test_remote_advance_cannot_change_captured_source(origin, tmp_path, layout):
     captured = git(origin, "rev-parse", "HEAD")
+    if layout == "normal-after-fetch":
+        root = tmp_path / "normal"
+        git(tmp_path, "clone", "-q", GITHUB, str(root))
+    else:
+        root = installed(tmp_path, captured)
     advanced = []
 
     def advancing(cwd, args):
+        if args[0] == "fetch" and layout == "installed-before-fetch":
+            git(origin, "commit", "-q", "--allow-empty", "-m", "new main before fetch")
+            advanced.append(git(origin, "rev-parse", "HEAD"))
         result = pack_git.git(cwd, args)
-        if args[0] == "fetch" and not advanced:
+        if args[0] == "fetch" and layout == "normal-after-fetch":
             git(origin, "commit", "-q", "--allow-empty", "-m", "new main after fetch")
             advanced.append(git(origin, "rev-parse", "HEAD"))
         return result
 
-    source = pack_git.source(clone, run=advancing)
-
+    source = pack_git.source(root, run=advancing)
     assert advanced[0] != captured
     assert source.base == captured
-    assert git(clone, "rev-parse", "HEAD") == captured
-
-
-def test_bare_source_capture_stays_valid_when_main_advances_before_exact_fetch(origin, tmp_path):
-    runtime = installed(tmp_path, git(origin, "rev-parse", "HEAD"))
-    pinned = git(runtime, "rev-parse", "HEAD")
-    advanced = []
-
-    def advancing(cwd, args):
-        if args[0] == "fetch" and not advanced:
-            git(origin, "commit", "-q", "--allow-empty", "-m", "new main before fetch")
-            advanced.append(git(origin, "rev-parse", "HEAD"))
-        return pack_git.git(cwd, args)
-
-    source = pack_git.source(runtime, run=advancing)
-
-    assert source.base == pinned
-    assert advanced[0] != pinned
-    assert git(runtime, "rev-parse", "HEAD") == pinned
+    assert git(root, "rev-parse", "HEAD") == captured
 
 
 @pytest.mark.parametrize("reply", ["", "not-an-object refs/heads/main", "a" * 40 + "\trefs/heads/other"])

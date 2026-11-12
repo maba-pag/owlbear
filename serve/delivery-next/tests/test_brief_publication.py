@@ -134,25 +134,6 @@ def _together(*children: subprocess.Popen[str]) -> list[Any]:
                 child.wait()
 
 
-def test_same_title_creates_in_threads_keep_both_under_distinct_handles(repo):
-    store = Store.open(repo)
-    store.issued()
-    barrier = threading.Barrier(2, timeout=10)
-
-    def create() -> tuple[int, dict[str, Any]]:
-        barrier.wait()
-        return briefs.save_brief(store, brief("Same title"))
-
-    with ThreadPoolExecutor(max_workers=2) as workers:
-        pending = [workers.submit(create) for _ in range(2)]
-        results = [future.result(timeout=15) for future in pending]
-    assert sorted(code for code, _ in results) == [200, 200]
-    assert sorted(body["slug"] for _, body in results) == ["same-title", "same-title-2"]
-    assert sorted(body["change"] for _, body in results) == ["c1", "c2"]
-    assert all(store.read(body["slug"]).handle == body["change"] for _, body in results)
-    assert store.issued() == 2
-
-
 def test_same_title_creates_in_two_processes_keep_both_under_distinct_handles(repo):
     store = Store.open(repo)
     store.issued()
@@ -160,6 +141,7 @@ def test_same_title_creates_in_two_processes_keep_both_under_distinct_handles(re
     assert sorted(code for code, _ in answers) == [200, 200]
     assert sorted(body["slug"] for _, body in answers) == ["same-title", "same-title-2"]
     assert sorted(body["change"] for _, body in answers) == ["c1", "c2"]
+    assert all(store.read(body["slug"]).handle == body["change"] for _, body in answers)
     assert store.issued() == 2
 
 

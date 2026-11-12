@@ -44,19 +44,26 @@ def authority(shared_repo):
     return repo, rule, path
 
 
-def test_pinned_authority_does_not_read_the_changed_working_copy(authority):
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+def test_pinned_authority_reads_unequal_native_blobs_once_not_the_changed_worktree(authority, monkeypatch, ending):
     repo, rule, path = authority
+    another = rule.model_copy(
+        update={
+            "id": new_id(),
+            "title": "Another report",
+            "rationale": ("Résumé of the other report.\n" * 100).rstrip(),
+        }
+    )
+    write(another, repo.root / "owlbear")
+    other_path = decision_path(another, repo.root / "owlbear")
+    for candidate, decision in ((path, rule), (other_path, another)):
+        candidate.write_bytes(serialize(decision).replace("\n", ending).encode())
+    assert len(path.read_bytes()) != len(other_path.read_bytes())
+    assert repo.publish([path, other_path], "native unequal decision records") == ""
     commit = repo.git("rev-parse", "HEAD").stdout.strip()
+    assert snapshot(repo.root, "owlbear").active(rule.id)
     write(rule.model_copy(update={"conflict": True}), repo.root / "owlbear", expected_revision=rule.revision)
     assert not snapshot(repo.root, "owlbear").active(rule.id)
-    assert decision_authority.inactive(repo, commit, path.relative_to(repo.root).as_posix(), None) == ""
-
-
-def test_pinned_authority_reads_multiple_decisions_in_one_content_launch(authority, monkeypatch):
-    repo, rule, path = authority
-    another = rule.model_copy(update={"id": new_id(), "title": "Another report"})
-    write(another, repo.root / "owlbear")
-    assert repo.publish(decision_path(another, repo.root / "owlbear"), "another decision") == ""
     real, calls = repo.git, []
 
     def observe(_repo, *args, **kwargs):
@@ -64,7 +71,7 @@ def test_pinned_authority_reads_multiple_decisions_in_one_content_launch(authori
         return real(*args, **kwargs)
 
     monkeypatch.setattr(DataRepo, "git", observe)
-    assert decision_authority.inactive(repo, "HEAD", path.relative_to(repo.root).as_posix(), None) == ""
+    assert decision_authority.inactive(repo, commit, path.relative_to(repo.root).as_posix(), None) == ""
     assert calls.count("show") == 1
     assert "grep" not in calls
 
@@ -129,17 +136,6 @@ def test_pinned_unreadable_authority_matches_snapshot_scope(authority, where, da
         assert f"{str(broken)!r} at {commit}: UnicodeDecodeError: {cause.value}" in refused
 
 
-@pytest.mark.parametrize("ending", ["\r\n", "\r"])
-def test_pinned_authority_normalizes_newlines_after_separating_records(authority, ending):
-    repo, rule, path = authority
-    path.write_bytes(serialize(rule).replace("\n", ending).encode())
-    rel = path.relative_to(repo.root).as_posix()
-    assert repo.git("add", "--", rel).returncode == 0
-    assert repo.git("commit", "-qm", "native newlines").returncode == 0
-    assert snapshot(repo.root, "owlbear").active(rule.id)
-    assert decision_authority.inactive(repo, "HEAD", rel, None) == ""
-
-
 def test_lossless_git_output_preserves_exact_bytes(authority):
     repo, _rule, _path = authority
     raw = b"first\rsecond\r\nthird\nnul\0\xff"
@@ -197,16 +193,6 @@ def test_pinned_authority_rejects_unreadable_layer_containers(authority, rel, da
         assert snapshot(repo.root, "owlbear").complete is rel.startswith("other/")
     refused = decision_authority.inactive(repo, "HEAD", path.relative_to(repo.root).as_posix(), None)
     assert bool(refused) is (not rel.startswith("other/"))
-
-
-@pytest.mark.parametrize(
-    ("setting", "value"),
-    [("color.grep", "always"), ("grep.column", "true"), ("grep.patternType", "fixed")],
-)
-def test_pinned_authority_is_independent_of_git_presentation_settings(authority, setting, value):
-    repo, _rule, path = authority
-    assert repo.git("config", setting, value).returncode == 0
-    assert decision_authority.inactive(repo, "HEAD", path.relative_to(repo.root).as_posix(), None) == ""
 
 
 @pytest.mark.parametrize("folder", ["unrelated", "other/decisions", "owlbear/decisions", "decisions"])

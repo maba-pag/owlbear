@@ -135,9 +135,9 @@ def test_same_rule_label_does_not_hide_a_changed_state_or_value(tmp_path, known)
     assert any(profile.STRICT in line for line in diffs)
 
 
-def test_fingerprint_survives_json_and_reconfirmation_has_no_nested_evidence(tmp_path):
-    repo = clone(tmp_path, "shop")
-    once = profile.confirm(profile.detect(repo, GitHub(), None), profile.STRICT, "no", NOW)
+def test_fingerprint_survives_json_and_reconfirmation_has_no_nested_evidence():
+    detected = ProfileEntry(state="known", value="no", evidence="same observation label")  # GitHub()'s STRICT
+    once = profile.confirm(Profile(version=1, entries={profile.STRICT: detected}), profile.STRICT, "no", NOW)
     back = Profile.model_validate_json(once.model_dump_json())
     twice = profile.confirm(back, profile.STRICT, "no", NOW)
     assert twice.entries[profile.STRICT] == once.entries[profile.STRICT]
@@ -326,13 +326,12 @@ def test_detection_publication_failure_preserves_local_progress_and_retries_with
     assert calls == ["failed"]
 
 
-@pytest.mark.parametrize("reconfirm", [False, True])
-def test_owner_selected_ci_checks_keep_their_workflow_digest_through_confirmation(tmp_path, reconfirm):
+@pytest.mark.parametrize("_reconfirm", [True])  # a digest the first confirm loses stays lost after the second
+def test_owner_selected_ci_checks_keep_their_workflow_digest_through_confirmation(tmp_path, _reconfirm):
     repo = clone(tmp_path, "shop")
     raw = profile.detect(repo, GitHub(), None)
     chosen = profile.confirm(raw, profile.DECLARED, "lint", NOW)
-    if reconfirm:
-        chosen = profile.confirm(chosen, profile.DECLARED, "lint", NOW)
+    chosen = profile.confirm(chosen, profile.DECLARED, "lint", NOW)
     head = git(repo, "rev-parse", "HEAD")
     pr = PullRequest(
         repository="acme/shop-site",

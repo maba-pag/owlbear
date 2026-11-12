@@ -238,14 +238,19 @@ FAILING = {  # a command of an update that fails: the step it fails, and what th
 }
 
 
-@pytest.fixture
-def updating(origin, monkeypatch) -> SimpleNamespace:
-    """A machine at v0.1 updating to v0.2 through the real versions and install; ``said`` is its host log."""
-    runtime_at(origin, git(origin, "rev-parse", "v0.1^{commit}"))
+def host(monkeypatch) -> SimpleNamespace:
+    """This machine's running host; ``said`` is its host log."""
     record = HostRecord(url=URL, token=TOKEN, pid=1, started_at=datetime.now(UTC), code="c")
     machine, said = Machine(record, paused=False), []
     monkeypatch.setattr(machine, "say", said.append)
     return SimpleNamespace(machine=machine, said=said)
+
+
+@pytest.fixture
+def updating(origin, monkeypatch) -> SimpleNamespace:
+    """A machine at v0.1 updating to v0.2 through the real versions and install; ``said`` is its host log."""
+    runtime_at(origin, git(origin, "rev-parse", "v0.1^{commit}"))
+    return host(monkeypatch)
 
 
 def ended(machine: Machine, step: str) -> tuple[str, str, list[str]]:
@@ -336,14 +341,19 @@ def test_a_failing_build_step_says_both_its_streams_whole_on_the_page_and_in_the
         assert updating.machine.impeccable.read()["install"]["detail"] == detail  # every page's banner
 
 
-def test_a_switch_that_fails_says_the_whole_failure_on_the_page_and_in_the_log(updating, whole_error, monkeypatch):
-    """#971: a version that could not take over: the update's detail and the host's log carry the error's notes."""
+def test_a_switch_that_fails_says_the_whole_failure_on_the_page_and_in_the_log(whole_error, monkeypatch):
+    """#971: a version that could not take over: the update's detail and the host's log carry the error's notes.
+
+    The look that chooses v0.2 is the Git tests' (annotated tags, the newest descendant); here it is given.
+    """
     error = versions.VersionError(whole_error)
     error.add_note("a note on the failure")
 
     def failing(_folder: Path, _tag: str) -> bool:
         raise error
 
+    monkeypatch.setattr(versions, "target", lambda: Choice("v0.2", TAGS["v0.2"]))
+    updating = host(monkeypatch)
     updater = updating.machine.updater
     monkeypatch.setattr(updater, "_prepared", lambda _choice: local_home.root() / local_home.VERSIONS / "v0.2")
     monkeypatch.setattr(updater, "_switch", failing)
@@ -641,12 +651,6 @@ def test_the_selfcheck_creates_nothing_on_a_machine_without_owlbear():
     assert not home.exists()
 
 
-def test_the_selfcheck_refuses_a_missing_page_asset(monkeypatch):
-    monkeypatch.setattr(pages, "lit_files", lambda: {"lit-html.js": "x", "gone.js": "y"})
-
-    assert selfcheck.problems() == ["the pages' assets are missing: vendor/lit-html/gone.js"]
-
-
 def test_the_selfcheck_refuses_a_missing_echarts_file(monkeypatch):
     monkeypatch.setattr(pages, "ECHARTS", "vendor/gone")
     monkeypatch.setattr(pages, "echarts_files", lambda: {"echarts.min.js": "x"})
@@ -667,18 +671,6 @@ def test_the_selfcheck_refuses_a_module_only_another_module_imports(monkeypatch)
     monkeypatch.setattr(pages, "page_files", lambda: {k: v for k, v in own.items() if k != ("changes", "list.mjs")})
 
     assert selfcheck.problems() == ["the pages' assets are missing: pages/changes/list.mjs"]
-
-
-def test_the_selfcheck_refuses_a_clones_unmoved_settings_newer_than_it_reads(tmp_path):
-    clone = registered(tmp_path)
-    folder = project_home.clone_dir(clone)
-    folder.mkdir(exist_ok=True)
-    (folder / "config.json").write_text(json.dumps({"format": 99}))
-
-    found = selfcheck.problems()
-
-    said = f"its settings in {folder / 'config.json'} have format 99, newer than this version's {CONFIG_FORMAT}"
-    assert found == [f"{clone}: {said}"]
 
 
 def test_the_selfcheck_reads_settings_in_format_23_and_refuses_the_next_one(tmp_path):

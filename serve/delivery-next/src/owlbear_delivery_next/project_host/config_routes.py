@@ -113,7 +113,8 @@ def _rev(path: Path | None) -> str:
 
 
 def _state(store: Store, notice: str = "") -> dict[str, Any]:
-    """The layers with their revisions, the resolved settings with their sources, and what is applied."""
+    """The layers and resolved settings; ``write_notice`` distinguishes an operation's notice from standing ones."""
+    write_notice = notice
     global_path = store.global_path
     try:
         glob, glob_raw = read_layer_bytes(global_path, GlobalLayer) if global_path else (None, b"")
@@ -150,6 +151,7 @@ def _state(store: Store, notice: str = "") -> dict[str, Any]:
         "global_location": global_path is not None,
         "folder": store.name or None,
         "notice": notice or (store.shared.pending() if store.shared else ""),
+        "write_notice": write_notice,
         "prefs_pending": prof is not None and prof.prefs_import == "pending",
         "settings": settings.page(),
         "recommendations": recommendations.page(),

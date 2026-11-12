@@ -169,12 +169,8 @@ def test_cause_count_survives_retry_back_replan_and_an_unobserved_answer():
     c = loop.apply(c, StepResult(exit=Exit.DONE, plan=Plan(version=2, tasks=[Task(id="t9", title="x")])), NOW)
     assert c.step.task == "t9"
     c = loop.apply(c, StepResult(exit=Exit.RETRY, cause=cause), NOW)
-    assert c.outcome.exit == Exit.ASK
-    assert [o.id for o in c.questions[-1].options] == ["revise", "narrow", "pause"]
-    c, step = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="narrow")], NOW)
-    assert step.kind == K.PLAN
-    assert c.budgets.causes[cause].count == 4
-    assert cause not in budgets.effect_observed(c, c.questions[-1].id, NOW).budgets.causes
+    assert c.budgets.causes[cause].count == 4  # counted through the retries, the step back and the re-plan
+    assert (c.repairs.current.cause, c.repairs.done[-1].stopped) == (cause, "the Change moved on to plan")  # #1066
 
 
 def test_effect_observation_clears_a_cause_once_per_answer_and_delivery_alone_clears_nothing():
@@ -279,11 +275,15 @@ def test_renamed_task_with_the_same_scope_keeps_its_review_rounds():
     assert c.outcome.exit == Exit.ASK
 
 
-def test_fourth_replan_asks():
+def test_unrelated_replans_do_not_preempt_a_new_cause_or_its_repair():
     c = change()
-    c.budgets.replans = budgets.REPLAN_LIMIT
-    c = loop.apply(c, StepResult(exit=Exit.BACK, back_to=K.PLAN, cause="scope:build:x"), NOW)
-    assert (c.step.kind, c.outcome.exit) == (K.BUILD, Exit.ASK)
+    c.budgets.replans = 3
+    r = StepResult(exit=Exit.BACK, back_to=K.PLAN, cause="scope:build:x")
+    c = loop.apply(c, r, NOW)
+    assert (c.step.kind, c.budgets.replans, c.questions) == (K.PLAN, 4, [])
+    c.step = Step(kind=K.BUILD, task="t1")
+    c = loop.apply(c, r, NOW)
+    assert (c.step.kind, c.repairs.current.cause, c.questions) == (K.BUILD, r.cause, [])
 
 
 def _asked(c):

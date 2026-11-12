@@ -152,6 +152,8 @@ def test_an_owned_partial_of_an_interrupted_staging_copy_resumes_and_is_kept_not
     interrupted_copy(monkeypatch)
     with pytest.raises(CrashError):
         move(repo, monkeypatch)
+    assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
+    assert not target.exists()
     assert (stage / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     heal(monkeypatch)
     assert move(repo, monkeypatch) == target

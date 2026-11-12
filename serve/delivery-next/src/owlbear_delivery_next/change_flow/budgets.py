@@ -27,7 +27,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.round_records import FINAL
-from owlbear_delivery_next.change_flow import curation_flow
+from owlbear_delivery_next.change_flow import curation_flow, stuck
 from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go
 
 if TYPE_CHECKING:
@@ -39,8 +39,8 @@ if TYPE_CHECKING:
 RETRY_LIMIT = 3
 FLAKE_LIMIT = 1
 ROUND_LIMIT = 2
-REPLAN_LIMIT = 3
 DEFECT_LIMIT = 3  # the same Delivery defect in a row before asking
+REPAIR_AT = 2  # one cause stopping a step this often starts its repair (D-01M6RT5QHXFM58C9BPQXEK3QFB)
 WRONG_MODEL_LIMIT = 2  # wrong models in a row before asking: one rerun (owner decision 2026-10-15)
 PAUSE = timedelta(minutes=1)
 PAUSE_CAP = timedelta(minutes=30)
@@ -169,7 +169,7 @@ def _environment(c: Change, r: StepResult, now: datetime) -> None:
     if not quota and now - (b.since or now) >= EPISODE_ASK:
         last = r.detail or r.reason
         text = f"{kind} keeps failing for {c.step.kind} since {b.since:%Y-%m-%d %H:%M}; last error: {last}"
-        ask(c, Question(step=c.step.kind, text=text, options=_resolve_or_pause(c), cause=cause), now)
+        ask(c, _internal(c, text, cause), now)
         return
     if kind == ErrorKind.CAPACITY and r.wake_at and r.wake_at > now:
         wake = r.wake_at  # a quota or rate limit resets at its own time
@@ -189,9 +189,11 @@ def _defect(c: Change, r: StepResult, now: datetime) -> None:
     b = c.budgets.causes.get(cause)
     count = b.count + 1 if b and b.signature == sig else 1
     c.budgets.causes[cause] = Budget(count=count, signature=sig, task=c.step.task, at=now)
+    if _repaired(c, r, count, now):
+        return
     if count >= DEFECT_LIMIT:
         text = f"Delivery failed the same way {count} times ({cause}): {r.reason}"
-        ask(c, Question(step=c.step.kind, text=text, options=_resolve_or_pause(c), cause=cause), now)
+        ask(c, _internal(c, text, cause), now)
     else:
         c.step.attempt += 1
 
@@ -204,9 +206,14 @@ def _wrong_model(c: Change, r: StepResult, now: datetime) -> None:
     c.budgets.causes[cause] = Budget(count=count, task=c.step.task, at=now)
     if count >= WRONG_MODEL_LIMIT:
         text = f"The step ran on the wrong model again after one rerun: {r.reason}"
-        ask(c, Question(step=c.step.kind, text=text, options=_resolve_or_pause(c), cause=cause), now)
+        ask(c, _internal(c, text, cause), now)
     else:
         c.step.attempt += 1
+
+
+def _internal(c: Change, text: str, cause: str) -> Question:
+    """Delivery's own problem: after approval the gate repairs or stops it, never asks (#1062)."""
+    return Question(step=c.step.kind, text=text, options=_resolve_or_pause(c), cause=cause, subject="internal")
 
 
 def _resolve_or_pause(c: Change) -> list[Option]:
@@ -229,12 +236,25 @@ def _exhausted(c: Change, r: StepResult, now: datetime) -> None:
     if c.tests is None and _alternative(c, r, now):
         return
     options = [
-        Option(id="revise", label="Revise the requirement", next=StepKind.SHAPE),
-        Option(id="narrow", label="Narrow the scope", next=StepKind.PLAN),
+        Option(id="revise", label="Change what this Change delivers", next=StepKind.SHAPE),
+        Option(id="narrow", label="Deliver less: narrow the scope", next=StepKind.PLAN),
         Option(id="pause", label="Pause this Change", next="pause"),
     ]
     options = curation_flow.options(c) if c.tests else options  # a test review is never revised or re-planned
-    ask(c, Question(step=c.step.kind, text=f"{r.reason} keeps failing ({cause})", options=options, cause=cause), now)
+    task = next((t.title for t in c.plan.tasks if t.id == c.step.task), "") if c.plan else ""
+    split = (b := c.budgets.causes.get(cause)) is not None and b.alternative
+    what = f"{task!r}" if task else f"the {c.step.kind} step"
+    text = (  # the product consequence in plain words; the worker's evidence stays in the outcome (#1062)
+        f"Delivery could not finish {what} after several tries{', and a smaller plan did not help' if split else ''}."
+        + (
+            " How should it go on?"
+            if c.tests
+            else " It goes on only with a smaller or different goal, or after a pause."
+        )
+    )
+    asked = ask(c, Question(step=c.step.kind, text=text, options=options, cause=cause, subject="product"), now)
+    if asked and c.outcome:
+        c.outcome.reason = f"{text}\n\nDetails: {r.reason} keeps failing ({cause})"
 
 
 def _alternative(c: Change, r: StepResult, now: datetime) -> bool:
@@ -242,7 +262,7 @@ def _alternative(c: Change, r: StepResult, now: datetime) -> bool:
     b = c.budgets.causes.get(r.cause or "")
     if b is None or b.alternative or kind_of(r.cause) not in SPLITTABLE or c.plan is None:
         return False
-    if c.step.kind in {StepKind.SHAPE, StepKind.PLAN} or c.budgets.replans >= REPLAN_LIMIT:
+    if c.step.kind in {StepKind.SHAPE, StepKind.PLAN}:
         return False
     c.budgets.replans += 1
     c.budgets.causes[r.cause or ""] = b.model_copy(update={"alternative": True})  # the next exhaustion asks
@@ -265,14 +285,26 @@ def _round(c: Change, r: StepResult, now: datetime) -> None:
             Option(id="fix", label="Fix the findings", next=fix),
             Option(id="accept", label="Accept as it is", next="done"),
         ]
-        text = f"Findings remain after {ROUND_LIMIT} rounds: {r.reason}"
+        what = "the final review" if key == FINAL else (f"task {s.task}" if s.task else f"the {s.kind}")
+        text = (
+            f"Review findings remain on {what} after {ROUND_LIMIT} rounds. Accept: the work ships with them open. "
+            f"Fix: the builder works on them again.\n\nDetails: {r.reason}"
+        )
         cause = cause_key(ErrorKind.REVIEW, s.kind, key)
         held = [r.fix_task, *r.more_fixes] if s.kind == StepKind.REVIEW and r.fix_task else []
-        ask(c, Question(step=s.kind, text=text, options=options, cause=cause, repair=held), now)
+        ask(c, Question(step=s.kind, text=text, options=options, cause=cause, repair=held, subject="product"), now)
     elif s.kind == StepKind.REVIEW:
         go(c, StepKind.BUILD, fix_task(c, r, s.task or FINAL) or s.task)
     else:
         s.attempt += 1
+
+
+def _repaired(c: Change, r: StepResult, count: int, now: datetime) -> bool:
+    """The second time one cause stops an agent step, Delivery repairs it (D-01M6RT5QHXFM58C9BPQXEK3QFB)."""
+    if count < REPAIR_AT or not stuck.repaired(c):
+        return False
+    stuck.start(c, r.cause or "", f"{r.reason}\n{r.detail}" if r.detail and r.detail not in r.reason else r.reason, now)
+    return True
 
 
 def retry(c: Change, r: StepResult, now: datetime) -> None:
@@ -303,37 +335,34 @@ def retry(c: Change, r: StepResult, now: datetime) -> None:
         _defect(c, r, now)
         return
     limit = FLAKE_LIMIT if s.kind == StepKind.FOLLOW else RETRY_LIMIT
-    if _count(c, r.cause, now, r.score, r.classified or r.reason) > limit:
+    count = _count(c, r.cause, now, r.score, r.classified or r.reason)
+    if _repaired(c, r, count, now):
+        return
+    if count > limit:
         _exhausted(c, r, now)
     else:
         s.attempt += 1
 
 
 def back(c: Change, r: StepResult, now: datetime) -> None:
-    """Apply a back exit to an allowed earlier step; re-planning too often asks the owner.
+    """Apply a back exit; the current cause's count governs repair and exhaustion, not unrelated re-plans.
 
     Raises:
         ValueError: The back exit has no cause.
     """
-    s = c.step
     target = r.back_to
     if r.cause is None:
-        msg = f"{s.kind} back needs a cause"
+        msg = f"{c.step.kind} back needs a cause"
         raise ValueError(msg)
     if c.tests is not None and target in curation_flow.FIXED:  # never counted, never a re-plan (TD-390)
         curation_flow.stop(c, r.reason or f"it would go back to {target}", r.cause, now)
         return
-    if _count(c, r.cause, now, r.score, r.classified or r.reason) > RETRY_LIMIT:
+    count = _count(c, r.cause, now, r.score, r.classified or r.reason)
+    if _repaired(c, r, count, now):
+        return
+    if count > RETRY_LIMIT:
         _exhausted(c, r, now)
         return
     if target == StepKind.PLAN:
         c.budgets.replans += 1
-        if c.budgets.replans > REPLAN_LIMIT:
-            options = [
-                Option(id="revise", label="Narrow or split the brief", next=StepKind.SHAPE),
-                Option(id="pause", label="Pause this Change", next="pause"),
-            ]
-            text = f"Re-planned {REPLAN_LIMIT} times: {r.reason}"
-            ask(c, Question(step=s.kind, text=text, options=options, cause=r.cause), now)
-            return
     enter(c, target, fix_task(c, r) if target == StepKind.BUILD else None)

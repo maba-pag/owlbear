@@ -65,26 +65,30 @@ def decisions_page(store: Store, pds: Any, query: str = "") -> Iterator[Any]:
     import uvicorn  # noqa: PLC0415
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            page.goto(f"{base}/decisions{query}#token=tok")
-            yield page
-            browser.close()
-    finally:
-        server.should_exit = True
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+            with sync_playwright() as pw:
+                try:
+                    browser = pw.chromium.launch()
+                except Error as exc:
+                    pytest.skip(f"no Playwright Chromium: {exc}")
+                page = browser.new_page()
+                pds.only(page, base)
+                page.goto(f"{base}/decisions{query}#token=tok")
+                yield page
+                browser.close()
+        finally:
+            server.should_exit = True
+            thread.join(5)
+            assert not thread.is_alive(), "the owned page server did not stop"
 
 
 def in_force(store: Store, project: str = PROJECT) -> dict[str, Decision]:
@@ -460,9 +464,11 @@ def test_the_owner_marks_a_decided_decision_he_never_made_approved(store, pds):
 def test_the_read_back_queue_asks_with_one_primary_and_withdrawing_is_never_it(store, pds):
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    for title in ("Exports are CSV", "Builds run nightly"):
+    for title in ("Invoices are PDF", "Builds run nightly"):
         write(make(title=title, statement=f"{title}.", read_back="pending", read_back_why="Asked again.",
                    read_back_kind="uncertain"), store.shared.root / PROJECT)  # fmt: skip
+    rule = make(title="Exports are CSV", statement="Exports are CSV.", aliases=("TD-12",), inherited=True)  # unqueued
+    write(rule, store.shared.root / PROJECT)
     with decisions_page(store, pds) as page:
         queue = page.locator("#queue")
         expect(queue.locator(".queued")).to_have_count(2)
@@ -490,16 +496,7 @@ def test_the_read_back_queue_asks_with_one_primary_and_withdrawing_is_never_it(s
         pds.modal(page).get_by_role("button", name="Confirm as it reads").click()
         expect(queue.locator(".queued")).to_have_count(1)
         expect(queue.locator('p-button[variant="primary"]')).to_have_text(["Still right"])  # the one left leads again
-
-
-@pytest.mark.browser
-def test_the_owner_reads_back_an_open_decision_by_confirming_it_and_sees_no_record_rows(store, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    rule = make(title="Exports are CSV", statement="Exports are CSV.", aliases=("TD-12",), inherited=True)
-    write(rule, store.shared.root / PROJECT)
-    with decisions_page(store, pds) as page:
-        card = page.locator(".entry", has_text="Exports are CSV")
+        card = page.locator(".entry", has_text="Exports are CSV")  # any open decision reads back from the list
         open_entry(pds, card)
         expect(card.locator("#detail")).to_contain_text("autonomous")
         expect(card.locator("#detail")).not_to_contain_text("TD-12")
@@ -510,7 +507,7 @@ def test_the_owner_reads_back_an_open_decision_by_confirming_it_and_sees_no_reco
         expect(dialog).to_contain_text("Exports are CSV.")
         with page.expect_request(lambda r: r.url.endswith("/read-back")) as sent:
             dialog.get_by_role("button", name="Confirm as it reads").click()
-        expect(page.locator("#receipts")).to_contain_text("saved · committed · published · active")
+        expect(page.locator("#receipts")).to_contain_text("“Exports are CSV”: saved · committed · published · active")
         body = sent.value.post_data_json
     assert body == {"revision": rule.revision, "confirmed": True}
     held = in_force(store)["Exports are CSV."]

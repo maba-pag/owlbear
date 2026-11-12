@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next.change_contracts import check_hint
+from owlbear_delivery_next.change_contracts import build_tools, check_hint, question_tools
+from owlbear_delivery_next.change_contracts.option_records import OptionAction
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -22,6 +23,9 @@ if TYPE_CHECKING:
 INVALID_LIMIT = 3
 LOCAL_URL = re.compile(r"http://(127\.0\.0\.1|localhost):\{port\}(/\S*)?")  # Delivery picks the port (TD-40)
 EXAMPLE_CHECK = "cd ./packages/app && {\nnpm test\n}"
+STAGES = ("Which document is wrong; target when the task needs a commit or API on the target branch but not in this "
+          "one yet; setup when something outside the brief and plan is missing or broken (a PR not merged, a profile "
+          "entry or setting, a tool, a check that cannot end); brief only if what the owner gets changes")  # fmt: skip
 
 
 class Args(BaseModel):
@@ -35,13 +39,16 @@ def _f(limit: int, description: str, example: object, least: int = 1) -> Any:  #
     return Field(min_length=least, max_length=limit, description=description, examples=[example])
 
 
-bounded = _f  # the same helper for the owner chat's brief schema (brief_tools)
+bounded = _f
+check_build = build_tools.check_build
+check_question = question_tools.check_question
+_few = build_tools.few
 
 
 class CheckRun(Args):
     """One check command the agent ran and its exit code."""
 
-    command: str = _f(1000, "The complete command as listed in the task", EXAMPLE_CHECK)
+    command: str = _f(16000, "Complete issued command, including its task context", EXAMPLE_CHECK)
     exit_code: int = Field(description="Its exit code; 0 means it passed", examples=[0])
 
 
@@ -66,7 +73,7 @@ class Rejection(Args):
 class BuildResult(Args):
     """``submit_result`` for the build step."""
 
-    summary: str = _f(2000, "What you changed and why, in a few sentences", "Added greet(name), with a test.")
+    summary: str = _f(2000, "What changed and why, its real run, what stays unproven", "Ran greet('Ada'): Hallo, Ada!")
     checks: list[CheckRun] = _f(
         100, "Every task check you ran on your final commit", [{"command": EXAMPLE_CHECK, "exit_code": 0}], least=0
     )
@@ -84,22 +91,44 @@ class BuildResult(Args):
 
 
 class AskOption(Args):
-    """One answer the owner can choose and where it leads."""
+    """One answer, its exact promise and the existing engine action that carries it."""
 
     label: str = _f(200, "The answer as the owner picks it", "German")
-    effect: str = _f(300, "What you will do if it is chosen", "greet() returns 'Hallo, <name>!'")
+    effect: str = _f(300, "The exact consequence, subject to existing brief approval and checks", "Use German")
+    action: OptionAction | None = Field(
+        default=None,
+        description="Required for new questions: continue with this product choice, retry this whole step, "
+        "pause or abandon. No action waives a failed check or opens a separate PR.",
+        examples=["continue"],
+    )
+    check: str = Field(
+        default="",
+        max_length=1000,
+        description="For a check-related recommendation: the exact declared check to trial before offering it; "
+        "empty otherwise. Never a new command or a claimed result.",
+        examples=[EXAMPLE_CHECK],
+    )
 
 
 class AskQuestion(Args):
-    """``ask_question``: one question for the owner; the step ends and resumes with the answer."""
+    """``ask_question`` submits a proposal; Delivery checks it before asking the owner."""
 
     question: str = _f(500, "One question", "Which language should greet() use?")
-    why: str = _f(500, "Why you cannot decide it yourself", "The brief calls the greeting language a product decision.")
+    why: str = _f(500, "Why you cannot decide it yourself", "The brief reserves the language for the owner.")
     options: list[AskOption] = _f(
         5,
-        "Two to five distinct answers, each leading somewhere",
-        [{"label": "German", "effect": "Hallo"}, {"label": "English", "effect": "Hello"}],
+        "Two to five distinct answers mapped to existing actions",
+        [
+            {"label": "German", "effect": "Use German", "action": "continue"},
+            {"label": "English", "effect": "Use English", "action": "continue"},
+        ],
         least=2,
+    )
+    recommended: int | None = Field(
+        default=None,
+        ge=0,
+        description="The zero-based index of the recommended option, if any; checked before it is offered",
+        examples=[0],
     )
 
 
@@ -119,11 +148,7 @@ class Amend(Args):
 class WrongPremise(Args):
     """``report_wrong_premise``: the brief or plan cannot be built as written, or the target has what is missing."""
 
-    stage: Literal["brief", "plan", "target"] = Field(
-        description="Which document is wrong; target when the task needs a commit or API that is on the target "
-        "branch but not in this branch yet",
-        examples=["plan"],
-    )
+    stage: Literal["brief", "plan", "target", "setup"] = Field(description=STAGES, examples=["plan"])
     reason: str = _f(1000, "What is wrong", "greet() already exists with another signature.")
     evidence: list[str] = _f(10, "Paths, lines or command output that show it", ["src/greet.ts:3 exports greet(a, b)"])
     amendment: list[Amend] = Field(default_factory=list, max_length=5, description="Only for stage brief, optional: "
@@ -236,10 +261,10 @@ class CheckRecipe(Args):
 class PlanTask(Args):
     """One ordered task of the plan."""
 
-    title: str = _f(200, "What the task delivers", "Add farewell(name) with a test")
+    title: str = _f(200, "What the task delivers", "Add farewell(name)")
     goal: str = _f(3000, "The criteria it meets and how the Builder knows it is done", "AC-1: farewell('Ada')")
     scope: list[str] = _f(20, "Repository-relative paths or directories it may change", ["packages/app"])
-    checks: list[str] = _f(100, "Complete check commands exactly as listed for their packages", [EXAMPLE_CHECK])
+    checks: list[str] = _f(100, "Package checks with literal test targets of the confirmed runner", [EXAMPLE_CHECK])
 
 
 class PlanResult(Args):
@@ -282,7 +307,7 @@ def check_plan(
         errors += [
             f'tasks[{i}].checks: "{c}" is not a check of the project profile - ' + f"use one of {listed}"
             for c in task.checks
-            if c not in checks
+            if not check_hint.offered(c, checks)
         ]
         errors += [f"tasks[{i}].scope: {p} is not repository-relative" for p in task.scope if not relative(p)]
         errors += [
@@ -313,7 +338,11 @@ SUBMIT = Spec(
 )
 ASK = Spec(
     "ask_question",
-    "Ask the owner one question when a decision is theirs. Your step ends; it resumes with the answer.",
+    "Propose one owner question with exact executable actions: a product choice (what he gets), or one proposal "
+    "a decision reserves for him (lint, CI or hook configuration, security, project setup) as yes or no, in plain "
+    "words. Delivery admits it before asking; a refusal returns field errors to you, and a question about getting a "
+    "tool or check working goes to Delivery's repair instead. Mark the recommended index; a check recommendation "
+    "names its exact declared check for a measured trial. Your step ends; it resumes with the refusal or answer.",
     AskQuestion,
     "ask",
 )
@@ -335,7 +364,7 @@ SPECS = (SUBMIT, ASK, PREMISE, MISSING)
 FIRST_LOOK = "submit_first_look"  # the design judge's own verdict, before the detector's findings reach it
 SCAN_DESIGN = "scan_design"  # the builder's design detector on a UI Change (slice 7)
 LOOKUP = "lookup_decisions"  # which decisions govern a question, answered by the picker (TD-456, TD-459)
-LOOKERS = frozenset({"planner", "builder", "reviewer", "preparer", "test-curator"})  # a Change step's own worker
+LOOKERS = frozenset({"planner", "builder", "reviewer", "preparer", "test-curator", "repairer"})  # a step's worker
 JUDGES = frozenset({"challenger", "design-judge", "test-reviewer", "picker", "curator", "auditor"})  # never asks
 PICKER = "picker"  # an SDK-only session whose one tool is its result (TD-459)
 CURATOR = "curator"  # automatic memory curation: its memory tools, then its report as its result (item 5 slice 4)
@@ -352,13 +381,13 @@ def asks(role: str, *, judging: bool = False) -> bool:
 
     The pack updater runs inside a host job, not a Change; its owner questions are the job's stops (TD-177).
     """
-    return role not in JUDGES and role != "updater" and not judging
+    return role not in JUDGES and role not in {"updater", "repairer"} and not judging  # #1066: Delivery asks
 
 
 def results(role: str, *, ui: bool = False, judging: bool = False) -> list[str]:
     """Delivery's tools a role's agent is offered: every step's own, the first look, the UI scan, the lookup."""
-    if role in {PICKER, CURATOR, AUDITOR}:
-        return [SUBMIT.name]
+    if role in {PICKER, CURATOR, AUDITOR, "repairer"}:  # a repairer's one owner question is Delivery's (#1066)
+        return [SUBMIT.name, *([LOOKUP] if role == "repairer" else [])]
     extra = [FIRST_LOOK] if role == "design-judge" else [SCAN_DESIGN] if role == "builder" and ui else []
     extra += [LOOKUP] if role in LOOKERS and not judging else []
     return [*(s.name for s in SPECS if s is not ASK or asks(role, judging=judging)), *extra]
@@ -386,59 +415,6 @@ class Worktree:
     base: str
     dirty: tuple[str, ...] = ()
     changed: tuple[str, ...] = ()
-
-
-def _few(paths: Sequence[str]) -> str:
-    return ", ".join(paths[:5]) + (f" and {len(paths) - 5} more" if len(paths) > 5 else "")  # noqa: PLR2004
-
-
-def _response(result: BuildResult, item: ItemRef | None) -> list[str]:
-    """Errors of the ``response`` field: required for a conversation task answering *item*, refused otherwise."""
-    r = result.response
-    if item is None:
-        return ["response: only for a pull-request conversation task - remove it"] if r else []
-    if r is None:
-        return ['response: required for this conversation task - e.g. {"how": "answered", "text": "..."}']
-    if r.how == "no-action" and not item.notice:
-        return ["response.how: no-action is only for a bot's comment or review - fix it or answer it"]
-    return []
-
-
-def check_build(result: BuildResult, tree: Worktree, checks: Sequence[str], item: ItemRef | None = None) -> list[str]:
-    """Return field errors for a build result against the worktree HEAD the runner derives and the task's checks.
-
-    *item* is the conversation item the task answers, if any; an answer or no-action needs no commit, nor does a
-    result that rejects findings (``disputes.check`` then demands every finding rejected).
-    """
-    errors = _response(result, item)
-    reply = (result.response is not None and result.response.how != "fixed") or bool(result.rejected)
-    if reply and tree.head == tree.base and not tree.dirty:
-        return errors
-    if tree.head == tree.base:
-        errors.append(
-            f"changes: no commit since the task's base {tree.base[:12]}; commit your changes, then submit again"
-        )
-    if tree.dirty:
-        errors.append(f"changes: uncommitted files ({_few(tree.dirty)}); commit them, then submit again")
-    errors.extend(
-        f"checks[{i}].exit_code: {c.exit_code} - fix the failure, commit, run it again, then submit"
-        for i, c in enumerate(result.checks)
-        if c.exit_code != 0
-    )
-    errors.extend(
-        check_hint.missing(cmd)
-        for cmd in checks
-        if not any(check_hint.ran(cmd, c.command, checks) for c in result.checks)
-    )
-    return errors
-
-
-def check_question(question: AskQuestion) -> list[str]:
-    """Return field errors for a question whose options do not lead to distinct answers."""
-    labels = [o.label.strip().lower() for o in question.options]
-    if len(set(labels)) < len(labels):
-        return ["options: labels repeat - give each option a distinct answer"]
-    return []
 
 
 def check_review(review: ReviewResult, tree: Worktree, *, visual: bool = False) -> list[str]:

@@ -32,7 +32,7 @@ from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import sdk_adapter, step_decisions
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.state_store import decision_archive, decision_store, spend_ledger
+from owlbear_delivery_next.state_store import decision_store, spend_ledger
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.workflow_steps import decisions_gate, lookup, pick
 
@@ -84,8 +84,21 @@ def test_a_workers_lookup_in_an_sdk_step_reads_the_complete_list_answers_whole_a
     picking, monkeypatch
 ):
     rule, other = picking.put(make()), picking.put(fonts())
-    building(picking, rule)
-    picking.picks += [picked(other.id), "error"]
+    long_answer = " ".join(["Farewells use the first name only and never the family name,"] * 6)
+    assert len(long_answer) > STATEMENT_LIMIT
+    drafted = {"question": "Which name does a farewell use?", "answer": long_answer, "origin": "decided"}
+    building(picking, rule, decisions=[drafted])
+    before = picking.change()
+    own = before.brief.decisions[0]
+    clarified = ChangeDecision(
+        id=new_id(), title="Which language does the greeting use?", text="The greeting is in English.",
+        origin="decided", at=AT,
+    )  # fmt: skip
+    before.decisions += [clarified, clarified.model_copy()]
+    assert before.decisions_baseline is not None
+    baseline = before.decisions_baseline.model_copy(deep=True)
+    picking.store.write(Lock(picking.slug), before)
+    picking.picks += [picked(other.id, own.id, clarified.id), "error"]
     said = []
 
     async def run(cfg):
@@ -105,76 +118,25 @@ def test_a_workers_lookup_in_an_sdk_step_reads_the_complete_list_answers_whole_a
 
     answer, failed = said
     whole = {"id": other.id, "title": other.title, "statement": other.statement, "scope": "project"}
-    assert answer == {"decisions": [whole | {"origin": "approved"}]}
+    own_whole = {"id": own.id, "title": own.question, "statement": long_answer, "scope": "change", "origin": "decided"}
+    clarified_whole = {
+        "id": clarified.id, "title": clarified.title, "statement": clarified.text,
+        "scope": "change", "origin": "decided",
+    }  # fmt: skip
+    assert answer == {"decisions": [whole | {"origin": "approved"}, own_whole, clarified_whole]}
     assert failed["failed"].startswith("its session ended error")  # never an empty answer
     picker = picking.pickers()[1]
     assert (len(picking.pickers()), picker.model, picker.effort) == (3, "gpt-6.1-sol", "medium")
-    assert all(x in picker.message for x in (QUESTION, rule.id, other.id, "Title: Add farewell"))
+    assert all(x in picker.message for x in (QUESTION, rule.id, other.id, own.id, long_answer, "Title: Add farewell"))
+    assert picker.message.count(f"{clarified.id} |") == 1
     assert picker.limit <= pick_tools.LIMIT
     assert c.spend.credits == 12.0  # the shaping pick and the answered lookup
+    assert c.decisions_baseline == baseline
     assert set(c.decisions_baseline.said) == {rule.id}  # a lookup answers; it attaches nothing
     assert c.brief.picked is not None
     assert c.brief.picked.decisions[0].note == "it governs the work"
     exits = [e["exit"] for e in picking.store.events(picking.slug) if e.get("kind") == lookup.LABEL]
     assert exits == ["ok", "failed"]
-
-
-def test_a_workers_lookup_lists_the_changes_own_decisions_whole(picking, monkeypatch):
-    answer = " ".join(["Farewells use the first name only and never the family name,"] * 6)
-    drafted = {"question": "Which name does a farewell use?", "answer": answer, "origin": "decided"}
-    building(picking, decisions=[drafted])
-    picking.picks.clear()  # nothing was in force to pick from
-    own = picking.change().brief.decisions[0]
-    picking.picks.append(picked(own.id))
-    said = []
-
-    async def run(cfg):
-        if cfg.role == tools.PICKER:
-            return await picking.run(cfg)
-        step = sdk_adapter._Step(cfg, asyncio.get_running_loop())  # noqa: SLF001
-        (tool,) = [t for t in step.tools() if t.name == tools.LOOKUP]
-        reply = await tool.handler(SimpleNamespace(arguments={"question": QUESTION}))
-        said.append(json.loads(reply.text_result_for_llm))
-        return Run(cfg.session_id, "error", detail="stopped after its lookup", termination=DONE)
-
-    monkeypatch.setattr(runner.sdk_adapter, "run", run)
-
-    build(picking)
-
-    whole = {"id": own.id, "title": own.question, "statement": answer, "scope": "change", "origin": "decided"}
-    assert said == [{"decisions": [whole]}]
-    assert all(x in picking.pickers()[0].message for x in (own.id, answer))
-
-
-def test_a_workers_lookup_lists_a_clarification_confirmed_during_the_work_once(picking, monkeypatch):
-    building(picking, picking.put(make()))
-    c = picking.change()
-    clarified = ChangeDecision(
-        id=new_id(), title="Which language does the greeting use?", text="The greeting is in English.",
-        origin="decided", at=AT,
-    )  # fmt: skip
-    c.decisions += [clarified, clarified.model_copy()]  # the same id twice: listed once
-    picking.store.write(Lock(picking.slug), c)
-    picking.picks.append(picked(clarified.id))
-    said = []
-
-    async def run(cfg):
-        if cfg.role == tools.PICKER:
-            return await picking.run(cfg)
-        step = sdk_adapter._Step(cfg, asyncio.get_running_loop())  # noqa: SLF001
-        (tool,) = [t for t in step.tools() if t.name == tools.LOOKUP]
-        said.append(
-            json.loads((await tool.handler(SimpleNamespace(arguments={"question": QUESTION}))).text_result_for_llm)
-        )
-        return Run(cfg.session_id, "error", detail="stopped after its lookup", termination=DONE)
-
-    monkeypatch.setattr(runner.sdk_adapter, "run", run)
-
-    build(picking)
-
-    whole = {"id": clarified.id, "title": clarified.title, "statement": clarified.text, "scope": "change"}
-    assert said == [{"decisions": [whole | {"origin": "decided"}]}]
-    assert picking.pickers()[-1].message.count(f"{clarified.id} |") == 1
 
 
 class Blocked:
@@ -692,18 +654,6 @@ def test_a_lead_chats_mcp_tool_preserves_failed_authority_and_unresolved_ids(pic
     assert "decisions" not in answer
     assert {row["id"] for row in answer["unresolved"]} == {bad.id}
     assert picking.pickers() == []
-
-
-@pytest.mark.parametrize(
-    ("statement", "rationale"),
-    [
-        ("Keep this rule's\noriginal formatting.", "Whole wording: unrelated rationale"),
-        ("Keep this rule\u2026", "Whole wording: a different prefix does not restore that rule"),
-    ],
-)
-def test_whole_binding_text_does_not_promote_unrelated_rationale_or_reformat_ordinary_rules(statement, rationale):
-    rule = make(statement=statement, rationale=rationale)
-    assert decision_archive.whole(rule) == statement
 
 
 @pytest.mark.parametrize("boundary", ["worker", "chat"])

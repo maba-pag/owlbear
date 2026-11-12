@@ -16,7 +16,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from owlbear_memory import AssessmentResult, MemoryEngine, MemoryEntry, MemoryState, storage
+from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, storage
 from owlbear_memory.errors import ConcurrencyError, NotFoundError, TransitionError
 
 pytestmark = pytest.mark.usefixtures("todays_memory_values")
@@ -113,12 +113,6 @@ def _record_assessment(engine: MemoryEngine, entry_id: str, bucket: str) -> Memo
 class TestToolRegistration:
     """AC1: assess_memories is importable and validates assessments/task_id/bucket."""
 
-    def test_assess_memories_importable_from_tools(self) -> None:
-        """assess_memories can be imported from owlbear_memory_mcp.tools."""
-        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
-
-        assert callable(assess_memories)
-
     @pytest.mark.asyncio
     async def test_assess_memories_registered_on_mcp_server(self) -> None:
         """assess_memories must appear in the MCP server tool registry.
@@ -186,23 +180,6 @@ class TestToolRegistration:
                 ctx,
                 assessments=[_assessment_input(engine, _ID_APPROVED, "outstanding")],
                 task_id="   ",
-            )
-
-    @pytest.mark.asyncio
-    async def test_invalid_bucket_raises_tool_error(self, tmp_path: Path) -> None:
-        """Invalid bucket value raises ToolError, not a per-item failure."""
-        from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
-
-        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
-
-        engine = MemoryEngine(memory_dir=tmp_path)
-        ctx = _make_ctx(engine)
-
-        with pytest.raises(ToolError):
-            await assess_memories(
-                ctx,
-                assessments=[{"entry_id": _ID_APPROVED, "revision": "0" * 16, "bucket": "bogus_bucket"}],
-                task_id="task-1",
             )
 
     @pytest.mark.asyncio
@@ -336,12 +313,6 @@ class TestToolRegistration:
 class TestCounterIncrementPath:
     """AC2: record_assessment engine method — counter increment, score recompute, stale trigger."""
 
-    def test_record_assessment_method_exists_on_memory_engine(self, tmp_path: Path) -> None:
-        """MemoryEngine exposes a record_assessment() method."""
-        engine = MemoryEngine(memory_dir=tmp_path)
-        assert hasattr(engine, "record_assessment"), "MemoryEngine.record_assessment method missing"
-        assert callable(engine.record_assessment)
-
     def test_outstanding_bucket_increments_outstanding_count(self, tmp_path: Path) -> None:
         """outstanding bucket increments outstanding_count by exactly 1."""
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -351,6 +322,8 @@ class TestCounterIncrementPath:
 
         updated = _record_assessment(engine, _ID_APPROVED, "outstanding")
         assert updated.outstanding_count == 3
+        assert updated.unremarkable_count == 0
+        assert updated.didnt_use_count == 0
 
     def test_unremarkable_bucket_increments_unremarkable_count(self, tmp_path: Path) -> None:
         """unremarkable bucket increments unremarkable_count by exactly 1."""
@@ -371,17 +344,6 @@ class TestCounterIncrementPath:
 
         updated = _record_assessment(engine, _ID_APPROVED, "didnt_use")
         assert updated.didnt_use_count == 11
-
-    def test_outstanding_increment_only_changes_outstanding_count(self, tmp_path: Path) -> None:
-        """outstanding bucket leaves unremarkable_count and didnt_use_count unchanged."""
-        engine = MemoryEngine(memory_dir=tmp_path)
-        entry = _make_entry(_ID_APPROVED, "approved")
-        _seed_entry(tmp_path, entry)
-        engine.load()
-
-        updated = _record_assessment(engine, _ID_APPROVED, "outstanding")
-        assert updated.unremarkable_count == 0
-        assert updated.didnt_use_count == 0
 
     def test_assessment_leaves_the_stored_score_unchanged(self, tmp_path: Path) -> None:
         """A rating writes its counter and no score: the stored score is legacy and ranks nothing."""
@@ -496,32 +458,6 @@ class TestCounterIncrementPath:
                 expected_revision="0" * 16,
                 stale_factor=50,
             )
-
-    def test_occ_match_succeeds(self, tmp_path: Path) -> None:
-        """No error when expected_updated_at matches entry's current updated_at."""
-        engine = MemoryEngine(memory_dir=tmp_path)
-        entry = _make_entry(_ID_APPROVED, "approved", updated_at=_TS)
-        _seed_entry(tmp_path, entry)
-        engine.load()
-
-        updated = _record_assessment(engine, _ID_APPROVED, "outstanding")
-        assert updated.outstanding_count == 1
-
-    def test_slot_efficiency_exceeded_transitions_entry_to_stale(self, tmp_path: Path) -> None:
-        """Once didnt_use passes the stale factor times the ratings after a rating, state→stale."""
-        engine = MemoryEngine(memory_dir=tmp_path)
-        entry = _make_entry(
-            _ID_APPROVED,
-            "approved",
-            outstanding_count=0,
-            unremarkable_count=0,
-            didnt_use_count=50,
-        )
-        _seed_entry(tmp_path, entry)
-        engine.load()
-
-        updated = _record_assessment(engine, _ID_APPROVED, "didnt_use")
-        assert updated.state == MemoryState.STALE
 
     @pytest.mark.parametrize(("factor", "expected"), [(51, MemoryState.APPROVED), (50, MemoryState.STALE)])
     def test_the_stale_factor_decides_at_the_boundary(self, tmp_path: Path, factor: int, expected: MemoryState) -> None:
@@ -770,26 +706,6 @@ class TestBatchSemantics:
     """AC4: per-entry result format, per-item failure, batch-continues, persistence."""
 
     @pytest.mark.asyncio
-    async def test_return_value_has_results_key(self, tmp_path: Path) -> None:
-        """Return value is a dict containing a 'results' key."""
-        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
-
-        engine = MemoryEngine(memory_dir=tmp_path)
-        entry = _make_entry(_ID_APPROVED, "approved")
-        _seed_entry(tmp_path, entry)
-        engine.load()
-        ctx = _make_ctx(engine)
-
-        result = await assess_memories(
-            ctx,
-            assessments=[_assessment_input(engine, _ID_APPROVED, "outstanding")],
-            task_id="task-1",
-        )
-
-        assert isinstance(result, dict)
-        assert "results" in result
-
-    @pytest.mark.asyncio
     async def test_success_result_has_entry_id_and_success_true(self, tmp_path: Path) -> None:
         """Successful result contains entry_id and success=True."""
         from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
@@ -806,36 +722,13 @@ class TestBatchSemantics:
             task_id="task-1",
         )
 
+        assert isinstance(result, dict)
         results = result["results"]
         assert len(results) == 1
         assert results[0]["entry_id"] == _ID_APPROVED
         assert results[0]["success"] is True
         assert results[0]["already_applied"] is False
         assert results[0]["recorded_bucket"] == "outstanding"
-
-    @pytest.mark.asyncio
-    async def test_results_list_length_equals_assessments_count(self, tmp_path: Path) -> None:
-        """results list has exactly one element per assessment input item."""
-        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
-
-        engine = MemoryEngine(memory_dir=tmp_path)
-        entry1 = _make_entry(_ID_APPROVED, "approved")
-        entry2 = _make_entry(_ID_CURATED, "curated")
-        _seed_entry(tmp_path, entry1)
-        _seed_entry(tmp_path, entry2)
-        engine.load()
-        ctx = _make_ctx(engine)
-
-        result = await assess_memories(
-            ctx,
-            assessments=[
-                _assessment_input(engine, _ID_APPROVED, "outstanding"),
-                _assessment_input(engine, _ID_CURATED, "unremarkable"),
-            ],
-            task_id="task-1",
-        )
-
-        assert len(result["results"]) == 2
 
     @pytest.mark.asyncio
     async def test_nonexistent_entry_produces_failure_with_error_message(self, tmp_path: Path) -> None:
@@ -892,37 +785,15 @@ class TestBatchSemantics:
         _seed_entry(tmp_path, curated)
         engine.load()
 
-        original_record = engine.record_assessment
-
-        def _patched_record(
-            entry_id: str,
-            bucket: str,
-            *,
-            task_id: str,
-            expected_revision: str,
-            stale_factor: int,
-        ) -> AssessmentResult:
-            if entry_id == _ID_APPROVED:
-                msg = "simulated OCC conflict"
-                raise ConcurrencyError(msg)
-            return original_record(
-                entry_id,
-                bucket,
-                task_id=task_id,
-                expected_revision=expected_revision,
-                stale_factor=stale_factor,
-            )
-
         ctx = _make_ctx(engine)
-        with patch.object(engine, "record_assessment", side_effect=_patched_record):
-            result = await assess_memories(
-                ctx,
-                assessments=[
-                    _assessment_input(engine, _ID_APPROVED, "outstanding"),
-                    _assessment_input(engine, _ID_CURATED, "unremarkable"),
-                ],
-                task_id="task-1",
-            )
+        result = await assess_memories(
+            ctx,
+            assessments=[
+                {"entry_id": _ID_APPROVED, "revision": "0" * 16, "bucket": "outstanding"},
+                _assessment_input(engine, _ID_CURATED, "unremarkable"),
+            ],
+            task_id="task-1",
+        )
 
         results = result["results"]
         approved_result = next(r for r in results if r["entry_id"] == _ID_APPROVED)
@@ -931,35 +802,6 @@ class TestBatchSemantics:
         assert approved_result["success"] is False
         assert "error" in approved_result
         assert curated_result["success"] is True
-
-    @pytest.mark.asyncio
-    async def test_one_per_item_failure_does_not_abort_remaining_assessments(self, tmp_path: Path) -> None:
-        """A missing entry failure does not abort processing of subsequent valid entries."""
-        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
-
-        engine = MemoryEngine(memory_dir=tmp_path)
-        entry = _make_entry(_ID_APPROVED, "approved")
-        _seed_entry(tmp_path, entry)
-        engine.load()
-        ctx = _make_ctx(engine)
-
-        result = await assess_memories(
-            ctx,
-            assessments=[
-                _assessment_input(engine, _ID_MISSING, "outstanding"),  # fails
-                _assessment_input(engine, _ID_APPROVED, "outstanding"),  # must still run
-            ],
-            task_id="task-1",
-        )
-
-        results = result["results"]
-        assert len(results) == 2
-
-        missing_result = next(r for r in results if r["entry_id"] == _ID_MISSING)
-        approved_result = next(r for r in results if r["entry_id"] == _ID_APPROVED)
-
-        assert missing_result["success"] is False
-        assert approved_result["success"] is True
 
     @pytest.mark.asyncio
     async def test_successful_assessment_persisted_to_disk(self, tmp_path: Path) -> None:

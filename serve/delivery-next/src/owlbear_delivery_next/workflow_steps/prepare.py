@@ -197,7 +197,7 @@ def chosen(  # noqa: PLR0913, PLR0917 - the session's end, its worktree and what
     moved = preparer.end(root, _dir(store, c.slug), started).get("reset")  # if this fails, ``stray`` ends it
     made = [p for p in edits(root) if p not in set(ctx.found)]
     try:
-        if moved:
+        if moved and result.exit != Exit.STOP:
             result = check.failed(f"the preparer committed (HEAD was {moved[:12]}); its commits were undone")
         elif result.exit == Exit.PENDING and isinstance(payload, tools.CheckRecipe):
             if option := ctx.option(payload.preparation):

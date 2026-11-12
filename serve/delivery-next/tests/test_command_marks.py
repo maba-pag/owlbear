@@ -162,8 +162,8 @@ def test_a_mark_in_new_yorks_repeated_hour_keeps_its_instant(tmp_path) -> None:
         assert command_marks.read(tmp_path, second) == {77: second.timestamp() + 1}
 
 
-def test_a_shell_in_another_zone_marks_its_start_as_the_host_reads_it(change_repo) -> None:
-    store = Store.open(change_repo)
+def test_a_shell_in_another_zone_marks_its_start_as_the_host_reads_it(tmp_path) -> None:
+    store = Store(tmp_path / "store")
     with store.lock("c1") as lock:
         store.write(lock, Change(slug="c1"))
         with command_marks.marking(store, lock, "c1"):

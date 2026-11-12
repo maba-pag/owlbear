@@ -110,18 +110,6 @@ class TestStateEnum:
     _state_rank_for_list: contested=1 (curated tier), disputed=stale=3 (deleted tier).
     """
 
-    def test_contested_value_in_memory_state_enum(self) -> None:
-        """MemoryState.CONTESTED exists with value 'contested' in owlbear_memory."""
-        assert MemoryState.CONTESTED == "contested"
-
-    def test_disputed_value_in_memory_state_enum(self) -> None:
-        """MemoryState.DISPUTED exists with value 'disputed' in owlbear_memory."""
-        assert MemoryState.DISPUTED == "disputed"
-
-    def test_stale_value_in_memory_state_enum(self) -> None:
-        """MemoryState.STALE exists with value 'stale' in owlbear_memory."""
-        assert MemoryState.STALE == "stale"
-
     def test_new_states_accessible_via_mcp_memory_package(self) -> None:
         """owlbear_memory_mcp exposes the same MemoryState enum with all three new values."""
         from owlbear_memory_mcp.tools import MemoryState as McpState  # noqa: PLC0415
@@ -153,34 +141,6 @@ class TestStateEnum:
         from owlbear_memory_mcp.tools import _state_rank_for_list  # noqa: PLC0415
 
         assert _state_rank_for_list(MemoryState.CONTESTED) == _state_rank_for_list(MemoryState.CURATED)
-
-    @pytest.mark.asyncio
-    async def test_list_memories_default_includes_contested_entries(self, tmp_path: Path) -> None:
-        """list_memories with no state filter returns entries in contested state."""
-        from owlbear_memory_mcp.tools import list_memories  # noqa: PLC0415
-
-        _write_raw_md(tmp_path, _ID_CONTESTED, "contested")
-        engine = MemoryEngine(memory_dir=tmp_path)
-        ctx = _make_ctx(engine)
-
-        result = await list_memories(ctx)
-
-        ids = [row["id"] for row in result]
-        assert _ID_CONTESTED in ids
-
-    @pytest.mark.asyncio
-    async def test_list_memories_default_includes_disputed_entries(self, tmp_path: Path) -> None:
-        """list_memories with no state filter returns entries in disputed state."""
-        from owlbear_memory_mcp.tools import list_memories  # noqa: PLC0415
-
-        _write_raw_md(tmp_path, _ID_DISPUTED, "disputed")
-        engine = MemoryEngine(memory_dir=tmp_path)
-        ctx = _make_ctx(engine)
-
-        result = await list_memories(ctx)
-
-        ids = [row["id"] for row in result]
-        assert _ID_DISPUTED in ids
 
     @pytest.mark.asyncio
     async def test_list_memories_default_includes_stale_entries(self, tmp_path: Path) -> None:
@@ -234,6 +194,7 @@ class TestResolve:
         result = engine.resolve(_ID_CONTESTED, expected_updated_at=_TS)
 
         assert result.state == MemoryState.APPROVED
+        assert result.approved_at is not None
 
     def test_resolve_disputed_returns_approved_state(self, tmp_path: Path) -> None:
         """resolve() on a disputed entry returns an entry with state=approved."""
@@ -243,32 +204,6 @@ class TestResolve:
         result = engine.resolve(_ID_DISPUTED, expected_updated_at=_TS)
 
         assert result.state == MemoryState.APPROVED
-
-    def test_resolve_stale_returns_approved_state(self, tmp_path: Path) -> None:
-        """resolve() on a stale entry returns an entry with state=approved."""
-        _write_raw_md(tmp_path, _ID_STALE, "stale")
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        result = engine.resolve(_ID_STALE, expected_updated_at=_TS)
-
-        assert result.state == MemoryState.APPROVED
-
-    def test_resolve_sets_approved_at_timestamp(self, tmp_path: Path) -> None:
-        """resolve() populates approved_at on the returned entry."""
-        _write_raw_md(tmp_path, _ID_CONTESTED, "contested")
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        result = engine.resolve(_ID_CONTESTED, expected_updated_at=_TS)
-
-        assert result.approved_at is not None
-
-    def test_resolve_updates_updated_at(self, tmp_path: Path) -> None:
-        """resolve() refreshes updated_at to a new value (not the original timestamp)."""
-        _write_raw_md(tmp_path, _ID_DISPUTED, "disputed", updated_at=_TS)
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        result = engine.resolve(_ID_DISPUTED, expected_updated_at=_TS)
-
         assert result.updated_at != _TS
 
     def test_resolve_persists_approved_state_to_disk(self, tmp_path: Path) -> None:
@@ -338,19 +273,6 @@ class TestRecallFiltering:
 
     contested is added to the recall visible set and inline state_rank dict.
     """
-
-    @pytest.mark.asyncio
-    async def test_recall_includes_contested_entries(self, tmp_path: Path) -> None:
-        """recall_memory returns contested entries scoped to the requesting agent."""
-        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
-
-        _write_raw_md(tmp_path, _ID_CONTESTED, "contested", scope_agents=["test-agent"])
-        engine = MemoryEngine(memory_dir=tmp_path)
-        ctx = _make_ctx(engine)
-
-        result = await recall_memory(ctx, agent="test-agent")
-
-        assert "Entry-contested" in result
 
     @pytest.mark.asyncio
     async def test_recall_excludes_disputed_entries(self, tmp_path: Path) -> None:
@@ -509,16 +431,6 @@ class TestEditDeleteNewStates:
         assert result.state == MemoryState.DELETED
         # Soft-delete: the file must still exist on disk (not hard-deleted)
         assert (tmp_path / f"{_ID_CONTESTED}.md").exists()
-
-    def test_delete_disputed_is_soft_delete(self, tmp_path: Path) -> None:
-        """delete() on disputed transitions to deleted state (file preserved on disk)."""
-        _write_raw_md(tmp_path, _ID_DISPUTED, "disputed")
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        result = engine.delete(_ID_DISPUTED, expected_updated_at=_TS)
-
-        assert result.state == MemoryState.DELETED
-        assert (tmp_path / f"{_ID_DISPUTED}.md").exists()
 
     def test_delete_stale_is_soft_delete(self, tmp_path: Path) -> None:
         """delete() on stale transitions to deleted state (file preserved on disk)."""

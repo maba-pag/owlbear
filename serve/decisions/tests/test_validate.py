@@ -4,188 +4,168 @@ import pytest
 
 from owlbear_decisions.models import Link, LinkType, Scope, State, new_id
 from owlbear_decisions.storage import serialize, write
-from owlbear_decisions.validate import main, validate, validate_repo
+from owlbear_decisions.validate import Entry, Layer, check, main, validate, validate_repo
 
 
-@pytest.fixture
-def put(tmp_path, make):
-    """Write a decision into the layer its scope names under `tmp_path`; returns it."""
-
-    def put_(scope=Scope.PROJECT, project="p", change="", folder=None, **changes):
-        project = "" if scope is Scope.GLOBAL else project
-        change = change or ("c1" if scope is Scope.CHANGE else "")
-        fields = {"id": new_id(), "aliases": (), "scope": scope, "project": project, "change": change}
-        decision = make(**{**fields, **changes})
-        if folder is None:
-            folder = tmp_path / project / "changes" / change if change else tmp_path / project
-        write(decision, folder)
-        return decision
-
-    return put_
+def entry(root, make, scope=Scope.PROJECT, project="p", change="", **changes):
+    project = "" if scope is Scope.GLOBAL else project
+    change = change or ("c1" if scope is Scope.CHANGE else "")
+    decision = make(**{"id": new_id(), "aliases": (), "scope": scope, "project": project, "change": change, **changes})
+    folder = root / project / "changes" / change if change else root / project
+    return Entry(folder / "decisions" / f"{decision.id}.md", Layer(folder, scope, project, change), decision)
 
 
-def rules(root):
-    return sorted(finding.rule for finding in validate_repo(root))
+@pytest.mark.parametrize("failure", ["schema", "link-type"])
+def test_validator_classifies_file_schema_failures(tmp_path, make, failure):
+    good = entry(tmp_path, make, Scope.GLOBAL)
+    write(good.decision, good.layer.folder)
+    if failure == "schema":
+        (good.path.parent / "broken.md").write_text("nothing\n", encoding="utf-8")
+    else:
+        linked = good.decision.model_copy(update={"links": (Link(type=LinkType.RELATED_TO, target=new_id()),)})
+        good.path.write_text(serialize(linked).replace("type: related_to", "type: contradicts"), encoding="utf-8")
+    assert [f.rule for f in validate_repo(tmp_path)] == [failure]
 
 
-def test_a_clean_repository_has_no_findings(tmp_path, put):
-    rule = put(Scope.GLOBAL)
-    put(links=(Link(type=LinkType.EXCEPTION_TO, target=rule.id),))
-    put(Scope.CHANGE, links=(Link(type=LinkType.REFINES, target=rule.id),))
+@pytest.mark.parametrize("duplicate", [False, True], ids=["shared-alias", "shared-id"])
+def test_identity_uniqueness_is_not_alias_uniqueness(tmp_path, make, duplicate):
+    first = entry(tmp_path, make, Scope.GLOBAL, aliases=("TD-1",))
+    second = entry(tmp_path, make, aliases=("TD-1",), **({"id": first.decision.id} if duplicate else {}))
+    findings = check([first, second])
+    assert [f.rule for f in findings] == (["duplicate-id"] * 2 if duplicate else [])
+    if duplicate:
+        assert {f.path for f in findings} == {str(first.path), str(second.path)}
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        (LinkType.REPLACES, {"scope": Scope.GLOBAL}, {"scope": Scope.GLOBAL}, []),
+        (LinkType.REPLACES, {}, {}, []),
+        (LinkType.REPLACES, {"scope": Scope.CHANGE}, {}, []),
+        (LinkType.REPLACES, {"scope": Scope.CHANGE}, {"scope": Scope.CHANGE}, []),
+        (LinkType.REPLACES, {"scope": Scope.GLOBAL}, {}, ["replace-scope"]),
+        (LinkType.REPLACES, {"scope": Scope.GLOBAL}, {"scope": Scope.CHANGE}, ["replace-scope"]),
+        (LinkType.REPLACES, {}, {"scope": Scope.CHANGE}, ["replace-scope"]),
+        (LinkType.REPLACES, {"scope": Scope.CHANGE, "change": "c2"}, {"scope": Scope.CHANGE}, ["replace-scope"]),
+        (LinkType.PROMOTED_FROM, {}, {"scope": Scope.GLOBAL}, []),
+        (LinkType.PROMOTED_FROM, {"scope": Scope.CHANGE}, {"scope": Scope.GLOBAL}, []),
+        (LinkType.PROMOTED_FROM, {"scope": Scope.CHANGE}, {}, []),
+        (LinkType.PROMOTED_FROM, {"scope": Scope.GLOBAL}, {"scope": Scope.GLOBAL}, ["no-successor", "promote-scope"]),
+        (LinkType.PROMOTED_FROM, {}, {}, ["no-successor", "promote-scope"]),
+        (LinkType.PROMOTED_FROM, {"scope": Scope.CHANGE, "project": "q"}, {}, ["no-successor", "promote-scope"]),
+        (LinkType.PROMOTED_FROM, {}, {"scope": Scope.CHANGE}, ["no-successor", "promote-scope"]),
+        (LinkType.DEPENDS_ON, {"scope": Scope.GLOBAL}, {}, []),
+        (LinkType.RELATED_TO, {}, {"project": "q"}, ["link-target"]),
+        (LinkType.RELATED_TO, {}, {"scope": Scope.GLOBAL}, ["link-target"]),
+        (LinkType.EXCEPTION_TO, {}, {}, ["exception-target"]),
+        (LinkType.DEPENDS_ON, None, {}, ["link-target"]),
+    ],
+)
+def test_links_respect_visibility_replacement_and_promotion_scope(tmp_path, make, case):
+    link, target, source, expected = case
+    old = entry(
+        tmp_path,
+        make,
+        **(target or {}),
+        state=State.REPLACED if link in {LinkType.REPLACES, LinkType.PROMOTED_FROM} else State.IN_FORCE,
+    )
+    successor = entry(tmp_path, make, **source, links=(Link(type=link, target=old.decision.id),))
+    findings = check([old, successor] if target is not None else [successor])
+    assert sorted(f.rule for f in findings) == expected
+    for finding in findings:
+        assert successor.decision.id in finding.involves or finding.involves == (old.decision.id,)
+
+
+@pytest.mark.parametrize("kind", ["repeated", "two-live", "draft", "promotion-draft", "two-promotions", "mixed"])
+def test_successor_count_includes_only_eligible_live_successors(tmp_path, make, kind):
+    old = entry(tmp_path, make, state=State.REPLACED)
+    link = Link(type=LinkType.PROMOTED_FROM if "promotion" in kind else LinkType.REPLACES, target=old.decision.id)
+    first = entry(
+        tmp_path,
+        make,
+        scope=Scope.GLOBAL if "promotion" in kind else Scope.PROJECT,
+        state=State.DRAFT if kind == "draft" else State.IN_FORCE,
+        links=(link, link) if kind == "repeated" else (link,),
+    )
+    entries = [old, first]
+    expected = []
+    if kind in {"two-live", "two-promotions", "mixed"}:
+        second = entry(
+            tmp_path,
+            make,
+            Scope.GLOBAL if kind in {"two-promotions", "mixed"} else Scope.PROJECT,
+            links=(
+                Link(type=LinkType.PROMOTED_FROM if kind != "two-live" else LinkType.REPLACES, target=old.decision.id),
+            ),
+        )
+        entries += [
+            second,
+            entry(
+                tmp_path,
+                make,
+                Scope.GLOBAL if kind == "two-promotions" else Scope.PROJECT,
+                state=State.WITHDRAWN,
+                links=(link,),
+            ),
+        ]
+        expected = ["two-successors"] * 2
+    elif kind == "draft":
+        expected = ["no-successor"]
+    elif kind == "promotion-draft":
+        proposed = entry(tmp_path, make, state=State.REPLACED)
+        entries += [
+            proposed,
+            entry(
+                tmp_path,
+                make,
+                Scope.GLOBAL,
+                state=State.DRAFT,
+                links=(Link(type=LinkType.PROMOTED_FROM, target=proposed.decision.id),),
+            ),
+        ]
+        expected = ["no-successor"]
+    findings = check(entries)
+    assert sorted(f.rule for f in findings) == expected
+    if kind in {"two-live", "two-promotions", "mixed"}:
+        assert {f.involves for f in findings} == {
+            (first.decision.id, old.decision.id),
+            (second.decision.id, old.decision.id),
+        }
+    elif kind in {"draft", "promotion-draft"}:
+        assert findings[0].involves == ((old if kind == "draft" else proposed).decision.id,)
+
+
+@pytest.mark.parametrize("kind", ["240", "241", "outside-change", "wrong-project"])
+def test_placement_and_statement_limit_are_independent_findings(tmp_path, make, kind):
+    found = (
+        entry(tmp_path, make, statement="x" * int(kind))
+        if kind.isdigit()
+        else entry(tmp_path, make, Scope.CHANGE if kind == "outside-change" else Scope.PROJECT, project="q")
+    )
+    if not kind.isdigit():
+        found = Entry(found.path, Layer(tmp_path / "p", Scope.PROJECT, "p"), found.decision)
+    findings = check([found])
+    assert [f.rule for f in findings] == (
+        [] if kind == "240" else ["statement-length" if kind == "241" else "placement"]
+    )
+    if kind == "outside-change":
+        assert "outside a change folder" in findings[0].message
+
+
+def test_validator_cli_and_explicit_layer_selection(tmp_path, make, capsys):
+    rule = entry(tmp_path, make, Scope.GLOBAL)
+    local = entry(tmp_path, make, links=(Link(type=LinkType.EXCEPTION_TO, target=rule.decision.id),))
+    change = entry(tmp_path, make, Scope.CHANGE, links=(Link(type=LinkType.REFINES, target=rule.decision.id),))
+    for found in (rule, local, change):
+        write(found.decision, found.layer.folder)
     assert validate_repo(tmp_path) == []
     assert main([str(tmp_path)]) == 0
-
-
-def test_schema_error(tmp_path, put):
-    put()
-    (tmp_path / "p" / "decisions" / "broken.md").write_text("nothing\n", encoding="utf-8")
-    assert rules(tmp_path) == ["schema"]
-
-
-def test_link_type_outside_the_set(tmp_path, put):
-    decision = put(Scope.GLOBAL, links=(Link(type=LinkType.RELATED_TO, target=new_id()),))
-    path = tmp_path / "decisions" / f"{decision.id}.md"
-    path.write_text(serialize(decision).replace("type: related_to", "type: contradicts"), encoding="utf-8")
-    assert rules(tmp_path) == ["link-type"]
-
-
-def test_a_repeated_replaces_link_is_one_successor(tmp_path, put):
-    old = put(state=State.REPLACED)
-    link = Link(type=LinkType.REPLACES, target=old.id)
-    put(links=(link, link))
-    assert rules(tmp_path) == []
-
-
-@pytest.mark.parametrize(
-    ("target", "source", "allowed"),
-    [
-        ({"scope": Scope.GLOBAL}, {"scope": Scope.GLOBAL}, True),
-        ({"scope": Scope.PROJECT}, {"scope": Scope.PROJECT}, True),
-        ({"scope": Scope.CHANGE}, {"scope": Scope.PROJECT}, True),
-        ({"scope": Scope.CHANGE}, {"scope": Scope.CHANGE}, True),
-        ({"scope": Scope.GLOBAL}, {"scope": Scope.PROJECT}, False),
-        ({"scope": Scope.GLOBAL}, {"scope": Scope.CHANGE}, False),
-        ({"scope": Scope.PROJECT}, {"scope": Scope.CHANGE}, False),
-        ({"scope": Scope.CHANGE, "change": "c2"}, {"scope": Scope.CHANGE}, False),
-    ],
-)
-def test_replaces_only_reaches_the_same_or_a_narrower_layer(tmp_path, put, target, source, allowed):
-    old = put(**target, state=State.REPLACED)
-    put(**source, links=(Link(type=LinkType.REPLACES, target=old.id),))
-    assert rules(tmp_path) == ([] if allowed else ["replace-scope"])
-
-
-def test_duplicate_id(tmp_path, put):
-    first = put(Scope.GLOBAL)
-    put(id=first.id)
-    assert rules(tmp_path) == ["duplicate-id", "duplicate-id"]
-
-
-def test_an_alias_may_name_several_entries(tmp_path, put):
-    put(aliases=("TD-1",))
-    put(aliases=("TD-1",))
-    assert rules(tmp_path) == []
-
-
-def test_missing_link_target(tmp_path, put):
-    put(links=(Link(type=LinkType.DEPENDS_ON, target=new_id()),))
-    assert rules(tmp_path) == ["link-target"]
-
-
-def test_global_cannot_link_into_a_project_but_a_project_may_target_global(tmp_path, put):
-    rule = put(Scope.GLOBAL)
-    local = put(links=(Link(type=LinkType.DEPENDS_ON, target=rule.id),))
-    other = put(project="q", links=(Link(type=LinkType.RELATED_TO, target=local.id),))
-    put(Scope.GLOBAL, links=(Link(type=LinkType.RELATED_TO, target=other.id),))
-    put(Scope.GLOBAL, links=(Link(type=LinkType.PROMOTED_FROM, target=other.id),))
-    assert rules(tmp_path) == ["link-target", "link-target"]
-
-
-def test_two_in_force_successors(tmp_path, put):
-    old = put(state=State.REPLACED)
-    put(links=(Link(type=LinkType.REPLACES, target=old.id),))
-    put(links=(Link(type=LinkType.REPLACES, target=old.id),))
-    put(state=State.WITHDRAWN, links=(Link(type=LinkType.REPLACES, target=old.id),))
-    assert rules(tmp_path) == ["two-successors", "two-successors"]
-
-
-def test_replaced_without_successor(tmp_path, put):
-    old = put(state=State.REPLACED)
-    put(state=State.DRAFT, links=(Link(type=LinkType.REPLACES, target=old.id),))
-    assert rules(tmp_path) == ["no-successor"]
-
-
-def test_a_promotion_is_the_replaced_sources_successor_but_a_draft_one_is_not(tmp_path, put):
-    source, proposed = put(state=State.REPLACED), put(state=State.REPLACED)
-    put(Scope.GLOBAL, links=(Link(type=LinkType.PROMOTED_FROM, target=source.id),))
-    put(Scope.GLOBAL, state=State.DRAFT, links=(Link(type=LinkType.PROMOTED_FROM, target=proposed.id),))
-    assert [(f.rule, f.involves) for f in validate_repo(tmp_path)] == [("no-successor", (proposed.id,))]
-
-
-@pytest.mark.parametrize(
-    ("target", "source", "allowed"),
-    [
-        ({"scope": Scope.PROJECT}, {"scope": Scope.GLOBAL}, True),
-        ({"scope": Scope.CHANGE}, {"scope": Scope.GLOBAL}, True),
-        ({"scope": Scope.CHANGE}, {"scope": Scope.PROJECT}, True),
-        ({"scope": Scope.GLOBAL}, {"scope": Scope.GLOBAL}, False),
-        ({"scope": Scope.PROJECT}, {"scope": Scope.PROJECT}, False),
-        ({"scope": Scope.CHANGE, "project": "q"}, {"scope": Scope.PROJECT}, False),
-        ({"scope": Scope.PROJECT}, {"scope": Scope.CHANGE}, False),
-    ],
-)
-def test_a_promotion_only_widens_and_a_narrowing_one_is_no_successor(tmp_path, put, target, source, allowed):
-    old = put(**target, state=State.REPLACED)
-    put(**source, links=(Link(type=LinkType.PROMOTED_FROM, target=old.id),))
-    assert rules(tmp_path) == ([] if allowed else ["no-successor", "promote-scope"])
-
-
-def test_two_promotions_or_a_promotion_and_a_replacement_of_one_source_are_two_successors(tmp_path, put):
-    source, other = put(state=State.REPLACED), put(state=State.REPLACED)
-    put(Scope.GLOBAL, links=(Link(type=LinkType.PROMOTED_FROM, target=source.id),))
-    put(Scope.GLOBAL, links=(Link(type=LinkType.PROMOTED_FROM, target=source.id),))
-    put(Scope.GLOBAL, links=(Link(type=LinkType.PROMOTED_FROM, target=other.id),))
-    put(links=(Link(type=LinkType.REPLACES, target=other.id),))
-    assert rules(tmp_path) == ["two-successors"] * 4
-
-
-def test_a_decided_decision_needs_no_quote(tmp_path, put):
-    put()  # TD-449: the owner's words are never stored
-    assert rules(tmp_path) == []
-
-
-def test_statement_over_240_characters(tmp_path, put):
-    put(statement="x" * 240)
-    put(statement="x" * 241)
-    assert rules(tmp_path) == ["statement-length"]
-
-
-def test_change_decision_outside_a_change_folder(tmp_path, put):
-    put(Scope.CHANGE, folder=tmp_path / "p")
-    findings = validate_repo(tmp_path)
-    assert [f.rule for f in findings] == ["placement"]
-    assert "outside a change folder" in findings[0].message
-
-
-def test_project_decision_in_another_projects_folder(tmp_path, put):
-    put(project="q", folder=tmp_path / "p")
-    assert rules(tmp_path) == ["placement"]
-
-
-def test_exception_to_a_non_global_decision(tmp_path, put):
-    local = put()
-    put(links=(Link(type=LinkType.EXCEPTION_TO, target=local.id),))
-    assert rules(tmp_path) == ["exception-target"]
-
-
-def test_validate_takes_explicit_folders(tmp_path, put):
-    put(statement="x" * 241)
-    assert [f.rule for f in validate(None, [tmp_path / "p"])] == ["statement-length"]
+    assert capsys.readouterr().out.endswith("0 finding(s)\n")
+    long = entry(tmp_path, make, statement="x" * 241)
+    write(long.decision, long.layer.folder)
+    assert [f.rule for f in validate(None, [tmp_path / "p"])] == ["link-target", "link-target", "statement-length"]
     assert validate(tmp_path, []) == []
-
-
-def test_cli_prints_findings_and_fails(tmp_path, put, capsys):
-    put(statement="x" * 241)
     assert main([str(tmp_path)]) == 1
     out = capsys.readouterr().out
     assert "statement-length: statement has 241 characters" in out

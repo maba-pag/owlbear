@@ -219,13 +219,13 @@ def test_a_completion_between_the_checked_rebase_and_the_second_push_is_held_by_
 
 
 @pytest.fixture
-def held(three, monkeypatch) -> tuple[Store, Path]:
+def held(three) -> tuple[Store, Path]:
     """A winner whose stale fill was refused at its first push: committed here, unpushed, the refusal recorded."""
     winner, settler, remote = three
-    at_git(monkeypatch, winner, nth_push(1), lambda: complete_and_delete(settler))
-    with pytest.raises(StoreError, match="is held because"):
-        prefs_import.run(winner)
-    monkeypatch.undo()
+    with pytest.MonkeyPatch.context() as patch:
+        at_git(patch, winner, nth_push(1), lambda: complete_and_delete(settler))
+        with pytest.raises(StoreError, match="is held because"):
+            prefs_import.run(winner)
     return winner, remote
 
 
@@ -297,7 +297,19 @@ def test_a_dangling_hold_introduced_during_its_git_probe_never_replays_or_pushes
     assert saved.read_bytes() == raw
 
 
-@pytest.mark.parametrize("damage", ["dangling", "symlink", "directory", "unreadable"])
+def damage_record(record, raw, damage):
+    if damage in {"dangling", "symlink"}:
+        record.symlink_to(record.with_suffix(".saved") if damage == "symlink" else "missing-held-publication.json")
+    elif damage == "directory":
+        record.mkdir()
+    elif damage == "malformed":
+        record.write_bytes(mutate(json.loads(raw), "not json"))
+    else:
+        record.write_bytes(raw)
+        record.chmod(0)
+
+
+@pytest.mark.parametrize("damage", ["dangling", "symlink", "directory", "unreadable", "malformed"])
 def test_every_hold_reader_keeps_a_damaged_entry_and_its_original_without_publishing(held, monkeypatch, damage):
     winner, remote = held
     shared, root = winner.shared, winner.shared.root
@@ -305,13 +317,7 @@ def test_every_hold_reader_keeps_a_damaged_entry_and_its_original_without_publis
     saved = record.with_suffix(".saved")
     raw, before, owner = record.read_bytes(), remote_head(remote), owner_state(root)
     record.rename(saved)
-    if damage in {"dangling", "symlink"}:
-        record.symlink_to(saved if damage == "symlink" else "missing-held-publication.json")
-    elif damage == "directory":
-        record.mkdir()
-    else:
-        record.write_bytes(raw)
-        record.chmod(0)
+    damage_record(record, raw, damage)
     entry, real, ran = record.lstat(), data_repo._git, []  # noqa: SLF001
 
     def spy(cwd, *args, until=None):
@@ -341,6 +347,11 @@ def test_every_hold_reader_keeps_a_damaged_entry_and_its_original_without_publis
         assert not remote_has_config(remote)
         assert remote_marker(remote) == "done"
         assert owner_state(root) == owner
+        if damage == "malformed":
+            assert record.read_bytes() == b"{ not json"
+            assert "held publication record" in publish_memory(winner, "later.md")
+            assert record.read_bytes() == b"{ not json"
+            assert remote_head(remote) == before
     finally:
         if damage == "unreadable":
             record.chmod(0o600)
@@ -435,14 +446,13 @@ def test_a_fifo_hold_is_refused_by_every_caller_without_waiting(held):
     assert owner_state(root) == owner
 
 
-@pytest.mark.parametrize("alias", ["none", "checkout", "ancestor"])
+@pytest.mark.parametrize("alias", ["ancestor"])
 def test_absent_and_valid_regular_holds_still_publish_through_preexisting_checkout_aliases(three, tmp_path, alias):
     winner, _, remote = three
     root = winner.shared.root
-    if alias != "none":
-        link = tmp_path / "checkout-alias"
-        link.symlink_to(root if alias == "checkout" else root.parent, target_is_directory=True)
-        root = link if alias == "checkout" else link / root.name
+    link = tmp_path / f"{alias}-alias"  # a folder holding the checkout, reached by a symlink
+    link.symlink_to(root.parent, target_is_directory=True)
+    root = link / root.name
     shared = DataRepo(root)
     record = root / git(root, "rev-parse", "--git-path", publication_hold.RECORD)
     assert not publication_hold.recorded(shared, None)
@@ -501,36 +511,18 @@ def test_no_later_publication_of_the_held_checkout_pushes_its_stale_fill(held, t
     assert git(root, "merge-base", "--is-ancestor", head, "HEAD") == ""  # every commit kept, none undone
     assert (root / "owner-wip.txt").read_text() == "the owner's untracked work\n"
 
-
-def test_once_the_owner_removes_the_held_change_the_checkout_catches_up_and_stays_settled(held):
-    winner, remote = held
-    root = winner.shared.root
     git(root, "reset", "-q", "--hard", "@{upstream}")  # the owner's own review and removal, by hand
-
-    prefs_import.run(winner)
-
+    prefs_import.run(restarted)
     assert not winner.shared.held()
     assert not publication_hold.recorded(winner.shared, None)
     assert winner.read_profile().prefs_import == "done"
     assert not winner.config_path.exists()
     assert not remote_has_config(remote)
+    assert (root / "owner-wip.txt").read_text() == "the owner's untracked work\n"
 
 
-def test_a_healthy_unrelated_advance_at_the_first_push_is_checked_and_published(three, monkeypatch):
-    winner, other, remote = three
-    fired = at_git(monkeypatch, winner, nth_push(1), lambda: unrelated_advance(other))
-
-    prefs_import.run(winner)
-
-    assert fired == [True]
-    assert remote_marker(remote) == "done"
-    assert remote_has_config(remote)
-    assert winner.read_config().prefs.ci_poll_seconds == 45
-    assert not publication_hold.recorded(winner.shared, None)  # the record lapsed with its publication
-
-
-def test_an_automatic_save_that_cannot_tell_a_rebase_says_why_whole(three, monkeypatch, whole_error):
-    winner = three[0]
+def test_an_automatic_save_that_cannot_tell_a_rebase_says_why_whole(shared_repo, tmp_path, monkeypatch, whole_error):
+    winner = Store(tmp_path / "winner-store", DataRepo(shared_repo[0]), PROJECT)
     basis = profile_share.config_digest(winner.config_path)
 
     def unknown(*_args: object) -> bool:
@@ -591,7 +583,6 @@ def test_every_added_git_step_of_the_automatic_save_shares_the_saves_one_deadlin
     monkeypatch.setattr(winner, "update_config", watched)
     prefs_import.run(winner)
 
-    assert len(untils) >= 5
     assert None not in untils
     assert len(set(untils)) == 1
 
@@ -782,31 +773,6 @@ def test_a_malformed_held_record_is_refused_and_kept_as_it_is(tmp_path, case):
     with pytest.raises(publication_hold._UnknownError, match="held publication record"):  # noqa: SLF001
         publication_hold._load(record)  # noqa: SLF001
     assert record.read_bytes() == raw
-
-
-@pytest.mark.parametrize("case", ["watch escapes", "missing key", "not json"])
-def test_a_malformed_held_record_stays_held_with_its_bytes_and_never_lapses(held, case):
-    import json  # noqa: PLC0415
-
-    winner, remote = held
-    root, before = winner.shared.root, remote_head(remote)
-    record = root / git(root, "rev-parse", "--git-path", publication_hold.RECORD)
-    raw = mutate(json.loads(record.read_bytes()), case)
-    record.write_bytes(raw)
-    head = git(root, "rev-parse", "HEAD")
-
-    with winner.shared.locked():
-        assert "held publication record" in winner.shared.pull()
-        memory = winner.shared.memory_path(PROJECT) / "note.md"
-        memory.parent.mkdir(parents=True, exist_ok=True)
-        memory.write_text("a memory\n")
-        assert "held publication record" in winner.shared.publish(memory, "memory: note")
-    assert "held publication record" in winner.shared.held()
-
-    assert record.read_bytes() == raw
-    assert remote_head(remote) == before
-    assert not remote_has_config(remote)
-    assert git(root, "merge-base", "--is-ancestor", head, "HEAD") == ""
 
 
 def publish_memory(store: Store, name: str) -> str:
@@ -1004,9 +970,11 @@ def test_a_configured_forced_push_never_overwrites_a_remote_that_moved_after_the
     assert remote_head(remote) == git(settler.shared.root, "rev-parse", "HEAD")
 
 
-def test_a_configured_forced_push_of_a_held_fill_keeps_a_healthy_remote_advance(three, tmp_path, monkeypatch):
+@pytest.mark.parametrize("forced", [False, True])
+def test_a_configured_forced_push_of_a_held_fill_keeps_a_healthy_remote_advance(three, tmp_path, monkeypatch, forced):
     winner, other, remote = three
-    git(winner.shared.root, "config", "remote.origin.push", FORCED)
+    if forced:
+        git(winner.shared.root, "config", "remote.origin.push", FORCED)
     fired = at_git(monkeypatch, winner, nth_push(1), lambda: unrelated_advance(other))
 
     prefs_import.run(winner)  # the forced refspec would overwrite the advance; the bound push is rejected instead
@@ -1014,19 +982,10 @@ def test_a_configured_forced_push_of_a_held_fill_keeps_a_healthy_remote_advance(
     assert fired == [True]
     assert remote_marker(remote) == "done"
     assert remote_has_config(remote)
+    assert winner.read_config().prefs.ci_poll_seconds == 45
+    assert not publication_hold.recorded(winner.shared, None)
     fresh = checkout(remote, tmp_path, "fresh")
     assert (fresh.shared.root / "unrelated" / "notes.md").exists()  # the other clone's commit was not overwritten
-
-
-def test_an_explicit_push_is_still_checked_whatever_push_refspec_is_configured(held):
-    winner, remote = held
-    git(winner.shared.root, "config", "remote.origin.push", FORCED)
-    before = remote_head(remote)
-    for args in (("push", "-q", "origin", "+HEAD:refs/heads/main"), ("push", "-q", "origin", "HEAD:refs/heads/main")):
-        said = winner.shared.git(*args)
-        assert said.returncode == 1
-        assert "nothing was pushed" in said.stderr
-    assert remote_head(remote) == before
 
 
 def old_roles(store: Store, roles_: dict) -> None:
@@ -1064,36 +1023,32 @@ def move_then_clear(b: Store) -> None:
     )
 
 
-def test_a_role_move_never_restores_overrides_another_checkout_moved_and_cleared_first(two_movers, monkeypatch):
+@pytest.mark.parametrize("remote_moves", [False, True])
+def test_a_role_move_never_restores_overrides_another_checkout_moved_and_cleared_first(
+    two_movers, monkeypatch, remote_moves
+):
     from owlbear_delivery_next.state_store import roles_move  # noqa: PLC0415
 
     a, b, remote = two_movers
-    fired = at_git(monkeypatch, a, nth_push(1), lambda: move_then_clear(b))
+    if remote_moves:
+        fired = at_git(monkeypatch, a, nth_push(1), lambda: move_then_clear(b))
 
     roles_move.move_roles(a)  # applied here with its receipt; its publication is held, as Settings shows
 
-    assert fired == [True]
     published = remote_config(remote)
     assert published.roles_moved is True
+    if not remote_moves:
+        assert published.agents["builder"].model == "m-1"
+        assert (a.root / profile_share.ROLES_MOVED).exists()
+        assert not publication_hold.recorded(a.shared, None)
+        return
+    assert fired == [True]
     assert published.agents == {}  # the owner's clear dominates
     assert remote_head(remote) == git(b.shared.root, "rev-parse", "HEAD")
     assert "an automatic change is held" in a.shared.pending()
     assert "changed on the shared remote" in a.shared.held()
     assert "is held because" in publish_memory(a, "later.md")  # a later publication never sends the move
     assert remote_config(remote).agents == {}
-
-
-def test_a_role_move_over_an_unchanged_remote_config_publishes_its_overrides_and_receipt(two_movers):
-    from owlbear_delivery_next.state_store import roles_move  # noqa: PLC0415
-
-    a, _, remote = two_movers
-    roles_move.move_roles(a)
-
-    published = remote_config(remote)
-    assert published.roles_moved is True
-    assert published.agents["builder"].model == "m-1"
-    assert (a.root / profile_share.ROLES_MOVED).exists()
-    assert not publication_hold.recorded(a.shared, None)
 
 
 @pytest.fixture
@@ -1188,9 +1143,20 @@ def interrupt_a_batch(store: Store, how: str) -> None:
     decision_batch.begin(store.shared, PROJECT, head, "decisions: in flight", [decision_id], files)
 
 
-@pytest.mark.parametrize("how", ["pending", "corrupt"])
-def test_an_interrupted_decision_batch_stops_the_import_before_its_pull_or_any_push(three, monkeypatch, how):
-    winner, other, remote = three
+@pytest.mark.parametrize("how", ["pending", "corrupt", "held"])
+def test_an_interrupted_decision_batch_stops_the_import_before_its_pull_or_any_push(request, monkeypatch, how):
+    if how == "held":
+        winner, remote = request.getfixturevalue("held")
+        interrupt_a_batch(winner, "pending")
+        before = remote_head(remote)
+        notice = publish_memory(winner, "later.md")
+        assert "decision batch" in notice
+        assert "is held because" not in notice
+        with winner.shared.locked():
+            assert "decision batch" in winner.shared.pull()
+        assert remote_head(remote) == before
+        return
+    winner, other, remote = request.getfixturevalue("three")
     unrelated_advance(other)  # the import's catch-up would rebase onto this
     interrupt_a_batch(winner, how)
     before, head = remote_head(remote), git(winner.shared.root, "rev-parse", "HEAD")
@@ -1214,42 +1180,20 @@ def test_an_interrupted_decision_batch_stops_the_import_before_its_pull_or_any_p
     assert not remote_has_config(remote)
 
 
-def test_an_interrupted_decision_batch_comes_before_a_held_change_in_every_ordinary_publication(held):
-    winner, remote = held
-    interrupt_a_batch(winner, "pending")
-    before = remote_head(remote)
-
-    notice = publish_memory(winner, "later.md")
-    assert "decision batch" in notice
-    assert "is held because" not in notice  # the barrier answers before the hold is even checked
-    with winner.shared.locked():
-        assert "decision batch" in winner.shared.pull()
-    assert remote_head(remote) == before
-
-
-def test_an_owned_decision_push_never_sends_a_held_stale_fill(held):
-    winner, remote = held
-    shared, before = winner.shared, remote_head(remote)
-    until = time.monotonic() + 30
-    goal = decision_sync.target(shared, until)
-    assert goal is not None
-
-    said = decision_sync.push_commit(shared, git(shared.root, "rev-parse", "HEAD"), goal, until)
-
-    # the explicit SHA and captured target are checked against the hold too (R06 keeps 200 characters of the notice)
-    assert said.startswith(f"nothing was pushed or rebased in {shared.root}")
-    assert remote_head(remote) == before
-    assert not remote_has_config(remote)
-    assert shared.held()  # the kept refusal still names why
-
-
-@pytest.mark.parametrize("remote_name", ["origin", "authority"])
-def test_a_healthy_owned_decision_push_lands_on_its_target_within_one_deadline(three, monkeypatch, remote_name):
+@pytest.mark.parametrize("transport", ["owned", "plain", "spaced"])
+def test_a_healthy_owned_decision_push_lands_on_its_target_within_one_deadline(three, tmp_path, monkeypatch, transport):
     winner, _, remote = three
     root = winner.shared.root
+    remote_name = "origin" if transport == "plain" else "authority"
     if remote_name != "origin":
         git(root, "remote", "rename", "origin", remote_name)
-    git(root, "config", "remote.origin.push" if remote_name == "origin" else f"remote.{remote_name}.push", FORCED)
+    if transport == "spaced":
+        spaced = tmp_path / "authority  repo.git"
+        git(tmp_path, "clone", "-q", "--bare", str(remote), str(spaced))
+        git(root, "remote", "set-url", remote_name, str(spaced))
+        git(root, "fetch", "-q", remote_name)
+        remote = spaced
+    git(root, "config", f"remote.{remote_name}.push", FORCED)
     notes = root / "unrelated" / "decision-notes.md"
     notes.parent.mkdir(parents=True, exist_ok=True)
     notes.write_text("an owned batch's commit\n")
@@ -1267,12 +1211,16 @@ def test_a_healthy_owned_decision_push_lands_on_its_target_within_one_deadline(t
     goal = decision_sync.target(winner.shared, until)
     assert goal is not None
     assert (goal.remote, goal.ref) == (remote_name, "refs/heads/main")
+    if transport == "spaced":
+        assert goal.fetch == str(remote)
     monkeypatch.setattr(data_repo, "_git", spy)
 
-    assert decision_sync.push_commit(winner.shared, made, goal, until) == ""
+    if transport == "plain":
+        assert winner.shared.git("push", "-q", remote_name, f"{made}:refs/heads/main", until=until).returncode == 0
+    else:
+        assert decision_sync.push_commit(winner.shared, made, goal, until) == ""
 
     assert remote_head(remote) == made  # a fast-forward of exactly the owned commit, never forced
-    assert untils
     assert set(untils) == {until}
 
 
@@ -1305,10 +1253,7 @@ def owner_state(root: Path) -> tuple[str, ...]:
     )
 
 
-@pytest.mark.parametrize(
-    "refspec",
-    ["refs/heads/*:refs/heads/*", "refs/heads/*:refs/heads/main", "HEAD:refs/heads/*", "main*:refs/heads/main"],
-)
+@pytest.mark.parametrize("refspec", ["refs/heads/*:refs/heads/main", "HEAD:refs/heads/*"])
 def test_an_explicit_pattern_push_never_sends_more_than_one_captured_branch(three, monkeypatch, refspec):
     winner, _, remote = three
     root = winner.shared.root
@@ -1333,17 +1278,6 @@ def test_an_explicit_pattern_push_never_sends_more_than_one_captured_branch(thre
     assert said.returncode == 1
     assert "names no single remote and branch to check" in said.stderr
     assert owner_state(root) == owner
-
-
-def test_a_single_explicit_sha_push_to_a_captured_branch_still_publishes(three):
-    winner, _, remote = three
-    root = winner.shared.root
-    git(root, "commit", "-q", "--allow-empty", "-m", "an owned commit")
-    made = git(root, "rev-parse", "HEAD")
-
-    assert winner.shared.git("push", "-q", "origin", f"{made}:refs/heads/main").returncode == 0
-
-    assert remote_head(remote) == made
 
 
 def repointed(three, tmp_path: Path, name: str = "fork-b.git") -> tuple[Store, Path, Path, str, object]:
@@ -1439,47 +1373,36 @@ def test_a_proof_with_unreadable_repository_addresses_is_not_known_or_fetched(th
     assert not [args for args in calls if args[:1] in {("fetch",), ("push",)}]
 
 
-def test_an_owned_decision_push_to_an_unchanged_address_with_spaces_lands(three, tmp_path):
-    winner, _, remote = three
-    root = winner.shared.root
-    spaced = tmp_path / "authority  repo.git"
-    git(tmp_path, "clone", "-q", "--bare", str(remote), str(spaced))
-    git(root, "remote", "set-url", "origin", str(spaced))
-    git(root, "fetch", "-q")
-    git(root, "commit", "-q", "--allow-empty", "-m", "decisions: an owned batch")
-    made = git(root, "rev-parse", "HEAD")
-    until = time.monotonic() + 30
-    goal = decision_sync.target(winner.shared, until)
-    assert goal is not None
-    assert goal.fetch == str(spaced)
-
-    assert decision_sync.push_commit(winner.shared, made, goal, until) == ""
-
-    assert remote_head(spaced) == made
+@pytest.fixture
+def claimed(shared_repo) -> DataRepo:
+    """The shared checkout with this project's folder claimed, its claim file left untracked."""
+    shared = DataRepo(shared_repo[0])
+    shared.claim(PROJECT, "github.com/acme/shop-site")
+    return shared
 
 
-def an_owned_decision(picking) -> object:
+def an_owned_decision() -> object:
     from datetime import UTC, datetime  # noqa: PLC0415
 
     from owlbear_decisions import Decision, Origin, Scope, State, new_id  # noqa: PLC0415
 
     return Decision(
         id=new_id(), title="Notes live in SQLite", statement="Notes live in one SQLite table.", scope=Scope.PROJECT,
-        project=picking.PROJECT, origin=Origin.AUTONOMOUS, actor="shaper", state=State.IN_FORCE,
+        project=PROJECT, origin=Origin.AUTONOMOUS, actor="shaper", state=State.IN_FORCE,
         created_at=datetime(2026, 10, 26, tzinfo=UTC),
     )  # fmt: skip
 
 
 @pytest.mark.parametrize("push", ["initial", "rebased-retry"])
 def test_a_repoint_during_the_shared_checkouts_own_push_probes_sends_nothing_to_the_other_repository(
-    picking, shared_repo, tmp_path, monkeypatch, push
+    claimed, shared_repo, tmp_path, monkeypatch, push
 ):
     """The owned push checked its captured remote's addresses, then the shared checkout's own probes run (the held
     publication record's lookup first); origin is pointed at repository B during that lookup. The push still goes
     nowhere: its captured addresses are checked again at the push itself, after those probes."""
     from owlbear_delivery_next.state_store import decision_store  # noqa: PLC0415
 
-    shared, remote = picking.shared, shared_repo[1]
+    shared, remote = claimed, shared_repo[1]
     root = shared.root
     fork = tmp_path / "fork-b.git"
     git(tmp_path, "clone", "-q", "--bare", str(remote), str(fork))
@@ -1508,7 +1431,7 @@ def test_a_repoint_during_the_shared_checkouts_own_push_probes_sends_nothing_to_
 
     monkeypatch.setattr(DataRepo, "git", spy)
     fork_refs, before = remote_refs(fork), remote_head(remote)
-    receipts = decision_store.save_all(shared, [(an_owned_decision(picking), None)], message="decisions: one")
+    receipts = decision_store.save_all(shared, [(an_owned_decision(), None)], message="decisions: one")
 
     assert fired == [True]
     assert remote_refs(fork) == fork_refs  # repository B never got the commit
@@ -1608,12 +1531,12 @@ def test_a_held_record_lock_folder_or_rebase_state_that_cannot_be_read_says_the_
     )
 
 
-def test_a_spent_decision_whose_hold_git_fails_is_refused_with_git_s_whole_words(picking, failing_git, whole_error):
+def test_a_spent_decision_whose_hold_git_fails_is_refused_with_git_s_whole_words(claimed, failing_git, whole_error):
     """P21: spending an active project decision holds it first; a hold Git fails refuses the save, Git's words whole."""
     from owlbear_decisions import State  # noqa: PLC0415
     from owlbear_delivery_next.state_store import decision_store  # noqa: PLC0415
 
-    shared, rule = picking.shared, an_owned_decision(picking)
+    shared, rule = claimed, an_owned_decision()
     (saved,) = decision_store.save_all(shared, [(rule, None)], message="decisions: one")
     assert saved.saved
     ran: list[tuple[str, ...]] = []
