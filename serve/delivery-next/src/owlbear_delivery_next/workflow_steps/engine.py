@@ -155,6 +155,7 @@ def needs_target(c: Change, path: Path, reason: str, now: datetime, writer: Writ
             exit=Exit.RETRY,
             cause=failures.cause_key(ErrorKind.CONFLICT, StepKind.BUILD, ref),
             reason=f"The branch already contains {ref}, but the Builder of {c.step.task} needs: {reason}",
+            classified=f"target premise remains unsatisfied with {ref} already integrated",
         )
     return integrate(c, StepKind.BUILD, ref, f"The Builder of {c.step.task} needs: {reason}")
 
