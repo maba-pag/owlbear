@@ -253,6 +253,7 @@ class _Selection:
     maps: list[Evidence]
     current_hashes: dict[str, str]
     local: frozenset[str] = frozenset()
+    measurement: bool = False
 
     def __post_init__(self) -> None:
         self.recorded = self.maps[0].inputs
@@ -350,7 +351,12 @@ class _Selection:
         for node in direct:
             if not any(test == node or test.startswith((f"{node}[", f"{node}::")) for test in mapped):
                 self.add(node, f"unobserved block current named consumer: {source}")
-        if not mapped and not direct and not (source in self.local and source not in self.consumers.texts):
+        measured = self.measurement and source in self.reasons
+        if (
+            not mapped
+            and not direct
+            and not (source in self.local and (source not in self.consumers.texts or measured))
+        ):
             msg = f"Unobserved task blocks in {self.root}/{source} have no resolved current consumers"
             raise RuntimeError(msg)
 
@@ -467,7 +473,13 @@ def select(
     suites = _suites({*all_paths, *importing, *(node_path(node, local=local) for node in forced)})
     hashes = inputs(root, files) | {name: snapshot(root / name) for name in local if (root / name).is_file()}
     selection = _Selection(
-        root, all_paths, consumers, _load(root, context.target, context.maps_dir, suites), hashes, local
+        root,
+        all_paths,
+        consumers,
+        _load(root, context.target, context.maps_dir, suites),
+        hashes,
+        local,
+        context.measurement,
     )
     for node in scope.tests:
         selection.add(node, "caller-supplied invariant/source-reading/subprocess/neighbor")
