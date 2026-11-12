@@ -305,9 +305,9 @@ def _resolved_witness(change: Change, prof: Profile, source: Path) -> tuple[str,
     if task:
         rebuilds.refresh(change, task)
     pairs = worktree.checks(profile.vouched(prof))
-    if task and task.checks and r is not None:
+    if task and r is not None and (task.checks or change.tests is not None):
         bound = task if task.base is not None else task.model_copy(update={"base": r.base})
-        return tuple(worktree.task_checks(profile.vouched(prof), bound, source, change.names.target))
+        return tuple(worktree.build_checks(profile.vouched(prof), change, bound, source))
     selected = [check_hint.qualified(p, c) for p, c in pairs if _in_scope(change, p)]
     if r is None or not worktree.owns_changed_runner(source):
         return tuple(selected)

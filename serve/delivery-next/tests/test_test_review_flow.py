@@ -26,7 +26,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.change_flow import loop, stuck, worktree
 from owlbear_delivery_next.change_flow.brief_rounds import ready
 from owlbear_delivery_next.change_flow.curation_flow import CURATE
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
@@ -41,7 +41,7 @@ from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.state_store import identities
 from owlbear_delivery_next.state_store.briefs import new_slug
 from owlbear_delivery_next.state_store.store import Store
-from owlbear_delivery_next.workflow_steps import curation, curation_build, curation_shares, sessions
+from owlbear_delivery_next.workflow_steps import curation, curation_build, curation_shares, sessions, step_repair
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -355,6 +355,9 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
         ),
     )
     assert cfg.checks[0] in cfg.message
+    repair = c.model_copy(update={"step": Step(kind=StepKind.BUILD, task=CURATE)}, deep=True)
+    stuck.start(repair, "project-env:build:measurement", "the suite measurement cannot finish", NOW)
+    assert step_repair._witness(repair, prof, cfg.worktree) == cfg.checks  # noqa: SLF001
     assert "tests/test_a.py::old: retire" in cfg.message
     assert "share 2 (web/src/b.test.ts" not in cfg.message  # every share ended
     assert "::slow" not in cfg.message  # rewrite-lower waits (TD-312)
