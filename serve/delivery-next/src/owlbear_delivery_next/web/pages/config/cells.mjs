@@ -91,6 +91,12 @@ export function table(caption, heads, body, rows, { id, hidden = false } = {}) {
     <p-table-body id=${body}>${rows}</p-table-body></p-table>`;
 }
 
+// A select whose *options* ([value, words] pairs) change is replaced as one subtree: PDS options can receive a queued
+// slotchange after removal, and a closed select keeps showing its chosen option's old words.
+export function renewed(options, render) {
+  return repeat([options], (list) => JSON.stringify(list), render);
+}
+
 // A table cell's choice: its column says what it is, so the label is for assistive technology only.
 // *wrong* says why the choice cannot run, for a choice that is checked (an effort); undefined for the others.
 function choose(label, options, value, chosen, { key, disabled = false, filter = false, wrong } = {}) {
@@ -100,9 +106,7 @@ function choose(label, options, value, chosen, { key, disabled = false, filter =
   };
   const items = options.map(([v, said]) => html`<p-select-option value=${v}>${said}</p-select-option>`);
   const checked = wrong === undefined ? nothing : wrong ? "error" : "none";
-  // PDS options can receive a queued slotchange after removal; replace their select as one subtree.
-  return repeat([options], (list) => JSON.stringify(list.map(([v]) => v)),
-    () => html`<p-select label=${label} hide-label="true" data-key=${key ?? nothing}
+  return renewed(options, () => html`<p-select label=${label} hide-label="true" data-key=${key ?? nothing}
       filter=${filter ? "true" : nothing} state=${checked} message=${wrong || nothing} ?disabled=${disabled}
       .value=${live(value)} @change=${changed}>${items}</p-select>`);
 }

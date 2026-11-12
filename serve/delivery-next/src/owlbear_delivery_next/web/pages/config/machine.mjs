@@ -2,7 +2,7 @@ import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { call, displayName, here, loaded as clones, project as current } from "/assets/ui.mjs";
 import { CREDITS, INHERIT, SOURCES, WRITE, state, show, notify, typedNumber, turns } from "./state.mjs";
-import { button } from "./cells.mjs";
+import { button, renewed } from "./cells.mjs";
 import { edit, own, layerValue } from "./layers.mjs";
 import { MACHINE_LABELS } from "./names.mjs";
 
@@ -110,10 +110,11 @@ function ownControl(key) {
       const v = e.target.value;
       machineEdit(key, v === INHERIT ? null : CHOICES[key] === SWITCH ? v === "true" : v);
     };
-    control = html`<p-select id=${`machine-${key}`} label=${MACHINE_LABELS[key]} hide-label="true"
+    control = renewed([[INHERIT, below], ...CHOICES[key]], (options) => html`<p-select id=${`machine-${key}`}
+      label=${MACHINE_LABELS[key]} hide-label="true"
       .value=${live(value === null || value === undefined ? INHERIT : String(value))} ?disabled=${common.disabled}
-      @change=${pick}>${[[INHERIT, below], ...CHOICES[key]].map(([v, text]) =>
-        html`<p-select-option value=${v}>${text}</p-select-option>`)}</p-select>`;
+      @change=${pick}>${options.map(([v, text]) => html`<p-select-option value=${v}>${text}</p-select-option>`)}
+      </p-select>`);
   }
   return machineRow(key, MACHINE_LABELS[key], control, machineSource(key));
 }
