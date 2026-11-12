@@ -437,15 +437,14 @@ def admitted(
         option = options[proposed.recommended]
         recommendation = option.id
         proof = option.proof
-        if proof is not None:
-            evidence = proof.admission
-            if proof.command and proof.elapsed_seconds is not None:
-                evidence = (
-                    f"`{proof.command}` at {proof.head}: exit {proof.exit_code}, "
-                    f"{proof.elapsed_seconds:.3f} s. {proof.admission}"
-                )
-            text += f"\nRecommended: {proposed.options[proposed.recommended].label}."
-            details.append(f"Checked before offering: {evidence}")
+        evidence = proof.admission  # every option above carries its proof
+        if proof.command and proof.elapsed_seconds is not None:
+            evidence = (
+                f"`{proof.command}` at {proof.head}: exit {proof.exit_code}, "
+                f"{proof.elapsed_seconds:.3f} s. {proof.admission}"
+            )
+        text += f"\nRecommended: {proposed.options[proposed.recommended].label}."
+        details.append(f"Checked before offering: {evidence}")
     text += "\n\nDetails: " + " ".join(details)  # the plain question first; what the owner needn't judge after it
     question = Question(
         step=c.step.kind,

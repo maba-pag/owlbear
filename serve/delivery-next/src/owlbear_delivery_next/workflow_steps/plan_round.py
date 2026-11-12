@@ -141,7 +141,7 @@ def judged(change: Change, verdict: Result, payload: object) -> Result:
         return verdict  # the session failed or stopped: the mode stays, so the same plan is challenged again
     then = plan_rounds.counted(change, found, upheld)
     change.step.mode = None
-    if then == "ask" and plan_rounds.delegated(change) and plan_rounds.addressing(change):
+    if then == "ask" and plan_rounds.delegated(change):
         then = "revise"  # #1062: the upheld rejections are Delivery's, so the planner revises for them
     if then == "ask":
         return _last(change)
@@ -155,8 +155,7 @@ def judged(change: Change, verdict: Result, payload: object) -> Result:
 def continued(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
     """A plan step that goes on without a planner session: its challenge, a reconsideration or its acceptance."""
     s, now = change.step, datetime.now(UTC)
-    if s.kind == StepKind.PLAN and plan_rounds.first(change) is not None and not s.mode:
-        plan_rounds.delegated(change)  # an upheld rejection is decided before any planning (TD-193, #1062)
+    if s.kind == StepKind.PLAN and not s.mode and plan_rounds.delegated(change):  # decided before planning (#1062)
         plan_rounds.proceed(change, now)
         store.write(lock, change)
         return True

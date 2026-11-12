@@ -143,7 +143,7 @@ def _answered(
 def _first(prof: Profile, missing: list[str], cause: str) -> loop.StepResult:
     """Once per project: yes or no on the detected commands (#1062); none detected is Delivery's to repair."""
     typed = (
-        "No, I'll type the commands: one `package: command` per line (`.: command` covers every package); "
+        "Use commands I type instead: one `package: command` per line (`.: command` covers every package); "
         "you see them again before anything is saved"
     )
     if not (proposed := _proposed(prof, missing)):
@@ -161,7 +161,8 @@ def _first(prof: Profile, missing: list[str], cause: str) -> loop.StepResult:
         "in CI before merge. Use it?"
     )
     detected = "Yes, use it: if it is wrong or slow, every task fails or slows with it"
-    options = [Option(id="detected", label=detected, next="retry"), Option(id="typed", label=typed, next="retry")]
+    no = Option(id="pause", label="No: plan nothing until the project has a check you confirm", next="pause")
+    options = [Option(id="detected", label=detected, next="retry"), no, Option(id="typed", label=typed, next="retry")]
     result = engine.ask(StepKind.PLAN, text, cause, options)
     if result.question is not None:
         result.question.subject = "reserved"

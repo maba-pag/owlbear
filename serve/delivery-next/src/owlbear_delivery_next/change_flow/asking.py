@@ -43,7 +43,7 @@ def offered(c: Change, q: Question, now: datetime) -> Question | None:
         routed(c, q.cause or "", q.text, now, root(q))
         return None
     key = root(q)
-    earlier = _counted(c, key) if key else []
+    earlier = _counted(c, key)
     if len(earlier) >= LIMIT:
         twice = ", ".join(x.id for x in earlier)
         said = f"{q.text}\n\nIt reached you twice already ({twice}): Delivery handles it now."

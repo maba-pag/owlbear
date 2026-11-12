@@ -58,7 +58,6 @@ UNPINNED = (
 )
 REPICK = "the decisions new since this Change's were picked could not be put to the picker"
 SHOWN = 3  # read-backs a checkpoint shows; the rest wait on the Decisions page (TD-427)
-WAITING = "Read-backs waiting that apply to this Change (optional: answer them on the Decisions page):"
 
 
 @dataclass(frozen=True)
