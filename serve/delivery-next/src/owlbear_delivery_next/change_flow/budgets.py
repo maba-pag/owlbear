@@ -345,12 +345,15 @@ def retry(c: Change, r: StepResult, now: datetime) -> None:
 
 
 def back(c: Change, r: StepResult, now: datetime) -> None:
-    """Apply a back exit; the current cause's count governs repair and exhaustion, not unrelated re-plans.
+    """Integrate as progress; other back exits count their cause, not unrelated re-plans.
 
     Raises:
         ValueError: The back exit has no cause.
     """
     target = r.back_to
+    if target == StepKind.BUILD and r.fix_task is not None and r.fix_task.origin == "integration":
+        enter(c, target, fix_task(c, r))
+        return
     if r.cause is None:
         msg = f"{c.step.kind} back needs a cause"
         raise ValueError(msg)

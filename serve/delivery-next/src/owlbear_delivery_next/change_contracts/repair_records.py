@@ -5,8 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-type Phase = Literal["running", "asked", "approved", "applied", "stopped"]
-type Fix = Literal["none", "patch", "profile-check"]
+type Phase = Literal["running", "asked", "approved", "applied", "unchanged", "stopped"]
+type Fix = Literal["none", "patch", "profile-check", "retry"]
 KEPT = "refs/owlbear/repair/"  # + the Change's slug: a fix waiting for the owner's yes stays reachable
 
 
@@ -51,6 +51,7 @@ class Repair(BaseModel):
     command: str = ""
     paths: list[str] = Field(default_factory=list)  # what the fix changes
     base: str = ""  # the copy's baseline: the step worktree's whole state when the repair began
+    target: str = ""  # the actual configured target commit this diagnosis must compare with
     commit: str = ""  # the fix, committed by Delivery on that baseline; kept under ``KEPT`` until it ends
     applied: str = ""  # its commit on the Change's branch
     witness: Witness | None = None

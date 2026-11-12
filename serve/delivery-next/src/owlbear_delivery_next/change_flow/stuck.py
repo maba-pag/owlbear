@@ -102,6 +102,35 @@ def applied(c: Change, commit: str) -> None:
     c.outcome = None
 
 
+def diagnostic(c: Change) -> Repair | None:
+    """A failed diagnostic or real rerun requires attempted remedies, not another unchanged-check diagnosis."""
+    r = c.repairs.current
+    if r is None:
+        return None
+    if r.fix == "retry" and r.witness is not None:
+        return r
+    return next(
+        (
+            p
+            for p in reversed(c.repairs.done)
+            if p.phase == "unchanged"
+            and (p.cause, p.target, p.step, p.task, p.mode) == (r.cause, r.target, r.step, r.task, r.mode)
+        ),
+        None,
+    )
+
+
+def unchanged(c: Change, reason: str, now: datetime) -> None:
+    """Keep the diagnostic and rerun the real step; its cause is not resolved by unrelated passing checks."""
+    r = c.repairs.current
+    assert r is not None  # noqa: S101 - only a running repair records its diagnosis
+    r.phase = "unchanged"
+    c.repairs.done.append(r)
+    c.repairs.current = None
+    go(c, StepKind(r.step), r.task, r.mode)
+    c.outcome = Outcome(exit=Exit.RETRY, cause=r.cause, reason=reason, at=now)
+
+
 def stopped(c: Change, why: str, now: datetime) -> None:
     """Nothing worked, a fix was refused or declined: stop listing every fix tried and the repair's spend."""
     r = c.repairs.current
