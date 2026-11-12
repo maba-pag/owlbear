@@ -110,19 +110,16 @@ def explicit_targets(root: Path, targets: Sequence[str], recorded: Sequence[str]
         )
         if name.is_absolute() or ".." in name.parts or not path.resolve().is_relative_to(root.resolve()):
             raise ScopeError(msg)
-        modules = [path] if path.is_file() else sorted(path.rglob("test_*.py")) if path.is_dir() else []
-        modules = sorted(
-            {
-                *modules,
-                *(
-                    root / module
-                    for module in recorded
-                    if (module == name.as_posix() or module.startswith(f"{name.as_posix()}/"))
-                    and PurePosixPath(module).name.startswith("test_")
-                    and module.endswith(".py")
-                ),
-            }
-        )
+        modules = {
+            *([path] if path.is_file() else path.rglob("test_*.py") if path.is_dir() else ()),
+            *(
+                root / module
+                for module in recorded
+                if (module == name.as_posix() or module.startswith(f"{name.as_posix()}/"))
+                and PurePosixPath(module).name.startswith("test_")
+                and module.endswith(".py")
+            ),
+        }
         if (
             not modules
             or ("::" in target and not path.is_file() and name.as_posix() not in recorded)
