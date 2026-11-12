@@ -3,6 +3,7 @@
 import json
 import os
 import threading
+from types import SimpleNamespace
 
 import pytest
 
@@ -16,21 +17,36 @@ from owlbear_delivery_next.state_store.store import Store
 
 @pytest.fixture
 def record_fds(monkeypatch):
-    opened, real_open = [], os.open
+    opened, active, closed, files = [], set(), [], []
 
     def capture(path, flags, *args, **kwargs):
-        fd = real_open(path, flags, *args, **kwargs)
-        if str(path).endswith(pack_state.FILE):
-            assert flags & os.O_NOFOLLOW
-            assert flags & os.O_NONBLOCK
-            opened.append(fd)
+        fd = os.open(path, flags, *args, **kwargs)
+        opened.append(fd)
+        active.add(fd)
+        assert flags & os.O_NOFOLLOW
+        assert flags & os.O_NONBLOCK
         return fd
 
-    monkeypatch.setattr(pack_run_record.os, "open", capture)
+    def close(fd):
+        assert fd in active
+        os.close(fd)
+        active.remove(fd)
+        closed.append(fd)
+
+    def fdopen(fd, *args, **kwargs):
+        source = os.fdopen(fd, *args, **kwargs)
+        assert fd in active
+        active.remove(fd)
+        files.append(source)
+        return source
+
+    monkeypatch.setattr(
+        pack_run_record, "os", SimpleNamespace(**(vars(os) | {"open": capture, "close": close, "fdopen": fdopen}))
+    )
     yield opened
-    for fd in set(opened):
-        with pytest.raises(OSError, match="Bad file descriptor"):
-            os.fstat(fd)
+    assert not active
+    assert len(opened) == len(closed) + len(files)
+    assert all(source.closed for source in files)
 
 
 def regular(root):

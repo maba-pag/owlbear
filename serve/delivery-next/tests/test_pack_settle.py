@@ -6,9 +6,9 @@ recovered, still covers it wherever the store now lies. A later record carries n
 """
 
 import json
-import os
 import shutil
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -340,14 +340,14 @@ def test_every_reader_refuses_a_run_rewritten_in_place_while_it_read_it_and_clos
     tmp_path, monkeypatch
 ):
     root = store(tmp_path, "clone", SDK_FAILED)
-    opened, real_open = [], pack_run_record.open_record
+    files, real_fdopen = [], pack_run_record.os.fdopen
 
-    def captured(*args, **kwargs):
-        fd = real_open(*args, **kwargs)
-        opened.append(fd)
-        return fd
+    def captured(fd, *args, **kwargs):
+        source = real_fdopen(fd, *args, **kwargs)
+        files.append(source)
+        return source
 
-    monkeypatch.setattr(pack_run_record, "open_record", captured)
+    monkeypatch.setattr(pack_run_record, "os", SimpleNamespace(**(vars(pack_run_record.os) | {"fdopen": captured})))
     patch = rewritten_in_place_while_read(root, {"state": "running"})
     try:
         with pytest.raises(ValueError, match="changed while it was read"):
@@ -355,10 +355,8 @@ def test_every_reader_refuses_a_run_rewritten_in_place_while_it_read_it_and_clos
         assert pack_state.read_version(root / pack_state.FILE) == (pack_state.blank(), "")
     finally:
         patch.undo()
-    assert len(opened) == 2
-    for fd in opened:
-        with pytest.raises(OSError, match="Bad file descriptor"):
-            os.fstat(fd)
+    assert len(files) == 2
+    assert all(source.closed for source in files)
     kept, version = pack_state.observed(root)  # control: read again unchanged, it is the new run, whole
     assert (kept["state"], version != "") == ("running", True)
 
