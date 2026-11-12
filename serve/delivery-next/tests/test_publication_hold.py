@@ -348,9 +348,9 @@ def test_every_hold_reader_keeps_a_damaged_entry_and_its_original_without_publis
         assert remote_marker(remote) == "done"
         assert owner_state(root) == owner
         if damage == "malformed":
-            malformed = record.read_bytes()
+            assert record.read_bytes() == b"{ not json"
             assert "held publication record" in publish_memory(winner, "later.md")
-            assert record.read_bytes() == malformed
+            assert record.read_bytes() == b"{ not json"
             assert remote_head(remote) == before
     finally:
         if damage == "unreadable":
