@@ -197,6 +197,8 @@ def test_the_activation_dialog_lists_the_unreviewed_repair_and_what_was_not_chan
     before = job.path.read_bytes()
     with opened(base, pds) as page:
         expect(page.locator("#pack-ask")).to_contain_text("The updater's last repair (r1) was not reviewed")
+        expect(page.locator('#pack p-button[variant="primary"]')).to_have_text(["Activate the unreviewed repair"])
+        expect(page.locator("#pack-ask").get_by_role("button", name=re.compile("Discard"))).to_have_count(1)
         page.get_by_role("button", name="Activate the unreviewed repair").click()
         dialog = page.get_by_role("dialog")
         expect(dialog).to_be_visible()
@@ -205,6 +207,9 @@ def test_the_activation_dialog_lists_the_unreviewed_repair_and_what_was_not_chan
         expect(said).to_contain_text("F2 not changed for (rejected by the updater; the challenger accepted that)")
         said.get_by_role("button", name="Keep it waiting").click()
         expect(dialog).to_be_hidden()
+        page.locator("#pack-discard").click()
+        pds.answer(page, "Keep it waiting")
+        expect(page.get_by_role("dialog")).to_have_count(0)
     assert job.read()["state"] == "waiting"  # declining activates nothing
     assert job.path.read_bytes() == before
 
