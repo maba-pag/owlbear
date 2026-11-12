@@ -146,12 +146,16 @@ def build_checks(profile: Profile, change: Change, task: Task, path: Path) -> li
                 for name in (name for share in change.tests.shares for name in share.paths):
                     module = Path(name)
                     owner = next((p for p in packages if p != "." and name.startswith(f"{p}/")), ".")
-                    if module.suffix != ".py" or (
-                        module.name.endswith("_test.py") and not module.name.startswith("test_")
-                    ):
+                    prefix = module.name.startswith("test_")
+                    outside_helper = not prefix and not (
+                        name == "conftest.py"
+                        or name.startswith("tests/")
+                        or (name.startswith("serve/") and "/tests/" in name)
+                    )
+                    if module.suffix != ".py" or (module.name.endswith("_test.py") and not prefix) or outside_helper:
                         unsupported.add(owner)
                         continue
-                    if not module.name.startswith("test_"):
+                    if not prefix:
                         continue
                     covered.add(owner)
                     target = owner if owner != "." else module.parent.as_posix() if module.parent != Path() else name

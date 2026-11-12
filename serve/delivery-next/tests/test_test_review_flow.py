@@ -413,6 +413,9 @@ def test_curator_measurements_refuse_a_mixed_changed_runner(curating, monkeypatc
     mixed.tests.shares[0].paths[-1] = "tests/client_test.py"
     with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
         witness(mixed, prof, curating.repo)
+    mixed.tests.shares[0].paths[-1] = "serve/demo/test/helpers.py"
+    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
+        witness(mixed, prof, curating.repo)
     owned = c.model_copy(deep=True)
     owned.tests.packages = ["api", "web"]
     owned.tests.shares[0].paths = ["api/tests/test_a.py"]
