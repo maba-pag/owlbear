@@ -115,6 +115,27 @@ def test_only_the_unblocked_folder_curates_and_the_blocked_one_runs_once_its_set
     assert (listed["a"]["blocked"], listed["b"]["blocked"]) == (UNSET, "")
     assert [(f["unset"], f["unset_reason"]) for f in listed.values()] == [([GAP], ""), ([], "")]  # for the page
     assert (a.reason_unset, _row(job, "b").reason_unset) == (1, 0)  # the refusal's count, beside its recorded words
+    assert (curation_snapshots.refused(a), curation.legacy_uncertain(a)) == (True, False)
+    after_restart = Curator()
+    restarted = curation.Curation(Slots(lambda: 1), shared=lambda: shared, run=after_restart)
+    assert (_row(restarted, "a").reason, restarted.lingering()) == (UNSET, False)
+    restarted.start("b")
+    _drained(restarted)
+    assert after_restart.folders == ["b"]
+
+    (shared.root / "c" / "memory").mkdir(parents=True)
+    assert (shared.project_path("a").exists(), shared.project_path("c").exists(), _missing(shared, "c")) == (
+        True,
+        False,
+        [GAP],
+    )
+    for folder in ("a", "c"):
+        _pending(shared, folder, "First lesson")
+    job.start("a")
+    job.start("c")
+    _drained(job)
+    blocked = {f["folder"]: f["blocked"] for f in job.read()["folders"]}
+    assert (curator.folders[-1], _row(job, "c").state, blocked["a"], blocked["c"]) == ("c", "done", UNSET, "")
 
     _poll(shared, "a", 20)
     assert job.queue == []  # A's refused request has left; no manual request waits
@@ -149,21 +170,6 @@ def test_a_later_reason_leaves_none_of_an_earlier_unset_refusal_s_count(shared, 
     assert (noted.reason_unset, UNSET in noted.reason, "git push failed" in noted.reason) == (0, True, True)
 
 
-def test_a_folder_with_no_project_layer_curates_though_project_settings_are_unset(shared) -> None:
-    (shared.root / "c" / "memory").mkdir(parents=True)  # no project behind it (D-01M6A32JGMSYG3HQ58HF4QAB1T)
-    layers = (shared.project_path("a").exists(), shared.project_path("c").exists())
-    assert (layers, _missing(shared, "c")) == ((True, False), [GAP])
-    curator = Curator()
-    job = curation.Curation(Slots(lambda: 1), shared=lambda: shared, run=curator)
-    for folder in ("a", "c"):
-        _pending(shared, folder, "First lesson")
-    job.start("a")
-    job.start("c")
-    _drained(job)
-    blocked = {f["folder"]: f["blocked"] for f in job.read()["folders"]}
-    assert (curator.folders, _row(job, "c").state, blocked["a"], blocked["c"]) == (["c"], "done", UNSET, "")
-
-
 def test_a_setting_cleared_while_the_request_waits_for_its_slot_refuses_it_at_the_grant(shared) -> None:
     slots, curator = Slots(lambda: 1), Curator()
     assert slots.take(HELD, "a-step", 1, 1) == 1  # a project's step holds the only slot
@@ -175,21 +181,6 @@ def test_a_setting_cleared_while_the_request_waits_for_its_slot_refuses_it_at_th
     b = _row(job, "b")
     assert (curator.folders, b.state, b.reason, b.reason_unset) == ([], "failed", UNSET, 1)
     assert slots.take(HELD, "after", 1, 1) == 1  # the refusal gave the slot back
-
-
-def test_a_blocked_row_read_back_after_a_restart_is_a_refusal_and_holds_nothing(shared) -> None:
-    job = curation.Curation(Slots(lambda: 1), shared=lambda: shared, run=Curator())
-    job.start("a")
-    _drained(job)
-    a = _row(job, "a")
-    assert (curation_snapshots.refused(a), curation.legacy_uncertain(a)) == (True, False)
-
-    curator = Curator()
-    restarted = curation.Curation(Slots(lambda: 1), shared=lambda: shared, run=curator)
-    assert (_row(restarted, "a").reason, restarted.lingering()) == (UNSET, False)
-    restarted.start("b")
-    _drained(restarted)
-    assert curator.folders == ["b"]
 
 
 def test_an_unreadable_global_refuses_every_folder_and_keeps_what_the_last_run_saw(shared) -> None:

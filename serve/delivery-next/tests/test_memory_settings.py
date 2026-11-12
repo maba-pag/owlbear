@@ -23,13 +23,10 @@ TODAYS = {
 }  # fmt: skip
 
 
-def test_there_are_nine_memory_values_and_the_curator_s_threshold_stays_its_own_setting():
+def test_nine_global_values_resolve_independently_of_the_separate_curator_threshold():
     assert set(NAMES) == set(TODAYS)
     assert "curator_threshold" in GlobalLayer.model_fields
     assert "curator_threshold" not in MemoryValues.model_fields
-
-
-def test_each_memory_value_resolves_on_its_own_from_global():
     eff = resolve(GlobalLayer(memory=MemoryValues(stale_factor=7)), Layer())
     assert eff.memory.stale_factor == 7
     assert eff.sources["memory.stale_factor"] == "global"
@@ -67,8 +64,18 @@ def test_each_memory_value_keeps_to_its_bounds(name, value, ok):
             MemoryValues.model_validate({name: value})
 
 
-def test_a_memory_value_no_layer_sets_is_unset_and_listed_and_holds_what_reads_it(monkeypatch):
+def test_reading_old_global_then_partial_and_complete_values_never_rewrites_the_file(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "BASE", None)
+    path = tmp_path / "config.json"
+    original = json.dumps({"format": 20, "curator_threshold": 90, "sessions": 2}).encode()
+    path.write_bytes(original)
+    glob = read_layer(path, GlobalLayer)
+    eff = resolve(glob, Layer())
+    assert (glob.format, glob.memory, glob.curator_threshold, glob.sessions) == (23, None, 90, 2)
+    assert (eff.curator_threshold, eff.sessions) == (90, 2)
+    assert [k for k in eff.missing if k.startswith("memory.")] == [f"memory.{n}" for n in NAMES]
+    assert path.read_bytes() == original
+
     empty = resolve(None, Layer())
     assert [k for k in empty.missing if k.startswith("memory.")] == [f"memory.{n}" for n in NAMES]
     assert empty.memory == MemoryValues()
@@ -81,26 +88,8 @@ def test_a_memory_value_no_layer_sets_is_unset_and_listed_and_holds_what_reads_i
     ]  # zero is a value, not an unset one
     assert some.page()["memory"]["purge_days"] == 0
     assert some.page()["memory"]["recall_limit"] is None
-
-
-def test_a_published_format_20_global_gains_nine_unset_values_and_keeps_every_other_one(tmp_path, monkeypatch):
-    """The upgrade as production meets it: no test layer under Global, no memory block in the stored file."""
-    monkeypatch.setattr(config, "BASE", None)
-    path = tmp_path / "config.json"
-    path.write_text(json.dumps({"format": 20, "curator_threshold": 90, "sessions": 2}))
-
-    glob = read_layer(path, GlobalLayer)
-    eff = resolve(glob, Layer())
-
-    assert (glob.format, glob.memory, glob.curator_threshold, glob.sessions) == (23, None, 90, 2)
-    assert (eff.curator_threshold, eff.sessions) == (90, 2)
-    assert [k for k in eff.missing if k.startswith("memory.")] == [f"memory.{n}" for n in NAMES]
-    assert json.loads(path.read_text()) == {"format": 20, "curator_threshold": 90, "sessions": 2}  # read, not written
-
-
-def test_a_global_with_every_memory_value_saved_resolves_them_all(monkeypatch):
-    monkeypatch.setattr(config, "BASE", None)
     eff = resolve(GlobalLayer(memory=MemoryValues.model_validate(TODAYS)), Layer())
     assert eff.memory.model_dump() == TODAYS
     assert not [k for k in eff.missing if k.startswith("memory.")]
     assert {eff.sources[f"memory.{n}"] for n in NAMES} == {"global"}
+    assert path.read_bytes() == original
