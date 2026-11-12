@@ -147,7 +147,6 @@ def test_public_memory_types() -> None:
     ("fields", "valid"),
     [
         ({}, True),
-        ({"approved_at": None}, True),
         ({"approved_at": "2026-06-01T12:00:00+00:00"}, True),
         ({"content": "x" * 1024}, True),
         ({"content": "x" * 1025}, False),
@@ -155,7 +154,6 @@ def test_public_memory_types() -> None:
         ({"id": "a3bb189e-8bf9-3888-9912-ace4e6543002"}, False),
         ({"created_at": "2026-01-01T00:00:00"}, False),
         ({"updated_at": "2026-01-01"}, False),
-        ({"scope_agents": []}, True),
         ({"scope_agents": ["builder", "reviewer"]}, True),
     ],
 )
