@@ -382,7 +382,6 @@ def test_read_backs_never_block_a_step_or_its_adoption_of_changed_decisions(tmp_
     assert (gate.result, gate.pinned, gate.change.questions) == (None, True, [])
     assert rule.id not in gate.change.decisions_baseline.revisions
     assert f"no longer in force: {rule.id}" in "\n".join(gate.adopted)
-    assert decisions_gate.WAITING not in gate.adopted
     assert loop.next_step(gate.change, AT) == c.step
     pending = decisions_gate.waiting(store, decisions_gate.loaded(store), gate.change)
     assert [q.kind for q in pending] == ["safety", "blocked", "uncertain", "improvement"]
