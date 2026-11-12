@@ -17,14 +17,8 @@ def git(cwd: Path, *args: str) -> str:
 
 
 @pytest.fixture
-def shared(tmp_path: Path) -> tuple[DataRepo, Path]:
-    remote, root = tmp_path / "remote.git", tmp_path / "owlbear-data"
-    git(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
-    git(tmp_path, "clone", "-q", str(remote), str(root))
-    for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
-        git(root, "config", key, value)
-    git(root, "commit", "-q", "--allow-empty", "-m", "start")
-    git(root, "push", "-q", "origin", "HEAD")
+def shared(shared_repo) -> tuple[DataRepo, Path]:
+    root, remote = shared_repo
     return DataRepo(root), remote
 
 
@@ -40,40 +34,34 @@ def tracked(repo: DataRepo) -> Path:
     return path
 
 
-def test_a_healthy_save_commits_and_pushes_an_existing_path(shared) -> None:
-    repo, remote = shared
-    tracked(repo)
-    assert git(remote, "rev-parse", "main") == git(repo.root, "rev-parse", "HEAD")
-    assert repo.pending() == ""
-
-
 def test_a_healthy_tracked_deletion_is_committed_and_pushed(shared) -> None:
     repo, remote = shared
     path = tracked(repo)
+    assert git(remote, "show", "main:config.json") == '{"v": 1}'
+    assert git(remote, "rev-parse", "main") == git(repo.root, "rev-parse", "HEAD")
+    assert repo.pending() == ""
     (repo.root / "owner.txt").write_text("owner's staged work\n")
     git(repo.root, "add", "--", "owner.txt")
     staged = git(repo.root, "diff", "--cached", "--binary")
+    git(repo.root, "commit", "-q", "--allow-empty", "--only", "-m", "earlier unchanged save")
+    assert "1 commit(s)" in repo.pending()
+    assert publish(repo, path, "settings: save") == ""
+    assert git(remote, "rev-parse", "main") == git(repo.root, "rev-parse", "HEAD")
+    assert git(repo.root, "diff", "--cached", "--binary") == staged
     path.unlink()
     assert publish(repo, path, "settings: delete") == ""
     assert git(remote, "rev-parse", "main") == git(repo.root, "rev-parse", "HEAD")
     assert git(repo.root, "ls-files", "--", "config.json") == ""
     assert git(repo.root, "diff", "--cached", "--binary") == staged
     assert git(repo.root, "ls-tree", "HEAD", "--", "owner.txt") == ""
+    git(repo.root, "commit", "-q", "--allow-empty", "--only", "-m", "earlier missing-path save")
+    assert publish(repo, repo.root / "ghost.json", "settings: save") == ""
+    assert git(remote, "rev-parse", "main") == git(repo.root, "rev-parse", "HEAD")
+    assert git(repo.root, "diff", "--cached", "--binary") == staged
+    assert repo.pending() == f"unpublished in {repo.root}: 1 file(s) not committed; the next save retries"
 
 
-def test_a_corrupt_index_cannot_report_a_tracked_deletion_published(shared) -> None:
-    repo, remote = shared
-    path = tracked(repo)
-    published = git(remote, "rev-parse", "main")
-    path.unlink()
-    (repo.root / ".git" / "index").write_bytes(b"synthetic broken index")
-
-    assert publish(repo, path, "settings: delete")
-    assert git(remote, "rev-parse", "main") == published
-    assert git(repo.root, "show", "HEAD:config.json") == '{"v": 1}'
-
-
-@pytest.mark.parametrize("failure", ["timeout", "oserror"])
+@pytest.mark.parametrize("failure", ["corrupt-index", "timeout", "oserror"])
 def test_a_local_tracking_failure_cannot_report_a_deletion_published(shared, monkeypatch, failure) -> None:
     repo, remote = shared
     path = tracked(repo)
@@ -82,10 +70,12 @@ def test_a_local_tracking_failure_cannot_report_a_deletion_published(shared, mon
     (repo.root / "owner.txt").write_text("owner's staged work\n")
     git(repo.root, "add", "--", "owner.txt")
     staged = git(repo.root, "diff", "--cached", "--binary")
+    if failure == "corrupt-index":
+        (repo.root / ".git" / "index").write_bytes(b"synthetic broken index")
     run = subprocess.run
 
     def fail_tracking(args, **kwargs):
-        if "ls-files" in args:
+        if "ls-files" in args and failure != "corrupt-index":
             if failure == "timeout":
                 raise subprocess.TimeoutExpired(args, 10)
             msg = "synthetic execution failure"
@@ -95,7 +85,9 @@ def test_a_local_tracking_failure_cannot_report_a_deletion_published(shared, mon
     monkeypatch.setattr(data_repo.subprocess, "run", fail_tracking)
     assert publish(repo, path, "settings: delete")
     assert git(remote, "rev-parse", "main") == published
-    assert git(repo.root, "diff", "--cached", "--binary") == staged
+    assert git(repo.root, "show", "HEAD:config.json") == '{"v": 1}'
+    if failure != "corrupt-index":
+        assert git(repo.root, "diff", "--cached", "--binary") == staged
 
 
 def test_a_failed_staged_diff_does_not_commit_or_push(shared, monkeypatch) -> None:
@@ -116,13 +108,6 @@ def test_a_failed_staged_diff_does_not_commit_or_push(shared, monkeypatch) -> No
     assert git(remote, "rev-parse", "main") == published
 
 
-def test_a_missing_untracked_path_still_retries_earlier_unpushed_commits(shared) -> None:
-    repo, remote = shared
-    git(repo.root, "commit", "-q", "--allow-empty", "-m", "earlier")
-    assert publish(repo, repo.root / "ghost.json", "settings: save") == ""
-    assert git(remote, "rev-parse", "main") == git(repo.root, "rev-parse", "HEAD")
-
-
 @pytest.mark.parametrize("name", [" ", "\n"])
 def test_tracking_preserves_whitespace_in_deleted_paths(shared, name) -> None:
     repo, remote = shared
@@ -136,27 +121,6 @@ def test_tracking_preserves_whitespace_in_deleted_paths(shared, name) -> None:
     assert git(repo.root, "ls-tree", "-z", "--name-only", "HEAD", "--", name) == ""
     assert git(repo.root, "rev-parse", "HEAD") != before
     assert git(remote, "rev-parse", "main") == git(repo.root, "rev-parse", "HEAD")
-
-
-def test_an_unchanged_save_preserves_unrelated_staging_and_retries_publication(shared) -> None:
-    repo, remote = shared
-    path = tracked(repo)
-    other = repo.root / "owner.txt"
-    other.write_text("owner's staged work\n")
-    git(repo.root, "add", "--", other.name)
-    staged = git(repo.root, "diff", "--cached", "--binary")
-    git(repo.root, "commit", "-q", "--allow-empty", "--only", "-m", "earlier")
-    assert publish(repo, path, "settings: save") == ""
-    assert git(repo.root, "diff", "--cached", "--binary") == staged
-    assert git(remote, "rev-parse", "main") == git(repo.root, "rev-parse", "HEAD")
-    assert git(repo.root, "ls-tree", "HEAD", "--", other.name) == ""
-
-
-def test_pending_counts_the_commits_no_remote_has(shared) -> None:
-    repo, _ = shared
-    assert repo.pending() == ""
-    git(repo.root, "commit", "-q", "--allow-empty", "-m", "earlier")
-    assert "1 commit(s)" in repo.pending()
 
 
 @pytest.mark.parametrize(("code", "output"), [(128, ""), (0, "not-a-count"), (0, "\u00b2")])

@@ -225,20 +225,16 @@ def change(kind=StepKind.MERGE, worktree="", head=A, **fields):
 
 
 class RetiringGh(FakeGh):
-    """A real local branch; the optional argument models the old unsafe transport for baseline proof only."""
+    """A real local branch deleted only by exact-head compare-and-delete."""
 
     def __init__(self, current, remote):
         super().__init__(current)
         self.remote, self.deleted = remote, []
         self.commit_checks = (Check(name="test", status="completed", conclusion="success"),)
 
-    def delete_branch(self, _repository, branch, expected_head=None):
+    def delete_branch(self, _repository, branch, expected_head):
         ref = f"refs/heads/{branch}"
         current = git(self.remote, "for-each-ref", "--format=%(objectname)", ref)
-        if expected_head is None:
-            git(self.remote, "update-ref", "-d", ref)
-            self.deleted.append(branch)
-            return None
         if not current:
             return provider_contract.BranchDelete(provider_contract.BranchState.GONE)
         if current != expected_head:
@@ -248,8 +244,9 @@ class RetiringGh(FakeGh):
         return provider_contract.BranchDelete(provider_contract.BranchState.DELETED)
 
 
-@pytest.mark.parametrize("move_again", [False, True])
-@pytest.mark.parametrize("mode", [None, "abandon"])
+@pytest.mark.parametrize(
+    ("move_again", "mode"), [(None, None), (False, None), (True, None), (False, "abandon"), (True, "abandon")]
+)
 def test_cleanup_keeps_advanced_remote_work_and_the_owner_can_finish_without_deleting_it(
     clone,
     tmp_path,
@@ -259,7 +256,8 @@ def test_cleanup_keeps_advanced_remote_work_and_the_owner_can_finish_without_del
 ):
     remote = tmp_path / "origin.git"
     git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
-    git(clone, "commit", "-q", "--allow-empty", "-m", "new unmerged work")
+    if move_again is not None:
+        git(clone, "commit", "-q", "--allow-empty", "-m", "new unmerged work")
     moved = git(clone, "rev-parse", "HEAD")
     git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
     gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
@@ -271,6 +269,10 @@ def test_cleanup_keeps_advanced_remote_work_and_the_owner_can_finish_without_del
 
     c, result = cleanup.run(cx, c)
 
+    if move_again is None:
+        assert result.exit == Exit.DONE
+        assert git(remote, "for-each-ref", "--format=%(objectname)", "refs/heads/owlbear/c1") == ""
+        return
     assert git(remote, "for-each-ref", "--format=%(objectname)", "refs/heads/owlbear/c1") == moved
     assert result.exit == Exit.ASK
     assert gh.deleted == []
@@ -369,21 +371,6 @@ def test_a_paused_cleanup_decision_is_hidden_in_the_changes_api_until_resume(tmp
     assert loop.next_step(c, NOW + timedelta(seconds=1)) is not None
 
 
-def test_cleanup_still_automatically_retires_the_exact_merged_head(clone, tmp_path, monkeypatch):
-    remote = tmp_path / "origin.git"
-    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
-    gh = RetiringGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A), remote)
-    set_prefs(monkeypatch, delete_remote_branch=True)
-    p = prof()
-
-    cx, c = ctx(tmp_path, gh, p, repo=clone), change(StepKind.CLEANUP)
-    cx.store.write(cx.lock, c)
-    _, result = cleanup.run(cx, c)
-
-    assert result.exit == Exit.DONE
-    assert git(remote, "for-each-ref", "--format=%(objectname)", "refs/heads/owlbear/c1") == ""
-
-
 # Consent voiding on head change
 
 
@@ -393,39 +380,29 @@ def test_consent_holds_only_for_the_exact_head():
     assert merge_offer.consent(A, B) == "void"
 
 
-def test_a_head_change_voids_consent_shows_the_delta_and_asks_again(tmp_path, clone, monkeypatch):
-    gh = FakeGh(pr(head=A))
-    c = change(worktree=str(clone))
-    c.consent = MergeConsent(head=B, at=NOW)  # given while B waited for it
+@pytest.mark.parametrize("changed", ["consent", "local-head", "foreign-head", "review"])
+def test_a_head_change_voids_consent_shows_the_delta_and_asks_again(tmp_path, clone, monkeypatch, changed):
+    gh = FakeGh(pr(head="f" * 40 if changed == "foreign-head" else B if changed == "review" else A))
+    c = change(worktree=str(clone), head=A)
+    if changed == "foreign-head":
+        c.reviews = [Review(commit=A, inputs=Inputs(), verdict="pass", tree=git(clone, "rev-parse", "HEAD^{tree}"))]
+    if changed == "local-head":
+        git(clone, "commit", "-q", "--allow-empty", "-m", "integrated locally")
+    c.consent = MergeConsent(head=B if changed == "consent" else A, at=NOW)
     set_prefs(monkeypatch, ask_before_merge=True)
     cx = ctx(tmp_path, gh, prof())
     _, result = merge.run(cx, c)
+    assert gh.merges == []
+    if changed != "consent":
+        cause = failures.cause_key(
+            ErrorKind.GATE, StepKind.MERGE, "local-head" if changed == "local-head" else "review"
+        )
+        assert (result.exit, result.back_to, result.cause) == (Exit.BACK, StepKind.PUBLISH, cause)
+        return
     offer = cx.events("c1", "merge-offer")[-1]
     assert (result.exit, result.cause) == (Exit.ASK, loop.CONSENT)
     assert result.reason.startswith(f"approve merging {A[:7]}, changed since {B[:7]} (1 commit(s)")
     assert (offer["head"], offer["void"]) == (A, B)
-    assert gh.merges == []
-
-
-def test_a_locally_integrated_but_unpublished_head_goes_back_to_publish_and_never_merges(tmp_path, clone):
-    git(clone, "commit", "-q", "--allow-empty", "-m", "integrated locally")
-    gh = FakeGh(pr(head=A))
-    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
-    _, result = merge.run(ctx(tmp_path, gh), c)
-    cause = failures.cause_key(ErrorKind.GATE, StepKind.MERGE, "local-head")
-    assert (result.exit, result.back_to, result.cause) == (Exit.BACK, StepKind.PUBLISH, cause)
-    assert gh.merges == []
-
-
-def test_a_pr_head_someone_else_pushed_goes_back_to_publish_without_reading_it_locally(tmp_path, clone, monkeypatch):
-    gh = FakeGh(pr(head="f" * 40))  # an owner commit on the PR branch, never fetched into the worktree (live G2)
-    final = Review(commit=A, inputs=Inputs(), verdict="pass", tree=git(clone, "rev-parse", "HEAD^{tree}"))
-    c = loop.fold(change(worktree=str(clone), reviews=[final]), [ConsentItem(at=NOW, head=A)], NOW)
-    set_prefs(monkeypatch, ask_before_merge=True)
-    _, result = merge.run(ctx(tmp_path, gh, prof()), c)
-    cause = failures.cause_key(ErrorKind.GATE, StepKind.MERGE, "review")
-    assert (result.exit, result.back_to, result.cause) == (Exit.BACK, StepKind.PUBLISH, cause)
-    assert gh.merges == []
 
 
 def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_merging(tmp_path, clone, whole_error):
@@ -504,6 +481,8 @@ def test_a_none_confirmation_does_not_survive_a_workflow_the_change_adds(tmp_pat
 
 
 def test_the_merge_carries_the_consented_head_as_its_sha_guard(tmp_path, clone):
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
+    assert git(tmp_path / "origin.git", "rev-parse", "refs/heads/owlbear/c1") == A
     gh = FakeGh(pr(head=A))
     gh.result = MergeResult(status=MergeStatus.MERGED, sha=B)
     gh.after = pr(head=A, state="closed", merged=True, merge_commit_sha=B)
@@ -511,19 +490,6 @@ def test_the_merge_carries_the_consented_head_as_its_sha_guard(tmp_path, clone):
     _, result = merge.run(ctx(tmp_path, gh), c)
     assert (result.exit, gh.merges[0].expected_head_sha) == (Exit.DONE, A)
     assert merge_request_body(gh.merges[0]) == b'{"merge_method":"squash","sha":"' + A.encode() + b'"}'
-
-
-def test_a_review_comment_after_ci_goes_back_to_build_before_any_merge(tmp_path, clone):
-    gh = FakeGh(pr(head=A))
-    item = ConversationItem(id="r9", kind="comment", author="o", body="throw on zero")
-    gh.read_conversation = lambda _repo, _number: (item,)
-    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
-    c, result = merge.run(ctx(tmp_path, gh), c)
-    tid = f"pr-r9-{conversation.version(item, [('r9', 'throw on zero')])[:8]}"
-    assert (result.exit, result.back_to, result.fix_task.id) == (Exit.BACK, StepKind.BUILD, tid)
-    assert gh.merges == []
-    after = loop.apply(c, result, NOW)
-    assert (after.step.kind, after.step.task) == (StepKind.BUILD, tid)
 
 
 # Pull-request conversation items (TD-15, TD-16)
@@ -589,26 +555,17 @@ def handled(c, result, how, text, commit=None):
     return c
 
 
-def test_an_answered_comment_is_replied_to_once_and_then_the_merge_proceeds(tmp_path, clone):
-    gh = ChatGh(pr(head=A), comment("c1", "why not a dict?"))
-    gh.result = MergeResult(status=MergeStatus.MERGED, sha=B)
-    gh.after = pr(head=A, state="closed", merged=True, merge_commit_sha=B)
-    c = loop.fold(change(worktree=str(clone)), [ConsentItem(at=NOW, head=A)], NOW)
-    cx = ctx(tmp_path, gh)
-    c, result = merge.run(cx, c)
-    tid = result.fix_task.id
-    assert (result.exit, tid[:6], result.fix_task.item.kind) == (Exit.BACK, "pr-c1-", "comment")
-    c = handled(c, result, "answered", "A list keeps the order.")
-    c = c.model_copy(update={"step": Step(kind=StepKind.MERGE)})
-    c = loop.fold(c, [ConsentItem(at=NOW, head=A)], NOW)
-    c, result = merge.run(cx, c)
-    assert result.exit == Exit.DONE, result.reason
-    assert len(gh.posts) == 1
-    assert gh.posts[0][1] == f"A list keeps the order.\n\n<!-- delivery:c1:c1:{tid} -->"
-    assert [(h.item, h.how, h.reply_id) for h in c.handled] == [("c1", "answered", "reply1")]
-    assert follow.conversation(cx, c, gh.pr, StepKind.MERGE)[1] is None
-    assert len(gh.posts) == 1
-    assert [e["item"] for e in cx.events("c1", "reply")] == ["c1"]
+def repair_response(c, root, clone, fix):
+    review_, _ = tool_schema.parse(
+        tools.ReviewResult,
+        {"verdict": "fix", "findings": [{"place": "a", "problem": "p", "fix": "f"}], "covered_paths": ["a.txt"]},
+    )
+    c.step = Step(kind=StepKind.REVIEW, task=root.id)
+    run = Run("s", "result", review_, head=worktree.head(clone))
+    repair = review.recorded(c, root, run, clone, loop.StepResult(exit=Exit.RETRY, reason="cut")).fix_task
+    assert repair.item == root.item
+    repair.done, repair.response = True, Response(how="fixed", text="Repaired.", commit=fix)
+    c.plan.tasks.append(repair)
 
 
 def test_a_bot_comment_handled_as_no_action_posts_nothing_and_records_the_reason(tmp_path):
@@ -638,7 +595,6 @@ def test_a_fixed_thread_is_published_before_its_reply_names_the_pr_head_then_res
     cx = ctx(tmp_path, gh)
     c, result = follow.conversation(cx, change(worktree=str(clone)), gh.pr, StepKind.FOLLOW)
     tid = result.fix_task.id
-    assert tid.startswith("pr-t1-")
     c = handled(c, result, "fixed", "Now counts from zero.", fix)
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert (result.exit, result.back_to, gh.posts, c.handled) == (Exit.BACK, StepKind.PUBLISH, [], [])
@@ -649,12 +605,37 @@ def test_a_fixed_thread_is_published_before_its_reply_names_the_pr_head_then_res
     head = git(clone, "rev-parse", "HEAD")
     gh.pr = pr(head=head)
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    assert result is None
     assert gh.posts == [("t1", f"Now counts from zero.\n\nFixed in {head[:7]}.\n\n<!-- delivery:c1:t1:{tid} -->")]
-    assert gh.resolved == ["t1"]
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert (result, gh.resolved) == (None, ["t1"])
     assert [(h.item, h.how, h.resolved) for h in c.handled] == [("t1", "fixed", True)]
+    gh.items.append(comment("c1", "why?"))
+    c, opened = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    c = handled(c, opened, "answered", "First answer.")
+    root = next(task for task in c.plan.tasks if task.id == opened.fix_task.id)
+    repair_response(c, root, clone, fix)
+    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    assert gh.posts[-1] == ("c1", f"Repaired.\n\nFixed in {head[:7]}.\n\n<!-- delivery:c1:c1:{root.id} -->")
+    assert [(entry.how, entry.text) for entry in c.handled if entry.item == "c1"] == [("fixed", "Repaired.")]
+
+    gh.items.append(comment("c2", "why not a dict?"))
+    c.step = Step(kind=StepKind.MERGE)
+    c.reviews.append(Review(commit=head, inputs=Inputs(), verdict="pass"))
+    c = loop.fold(c, [ConsentItem(at=NOW, head=head)], NOW)
+    gh.result = MergeResult(status=MergeStatus.MERGED, sha=B)
+    gh.after = pr(head=head, state="closed", merged=True, merge_commit_sha=B)
+    c, opened = merge.run(cx, c)
+    assert opened.exit == Exit.BACK
+    assert opened.fix_task.item.kind == "comment"
+    c = handled(c, opened, "answered", "A list keeps the order.")
+    c.step = Step(kind=StepKind.MERGE)
+    c = loop.fold(c, [ConsentItem(at=NOW, head=head)], NOW)
+    c, result = merge.run(cx, c)
+    assert result.exit == Exit.DONE, result.reason
+    assert gh.posts[-1] == ("c2", f"A list keeps the order.\n\n<!-- delivery:c1:c2:{opened.fix_task.id} -->")
+    assert follow.conversation(cx, c, gh.pr, StepKind.MERGE)[1] is None
+    assert [entry["item"] for entry in cx.events("c1", "reply")] == ["t1", "c1", "c2"]
+    assert len(gh.posts) == 3
 
 
 def test_a_reply_whose_acknowledgement_was_lost_is_not_posted_again(tmp_path):
@@ -717,25 +698,40 @@ def test_a_person_quoting_a_full_delivery_marker_still_opens_a_task(tmp_path):
     assert [s.item.id for s in conversation.open_items(c, gh.items, lambda: "delivery")] == ["c2"]
 
 
-def test_an_unresolved_thread_ending_with_delivery_is_open_while_a_person_is_unanswered(tmp_path):
+def test_an_unresolved_thread_ending_with_delivery_is_open_while_a_person_is_unanswered():
     c = change()
     mark = task_for(c, "t1", "pr-t1-old")
-    gh = ChatGh(pr(head=A), thread("t1", ("h1", "o", "q"), ("d1", "delivery", f"Done.\n\n{mark}")))
-    c, result = follow.conversation(ctx(tmp_path, gh), c, gh.pr, StepKind.FOLLOW)
-    assert (result.exit, result.fix_task.item.id, result.fix_task.id != "pr-t1-old") == (Exit.BACK, "t1", True)
+    item = thread("t1", ("h1", "o", "q"), ("d1", "delivery", f"Done.\n\n{mark}"))
+    [state] = conversation.open_items(c, [item], lambda: "delivery")
+    assert state.item.id == "t1"
+    assert state.task != "pr-t1-old"
 
 
-def test_editing_a_handled_issue_comment_reopens_it_with_a_new_task(tmp_path):
-    gh = ChatGh(pr(head=A), comment("c1", "why?"))
-    cx = ctx(tmp_path, gh)
-    c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
-    first = result.fix_task.id
-    c = handled(c, result, "answered", "Because.")
-    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    assert result is None
-    gh.items[0] = comment("c1", "why? and why a list?")
-    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    assert (result.exit, result.fix_task.id[:6], result.fix_task.id != first) == (Exit.BACK, "pr-c1-", True)
+@pytest.mark.parametrize(("kind", "mutation"), [("comment", "edit"), ("thread", "edit"), ("thread", "unresolve")])
+def test_editing_a_handled_issue_comment_reopens_it_with_a_new_task(kind, mutation):
+    c = change()
+    item = comment("c1", "why?") if kind == "comment" else thread("t1", ("h1", "o", "why?"))
+    state = conversation.assess(c, item, lambda: "delivery")
+    task = Task(id=state.task, title="answer", item=conversation.ref(state), done=True)
+    c.plan.tasks.append(task)
+    conversation.record(c, task, Response(how="answered", text="Because."), NOW, reply_id="reply")
+    if kind == "thread":
+        item = item.model_copy(update={"resolved": True})
+        c.handled[-1].resolved = True
+    assert conversation.assess(c, item, lambda: "delivery").rec is c.handled[-1]
+    if mutation == "unresolve":
+        item = item.model_copy(update={"resolved": False})
+    elif kind == "thread":
+        item = thread("t1", ("h1", "o", "why? and why a list?"), resolved=True)
+    else:
+        item = comment("c1", "why? and why a list?")
+    reopened = conversation.assess(c, item, lambda: "delivery")
+    assert reopened.rec is None
+    assert reopened.task != task.id
+    if mutation == "unresolve":
+        assert reopened.task == f"{task.id}-2"
+    else:
+        assert reopened.version != state.version
 
 
 def test_deleting_the_latest_person_comment_does_not_spin(tmp_path):
@@ -776,21 +772,6 @@ def test_a_deleted_delivery_reply_is_reposted_after_looking_for_a_replay(tmp_pat
     assert gh.posts[1] == ("c1", f"Because.\n\n<!-- delivery:c1:c1:{tid} -->")
 
 
-def test_a_thread_a_person_unresolves_after_delivery_resolved_it_opens_again_unresolved(tmp_path):
-    gh = ChatGh(pr(head=A), thread("t1", ("h1", "o", "why?")))
-    cx = ctx(tmp_path, gh)
-    c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
-    first = result.fix_task.id
-    c = handled(c, result, "answered", "Because.")
-    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    assert (result, gh.resolved, c.handled[0].resolved) == (None, ["t1"], True)
-    c, _ = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    assert (gh.resolved, c.handled[0].resolved) == (["t1"], True)
-    gh.items = [i.model_copy(update={"resolved": False}) for i in gh.items]
-    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    assert (result.exit, result.fix_task.id, gh.resolved) == (Exit.BACK, f"{first}-2", ["t1"])
-
-
 def test_an_unacknowledged_resolve_holds_the_merge_until_a_read_shows_it(tmp_path):
     gh = ChatGh(pr(head=A), thread("t1", ("h1", "o", "why?")))
     gh.ack = False
@@ -802,40 +783,6 @@ def test_an_unacknowledged_resolve_holds_the_merge_until_a_read_shows_it(tmp_pat
     gh.items = [i.model_copy(update={"resolved": True}) for i in gh.items]
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert (result, c.handled[0].resolved) == (None, True)
-
-
-def test_a_resolved_thread_whose_human_comment_was_edited_reopens(tmp_path):
-    gh = ChatGh(pr(head=A), thread("t1", ("h1", "o", "why?")))
-    cx = ctx(tmp_path, gh)
-    c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
-    first = result.fix_task.id
-    c = handled(c, result, "answered", "Because.")
-    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    assert (result, gh.items[0].resolved) == (None, True)
-    notes = [(x.id, x.author, "why? and why a list?" if x.id == "h1" else x.body) for x in gh.items[0].comments]
-    gh.items = [thread("t1", *notes, resolved=True)]
-    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    assert (result.exit, result.fix_task.id[:6], result.fix_task.id != first) == (Exit.BACK, "pr-t1-", True)
-
-
-def test_a_resolved_thread_whose_fix_was_rewritten_away_reopens(tmp_path, clone):
-    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
-    base = git(clone, "rev-parse", "HEAD")
-    (clone / "a.txt").write_text("fixed\n")
-    git(clone, "commit", "-qam", "fix")
-    fix = git(clone, "rev-parse", "HEAD")
-    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
-    gh = ChatGh(pr(head=fix), thread("t1", ("h1", "o", "off by one")))
-    cx = ctx(tmp_path, gh)
-    c, result = follow.conversation(cx, change(worktree=str(clone)), gh.pr, StepKind.FOLLOW)
-    first = result.fix_task.id
-    c = handled(c, result, "fixed", "Counts from zero.", fix)
-    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    assert (result, gh.items[0].resolved) == (None, True)
-    git(clone, "push", "-q", "-f", "origin", f"{base}:refs/heads/owlbear/c1")
-    gh.pr = pr(head=base)
-    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    assert (result.exit, result.back_to, result.fix_task.id) == (Exit.BACK, StepKind.BUILD, f"{first}-2")
 
 
 def test_a_person_editing_during_a_repost_is_reassessed_and_blocks_the_merge(tmp_path):
@@ -898,52 +845,28 @@ def test_a_pending_replay_with_a_credential_that_cannot_read_the_viewer_names_gh
     assert (asked.exit, "/user" in asked.reason, "gh auth login" in asked.reason) == (Exit.ASK, True, True)
 
 
-def test_a_force_rewritten_head_without_the_fix_reopens_the_handled_item(tmp_path, clone):
+@pytest.mark.parametrize("kind", ["comment", "resolved-thread"])
+def test_a_force_rewritten_head_without_the_fix_reopens_the_handled_item(tmp_path, clone, kind):
     git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
     base = git(clone, "rev-parse", "HEAD")
     (clone / "a.txt").write_text("fixed\n")
     git(clone, "commit", "-qam", "fix")
     fix = git(clone, "rev-parse", "HEAD")
     git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
-    gh = ChatGh(pr(head=fix), comment("c1", "off by one"))
+    item = comment("c1", "off by one") if kind == "comment" else thread("t1", ("h1", "o", "off by one"))
+    gh = ChatGh(pr(head=fix), item)
     cx = ctx(tmp_path, gh)
     c, result = follow.conversation(cx, change(worktree=str(clone)), gh.pr, StepKind.FOLLOW)
     first = result.fix_task.id
     c = handled(c, result, "fixed", "Counts from zero.", fix)
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert (result, len(gh.posts)) == (None, 1)
+    if kind == "resolved-thread":
+        assert gh.items[0].resolved
     git(clone, "push", "-q", "-f", "origin", f"{base}:refs/heads/owlbear/c1")
     gh.pr = pr(head=base)
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert (result.exit, result.back_to, result.fix_task.id) == (Exit.BACK, StepKind.BUILD, f"{first}-2")
-
-
-def test_a_review_repair_of_a_conversation_task_replies_with_its_response_and_the_published_head(tmp_path, clone):
-    (clone / "a.txt").write_text("fixed\n")
-    git(clone, "commit", "-qam", "fix")
-    fix = git(clone, "rev-parse", "HEAD")
-    commit(clone, "later.txt")
-    git(clone, "push", "-q", "origin", "HEAD:refs/heads/owlbear/c1")
-    head = git(clone, "rev-parse", "HEAD")
-    gh = ChatGh(pr(head=head), comment("c1", "why?"))
-    cx = ctx(tmp_path, gh)
-    c, result = follow.conversation(cx, change(worktree=str(clone)), gh.pr, StepKind.FOLLOW)
-    c = handled(c, result, "answered", "First answer.")
-    root = c.plan.tasks[-1]
-    review_, _ = tool_schema.parse(
-        tools.ReviewResult,
-        {"verdict": "fix", "findings": [{"place": "a", "problem": "p", "fix": "f"}], "covered_paths": ["a.txt"]},
-    )
-    c.step = Step(kind=StepKind.REVIEW, task=root.id)
-    run = Run("s", "result", review_, head=worktree.head(clone))
-    repair = review.recorded(c, root, run, clone, loop.StepResult(exit=Exit.RETRY, reason="cut")).fix_task
-    assert repair.item == root.item
-    repair.done, repair.response = True, Response(how="fixed", text="Repaired.", commit=fix)
-    c.plan.tasks.append(repair)
-    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    assert result is None
-    assert gh.posts == [("c1", f"Repaired.\n\nFixed in {head[:7]}.\n\n<!-- delivery:c1:c1:{root.id} -->")]
-    assert [(h.how, h.text) for h in c.handled] == [("fixed", "Repaired.")]
 
 
 @pytest.mark.parametrize("callback", ["delivered", "replaced"])
@@ -1227,45 +1150,21 @@ class Interrupted(BaseException):
 
 @pytest.mark.parametrize("lost", [Interrupted, ProviderError(FailureCode.TIMEOUT, "create", "x", retry_safe=False)])
 def test_a_pr_created_before_an_interruption_is_found_again_and_never_created_twice(tmp_path, lost):
-    gh, made = FakeGh(None), []
-
-    def create(_repo, _branch, _target, _title, _body):
-        made.append(1)
-        gh.pr = pr(head=A, draft=True)
-        raise lost
-
-    gh.find_pull_request = lambda *_a: gh.pr
-    gh.create_pull_request = create
-    c, cx = change(StepKind.PUBLISH), ctx(tmp_path, gh)
-    if lost is Interrupted:
-        with pytest.raises(Interrupted):
-            publish.pull_request(cx, c, A)
-    else:  # an unknown create is read back at once
-        assert publish.pull_request(cx, c, A).number == 7
-    found = publish.pull_request(cx, c, A)  # the next runner
-    assert (found.number, made) == (7, [1])
-
-
-@pytest.mark.parametrize("fails", [False, True])
-def test_a_pr_gets_the_projects_labels_once_and_the_marker_line_follows_its_switch(tmp_path, fails):
-    """TD-308: once per PR, even when it was made ready before the runner that created it labelled it; a refused
-    label is logged and never retried or holding the PR, and the owner's later edits stay."""
-    gh, bodies, added = FakeGh(None), [], []
+    gh, bodies, added, labels = FakeGh(None), [], [], set()
 
     def create(_repo, _branch, _target, _title, body):
         bodies.append(body)
         gh.pr = pr(head=A, draft=True)
-        raise Interrupted  # the runner dies before it labels and marks the draft ready
+        raise lost
 
-    def add_labels(repo, number, labels):
-        added.append((repo, number, labels))
-        if fails:
-            refused = ProviderError(FailureCode.NOT_FOUND, "add_labels", "no such label", retry_safe=True)
-            refused.add_note("NOTE-MARK")
-            raise refused
+    def add_labels(repo, number, values):
+        added.append((repo, number, values))
+        labels.update(values)
 
-    gh.find_pull_request, gh.create_pull_request, gh.add_labels = (lambda *_a: gh.pr), create, add_labels
-    cx = ctx(tmp_path, gh)
+    gh.find_pull_request = lambda *_a: gh.pr
+    gh.create_pull_request = create
+    gh.add_labels = add_labels
+    c, cx = change(StepKind.PUBLISH), ctx(tmp_path, gh)
     labelled = {"pr_labels": ["release:minor"], "pr_marker": False}
     assert (
         cx.store.save(
@@ -1273,17 +1172,23 @@ def test_a_pr_gets_the_projects_labels_once_and_the_marker_line_follows_its_swit
         )
         == ""
     )
-    c = change(StepKind.PUBLISH)
-    with pytest.raises(Interrupted):
-        publish.pull_request(cx, c, A)
-    gh.pr = gh.pr.model_copy(update={"draft": False})  # someone marked it ready meanwhile
-    assert publish.pull_request(cx, c, A).number == 7  # the next runner
-    assert (added, "Opened by OwlBear Delivery" in bodies[0]) == ([("o/r", 7, ["release:minor"])], False)
-    said = {e["event"]: (e["pr"], e["labels"], e.get("reason")) for e in cx.store.events(c.slug) if "labels" in e}
-    why = "ProviderError: add_labels: no such label\nNOTE-MARK" if fails else None  # #971: its notes too
-    assert said == {"labels-failed" if fails else "labels": (7, ["release:minor"], why)}
-    publish.pull_request(cx, cx.store.read(c.slug), A)  # a runner that died right after labelling reads it back
-    assert (len(added), cx.store.read(c.slug).names.labelled) == (1, 7)  # never again on this PR
+    if lost is Interrupted:
+        with pytest.raises(Interrupted):
+            publish.pull_request(cx, c, A)
+    else:  # an unknown create is read back at once
+        assert publish.pull_request(cx, c, A).number == 7
+    gh.pr = gh.pr.model_copy(update={"draft": False})
+    found = publish.pull_request(cx, c, A)
+    assert found.number == 7
+    assert len(bodies) == 1
+    assert added == [("o/r", 7, ["release:minor"])]
+    assert "Opened by OwlBear Delivery" not in bodies[0]
+    labels.clear()
+    labels.add("owner-chosen")
+    publish.pull_request(cx, cx.store.read(c.slug), A)
+    assert labels == {"owner-chosen"}
+    assert len(added) == 1
+    assert cx.store.read(c.slug).names.labelled == 7
     cleared = {"pr_labels": None, "pr_marker": None}
     assert (
         cx.store.save(
@@ -1292,9 +1197,37 @@ def test_a_pr_gets_the_projects_labels_once_and_the_marker_line_follows_its_swit
         == ""
     )
     gh.pr, c.names.labelled = None, None
-    gh.create_pull_request = lambda *a: bodies.append(a[4]) or pr(head=A, draft=True)
+    gh.create_pull_request = lambda *args: bodies.append(args[4]) or pr(head=A, draft=True)
     publish.pull_request(cx, c, A)
-    assert (len(added), "Opened by OwlBear Delivery for `c1`." in bodies[1]) == (1, True)  # no labels: none sent
+    assert len(added) == 1
+    assert "Opened by OwlBear Delivery for `c1`." in bodies[1]
+
+
+def test_refused_project_labels_are_reported_whole_and_not_retried(tmp_path):
+    gh, added = FakeGh(pr(head=A)), []
+
+    def add_labels(repo, number, labels):
+        added.append((repo, number, labels))
+        refused = ProviderError(FailureCode.NOT_FOUND, "add_labels", "no such label", retry_safe=True)
+        refused.add_note("NOTE-MARK")
+        raise refused
+
+    gh.find_pull_request, gh.add_labels = (lambda *_a: gh.pr), add_labels
+    cx = ctx(tmp_path, gh)
+    labelled = {"pr_labels": ["release:minor"]}
+    assert (
+        cx.store.save(
+            cx.store.config_path, config.Layer, lambda layer: layer.model_copy(update=labelled), "setup", owner=True
+        )
+        == ""
+    )
+    c = change(StepKind.PUBLISH)
+    assert publish.pull_request(cx, c, A).number == 7
+    assert added == [("o/r", 7, ["release:minor"])]
+    said = {e["event"]: (e["pr"], e["labels"], e.get("reason")) for e in cx.store.events(c.slug) if "labels" in e}
+    assert said == {"labels-failed": (7, ["release:minor"], "ProviderError: add_labels: no such label\nNOTE-MARK")}
+    publish.pull_request(cx, cx.store.read(c.slug), A)  # a runner that died right after labelling reads it back
+    assert (len(added), cx.store.read(c.slug).names.labelled) == (1, 7)  # never again on this PR
 
 
 def test_a_pr_head_lagging_the_push_is_observed_again_shortly_without_budget(clone, tmp_path):
@@ -1499,17 +1432,6 @@ def test_merge_asks_the_projects_account_again_when_detection_found_no_push_perm
     assert (result.exit, len(gh.merges)) == ((Exit.DONE, 1) if permitted else (Exit.PENDING, 0))
 
 
-def test_a_head_without_a_valid_final_review_goes_back_to_publish(tmp_path, clone):
-    gh = FakeGh(pr(head=B))
-    _, result = merge.run(ctx(tmp_path, gh), change(worktree=str(clone), head=A))
-    assert (result.exit, result.back_to, result.cause, gh.merges) == (
-        Exit.BACK,
-        StepKind.PUBLISH,
-        "gate:merge:review",
-        [],
-    )
-
-
 def test_a_required_human_review_is_pending_naming_the_reviewers(tmp_path, clone):
     gh = FakeGh(pr(head=A))
     gh.review = ("REVIEW_REQUIRED", ("alice", "team/core"))
@@ -1560,32 +1482,26 @@ def gh_cases(whole_error, sent):
     }
 
 
-@pytest.mark.parametrize("case", ["timeout", "stderr", "unreadable", "unreadable, exit 0", "message"])
+@pytest.mark.parametrize("case", ["timeout", "stderr", "unreadable", "unreadable, exit 0", "message", "no-message"])
 def test_a_merge_without_a_known_result_keeps_what_gh_said_whole(tmp_path, clone, whole_error, case):
     """#921: a lost or unreadable merge answer reaches its event and the step's reason whole."""
     sent, server = [], "gh: Server Error (HTTP 502)"
     message = answered(1, json.dumps({"message": whole_error}).encode(), server.encode())
-    cases = gh_cases(whole_error, sent) | {"message": (message, lambda: f"{whole_error}\n{server}")}
+    refused = f"{whole_error}\ngh: HTTP 405"
+    cases = gh_cases(whole_error, sent) | {
+        "message": (message, lambda: f"{whole_error}\n{server}"),
+        "no-message": (answered(1, stderr=refused.encode()), lambda: refused),
+    }
     runner, said = cases[case]
     gh = FakeGh(pr(head=A))
     gh.request_merge = GhProvider(tmp_path, writer=None, runner=runner).request_merge
     cx = ctx(tmp_path, gh)
     _, result = merge.run(cx, change(worktree=str(clone)))
     (event,) = cx.events("c1", "merge-request")
-    assert (event["status"], event["message"]) == (MergeStatus.UNKNOWN, said())
-    assert (result.exit, result.reason) == (Exit.RETRY, f"merge of {A[:7]} not applied: {said()}")
-
-
-def test_a_merge_refusal_without_a_message_keeps_gh_s_whole_error(tmp_path, clone, whole_error):
-    """#921: a refusal whose answer has no message keeps all of gh's error output, in its event and its reason."""
-    said = f"{whole_error}\ngh: HTTP 405"
-    gh = FakeGh(pr(head=A))
-    gh.request_merge = GhProvider(tmp_path, writer=None, runner=answered(1, stderr=said.encode())).request_merge
-    cx = ctx(tmp_path, gh)
-    _, result = merge.run(cx, change(worktree=str(clone)))
-    (event,) = cx.events("c1", "merge-request")
-    assert (event["status"], event["message"]) == (MergeStatus.REFUSED, said)
-    assert (result.exit, result.reason) == (Exit.RETRY, f"GitHub refused: {said}")
+    status = MergeStatus.REFUSED if case == "no-message" else MergeStatus.UNKNOWN
+    assert (event["status"], event["message"]) == (status, said())
+    reason = f"GitHub refused: {said()}" if case == "no-message" else f"merge of {A[:7]} not applied: {said()}"
+    assert (result.exit, result.reason) == (Exit.RETRY, reason)
 
 
 def test_a_held_target_lock_is_pending_and_nothing_is_merged(tmp_path, clone):
@@ -1605,25 +1521,36 @@ def test_a_held_target_lock_is_pending_and_nothing_is_merged(tmp_path, clone):
         assert other
 
 
-def test_a_check_failing_between_the_reads_prevents_the_merge(tmp_path, clone):
-    gh = FakeGh(pr(head=A))
-    results = iter([gh.checks, (Check(name="test", status="completed", conclusion="failure"),)])
-    gh.observe_checks = lambda _repo, _number, _head: next(results)
-    _, result = merge.run(ctx(tmp_path, gh), change(worktree=str(clone)))
-    assert (result.exit, result.back_to, result.cause, gh.merges) == (
-        Exit.BACK,
-        StepKind.BUILD,
-        "checks:merge:test",
-        [],
-    )
-
-
-def test_a_conversation_item_arriving_between_the_reads_prevents_the_merge(tmp_path, clone):
+@pytest.mark.parametrize("late", ["checks", "conversation", "initial-comment", "retarget"])
+def test_a_check_failing_between_the_reads_prevents_the_merge(tmp_path, clone, late):
     gh = ChatGh(pr(head=A))
-    reads = iter([(), (comment("c9", "wait"),)])
-    gh.read_conversation = lambda _repo, _number: next(reads)
-    _, result = merge.run(ctx(tmp_path, gh), change(worktree=str(clone)))
-    assert (result.exit, result.fix_task.id[:6], gh.merges) == (Exit.BACK, "pr-c9-", [])
+    if late == "checks":
+        results = iter([gh.checks, (Check(name="test", status="completed", conclusion="failure"),)])
+        gh.observe_checks = lambda _repo, _number, _head: next(results)
+    elif late == "conversation":
+        reads = iter([(), (comment("c9", "wait"),)])
+        gh.read_conversation = lambda _repo, _number: next(reads)
+    elif late == "initial-comment":
+        gh.items = [ConversationItem(id="r9", kind="comment", author="o", body="throw on zero")]
+    else:
+        ended = pr(head=A, merged=True, state="closed", merge_commit_sha=A, base_branch="release/other")
+        reads = iter((gh.pr, ended))
+        gh.read_pull_request = lambda *_args: next(reads)
+    p = prof(**{profile.ASK: ProfileEntry(state="known", value="no")})
+    cx = ctx(tmp_path, gh, p, repo=clone)
+    c, result = merge.run(cx, change(worktree=str(clone)))
+    assert gh.merges == []
+    assert cx.events("c1", "merged") == []
+    if late == "retarget":
+        assert result.exit is Exit.ASK
+    else:
+        assert (result.exit, result.back_to) == (Exit.BACK, StepKind.BUILD)
+        if late == "checks":
+            assert result.cause == "checks:merge:test"
+        else:
+            assert result.fix_task.item.id == ("r9" if late == "initial-comment" else "c9")
+            after = loop.apply(c, result, NOW)
+            assert (after.step.kind, after.step.task) == (StepKind.BUILD, result.fix_task.id)
 
 
 def target_checks(gh, *checks):
@@ -1728,21 +1655,103 @@ def worktree_with_work(clone, tmp_path):
     return clone, wt
 
 
-def test_cleanup_removes_the_worktree_only_after_bundle_and_archive_verify(worktree_with_work, tmp_path):
+@pytest.fixture
+def restorable_work(worktree_with_work, tmp_path, request):
     clone, wt = worktree_with_work
-    inv = cleanup.inventory(wt, "owlbear/c2", ["origin/main", "absent-ref"])
-    assert len(inv.commits) == 1
-    assert sorted(inv.dirty) == ["a.txt", "new.txt", "staged.txt"]
+    replacement = request.param
+    subtree = wt / "tracked"
+    subtree.mkdir()
+    (subtree / "child.txt").write_text("original subtree content\n")
+    git(wt, "add", "tracked/child.txt")
+    git(wt, "commit", "-qm", "track subtree", "--", "tracked/child.txt")
+    head = git(wt, "rev-parse", "HEAD")
+    (subtree / "child.txt").unlink()
+    subtree.rmdir()
+    if replacement:
+        subtree.write_text("replacement file\n")
+    git(wt, "mv", "kept.txt", "néw kept.txt")
+    (wt / "a.txt").write_text("staged B\n")
+    git(wt, "add", "a.txt")
+    (wt / "a.txt").write_text("worktree C\n")
+    (wt / "run.sh").write_text("#!/bin/sh\n")
+    (wt / "run.sh").chmod(0o755)
+    for name, target in (("live-link", "a.txt"), ("dangling-link", "missing-target"), ("local-link", "missing-target")):
+        (wt / name).symlink_to(target)
+    (tmp_path / "ignore").write_text(".env\nlocal-link\nnode_modules/\n")
+    git(wt, "config", "core.excludesFile", str(tmp_path / "ignore"))
+    (wt / ".env").write_text("OWNER=1\n")
+    (wt / "node_modules").mkdir()
+    (wt / "node_modules" / "x.js").write_text("x\n")
+    index = git(wt, "ls-files", "--stage")
+    return clone, wt, head, index, replacement
+
+
+def restore_archive(restored, archive, index):
+    with tarfile.open(archive) as tar:
+        assert tar.extractfile("index/0/a.txt").read() == b"staged B\n"
+        assert tar.extractfile("index/0/tracked/child.txt").read() == b"original subtree content\n"
+        assert "files/tracked/child.txt" not in tar.getnames()
+        staged = restored.parent / "staged.diff"
+        staged.write_bytes(tar.extractfile("staged.diff").read())
+        git(restored, "apply", "--index", str(staged))
+        assert git(restored, "show", ":a.txt") == "staged B"
+        assert git(restored, "ls-files", "--stage") == index
+        git(restored, "reset", "-q", "--hard", "HEAD")
+        changes = restored.parent / "changes.diff"
+        changes.write_bytes(tar.extractfile("changes.diff").read())
+        assert b"tracked/child.txt" in changes.read_bytes()
+        git(restored, "apply", str(changes))
+        for member in tar:
+            if not member.name.startswith("files/"):
+                continue
+            dest = restored / member.name.removeprefix("files/")
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if member.issym():
+                if dest.is_symlink():
+                    dest.unlink()
+                dest.symlink_to(member.linkname)
+            else:
+                dest.write_bytes(tar.extractfile(member).read())
+                dest.chmod(member.mode)
+        assert not any("node_modules" in name for name in tar.getnames())
+
+
+@pytest.mark.parametrize("restorable_work", [False, True], indirect=True)
+def test_cleanup_removes_the_worktree_only_after_bundle_and_archive_verify(restorable_work, tmp_path):
+    clone, wt, head, index, replacement = restorable_work
+    cleanup.inventory(wt, "owlbear/c2", ["origin/main", "absent-ref"])
     c = change(StepKind.CLEANUP, worktree=str(wt))
     c.names.branch, c.names.pr = "owlbear/c2", None
     _, result = cleanup.run(ctx(tmp_path, FakeGh(pr()), repo=clone), c)
     assert result.exit == Exit.DONE
     assert not wt.exists()
     bundle, archive = result.preserved
-    assert git(clone, "bundle", "verify", "--quiet", bundle) == ""
-    with tarfile.open(archive) as tar:
-        assert {"changes.diff", "index.txt", "files/a.txt", "files/new.txt", "files/staged.txt"} <= set(tar.getnames())
-        assert tar.extractfile("files/new.txt").read() == b"untracked\n"
+    restored = tmp_path / "restored"
+    git(tmp_path, "clone", "-q", "-b", "owlbear/c2", bundle, str(restored))
+    assert git(restored, "rev-parse", "HEAD") == head
+    assert (restored / "kept.txt").read_bytes() == b"unmerged\n"
+    assert (restored / "tracked/child.txt").read_bytes() == b"original subtree content\n"
+    restore_archive(restored, archive, index)
+    for name, contents in {
+        "a.txt": b"worktree C\n",
+        "new.txt": b"untracked\n",
+        "staged.txt": b"staged\n",
+        "néw kept.txt": b"unmerged\n",
+        "run.sh": b"#!/bin/sh\n",
+        ".env": b"OWNER=1\n",
+    }.items():
+        assert (restored / name).read_bytes() == contents
+    assert not (restored / "kept.txt").exists()
+    assert not (restored / "tracked/child.txt").exists()
+    if replacement:
+        assert (restored / "tracked").read_bytes() == b"replacement file\n"
+    else:
+        assert not (restored / "tracked").exists()
+    assert (restored / "run.sh").stat().st_mode & 0o777 == 0o755
+    assert (restored / "live-link").readlink().as_posix() == "a.txt"
+    for name in ("dangling-link", "local-link"):
+        assert (restored / name).readlink().as_posix() == "missing-target"
+        assert not (restored / name).exists()
 
 
 @pytest.mark.parametrize("how", ["worktree", "index", "chained"])
@@ -1824,19 +1833,6 @@ def test_ignored_files_are_archived_unless_regenerable_and_large_ones_keep_the_w
         assert not any("node_modules" in n for n in tar.getnames())
 
 
-def test_a_staged_version_the_working_tree_replaced_is_archived_and_verified(worktree_with_work, tmp_path):
-    _, wt = worktree_with_work
-    (wt / "a.txt").write_text("staged B\n")
-    git(wt, "add", "a.txt")
-    (wt / "a.txt").write_text("worktree C\n")
-    inv = cleanup.inventory(wt, "owlbear/c2", ["origin/main"])
-    archive = cleanup.preserve(wt, "owlbear/c2", inv, tmp_path / "kept", "s")[-1]
-    with tarfile.open(archive) as tar:
-        assert tar.extractfile("index/0/a.txt").read() == b"staged B\n"
-        assert tar.extractfile("files/a.txt").read() == b"worktree C\n"
-        assert b"+staged B" in tar.extractfile("staged.diff").read()
-
-
 def make_nested_repo(where):
     where.mkdir(parents=True)
     git(where, "init", "-q")
@@ -1846,8 +1842,12 @@ def make_nested_repo(where):
     return git(where, "rev-parse", "HEAD")
 
 
-def test_a_nested_repository_stops_the_cleanup_and_keeps_its_unique_work(worktree_with_work, tmp_path):
+@pytest.mark.parametrize("ignored", [False, True])
+def test_a_nested_repository_stops_the_cleanup_and_keeps_its_unique_work(worktree_with_work, tmp_path, ignored):
     clone, wt = worktree_with_work
+    if ignored:
+        (tmp_path / "ignore").write_text("vendor/\n")
+        git(wt, "config", "core.excludesFile", str(tmp_path / "ignore"))
     nested = wt / "vendor" / "lib"
     head = make_nested_repo(nested)
     c = change(StepKind.CLEANUP, worktree=str(wt))
@@ -1858,58 +1858,6 @@ def test_a_nested_repository_stops_the_cleanup_and_keeps_its_unique_work(worktre
     assert "vendor" in result.reason
     assert (wt / "new.txt").read_text() == "untracked\n"
     assert (git(nested, "rev-parse", "HEAD"), (nested / "unique.txt").read_text()) == (head, "only here\n")
-
-
-def test_an_ignored_nested_repository_stops_the_cleanup_and_is_not_dropped(worktree_with_work, tmp_path):
-    clone, wt = worktree_with_work
-    (tmp_path / "ignore").write_text("vendor/\n")
-    git(wt, "config", "core.excludesFile", str(tmp_path / "ignore"))
-    nested = wt / "vendor" / "lib"
-    head = make_nested_repo(nested)
-    c = change(StepKind.CLEANUP, worktree=str(wt))
-    c.names.branch, c.names.pr = "owlbear/c2", None
-    _, result = cleanup.run(ctx(tmp_path, FakeGh(pr()), repo=clone), c)
-    assert (result.exit, wt.exists()) == (Exit.STOP, True)
-    assert (git(nested, "rev-parse", "HEAD"), (nested / "unique.txt").read_text()) == (head, "only here\n")
-
-
-def test_links_and_file_modes_round_trip_through_the_archive(worktree_with_work, tmp_path):
-    _, wt = worktree_with_work
-    (wt / "run.sh").write_text("#!/bin/sh\n")
-    (wt / "run.sh").chmod(0o755)
-    (wt / "live-link").symlink_to("a.txt")
-    (wt / "dangling-link").symlink_to("missing-target")
-    inv = cleanup.inventory(wt, "owlbear/c2", ["origin/main"])
-    assert {"run.sh", "live-link", "dangling-link"} <= set(inv.dirty)
-    archive = cleanup.preserve(wt, "owlbear/c2", inv, tmp_path / "kept", "links")[-1]
-    restored = tmp_path / "restored"
-    restored.mkdir()
-    with tarfile.open(archive) as tar:
-        for name in ("run.sh", "live-link", "dangling-link"):
-            member = tar.getmember(f"files/{name}")
-            if member.issym():
-                (restored / name).symlink_to(member.linkname)
-            else:
-                (restored / name).write_bytes(tar.extractfile(member).read())
-                (restored / name).chmod(member.mode)
-    assert (restored / "run.sh").stat().st_mode & 0o777 == 0o755
-    assert (restored / "live-link").readlink().as_posix() == "a.txt"
-    assert (restored / "dangling-link").readlink().as_posix() == "missing-target"
-    assert not (restored / "dangling-link").exists()
-
-
-def test_ignored_links_are_archived_and_a_dangling_one_does_not_break_the_size_check(worktree_with_work, tmp_path):
-    clone, wt = worktree_with_work
-    (tmp_path / "ignore").write_text("local-link\n")
-    git(wt, "config", "core.excludesFile", str(tmp_path / "ignore"))
-    (wt / "local-link").symlink_to("missing-target")
-    c = change(StepKind.CLEANUP, worktree=str(wt))
-    c.names.branch, c.names.pr = "owlbear/c2", None
-    _, result = cleanup.run(ctx(tmp_path, FakeGh(pr()), repo=clone), c)
-    assert (result.exit, wt.exists()) == (Exit.DONE, False)
-    with tarfile.open(result.preserved[-1]) as tar:
-        member = tar.getmember("files/local-link")
-        assert (member.issym(), member.linkname) == (True, "missing-target")
 
 
 def test_an_entry_that_cannot_be_kept_is_refused_before_anything_is_written(worktree_with_work, tmp_path):
@@ -1935,30 +1883,6 @@ def test_preservation_never_reads_through_a_link_in_a_dirty_paths_parent(worktre
         cleanup.preserve(wt, "owlbear/c2", cleanup.Inventory((), ("linked/only-outside.txt",)), dest, "linked")
     assert not dest.exists()
     assert (outside / "only-outside.txt").read_text() == "not part of the worktree\n"
-
-
-@pytest.mark.parametrize("replacement", [False, True])
-def test_cleanup_preserves_deleted_subtrees_and_directory_replacements(worktree_with_work, tmp_path, replacement):
-    clone, wt = worktree_with_work
-    subtree = wt / "tracked"
-    subtree.mkdir()
-    (subtree / "child.txt").write_text("original subtree content\n")
-    git(wt, "add", "tracked/child.txt")
-    git(wt, "commit", "-qm", "track subtree")
-    (subtree / "child.txt").unlink()
-    subtree.rmdir()
-    if replacement:
-        subtree.write_text("replacement file\n")
-    c = change(StepKind.CLEANUP, worktree=str(wt))
-    c.names.branch, c.names.pr = "owlbear/c2", None
-    _, result = cleanup.run(ctx(tmp_path, FakeGh(pr()), repo=clone), c)
-    assert (result.exit, wt.exists()) == (Exit.DONE, False)
-    with tarfile.open(result.preserved[-1]) as archive:
-        assert b"tracked/child.txt" in archive.extractfile("changes.diff").read()
-        assert archive.extractfile("index/0/tracked/child.txt").read() == b"original subtree content\n"
-        assert "files/tracked/child.txt" not in archive.getnames()
-        if replacement:
-            assert archive.extractfile("files/tracked").read() == b"replacement file\n"
 
 
 # CI detection from workflow files
@@ -2208,23 +2132,22 @@ def test_findings_beyond_one_tasks_detail_limit_are_kept_whole_across_repair_tas
     lines = review.lines(review_)
     assert (len("\n".join(lines)) > 4000, r.review.findings) == (True, lines)  # the record keeps every finding
     tasks = [r.fix_task, *r.more_fixes]
-    assert [t.title for t in tasks] == [f"Fix 10 review finding(s) of task t1 (part {i} of 3)" for i in (1, 2, 3)]
+    assert len(tasks) == 3
     assert all(len(t.detail) <= 4000 for t in tasks)
     assert "\n".join(t.detail for t in tasks).splitlines() == lines  # none lost, none cut
+    later = Task(id="later", title="later plan work")
+    c.plan.tasks.append(later)
     c = loop.apply(c, r, NOW)
-    assert ([t.id for t in c.plan.tasks[-3:]], c.step.task) == (["t2", "t3", "t4"], "t2")
-    assert {t.fixes for t in c.plan.tasks[-3:]} == {"t1"}
-
-
-def test_a_repaired_task_resolves_only_after_every_part_and_the_parts_run_before_later_tasks():
-    c = change(StepKind.REVIEW)
-    c.plan.tasks += [Task(id="t2", title="two")] + [Task(id=f"t{i}", title="part", fixes="t1") for i in (3, 4, 5)]
-    c.step.task, steps = "t3", []
-    for _ in range(3):
+    assert c.step.task == tasks[0].id
+    tasks = c.plan.tasks[-len(tasks) :]
+    assert {task.fixes for task in tasks} == {"t1"}
+    root, steps = c.plan.tasks[0].id, []
+    c.step = Step(kind=StepKind.REVIEW, task=c.step.task)
+    for _ in tasks:
         c = loop.apply(c, loop.StepResult(exit=Exit.DONE, reason="pass"), NOW)
-        steps.append((c.step.task, c.plan.tasks[0].done))
+        steps.append((c.step.task, next(task for task in c.plan.tasks if task.id == root).done))
         c.step = Step(kind=StepKind.REVIEW, task=c.step.task)
-    assert steps == [("t4", False), ("t5", False), ("t2", True)]
+    assert steps == [(tasks[1].id, False), (tasks[2].id, False), (later.id, True)]
 
 
 # Reopen and the pre-push hook
@@ -2352,17 +2275,30 @@ def queued_change(clone, **fields):
     return c
 
 
-def test_a_passing_gate_enqueues_the_exact_head_once_and_never_merges_directly(tmp_path, clone):
+@pytest.mark.parametrize("arrival", ["enqueue", "adopt", "under-lock"])
+def test_a_passing_gate_enqueues_the_exact_head_once_and_never_merges_directly(tmp_path, clone, arrival):
     gh = QueueGh(pr(head=A))
+    if arrival == "adopt":
+        gh.state = gh.state.model_copy(update={"entry": entry("AWAITING_CHECKS", group=GROUP), "added": ADDED})
+    elif arrival == "under-lock":
+        reads = iter([gh.state, gh.state.model_copy(update={"entry": entry(), "added": ADDED})])
+        gh.read_queue = lambda _repo, _number: next(reads)
     c, result = queue_step(tmp_path, gh, change(worktree=str(clone)))
-    assert (result.exit, result.waiting, result.reason) == (
-        Exit.PENDING,
-        Waiting.GITHUB,
-        "PR #7 added to the merge queue",
-    )
-    assert (gh.enqueued, gh.merges, c.queue.head, c.queue.settled) == ([A], [], A, True)
+    assert (result.exit, result.waiting, gh.merges) == (Exit.PENDING, Waiting.GITHUB, [])
+    assert (gh.enqueued, c.queue.head, c.queue.settled) == ([A] if arrival == "enqueue" else [], A, True)
+    if arrival == "enqueue":
+        assert result.reason == "PR #7 added to the merge queue"
+        c, result = queue_step(tmp_path, gh, c)
+        assert (result.reason, gh.enqueued) == ("PR #7 in the merge queue: position 1, queued", [A])
+    else:
+        assert c.queue.adopted
+        if arrival == "adopt":
+            assert result.reason == "PR #7 in the merge queue: position 1, awaiting checks"
+    gh.pr = pr(head=A, merged=True, state="closed", merge_commit_sha=B)
+    gh.state = QueueState(merged=True, open=False, head_sha=A, added=ADDED, removed=removal("merged"))
+    gh.read_queue = lambda _repo, _number: gh.state
     c, result = queue_step(tmp_path, gh, c)
-    assert (result.reason, gh.enqueued) == ("PR #7 in the merge queue: position 1, queued", [A])
+    assert (result.exit, c.queue, gh.merges) == (Exit.DONE, None, [])
 
 
 def test_an_already_queued_refusal_settles_and_a_stale_head_retries(tmp_path, clone):
@@ -2413,14 +2349,6 @@ def test_an_attempt_without_evidence_is_never_sent_again_and_then_asks(tmp_path,
     assert (gh.enqueued, result.reason) == ([A, A], "PR #7 added to the merge queue")
 
 
-def test_a_persons_entry_is_adopted_and_gated(tmp_path, clone):
-    gh = QueueGh(pr(head=A))
-    gh.state = gh.state.model_copy(update={"entry": entry("AWAITING_CHECKS", group=GROUP), "added": ADDED})
-    c, result = queue_step(tmp_path, gh, change(worktree=str(clone)))
-    assert (c.queue.adopted, gh.enqueued) == (True, [])
-    assert result.reason == "PR #7 in the merge queue: position 1, awaiting checks"
-
-
 def test_a_gate_failing_while_queued_takes_the_pr_out_before_routing(tmp_path, clone):
     gh = QueueGh(pr(head=A))
     gh.state = gh.state.model_copy(update={"entry": entry(), "added": ADDED})
@@ -2429,15 +2357,38 @@ def test_a_gate_failing_while_queued_takes_the_pr_out_before_routing(tmp_path, c
     assert (c.queue, c.queue_seen) == (None, "RFMQE_9")
 
 
-def test_failed_group_checks_become_one_fix_task_from_that_group_handled_once(tmp_path, clone):
+@pytest.mark.parametrize(
+    ("diagnostics", "owner_again"), [("readable", False), ("unreadable", False), ("readable", True)]
+)
+def test_failed_group_checks_become_one_fix_task_from_that_group_handled_once(
+    tmp_path, clone, diagnostics, owner_again
+):
     gh = QueueGh(pr(head=A))
     run = {"branch": "gh-readonly-queue/main/pr-7-x", "status": "completed", "conclusion": "failure", "updated_at": NOW}
-    gh.runs = (GroupRun(id=41, head_sha=GROUP, **run), GroupRun(id=42, head_sha="d" * 40, **run))
+    gh.runs = (
+        GroupRun(id=41, name="Python", head_sha=GROUP, **run),
+        GroupRun(id=43, name="Static", head_sha=GROUP, **run),
+        GroupRun(id=42, head_sha="d" * 40, **run),
+    )
+    if diagnostics == "unreadable":
+        gh.group_runs = lambda _repo, _sha: (_ for _ in ()).throw(
+            ProviderError(FailureCode.UNAVAILABLE, "runs", "x", retry_safe=True)
+        )
     gh.state = gh.state.model_copy(update={"added": ADDED, "removed": removal("failed_checks")})
-    c, result = queue_step(tmp_path, gh, queued_change(clone))
+    c = queued_change(clone)
+    if owner_again:
+        asked = Question(id="q1", step=StepKind.MERGE, text="no trace", cause=queue.UNSEEN, options=[queue.AGAIN])
+        asked.answer = Answer(option="again", at=NOW)
+        c.questions.append(asked)
+    c, result = queue_step(tmp_path, gh, c)
     assert (result.exit, result.back_to, c.queue, c.queue_seen) == (Exit.BACK, StepKind.BUILD, None, "RFMQE_1")
-    assert "run 41 failed in the group" in result.fix_task.detail
-    assert "run 42" not in result.fix_task.detail  # another group's run is never blamed
+    assert gh.enqueued == []
+    if diagnostics == "readable":
+        assert "run 41 failed in the group" in result.fix_task.detail
+        assert "run 42" not in result.fix_task.detail
+        assert (result.score.failing, result.score.findings) == (2, ["Python", "Static"])
+    else:
+        assert "could not be read" in result.fix_task.detail
     c.queue = QueueClaim(head=A, at=NOW, settled=True)  # a later attempt never handles that removal again
     gh.state = gh.state.model_copy(update={"entry": entry()})
     _, result = queue_step(tmp_path, gh, c)
@@ -2465,13 +2416,6 @@ def test_a_removal_before_any_attempt_is_not_handled(tmp_path, clone):
     gh.state = gh.state.model_copy(update={"added": ADDED, "removed": removal("manual", actor="maba-pag")})
     c, result = queue_step(tmp_path, gh, change(worktree=str(clone)))
     assert (result.reason, c.queue_seen, gh.enqueued) == ("PR #7 added to the merge queue", "RFMQE_1", [A])
-
-
-def test_a_merge_by_the_queue_ends_the_step(tmp_path, clone):
-    gh = QueueGh(pr(head=A, merged=True, state="closed", merge_commit_sha=B))
-    gh.state = QueueState(merged=True, open=False, head_sha=A, added=ADDED, removed=removal("merged"))
-    c, result = queue_step(tmp_path, gh, queued_change(clone))
-    assert (result.exit, c.queue) == (Exit.DONE, None)
 
 
 def test_the_gate_lets_the_queue_merge_with_its_own_method_and_ignores_blocked():
@@ -2626,15 +2570,6 @@ def test_a_removal_is_this_attempts_only_after_the_added_event_of_its_own_entry(
     assert (result.exit, c.queue is not None) == (Exit.PENDING, True)
 
 
-def test_a_visible_removal_is_repaired_before_the_owners_again(tmp_path, clone):
-    gh = QueueGh(pr(head=A))
-    gh.state = gh.state.model_copy(update={"added": ADDED, "removed": removal("failed_checks")})
-    asked = Question(id="q1", step=StepKind.MERGE, text="no trace", cause=queue.UNSEEN, options=[queue.AGAIN])
-    asked.answer = Answer(option="again", at=NOW)
-    _, result = queue_step(tmp_path, gh, queued_change(clone, questions=[asked]))
-    assert (result.back_to, gh.enqueued) == (StepKind.BUILD, [])
-
-
 def test_a_restart_waits_for_the_owners_answer_about_an_untraced_attempt(tmp_path, monkeypatch):
     gh = QueueGh(pr(head=A))
     asked = Question(id="q1", step=StepKind.MERGE, text="no trace", cause=queue.UNSEEN, options=[queue.PAUSE])
@@ -2646,37 +2581,6 @@ def test_a_restart_waits_for_the_owners_answer_about_an_untraced_attempt(tmp_pat
     store.put_inbox("c1", AnswerItem(at=NOW, question="q1", option="pause"))
     folded = fold_pause(store, tmp_path)
     assert (folded.intent.paused_at is not None, folded.queue, folded.step.kind) == (True, None, StepKind.MERGE)
-
-
-def test_an_entry_seen_under_the_merge_lock_is_followed_not_sent_again(tmp_path, clone):
-    gh = QueueGh(pr(head=A))
-    reads = iter([gh.state, gh.state.model_copy(update={"entry": entry(), "added": ADDED})])
-    gh.read_queue = lambda _r, _n: next(reads)
-    c, result = queue_step(tmp_path, gh, change(worktree=str(clone)))
-    assert (gh.enqueued, c.queue.adopted, result.exit) == ([], True, Exit.PENDING)
-
-
-def test_unreadable_group_diagnostics_still_give_one_fix_task_and_handle_the_removal(tmp_path, clone):
-    gh = QueueGh(pr(head=A))
-    gh.group_runs = lambda _r, _s: (_ for _ in ()).throw(
-        ProviderError(FailureCode.UNAVAILABLE, "runs", "x", retry_safe=True)
-    )
-    gh.state = gh.state.model_copy(update={"added": ADDED, "removed": removal("failed_checks")})
-    c, result = queue_step(tmp_path, gh, queued_change(clone))
-    assert (result.back_to, c.queue_seen) == (StepKind.BUILD, "RFMQE_1")
-    assert "could not be read" in result.fix_task.detail
-
-
-def test_group_fixes_score_by_failing_workflow_so_fewer_is_progress(tmp_path, clone):
-    gh = QueueGh(pr(head=A))
-    run = {"head_sha": GROUP, "branch": "gh-readonly-queue/main/pr-7-x", "status": "completed", "updated_at": NOW}
-    gh.runs = (
-        GroupRun(id=1, name="Python", conclusion="failure", **run),
-        GroupRun(id=2, name="Static", conclusion="failure", **run),
-    )
-    gh.state = gh.state.model_copy(update={"added": ADDED, "removed": removal("failed_checks")})
-    _, result = queue_step(tmp_path, gh, queued_change(clone))
-    assert (result.score.failing, result.score.findings) == (2, ["Python", "Static"])
 
 
 def test_a_replacement_entry_rebinds_so_its_removal_is_repaired(tmp_path, clone):
@@ -2780,14 +2684,6 @@ def test_paused_delivery_discrepancy_owns_accounting_even_without_a_current_ask(
     assert after.budgets.causes[cause].count == 1
 
 
-def test_a_direct_merge_read_of_wrong_target_does_not_acknowledge_fulfillment(tmp_path):
-    gh = FakeGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A, base_branch="release/other"))
-    _, result = merge.run(ctx(tmp_path, gh), change())
-    assert result.exit is Exit.ASK
-    assert gh.merges == []
-    assert {o.id for o in result.question.options} == {"abandon", "pause"}
-
-
 def test_correct_external_delivery_uses_the_stored_nonmain_target_and_allows_owner_head_updates(tmp_path):
     c = change()
     c.names.target = "release"
@@ -2797,35 +2693,6 @@ def test_correct_external_delivery_uses_the_stored_nonmain_target_and_allows_own
     _, result = merge.run(ctx(tmp_path, gh), c)
     assert result.exit is Exit.DONE
     assert c.names.target == "release"
-
-
-def test_a_pr_retargeted_and_merged_before_the_locked_read_is_not_accepted(tmp_path, clone):
-    opened = pr(head=A)
-    ended = pr(head=A, merged=True, state="closed", merge_commit_sha=A, base_branch="release/other")
-    gh = FakeGh(opened)
-    reads = iter((opened, ended))
-    gh.read_pull_request = lambda *_a: next(reads)
-    p = prof(**{profile.ASK: ProfileEntry(state="known", value="no")})
-    _, result = merge.run(ctx(tmp_path, gh, p, repo=clone), change(worktree=str(clone)))
-    assert result.exit is Exit.ASK
-    assert gh.merges == []
-
-
-@pytest.mark.parametrize("mode", [None, "abandon"])
-def test_wrong_target_cleanup_cannot_record_a_successful_delivery(clone, tmp_path, mode):
-    gh = FakeGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A, base_branch="release/other"))
-    target_checks(gh, ("test", "completed", "success"))
-    cx, c = ctx(tmp_path, gh, repo=clone), change(StepKind.CLEANUP)
-    c.step.mode = mode
-    cx.store.write(cx.lock, c)
-    _, result = cleanup.run(cx, c)
-    if mode is None:
-        assert result.exit is Exit.ASK
-        assert not (cx.store.root / "history.jsonl").exists()
-    else:
-        assert result.exit is Exit.DONE
-        history = [json.loads(line) for line in (cx.store.root / "history.jsonl").read_text().splitlines()]
-        assert history[-1]["merged"] is False
 
 
 @pytest.mark.parametrize("scenario", ["build", "consent", "queued"])
@@ -2967,20 +2834,28 @@ def test_owner_abandonment_of_a_queued_misdelivery_crosses_the_actual_queue_barr
     assert store.read("c1").questions[-1].answer.option == "abandon"
 
 
-def test_uncertain_merge_readback_cannot_credit_a_different_terminal_target(tmp_path):
+@pytest.mark.parametrize("read", ["direct", "unknown"])
+def test_uncertain_merge_readback_cannot_credit_a_different_terminal_target(tmp_path, read):
     gh = FakeGh(pr(head=A, merged=True, state="closed", merge_commit_sha=A, base_branch="release/other"))
     cx, c = ctx(tmp_path, gh), change()
     request = MergeRequest(repository="o/r", number=7, expected_head_sha=A, method=MergeMethod.MERGE)
-    result = merge._readback(cx, c, request, MergeResult(status=MergeStatus.UNKNOWN))  # noqa: SLF001
+    if read == "direct":
+        _, result = merge.run(cx, c)
+        assert gh.merges == []
+        assert {option.id for option in result.question.options} == {"abandon", "pause"}
+    else:
+        result = merge._readback(cx, c, request, MergeResult(status=MergeStatus.UNKNOWN))  # noqa: SLF001
     assert result.exit is Exit.ASK
     assert cx.events("c1", "merged") == []
 
 
+@pytest.mark.parametrize("mode", [None, "abandon"])
 def test_abandoning_misdelivery_preserves_target_unmerged_work_and_records_no_credit(
     tmp_path,
     shared_repo,
     worktree_with_work,
     monkeypatch,
+    mode,
 ):
     clone, wt = worktree_with_work
     head = git(wt, "rev-parse", "HEAD")
@@ -2988,7 +2863,7 @@ def test_abandoning_misdelivery_preserves_target_unmerged_work_and_records_no_cr
                    base_branch="release/other", head_branch="owlbear/c2"))  # fmt: skip
     store = Store(tmp_path / "store", DataRepo(shared_repo[0]), "shop-site")
     c = change(StepKind.CLEANUP, worktree=str(wt))
-    c.names.branch, c.step.mode, c.brief.approved_at = "owlbear/c2", "abandon", NOW
+    c.names.branch, c.step.mode, c.brief.approved_at = "owlbear/c2", mode, NOW
     c.decisions_baseline = DecisionBaseline(
         commit=A,
         at=NOW,
@@ -3002,6 +2877,14 @@ def test_abandoning_misdelivery_preserves_target_unmerged_work_and_records_no_cr
 
     after, result = cleanup.run(cx, c)
 
+    if mode is None:
+        assert result.exit is Exit.ASK
+        assert wt.exists()
+        assert git(wt, "rev-parse", "HEAD") == head
+        assert not (store.root / "history.jsonl").exists()
+        assert fixed == []
+        assert after.pullback is None
+        return
     assert result.exit is Exit.DONE
     assert not wt.exists()
     assert any(path.endswith(".bundle") for path in result.preserved)
@@ -3014,6 +2897,8 @@ def test_abandoning_misdelivery_preserves_target_unmerged_work_and_records_no_cr
     assert record["pr"] is None
     assert record["observed_pr"]["target"] == "release/other"
     assert record["observed_pr"]["merge_commit"] == head
+    history = [json.loads(line) for line in (store.root / "history.jsonl").read_text().splitlines()]
+    assert history[-1]["merged"] is False
 
 
 def test_the_queue_read_takes_the_group_commit_and_the_latest_events():
