@@ -104,6 +104,28 @@ def act_of(st: sdk_adapter._Step) -> acts.Act:
     return act
 
 
+def pending(st: sdk_adapter._Step, category: str, note: str = "") -> tuple[spotter.Record, acts.Act]:
+    """The persisted pending act the real dispatcher gives its actor."""
+    spot = st.feed.spotter
+    record = spotter.Record(
+        id="r-1",
+        at="2026-11-02T10:00:00+00:00",
+        project=spot.ctx.project,
+        change=spot.ctx.change,
+        step=spot.ctx.step,
+        session=spot.session(),
+        look="plan",
+        call="c-1",
+        cutoff=0,
+        probability=1.0,
+        category=category,
+        note=note,
+    )
+    act = acts.decide(record, "plan", spot.ctx, 0, {})
+    acts.write(spot.folder, act)
+    return record, act
+
+
 async def until(test: Any) -> None:
     for _ in range(500):
         if test():
@@ -117,15 +139,11 @@ def test_a_steer_is_delivered_only_once_the_runtime_logs_its_message_else_unconf
         session, clock = Session(), Clock()
         st = stepped(tmp_path, session, "course-and-constraints", clock)
         spot, said = st.feed.spotter, []
-        record = spot._record("plan", 1.0, {"call": "c-1"}, category="course-and-constraints",  # noqa: SLF001
-                              note="Run the tests first.")  # fmt: skip
-        act = acts.decide(record, "plan", spot.ctx, 0, {})
-        acts.write(spot.folder, act)
+        record, act = pending(st, "course-and-constraints", "Run the tests first.")
         sending = asyncio.ensure_future(st.actor(record, act))
         await until(lambda: session.calls)
         said.append(act_of(st).delivery)  # sent, not yet seen
         st.on_event(message("m-0"))  # another message
-        await asyncio.sleep(0.05)
         said.append(act_of(st).delivery)
         st.on_event(message("m-1"))  # its own
         await sending
@@ -155,10 +173,7 @@ def test_a_message_logged_before_send_returned_still_confirms_it(tmp_path) -> No
     async def main() -> str:
         nonlocal st
         st = stepped(tmp_path, Quick(), "course-and-constraints", Clock())
-        spot = st.feed.spotter
-        record = spot._record("plan", 1.0, {"call": "c-1"}, category="course-and-constraints")  # noqa: SLF001
-        act = acts.decide(record, "plan", spot.ctx, 0, {})
-        acts.write(spot.folder, act)
+        record, act = pending(st, "course-and-constraints")
         await asyncio.wait_for(st.actor(record, act), 1)
         return act_of(st).delivery
 
@@ -235,21 +250,6 @@ def test_stop_and_ask_ends_the_step_with_the_owners_three_options_harm_saying_wh
     assert (act.delivery, acts.joined(act)["acted"]) == ("delivered", acted)
 
 
-def test_a_send_that_raises_leaves_the_act_failed_with_its_whole_error(tmp_path) -> None:
-    error = "the runtime closed the connection: " + "x" * 400
-
-    async def main() -> sdk_adapter._Step:
-        st = stepped(tmp_path, Session(fails=error), "irreversible-harm", **{"irreversible-harm": "stop-and-resume"})
-        sampled(st)
-        await st.feed.spotter.drain()
-        return st
-
-    st = asyncio.run(main())
-    assert spotter.WORK.settled(5)
-    act = act_of(st)
-    assert (act.act, act.delivery, act.error) == ("stop-and-resume", "failed", f"ConnectionError: {error}")
-
-
 @pytest.mark.parametrize(("category", "fails"), [
     ("irreversible-harm", "abort"),
     ("outside-state-changes", "send"),
@@ -262,7 +262,7 @@ def test_a_failed_stop_and_resume_ends_the_step_with_a_question_naming_the_failu
 
     class Failing(Session):
         async def send(self, prompt: str, **kw: Any) -> str:
-            self.fails = "refused" if fails == "send" else ""
+            self.fails = whole_error if fails == "send" else ""
             return await super().send(prompt, **kw)
 
         async def abort(self) -> None:
@@ -278,7 +278,9 @@ def test_a_failed_stop_and_resume_ends_the_step_with_a_question_naming_the_failu
 
     st = asyncio.run(main())
     assert spotter.WORK.settled(5)
-    error = f"JsonRpcError: JSON-RPC Error -32000: {whole_error}" if fails == "abort" else "ConnectionError: refused"
+    error = (
+        f"JsonRpcError: JSON-RPC Error -32000: {whole_error}" if fails == "abort" else f"ConnectionError: {whole_error}"
+    )
     act = act_of(st)
     detail = f"{error}\nNOTE-MARK {{'DATA-MARK': 1}}" if fails == "abort" else error
     assert (act.act, act.delivery, act.error) == ("stop-and-resume", "failed", detail)
@@ -355,10 +357,7 @@ def test_an_act_cancelled_while_its_abort_or_its_confirmation_is_held_is_never_l
     async def main() -> sdk_adapter._Step:
         session = Held(held)
         st = stepped(tmp_path, session, "outside-state-changes", Clock())
-        spot = st.feed.spotter
-        record = spot._record("plan", 1.0, {"call": "c-1"}, category="outside-state-changes")  # noqa: SLF001
-        act = acts.decide(record, "plan", spot.ctx, 0, {})
-        acts.write(spot.folder, act)
+        record, act = pending(st, "outside-state-changes")
         acting = asyncio.ensure_future(st.actor(record, act))
         await until(lambda: len(session.calls) == calls)
         await asyncio.sleep(0.01)
@@ -386,10 +385,7 @@ def test_an_act_after_the_step_ended_expires_and_neither_aborts_nor_sends(tmp_pa
     async def main() -> tuple[sdk_adapter._Step, Session]:
         session = Session()
         st = stepped(tmp_path, session, category, Clock())
-        spot = st.feed.spotter
-        record = spot._record("plan", 1.0, {"call": "c-1"}, category=category, note="n")  # noqa: SLF001
-        act = acts.decide(record, "plan", spot.ctx, 0, {})
-        acts.write(spot.folder, act)
+        record, act = pending(st, category, "n")
         st.gate.finish("result", None, "accepted")  # the gate accepted a submit while the look ran
         await asyncio.wait_for(st.actor(record, act), 1)
         return st, session
@@ -408,10 +404,7 @@ def test_a_stop_and_resume_whose_step_ends_during_its_abort_sends_no_note(tmp_pa
     async def main() -> sdk_adapter._Step:
         nonlocal st
         st = stepped(tmp_path, Closing(), "outside-state-changes", Clock())
-        spot = st.feed.spotter
-        record = spot._record("plan", 1.0, {"call": "c-1"}, category="outside-state-changes")  # noqa: SLF001
-        act = acts.decide(record, "plan", spot.ctx, 0, {})
-        acts.write(spot.folder, act)
+        record, act = pending(st, "outside-state-changes")
         await asyncio.wait_for(st.actor(record, act), 1)
         return st
 

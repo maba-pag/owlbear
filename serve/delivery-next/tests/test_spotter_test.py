@@ -126,14 +126,6 @@ def started(layers: Layers) -> dict[str, Any]:
     return spotter_test_run.start(lookup.machine(layers.shared))
 
 
-def test_a_declaration_is_refused_once_the_test_started_and_left_as_it_was(layers) -> None:
-    layers.set("gpt-6-luna", "medium", "default", "Judge the card.")
-    test = started(layers)
-    with pytest.raises(spotter_test.Refused, match=rf"{test['id']} \('fewer reworked hand-offs'\) started at"):
-        spotter_test.declare("something else", "A", "1%")
-    assert spotter_test.current() == test
-
-
 def test_an_unreadable_record_is_said_with_its_path_and_the_parser_s_whole_error() -> None:
     spotter_test.path().parent.mkdir(parents=True, exist_ok=True)
     spotter_test.path().write_text("{")
@@ -275,8 +267,11 @@ def test_the_command_declares_starts_shows_and_ends_the_test(layers, capsys) -> 
     hashed = cases.render({}, 0, verbose=False).hash
     assert (code, shown["state"], shown["frozen"]) == (0, "started", {
         "model": "gpt-6-luna", "effort": "medium", "context": "long", "prompt_hash": hashed, "cases": 0})  # fmt: skip
+    original = spotter_test.current()
     code, out = run("declare", outcome="x", start_threshold="A", promote_threshold="1%")
-    assert (code, out.startswith(f"refused: the Spotter test {shown['id']}")) == (1, True)
+    why = f"{spotter_test.name(original)} started at {original['started_at']}: its declaration is fixed until it ends"
+    assert (code, out) == (1, f"refused: {why}\n")
+    assert spotter_test.current() == original
     assert json.loads(run("show")[1]) == shown
     code, out = run("end")
     assert (code, json.loads(out)["state"]) == (0, "ended")
