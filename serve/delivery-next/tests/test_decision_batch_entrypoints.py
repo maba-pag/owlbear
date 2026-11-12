@@ -42,6 +42,7 @@ from owlbear_delivery_next.state_store import (
 from owlbear_delivery_next.workflow_steps import lookup
 
 from . import test_decision_routes
+from .test_decision_batch import _seed
 
 shared = test_decision_routes.shared
 PROJECT = "shop-site"
@@ -61,13 +62,6 @@ def make(**changes) -> Decision:
 def picking(shared):
     """Keep K's unchanged bindings while opting storage rules out of the host/SDK fixture."""
     return SimpleNamespace(shared=shared)
-
-
-def _seed(picking) -> None:
-    write(make(statement="Notes live in SQLite."), picking.shared.root / PROJECT)
-    picking.shared.git("add", "-A")
-    picking.shared.git("commit", "-qm", "seed")
-    picking.shared.git("push", "-q")
 
 
 def _interrupt(picking, monkeypatch, items: list[Decision]) -> None:
