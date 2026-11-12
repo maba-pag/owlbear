@@ -1024,15 +1024,15 @@ def test_snapshot_identity_respects_pid_birth_end_and_boot(root, monkeypatch, id
 HELD = "0123456789abcdef"
 
 
-def quiet(cfg) -> Run:
-    return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
-               termination=Termination(confirmed=True))  # fmt: skip
-
-
 def recording(seen: list) -> callable:
     def run(cfg) -> Run:
         seen.append(cfg)
-        return quiet(cfg)
+        return Run(
+            cfg.session_id,
+            ending="result",
+            payload=MemoryCurationResult(summary="ok", entries=[]),
+            termination=Termination(confirmed=True),
+        )
 
     return run
 
