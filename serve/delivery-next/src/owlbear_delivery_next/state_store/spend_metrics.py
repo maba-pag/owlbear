@@ -143,6 +143,21 @@ def _why(group: list[dict[str, Any]]) -> dict[str, list[str]]:
     } | ({"read_errors": history} if history else {})
 
 
+def _parts(group: list[dict[str, Any]], tz: ZoneInfo) -> dict[str, list[dict[str, Any]]]:
+    """A row's known credits broken down by model and by step, largest first: the credits chart's stacks."""
+    out: dict[str, list[dict[str, Any]]] = {}
+    for by in ("model", "step"):
+        parts: dict[str, dict[str, Any]] = {}
+        for p in group:
+            if p["credits"] is not None:
+                key = _key(p, by, tz)
+                part = parts.setdefault(key, {"key": key or UNKNOWN, "label": _label(p, by, key, {}), "credits": 0.0})
+                part["credits"] += p["credits"]
+        listed = [part | {"credits": round(part["credits"], 4)} for part in parts.values()]
+        out[f"by_{by}"] = sorted(listed, key=lambda r: (-r["credits"], r["label"]))
+    return out
+
+
 def query(  # noqa: PLR0913 - one value per filter the page offers
     found: list[dict[str, Any]], *, tz: ZoneInfo, start: date | None = None, end: date | None = None, project: str = "",
     agent: str = "", model: str = "", change: str = "", stopped: bool = False, by: str = "agent", cursor: int = 0,
@@ -163,7 +178,7 @@ def query(  # noqa: PLR0913 - one value per filter the page offers
         key = _key(p, by, tz)
         groups.setdefault(key, []).append(p)
         rows.setdefault(key, {"key": key or UNKNOWN, "label": _label(p, by, key, names)})
-    listed = [rows[k] | _sum(g) for k, g in groups.items()]
+    listed = [rows[k] | _sum(g) | _parts(g, tz) for k, g in groups.items()]
     listed.sort(key=(lambda r: r["key"]) if by == "day" else (lambda r: (-r["credits"], r["label"])))
     return {
         "totals": _sum(inside) | _why(inside),
