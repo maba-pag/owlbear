@@ -67,9 +67,12 @@ export function stacked({ labels, parts, totals, colours, format, horizontal, re
     rows: labels.length, horizontal, build,
     height: horizontal ? 96 + labels.length * 32 : 340,
     items: (row, inst) => {
-      const hidden = inst.getOption()?.legend?.[0]?.selected ?? {};
-      return parts.flatMap((p, j) => (p.values[row] > 0 && hidden[p.name] !== false
-        ? [{ seriesIndex: j, dataIndex: row }] : []));
+      const option = inst.getOption();
+      const hidden = option?.legend?.[0]?.selected ?? {};
+      // replaceMerge keeps the indices of kept series, so a part's index is looked up by its id
+      const ids = (option?.series ?? []).map((s) => s?.id);
+      return parts.flatMap((p) => (p.values[row] > 0 && hidden[p.name] !== false
+        ? [{ seriesIndex: ids.indexOf(p.id), dataIndex: row }] : []));
     },
     row: (params) => (params.componentType === "series" && params.seriesId !== "total" ? params.dataIndex : null),
   };  // fmt: skip

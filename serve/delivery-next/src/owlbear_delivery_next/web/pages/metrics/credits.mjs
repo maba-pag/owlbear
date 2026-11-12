@@ -17,7 +17,7 @@ export function creditsControls() {
     show();
   };
   return html`<div id="split-controls" class="row">
-    <p-segmented-control id="split-stack" label="Stack by" compact="true" .value=${pick.by} @change=${by}>
+    <p-segmented-control id="split-stack" label="Stack by" compact="true" columns="2" .value=${pick.by} @change=${by}>
       <p-segmented-control-item value="model">Model</p-segmented-control-item>
       <p-segmented-control-item value="step">Step</p-segmented-control-item>
     </p-segmented-control>
