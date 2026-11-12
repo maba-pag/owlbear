@@ -92,7 +92,7 @@ def _body(c: Change, *, marker: bool) -> str:
 
 
 OPEN, CLOSE = "<!-- owlbear:findings-left-open -->", "<!-- /owlbear:findings-left-open -->"
-SECTION = re.compile(rf"^{re.escape(OPEN)}\r?\n.*?^{re.escape(CLOSE)}[^\S\n]*$", re.MULTILINE | re.DOTALL)
+SECTION = re.compile(rf"^{re.escape(OPEN)}\r?\n.*?^{re.escape(CLOSE)}(?=\r?$)", re.MULTILINE | re.DOTALL)
 LEFT = "Rejected by the builder or planner and upheld by the next reviewer or challenger. Nothing was changed for them."
 
 
