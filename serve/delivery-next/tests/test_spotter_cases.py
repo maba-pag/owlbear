@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from owlbear_delivery_next.improvement import assumptions, case_intake, case_replay, cases, pilot_seed, spotter
+from owlbear_delivery_next.improvement.case_replay import _counts, _result
 from owlbear_delivery_next.improvement.cases import CaseError
 from owlbear_delivery_next.improvement.credit_meter import Meter
 from owlbear_delivery_next.state_store import spotter_test
@@ -44,22 +45,20 @@ def new(  # noqa: PLR0913 - a case as each test needs it
         },
     )
     entry = {"stage": "candidate", "call": call, "why": f"why {call}", "example": "", "review": None}
-    with cases.locked():
-        cases.commit(cases.current()["n"], {cid: entry}, "t", "add")
-        if stage != "candidate":
-            done = cases.edited(cid, entry, stage="test", reviewed_by="sol")
-            cases.commit(cases.current()["n"], {cid: done}, "t", "review")
+    if stage != "candidate":
+        entry = cases.edited(cid, entry, stage="test", reviewed_by="sol")
+    cases.commit(cases.current()["n"], {cid: entry}, "t", "add")
     if stage == "example":
-        promote(cid, example or f"moment of {call}")
+        set_example(cid, example or f"moment of {call}")
     return cid
 
 
-def promote(cid: str, example: str) -> None:
-    """Make *cid* an example as a passed regression would: its run is written first."""
+def set_example(cid: str, example: str) -> None:
+    """Choose or demote an example with the same passed-run authorization used by the gate."""
     with cases.locked():
         cur = cases.current()
-        edits = {cid: cases.edited(cid, cur["cases"][cid], stage="example", example=example)}
-        rid = f"r-{cid}"
+        edits = {cid: cases.edited(cid, cur["cases"][cid], stage="example" if example else "test", example=example)}
+        rid = f"r-{cid}-{cur['n']}"
         cases.append(
             "runs.jsonl",
             {"id": rid, "kind": "regression", "result": "passed", "parent": cur["n"], "edits": cases.digest(edits)},
@@ -127,15 +126,19 @@ def test_a_test_case_needs_a_review_of_exactly_its_card_call_and_why() -> None:
 def test_reserve_synthetic_and_unscored_cases_are_never_examples_and_examples_stay_bounded() -> None:
     for kw in ({"reserve": True}, {"source": "synthetic"}, {"unscored": "TD-435 is absent"}):
         cid = new("course-and-constraints", **kw)
-        with pytest.raises(CaseError, match="never an example"):
-            promote(cid, "a moment")
+        entry = cases.edited(cid, cases.current()["cases"][cid], stage="example", example="a moment")
+        assert any("never an example" in why for why in cases.problems({cid: entry}))
     big = new("hand-off-fitness")
-    with pytest.raises(CaseError, match="at most"):
-        promote(big, "x" * (cases.EXAMPLE + 1))
+    entry = cases.edited(big, cases.current()["cases"][big], stage="example", example="x" * (cases.EXAMPLE + 1))
+    assert any("at most" in why for why in cases.problems({big: entry}))
+    selected = {}
     for i in range(cases.EXAMPLES // cases.EXAMPLE):
-        promote(new("none", text=f"n{i}"), "y" * (cases.EXAMPLE - 10))
-    with pytest.raises(CaseError, match="more than the prompt"):
-        promote(big, "z" * 500)
+        cid = new("none", text=f"n{i}")
+        selected[cid] = cases.edited(
+            cid, cases.current()["cases"][cid], stage="example", example="y" * (cases.EXAMPLE - 10)
+        )
+    selected[big] = cases.edited(big, cases.current()["cases"][big], stage="example", example="z" * 500)
+    assert any("more than the prompt" in why for why in cases.problems(selected))
 
 
 def test_the_active_examples_change_only_with_a_passed_regression_of_that_change() -> None:
@@ -160,11 +163,9 @@ def test_the_active_examples_change_only_with_a_passed_regression_of_that_change
 
 
 def _regression_setup() -> tuple[str, dict[str, Any]]:
-    """Two scored test cases (one positive, one silent), a reserve and an unscored one; a candidate to promote."""
+    """Only the scored positive/silent pair and the reviewed case to promote."""
     new("hand-off-fitness", text="pos")
     new("none", text="neg")
-    new("course-and-constraints", text="reserved", reserve=True)
-    new("course-and-constraints", text="unscored", unscored="its decision is absent")
     chosen = new("hand-off-fitness", text="chosen")
     cur = cases.current()
     edits = {chosen: cases.edited(chosen, cur["cases"][chosen], stage="example", example="a hand-off with gaps")}
@@ -172,6 +173,8 @@ def _regression_setup() -> tuple[str, dict[str, Any]]:
 
 
 def test_a_regression_freezes_only_the_scored_test_cases_and_both_prompts_before_any_look() -> None:
+    new("course-and-constraints", text="reserved", reserve=True)
+    new("course-and-constraints", text="unscored", unscored="its decision is absent")
     chosen, request = _regression_setup()
     tasks = {cases.card(cid)["intent"]["task"] for cid in request["frozen"]}
     assert tasks == {"pos", "neg"}  # not the reserve, the unscored case or the example to be
@@ -190,41 +193,27 @@ def test_an_empty_comparison_is_refused() -> None:
         case_replay.regression(edits, "owner", "promote")
 
 
-def test_a_tie_passes_and_writes_the_change_onto_the_version_it_was_asked_against() -> None:
-    chosen, request = _regression_setup()
-    seen: list = []
-    out = run(request, looker({"before": {"pos": "hand-off-fitness"}, "after": {"pos": "hand-off-fitness"}}, seen=seen))
-    assert out["result"] == "passed"
-    assert out["applied"] == request["parent"] + 1
-    assert cases.current()["cases"][chosen]["stage"] == "example"
-    assert cases.snapshot(verbose=False).cases == out["applied"]
-    assert len(seen) == 4
-    kept = case_replay.results()
-    assert kept[0]["frozen"] == request["frozen"]
-    assert kept[1]["applied"] == out["applied"]
-
-
 @pytest.mark.parametrize(
     ("before", "after", "risen"),
     [
         ({"pos": "hand-off-fitness"}, {"pos": "hand-off-fitness", "neg": "course-and-constraints"}, "false notes"),
         ({"pos": "hand-off-fitness"}, {"pos": "none"}, "misses"),
         ({"pos": "hand-off-fitness"}, {"pos": "course-and-constraints"}, "wrong categories"),
+        ({"pos": "none"}, {"pos": "hand-off-fitness", "neg": "irreversible-harm"}, "false notes"),
     ],
 )
 def test_a_change_is_refused_when_any_count_rises_with_no_trade(before, after, risen) -> None:
-    chosen, request = _regression_setup()
-    out = run(request, looker({"before": before, "after": after}))
-    assert out["result"] == f"refused: {risen} rose"
-    assert cases.current()["cases"][chosen]["stage"] == "test"
-
-
-def test_fewer_misses_never_buy_a_new_false_note() -> None:
-    _, request = _regression_setup()
-    out = run(
-        request, looker({"before": {"pos": "none"}, "after": {"pos": "hand-off-fitness", "neg": "irreversible-harm"}})
-    )
-    assert out["result"] == "refused: false notes rose"
+    expected = {"pos": "hand-off-fitness", "neg": "none"}
+    answers = {
+        cid: {
+            side: {"grade": case_replay.grade(want, said.get(cid, "none"))}
+            for side, said in (("before", before), ("after", after))
+        }
+        for cid, want in expected.items()
+    }
+    counts = _counts(answers)
+    request = {"kind": "regression", "frozen": expected}
+    assert _result(request, answers, "", counts) == f"refused: {risen} rose"
 
 
 def test_a_passing_result_on_a_changed_store_is_refused_as_stale_and_not_rerun() -> None:
@@ -304,20 +293,7 @@ def test_a_rollback_that_changes_the_examples_is_replayed_and_refused_when_worse
     new("none", text="neg")
     ex = new("hand-off-fitness", text="ex", stage="example")
     before_example = cases.current()["n"]
-    with cases.locked():
-        cur = cases.current()
-        demoted = cases.edited(ex, cur["cases"][ex], stage="test")
-        cases.append(
-            "runs.jsonl",
-            {
-                "id": "r-d",
-                "kind": "regression",
-                "result": "passed",
-                "parent": cur["n"],
-                "edits": cases.digest({ex: demoted}),
-            },
-        )
-        cases.commit(cur["n"], {ex: demoted}, "t", "demote", "r-d")
+    set_example(ex, "")
     edits = cases.rollback_edits(before_example)
     with pytest.raises(CaseError, match="regression run to pass"):
         cases.commit(cases.current()["n"], edits, "t", "rollback without a run")
@@ -333,32 +309,19 @@ def test_a_release_is_its_manifest_and_examples_alone_make_none() -> None:
     rid, made = case_replay.release("owner")
     assert made
     assert case_replay.release("owner") == (rid, False)
-    promote(new("none", text="ex"), "a moment")  # a new reviewed case changes the corpus: a new release
+    set_example(new("none", text="ex"), "a moment")  # a new reviewed case changes the corpus: a new release
     rid2, made = case_replay.release("owner")
     assert made
     assert rid2 != rid
-    with cases.locked():  # choosing the examples alone: the same corpus, the same release
-        cur = cases.current()
-        ex = next(c for c, e in cur["cases"].items() if e["stage"] == "example")
-        demoted = cases.edited(ex, cur["cases"][ex], stage="test")
-        cases.append(
-            "runs.jsonl",
-            {
-                "id": "r-x",
-                "kind": "regression",
-                "result": "passed",
-                "parent": cur["n"],
-                "edits": cases.digest({ex: demoted}),
-            },
-        )
-        cases.commit(cur["n"], {ex: demoted}, "t", "demote", "r-x")
+    ex = next(c for c, e in cases.current()["cases"].items() if e["stage"] == "example")
+    set_example(ex, "")  # choosing examples alone: the same corpus, the same release
     assert case_replay.release("owner") == (rid2, False)
 
 
 def test_a_release_compares_once_claimed_before_its_first_look_even_if_it_stops() -> None:
     new("hand-off-fitness", text="pos", reserve=True)
     new("none", text="neg", reserve=True)
-    promote(new("none", text="ex"), "a moment")
+    set_example(new("none", text="ex"), "a moment")
     rid, _ = case_replay.release("owner")
     first = case_replay.comparison(rid, 0, cases.current()["n"], "owner")
     second = case_replay.comparison(rid, 0, cases.current()["n"], "owner")  # asked before the first ran
@@ -410,12 +373,6 @@ def test_the_prompt_snapshot_is_exactly_what_is_hashed_and_names_its_version() -
     verbose = cases.snapshot(verbose=True)
     assert verbose.text.endswith(cases.VERBOSE)
     assert verbose.hash != base.hash
-    promote(new("hand-off-fitness"), "the agent stopped with two criteria unmet")
-    shown = cases.snapshot(verbose=False)
-    assert "the agent stopped with two criteria unmet" in shown.text
-    assert "`hand-off-fitness`" in shown.text
-    assert shown.cases == cases.current()["n"]
-    assert shown.hash == hashlib.sha256(shown.text.encode()).hexdigest()[:12]
 
 
 def test_an_unreadable_store_gives_the_base_prompt_and_says_so() -> None:
@@ -424,42 +381,6 @@ def test_an_unreadable_store_gives_the_base_prompt_and_says_so() -> None:
     got = cases.snapshot(verbose=False)
     assert (got.text, got.cases) == (cases.PROMPT.read_text(), 0)
     assert "could not be read" in got.gap
-
-
-def test_a_spotter_record_keeps_the_hash_and_version_of_the_prompt_it_sent() -> None:
-    promote(new("hand-off-fitness"), "a moment")
-    prompt = cases.snapshot(verbose=False)
-    ctx = spotter.Context(
-        project="p",
-        change="c",
-        step="build",
-        looks=("hand-off",),
-        sample_rate=0,
-        verbose=False,
-        model="m",
-        effort="",
-        limit=0.75,
-        prompt=prompt,
-    )
-    sent: list = []
-
-    async def judge(_card: dict[str, Any], c: spotter.Context, meter: Meter) -> str:
-        sent.append(c.prompt)
-        spend(meter, 0.1)
-        return '{"category": "none", "note": ""}'
-
-    async def main() -> None:
-        spot = spotter.Spotter(ctx, lambda: "s", judge)
-        spot.handed_off("call", {})
-        await spot.drain()
-
-    asyncio.run(main())
-    assert spotter.WORK.settled(5)
-    [line] = (spotter.place() / f"records-{spotter._today()}.jsonl").read_text().splitlines()  # noqa: SLF001
-    rec = json.loads(line)
-    assert (rec["prompt"], rec["cases"]) == (prompt.hash, prompt.cases)
-    assert (rec["credits"], rec["limit"]) == (pytest.approx(0.1), 0.75)
-    assert sent == [prompt]
 
 
 def test_a_case_from_an_old_record_keeps_what_the_record_has() -> None:

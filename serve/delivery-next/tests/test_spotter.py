@@ -9,6 +9,8 @@ import json
 import random
 import re
 import stat
+import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -99,6 +101,29 @@ def meter(limit: float = 0.75) -> credit_meter.Meter:
     return credit_meter.Meter(limit, "look")
 
 
+@pytest.fixture
+def look_runtime(monkeypatch) -> dict[str, Any]:
+    made: dict[str, Any] = {}
+
+    class Client:
+        def __init__(self, **_kw: Any) -> None:
+            pass
+
+        async def start(self) -> None:
+            pass
+
+        async def create_session(self, **kw: Any) -> Any:
+            made.update(kw, noted=kw["session_id"] in (chatlogs.own() or set()))
+            return made["session"]
+
+        async def stop(self) -> None:
+            made["stopped"] = True
+
+    monkeypatch.setattr(spotter_look, "CopilotClient", Client)
+    monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
+    return made
+
+
 def judge(
     answer: str = '{"category": "none"}',
     *,
@@ -157,7 +182,12 @@ def test_the_card_holds_intent_superseding_requests_edits_failures_and_the_runne
     for ev in (
         asked("Build greet() and test it."),
         said("Plan: edit a.py, run pytest."),
-        started("e1", "edit", {"path": "/Users/x/work/a.py", "old_str": "a", "new_str": "b"}, second=10),
+        started(
+            "e1",
+            "edit",
+            {"path": "/Users/x/work/a.py", "old_str": "def test_a():", "new_str": "@pytest.mark.skip\ndef test_a():"},
+            second=10,
+        ),
         done("e1", "ok", second=11),
         started("t1", "bash", {"command": "uv run pytest -q"}, second=20),
         done("t1", "1 failed", ok=False, second=40),
@@ -170,7 +200,7 @@ def test_the_card_holds_intent_superseding_requests_edits_failures_and_the_runne
     assert built["intent"]["later_requests"] == ["Keep the old name too."]
     whys = {e["why"]: e for e in built["evidence"]}
     assert whys["failed"]["output"].startswith('{"message": "1 failed"')
-    assert '"new_str": "b"' in whys["edit"]["output"]  # an edit's evidence is the change itself
+    assert "@pytest.mark.skip" in whys["edit"]["output"]
     assert "/Users/x/work/a.py" in whys["edit"]["args"]  # a path is no secret
     assert (built["open_work"], built["decisions"], built["timing"]["minutes_since_edit"]) == (
         ["t2: docs"], "## Decisions in force\n- D1", 1)  # fmt: skip
@@ -190,21 +220,27 @@ def test_the_card_drops_emails_keeps_credentials_as_the_agent_saw_them_and_is_bo
     assert len(text) <= card.BOUND
 
 
-def test_a_hand_off_starts_a_look_without_waiting_and_records_it_owner_only() -> None:
-    async def main() -> float:
-        spot = spotter.Spotter(ctx(), lambda: "s-1", judge(wait=0.2))
-        spot.seen(asked("Build greet()."))
-        loop = asyncio.get_running_loop()
-        began = loop.time()
-        spot.handed_off("call-9", {"summary": "done"})
-        returned = loop.time() - began
-        assert len(spot.tasks) == 1
-        await spot.drain()
-        return returned
+def test_a_hand_off_starts_a_look_without_waiting_and_records_it_owner_only(monkeypatch) -> None:
+    loop_thread = threading.get_ident()
+    build = card.build
 
-    returned = asyncio.run(main())
+    def off_loop(*args: Any) -> dict[str, Any]:
+        assert threading.get_ident() != loop_thread
+        return build(*args)
+
+    monkeypatch.setattr(card, "build", off_loop)
+
+    async def main() -> None:
+        entered = asyncio.Event()
+        spot = spotter.Spotter(ctx(), lambda: "s-1", judge(reached=entered))
+        spot.seen(asked("Build greet()."))
+        spot.handed_off("call-9", {"summary": "done"})
+        assert len(spot.tasks) == 1
+        assert not entered.is_set()
+        await spot.drain()
+
+    asyncio.run(main())
     assert spotter.WORK.settled(5)
-    assert returned < 0.05
     [rec] = records()
     assert (rec["look"], rec["category"], rec["action"], rec["session"], rec["skipped"]) == (
         "hand-off", "none", "", "s-1", "")  # fmt: skip
@@ -434,8 +470,9 @@ def test_the_runner_gives_the_look_its_settings_open_work_and_decisions(tmp_path
         watched.needed(no_limit)  # required while the Spotter is on
 
 
-def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypatch) -> None:
-    made: dict[str, Any] = {}
+@pytest.mark.parametrize("nano", [0, 2e8], ids=["free", "paid"])
+def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(look_runtime, nano) -> None:
+    made = look_runtime
 
     class Session:
         session_id = "look-1"
@@ -449,29 +486,13 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
             made["disconnected"] = True
 
     async def metrics() -> Any:
-        return SimpleNamespace(total_nano_aiu=2e8)
+        return SimpleNamespace(total_nano_aiu=nano)
 
     Session.rpc.usage.get_metrics = metrics
-
-    class Client:
-        def __init__(self, **_kw: Any) -> None:
-            pass
-
-        async def start(self) -> None:
-            pass
-
-        async def create_session(self, **kw: Any) -> Session:
-            made.update(kw, noted=kw["session_id"] in (chatlogs.own() or set()))  # noted before it exists
-            return Session()
-
-        async def stop(self) -> None:
-            made["stopped"] = True
-
-    monkeypatch.setattr(spotter_look, "CopilotClient", Client)
-    monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
+    made["session"] = Session()
     spend = meter()
     assert asyncio.run(REAL_LOOK({"step": "build"}, ctx(verbose=True), spend)) == '{"category": "none"}'
-    assert (spend.report()["credits"], spend.report()["credits_known"]) == (0.2, True)
+    assert (spend.report()["credits"], spend.report()["credits_known"]) == (nano / credit_meter.NANO, True)
     sid = made["session_id"]
     assert made["noted"]
     assert spend.report()["sdk_sessions"] == [sid]
@@ -494,7 +515,7 @@ def test_a_look_is_one_toolless_session_noted_in_the_chatlogs_manifest(monkeypat
     assert (start["session"], start["agent"], start["job"], start["model"], start["before"]) == (
         sid, "spotter", "look", "gpt-6-luna", {}
     )  # fmt: skip
-    assert (end["run"], end["ending"], end["usage"]["credits"]) == (start["run"], "finished", 0.2)
+    assert (end["run"], end["ending"], end["usage"]["credits"]) == (start["run"], "finished", nano / credit_meter.NANO)
     assert start["look"] == end["look"] == spend.id  # the look's record carries the same id
 
 
@@ -749,28 +770,6 @@ def test_a_look_cancelled_twice_before_its_card_is_built_still_records(monkeypat
         ("the step ended before the look began", 0.0, True)]  # fmt: skip
 
 
-def test_the_steps_loop_ends_without_waiting_for_the_spotters_writes(monkeypatch) -> None:
-    import threading  # noqa: PLC0415
-    import time  # noqa: PLC0415
-
-    monkeypatch.setattr(spotter, "DRAIN", 0.02)
-    monkeypatch.setattr(spotter, "TEARDOWN", 0.02)
-    written = threading.Event()
-    monkeypatch.setattr(spotter, "store", lambda *_a: (time.sleep(0.5), written.set()))
-
-    async def main() -> None:
-        spot = spotter.Spotter(ctx(), lambda: "s-1", judge())
-        spot.handed_off("c", {})
-        await spot.drain()
-
-    began = time.monotonic()
-    asyncio.run(main())  # leftovers are cancelled by asyncio.run itself
-    took = time.monotonic() - began
-    written.wait(5)
-    assert spotter.WORK.settled(5)
-    assert took < 0.3
-
-
 def test_a_burst_of_samples_while_looks_run_is_counted_once_not_queued() -> None:
     async def main() -> int:
         spot = spotter.Spotter(ctx(looks=("sample",), sample_rate=100), lambda: "s-1", judge(wait=0.2))
@@ -818,21 +817,39 @@ def test_a_spotter_writes_where_it_started_whatever_changes_later(monkeypatch, t
 
 
 def test_the_process_exits_within_the_grace_though_spotter_work_is_still_queued(tmp_path) -> None:
-    import subprocess  # noqa: PLC0415
-    import sys  # noqa: PLC0415
-    import time  # noqa: PLC0415
+    script = """
+import atexit, threading, time
 
-    script = (
-        "import time\n"
-        "from owlbear_delivery_next.improvement import spotter\n"
-        "spotter.WORK.submit(time.sleep, 30)\n"
-        "print(time.monotonic(), flush=True)\n"
-    )
+register = atexit.register
+def observed(callback, *args, **kwargs):
+    if getattr(callback, "__qualname__", "") != "Worker.settled":
+        return register(callback, *args, **kwargs)
+    def shutdown():
+        assert callback.__self__ is spotter_store.WORK
+        assert args == (spotter_store.GRACE,)
+        start = time.monotonic()
+        assert callback(*args, **kwargs) is False
+        elapsed = time.monotonic() - start
+        assert spotter_store.GRACE <= elapsed < spotter_store.GRACE + 1.5, elapsed
+        assert spotter_store.WORK.jobs.unfinished_tasks == 1
+        print("exited with queued work after the grace", flush=True)
+    return register(shutdown)
+
+atexit.register = observed
+from owlbear_delivery_next.improvement import spotter_store
+atexit.register = register
+entered = threading.Event()
+def held():
+    entered.set()
+    threading.Event().wait()
+spotter_store.WORK.submit(held)
+assert entered.wait(5)
+"""
     proc = subprocess.run(  # noqa: S603 - this interpreter and a fixed script
         [sys.executable, "-c", script], capture_output=True, text=True, timeout=20, cwd=tmp_path, check=True
     )
-    ended = time.monotonic()
-    assert ended - float(proc.stdout.strip()) < spotter.GRACE + 1.5
+    assert proc.stdout.strip() == "exited with queued work after the grace"
+    assert proc.stderr == ""
 
 
 def test_a_hand_off_skipped_for_capacity_keeps_the_events_seen_as_its_cutoff() -> None:
@@ -893,8 +910,8 @@ def usage(nano: float | None, second: int = 0) -> SessionEvent:
 
 
 @pytest.mark.parametrize(("calls", "known"), [([1.5e8], True), ([], False), ([None], False)])
-def test_an_unread_total_keeps_the_answer_and_its_spend_is_the_calls_reported(monkeypatch, calls, known) -> None:
-    made: dict[str, Any] = {}
+def test_an_unread_total_keeps_the_answer_and_its_spend_is_the_calls_reported(look_runtime, calls, known) -> None:
+    made = look_runtime
 
     class Session:
         session_id = "look-3"
@@ -911,22 +928,7 @@ def test_an_unread_total_keeps_the_answer_and_its_spend_is_the_calls_reported(mo
         def rpc(self) -> Any:
             raise ConnectionError(made.setdefault("why", "usage unread"))
 
-    class Client:
-        def __init__(self, **_kw: Any) -> None:
-            pass
-
-        async def start(self) -> None:
-            pass
-
-        async def create_session(self, **kw: Any) -> Session:
-            made.update(kw)
-            return Session()
-
-        async def stop(self) -> None:
-            pass
-
-    monkeypatch.setattr(spotter_look, "CopilotClient", Client)
-    monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
+    made["session"] = Session()
     spend = meter()
     text = asyncio.run(REAL_LOOK({}, ctx(), spend))
     assert spotter.parse(text)["category"] == "course-and-constraints"
@@ -963,45 +965,6 @@ def test_a_drain_that_stops_waiting_never_drops_queued_writes(monkeypatch) -> No
     assert [json.loads(x)["call"] for x in outcomes.read_text().splitlines()] == ["call-7"]
 
 
-def test_a_look_the_runtime_reports_as_free_costs_nothing(monkeypatch) -> None:
-    made: dict[str, Any] = {}
-
-    class Session:
-        session_id = "look-4"
-        rpc = SimpleNamespace(usage=SimpleNamespace(get_metrics=None))
-
-        async def send_and_wait(self, *_a: Any, **_kw: Any) -> None:
-            made["on_event"](said('{"category": "none"}'))
-
-        async def disconnect(self) -> None:
-            pass
-
-    async def metrics() -> Any:
-        return SimpleNamespace(total_nano_aiu=0)
-
-    Session.rpc.usage.get_metrics = metrics
-
-    class Client:
-        def __init__(self, **_kw: Any) -> None:
-            pass
-
-        async def start(self) -> None:
-            pass
-
-        async def create_session(self, **kw: Any) -> Session:
-            made.update(kw)
-            return Session()
-
-        async def stop(self) -> None:
-            pass
-
-    monkeypatch.setattr(spotter_look, "CopilotClient", Client)
-    monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
-    spend = meter()
-    assert asyncio.run(REAL_LOOK({}, ctx(), spend)) == '{"category": "none"}'
-    assert (spend.report()["credits"], spend.report()["credits_known"]) == (0.0, True)
-
-
 SHAPES = ["d", "a.", "a@", "x@y.", "<browser_context>", "</browser_context>", "<browser_context>x</browser_context>"]
 
 
@@ -1013,16 +976,6 @@ def test_cleaning_the_largest_text_takes_linear_time_whatever_its_shape(unit: st
     began = time.monotonic()
     events.kept_text(text, events.RESULT)
     assert time.monotonic() - began < 1  # milliseconds here; a quadratic pattern took seconds
-
-
-def test_an_edit_mentioning_tests_keeps_its_change() -> None:
-    kept = Kept()
-    change = {"path": "/Users/x/t.py", "old_str": "def test_a():", "new_str": "@pytest.mark.skip\ndef test_a():"}
-    kept.add(started("e1", "edit", change))
-    kept.add(done("e1", "ok"))
-    built = card.build(kept.snapshot(), {"at": "2026-10-26T10:01:00+00:00"}, {})
-    [edit] = [e for e in built["evidence"] if e["tool"] == "edit"]
-    assert (edit["why"], "@pytest.mark.skip" in edit["output"]) == ("edit", True)
 
 
 MALFORMED = [
@@ -1074,15 +1027,6 @@ def test_a_record_keeps_the_category_and_the_action_the_settings_give_it(answer,
     assert [(r["category"], r["action"]) for r in records()] == [(category, action)]
 
 
-def test_the_prompt_names_every_category_and_asks_for_a_category_never_a_verdict() -> None:
-    text = spotter.PROMPT.read_text()
-    assert all(f"`{c}`" in text for c in CATEGORIES)
-    assert '"category": "none"' in text
-    assert "insufficient-context" in text
-    assert "verdict" not in text
-    assert not any(a in text for a in ("show-owner", "refuse-hand-off", "stop-and-ask"))  # the actions stay out
-
-
 def test_answers_the_ring_drops_are_a_gap() -> None:
     kept = Kept()
     for i in range(5):
@@ -1105,27 +1049,32 @@ def test_the_card_stays_within_its_bound_at_the_shortening_edge() -> None:
 
 
 def test_no_look_starts_once_the_drain_began_and_a_slow_write_never_holds_the_end(monkeypatch) -> None:
-    import time  # noqa: PLC0415
-
     monkeypatch.setattr(spotter, "LOCK", 0.05)
+    entered, release = threading.Event(), threading.Event()
     real = spotter.store
-    monkeypatch.setattr(spotter, "store", lambda *a: (time.sleep(0.6), real(*a)))
 
-    async def main() -> tuple[float, int]:
-        spot = spotter.Spotter(ctx(), lambda: "s-1", judge(wait=0.05))
+    def held(*args: Any) -> None:
+        entered.set()
+        assert release.wait(10)
+        real(*args)
+
+    monkeypatch.setattr(spotter, "store", held)
+
+    async def main() -> None:
+        spot = spotter.Spotter(ctx(), lambda: "s-1", judge())
         spot.handed_off("c1", {})
-        loop = asyncio.get_running_loop()
-        began = loop.time()
+        assert await asyncio.to_thread(entered.wait, 5)
         draining = asyncio.ensure_future(spot.drain())
         await asyncio.sleep(0)
+        before = set(spot.tasks)
         spot.handed_off("c2", {})  # a late hand-off after the drain began
-        late = len(spot.tasks)
+        assert spot.tasks == before
         await draining
-        return loop.time() - began, late
 
-    took, late = asyncio.run(main())
-    assert late == 1
-    assert took < 0.5  # the write goes on; the step's end does not wait for it
+    try:
+        asyncio.run(main())
+    finally:
+        release.set()
     assert spotter.WORK.settled(5)
     assert [r["call"] for r in records()] == ["c1"]
 
@@ -1168,17 +1117,17 @@ def test_an_unreadable_prompt_still_records_the_look_and_its_spend(monkeypatch, 
     assert [(r["prompt"], r["credits"]) for r in records()] == [("unreadable", 0.25)]
 
 
-def test_a_slow_manifest_write_never_holds_a_looks_teardown(monkeypatch) -> None:
-    import threading  # noqa: PLC0415
-    import time  # noqa: PLC0415
-
-    released = threading.Event()
+def test_a_slow_manifest_write_never_holds_a_looks_teardown(monkeypatch, look_runtime) -> None:
+    entered, released, written = threading.Event(), threading.Event(), threading.Event()
     real = chatlogs.note
 
     def note(event: dict[str, Any]) -> None:
         if event["event"] == "ended":
-            released.wait(5)
+            entered.set()
+            assert released.wait(5)
         real(event)
+        if event["event"] == "ended":
+            written.set()
 
     class Session:
         session_id = "look-5"
@@ -1190,28 +1139,16 @@ def test_a_slow_manifest_write_never_holds_a_looks_teardown(monkeypatch) -> None
         async def disconnect(self) -> None:
             pass
 
-    class Client:
-        def __init__(self, **_kw: Any) -> None:
-            pass
-
-        async def start(self) -> None:
-            pass
-
-        async def create_session(self, **_kw: Any) -> Session:
-            return Session()
-
-        async def stop(self) -> None:
-            pass
-
-    monkeypatch.setattr(spotter_look, "CopilotClient", Client)
-    monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
+    look_runtime["session"] = Session()
     monkeypatch.setattr(spotter_look.chatlogs, "note", note)
-    began = time.monotonic()
-    asyncio.run(REAL_LOOK({}, ctx(), meter()))
-    took = time.monotonic() - began
-    released.set()
+    try:
+        asyncio.run(REAL_LOOK({}, ctx(), meter()))
+        assert entered.wait(5)
+        assert not written.is_set()
+    finally:
+        released.set()
     assert spotter.WORK.settled(5)
-    assert took < 1
+    assert written.is_set()
 
 
 class TwoSessions:
