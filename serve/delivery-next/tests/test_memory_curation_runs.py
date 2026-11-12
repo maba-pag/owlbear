@@ -1067,10 +1067,9 @@ def test_grant_reads_current_settings_and_manual_takeover_bypasses_pause_and_off
     written = []
     real = layers.atomic_write
     monkeypatch.setattr(layers, "atomic_write", lambda path, text: (written.append(path), real(path, text)))
-    curator(repo, model="model-z", minutes=1)
+    curator(repo, model="model-a", minutes=1)
     assert written == [DataRepo(repo).global_path]
     slots, paused, ran = Slots(lambda: 1), [False], []
-    curator(repo, model="model-a", minutes=1)
     assert slots.take(HELD, "a-change", 1, 1) == 1
     job = curation.Curation(slots, shared=lambda: DataRepo(repo), run=recording(ran), paused=lambda: paused[0])
     job.start("shop")
