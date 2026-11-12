@@ -25,10 +25,6 @@ _VALUES = {
 }
 
 
-def git(root: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)  # noqa: S603, S607
-
-
 @pytest.fixture
 def root(tmp_path: Path) -> Path:
     data = tmp_path / "data"
@@ -38,7 +34,7 @@ def root(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def git_repository(root: Path) -> None:
-    git(root, "init", "-q")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True, capture_output=True)  # noqa: S603, S607
 
 
 @pytest.fixture
