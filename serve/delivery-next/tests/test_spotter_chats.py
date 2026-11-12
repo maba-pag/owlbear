@@ -21,7 +21,6 @@ from typing import Any
 
 import pytest
 
-from owlbear_delivery_next.change_contracts import watch_policy
 from owlbear_delivery_next.commands import chat_client
 from owlbear_delivery_next.improvement import acts, assumptions, cases, chatlogs, credit_meter, retro_units, spotter
 from owlbear_delivery_next.improvement.events import Kept
@@ -203,6 +202,7 @@ def classified(
 
 
 def test_writes_outside_the_workspace_are_state_changes_wherever_they_go(tmp_path) -> None:
+    assert moments(tmp_path).places.exempt == ()
     inside = str(tmp_path / "work" / "a.py")
     assert classified(tmp_path, "edit", {"path": inside})[0] == "none"
     for outside in ("/tmp/x.txt", str(Path.home() / ".cache" / "x"), str(local_home.root() / "x")):  # noqa: S108 - no exemption
@@ -507,29 +507,6 @@ def test_a_state_change_wins_over_a_sample_of_the_same_call(world):
     assert sorted((r["look"], r["call"]) for r in records()) == [("sample", "y"), ("state-change", "x")]
 
 
-def test_a_look_keeps_the_settings_it_was_admitted_with(world):
-    release = asyncio.Event()
-
-    async def slow(card: dict[str, Any], ctx: spotter.Context, meter: credit_meter.Meter) -> str:
-        await release.wait()
-        return await World.judge(world, card, ctx, meter)
-
-    async def scenario() -> None:
-        spot = spotter.Spotter(world.ctx, lambda: "c", slow)
-        for d in (asked("go"), ev("assistant.turn_start"), reply("plan", tools=1)):
-            spot.seen(d)  # the reply is the turn's plan: its look is admitted and waits
-        spot.ctx = dataclasses.replace(spot.ctx, model="m2")  # the settings change, with no new event
-        await asyncio.sleep(0)  # a later turn of the loop, the look still waiting
-        release.set()
-        if spot.tasks:
-            await asyncio.wait(set(spot.tasks), timeout=10)
-        assert spotter.WORK.settled(5)
-
-    asyncio.run(scenario())
-    assert [r["model"] for r in records()] == ["m1"]
-    assert world.cards[0][1].model == "m1"
-
-
 def test_tailing_waits_for_a_whole_line_leaves_out_an_oversized_one_and_takes_a_replaced_log_as_context(
     world, monkeypatch
 ):
@@ -555,21 +532,6 @@ def test_tailing_waits_for_a_whole_line_leaves_out_an_oversized_one_and_takes_a_
         await world.passes(2)
         assert records() == []  # what the replaced log held is context only
         assert any("replaced" in g for g in world.follower.chats["c"].gaps)
-
-    asyncio.run(scenario())
-
-
-def test_a_pass_reads_a_bounded_number_of_bytes(world, monkeypatch):
-    monkeypatch.setattr(chats, "PASS", 200)
-    monkeypatch.setattr(chats, "CHUNK", 100)
-
-    async def scenario() -> None:
-        await world.passes()
-        log = world.chat("c", [asked(f"message {i}") for i in range(20)])
-        await world.passes()
-        assert 0 < world.follower.chats["c"].offset < log.stat().st_size
-        await world.passes(20)
-        assert world.follower.chats["c"].offset == log.stat().st_size
 
     asyncio.run(scenario())
 
@@ -649,11 +611,6 @@ def test_the_machine_closes_its_follower_at_its_stop():
     m.stop_all()
     assert m.chats.closed.is_set()
     assert m.chats.thread is None
-
-
-def test_places_have_no_exemptions_for_a_chat(tmp_path):
-    assert moments(tmp_path).places.exempt == ()
-    assert isinstance(moments(tmp_path).places, watch_policy.Places)
 
 
 def test_a_session_registering_while_the_follower_discovers_is_never_read(world, monkeypatch):
@@ -772,7 +729,8 @@ def test_a_chat_look_keeps_its_turns_case_snapshot_and_its_limit_whatever_change
     for r in records():  # each look's meter, as its record keeps it
         assert (r["credits"], r["credits_known"], r["stopped"], r["stopped_by"], r["sdk_sessions"], r["skipped"]) == (
             0.01, True, "", "", [f"sdk-{r['id']}"], "")  # fmt: skip
-    assert world.cards[0][1].prompt == sent  # exactly the snapshot the look was admitted with
+    admitted = world.cards[0][1]
+    assert (admitted.prompt, admitted.model, admitted.limit) == (sent, "m1", 0.75)
 
 
 class Stuck:
@@ -967,10 +925,12 @@ def test_a_pass_fetches_at_most_its_budget_and_a_long_event_is_fetched_once(worl
             world.chat(cid, [asked("go")])
             with (world.state / cid / "events.jsonl").open("a") as out:
                 out.write(long[:2900])
-        for _ in range(12):
+        for i in range(12):
             fetched.clear()
             await world.passes()
             assert sum(fetched) <= chats.PASS
+            if i == 0:
+                assert 0 < world.follower.chats["a"].offset < (world.state / "a" / "events.jsonl").stat().st_size
         for cid in ("a", "b"):
             with (world.state / cid / "events.jsonl").open("a") as out:
                 out.write(long[2900:] + "\n")
