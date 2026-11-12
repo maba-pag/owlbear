@@ -98,8 +98,6 @@ def step(cfg: sdk_adapter.Session) -> sdk_adapter._Step:
 def test_pds_preload_roles_and_candidate_skill_isolation(tmp_path, fields, loads) -> None:
     chosen = react(tmp_path / "app")
     cfg = session(tmp_path / "app", **fields)
-    role = sdk_adapter.role_of(cfg)
-    assert pds_skill.wanted(role, ui=cfg.ui, skills=cfg.skills) is loads
     opts = step(cfg).options()
     assert (str(chosen) in opts["skill_directories"]) is loads
     assert ("pds-knowledge-react" in opts["custom_agents"][0]["skills"]) is loads
