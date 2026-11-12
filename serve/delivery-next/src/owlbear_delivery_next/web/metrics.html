@@ -31,6 +31,8 @@
   .fold > summary { min-block-size: 24px; }
   /* A chart takes its section's width and never widens it; ECharts sizes its canvas to it. */
   .chart { inline-size: 100%; min-inline-size: 0; overflow: hidden; contain: inline-size; }
+  .chart-keys { display: none; max-inline-size: 75ch; margin: 0; }
+  section:has(.chart:focus-visible) .chart-keys { display: block; }
   #compaction a { display: inline-block; min-block-size: 24px; line-height: 24px; }
 </style>
 </head>

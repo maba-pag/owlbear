@@ -2,7 +2,7 @@
 // split by day, columns over time with an average line, without the day whose time is unknown.
 import { html } from "/assets/lit-html/3.3.3/lit-html.js";
 import { draw } from "./chart.mjs";
-import { lengthSwitch, stacked } from "./stacked.mjs";
+import { keysHint, lengthSwitch, stacked } from "./stacked.mjs";
 import { credits } from "./runs.mjs";
 import { query, show } from "./state.mjs";
 
@@ -24,7 +24,7 @@ export function creditsControls() {
     ${lengthSwitch(pick.relative, (on) => {
       pick.relative = on;
       show();
-    })}</div>`;
+    })}</div>${keysHint}`;
 }
 
 // The stacks: each key's credits per bar, largest first; past 7 keys, the largest 6 and the rest as Other.

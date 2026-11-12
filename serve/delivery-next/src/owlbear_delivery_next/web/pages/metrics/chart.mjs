@@ -30,6 +30,7 @@ export function draw(name, spec) {
 function drop(name) {
   const c = charts.get(name);
   c.observer.disconnect();
+  c.listening.abort();
   c.inst.dispose();
   c.el.removeAttribute("tabindex");
   charts.delete(name);
@@ -38,15 +39,17 @@ function drop(name) {
 
 function create(name, el) {
   const inst = globalThis.echarts.init(el);
-  const c = { el, inst, spec: null, mark: null, at: [0, 0], said: "" };
+  // a container the page keeps after a drop must not keep this chart's handlers
+  const c = { el, inst, spec: null, mark: null, at: [0, 0], said: "", listening: new AbortController() };
+  const { signal } = c.listening;
   el.tabIndex = 0;
   el.setAttribute("role", "group");
-  el.addEventListener("keydown", (e) => key(c, e));
-  el.addEventListener("focus", () => { if (el.matches(":focus-visible")) focus(c); });
+  el.addEventListener("keydown", (e) => key(c, e), { signal });
+  el.addEventListener("focus", () => { if (el.matches(":focus-visible")) focus(c); }, { signal });
   el.addEventListener("blur", () => {
     inst.dispatchAction({ type: "downplay" });
     inst.dispatchAction({ type: "hideTip" });
-  });
+  }, { signal });
   inst.on("click", (params) => {
     const row = c.spec.row(params);
     if (row != null) act(c, row);
@@ -96,11 +99,25 @@ function focus(c) {
 }
 
 const ALONG = { ArrowUp: -1, ArrowDown: 1 }, ACROSS = { ArrowLeft: -1, ArrowRight: 1 };
+// The legend by keyboard, for charts whose spec has `legend`: Space hides the focused part, A shows all, I inverts.
+const LEGEND = { a: "legendAllSelect", i: "legendInverseSelect" };
 
 function key(c, e) {
   if (e.key === "Enter") {
     e.preventDefault();
     act(c, c.at[0]);
+    return;
+  }
+  if (c.spec.legend && (e.key === " " || LEGEND[e.key.toLowerCase()]) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    if (e.key === " ") {
+      const item = c.spec.items(c.at[0], c.inst)[c.at[1]];
+      const name = item && c.inst.getOption().series[item.seriesIndex]?.name;
+      if (name != null) c.inst.dispatchAction({ type: "legendUnSelect", name });
+    } else {
+      c.inst.dispatchAction({ type: LEGEND[e.key.toLowerCase()] });
+    }
+    focus(c);
     return;
   }
   const [rowKeys, itemKeys] = c.spec.horizontal ? [ALONG, ACROSS] : [ACROSS, { ArrowUp: 1, ArrowDown: -1 }];

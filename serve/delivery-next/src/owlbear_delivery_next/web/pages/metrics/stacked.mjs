@@ -9,6 +9,10 @@ const esc = (text) => globalThis.echarts.format.encodeHTML(String(text));
 export const lengthSwitch = (on, set) => html`<p-switch compact="true" .checked=${on}
   @update=${(e) => set(e.detail.checked)}>Relative lengths</p-switch>`;
 
+/** The keys of a stacked chart, shown while the chart has keyboard focus. */
+export const keysHint = html`<p class="chart-keys">Arrow keys move between bars and parts, Enter opens a bar,
+  Space hides the focused part, A shows all parts, I inverts which are shown.</p>`;
+
 /**
  * The spec of a stacked chart: `labels` (one per bar, in order), `parts` (`{ id, name, values }`, a raw value per
  * bar, bottom of the stack first), `totals` (per bar), `colours(theme)` (one per part), `format` (a raw value as
@@ -64,7 +68,7 @@ export function stacked({ labels, parts, totals, colours, format, horizontal, re
     };  // fmt: skip
   }
   return {
-    rows: labels.length, horizontal, build,
+    rows: labels.length, horizontal, build, legend: true,
     height: horizontal ? 96 + labels.length * 32 : 340,
     items: (row, inst) => {
       const option = inst.getOption();
