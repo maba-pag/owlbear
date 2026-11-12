@@ -81,10 +81,6 @@ def _set_directory_mode(memory_dir: Path, mode: int) -> None:
     memory_dir.chmod(mode)
 
 
-def _memory_entries(memory_dir: Path) -> list[MemoryEntry]:
-    return [entry for path in memory_dir.glob("*.md") if (entry := storage.read_entry(path)) is not None]
-
-
 @pytest.fixture
 def saved(memory_entry: Callable[..., MemoryEntry]) -> Callable[..., MemoryEntry]:
     return partial(
@@ -301,5 +297,5 @@ async def test_purge_keeps_repaired_copy_pending_and_out_of_recall(
     restored = await tools.read_memory(ctx, entry_id=str(pending["id"]))
     assert restored["content"] == approved.content
 
-    remaining_entries = _memory_entries(tmp_path)
+    remaining_entries = [entry for path in tmp_path.glob("*.md") if (entry := storage.read_entry(path)) is not None]
     assert not any(entry.id == _DUPLICATE_ID and entry.state == MemoryState.APPROVED for entry in remaining_entries)
