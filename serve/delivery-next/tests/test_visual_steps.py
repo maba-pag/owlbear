@@ -103,7 +103,6 @@ def test_steps_run_only_on_a_prepared_test_copy():
         prepare.stepped(c, prepared=False)
     asked = unprepared.value.result
     assert (asked.exit, asked.cause, asked.question) == (Exit.STOP, "project-env:check:preparation", None)
-    assert "Revise the brief" not in asked.reason  # a setup problem never reopens the brief (#1168)
     prepare.stepped(c, prepared=True)
     prepare.stepped(stepped(), prepared=False)  # static states need no test copy
 

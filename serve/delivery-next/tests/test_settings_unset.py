@@ -382,20 +382,10 @@ PREF_KEYS = ("merge_method", "delete_remote_branch", "ci_poll_seconds", "ci_star
 
 
 @pytest.mark.parametrize("key", PREF_KEYS)
-def test_an_unset_preference_refuses_the_step_and_stops_for_the_owner_never_a_code_default(key, monkeypatch):
+def test_an_unset_preference_refuses_the_step_never_a_code_default(key, monkeypatch):
     monkeypatch.setattr(config, "BASE", None)  # the test-only base layer would fill it in
     empty = resolve(None, Layer())
     assert f"prefs.{key}" in empty.missing
     with pytest.raises(SettingsUnset) as refused:
         config.pref(empty, key)
-    assert refused.value.keys == [f"prefs.{key}"]
-
-    asked = change(StepKind.REVIEW)
-    written: list[Change] = []
-    logged: list[dict] = []
-    store = SimpleNamespace(read=lambda _slug: written[-1] if written else asked, write=lambda _l, c: written.append(c),
-                            log=lambda _l, _s, e: logged.append(e))  # fmt: skip
-    unset_settings.asked(store, SimpleNamespace(slug="c1"), refused.value)
-    assert written[-1].stop is not None
-    assert not written[-1].questions
-    assert [e["reason"] for e in logged] == [f"prefs.{key}"]
+    assert refused.value.keys == [f"prefs.{key}"]  # the stop it leads to: the unset-setting test above
