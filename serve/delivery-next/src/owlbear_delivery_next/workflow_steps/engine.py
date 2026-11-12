@@ -213,6 +213,9 @@ def rules_changed(ctx: Ctx, c: Change) -> tuple[StepResult | None, Rules]:
     agreed = (q for q in c.questions if q.cause == cause and q.answer and not q.effect_observed_at)
     if (q := next(agreed, None)) is not None and q.answer and q.answer.option == "yes":
         latest = ctx.store.read_profile() or ctx.profile  # entries another Change confirmed meanwhile stay
+        if profile.differences(latest, rules) != diffs:  # his yes covers only the differences he was shown
+            ctx.profile = latest
+            return rules_changed(ctx, c)
         ctx.profile = profile.adopt(latest, rules, ctx.now)
         ctx.store.write_profile(ctx.profile)
         q.effect_observed_at = ctx.now

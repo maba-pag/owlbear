@@ -3284,6 +3284,16 @@ def test_a_yes_to_changed_merge_rules_records_only_the_rules_it_was_shown(tmp_pa
     assert (again.exit, again.cause != asked.cause, cx.profile.entries == before) == (Exit.ASK, True, True)
 
     gh.read_rules = lambda _r, _b: shown
+    saved = profile.confirm(
+        cx.profile, profile.STRICT, "yes", NOW
+    )  # another Change's newer rule entry, saved meanwhile
+    cx.store.write_profile(saved)
+    wider, _ = engine.rules_changed(cx, c)
+    assert (wider.exit, wider.cause != asked.cause, cx.store.read_profile().entries == saved.entries) == (
+        Exit.ASK, True, True
+    )  # fmt: skip
+    cx.store.write_profile(cx.profile.model_copy(update={"entries": before}))
+    cx.profile = cx.store.read_profile()
     assert engine.rules_changed(cx, c)[0] is None  # recorded, and the step goes on
     assert profile.value(cx.profile, profile.REQUIRED) == "ci"
     assert profile.reread(cx.store.read_profile(), gh, "main")[0] == []

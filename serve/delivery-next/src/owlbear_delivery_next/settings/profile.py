@@ -349,8 +349,13 @@ def _differs(old: ProfileEntry | None, key: str, new: ProfileEntry) -> str:
 def reread(profile: Profile, gh: Provider, branch: str) -> tuple[list[str], Rules]:
     """Re-read effective rules and required checks; return each difference from the profile and the rules."""
     rules = gh.read_rules(value(profile, REPO), branch)
+    return differences(profile, rules), rules
+
+
+def differences(profile: Profile, rules: Rules) -> list[str]:
+    """Each difference of the read *rules* from the profile's rule entries."""
     read = rule_entries(rules).items()
-    return [d for key, new in read if (d := _differs(profile.entries.get(key), key, new))], rules
+    return [d for key, new in read if (d := _differs(profile.entries.get(key), key, new))]
 
 
 def adopt(profile: Profile, rules: Rules, now: datetime) -> Profile:
