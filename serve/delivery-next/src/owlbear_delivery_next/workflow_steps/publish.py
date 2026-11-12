@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -91,6 +92,7 @@ def _body(c: Change, *, marker: bool) -> str:
 
 
 OPEN, CLOSE = "<!-- owlbear:findings-left-open -->", "<!-- /owlbear:findings-left-open -->"
+SECTION = re.compile(rf"^{re.escape(OPEN)}\r?\n.*?^{re.escape(CLOSE)}[^\S\n]*$", re.MULTILINE | re.DOTALL)
 LEFT = "Rejected by the builder or planner and upheld by the next reviewer or challenger. Nothing was changed for them."
 
 
@@ -100,21 +102,20 @@ def section(c: Change) -> str:
         return ""
     lines = [OPEN, "## Findings left open", LEFT]
     for f in found:
-        lines += [f"- **{f['where']} {f['id']}:** {_flat(f['text'])}"]
+        lines += [f"- **{f['where']} {f['id']}:** {' '.join(f['text'].split())}"]
         said = (("worker", "reason"), ("judge", "judgement"))
-        lines += [f"  - {f[who]}: {_flat(f[why])}" for who, why in said if f[why]]
+        lines += [f"  - {f[who]}: {' '.join(f[why].split())}" for who, why in said if f[why]]
     return "\n".join([*lines, CLOSE])
 
 
-def _flat(text: str) -> str:
-    return " ".join(text.split())
-
-
 def relisted(c: Change, body: str) -> str:
-    """*body* with Delivery's own section as it is now: replaced between its markers, else appended; the rest stays."""
-    now, start, end = section(c), body.find(OPEN), body.find(CLOSE)
-    if 0 <= start < end:
-        return body[:start] + now + body[end + len(CLOSE) :]
+    """*body* with Delivery's own section as it is now: replaced between its markers, else appended; the rest stays.
+
+    A marker counts only as a whole line: a finding or the owner's text that quotes one is on a longer line.
+    """
+    now = section(c)
+    if SECTION.search(body):
+        return SECTION.sub(lambda _: now, body, count=1)
     return f"{body.rstrip()}\n\n{now}" if now else body
 
 
