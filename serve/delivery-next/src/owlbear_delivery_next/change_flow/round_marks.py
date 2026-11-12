@@ -51,7 +51,7 @@ def unmet(c: Change, lp: RoundLoop) -> list[Criterion]:
 def problem(text: str) -> str:
     """A finding's problem without its place and fix: findings read ``place: problem - fix: fix``."""
     said = " ".join(text.removeprefix("- ").split(" - fix:", 1)[0].split())
-    return re.sub(r"^\S+:\s+(?=\S)", "", said)  # the file and line stay in the question's details
+    return said.partition(": ")[2] or said  # the place (a file and line, or an area) stays in the details
 
 
 def some(items: list[str]) -> str:
