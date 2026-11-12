@@ -302,6 +302,11 @@ function walk(path, as) {
 
 const answers = turns(), models = turns();  // the layers' reloads, saves and renames
 
+function standingNotice(loaded) {
+  const notice = loaded.write_notice ? "" : loaded.notice;
+  return notice ? notice.charAt(0).toUpperCase() + notice.slice(1) : "";
+}
+
 // The layers as the host has them now, unless a newer reload, save or rename has answered meanwhile.
 export async function reload() {
   const n = answers.ask();
@@ -310,7 +315,7 @@ export async function reload() {
     const says = answers.says(n);
     if (!answers.take(n)) return false;
     state.loaded = loaded;
-    if (says) state.layerNotice = loaded.notice ? loaded.notice.charAt(0).toUpperCase() + loaded.notice.slice(1) : "";
+    if (says) state.layerNotice = standingNotice(loaded);
     return true;
   } catch (e) {
     if (answers.says(n)) {
@@ -370,11 +375,11 @@ async function saveLayer(review) {
       { method: "PUT", body: { rev: state.loaded[`${layer}_rev`], layer: edited(layer),
         prefs_reviewed: layer === "project" && state.prefsReview }, timeout: WRITE });
     answers.shown();
-    state.layerNotice = "";
+    state.layerNotice = standingNotice(state.loaded);
     if (layer === "project" && !state.loaded.unpublished) state.prefsReview = false;  // kept until published
     for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
     state.kept.clear();  // what was saved is no longer an unsaved edit for the filter
-    error = state.loaded.notice ?? "";
+    error = state.loaded.write_notice ?? "";
     const whose = { global: "the global", machine: "this machine's" }[layer]
       ?? (named() ? `${named()}'s` : "this project's");
     status = `Saved ${whose} settings. They apply to the next session.`;
@@ -412,9 +417,10 @@ export async function rename() {
   try {
     state.loaded = await call("/config/folder", { method: "PUT", body: { name }, timeout: WRITE });
     answers.shown();
-    state.layerNotice = "";
+    state.layerNotice = standingNotice(state.loaded);
     state.folder = null;
-    state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
+    const notice = state.loaded.write_notice;
+    state.error = notice ? notice.charAt(0).toUpperCase() + notice.slice(1) : "";
     state.status = `This project's folder is now ${state.loaded.folder}.`;
   } catch (e) {
     state.status = "";

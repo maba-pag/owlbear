@@ -1268,6 +1268,7 @@ def _project_puts(page) -> list[dict]:
 def test_cancelled_review_preserves_previous_intent(pending, pds, prior_edit) -> None:
     """Keep editing on the review's confirmation is no review: a later unrelated save leaves the import pending."""
     with settings_page(pending, pds) as page:
+        standing = page.locator("#error").inner_text()
         sent = _project_puts(page)
         if prior_edit:
             pds.group(page, "checks")
@@ -1284,9 +1285,19 @@ def test_cancelled_review_preserves_previous_intent(pending, pds, prior_edit) ->
         expect(page.get_by_role("button", name="Confirm merge preferences reviewed")).to_have_count(
             0 if prior_edit else 1
         )
+        assert pending.read_profile().prefs_import == ("done" if prior_edit else "pending")
+        if not prior_edit:
+            pds.group(page, "overview")
+            with page.expect_request("**/api/next/config/models"):
+                page.locator("#read-again").click()
+            expect(page.locator("#error")).to_have_text(standing)
+            _, notice, _ = pending.mark_prefs_import("pending", "done")
+            assert not notice
+            with page.expect_request("**/api/next/config/models"):
+                page.locator("#read-again").click()
+            expect(page.locator("#error")).to_be_hidden()
 
     assert [body["prefs_reviewed"] for body in sent] == [prior_edit]
-    assert pending.read_profile().prefs_import == ("done" if prior_edit else "pending")
     assert pending.read_config().agents["builder"].max_rounds == 4
     if prior_edit:
         assert pending.read_config().prefs.merge_method == "squash"
@@ -1306,7 +1317,9 @@ def test_explicit_review_waits_for_publication(pending, tmp_path, monkeypatch, s
         expect(page.locator("#status")).to_have_text("Saving…")
         expect(page.locator("#error")).to_be_hidden()  # nothing offers a retry the running save would ignore
 
-        held[0][0].fallback()
+        with page.expect_response("**/api/next/config/project") as written:
+            held[0][0].fallback()
+        assert written.value.json()["write_notice"], written.value.json()
         expect(page.locator("#error")).to_be_visible()
         expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
         assert page.evaluate("() => document.querySelector('#save').loading") is False
@@ -1522,6 +1535,14 @@ def test_a_global_save_not_recorded_as_seen_says_why_whole(store, pds, monkeypat
         said = f"The saved Global values could not be recorded as seen: OSError: [Errno 28] {whole_error}\nNOTE-MARK"
         expect(page.locator("#error")).to_be_visible()
         assert page.locator("#error").text_content().strip() == said
+        refusing.clear()
+        pds.group(page, "overview")
+        with page.expect_response("**/api/next/config") as refreshed:
+            page.locator("#read-again").click()
+        current = refreshed.value.json()["notice"]
+        expect(page.locator("#error")).to_have_text(
+            said + (f"\n\n{current[0].upper()}{current[1:]}" if current else "")
+        )
     assert '"minutes":50' in store.global_path.read_text().replace(" ", "")
 
 
