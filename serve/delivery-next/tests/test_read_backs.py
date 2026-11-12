@@ -14,7 +14,8 @@ from fastapi.testclient import TestClient
 from mcp.server.mcpserver.exceptions import ToolError
 
 from owlbear_decisions import Decision, Origin, Scope, State, new_id, write
-from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
+from owlbear_delivery_next.change_contracts.models import Brief, Change, Names, Plan, Step, StepKind, Task
+from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.commands import chat_client, mcp_server
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -363,7 +364,7 @@ def test_the_approval_view_shows_at_most_three_applying_read_backs_and_counts_th
     assert owner.get("/api/next/changes/notes").json()["brief"]["read_backs"] is None
 
 
-def test_the_gate_question_lists_at_most_three_applying_read_backs_and_never_blocks_on_them(tmp_path, shared):
+def test_read_backs_never_block_a_step_or_its_adoption_of_changed_decisions(tmp_path, shared):
     rule = make(title="Pages are plain HTML", statement="No build step.")
     put(shared, rule, *(waiting(k) for k in ("safety", "blocked", "uncertain", "improvement")))
     brief = Brief(version=1, approved_version=1, challenged=1, approved_at=AT, title="Notes", scope=["web"])
@@ -376,13 +377,15 @@ def test_the_gate_question_lists_at_most_three_applying_read_backs_and_never_blo
 
     assert decisions_gate.check_step(store, c, AT).result is None  # read-backs alone never stop a step
     write(rule.model_copy(update={"state": State.WITHDRAWN}), shared.root / PROJECT, rule.revision)
-    asked = decisions_gate.check_step(store, c, AT).result
+    gate = decisions_gate.check_step(store, c, AT)
 
-    assert asked.exit is Exit.ASK
-    lines = asked.question.text.splitlines()
-    assert decisions_gate.WAITING in lines
-    assert sum(line.startswith(("- safety", "- blocked", "- uncertain", "- improvement")) for line in lines) == 3
-    assert "1 more wait on the Decisions page." in lines
+    assert (gate.result, gate.pinned, gate.change.questions) == (None, True, [])
+    assert rule.id not in gate.change.decisions_baseline.revisions
+    assert f"no longer in force: {rule.id}" in "\n".join(gate.adopted)
+    assert decisions_gate.WAITING not in gate.adopted
+    assert loop.next_step(gate.change, AT) == c.step
+    pending = decisions_gate.waiting(store, decisions_gate.loaded(store), gate.change)
+    assert [q.kind for q in pending] == ["safety", "blocked", "uncertain", "improvement"]
 
 
 def test_the_owlbear_scope_lists_owlbears_and_global_decisions_and_the_owner_acts_on_them(owner, shared):

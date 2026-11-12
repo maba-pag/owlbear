@@ -117,6 +117,11 @@ def stepped(picking, slug: str) -> Change:
     return picking.store.read(slug)
 
 
+def adopted(store: Store, slug: str) -> str:
+    (event,) = [e for e in store.events(slug) if e.get("event") == "decisions-adopted"]
+    return "\n".join(event["lines"])
+
+
 def approved_binding(c, root, choice, answer):
     """Reopen the exact binding and its actual approval receipt and pin."""
     rule = read(root / rel(choice.id))
@@ -154,15 +159,20 @@ def test_approved_rule_is_visible_replaced_and_retained_at_end(picking, shared_r
 
     tags = stepped(picking, "tags")  # its approving Change's runner has not run yet
 
-    assert ran == []
-    assert f"new: {lasting.id} {WHERE}" in loop.open_question(tags).text  # its gate asks, as for any new rule
+    assert (ran, tags.outcome, tags.questions, tags.decisions_baseline.revisions) == (
+        ["tags"],
+        None,
+        [],
+        {lasting.id: rule.rule_revision},
+    )
+    assert f"new: {lasting.id} {WHERE}" in adopted(picking.store, "tags")
     written, before = (root / rel(lasting.id)).read_bytes(), commits(remote)
     assert picking.approve(1).status_code == 200
     assert ((root / rel(lasting.id)).read_bytes(), commits(remote)) == (written, before)
     (again,) = picking.approved().decisions_published
     assert (again.id, again.published, again.revision) == (lasting.id, True, rule.revision)
     stepped(picking, picking.slug)
-    assert ran == [picking.slug]  # its own decision asks nothing of it
+    assert ran == ["tags", picking.slug]  # neither Change waits for a decision question
     monkeypatch.setattr(runner, "_run", _run)
     reshape(picking)
     successor_answer = answer + "\nThe successor also keeps restore instructions."
@@ -382,8 +392,11 @@ def test_an_interrupted_later_approval_keeps_the_receipt_of_an_unchanged_own_dec
     kept = {p.id: p for p in c.decisions_published}
     assert (kept[lasting.id].revision, kept[lasting.id].committed) == (v1.revision, True)
     assert (kept[added.id].committed, kept[added.id].revision) == (True, read(root / rel(added.id)).revision)
-    assert f"changed: {lasting.id}" in loop.open_question(c).text
-    assert ran == []
+    assert (c.outcome, c.questions, ran) == (None, [], [picking.slug])
+    assert f"changed: {lasting.id}" in adopted(picking.store, picking.slug)
+    current = read(root / rel(lasting.id))
+    assert c.decisions_baseline.revisions[lasting.id] == current.rule_revision
+    assert (c.decisions_unpinned_at, c.decisions_offered) == (None, None)
 
 
 def test_a_recovery_that_fails_waits_with_its_reason_and_the_next_step_saves_before_work(
@@ -717,11 +730,11 @@ def _unavailable(reason: str, note: str = "NOTE-MARK"):
 
 
 @pytest.mark.parametrize("fails", ["save", "items"])
-def test_a_day_of_the_same_failed_recovery_asks_though_its_notes_said_different_words(
+def test_a_day_of_the_same_failed_recovery_repairs_though_its_notes_said_different_words(
     picking, monkeypatch, whole_error, fails
 ):
-    """#971: a failed save's notes differ each time; the wait signs the error without them, so a day of it asks,
-    showing the last one whole."""
+    """#971: a failed save's notes differ each time; the wait signs the error without them, so a day of it repairs,
+    keeping the last one whole."""
     approvable(picking, 1, LASTING)
 
     def crashed(*_args, **_kwargs):
@@ -749,7 +762,9 @@ def test_a_day_of_the_same_failed_recovery_asks_though_its_notes_said_different_
 
     c = picking.store.read(picking.slug)
     budget = c.budgets.causes[f"network:{c.step.kind}:decisions"]
-    assert (budget.since, budget.attempts, c.outcome.exit) == (first_at, 2, Exit.ASK)
+    assert (budget.since, budget.attempts, c.outcome.exit) == (first_at, 2, Exit.RETRY)
     reason = f"{decision_publication.UNSAVED}: DecisionsUnavailable: {whole_error}\nthe fetch was cut off"
     since = f"{first_at:%Y-%m-%d %H:%M}"
-    assert loop.open_question(c).text == f"network keeps failing for {c.step.kind} since {since}; last error: {reason}"
+    assert c.questions == []
+    assert c.repairs.current.cause == f"network:{c.step.kind}:decisions"
+    assert c.repairs.current.evidence == f"network keeps failing for {c.step.kind} since {since}; last error: {reason}"

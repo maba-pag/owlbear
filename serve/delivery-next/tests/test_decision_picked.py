@@ -156,24 +156,28 @@ def test_a_decision_activated_elsewhere_is_picked_at_the_next_boundary_and_an_un
     assert len(picking.pickers()) == 2  # nothing new since: no picker call
 
 
-def test_a_replaced_pinned_decision_asks_the_owner_and_its_successor_goes_to_the_picker(picking, monkeypatch):
+def test_a_replaced_pinned_decision_is_adopted_and_its_successor_goes_to_the_picker(picking, monkeypatch):
     rule = picking.put(make())
-    prepared(picking, monkeypatch, rule)
+    held = prepared(picking, monkeypatch, rule)
     successor = picking.put(make(statement="The pages are plain HTML and CSS.",
                                  links=(Link(type=LinkType.REPLACES, target=rule.id),)))  # fmt: skip
     write(rule.model_copy(update={"state": State.REPLACED}), picking.shared.root / PROJECT, rule.revision)
 
+    picking.picks.append(picked(successor.id))
     c = advance(picking)
 
-    q = loop.open_question(c)
-    assert q.cause.startswith("decisions:build:")
-    assert f"no longer in force: {rule.id}" in q.text
-    assert len(picking.pickers()) == 1
-    c, _ = loop.schedule(c, [AnswerItem(at=AT, question=q.id, option="continue")], AT)
-    picking.store.write(Lock(picking.slug), c)
-    picking.picks.append(picked(successor.id))
+    assert (c.outcome, c.questions, len(picking.pickers())) == (None, [], 2)
+    assert set(c.decisions_baseline.said) == {successor.id}
+    assert c.decisions_baseline.revisions == {successor.id: successor.rule_revision}
+    assert (c.decisions_unpinned_at, c.decisions_offered) == (None, None)
+    later = picking.pickers()[-1].message.split("## Decisions")[1]
+    assert (successor.id in later, rule.id in later) == (True, False)
+    [(worker, _)] = held
+    assert (line(successor) in worker, line(rule) in worker) == (True, False)
+    (event,) = [e for e in picking.store.events(picking.slug) if e.get("event") == "decisions-adopted"]
+    assert f"no longer in force: {rule.id}" in "\n".join(event["lines"])
     assert advance(picking).outcome is None
-    assert set(picking.change().decisions_baseline.said) == {successor.id}
+    assert len(picking.pickers()) == 2  # the successor is not picked again
 
 
 @pytest.mark.parametrize("governs", [False, True], ids=["unrelated", "governing"])
@@ -218,49 +222,59 @@ def test_decisions_the_pick_did_not_read_pass_approval_and_go_to_the_next_steps_
     assert (again.said, again.revisions) == (pin.said, pin.revisions)
 
 
-def test_a_pick_approved_while_the_decisions_did_not_load_offers_its_rule_as_it_stands_and_pins_that(
+def test_a_pick_approved_while_the_decisions_did_not_load_adopts_its_rule_as_it_stands_and_pins_that(
     picking, monkeypatch, tmp_path
 ):
     rule, data, away = picking.put(make()), picking.shared.root / PROJECT, tmp_path / "away"
-    prepared(picking, monkeypatch, rule, between=lambda: data.rename(away))
+    held = prepared(picking, monkeypatch, rule, between=lambda: data.rename(away))
     assert picking.change().decisions_unpinned_at is not None
     away.rename(data)
     renamed = rule.model_copy(update={"title": "Pages are plain HTML files"})
     write(renamed, data, rule.revision)
 
-    q = loop.open_question(advance(picking))
+    c = advance(picking)
 
-    assert f"{rule.id} Pages are plain HTML files:" in q.text
-    c, _ = loop.schedule(picking.change(), [AnswerItem(at=AT, question=q.id, option="continue")], AT)
-    picking.store.write(Lock(picking.slug), c)
-    assert advance(picking).outcome is None  # no second question
-    assert picking.change().decisions_baseline.revisions[rule.id] == renamed.rule_revision
+    assert (c.outcome, c.questions, len(picking.pickers())) == (None, [], 1)
+    [(worker, _)] = held
+    assert line(renamed) in worker
+    assert c.decisions_baseline.revisions == {rule.id: renamed.rule_revision}
+    assert (c.decisions_unpinned_at, c.decisions_offered) == (None, None)
+    (event,) = [e for e in picking.store.events(picking.slug) if e.get("event") == "decisions-adopted"]
+    assert decisions_gate.UNPINNED in event["lines"]
+    assert f"{rule.id} Pages are plain HTML files:" in "\n".join(event["lines"])
+    assert advance(picking).outcome is None
+    assert len(picking.pickers()) == 1
 
 
 @pytest.mark.parametrize("fate", ["changed", "withdrawn"])
-def test_a_picked_decision_changed_or_withdrawn_before_approval_asks_the_owner_at_the_next_step(
-    picking, monkeypatch, fate
-):
+def test_a_picked_decision_changed_or_withdrawn_before_approval_is_adopted_at_the_next_step(picking, monkeypatch, fate):
     rule = picking.put(make())
     update = {"title": "Pages are plain HTML files"} if fate == "changed" else {"state": State.WITHDRAWN}
+    updated = rule.model_copy(update=update)
 
     def between() -> None:
-        write(rule.model_copy(update=update), picking.shared.root / PROJECT, rule.revision)
+        write(updated, picking.shared.root / PROJECT, rule.revision)
 
     held = prepared(picking, monkeypatch, rule, between=between)
 
     c = advance(picking)
 
-    q = loop.open_question(c)
-    assert q.cause.startswith("decisions:build:")
+    assert (c.outcome, c.questions, len(picking.pickers())) == (None, [], 1)
+    (event,) = [e for e in picking.store.events(picking.slug) if e.get("event") == "decisions-adopted"]
+    lines = "\n".join(event["lines"])
     gone = f"no longer in force: {rule.id}"
-    assert (f"changed: {rule.id} Pages are plain HTML files: was" if fate == "changed" else gone) in q.text
-    assert rule.statement in q.text  # the wording the pick read
-    assert (held, len(picking.pickers())) == ([], 1)
-    assert picking.approve(1).status_code == 200  # a retried approval keeps the question's offer
-    c, _ = loop.schedule(picking.change(), [AnswerItem(at=AT, question=q.id, option="continue")], AT)
-    picking.store.write(Lock(picking.slug), c)
-    assert advance(picking).outcome is None  # Continue took the change in: not asked again
+    assert (f"changed: {rule.id} Pages are plain HTML files: was" if fate == "changed" else gone) in lines
+    assert rule.statement in lines
+    [(worker, _)] = held
+    assert (line(updated) in worker, rule.id in c.decisions_baseline.said) == (fate == "changed", fate == "changed")
+    expected = {rule.id: updated.rule_revision} if fate == "changed" else {}
+    assert c.decisions_baseline.revisions == expected
+    assert (c.decisions_unpinned_at, c.decisions_offered) == (None, None)
+    assert picking.approve(1).status_code == 200  # a retried approval keeps the adopted baseline
+    assert picking.change().decisions_baseline.revisions == expected
+    assert advance(picking).outcome is None
+    assert len(picking.pickers()) == 1
+    assert len([e for e in picking.store.events(picking.slug) if e.get("event") == "decisions-adopted"]) == 1
 
 
 def test_a_pick_saved_before_it_recorded_what_it_read_counts_only_its_picks_as_read(picking, monkeypatch):
@@ -323,11 +337,14 @@ def test_a_change_approved_without_a_pick_keeps_every_decision_in_force(picking,
 
     c = advance(picking)
 
-    if pinned:  # a new decision asks the owner, as before picking existed
-        assert f"new: {other.id}" in loop.open_question(c).text
-        return
+    assert (c.outcome, c.questions) == (None, [])
     worker, _ = held[-1]
     assert (line(rule) in worker, line(other) in worker, len(picking.pickers())) == (True, True, 1)
+    assert c.decisions_baseline.revisions == {rule.id: rule.rule_revision, other.id: other.rule_revision}
+    assert c.decisions_baseline.picked is False
+    if pinned:
+        (event,) = [e for e in picking.store.events(picking.slug) if e.get("event") == "decisions-adopted"]
+        assert f"new: {other.id}" in "\n".join(event["lines"])
 
 
 @pytest.mark.parametrize("kind", [StepKind.PUBLISH, StepKind.MERGE])
