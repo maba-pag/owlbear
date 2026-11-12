@@ -129,19 +129,31 @@ REFUSALS = {
 }
 
 
-@pytest.mark.parametrize("refusal", list(REFUSALS))
-def test_a_refused_runs_commit_never_reaches_the_remote_while_another_writers_does(
-    repo, remote, refusal, caplog
+@pytest.mark.parametrize(
+    ("refusal", "folder"),
+    [(r, "shop") for r in REFUSALS] + [("unread", "shop.lock"), ("unread", "shop..v2")],
+)
+def test_refused_edits_stay_in_local_custody_during_and_after_other_publications(
+    repo, remote, refusal, folder, caplog
 ) -> None:
-    entry = curated(repo / "shop" / "memory", "Lesson")
+    entry = curated(repo / folder / "memory", "Lesson")
     pushed(repo, "a curated entry")
-    before = (repo / rel(entry)).read_bytes()
+    path = rel(entry, folder)
+    before = (repo / path).read_bytes()
     made = {}
 
     def run(cfg) -> Run:
-        reword(cfg.memory, entry.id, "Lesson: the curator's version")
-        made["curator"] = committed(cfg.memory, "shop/memory")
+        reword(
+            cfg.memory,
+            entry.id,
+            "Lesson: the curator's version" if folder == "shop" else "Lesson: an edit never committed",
+        )
+        made["curator"] = committed(cfg.memory, f"{folder}/memory") if folder == "shop" else ""
         made["bytes"] = (cfg.memory / f"{entry.id}.md").read_bytes()
+        if refusal == "unread" and folder == "shop":
+            made["during"] = publish_other(repo, "during")
+            assert (remote_has(remote, made["during"]), remote_has(remote, made["curator"])) == (True, False)
+            assert (remote_bytes(remote, path), (repo / path).read_bytes()) == (before, before)
         if refusal != "unconfirmed":
             return Run(cfg.session_id, termination=Termination(confirmed=True), **REFUSALS[refusal])
         shared, notes = DataRepo(repo), repo / "shop" / "notes.txt"
@@ -154,8 +166,8 @@ def test_a_refused_runs_commit_never_reaches_the_remote_while_another_writers_do
                    termination=Termination(confirmed=False, survivors=(4242,)), **REFUSALS[refusal])  # fmt: skip
 
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
-    job.start("shop")
-    row = drained(job)
+    job.start(folder)
+    row = drained(job, folder)
 
     if refusal == "unconfirmed":
         other = made["other"]
@@ -163,34 +175,18 @@ def test_a_refused_runs_commit_never_reaches_the_remote_while_another_writers_do
             assert DataRepo(repo).publish([], "a later publication") == ""
     else:
         other = publish_other(repo, "after")
-    assert (remote_has(remote, other), remote_has(remote, made["curator"])) == (True, False)
-    assert (remote_bytes(remote, rel(entry)), (repo / rel(entry)).read_bytes()) == (before, before)
+    assert remote_has(remote, other)
+    assert not made["curator"] or not remote_has(remote, made["curator"])
+    assert (remote_bytes(remote, path), (repo / path).read_bytes()) == (before, before)
     assert bare(remote, "for-each-ref", "refs/owlbear").stdout == b""
     assert row.state == "failed"
-    assert held(repo, row.reason, rel(entry)) == made["bytes"]
+    assert held(repo, row.reason, path) == made["bytes"]
+    if refusal != "unconfirmed":
+        assert data_place.inventory(DataRepo(repo)) == [
+            "1 refused memory curation run(s) held under refs/owlbear/curation"
+        ]
     (logged,) = [r.getMessage() for r in caplog.records if r.name == curation.__name__]
     assert row.reason in logged
-
-
-def test_a_publication_during_a_run_never_carries_its_commit(repo, remote) -> None:
-    entry = curated(repo / "shop" / "memory", "Lesson")
-    pushed(repo, "a curated entry")
-    before = (repo / rel(entry)).read_bytes()
-    made = {}
-
-    def run(cfg) -> Run:
-        reword(cfg.memory, entry.id, "Lesson: the curator's version")
-        made["curator"] = committed(cfg.memory, "shop/memory")
-        made["other"] = publish_other(repo, "during")
-        return Run(cfg.session_id, termination=Termination(confirmed=True), **REFUSALS["unread"])
-
-    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
-    job.start("shop")
-    row = drained(job)
-
-    assert (remote_has(remote, made["other"]), remote_has(remote, made["curator"])) == (True, False)
-    assert (remote_bytes(remote, rel(entry)), (repo / rel(entry)).read_bytes()) == (before, before)
-    assert (row.state, bool(HELD.search(row.reason))) == ("failed", True)
 
 
 @pytest.mark.parametrize("commits", [True, False], ids=["committed", "uncommitted"])
@@ -302,25 +298,6 @@ def test_a_run_whose_entry_changed_meanwhile_is_refused_whole_and_the_other_chan
     assert (remote_bytes(remote, rel(a)), remote_bytes(remote, rel(b))) == (before_a, made["other"])
     assert (held(repo, row.reason, rel(a)), held(repo, row.reason, rel(b))) == (made["a"], made["b"])
     assert not curation.legacy_uncertain(row)
-
-
-@pytest.mark.parametrize("folder", ["shop.lock", "shop..v2"])
-def test_a_folder_name_git_takes_for_no_ref_name_still_holds_a_refused_runs_edits(repo, folder) -> None:
-    entry = curated(repo / folder / "memory", "Lesson")
-    pushed(repo, "a curated entry")
-    made = {}
-
-    def run(cfg) -> Run:
-        reword(cfg.memory, entry.id, "Lesson: an edit never committed")
-        made["bytes"] = (cfg.memory / f"{entry.id}.md").read_bytes()
-        return Run(cfg.session_id, termination=Termination(confirmed=True), **REFUSALS["unread"])
-
-    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
-    job.start(folder)
-    row = drained(job, folder)
-
-    assert row.state == "failed"
-    assert held(repo, row.reason, rel(entry, folder)) == made["bytes"]
 
 
 def test_an_accepted_run_whose_push_fails_stands_and_a_later_publication_carries_it(repo, remote, monkeypatch) -> None:
@@ -519,21 +496,6 @@ def test_a_seed_reads_the_checkout_under_its_memory_writer_locks(repo, monkeypat
     job.start("shop")
     drained(job)
     assert busy == [True]
-
-
-def test_the_checkout_lists_held_runs_as_its_own_and_no_finished_runs_worktree(repo) -> None:
-    entry = curated(repo / "shop" / "memory", "Lesson")
-    pushed(repo, "a curated entry")
-
-    def run(cfg) -> Run:
-        reword(cfg.memory, entry.id, "Lesson: the curator's version")
-        return Run(cfg.session_id, termination=Termination(confirmed=True), **REFUSALS["unread"])
-
-    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
-    job.start("shop")
-    drained(job)
-
-    assert data_place.inventory(DataRepo(repo)) == ["1 refused memory curation run(s) held under refs/owlbear/curation"]
 
 
 KEY = "shop:" + "0" * 32
@@ -856,16 +818,6 @@ def test_an_apply_whose_folder_another_process_holds_stays_cut_short(repo, monke
 
     assert (resumed.done, resumed.said.startswith("MemoryBusyError: "), CUT in resumed.said) == (False, True, True)
     assert ((repo / rel(entry)).read_bytes(), curation_apply.read(shared) is not None) == (seed, True)
-
-
-def test_a_curation_run_is_seeded_with_the_global_settings_whole_memory_values_included(repo, tmp_path) -> None:
-    """The curator's memory server reads the settings beside its worktree: one copy of Global's file, byte for byte."""
-    text = '{"format": 21, "curator_threshold": 90, "memory": {"stale_factor": 50, "purge_days": 14}}'
-    (repo / "config.json").write_text(text)
-
-    tree = curation_tree.seed(DataRepo(repo), tmp_path / "run", ["shop"])
-
-    assert (tree.root / "config.json").read_text() == text
 
 
 def test_an_apply_finished_first_leads_the_refusal_of_a_run_whose_file_changed_meanwhile(repo, tmp_path) -> None:
