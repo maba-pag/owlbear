@@ -99,6 +99,7 @@ class PullRequest(_Model):
     mergeable: bool | None = None
     merge_state: str | None = None
     merge_commit_sha: str | None = Field(default=None, pattern=_SHA)
+    body: str = ""  # the description, from a REST read; the page lists leave it empty
 
 
 class Check(_Model):
@@ -329,6 +330,10 @@ class Provider(Protocol):
 
     def add_labels(self, repository: str, number: int, labels: list[str]) -> None:
         """Add labels to one pull request, keeping those it has."""
+        ...
+
+    def set_pull_request_body(self, repository: str, number: int, body: str) -> None:
+        """Replace one pull request's description with *body*."""
         ...
 
     def close_pull_request(self, repository: str, number: int) -> None:
