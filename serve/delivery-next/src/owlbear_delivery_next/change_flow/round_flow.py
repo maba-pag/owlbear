@@ -28,8 +28,8 @@ PREFIX = cause_key(ErrorKind.REVIEW, StepKind.REVIEW, "round ")
 RETRY = "rebuild"  # a build step's mode while its rejected attempt is undone before a fresh build (TD-210)
 CLEAN = "clean"  # the final review step's mode while the Change's work is undone for a plan from a clean state
 OPTIONS = [
-    Option(id="another", label="Another round", next="another"),
-    Option(id="retry", label="Reject the work and retry it", next=RETRY),
+    Option(id="another", label="Yes: review the work once more", next="another"),
+    Option(id="retry", label="No: rebuild this task from its plan; the rejected work stays on a branch", next=RETRY),
 ]
 FINAL_OPTIONS = [  # TD-217: every retry of the final review is a rebuild of tasks or a new plan (TD-210)
     Option(id="rebuild", label="Rebuild the ticked tasks", next=RETRY),
@@ -147,12 +147,10 @@ def question(c: Change, lp: RoundLoop, task: Task) -> Question:
         )
     else:
         what, options = f"Review round {lp.round} of task {lp.subject}", OPTIONS
-        then = (
-            "Another round reviews this repair; a retry rebuilds the task from its plan entry with a fresh builder, "
-            "the rejected attempt archived on a branch."
-        )
-    lead = f"{what} found {lp.found} new findings, and it was the last allowed round."
-    text = f"{lead} {risk(c, lp)} {then}\n\nDetails: {said}"
+        then = "Have Delivery review the work once more?"
+    wrong = risk(c, lp)  # what may still be wrong leads; the review's mechanics follow (#1168)
+    limit = f"{what} found {lp.found} new findings, and it was the last allowed round."
+    text = f"{wrong}{' ' if wrong else ''}{limit} {then}\n\nDetails: {said}"
     cause = f"{PREFIX}{lp.subject} {task.id}"  # the answer's task; the loop's subject counts it (#1064)
     return Question(
         step=StepKind.REVIEW,

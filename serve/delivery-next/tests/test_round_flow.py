@@ -201,13 +201,13 @@ def test_the_owner_is_asked_only_after_the_last_allowed_round_with_many_findings
     assert at(store.read("c1")) == (K.REVIEW, "t3", RECHECK)  # TD-330: its rejection is judged before the owner
     reviewed(store, clone, monkeypatch, F8=False)
     q = loop.open_question(store.read("c1"))
-    assert [o.label for o in q.options] == ["Another round", "Reject the work and retry it"]
+    assert [o.id for o in q.options] == ["another", "retry"]
     lead, details = q.text.split("\n\nDetails: ")
-    assert lead.startswith(
-        "Review round 1 of task t1 found 8 new findings, and it was the last allowed round. "
-        "Reported fixed or rejected by the builder, and not reviewed again: "
-        "a.txt:1: problem 1; a.txt:2: problem 2; a.txt:3: problem 3; and 4 more. Another round"
-    )  # the risk in the reviewer's words leads (#1168); F8's rejection the reviewer accepted is settled
+    assert lead == (
+        "Reported fixed or rejected by the builder, and not reviewed again: problem 1; problem 2; problem 3; "
+        "and 4 more. Review round 1 of task t1 found 8 new findings, and it was the last allowed round. "
+        "Have Delivery review the work once more?"
+    )  # the risk in the reviewer's words leads (#1168), places in the details; F8's accepted rejection is settled
     assert q.subject == "product"
     assert details.startswith("F1 fixed, not re-reviewed: a.txt:1: problem 1 - fix: fix 1; F2 ")
     assert details.endswith("; F8 rejected; the reviewer accepted that (F8 is wrong): a.txt:8: problem 8 - fix: fix 8")
