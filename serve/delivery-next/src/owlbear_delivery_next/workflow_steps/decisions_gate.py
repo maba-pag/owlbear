@@ -230,14 +230,6 @@ def waiting(store: Store, view: DataView, c: Change) -> list[Queued]:
     return [q for q in read_backs.waiting(store, view) if reaches(q.decision, c)]
 
 
-def _waiting_lines(store: Store, view: DataView, c: Change) -> list[str]:
-    found = waiting(store, view, c)
-    if not found:
-        return []
-    lines = [WAITING, *(f"- {q.kind}: {q.decision.id} {_quoted(q.decision.title)}: {q.why}" for q in found[:SHOWN])]
-    return lines + ([f"{len(found) - SHOWN} more wait on the Decisions page."] if len(found) > SHOWN else [])
-
-
 def checkpoint(store: Store, c: Change) -> dict[str, Any] | None:
     """At most SHOWN read-backs that apply and how many more wait, while the brief awaits approval; else None."""
     if store.shared is None or c.step.kind is not StepKind.SHAPE or c.brief.approved_version == c.brief.version:
@@ -374,9 +366,9 @@ def _judged(view: DataView, c: Change, now: datetime, store: Store, lock: Lock |
     if lock is not None and (later := _later(seen, c)):
         c, result = _reassessed(store, lock, view, c, later)
         if result is not None:
-            return Gate(c, result)
+            return Gate(c, result, adopted=adopted)  # the adoption already holds: its record goes with it
         if stop := _faults(seen, c, c.decisions_baseline.said, now):
-            return stop
+            return replace(stop, adopted=adopted)
         pinning = True
     lines, others = context(seen, c)
     return Gate(c, lines=lines, others=others, pinned=pinning, adopted=adopted)
