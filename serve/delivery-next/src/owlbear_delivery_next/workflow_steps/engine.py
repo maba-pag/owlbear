@@ -149,7 +149,14 @@ def needs_target(c: Change, path: Path, reason: str, now: datetime, writer: Writ
         fetch(path, c.names.target, writer.access())
     except (RemoteGitError, ProviderError) as exc:
         return failed(c, exc, now)
-    return integrate(c, StepKind.BUILD, f"origin/{c.names.target}", f"The Builder of {c.step.task} needs: {reason}")
+    ref = f"origin/{c.names.target}"
+    if contains(path, ref):
+        return StepResult(
+            exit=Exit.RETRY,
+            cause=failures.cause_key(ErrorKind.CONFLICT, StepKind.BUILD, ref),
+            reason=f"The branch already contains {ref}, but the Builder of {c.step.task} needs: {reason}",
+        )
+    return integrate(c, StepKind.BUILD, ref, f"The Builder of {c.step.task} needs: {reason}")
 
 
 def pending(waiting: Waiting, reason: str, wake: datetime | None, who: Actor = "github") -> StepResult:

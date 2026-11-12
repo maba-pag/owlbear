@@ -1958,6 +1958,10 @@ def test_a_moved_target_integrates_before_merging_whatever_github_reports(tmp_pa
 
 
 def test_a_builder_needing_target_work_integrates_then_resumes_its_task(clone):
+    git(clone, "switch", "-q", "main")
+    git(clone, "commit", "-q", "--allow-empty", "-m", "required target work")
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/main")
+    git(clone, "switch", "-q", "owlbear/c1")
     c = change(StepKind.BUILD, worktree=str(clone))
     c.step.task = "t1"
     c = loop.apply(c, engine.needs_target(c, clone, "greet() exists only on main", NOW, Writer.rule(clone)), NOW)
