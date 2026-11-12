@@ -2,7 +2,18 @@ import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { LOOPS } from "./progress.mjs";
 import { reviseButton } from "./brief.mjs";
 import { sendTo, starts, state } from "./state.mjs";
-import { button, info, list, refusal, row } from "./widgets.mjs";
+import { button, info, list, refusal, row, toggle } from "./widgets.mjs";
+
+// The findings left open after approval: the worker rejected each and the next reviewer or challenger upheld it. One
+// fold with a count; opened, each finding whole with the reasons it has (D-01M7866JPJ080C8545DH00WY1H).
+function leftOpen(found) {
+  if (!found.length) return nothing;
+  const said = (f) => html`${f.where} ${f.id}: ${f.text}${[[f.worker, f.reason], [f.judge, f.judgement]]
+    .filter(([, why]) => why).map(([who, why]) => html`<br>${who}: ${why}`)}`;
+  return toggle("left-open", `Findings left open (${found.length})`,
+    html`<p-text size="sm">The builder or planner rejected each of these and the next reviewer or challenger upheld
+      it. Nothing was changed for them.</p-text>`, list(found.map(said)));
+}
 
 // What stands open on this Change, one line each in plain words, whether or not the details are shown.
 export function actionItems(d) {
@@ -37,7 +48,8 @@ export function actionItems(d) {
     lines.push(`Amendment ${a.id} was applied in a wording no challenger reviewed: turn on Show details to read it`
       + (a.object ? "" : ", and object if you disagree"));
   }
-  if (!lines.length) return nothing;
-  return html`<div class="actions">${info("Open items", list(lines),
+  const left = leftOpen(r?.left ?? []);
+  if (!lines.length && left === nothing) return nothing;
+  return html`<div class="actions">${info("Open items", lines.length ? list(lines) : nothing, left,
     act === nothing && again === nothing ? nothing : row(act, again), refused)}</div>`;
 }
