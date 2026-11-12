@@ -126,16 +126,21 @@ def usage_gate(run: Run, kind: StepKind, *, accept: bool = False) -> StepResult:
 
     TD-56: a held result may be accepted while the step, brief version and commit it depends on match.
     """
-    text = f"The step's model is unknown: {run.usage_unread}. The step's result was not accepted"
-    text += "; it is held, so you can accept it without the model check." if accept else "."
+    cause = cause_key(ErrorKind.LIVENESS, kind, UNREAD)
     retry = Option(id="retry", label="Run this step again", next="retry")
-    take = Option(id="accept", label="Accept the held result without the model check", next="accept")
-    question = Question(
-        step=kind,
-        text=text,
-        options=[take, retry] if accept else [retry],
-        cause=cause_key(ErrorKind.LIVENESS, kind, UNREAD),
-    )
+    if accept:  # reserved (TD-94, TD-56): his yes or no on the held result
+        text = (
+            f"Delivery could not verify which AI model did this step ({run.usage_unread}), so it did not accept the "
+            "result. Accept the result anyway?"
+        )
+        options = [
+            Option(id="accept", label="Yes: accept it without the model check", next="accept"),
+            retry.model_copy(update={"label": "No: run the step again"}),
+        ]
+        question = Question(step=kind, text=text, options=options, cause=cause, subject="reserved")
+    else:
+        text = f"The step's model is unknown: {run.usage_unread}. The step's result was not accepted."
+        question = Question(step=kind, text=text, options=[retry], cause=cause)
     return StepResult(exit=Exit.ASK, reason=text, question=question)
 
 

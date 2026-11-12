@@ -64,8 +64,9 @@ def offer(ctx: Ctx, c: Change, pr: PullRequest, state: CiState) -> StepResult:
     method = pref(ctx.store.settings(), "merge_method")
     fields = {"pr": pr.number, "url": pr.url, "head": pr.head_sha, "checks": checks(state), "method": method}
     ctx.log(c.slug, "merge-offer", **fields, void=old, delta=delta)
-    text = f"approve merging {pr.head_sha[:7]}" + (f", changed since {old[:7]} ({delta})" if old else "")
-    return engine.ask(M, text, loop.CONSENT)
+    text = f"Merge pull request #{pr.number} into {c.names.target}?"
+    text += f" It changed since you approved it: {delta}." if old else ""
+    return engine.ask(M, text, loop.CONSENT, subject="reserved")
 
 
 def _review(ctx: Ctx, pr: PullRequest) -> StepResult | None:
@@ -88,7 +89,7 @@ def _blocked(  # noqa: PLR0911 - one exit per block reason
         case Block.CHECKS_FAILED:
             return c, follow.fix_ci(ctx, c, state, M)
         case Block.CHECKS_RUNNING if state.missing and not state.running:
-            return follow.missing(ctx, c, pr, state, M)
+            return follow.missing(ctx, c, pr, state)
         case Block.CHECKS_RUNNING:
             return c, follow.waiting(state, ctx)
         case Block.CONFLICTS | Block.BEHIND:

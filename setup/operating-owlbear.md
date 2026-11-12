@@ -247,8 +247,8 @@ project can start work. Maintenance's curation folders say the same for their ow
 refused run. The Unset settings list, Across projects, the changed-elsewhere notices and the pending line and
 save dialogs of Settings name a setting by the words its row on the Settings page shows, such as
 "planner · Model", so you can find it there; a setting the page has no row for is named by its key, and the
-technical keys stay in the CLI, logs and agent errors. A step that already runs when one turns unset asks you
-to fill it in. Automatic memory curation also waits until its role and threshold are set; a memory folder
+technical keys stay in the CLI, logs and agent errors. A step that already runs when one turns unset stops
+until you fill it in and run the step again. Automatic memory curation also waits until its role and threshold are set; a memory folder
 with no project settings of its own waits only for those and this machine's. A new machine that uses your
 shared repository takes its global settings; one without starts with every setting unset. Nothing
 lies under the global settings, so with the Global layer chosen the page names the choice that

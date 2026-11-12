@@ -116,7 +116,7 @@ def asked(clone: Path) -> Change:
         reviews=covered,
         consent=MergeConsent(head=head, at=NOW),
     )
-    ask(c, round_flow.question(lp, t5), NOW)
+    ask(c, round_flow.question(c, lp, t5), NOW)
     return c
 
 
@@ -268,7 +268,7 @@ def test_accept_as_done_names_the_criteria_the_open_findings_report_unmet():
         reviews=covered,
         consent=MergeConsent(head=head, at=NOW),
     )
-    ask(c, round_flow.question(lp, t5), NOW)
+    ask(c, round_flow.question(c, lp, t5), NOW)
     found = c.loops[FINAL].findings
     found[0].text, found[2].text = "x.txt:1: AC-2 broken - fix: f", "y.txt:2: AC-1 not met - fix: f"
     assert rebuilds.shown(c, c.questions[0])["unmet"] == ["AC-1: rule AC-1"]
@@ -547,7 +547,7 @@ def test_a_task_with_a_finding_still_to_fix_starts_ticked(state, ticked):
             subject="t2", policy=RoundPolicy(), findings=[RoundFinding(id="F1", text="x", raised=1, state=state)]
         ),
     }
-    ask(c, round_flow.question(c.loops[FINAL], c.plan.tasks[0]), NOW)
+    ask(c, round_flow.question(c, c.loops[FINAL], c.plan.tasks[0]), NOW)
     listed = rebuilds.shown(c, c.questions[0])["tasks"]
     assert [(t["ticked"], t["shares"]) for t in listed] == [(ticked, []), (ticked, [])]  # no shared files known
 

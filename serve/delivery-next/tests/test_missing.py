@@ -28,7 +28,6 @@ from owlbear_delivery_next.change_contracts.round_records import RoundLoop, Roun
 from owlbear_delivery_next.change_flow import brief_rounds, budgets, loop, plan_rounds, stuck, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.commands import runner, worker_input
-from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import missing, sdk_adapter, step_input
 from owlbear_delivery_next.runtimes.session_result import Run, to_result
@@ -382,25 +381,13 @@ def test_planning_starts_on_a_clean_tree_whatever_step_left_edits(repo, monkeypa
     assert [e["event"] for e in events] == ["shelved"]
 
 
-def test_a_failed_shelve_asks_the_owner_before_any_planner_runs(tmp_path) -> None:
-    with pytest.raises(worktree.ShelveError, match="git stash failed") as caught:
-        worktree.shelve(tmp_path, "owlbear c1")  # not a repository: Git fails
-    asked = plan_round.unshelved(failure(caught.value))
-    assert (asked.exit, asked.cause, options(asked)) == (
-        Exit.ASK,
-        "state:plan:dirty-worktree",
-        [("done", K.PLAN), ("pause", "pause")],
-    )
-    loop.apply(change(K.PLAN), asked, NOW)
-
-
 def test_prompts_name_the_report() -> None:
     assert "report_missing_tool" in step_input.FINISH
     assert "report_missing_tool" in step_input.reminder("builder")
 
 
 @pytest.mark.parametrize("how", ["refused", "left"])
-def test_a_shelve_failure_is_asked_and_logged_whole(  # noqa: PLR0913, PLR0917 - fixtures
+def test_a_shelve_failure_stops_and_is_logged_whole(  # noqa: PLR0913, PLR0917 - fixtures
     repo, tmp_path, whole_error, monkeypatch, how, checks_settled
 ) -> None:
     store = Store(tmp_path / "store")
@@ -428,10 +415,12 @@ def test_a_shelve_failure_is_asked_and_logged_whole(  # noqa: PLR0913, PLR0917 -
         if how == "refused"
         else f"files stay uncommitted in {repo} after git stash: " + "\n".join(f"?? {n}" for n in left)
     )
-    q = loop.open_question(store.read("c1"))
-    assert q.text == (
-        "Delivery could not set aside the uncommitted edits before planning "
-        f"(ShelveError: {why}). Commit, stash or discard them."
+    stopped = store.read("c1")
+    assert loop.open_question(stopped) is None
+    assert (stopped.outcome.cause, stopped.stop.action) == ("state:plan:dirty-worktree", "Run the step again")
+    assert stopped.stop.reason == (
+        "Delivery could not safely set aside uncommitted work in this Change's worktree before planning. Ask a chat "
+        f"to resolve the Git error below without losing work, then run the step again.\n\nDetails: ShelveError: {why}"
     )
     assert [e["reason"] for e in store.events("c1") if e["event"] == "not-shelved"] == [f"ShelveError: {why}"]
 

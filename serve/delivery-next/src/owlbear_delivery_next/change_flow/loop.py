@@ -153,7 +153,10 @@ def ordinary(q: Question) -> bool:
 def usage_gated(c: Change) -> bool:
     """The step's model check could not read its usage; nothing of it runs until the owner reruns it (TD-54)."""
     o = c.outcome
-    return bool(o and o.exit == Exit.ASK and (o.cause or "").endswith(f":{UNREAD}"))
+    if not (o and o.exit == Exit.ASK and (o.cause or "").endswith(f":{UNREAD}")):
+        return False
+    q = next((q for q in c.questions if q.id == o.question), None)
+    return q is None or not any(x.next == "accept" for x in q.options)  # a held result is his yes or no (#1168)
 
 
 DECISIONS = frozenset({"retry", "accept", "repair", "reconsider", "another", "rebuild", stuck.APPLY, stuck.DECLINE})
@@ -207,10 +210,12 @@ def schedule(  # noqa: PLR0913 - the PR observation, the profile's consent setti
             # A closed-PR question holds until it is answered and, for reopen, the PR is observed open again.
             go(c, StepKind.MERGE)
             options = [
-                Option(id="abandon", label="Abandon this Change", next="abandon"),
-                Option(id="reopen", label="Reopen it and continue", next=StepKind.FOLLOW),
+                Option(id="reopen", label="Yes: reopen it and go on", next=StepKind.FOLLOW),
+                Option(id="abandon", label="No: abandon this Change", next="abandon"),
             ]
-            ask(c, Question(step=StepKind.MERGE, text="The PR was closed", options=options, cause=PR_CLOSED), now)
+            text = "This Change's pull request was closed on GitHub without being merged. Reopen it and go on?"
+            q = Question(step=StepKind.MERGE, text=text, options=options, cause=PR_CLOSED, subject="reserved")
+            ask(c, q, now)
         elif c.intent.hold and c.step.kind != StepKind.MERGE:
             amending.left(c, "the brief is reshaped")  # its question no longer approves anything
             go(c, StepKind.SHAPE)

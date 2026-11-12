@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts import evidence, failures, tool_schema, tools
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline, Said
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem, ConsentItem, IntentItem, RestartItem
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, ConsentItem, IntentItem, Recovery, RestartItem
 from owlbear_delivery_next.change_contracts.models import (
     Answer,
     Brief,
@@ -401,7 +401,8 @@ def test_a_head_change_voids_consent_shows_the_delta_and_asks_again(tmp_path, cl
         return
     offer = cx.events("c1", "merge-offer")[-1]
     assert (result.exit, result.cause) == (Exit.ASK, loop.CONSENT)
-    assert result.reason.startswith(f"approve merging {A[:7]}, changed since {B[:7]} (1 commit(s)")
+    assert result.reason.startswith("Merge pull request #7 into main? It changed since you approved it: 1 commit(s)")
+    assert result.question.subject == "reserved"
     assert (offer["head"], offer["void"]) == (A, B)
 
 
@@ -413,11 +414,13 @@ def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_m
     cx = ctx(tmp_path, gh, p)
     cx.store.root.mkdir()
     c, result = merge.run(cx, change(worktree=str(clone), head=head))
-    assert (result.exit, [o.id for o in result.question.options]) == (Exit.ASK, ["none", "names", "pause"])
+    assert (result.exit, [o.id for o in result.question.options]) == (Exit.ASK, ["yes", "pause"])
+    assert result.question.subject == "reserved"  # which checks gate a merge is his: a yes or no on what was read
+    assert "those it could read: none it could read. Merge on that basis?" in result.question.text
     assert result.cause.endswith(f"declared-{profile.digest_of(entries[profile.DECLARED])}")
     assert gh.merges == []
     c = loop.apply(c, result, NOW)
-    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="none")], NOW)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
     saving = cx.store.write_profile
 
     def locked(_profile) -> None:
@@ -466,10 +469,10 @@ def test_a_none_confirmation_does_not_survive_a_workflow_the_change_adds(tmp_pat
     cx.gh = gh
     c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
     c, result = follow.run(cx, c)
-    assert (result.exit, "workflows changed" in result.reason) == (Exit.ASK, True)
+    assert (result.exit, "its CI files changed in this Change" in result.reason) == (Exit.ASK, True)
     assert follow.run(cx, c)[1].cause == result.cause  # asked once per digest
     c = loop.apply(c, result, NOW)
-    answer = AnswerItem(at=NOW, question=c.outcome.question, option="names", text="t (a), t (b)")
+    answer = AnswerItem(at=NOW, question=c.outcome.question, text="t (a), t (b)")  # as saved before #1168: still read
     c, _ = loop.schedule(c, [answer], NOW)
     _, result = follow.run(cx, c)
     assert (result.exit, result.back_to, result.fix_task.title) == (
@@ -799,7 +802,7 @@ def test_a_person_editing_during_a_repost_is_reassessed_and_blocks_the_merge(tmp
     assert (result.exit, result.fix_task.id != first) == (Exit.BACK, True)
 
 
-def test_the_fourth_repost_of_a_disappearing_reply_asks_the_owner(tmp_path):
+def test_the_fourth_repost_of_a_disappearing_reply_stops_and_a_rerun_posts_again(tmp_path):
     gh = ChatGh(pr(head=A), comment("c1", "why?"))
     cx = ctx(tmp_path, gh)
     c, result = follow.conversation(cx, change(), gh.pr, StepKind.FOLLOW)
@@ -812,12 +815,16 @@ def test_the_fourth_repost_of_a_disappearing_reply_asks_the_owner(tmp_path):
     assert (len(gh.posts), c.handled[0].reposts) == (4, 3)
     gh.items = [i for i in gh.items if i.author != "delivery"]
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
-    assert result.exit == Exit.ASK
-    assert result.question.text == (
-        "Delivery's reply on https://github.com/o/r/pull/7#c1 keeps disappearing; "
-        "reply manually or let Delivery post again"
+    assert (result.exit, result.question) == (Exit.STOP, None)  # Delivery's own problem: never a question (#1168)
+    assert result.stop.reason.startswith(
+        "Delivery's reply on https://github.com/o/r/pull/7#c1 was deleted 3 times. Run the step again and Delivery "
+        "posts its saved reply once more.\n\nDetails: The saved reply: Because."
     )
     assert len(gh.posts) == 4
+    c = loop.apply(c, result, NOW)
+    c, _ = loop.schedule(c, [Recovery(at=NOW, action=c.stop.action)], NOW)  # the owner runs the step again
+    c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
+    assert (result, len(gh.posts), c.handled[0].reposts) == (None, 5, 1)
 
 
 def _no_user(*_):
@@ -841,8 +848,9 @@ def test_a_pending_replay_with_a_credential_that_cannot_read_the_viewer_names_gh
         follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert (raised.value.code, raised.value.retry_safe) == (FailureCode.AUTHENTICATION_REQUIRED, False)
     assert gh.posts == []
-    asked = engine.failed(c, raised.value, NOW)
-    assert (asked.exit, "/user" in asked.reason, "gh auth login" in asked.reason) == (Exit.ASK, True, True)
+    stopped = engine.failed(c, raised.value, NOW)
+    assert (stopped.exit, stopped.question) == (Exit.STOP, None)  # no question: sign in, then run the step again
+    assert ("/user" in stopped.reason, "gh auth login" in stopped.reason) == (True, True)
 
 
 @pytest.mark.parametrize("kind", ["comment", "resolved-thread"])
@@ -1091,15 +1099,17 @@ def test_a_saved_person_check_is_voided_by_revised_steps_or_a_commit_in_its_scop
     assert check.pending(c, env).reason.endswith("asked again: changed app/page.ts")
 
 
-def test_publish_waits_for_the_network_and_asks_for_other_readiness_fixes():
+def test_publish_waits_for_the_network_and_stops_for_other_readiness_fixes():
     ok = [SetupCheck("network", ok=True, detail=""), SetupCheck("github cli", ok=True, detail="")]
     assert publish.gate(ok, NOW) is None
     net = publish.gate([SetupCheck("network", ok=False, detail="timed out", fix="Connect")], NOW)
     assert (net.exit, net.cause, net.wake_at) == (Exit.RETRY, "network:publish:readiness", NOW + timedelta(minutes=1))
     fix = "Run `gh auth login --hostname github.com`"
     auth = publish.gate([*ok, SetupCheck("github sign-in", ok=False, detail="expired", fix=fix)], NOW)
-    assert (auth.exit, auth.cause, auth.reason.endswith(fix)) == (Exit.ASK, "auth:publish:github sign-in", True)
-    assert [o.next for o in auth.question.options] == [StepKind.PUBLISH, "pause"]
+    assert (auth.exit, auth.cause, auth.question) == (Exit.STOP, "auth:publish:github sign-in", None)
+    assert auth.reason == (
+        f"Delivery cannot publish this Change yet (github sign-in). {fix}; then run the step again.\n\nDetails: expired"
+    )
 
 
 def test_offline_readiness_is_an_episode_that_asks_only_after_a_day():
@@ -1265,10 +1275,10 @@ def test_a_pr_head_lagging_the_push_is_observed_again_shortly_without_budget(clo
     cx.now = NOW + timedelta(minutes=9)
     assert publish.run(cx, after)[1].exit == Exit.PENDING  # within ten minutes of the first lag
     cx.now = NOW + timedelta(minutes=10)
-    _, asked = publish.run(cx, after)
-    assert (asked.exit, [o.label for o in asked.question.options]) == (Exit.ASK, ["Done, continue", "Pause"])
-    assert all(s in asked.reason for s in (gh.pr.url, A, head))
-    assert publish.run(cx, after)[1].exit == Exit.PENDING  # after "Done, continue" a new ten-minute window starts
+    _, stopped = publish.run(cx, after)
+    assert (stopped.exit, stopped.question, stopped.stop.action) == (Exit.STOP, None, "Run the step again")
+    assert all(s in stopped.reason for s in (gh.pr.url, A, head))
+    assert publish.run(cx, after)[1].exit == Exit.PENDING  # after "Run the step again" a new ten-minute window starts
     gh.pr = pr(head=head)
     assert publish.run(cx, after)[1].exit == Exit.DONE
     assert after.lag is None
@@ -1310,7 +1320,7 @@ def test_required_and_github_required_checks_are_expected_and_the_latest_run_win
     assert (state.running, state.missing) == (("e2e",), ("sign",))
 
 
-def test_a_check_that_never_starts_is_pending_then_asks_the_owner_in_follow_and_merge(tmp_path, clone):
+def test_a_check_that_never_starts_is_pending_then_stops_in_follow_and_merge(tmp_path, clone):
     gh, state = FakeGh(pr(head=B)), classify_checks((), ("test",), ())
     cx = ctx(tmp_path, gh)
     c = follow.episode(cx, change(StepKind.FOLLOW), B, state)
@@ -1318,9 +1328,11 @@ def test_a_check_that_never_starts_is_pending_then_asks_the_owner_in_follow_and_
     _, early = follow.missing(cx, follow.episode(cx, c, B, state), gh.pr, state)
     assert (early.exit, early.waiting, c.missing.since) == (Exit.PENDING, Waiting.CHECK_START, NOW)
     cx.now = NOW + timedelta(minutes=10)
-    _, late = follow.missing(cx, c, gh.pr, state)
-    assert late.exit == Exit.ASK
-    assert "test never started on PR #7" in late.reason
+    c, late = follow.missing(cx, c, gh.pr, state)
+    assert (late.exit, late.question, late.stop.action) == (Exit.STOP, None, "Run the step again")
+    assert late.reason.startswith("test never started on this Change's pull request. Start or approve the run")
+    again = follow.episode(cx, c, B, state)  # the owner runs the step again: a new window for the run he started
+    assert (again.missing.since, follow.missing(cx, again, gh.pr, state)[1].exit) == (cx.now, Exit.PENDING)
     assert follow.episode(cx, c, B, classify_checks(gh.checks, ("test",), ())).missing is None
     head, entries = ci_head(clone, "test")
     gh.pr, gh.checks, cx.now, cx.profile = pr(head=head), (), NOW, prof(**entries)
@@ -1328,7 +1340,7 @@ def test_a_check_that_never_starts_is_pending_then_asks_the_owner_in_follow_and_
     m, early = merge.run(cx, m)
     cx.now = NOW + timedelta(minutes=10)
     _, late = merge.run(cx, m)
-    assert (early.waiting, late.exit, late.question.options[0].next) == (Waiting.CHECK_START, Exit.ASK, StepKind.MERGE)
+    assert (early.waiting, late.exit, late.question) == (Waiting.CHECK_START, Exit.STOP, None)
 
 
 def test_a_failing_check_goes_back_to_build_with_its_log(tmp_path, clone):
@@ -2070,7 +2082,9 @@ def test_an_integration_build_collision_asks_the_owner_once_across_a_restart_the
         ("adopt", StepKind.BUILD),
         ("pause", "pause"),
     ]
-    assert "collided with c3 on src/app.py" in q.text
+    assert q.subject == "product"
+    assert "This Change and c3 changed the same part of the project" in q.text
+    assert q.text.endswith("Details: c3 on src/app.py")
     answered, step = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="keep")], NOW)
     assert (step.kind, step.task) == (StepKind.BUILD, tid)
     restarted.write(Lock("c1"), answered)
@@ -2179,7 +2193,7 @@ def test_findings_beyond_one_tasks_detail_limit_are_kept_whole_across_repair_tas
 
 
 @pytest.mark.parametrize(("push", "account"), [("yes", False), ("no", True), ("no", False)])
-def test_reopen_reopens_the_pr_when_permitted_else_asks_the_owner(tmp_path, clone, push, account):
+def test_reopen_reopens_the_pr_when_permitted_else_stops(tmp_path, clone, push, account):
     """A detected no is asked again of the project's account, which the setting may have changed (TD-402)."""
     head, entries = ci_head(clone, "test")
     gh = FakeGh(pr(head=head, state="closed"))
@@ -2191,12 +2205,13 @@ def test_reopen_reopens_the_pr_when_permitted_else_asks_the_owner(tmp_path, clon
     if push == "yes" or account:
         assert (result.exit, gh.reopened, bool(c.questions[0].effect_observed_at)) == (Exit.DONE, [7], True)
     else:
-        assert (result.exit, gh.reopened, c.questions[0].effect_observed_at) == (Exit.ASK, [], None)
-        assert result.reason.startswith("Reopen PR #7 in GitHub")
+        assert (result.exit, gh.reopened, c.questions[0].effect_observed_at) == (Exit.STOP, [], None)
+        assert result.question is None  # Delivery's own problem: never a question (#1168)
+        assert result.reason.startswith("Delivery could not reopen pull request #7. Reopen it on GitHub")
 
 
 def test_a_refused_reopen_is_logged_with_its_whole_error(tmp_path, clone, whole_error):
-    """#895: GitHub's whole refusal reaches the reopen event, the owner then asked to reopen it."""
+    """#895: GitHub's whole refusal reaches the reopen event and the stop that tells the owner to reopen it."""
     head, entries = ci_head(clone, "test")
 
     class Refusing(FakeGh):
@@ -2211,7 +2226,10 @@ def test_a_refused_reopen_is_logged_with_its_whole_error(tmp_path, clone, whole_
     on = ctx(tmp_path, gh, prof(**entries, **{profile.PUSH: ProfileEntry(state="known", value="yes")}))
     c, result = follow.run(on, c)
     (event,) = [e for e in on.store.events("c1") if e.get("event") == "reopen"]
-    assert (result.exit, event["error"]) == (Exit.ASK, f"ProviderError: reopen_pull_request: {whole_error}\nNOTE-MARK")
+    said = f"ProviderError: reopen_pull_request: {whole_error}\nNOTE-MARK"
+    assert (result.exit, event["error"], result.reason.endswith(f"Details: {said}")) == (Exit.STOP, said, True)
+    c, _ = loop.schedule(loop.apply(c, result, NOW), [Recovery(at=NOW, action=result.stop.action)], NOW)
+    assert follow.run(on, c)[1].exit == Exit.STOP  # the rerun tries the reopen again, still on the owner's answer
 
 
 def test_a_silent_rejecting_pre_push_hook_becomes_a_builder_fix_after_readback(clone):
@@ -2428,12 +2446,17 @@ def test_failed_group_checks_become_one_fix_task_from_that_group_handled_once(
         ("something_new", "github-merge-queue", queue.REMOVED),
     ],
 )
-def test_other_removals_ask_and_are_never_enqueued_again_on_their_own(tmp_path, clone, reason, actor, cause):
+def test_other_removals_stop_or_ask_and_are_never_enqueued_again_on_their_own(tmp_path, clone, reason, actor, cause):
     gh = QueueGh(pr(head=A))
     gh.state = gh.state.model_copy(update={"added": ADDED, "removed": removal(reason, actor=actor)})
     _, result = queue_step(tmp_path, gh, queued_change(clone))
-    assert (result.exit, result.cause, gh.enqueued) == (Exit.ASK, cause, [])
+    assert (result.cause, gh.enqueued) == (cause, [])
+    if cause == queue.TIMED_OUT:  # Delivery's own problem: a stop, never a question (#1168)
+        assert (result.exit, result.question, result.stop.action) == (Exit.STOP, None, "Run the step again")
+        return
+    assert (result.exit, result.question.subject) == (Exit.ASK, "reserved")
     assert [o.id for o in result.question.options] == ["again", "pause"]
+    assert result.question.text.endswith("Put it back in the queue so it merges?")
 
 
 def test_a_removal_before_any_attempt_is_not_handled(tmp_path, clone):
@@ -3037,7 +3060,7 @@ def run_merge_step(store, capsys):
 
 
 @pytest.mark.parametrize("uncertainty", ["provider_error", "still_queued"])
-def test_an_uncertain_withdrawal_with_both_prefs_unset_waits_and_a_later_confirmed_removal_asks_the_owner(
+def test_an_uncertain_withdrawal_with_both_prefs_unset_waits_and_a_later_confirmed_removal_stops(
     both_prefs_unset, capsys, uncertainty
 ):
     store, gh = both_prefs_unset
@@ -3057,9 +3080,9 @@ def test_an_uncertain_withdrawal_with_both_prefs_unset_waits_and_a_later_confirm
         runner._step(store, lock, c := store.read("c1"), Step(kind=StepKind.MERGE), Path(c.names.worktree))  # noqa: SLF001
     after = store.read("c1")
     assert (after.queue, gh.state.entry) == (None, None)
-    assert len(after.questions) == 1
-    assert "merge_method" in after.questions[0].text
-    assert after.questions[0].answer is None
+    assert after.questions == []  # the unset setting stops the step: never a question (#1168)
+    assert "Settings page" in after.stop.reason
+    assert [e["reason"] for e in store.events("c1") if e.get("event") == "settings-unset"] == ["prefs.merge_method"]
 
 
 def test_a_dequeue_not_read_back_as_removed_keeps_the_barrier_and_asks_nothing(tmp_path):
@@ -3208,12 +3231,14 @@ def test_a_provider_failure_the_owner_handles_says_its_whole_error(whole_error, 
     result = engine.failed(change(StepKind.MERGE), exc, NOW)
     said = f"{type(exc).__name__}: {exc}\nNOTE-MARK"
     expected = {
-        "account": f"{said}; then continue",
-        "credential": f"GitHub refused the credential ({said}): "
-        "run `gh auth login` (or `gh auth refresh`), then continue",
+        "account": "Delivery cannot reach GitHub as this project's account. Once it can, run the step again."
+        f"\n\nDetails: {said}",
+        "credential": "GitHub refused Delivery's sign-in. Sign in again in a terminal (`gh auth login`, or "
+        f"`gh auth refresh`), then run the step again.\n\nDetails: {said}",
         "conflict": said,
     }
     assert result.reason == expected[which]
+    assert (result.exit, result.question) == (Exit.STOP, None)  # Delivery's own problem: never a question (#1168)
     if which == "conflict":
         assert (result.exit, result.stop.reason) == (Exit.STOP, said)
 
@@ -3237,3 +3262,45 @@ def test_a_plan_limited_repository_merges_without_the_owner_on_its_detected_prof
     assert not any(profile.is_confirmed(e) for e in detected.entries.values())  # no confirmation lets it through
     _, result = merge.run(ctx(tmp_path, gh, detected), change(worktree=str(clone)))
     assert (result.exit, len(gh.merges)) == (Exit.DONE, 1)
+
+
+def test_a_yes_to_changed_merge_rules_records_only_the_rules_it_was_shown(tmp_path):
+    """#1168: the owner's yes binds to the differences he saw; other rules and other entries stay as they were."""
+    gh = FakeGh(pr(head=A))
+    shown = Rules(state="known", evidence="rules", required_checks=("ci",))
+    gh.read_rules = lambda _r, _b: shown
+    cx = ctx(tmp_path, gh)
+    cx.store.root.mkdir()
+    before = dict(cx.profile.entries)
+    c = change(StepKind.PUBLISH)
+    asked, _ = engine.rules_changed(cx, c)
+    assert (asked.exit, asked.question.subject, [o.id for o in asked.question.options]) == (
+        Exit.ASK, "reserved", ["yes", "pause"]
+    )  # fmt: skip
+    assert "checks GitHub requires before merging: was not readable, now ci" in asked.question.text
+    c = loop.apply(c, asked, NOW)
+    c, step = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
+    assert step.kind == StepKind.PUBLISH
+
+    later = Rules(state="known", evidence="rules", required_checks=("ci", "lint"))
+    gh.read_rules = lambda _r, _b: later  # the rules moved again before the step ran: his yes does not cover them
+    again, _ = engine.rules_changed(cx, c)
+    assert (again.exit, again.cause != asked.cause, cx.profile.entries == before) == (Exit.ASK, True, True)
+
+    gh.read_rules = lambda _r, _b: shown
+    saved = profile.confirm(
+        cx.profile, profile.STRICT, "yes", NOW
+    )  # another Change's newer rule entry, saved meanwhile
+    cx.store.write_profile(saved)
+    wider, _ = engine.rules_changed(cx, c)
+    assert (wider.exit, wider.cause != asked.cause, cx.store.read_profile().entries == saved.entries) == (
+        Exit.ASK, True, True
+    )  # fmt: skip
+    cx.store.write_profile(cx.profile.model_copy(update={"entries": before}))
+    cx.profile = cx.store.read_profile()
+    assert engine.rules_changed(cx, c)[0] is None  # recorded, and the step goes on
+    assert profile.value(cx.profile, profile.REQUIRED) == "ci"
+    assert profile.reread(cx.store.read_profile(), gh, "main")[0] == []
+    kept = [k for k in before if k not in profile.rule_entries(shown)]
+    assert all(cx.profile.entries[k] == before[k] for k in kept)
+    assert engine.rules_changed(cx, c)[0] is None  # and it is not asked again

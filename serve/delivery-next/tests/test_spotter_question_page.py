@@ -161,7 +161,7 @@ def test_an_answer_the_fold_did_not_apply_is_shown_on_the_final_reviews_question
     lp = RoundLoop(subject=FINAL, policy=RoundPolicy(max_rounds=1), round=1, found=1, last=True, findings=[finding])
     lp.head = "a" * 40
     c = m.Change(slug=SLUG, plan=m.Plan(tasks=[t1]), step=m.Step(kind=m.StepKind.BUILD, task="t1"), loops={FINAL: lp})
-    ask(c, round_flow.question(lp, t1), NOW)
+    ask(c, round_flow.question(c, lp, t1), NOW)
     store.write(Lock(SLUG), c)
     why = "question q1: the page showed an earlier attempt or head; reload"
     store.log(Lock(SLUG), SLUG, {"event": "answer-not-applied", "at": NOW.isoformat(), "question": "q1", "reason": why})

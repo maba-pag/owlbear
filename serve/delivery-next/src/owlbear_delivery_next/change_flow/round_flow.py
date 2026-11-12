@@ -15,7 +15,7 @@ from owlbear_delivery_next.change_contracts.models import Answer, ErrorKind, Exi
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, FINAL, PLAN, RECHECK, Completion, RoundLoop
 from owlbear_delivery_next.change_flow.disputes import DISPUTED
 from owlbear_delivery_next.change_flow.moves import ask, go, loop_of, open_task, resolved, subject_of
-from owlbear_delivery_next.change_flow.round_marks import unmet
+from owlbear_delivery_next.change_flow.round_marks import risk, unmet
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -92,7 +92,7 @@ def built(c: Change, r: StepResult | None, now: datetime) -> None:
     elif any(d.upheld is None for d in task.disputes):
         go(c, StepKind.REVIEW, reviewed, RECHECK)  # TD-330: the last round's rejections are judged first
     elif lp.many():
-        ask(c, question(lp, task), now)
+        ask(c, question(c, lp, task), now)
     else:
         end(c, lp, task)
 
@@ -110,7 +110,7 @@ def passed(c: Change, now: datetime) -> bool:
         return False
     judged = [task.id] if task else lp.batch
     if c.step.mode in {RECHECK, DISPUTED} and lp.many() and judged:  # a check whose rejections were left open too
-        ask(c, question(lp, next(t for t in c.plan.tasks if t.id == judged[-1])), now)
+        ask(c, question(c, lp, next(t for t in c.plan.tasks if t.id == judged[-1])), now)
         return True
     lp.ended = lp.ending() if judged and judged[-1] in lp.unreviewed else "clean"
     lp.batch = []
@@ -134,7 +134,7 @@ def end(c: Change, lp: RoundLoop, task: Task, ended: Ended = "") -> None:
         go(c, StepKind.REVIEW, mode="final")
 
 
-def question(lp: RoundLoop, task: Task) -> Question:
+def question(c: Change, lp: RoundLoop, task: Task) -> Question:
     """The owner's choice after the last allowed round: every finding of that round, whole, with what became of it."""
     said = "; ".join(_said(f) for f in lp.findings if f.raised == lp.round)
     if lp.subject == FINAL:
@@ -151,9 +151,17 @@ def question(lp: RoundLoop, task: Task) -> Question:
             "Another round reviews this repair; a retry rebuilds the task from its plan entry with a fresh builder, "
             "the rejected attempt archived on a branch."
         )
-    text = f"{what} found {lp.found} new findings, and it was the last allowed round: {said}. {then}"
+    lead = f"{what} found {lp.found} new findings, and it was the last allowed round."
+    text = f"{lead} {risk(c, lp)} {then}\n\nDetails: {said}"
     cause = f"{PREFIX}{lp.subject} {task.id}"  # the answer's task; the loop's subject counts it (#1064)
-    return Question(step=StepKind.REVIEW, text=text, options=options, cause=cause, follows=f"{PREFIX}{lp.subject}")
+    return Question(
+        step=StepKind.REVIEW,
+        text=text,
+        options=options,
+        cause=cause,
+        follows=f"{PREFIX}{lp.subject}",
+        subject="product",
+    )
 
 
 def _said(f: RoundFinding) -> str:

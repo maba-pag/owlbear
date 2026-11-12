@@ -202,9 +202,15 @@ def test_the_owner_is_asked_only_after_the_last_allowed_round_with_many_findings
     reviewed(store, clone, monkeypatch, F8=False)
     q = loop.open_question(store.read("c1"))
     assert [o.label for o in q.options] == ["Another round", "Reject the work and retry it"]
-    assert "Review round 1 of task t1 found 8 new findings, and it was the last allowed round: " in q.text
-    assert "F1 fixed, not re-reviewed: a.txt:1: problem 1 - fix: fix 1; F2 " in q.text
-    assert "; F8 rejected; the reviewer accepted that (F8 is wrong): a.txt:8: problem 8 - fix: fix 8. Another" in q.text
+    lead, details = q.text.split("\n\nDetails: ")
+    assert lead.startswith(
+        "Review round 1 of task t1 found 8 new findings, and it was the last allowed round. "
+        "Reported fixed or rejected by the builder, and not reviewed again: "
+        "a.txt:1: problem 1; a.txt:2: problem 2; a.txt:3: problem 3; and 4 more. Another round"
+    )  # the risk in the reviewer's words leads (#1168); F8's rejection the reviewer accepted is settled
+    assert q.subject == "product"
+    assert details.startswith("F1 fixed, not re-reviewed: a.txt:1: problem 1 - fix: fix 1; F2 ")
+    assert details.endswith("; F8 rejected; the reviewer accepted that (F8 is wrong): a.txt:8: problem 8 - fix: fix 8")
     c = answer(store, "another")
     assert (c.loops["t1"].extra, at(c)) == (1, (K.REVIEW, "t3", None))
     reviewed(store, clone, monkeypatch, range(9, 17))
@@ -259,7 +265,7 @@ def test_an_undo_that_conflicts_asks_the_owner_and_leaves_the_branch_as_it_was(t
     c = step(store, clone)
     q = loop.open_question(c)
     assert ([o.label for o in q.options], q.cause) == (
-        ["Another round on the kept work", "Pause this Change"],
+        ["Yes: review the kept work once more", "No: pause this Change"],
         f"{round_flow.PREFIX}t1 t3",
     )
     assert (git(clone, "rev-parse", "HEAD"), (clone / "a.txt").read_text(), c.loops["t1"].attempt) == (head, "c\n", 1)
@@ -426,7 +432,7 @@ def test_an_undo_git_refuses_is_asked_and_logged_with_its_whole_output(tmp_path,
     c = step(store, clone)
     why = f"CalledProcessError: Command 'git revert' returned non-zero exit status 1.\n{whole_error}"
     assert loop.open_question(c).text == (
-        f"Delivery could not undo attempt 1 of task t1 for its fresh build: {why}. Nothing was undone. Another round "
-        "reviews the last repair of the kept work; a pause lets you fix the branch first."
+        "Delivery could not undo the work you rejected (attempt 1 of task t1), so it cannot build it afresh; nothing "
+        f"was undone. Have the kept work reviewed once more instead?\n\nDetails: {why}"
     )
     assert [e.get("error") for e in store.events("c1") if e["event"] == "undo"] == [why]
