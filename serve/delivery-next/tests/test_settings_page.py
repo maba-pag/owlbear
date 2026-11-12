@@ -2203,6 +2203,20 @@ def test_settings_say_a_failed_read_of_the_shared_repository_whole(
         assert said == []
 
 
+def _remove_old_runtime_during_save(page, pds, whole_error):
+    pds.group(page, "agents")
+    held = hold_first(page, "**/config/project", "PUT", fetch=False)
+    page.get_by_role("button", name="Save project settings").click()
+    pds.answer(page, "Save project settings")
+    until(page, lambda: held)
+    pds.group(page, "this-machine")
+    page.get_by_role("button", name="Remove the old runtime").click()
+    pds.answer(page, "Remove it")
+    expect(page.locator("#error")).to_have_text(f"VersionError: {whole_error}\na note on the failure")
+    expect(page.locator("#error")).to_be_hidden()
+    return held[0][0]
+
+
 @pytest.mark.browser
 def test_settings_say_why_the_old_runtime_stays_whole(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
     a = registry.register(clone(tmp_path / "alpha"))
@@ -2249,6 +2263,25 @@ def test_settings_say_why_the_old_runtime_stays_whole(tmp_path: Path, monkeypatc
         assert said == [
             "Failed to load resource: the server responded with a status of 409 (Conflict)",
             "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+        ]
+        pds.group(page, "agents")
+        page.get_by_label("Minutes per session, builder").fill("50")
+
+        saving = _remove_old_runtime_during_save(page, pds, whole_error)
+        saving.fulfill(status=503, json={"detail": "the project settings could not be saved"})
+        expect(notice).to_be_visible()
+        expect(notice).to_have_text(
+            f"VersionError: {whole_error}\na note on the failure\n\nThe project settings could not be saved"
+        )
+        retry = _remove_old_runtime_during_save(page, pds, whole_error)
+        retry.continue_()
+        expect(page.locator("#status")).to_contain_text("Saved alpha's settings")
+        expect(notice).to_be_visible()
+        expect(notice).to_have_text(f"VersionError: {whole_error}\na note on the failure")
+        assert said[2:] == [
+            "Failed to load resource: the server responded with a status of 409 (Conflict)",
+            "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+            "Failed to load resource: the server responded with a status of 409 (Conflict)",
         ]
     assert kept.is_dir()
 

@@ -307,6 +307,11 @@ function standingNotice(loaded) {
   return notice ? notice.charAt(0).toUpperCase() + notice.slice(1) : "";
 }
 
+function writeNotice(previous, notice) {
+  const next = notice ? notice.charAt(0).toUpperCase() + notice.slice(1) : "";
+  return [previous, next].filter(Boolean).join("\n\n");
+}
+
 // The layers as the host has them now, unless a newer reload, save or rename has answered meanwhile.
 export async function reload() {
   const n = answers.ask();
@@ -393,7 +398,7 @@ async function saveLayer(review) {
     }
   } finally {
     state.saving = false;
-    state.error = error ? error.charAt(0).toUpperCase() + error.slice(1) : "";
+    state.error = writeNotice(state.error, error);
     state.status = status;
     showIdle();  // models that arrived during it apply now
   }
@@ -411,7 +416,9 @@ export async function rename() {
     instead: "The folder keeps its name.",
   });
   if (!sure) return;
+  let error = "";
   state.saving = true;
+  state.error = "";
   state.status = "Renaming…";
   show();
   try {
@@ -419,14 +426,14 @@ export async function rename() {
     answers.shown();
     state.layerNotice = standingNotice(state.loaded);
     state.folder = null;
-    const notice = state.loaded.write_notice;
-    state.error = notice ? notice.charAt(0).toUpperCase() + notice.slice(1) : "";
+    error = state.loaded.write_notice;
     state.status = `This project's folder is now ${state.loaded.folder}.`;
   } catch (e) {
     state.status = "";
-    state.error = e.message.charAt(0).toUpperCase() + e.message.slice(1);
+    error = e.message;
   } finally {
     state.saving = false;
+    state.error = writeNotice(state.error, error);
     showIdle();  // models that arrived during it apply now
   }
 }
