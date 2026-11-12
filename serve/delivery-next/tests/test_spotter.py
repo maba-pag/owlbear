@@ -819,25 +819,26 @@ def test_a_spotter_writes_where_it_started_whatever_changes_later(monkeypatch, t
 
 def test_the_process_exits_within_the_grace_though_spotter_work_is_still_queued(tmp_path) -> None:
     script = """
-import atexit, threading
+import atexit, threading, time
 
-class Clock:
-    elapsed = 0.0
-    @classmethod
-    def monotonic(cls):
-        return cls.elapsed
-    @classmethod
-    def sleep(cls, seconds):
-        cls.elapsed += seconds
+register = atexit.register
+def observed(callback, *args, **kwargs):
+    if getattr(callback, "__qualname__", "") != "Worker.settled":
+        return register(callback, *args, **kwargs)
+    def shutdown():
+        assert callback.__self__ is spotter_store.WORK
+        assert args == (spotter_store.GRACE,)
+        start = time.monotonic()
+        assert callback(*args, **kwargs) is False
+        elapsed = time.monotonic() - start
+        assert spotter_store.GRACE <= elapsed < spotter_store.GRACE + 1.5, elapsed
+        assert spotter_store.WORK.jobs.unfinished_tasks == 1
+        print("exited with queued work after the grace", flush=True)
+    return register(shutdown)
 
-def after_shutdown():
-    assert spotter_store.GRACE <= Clock.elapsed <= spotter_store.GRACE + 0.011
-    assert spotter_store.WORK.jobs.unfinished_tasks == 1
-    print("exited with queued work after the grace", flush=True)
-
-atexit.register(after_shutdown)
+atexit.register = observed
 from owlbear_delivery_next.improvement import spotter_store
-spotter_store.time = Clock
+atexit.register = register
 entered = threading.Event()
 def held():
     entered.set()
