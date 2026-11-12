@@ -17,6 +17,7 @@ from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import storage_io
 from owlbear_delivery_next.local_system.data_repo import SAVE_SECONDS, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch, decision_store, decision_sync, decision_transaction
+from owlbear_delivery_next.state_store.decision_errors import unavailable
 from owlbear_delivery_next.state_store.decision_store import RECOVER, DecisionsUnavailable
 
 if TYPE_CHECKING:
@@ -187,7 +188,7 @@ def finish(shared: DataRepo, generation: str) -> Recovery:
                 said = f"finished here, but not yet on the remote: {sent.notice}"
             return Recovery(generation=generation, done=True, notice=said)
     except (DataRepoError, OSError) as exc:
-        raise DecisionsUnavailable(failure(exc), RECOVER) from exc
+        raise unavailable(exc, RECOVER) from exc
 
 
 def _validate(root: DataRepo, batch: decision_batch.Batch) -> None:
@@ -244,4 +245,4 @@ def abandon(shared: DataRepo, generation: str) -> Recovery:
             notice = "abandoned: the files are as they were; Git is unchanged"
             return Recovery(generation=generation, done=True, notice=notice)
     except (DataRepoError, OSError) as exc:
-        raise DecisionsUnavailable(failure(exc), RECOVER) from exc
+        raise unavailable(exc, RECOVER) from exc

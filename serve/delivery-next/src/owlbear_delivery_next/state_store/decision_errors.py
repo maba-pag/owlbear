@@ -11,6 +11,8 @@ from __future__ import annotations
 from contextlib import ExitStack
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.git import command_failure
+from owlbear_delivery_next.local_system.data_repo import DataRepoBusyError, DataRepoError
 from owlbear_delivery_next.state_store.database import StoreError
 
 if TYPE_CHECKING:
@@ -24,6 +26,7 @@ REPAIR = "Repair the shared data repository's checkout so Git can read it"
 READ = "Make the decision folders and files in the shared data repository readable and valid"
 RECOVER = "Finish or abandon the interrupted decision batch by its generation (owner's explicit choice)"
 SAVING = "Wait for the decision save in progress to finish, then read again"
+RETRY = "Wait for the running save to finish, then try again"
 IN_PROGRESS = "a decision save is in progress, so the decisions are not settled; read them again shortly"
 
 
@@ -40,6 +43,11 @@ class DecisionsUnavailable(StoreError):  # noqa: N818 - the design's name for it
 
 class Unsettled(DecisionsUnavailable):
     """A read met a batch's unsettled state: a save in progress while a writer holds the lock, else what it says."""
+
+
+def unavailable(exc: DataRepoError | OSError, action: str = REPAIR) -> DecisionsUnavailable:
+    """Keep the caller's remedy for repository failures, but only advise retrying a busy save."""
+    return DecisionsUnavailable(command_failure.failure(exc), RETRY if isinstance(exc, DataRepoBusyError) else action)
 
 
 def settled[T](shared: DataRepo, read: Callable[[], T]) -> T:
