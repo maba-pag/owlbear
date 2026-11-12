@@ -259,7 +259,6 @@ def test_a_target_marker_fifo_is_refused_without_a_blocking_open(repo, boot, blo
 @pytest.mark.usefixtures("current_binding")
 def test_a_foreign_target_found_on_resume_is_refused_before_any_write(repo, boot, capsys, monkeypatch):
     _prepared(repo, boot)
-    real_sync = project_move._sync_published  # noqa: SLF001 - the first attempt fails, the resume must not write
 
     def fail_sync(_pfd, _target, _tfd):
         raise OSError(errno.EIO, "injected first-attempt sync failure")
@@ -274,8 +273,6 @@ def test_a_foreign_target_found_on_resume_is_refused_before_any_write(repo, boot
     shutil.rmtree(target)
     target.mkdir()
     (target / "foreign.txt").write_text("owner bytes\n")
-    monkeypatch.setattr(project_move, "_sync_published", real_sync)
-
     assert cli.main(["--repo", str(repo), "finish"]) == 1
     assert capsys.readouterr().err == (
         f"{target} is not the copy this move published: nothing was removed; move it away, then start again\n"
