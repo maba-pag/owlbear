@@ -334,6 +334,7 @@ def curated(applied: bool):  # noqa: FBT001 - one switch per test
 def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(curating, monkeypatch, user_on):
     prof = profile.confirm(Profile(), "check:.", "uv run test --changed", NOW)
     prof = profile.confirm(prof, "check:api", "npm test", NOW)
+    prof = profile.confirm(prof, "check:web", "npm test", NOW)
     curating.store.write_profile(prof)
     monkeypatch.setattr(worktree, "owns_changed_runner", lambda *_: True)
     curating.curate = curated(applied=True)
@@ -349,10 +350,11 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
     assert cfg.user == user_on
     assert cfg.checks == (
         check_hint.task_command(
-            check_hint.qualified(".", "uv run test --changed tests web/tests"),
+            check_hint.qualified(".", "uv run test --changed tests"),
             c.tests.commit,
             c.tests.commit,
         ),
+        check_hint.qualified("web", "npm test"),
     )
     assert cfg.checks[0] in cfg.message
     repair = c.model_copy(update={"step": Step(kind=StepKind.BUILD, task=CURATE)}, deep=True)

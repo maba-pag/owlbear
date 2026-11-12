@@ -130,15 +130,35 @@ def task_checks(profile: Profile, task: Task, path: Path, target: str) -> list[s
 def build_checks(profile: Profile, change: Change, task: Task, path: Path) -> list[str]:
     """Confirmed build checks; curator measurements require their selected suites even before edits."""
     if change.tests is not None and change.step.task == curation_flow.CURATE:
+        pairs = checks(profile)
         found = []
-        for package, command in checks(profile):
+        for package, command in pairs:
             if package != "." and package not in change.tests.packages:
                 continue
             root = check_hint.changed_runner(check_hint.qualified(package, command))
             adapted = check_hint.qualified(package, command)
             if root and owns_changed_runner(path, root[0].split()[2]):
-                targets = shlex.join((Path(p) / "tests").as_posix() for p in change.tests.packages)
-                adapted = check_hint.freeze(check_hint.qualified(package, f"{root[0]} {targets}"), root[1])
+                targets, covered = set[str](), set[str]()
+                packages = sorted(change.tests.packages, key=len, reverse=True)
+                for name in (name for share in change.tests.shares for name in share.paths):
+                    module = Path(name)
+                    if module.suffix != ".py" or not module.name.startswith("test_"):
+                        continue
+                    owner = next((p for p in packages if p != "." and name.startswith(f"{p}/")), ".")
+                    covered.add(owner)
+                    target = owner if owner != "." else module.parent.as_posix() if module.parent != Path() else name
+                    targets.add(target)
+                missing = set(packages) - covered - {p for p, _ in pairs if p != "."}
+                if missing:
+                    msg = (
+                        f"The confirmed Python runner cannot measure selected suites: {', '.join(sorted(missing))}; "
+                        "confirm their package checks before curation"
+                    )
+                    raise ValueError(msg)
+                if not targets:
+                    continue
+                chosen = shlex.join(sorted(targets))
+                adapted = check_hint.freeze(check_hint.qualified(package, f"{root[0]} {chosen}"), root[1])
                 adapted = check_hint.task_command(adapted, change.tests.commit, change.tests.commit)
             found.append(adapted)
         return found
