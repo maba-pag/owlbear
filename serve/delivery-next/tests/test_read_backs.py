@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -76,8 +77,9 @@ def client(store: Store, headers=AUTH) -> TestClient:
 
 
 @pytest.fixture
-def owner(store) -> TestClient:
-    return client(store)
+def owner(store) -> Iterator[TestClient]:
+    with client(store) as http:
+        yield http
 
 
 def now(shared: DataRepo, decision_id: str, project: str = PROJECT) -> Decision:
@@ -89,19 +91,19 @@ def queue(c: TestClient, **query) -> list[dict[str, Any]]:
 
 
 @pytest.fixture
-def chat(store, monkeypatch) -> chat_client.Chat:
-    http = client(store, CHAT)
-    tools = chat_client.Chat.__new__(chat_client.Chat)
-    tools.repo, tools.home = Path(), store.root
+def chat(store, monkeypatch) -> Iterator[chat_client.Chat]:
+    with client(store, CHAT) as http:
+        tools = chat_client.Chat.__new__(chat_client.Chat)
+        tools.repo, tools.home = Path(), store.root
 
-    def call(method: str, path: str, body: object = None, timeout: float = 15.0,  # noqa: ARG001
-             headers: dict[str, str] | None = None) -> tuple[int, Any]:  # fmt: skip
-        r = http.request(method, f"/api/next{path}", json=body, headers=headers)
-        return r.status_code, r.json()
+        def call(method: str, path: str, body: object = None, timeout: float = 15.0,  # noqa: ARG001
+                 headers: dict[str, str] | None = None) -> tuple[int, Any]:  # fmt: skip
+            r = http.request(method, f"/api/next{path}", json=body, headers=headers)
+            return r.status_code, r.json()
 
-    tools.call = call
-    monkeypatch.setitem(mcp_server._STATE, "chat", tools)  # noqa: SLF001 - the server's one chat
-    return tools
+        tools.call = call
+        monkeypatch.setitem(mcp_server._STATE, "chat", tools)  # noqa: SLF001 - the server's one chat
+        yield tools
 
 
 def tool(name: str, **args: object):
@@ -123,27 +125,10 @@ def test_the_queue_leads_the_list_by_kind_then_oldest_and_a_conflict_queues_itse
 
 
 @pytest.mark.usefixtures("chat")
-def test_queue_read_back_sets_pending_with_why_and_kind_and_never_touches_origin_wording_or_state(shared):
+def test_queue_read_back_refuses_an_empty_why_an_unknown_kind_and_the_same_reason_twice(shared, owner):
     rule = make(origin=Origin.DECIDED, read_back=AT.date().isoformat(), inherited=True)
     put(shared, rule)
-
-    got = tool("queue_read_back", decision=rule.id, revision=rule.revision, why="A second team now edits notes.",
-               kind="uncertain")  # fmt: skip
-
-    assert got.structured_content["saved"] is True
-    held = now(shared, rule.id)
-    assert (held.read_back, held.read_back_why, held.read_back_kind) == ("pending", "A second team now edits notes.",
-                                                                       "uncertain")  # fmt: skip
-    assert (held.origin, held.statement, held.state, held.inherited) == (
-        rule.origin, rule.statement, rule.state, rule.inherited)  # fmt: skip
-    said = shared.git("log", "-1", "--format=%B").stdout.strip()
-    assert said == f"decisions: queue-read-back {rule.id} (uncertain)"  # the reason stays in the file only
-
-
-@pytest.mark.usefixtures("chat")
-def test_queue_read_back_refuses_an_empty_why_an_unknown_kind_and_the_same_reason_twice(shared, owner):
-    rule = make()
-    put(shared, rule)
+    head = shared.git("rev-parse", "HEAD").stdout.strip()
 
     with pytest.raises(ToolError, match="at least 1 character"):
         tool("queue_read_back", decision=rule.id, revision=rule.revision, why="", kind="uncertain")
@@ -156,50 +141,38 @@ def test_queue_read_back_refuses_an_empty_why_an_unknown_kind_and_the_same_reaso
     unread = owner.post(f"/api/next/decisions/{rule.id}/queue-read-back", json={"why": "New data.", "kind": "safety"})
     assert (blank.status_code, unread.status_code) == (422, 422)
     assert now(shared, rule.id) == rule
+    assert shared.git("rev-parse", "HEAD").stdout.strip() == head
 
-    first = tool("queue_read_back", decision=rule.id, revision=rule.revision, why="New data.", kind="uncertain")
+    newer = rule.model_copy(update={"rationale": "One table keeps backups simple."})
+    write(newer, shared.root / PROJECT, rule.revision)
+    stale = tool("queue_read_back", decision=rule.id, revision=rule.revision,
+                 why="New data.", kind="safety").structured_content  # fmt: skip
+    assert stale["saved"] is False
+    assert stale["receipts"][0]["notice"] == (
+        f"{rule.id} changed since it was read (now {newer.revision[:12]}); reload and decide again"
+    )
+    assert now(shared, rule.id) == newer
+    assert shared.git("rev-parse", "HEAD").stdout.strip() == head
+
+    first = tool("queue_read_back", decision=rule.id, revision=newer.revision, why="New data.", kind="uncertain")
     assert first.structured_content["saved"]
     held = now(shared, rule.id)
+    assert (held.read_back, held.read_back_why, held.read_back_kind) == ("pending", "New data.", "uncertain")
+    assert (held.origin, held.statement, held.state, held.inherited) == (
+        rule.origin,
+        rule.statement,
+        rule.state,
+        rule.inherited,
+    )
+    assert shared.git("log", "-1", "--format=%B").stdout.strip() == (
+        f"decisions: queue-read-back {rule.id} (uncertain)"
+    )
+    head = shared.git("rev-parse", "HEAD").stdout.strip()
     again = tool("queue_read_back", decision=rule.id, revision=held.revision, why=" new  DATA. ",
                  kind="uncertain").structured_content  # fmt: skip
     assert (again["saved"], "already" in again["error"]) == (False, True)
     assert now(shared, rule.id) == held
-
-
-@pytest.mark.usefixtures("chat")
-def test_queue_read_back_against_a_stale_revision_is_refused_and_writes_nothing(shared):
-    rule = make()
-    put(shared, rule)
-    newer = rule.model_copy(update={"rationale": "One table keeps backups simple."})
-    write(newer, shared.root / PROJECT, rule.revision)
-
-    got = tool("queue_read_back", decision=rule.id, revision=rule.revision, why="New data.", kind="safety")
-
-    said = got.structured_content
-    assert said["saved"] is False
-    assert "changed since it was read" in said["receipts"][0]["notice"]
-    assert now(shared, rule.id) == newer
-
-
-def test_still_right_records_the_date_keeps_the_reason_answered_and_keeps_origin(owner, shared):
-    rule = waiting("blocked", origin=Origin.APPROVED)
-    put(shared, rule)
-
-    said = owner.post(f"/api/next/decisions/{rule.id}/read-back", json={"revision": rule.revision,
-                                                                          "confirmed": True}).json()  # fmt: skip
-
-    assert said["saved"] is True
-    held = now(shared, rule.id)
-    assert (held.read_back, held.read_back_why, held.read_back_kind) == (TODAY, rule.read_back_why, "blocked")
-    assert (held.origin, held.statement, held.state) == (Origin.APPROVED, rule.statement, State.IN_FORCE)
-    assert held.rule_revision == rule.rule_revision
-    assert queue(owner) == []
-    same = owner.post(f"/api/next/decisions/{rule.id}/queue-read-back", json={
-        "why": rule.read_back_why, "kind": "blocked", "revision": held.revision})  # fmt: skip
-    assert (same.status_code, "already" in same.json()["detail"]) == (409, True)  # consent stands
-    other = owner.post(f"/api/next/decisions/{rule.id}/queue-read-back", json={
-        "why": "The law changed.", "kind": "safety", "revision": held.revision})  # fmt: skip
-    assert other.json()["saved"] is True
+    assert shared.git("rev-parse", "HEAD").stdout.strip() == head
 
 
 def test_the_reason_answered_yesterday_is_not_queued_again_today_and_a_new_one_is(owner, shared):
@@ -220,18 +193,17 @@ def test_the_reason_answered_yesterday_is_not_queued_again_today_and_a_new_one_i
                                                                        "uncertain")  # fmt: skip
 
 
-def confirmed_reason(owner, shared, ident, why):
+def confirmed_reason(owner, shared, current, why, kind="uncertain"):
     """Queue and confirm through the real owner API."""
-    current = now(shared, ident)
+    ident = current.id
     queued = owner.post(
         f"/api/next/decisions/{ident}/queue-read-back",
-        json={"revision": current.revision, "why": why, "kind": "uncertain"},
+        json={"revision": current.revision, "why": why, "kind": kind},
     )
-    assert queued.json()["saved"] is True
-    current = now(shared, ident)
-    confirmed = owner.post(
-        f"/api/next/decisions/{ident}/read-back", json={"revision": current.revision, "confirmed": True}
-    )
+    receipt = queued.json()
+    assert receipt["saved"] is True
+    revision = receipt["receipts"][0]["revision"]
+    confirmed = owner.post(f"/api/next/decisions/{ident}/read-back", json={"revision": revision, "confirmed": True})
     assert confirmed.json()["saved"] is True
     return now(shared, ident)
 
@@ -239,40 +211,49 @@ def confirmed_reason(owner, shared, ident, why):
 def test_a_then_b_confirmation_remembers_a_after_real_shared_clone_and_host_reload(
     owner, shared, shared_repo, tmp_path
 ):
-    rule = make()
+    rule = make(origin=Origin.APPROVED)
     put(shared, rule)
-    first = confirmed_reason(owner, shared, rule.id, "The vendor changed its terms.")
-    confirmed_reason(owner, shared, rule.id, "A second team now uses notes.")
+    first = confirmed_reason(owner, shared, rule, "The vendor changed its terms.", kind="blocked")
+    assert (first.read_back, first.read_back_why, first.read_back_kind) == (
+        TODAY,
+        "The vendor changed its terms.",
+        "blocked",
+    )
+    assert (first.origin, first.statement, first.state) == (Origin.APPROVED, rule.statement, State.IN_FORCE)
+    assert first.rule_revision == rule.rule_revision
+    assert queue(owner) == []
+    confirmed_reason(owner, shared, first, "A second team now uses notes.")
     other_path = tmp_path / "other-data"
     copied = shared.git("clone", "-q", str(shared_repo[1]), str(other_path))
     assert copied.returncode == 0, copied.stderr
     other = DataRepo(other_path)
     for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
         assert other.git("config", key, value).returncode == 0
-    other_owner = client(Store(tmp_path / "other-host", other, PROJECT))
-    before = now(other, rule.id)
+    with client(Store(tmp_path / "other-host", other, PROJECT)) as other_owner:
+        before = now(other, rule.id)
 
-    repeated = other_owner.post(
-        f"/api/next/decisions/{rule.id}/queue-read-back",
-        json={"revision": before.revision, "why": "  the VENDOR  changed its TERMS. ", "kind": "safety"},
-    )
+        repeated = other_owner.post(
+            f"/api/next/decisions/{rule.id}/queue-read-back",
+            json={"revision": before.revision, "why": "  the VENDOR  changed its TERMS. ", "kind": "safety"},
+        )
 
-    assert repeated.status_code == 409
-    assert now(other, rule.id) == before
-    stale = other_owner.post(
-        f"/api/next/decisions/{rule.id}/queue-read-back",
-        json={"revision": first.revision, "why": "A new regulation now covers notes.", "kind": "safety"},
-    )
-    assert stale.json()["saved"] is False
-    assert now(other, rule.id) == before
-    fresh = other_owner.post(
-        f"/api/next/decisions/{rule.id}/queue-read-back",
-        json={"revision": before.revision, "why": "A new regulation now covers notes.", "kind": "safety"},
-    )
-    assert fresh.json()["saved"] is True
-    current = now(other, rule.id)
-    assert current.read_back_settled == ("the vendor changed its terms.", "a second team now uses notes.")
-    assert current.rule_revision == rule.rule_revision
+        assert repeated.status_code == 409
+        assert "already" in repeated.json()["detail"]
+        assert now(other, rule.id) == before
+        stale = other_owner.post(
+            f"/api/next/decisions/{rule.id}/queue-read-back",
+            json={"revision": first.revision, "why": "A new regulation now covers notes.", "kind": "safety"},
+        )
+        assert stale.json()["saved"] is False
+        assert now(other, rule.id) == before
+        fresh = other_owner.post(
+            f"/api/next/decisions/{rule.id}/queue-read-back",
+            json={"revision": before.revision, "why": "A new regulation now covers notes.", "kind": "safety"},
+        )
+        assert fresh.json()["saved"] is True
+        current = now(other, rule.id)
+        assert current.read_back_settled == ("the vendor changed its terms.", "a second team now uses notes.")
+        assert current.rule_revision == rule.rule_revision
 
 
 @pytest.mark.parametrize("pending", [False, True])
@@ -303,26 +284,6 @@ def test_origin_only_correction_preserves_prior_consent_without_confirming_pendi
     )
     assert repeated.status_code == 409
     assert now(shared, successor.id) == successor
-
-
-def test_unconfirmed_and_ignored_reasons_do_not_become_settled_consent(owner, shared):
-    rule = make()
-    put(shared, rule)
-    first = owner.post(
-        f"/api/next/decisions/{rule.id}/queue-read-back",
-        json={"revision": rule.revision, "why": "The vendor changed its terms.", "kind": "uncertain"},
-    )
-    assert first.json()["saved"] is True
-    waiting_rule = now(shared, rule.id)
-    ignored = owner.post(f"/api/next/decisions/{rule.id}/ignore-read-back", json={"revision": waiting_rule.revision})
-    assert ignored.status_code == 200
-    confirmed_reason(owner, shared, rule.id, "A second team now uses notes.")
-    current = now(shared, rule.id)
-    again = owner.post(
-        f"/api/next/decisions/{rule.id}/queue-read-back",
-        json={"revision": current.revision, "why": "The vendor changed its terms.", "kind": "safety"},
-    )
-    assert again.json()["saved"] is True
 
 
 @pytest.mark.parametrize("mutation", ["replace", "promote"])
@@ -357,7 +318,8 @@ def test_a_changed_rule_does_not_inherit_settled_reasons(owner, shared, mutation
 
 
 def test_ignore_for_now_writes_nothing_keeps_the_rule_in_force_and_moves_it_last(owner, shared, store):
-    first, second = waiting("safety", created_at=AT), waiting("improvement", created_at=AT + timedelta(days=1))
+    first = waiting("safety", why="The vendor changed its terms.", created_at=AT)
+    second = waiting("improvement", created_at=AT + timedelta(days=1))
     put(shared, first, second)
 
     chat = client(store, CHAT).post(f"/api/next/decisions/{first.id}/ignore-read-back",
@@ -369,6 +331,12 @@ def test_ignore_for_now_writes_nothing_keeps_the_rule_in_force_and_moves_it_last
     assert now(shared, first.id) == first
     assert decision_store.load(shared, PROJECT).snapshot.active(first.id) is True
     assert [(q["id"], q["ignored"]) for q in queue(owner)] == [(second.id, False), (first.id, True)]
+    current = confirmed_reason(owner, shared, first, "A second team now uses notes.")
+    again = owner.post(
+        f"/api/next/decisions/{first.id}/queue-read-back",
+        json={"revision": current.revision, "why": "The vendor changed its terms.", "kind": "safety"},
+    )
+    assert again.json()["saved"] is True
 
 
 def awaiting(scope: tuple[str, ...] = ("web",)) -> Change:

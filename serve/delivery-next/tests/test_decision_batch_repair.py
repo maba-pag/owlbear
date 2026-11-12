@@ -14,21 +14,13 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.state_store import decision_batch
 
 
-def test_a_failed_rebase_probe_raises_instead_of_reporting_no_rebase(tmp_path: Path, monkeypatch) -> None:
+@pytest.mark.parametrize(("code", "out", "error"), [(128, "", "fatal: not a git repository"), (0, "\n", "")])
+def test_external_rebase_probe_failure_is_never_idle_git(tmp_path: Path, monkeypatch, code, out, error) -> None:
     def probe(_cwd: Path, *args: str, **_: object) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(args, 128, "", "fatal: not a git repository")
+        return subprocess.CompletedProcess(args, code, out, error)
 
     monkeypatch.setattr(data_repo, "_git", probe)
     with pytest.raises(DataRepoError, match="cannot tell whether a rebase is in progress"):
-        DataRepo(tmp_path).rebasing()
-
-
-def test_an_empty_rebase_probe_is_unknown_not_fallen_back_to_the_checkout(tmp_path: Path, monkeypatch) -> None:
-    def probe(_cwd: Path, *args: str, **_: object) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(args, 0, "\n", "")
-
-    monkeypatch.setattr(data_repo, "_git", probe)
-    with pytest.raises(DataRepoError):
         DataRepo(tmp_path).rebasing()
 
 

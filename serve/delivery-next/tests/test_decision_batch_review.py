@@ -43,55 +43,26 @@ def test_abandoning_a_new_file_in_an_absent_folder_fsyncs_nothing(tmp_path, monk
     assert not absent.parent.exists()
 
 
-def test_removing_a_file_from_an_existing_folder_still_fsyncs_its_parent(tmp_path, monkeypatch):
-    synced: list[os.stat_result] = []
-    real_fsync = os.fsync
-
-    def recording_fsync(descriptor: int) -> None:
-        synced.append(os.fstat(descriptor))
-        real_fsync(descriptor)
-
-    monkeypatch.setattr(os, "fsync", recording_fsync)
-    folder = tmp_path / "decisions"
-    folder.mkdir()
-    (folder / "old.md").write_text("x", encoding="utf-8")
-
-    decision_batch.replace_file(folder / "old.md", None)
-
-    assert not (folder / "old.md").exists()
-    assert [os.path.samestat(found, folder.stat()) for found in synced] == [True]  # the folder held open, once
-
-
-def test_an_empty_publication_outcome_is_not_a_known_refusal_and_stays_interrupted(shared_repo):
+@pytest.mark.parametrize("refused", [False, True], ids=["unknown", "known-refusal"])
+def test_settlement_requires_a_known_refusal_or_exact_landing(shared_repo, refused):
     shared = DataRepo(shared_repo[0])
     shared.claim("shop-site", "github.com/acme/shop-site")
     target = shared.root / "shop-site" / "changes" / "note.json"
     target.parent.mkdir(parents=True)
 
-    def silent(_head: str, _fence) -> decision_transaction.Step:
-        target.write_text("{}", encoding="utf-8")
-        return decision_transaction.Step("")  # success-looking, no landing proof, no refusal
+    def outcome(_head: str, _fence) -> decision_transaction.Step:
+        if not refused:
+            target.write_text("{}", encoding="utf-8")
+        return decision_transaction.Step("the commit was refused" if refused else "", refused=refused)
 
     head = shared.git("rev-parse", "HEAD").stdout.strip()
-    notice = decision_transaction.transaction(shared, "shop-site", "changes: silent", [(target, b"{}")], silent, head)
-
-    assert notice.startswith("interrupted batch"), notice
-    assert decision_batch.pending(shared) is not None
-    assert target.is_file()  # never restored or completed on a guess
-
-
-def test_a_known_refusal_with_unmoved_head_puts_the_files_back_and_completes(shared_repo):
-    shared = DataRepo(shared_repo[0])
-    shared.claim("shop-site", "github.com/acme/shop-site")
-    target = shared.root / "shop-site" / "changes" / "refused.json"
-    target.parent.mkdir(parents=True)
-
-    def refused(_head: str, _fence) -> decision_transaction.Step:
-        return decision_transaction.Step("the commit was refused", refused=True)
-
-    head = shared.git("rev-parse", "HEAD").stdout.strip()
-    notice = decision_transaction.transaction(shared, "shop-site", "changes: refused", [(target, b"{}")], refused, head)
-
-    assert notice == "the commit was refused"
-    assert decision_batch.pending(shared) is None
-    assert not target.exists()
+    notice = decision_transaction.transaction(shared, "shop-site", "changes: outcome", [(target, b"{}")], outcome, head)
+    assert shared.git("rev-parse", "HEAD").stdout.strip() == head
+    if refused:
+        assert notice == "the commit was refused"
+        assert decision_batch.pending(shared) is None
+        assert not target.exists()
+    else:
+        assert notice.startswith("interrupted batch"), notice
+        assert decision_batch.pending(shared) is not None
+        assert target.read_bytes() == b"{}"

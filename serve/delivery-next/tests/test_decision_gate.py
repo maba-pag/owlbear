@@ -34,6 +34,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.preparation import Preparation
+from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import loop, worktree
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -242,17 +243,18 @@ def test_a_conflicted_applicable_decision_stops_naming_it(tmp_path, shared, ran)
     assert flagged.id in c.stop.reason
 
 
-def test_decisions_longer_than_twelve_thousand_characters_reach_the_step_whole(tmp_path, shared, monkeypatch):
-    rules = [put(shared, make(title=f"Rule {n} " + "t" * 100, statement=f"{n:02} " + "s" * 236)) for n in range(40)]
-    store = stored(tmp_path, shared, change())
-    held: list[list[str]] = []
-    monkeypatch.setattr(runner, "_agent", lambda *_a: held.append(step_decisions.held()))
-
-    assert step(store, tmp_path).outcome is None
-
-    [lines] = held
+def test_large_set_reaches_consumers_whole(tmp_path):
+    rules = [make(title=f"Rule {n} " + "t" * 100, statement=f"{n:02} " + "s" * 236) for n in range(40)]
+    lines = step_decisions.section(rules)
     assert sum(len(line) + 1 for line in lines if line.startswith("- D-")) > 12_000
-    assert all(f"- {r.id} (project, approved): {r.title}: {r.statement}" in lines for r in rules)  # none cut
+    assert all(f"- {r.id} (project, approved): {r.title}: {r.statement}" in lines for r in rules)
+    c = change()
+    with step_decisions.using(lines, []):
+        build = step_input.build(c, c.plan.tasks[0], tmp_path, [])
+        planned = step_input.plan_challenge(c, c.plan, Profile(), tmp_path, {})
+        tree = SimpleNamespace(base="a" * 40, head="b" * 40, changed=())
+        review = step_input.review(c, None, tmp_path, tree)
+    assert all(line in message for line in lines for message in (build, planned, review))
 
 
 def test_approval_pins_the_baseline_and_an_unreadable_one_asks_before_pinning_the_set_in_force(tmp_path, shared, ran):
