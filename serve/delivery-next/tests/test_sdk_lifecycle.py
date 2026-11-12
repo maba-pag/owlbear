@@ -406,13 +406,6 @@ def test_each_teardown_failure_keeps_its_whole_error(world, monkeypatch, whole_e
     assert problem in run.termination.problems
 
 
-def test_a_clean_lifecycle_confirms_without_signals(world):
-    run = asyncio.run(sdk_adapter.run(world.cfg))
-    assert run.termination.confirmed
-    assert world.stop_calls == 1
-    assert world.signals == []
-
-
 class _Issued(step_budget.Budget):
     """A teardown request's budget counted from the moment its request starts, frozen again once it answered (#943).
 
@@ -561,6 +554,9 @@ def test_a_finished_run_records_its_start_and_end_where_it_ran(world, monkeypatc
     assert (end["run"], end["usage"], end["ending"], end["project"]) == (start["run"], used, run.ending, "owlbear")
     assert (end["tools"], end["wrong"]) == ({}, {})  # measured though nothing was called (C-28)
     assert (start["cli"], "cli_error" in start) == ("1.0.105-test", False)  # the CLI the runtime said it is (#849)
+    assert run.termination.confirmed
+    assert world.stop_calls == 1
+    assert world.signals == []
 
 
 @pytest.mark.parametrize("unread", ["error", "rpc", "hang"])
@@ -857,6 +853,22 @@ def test_a_turn_that_never_goes_idle_holds_a_result_run_once_for_the_bound_and_a
 REAL_OPEN = sdk_adapter._open  # noqa: SLF001 - the real one, which the fixture replaces
 
 
+@pytest.fixture
+def _opening(world, monkeypatch):
+    async def missing(_sid):
+        return None
+
+    async def stopped(*_args, **_kwargs):
+        msg = "stop here"
+        raise RuntimeError(msg)
+
+    async def created(**_kwargs):
+        return world.session
+
+    world.get_session_metadata, world.create_session, world.session.send = missing, created, stopped
+    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
+
+
 def test_a_session_failure_keeps_its_whole_error_in_the_journal_and_status(world, monkeypatch, tmp_path, whole_error):
     """#746/#894/#895: a failed session's step event keeps its whole error, and its retry carries it as the reason."""
 
@@ -969,7 +981,8 @@ def test_a_timed_out_session_keeps_its_whole_error_and_retries_as_before(world, 
     assert result.classified == said  # retries sign the message alone, as before (#971)
 
 
-def test_an_unread_transcript_keeps_its_whole_error(world, monkeypatch, tmp_path, whole_error):
+@pytest.mark.usefixtures("_opening")
+def test_an_unread_transcript_keeps_its_whole_error(world, tmp_path, whole_error):
     """#971 R5: a resumed session's failed transcript read says the read's whole error, with its JSON-RPC data."""
     error = JsonRpcError(-32603, whole_error, {"marker": "DATA-MARK"})
     error.add_note(TRIGGER)
@@ -984,7 +997,6 @@ def test_an_unread_transcript_keeps_its_whole_error(world, monkeypatch, tmp_path
         raise error
 
     world.get_session_metadata, world.resume_session, world.session.get_events = known, resumed, events
-    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
     run = asyncio.run(sdk_adapter.run(dataclasses.replace(world.cfg, resume=True)))
     failed = f"JsonRpcError: JSON-RPC Error -32603: {whole_error}\n{TRIGGER} {{'marker': 'DATA-MARK'}}"
     want = f"transcript read failed ({failed}); the answer was not resent"
@@ -995,16 +1007,12 @@ def test_an_unread_transcript_keeps_its_whole_error(world, monkeypatch, tmp_path
 
 
 @pytest.mark.parametrize("unknown", [False, True])
-def test_a_missing_session_names_the_earlier_processes_not_observed_gone(world, monkeypatch, tmp_path, unknown):
+@pytest.mark.usefixtures("_opening")
+def test_a_missing_session_names_the_earlier_processes_not_observed_gone(world, tmp_path, unknown):
     """#971: the step says which recorded processes are still present and which are in an unknown state; once its
     teardown confirmed them gone, the retry's reason is that detail (session_result's ``missing`` case)."""
 
-    async def missing(_sid):
-        return None
-
-    world.get_session_metadata = missing
     world.live[CHILD] = world.births[CHILD]
-    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
     previous = {ROOT: world.births[ROOT]} | ({CHILD: None} if unknown else {})
     run = asyncio.run(sdk_adapter.run(dataclasses.replace(world.cfg, resume=True, previous=previous)))
     seen = f"{ROOT} still present" + (f"; {CHILD} in an unknown state" if unknown else "")
@@ -1087,6 +1095,7 @@ def test_a_failed_sessions_retry_shows_its_last_try_whole_on_the_changes_page(wo
             assert not thread.is_alive(), "the owned page server did not stop"
 
 
+@pytest.mark.usefixtures("_opening")
 def test_a_session_that_cannot_be_noted_as_ours_is_never_created(world, monkeypatch):
     """Provenance (Improvement design §4): the manifest still reads, but this session's line was not written."""
     created = []
@@ -1095,7 +1104,6 @@ def test_a_session_that_cannot_be_noted_as_ours_is_never_created(world, monkeypa
         created.append(kw)
 
     world.create_session = create_session
-    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
     monkeypatch.setattr(chatlogs, "note", lambda _event: False)
     run = asyncio.run(sdk_adapter.run(world.cfg))
     assert created == []
@@ -1103,6 +1111,7 @@ def test_a_session_that_cannot_be_noted_as_ours_is_never_created(world, monkeypa
 
 
 @pytest.mark.parametrize("status", ["read", "error", "hang"])
+@pytest.mark.usefixtures("_opening")
 def test_the_real_open_records_the_cli_version_before_its_first_send(world, monkeypatch, status):
     """#849: the start line, with the CLI the runtime said it is, is written before the step's first send; an unread
     version is recorded as such and the send still happens."""
@@ -1113,7 +1122,8 @@ def test_the_real_open_records_the_cli_version_before_its_first_send(world, monk
         msg = "stop here"
         raise RuntimeError(msg)
 
-    async def create_session(**_kw):
+    async def create_session(**kw):
+        assert kw["session_id"] in (chatlogs.own() or set())
         world.session.send = send
         return world.session
 
@@ -1124,7 +1134,6 @@ def test_the_real_open_records_the_cli_version_before_its_first_send(world, monk
     world.status_error = RuntimeError("no status") if status == "error" else None
     world.status_hang = status == "hang"
     monkeypatch.setattr(sdk_teardown, "CALL", 0.05)
-    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
     monkeypatch.setattr(sdk_adapter, "session_options", nothing)
     asyncio.run(sdk_adapter.run(world.cfg))
     assert [[start["cli"] for start in starts] for starts in seen] == [["1.0.105-test" if status == "read" else ""]]
@@ -1132,34 +1141,16 @@ def test_the_real_open_records_the_cli_version_before_its_first_send(world, monk
     assert world.status_calls == 1
 
 
-def test_a_new_session_is_noted_as_ours_before_it_is_created(world, monkeypatch):
-    seen = []
-
-    async def create_session(**kw):
-        seen.append(kw["session_id"] in (chatlogs.own() or set()))
-        msg = "stop here"
-        raise RuntimeError(msg)
-
-    world.create_session = create_session
-    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
-    asyncio.run(sdk_adapter.run(world.cfg))
-    assert seen == [True]
-
-
+@pytest.mark.usefixtures("_opening")
 def test_a_replacement_session_is_noted_as_ours_naming_the_one_it_replaces_before_it_is_created(world, monkeypatch):
     seen = []
-
-    async def missing(_sid):
-        return None
 
     async def create_session(**kw):
         seen.append(kw["session_id"])
         msg = "stop here"
         raise RuntimeError(msg)
 
-    world.get_session_metadata = missing
     world.create_session = create_session
-    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
     cfg = dataclasses.replace(world.cfg, resume=True, journal=sdk_adapter.Journal(event=world.event,
                               replaced=lambda: "synthetic-2"))  # fmt: skip
     noted = []
@@ -1179,21 +1170,11 @@ def test_a_replacement_session_is_noted_as_ours_naming_the_one_it_replaces_befor
     assert (run.ending, run.detail) == ("error", f"UnnotedError: {chatlogs.UNNOTED}")
 
 
+@pytest.mark.usefixtures("_opening")
 def test_an_opened_sessions_events_name_it_and_its_role_and_its_run_ends_after_the_runtime_stopped(world, monkeypatch):
     """#718: a replacement's claimed id, not the configured one, and the role mark each event once the session opened;
     startup marks name no role; ``ended`` comes once the runtime is stopped, also when the session failed."""
     ended_after_stop = []
-
-    async def missing(_sid):
-        return None
-
-    async def send(*_args, **_kwargs):
-        msg = "stop here"
-        raise RuntimeError(msg)
-
-    async def create_session(**_kw):
-        world.session.send = send
-        return world.session
 
     async def nothing(*_args):
         return None
@@ -1203,9 +1184,7 @@ def test_an_opened_sessions_events_name_it_and_its_role_and_its_run_ends_after_t
             ended_after_stop.append(world.stop_calls == 1 and ROOT not in world.live)
         world.event(record)
 
-    world.get_session_metadata, world.create_session = missing, create_session
     monkeypatch.setattr(sdk_teardown, "CALL", 0.05)
-    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
     monkeypatch.setattr(sdk_adapter, "session_options", nothing)
     cfg = dataclasses.replace(world.cfg, resume=True, journal=sdk_adapter.Journal(event=event,
                               replaced=lambda: "synthetic-2"))  # fmt: skip
@@ -1218,13 +1197,9 @@ def test_an_opened_sessions_events_name_it_and_its_role_and_its_run_ends_after_t
     assert ended_after_stop == [True]
 
 
-def test_a_session_that_never_opened_logs_no_role_and_no_end(world, monkeypatch):
-    async def create_session(**_kw):
-        msg = "stop here"
-        raise RuntimeError(msg)
-
-    world.create_session = create_session
-    monkeypatch.setattr(sdk_adapter, "_open", REAL_OPEN)
+@pytest.mark.usefixtures("_opening")
+def test_a_session_that_never_opened_logs_no_role_and_no_end(world):
+    world.create_session = world.session.send
     run = asyncio.run(sdk_adapter.run(world.cfg))
     assert run.ending == "error"
     assert world.events
