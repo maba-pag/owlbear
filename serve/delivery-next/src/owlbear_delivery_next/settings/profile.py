@@ -333,20 +333,38 @@ def confirm(profile: Profile, key: str, value: str, now: datetime) -> Profile:
     return profile.model_copy(update={"entries": entries, "version": profile.version + 1, "confirmed_at": now})
 
 
+def _differs(old: ProfileEntry | None, key: str, new: ProfileEntry) -> str:
+    """How the read entry of *key* differs from the recorded one, or nothing."""
+    if old is None:
+        return f"{key}: not in the profile, now {new.value or new.state}"
+    if is_confirmed(old):
+        if holds(old, new):
+            return ""
+        return f"{key}: confirmed '{old.value}', now '{new.value or new.state}' ({new.evidence})"
+    if (old.state, old.value) != (new.state, new.value):
+        return f"{key}: profile '{old.value or old.state}', now '{new.value or new.state}'"
+    return ""
+
+
 def reread(profile: Profile, gh: Provider, branch: str) -> tuple[list[str], Rules]:
     """Re-read effective rules and required checks; return each difference from the profile and the rules."""
     rules = gh.read_rules(value(profile, REPO), branch)
-    diffs = []
+    return differences(profile, rules), rules
+
+
+def differences(profile: Profile, rules: Rules) -> list[str]:
+    """Each difference of the read *rules* from the profile's rule entries."""
+    read = rule_entries(rules).items()
+    return [d for key, new in read if (d := _differs(profile.entries.get(key), key, new))]
+
+
+def adopt(profile: Profile, rules: Rules, now: datetime) -> Profile:
+    """The owner's yes to the rules as read: each differing entry is replaced by the read one and confirmed on it."""
     for key, new in rule_entries(rules).items():
-        old = profile.entries.get(key)
-        if old is None:
-            diffs.append(f"{key}: not in the profile, now {new.value or new.state}")
-        elif is_confirmed(old):
-            if not holds(old, new):
-                diffs.append(f"{key}: confirmed '{old.value}', now '{new.value or new.state}' ({new.evidence})")
-        elif (old.state, old.value) != (new.state, new.value):
-            diffs.append(f"{key}: profile '{old.value or old.state}', now '{new.value or new.state}'")
-    return diffs, rules
+        if _differs(profile.entries.get(key), key, new):
+            profile = profile.model_copy(update={"entries": {**profile.entries, key: new}})
+            profile = confirm(profile, key, new.value, now)
+    return profile
 
 
 def value(profile: Profile, key: str, default: str = "") -> str:

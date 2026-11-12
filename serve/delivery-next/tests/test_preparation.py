@@ -198,7 +198,7 @@ def test_a_live_copy_must_point_every_declared_live_resource_elsewhere(env):
     assert preparation.refusals(copy, rules, {}) == ["its isolation TEST_DB points at the live TEST_DB"]
     prepare._write(store, "c1", prepare.Prepared(check="visual", option=copy))  # noqa: SLF001 - as accepted
     result = prepare.launch(store, change(repo), settings(copy, isolation=[]), lambda _e: None)
-    assert (result.exit, lines(log)) == (Exit.ASK, [])  # nothing exported
+    assert (result.exit, result.question, lines(log)) == (Exit.STOP, None, [])  # nothing exported
 
 
 def test_restore_seed_cleanup_and_the_launch_never_inherit_delivery_s_environment(env, monkeypatch):
@@ -295,25 +295,23 @@ def test_a_recipe_names_a_declared_permitted_option_and_edits_only_its_setup_fil
     ]
 
 
-def test_with_no_safe_option_delivery_asks_and_starts_no_preparer(tmp_path):
+def test_with_no_safe_option_delivery_stops_and_starts_no_preparer(tmp_path):
     unsafe = settings(option(tmp_path), data_classes=[])
     asked = prepare.unsafe(unsafe, LIVE)
-    assert (asked.exit, asked.cause, [o.next for o in asked.question.options]) == (
-        Exit.ASK, "project-env:check:preparation-unsafe", [StepKind.CHECK, "pause"]
+    assert (asked.exit, asked.cause, asked.question, asked.stop.action) == (
+        Exit.STOP, "project-env:check:preparation-unsafe", None, "Run the step again"
     )  # fmt: skip
     assert "copy: data classes customers are not permitted" in asked.reason
     assert prepare.unsafe(settings(option(tmp_path)), LIVE) is None
 
 
-def test_without_a_declared_option_no_check_launches_and_the_owner_is_asked_to_declare_one(env):
+def test_without_a_declared_option_no_check_launches_and_the_stop_says_to_declare_one(env):
     repo, store, _log, tmp = env
     asked = prepare.unsafe(settings(), LIVE)
-    assert (asked.exit, asked.cause, [o.next for o in asked.question.options]) == (
-        Exit.ASK, "project-env:check:preparation-missing", [StepKind.CHECK, "pause"]
+    assert (asked.exit, asked.cause, asked.question, asked.stop.action) == (
+        Exit.STOP, "project-env:check:preparation-missing", None, "Run the step again"
     )  # fmt: skip
-    assert "Declare at least one under `preparations` in the project's settings (`<project folder>/config.json`" in (
-        asked.reason
-    )
+    assert "under `preparations` in the project's settings file (`<project folder>/config.json`" in asked.reason
     assert "data-only option whose seed and cleanup are `true`" in asked.reason
     c = change(repo)
     assert not prepare.reusable(store, c, settings(), LIVE)  # a last recipe without a preparation never relaunches
@@ -411,11 +409,11 @@ def test_a_snapshot_changed_after_it_was_frozen_is_never_restored(env):
     )
 
 
-def test_a_revoked_permission_asks_and_a_changed_option_prepares_again(env):
+def test_a_revoked_permission_stops_and_a_changed_option_prepares_again(env):
     repo, store, _log, tmp = env
     c = change(repo)
     prepare._write(store, "c1", prepare.Prepared(check="visual", option=option(tmp)))  # noqa: SLF001 - as accepted
-    assert prepare.launch(store, c, settings(option(tmp), data_classes=[]), lambda _e: None).exit == Exit.ASK
+    assert prepare.launch(store, c, settings(option(tmp), data_classes=[]), lambda _e: None).exit == Exit.STOP
     changed = prepare.launch(store, c, settings(option(tmp, seed=run(tmp, "other"))), lambda _e: None)
     assert (changed.exit, changed.reason) == (Exit.RETRY, "the preparation option copy changed since it was chosen")
     assert not prepare.reusable(store, c, settings(option(tmp, seed=run(tmp, "other"))), LIVE)
@@ -822,7 +820,7 @@ def test_a_live_copy_pointing_at_live_is_refused_and_never_exported(env):
     assert preparation.check(recipe("fixtures"), tools.Worktree(head, head), repo, ctx) == []
 
     prepare._write(store, "c1", prepare.Prepared(check="visual", option=copy))  # noqa: SLF001 - as accepted
-    assert prepare.launch(store, change(repo), settings(copy), lambda _e: None).exit == Exit.ASK
+    assert prepare.launch(store, change(repo), settings(copy), lambda _e: None).exit == Exit.STOP
     alongside = prepare.launch(store, change(repo), settings(copy, data), lambda _e: None)
     assert (alongside.exit, alongside.reason) == (Exit.RETRY, "the preparation option copy is no longer permitted")
     assert lines(log) == []  # nothing exported

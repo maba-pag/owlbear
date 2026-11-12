@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -18,8 +19,8 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
     Waiting,
 )
-from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import delivery_target, loop, worktree
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.change_flow import asking, delivery_target, loop, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.git.access import PushRefused
 from owlbear_delivery_next.git.command_failure import failure
@@ -165,40 +166,101 @@ def pending(waiting: Waiting, reason: str, wake: datetime | None, who: Actor = "
     return StepResult(exit=Exit.PENDING, waiting=waiting, reason=reason, who=who, wake_at=wake)
 
 
-def ask(step: StepKind, text: str, cause: str | None, options: list[Option] | None = None) -> StepResult:
-    """Ask the owner; the answer's option names the step that follows."""
-    question = Question(step=step, text=text, cause=cause, options=options or [])
+def ask(
+    step: StepKind,
+    text: str,
+    cause: str | None,
+    options: list[Option] | None = None,
+    *,
+    subject: Literal["product", "reserved"] | None = None,
+) -> StepResult:
+    """Ask the owner; the answer's option names the step that follows. After approval *subject* says why it is his."""
+    question = Question(step=step, text=text, cause=cause, options=options or [], subject=subject)
     return StepResult(exit=Exit.ASK, reason=text, cause=cause, question=question)
 
 
-def continue_or_pause(step: StepKind) -> list[Option]:
-    """The two options of an owner action question."""
-    return [Option(id="done", label="Done, continue", next=step), Option(id="pause", label="Pause", next="pause")]
+def blocked(cause: str, said: str, detail: str, now: datetime | None = None) -> StepResult:
+    """Delivery's own problem that only an action outside the Change ends: never a question (#1168).
+
+    The step stops with the plain reason first and the whole evidence after it; "Run the step again" clears it.
+    """
+    reason = f"{said}.\n\nDetails: {detail}" if detail else said
+    kind = ErrorKind(failures.kind_of(cause))
+    at = now or datetime.now(UTC)
+    stop = Stop(kind=kind, reason=reason, action=asking.RERUN, resume="the step runs again", at=at)
+    return StepResult(exit=Exit.STOP, cause=cause, reason=reason, stop=stop)
+
+
+PAUSE = Option(id="pause", label="No: pause this Change", next="pause")
+_RULES = {  # the profile's rule entries in the owner's words
+    profile.RULES: "kinds of rules on the branch",
+    profile.REQUIRED: "checks GitHub requires before merging",
+    profile.QUEUE: "merging only through the merge queue",
+    profile.STRICT: "the branch must be up to date before merging",
+    profile.RESOLUTION: "review conversations must be resolved before merging",
+}
+
+
+def _was(old: ProfileEntry | None) -> str:
+    if old is None:
+        return "not recorded"
+    return old.value if old.state == "known" else "not readable"
 
 
 def rules_changed(ctx: Ctx, c: Change) -> tuple[StepResult | None, Rules]:
-    """Re-read effective rules and required checks; a difference from the profile becomes ``ask`` showing it."""
+    """Re-read effective rules and required checks against the profile.
+
+    Rules GitHub would not show stop the step. A difference is the owner's yes or no on the rules as they are now;
+    his yes to exactly these differences records them in the profile, and the step goes on.
+    """
     diffs, rules = profile.reread(ctx.profile, ctx.gh, c.names.target)
+    kind, target = c.step.kind, c.names.target
     if not diffs:
+        return None, rules  # rules recorded as unreadable stay so: the merge gate handles them as before
+    if rules.state == "unknown":
+        cause = failures.cause_key(ErrorKind.GATE, kind, "rules-unread")
+        said = f"Delivery could not read the merge rules of {target} on GitHub, so it cannot tell what a merge needs"
+        return blocked(cause, said, rules.evidence, ctx.now), rules
+    shown = hashlib.sha256("\n".join(diffs).encode()).hexdigest()[:12]
+    cause = failures.cause_key(ErrorKind.GATE, kind, f"rules-{shown}")
+    agreed = (q for q in c.questions if q.cause == cause and q.answer and not q.effect_observed_at)
+    if (q := next(agreed, None)) is not None and q.answer and q.answer.option == "yes":
+        latest = ctx.store.read_profile() or ctx.profile  # entries another Change confirmed meanwhile stay
+        if profile.differences(latest, rules) != diffs:  # his yes covers only the differences he was shown
+            ctx.profile = latest
+            return rules_changed(ctx, c)
+        ctx.profile = profile.adopt(latest, rules, ctx.now)
+        ctx.store.write_profile(ctx.profile)
+        q.effect_observed_at = ctx.now
+        ctx.log(c.slug, "profile-confirmed", key="branch rules", value="; ".join(diffs))
         return None, rules
-    text = f"Branch rules differ from the profile ({'; '.join(diffs)}); run `owlbear-next profile` to confirm them"
-    cause = failures.cause_key(ErrorKind.GATE, c.step.kind, "rules")
-    return ask(c.step.kind, text, cause, continue_or_pause(c.step.kind)), rules
+    read = profile.rule_entries(rules)
+    lines = [
+        f"{words}: was {_was(ctx.profile.entries.get(key))}, now {read[key].value}"
+        for key, words in _RULES.items()
+        if any(d.startswith(f"{key}:") for d in diffs)
+    ]
+    text = (
+        f"The merge rules of {target} on GitHub differ from what Delivery recorded for this project: "
+        f"{'; '.join(lines)}. Go on under the rules as they are now?"
+    )
+    options = [Option(id="yes", label="Yes: record them and go on", next=kind), PAUSE]
+    return ask(kind, text, cause, options, subject="reserved"), rules
 
 
 def failed(c: Change, exc: Exception, now: datetime) -> StepResult:
-    """Map provider and remote Git failures: sign-in asks with the command; the rest retry as classified."""
+    """Map provider and remote Git failures: a refused sign-in or push stops with what to do; the rest retry."""
     kind = c.step.kind
     if isinstance(exc, AccountMissing | PushRefused):  # its text names the account, the cause and the fix (TD-402)
         error, subject = (ErrorKind.AUTH, "gh") if isinstance(exc, AccountMissing) else (ErrorKind.GATE, "ssh")
-        return ask(
-            kind, f"{failure(exc)}; then continue", failures.cause_key(error, kind, subject), continue_or_pause(kind)
-        )
+        said = "Delivery cannot reach GitHub as this project's account. Once it can, run the step again"
+        return blocked(failures.cause_key(error, kind, subject), said, failure(exc), now)
     if isinstance(exc, ProviderError) and exc.code == FailureCode.AUTHENTICATION_REQUIRED:
-        text = (
-            f"GitHub refused the credential ({failure(exc)}): run `gh auth login` (or `gh auth refresh`), then continue"
+        said = (
+            "GitHub refused Delivery's sign-in. Sign in again in a terminal (`gh auth login`, or `gh auth refresh`), "
+            "then run the step again"
         )
-        return ask(kind, text, failures.cause_key(ErrorKind.AUTH, kind, "gh"), continue_or_pause(kind))
+        return blocked(failures.cause_key(ErrorKind.AUTH, kind, "gh"), said, failure(exc), now)
     if isinstance(exc, ProviderError) and exc.code == FailureCode.CONFLICT and not exc.retry_safe:
         reason = failure(exc)
         stop = Stop(kind=ErrorKind.GATE, reason=reason, action="Resolve it in GitHub", resume="GitHub agrees", at=now)

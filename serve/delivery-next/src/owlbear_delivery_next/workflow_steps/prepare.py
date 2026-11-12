@@ -30,7 +30,6 @@ from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     ErrorKind,
     Exit,
-    Option,
     Record,
     StepKind,
     Stop,
@@ -218,30 +217,28 @@ def chosen(  # noqa: PLR0913, PLR0917 - the session's end, its worktree and what
 
 
 def unsafe(settings: Settings, live: Mapping[str, str] | None = None) -> loop.StepResult | None:
-    """No option is declared, or none is permitted, so a check would run on live data: the owner decides."""
+    """No option is declared, or none is permitted, so a check would run on live data: the step stops."""
     live = dict(os.environ) if live is None else live
+    lead = "Checks cannot run: this project has no safe test copy set up, and Delivery never runs a check on live data"
+    how = (
+        "A test preparation is declared under `preparations` in the project's settings file "
+        "(`<project folder>/config.json` in the shared settings repository), which an agent in a chat can write; "
+        "a project without data can declare a data-only option whose seed and cleanup are `true`"
+    )
     if not settings.preparations:
-        text = (
-            "This project declares no test preparation option, and a check launches only on a prepared test copy "
-            "(TD-96). Declare at least one under `preparations` in the project's settings "
-            "(`<project folder>/config.json` in the shared repository, or the settings page); a project without data "
-            "can declare a data-only option whose seed and cleanup are `true`. Then continue."
-        )
         cause = cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, "preparation-missing")
-        return engine.ask(StepKind.CHECK, text, cause, engine.continue_or_pause(StepKind.CHECK))
+        said = f"{lead}. Have one declared for this project, then run the step again"
+        return engine.blocked(cause, said, f"No test preparation option is declared (TD-96). {how}")
     if preparation.safe(settings.preparations, settings.data, live):
         return None
     why = "; ".join(f"{o.id}: {', '.join(preparation.refusals(o, settings.data, live))}" for o in settings.preparations)
-    text = (
-        f"No declared test preparation is permitted ({why}), and a check never runs on live data (TD-96). Change "
-        "the project's preparation options or data permissions in its settings, then continue."
-    )
     cause = cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, "preparation-unsafe")
-    return engine.ask(StepKind.CHECK, text, cause, engine.continue_or_pause(StepKind.CHECK))
+    said = f"{lead}. Have a permitted one declared, or its data permissions changed, then run the step again"
+    return engine.blocked(cause, said, f"No declared test preparation is permitted ({why}) (TD-96). {how}")
 
 
 def refused(store: Store, lock: Lock, c: Change) -> bool:
-    """A check step with no permitted preparation asks the owner instead of starting a preparer."""
+    """A check step with no permitted preparation stops instead of starting a preparer."""
     asked = unsafe(store.settings()) if c.step.kind == StepKind.CHECK else None
     if asked:
         store.write(lock, loop.apply(c, asked, datetime.now(UTC)))
@@ -249,24 +246,20 @@ def refused(store: Store, lock: Lock, c: Change) -> bool:
 
 
 def stepped(c: Change, *, prepared: bool) -> None:
-    """Clicks and typing run only on a prepared test copy (TD-96); without one the owner decides.
+    """Clicks and typing run only on a prepared test copy (TD-96); without one the step stops.
 
     Raises:
         PrepareError: a state has steps and the check has no preparation.
     """
     if prepared or not any(s.steps for s in c.brief.visual):
         return
-    text = (
-        "The visual check has states with clicks or typing, which run only on a prepared test copy (TD-96), and "
-        "this check has none. Declare a preparation option in the project settings, or revise the brief's states."
+    said = (
+        "The visual check has pages it must click or type on, which it does only on a prepared test copy, and this "
+        "check has none. Have a test preparation declared for this project, then run the step again"
     )
-    options = [
-        Option(id="done", label="Preparation declared, prepare again", next=StepKind.CHECK),
-        Option(id="brief", label="Revise the brief", next=StepKind.SHAPE),
-        Option(id="pause", label="Pause", next="pause"),
-    ]
+    detail = "A brief state has steps and the check has no preparation (TD-96): `preparations` in the project settings"
     cause = cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, "preparation")
-    raise PrepareError(engine.ask(StepKind.CHECK, text, cause, options))
+    raise PrepareError(engine.blocked(cause, said, detail))
 
 
 def reusable(store: Store, c: Change, settings: Settings, live: Mapping[str, str] | None = None) -> bool:

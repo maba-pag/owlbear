@@ -222,16 +222,22 @@ def collision(  # noqa: PLR0913 - collision context, path policy and the pending
     if any(q.cause in consent and q.answer and q.answer.option in {"keep", "adopt"} for q in c.questions):
         return None
     others = ", ".join(n.handle for n, _ in hits)
-    wants = " ".join(f"{n.handle} ({'merged' if n.merged else 'open'}) wants: {n.outcome or '?'}." for n, _ in hits)
+    wants = " ".join(
+        f"{n.handle} ({'merged' if n.merged else 'open'}): {(n.outcome or '?').rstrip('.')}." for n, _ in hits
+    )
     on = "; ".join(f"{n.handle} on {', '.join(ps[:5])}" for n, ps in hits)
-    text = f"Updating with the target collided with {on}. This Change wants: {c.brief.outcome or '?'}. {wants}"
-    text += f" The Builder said: {said}" if said else ""
+    told = f" The builder who combined them says: {said.rstrip('. ')}." if said else ""
+    mine = (c.brief.outcome or "?").rstrip(".")
+    text = (
+        f"This Change and {others} changed the same part of the project.{told} Delivery cannot tell which "
+        f"behaviour you want where they differ. This Change: {mine}. {wants}\n\nDetails: {on}"
+    )
     options = [
-        Option(id="keep", label="Keep this Change's behaviour", next=c.step.kind),
-        Option(id="adopt", label=f"Adopt {others}'s behaviour", next=c.step.kind),
+        Option(id="keep", label="Where they differ, keep this Change's behaviour", next=c.step.kind),
+        Option(id="adopt", label=f"Where they differ, keep {others}'s behaviour", next=c.step.kind),
         Option(id="pause", label="Pause this Change", next="pause"),
     ]
-    return engine.ask(c.step.kind, text, cause, options)
+    return engine.ask(c.step.kind, text, cause, options, subject="product")
 
 
 def integrates(c: Change) -> bool:

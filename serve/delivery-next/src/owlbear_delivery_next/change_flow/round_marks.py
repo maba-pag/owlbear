@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.round_records import RoundFinding, RoundLoop
 
 KINDS = ("open", "unverified", "settled")  # most urgent first
+SHOWN = 3  # problems a question names before it counts the rest
 SAID = {  # per finding state and kind: one and many
     ("open", "open"): ("fix agreed, not made", "fixes agreed, not made"),
     ("owner-fix", "open"): ("fix you decided on, not made", "fixes you decided on, not made"),
@@ -45,6 +46,30 @@ def unmet(c: Change, lp: RoundLoop) -> list[Criterion]:
     loops = [lp, *(x for k, x in c.loops.items() if k != FINAL)]
     said = [f.text for x in loops for f in x.findings if kind(x, f) == "open"]
     return [k for k in c.brief.criteria if any(re.search(rf"(?<![\w-]){re.escape(k.id)}(?![\w-])", s) for s in said)]
+
+
+def problem(text: str) -> str:
+    """A finding's problem without its fix: findings read ``place: problem - fix: fix``."""
+    return " ".join(text.removeprefix("- ").split(" - fix:", 1)[0].split())
+
+
+def some(items: list[str]) -> str:
+    """The first few of *items* and how many more there are."""
+    more = f"; and {len(items) - SHOWN} more" if len(items) > SHOWN else ""
+    return "; ".join(items[:SHOWN]) + more
+
+
+def risk(c: Change, lp: RoundLoop) -> str:
+    """What the loop's work may still get wrong, in the reviewer's words (#1168): the problems first, never counts."""
+    kinds = [(f, kind(lp, f)) for f in lp.findings]
+    still = [problem(f.text) for f, k in kinds if k == "open"]
+    unseen = [problem(f.text) for f, k in kinds if k == "unverified"]
+    said = [f"The review says this is still wrong: {some(still)}."] if still else []
+    if unseen:
+        said.append(f"Reported fixed or rejected by the builder, and not reviewed again: {some(unseen)}.")
+    if named := unmet(c, lp):
+        said.append(f"Acceptance criteria the open findings name: {some([f'{k.id} ({k.text})' for k in named])}.")
+    return " ".join(said)
 
 
 def rounds(lp: RoundLoop, findings: list[RoundFinding]) -> list[dict[str, object]]:
