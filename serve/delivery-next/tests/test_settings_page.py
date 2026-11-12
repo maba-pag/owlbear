@@ -705,6 +705,7 @@ def test_a_save_blocks_old_layers_before_its_across_read_finishes(store, pds) ->
         )
         page.locator("#read-again").click()
         expect(page.locator("#error")).to_have_text("An earlier layer notice")
+        expect(page.locator("#error")).to_be_hidden()
         pds.group(page, "agents")
         machine = hold_first(page, "**/api/next/machine")
         save[0][0].continue_()

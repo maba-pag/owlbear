@@ -277,7 +277,7 @@ export function view() {
   // address gave it; a layer that does not read keeps Read again and why.
   return html`
     <p-inline-notification id="error" class="failure-detail" state="error" dismiss-button="false"
-      ?hidden=${!error}>${error}
+      ?hidden=${state.saving || !error}>${error}
     </p-inline-notification>
     <p-text id="status" role="status" aria-live="polite">${state.status}</p-text>
     ${loaded ? html`${scopeSection()}${groupNav()}${filterBar()}` : nothing}
