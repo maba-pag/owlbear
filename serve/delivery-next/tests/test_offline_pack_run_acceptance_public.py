@@ -1,167 +1,233 @@
-"""A held Impeccable run survives the public Prepare and Finish move, and Finish never writes the ledger.
-
-Each case runs the real ``cli.main`` Prepare and Finish on a real git clone with a temporary HOME. The reboot is
-modeled by changing the boot session id. The Finish move copies the store into a different target root, so the
-carried run record must have a different file identity from the retained source.
-"""
+"""Real offline movement preserves ownership, source bytes and the original workspace."""
 
 import json
 import os
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from owlbear_delivery_next.commands import cli
-from owlbear_delivery_next.impeccable_runs import pack_state
-from owlbear_delivery_next.local_system import local_home, maintenance
-from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move
-from owlbear_delivery_next.state_store.database import MARKER, StoreError
+from owlbear_delivery_next.impeccable_runs import pack_run, pack_state
+from owlbear_delivery_next.local_system import codebase, local_home, maintenance
+from owlbear_delivery_next.local_system.slots import Slots
+from owlbear_delivery_next.machine_host import project
+from owlbear_delivery_next.machine_host.machine import Machine
+from owlbear_delivery_next.project_host.host import Host, HostRecord
+from owlbear_delivery_next.state_store import offline_protocol, pack_run_record, project_home, project_move, registry
+from owlbear_delivery_next.state_store.database import MARKER
 from owlbear_delivery_next.state_store.store import Store
 
 BEFORE = "AAAAAAAA-0000-4000-8000-000000000011"
 AFTER = "BBBBBBBB-0000-4000-8000-000000000012"
-RUN_A = "run-a"
-STARTED_A = "2026-01-01T00:00:00+00:00"
-
-
-@pytest.fixture(autouse=True)
-def home(tmp_path: Path, monkeypatch) -> Path:
-    path = tmp_path / "home"
-    path.mkdir()
-    monkeypatch.setenv("HOME", str(path))
-    return path
+STARTED = "2026-01-01T00:00:00+00:00"
 
 
 @pytest.fixture
-def repo(tmp_path: Path) -> Path:
-    path = tmp_path / "shop"
-    subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True, capture_output=True)  # noqa: S603, S607
-    folder = project_home.clone_dir(path)
-    folder.mkdir(parents=True)
-    (folder / MARKER).write_text("7")
-    (folder / "config.json").write_text(json.dumps({"format": 1, "widths": [1600]}))
-    return path
+def offline(tmp_path, monkeypatch):
+    repo = tmp_path / "shop"
+    for args in (
+        ["init", "-q", "-b", "main", str(repo)],
+        ["-C", str(repo), "commit", "-q", "--allow-empty", "-m", "initial"],
+    ):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
+    source = project_home.clone_dir(repo)
+    source.mkdir(parents=True)
+    (source / MARKER).write_text("7")
+    (source / "config.json").write_text(json.dumps({"format": 1, "widths": [1600]}))
+    boot = {"id": BEFORE}
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: boot["id"])
+    return repo, source, boot
 
 
 @pytest.fixture
-def boot(monkeypatch) -> dict:
-    state = {"id": BEFORE}
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: state["id"])
-    return state
+def machines(monkeypatch):
+    monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
+    monkeypatch.setattr(Host, "_spawn", lambda _self, slug: pytest.fail(f"unexpected runner: {slug}"))
+    made = []
+
+    def make():
+        record = HostRecord(
+            url="http://127.0.0.1:9/",
+            token="t",  # noqa: S106
+            pid=1,
+            started_at=datetime.now(UTC),
+            code=codebase.CURRENT,
+        )
+        machine = Machine(record)
+        machine.slots.total = lambda: 1
+        made.append(machine)
+        return machine
+
+    yield make
+    for machine in made:
+        machine.stop_all()
 
 
-def _source(repo: Path) -> Path:
-    return project_home.clone_dir(repo)
-
-
-def _run_record(run: str, started: str, state: str = "running") -> dict:
-    record = pack_state.blank()
-    record |= {"state": state, "run": run, "started_at": started, "reason": ""}
-    if state == "running":
+def write_run(root: Path, fields: dict) -> None:
+    record = pack_state.blank() | fields
+    if record["state"] == "running":
         record["stage"] = "update"
         next(s for s in record["stages"] if s["name"] == "update")["result"] = "running"
-    return record
+    (root / pack_state.FILE).write_text(json.dumps(record, indent=1) + "\n")
 
 
-def _write_run(folder: Path, record: dict) -> None:
-    (folder / pack_state.FILE).write_text(json.dumps(record, indent=1) + "\n")
+def hold_legacy_run(repo, source, machines, recovered):
+    """Import the legacy run through the real unloaded Machine, retaining its original workspace."""
+    entry = registry.register(repo)
+    (source / MARKER).write_text("99\n")
+    write_run(source, {"state": "running"})
+    workspace = source / pack_run.UPDATER
+    workspace.mkdir()
+    sentinel = workspace / "retained-sentinel.txt"
+    sentinel.write_text("kept\n")
+    first = machines()
+    first.load_all()
+    [lease] = [s for s in first.maintenance.read()["sessions"] if s["project"] == entry.id]
+    [stored] = [s for s in json.loads(first.maintenance.path.read_bytes())["sessions"] if s["id"] == lease["id"]]
+    if recovered:
+        original_boot = first.maintenance.boot
+        first.maintenance.boot = lambda: original_boot() + 1
+        first.maintenance.recover(lease["id"], rebooted=True)
+    first.stop_all()
+    (source / MARKER).write_text("7")
+    return entry, lease, stored, workspace, sentinel
 
 
-def _prepared(repo: Path, boot: dict) -> None:
+@pytest.mark.usefixtures("current_binding")
+@pytest.mark.parametrize("recovered", [False, True], ids=["held", "recovered"])
+def test_held_generation_survives_prepare_finish_and_restart(offline, machines, recovered):
+    repo, source, boot = offline
+    entry, lease, stored, workspace, sentinel = hold_legacy_run(repo, source, machines, recovered)
+    head = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"])  # noqa: S603, S607
     assert cli.main(["--repo", str(repo), "prepare"]) == 0
     boot["id"] = AFTER
-
-
-def _refused(repo: Path, capsys) -> bool:
-    try:
-        code = cli.main(["--repo", str(repo), "finish"])
-    except StoreError, maintenance.MaintenanceError:
-        code = None
-    capsys.readouterr()
-    return code in (None, 1)
-
-
-@pytest.mark.usefixtures("current_binding")
-def test_a_held_run_survives_the_public_move_into_a_new_root_and_two_restarts(repo, boot, capsys):
-    _prepared(repo, boot)
-    source = _source(repo)
-    _write_run(source, _run_record(RUN_A, STARTED_A))
-    assert not (local_home.root() / maintenance.FILE).exists(), "no ledger: the receipt lookup is empty"
+    ledger = local_home.root() / maintenance.FILE
+    ledger_bytes = ledger.read_bytes()
 
     assert cli.main(["--repo", str(repo), "finish"]) == 0
-    capsys.readouterr()
-
     target = Store.open(repo).root
     assert target != source
-    carried_path = target / pack_state.FILE
-    assert not os.path.samestat(carried_path.stat(), (source / pack_state.FILE).stat()), (
-        "the run record was not copied into the new root"
-    )
-    carried = json.loads(carried_path.read_text())
-    assert carried["state"] == "failed"
-    assert carried["reason"] == pack_state.HOST_STOPPED
-    assert carried[pack_state.REWRITTEN] == f"{RUN_A}:{STARTED_A}"
-    assert carried["run"] == RUN_A
-    assert carried["started_at"] == STARTED_A
-    assert json.loads((source / pack_state.FILE).read_text())["run"] == RUN_A, "the source record was lost"
+    original, carried = source / pack_state.FILE, target / pack_state.FILE
+    assert not os.path.samestat(original.stat(), carried.stat())
+    settled = original.read_bytes()
+    assert carried.read_bytes() == settled
+    record = json.loads(settled)
+    assert (record["state"], record["reason"]) == ("failed", pack_state.HOST_STOPPED)
+    assert record[pack_state.REWRITTEN] == stored["generation"]
+    assert ledger.read_bytes() == ledger_bytes
+    assert subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"]) == head  # noqa: S603, S607
 
-    first = carried_path.read_bytes()
-    assert Store.open(repo).root == target
-    assert carried_path.read_bytes() == first, "the first restart changed the carried run record"
-    assert Store.open(repo).root == target
-    assert carried_path.read_bytes() == first, "the second restart changed the carried run record"
+    again = machines()
+    again.load_all()
+    [found] = [s for s in again.maintenance.read()["sessions"] if s["project"] == entry.id]
+    assert (found["id"], found["state"], found["workspace"]) == (
+        lease["id"],
+        "recovered" if recovered else "held",
+        lease["workspace"],
+    )
+    assert found["workspace"] == str(workspace)
+    assert not workspace.is_relative_to(target)
+    assert workspace.is_dir()
+    assert sentinel.read_text() == "kept\n"
+    assert original.read_bytes() == carried.read_bytes() == settled
+    again.stop_all()
+
+    other_repo = repo.parent / "other"
+    subprocess.run(["git", "init", "-q", str(other_repo)], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603
+        [  # noqa: S607
+            "git",
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-C",
+            str(other_repo),
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "other clone",
+        ],
+        check=True,
+    )
+    other = registry.register(other_repo)
+    write_run(
+        target,
+        {
+            "state": "failed",
+            "run": "run-b",
+            "started_at": STARTED,
+            "ended_at": "2026-01-01T01:00:00+00:00",
+            "reason": "update: RuntimeError: SDK failure",
+            "stages": [{"name": "update", "label": "Update", "result": "failed", "detail": "SDK failure"}],
+        },
+    )
+    later = machines()
+    later.load_all()
+    owned = [s for s in later.maintenance.read()["sessions"] if s["project"] == entry.id]
+    assert [(s["id"], s["state"]) for s in owned[:1]] == [(lease["id"], found["state"])]
+    [b] = owned[1:]
+    assert b["id"] != lease["id"]
+    assert b["state"] == "held"
+    assert later.slots.take(other.id, "probe", 1, 1) == 0
+    assert later.maintenance.pending("pack")
+    assert sentinel.read_text() == "kept\n"
 
 
 @pytest.mark.usefixtures("current_binding")
-def test_finish_reads_the_ledger_statically_and_writes_nothing_to_it(repo, boot, capsys, monkeypatch):
-    _prepared(repo, boot)
-    _write_run(_source(repo), _run_record(RUN_A, STARTED_A))
-    ledger = local_home.root() / maintenance.FILE
-    assert not ledger.exists(), "a missing ledger is the empty ledger, so this case starts without one"
+def test_finish_resumes_copy_without_resettling(offline, monkeypatch):
+    repo, source, boot = offline
+    assert cli.main(["--repo", str(repo), "prepare"]) == 0
+    boot["id"] = AFTER
+    write_run(source, {"state": "running", "run": "a", "started_at": STARTED})
+    calls = []
+    real_settle = pack_run_record.settle
 
-    constructed: list[object] = []
-    original_init = maintenance.Maintenance.__init__
+    def counted(*args, **kwargs):
+        calls.append(args)
+        return real_settle(*args, **kwargs)
 
-    def spy_init(self, *args, **kwargs):
-        constructed.append(args)
-        original_init(self, *args, **kwargs)
+    def interrupted(*_args, **_kwargs):
+        msg = "interrupted after the copy began"
+        raise OSError(msg)
 
-    monkeypatch.setattr(maintenance.Maintenance, "__init__", spy_init)
-
+    monkeypatch.setattr(pack_run_record, "settle", counted)
+    with monkeypatch.context() as patch:
+        patch.setattr(project_move, "_copy_each", interrupted)
+        with pytest.raises(OSError, match="interrupted after the copy began"):
+            cli.main(["--repo", str(repo), "finish"])
+    assert project_move.record(source) is not None
+    assert len(calls) == 1
+    before = {p.name: p.read_bytes() for p in source.iterdir() if p.is_file()}
+    assert cli.main(["--repo", str(repo), "prepare"]) == 0
+    assert {p.name: p.read_bytes() for p in source.iterdir() if p.is_file()} == before
     assert cli.main(["--repo", str(repo), "finish"]) == 0
-    capsys.readouterr()
-
-    assert constructed == [], "Finish constructed Maintenance, which is not host-free"
-    assert not ledger.exists(), "Finish created the ledger"
-    assert json.loads((Store.open(repo).root / pack_state.FILE).read_text())[pack_state.REWRITTEN] == (
-        f"{RUN_A}:{STARTED_A}"
-    )
+    assert len(calls) == 1
+    assert (source / pack_state.FILE).read_bytes() == before[pack_state.FILE]
 
 
 @pytest.mark.usefixtures("current_binding")
-def test_a_malformed_move_record_refuses_before_the_source_record_is_settled_or_copied(repo, boot, capsys):
-    _prepared(repo, boot)
-    source = _source(repo)
-    _write_run(source, _run_record(RUN_A, STARTED_A))
-    run_bytes = (source / pack_state.FILE).read_bytes()
-    (source / project_move.MOVE_RECORD).write_text('{"not": "a move record"}\n')
-
-    assert _refused(repo, capsys), "a malformed move record was taken for no move record"
-    assert (source / pack_state.FILE).read_bytes() == run_bytes, "the run record was settled before the refusal"
-    assert (source / project_move.MOVE_RECORD).read_text() == '{"not": "a move record"}\n'
-
-
-@pytest.mark.usefixtures("current_binding")
-def test_a_fifo_ledger_refuses_finish_before_any_copy_and_leaves_the_store_in_place(repo, boot, capsys):
-    _prepared(repo, boot)
-    source = _source(repo)
-    _write_run(source, _run_record(RUN_A, STARTED_A))
-    run_bytes = (source / pack_state.FILE).read_bytes()
+@pytest.mark.parametrize("receipted", [False, True], ids=["absent-ledger", "unregistered-clone-receipt"])
+def test_finish_uses_static_clone_receipt_without_a_host(offline, monkeypatch, receipted):
+    repo, source, boot = offline
+    write_run(source, {"state": "running", "run": "a", "started_at": STARTED})
+    clone_id = project_home.ensure_id(source)
     ledger = local_home.root() / maintenance.FILE
-    ledger.parent.mkdir(parents=True, exist_ok=True)
-    os.mkfifo(ledger)
-
-    assert _refused(repo, capsys), "a FIFO ledger was read as an empty or valid one"
-    assert project_move.record(source) is None, "a move was started before the ledger was read"
-    assert (source / pack_state.FILE).read_bytes() == run_bytes
+    if receipted:
+        owner = maintenance.Maintenance(Slots(lambda: 1), boot=lambda: 0.0, observe=lambda *_a: True)
+        owner.receipt(clone_id, pack_state.digest(pack_state.observed(source)[1]), "receipt-a")
+    before = ledger.read_bytes() if receipted else None
+    assert cli.main(["--repo", str(repo), "prepare"]) == 0
+    boot["id"] = AFTER
+    monkeypatch.setattr(maintenance.Maintenance, "__init__", lambda *_a, **_kw: pytest.fail("Finish starts a manager"))
+    assert cli.main(["--repo", str(repo), "finish"]) == 0
+    assert (ledger.read_bytes() if ledger.exists() else None) == before
+    kept = json.loads((Store.open(repo).root / pack_state.FILE).read_bytes())
+    assert kept[pack_state.REWRITTEN] == ("receipt-a" if receipted else f"a:{STARTED}")
+    assert (kept["run"], kept["started_at"]) == ("a", STARTED)
+    retained = json.loads((source / pack_state.FILE).read_bytes())
+    assert retained["run"] == "a"
+    assert retained["started_at"] == STARTED

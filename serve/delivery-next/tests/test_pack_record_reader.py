@@ -1,13 +1,9 @@
-"""Review 4375573453: the pack run record is read only as a regular file, without following a link or waiting on a pipe.
-
-A FIFO, a directory or a link at the record's name is unreadable ownership, never an absent record: every reader returns
-at once, closes its descriptor, and the restoration holds the project's pack work conservatively.
-"""
+"""Unreadable ownership is never absence; each reader closes only the descriptors it owns."""
 
 import json
 import os
 import threading
-from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -18,38 +14,73 @@ from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.state_store import pack_run_record
 from owlbear_delivery_next.state_store.store import Store
 
-KINDS = ["fifo", "directory", "link"]
+
+@pytest.fixture
+def record_fds(monkeypatch):
+    opened, active, closed, files = [], set(), [], []
+
+    def capture(path, flags, *args, **kwargs):
+        fd = os.open(path, flags, *args, **kwargs)
+        opened.append(fd)
+        active.add(fd)
+        assert flags & os.O_NOFOLLOW
+        assert flags & os.O_NONBLOCK
+        return fd
+
+    def close(fd):
+        assert fd in active
+        os.close(fd)
+        active.remove(fd)
+        closed.append(fd)
+
+    def fdopen(fd, *args, **kwargs):
+        source = os.fdopen(fd, *args, **kwargs)
+        assert fd in active
+        active.remove(fd)
+        files.append(source)
+        return source
+
+    monkeypatch.setattr(
+        pack_run_record, "os", SimpleNamespace(**(vars(os) | {"open": capture, "close": close, "fdopen": fdopen}))
+    )
+    yield opened
+    assert not active
+    assert len(opened) == len(closed) + len(files)
+    assert all(source.closed for source in files)
 
 
-def held(root: Path) -> list[int]:
-    """This process's descriptors open on *root*, its record or what a link there names. Not all descriptors: other
-    tests' threads and finalisers in this worker open and close their own while a test runs."""
-    files = set()
-    for path in (root, root / pack_state.FILE):
-        for follow in (False, True):
-            try:
-                st = path.stat(follow_symlinks=follow)
-            except FileNotFoundError:
-                continue
-            files.add((st.st_dev, st.st_ino))
-    fds = []
-    for entry in Path("/dev/fd").iterdir():
-        try:
-            st = os.fstat(int(entry.name))
-        except OSError:  # closed since it was listed, the listing's own descriptor among them
-            continue
-        if (st.st_dev, st.st_ino) in files:
-            fds.append(int(entry.name))
-    return fds
-
-
-def regular(root: Path) -> Path:
+def regular(root):
     path = root / pack_state.FILE
-    path.write_text(json.dumps(pack_job._blank() | {"state": "failed", "reason": "the pack was refused"}))  # noqa: SLF001
+    path.write_text(
+        json.dumps(
+            pack_state.blank()
+            | {"state": "failed", "reason": "the pack was refused", "started_at": "2026-10-15T10:00:00+00:00"}
+        )
+    )
     return path
 
 
-def unsafe(root: Path, kind: str, tmp_path: Path) -> Path:
+def bounded(call):
+    """Only the FIFO needs a bounded worker to distinguish refusal from a blocking open."""
+    outcome = []
+
+    def run():
+        try:
+            call()
+        except BaseException as exc:  # noqa: BLE001 - handed to the test's assertion
+            outcome.append(exc)
+
+    reader = threading.Thread(target=run, daemon=True)
+    reader.start()
+    reader.join(5)
+    assert not reader.is_alive(), "the reader waited on the pipe"
+    assert outcome == []
+
+
+@pytest.mark.parametrize("kind", ["fifo", "directory", "link"])
+def test_nonregular_record_is_unreadable_and_holds_work(tmp_path, record_fds, kind):
+    root = tmp_path / "store"
+    root.mkdir()
     path = root / pack_state.FILE
     if kind == "fifo":
         os.mkfifo(path)
@@ -57,122 +88,101 @@ def unsafe(root: Path, kind: str, tmp_path: Path) -> Path:
         path.mkdir()
     else:
         path.symlink_to(regular(tmp_path))
-    return path
+
+    def read_and_restore():
+        for read in (lambda: pack_run_record.open_record(path), lambda: pack_state.observed(root)):
+            with pytest.raises((OSError, ValueError)):
+                read()
+        assert pack_state.read_version(path) == (pack_state.blank(), "")
+        assert pack_state.last(Store(root)) is None
+        job = pack_job.Job(Store(root))
+        assert (job.version, job.state["state"]) == ("", "idle")
+        job.maintenance = maintenance.Maintenance(Slots(lambda: 1), boot=lambda: 10.0, observe=lambda *_a: False)
+        session_slots.interrupted(job, "p")
+        assert [s["state"] for s in job.maintenance.read()["sessions"]] == ["held"]
+        assert job.maintenance.slots.take("other", "probe", 1, 1) == 0
+
+    if kind == "fifo":
+        bounded(read_and_restore)
+    else:
+        read_and_restore()
+    if kind != "link":
+        assert record_fds
 
 
-def bounded(call) -> list[object]:
-    """*call*'s outcome, or a failure if it waits: a reader that blocks on a pipe never returns."""
-    outcome: list[object] = []
-
-    def run() -> None:
-        try:
-            outcome.append(call())
-        except BaseException as exc:  # noqa: BLE001 - handed to the test's own assertion
-            outcome.append(exc)
-
-    reader = threading.Thread(target=run, daemon=True)
-    reader.start()
-    reader.join(5)
-    assert not reader.is_alive(), "the reader waited on the record"
-    return outcome
-
-
-@pytest.mark.parametrize("kind", KINDS)
-def test_every_reader_refuses_a_record_that_is_not_a_regular_file_at_once_and_closes_it(tmp_path, kind):
-    root = tmp_path / "store"
-    root.mkdir()
-    unsafe(root, kind, tmp_path)
-    [opened] = bounded(lambda: pack_run_record.open_record(root / pack_state.FILE))
-    assert isinstance(opened, (OSError, ValueError)), opened
-    [seen] = bounded(lambda: pack_state.observed(root))
-    assert isinstance(seen, (OSError, ValueError)), seen  # unreadable, never taken for no record
-    assert bounded(lambda: pack_state.read_version(root / pack_state.FILE)) == [(pack_state.blank(), "")]
-    assert bounded(lambda: pack_state.last(Store(root))) == [None]
-    assert held(root) == []
-
-
-def test_a_regular_record_still_reads_and_a_missing_one_is_absent(tmp_path):
-    root = tmp_path / "store"
-    root.mkdir()
-    assert (pack_state.observed(root), pack_state.read_version(root / pack_state.FILE)[1]) == (None, "absent")
-    regular(root)
-    kept, version = pack_state.observed(root)
-    assert (kept["reason"], version != "", pack_state.last(Store(root))) == ("the pack was refused", True, None)
-
-
-@pytest.mark.parametrize("fault", ["fstat", "read"])
-def test_a_fault_after_the_open_closes_the_descriptor(tmp_path, fault):
-    root = tmp_path / "store"
-    root.mkdir()
-    regular(root)
-
-    def broken(*_args: object, **_kwargs: object) -> None:
-        msg = f"synthetic {fault} failure"
-        raise OSError(msg)
-
-    with pytest.MonkeyPatch.context() as patch:
-        if fault == "fstat":
-            patch.setattr(pack_run_record.os, "fstat", broken)
-        else:
-            patch.setattr(pack_run_record.json, "load", broken)
-        with pytest.raises(OSError, match=f"synthetic {fault} failure"):
-            pack_state.observed(root)
-        assert pack_state.read_version(root / pack_state.FILE) == (pack_state.blank(), "")
-    assert held(root) == []
-
-
-@pytest.mark.parametrize("kind", KINDS)
-def test_a_loaded_project_whose_record_is_not_a_regular_file_holds_its_pack_work(tmp_path, kind):
-    store = Store(tmp_path / "store")
-    store.root.mkdir(parents=True)
-    unsafe(store.root, kind, tmp_path)
-    [job] = bounded(lambda: pack_job.Job(store))
-    assert (job.version, job.state["state"]) == ("", "idle")
-    job.maintenance = maintenance.Maintenance(Slots(lambda: 1), boot=lambda: 10.0, observe=lambda *_args: False)
-    session_slots.interrupted(job, "p")
-    assert [s["state"] for s in job.maintenance.read()["sessions"]] == ["held"]
-    assert job.maintenance.slots.take("other", "probe", 1, 1) == 0
+def test_regular_missing_and_malformed_record_contracts(tmp_path):
+    assert (pack_state.observed(tmp_path), pack_state.read_version(tmp_path / pack_state.FILE)[1]) == (None, "absent")
+    path = regular(tmp_path)
+    kept, version = pack_state.observed(tmp_path)
+    assert kept["reason"] == "the pack was refused"
+    assert version
+    assert pack_state.last(Store(tmp_path))["started_at"] == kept["started_at"]
+    path.write_text("{")
+    with pytest.raises(ValueError, match="Expecting"):
+        pack_state.observed(tmp_path)
+    with pytest.raises(ValueError, match="Expecting"):
+        pack_run_record.settle(tmp_path, receipted=lambda _d: "")
+    assert pack_state.read_version(path) == (pack_state.blank(), "")
+    assert path.read_text() == "{"
 
 
 class Cancelled(BaseException):
-    """Stands in for a cancellation: never an ordinary read failure."""
+    """Cancellation must propagate, unlike an ordinary read failure."""
 
 
-@pytest.mark.parametrize("fault", [OSError, ValueError, Cancelled])
-def test_the_pages_reader_shows_a_failed_handover_as_unread_and_lets_a_cancellation_through(tmp_path, fault):
-    root = tmp_path / "store"
-    root.mkdir()
-    (root / pack_state.FILE).write_text(json.dumps(pack_job._blank() | {"started_at": "2026-10-15T10:00:00+00:00"}))  # noqa: SLF001
+@pytest.mark.parametrize(
+    ("boundary", "error"),
+    [
+        ("fstat", OSError),
+        ("decode", OSError),
+        ("handover", OSError),
+        ("handover", ValueError),
+        ("handover", Cancelled),
+    ],
+    ids=["fstat", "decode", "handover-os", "handover-value", "handover-cancellation"],
+)
+@pytest.mark.usefixtures("record_fds")
+def test_record_descriptor_closes_on_failure_and_cancellation(tmp_path, monkeypatch, boundary, error):
+    regular(tmp_path)
 
-    def handover(*_args: object, **_kwargs: object) -> None:
-        msg = "synthetic handover failure"
-        raise fault(msg)
+    def broken(*_args, **_kwargs):
+        msg = "synthetic reader failure"
+        raise error(msg)
 
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(pack_run_record.os, "fdopen", handover)
-        if fault is Cancelled:
+    with monkeypatch.context() as patch:
+        target, name = {
+            "fstat": (pack_run_record.os, "fstat"),
+            "decode": (pack_run_record.json, "load"),
+            "handover": (pack_run_record.os, "fdopen"),
+        }[boundary]
+        patch.setattr(target, name, broken)
+        with pytest.raises(error, match="synthetic reader failure"):
+            pack_state.observed(tmp_path)
+        if error is Cancelled:
             with pytest.raises(Cancelled):
-                pack_state.last(Store(root))
+                pack_state.last(Store(tmp_path))
         else:
-            assert pack_state.last(Store(root)) is None
-    assert held(root) == []
-    assert pack_state.last(Store(root))["started_at"] == "2026-10-15T10:00:00+00:00"  # control: it reads again
+            assert pack_state.read_version(tmp_path / pack_state.FILE) == (pack_state.blank(), "")
+            if boundary != "fstat":
+                assert pack_state.last(Store(tmp_path)) is None
+    assert pack_state.last(Store(tmp_path))["started_at"] == "2026-10-15T10:00:00+00:00"
 
 
-def test_a_record_from_before_invocations_reads_with_its_stages_and_no_made_up_history(tmp_path):
-    root = tmp_path / "store"
-    root.mkdir()
-    results = ["passed"] * 6 + ["running"] + ["pending"] * 4  # the host stopped while its challenger ran
+def test_legacy_stages_survive_without_invented_history(tmp_path):
+    results = ["passed"] * 6 + ["running"] + ["pending"] * 4
     stages = [
-        {"name": n, "label": label, "result": r, "detail": ""}
-        for (n, label), r in zip(pack_state.STAGES, results, strict=True)
+        {"name": n, "label": label, "result": result, "detail": ""}
+        for (n, label), result in zip(pack_state.STAGES, results, strict=True)
     ]
-    record = pack_state.blank() | {"state": "running", "stage": "challenger", "stages": stages, "run": "r0",
-                                   "started_at": "2026-10-15T10:00:00+00:00"}  # fmt: skip
-    (root / pack_state.FILE).write_text(json.dumps(record))
-
-    state = pack_job.Job(Store(root), pack_job.Live()).read()
-
+    record = pack_state.blank() | {
+        "state": "running",
+        "stage": "challenger",
+        "stages": stages,
+        "run": "r0",
+        "started_at": "2026-10-15T10:00:00+00:00",
+    }
+    (tmp_path / pack_state.FILE).write_text(json.dumps(record))
+    state = pack_job.Job(Store(tmp_path), pack_job.Live()).read()
     assert "invocations" not in state
     assert state["progress"] == {"legacy": True, "phases": [], "now": None, "next": None}
     assert [s["result"] for s in state["stages"]] == ["passed"] * 6 + ["failed"] + ["not-reached"] * 4
