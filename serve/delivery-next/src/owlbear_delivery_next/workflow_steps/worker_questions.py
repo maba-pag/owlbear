@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import pick_tools, tools
-from owlbear_delivery_next.change_contracts.failures import cause_key
+from owlbear_delivery_next.change_contracts.failures import cause_key, signature
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, Question, StepKind
 from owlbear_delivery_next.change_contracts.option_records import OptionProof, PendingQuestion
-from owlbear_delivery_next.change_flow import answer_kinds, budgets, loop, worktree
+from owlbear_delivery_next.change_flow import answer_kinds, asking, budgets, loop, worktree
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, session_result, step_decisions
 from owlbear_delivery_next.workflow_steps import (
@@ -53,7 +53,15 @@ INSTRUCTION = (
     "command, or a trial of unchanged code that cannot establish a promised future reduction, is no proof. "
     "Without observed relevant evidence the check recommendation is not executable as offered. For other "
     "recommendations, explain how the actual capabilities and current work support the proposed choice. "
-    "When a promise's mapping is uncertain, mark executable false and name what cannot be carried out."
+    "When a promise's mapping is uncertain, mark executable false and name what cannot be carried out. "
+    "The brief is approved, so the owner is asked only a product question (it changes what he gets: scope, look, "
+    "behaviour, risk) or a reserved one (lint, format, CI or hook configuration, security, project setup: one "
+    "concrete proposal he answers yes or no, its consequence in the effect). Any other question, such as how to get a "
+    "tool, test run or check working, is internal: Delivery repairs it without him. He cannot judge logs, test or "
+    "function names, commands or tool internals: mark plain false when the question or an effect needs them, though "
+    "a reserved proposal may name its exact file or setting after a plain explanation. When it asks again about the "
+    "problem of an answered question listed below, give that id in follows and say in why why his answer did not "
+    "resolve it."
 )
 
 
@@ -140,7 +148,7 @@ def continued(store: Store, lock: Lock, c: Change, path: Path) -> bool:
     if retrying or (not gated and offered):
         final.step.session = p.run.session_id
     final.step.question_errors = result.reason.splitlines() if retrying else []
-    if gated or rejected or offered:
+    if gated or rejected or offered or result.setup:  # a routed question is settled by its repair (#1062)
         final.pending_question = None
     final.pending_child = None
     store.write(lock, final)
@@ -189,8 +197,12 @@ def checked(store: Store, lock: Lock, c: Change, path: Path) -> tuple[loop.StepR
     route, done = pending_child.child(store, lock, c, (LABEL, parent.session_id), start)
     if route.exit == Exit.DONE:
         verdict, errors = judged(done, proposed, p.proof)
-        errors += _stale(p, path)
-        result = refused(c, errors) if errors or verdict is None else admitted(c, proposed, verdict, p.proof)
+        stale = _stale(p, path)
+        if verdict is not None and verdict.subject == "internal" and not stale:  # its field errors don't matter
+            result = routed(c, proposed, verdict)
+        else:
+            errors += stale
+            result = refused(c, errors) if errors or verdict is None else admitted(c, proposed, verdict, p.proof)
     else:
         result = route
     return result, _booked(c, done, result)
@@ -266,6 +278,14 @@ def refused(c: Change, errors: Sequence[str]) -> loop.StepResult:
     )
 
 
+def routed(c: Change, proposed: tools.AskQuestion, verdict: pick_tools.QuestionJudgment) -> loop.StepResult:
+    """A question about Delivery's own problem never reaches the owner: the step's repair takes it (#1062)."""
+    said = f"{proposed.question} (why: {proposed.why}) Admission: {verdict.why}"
+    subject = f"question-{signature(ErrorKind.PROJECT_ENV, str(c.step.kind), proposed.question)[:8]}"
+    cause = cause_key(ErrorKind.PROJECT_ENV, c.step.kind, subject)
+    return loop.StepResult(exit=Exit.RETRY, cause=cause, reason=said, setup=True)
+
+
 def message(c: Change, proposed: tools.AskQuestion) -> str:
     """The whole current work, capabilities and observed trial for the independent verdict."""
     b = c.brief.approved[-1] if c.brief.approved else c.brief
@@ -276,6 +296,11 @@ def message(c: Change, proposed: tools.AskQuestion) -> str:
         "step": c.step.model_dump(mode="json"),
         "integration_target": c.names.target,
         "question": proposed.model_dump(mode="json"),
+        "answered": [
+            {"id": q.id, "question": q.text[:300], "answer": answer_kinds.answer_text(q)[:300]}
+            for q in c.questions
+            if q.answer is not None
+        ],
         "declared_checks": p.checks if p else [],
         "trial": p.proof.model_dump(mode="json") if p and p.proof else None,
     }
@@ -289,8 +314,9 @@ def message(c: Change, proposed: tools.AskQuestion) -> str:
             "",
             "## Finish",
             (
-                "Call submit_result once with one options verdict per zero-based index: executable, why, "
-                "check_related and recommends. Fix any field error and call again."
+                "Call submit_result once with the question's subject, plain, follows and why, and one options verdict "
+                "per zero-based index: executable, why, check_related and recommends. Fix any field error and call "
+                "again."
             ),
         ]
     )
@@ -330,7 +356,7 @@ def judged(
     verdict = done.payload
     if sorted(o.index for o in verdict.options) != list(range(len(proposed.options))):
         return None, ["options: admission must judge every proposed option exactly once"]
-    errors = []
+    errors = _worded(verdict, proposed)
     for v in verdict.options:
         if not v.executable:
             errors.append(f"options[{v.index}].action: {v.why}")
@@ -347,6 +373,15 @@ def judged(
             ):
                 errors.append(f"options[{v.index}].check: a check-related recommendation needs its observed trial")
     return verdict, errors
+
+
+def _worded(verdict: pick_tools.QuestionJudgment, proposed: tools.AskQuestion) -> list[str]:
+    """What the worker can correct: words the owner can't judge, or a reserved question that isn't yes or no."""
+    errors = [] if verdict.plain else [f"question: not plain words: {verdict.why} - say what the owner gets or allows"]
+    actions = sorted(o.action or "" for o in proposed.options)
+    if verdict.subject == "reserved" and actions not in (["continue", "pause"], ["abandon", "continue"]):
+        errors.append("options: a reserved question is one proposal, yes (continue) or no (pause or abandon)")
+    return errors
 
 
 def admitted(
@@ -370,7 +405,10 @@ def admitted(
                 proof=proof,
             )
         )
-    text = f"{proposed.question} (why: {proposed.why})"
+    text, details = proposed.question, [f"Why it is yours: {proposed.why}"]
+    prev = next((q for q in c.questions if q.id == verdict.follows and q.answer is not None), None)
+    if prev is not None:  # its second question says which answer did not resolve it, and why (#1064)
+        text = f"{asking.failed(prev)} {verdict.why}\n\n{text}"
     recommendation = None
     if proposed.recommended is not None:
         option = options[proposed.recommended]
@@ -383,7 +421,15 @@ def admitted(
                     f"`{proof.command}` at {proof.head}: exit {proof.exit_code}, "
                     f"{proof.elapsed_seconds:.3f} s. {proof.admission}"
                 )
-            name = proposed.options[proposed.recommended].label
-            text += f"\nRecommended: {name}. Checked before offering: {evidence}"
-    question = Question(step=c.step.kind, text=text, options=options, recommended=recommendation)
+            text += f"\nRecommended: {proposed.options[proposed.recommended].label}."
+            details.append(f"Checked before offering: {evidence}")
+    text += "\n\nDetails: " + " ".join(details)  # the plain question first; what the owner needn't judge after it
+    question = Question(
+        step=c.step.kind,
+        text=text,
+        options=options,
+        recommended=recommendation,
+        subject=verdict.subject,
+        follows=asking.root(prev) if prev is not None else "",
+    )
     return loop.StepResult(exit=Exit.ASK, reason=proposed.question, question=question)

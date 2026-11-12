@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field
 
 from owlbear_delivery_next.change_contracts import tools
@@ -60,8 +62,30 @@ class OptionJudgment(tools.Args):
 
 
 class QuestionJudgment(tools.Args):
-    """A complete pre-publication judgment, including a recommendation's observed trial."""
+    """A complete pre-publication judgment: the question's subject and words, and every option (#1062, #1064)."""
 
+    subject: Literal["product", "reserved", "internal"] = Field(
+        description="product: it changes what the owner gets (scope, look, behaviour, risk); reserved: a decision "
+        "reserves it for him (lint, format, CI or hook configuration, security, project setup); internal: anything "
+        "else, such as a tool, test run or check Delivery must get working",
+        examples=["product"],
+    )
+    plain: bool = Field(
+        description="The question and each effect say in plain words what the owner gets or allows; a reserved "
+        "proposal may name its exact file or setting after that, but no logs, test or function names or output",
+        examples=[True],
+    )
+    follows: str = Field(
+        default="",
+        max_length=10,
+        description="The id of an answered question whose problem this one asks about again; empty for none",
+        examples=["q4"],
+    )
+    why: str = tools.bounded(
+        600,
+        "The reservation it falls under, what is not plain, and for follows why that answer did not resolve it",
+        "It asks to exclude one vendored file from the large-file hook, a hook configuration change.",
+    )
     options: list[OptionJudgment] = tools.bounded(
         5,
         "One verdict for every option, by its zero-based index",
@@ -71,7 +95,10 @@ class QuestionJudgment(tools.Args):
 
 
 ADMIT = tools.Spec(
-    "submit_result", "Submit the executable-option verdict for every proposed option once.", QuestionJudgment, "result"
+    "submit_result",
+    "Submit the question's subject and words verdict and every option's verdict once.",
+    QuestionJudgment,
+    "result",
 )
 LIMIT = 600.0  # seconds a lookup's picker session may run: a pick takes about a minute
 WAIT = 900.0  # seconds a caller waits for a lookup's answer: its session's limit, its start and its end
