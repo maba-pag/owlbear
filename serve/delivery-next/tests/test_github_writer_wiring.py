@@ -206,7 +206,7 @@ def _cleanup_fetch(store, repo, _head, lock):
 
 def _needs_target(store, repo, _head, _lock):
     c = _change(repo, StepKind.BUILD)
-    assert engine.needs_target(c, repo, "the API", NOW, github_writer.of(store, repo)).exit == Exit.BACK
+    assert engine.needs_target(c, repo, "the API", NOW, github_writer.of(store, repo)).exit == Exit.RETRY
 
 
 def _owners_pull(store, repo, _head, lock):

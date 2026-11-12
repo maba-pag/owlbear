@@ -26,7 +26,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
 )
 from owlbear_delivery_next.change_contracts.round_records import PLAN, RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_flow import loop, plan_rounds
+from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.processes import Termination
@@ -386,9 +386,9 @@ def test_an_upheld_rejection_is_delegated_once_whatever_the_owner_does_next(tmp_
     fail_settlement(tmp_path, change_repo, monkeypatch)
     restart(tmp_path, change_repo)
     asked = store.read("c1")
-    assert (asked.outcome.exit, loop.open_question(asked)) == (Exit.RETRY, None)
+    assert (asked.outcome.exit, loop.open_question(asked)) == (Exit.DONE, None)
     found = asked.loops[PLAN].findings[0]
-    assert (found.state, found.note) == ("owner-fix", plan_rounds.DELEGATED)
+    assert (found.state, [e.id for e in asked.left]) == ("left-open", ["F1"])
     ids = [x.id for x in asked.questions]
     assert all(x.answer is not None for x in asked.questions)
     assert (len(paid.parents), len(paid.children)) == (2, 2)

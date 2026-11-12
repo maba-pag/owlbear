@@ -8,7 +8,6 @@ import json
 import subprocess
 import threading
 import uuid
-from functools import partial
 from types import SimpleNamespace
 from typing import Any, ClassVar
 
@@ -73,9 +72,16 @@ def place(tmp_path) -> SimpleNamespace:
     store.write(Lock("c1"), Change(slug="c1"))
     notes: list[str] = []
     places = Places((tmp_path / "worktrees",), (), (), tmp_path / "home", None)  # pytest's own folders are exempt
-    writer = partial(watch_reports.Writer, store.db, Lock("c1"), note=notes.append)
+    writers: list[watch_reports.Writer] = []
+
+    def writer() -> watch_reports.Writer:
+        made = watch_reports.Writer(store.db, Lock("c1"), note=notes.append)
+        writers.append(made)
+        return made
+
     watching = watch_feed.Watching("c1", "build", places, writer)
-    return SimpleNamespace(own=own, elsewhere=elsewhere.resolve(), store=store, notes=notes, watching=watching)
+    return SimpleNamespace(own=own, elsewhere=elsewhere.resolve(), store=store, notes=notes, watching=watching,
+                           writers=writers)  # fmt: skip
 
 
 def config(place, *, watch: bool = True, **kw: Any) -> sdk_adapter.Session:
@@ -106,20 +112,6 @@ def rows(place) -> dict[str, dict[str, Any]]:
     return {r["call_id"]: r for r in watch_reports.reports(place.store.db, "c1")}
 
 
-def threads() -> list[threading.Thread]:
-    """The writer threads alive that this test started."""
-    return [t for t in threading.enumerate() if t.name.startswith("watch-") and t not in BEFORE]
-
-
-BEFORE: set[threading.Thread] = set()
-
-
-@pytest.fixture(autouse=True)
-def _baseline() -> None:
-    BEFORE.clear()
-    BEFORE.update(threading.enumerate())
-
-
 def test_a_call_is_one_observation_whichever_comes_first_its_start_or_its_permission_request(place) -> None:
     stepped(
         place,
@@ -136,7 +128,7 @@ def test_a_call_is_one_observation_whichever_comes_first_its_start_or_its_permis
     assert {r["verdict"] for r in found.values()} == {SHELL_UNRESOLVED}
     assert found["c3"]["command"] == "ran make c3"
     assert watch_reports.counts(place.store.db, "c1") == {"outside": 0, "unresolved": 3}
-    assert not threads()
+    assert all(not w.thread.is_alive() for w in place.writers)
 
 
 def test_repeated_enrichment_reclassifies_the_one_row_and_read_only_evidence_covers_only_the_shell(place) -> None:
@@ -209,7 +201,7 @@ def test_an_observation_or_a_launch_that_fails_is_told_whole_at_once_and_in_the_
 
 def test_with_the_master_switch_off_there_is_no_watcher_and_nothing_is_recorded(place, change_repo) -> None:
     st = stepped(place, start("c1"), write("c1", str(place.elsewhere / "x")), watch=False)
-    assert (st.feed, rows(place), threads()) == (None, {}, [])
+    assert (st.feed, rows(place), place.writers) == (None, {}, [])
     store, lock = place.store, Lock("c1")
     off = resolve(None, Layer(spotter=Spotter(switch="off")))
     assert watched.watching(store, lock, "build", off, change_repo, print, watched.needed(off)) is None
@@ -268,7 +260,8 @@ def test_a_run_closes_its_watcher_after_the_teardown_and_its_outcome_and_guard_a
     monkeypatch.setattr(sdk_usage, "USAGE_PAUSE", 0)
     read_only = Policy(place.own, write=False)
     ran = [asyncio.run(sdk_adapter.run(config(place, watch=w, limit=0.2, policy=read_only))) for w in (True, False)]
-    assert not threads()  # no writer outlives its run
+    assert len(place.writers) == 1
+    assert not place.writers[0].thread.is_alive()
     assert [(r.ending, r.denials, r.termination) for r in ran[:1]] == [(r.ending, r.denials, r.termination)
                                                                        for r in ran[1:]]  # fmt: skip
     assert Client.decided == ["PermissionDecisionReject", "PermissionDecisionReject"]
@@ -276,7 +269,8 @@ def test_a_run_closes_its_watcher_after_the_teardown_and_its_outcome_and_guard_a
     assert (found["c1"]["targets"], found["c1"]["source"], found["c1"]["step"]) == ([outside], "enriched", "build")
     assert found["c2"]["verdict"] == SHELL_UNRESOLVED
     refused = asyncio.run(sdk_adapter.run(dataclasses.replace(config(place), model=None)))
-    assert (refused.ending, threads()) == ("error", [])
+    assert refused.ending == "error"
+    assert all(not w.thread.is_alive() for w in place.writers)
 
 
 class _MadeError(Exception):

@@ -36,6 +36,7 @@ from owlbear_delivery_next.state_store.decision_errors import (  # noqa: F401 - 
     DecisionsUnavailable,
     Unsettled,
     settled,
+    unavailable,
 )
 
 if TYPE_CHECKING:
@@ -226,7 +227,7 @@ def refresh(shared: DataRepo | None) -> str:
                 return f"not refreshed: {len(changed)} uncommitted file(s) in {shared.root}; the next save publishes"
             failed = decision_sync.catch_up(shared, time.monotonic() + SAVE_SECONDS)
     except (DataRepoError, OSError) as exc:  # a lock or attributes file that cannot be opened too
-        raise DecisionsUnavailable(command_failure.failure(exc)) from exc
+        raise unavailable(exc) from exc
     return f"not refreshed from the remote: {failed}" if failed else ""
 
 
@@ -262,7 +263,7 @@ def save_all(shared: DataRepo | None, items: Sequence[tuple[Decision, str | None
             _interrupted(shared)
             return _save_all(shared, [(d, _layer(shared.root, d), expected) for d, expected in items], message)
     except DataRepoError as exc:
-        raise DecisionsUnavailable(command_failure.failure(exc)) from exc
+        raise unavailable(exc) from exc
     except decision_batch.JournalError as exc:  # the journal or its lock failed during the save: the batch is unknown
         raise DecisionsUnavailable(command_failure.failure(exc), RECOVER) from exc
     except OSError as exc:

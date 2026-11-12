@@ -36,7 +36,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
-from owlbear_delivery_next.change_contracts.round_records import RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_contracts.round_records import LeftOpen, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import budgets, delivery_target, loop, round_flow, worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
@@ -1230,6 +1230,27 @@ def test_refused_project_labels_are_reported_whole_and_not_retried(tmp_path):
     assert (len(added), cx.store.read(c.slug).names.labelled) == (1, 7)  # never again on this PR
 
 
+def test_a_later_left_open_finding_changes_only_delivery_s_section_of_the_description(tmp_path):
+    """#1173: the owner's text around the section stays, also in GitHub's CRLF and where it quotes a marker."""
+    c, sent = change(StepKind.PUBLISH), []
+    c.names.labelled = 7
+    quoted = f"t1: the body quotes {publish.CLOSE} - fix: escape it"
+    c.left = [LeftOpen(loop="final", id="F1", text=quoted, reason="it is escaped", judgement="it is not")]
+    mine = f"Mine, about {publish.OPEN} too."
+    body = f"{mine}\n\n{publish.section(c)}\n\nMine as well.".replace("\n", "\r\n")
+    gh = FakeGh(pr(head=A).model_copy(update={"body": body}))
+    gh.find_pull_request = lambda *_a: gh.pr
+    gh.set_pull_request_body = lambda _repo, _number, text: sent.append(text)
+    cx = ctx(tmp_path, gh)
+    c.left.append(LeftOpen(loop="plan", attempt=1, id="F2", text="t2: later", reason="no", judgement="yes"))
+    publish.pull_request(cx, c, A)
+    assert sent == [f"{mine}\r\n\r\n{publish.section(c)}\r\n\r\nMine as well."]
+    assert sent[0].count("- **") == 2
+    gh.pr = gh.pr.model_copy(update={"body": sent[0]})
+    publish.pull_request(cx, c, A)
+    assert len(sent) == 1  # nothing new: no second write
+
+
 def test_a_pr_head_lagging_the_push_is_observed_again_shortly_without_budget(clone, tmp_path):
     commit(clone, "fix.txt")
     head = git(clone, "rev-parse", "HEAD")
@@ -1930,13 +1951,17 @@ def test_a_moved_target_integrates_before_merging_whatever_github_reports(tmp_pa
     _, result = merge.run(ctx(tmp_path, gh), c)
     assert (result.back_to, result.cause, result.fix_task.origin) == (
         StepKind.BUILD,
-        "conflict:merge:origin/main",
+        None,
         "integration",
     )
     assert gh.merges == []
 
 
 def test_a_builder_needing_target_work_integrates_then_resumes_its_task(clone):
+    git(clone, "switch", "-q", "main")
+    git(clone, "commit", "-q", "--allow-empty", "-m", "required target work")
+    git(clone, "push", "-q", "origin", "HEAD:refs/heads/main")
+    git(clone, "switch", "-q", "owlbear/c1")
     c = change(StepKind.BUILD, worktree=str(clone))
     c.step.task = "t1"
     c = loop.apply(c, engine.needs_target(c, clone, "greet() exists only on main", NOW, Writer.rule(clone)), NOW)

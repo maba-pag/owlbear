@@ -32,12 +32,13 @@ class RepairResult(Args):
 
     cause: str = bounded(3000, "Why the step stopped, with the evidence", "The diff's .pre-commit-config.yaml ...")
     tried: list[Try] = Field(
-        min_length=1, max_length=20, description="Every fix in the order you tried it",
+        max_length=20, description="Every attempted remedy in order; empty only for retry, never invent a fix",
         examples=[[{"fix": "Route web/vendor/ like pages", "outcome": "passed in 212 s"}]],
     )  # fmt: skip
-    fix: Literal["none", "patch", "profile-check"] = Field(
+    fix: Literal["none", "patch", "profile-check", "retry"] = Field(
         description="patch: your edits in this copy make the checks pass; profile-check: the step needs a project "
-        "check the profile lacks, proven here; none: nothing worked or the cause is temporary",
+        "check the profile lacks, proven here; retry: the cause no longer reproduces, no change needed; "
+        "none: you tried remedies but none worked",
         examples=["patch"],
     )
     package: str = Field(default="", max_length=300, description="profile-check only: its package", examples=["."])
@@ -48,10 +49,33 @@ class RepairResult(Args):
 
     @model_validator(mode="after")
     def _check(self) -> RepairResult:
+        if self.fix != "retry" and not self.tried:
+            msg = "tried: list the remedies actually attempted; only retry may report no attempted fix"
+            raise ValueError(msg)
         if self.fix == "profile-check" and not (self.package.strip() and self.command.strip()):
             msg = "package and command: a profile-check needs both, e.g. package '.' and command 'uv run pytest -q'"
             raise ValueError(msg)
         return self
 
 
+class AttemptResult(RepairResult):
+    """The diagnostic or real rerun failed: reproduce that operation and try remedies, not another no-change retry."""
+
+    fix: Literal["none", "patch", "profile-check", "retry"] = Field(
+        description="patch: a proven edit; profile-check: a proven missing project check; none: remedies failed",
+        json_schema_extra={"enum": ["none", "patch", "profile-check"]},
+    )
+    tried: list[Try] = Field(min_length=1, max_length=20, description="Actual attempted remedies, never diagnostics")
+
+    @model_validator(mode="after")
+    def _attempted(self) -> AttemptResult:
+        if self.fix == "retry":
+            msg = "fix: retry did not recover the step; reproduce its reported failure and try a remedy before ending"
+            raise ValueError(msg)
+        return self
+
+
 SUBMIT = Spec("submit_result", "Submit once, after trying fixes in this copy.", RepairResult, "result")
+ATTEMPT = Spec(
+    "submit_result", "Submit after trying remedies; another no-change retry is not recovery.", AttemptResult, "result"
+)

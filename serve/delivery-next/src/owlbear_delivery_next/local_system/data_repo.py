@@ -1,11 +1,8 @@
 """Delivery's settings in the shared data repository (TD-57, TD-59, TD-64, TD-98, TD-128).
 
-Where the repository's checkout is and how it gets there is `data_place`'s; this module works in it. The global
-layer lives at its root, each project's layer in a folder named
-after the project's repository unless the owner chose another name; the folder is claimed by that repository's
-identity, and that claim keeps the chosen name for every clone and machine. Every save is committed and pushed
-under one repository-wide lock; a failed commit or push is reported, never hidden. A running host passes its view to
-its runners through ``OWLBEAR_DATA``; each runner finds the project's folder by its claim.
+`data_place` locates the checkout. Global settings live at its root; each project claims a folder by repository
+identity, keeping its chosen name across clones and machines. Saves commit and push under one repository-wide lock,
+reporting every failure. Hosts pass their view through ``OWLBEAR_DATA``; runners find project folders by their claims.
 """
 
 from __future__ import annotations
@@ -45,6 +42,10 @@ _HOLDING = threading.local()  # the lock files this thread holds through `DataRe
 
 class DataRepoError(ValueError):
     """The pointer names no usable repository, or a project folder belongs to another repository."""
+
+
+class DataRepoBusyError(DataRepoError):
+    """Another save holds the repository-wide lock past this caller's wait."""
 
 
 class Committed(str):
@@ -164,7 +165,7 @@ class DataRepo:
                 except BlockingIOError:
                     if time.monotonic() > end:
                         msg = "another settings save is still running; try again"
-                        raise DataRepoError(msg) from None
+                        raise DataRepoBusyError(msg) from None
                     time.sleep(0.1)
             holding.add(lock)
             stack.callback(holding.discard, lock)

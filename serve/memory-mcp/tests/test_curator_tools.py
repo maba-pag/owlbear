@@ -3,12 +3,13 @@ reads its threshold (TD-292, TD-400)."""
 
 import json
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
-from owlbear_memory import MemoryCategory, MemoryEngine, storage
+from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, storage
 
 from owlbear_memory_mcp import tools
 
@@ -33,30 +34,34 @@ def git_repository(root: Path) -> None:
     git(root, "config", "user.email", "t@t")
 
 
-def bound(
-    root: Path, project: str = "shop", *, shared: bool = True, agents: frozenset[str] = frozenset()
-) -> SimpleNamespace:
-    store = root / project / "memory"
-    shared_dir = root / "memory" if shared else None
-    context = SimpleNamespace(
-        engine=MemoryEngine(store), memory_dir=store, global_dir=shared_dir, global_engine=None, agents=agents
-    )
-    return SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context))
+@pytest.fixture
+def ctx(root: Path, memory_context: Callable[..., SimpleNamespace]) -> SimpleNamespace:
+    return memory_context(root / "shop" / "memory", global_dir=root / "memory")
 
 
-def saved(folder: Path, title: str, *, curated: bool = False):
-    engine = MemoryEngine(folder)
-    entry = engine.save(
-        title=title, content=f"{title}: what to know", categories=[MemoryCategory.PROCESS], confidence=0.8,
-        source_agent="builder", scope_agents=[],
-    )  # fmt: skip
-    return engine.edit(entry.id, {"scope_agents": ["builder"]}, expected_revision=entry.revision) if curated else entry
+@pytest.fixture
+def saved(memory_entry: Callable[..., MemoryEntry]) -> Callable[..., MemoryEntry]:
+    def seed(folder: Path, title: str, *, curated: bool = False) -> MemoryEntry:
+        return memory_entry(
+            folder,
+            title,
+            content=f"{title}: what to know",
+            source_agent="builder",
+            scope_agents=["builder"] if curated else [],
+            state=MemoryState.CURATED if curated else MemoryState.PENDING,
+        )
+
+    return seed
 
 
 @pytest.mark.asyncio
-async def test_the_curator_works_on_another_project_folder_and_never_on_global_by_name(root: Path) -> None:
+async def test_the_curator_works_on_another_project_folder_and_never_on_global_by_name(
+    root: Path,
+    saved: Callable[..., MemoryEntry],
+    memory_context: Callable[..., SimpleNamespace],
+) -> None:
     pending = saved(root / "docs" / "memory", "Pin the runtime")
-    ctx = bound(root, agents=frozenset({"builder"}))  # known only: no entry in either folder vouches for builder
+    ctx = memory_context(root / "shop" / "memory", global_dir=root / "memory", agents=frozenset({"builder"}))
 
     listed = await tools.list_memories(ctx, folder="docs")
     curated = await tools.curate_memory(
@@ -72,20 +77,22 @@ async def test_the_curator_works_on_another_project_folder_and_never_on_global_b
         with pytest.raises(ToolError):
             await tools.list_memories(ctx, folder=wrong)
     with pytest.raises(ToolError, match="no shared repository"):
-        await tools.list_memories(bound(root, shared=False), folder="docs")
+        await tools.list_memories(memory_context(root / "shop" / "memory"), folder="docs")
 
 
 @pytest.mark.usefixtures("git_repository")
 @pytest.mark.asyncio
-async def test_make_global_records_the_project_and_commits_both_paths(root: Path) -> None:
+async def test_make_global_records_the_project_and_commits_both_paths(
+    root: Path,
+    ctx: SimpleNamespace,
+    saved: Callable[..., MemoryEntry],
+) -> None:
     entry, pending = (
         saved(root / "docs" / "memory", "Pin the runtime", curated=True),
         saved(root / "docs" / "memory", "x"),
     )
     git(root, "add", "-A")
     git(root, "commit", "-qm", "seed")
-    ctx = bound(root)
-
     with pytest.raises(ToolError, match="changed since"):
         await tools.make_global(ctx, entry_id=entry.id, revision="0" * 16, folder="docs")
     with pytest.raises(ToolError, match="only a curated or approved entry"):
@@ -104,25 +111,31 @@ async def test_make_global_records_the_project_and_commits_both_paths(root: Path
 
 
 @pytest.mark.asyncio
-async def test_the_threshold_is_the_global_settings_value_else_unset(root: Path) -> None:
-    ctx, unset = bound(root), {"threshold": None, "source": "unset", "error": tools.UNSET_THRESHOLD}
+async def test_the_threshold_is_the_global_settings_value_else_unset(
+    root: Path,
+    ctx: SimpleNamespace,
+    memory_context: Callable[..., SimpleNamespace],
+) -> None:
+    unset = {"threshold": None, "source": "unset", "error": tools.UNSET_THRESHOLD}
     assert await tools.curation_threshold(ctx) == unset
     (root / "config.json").write_text(json.dumps({"format": 2, "curator_threshold": 90}))
     assert await tools.curation_threshold(ctx) == {"threshold": 90, "source": "global"}
     (root / "config.json").write_text(json.dumps({"format": 2, "curator_threshold": 30}))
     assert await tools.curation_threshold(ctx) == unset
-    assert await tools.curation_threshold(bound(root, shared=False)) == unset
+    assert await tools.curation_threshold(memory_context(root / "shop" / "memory")) == unset
 
 
 @pytest.mark.asyncio
-async def test_a_folder_that_links_to_global_or_outside_the_repository_is_refused(root: Path, tmp_path: Path) -> None:
+async def test_a_folder_that_links_to_global_or_outside_the_repository_is_refused(
+    root: Path,
+    tmp_path: Path,
+    ctx: SimpleNamespace,
+) -> None:
     (root / "memory").mkdir()
     (root / "alias").mkdir()
     (root / "alias" / "memory").symlink_to(root / "memory")
     (tmp_path / "elsewhere" / "memory").mkdir(parents=True)
     (root / "outside").symlink_to(tmp_path / "elsewhere")
-    ctx = bound(root)
-
     for folder in ("alias", "outside"):
         with pytest.raises(ToolError, match="no memory folder"):
             await tools.list_memories(ctx, folder=folder)
@@ -130,7 +143,11 @@ async def test_a_folder_that_links_to_global_or_outside_the_repository_is_refuse
 
 @pytest.mark.usefixtures("git_repository")
 @pytest.mark.asyncio
-async def test_make_global_refuses_while_deliverys_apply_of_a_curation_run_is_cut_short(root: Path) -> None:
+async def test_make_global_refuses_while_deliverys_apply_of_a_curation_run_is_cut_short(
+    root: Path,
+    ctx: SimpleNamespace,
+    saved: Callable[..., MemoryEntry],
+) -> None:
     """#875: the cut-short set names its entries where they are; Delivery finishes it from its record by name."""
     entry = saved(root / "docs" / "memory", "Pin the runtime", curated=True)
     git(root, "add", "-A")
@@ -139,7 +156,7 @@ async def test_make_global_refuses_while_deliverys_apply_of_a_curation_run_is_cu
     record.write_text(json.dumps({"folder": "docs", "steps": {}}))
 
     with pytest.raises(ToolError, match=f"{entry.id} stays: the memory curation of docs was cut short"):
-        await tools.make_global(bound(root), entry_id=entry.id, revision=entry.revision, folder="docs")
+        await tools.make_global(ctx, entry_id=entry.id, revision=entry.revision, folder="docs")
 
     assert (root / "docs" / "memory" / f"{entry.id}.md").is_file()
     assert git(root, "status", "--porcelain") == ""
@@ -149,12 +166,13 @@ async def test_make_global_refuses_while_deliverys_apply_of_a_curation_run_is_cu
 @pytest.mark.asyncio
 async def test_a_make_global_whose_commit_fails_leaves_the_entry_where_it_was_and_can_be_tried_again(
     root: Path,
+    ctx: SimpleNamespace,
+    saved: Callable[..., MemoryEntry],
 ) -> None:
     folder = root / "docs" / "memory"
     entry = saved(folder, "Pin the runtime", curated=True)
     git(root, "add", "-A")
     git(root, "commit", "-qm", "seed")
-    ctx = bound(root)
     (root / ".git" / "hooks" / "pre-commit").write_text("#!/bin/sh\nexit 1\n")
     (root / ".git" / "hooks" / "pre-commit").chmod(0o755)
 
@@ -170,7 +188,10 @@ async def test_a_make_global_whose_commit_fails_leaves_the_entry_where_it_was_an
 @pytest.mark.usefixtures("git_repository")
 @pytest.mark.asyncio
 async def test_make_global_refuses_a_contested_entry_and_a_global_folder_that_links_elsewhere(
-    root: Path, tmp_path: Path
+    root: Path,
+    tmp_path: Path,
+    ctx: SimpleNamespace,
+    saved: Callable[..., MemoryEntry],
 ) -> None:
     """Copilot on #586: unresolved entries stay with the owner; a linked Global never takes an entry out."""
     folder = root / "docs" / "memory"
@@ -178,8 +199,6 @@ async def test_make_global_refuses_a_contested_entry_and_a_global_folder_that_li
     engine = MemoryEngine(folder)
     contested = engine.get_entry(entry.id).model_copy(update={"state": "contested"})
     storage.write_entry(folder / f"{entry.id}.md", contested, memory_dir=folder)
-    ctx = bound(root)
-
     with pytest.raises(ToolError, match="contested"):
         await tools.make_global(ctx, entry_id=entry.id, revision=contested.revision, folder="docs")
     other = saved(folder, "Sign commits", curated=True)

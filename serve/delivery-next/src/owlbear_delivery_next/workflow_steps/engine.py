@@ -132,10 +132,15 @@ def back(kind: ErrorKind, step: StepKind, subject: str, reason: str, fix: Task) 
     return StepResult(exit=Exit.BACK, back_to=StepKind.BUILD, cause=cause, reason=reason, fix_task=fix)
 
 
-def integrate(c: Change, step: StepKind, ref: str, detail: str = "") -> StepResult:
+def integrate(c: Change, _step: StepKind, ref: str, detail: str = "") -> StepResult:
     """Integration runs as a Builder task (DR3): merge *ref* into the branch before publishing or merging."""
     title = f"Merge {ref} into this branch with `git merge {ref}`, resolve any conflicts, run the checks, commit"
-    return back(ErrorKind.CONFLICT, step, ref, f"updating with {ref}", task(c, title, "integration", detail))
+    return StepResult(
+        exit=Exit.BACK,
+        back_to=StepKind.BUILD,
+        reason=f"updating with {ref}",
+        fix_task=task(c, title, "integration", detail),
+    )
 
 
 def needs_target(c: Change, path: Path, reason: str, now: datetime, writer: Writer) -> StepResult:
@@ -144,7 +149,15 @@ def needs_target(c: Change, path: Path, reason: str, now: datetime, writer: Writ
         fetch(path, c.names.target, writer.access())
     except (RemoteGitError, ProviderError) as exc:
         return failed(c, exc, now)
-    return integrate(c, StepKind.BUILD, f"origin/{c.names.target}", f"The Builder of {c.step.task} needs: {reason}")
+    ref = f"origin/{c.names.target}"
+    if contains(path, ref):
+        return StepResult(
+            exit=Exit.RETRY,
+            cause=failures.cause_key(ErrorKind.CONFLICT, StepKind.BUILD, ref),
+            reason=f"The branch already contains {ref}, but the Builder of {c.step.task} needs: {reason}",
+            classified=f"target premise remains unsatisfied with {ref} already integrated",
+        )
+    return integrate(c, StepKind.BUILD, ref, f"The Builder of {c.step.task} needs: {reason}")
 
 
 def pending(waiting: Waiting, reason: str, wake: datetime | None, who: Actor = "github") -> StepResult:

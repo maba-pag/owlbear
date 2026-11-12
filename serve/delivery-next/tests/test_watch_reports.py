@@ -81,20 +81,6 @@ def summary(said: str) -> Report:
     return watch_reports.summary_row("s1", "build", said)
 
 
-def threads() -> list[threading.Thread]:
-    """The writer threads alive that this test started."""
-    return [t for t in threading.enumerate() if t.name.startswith("watch-") and t not in BEFORE]
-
-
-BEFORE: set[threading.Thread] = set()
-
-
-@pytest.fixture(autouse=True)
-def _baseline() -> None:
-    BEFORE.clear()
-    BEFORE.update(threading.enumerate())
-
-
 def test_a_pre_watcher_database_is_read_by_a_new_hosts_change_page_with_no_write_between(tmp_path) -> None:
     store = pre_w1(tmp_path)
     assert (watch_reports.reports(store.db, "c1"), watch_reports.counts(store.db, "c1")) == (
@@ -145,7 +131,6 @@ def test_a_writer_persists_in_order_and_leaves_no_thread_or_summary_when_all_was
         w.put(watch_reports.put("c1", report(n)))
     w.close(summary)
     assert not w.thread.is_alive()
-    assert not threads()
     assert [r["call_id"] for r in watch_reports.reports(store.db, "c1")] == [f"call-{n}" for n in range(4, -1, -1)]
     assert notes == []
 
@@ -187,7 +172,6 @@ def test_a_migration_fence_held_through_the_deadline_stops_the_writer_and_the_lo
         w.close(summary, deadline=0.3)
         assert time.monotonic() - started < 2
         assert not w.thread.is_alive()
-        assert not threads()
     *told, said = notes  # the one in progress at the deadline is failed, told at once too, or not written
     assert told in ([], ["watcher c1: a report was not recorded: BusyError: the Delivery database is being migrated"])
     assert (said.startswith("watcher c1: "), lost(said)) == (True, 3)
@@ -260,7 +244,7 @@ def test_a_write_that_gets_the_database_only_after_the_deadline_does_not_run(sto
     began = time.monotonic()
     w.close(summary, deadline=0.1)
     assert time.monotonic() - began < 1.0
-    assert (w.thread.is_alive(), threads()) == (False, [])
+    assert not w.thread.is_alive()
     monkeypatch.undo()
     assert watch_reports.reports(store.db, "c1") == []
     assert notes == ["watcher c1: 1 not written by the deadline"]

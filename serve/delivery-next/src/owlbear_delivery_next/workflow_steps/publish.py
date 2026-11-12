@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -10,7 +11,7 @@ from owlbear_delivery_next.change_contracts.evidence import criteria, review_val
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import Episode, ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.round_records import FINAL
-from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.change_flow import round_marks, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.git.remote_git import (
@@ -86,7 +87,36 @@ def _body(c: Change, *, marker: bool) -> str:
     criteria = "\n".join(f"- {k.id}: {k.text}{waived(c, k)}" for k in c.brief.criteria)
     said = f"\n\nOpened by OwlBear Delivery for `{c.slug}`." if marker else ""
     review = f"\n\n{tests}" if (tests := curation_build.body(c)) else ""  # a test review's table (TD-339)
-    return f"{c.brief.outcome}\n\n## Acceptance criteria\n{criteria}{review}{said}"
+    left = f"\n\n{listed}" if (listed := section(c)) else ""
+    return f"{c.brief.outcome}\n\n## Acceptance criteria\n{criteria}{review}{left}{said}"
+
+
+OPEN, CLOSE = "<!-- owlbear:findings-left-open -->", "<!-- /owlbear:findings-left-open -->"
+SECTION = re.compile(rf"^{re.escape(OPEN)}\r?\n.*?^{re.escape(CLOSE)}(?=\r?$)", re.MULTILINE | re.DOTALL)
+LEFT = "Rejected by the builder or planner and upheld by the next reviewer or challenger. Nothing was changed for them."
+
+
+def section(c: Change) -> str:
+    """The PR description's list of the findings left open, each whole with both reasons; "" without any."""
+    if not (found := round_marks.left(c)):
+        return ""
+    lines = [OPEN, "## Findings left open", LEFT]
+    for f in found:
+        lines += [f"- **{f['where']} {f['id']}:** {' '.join(f['text'].split())}"]
+        said = (("worker", "reason"), ("judge", "judgement"))
+        lines += [f"  - {f[who]}: {' '.join(f[why].split())}" for who, why in said if f[why]]
+    return "\n".join([*lines, CLOSE])
+
+
+def relisted(c: Change, body: str) -> str:
+    """*body* with Delivery's own section as it is now: replaced between its markers, else appended; the rest stays.
+
+    A marker counts only as a whole line: a finding or the owner's text that quotes one is on a longer line.
+    """
+    now = section(c)
+    if SECTION.search(body):
+        return SECTION.sub(lambda _: now, body, count=1)
+    return f"{body.rstrip()}\n\n{now}" if now else body
 
 
 def labelled(ctx: Ctx, c: Change, pr: PullRequest, labels: list[str]) -> None:
@@ -117,6 +147,9 @@ def pull_request(ctx: Ctx, c: Change, head: str) -> PullRequest | None:
             if exc.retry_safe:
                 raise
             pr = ctx.gh.find_pull_request(repo, branch, target)
+    if pr and (body := relisted(c, pr.body)) != pr.body:  # a finding left open since the PR was opened (#1173)
+        ctx.gh.set_pull_request_body(repo, pr.number, body)
+        ctx.log(c.slug, "pr-body", pr=pr.number, left=len(c.left))
     if pr and c.names.labelled != pr.number:
         settings.need("pr_labels")
         labelled(ctx, c, pr, settings.pr_labels)

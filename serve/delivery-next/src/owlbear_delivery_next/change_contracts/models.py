@@ -22,7 +22,7 @@ from owlbear_delivery_next.change_contracts.held_records import HeldRecord, Pend
 from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim
 from owlbear_delivery_next.change_contracts.option_records import Inputs, OptionAction, OptionProof, PendingQuestion
 from owlbear_delivery_next.change_contracts.repair_records import Repairs
-from owlbear_delivery_next.change_contracts.round_records import RoundLoop
+from owlbear_delivery_next.change_contracts.round_records import Dispute, LeftOpen, RoundLoop
 from owlbear_delivery_next.change_contracts.shaper_records import SavingChat, ShaperNotice
 from owlbear_delivery_next.change_contracts.spend import Spend
 from owlbear_delivery_next.change_contracts.tool_use import ToolUse
@@ -283,20 +283,6 @@ class Handling(Record):
     at: datetime
 
 
-class Dispute(Record):
-    """A review finding the builder rejected (TD-124/176): the fresh reviewer's recheck and, if upheld, the owner's."""
-
-    key: str  # the finding's key in its repair task, e.g. F2
-    finding: str
-    reason: str  # the builder's
-    upheld: bool | None = None
-    recheck: str = ""  # the reviewer's reason
-    owner: Literal["", "fix", "drop", "reconsider"] = ""
-    note: str = Field(default="", max_length=2000)  # the owner's note with the decision (TD-193)
-    reconsidered: Literal["", "withdrawn", "clarified", "unsure"] = ""  # a fresh reviewer, after the note
-    clarified: str = ""  # the finding as that reviewer restated it
-
-
 class Task(Record):
     """One plan task; fix tasks are appended without a new plan version."""
 
@@ -483,6 +469,7 @@ class Change(Record):
     amending: Amending | None = None  # the amendment running before the stopped step
     repairs: Repairs = Field(default_factory=Repairs)  # a stuck step's repair and those before it (#1066)
     loops: dict[str, RoundLoop] = Field(default_factory=dict)  # TD-208: each subject's challenge loop
+    left: list[LeftOpen] = Field(default_factory=list)  # every finding left open after approval, as it happened
     names: Names = Field(default_factory=Names)
     spend: Spend = Field(default_factory=Spend)
     tool_use: ToolUse = Field(default_factory=ToolUse)  # C-28 T8: how agents' Delivery tool calls went

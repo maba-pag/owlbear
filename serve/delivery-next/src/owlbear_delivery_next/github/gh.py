@@ -84,6 +84,7 @@ def _pull(repository: str, p: Json, operation: str) -> PullRequest:
             mergeable=p.get("mergeable"),
             merge_state=p.get("mergeable_state"),
             merge_commit_sha=p.get("merge_commit_sha") if p["merged"] else None,
+            body=p.get("body") or "",
         )
     except (KeyError, TypeError, ValidationError) as exc:
         invalid(operation, "GitHub returned an invalid pull request", exc)
@@ -258,6 +259,11 @@ class GhProvider(Queue, Conversation):
         """Add labels to one pull request, keeping those it has."""
         endpoint = f"{repo(repository)}/issues/{number}/labels"
         self._api("add_labels", "POST", endpoint, body={"labels": labels}, write=True)
+
+    def set_pull_request_body(self, repository: str, number: int, body: str) -> None:
+        """Replace one pull request's description with *body*."""
+        endpoint = f"{repo(repository)}/pulls/{number}"
+        self._api("set_pull_request_body", "PATCH", endpoint, body={"body": body}, write=True)
 
     def close_pull_request(self, repository: str, number: int) -> None:
         """Close one pull request without merging it."""
