@@ -1018,7 +1018,7 @@ def test_snapshot_identity_respects_pid_birth_end_and_boot(root, monkeypatch, id
     if count == 2 and observed in {"after-end", "after-boot"}:
         rebuilt.start("shop")
         drained(rebuilt)
-        assert calls == []
+        assert (calls, rebuilt.load().folders["shop"].reason) == ([], curation.LEFT)
 
 
 HELD = "0123456789abcdef"
