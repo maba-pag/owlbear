@@ -2,9 +2,11 @@
 
 Each plan challenge's verdict counts one round of the loop ``plan``, run with the planner's TD-209 values. The planner
 revises its plan for the findings that hold, or rejects one with its reason; the next round's challenger judges each
-rejection, and one it does not accept goes to the owner: revise for it, ask the challenger to reconsider (with a
-note) or drop it (TD-193). After the last round the revision is accepted unreviewed, unless the last allowed round
-found many: then the owner chooses another round or a new plan from the brief (TD-210).
+rejection, and one it does not accept stands all the same: the finding is left open and recorded on the Change
+(D-01M7866JPJ080C8545DH00WY1H). A dispute an older version asked the owner about keeps his answer: revise for it, ask
+the challenger to reconsider (with a note) or drop it (TD-193). After the last round the revision is accepted
+unreviewed, unless the last allowed round found many: then the owner chooses another round or a new plan from the
+brief (TD-210).
 """
 
 from __future__ import annotations
@@ -24,9 +26,8 @@ from owlbear_delivery_next.change_contracts.models import (
     Step,
     StepKind,
 )
-from owlbear_delivery_next.change_contracts.round_records import BRIEF, FINAL, PLAN, RECHECK, RoundLoop
+from owlbear_delivery_next.change_contracts.round_records import BRIEF, FINAL, PLAN, RECHECK, LeftOpen, RoundLoop
 from owlbear_delivery_next.change_flow import asking
-from owlbear_delivery_next.change_flow.moves import ask
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -51,6 +52,7 @@ HOW = {
     "fixed": "revised for, not challenged again",
     "standing": "rejected; the challenger accepted that",
     "owner-fix": "you decided to revise for it",
+    "left-open": "rejected; the challenger upheld it, left open",
 }
 REJECT = (
     "Revise the plan for each finding that holds. Reject one you judge wrong in `rejected`, by its key, with your "
@@ -202,8 +204,7 @@ def counted(c: Change, found: list[str], judged: Mapping[str, tuple[bool, str]])
     upheld = lp.verdict(found, judged, identity(c.plan), f"r{lp.round}", recheck=recheck)
     if c.plan:
         lp.read(c.plan.version, recheck=recheck, upheld=upheld, repair=repair)
-    if _undecided(lp) is not None:
-        return "ask"
+    delegated(c)  # an upheld rejection stands: the round goes on as for an accepted one (#1173)
     if addressing(c):
         return "revise"
     if recheck and lp.many():
@@ -230,18 +231,21 @@ def question(lp: RoundLoop, f: RoundFinding) -> Question:
     return Question(step=StepKind.PLAN, text=text, options=OPTIONS, cause=cause)
 
 
-DELEGATED = "upheld by the challenger after the planner's rejection: Delivery decided it (#1062)"
 LAST_STOP = "The plan still had many findings after its last allowed challenge round"
 
 
 def delegated(c: Change) -> bool:
-    """After approval a rejection the challenger upheld is Delivery's, decided as the owner's Revise (#1062)."""
+    """After approval a rejection the challenger upheld stands: the finding is left open and recorded on the Change.
+
+    D-01M7866JPJ080C8545DH00WY1H: no revision for it, no question. An unsure challenger's doubt joins its judgement.
+    """
     lp = current(c)
     found = [f for f in lp.findings if f.state == "escalated" and f.reconsider != "due"] if lp else []
-    for f in found:  # an unsure challenger's doubt is no finding to fix: the planner gets the original, the doubt noted
-        doubt = f". The challenger was unsure: {f.clarified}" if f.reconsider == "unsure" and f.clarified else ""
-        f.clarified = "" if doubt else f.clarified
-        f.state, f.note, f.reconsider = "owner-fix", f"{DELEGATED}{doubt}", ""
+    for f in found:
+        doubt = f" A second challenger was unsure: {f.clarified}" if f.reconsider == "unsure" and f.clarified else ""
+        f.state, f.judgement, f.reconsider, f.clarified = "left-open", f"{f.judgement}{doubt}", "", ""
+        entry = LeftOpen(loop=PLAN, attempt=lp.attempt, id=f.id, text=f.text, reason=f.reason, judgement=f.judgement)
+        c.left.append(entry)
     return bool(found)
 
 
@@ -316,10 +320,8 @@ def proceed(c: Change, now: datetime) -> None:
     lp = current(c)
     if lp is None:
         return
-    delegated(c)  # an upheld or unsure finding left after the owner's answer is Delivery's (#1062)
-    if (q := first(c)) is not None:
-        ask(c, q, now)
-    elif any(f.reconsider == "due" for f in lp.findings):
+    delegated(c)  # an upheld or unsure finding left after the owner's answer is left open (#1173)
+    if any(f.reconsider == "due" for f in lp.findings):
         _mode(c, RECONSIDER)
     elif addressing(c):
         _mode(c, None)  # the planner revises, as after a challenge: its producer's one repair chance holds (TD-123)

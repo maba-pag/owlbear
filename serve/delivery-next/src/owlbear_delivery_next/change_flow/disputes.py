@@ -5,6 +5,9 @@ to fix, with reasons. The next round's reviewer, a fresh session, judges each re
 (the owner decides it before the repair). The owner answers one finding per question: Fix it (a note guides the
 builder within the brief), Ask the reviewer to reconsider (a note is required; a fresh reviewer withdraws or clarifies
 it, or returns it unsure for Fix it or Drop it), or Drop it (a note says why to later reviewers).
+
+After brief approval the owner is not asked (D-01M7866JPJ080C8545DH00WY1H): a rejection the reviewer upheld stands,
+and the finding is left open and recorded on the Change with both reasons (``delegated``).
 """
 
 from __future__ import annotations
@@ -14,9 +17,9 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts import amend_tools, dispute_tools, round_records, tools
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import Dispute, ErrorKind, Exit, Option, Question, StepKind
-from owlbear_delivery_next.change_contracts.round_records import FINAL, MAX_FINDINGS, RECHECK
+from owlbear_delivery_next.change_contracts.round_records import FINAL, MAX_FINDINGS, RECHECK, LeftOpen
 from owlbear_delivery_next.change_flow import repairs
-from owlbear_delivery_next.change_flow.moves import ask, go, loop_of
+from owlbear_delivery_next.change_flow.moves import ask, go, loop_of, subject_of
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -275,27 +278,29 @@ def _settle(c: Change, task: Task | None, payload: object, result: StepResult) -
     return result.model_copy(update=update | {"score": None})
 
 
-DELEGATED = "upheld by the independent reviewer after the builder's rejection: Delivery decided it (#1062)"
-
-
 def delegated(c: Change, task: Task | None) -> bool:
-    """After approval a rejection the reviewer upheld is Delivery's, decided as his Fix (D-01M6RT4ADHEEH6FFAF6HVW55QZ).
+    """After approval a rejection the reviewer upheld stands: the finding is left open and recorded on the Change.
 
-    The review then completes from its held verdict, as after his answers (``workflow_steps.review.disputed``).
+    D-01M7866JPJ080C8545DH00WY1H: no repair, no question. The review then completes from its held verdict
+    (``workflow_steps.review.disputed``).
     """
     judged = target(c, task)
     if judged is None or c.brief.approved_version is None or _open(judged) is None:
         return False
+    subject = subject_of(c, judged)
     while (d := _open(judged)) is not None:
-        d.owner, d.note = "fix", DELEGATED
-        mark(c, judged, d.key, "owner-fix", note=DELEGATED)
+        d.left = True
+        mark(c, judged, d.key, "left-open")
+        doubt = f" A second reviewer was unsure: {d.clarified}" if d.reconsidered == "unsure" and d.clarified else ""
+        said = f"{d.recheck}{doubt}"
+        c.left.append(LeftOpen(loop=subject, id=d.key, text=d.finding, reason=d.reason, judgement=said))
     go(c, StepKind.REVIEW, c.step.task, DISPUTED)
     return True
 
 
 def _open(task: Task) -> Dispute | None:
     """The next rejection the owner decides: one the reviewer did not accept, or one a reconsideration left unsure."""
-    return next((d for d in task.disputes if not d.owner and d.upheld), None)
+    return next((d for d in task.disputes if not d.owner and not d.left and d.upheld), None)
 
 
 def question(task: Task, d: Dispute) -> Question:
@@ -323,7 +328,7 @@ def decided(c: Change, q: Question, target: str, at: datetime, note: str = "") -
         d.reconsidered, d.clarified = "", ""
     else:
         mark(c, task, key, "owner-fix" if d.owner == "fix" else "owner-drop", note=d.note)
-    if delegated(c, task):  # a later upheld rejection is Delivery's, as after approval it always is (#1062)
+    if delegated(c, task):  # a later upheld rejection is left open, as after approval it always is (#1173)
         return
     if (later := _open(task)) is not None:
         ask(c, question(task, later), at)
@@ -401,4 +406,6 @@ def _how(d: Dispute) -> str:
         return "dropped by the owner" + (f": {_flat(d.note, 300)}" if d.note else "")
     if d.reconsidered == "withdrawn":
         return f"withdrawn after the owner's note: {_flat(d.clarified, 300)}"
+    if d.left:
+        return "left open: the builder's rejection stands, though a reviewer upheld the finding"
     return "rejection accepted by the reviewer" if d.upheld is False else ""
