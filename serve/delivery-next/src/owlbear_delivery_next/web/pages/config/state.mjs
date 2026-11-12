@@ -79,12 +79,23 @@ export const back = (() => {
 export const page = { arrived: null, target: null };
 
 export function show() {
+  const focused = document.activeElement, label = focused?.getAttribute?.("label");
   render(view(), document.getElementById("page"));
+  if (label && !focused.isConnected) keepFocus(label);
   const target = page.target && document.querySelector(page.target);
   if (target) {
     page.target = null;
     reveal(target);
   }
+}
+
+// A control a render replaced while it held the focus (a select whose words changed with a read or an edit) hands
+// the focus to the control now under its *label*, unless the owner moved it meanwhile.
+function keepFocus(label) {
+  const next = document.querySelector(`[label="${CSS.escape(label)}"]`);
+  Promise.resolve(next?.componentOnReady?.()).then(() => {
+    if (next?.isConnected && document.activeElement === document.body) next.focus({ preventScroll: true });
+  });
 }
 
 // Focus *target*, or a row's first control, and keep it in view. A control's design-system part may still be loading,
