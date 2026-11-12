@@ -110,7 +110,12 @@ def diagnostic(c: Change) -> Repair | None:
     if r.fix == "retry" and r.witness is not None:
         return r
     return next(
-        (p for p in reversed(c.repairs.done) if p.phase == "unchanged" and (p.cause, p.target) == (r.cause, r.target)),
+        (
+            p
+            for p in reversed(c.repairs.done)
+            if p.phase == "unchanged"
+            and (p.cause, p.target, p.step, p.task, p.mode) == (r.cause, r.target, r.step, r.task, r.mode)
+        ),
         None,
     )
 
