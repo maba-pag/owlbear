@@ -132,11 +132,13 @@ def back(kind: ErrorKind, step: StepKind, subject: str, reason: str, fix: Task) 
     return StepResult(exit=Exit.BACK, back_to=StepKind.BUILD, cause=cause, reason=reason, fix_task=fix)
 
 
-def integrate(c: Change, step: StepKind, ref: str, detail: str = "") -> StepResult:
+def integrate(c: Change, _step: StepKind, ref: str, detail: str = "") -> StepResult:
     """Integration runs as a Builder task (DR3): merge *ref* into the branch before publishing or merging."""
     title = f"Merge {ref} into this branch with `git merge {ref}`, resolve any conflicts, run the checks, commit"
     return StepResult(
-        exit=Exit.BACK, back_to=StepKind.BUILD, reason=f"updating with {ref}",
+        exit=Exit.BACK,
+        back_to=StepKind.BUILD,
+        reason=f"updating with {ref}",
         fix_task=task(c, title, "integration", detail),
     )
 
