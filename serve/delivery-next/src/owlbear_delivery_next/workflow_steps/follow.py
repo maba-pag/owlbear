@@ -90,11 +90,7 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
             ctx.log(c.slug, "profile-confirmed", key=profile.DECLARED, value=value)
     if value:
         return () if value == "none" else tuple(n.strip() for n in value.split(",")), None
-    options = [
-        Option(id="yes", label="Yes: merge once those pass", next=step),
-        Option(id="names", label="Wait for the checks I type instead (their names, comma-separated)", next=step),
-        engine.PAUSE,
-    ]
+    options = [Option(id="yes", label="Yes: merge once those pass", next=step), engine.PAUSE]
     changed = " (its CI files changed in this Change)" if digest != bound else ""
     text = (
         f"Delivery could not read the names of every check this project's CI runs before a merge{changed}. "
@@ -136,9 +132,6 @@ def episode(ctx: Ctx, c: Change, head: str, state: CiState) -> Change:
             c.missing = Episode(head=head, since=ctx.now)
         return c
     c.missing = None
-    for q in c.questions:
-        if q.cause and q.cause.startswith(MISSING) and q.answer and not q.effect_observed_at:
-            c = budgets.effect_observed(c, q.id, ctx.now)
     return c
 
 
@@ -212,7 +205,7 @@ def _reply(  # noqa: PLR0913 - one reply needs the PR, the task, its response an
 def _repost(  # noqa: PLR0913 - one repost needs the PR, the item's state and the conversation read
     ctx: Ctx, c: Change, pr: PullRequest, s: conv.State, *, items: tuple[ConversationItem, ...], step: StepKind
 ) -> tuple[Change, StepResult | None]:
-    """P13: adopt a replay of a deleted reply, else repost it; after ``REPOSTS`` reposts the owner decides."""
+    """P13: adopt a replay of a deleted reply, else repost it; after ``REPOSTS`` reposts the step stops."""
     assert s.rec  # noqa: S101 - only handled items reach here
     task = s.rec.task
     mark = conv.marker(c.slug, s.item.id, task)
@@ -224,11 +217,11 @@ def _repost(  # noqa: PLR0913 - one repost needs the PR, the item's state and th
         cause = failures.cause_key(ErrorKind.GATE, step, f"repost:{s.item.id}")
         where = s.item.url or s.item.id
         said = (
-            f"Delivery's reply on {where} was deleted {rec.reposts} times. Reply there yourself, or run the step "
-            "again and Delivery posts it once more"
+            f"Delivery's reply on {where} was deleted {rec.reposts} times. "
+            "Run the step again and Delivery posts its saved reply once more"
         )
         rec.reposts = 0  # the rerun posts again
-        return c, engine.blocked(cause, said, f"PR #{pr.number}", ctx.now)
+        return c, engine.blocked(cause, said, f"The saved reply: {rec.text}", ctx.now)
     rec.reposts += 1
     rec.reply_id = _post(ctx, c, pr, s.item, r=Response(how=rec.how, text=rec.text, commit=rec.commit), task=task)
     return c, None
@@ -320,13 +313,13 @@ def _reopening(c: Change) -> Question | None:
 
 
 def reopen(ctx: Ctx, c: Change, pr: PullRequest) -> tuple[Change, PullRequest, StepResult | None]:
-    """M4 reopen: reopen the closed PR when the project's account can push, else ask the owner; go on once it's open."""
+    """M4 reopen: reopen the closed PR when the project's account can push, else stop; go on once it's open."""
     q, refused = _reopening(c), "this project's GitHub account may not push to the repository"
     if q and pr.state != "open" and not pr.merged and can_push(ctx):
         refused = ""
         try:
             ctx.gh.reopen_pull_request(ctx.repository, pr.number)
-        except ProviderError as exc:  # GitHub refuses, e.g. a deleted branch: the owner gets the action
+        except ProviderError as exc:  # GitHub refuses, e.g. a deleted branch: the step stops with its reason
             refused = failure(exc)
             ctx.log(c.slug, "reopen", pr=pr.number, error=refused)
         pr = ctx.gh.read_pull_request(ctx.repository, pr.number)

@@ -29,6 +29,7 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_contracts.round_records import FINAL
 from owlbear_delivery_next.change_flow import curation_flow, stuck
 from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go
+from owlbear_delivery_next.change_flow.round_marks import problem, some
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -286,12 +287,14 @@ def _round(c: Change, r: StepResult, now: datetime) -> None:
             Option(id="accept", label="Accept as it is", next="done"),
         ]
         what = "the final review" if key == FINAL else (f"task {s.task}" if s.task else f"the {s.kind}")
-        text = (
-            f"Review findings remain on {what} after {ROUND_LIMIT} rounds. Accept: the work ships with them open. "
-            f"Fix: the builder works on them again.\n\nDetails: {r.reason}"
-        )
         cause = cause_key(ErrorKind.REVIEW, s.kind, key)
         held = [r.fix_task, *r.more_fixes] if s.kind == StepKind.REVIEW and r.fix_task else []
+        found = [problem(ln) for t in held for ln in t.detail.splitlines() if ln.startswith("- ")]
+        wrong = f" The review says this is still wrong: {some(found)}." if found else ""
+        text = (  # what may still be wrong leads, in the reviewer's words (#1168)
+            f"Review findings remain on {what} after {ROUND_LIMIT} rounds.{wrong} Accept: the work ships with them "
+            f"open. Fix: the builder works on them again.\n\nDetails: {r.reason}"
+        )
         ask(c, Question(step=s.kind, text=text, options=options, cause=cause, repair=held, subject="product"), now)
     elif s.kind == StepKind.REVIEW:
         go(c, StepKind.BUILD, fix_task(c, r, s.task or FINAL) or s.task)

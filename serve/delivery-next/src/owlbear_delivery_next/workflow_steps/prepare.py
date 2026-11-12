@@ -217,7 +217,7 @@ def chosen(  # noqa: PLR0913, PLR0917 - the session's end, its worktree and what
 
 
 def unsafe(settings: Settings, live: Mapping[str, str] | None = None) -> loop.StepResult | None:
-    """No option is declared, or none is permitted, so a check would run on live data: the owner decides."""
+    """No option is declared, or none is permitted, so a check would run on live data: the step stops."""
     live = dict(os.environ) if live is None else live
     lead = "Checks cannot run: this project has no safe test copy set up, and Delivery never runs a check on live data"
     how = (
@@ -238,7 +238,7 @@ def unsafe(settings: Settings, live: Mapping[str, str] | None = None) -> loop.St
 
 
 def refused(store: Store, lock: Lock, c: Change) -> bool:
-    """A check step with no permitted preparation asks the owner instead of starting a preparer."""
+    """A check step with no permitted preparation stops instead of starting a preparer."""
     asked = unsafe(store.settings()) if c.step.kind == StepKind.CHECK else None
     if asked:
         store.write(lock, loop.apply(c, asked, datetime.now(UTC)))
@@ -246,7 +246,7 @@ def refused(store: Store, lock: Lock, c: Change) -> bool:
 
 
 def stepped(c: Change, *, prepared: bool) -> None:
-    """Clicks and typing run only on a prepared test copy (TD-96); without one the owner decides.
+    """Clicks and typing run only on a prepared test copy (TD-96); without one the step stops.
 
     Raises:
         PrepareError: a state has steps and the check has no preparation.

@@ -222,8 +222,9 @@ def collision(  # noqa: PLR0913 - collision context, path policy and the pending
     if any(q.cause in consent and q.answer and q.answer.option in {"keep", "adopt"} for q in c.questions):
         return None
     others = ", ".join(n.handle for n, _ in hits)
-    state = {True: "merged", False: "open"}
-    wants = " ".join(f"{n.handle} ({state[n.merged]}): {(n.outcome or '?').rstrip('.')}." for n, _ in hits)
+    wants = " ".join(
+        f"{n.handle} ({'merged' if n.merged else 'open'}): {(n.outcome or '?').rstrip('.')}." for n, _ in hits
+    )
     on = "; ".join(f"{n.handle} on {', '.join(ps[:5])}" for n, ps in hits)
     told = f" The builder who combined them says: {said.rstrip('. ')}." if said else ""
     mine = (c.brief.outcome or "?").rstrip(".")

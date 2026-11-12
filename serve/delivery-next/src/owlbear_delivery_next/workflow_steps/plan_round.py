@@ -231,8 +231,8 @@ def prompt(c: Change, at: Path) -> str:
 def unshelved(why: str) -> loop.StepResult:
     """Planning stops until the worktree the planner would find dirty is cleared; *why* says the error."""
     said = (
-        "Delivery could not set aside uncommitted edits in this Change's worktree before planning. "
-        "Commit or discard them there, then run the step again"
+        "Delivery could not safely set aside uncommitted work in this Change's worktree before planning. "
+        "Ask a chat to resolve the Git error below without losing work, then run the step again"
     )
     cause = cause_key(ErrorKind.STATE, StepKind.PLAN, "dirty-worktree")
     return engine.blocked(cause, said, why)

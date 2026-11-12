@@ -414,7 +414,7 @@ def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_m
     cx = ctx(tmp_path, gh, p)
     cx.store.root.mkdir()
     c, result = merge.run(cx, change(worktree=str(clone), head=head))
-    assert (result.exit, [o.id for o in result.question.options]) == (Exit.ASK, ["yes", "names", "pause"])
+    assert (result.exit, [o.id for o in result.question.options]) == (Exit.ASK, ["yes", "pause"])
     assert result.question.subject == "reserved"  # which checks gate a merge is his: a yes or no on what was read
     assert "those it could read: none it could read. Merge on that basis?" in result.question.text
     assert result.cause.endswith(f"declared-{profile.digest_of(entries[profile.DECLARED])}")
@@ -472,7 +472,7 @@ def test_a_none_confirmation_does_not_survive_a_workflow_the_change_adds(tmp_pat
     assert (result.exit, "its CI files changed in this Change" in result.reason) == (Exit.ASK, True)
     assert follow.run(cx, c)[1].cause == result.cause  # asked once per digest
     c = loop.apply(c, result, NOW)
-    answer = AnswerItem(at=NOW, question=c.outcome.question, option="names", text="t (a), t (b)")
+    answer = AnswerItem(at=NOW, question=c.outcome.question, text="t (a), t (b)")  # as saved before #1168: still read
     c, _ = loop.schedule(c, [answer], NOW)
     _, result = follow.run(cx, c)
     assert (result.exit, result.back_to, result.fix_task.title) == (
@@ -817,8 +817,8 @@ def test_the_fourth_repost_of_a_disappearing_reply_stops_and_a_rerun_posts_again
     c, result = follow.conversation(cx, c, gh.pr, StepKind.FOLLOW)
     assert (result.exit, result.question) == (Exit.STOP, None)  # Delivery's own problem: never a question (#1168)
     assert result.stop.reason.startswith(
-        "Delivery's reply on https://github.com/o/r/pull/7#c1 was deleted 3 times. Reply there yourself, or run the "
-        "step again and Delivery posts it once more."
+        "Delivery's reply on https://github.com/o/r/pull/7#c1 was deleted 3 times. Run the step again and Delivery "
+        "posts its saved reply once more.\n\nDetails: The saved reply: Because."
     )
     assert len(gh.posts) == 4
     c = loop.apply(c, result, NOW)

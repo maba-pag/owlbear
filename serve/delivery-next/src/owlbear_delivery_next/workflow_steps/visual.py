@@ -277,7 +277,7 @@ def missing_browser(reason: str) -> StepResult:
         f"Install it in a terminal with `{INSTALL}`, then run the step again"
     )
     cause = cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, VISUAL)
-    return engine.blocked(cause, said, reason[:400])
+    return engine.blocked(cause, said, reason)
 
 
 def broken(reason: str) -> StepResult:

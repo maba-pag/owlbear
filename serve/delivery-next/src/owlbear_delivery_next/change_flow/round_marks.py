@@ -48,22 +48,23 @@ def unmet(c: Change, lp: RoundLoop) -> list[Criterion]:
     return [k for k in c.brief.criteria if any(re.search(rf"(?<![\w-]){re.escape(k.id)}(?![\w-])", s) for s in said)]
 
 
-def _problem(text: str) -> str:
+def problem(text: str) -> str:
     """A finding's problem without its fix: findings read ``place: problem - fix: fix``."""
-    return " ".join(text.split(" - fix:", 1)[0].split())
+    return " ".join(text.removeprefix("- ").split(" - fix:", 1)[0].split())
+
+
+def some(items: list[str]) -> str:
+    """The first few of *items* and how many more there are."""
+    more = f"; and {len(items) - SHOWN} more" if len(items) > SHOWN else ""
+    return "; ".join(items[:SHOWN]) + more
 
 
 def risk(c: Change, lp: RoundLoop) -> str:
-    """What accepting the loop's work may leave, in the reviewer's words (#1168): the problems first, never counts."""
-
-    def some(items: list[str]) -> str:
-        more = f"; and {len(items) - SHOWN} more" if len(items) > SHOWN else ""
-        return "; ".join(items[:SHOWN]) + more
-
+    """What the loop's work may still get wrong, in the reviewer's words (#1168): the problems first, never counts."""
     kinds = [(f, kind(lp, f)) for f in lp.findings]
-    still = [_problem(f.text) for f, k in kinds if k == "open"]
-    unseen = [_problem(f.text) for f, k in kinds if k == "unverified"]
-    said = [f"If you accept the work as it is, this may still be wrong: {some(still)}."] if still else []
+    still = [problem(f.text) for f, k in kinds if k == "open"]
+    unseen = [problem(f.text) for f, k in kinds if k == "unverified"]
+    said = [f"The review says this is still wrong: {some(still)}."] if still else []
     if unseen:
         said.append(f"Reported fixed or rejected by the builder, and not reviewed again: {some(unseen)}.")
     if named := unmet(c, lp):

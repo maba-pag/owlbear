@@ -212,8 +212,8 @@ def _final(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
     if why:
         text = ASKED.format(what=f"final review attempt {lp.attempt}", why=why)
         repair = next((t.id for t in reversed(change.plan.tasks) if t.fixes == FINAL), FINAL) if change.plan else FINAL
-        q = Question(step=StepKind.REVIEW, text=text, options=OPTIONS, cause=f"{PREFIX}{FINAL} {repair}")
-        ask(change, q.model_copy(update={"subject": "reserved"}), now)
+        cause = f"{PREFIX}{FINAL} {repair}"
+        ask(change, Question(step=StepKind.REVIEW, text=text, options=OPTIONS, cause=cause, subject="reserved"), now)
     elif clean:
         how = "from a clean state: Delivery undid the Change's earlier work, which stays archived on a branch"
         round_flow.replan(change, lp, round_flow.why(lp, how), now)
