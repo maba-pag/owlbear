@@ -603,7 +603,7 @@ def test_a_recipe_for_another_check_or_other_inputs_is_forgotten_and_an_agent_pr
     assert (agents, after.recipe, after.env) == (["agent"], None, None)
 
 
-def test_a_project_without_a_preparation_option_asks_and_neither_reuses_nor_prepares(store, tmp_path, reusable):
+def test_a_project_without_a_preparation_option_stops_and_neither_reuses_nor_prepares(store, tmp_path, reusable):
     _fake, agents = reusable
     assert (
         store.save(
@@ -614,7 +614,7 @@ def test_a_project_without_a_preparation_option_asks_and_neither_reuses_nor_prep
     step(store, tmp_path)
     after = store.read("c1")
     assert (agents, after.env, after.outcome.exit, after.outcome.cause) == (
-        [], None, Exit.ASK, "project-env:check:preparation-missing"
+        [], None, Exit.STOP, "project-env:check:preparation-missing"
     )  # fmt: skip
 
 

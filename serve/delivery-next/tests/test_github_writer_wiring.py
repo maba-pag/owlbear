@@ -157,7 +157,7 @@ def test_each_construction_site_launches_gh_as_its_account(case, fake_gh, tmp_pa
     assert {c["GH_TOKEN"] for c in launches} == {f"tok-{login}"}
 
 
-def test_an_unset_setting_observes_nothing_and_asks_the_owner_at_the_step(fake_gh, tmp_path, monkeypatch):
+def test_an_unset_setting_observes_nothing_and_stops_the_step(fake_gh, tmp_path, monkeypatch):
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"github_account": None}))
     store, repo = _project(tmp_path)
     c = _following(store)
@@ -166,8 +166,9 @@ def test_an_unset_setting_observes_nothing_and_asks_the_owner_at_the_step(fake_g
     assert queue.barrier(store, repo)(before, before.model_copy(update={"step": Step(kind=StepKind.FOLLOW)})) is None
     with store.lock("c1") as lock:
         runner._run(store, lock, c, c.step, repo)  # noqa: SLF001 - the manual runner's handler
-    (question,) = store.read("c1").questions
-    assert "github_account" in question.text
+    stopped = store.read("c1")
+    assert (stopped.questions, "Settings page" in stopped.stop.reason) == ([], True)  # a stop, never a question
+    assert [e["reason"] for e in store.events("c1") if e.get("event") == "settings-unset"] == ["github_account"]
     assert fake_gh.calls() == []
 
 
@@ -242,7 +243,7 @@ def test_each_project_git_launch_carries_the_projects_account(case, fake_gh, git
     ("setting", "cause", "says"),
     [("octo-writer", "gate:publish:ssh", "over SSH"), ("nobody", "auth:publish:gh", "nobody")],
 )
-def test_an_ssh_push_or_a_missing_account_asks_the_owner_and_pushes_nothing(  # noqa: PLR0913, PLR0917 - one case
+def test_an_ssh_push_or_a_missing_account_stops_and_pushes_nothing(  # noqa: PLR0913, PLR0917 - one case
     setting, cause, says, fake_gh, git_launches, tmp_path, monkeypatch
 ):
     fake_gh.set(ACCOUNTS, {"github.com": "maba-pag"})
@@ -252,8 +253,8 @@ def test_an_ssh_push_or_a_missing_account_asks_the_owner_and_pushes_nothing(  # 
     with store.lock("c1") as lock:
         ctx = engine.Ctx(store, lock, repo, store.read_profile(), None, NOW)
         _, result = engine.run(lambda x, c: (c, publish.push(repo, c, head, x.writer.access())), ctx, _change(repo))
-    assert (result.exit, result.cause) == (Exit.ASK, cause)
-    assert says in result.question.text
+    assert (result.exit, result.cause, result.question) == (Exit.STOP, cause, None)  # sign in, then run it again
+    assert says in result.stop.reason
     assert "push" not in git_launches.verbs()
 
 
