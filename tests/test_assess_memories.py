@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from itertools import count
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -22,7 +21,6 @@ _ID_CONTESTED = "550e8400-e29b-41d4-a716-446655441862"
 _ID_PENDING = "550e8400-e29b-41d4-a716-446655441863"
 _ID_MISSING = "550e8400-e29b-41d4-a716-446655441866"
 _ID_CURATED_B = "550e8400-e29b-41d4-a716-446655441867"
-_TASK_IDS = count()
 
 
 def _make_entry(entry_id: str, state: str, **fields: object) -> MemoryEntry:
@@ -55,17 +53,6 @@ def _make_ctx(engine: MemoryEngine, directory: Path) -> SimpleNamespace:
     return SimpleNamespace(
         request_context=SimpleNamespace(lifespan_context=AppContext(engine=engine, memory_dir=directory))
     )
-
-
-def _record_assessment(engine: MemoryEngine, entry_id: str, bucket: str) -> MemoryEntry:
-    entry = engine.get_entry(entry_id)
-    return engine.record_assessment(
-        entry_id,
-        bucket,
-        task_id=f"assessment-test-{next(_TASK_IDS)}",
-        expected_revision=entry.revision,
-        stale_factor=50,
-    ).entry
 
 
 @pytest.mark.asyncio
@@ -169,7 +156,10 @@ def test_the_stale_factor_decides_at_the_boundary(tmp_path: Path, factor: int, e
 def test_slot_efficiency_not_exceeded_state_unchanged(tmp_path: Path) -> None:
     entry = _make_entry(_ID_APPROVED, "approved", outstanding_count=10, didnt_use_count=1)
     _seed_entry(tmp_path, entry)
-    assert _record_assessment(MemoryEngine(tmp_path), entry.id, "didnt_use").state == MemoryState.APPROVED
+    result = MemoryEngine(tmp_path).record_assessment(
+        entry.id, "didnt_use", task_id="slot-efficient", expected_revision=entry.revision, stale_factor=50
+    )
+    assert result.entry.state == MemoryState.APPROVED
 
 
 @pytest.mark.asyncio
