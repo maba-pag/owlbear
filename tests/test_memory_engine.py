@@ -7,12 +7,15 @@ import json
 import re
 from functools import partial
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
 
 import pytest
 from owlbear_memory import MemoryEngine, storage
 from owlbear_memory.errors import ConcurrencyError, ValidationError
 from owlbear_memory.models import AssessmentReceipt, MemoryEntry, MemoryState
+
+from owlbear_memory_mcp.server import AppContext
+from owlbear_memory_mcp.tools import approve_memory, curate_memory, read_memory, recall_memory, save_memory
 
 _VALID_ID = "550e8400-e29b-41d4-a716-446655440000"
 
@@ -89,47 +92,44 @@ def test_memory_entry_revision_preserves_list_order(field: str, replacement: lis
     assert changed.revision != entry.revision
 
 
-def test_engine_revision_survives_reads_approval_and_assessment(tmp_path: Path) -> None:
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("todays_memory_values")
+async def test_saved_lesson_is_curated_approved_recalled_and_refreshed(tmp_path: Path) -> None:
     engine = MemoryEngine(tmp_path)
-    entry = engine.save(
-        title="Revision entry",
+    ctx = SimpleNamespace(
+        request_context=SimpleNamespace(lifespan_context=AppContext(engine, tmp_path, agents=frozenset({"test-agent"})))
+    )
+    pending = await save_memory(
+        ctx,
+        title="Revision lesson",
         content="Stable content",
         categories=["domain-knowledge"],
         confidence=0.9,
         source_agent="test-agent",
-        scope_agents=[],
+        where="project",
     )
-    initial_revision = entry.revision
-    entry_path = tmp_path / f"{entry.id}.md"
-
-    assert engine.get_entry(entry.id).revision == initial_revision
-    assert MemoryEngine(tmp_path).get_entry(entry.id).revision == initial_revision
+    entry_id, initial_revision = pending["id"], pending["revision"]
+    entry_path = tmp_path / f"{entry_id}.md"
+    assert (pending["state"], pending["scope_agents"], pending["recommended"]) == ("pending", [], "project")
+    assert entry_id not in await recall_memory(ctx, agent="test-agent")
+    assert (await read_memory(ctx, entry_id=entry_id))["revision"] == initial_revision
+    assert MemoryEngine(tmp_path).get_entry(entry_id).revision == initial_revision
     assert "revision:" not in entry_path.read_text(encoding="utf-8")
 
-    curated = engine.edit(entry.id, {"scope_agents": ["test-agent"]}, expected_revision=initial_revision)
-    curated_revision = curated.revision
-    with patch.object(
-        engine,
-        "_now_iso",
-        side_effect=["2026-02-01T00:00:00+00:00", "2026-02-02T00:00:00+00:00"],
-    ):
-        approved = engine.approve(entry.id, expected_revision=curated_revision)
-        assessed = engine.record_assessment(
-            entry.id,
-            "outstanding",
-            task_id="engine-assessment",
-            expected_revision=approved.revision,
-            stale_factor=50,
-        ).entry
-
-    assert curated.state == MemoryState.CURATED
-    assert approved.state == MemoryState.APPROVED
-    assert approved.updated_at != curated.updated_at
-    assert approved.revision == curated_revision
-    assert assessed.outstanding_count == 1
-    assert assessed.updated_at != approved.updated_at
-    assert assessed.revision == curated_revision
-    assert MemoryEngine(tmp_path).get_entry(entry.id).revision == curated_revision
+    curated = await curate_memory(ctx, entry_id=entry_id, revision=initial_revision, scope_agents=["test-agent"])
+    revision = curated["revision"]
+    assert curated["state"] == "curated"
+    assert revision != initial_revision
+    approved = await approve_memory(ctx, entry_id=entry_id, revision=revision)
+    assert approved["state"] == "approved"
+    assert approved["approved_at"] == approved["updated_at"] != curated["updated_at"]
+    assert approved["revision"] == revision
+    expected = f"## Revision lesson\nEntry ID: `{entry_id}`\nRevision: `{revision}`\nStable content"
+    assert await recall_memory(ctx, agent="test-agent") == expected
+    engine.load()
+    assert MemoryEngine(tmp_path).get_entry(entry_id) == engine.get_entry(entry_id)
+    assert (await read_memory(ctx, entry_id=entry_id))["revision"] == revision
+    assert await recall_memory(ctx, agent="test-agent") == expected
 
 
 @pytest.mark.parametrize("operation", ["approve", "edit", "delete"])
@@ -393,13 +393,7 @@ def test_content_edit_discards_receipts_for_previous_revision(tmp_path: Path) ->
     storage.write_entry(tmp_path / f"{entry.id}.md", entry, memory_dir=tmp_path)
     engine = MemoryEngine(tmp_path)
     engine.load()
-
-    updated = engine.edit(
-        entry.id,
-        {"content": "Changed content."},
-        expected_revision=entry.revision,
-    )
-
+    updated = engine.edit(entry.id, {"content": "Changed content."}, expected_revision=entry.revision)
     assert updated.revision != entry.revision
     assert updated.assessment_receipts == []
     assert MemoryEngine(tmp_path).get_entry(entry.id).assessment_receipts == []

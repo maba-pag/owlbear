@@ -1,13 +1,4 @@
-"""Tests for owlbear-memory package primitives.
-
-Covers:
-- models.py — MemoryEntry, MemoryCategory, MemoryState with all required fields,
-  validators (UUIDv4, tz-aware timestamps, frozen source_agent), content ≤1024 constraint
-- errors.py — NotFoundError, ConcurrencyError, ValidationError, TransitionError
-- storage.read_entry — symlink/size rejection, YAML parsing, lenient (returns None)
-- storage.write_entry — containment, symlink rejection, atomic write
-- storage.delete_entry — containment, symlink rejection, NotFoundError
-"""
+"""Memory's public schema and independent raw-file storage boundaries."""
 
 from __future__ import annotations
 
@@ -20,23 +11,14 @@ from unittest.mock import patch
 
 import pytest
 from owlbear_memory import storage
-from owlbear_memory.errors import (
-    ConcurrencyError,
-    NotFoundError,
-    TransitionError,
-)
-from owlbear_memory.errors import (
-    ValidationError as MemValidationError,
-)
-from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryState
+from owlbear_memory.errors import ConcurrencyError, NotFoundError, TransitionError
+from owlbear_memory.errors import ValidationError as MemValidationError
+from owlbear_memory.models import ChallengeRecord, MemoryCategory, MemoryEntry, MemoryState
 from pydantic import ValidationError as PydanticValidationError
 
-# ---------------------------------------------------------------------------
-# Shared constants and helpers
-# ---------------------------------------------------------------------------
+from owlbear_memory_mcp.tools import MemoryState as McpState
 
 _VALID_ID = "550e8400-e29b-41d4-a716-446655440000"
-
 _VALID_FRONTMATTER = """\
 ---
 id: 550e8400-e29b-41d4-a716-446655440000
@@ -53,7 +35,6 @@ approved_at: null
 ---
 
 """
-
 _8KB = 8192
 
 
@@ -78,18 +59,15 @@ def _make_valid_entry() -> MemoryEntry:
 
 
 def _write_valid_file(path: Path, body: str = "Some content") -> None:
-    """Write a syntactically and semantically valid memory markdown file."""
     path.write_text(_VALID_FRONTMATTER + body + "\n", encoding="utf-8")
 
 
 def test_a_recommended_scope_round_trips_and_an_entry_without_one_keeps_its_bytes(tmp_path: Path) -> None:
-    """TD-293: the saver's recommendation is written only when set, so files saved before it stay unchanged."""
     plain, recommended = tmp_path / "plain.md", tmp_path / "recommended.md"
     storage.write_entry(plain, _make_valid_entry(), memory_dir=tmp_path)
     storage.write_entry(
         recommended, _make_valid_entry().model_copy(update={"recommended": "global"}), memory_dir=tmp_path
     )
-
     assert "recommended" not in plain.read_text(encoding="utf-8")
     assert (storage.read_entry(plain).recommended, storage.read_entry(recommended).recommended) == (None, "global")
     with pytest.raises(PydanticValidationError):
@@ -97,7 +75,6 @@ def test_a_recommended_scope_round_trips_and_an_entry_without_one_keeps_its_byte
 
 
 def test_concurrent_reads_and_writes_parse_every_entry(tmp_path: Path) -> None:
-    """Threads sharing the storage module never corrupt each other's YAML parsing."""
     previous_interval = sys.getswitchinterval()
     sys.setswitchinterval(1e-5)
     entry = _make_valid_entry().model_copy(update={"content": "c" * 500})
@@ -120,563 +97,322 @@ def test_concurrent_reads_and_writes_parse_every_entry(tmp_path: Path) -> None:
         sys.setswitchinterval(previous_interval)
 
 
-# ---------------------------------------------------------------------------
-# AC1: models.py — MemoryEntry, MemoryCategory, MemoryState
-# ---------------------------------------------------------------------------
+def test_public_memory_types() -> None:
+    assert {v.value for v in MemoryCategory} == {
+        "domain-knowledge",
+        "behaviour",
+        "pitfall",
+        "process",
+        "tool-usage",
+        "goal",
+        "personality",
+        "preference",
+        "env-context",
+    }
+    assert {v.value for v in MemoryState} == {
+        "pending",
+        "curated",
+        "approved",
+        "contested",
+        "disputed",
+        "stale",
+        "deleted",
+    }
+    assert McpState is MemoryState
+    assert issubclass(MemoryCategory, StrEnum)
+    assert issubclass(MemoryState, StrEnum)
+    assert {
+        "id",
+        "title",
+        "content",
+        "categories",
+        "confidence",
+        "state",
+        "scope_agents",
+        "source_agent",
+        "created_at",
+        "updated_at",
+        "approved_at",
+    } <= MemoryEntry.model_fields.keys()
+    errors = {NotFoundError, ConcurrencyError, MemValidationError, TransitionError}
+    assert len(errors) == 4
+    for error in errors:
+        assert issubclass(error, Exception)
+        message = "public failure"
+        with pytest.raises(error, match="public failure"):
+            raise error(message)
 
 
-class TestModels:
-    """AC1: models.py exports correct Pydantic models with required fields and validators."""
-
-    # --- MemoryCategory ---
-
-    def test_memory_category_values(self) -> None:
-        """MemoryCategory must contain exactly the 9 documented string values."""
-        expected = {
-            "domain-knowledge",
-            "behaviour",
-            "pitfall",
-            "process",
-            "tool-usage",
-            "goal",
-            "personality",
-            "preference",
-            "env-context",
-        }
-        actual = {v.value for v in MemoryCategory}
-        assert actual == expected
-
-    # --- MemoryState ---
-
-    def test_memory_state_values(self) -> None:
-        """MemoryState must contain all lifecycle states."""
-        expected = {"pending", "curated", "approved", "contested", "disputed", "stale", "deleted"}
-        actual = {v.value for v in MemoryState}
-        assert actual == expected
-
-    # --- AC5: StrEnum subclass contract ---
-
-    def test_memory_category_is_str_enum_subclass(self) -> None:
-        """AC5: MemoryCategory must be a StrEnum, not a plain Enum (regression guard)."""
-        assert issubclass(MemoryCategory, StrEnum)
-
-    def test_memory_state_is_str_enum_subclass(self) -> None:
-        """AC5: MemoryState must be a StrEnum, not a plain Enum (regression guard)."""
-        assert issubclass(MemoryState, StrEnum)
-
-    # --- MemoryEntry construction ---
-
-    def test_memory_entry_valid_instantiation(self) -> None:
-        """Happy: MemoryEntry instantiates from valid data without error."""
-        entry = _make_valid_entry()
-        assert entry.id == _VALID_ID
-        assert entry.title == "Test Entry"
-        assert entry.content == "Some content"
-
-    def test_memory_entry_has_all_required_fields(self) -> None:
-        """MemoryEntry must expose all 11 documented fields."""
-        entry = _make_valid_entry()
-        required = (
-            "id",
-            "title",
-            "content",
-            "categories",
-            "confidence",
-            "state",
-            "scope_agents",
-            "source_agent",
-            "created_at",
-            "updated_at",
-            "approved_at",
-        )
-        for field in required:
-            assert hasattr(entry, field), f"MemoryEntry missing field: {field}"
-
-    # --- approved_at ---
-
-    def test_approved_at_nullable(self) -> None:
-        """approved_at field accepts None."""
-        entry = MemoryEntry(**{**_valid_entry_data(), "approved_at": None})
-        assert entry.approved_at is None
-
-    def test_approved_at_accepts_tz_aware_timestamp(self) -> None:
-        """approved_at field accepts a valid timezone-aware ISO timestamp string."""
-        ts = "2026-06-01T12:00:00+00:00"
-        entry = MemoryEntry(**{**_valid_entry_data(), "approved_at": ts})
-        assert entry.approved_at == ts
-
-    # --- content ≤1024 constraint ---
-
-    def test_content_at_max_length_is_valid(self) -> None:
-        """Boundary: content of exactly 1024 characters is accepted."""
-        entry = MemoryEntry(**{**_valid_entry_data(), "content": "x" * 1024})
-        assert len(entry.content) == 1024
-
-    def test_content_over_max_length_is_rejected(self) -> None:
-        """Boundary: content of 1025 characters is rejected at construction."""
+@pytest.mark.parametrize(
+    ("fields", "valid"),
+    [
+        ({}, True),
+        ({"approved_at": None}, True),
+        ({"approved_at": "2026-06-01T12:00:00+00:00"}, True),
+        ({"content": "x" * 1024}, True),
+        ({"content": "x" * 1025}, False),
+        ({"id": "not-a-uuid"}, False),
+        ({"id": "a3bb189e-8bf9-3888-9912-ace4e6543002"}, False),
+        ({"created_at": "2026-01-01T00:00:00"}, False),
+        ({"updated_at": "2026-01-01"}, False),
+        ({"scope_agents": []}, True),
+        ({"scope_agents": ["builder", "reviewer"]}, True),
+    ],
+)
+def test_memory_model_schema(fields: dict, *, valid: bool) -> None:
+    data = {**_valid_entry_data(), **fields}
+    if not valid:
         with pytest.raises(PydanticValidationError):
-            MemoryEntry(**{**_valid_entry_data(), "content": "x" * 1025})
-
-    # --- id UUIDv4 validator ---
-
-    def test_id_non_uuid_string_is_rejected(self) -> None:
-        """Error: a non-UUID id string is rejected at construction."""
-        with pytest.raises(PydanticValidationError):
-            MemoryEntry(**{**_valid_entry_data(), "id": "not-a-uuid"})
-
-    def test_id_uuid_v3_is_rejected(self) -> None:
-        """Error: UUIDv3 id is rejected (version 4 required)."""
-        uuid_v3 = "a3bb189e-8bf9-3888-9912-ace4e6543002"
-        with pytest.raises(PydanticValidationError):
-            MemoryEntry(**{**_valid_entry_data(), "id": uuid_v3})
-
-    # --- timezone-aware timestamp validators ---
-
-    def test_timestamps_require_timezone_info(self) -> None:
-        """Error: a timezone-naive created_at timestamp is rejected."""
-        with pytest.raises(PydanticValidationError):
-            MemoryEntry(**{**_valid_entry_data(), "created_at": "2026-01-01T00:00:00"})
-
-    def test_timestamps_must_include_time_component(self) -> None:
-        """Error: a date-only updated_at value (no time) is rejected."""
-        with pytest.raises(PydanticValidationError):
-            MemoryEntry(**{**_valid_entry_data(), "updated_at": "2026-01-01"})
-
-    # --- source_agent frozen ---
-
-    def test_source_agent_is_frozen_after_creation(self) -> None:
-        """Error: mutating source_agent after construction raises an error (frozen field)."""
-        entry = _make_valid_entry()
-        with pytest.raises(PydanticValidationError):
-            entry.source_agent = "new-agent"  # type: ignore[misc]
-
-    # --- scope_agents ---
-
-    def test_scope_agents_accepts_empty_list(self) -> None:
-        """Edge: scope_agents field accepts an empty list."""
-        entry = MemoryEntry(**{**_valid_entry_data(), "scope_agents": []})
-        assert entry.scope_agents == []
-
-    def test_scope_agents_accepts_agent_name_list(self) -> None:
-        """Happy: scope_agents accepts a non-empty list of agent name strings."""
-        agents = ["builder", "reviewer"]
-        entry = MemoryEntry(**{**_valid_entry_data(), "scope_agents": agents})
-        assert "builder" in entry.scope_agents
-        assert "reviewer" in entry.scope_agents
+            MemoryEntry(**data)
+        return
+    entry = MemoryEntry(**data)
+    assert all(getattr(entry, field) == value for field, value in data.items())
+    assert entry.challenges == []
+    assert "contested_by_task" not in MemoryEntry.model_fields
 
 
-# ---------------------------------------------------------------------------
-# AC2: errors.py — NotFoundError, ConcurrencyError, ValidationError, TransitionError
-# ---------------------------------------------------------------------------
+def test_source_agent_is_frozen_after_creation() -> None:
+    entry = _make_valid_entry()
+    with pytest.raises(PydanticValidationError):
+        entry.source_agent = "new-agent"  # type: ignore[misc]
 
 
-class TestErrors:
-    """AC2: errors.py exports 4 distinct Exception subclasses."""
-
-    def test_not_found_error_is_exception_subclass(self) -> None:
-        """NotFoundError must subclass Exception."""
-        assert issubclass(NotFoundError, Exception)
-
-    def test_concurrency_error_is_exception_subclass(self) -> None:
-        """ConcurrencyError must subclass Exception."""
-        assert issubclass(ConcurrencyError, Exception)
-
-    def test_validation_error_is_exception_subclass(self) -> None:
-        """ValidationError must subclass Exception."""
-        assert issubclass(MemValidationError, Exception)
-
-    def test_transition_error_is_exception_subclass(self) -> None:
-        """TransitionError must subclass Exception."""
-        assert issubclass(TransitionError, Exception)
-
-    def test_error_classes_are_distinct_types(self) -> None:
-        """All 4 error classes must be distinct types, not aliases of each other."""
-        classes = {NotFoundError, ConcurrencyError, MemValidationError, TransitionError}
-        assert len(classes) == 4
-
-    def test_not_found_error_can_be_raised_and_caught_as_exception(self) -> None:
-        """NotFoundError can be raised and caught as a plain Exception."""
-        msg = "entry not found"
-        with pytest.raises(NotFoundError):
-            raise NotFoundError(msg)
-
-    def test_concurrency_error_can_be_raised_and_caught_as_exception(self) -> None:
-        """ConcurrencyError can be raised and caught as a plain Exception."""
-        msg = "concurrent modification"
-        with pytest.raises(ConcurrencyError):
-            raise ConcurrencyError(msg)
-
-    def test_transition_error_can_be_raised_and_caught_as_exception(self) -> None:
-        """TransitionError can be raised and caught as a plain Exception."""
-        msg = "invalid state transition"
-        with pytest.raises(TransitionError):
-            raise TransitionError(msg)
-
-
-# ---------------------------------------------------------------------------
-# AC3: storage.read_entry — lenient reads, symlink/size rejection
-# ---------------------------------------------------------------------------
-
-
-class TestStorageRead:
-    """AC3: read_entry rejects symlinks and >8KB files, parses YAML, never raises."""
-
-    def test_read_entry_valid_file_returns_memory_entry(self, tmp_path: Path) -> None:
-        """Happy: a well-formed markdown+frontmatter file returns a MemoryEntry."""
-        entry_file = tmp_path / "entry.md"
-        _write_valid_file(entry_file)
-        result = storage.read_entry(entry_file)
+@pytest.mark.parametrize(
+    ("raw", "body"),
+    [
+        (_VALID_FRONTMATTER + "Some content\n", "Some content"),
+        (_VALID_FRONTMATTER + "Hello from body\n", "Hello from body"),
+        ("---\n: invalid: yaml: [unbalanced\n---\n\nContent\n", None),
+        ("No frontmatter here\n", None),
+        (
+            (
+                "---\nid: not-a-uuid\ntitle: Bad\ncategories: [domain-knowledge]\n"
+                "confidence: 0.9\nstate: pending\nsource_agent: agent\n"
+                "created_at: '2026-01-01T00:00:00+00:00'\n"
+                "updated_at: '2026-01-01T00:00:00+00:00'\n---\n\nContent\n"
+            ),
+            None,
+        ),
+        ("", None),
+        ("---\n---\n", None),
+        ("---\n}{invalid yaml\n---\n\nbody\n", None),
+        ("---\ntitle: Only title\n---\n\nbody\n", None),
+        ("---\n- item1\n- item2\n---\n\nbody\n", None),
+    ],
+    ids=[
+        "valid",
+        "body",
+        "unbalanced-yaml",
+        "no-frontmatter",
+        "invalid-uuid",
+        "empty",
+        "empty-frontmatter",
+        "invalid-yaml",
+        "missing-fields",
+        "non-object",
+    ],
+)
+def test_raw_memory_reader_contract(tmp_path: Path, raw: str, body: str | None) -> None:
+    path = tmp_path / "raw.md"
+    path.write_text(raw, encoding="utf-8")
+    result = storage.read_entry(path)
+    if body is None:
+        assert result is None
+    else:
         assert isinstance(result, MemoryEntry)
-        assert result.id == _VALID_ID
+        assert (result.id, result.content) == (_VALID_ID, body)
 
-    def test_read_entry_content_comes_from_markdown_body(self, tmp_path: Path) -> None:
-        """Happy: the content field is taken from the text after the frontmatter delimiter."""
-        entry_file = tmp_path / "entry.md"
-        _write_valid_file(entry_file, body="Hello from body")
-        result = storage.read_entry(entry_file)
+
+def test_read_entry_symlink_returns_none(tmp_path: Path) -> None:
+    real_file = tmp_path / "real.md"
+    _write_valid_file(real_file)
+    link = tmp_path / "link.md"
+    link.symlink_to(real_file)
+    assert storage.read_entry(link) is None
+
+
+@pytest.mark.parametrize("size", [8192, 8193])
+def test_read_entry_exact_byte_boundary(tmp_path: Path, size: int) -> None:
+    base = _VALID_FRONTMATTER + "A\n"
+    padding = size - len(base.encode("utf-8")) - 3
+    assert padding > 0
+    content = "---\n# " + "x" * padding + "\n" + _VALID_FRONTMATTER[4:] + "A\n"
+    path = tmp_path / "boundary.md"
+    path.write_text(content, encoding="utf-8")
+    assert path.stat().st_size == size
+    result = storage.read_entry(path)
+    if size == 8192:
         assert result is not None
-        assert result.content == "Hello from body"
-
-    def test_read_entry_symlink_returns_none(self, tmp_path: Path) -> None:
-        """Error: read_entry returns None for a symlink path (symlink rejected before parsing)."""
-        real_file = tmp_path / "real.md"
-        _write_valid_file(real_file)
-        link = tmp_path / "link.md"
-        link.symlink_to(real_file)
-        result = storage.read_entry(link)
+        assert result.content == "A"
+    else:
         assert result is None
 
-    def test_read_entry_file_at_exactly_8192_bytes_returns_entry(self, tmp_path: Path) -> None:
-        """Boundary (AC6): file at exactly 8192 bytes passes size guard (>8192) and returns MemoryEntry."""
-        entry_file = tmp_path / "boundary_8192.md"
-        # Pad the frontmatter with a YAML comment line to reach exactly _8KB bytes total.
-        # A YAML comment is ignored by the parser, so the file remains fully parseable.
-        body_suffix = "A\n"  # 2 bytes; content "A" is well within the 1024-char limit
-        base_content = _VALID_FRONTMATTER + body_suffix
-        base_size = len(base_content.encode("utf-8"))
-        comment_size = _8KB - base_size  # bytes needed from the inserted comment line
-        assert comment_size > 2, "Base content already >=8190 bytes; cannot construct boundary case"
-        # comment line = "# " (2) + padding_chars + "\n" (1)
-        padding_chars = comment_size - 3
-        comment_line = "# " + "x" * padding_chars + "\n"
-        # Insert comment after opening "---\n"; _VALID_FRONTMATTER[4:] is the rest
-        content = "---\n" + comment_line + _VALID_FRONTMATTER[4:] + body_suffix
-        entry_file.write_text(content, encoding="utf-8")
-        assert entry_file.stat().st_size == _8KB, f"Expected {_8KB} bytes, got {entry_file.stat().st_size}"
-        result = storage.read_entry(entry_file)
-        assert result is not None, "File at exactly 8192 bytes must not be rejected by the size guard"
 
-    def test_read_entry_file_at_8193_bytes_returns_none(self, tmp_path: Path) -> None:
-        """Boundary (AC6): file at exactly 8193 bytes exceeds size guard (>8192) and returns None."""
-        entry_file = tmp_path / "boundary_8193.md"
-        body_suffix = "A\n"  # 2 bytes
-        base_content = _VALID_FRONTMATTER + body_suffix
-        base_size = len(base_content.encode("utf-8"))
-        comment_size = (_8KB + 1) - base_size  # one byte over the limit
-        assert comment_size > 2
-        padding_chars = comment_size - 3
-        comment_line = "# " + "x" * padding_chars + "\n"
-        content = "---\n" + comment_line + _VALID_FRONTMATTER[4:] + body_suffix
-        entry_file.write_text(content, encoding="utf-8")
-        assert entry_file.stat().st_size == _8KB + 1, f"Expected {_8KB + 1} bytes, got {entry_file.stat().st_size}"
-        result = storage.read_entry(entry_file)
-        assert result is None, "File at 8193 bytes must be rejected by size guard (st_size > 8192)"
-
-    def test_read_entry_malformed_yaml_returns_none(self, tmp_path: Path) -> None:
-        """Error: a file with malformed YAML frontmatter returns None (lenient)."""
-        entry_file = tmp_path / "bad-yaml.md"
-        entry_file.write_text(
-            "---\n: invalid: yaml: [unbalanced\n---\n\nContent\n",
-            encoding="utf-8",
-        )
-        result = storage.read_entry(entry_file)
-        assert result is None
-
-    def test_read_entry_missing_frontmatter_returns_none(self, tmp_path: Path) -> None:
-        """Error: a plain markdown file without frontmatter delimiters returns None."""
-        entry_file = tmp_path / "no-frontmatter.md"
-        entry_file.write_text("No frontmatter here\n", encoding="utf-8")
-        result = storage.read_entry(entry_file)
-        assert result is None
-
-    def test_read_entry_invalid_pydantic_data_returns_none(self, tmp_path: Path) -> None:
-        """Error: valid YAML but data failing Pydantic validation returns None."""
-        entry_file = tmp_path / "bad-data.md"
-        # id is not a valid UUIDv4
-        entry_file.write_text(
-            "---\nid: not-a-uuid\ntitle: Bad\ncategories: [domain-knowledge]\n"
-            "confidence: 0.9\nstate: pending\nsource_agent: agent\n"
-            "created_at: '2026-01-01T00:00:00+00:00'\n"
-            "updated_at: '2026-01-01T00:00:00+00:00'\n---\n\nContent\n",
-            encoding="utf-8",
-        )
-        result = storage.read_entry(entry_file)
-        assert result is None
-
-    def test_read_entry_never_raises_for_any_malformed_file(self, tmp_path: Path) -> None:
-        """Error: read_entry must never raise an exception for malformed file content."""
-        bad_files = [
-            ("empty.md", ""),
-            ("only-dashes.md", "---\n---\n"),
-            ("bad-yaml.md", "---\n}{invalid yaml\n---\n\nbody\n"),
-            ("missing-required-fields.md", "---\ntitle: Only title\n---\n\nbody\n"),
-            ("non-object-frontmatter.md", "---\n- item1\n- item2\n---\n\nbody\n"),
-        ]
-        for name, content in bad_files:
-            f = tmp_path / name
-            f.write_text(content, encoding="utf-8")
-            result = storage.read_entry(f)
-            assert result is None, f"{name}: expected None for malformed file, got {result!r}"
-
-
-# ---------------------------------------------------------------------------
-# AC4: storage.write_entry — containment, symlink rejection, atomic write
-# ---------------------------------------------------------------------------
-
-
-class TestStorageWrite:
-    """AC4: write_entry creates files atomically with containment and symlink guards."""
-
-    def test_write_entry_produces_file_parseable_by_read_entry(self, tmp_path: Path) -> None:
-        """Happy: file written by write_entry is parseable back to a MemoryEntry."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        target = memory_dir / "entry.md"
-        entry = _make_valid_entry()
-        storage.write_entry(target, entry, memory_dir=memory_dir)
-        result = storage.read_entry(target)
-        assert result is not None
-        assert result.id == entry.id
-        assert result.title == entry.title
-        assert result.content == entry.content
-
-    @pytest.mark.parametrize(
-        ("title", "content"),
-        [
-            ("x" * 7828, "Some content"),
-            ("é" * 3909 + "x" * 10, "Some content"),
-            ("x" * 3744, "😀" * 1024),
-        ],
-        ids=["ascii-title", "multibyte-title", "multibyte-content"],
+def test_write_entry_produces_file_parseable_by_read_entry(tmp_path: Path) -> None:
+    entry = MemoryEntry(
+        **{
+            **_valid_entry_data(),
+            "score": 0.93,
+            "outstanding_count": 7,
+            "unremarkable_count": 12,
+            "didnt_use_count": 3,
+            "challenges": [
+                ChallengeRecord(
+                    task_id="task-123", revision="0123456789abcdef", recorded_at="2026-01-01T00:00:00+00:00"
+                )
+            ],
+        }
     )
-    def test_write_entry_accepts_exact_utf8_serialized_size(
-        self,
-        tmp_path: Path,
-        title: str,
-        content: str,
-    ) -> None:
-        """Boundary: an entry whose UTF-8 serialization is exactly 8192 bytes is accepted."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        target = memory_dir / "entry.md"
-        entry = MemoryEntry(**{**_valid_entry_data(), "title": title, "content": content})
+    path = tmp_path / "memory" / "entry.md"
+    storage.write_entry(path, entry, memory_dir=tmp_path / "memory")
+    assert storage.read_entry(path) == entry
+    serialized = path.read_text(encoding="utf-8")
+    assert "challenges:" in serialized
+    assert "contested_by_task" not in serialized
 
-        storage.write_entry(target, entry, memory_dir=memory_dir)
 
-        assert target.stat().st_size == _8KB
-        result = storage.read_entry(target)
-        assert result is not None
-        assert result.title == title
-        assert result.content == content
+@pytest.mark.parametrize(
+    ("title", "content"),
+    [("x" * 7828, "Some content"), ("é" * 3909 + "x" * 10, "Some content"), ("x" * 3744, "😀" * 1024)],
+    ids=["ascii-title", "multibyte-title", "multibyte-content"],
+)
+def test_write_entry_accepts_exact_utf8_serialized_size(tmp_path: Path, title: str, content: str) -> None:
+    target = tmp_path / "entry.md"
+    entry = MemoryEntry(**{**_valid_entry_data(), "title": title, "content": content})
+    storage.write_entry(target, entry, memory_dir=tmp_path)
+    assert target.stat().st_size == _8KB
+    assert storage.read_entry(target) == entry
 
-    def test_write_entry_rejects_8193_byte_serialization_before_replacement(self, tmp_path: Path) -> None:
-        """Error: an oversized update leaves the previous serialized entry unchanged."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        target = memory_dir / "entry.md"
-        original = _make_valid_entry()
-        storage.write_entry(target, original, memory_dir=memory_dir)
-        original_bytes = target.read_bytes()
-        oversized = MemoryEntry(**{**_valid_entry_data(), "title": "x" * 7829})
 
-        with pytest.raises(ValueError, match=rf"serialized entry exceeds {_8KB} bytes \(got 8193\).*metadata"):
-            storage.write_entry(target, oversized, memory_dir=memory_dir)
+def test_write_entry_rejects_8193_byte_serialization_before_replacement(tmp_path: Path) -> None:
+    target = tmp_path / "entry.md"
+    original = _make_valid_entry()
+    storage.write_entry(target, original, memory_dir=tmp_path)
+    before = target.read_bytes()
+    oversized = MemoryEntry(**{**_valid_entry_data(), "title": "x" * 7829})
+    with pytest.raises(ValueError, match=rf"serialized entry exceeds {_8KB} bytes \(got 8193\).*metadata"):
+        storage.write_entry(target, oversized, memory_dir=tmp_path)
+    assert target.read_bytes() == before
+    assert storage.read_entry(target) == original
 
-        assert target.read_bytes() == original_bytes
-        result = storage.read_entry(target)
-        assert result is not None
-        assert result.id == original.id
-        assert result.title == original.title
 
-    @pytest.mark.parametrize(
-        ("source_agent", "expected_size"),
-        [
-            ("é" * 3909 + "x" * 10, _8KB),
-            ("é" * 3909 + "x" * 11, _8KB + 1),
-        ],
-        ids=["accepted", "rejected"],
-    )
-    def test_write_entry_enforces_exact_multibyte_metadata_boundary(
-        self,
-        tmp_path: Path,
-        source_agent: str,
-        expected_size: int,
-    ) -> None:
-        """Boundary: multibyte metadata is accepted at 8192 bytes and rejected at 8193."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        target = memory_dir / "entry.md"
-        entry = MemoryEntry(**{**_valid_entry_data(), "source_agent": source_agent})
-
-        if expected_size > _8KB:
-            with pytest.raises(ValueError, match=rf"serialized entry exceeds {_8KB} bytes \(got {expected_size}\)"):
-                storage.write_entry(target, entry, memory_dir=memory_dir)
-            assert not target.exists()
-        else:
-            storage.write_entry(target, entry, memory_dir=memory_dir)
-            assert target.stat().st_size == expected_size
-            assert storage.read_entry(target) == entry
-
-    def test_write_entry_rejects_content_that_cannot_round_trip(self, tmp_path: Path) -> None:
-        """Error: content normalized by the reader is rejected before replacement."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        target = memory_dir / "entry.md"
-        original = _make_valid_entry()
-        storage.write_entry(target, original, memory_dir=memory_dir)
-        original_bytes = target.read_bytes()
-        lossy = MemoryEntry(**{**_valid_entry_data(), "content": " padded "})
-
-        with pytest.raises(ValueError, match="does not round-trip unchanged"):
-            storage.write_entry(target, lossy, memory_dir=memory_dir)
-
-        assert target.read_bytes() == original_bytes
-
-    @pytest.mark.parametrize(
-        ("overrides", "serialized_size"),
-        [
-            ({"source_agent": "x" * 9000}, 9364),
-            ({"scope_agents": ["x" * 9000]}, 9376),
-            ({"title": "x" * 3745, "content": "😀" * 1024}, 8193),
-        ],
-        ids=["provenance", "scope", "body-content"],
-    )
-    def test_write_entry_rejects_oversized_yaml_or_body_content(
-        self,
-        tmp_path: Path,
-        overrides: dict,
-        serialized_size: int,
-    ) -> None:
-        """Error: oversized metadata or body content is rejected before creating a file."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        target = memory_dir / "entry.md"
-        entry = MemoryEntry(**{**_valid_entry_data(), **overrides})
-
-        with pytest.raises(
-            ValueError,
-            match=rf"serialized entry exceeds {_8KB} bytes \(got {serialized_size}\)",
-        ):
-            storage.write_entry(target, entry, memory_dir=memory_dir)
-
+@pytest.mark.parametrize(
+    ("source_agent", "expected_size"),
+    [("é" * 3909 + "x" * 10, _8KB), ("é" * 3909 + "x" * 11, _8KB + 1)],
+    ids=["accepted", "rejected"],
+)
+def test_write_entry_enforces_exact_multibyte_metadata_boundary(
+    tmp_path: Path, source_agent: str, expected_size: int
+) -> None:
+    target = tmp_path / "entry.md"
+    entry = MemoryEntry(**{**_valid_entry_data(), "source_agent": source_agent})
+    if expected_size > _8KB:
+        with pytest.raises(ValueError, match=rf"serialized entry exceeds {_8KB} bytes \(got {expected_size}\)"):
+            storage.write_entry(target, entry, memory_dir=tmp_path)
         assert not target.exists()
-
-    def test_write_entry_path_outside_memory_dir_raises(self, tmp_path: Path) -> None:
-        """Error: path outside memory_dir raises ValueError (containment assertion)."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        outside_dir = tmp_path / "outside"
-        outside_dir.mkdir()
-        outside = outside_dir / "entry.md"
-        entry = _make_valid_entry()
-        with pytest.raises(ValueError, match="Path escapes memory_dir"):
-            storage.write_entry(outside, entry, memory_dir=memory_dir)
-
-    def test_write_entry_symlink_target_raises(self, tmp_path: Path) -> None:
-        """Error: writing to a symlink path raises ValueError (symlink rejected)."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        real_target = memory_dir / "real.md"
-        real_target.write_text("placeholder", encoding="utf-8")
-        link = memory_dir / "link.md"
-        link.symlink_to(real_target)
-        entry = _make_valid_entry()
-        with pytest.raises(ValueError, match="Symlink paths are not allowed"):
-            storage.write_entry(link, entry, memory_dir=memory_dir)
-
-    def test_write_entry_invalid_object_raises(self, tmp_path: Path) -> None:
-        """Error: passing a non-MemoryEntry object raises PydanticValidationError (strict validation)."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        target = memory_dir / "entry.md"
-        with pytest.raises(PydanticValidationError):
-            storage.write_entry(target, "not-a-memory-entry", memory_dir=memory_dir)  # type: ignore[arg-type]
-
-    def test_write_entry_uses_mkstemp_and_replace_atomically(self, tmp_path: Path) -> None:
-        """AC4: write_entry must use mkstemp to create a temp file, then replace atomically.
-
-        Proves the full mkstemp → fsync → replace contract. Would fail if write_entry
-        used write_text() or any non-atomic approach. The temp-file-consumed assertion
-        specifically fails when replace is skipped (e.g. direct write leaves temp on disk).
-        """
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        target = memory_dir / "entry.md"
-        entry = _make_valid_entry()
-        _mkstemp_results: list[tuple[int, str]] = []
-
-        def _capturing_mkstemp(*args: object, **kwargs: object) -> tuple[int, str]:
-            fd, name = _real_mkstemp(*args, **kwargs)  # type: ignore[arg-type]
-            _mkstemp_results.append((fd, name))
-            return fd, name
-
-        with (
-            patch("owlbear_memory.storage.mkstemp", side_effect=_capturing_mkstemp) as mock_mkstemp,
-            patch("os.fsync") as mock_fsync,
-        ):
-            storage.write_entry(target, entry, memory_dir=memory_dir)
-        mock_mkstemp.assert_called_once()
-        mock_fsync.assert_called()
-        assert target.exists(), "Target file was not created after atomic replace"
-        tmp_path_used = Path(_mkstemp_results[0][1])
-        assert not tmp_path_used.exists(), "Temp file should be consumed by atomic replace (os.replace/Path.replace)"
+    else:
+        storage.write_entry(target, entry, memory_dir=tmp_path)
+        assert target.stat().st_size == expected_size
+        assert storage.read_entry(target) == entry
 
 
-# ---------------------------------------------------------------------------
-# AC4: storage.delete_entry — containment, symlink rejection, NotFoundError
-# ---------------------------------------------------------------------------
+def test_write_entry_rejects_content_that_cannot_round_trip(tmp_path: Path) -> None:
+    target = tmp_path / "entry.md"
+    storage.write_entry(target, _make_valid_entry(), memory_dir=tmp_path)
+    before = target.read_bytes()
+    lossy = MemoryEntry(**{**_valid_entry_data(), "content": " padded "})
+    with pytest.raises(ValueError, match="does not round-trip unchanged"):
+        storage.write_entry(target, lossy, memory_dir=tmp_path)
+    assert target.read_bytes() == before
 
 
-class TestStorageDelete:
-    """AC4: delete_entry removes files and raises NotFoundError for missing paths."""
+@pytest.mark.parametrize(
+    ("overrides", "serialized_size"),
+    [
+        ({"source_agent": "x" * 9000}, 9364),
+        ({"scope_agents": ["x" * 9000]}, 9376),
+        ({"title": "x" * 3745, "content": "😀" * 1024}, 8193),
+    ],
+    ids=["provenance", "scope", "body-content"],
+)
+def test_write_entry_rejects_oversized_yaml_or_body_content(
+    tmp_path: Path, overrides: dict, serialized_size: int
+) -> None:
+    target = tmp_path / "entry.md"
+    entry = MemoryEntry(**{**_valid_entry_data(), **overrides})
+    with pytest.raises(ValueError, match=rf"serialized entry exceeds {_8KB} bytes \(got {serialized_size}\)"):
+        storage.write_entry(target, entry, memory_dir=tmp_path)
+    assert not target.exists()
 
-    def test_delete_entry_removes_file_from_disk(self, tmp_path: Path) -> None:
-        """Happy: delete_entry removes the target file so it no longer exists."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        target = memory_dir / "entry.md"
-        entry = _make_valid_entry()
-        storage.write_entry(target, entry, memory_dir=memory_dir)
-        assert target.exists()
-        storage.delete_entry(target, memory_dir=memory_dir)
-        assert not target.exists()
 
-    def test_delete_entry_nonexistent_file_raises_not_found_error(self, tmp_path: Path) -> None:
-        """Error: deleting a nonexistent file raises NotFoundError specifically."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        missing = memory_dir / "missing.md"
-        with pytest.raises(NotFoundError):
-            storage.delete_entry(missing, memory_dir=memory_dir)
+def test_write_entry_path_outside_memory_dir_raises(tmp_path: Path) -> None:
+    memory_dir = tmp_path / "memory"
+    memory_dir.mkdir()
+    outside = tmp_path / "outside" / "entry.md"
+    with pytest.raises(ValueError, match="Path escapes memory_dir"):
+        storage.write_entry(outside, _make_valid_entry(), memory_dir=memory_dir)
 
-    def test_delete_entry_path_outside_memory_dir_raises(self, tmp_path: Path) -> None:
-        """Error: path outside memory_dir raises ValueError on containment check before deletion."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        outside_dir = tmp_path / "outside"
-        outside_dir.mkdir()
-        outside_file = outside_dir / "entry.md"
-        outside_file.write_text("placeholder", encoding="utf-8")
-        with pytest.raises(ValueError, match="Path escapes memory_dir"):
-            storage.delete_entry(outside_file, memory_dir=memory_dir)
 
-    def test_delete_entry_symlink_raises(self, tmp_path: Path) -> None:
-        """Error: deleting a symlink raises ValueError (symlink rejected)."""
-        memory_dir = tmp_path / "memory"
-        memory_dir.mkdir()
-        real_file = memory_dir / "real.md"
-        real_file.write_text("placeholder", encoding="utf-8")
-        link = memory_dir / "link.md"
-        link.symlink_to(real_file)
-        with pytest.raises(ValueError, match="Symlink paths are not allowed"):
-            storage.delete_entry(link, memory_dir=memory_dir)
+def test_write_entry_symlink_target_raises(tmp_path: Path) -> None:
+    real = tmp_path / "real.md"
+    real.write_text("placeholder", encoding="utf-8")
+    link = tmp_path / "link.md"
+    link.symlink_to(real)
+    with pytest.raises(ValueError, match="Symlink paths are not allowed"):
+        storage.write_entry(link, _make_valid_entry(), memory_dir=tmp_path)
+
+
+def test_write_entry_invalid_object_raises(tmp_path: Path) -> None:
+    with pytest.raises(PydanticValidationError):
+        storage.write_entry(tmp_path / "entry.md", "not-a-memory-entry", memory_dir=tmp_path)  # type: ignore[arg-type]
+
+
+def test_write_entry_uses_mkstemp_and_replace_atomically(tmp_path: Path) -> None:
+    target = tmp_path / "entry.md"
+    captured: list[tuple[int, str]] = []
+
+    def _capturing_mkstemp(*args: object, **kwargs: object) -> tuple[int, str]:
+        fd, name = _real_mkstemp(*args, **kwargs)  # type: ignore[arg-type]
+        captured.append((fd, name))
+        return fd, name
+
+    with (
+        patch("owlbear_memory.storage.mkstemp", side_effect=_capturing_mkstemp) as mock_mkstemp,
+        patch("os.fsync") as mock_fsync,
+    ):
+        storage.write_entry(target, _make_valid_entry(), memory_dir=tmp_path)
+    mock_mkstemp.assert_called_once()
+    mock_fsync.assert_called()
+    assert target.exists()
+    assert not Path(captured[0][1]).exists()
+
+
+def test_delete_entry_removes_file_from_disk(tmp_path: Path) -> None:
+    target = tmp_path / "entry.md"
+    storage.write_entry(target, _make_valid_entry(), memory_dir=tmp_path)
+    assert target.exists()
+    storage.delete_entry(target, memory_dir=tmp_path)
+    assert not target.exists()
+
+
+def test_delete_entry_nonexistent_file_raises_not_found_error(tmp_path: Path) -> None:
+    with pytest.raises(NotFoundError):
+        storage.delete_entry(tmp_path / "missing.md", memory_dir=tmp_path)
+
+
+def test_delete_entry_path_outside_memory_dir_raises(tmp_path: Path) -> None:
+    memory_dir = tmp_path / "memory"
+    memory_dir.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("placeholder", encoding="utf-8")
+    with pytest.raises(ValueError, match="Path escapes memory_dir"):
+        storage.delete_entry(outside, memory_dir=memory_dir)
+
+
+def test_delete_entry_symlink_raises(tmp_path: Path) -> None:
+    real = tmp_path / "real.md"
+    _write_valid_file(real)
+    link = tmp_path / "link.md"
+    link.symlink_to(real)
+    with pytest.raises(ValueError, match="Symlink paths are not allowed"):
+        storage.delete_entry(link, memory_dir=tmp_path)
