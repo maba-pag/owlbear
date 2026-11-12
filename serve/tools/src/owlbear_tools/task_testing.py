@@ -33,9 +33,10 @@ def _targets(
     python: list[str] = []
     packages: dict[str, _WorkspacePackage] = {}
     resources: list[str] = []
+    explicit_modules = {target.split("::", 1)[0] for target in explicit or ()}
     for path in paths:
         package = _package_for_path(path, workspace)
-        named = explicit is not None and path in explicit
+        named = path in explicit_modules
         if path in _CONFIG_TESTS:
             required.update(_CONFIG_TESTS[path])
         elif package and path.startswith(_PAGES):

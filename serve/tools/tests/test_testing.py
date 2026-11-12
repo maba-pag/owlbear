@@ -424,6 +424,8 @@ def test_required_discovered_suites_survive_edits_and_module_retirement(tmp_path
             "owlbear_tools.test_impact.select", side_effect=lambda _root, _py, _ctx, forced, _scope: forced
         ) as select,
     ):
+        [(literal, _)] = task_testing.commands_for_task([retired], context, [node], coverage=False)
+        assert node in literal
         [(before, _)] = task_testing.commands_for_task([], context, targets, coverage=False)
         assert {retired, kept} <= set(before)
         assert node not in before
