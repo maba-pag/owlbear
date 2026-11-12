@@ -57,6 +57,41 @@ GOOD = {
 }
 
 
+def _question(check: str = "") -> AskQuestion:
+    return AskQuestion(
+        question="Retry the checked step or pause?" if check else "Continue or pause?",
+        why="Choose the next move.",
+        recommended=0 if check else None,
+        options=[
+            {
+                "label": "Retry" if check else "Continue",
+                "effect": "Retry after the check passes." if check else "Continue this worker.",
+                "action": "retry" if check else "continue",
+                "check": check,
+            },
+            {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
+        ],
+    )
+
+
+def _judgment(*, check: bool = False) -> pick_tools.QuestionJudgment:
+    return pick_tools.QuestionJudgment(
+        subject="product",
+        plain=True,
+        why="The owner chooses what this Change delivers.",
+        options=[
+            {
+                "index": i,
+                "executable": True,
+                "why": "Supported action.",
+                "check_related": check and i == 0,
+                "recommends": check and i == 0,
+            }
+            for i in range(2)
+        ],
+    )
+
+
 def test_a_confirmed_admission_is_kept_before_its_temporary_directory_cleanup(tmp_path, change_repo, monkeypatch):
     store, lock = Store(tmp_path / "store"), Lock("c1")
     store.root.mkdir()
@@ -83,21 +118,7 @@ def test_a_confirmed_admission_is_kept_before_its_temporary_directory_cleanup(tm
         return Run(
             "admission",
             "result",
-            pick_tools.QuestionJudgment(
-                subject="product",
-                plain=True,
-                why="The owner chooses what this Change delivers.",
-                options=[
-                    {
-                        "index": i,
-                        "executable": True,
-                        "why": "Supported move.",
-                        "check_related": False,
-                        "recommends": False,
-                    }
-                    for i in range(2)
-                ],
-            ),
+            _judgment(),
             termination=Termination(confirmed=True),
             usage={"credits": 2},
             tool_calls={"submit_result": {"calls": 1}},
@@ -153,21 +174,7 @@ def test_an_unconfirmed_admission_keeps_its_stop_and_accounting_before_cleanup(
         return Run(
             f"admission-{len(calls)}",
             "result",
-            pick_tools.QuestionJudgment(
-                subject="product",
-                plain=True,
-                why="The owner chooses what this Change delivers.",
-                options=[
-                    {
-                        "index": i,
-                        "executable": True,
-                        "why": "Supported move.",
-                        "check_related": False,
-                        "recommends": False,
-                    }
-                    for i in range(2)
-                ],
-            ),
+            _judgment(),
             termination=Termination(confirmed=False, unknown=(9,), problems=("disconnect failed: OSError: gone",)),
             usage={"credits": 2},
             tool_calls={"submit_result": {"calls": 1}},
@@ -223,14 +230,7 @@ def test_a_head_read_after_a_worker_ask_keeps_custody_and_replay_closes_the_buil
     parent = Run(
         "question-author",
         "ask",
-        tools.AskQuestion(
-            question="Continue?",
-            why="Choose the next move.",
-            options=[
-                {"label": "Continue", "effect": "Continue this worker.", "action": "continue"},
-                {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
-            ],
-        ),
+        _question(),
         termination=Termination(confirmed=True),
         usage={"credits": 1},
         tool_calls={"ask_question": {"calls": 1}},
@@ -281,14 +281,7 @@ def test_input_capture_failure_keeps_the_parent_and_returns_feedback_to_its_auth
     parent = Run(
         "question-author",
         "ask",
-        tools.AskQuestion(
-            question="Continue with this product choice?",
-            why="The choice stays within the brief.",
-            options=[
-                {"label": "Continue", "effect": "Continue within the approved brief.", "action": "continue"},
-                {"label": "Pause", "effect": "Pause the Change.", "action": "pause"},
-            ],
-        ),
+        _question(),
         head=worker_questions.worktree.head(change_repo),
         termination=Termination(confirmed=True),
         usage={"credits": 1},
@@ -471,14 +464,7 @@ def test_stopped_admission_counts_its_usage_and_its_resumed_child_keeps_its_gene
     c = Change(
         slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.BUILD), names=Names(worktree=str(change_repo))
     )
-    proposed = tools.AskQuestion(
-        question="Continue?",
-        why="Choose the next move.",
-        options=[
-            {"label": "Continue", "effect": "Continue this worker.", "action": "continue"},
-            {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
-        ],
-    )
+    proposed = _question()
     monkeypatch.setattr(worker_questions.worktree, "head", lambda _p: HEAD)
     parent = Run("author", "ask", proposed, termination=Termination(confirmed=True), usage={"credits": 1})
     worker_questions.checkpoint(store, lock, c, parent, [])
@@ -489,27 +475,7 @@ def test_stopped_admission_counts_its_usage_and_its_resumed_child_keeps_its_gene
         done = Run(
             f"admission-{len(calls)}",
             "result",
-            pick_tools.QuestionJudgment(
-                subject="product",
-                plain=True,
-                why="The owner chooses what this Change delivers.",
-                options=[
-                    {
-                        "index": 0,
-                        "executable": True,
-                        "why": "The worker can continue.",
-                        "check_related": False,
-                        "recommends": False,
-                    },
-                    {
-                        "index": 1,
-                        "executable": True,
-                        "why": "The engine can pause.",
-                        "check_related": False,
-                        "recommends": False,
-                    },
-                ],
-            ),
+            _judgment(),
             termination=Termination(confirmed=len(calls) > 1),
             usage={"credits": 2},
             tool_calls={"view": {"calls": 1}},
@@ -550,14 +516,7 @@ def test_a_retried_unread_admission_returns_the_answer_to_the_proposal_author(tm
     parent = Run(
         "proposal-author",
         "ask",
-        tools.AskQuestion(
-            question="Continue?",
-            why="Choose the next move.",
-            options=[
-                {"label": "Continue", "effect": "Continue this worker.", "action": "continue"},
-                {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
-            ],
-        ),
+        _question(),
         termination=Termination(confirmed=True),
         usage={"credits": 1},
     )
@@ -569,21 +528,7 @@ def test_a_retried_unread_admission_returns_the_answer_to_the_proposal_author(tm
         done = Run(
             f"admission-{len(calls)}",
             "result",
-            pick_tools.QuestionJudgment(
-                subject="product",
-                plain=True,
-                why="The owner chooses what this Change delivers.",
-                options=[
-                    {
-                        "index": i,
-                        "executable": True,
-                        "why": "The engine can carry out this action.",
-                        "check_related": False,
-                        "recommends": False,
-                    }
-                    for i in range(2)
-                ],
-            ),
+            _judgment(),
             termination=Termination(confirmed=True),
             usage={"error": "RuntimeError"} if len(calls) == 1 else {"credits": 2},
             usage_unread="usage read failed" if len(calls) == 1 else "",
@@ -619,14 +564,7 @@ def test_admission_refuses_a_head_changed_while_its_paid_verdict_returns(tmp_pat
         step=Step(kind=StepKind.BUILD),
         names=Names(worktree=str(change_repo)),
     )
-    proposed = tools.AskQuestion(
-        question="Continue or pause?",
-        why="Choose the next move.",
-        options=[
-            {"label": "Continue", "effect": "Continue this worker.", "action": "continue"},
-            {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
-        ],
-    )
+    proposed = _question()
     parent = Run("author", "ask", proposed, termination=Termination(confirmed=True), usage={"credits": 1})
     worker_questions.checkpoint(store, lock, c, parent, [])
 
@@ -634,21 +572,7 @@ def test_admission_refuses_a_head_changed_while_its_paid_verdict_returns(tmp_pat
         done = Run(
             "admission",
             "result",
-            pick_tools.QuestionJudgment(
-                subject="product",
-                plain=True,
-                why="The owner chooses what this Change delivers.",
-                options=[
-                    {
-                        "index": i,
-                        "executable": True,
-                        "why": "Supported action.",
-                        "check_related": False,
-                        "recommends": False,
-                    }
-                    for i in range(2)
-                ],
-            ),
+            _judgment(),
             termination=Termination(confirmed=True),
             usage={"credits": 2},
         )
@@ -675,20 +599,7 @@ def test_kept_recommendation_cannot_publish_after_uncommitted_inputs_change(tmp_
     c = Change(
         slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.BUILD), names=Names(worktree=str(change_repo))
     )
-    proposed = tools.AskQuestion(
-        question="Retry the checked step or pause?",
-        why="The smoke check needs verification.",
-        recommended=0,
-        options=[
-            {
-                "label": "Retry",
-                "effect": "Retry this step after its smoke check passes.",
-                "action": "retry",
-                "check": command,
-            },
-            {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
-        ],
-    )
+    proposed = _question(command)
     parent = Run("author", "ask", proposed, termination=Termination(confirmed=True), usage={"credits": 1})
     worker_questions.checkpoint(store, lock, c, parent, [command])
     calls = []
@@ -698,21 +609,7 @@ def test_kept_recommendation_cannot_publish_after_uncommitted_inputs_change(tmp_
         done = Run(
             "admission",
             "result",
-            pick_tools.QuestionJudgment(
-                subject="product",
-                plain=True,
-                why="The owner chooses what this Change delivers.",
-                options=[
-                    {
-                        "index": i,
-                        "executable": True,
-                        "why": "Observed smoke assertion passed.",
-                        "check_related": i == 0,
-                        "recommends": i == 0,
-                    }
-                    for i in range(2)
-                ],
-            ),
+            _judgment(check=True),
             termination=Termination(confirmed=True),
             usage={"credits": 2},
         )
@@ -755,20 +652,7 @@ def test_kept_trial_of_staged_content_is_refused_after_an_index_only_change(tmp_
         slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.BUILD), names=Names(worktree=str(change_repo))
     )
     command = "git show :a.txt | grep -x a"
-    proposed = tools.AskQuestion(
-        question="Retry the checked step or pause?",
-        why="Verify its staged smoke input.",
-        recommended=0,
-        options=[
-            {
-                "label": "Retry",
-                "effect": "Retry after the staged smoke assertion passes.",
-                "action": "retry",
-                "check": command,
-            },
-            {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
-        ],
-    )
+    proposed = _question(command)
     parent = Run("author", "ask", proposed, termination=Termination(confirmed=True), usage={"credits": 1})
     worker_questions.checkpoint(store, lock, c, parent, [command])
     calls = []
@@ -783,21 +667,7 @@ def test_kept_trial_of_staged_content_is_refused_after_an_index_only_change(tmp_
         done = Run(
             "admission",
             "result",
-            pick_tools.QuestionJudgment(
-                subject="product",
-                plain=True,
-                why="The owner chooses what this Change delivers.",
-                options=[
-                    {
-                        "index": i,
-                        "executable": True,
-                        "why": "The staged smoke assertion passed.",
-                        "check_related": i == 0,
-                        "recommends": i == 0,
-                    }
-                    for i in range(2)
-                ],
-            ),
+            _judgment(check=True),
             termination=Termination(confirmed=True),
             usage={"credits": 2},
         )
@@ -842,15 +712,7 @@ def test_a_retained_trial_cannot_ignore_staging_an_empty_intent_to_add_file(tmp_
     (change_repo / "empty.txt").touch()
     worker_questions.worktree.git(change_repo, "add", "-N", "empty.txt")
     command = "git diff --cached --ita-invisible-in-index --quiet && echo hidden"
-    proposed = tools.AskQuestion(
-        question="Retry after checking the index or pause?",
-        why="Verify there are no staged edits.",
-        recommended=0,
-        options=[
-            {"label": "Retry", "effect": "Retry after the index check passes.", "action": "retry", "check": command},
-            {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
-        ],
-    )
+    proposed = _question(command)
     parent = Run("author", "ask", proposed, termination=Termination(confirmed=True), usage={"credits": 1})
     worker_questions.checkpoint(store, lock, c, parent, [command])
     assert worker_questions.trial(store, lock, c, change_repo, proposed) == []
