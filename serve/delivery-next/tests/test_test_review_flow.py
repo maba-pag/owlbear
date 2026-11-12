@@ -380,6 +380,9 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
     mixed.tests.shares[0].paths.append("tests/client.test.ts")
     with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
         witness(mixed, prof, cfg.worktree)
+    mixed.tests.shares[0].paths[-1] = "tests/client_test.py"
+    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
+        witness(mixed, prof, cfg.worktree)
     manifest = cfg.worktree / "serve/tools/pyproject.toml"
     manifest.parent.mkdir(parents=True, exist_ok=True)
     manifest.write_text("[project\n")

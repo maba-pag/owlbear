@@ -132,6 +132,8 @@ remain required even when the task has no edited paths. For example,
 unions that module with the task's affected checks. Positional targets with ordinary `--changed`
 still require task context rather than silently replacing branch scope.
 Curator measurements use `-m` (`--measurement`) with that same task context and pinned suite targets.
+The maintained runner's directory targets expand `test_*.py` modules. Selected suffix-named Python tests
+or other languages require their package's own confirmed check, rather than being silently omitted.
 Membership comes from both the original task commit and current tree: every surviving module still runs,
 while retired members remain inputs to consumer analysis rather than nonexistent pytest arguments.
 When a measured module is required in full, its redundant literal node selectors are subsumed by that module,

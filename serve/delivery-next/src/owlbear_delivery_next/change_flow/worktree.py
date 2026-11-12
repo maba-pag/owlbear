@@ -143,7 +143,9 @@ def build_checks(profile: Profile, change: Change, task: Task, path: Path) -> li
                 for name in (name for share in change.tests.shares for name in share.paths):
                     module = Path(name)
                     owner = next((p for p in packages if p != "." and name.startswith(f"{p}/")), ".")
-                    if module.suffix != ".py":
+                    if module.suffix != ".py" or (
+                        module.name.endswith("_test.py") and not module.name.startswith("test_")
+                    ):
                         unsupported.add(owner)
                         continue
                     if not module.name.startswith("test_"):
