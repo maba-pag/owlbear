@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from owlbear_tools import task_scope
+from owlbear_tools import task_scope, task_testing
 from owlbear_tools import testing as testing_module
 from owlbear_tools.task_testing import _targets
 from owlbear_tools.testing import _commands_for_paths, _require_development_checkout, _workspace_packages
@@ -364,6 +364,7 @@ def test_changed_runs_git_scope_and_accepts_explicit_base(options: list[str]) ->
             patch.object(sys, "argv", ["test", "--changed", target, "--task-base", "base", "--target", "target"]),
             patch("owlbear_tools.task_scope.commit", return_value="target"),
             patch("owlbear_tools.task_scope.changed", return_value=[]),
+            patch("owlbear_tools.task_testing._git_paths", return_value=set()),
             patch("owlbear_tools.testing.subprocess.call", return_value=0) as task_call,
             pytest.raises(SystemExit, match="0"),
         ):
@@ -378,6 +379,7 @@ def test_changed_runs_git_scope_and_accepts_explicit_base(options: list[str]) ->
             patch.object(sys, "argv", ["test", "--changed", target, "--task-base", "base", "--target", "target"]),
             patch("owlbear_tools.task_scope.commit", return_value="target"),
             patch("owlbear_tools.task_scope.changed", return_value=[page]),
+            patch("owlbear_tools.task_testing._git_paths", return_value=set()),
             patch("owlbear_tools.test_impact.select", return_value=[target]) as select,
             patch("owlbear_tools.testing.subprocess.call", return_value=0),
             pytest.raises(SystemExit, match="0"),
@@ -405,6 +407,37 @@ def test_changed_runs_git_scope_and_accepts_explicit_base(options: list[str]) ->
         assert python == [module]
         assert module in required
         assert resources == []
+
+
+def test_required_discovered_suites_survive_edits_and_module_retirement(tmp_path: Path) -> None:
+    retired, kept = "serve/demo/test/test_old.py", "tests/test_kept.py"
+    for name in (retired, kept):
+        module = tmp_path / name
+        module.parent.mkdir(parents=True, exist_ok=True)
+        module.write_text("def test_value():\n    assert True\n")
+    context = task_scope.Context("base", "base")
+    targets = ["serve/demo/test", "tests"]
+    with (
+        patch.object(task_testing, "_REPOSITORY_ROOT", tmp_path),
+        patch.object(task_testing, "_workspace_packages", return_value=()),
+        patch.object(task_testing, "_git_paths", return_value={retired, kept}),
+        patch(
+            "owlbear_tools.test_impact.select", side_effect=lambda _root, _py, _ctx, forced, _scope: forced
+        ) as select,
+    ):
+        [(before, _)] = task_testing.commands_for_task([], context, targets, coverage=False)
+        assert {retired, kept} <= set(before)
+        (tmp_path / retired).write_text("def test_value():\n    assert 1 == 1\n")
+        [(edited, _)] = task_testing.commands_for_task([retired], context, targets, coverage=False)
+        assert {retired, kept} <= set(edited)
+        (tmp_path / retired).unlink()
+        [(after, _)] = task_testing.commands_for_task([retired], context, targets, coverage=False)
+        assert kept in after
+        assert retired not in after
+        assert select.call_args.args[1] == [retired]
+        assert retired not in select.call_args.args[4].tests
+    with pytest.raises(task_scope.ScopeError, match="existing checkout-relative"):
+        task_scope.explicit_targets(tmp_path, ["serve/demo/test"])
 
 
 def test_task_consumers_exclude_docs_but_keep_markdown_fixtures_and_runtime_resources() -> None:

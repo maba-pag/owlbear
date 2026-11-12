@@ -97,8 +97,8 @@ def changed(run: Run, paths: Paths, base: str, kept: Sequence[str], target: str)
     return sorted(selected)
 
 
-def explicit_targets(root: Path, targets: Sequence[str]) -> set[str]:
-    """Existing checkout-relative test modules, directories or nodes, required without edited paths."""
+def explicit_targets(root: Path, targets: Sequence[str], recorded: Sequence[str] = ()) -> set[str]:
+    """Current and recorded target members; the caller requires every surviving module."""
     selected: set[str] = set()
     for target in targets:
         name = PurePosixPath(target.split("::", 1)[0])
@@ -110,9 +110,21 @@ def explicit_targets(root: Path, targets: Sequence[str]) -> set[str]:
         if name.is_absolute() or ".." in name.parts or not path.resolve().is_relative_to(root.resolve()):
             raise ScopeError(msg)
         modules = [path] if path.is_file() else sorted(path.rglob("test_*.py")) if path.is_dir() else []
+        modules = sorted(
+            {
+                *modules,
+                *(
+                    root / module
+                    for module in recorded
+                    if (module == name.as_posix() or module.startswith(f"{name.as_posix()}/"))
+                    and PurePosixPath(module).name.startswith("test_")
+                    and module.endswith(".py")
+                ),
+            }
+        )
         if (
             not modules
-            or (path.is_dir() and "::" in target)
+            or ("::" in target and not path.is_file())
             or any(
                 not module.name.startswith("test_")
                 or module.suffix != ".py"
