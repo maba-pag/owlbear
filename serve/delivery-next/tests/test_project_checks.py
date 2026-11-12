@@ -137,7 +137,7 @@ def test_no_profile_is_detected_saved_and_asked_about(store, change_repo, monkey
     fake = sessions(monkeypatch)
     made(store, change_repo, ["src"])
     text, options = asked(step(store, change_repo))
-    assert (options, fake.told) == (["detected", "typed"], [])
+    assert (options, fake.told) == (["detected", "pause", "typed"], [])
     assert "`npm test`, which covers every package" in text
     assert store.read_profile().entries[profile.REPO].value == "acme/shop-site"
 
@@ -186,7 +186,7 @@ def test_an_unconfirmed_check_is_proposed_or_repaired_before_any_session(  # noq
     assert fake.told == []
     if options:
         text, ids = asked(c)
-        assert ids == [*options, "typed"]
+        assert ids == [*options, "pause", "typed"]
         assert c.questions[-1].subject == "reserved"
         assert named in text
     else:
