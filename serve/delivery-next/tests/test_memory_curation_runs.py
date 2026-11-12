@@ -49,9 +49,11 @@ def repo(shared_repo) -> Path:
 
 
 @pytest.fixture
-def root(repo) -> Path:
-    """The same shared clone: every run works on a worktree of it (#746), even one that never reaches a commit."""
-    return repo
+def root(tmp_path) -> Path:
+    """Ownership reconstruction reads actual folders and records, but never opens Git."""
+    data = tmp_path / "ownership"
+    data.mkdir()
+    return layout(data)
 
 
 def finished(job: curation.Curation) -> None:
@@ -70,21 +72,33 @@ def drained(job: curation.Curation) -> None:
     pytest.fail("the curation queue did not drain")
 
 
-def test_the_folders_are_the_shared_repositorys_project_memory_folders_owlbears_included(root) -> None:
+def test_discovery_excludes_global_links_and_non_memory_folders_and_reports_no_shared_repository(root) -> None:
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
     got = job.read()
     assert [(f["folder"], f["state"]) for f in got["folders"]] == [("owlbear", "never"), ("shop", "never")]
     with pytest.raises(ValueError, match="no memory folder"):
         job.start("memory")
+    (root / "alias").mkdir()
+    (root / "alias" / "memory").symlink_to(root / "memory")
+    assert [f["folder"] for f in job.read()["folders"]] == ["owlbear", "shop"]
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: None)
+    assert job.read() == {"available": False, "reason": curation.NO_SHARED, "folders": []}
+    with pytest.raises(ValueError, match="no shared repository"):
+        job.start("all")
 
 
 def test_a_run_curates_one_folder_as_the_curator_and_keeps_its_report_and_what_it_skipped(repo) -> None:
+    (repo / "config.json").write_text(
+        '{"format": 21, "curator_threshold": 90, "memory": {"stale_factor": 50, "purge_days": 14}}'
+    )
+    settings = DataRepo(repo).global_path.read_bytes()
     left, done = pending(repo / "shop" / "memory", "Unsure lesson"), pending(repo / "shop" / "memory", "Clear one")
     seen, places = [], []
 
     def run(cfg) -> Run:
         seen.append(cfg)
         places.append(spend_ledger.where())
+        assert (cfg.memory.parent.parent / "config.json").read_bytes() == settings
         report = MemoryCurationResult(summary="1 pruned, 1 skipped", entries=[
             Judged(entry_id=left.id, action="skipped", confidence=60, reason="only one project shows it"),
             Judged(entry_id=done.id, action="pruned", confidence=97),
@@ -114,14 +128,14 @@ def test_a_run_curates_one_folder_as_the_curator_and_keeps_its_report_and_what_i
     assert places == [spend_ledger.Where(project="shop", name="shop")]  # its spend counts for the folder's project
 
 
-def test_a_run_without_a_report_or_while_fenced_fails_with_its_reason(root) -> None:
+def test_a_run_without_a_report_or_while_fenced_fails_with_its_reason(repo) -> None:
     def silent(cfg) -> Run:
         return Run(cfg.session_id, ending="error", detail="model unavailable", termination=Termination(confirmed=True))
 
-    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=silent)
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=silent)
     job.start("owlbear")
     finished(job)
-    fenced = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=silent, fenced=lambda: "updating")
+    fenced = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=silent, fenced=lambda: "updating")
     fenced.start("shop")
     finished(fenced)
 
@@ -130,9 +144,9 @@ def test_a_run_without_a_report_or_while_fenced_fails_with_its_reason(root) -> N
     assert (runs["shop"]["state"], runs["shop"]["reason"]) == ("failed", "updating")
 
 
-def test_a_report_whose_model_is_unproven_fails_publishes_nothing_and_leaves_its_entries_due(root, monkeypatch):
+def test_a_report_whose_model_is_unproven_fails_publishes_nothing_and_leaves_its_entries_due(repo, monkeypatch):
     """#675, TD-94: a curation run whose usage does not prove its model is refused like any unproven step."""
-    pending(root / "shop" / "memory", "Unsure lesson")
+    pending(repo / "shop" / "memory", "Unsure lesson")
     published = []
     monkeypatch.setattr(DataRepo, "publish", lambda _self, *args, **_kw: published.append(args) or "")
 
@@ -140,7 +154,7 @@ def test_a_report_whose_model_is_unproven_fails_publishes_nothing_and_leaves_its
         return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
                    termination=Termination(confirmed=True), usage_unread="no gpt-x tokens in the usage")  # fmt: skip
 
-    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
     job.start("shop")
     finished(job)
     shop = job.load().folders["shop"]
@@ -152,18 +166,9 @@ def test_a_report_whose_model_is_unproven_fails_publishes_nothing_and_leaves_its
     assert (job.due("shop"), job.slots.counts(curation.SLOT)[2]) == (True, 0)
 
 
-def test_without_a_shared_repository_nothing_is_curated() -> None:
-    job = curation.Curation(Slots(lambda: 1), shared=lambda: None)
-    assert job.read() == {"available": False, "reason": curation.NO_SHARED, "folders": []}
-    with pytest.raises(ValueError, match="no shared repository"):
-        job.start("all")
-
-
 def test_a_trigger_starts_only_folders_with_pending_entries_no_run_saw_and_as_its_own_setting_says(repo) -> None:
     """The merge and idle triggers: a skipped entry starts no run until it changes; each trigger's machine setting
     is off, on (not while paused, the default) or on even while paused (the owner, 2026-10-23)."""
-    from owlbear_delivery_next.state_store import registry  # noqa: PLC0415
-
     left = pending(repo / "shop" / "memory", "Unsure lesson")
     report = MemoryCurationResult(
         summary="1 skipped", entries=[Judged(entry_id=left.id, action="skipped", confidence=50)]
@@ -195,11 +200,10 @@ def test_a_trigger_starts_only_folders_with_pending_entries_no_run_saw_and_as_it
     finished(job)
     assert runs == ["shop", "shop"]
 
-
-def test_an_entry_saved_during_a_run_stays_due_and_a_trigger_meanwhile_runs_the_folder_once_more(repo) -> None:
-    """Sol: only what the curator could see is marked seen; a merge during its run is not lost."""
+    runs.clear()
+    paused[0] = False
+    configure_machine(curate_when_idle="on", curate_after_merge="on")
     pending(repo / "shop" / "memory", "First lesson")
-    runs = []
 
     def run(cfg) -> Run:
         runs.append(cfg.session_id)
@@ -249,7 +253,7 @@ def test_one_folder_that_fails_never_strands_the_next_and_a_restart_ends_interru
 
 
 def test_processes_that_may_still_run_keep_their_slot_and_the_machine_busy_until_they_are_gone(
-    root, monkeypatch
+    repo, monkeypatch
 ) -> None:
     alive = [True]
     monkeypatch.setattr(processes, "alive", lambda _pid, _created: alive[0])
@@ -258,11 +262,14 @@ def test_processes_that_may_still_run_keep_their_slot_and_the_machine_busy_until
     slots = Slots(lambda: 2)
 
     def run(cfg) -> Run:
+        cfg.journal.event({"event": "pids", "pids": {"4242": 1.0}})
+        during = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(repo))
+        assert during.load().left == {4242: 1.0}
         return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
                    runtime_pid=4242, pids={4242: 1.0},
                    termination=Termination(confirmed=False, survivors=(4242,)))  # fmt: skip
 
-    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=run)
+    job = curation.Curation(slots, shared=lambda: DataRepo(repo), run=run)
     job.start("shop")
     for _ in range(200):
         if job.queue == []:
@@ -270,7 +277,9 @@ def test_processes_that_may_still_run_keep_their_slot_and_the_machine_busy_until
         time.sleep(0.02)
     assert (job.working(), slots.counts(curation.SLOT)[2]) == ([curation.LINGERING], 1)
     assert (job.load().folders["shop"].state, published) == ("failed", [])  # #675: a survivor's run is refused
-    assert curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root)).left == {4242: 1.0}
+    for _ in range(2):
+        rebuilt = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(repo))
+        assert (rebuilt.left, len(rebuilt.maintenance.read()["sessions"])) == ({4242: 1.0}, 1)
     alive[0] = False
     assert (job.working(), slots.counts(curation.SLOT)[2]) == ([], 0)
 
@@ -362,14 +371,6 @@ def test_a_folder_that_cannot_be_listed_at_admission_gives_its_slot_back(root, m
     )  # fmt: skip
 
 
-def test_a_linked_memory_folder_is_never_curated(root) -> None:
-    """Copilot on #587: a project folder whose memory links to Global or outside is not a folder to curate."""
-    (root / "alias").mkdir()
-    (root / "alias" / "memory").symlink_to(root / "memory")
-    listed = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root)).read()["folders"]
-    assert [f["folder"] for f in listed] == ["owlbear", "shop"]
-
-
 def test_a_run_keeps_its_processes_on_file_while_it_runs_and_a_restart_holds_their_slot(repo, monkeypatch) -> None:
     """Copilot on #587: a host that stops mid-run leaves the session's processes known, their slot taken."""
     alive = [True]
@@ -400,65 +401,49 @@ def test_a_run_keeps_its_processes_on_file_while_it_runs_and_a_restart_holds_the
     assert (restarted.working(), slots.counts(curation.SLOT)[2]) == ([curation.LINGERING], 2)
 
 
-def test_an_unreadable_record_naming_left_processes_stops_the_restart_and_stays_as_it_was(root) -> None:
-    """#674: only a missing record is empty; one that cannot be read keeps its evidence and the host does not start.
-
-    #801: the refusal names the file, the parser's whole text and the way out.
-    """
+@pytest.mark.parametrize("broken", ["parse", "open", "annotated"])
+def test_unreadable_ownership_preserves_evidence_and_explains_recovery_whole(root, monkeypatch, whole_error, broken):
     path = local_home.root() / curation.STATE
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text('{"folders": {}, "left": {"4242": "not a birth time"}}\n')  # e.g. an older or newer format
-    before, slots = path.read_bytes(), Slots(lambda: 1)
-    with pytest.raises(ValueError, match="validation error") as parsed:
-        Runs.model_validate_json(before)
-    with pytest.raises(maintenance.MaintenanceError, match="ownership record") as refused:
-        curation.Curation(slots, shared=lambda: DataRepo(root))
-    assert (path.read_bytes(), slots.counts(curation.SLOT)[2]) == (before, 0)
-    said = str(refused.value)
-    assert str(path) in said
-    assert str(parsed.value) in said  # whole and contiguous, pydantic's "For further information" tail included
-    assert "aside" in said
+    before = b'{"folders": {}, "left": {"4242": "not a birth time"}}\n' if broken == "parse" else b"{}\n"
+    if broken == "open":
+        path.mkdir()
+        with pytest.raises(OSError, match="directory") as opened:
+            path.read_text()
+        detail = str(opened.value)
+    else:
+        path.write_bytes(before)
+        if broken == "parse":
+            with pytest.raises(ValueError, match="validation error") as parsed:
+                Runs.model_validate_json(before)
+            detail = str(parsed.value)
+        else:
 
+            def unreadable(_raw):
+                exc = ValueError(whole_error)
+                exc.add_note("a note added on the way up")
+                raise exc
 
-def test_a_record_that_cannot_be_opened_stops_the_restart_naming_it_and_the_way_out(root) -> None:
-    """#801: an OSError names the file, the system's whole text and the way out; what stands in its place stays."""
-    path = local_home.root() / curation.STATE
-    path.mkdir(parents=True)  # a folder where the file belongs: reading it is an OSError
+            monkeypatch.setattr(curation.Runs, "model_validate_json", unreadable)
+            detail = f"{whole_error}\na note added on the way up"
     slots = Slots(lambda: 1)
-    with pytest.raises(OSError, match="directory") as opened:
-        path.read_text()
     with pytest.raises(maintenance.MaintenanceError, match="ownership record") as refused:
         curation.Curation(slots, shared=lambda: DataRepo(root))
-    assert (list(path.iterdir()), slots.counts(curation.SLOT)[2]) == ([], 0)
+    assert (list(path.iterdir()) if broken == "open" else path.read_bytes()) == ([] if broken == "open" else before)
+    assert slots.counts(curation.SLOT)[2] == 0
     said = str(refused.value)
     assert str(path) in said
-    assert str(opened.value) in said
+    assert detail in said
     assert "aside" in said
-
-
-def test_a_record_that_cannot_be_read_stops_the_restart_with_the_whole_failure(root, monkeypatch, whole_error) -> None:
-    """#971: the refusal carries the read's whole failure, its type and notes included, between its own words."""
-    path = local_home.root() / curation.STATE
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("{}\n")
-    note = "a note added on the way up"
-
-    def unreadable(_raw):
-        exc = ValueError(whole_error)
-        exc.add_note(note)
-        raise exc
-
-    monkeypatch.setattr(curation.Runs, "model_validate_json", unreadable)
-    with pytest.raises(maintenance.MaintenanceError) as refused:
-        curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
-    assert str(refused.value) == (
-        f"the memory curation ownership record {path} cannot be read:\nValueError: {whole_error}\n{note}\n"
-        "OwlBear can't tell whether a memory curation session it started still runs, so memory curation "
-        "doesn't go on. Stop OwlBear if it still runs, and make sure no copilot process that memory curation "
-        'started still runs: the PIDs under "left" are the ones it recorded, but a session that failed early '
-        f"recorded none. Then move {path} aside, for example to {path}.broken, and start OwlBear again; the "
-        "folders' last runs are forgotten and curate again when due."
-    )
+    if broken == "annotated":
+        assert said == (
+            f"the memory curation ownership record {path} cannot be read:\nValueError: {detail}\n"
+            "OwlBear can't tell whether a memory curation session it started still runs, so memory curation "
+            "doesn't go on. Stop OwlBear if it still runs, and make sure no copilot process that memory curation "
+            'started still runs: the PIDs under "left" are the ones it recorded, but a session that failed early '
+            f"recorded none. Then move {path} aside, for example to {path}.broken, and start OwlBear again; the "
+            "folders' last runs are forgotten and curate again when due."
+        )
 
 
 def test_pids_left_after_an_earlier_empty_import_are_held_before_they_can_be_cleared(root, monkeypatch) -> None:
@@ -630,28 +615,30 @@ def test_an_unmatched_snapshot_is_released_only_by_its_own_recovery(root, monkey
     assert (last.working(), slots.counts(curation.SLOT)[2]) == ([curation.LINGERING], 1)  # only A is still held
 
 
-def test_a_run_unconfirmed_without_processes_to_watch_retains_its_slot_and_says_so(root) -> None:
+def test_a_run_unconfirmed_without_processes_to_watch_retains_its_slot_and_says_so(repo) -> None:
     slots = Slots(lambda: 1)
 
     def run(cfg) -> Run:
         return Run(cfg.session_id, ending="error", detail="runtime PID unknown",
                    termination=Termination(confirmed=False))  # fmt: skip
 
-    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=run)
+    job = curation.Curation(slots, shared=lambda: DataRepo(repo), run=run)
     job.start("shop")
     drained(job)
     shop = {f["folder"]: f for f in job.read()["folders"]}["shop"]
     assert (shop["state"], curation.UNKNOWN in shop["reason"], slots.counts(curation.SLOT)[2]) == ("failed", True, 1)
     assert slots.take("another-project", "c1", 1, 1) == 0
+    restarted = curation.Curation(Slots(lambda: 1, closed=True), shared=lambda: DataRepo(repo))
+    assert (restarted.slots.counts(curation.SLOT)[2], len(restarted.maintenance.read()["sessions"])) == (1, 1)
 
 
-def test_an_unverified_session_end_says_its_problems_whole(root, whole_error, caplog) -> None:
+def test_an_unverified_session_end_says_its_problems_whole(repo, whole_error, caplog) -> None:
     left = Termination(confirmed=False, unknown=(9,), problems=(f"disconnect failed: RuntimeError: {whole_error}",))
 
     def run(cfg) -> Run:
         return Run(cfg.session_id, ending="error", detail="the session's own detail", termination=left)
 
-    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
     job.start("shop")
     drained(job)
     shop = {f["folder"]: f for f in job.read()["folders"]}["shop"]
@@ -665,7 +652,7 @@ def test_an_unverified_session_end_says_its_problems_whole(root, whole_error, ca
 
 @pytest.mark.browser
 @pytest.mark.parametrize("unpruned", [False, True], ids=["raised", "unpruned"])
-def test_a_failed_folder_s_whole_reason_shows_on_maintenance(root, pds, whole_error, monkeypatch, unpruned) -> None:
+def test_a_failed_folder_s_whole_reason_shows_on_maintenance(repo, pds, whole_error, monkeypatch, unpruned) -> None:
     """#951: a folder's failed run, read as the host's route returns it, shows its whole reason in its Maintenance row;
     every failed run's reason (raised, ended unverified, or its worktree left listed) goes through that one line."""
     from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
@@ -687,7 +674,7 @@ def test_a_failed_folder_s_whole_reason_shows_on_maintenance(root, pds, whole_er
         raise broke
 
     monkeypatch.setattr(curation_tree, "_git", git_)
-    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
+    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
     job.start("owlbear")
     drained(job)
     read, reason = job.read(), f"RuntimeError: {whole_error}\n{note}"
@@ -699,7 +686,7 @@ def test_a_failed_folder_s_whole_reason_shows_on_maintenance(root, pds, whole_er
         sock.bind(("127.0.0.1", 0))
         server = uvicorn.Server(
             uvicorn.Config(
-                api.create_app(Store(root.parent, name="shop"), "tok", None), log_level="warning", timeout_keep_alive=60
+                api.create_app(Store(repo.parent, name="shop"), "tok", None), log_level="warning", timeout_keep_alive=60
             )
         )
         thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
@@ -948,17 +935,24 @@ def test_an_unrelated_earlier_curation_generation_never_covers_a_later_unkeyed_2
 
 
 def survived_run(root, monkeypatch, pid: int = 4242, birth: float | None = 1.0) -> curation.Curation:
-    """A run whose process survives it: its PIDs are kept on the run's own lease and on the ledger's ``left``."""
+    """Seed an admitted survivor through the native ledger; these tests judge reconstruction, not execution."""
     monkeypatch.setattr(processes, "alive", lambda _pid, _created: True)
-
-    def run(cfg) -> Run:
-        return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
-                   runtime_pid=pid, pids={pid: birth},
-                   termination=Termination(confirmed=False, survivors=(pid,)))  # fmt: skip
-
-    job = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=run)
-    job.start("shop")
-    drained(job)
+    job = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
+    key = "curate:shop:" + "a" * 32
+    assert job.slots.take(curation.SLOT, key, 1, 1) == 1
+    lease = job.maintenance.begin(curation.SLOT, key, "curation", "")
+    job.maintenance.finished(lease, Run(
+        "survivor", ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
+        runtime_pid=pid, pids={pid: birth}, termination=Termination(confirmed=False, survivors=(pid,)),
+    ))  # fmt: skip
+    job.left, job.left_key = {pid: birth}, key
+    job.path().write_text(
+        curation.Runs(
+            left={pid: birth},
+            left_key=key,
+            folders={"shop": curation.FolderRun(state="failed", key=key, reason=curation.UNKNOWN)},
+        ).model_dump_json()
+    )
     return job
 
 
@@ -971,153 +965,73 @@ def recovered_by_reboot(job: curation.Curation) -> None:
             job.maintenance.recover(session["id"], rebooted=True)
 
 
-def without_ended_at(job: curation.Curation) -> None:
-    """Serialize the recovered ledger as it would be written without an end time, which the schema allows."""
-    path = job.maintenance.path
-    data = json.loads(path.read_text())
-    for session in data["sessions"]:
-        session.pop("ended_at", None)
-    path.write_text(json.dumps(data))
-
-
-def test_a_settled_runs_pids_are_not_held_again_when_rebuilt_after_its_recovery(root, monkeypatch) -> None:
-    """Reconstruction runs without an intervening working() or lingering(), so the same PIDs stay released."""
-    job = survived_run(root, monkeypatch)
-    recovered_by_reboot(job)
-    again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
-    sessions = again.maintenance.read()["sessions"]
-    assert (again.maintenance.pending("curation"), len(sessions), sessions[0]["state"], again.left) == (
-        False, 1, "recovered", {4242: 1.0},
-    )  # fmt: skip
-
-
-def test_repeated_rebuilds_while_the_survivor_is_held_add_no_duplicate_hold(root, monkeypatch) -> None:
-    survived_run(root, monkeypatch)
+@pytest.mark.parametrize(
+    "identity",
+    [
+        pytest.param((True, 1.0, "same", True, False, 1), id="settled-known"),
+        pytest.param((False, 1.0, "same", True, False, 1), id="active-known"),
+        pytest.param((True, 1.0, "other-pid", True, False, 2), id="new-pid"),
+        pytest.param((True, None, "after-end", False, False, 2), id="missing-end"),
+        pytest.param((False, None, "after-end", True, False, 1), id="active-unknown"),
+        pytest.param((True, None, "after-end", True, False, 2), id="after-end"),
+        pytest.param((True, None, "before-end", True, False, 1), id="before-end"),
+        pytest.param((False, None, "after-boot", True, True, 2), id="held-after-boot"),
+        pytest.param((False, None, "before-boot", True, True, 1), id="held-before-boot"),
+        pytest.param((True, None, "after-boot", True, True, 2), id="settled-after-boot"),
+    ],
+)
+def test_snapshot_identity_respects_pid_birth_end_and_boot(root, monkeypatch, identity) -> None:
+    settled, birth, observed, end_known, new_boot, count = identity
+    job = survived_run(root, monkeypatch, birth=birth)
+    if settled:
+        recovered_by_reboot(job)
+    if not end_known:
+        data = json.loads(job.maintenance.path.read_text())
+        for session in data["sessions"]:
+            session.pop("ended_at", None)
+        job.maintenance.path.write_text(json.dumps(data))
+    boot = job.maintenance.boot() + 100 if new_boot else job.maintenance.boot()
+    snapshots = {
+        "same": {4242: birth},
+        "other-pid": {5555: 2.0},
+        "after-end": {4242: time.time() + 3600},
+        "before-end": {4242: time.time() - 3600},
+        "after-boot": {4242: boot + 10},
+        "before-boot": {4242: boot - 99},
+    }
+    job._pids({"event": "pids", "pids": snapshots[observed]})  # noqa: SLF001
+    calls: list[str] = []
+    identities = None
     for _ in range(2):
-        again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
-        assert (again.maintenance.pending("curation"), len(again.maintenance.read()["sessions"])) == (True, 1)
-
-
-def test_pids_a_later_snapshot_records_are_held_and_never_borrow_the_recovered_run(root, monkeypatch) -> None:
-    job = survived_run(root, monkeypatch)
-    recovered_by_reboot(job)
-    again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
-    again._pids({"event": "pids", "pids": {"5555": 2.0}})  # noqa: SLF001 - a process the earlier run never recorded
-    later = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
-    assert (later.maintenance.pending("curation"), len(later.maintenance.read()["sessions"])) == (True, 2)
-
-
-def test_a_recovered_lease_without_an_end_time_is_not_covered_by_a_later_known_birth(root, monkeypatch) -> None:
-    calls: list[str] = []
-    job = survived_run(root, monkeypatch, birth=None)
-    recovered_by_reboot(job)
-    without_ended_at(job)
-    again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
-    again._pids({"event": "pids", "pids": {4242: time.time() + 3600}})  # noqa: SLF001 - no end bound to prove it
-    rebuilt = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
-    assert (rebuilt.maintenance.pending("curation"), len(rebuilt.maintenance.read()["sessions"])) == (True, 2)
-    rebuilt.start("shop")
-    drained(rebuilt)
-    assert calls == []  # the public start runs nothing for it
-
-
-def test_an_active_unknown_birth_still_covers_a_later_known_birth_without_a_second_hold(root, monkeypatch) -> None:
-    survived_run(root, monkeypatch, birth=None)  # the run's lease stays active: its process survived
-    again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
-    again._pids({"event": "pids", "pids": {4242: time.time() + 3600}})  # noqa: SLF001
-    rebuilt = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
-    assert (rebuilt.maintenance.pending("curation"), len(rebuilt.maintenance.read()["sessions"])) == (True, 1)
-
-
-def test_a_known_birth_after_a_settled_runs_end_is_held_not_covered_by_its_unknown_birth(root, monkeypatch) -> None:
-    """The settled run's PID had an unknown birth; a later known birth after it ended is another process."""
-    calls: list[str] = []
-    job = survived_run(root, monkeypatch, birth=None)
-    recovered_by_reboot(job)
-    again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
-    again._pids({"event": "pids", "pids": {4242: time.time() + 3600}})  # noqa: SLF001 - born after the run ended
-    rebuilt = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root), run=never_runs(calls))
-    assert (rebuilt.maintenance.pending("curation"), len(rebuilt.maintenance.read()["sessions"])) == (True, 2)
-    rebuilt.start("shop")
-    drained(rebuilt)
-    assert calls == []  # the public start runs nothing while that contradiction is held
-
-
-def test_a_known_birth_before_a_settled_runs_end_is_still_that_recovered_run(root, monkeypatch) -> None:
-    job = survived_run(root, monkeypatch, birth=None)
-    recovered_by_reboot(job)
-    again = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
-    again._pids({"event": "pids", "pids": {4242: time.time() - 3600}})  # noqa: SLF001 - born while the run ran
-    rebuilt = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
-    assert (rebuilt.maintenance.pending("curation"), len(rebuilt.maintenance.read()["sessions"])) == (False, 1)
-
-
-def after_reboot(root, boot: float, run=None) -> curation.Curation:
-    """A host started after the computer rebooted at *boot*: its ledger judges leases against that boot."""
-    slots = Slots(lambda: 2)
-    ownership = maintenance.Maintenance(slots, boot=lambda: boot)
-    return curation.Curation(slots, shared=lambda: DataRepo(root), run=run, ownership=ownership)
-
-
-def test_a_held_unknown_birth_keeps_its_hold_when_a_known_birth_after_a_reboot_is_written(root, monkeypatch) -> None:
-    """A held lease A (PID 4242, unknown birth) predates a reboot; a later known birth is a new process, held as B."""
-    job = survived_run(root, monkeypatch, birth=None)
-    reboot = job.maintenance.boot() + 100
-    job._pids({"event": "pids", "pids": {4242: reboot + 10}})  # noqa: SLF001 - the historical producer after the boot
-    calls: list[str] = []
-    rebuilt = after_reboot(root, reboot, run=never_runs(calls))
-    assert (rebuilt.maintenance.pending("curation"), [s["state"] for s in rebuilt.maintenance.read()["sessions"]]) == (
-        True, ["held", "held"],
-    )  # fmt: skip
-    rebuilt.start("shop")
-    drained(rebuilt)
-    assert calls == []  # the public start runs nothing while a reboot contradiction is held
-
-
-def test_a_known_birth_before_the_reboot_is_still_the_held_lease_unchanged(root, monkeypatch) -> None:
-    """The unchanged pre-boot snapshot keeps covering its lease: nothing is held again."""
-    job = survived_run(root, monkeypatch, birth=None)
-    reboot = job.maintenance.boot() + 100
-    job._pids({"event": "pids", "pids": {4242: job.maintenance.boot() + 1}})  # noqa: SLF001 - born before the reboot
-    rebuilt = after_reboot(root, reboot)
-    assert (rebuilt.maintenance.pending("curation"), len(rebuilt.maintenance.read()["sessions"])) == (True, 1)
-
-
-def test_a_recovered_settled_lease_is_not_covered_by_a_known_birth_after_a_later_reboot(root, monkeypatch) -> None:
-    """A recovered lease A with a known birth after the new boot is a new process, not A's own."""
-    job = survived_run(root, monkeypatch, birth=None)
-    recovered_by_reboot(job)
-    reboot = job.maintenance.boot() + 100
-    job._pids({"event": "pids", "pids": {4242: reboot + 10}})  # noqa: SLF001
-    rebuilt = after_reboot(root, reboot)
-    assert (rebuilt.maintenance.pending("curation"), len(rebuilt.maintenance.read()["sessions"])) == (True, 2)
-
-
-def test_a_new_unknown_curation_run_is_not_imported_again_at_restart(root) -> None:
-    def run(cfg) -> Run:
-        return Run(cfg.session_id, ending="error", detail="runtime PID unknown",
-                   termination=Termination(confirmed=False))  # fmt: skip
-
-    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=run)
-    job.start("shop")
-    drained(job)
-    slots = Slots(lambda: 1, closed=True)
-    restarted = curation.Curation(slots, shared=lambda: DataRepo(root))
-    assert (slots.counts(curation.SLOT)[2], len(restarted.maintenance.read()["sessions"])) == (1, 1)
+        slots = Slots(lambda: 2)
+        ledger = maintenance.Maintenance(slots, boot=lambda: boot) if new_boot else maintenance.Maintenance(slots)
+        rebuilt = curation.Curation(slots, shared=lambda: DataRepo(root), run=never_runs(calls), ownership=ledger)
+        sessions = rebuilt.maintenance.read()["sessions"]
+        expected = ["recovered" if settled else "held"] + ["held"] * (count - 1)
+        assert [s["state"] for s in sessions] == expected
+        assert rebuilt.maintenance.pending("curation") is (not settled or count == 2)
+        ids = [s["id"] for s in sessions]
+        assert identities is None or ids == identities
+        identities = ids
+        assert rebuilt.left == ({4242: birth} | snapshots[observed])
+    if count == 2 and observed in {"after-end", "after-boot"}:
+        rebuilt.start("shop")
+        drained(rebuilt)
+        assert (calls, rebuilt.load().folders["shop"].reason) == ([], curation.LEFT)
 
 
 HELD = "0123456789abcdef"
 
 
-def quiet(cfg) -> Run:
-    return Run(cfg.session_id, ending="result", payload=MemoryCurationResult(summary="ok", entries=[]),
-               termination=Termination(confirmed=True))  # fmt: skip
-
-
 def recording(seen: list) -> callable:
     def run(cfg) -> Run:
         seen.append(cfg)
-        return quiet(cfg)
+        return Run(
+            cfg.session_id,
+            ending="result",
+            payload=MemoryCurationResult(summary="ok", entries=[]),
+            termination=Termination(confirmed=True),
+        )
 
     return run
 
@@ -1147,42 +1061,53 @@ def curator(root: Path, **changes) -> None:
     update_layer(shared.global_path, GlobalLayer, change)
 
 
-def test_the_curator_helper_writes_global_only_through_the_atomic_layer_writer(repo, monkeypatch) -> None:
+def test_grant_reads_current_settings_and_manual_takeover_bypasses_pause_and_off_not_fences(repo, monkeypatch) -> None:
     settings_carry.carry(DataRepo(repo))
     written = []
     real = layers.atomic_write
     monkeypatch.setattr(layers, "atomic_write", lambda path, text: (written.append(path), real(path, text)))
-    curator(repo, model="model-z")
+    curator(repo, model="model-a", minutes=1)
     assert written == [DataRepo(repo).global_path]
-
-
-def test_a_queued_automatic_request_starts_only_if_its_trigger_still_allows_it_at_its_slot(root) -> None:
     slots, paused, ran = Slots(lambda: 1), [False], []
-    assert slots.take(HELD, "a-change", 1, 1) == 1  # a project's step holds the only slot
-    job = curation.Curation(slots, shared=lambda: DataRepo(root), run=recording(ran), paused=lambda: paused[0])
-    pending(root / "shop" / "memory", "Lesson")
+    assert slots.take(HELD, "a-change", 1, 1) == 1
+    job = curation.Curation(slots, shared=lambda: DataRepo(repo), run=recording(ran), paused=lambda: paused[0])
+    job.start("shop")
+    curator(repo, model="model-b", minutes=5)
+    slots.give(HELD, "a-change")
+    finished(job)
+    assert [cfg.model for cfg in ran] == ["model-b"]
+
+    ran.clear()
+    pending(repo / "shop" / "memory", "Lesson")
+    assert slots.take(HELD, "a-change", 1, 1) == 1
     assert job.nudge(None, "idle") == ["shop"]
-    paused[0] = True  # the owner pauses while the request waits
+    paused[0] = True
     slots.give(HELD, "a-change")
     finished(job)
     assert (ran, folder_run(job, "shop")["state"], folder_run(job, "shop")["reason"]) == (
         [], "failed", curation.PAUSED
     )  # fmt: skip
-    assert job.due("shop")  # still due: the next allowed trigger runs it
-
-
-def test_curate_now_takes_over_a_waiting_automatic_request_and_runs_only_once(repo) -> None:
-    slots, paused, ran = Slots(lambda: 1), [False], []
+    assert job.due("shop")
+    paused[0] = False
     assert slots.take(HELD, "a-change", 1, 1) == 1
-    job = curation.Curation(slots, shared=lambda: DataRepo(repo), run=recording(ran), paused=lambda: paused[0])
-    pending(repo / "shop" / "memory", "Lesson")
     assert job.nudge(None, "idle") == ["shop"]
     paused[0] = True
-    assert job.start("shop") == []  # the waiting request is coalesced: no second run is queued
+    assert job.start("shop") == []
     assert job.queue == ["shop"]
     slots.give(HELD, "a-change")
     finished(job)
     assert (len(ran), folder_run(job, "shop")["state"]) == (1, "done")
+
+    configure_machine(curate_when_idle="off", curate_after_merge="off")
+    job.start("shop")
+    finished(job)
+    assert (len(ran), folder_run(job, "shop")["state"]) == (2, "done")
+    fenced = curation.Curation(
+        slots, shared=lambda: DataRepo(repo), run=recording(ran), fenced=lambda: "an update runs"
+    )
+    fenced.start("owlbear")
+    finished(fenced)
+    assert (len(ran), folder_run(fenced, "owlbear")["reason"]) == (2, "an update runs")
 
 
 def test_curate_now_landing_after_an_automatic_refusal_but_before_the_worker_retires_it_still_runs(repo) -> None:
@@ -1203,22 +1128,6 @@ def test_curate_now_landing_after_an_automatic_refusal_but_before_the_worker_ret
     slots.give(HELD, "a-change")
     finished(job)
     assert (raced, len(ran), folder_run(job, "shop")["state"]) == ([[]], 1, "done")
-
-
-def test_curate_now_bypasses_the_automatic_switch_and_pause_but_never_a_fence(repo) -> None:
-    configure_machine(curate_when_idle="off", curate_after_merge="off")
-    ran = []
-    job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=recording(ran),
-                            paused=lambda: True)  # fmt: skip
-    job.start("shop")
-    finished(job)
-    assert (len(ran), folder_run(job, "shop")["state"]) == (1, "done")
-
-    fenced = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=recording(ran),
-                               fenced=lambda: "an update runs")  # fmt: skip
-    fenced.start("owlbear")
-    finished(fenced)
-    assert (len(ran), folder_run(fenced, "owlbear")["reason"]) == (1, "an update runs")
 
 
 @pytest.mark.parametrize(("setting", "may"), [(True, True), (False, False)])
@@ -1243,23 +1152,6 @@ def test_a_curator_whose_subagent_setting_is_unset_never_starts(repo, monkeypatc
     assert (shop["state"], "agents.curator.subagents" in shop["reason"]) == ("failed", True)
 
 
-def test_a_waiting_request_takes_the_role_settings_in_force_at_its_grant(repo) -> None:
-    slots, seen = Slots(lambda: 1), []
-    curator(repo, model="model-a", minutes=1)
-    assert slots.take(HELD, "a-change", 1, 1) == 1
-    job = curation.Curation(slots, shared=lambda: DataRepo(repo), run=lambda cfg: _record(cfg, seen))
-    job.start("shop")
-    curator(repo, model="model-b", minutes=5)  # changed while the request waits for its slot
-    slots.give(HELD, "a-change")
-    finished(job)
-    assert [model for model, _limit in seen] == ["model-b"]
-
-
-def _record(cfg, seen: list) -> Run:
-    seen.append((cfg.model, cfg.limit))
-    return quiet(cfg)
-
-
 def test_a_keyless_snapshot_reusing_a_recovered_runs_pid_and_unknown_birth_is_held_anew(root, monkeypatch) -> None:
     """A later legacy snapshot with no key is not the recovered run's process: it gets its own hold and no SDK."""
     job = survived_run(root, monkeypatch, birth=None)
@@ -1276,12 +1168,6 @@ def test_a_keyless_snapshot_reusing_a_recovered_runs_pid_and_unknown_birth_is_he
     rebuilt.start("shop")
     drained(rebuilt)
     assert calls == []
-
-
-def test_a_keyless_snapshot_is_released_only_by_its_own_recovery_across_a_restart(root, monkeypatch) -> None:
-    job = survived_run(root, monkeypatch, birth=None)
-    recovered_by_reboot(job)
-    legacy_left_file({4242: None})
     held = curation.Curation(Slots(lambda: 2), shared=lambda: DataRepo(root))
     [*_, newer] = held.maintenance.read()["sessions"]
     booted = held.maintenance.boot
@@ -1484,15 +1370,22 @@ def test_an_unchanged_main_snapshot_keeps_its_leases_across_a_lost_write_and_aft
     assert (again.working(), again.load().left) == ([], {})
 
 
-def test_an_adopted_unknown_row_keeps_its_one_lease_through_a_lost_key_write_its_recovery_and_a_restart(root) -> None:
-    """Review 4373338555: the row's lease and its association are one save, so the lost key write is repaired.
-
-    The lease begins after the row ended, so no window could find it again; a later row with its own start is held anew.
-    """
+@pytest.mark.parametrize("producer", ["unknown", "generic-before-pid", "waiting", "interrupted"])
+def test_legacy_row_adoption_survives_lost_keys_restarts_and_recovery_without_owning_a_later_row(root, producer):
     first = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
     first.maintenance.path.unlink(missing_ok=True)
-    started = datetime.now(UTC) - timedelta(minutes=5)
-    older_unknown_run(first, started)
+    started = datetime.now(UTC) - (timedelta(minutes=5) if producer == "unknown" else timedelta(hours=2))
+
+    def write(at):
+        if producer == "unknown":
+            older_unknown_run(first, at)
+        elif producer == "generic-before-pid":
+            main_session_row(at, {})
+        else:
+            reason = "RuntimeError: synthetic SDK failure" if producer == "waiting" else curation.INTERRUPTED
+            main_row(reason, at, at + timedelta(seconds=30), "waiting" if producer == "waiting" else "failed")
+
+    write(started)
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(curation.Curation, "_write", lost_write)
         with pytest.raises(OSError, match="synthetic runs write failure"):
@@ -1500,20 +1393,34 @@ def test_an_adopted_unknown_row_keeps_its_one_lease_through_a_lost_key_write_its
     on_disk = ledger_on_disk()
     [b] = on_disk["sessions"]
     assert (b["state"], [m for m in on_disk["imported"] if m.endswith(f":slot:{b['slot']}")] != []) == ("held", True)
-    assert first.load().folders["shop"].key == ""  # the key write was lost
-    retry = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
-    assert ([s["id"] for s in ledger_on_disk()["sessions"]], retry.load().folders["shop"].key) == ([b["id"]], b["slot"])
+    assert first.load().folders["shop"].key == ""
+    calls: list[str] = []
+    for _ in range(2):
+        retry = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+        assert ([s["id"] for s in ledger_on_disk()["sessions"]], retry.load().folders["shop"].key) == (
+            [b["id"]],
+            b["slot"],
+        )
+    if producer in {"waiting", "interrupted"}:
+        assert retry.load().folders["shop"].reason == curation.INTERRUPTED
+    assert (retry.working(), retry.left) == ([curation.LINGERING], {})
+    retry.start("shop")
+    drained(retry)
+    assert (calls, retry.load().folders["shop"].reason) == ([], curation.LEFT)
     rebooted(retry)
     retry.maintenance.recover(b["id"], rebooted=True)
-    older_unknown_run(retry, started)  # the same row, its key lost again before any clearing
+    write(started)
     again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
     sessions = [s["id"] for s in ledger_on_disk()["sessions"]]
     assert (again.maintenance.pending("curation"), sessions) == (False, [b["id"]])
     assert again.load().folders["shop"].key == b["slot"]
-    older_unknown_run(again, started + timedelta(minutes=2))  # a later unknown run
-    calls: list[str] = []
+    assert (again.working(), calls) == ([], [])
+    write(started + (timedelta(minutes=2) if producer == "unknown" else timedelta(hours=1)))
     later = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
-    assert (later.maintenance.pending("curation"), len(ledger_on_disk()["sessions"])) == (True, 2)
+    assert ([s["state"] for s in ledger_on_disk()["sessions"]], later.working()) == (
+        ["recovered", "held"],
+        [curation.LINGERING],
+    )
     later.start("shop")
     drained(later)
     assert calls == []
@@ -1531,43 +1438,6 @@ def main_row(reason: str, started: datetime, ended: datetime | None, state: str 
 def ledger_sessions() -> list[dict]:
     path = local_home.root() / maintenance.FILE
     return json.loads(path.read_text())["sessions"] if path.exists() else []
-
-
-def test_main_generic_failure_before_its_first_pid_is_held_by_its_row_through_a_lost_key_write_and_recovery(
-    root,
-) -> None:
-    """Review 4373677385: main entered the SDK, which raised before any PID was recorded; nothing proves it ended.
-
-    The row's lease and its association are one save, so a lost key write is repaired; after the owner's recovery the
-    same row resurrects nothing, and a genuinely new row without PIDs is held again.
-    """
-    t0 = datetime.now(UTC) - timedelta(hours=2)
-    main_session_row(t0, {})  # main's ``_work`` row: RuntimeError, dated, no key, no PIDs
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(curation.Curation, "_write", lost_write)
-        with pytest.raises(OSError, match="synthetic runs write failure"):
-            curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
-    [b] = ledger_sessions()
-    calls: list[str] = []
-    retry = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
-    assert ([s["id"] for s in ledger_sessions()], b["state"], retry.load().folders["shop"].key) == (
-        [b["id"]], "held", b["slot"],
-    )  # fmt: skip
-    assert (retry.working(), retry.left) == ([curation.LINGERING], {})
-    retry.start("shop")
-    drained(retry)
-    assert (calls, retry.load().folders["shop"].reason) == ([], curation.LEFT)
-    rebooted(retry)
-    retry.maintenance.recover(b["id"], rebooted=True)
-    main_session_row(t0, {})  # the same row, its key lost again
-    again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
-    assert (again.maintenance.pending("curation"), [s["id"] for s in ledger_sessions()]) == (False, [b["id"]])
-    assert again.load().folders["shop"].key == b["slot"]
-    main_session_row(t0 + timedelta(hours=1), {})  # main's later session failed the same way
-    later = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
-    assert ([s["state"] for s in ledger_sessions()], later.working(), calls) == (
-        ["recovered", "held"], [curation.LINGERING], [],
-    )  # fmt: skip
 
 
 UNSET_MODEL = "settings unset: agents.curator.model; fill them in on the Settings page"
@@ -1614,39 +1484,6 @@ def test_a_dated_failure_no_known_shape_explains_is_held_fail_closed(root, reaso
     job.start("shop")
     drained(job)
     assert calls == []
-
-
-@pytest.mark.parametrize("copy", ["waiting", "interrupted"])
-def test_a_queued_copy_of_mains_failure_before_its_first_pid_keeps_one_hold_through_restarts_and_recovery(
-    root, copy
-) -> None:
-    """Review on b4: main's ``start`` copies the failed row as waiting, and main's restart then ends it interrupted.
-
-    Both still show the generic failure's session times, and the waiting one its reason; neither end proves the
-    session ended. It is held once, through a lost key write and further restarts, starts nothing, and after the
-    owner's recovery the same copy resurrects nothing.
-    """
-    t0 = datetime.now(UTC) - timedelta(hours=2)
-    reason = "RuntimeError: synthetic SDK failure" if copy == "waiting" else curation.INTERRUPTED
-    main_row(reason, t0, t0 + timedelta(seconds=30), "waiting" if copy == "waiting" else "failed")
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(curation.Curation, "_write", lost_write)
-        with pytest.raises(OSError, match="synthetic runs write failure"):
-            curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root))
-    [b] = ledger_sessions()
-    calls: list[str] = []
-    for _ in range(2):
-        again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
-        assert ([s["id"] for s in ledger_sessions()], again.load().folders["shop"].key) == ([b["id"]], b["slot"])
-    assert again.load().folders["shop"].reason == curation.INTERRUPTED
-    again.start("shop")
-    drained(again)
-    assert (calls, again.load().folders["shop"].reason) == ([], curation.LEFT)
-    rebooted(again)
-    again.maintenance.recover(b["id"], rebooted=True)
-    main_row(reason, t0, t0 + timedelta(seconds=30), "waiting" if copy == "waiting" else "failed")  # key lost again
-    after = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
-    assert ([s["state"] for s in ledger_sessions()], after.working(), calls) == (["recovered"], [], [])
 
 
 @pytest.mark.parametrize(
@@ -1779,7 +1616,7 @@ def owned_failure_before_any_pid(root: Path, *, lost: bool) -> tuple[dict, curat
     ("recovered", "lost"), [(False, False), (True, True)], ids=["held-final-row", "recovered-lost-final-row"]
 )
 def test_mains_later_failure_starting_when_an_owned_run_started_is_held_anew_and_the_owned_run_keeps_one_lease(
-    root, recovered, lost
+    repo, recovered, lost
 ) -> None:
     """Review on 4e95: this host's run is found by its admission key, never by its row's times.
 
@@ -1787,21 +1624,21 @@ def test_mains_later_failure_starting_when_an_owned_run_started_is_held_anew_and
     is another run, held as B, and nothing starts. The owned run keeps its one lease, held or recovered, whether its
     failure's row or only its running row reached the file.
     """
-    a, row = owned_failure_before_any_pid(root, lost=lost)
+    a, row = owned_failure_before_any_pid(repo, lost=lost)
     calls: list[str] = []
     state = "recovered" if recovered else "held"
     for _ in range(2):  # restarts with the owned run's own rows: no second lease
-        again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+        again = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=never_runs(calls))
         assert [(s["id"], s["state"]) for s in ledger_sessions()] == [(a["id"], "held")]
         assert again.load().folders["shop"].key == a["slot"]
     if recovered:
         rebooted(again)
         again.maintenance.recover(a["id"], rebooted=True)
-        after = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+        after = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=never_runs(calls))
         assert (after.maintenance.pending("curation"), len(ledger_sessions())) == (False, 1)
     main_row(GENERIC, row.started_at, row.started_at + timedelta(seconds=60))  # main's B: same start, its own end
     for _ in range(2):
-        later = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(root), run=never_runs(calls))
+        later = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=never_runs(calls))
         sessions = ledger_sessions()
         assert (sessions[0]["id"], sessions[0]["state"]) == (a["id"], state)
         assert ([s["state"] for s in sessions[1:]], later.load().folders["shop"].key) == (["held"], sessions[1]["slot"])

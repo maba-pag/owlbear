@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -10,7 +12,6 @@ from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_memory import AssessmentResult, DuplicateEntryError, MemoryEngine, MemoryEntry, MemoryState, storage
 
 from owlbear_memory_mcp import tools
-from owlbear_memory_mcp.server import AppContext
 
 _DUPLICATE_ID = "550e8400-e29b-41d4-a716-446655440001"
 
@@ -84,59 +85,39 @@ def _memory_entries(memory_dir: Path) -> list[MemoryEntry]:
     return [entry for path in memory_dir.glob("*.md") if (entry := storage.read_entry(path)) is not None]
 
 
-def _tool_context(engine: MemoryEngine, memory_dir: Path) -> SimpleNamespace:
-    return SimpleNamespace(
-        request_context=SimpleNamespace(
-            lifespan_context=AppContext(engine=engine, memory_dir=memory_dir),
-        ),
-    )
-
-
-def _create_entry(engine: MemoryEngine, *, title: str) -> MemoryEntry:
-    return engine.save(
-        title=title,
+@pytest.fixture
+def saved(memory_entry: Callable[..., MemoryEntry]) -> Callable[..., MemoryEntry]:
+    return partial(
+        memory_entry,
         content="Original content.",
         categories=["domain-knowledge"],
         confidence=0.9,
-        source_agent="test-agent",
-        scope_agents=[],
+        score=0.9,
     )
-
-
-def _create_approved_entry(engine: MemoryEngine, *, title: str) -> MemoryEntry:
-    pending = _create_entry(engine, title=title)
-    curated = engine.edit(
-        pending.id,
-        {"scope_agents": ["test-agent"]},
-        expected_updated_at=pending.updated_at,
-    )
-    return engine.approve(curated.id, expected_updated_at=curated.updated_at)
 
 
 @pytest.mark.parametrize(
-    ("tool_name", "engine_method"),
+    "operation",
     [
         ("save_memory", "save"),
         ("curate_memory", "edit"),
         ("delete_memory", "delete"),
         ("approve_memory", "approve"),
     ],
+    ids=["save_memory-save", "curate_memory-edit", "delete_memory-delete", "approve_memory-approve"],
 )
 @pytest.mark.asyncio
 async def test_mutation_tools_translate_duplicate_errors_to_tool_errors(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
-    tool_name: str,
-    engine_method: str,
+    operation: tuple[str, str],
+    saved: Callable[..., MemoryEntry],
+    memory_context: Callable[..., SimpleNamespace],
 ) -> None:
+    tool_name, engine_method = operation
     engine = MemoryEngine(tmp_path)
-    pending = _create_entry(engine, title="Pending entry")
-    curated = engine.edit(
-        pending.id,
-        {"scope_agents": ["test-agent"]},
-        expected_updated_at=pending.updated_at,
-    )
-    ctx = _tool_context(engine, tmp_path)
+    curated = saved(tmp_path, title="Pending entry", state=MemoryState.CURATED)
+    ctx = memory_context(tmp_path, engine=engine)
     error_paths = tuple(sorted((f"{_DUPLICATE_ID}.md", "duplicate-copy.md")))
     duplicate_error = DuplicateEntryError(_DUPLICATE_ID, error_paths)
 
@@ -156,12 +137,12 @@ async def test_mutation_tools_translate_duplicate_errors_to_tool_errors(
         ),
         "curate_memory": lambda: tools.curate_memory(
             ctx,
-            entry_id=pending.id,
-            revision=pending.revision,
+            entry_id=curated.id,
+            revision=curated.revision,
             content="Updated content.",
             scope_agents=["test-agent"],
         ),
-        "delete_memory": lambda: tools.delete_memory(ctx, entry_id=pending.id, revision=pending.revision),
+        "delete_memory": lambda: tools.delete_memory(ctx, entry_id=curated.id, revision=curated.revision),
         "approve_memory": lambda: tools.approve_memory(ctx, entry_id=curated.id, revision=curated.revision),
     }
 
@@ -172,19 +153,22 @@ async def test_mutation_tools_translate_duplicate_errors_to_tool_errors(
 
 
 @pytest.mark.asyncio
-async def test_curate_memory_surfaces_duplicate_repair_failure_without_changes(tmp_path: Path) -> None:
+async def test_curate_memory_surfaces_duplicate_repair_failure_without_changes(
+    tmp_path: Path,
+    saved: Callable[..., MemoryEntry],
+    memory_context: Callable[..., SimpleNamespace],
+) -> None:
     if os.geteuid() == 0:
         pytest.skip("real permission behavior cannot be verified as root")
 
-    setup_engine = MemoryEngine(tmp_path)
-    _create_entry(setup_engine, title="Lock file seed")
+    saved(tmp_path, title="Lock file seed")
     _write_duplicate_pair(
         tmp_path,
         older_state=MemoryState.APPROVED,
         newer_state=MemoryState.APPROVED,
     )
     engine = MemoryEngine(tmp_path)
-    ctx = _tool_context(engine, tmp_path)
+    ctx = memory_context(tmp_path, engine=engine)
     revision = engine.get_entry(_DUPLICATE_ID).revision
     before = _directory_snapshot(tmp_path)
     original_mode = _directory_mode(tmp_path)
@@ -207,19 +191,20 @@ async def test_curate_memory_surfaces_duplicate_repair_failure_without_changes(t
 async def test_assess_memories_reports_duplicate_failure_and_continues(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    saved: Callable[..., MemoryEntry],
+    memory_context: Callable[..., SimpleNamespace],
 ) -> None:
     if os.geteuid() == 0:
         pytest.skip("real permission behavior cannot be verified as root")
 
-    setup_engine = MemoryEngine(tmp_path)
-    later_entry = _create_approved_entry(setup_engine, title="Later assessment")
+    later_entry = saved(tmp_path, title="Later assessment", state=MemoryState.APPROVED)
     _write_duplicate_pair(
         tmp_path,
         older_state=MemoryState.APPROVED,
         newer_state=MemoryState.APPROVED,
     )
     engine = MemoryEngine(tmp_path)
-    ctx = _tool_context(engine, tmp_path)
+    ctx = memory_context(tmp_path, engine=engine)
     before = _directory_snapshot(tmp_path)
     original_mode = _directory_mode(tmp_path)
     duplicate_revision = engine.get_entry(_DUPLICATE_ID).revision
@@ -278,7 +263,10 @@ async def test_assess_memories_reports_duplicate_failure_and_continues(
 
 @pytest.mark.usefixtures("todays_memory_values")
 @pytest.mark.asyncio
-async def test_purge_keeps_repaired_copy_pending_and_out_of_recall(tmp_path: Path) -> None:
+async def test_purge_keeps_repaired_copy_pending_and_out_of_recall(
+    tmp_path: Path,
+    memory_context: Callable[..., SimpleNamespace],
+) -> None:
     scope_agents = ["agent-one", "agent-two"]
     approved = _entry(
         title="Approved duplicate",
@@ -297,7 +285,7 @@ async def test_purge_keeps_repaired_copy_pending_and_out_of_recall(tmp_path: Pat
     storage.write_entry(tmp_path / f"{_DUPLICATE_ID}.md", approved, memory_dir=tmp_path)
     storage.write_entry(tmp_path / "deleted-copy.md", tombstone, memory_dir=tmp_path)
     engine = MemoryEngine(tmp_path)
-    ctx = _tool_context(engine, tmp_path)
+    ctx = memory_context(tmp_path, engine=engine)
 
     result = engine.purge(min_age_days=0)
     recalls = [await tools.recall_memory(ctx, agent=agent) for agent in scope_agents]

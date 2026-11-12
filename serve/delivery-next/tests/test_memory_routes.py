@@ -38,14 +38,9 @@ def git(cwd: Path, *args: str) -> str:
 
 
 @pytest.fixture
-def shared(tmp_path: Path, monkeypatch) -> tuple[Path, Path, Path]:
-    remote, root, repo = tmp_path / "remote.git", tmp_path / "owlbear-data", tmp_path / "shop"
-    git(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
-    git(tmp_path, "clone", "-q", str(remote), str(root))
-    for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
-        git(root, "config", key, value)
-    git(root, "commit", "-q", "--allow-empty", "-m", "start")
-    git(root, "push", "-q", "origin", "HEAD")
+def shared(shared_repo, tmp_path: Path, monkeypatch) -> tuple[Path, Path, Path]:
+    root, remote = shared_repo
+    repo = tmp_path / "shop"
     home = tmp_path / "home"
     home.mkdir()
     (home / "data.json").write_text(json.dumps({"repository": str(root)}))
@@ -77,33 +72,29 @@ def test_without_a_shared_repository_the_memory_tab_says_so(tmp_path):
     assert client(Store(tmp_path / "store"), headers={}).get("/api/next/memory").status_code == 401
 
 
-def test_the_memory_tab_lists_the_projects_memory_with_what_the_filters_need(shared):
-    root, _, repo = shared
+def test_owner_lifecycle_lists_public_fields_and_publishes_only_the_entries_actual_path(shared):
+    root, remote, repo = shared
     store = Store.open(repo)
     folder = root / store.name / "memory"
-    seed(folder, "Run ruff first", curated=True)
-    seed(folder, "Ask before merging", agent="shaper")
-
-    got = client(store).get("/api/next/memory").json()
-
+    curated = seed(folder, "Run ruff first", curated=True)
+    pending = seed(folder, "Ask before merging", agent="shaper")
+    (folder / f"{curated.id}.md").rename(folder / "run-ruff-first.md")
+    c = client(store)
+    got = c.get("/api/next/memory").json()
     assert (got["available"], got["parse_errors"]) == (True, 0)
     assert {(e["title"], e["state"], tuple(e["scope_agents"])) for e in got["entries"]} == {
         ("Run ruff first", "curated", ("builder",)),
         ("Ask before merging", "pending", ()),
     }
-    assert all(e["updated_at"] for e in got["entries"])
+    assert all(e["updated_at"] and not {"score", "assessment_receipts"} & e.keys() for e in got["entries"])
     assert "deleted" in got["states"]
     assert "pitfall" in got["categories"]
-
-
-def test_the_owner_approves_edits_and_deletes_and_each_action_is_committed(shared):
-    root, remote, repo = shared
-    store = Store.open(repo)
-    folder = root / store.name / "memory"
-    curated, pending = seed(folder, "Run ruff first", curated=True), seed(folder, "Ask before merging")
-    c = client(store)
+    unpublished = seed(folder, "Written by an agent, not yet published")
 
     approved = c.post(f"/api/next/memory/{curated.id}/approve", json={"updated_at": curated.updated_at}).json()
+    assert git(remote, "show", "--name-only", "--format=", "main").splitlines() == [
+        f"{store.name}/memory/run-ruff-first.md"
+    ]
     stale = c.post(f"/api/next/memory/{curated.id}/edit", json={"updated_at": curated.updated_at, "title": "x"})
     edit = {"updated_at": approved["entry"]["updated_at"], "title": "Run ruff before tests", "categories": ["process"]}
     edited = c.post(f"/api/next/memory/{curated.id}/edit", json=edit).json()
@@ -118,7 +109,9 @@ def test_the_owner_approves_edits_and_deletes_and_each_action_is_committed(share
     )
     assert (deleted.status_code, deleted.json()["notice"]) == (200, "")
     assert not (folder / f"{pending.id}.md").exists()
-    log = git(remote, "log", "--format=%s", "main", "--", f"{store.name}/memory/{curated.id}.md").splitlines()
+    assert not (folder / f"{curated.id}.md").exists()
+    assert git(root, "status", "--porcelain") == f"?? {store.name}/memory/{unpublished.id}.md"
+    log = git(remote, "log", "--format=%s", "main", "--", f"{store.name}/memory/run-ruff-first.md").splitlines()
     assert log == [f"memory {store.name}: edit Run ruff before tests", f"memory {store.name}: approve Run ruff first"]
 
 
@@ -138,7 +131,6 @@ def test_purge_removes_only_old_deleted_entries_and_publishes_their_removal(shar
     assert (purged["purged"], purged["skipped"], purged["failed"]) == (1, 0, 0)
     assert [p.stem for p in folder.glob("*.md")] == [kept.id]
     assert git(remote, "log", "-1", "--format=%s", "main") == f"memory {store.name}: purge 1 deleted"
-    assert c.post("/api/next/memory/purge", json={"min_age_days": -1}).status_code == 422
 
 
 def deleted_days_ago(folder: Path, title: str, days: int, *, category: MemoryCategory | None = None) -> str:
@@ -212,17 +204,6 @@ def test_unreadable_settings_reach_the_purge_line_and_its_refusal_whole(shared, 
     why = f"the settings can't be read: StoreError: {whole_error}\na note added on the way up"
     assert (listed["purge_days"], listed["purge_why"]) == (None, why)
     assert (refused.status_code, refused.json()["detail"]) == (409, why)
-
-
-def test_an_entry_shown_to_the_page_carries_no_stored_score(shared):
-    root, _, repo = shared
-    store = Store.open(repo)
-    seed(root / store.name / "memory", "A lesson", curated=True)
-
-    entries = client(store).get("/api/next/memory").json()["entries"]
-    assert len(entries) == 1
-    assert "score" not in entries[0]
-    assert "assessment_receipts" not in entries[0]
 
 
 def curated(name: str, state: str, at: datetime) -> None:
@@ -347,36 +328,33 @@ def test_unreadable_curation_runs_qualify_memorys_last_run_whole(shared, monkeyp
 def test_refused_memory_actions_say_why(shared):
     root, _, repo = shared
     store = Store.open(repo)
-    pending = seed(root / store.name / "memory", "Ask before merging")
+    folder = root / store.name / "memory"
+    pending = seed(folder, "Ask before merging")
     c = client(store)
 
-    calls = [
-        c.post(f"/api/next/memory/{pending.id}/approve", json={"updated_at": pending.updated_at}),
-        c.post("/api/next/memory/no-such-entry/delete", json={"updated_at": pending.updated_at}),
-        c.post(f"/api/next/memory/{pending.id}/edit", json={"updated_at": pending.updated_at, "categories": []}),
-        c.post(f"/api/next/memory/{pending.id}/edit", json={"updated_at": pending.updated_at, "content": "x" * 1025}),
-        c.post("/api/next/memory/..%2F..%2Fconfig/delete", json={"updated_at": pending.updated_at}),
-    ]
-
-    assert [r.status_code for r in calls] == [409, 404, 422, 422, 404]
+    shown = {"updated_at": pending.updated_at}
+    calls = []
+    for path, body, status in [
+        (f"{pending.id}/approve", shown, 409),
+        ("no-such-entry/delete", shown, 404),
+        (f"{pending.id}/edit", shown | {"categories": []}, 422),
+        (f"{pending.id}/edit", shown | {"content": "x" * 1025}, 422),
+        ("..%2F..%2Fconfig/delete", shown, 404),
+        ("purge", {"min_age_days": -1}, 422),
+    ]:
+        before = (
+            {p.name: p.read_bytes() for p in folder.glob("*.md")},
+            git(root, "rev-parse", "HEAD"),
+            git(root, "status", "--porcelain"),
+        )
+        calls.append(c.post(f"/api/next/memory/{path}", json=body))
+        assert calls[-1].status_code == status
+        assert (
+            {p.name: p.read_bytes() for p in folder.glob("*.md")},
+            git(root, "rev-parse", "HEAD"),
+            git(root, "status", "--porcelain"),
+        ) == before
     assert "pending" in calls[0].json()["detail"]
-
-
-def test_an_action_publishes_the_file_the_entry_lives_in_and_nothing_else(shared):
-    root, remote, repo = shared
-    store = Store.open(repo)
-    folder = root / store.name / "memory"
-    curated = seed(folder, "Run ruff first", curated=True)
-    (folder / f"{curated.id}.md").rename(folder / "run-ruff-first.md")
-    unpublished = seed(folder, "Written by an agent, not yet published")
-
-    approved = client(store).post(f"/api/next/memory/{curated.id}/approve", json={"updated_at": curated.updated_at})
-
-    assert approved.json()["entry"]["state"] == "approved"
-    assert not (folder / f"{curated.id}.md").exists()
-    committed = git(remote, "show", "--name-only", "--format=", "main").splitlines()
-    assert committed == [f"{store.name}/memory/run-ruff-first.md"]
-    assert git(root, "status", "--porcelain") == f"?? {store.name}/memory/{unpublished.id}.md"
 
 
 def test_a_duplicate_repair_publishes_every_file_it_touched(shared):
@@ -434,36 +412,29 @@ def test_no_agent_can_write_the_memory_until_the_owners_action_is_published(shar
     assert raced == [MemoryBusyError]
 
 
-def test_global_memory_is_listed_and_acted_on_beside_the_projects(shared):
-    """TD-241: ``?where=global`` reads and changes the shared repository's Global memory, committed as Global."""
+def test_global_listing_actions_and_round_trip_publish_both_paths_and_refuse_stale_replays(shared):
     root, remote, repo = shared
     store = Store.open(repo)
+    folder = root / store.name / "memory"
+    entry = seed(folder, "Pin the runtime", curated=True)
     common = seed(root / "memory", "Sign every commit", curated=True)
-    seed(root / store.name / "memory", "Run ruff first")
+    seed(folder, "Run ruff first")
+    git(root, "add", "--", f"{store.name}/memory/{entry.id}.md")
+    git(root, "commit", "-qm", "seed")
+    git(root, "push", "-q")
     c = client(store)
-
     listed = c.get("/api/next/memory", params={"where": "global"}).json()
     approved = c.post(
         f"/api/next/memory/{common.id}/approve", params={"where": "global"}, json={"updated_at": common.updated_at}
     )
     elsewhere = c.post(f"/api/next/memory/{common.id}/approve", json={"updated_at": common.updated_at})
-
     assert ([e["title"] for e in listed["entries"]], listed["project"], listed["repository"]) == (
-        ["Sign every commit"], store.name, str(root)
-    )  # fmt: skip
+        ["Sign every commit"],
+        store.name,
+        str(root),
+    )
     assert (approved.json()["entry"]["state"], elsewhere.status_code) == ("approved", 404)
     assert git(remote, "log", "-1", "--format=%s", "main") == "memory global: approve Sign every commit"
-
-
-def test_make_global_moves_the_entry_and_publishes_both_folders(shared):
-    root, remote, repo = shared
-    store = Store.open(repo)
-    folder = root / store.name / "memory"
-    entry = seed(folder, "Pin the runtime", curated=True)
-    git(root, "add", "--", f"{store.name}/memory/{entry.id}.md")
-    git(root, "commit", "-qm", "seed")
-    git(root, "push", "-q")
-    c = client(store)
 
     stale = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": "2000-01-01T00:00:00Z"})
     moved = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at})
@@ -474,20 +445,13 @@ def test_make_global_moves_the_entry_and_publishes_both_folders(shared):
     committed = sorted(git(remote, "show", "--no-renames", "--name-only", "--format=", "main").splitlines())
     assert committed == sorted([f"{store.name}/memory/{entry.id}.md", f"memory/{entry.id}.md"])
     assert git(remote, "log", "-1", "--format=%s", "main") == f"memory {store.name}: make global Pin the runtime"
-    assert [e.id for e in MemoryEngine(root / "memory").get_entries()] == [entry.id]
-
-
-def test_a_global_entry_moves_back_only_to_the_project_it_came_from(shared):
-    """TD-292: Make global records the project; only it takes the entry back, and one without a record stays."""
-    root, remote, repo = shared
-    store = Store.open(repo)
-    folder, common = root / store.name / "memory", root / "memory"
-    entry = seed(folder, "Pin the runtime", curated=True)
-    c = client(store)
-    globalized = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at}).json()
-    theirs, unknown = seed(common, "Their habit", curated=True), seed(common, "An older global", curated=True)
+    assert {e.id for e in MemoryEngine(root / "memory").get_entries()} == {entry.id, common.id}
+    assert moved.json()["entry"]["origin"] == store.name
+    globalized = moved.json()
+    theirs = seed(root / "memory", "Their habit", curated=True)
+    unknown = seed(root / "memory", "An older global", curated=True)
     theirs = theirs.model_copy(update={"origin": "docs-site"})
-    storage.write_entry(common / f"{theirs.id}.md", theirs, memory_dir=common)
+    storage.write_entry(root / "memory" / f"{theirs.id}.md", theirs, memory_dir=root / "memory")
 
     refused = [
         c.post(f"/api/next/memory/{e.id}/move-back", json={"updated_at": e.updated_at}) for e in (theirs, unknown)
@@ -498,68 +462,75 @@ def test_a_global_entry_moves_back_only_to_the_project_it_came_from(shared):
     said = [(r.status_code, w in r.json()["detail"]) for r, w in zip(refused, ("docs-site", "recorded"), strict=True)]
     assert said == [(409, True), (409, True)]
     assert (back.status_code, back.json()["entry"]["origin"]) == (200, None)
-    assert [e.id for e in MemoryEngine(folder).get_entries()] == [entry.id]
+    assert entry.id in {e.id for e in MemoryEngine(folder).get_entries()}
     assert "origin" not in (folder / f"{entry.id}.md").read_text()
     assert git(remote, "log", "-1", "--format=%s", "main") == f"memory {store.name}: move back Pin the runtime"
+    replayed = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at})
+    assert replayed.status_code == 409
 
 
-def test_a_move_that_fails_keeps_the_entry_where_it_was_with_its_origin_and_can_be_tried_again(shared, monkeypatch):
-    root, _, repo = shared
+@pytest.mark.parametrize(
+    "phase",
+    ["origin-value", "origin-permission", "rename-home", "write-home"],
+)
+def test_failed_moves_preserve_source_bytes_origin_and_git_and_can_retry(shared, monkeypatch, whole_error, phase):
+    root, remote, repo = shared
     store = Store.open(repo)
     folder, common = root / store.name / "memory", root / "memory"
     entry = seed(folder, "Pin the runtime", curated=True)
     c = client(store)
-    shown = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at}).json()["entry"]
-    real = Path.replace
-
-    def refuse(self, target):  # only the move into the project's folder fails; atomic writes still work
-        if Path(target).parent == folder and Path(target).suffix == ".md":
-            raise PermissionError(13, "Permission denied")
-        return real(self, target)
-
-    monkeypatch.setattr(Path, "replace", refuse)
-    failed = c.post(f"/api/next/memory/{entry.id}/move-back", json={"updated_at": shown["updated_at"]})
-    monkeypatch.setattr(Path, "replace", real)
-    again = c.post(f"/api/next/memory/{entry.id}/move-back", json={"updated_at": shown["updated_at"]})
-
-    assert (failed.status_code, "try again" in failed.json()["detail"]) == (409, True)
-    assert again.status_code == 200
-    assert [e.id for e in MemoryEngine(folder).get_entries()] == [entry.id]
-    assert MemoryEngine(common).get_entries() == []
-
-
-@pytest.mark.parametrize(
-    ("error", "answer"),
-    [
-        (ValueError, (422, "Pin the runtime cannot move: {}")),
-        (PermissionError, (409, "Pin the runtime could not move: {}; try again")),
-    ],
-)
-def test_a_move_that_fails_answers_with_its_whole_error(shared, monkeypatch, whole_error, error, answer):
-    root, _, repo = shared
-    store = Store.open(repo)
-    entry = seed(root / store.name / "memory", "Pin the runtime", curated=True)
-    raised, rendered = (
-        (error(whole_error), f"ValueError: {whole_error}")
-        if error is ValueError
-        else (error(13, whole_error, "entry.md"), f"PermissionError: [Errno 13] {whole_error}: 'entry.md'")
+    back = phase in {"rename-home", "write-home"}
+    shown = (
+        c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at}).json()["entry"]
+        if back
+        else {"updated_at": entry.updated_at}
     )
-    raised.add_note("a note added on the way up")
-    real = storage.write_entry
+    source, target = (common, folder) if back else (folder, common)
+    before = (source / f"{entry.id}.md").read_bytes()
+    heads = git(root, "rev-parse", "HEAD"), git(remote, "rev-parse", "main")
+    raised = {
+        "origin-value": ValueError(whole_error),
+        "origin-permission": PermissionError(13, whole_error, "entry.md"),
+        "rename-home": PermissionError(13, "Permission denied"),
+        "write-home": OSError(28, "No space left on device"),
+    }[phase]
+    if not back:
+        raised.add_note("a note added on the way up")
+    real_write, real_replace = storage.write_entry, Path.replace
 
-    def refusing(path, written, *, memory_dir):  # only the moving entry's write, which names its origin, fails
-        if getattr(written, "origin", None):
+    def refusing(path, written, *, memory_dir):
+        if (phase.startswith("origin") and getattr(written, "origin", None)) or (
+            phase == "write-home" and memory_dir == folder
+        ):
             raise raised
-        return real(path, written, memory_dir=memory_dir)
+        return real_write(path, written, memory_dir=memory_dir)
 
+    def refuse_rename(self, destination):
+        if phase == "rename-home" and Path(destination).parent == folder and Path(destination).suffix == ".md":
+            raise raised
+        return real_replace(self, destination)
+
+    action = "move-back" if back else "make-global"
     monkeypatch.setattr(storage, "write_entry", refusing)
-    failed = client(store).post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at})
-
-    status, said = answer
+    monkeypatch.setattr(Path, "replace", refuse_rename)
+    failed = c.post(f"/api/next/memory/{entry.id}/{action}", json={"updated_at": shown["updated_at"]})
+    status = 422 if phase == "origin-value" else 409
+    said = "cannot move" if status == 422 else "could not move"
+    suffix = "" if status == 422 else "; try again"
     assert (failed.status_code, failed.json()["detail"]) == (
         status,
-        said.format(f"{rendered}\na note added on the way up"),
+        f"Pin the runtime {said}: {failure(raised)}{suffix}",
     )
+    assert (source / f"{entry.id}.md").read_bytes() == before
+    assert not (target / f"{entry.id}.md").exists()
+    assert MemoryEngine(source).get_entry(entry.id).origin == (store.name if back else None)
+    assert (git(root, "rev-parse", "HEAD"), git(remote, "rev-parse", "main")) == heads
+    monkeypatch.setattr(storage, "write_entry", real_write)
+    monkeypatch.setattr(Path, "replace", real_replace)
+    again = c.post(f"/api/next/memory/{entry.id}/{action}", json={"updated_at": shown["updated_at"]})
+    assert again.status_code == 200
+    assert [e.id for e in MemoryEngine(target).get_entries()] == [entry.id]
+    assert MemoryEngine(source).get_entries() == []
 
 
 def test_no_entry_moves_while_a_curation_runs_apply_is_cut_short(shared):
@@ -650,7 +621,7 @@ def refreshed(page: Any) -> None:
 
 
 @pytest.mark.browser
-def test_a_memory_edit_survives_the_entries_before_it_disappearing_and_is_saved(shared, pds):
+def test_browser_edit_filter_and_settings_navigation_preserve_drafts_and_project(shared, pds):
     """TD-264: the draft lives in page state, so a filter that removes the cards above it keeps what was typed."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -661,7 +632,10 @@ def test_a_memory_edit_survives_the_entries_before_it_disappearing_and_is_saved(
     above = seed(folder, "Name the release", agent="shaper")
     engine.edit(above.id, {"categories": [MemoryCategory.PROCESS]}, expected_revision=above.revision)
     seed(folder, "Ask before merging", agent="shaper")  # newer, so listed above it in the same group
-    with memory_page(store, pds) as page:
+    with memory_page(store, pds, query="?project=shop") as page:
+        expect(page.get_by_role("link", name="Memory settings")).to_have_attribute(
+            "href", "/config?project=shop&layer=global#memory"
+        )
         expect(page.locator("#shown")).to_have_text("2 of 2 shown")
         waiting = page.locator("section", has_text="Waiting for the curator").locator(".entry")
         expect(waiting).to_have_count(2)
@@ -673,6 +647,17 @@ def test_a_memory_edit_survives_the_entries_before_it_disappearing_and_is_saved(
         expect(page.get_by_label("Title")).to_have_value("Name the release after its tag")
         page.get_by_role("button", name="Save").click()
         expect(page.locator("#status")).to_have_text('Saved "Name the release after its tag".')
+        builder = seed(folder, "Run ruff first", curated=True)
+        refreshed(page)
+        pds.pick(page, "Category", "any")
+        pds.pick(page, "Agent", "builder")
+        expect(page.locator("#shown")).to_have_text("1 of 3 shown")
+        now = engine.get_entry(builder.id)
+        engine.edit(builder.id, {"scope_agents": ["reviewer"]}, expected_revision=now.revision)
+        refreshed(page)
+        expect(pds.select(page, "Agent")).to_have_js_property("value", "any")
+        expect(page.locator("#shown")).to_have_text("3 of 3 shown")
+        expect(page.locator(".entry")).to_have_count(3)
     assert {e.id: e.title for e in MemoryEngine(folder).get_entries()}[above.id] == "Name the release after its tag"
 
 
@@ -726,18 +711,6 @@ def test_an_unset_purge_age_disables_the_removal_and_says_why_with_a_link_to_the
 
 
 @pytest.mark.browser
-def test_the_page_links_to_the_memory_settings_keeping_the_selected_project(shared, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    root, _, repo = shared
-    store = Store.open(repo)
-    seed(root / store.name / "memory", "A lesson", curated=True)
-    with memory_page(store, pds, query="?project=shop") as page:
-        link = page.get_by_role("link", name="Memory settings")
-        expect(link).to_have_attribute("href", "/config?project=shop&layer=global#memory")
-
-
-@pytest.mark.browser
 def test_approving_one_memory_leaves_the_next_ones_button_ready(shared, pds):
     """Sol, TD-264: a finished action's busy state never moves to the card that takes its place."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
@@ -763,38 +736,14 @@ def test_approving_one_memory_leaves_the_next_ones_button_ready(shared, pds):
         expect(review.locator('p-button[variant="primary"]')).to_have_text(["Approve"])  # the next one leads
 
 
-@pytest.mark.browser
-def test_a_filter_whose_choice_vanished_shows_everything_again(shared, pds):
-    """Sol, TD-264: the filter falls back to Any before the list is computed, so the count and list agree."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
+def test_an_entry_too_large_with_its_origin_is_refused_without_writes(shared, monkeypatch):
     root, _, repo = shared
     store = Store.open(repo)
     folder = root / store.name / "memory"
-    builder = seed(folder, "Run ruff first", curated=True)
-    seed(folder, "Ask before merging", agent="shaper")
-    with memory_page(store, pds) as page:
-        pds.pick(page, "Agent", "builder")
-        expect(page.locator("#shown")).to_have_text("1 of 2 shown")
-        engine = MemoryEngine(folder)
-        now = next(e for e in engine.get_entries() if e.id == builder.id)
-        engine.edit(builder.id, {"scope_agents": ["reviewer"]}, expected_revision=now.revision)
-        refreshed(page)
-        expect(pds.select(page, "Agent")).to_have_js_property("value", "any")
-        expect(page.locator("#shown")).to_have_text("2 of 2 shown")
-        expect(page.locator(".entry")).to_have_count(2)
-
-
-def test_a_moved_entry_refuses_the_page_that_showed_it_before_and_one_too_large_with_its_origin(shared, monkeypatch):
-    """Copilot on #585: each move is a change, so replaying an older request is stale; an oversized entry is a 422."""
-    root, _, repo = shared
-    store = Store.open(repo)
-    folder = root / store.name / "memory"
-    entry, big = seed(folder, "Pin the runtime", curated=True), seed(folder, "Too large", curated=True)
+    big = seed(folder, "Too large", curated=True)
     c = client(store)
-    made = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at}).json()["entry"]
-    c.post(f"/api/next/memory/{entry.id}/move-back", json={"updated_at": made["updated_at"]})
-    replayed = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at})
+    before = (folder / f"{big.id}.md").read_bytes()
+    head = git(root, "rev-parse", "HEAD")
 
     def too_large(*_a, **_k):
         too = "serialized entry exceeds 8192 bytes"
@@ -803,27 +752,7 @@ def test_a_moved_entry_refuses_the_page_that_showed_it_before_and_one_too_large_
     monkeypatch.setattr(memory_routes.storage, "write_entry", too_large)
     refused = c.post(f"/api/next/memory/{big.id}/make-global", json={"updated_at": big.updated_at})
 
-    assert (replayed.status_code, refused.status_code, "8192" in refused.json()["detail"]) == (409, 422, True)
-    assert sorted(e.id for e in MemoryEngine(folder).get_entries()) == sorted([entry.id, big.id])
-
-
-def test_a_move_back_whose_write_at_home_fails_stays_global_with_its_origin(shared, monkeypatch):
-    """CodeRabbit on #585: the origin is cleared only at home, so Global never keeps an entry without it."""
-    root, _, repo = shared
-    store = Store.open(repo)
-    folder, common = root / store.name / "memory", root / "memory"
-    entry = seed(folder, "Pin the runtime", curated=True)
-    c = client(store)
-    made = c.post(f"/api/next/memory/{entry.id}/make-global", json={"updated_at": entry.updated_at}).json()["entry"]
-    real = memory_routes.storage.write_entry
-
-    def failing(path, written, *, memory_dir):
-        if memory_dir == folder:
-            raise OSError(28, "No space left on device")
-        return real(path, written, memory_dir=memory_dir)
-
-    monkeypatch.setattr(memory_routes.storage, "write_entry", failing)
-    failed = c.post(f"/api/next/memory/{entry.id}/move-back", json={"updated_at": made["updated_at"]})
-
-    assert (failed.status_code, MemoryEngine(common).get_entry(entry.id).origin) == (409, store.name)
-    assert MemoryEngine(folder).get_entries() == []
+    assert (refused.status_code, "8192" in refused.json()["detail"]) == (422, True)
+    assert [e.id for e in MemoryEngine(folder).get_entries()] == [big.id]
+    assert ((folder / f"{big.id}.md").read_bytes(), git(root, "rev-parse", "HEAD")) == (before, head)
+    assert not list((root / "memory").glob("*.md"))
