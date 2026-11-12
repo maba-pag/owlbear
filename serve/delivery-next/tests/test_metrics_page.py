@@ -517,3 +517,42 @@ def test_a_reconcile_error_keeps_its_whole_text(tmp_path, monkeypatch, caplog, w
     errors = spend_reconcile.status()["errors"]
     assert errors == [f"shop: RuntimeError: {whole_error}", f"spotter: RuntimeError: {whole_error}"]
     assert [r.getMessage() for r in caplog.records] == [f"spend reconcile: {e}" for e in errors]
+
+
+def _rgb(colour: str) -> tuple[float, float, float]:
+    if colour.startswith("#"):
+        hexes = colour[1:] if len(colour) == 7 else "".join(c * 2 for c in colour[1:])
+        return tuple(int(hexes[i : i + 2], 16) / 255 for i in (0, 2, 4))  # type: ignore[return-value]
+    h, s, li = (float(v) for v in re.findall(r"[\d.]+", colour))
+    s, li = s / 100, li / 100
+    a = s * min(li, 1 - li)
+
+    def f(n: int) -> float:
+        k = (n + h / 30) % 12
+        return li - a * max(-1, min(k - 3, 9 - k, 1))
+
+    return f(0), f(8), f(4)
+
+
+def _contrast(fg: str, bg: str) -> float:
+    def lum(c: str) -> float:
+        lin = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in _rgb(c)]
+        return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+    hi, lo = sorted((lum(fg), lum(bg)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def test_every_chart_part_colour_reaches_3_to_1_on_the_pds_canvas_in_both_schemes() -> None:
+    """AC-8: the chart palette's parts and accepted green stand out from the PDS canvas in light and dark mode."""
+    web = codebase.ROOT / "web"
+    palette = (web / "pages" / "metrics" / "palette.mjs").read_text(encoding="utf-8")
+    pds = (web / "pds" / "index.css").read_text(encoding="utf-8")
+    canvas = re.search(r"--p-color-canvas: light-dark\((#\w+|hsl\([^)]*\)), (#\w+|hsl\([^)]*\))\)", pds)
+    assert canvas
+    for i, scheme in enumerate(("light", "dark")):
+        parts = re.findall(r"#[0-9A-Fa-f]{6}", re.search(rf"{scheme}: \[([^\]]*)\]", palette)[1])  # type: ignore[index]
+        success = re.search(rf'SUCCESS = {{[^}}]*{scheme}: "(#\w+)"', palette)[1]  # type: ignore[index]
+        assert len(parts) == 7
+        for colour in [*parts, success]:
+            assert _contrast(colour, canvas[i + 1]) >= 3, f"{scheme} {colour} on {canvas[i + 1]}"

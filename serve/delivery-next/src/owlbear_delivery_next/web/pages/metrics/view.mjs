@@ -6,6 +6,7 @@ import { credits, count, head, runs } from "./runs.mjs";
 import { toolUse } from "./tools.mjs";
 import { compaction } from "./compaction.mjs";
 import { folded } from "./fold.mjs";
+import { creditsChart, creditsControls } from "./credits.mjs";
 
 const UNKNOWN = "?";
 const DRILL = { project: "in", agent: "agent", model: "model", change: "change" };  // a row that filters its value
@@ -134,7 +135,8 @@ function totals() {
   </section>`;
 }
 
-function drill(row) {
+/** What a split row's button, or its bar in the credits chart, does: filters the page to it, or null. */
+export function drill(row) {
   const key = DRILL[filter.by];
   if (filter.by === "day" && row.key !== UNKNOWN) {
     return () => changed(() => { filter.period = "custom"; filter.from = row.key; filter.to = row.key; })();
@@ -174,6 +176,7 @@ function split() {
   const heads = [label, "Credits", "Share", "Runs", "Unknown", "Tokens"];
   return html`<section aria-labelledby="split-title">
     <p-heading size="lg"><h2 id="split-title">By ${label.toLowerCase()}</h2></p-heading>
+    ${rows.length ? creditsControls() : nothing}
     ${rows.length ? folded("split", `Table: credits by ${label.toLowerCase()}`, html`<p-table id="split"
       caption=${`Credits by ${label.toLowerCase()}`}><p-table-head>
       <p-table-head-row>${heads.map(head)}</p-table-head-row>
@@ -207,6 +210,11 @@ function coverage() {
         and a Change's events dropped from its activity log beyond its totals.</li>
     </ul>
   </section>`;
+}
+
+/** Draws the charts of what the page shows, once it is rendered. */
+export function drawn() {
+  creditsChart(state.data?.rows ?? [], filter.by, drill);
 }
 
 export function view() {
