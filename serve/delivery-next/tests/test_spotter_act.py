@@ -141,9 +141,11 @@ def test_a_steer_is_delivered_only_once_the_runtime_logs_its_message_else_unconf
         spot, said = st.feed.spotter, []
         record, act = pending(st, "course-and-constraints", "Run the tests first.")
         sending = asyncio.ensure_future(st.actor(record, act))
-        await until(lambda: session.calls)
+        await until(lambda: "m-1" in st.actor.waiting)
+        waiter = st.actor.waiting["m-1"]
         said.append(act_of(st).delivery)  # sent, not yet seen
         st.on_event(message("m-0"))  # another message
+        assert not waiter.done()
         said.append(act_of(st).delivery)
         st.on_event(message("m-1"))  # its own
         await sending
