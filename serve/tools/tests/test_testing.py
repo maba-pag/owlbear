@@ -364,7 +364,6 @@ def test_changed_runs_git_scope_and_accepts_explicit_base(options: list[str]) ->
             patch.object(sys, "argv", ["test", "--changed", target, "--task-base", "base", "--target", "target"]),
             patch("owlbear_tools.task_scope.commit", return_value="target"),
             patch("owlbear_tools.task_scope.changed", return_value=[]),
-            patch("owlbear_tools.task_testing._git_paths", return_value=set()),
             patch("owlbear_tools.testing.subprocess.call", return_value=0) as task_call,
             pytest.raises(SystemExit, match="0"),
         ):
@@ -379,7 +378,6 @@ def test_changed_runs_git_scope_and_accepts_explicit_base(options: list[str]) ->
             patch.object(sys, "argv", ["test", "--changed", target, "--task-base", "base", "--target", "target"]),
             patch("owlbear_tools.task_scope.commit", return_value="target"),
             patch("owlbear_tools.task_scope.changed", return_value=[page]),
-            patch("owlbear_tools.task_testing._git_paths", return_value=set()),
             patch("owlbear_tools.test_impact.select", return_value=[target]) as select,
             patch("owlbear_tools.testing.subprocess.call", return_value=0),
             pytest.raises(SystemExit, match="0"),
