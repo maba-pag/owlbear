@@ -104,23 +104,37 @@ def _create_entry(memory_dir: Path, *, title: str, state: MemoryState) -> Memory
 
 
 @pytest.mark.asyncio
-async def test_live_server_revisions_are_stable_and_content_sensitive(
+async def test_live_curator_mutations_bind_to_read_content(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Read and list expose one stable token until a revision-covered field changes."""
+    """Fresh curator actions follow read content across approval, sessions, edits and deletion."""
     memory_dir = tmp_path / ".owlbear/memory"
-    entry = _create_entry(memory_dir, title="Stable revision", state=MemoryState.CURATED)
+    entry = _create_entry(memory_dir, title="Curate pending", state=MemoryState.PENDING)
+    discarded = _create_entry(memory_dir, title="Delete pending", state=MemoryState.PENDING)
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OWLBEAR_MEMORY_AGENTS", "planner, builder,reviewer")
 
     async with mcp.Client(memory_mcp) as client:
         read_result = await client.call_tool("read_memory", {"entry_id": entry.id})
-        list_result = await client.call_tool("list_memories", {})
+        assert not read_result.is_error
+        pending_revision = json.loads(_text(read_result))["revision"]
+        curated = await client.call_tool(
+            "curate_memory",
+            {"entry_id": entry.id, "revision": pending_revision, "scope_agents": ["builder"]},
+        )
+        assert not curated.is_error
+        curated_payload = json.loads(_text(curated))
+        assert curated_payload["state"] == "curated"
+        revision = curated_payload["revision"]
+        assert revision != pending_revision
+        read_result = await client.call_tool("read_memory", {"entry_id": entry.id})
+        list_result = await client.call_tool("list_memories", {"states": ["curated"]})
         assert not read_result.is_error
         assert not list_result.is_error
         read_payload = json.loads(_text(read_result))
         listed_payload = [json.loads(item.text) for item in list_result.content if hasattr(item, "text")]
-        revision = read_payload["revision"]
+        assert read_payload["revision"] == revision
         assert len(revision) == 16
         assert all(character in "0123456789abcdef" for character in revision)
         assert len(listed_payload) == 1
@@ -131,30 +145,49 @@ async def test_live_server_revisions_are_stable_and_content_sensitive(
             {"entry_id": entry.id, "revision": revision},
         )
         assert not approved.is_error
+        assert json.loads(_text(approved))["state"] == "approved"
         assert json.loads(_text(approved))["revision"] == revision
 
     async with mcp.Client(memory_mcp) as client:
         reloaded_read = await client.call_tool("read_memory", {"entry_id": entry.id})
-        reloaded_list = await client.call_tool("list_memories", {})
-
-    assert not reloaded_read.is_error
-    assert not reloaded_list.is_error
-    assert json.loads(_text(reloaded_read))["revision"] == revision
-    reloaded_payload = [json.loads(item.text) for item in reloaded_list.content if hasattr(item, "text")]
-    assert reloaded_payload[0]["revision"] == revision
-
-    changed = MemoryEngine(memory_dir).edit(
-        entry.id,
-        {"content": "Changed by a second engine."},
-        expected_revision=revision,
-    )
-    assert changed.revision != revision
-
-    async with mcp.Client(memory_mcp) as client:
+        reloaded_list = await client.call_tool("list_memories", {"states": ["approved"]})
+        assert not reloaded_read.is_error
+        assert not reloaded_list.is_error
+        assert json.loads(_text(reloaded_read))["revision"] == revision
+        reloaded_payload = [json.loads(item.text) for item in reloaded_list.content if hasattr(item, "text")]
+        assert reloaded_payload[0]["revision"] == revision
+        edited = await client.call_tool(
+            "curate_memory",
+            {"entry_id": entry.id, "revision": revision, "content": "Updated through MCP."},
+        )
+        assert not edited.is_error
+        edited_payload = json.loads(_text(edited))
+        assert edited_payload["state"] == "curated"
+        assert edited_payload["revision"] != revision
+        changed = MemoryEngine(memory_dir).edit(
+            entry.id,
+            {"content": "Changed by a second engine."},
+            expected_revision=edited_payload["revision"],
+        )
+        assert changed.revision != edited_payload["revision"]
         changed_read = await client.call_tool("read_memory", {"entry_id": entry.id})
+        assert not changed_read.is_error
+        assert json.loads(_text(changed_read))["revision"] == changed.revision
 
-    assert not changed_read.is_error
-    assert json.loads(_text(changed_read))["revision"] == changed.revision
+        soft_deleted = await client.call_tool(
+            "delete_memory", {"entry_id": entry.id, "revision": changed.revision}
+        )
+        assert not soft_deleted.is_error
+        assert json.loads(_text(soft_deleted))["state"] == "deleted"
+        assert (memory_dir / f"{entry.id}.md").exists()
+        pending_read = await client.call_tool("read_memory", {"entry_id": discarded.id})
+        assert not pending_read.is_error
+        hard_deleted = await client.call_tool(
+            "delete_memory",
+            {"entry_id": discarded.id, "revision": json.loads(_text(pending_read))["revision"]},
+        )
+        assert not hard_deleted.is_error
+        assert not (memory_dir / f"{discarded.id}.md").exists()
 
 
 @pytest.mark.asyncio
@@ -193,75 +226,6 @@ async def test_live_server_rejects_stale_revisions_without_mutation(
             assert f"current revision {current.revision!r}" in message
             assert "re-read before retrying" in message.lower()
             assert path.read_bytes() == before_call
-
-
-@pytest.mark.asyncio
-async def test_live_server_mutations_accept_fresh_revisions(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """Fresh revisions permit the supported curator lifecycle mutations."""
-    memory_dir = tmp_path / ".owlbear/memory"
-    to_approve = _create_entry(memory_dir, title="Approve", state=MemoryState.CURATED)
-    to_curate = _create_entry(memory_dir, title="Curate pending", state=MemoryState.PENDING)
-    to_edit = _create_entry(memory_dir, title="Edit approved", state=MemoryState.APPROVED)
-    to_hard_delete = _create_entry(memory_dir, title="Delete pending", state=MemoryState.PENDING)
-    to_soft_delete = _create_entry(memory_dir, title="Delete curated", state=MemoryState.CURATED)
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("OWLBEAR_MEMORY_AGENTS", "planner, builder,reviewer")  # as Delivery passes them; no witness
-
-    async with mcp.Client(memory_mcp) as client:
-
-        async def read_revision(entry_id: str) -> str:
-            result = await client.call_tool("read_memory", {"entry_id": entry_id})
-            assert not result.is_error
-            return json.loads(_text(result))["revision"]
-
-        approve_revision = await read_revision(to_approve.id)
-        approved = await client.call_tool(
-            "approve_memory",
-            {"entry_id": to_approve.id, "revision": approve_revision},
-        )
-        assert not approved.is_error
-        approved_payload = json.loads(_text(approved))
-        assert approved_payload["state"] == "approved"
-        assert approved_payload["revision"] == approve_revision
-
-        curate_revision = await read_revision(to_curate.id)
-        curated = await client.call_tool(
-            "curate_memory",
-            {"entry_id": to_curate.id, "revision": curate_revision, "scope_agents": ["builder"]},
-        )
-        assert not curated.is_error
-        curated_payload = json.loads(_text(curated))
-        assert curated_payload["state"] == "curated"
-
-        edit_revision = await read_revision(to_edit.id)
-        edited = await client.call_tool(
-            "curate_memory",
-            {"entry_id": to_edit.id, "revision": edit_revision, "content": "Updated through MCP."},
-        )
-        assert not edited.is_error
-        edited_payload = json.loads(_text(edited))
-        assert edited_payload["state"] == "curated"
-        assert edited_payload["revision"] != edit_revision
-
-        hard_delete_revision = await read_revision(to_hard_delete.id)
-        hard_deleted = await client.call_tool(
-            "delete_memory",
-            {"entry_id": to_hard_delete.id, "revision": hard_delete_revision},
-        )
-        assert not hard_deleted.is_error
-        assert not (memory_dir / f"{to_hard_delete.id}.md").exists()
-
-        soft_delete_revision = await read_revision(to_soft_delete.id)
-        soft_deleted = await client.call_tool(
-            "delete_memory",
-            {"entry_id": to_soft_delete.id, "revision": soft_delete_revision},
-        )
-        assert not soft_deleted.is_error
-        assert json.loads(_text(soft_deleted))["state"] == "deleted"
-        assert (memory_dir / f"{to_soft_delete.id}.md").exists()
 
 
 @pytest.mark.asyncio
@@ -348,7 +312,7 @@ async def test_live_assessments_reject_stale_revision_and_apply_sibling_item(
 
 
 @pytest.mark.asyncio
-async def test_live_assessments_replay_first_bucket_and_allow_different_task(
+async def test_live_rating_replay_keeps_the_first_bucket(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -382,6 +346,12 @@ async def test_live_assessments_replay_first_bucket_and_allow_different_task(
                 "task_id": "assessment-task-two",
             },
         )
+        read = await client.call_tool("read_memory", {"entry_id": entry.id})
+        listed = await client.call_tool("list_memories", {})
+        assert not read.is_error
+        assert not listed.is_error
+        assert "challenges" not in json.loads(_text(read))
+        assert all("challenges" not in json.loads(item.text) for item in listed.content if hasattr(item, "text"))
 
     first_result = json.loads(_text(first))["results"][0]
     replay_result = json.loads(_text(replay))["results"][0]
@@ -398,6 +368,9 @@ async def test_live_assessments_replay_first_bucket_and_allow_different_task(
     assert other_result["success"] is True
     assert other_result["already_applied"] is False
     assert other_result["recorded_bucket"] == "unremarkable"
+    for result in (first_result, replay_result, other_result):
+        assert "challenges" not in result
+        assert "state" not in result
 
     persisted = MemoryEngine(memory_dir).get_entry(entry.id)
     assert persisted.outstanding_count == 1
@@ -406,18 +379,19 @@ async def test_live_assessments_replay_first_bucket_and_allow_different_task(
 
 
 @pytest.mark.asyncio
-async def test_live_factually_wrong_projects_ordered_challenges(
+async def test_live_challenge_replay_preserves_ordered_history(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Registered MCP reads expose each challenge with its revision and time."""
+    """Challenges and replays expose the same ordered public history in each exceptional state."""
     memory_dir = tmp_path / ".owlbear/memory"
-    entry = _create_entry(memory_dir, title="Challenge projection", state=MemoryState.APPROVED)
+    entry = _create_entry(memory_dir, title="Challenge replay", state=MemoryState.APPROVED)
     monkeypatch.chdir(tmp_path)
     task_ids = ("challenge-task-a", "challenge-task-b")
 
     async with mcp.Client(memory_mcp) as client:
-        for task_id in task_ids:
+        history = []
+        for task_id, state in zip(task_ids, ("contested", "disputed"), strict=True):
             assessment = await client.call_tool(
                 "assess_memories",
                 {
@@ -429,96 +403,36 @@ async def test_live_factually_wrong_projects_ordered_challenges(
             result = json.loads(_text(assessment))["results"][0]
             assert result["success"] is True
             assert result["already_applied"] is False
-
-        read_result = await client.call_tool("read_memory", {"entry_id": entry.id})
-        list_result = await client.call_tool("list_memories", {})
-
-    read_payload = json.loads(_text(read_result))
-    listed_payload = [json.loads(item.text) for item in list_result.content if hasattr(item, "text")]
-    challenges = read_payload["challenges"]
-    assert not read_result.is_error
-    assert not list_result.is_error
-    assert read_payload["state"] == "disputed"
-    assert read_payload["revision"] == entry.revision
-    assert [challenge["task_id"] for challenge in challenges] == list(task_ids)
-    assert [challenge["revision"] for challenge in challenges] == [entry.revision, entry.revision]
-    assert all(challenge["recorded_at"] for challenge in challenges)
-    assert all(set(challenge) == {"task_id", "revision", "recorded_at"} for challenge in challenges)
-    assert len(listed_payload) == 1
-    assert listed_payload[0]["challenges"] == challenges
-    legacy_field = "contested" + "_by_task"
-    for payload in (read_payload, listed_payload[0]):
-        assert legacy_field not in payload
-        assert "assessment_receipts" not in payload
-
-
-@pytest.mark.asyncio
-async def test_live_factually_wrong_replays_after_challenge_state_changes(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """Challenge replays remain idempotent before and after the disputed transition."""
-    memory_dir = tmp_path / ".owlbear/memory"
-    entry = _create_entry(memory_dir, title="Challenge replay", state=MemoryState.APPROVED)
-    monkeypatch.chdir(tmp_path)
-    revision = entry.revision
-
-    async with mcp.Client(memory_mcp) as client:
-        first = await client.call_tool(
-            "assess_memories",
-            {
-                "assessments": [{"entry_id": entry.id, "revision": revision, "bucket": "factually_wrong"}],
-                "task_id": "challenge-task-a",
-            },
-        )
-        replay_first = await client.call_tool(
-            "assess_memories",
-            {
-                "assessments": [{"entry_id": entry.id, "revision": revision, "bucket": "factually_wrong"}],
-                "task_id": "challenge-task-a",
-            },
-        )
-        contested_read = await client.call_tool("read_memory", {"entry_id": entry.id})
-        second = await client.call_tool(
-            "assess_memories",
-            {
-                "assessments": [{"entry_id": entry.id, "revision": revision, "bucket": "factually_wrong"}],
-                "task_id": "challenge-task-b",
-            },
-        )
-        replay_second = await client.call_tool(
-            "assess_memories",
-            {
-                "assessments": [{"entry_id": entry.id, "revision": revision, "bucket": "factually_wrong"}],
-                "task_id": "challenge-task-b",
-            },
-        )
-        disputed_read = await client.call_tool("read_memory", {"entry_id": entry.id})
-
-    assert not first.is_error
-    assert not replay_first.is_error
-    assert not second.is_error
-    assert not replay_second.is_error
-    first_result = json.loads(_text(first))["results"][0]
-    replay_first_result = json.loads(_text(replay_first))["results"][0]
-    second_result = json.loads(_text(second))["results"][0]
-    replay_second_result = json.loads(_text(replay_second))["results"][0]
-    assert first_result["success"] is True
-    assert first_result["already_applied"] is False
-    assert replay_first_result["success"] is True
-    assert replay_first_result["already_applied"] is True
-    assert json.loads(_text(contested_read))["state"] == "contested"
-    assert [item["task_id"] for item in json.loads(_text(contested_read))["challenges"]] == ["challenge-task-a"]
-    assert second_result["success"] is True
-    assert second_result["already_applied"] is False
-    assert replay_second_result["success"] is True
-    assert replay_second_result["already_applied"] is True
-    disputed_payload = json.loads(_text(disputed_read))
-    assert disputed_payload["state"] == "disputed"
-    assert [item["task_id"] for item in disputed_payload["challenges"]] == [
-        "challenge-task-a",
-        "challenge-task-b",
-    ]
+            assert result["state"] == state
+            challenges = result["challenges"]
+            assert challenges[:-1] == history
+            history = challenges
+            assert [challenge["task_id"] for challenge in history] == list(task_ids[:len(history)])
+            assert all(challenge["revision"] == entry.revision for challenge in history)
+            assert all(challenge["recorded_at"] for challenge in history)
+            assert all(set(challenge) == {"task_id", "revision", "recorded_at"} for challenge in history)
+            replay = await client.call_tool(
+                "assess_memories",
+                {
+                    "assessments": [{"entry_id": entry.id, "revision": entry.revision, "bucket": "factually_wrong"}],
+                    "task_id": task_id,
+                },
+            )
+            assert not replay.is_error
+            assert json.loads(_text(replay))["results"][0] == result | {"already_applied": True}
+            read = await client.call_tool("read_memory", {"entry_id": entry.id})
+            listed = await client.call_tool("list_memories", {})
+            assert not read.is_error
+            assert not listed.is_error
+            read_payload = json.loads(_text(read))
+            listed_payload = [json.loads(item.text) for item in listed.content if hasattr(item, "text")]
+            assert len(listed_payload) == 1
+            for payload in (read_payload, listed_payload[0], result):
+                assert payload["state"] == state
+                assert payload["challenges"] == history
+                assert "contested" + "_by_task" not in payload
+                assert "assessment_receipts" not in payload
+            assert read_payload["revision"] == entry.revision
 
 
 @pytest.mark.asyncio
@@ -706,20 +620,47 @@ async def test_live_server_accepts_optional_recall_and_open_provenance(
 
 
 @pytest.mark.asyncio
-async def test_live_server_commits_reviewed_memory_batch(
+@pytest.mark.parametrize("hook_refuses", [False, True], ids=["commit-and-noop", "hook-refusal"])
+async def test_live_review_batch_reports_commit_noop_or_hook_failure(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    hook_refuses: bool,
 ) -> None:
-    """The public batch tool commits reviewed entries and reports a no-op afterward."""
+    """The registered batch tool exposes real Git success, no-op or logged hook refusal."""
     (tmp_path / ".owlbear/memory").mkdir(parents=True)
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "config", "user.name", "OwlBear Test")
     _git(tmp_path, "config", "user.email", "test@example.invalid")
     (tmp_path / ".owlbear/memory/reviewed.md").write_text(_REVIEWED_MEMORY, encoding="utf-8")
+    if hook_refuses:
+        hook = tmp_path / ".git/hooks/pre-commit"
+        hook.write_text(
+            "#!/bin/sh\nprintf '%s\\n' 'HOOKFAIL: review hook rejected this commit' >&2\nexit 1\n",
+            encoding="utf-8",
+        )
+        hook.chmod(0o755)
     monkeypatch.chdir(tmp_path)
 
+    caplog.set_level(logging.ERROR, logger="owlbear_memory_mcp.tools")
     async with mcp.Client(memory_mcp) as client:
         committed = await client.call_tool("commit_memory_batch", {"session_type": "review"})
+        if hook_refuses:
+            message = _text(committed)
+            assert committed.is_error
+            assert message.startswith(
+                "Error executing tool commit_memory_batch: memory batch commit failed: "
+                "git commit -m 'chore: memory review batch (memory-mcp, memory-reviewer)'"
+            )
+            assert "exited with status 1" in message
+            assert "HOOKFAIL: review hook rejected this commit" in message
+            assert "Memory paths may remain staged after this failure" in message
+            records = [record for record in caplog.records if record.name == "owlbear_memory_mcp.tools"]
+            assert len(records) == 1
+            assert "HOOKFAIL: review hook rejected this commit" in records[0].getMessage()
+            assert "exited with status 1" in records[0].getMessage()
+            assert records[0].exc_info is not None
+            return
         empty = await client.call_tool("commit_memory_batch", {"session_type": "review"})
 
     committed_payload = json.loads(_text(committed))
@@ -800,103 +741,31 @@ async def test_live_server_reports_deferred_duplicate_deletions(
 
 
 @pytest.mark.asyncio
-async def test_live_server_reports_git_hook_failure(
+@pytest.mark.parametrize("discovery", ["explicit", "claimed"])
+async def test_live_project_store_reads_late_global_memory_without_writing_it(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    discovery: str,
 ) -> None:
-    """The public batch tool reports output from a failing Git hook."""
-    (tmp_path / ".owlbear/memory").mkdir(parents=True)
-    _git(tmp_path, "init", "-q")
-    _git(tmp_path, "config", "user.name", "OwlBear Test")
-    _git(tmp_path, "config", "user.email", "test@example.invalid")
-    (tmp_path / ".owlbear/memory/reviewed.md").write_text(_REVIEWED_MEMORY, encoding="utf-8")
-    hook = tmp_path / ".git/hooks/pre-commit"
-    hook.write_text(
-        "#!/bin/sh\nprintf '%s\\n' 'HOOKFAIL: review hook rejected this commit' >&2\nexit 1\n",
-        encoding="utf-8",
-    )
-    hook.chmod(0o755)
-    monkeypatch.chdir(tmp_path)
-
-    async with mcp.Client(memory_mcp) as client:
-        result = await client.call_tool("commit_memory_batch", {"session_type": "review"})
-
-    message = _text(result)
-    assert result.is_error
-    assert "Error executing tool commit_memory_batch: memory batch commit failed:" in message
-    assert "git commit" in message
-    assert "exited with status 1" in message
-    assert "HOOKFAIL: review hook rejected this commit" in message
-    assert "Memory paths may remain staged after this failure" in message
-
-
-@pytest.mark.asyncio
-async def test_live_server_uses_an_explicit_store_outside_any_workspace(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """``OWLBEAR_MEMORY_DIR`` names the store; the working folder needs no ``.owlbear`` (TD-72)."""
-    store = tmp_path / "common" / "project" / "memory"
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("OWLBEAR_MEMORY_DIR", str(store))
-    args = {
-        "title": "Shared store",
-        "content": "Saved into the shared repository's project folder.",
-        "categories": ["process"],
-        "confidence": 0.8,
-        "source_agent": "builder",
-        "where": "project",
-    }
-
-    async with mcp.Client(memory_mcp) as client:
-        saved = await client.call_tool("save_memory", args)
-
-    assert not saved.is_error
-    (entry,) = store.iterdir()
-    assert "title: Shared store" in entry.read_text(encoding="utf-8")
-    assert not (tmp_path / ".owlbear").exists()
-
-
-@pytest.mark.asyncio
-async def test_live_server_reads_global_memory_named_beside_its_store(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """``OWLBEAR_MEMORY_GLOBAL_DIR`` names Global memory, read beside the store (TD-241)."""
-    shared = tmp_path / "common" / "memory"
-    _bound_store(monkeypatch, tmp_path)
-    common = _create_entry(shared, title="Global habit", state=MemoryState.APPROVED)
-    monkeypatch.chdir(tmp_path)
-
-    async with mcp.Client(memory_mcp) as client:
-        read = await client.call_tool("read_memory", {"entry_id": common.id})
-        recalled = await client.call_tool("recall_memory", {"agent": "test-agent"})
-        approved = await client.call_tool(
-            "approve_memory", {"entry_id": common.id, "revision": _recall_revision(recalled, common.id)}
-        )
-
-    assert (read.is_error, "Global habit" in _text(read), "Global habit" in _text(recalled)) == (False, True, True)
-    assert (approved.is_error, "not found" in _text(approved)) == (True, True)  # changed on the Memory page only
-
-
-@pytest.mark.asyncio
-async def test_live_server_in_a_claimed_workspace_uses_its_shared_folder(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """A chat's save lands in the folder that claims the workspace, never in the workspace itself (TD-72)."""
-    data, work = tmp_path / "data", tmp_path / "work"
-    (data / "shop").mkdir(parents=True)
-    _git(data, "init", "-q")
-    (data / "shop" / "repository").write_text("github.com/acme/shop\n", encoding="utf-8")
-    common = _create_entry(data / "memory", title="Global habit", state=MemoryState.APPROVED)
-    (work / ".owlbear").mkdir(parents=True)
-    _git(work, "init", "-q")
-    _git(work, "remote", "add", "origin", "git@github.com:acme/shop.git")
-    monkeypatch.setenv("OWLBEAR_DATA", str(data))
+    """Both discovery paths read late Global entries in one session but write only their project."""
+    store = _bound_store(monkeypatch, tmp_path)
+    data = store.parent.parent
+    work = tmp_path
+    title = "Shared store"
+    if discovery == "claimed":
+        title = "Claimed store"
+        (data / "shop" / "repository").write_text("github.com/acme/shop\n", encoding="utf-8")
+        work = tmp_path / "work"
+        (work / ".owlbear").mkdir(parents=True)
+        _git(work, "init", "-q")
+        _git(work, "remote", "add", "origin", "git@github.com:acme/shop.git")
+        monkeypatch.delenv("OWLBEAR_MEMORY_DIR")
+        monkeypatch.delenv("OWLBEAR_MEMORY_GLOBAL_DIR")
+        monkeypatch.setenv("OWLBEAR_DATA", str(data))
+    own = _create_entry(store, title="Run the shop's tests", state=MemoryState.APPROVED)
     monkeypatch.chdir(work)
     args = {
-        "title": "Claimed store",
+        "title": title,
         "content": "Saved into the shared repository's project folder.",
         "categories": ["process"],
         "confidence": 0.8,
@@ -905,13 +774,44 @@ async def test_live_server_in_a_claimed_workspace_uses_its_shared_folder(
     }
 
     async with mcp.Client(memory_mcp) as client:
+        initial = await client.call_tool("list_memories", {})
+        assert not initial.is_error
+        assert [json.loads(item.text)["id"] for item in initial.content if hasattr(item, "text")] == [own.id]
+        shared = data / "memory"
+        common = _create_entry(shared, title="Global habit", state=MemoryState.APPROVED)
+        listed = await client.call_tool("list_memories", {})
+        recalled = await client.call_tool("recall_memory", {"agent": "test-agent"})
+        assert not listed.is_error
+        assert {json.loads(item.text)["id"]: json.loads(item.text)["where"]
+                for item in listed.content if hasattr(item, "text")} == {own.id: "project", common.id: "global"}
+        assert "Global habit" in _text(recalled)
+        for entry, where in ((own, "project"), (common, "global")):
+            read = await client.call_tool("read_memory", {"entry_id": entry.id})
+            assert not read.is_error
+            payload = json.loads(_text(read))
+            assert (payload["where"], payload["title"]) == (where, entry.title)
+        before = {path.name: path.read_bytes() for path in shared.iterdir()}
+        refused = await client.call_tool(
+            "approve_memory", {"entry_id": common.id, "revision": _recall_revision(recalled, common.id)}
+        )
+        assert refused.is_error
+        assert "not found" in _text(refused)
         saved = await client.call_tool("save_memory", args)
-        read = await client.call_tool("read_memory", {"entry_id": common.id})
+        recommended = await client.call_tool(
+            "save_memory", args | {"title": "New", "content": "new", "source_agent": "*", "where": "global"}
+        )
 
-    assert (saved.is_error, read.is_error) == (False, False)
-    (entry,) = (data / "shop" / "memory").iterdir()
-    assert "title: Claimed store" in entry.read_text(encoding="utf-8")
+    assert not saved.is_error
+    saved_payload = json.loads(_text(saved))
+    assert f"title: {title}" in (store / f"{saved_payload['id']}.md").read_text(encoding="utf-8")
+    assert not recommended.is_error
+    recommendation = json.loads(_text(recommended))
+    assert (recommendation["recommended"], recommendation["state"]) == ("global", "pending")
+    assert (store / f"{recommendation['id']}.md").is_file()
+    assert {path.name: path.read_bytes() for path in shared.iterdir()} == before
     assert not (work / ".owlbear" / "memory").exists()
+    if discovery == "explicit":
+        assert not (work / ".owlbear").exists()
 
 
 def _whole_error() -> str:
