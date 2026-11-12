@@ -51,57 +51,54 @@ def client(replay, lock=None):
     return TestClient(app, base_url="http://127.0.0.1"), job
 
 
-def test_the_replay_is_run_by_the_jobs_managed_live_and_reports_what_the_cli_prints():
+def test_managed_replay_and_legacy_routes_count_once_and_redirect_reads():
     seen = []
 
     def replay(_store, candidate, **kwargs):
-        seen.append((candidate, kwargs["keep"]))
+        seen.append((_store.name, candidate, kwargs["keep"]))
         return calibration.replayed([])
 
     http, job = client(replay)
     body = http.post("/impeccable/replay").json()
     assert body["ok"] is calibration.replayed([]).ok
     assert body["report"] == f"calibration replay: {pack_candidate.said_replay(calibration.replayed([]))}"
-    assert seen == [(None, job.keeps)]
+    assert seen == [("shop", None, job.keeps)]
     assert job.counts == [1, -1], "the replay must count in once and out once"
     assert not job.lock.locked()
-
-
-def test_the_old_design_pack_routes_run_the_same_handler_once_and_their_reads_redirect():
-    seen = []
-    http, job = client(lambda store, *_a, **_k: seen.append(store.name) or calibration.replayed([]))
-
+    seen.clear()
+    job.counts.clear()
     assert http.post("/design-pack/replay").json()["ok"] is calibration.replayed([]).ok
-    assert (seen, job.counts) == (["shop"], [1, -1])  # once, for the router's own project
+    assert (seen, job.counts) == ([("shop", None, job.keeps)], [1, -1])
+    assert not job.lock.locked()
     for old, new in (("/design-pack", "/impeccable"), ("/design-pack/update?x=1", "/impeccable/update?x=1")):
         moved = http.get(old, follow_redirects=False)
         assert (moved.status_code, moved.headers["location"]) == (307, f"http://127.0.0.1{new}")
 
 
-def test_a_replay_while_an_update_holds_the_job_is_refused_with_409_and_runs_nothing():
-    lock = threading.Lock()
-    lock.acquire()
-    http, _job = client(lambda *_a, **_k: pytest.fail("the replay must not start"), lock)
-    assert http.post("/impeccable/replay").status_code == 409
-
-
-@pytest.mark.parametrize(
-    ("error", "status"),
-    [(pack_replay.ReplayError("a judge may still be running"), 409), (pack_files.PackError("no pack"), 422)],
-)
-def test_a_failed_replay_is_refused_with_its_reason_and_releases_the_job(error, status):
-    def replay(*_a, **_k):
-        raise error
-
-    http, job = client(replay)
-    assert http.post("/impeccable/replay").status_code == status
-    assert job.counts == [1, -1], "a failed replay must still count out"
-    assert not job.lock.locked()
-
-
-@pytest.mark.parametrize("fails", ["noted", "command"])
-def test_a_replay_that_fails_answers_and_logs_its_whole_error(caplog, whole_error, fails) -> None:
-    if fails == "noted":
+@pytest.mark.parametrize("fails", ["busy", "replay", "pack", "noted", "command"])
+def test_replay_refusals_release_job_and_preserve_whole_reason(caplog, whole_error, fails) -> None:
+    if fails == "busy":
+        lock = threading.Lock()
+        lock.acquire()
+        http, job = client(lambda *_a, **_k: pytest.fail("the replay must not start"), lock)
+        try:
+            assert http.post("/impeccable/replay").status_code == 409
+            assert job.counts == []
+        finally:
+            lock.release()
+        return
+    status, message, trace = 422, "failed", True
+    if fails in {"replay", "pack"}:
+        broke = (
+            pack_replay.ReplayError("a judge may still be running")
+            if fails == "replay"
+            else (pack_files.PackError("no pack"))
+        )
+        if fails == "replay":
+            status, message, trace, said = 409, "refused", False, str(broke)
+        else:
+            said = f"PackError: {broke}"
+    elif fails == "noted":
         broke = OSError(whole_error)
         broke.add_note(f"the session's teardown also failed: OSError: {whole_error}")  # as loop_owner.run adds it
         said = f"OSError: {whole_error}\nthe session's teardown also failed: OSError: {whole_error}"
@@ -114,11 +111,13 @@ def test_a_replay_that_fails_answers_and_logs_its_whole_error(caplog, whole_erro
     def replay(*_a, **_k):
         raise broke
 
-    http, _job = client(replay)
+    http, job = client(replay)
     answer = http.post("/impeccable/replay")
-    assert (answer.status_code, answer.json()) == (422, {"detail": said})
+    assert (answer.status_code, answer.json()) == (status, {"detail": said})
     logged = [(r.levelname, r.getMessage(), bool(r.exc_info)) for r in caplog.records if r.name == pack_routes.__name__]
-    assert logged == [("WARNING", f"calibration replay failed: {said}", True)]
+    assert logged == [("WARNING", f"calibration replay {message}: {said}", trace)]
+    assert job.counts == [1, -1]
+    assert not job.lock.locked()
 
 
 def legacy_host(tmp_path, state, *, updater_dir):

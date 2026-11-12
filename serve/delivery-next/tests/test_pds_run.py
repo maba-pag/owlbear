@@ -23,8 +23,9 @@ from owlbear_delivery_next.impeccable_runs import machine_lock, pack_job, pack_r
 from owlbear_delivery_next.impeccable_runs.pack_state import MACHINE_LOCK
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.pds_runs import audit, audit_markdown, browser, context, pin, sessions, tree
+from owlbear_delivery_next.pds_runs import audit, audit_markdown, browser, checks, context, pin, sessions, tree
 from owlbear_delivery_next.pds_runs import job as pds_job
+from owlbear_delivery_next.pds_runs.run import _browser as browser_stage
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import pds_run_record
 from owlbear_delivery_next.state_store.store import Store
@@ -108,6 +109,7 @@ class Fakes:
         self.browsed: list[tuple[str, tuple[str, ...]]] = []  # each run's tree (its folder's name) and ids
         self.verdicts: list[str] = []  # per challenger session; then pass
         self.sessions: list = []  # every session's config
+        self.judged: list[tuple[str, str]] = []  # each judge's actual page bytes
         self.copies: list[list[str]] = []  # each updater copy's files
         self.repairs: list[dict[str, str]] = []  # per CI repair session: repository path -> text
         self.hold: threading.Event | None = None  # set: the first session waits for it, its run holding the lock
@@ -133,6 +135,7 @@ class Fakes:
         done = Termination(confirmed=True)
         if cfg.job == sessions.AUDIT:
             self.calls.append("audit")
+            self.judged.append(("audit", (cfg.worktree / PAGE).read_text()))
             if self.ending != "result":
                 return Run(cfg.session_id, self.ending, detail="the model stopped", termination=done)
             said = AuditResult(report=json.dumps(report(cfg.worktree, self.follow_ups)))
@@ -160,6 +163,7 @@ class Fakes:
             return Run(cfg.session_id, "result", payload=said, termination=done)
         assert cfg.role == "challenger"
         self.calls.append("challenger")
+        self.judged.append(("challenger", (cfg.worktree / REPO / PAGE).read_text()))
         verdict = self.verdicts.pop(0) if self.verdicts else "pass"
         found = [] if verdict == "pass" else [tools.Finding(place=f"{PAGE}:2", problem="xs is too small", fix="s")]
         result = tools.ReviewResult(verdict=verdict, findings=found)
@@ -168,6 +172,7 @@ class Fakes:
     def browser(self, at: Path, ids: tuple[str, ...]) -> browser.Result:
         self.calls.append("browser")
         self.browsed.append((at.name, ids))
+        self.judged.append((f"browser-{at.name}", (at / REPO / PAGE).read_text()))
         planned = self.browsers.pop(0) if self.browsers else PASS
         if isinstance(planned, Exception):
             raise planned
@@ -263,11 +268,53 @@ def results(state: dict) -> dict[str, str]:
     return {s["name"]: s["result"] for s in state["stages"]}
 
 
-def test_an_update_audits_fixes_tests_and_challenges_the_pages_then_merges_one_commit(tmp_path, checkout):
-    """The plant is found, the updater fixes it in its copy, both gates pass the fix and one pull request merges it."""
+class StageJob(pds_job.Job):
+    """A stopped-stage witness using the native invocation formatter, final record and log sinks."""
+
+    def stopped(self, work) -> dict:
+        with pytest.raises(pack_job.Stopped) as raised:
+            work()
+        self._end("failed", raised.value.reason)
+        return self.read()
+
+    def failed(self, work) -> dict:
+        self._steps(work)
+        return self.read()
+
+
+def browser_job(tmp_path: Path, checkout: Path, *outcomes: browser.Result) -> tuple[Fakes, StageJob, context.Context]:
+    """A native candidate and base for gate rules, without an updater, release download or publication."""
+    fakes = Fakes(checkout)
+    fakes.browsers = list(outcomes)
+    job = StageJob(store(tmp_path), fakes.live(checkout))
+    job.state = job.state | {"state": "running", "run": "r1", "invocations": []}
+    root = checkout.parents[3]
+    tree.lay(job.workspace / context.CANDIDATE, {f"{REPO}{PAGE}": FIXED.encode()})
+    ctx = context.Context(
+        version=NEW,
+        old=OLD,
+        why="PDS update",
+        diff="",
+        candidate="",
+        checkout={"root": str(root), "base": git(root, "rev-parse", "HEAD")},
+    )
+    return fakes, job, ctx
+
+
+def test_release_update_rejudges_each_correction_without_touching_checkout(tmp_path, checkout):
+    """Three fresh corrections get their own audit/browser evidence before one release is published."""
     root = checkout.parents[3]
     before = (git(root, "rev-parse", "HEAD"), (checkout / PAGE).read_text(), (checkout / pin.PIN).read_bytes())
-    fakes, job, state = started(tmp_path, checkout)
+    second, third = FIXED + "export const s = 1;\n", FIXED + "export const s = 1;\nexport const u = 1;\n"
+    broken = replace(failing("tests/test_machine_pages.py::test_menu"), told="test_menu\nAssertionError: no dot")
+    fakes, job, state = started(
+        tmp_path,
+        checkout,
+        updater={"last_round_at": 0},
+        verdicts=["fix"],
+        edits=[{PAGE: "fix"}, {PAGE: second}, {PAGE: third}],
+        browsers=[PASS, broken, PASS, broken, PASS],
+    )
 
     pub = state["published"]
     assert (state["state"], state["reason"]) == (
@@ -275,11 +322,35 @@ def test_an_update_audits_fixes_tests_and_challenges_the_pages_then_merges_one_c
     )  # fmt: skip
     kept = pds_run_record.read_only(job.store.root)  # what Updates reads: the ended run's context is gone
     assert (kept["release"], kept["context"]) == (NEW, None)
-    assert fakes.calls == ["audit", "update", "audit", "browser", "challenger"]
-    assert fakes.browsed == [("candidate", ())]
+    assert fakes.judged == [
+        ("audit", DEMO),
+        ("audit", FIXED),
+        ("browser-candidate", FIXED),
+        ("challenger", FIXED),
+        ("audit", second),
+        ("browser-candidate", second),
+        ("browser-base", DEMO),
+        ("browser-candidate", second),
+        ("audit", third),
+        ("browser-candidate", third),
+        ("challenger", third),
+    ]
+    assert fakes.browsed == [
+        ("candidate", ()),
+        ("candidate", ()),
+        ("base", broken.failed),
+        ("candidate", broken.failed),
+        ("candidate", ()),
+    ]
     assert results(state) == dict.fromkeys(results(state), "passed") | {"update": "completed"}
-    assert fakes.copies == [["web/pages/demo.mjs"]]  # the pages only: never the vendored folders
-    updater, challenger = fakes.sessions[1], fakes.sessions[-1]
+    assert fakes.copies == [["web/pages/demo.mjs"]] * 3
+    updaters = [cfg for cfg in fakes.sessions if cfg.role == "updater"]
+    assert len({cfg.session_id for cfg in updaters}) == 3
+    updater, challenger = updaters[0], fakes.sessions[-1]
+    assert "xs is too small" not in updater.message
+    assert "xs is too small" in updaters[1].message
+    assert "tests/test_machine_pages.py::test_menu" in updaters[2].message
+    assert "AssertionError: no dot" in updaters[2].message
     assert f"{PAGE}:2:" in updater.message  # the finding, at its copy path
     assert "Use xs." in updater.message
     assert "p-text: size x-small is deprecated, use xs" in updater.message  # the release's changelog
@@ -289,7 +360,7 @@ def test_an_update_audits_fixes_tests_and_challenges_the_pages_then_merges_one_c
 
     made = landed(checkout)
     assert json.loads(landed(checkout, pin.PIN))["version"] == NEW
-    assert 'size="xs"' in landed(checkout, PAGE)
+    assert landed(checkout, PAGE) == third.rstrip("\n")
     assert landed(checkout, f"{pin.WEB}/load.mjs").startswith(f"/* {pin.NAME} {NEW} esm/index.mjs;")
     files = git(root, "show", "--name-only", "--format=%s", made).splitlines()
     assert files[:2] == [f"PDS: {OLD} to {NEW}", ""]
@@ -309,30 +380,20 @@ def test_an_update_audits_fixes_tests_and_challenges_the_pages_then_merges_one_c
     assert git(root, "status", "--porcelain") == ""
 
 
-def test_a_challenger_finding_goes_to_a_fresh_updater_and_both_gates_and_the_challenger_run_again(tmp_path, checkout):
-    """Plan d8 step 7: the challenger's findings send the run back; the next updater is told them.
-
-    With no round made the last by its few findings, the repair gets the full checks and a challenger round of its own.
-    """
-    answer = {PAGE: f"{FIXED}export const s = 1;\n"}
-    fakes, _job, state = started(tmp_path, checkout, updater={"last_round_at": 0}, verdicts=["fix"],
-                                 edits=[{PAGE: "fix"}, answer])  # fmt: skip
-
-    assert state["state"] == "passed", state["reason"]
-    assert fakes.calls == ["audit", "update", "audit", "browser", "challenger", "update", "audit", "browser",
-                           "challenger"]  # fmt: skip
-    first, second = (s.message for s in fakes.sessions if s.role == "updater")
-    assert "xs is too small" not in first
-    assert "xs is too small" in second
-
-
-def test_an_up_to_date_pin_ends_up_to_date_with_nothing_downloaded(tmp_path, checkout):
+def test_current_release_never_downloads_or_starts_work(tmp_path, checkout):
     fakes = Fakes(checkout)
-    fetch = fakes.fetch
-    fakes.fetch = lambda url, s: json.dumps({"version": OLD}).encode() if url.endswith("/latest") else fetch(url, s)
+    fetched = []
+
+    def fetch(url, _seconds):
+        fetched.append(url)
+        assert url == f"{pin.REGISTRY}/latest"
+        return json.dumps({"version": OLD}).encode()
+
+    fakes.fetch = fetch
     state = run(pds_job.Job(store(tmp_path), fakes.live(checkout)))
     assert (state["state"], state["reason"]) == ("up-to-date", f"up to date: PDS {OLD} is npm's latest release")
     assert (fakes.calls, fakes.github.calls) == ([], [])
+    assert fetched == [f"{pin.REGISTRY}/latest"]
 
 
 @pytest.mark.parametrize(
@@ -350,29 +411,38 @@ def test_an_up_to_date_pin_ends_up_to_date_with_nothing_downloaded(tmp_path, che
     ],
     ids=["npm-unreachable", "no-audit-result", "cdn-unrunnable", "zero-tests", "failing-on-main-too"],
 )  # fmt: skip
-def test_a_gate_that_cannot_judge_stops_the_update_with_its_reason_and_opens_nothing(tmp_path, checkout, plan, said,
-                                                                                     calls):  # fmt: skip
-    fakes, _job, state = started(tmp_path, checkout, **plan)
+def test_unjudgeable_candidate_stops_with_reason_before_publication(tmp_path, checkout, plan, said, calls):
+    if "browsers" not in plan:
+        fakes, _job, state = started(tmp_path, checkout, **plan)
+        assert fakes.calls == calls
+    else:
+        fakes, job, ctx = browser_job(tmp_path, checkout, *plan["browsers"])
+        state = job.stopped(lambda: browser_stage(job, ctx))
+        assert fakes.calls == [c for c in calls if c == "browser"]
     assert state["state"] == "failed"
     assert said in state["reason"]
-    assert fakes.calls == calls
     assert (fakes.github.prs, fakes.github.calls) == ({}, [])
 
 
 @pytest.mark.parametrize("cause", ["metadata", "unusable", "tarball"])
-def test_a_release_npm_does_not_give_stops_the_candidate_with_its_whole_error(
-    tmp_path, checkout, monkeypatch, whole_error, cause
-):
+def test_candidate_release_failure_keeps_whole_reason(tmp_path, monkeypatch, whole_error, cause):
     """#971: npm's whole error, or the whole reason its metadata is unusable, is the run's reason, its candidate
     stage's, its invocation's and its log's."""
-    fakes, error, loads = Fakes(checkout), (ValueError if cause == "unusable" else OSError)(whole_error), json.loads
+    error, loads = (ValueError if cause == "unusable" else OSError)(whole_error), json.loads
     error.add_note("a note added on the way up")
-    fetch, metadata, tarball = fakes.fetch, f"{pin.REGISTRY}/{NEW}", f"{pin.TARBALLS}components-js-{NEW}.tgz"
+    metadata, tarball = f"{pin.REGISTRY}/{NEW}", f"{pin.TARBALLS}components-js-{NEW}.tgz"
 
-    def failing(url: str, seconds: float) -> bytes:
+    def failing(url: str, _seconds: float) -> bytes:
         if url == {"metadata": metadata, "tarball": tarball}.get(cause):
             raise error
-        return b"unusable" if (cause, url) == ("unusable", metadata) else fetch(url, seconds)
+        if url == metadata:
+            return (
+                b"unusable"
+                if cause == "unusable"
+                else json.dumps({"dist": {"tarball": tarball, "integrity": PINS.integrity(TARBALLS[NEW])}}).encode()
+            )
+        assert url == tarball
+        return TARBALLS[NEW]
 
     def unusable(data: bytes | str, *args: object, **kwargs: object) -> object:
         if data == b"unusable":
@@ -380,8 +450,9 @@ def test_a_release_npm_does_not_give_stops_the_candidate_with_its_whole_error(
         return loads(data, *args, **kwargs)
 
     monkeypatch.setattr(pin.json, "loads", unusable)
-    fakes.fetch = failing
-    state = run(pds_job.Job(store(tmp_path), fakes.live(checkout)))
+    job = StageJob(store(tmp_path), pds_job.Live(fetch=failing, git=lambda _at, _args: ""))
+    job.state = job.state | {"state": "running", "run": "r1", "invocations": []}
+    state = job.failed(lambda: job.do("candidate", lambda: pin.release(NEW, job.live.fetch), op="pds-candidate"))
 
     whole = f"{type(error).__name__}: {whole_error}\na note added on the way up"
     said = {
@@ -392,54 +463,36 @@ def test_a_release_npm_does_not_give_stops_the_candidate_with_its_whole_error(
     PACK.stage_failed(state, "candidate", f"PinError: {said}")
 
 
-def test_a_failure_the_update_caused_goes_to_a_fresh_updater_and_both_gates_run_again(tmp_path, checkout):
-    """A test failing on the candidate but passing on main is the update's: the updater gets it, never a waiver."""
-    broken = replace(failing("tests/test_machine_pages.py::test_menu"), told="test_menu\nAssertionError: no dot")
-    fakes, _job, state = started(tmp_path, checkout, browsers=[broken, PASS, broken])
-
-    assert state["state"] == "passed", state["reason"]
-    assert fakes.calls == [
-        "audit", "update", "audit", "browser", "browser", "browser", "update", "audit", "browser", "challenger"
-    ]  # fmt: skip
-    rerun = [("base", broken.failed), ("candidate", broken.failed)]
-    assert fakes.browsed == [("candidate", ()), *rerun, ("candidate", ())]
-    second = [c for c in fakes.sessions if c.role == "updater"][1]
-    assert "tests/test_machine_pages.py::test_menu" in second.message
-    assert "AssertionError: no dot" in second.message  # what the report said, not the output's tail
-    assert second.session_id != fakes.sessions[1].session_id  # a fresh session
-
-
-def test_a_failure_passing_its_rerun_on_main_and_the_candidate_is_a_named_flake(tmp_path, checkout):
-    """D-01M6BFK5YF5GYYN7QCDDPBEZH2: no updater round for a test that passes again on both trees."""
-    flaky = failing("tests/test_visual.py::test_a_real_capture_of_a_local_page")
-    fakes, _job, state = started(tmp_path, checkout, browsers=[flaky, PASS, PASS])
-
-    assert state["state"] == "passed", state["reason"]
-    assert fakes.calls == ["audit", "update", "audit", "browser", "browser", "browser", "challenger"]
-    assert fakes.browsed == [("candidate", ()), ("base", flaky.failed), ("candidate", flaky.failed)]
-    gate = next(s for s in state["stages"] if s["name"] == "browser")
-    assert gate["result"] == "passed"
-    assert gate["detail"].endswith("passed on a rerun on the candidate and on main: " + flaky.failed[0])
-
-
-@pytest.mark.parametrize(("where", "state_", "calls"), [
-    ("candidate", "passed", ["audit", "update", "audit", "browser", "browser", "browser", "update", "audit", "browser",
-                             "challenger"]),
-    ("base", "failed", ["audit", "update", "audit", "browser", "browser"]),
-])  # fmt: skip
-def test_a_rerun_that_skips_a_failing_test_proves_no_flake(tmp_path, checkout, where, state_, calls):
+@pytest.mark.parametrize("outcome", ["flake", "base-failure", "base-skip", "candidate-skip"])
+def test_browser_reruns_discriminate_flake_base_failure_and_skips(tmp_path, checkout, outcome):
     two = failing("tests/test_a.py::t", "tests/test_b.py::t")
     half = browser.Result(tests=2, failures=0, errors=0, skipped=1, failed=(), code=0, output="1 passed, 1 skipped")
-    plan = [two, half] if where == "base" else [two, PASS, half]
-    fakes, _job, state = started(tmp_path, checkout, browsers=plan)
+    reruns = {
+        "flake": [PASS, PASS],
+        "base-failure": [two],
+        "base-skip": [half],
+        "candidate-skip": [PASS, half],
+    }[outcome]
+    fakes, job, ctx = browser_job(tmp_path, checkout, two, *reruns)
+    if outcome.startswith("base"):
+        with pytest.raises(pack_job.Stopped, match="browser tests fail on main as well: " + ", ".join(two.failed)):
+            checks.browsed(job, ctx, job.workspace / context.CANDIDATE)
+    else:
+        result = checks.browsed(job, ctx, job.workspace / context.CANDIDATE)
+        assert result.passed is (outcome == "flake")
+        if outcome == "flake":
+            assert result.said().endswith("passed on a rerun on the candidate and on main: " + ", ".join(two.failed))
+        else:
+            assert result == two
+    assert fakes.browsed == [
+        ("candidate", ()),
+        ("base", two.failed),
+        *([] if outcome.startswith("base") else [("candidate", two.failed)]),
+    ]
+    assert (fakes.sessions, fakes.github.calls) == ([], [])
 
-    assert state["state"] == state_, state["reason"]
-    assert fakes.calls == calls
-    if where == "base":
-        assert "browser tests fail on main as well" in state["reason"]
 
-
-def test_an_update_whose_updater_sessions_are_spent_stops_with_what_is_still_open(tmp_path, checkout):
+def test_spent_updater_budget_reports_remaining_browser_failure(tmp_path, checkout):
     broken = failing("tests/test_machine_pages.py::test_menu")
     fakes, _job, state = started(tmp_path, checkout, updater={"max_rounds": 1}, browsers=[broken, PASS, broken])
 
@@ -450,7 +503,7 @@ def test_an_update_whose_updater_sessions_are_spent_stops_with_what_is_still_ope
 
 
 @pytest.mark.parametrize("added", [False, True], ids=["same-set", "new-follow-up"])
-def test_a_continue_covers_the_follow_ups_shown_and_a_new_one_asks_again(tmp_path, checkout, added):
+def test_owner_continue_covers_only_the_followups_shown(tmp_path, checkout, added):
     """D-01M69VVX2N0F938Y0NSHQYP40S: never the updater's; the owner's continue covers exactly the set he saw."""
     one, two = AUDITED.follow_up("the size the theme picks"), AUDITED.follow_up("the weight the theme picks")
     broken = failing("tests/test_machine_pages.py::test_menu")
@@ -482,24 +535,21 @@ def test_a_continue_covers_the_follow_ups_shown_and_a_new_one_asks_again(tmp_pat
     ],
     ids=["creates", "deletes", "edits-json"],
 )
-def test_an_updater_that_changes_what_it_may_not_stops_the_update(tmp_path, checkout, edit, named):
-    fakes, _job, state = started(tmp_path, checkout, edits=[{PAGE: "fix", **edit}])
-    assert state["state"] == "failed"
-    assert f"the updater changed files it may not ({named}); nothing it did was taken" in state["reason"]
-    assert (fakes.calls, fakes.github.calls) == (["audit", "update"], [])
-
-
-def test_nothing_an_updater_did_is_taken_when_one_change_is_outside_its_pages(tmp_path):
+def test_page_copy_refuses_unauthorized_changes_before_taking_any(tmp_path, edit, named):
     candidate, copy = tmp_path / "candidate", tmp_path / "copy"
-    (candidate / tree.WEB / "pages").mkdir(parents=True)
-    (candidate / REPO / PAGE).write_text(DEMO)
-
+    tree.lay(candidate, {f"{REPO}{PAGE}": DEMO.encode(), f"{REPO}web/pages/a-valid.mjs": b"original\n"})
+    before = tree.files(candidate, REPO)
     start = tree.copy(candidate, copy, lambda at, args: git(at, *args))
-    (copy / PAGE).write_text("fixed\n")
-    (copy / "web/pages/new.mjs").write_text("export {};\n")
-    with pytest.raises(tree.Outside, match=r"web/pages/new\.mjs"):
+    (copy / "web/pages/a-valid.mjs").write_text("fixed\n")
+    for path, text in edit.items():
+        if text is None:
+            (copy / path).unlink()
+        else:
+            (copy / path).write_text(text)
+    with pytest.raises(tree.Outside) as raised:
         tree.taken(copy, start, candidate)
-    assert (candidate / REPO / PAGE).read_text() == DEMO
+    assert str(raised.value) == f"the updater changed files it may not ({named}); nothing it did was taken"
+    assert tree.files(candidate, REPO) == before
 
 
 def test_a_publication_stop_waits_and_a_retry_merges_the_one_pull_request(tmp_path, checkout):
@@ -636,7 +686,7 @@ def test_a_ci_repair_of_a_workflow_asks_the_owner_with_its_diff_before_it_is_pus
     assert git(root, "show", f"{landed(checkout)}:.github/workflows/ci.yml") == "on: push"
 
 
-def test_one_update_runs_at_a_time_on_this_machine_whichever_kind_holds_the_lock(tmp_path, checkout):
+def test_machine_update_lock_excludes_both_update_kinds(tmp_path, checkout):
     held = machine_lock.take(local_home.root() / MACHINE_LOCK, "garage", lambda: None)  # an Impeccable update's holder
     try:
         with pytest.raises(pack_job.Busy, match="an update runs for garage; one update runs at a time"):
@@ -644,6 +694,7 @@ def test_one_update_runs_at_a_time_on_this_machine_whichever_kind_holds_the_lock
     finally:
         os.close(held)
     fakes = Fakes(checkout)
+    fakes.ending = "error"
     fakes.hold = threading.Event()  # the PDS run holds the lock in its audit
     job = pds_job.Job(store(tmp_path), fakes.live(checkout))
     job.start()
@@ -655,7 +706,11 @@ def test_one_update_runs_at_a_time_on_this_machine_whichever_kind_holds_the_lock
         fakes.hold.set()
     assert job.thread is not None
     job.thread.join(60)
-    assert job.read()["state"] == "passed"
+    assert job.read()["state"] == "failed"
+    assert fakes.calls == ["audit"]
+    assert fakes.github.calls == []
+    released = machine_lock.take(local_home.root() / MACHINE_LOCK, "other", lambda: None)
+    os.close(released)
 
 
 @pytest.mark.parametrize(
@@ -920,7 +975,7 @@ def browsers(tmp_path, monkeypatch) -> Path:
     return where
 
 
-def test_the_browser_tests_run_on_the_trees_own_code_with_a_narrow_environment(tmp_path, browsers):
+def test_browser_invocation_reads_real_reports_on_target_code(tmp_path, browsers):
     at, runner = tmp_path / "candidate", Runner(suite(4))
     at.mkdir()
     r = browser.run(at, ("tests/test_a.py::t",), runner=runner)
@@ -932,33 +987,40 @@ def test_the_browser_tests_run_on_the_trees_own_code_with_a_narrow_environment(t
     assert "OWLBEAR_SECRET_FOR_TEST" not in env
     assert (env["NODE_EXTRA_CA_CERTS"], env["https_proxy"]) == ("/ca/interception.pem", "http://proxy:3128")
     assert runner.given["args"][3:6] == ["tests/test_a.py::t", "-m", "browser"]
-
-
-@pytest.mark.parametrize(
-    ("runner", "failed"),
-    [
-        (Runner(suite(4, errors=1), 1, "ERROR tests/test_a.py::t - fixture failed"), ("tests/test_a.py::t",)),
-        (Runner(suite(4), 1, "INTERNALERROR"), ()),
-        (Runner(suite(3, skipped=3)), ()),
-    ],
-    ids=["setup-error", "nonzero-exit", "all-skipped"],
-)
-def test_a_browser_run_is_no_pass_unless_tests_ran_cleanly(tmp_path, browsers, runner, failed):  # noqa: ARG001
-    r = browser.run(tmp_path, runner=runner)
-    assert (r.passed, r.failed) == (False, failed)
-
-
-def test_a_failing_browser_run_tells_what_its_report_says_not_the_output_tail(tmp_path, browsers):  # noqa: ARG001
     case = '<testcase classname="tests.test_v" name="t"><failure message="TimeoutError: 30000ms">trace</failure>'
     xml = f'<testsuites><testsuite tests="2" failures="1">{case}</testcase></testsuite></testsuites>'
-    r = browser.run(tmp_path, runner=Runner(xml, 1, "FAILED tests/test_v.py::t\n" + "DeprecationWarning\n" * 400))
+    r = browser.run(at, runner=Runner(xml, 1, "FAILED tests/test_v.py::t\n" + "DeprecationWarning\n" * 400))
     assert r.failed == ("tests/test_v.py::t",)
     assert r.told == "tests.test_v::t\nTimeoutError: 30000ms\ntrace"
 
 
-@pytest.mark.parametrize("cause", ["cdn", "no-report"])
-def test_an_unrunnable_browser_run_is_told_with_its_whole_output(tmp_path, browsers, whole_error, cause):  # noqa: ARG001
-    """The PDS CDN's silence, or a run that left no report, is told with the run's whole output (#895)."""
+@pytest.mark.parametrize(
+    "case",
+    [
+        (
+            "setup-error",
+            Runner(suite(4, errors=1), 1, "ERROR tests/test_a.py::t - fixture failed"),
+            ("tests/test_a.py::t",),
+        ),
+        ("nonzero-exit", Runner(suite(4), 1, "INTERNALERROR"), ()),
+        ("all-skipped", Runner(suite(3, skipped=3)), ()),
+        ("cdn", None, ()),
+        ("no-report", None, ()),
+        ("no-runtime", None, ()),
+    ],
+    ids=["setup-error", "nonzero-exit", "all-skipped", "cdn", "no-report", "no-runtime"],
+)
+def test_browser_evidence_refuses_unusable_runs_with_whole_output(tmp_path, browsers, monkeypatch, whole_error, case):
+    cause, runner, failed = case
+    if runner is not None:
+        r = browser.run(tmp_path, runner=runner)
+        assert (r.passed, r.failed) == (False, failed)
+        return
+    if cause == "no-runtime":
+        monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", str(browsers / "none"))
+        with pytest.raises(browser.Unrunnable, match="Playwright's browsers are not installed"):
+            browser.run(tmp_path, runner=Runner(suite(1)))
+        return
     if cause == "cdn":
         output = f"E   {browser.CDN} https://cdn.ui.porsche.com/x failed\n{whole_error}"
         with pytest.raises(browser.Unrunnable) as raised:
@@ -1013,12 +1075,6 @@ def test_a_timed_out_browser_gate_keeps_and_logs_its_whole_error(tmp_path, check
     assert next(s for s in state["stages"] if s["name"] == "merge")["detail"] == reason
     assert [i["detail"] for i in state["invocations"] if i["operation"] == "merge"][-1] == reason
     assert logged[-2:] == [f"merge: failed: {reason}", f"waiting for you: {reason}"]
-
-
-def test_without_playwrights_browsers_the_tests_cannot_run(tmp_path, monkeypatch):
-    monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", str(tmp_path / "none"))
-    with pytest.raises(browser.Unrunnable, match="Playwright's browsers are not installed"):
-        browser.run(tmp_path, runner=Runner(suite(1)))
 
 
 @pytest.mark.parametrize("stage", ["updater", "challenger", "reconsider", "audit", "audit-no-report"])

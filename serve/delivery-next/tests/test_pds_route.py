@@ -48,7 +48,7 @@ def routed(pds, monkeypatch, tmp_path):
     return handlers[0]
 
 
-def test_a_cdn_request_whose_fetch_keeps_failing_is_aborted_so_the_page_loads_on(routed, capsys):
+def test_cdn_failure_settles_and_never_caches_refused_answer(routed, capsys, pds):
     from playwright.sync_api import Error  # noqa: PLC0415 - the optional browser runtime
 
     r = Route(FONT, Error("Route.fetch: write EPROTO"), Error("Route.fetch: read ECONNRESET"))
@@ -57,31 +57,7 @@ def test_a_cdn_request_whose_fetch_keeps_failing_is_aborted_so_the_page_loads_on
     assert len(r.fetches) == 2
     assert all(0 < f["timeout"] < 30_000 for f in r.fetches)  # never the test's whole 30 s
     assert "ECONNRESET" in capsys.readouterr().out  # the reason is in the test's output
-
-
-def test_a_cdn_request_is_fetched_again_once_and_its_answer_kept(routed):
-    from playwright.sync_api import Error  # noqa: PLC0415 - the optional browser runtime
-
-    r = Route(FONT, Error("Route.fetch: write EPROTO"), ok(b"font"))
-    routed(r)
-    ((how, answer),) = r.settled
-    assert (how, answer["status"], answer["body"]) == ("fulfill", 200, b"font")
-    assert "content-encoding" not in answer["headers"]
-    again = Route(FONT)  # any fetch would fail: it has no answers
-    routed(again)
-    assert (again.fetches, again.settled[0][1]["body"]) == ([], b"font")
-
-
-def test_another_worker_of_the_run_answers_a_fetched_file_without_the_cdn(routed, pds, monkeypatch):
-    routed(Route(FONT, ok(b"font")))
-    monkeypatch.setattr(pds, "_fetched", {})  # the next worker's memory starts empty
-    again = Route(FONT)  # any fetch would fail: it has no answers
-    routed(again)
-    assert again.fetches == []
-    assert again.settled[0][1]["body"] == b"font"
-
-
-def test_a_failed_cdn_answer_is_passed_on_and_not_kept(routed, pds):
+    assert not list(pds.shared.glob("*"))
     missing = SimpleNamespace(ok=False, status=404, headers={}, body=lambda: b"")
     r = Route(FONT, missing)
     routed(r)
@@ -90,6 +66,25 @@ def test_a_failed_cdn_answer_is_passed_on_and_not_kept(routed, pds):
     again = Route(FONT, ok(b"font"))
     routed(again)
     assert len(again.fetches) == 1
+
+
+def test_successful_cdn_bytes_are_reused_in_memory_and_by_next_worker(routed, pds, monkeypatch):
+    from playwright.sync_api import Error  # noqa: PLC0415 - the optional browser runtime
+
+    r = Route(FONT, Error("Route.fetch: write EPROTO"), ok(b"font"))
+    routed(r)
+    ((how, answer),) = r.settled
+    assert (how, answer["status"], answer["body"]) == ("fulfill", 200, b"font")
+    assert "content-encoding" not in answer["headers"]
+    assert "content-length" not in answer["headers"]
+    again = Route(FONT)  # any fetch would fail: it has no answers
+    routed(again)
+    assert (again.fetches, again.settled[0][1]["body"]) == ([], b"font")
+    monkeypatch.setattr(pds, "_fetched", {})  # the next worker's memory starts empty
+    again = Route(FONT)  # any fetch would fail: it has no answers
+    routed(again)
+    assert again.fetches == []
+    assert again.settled[0][1]["body"] == b"font"
 
 
 def test_the_test_host_goes_through_and_anything_else_is_refused(routed):
