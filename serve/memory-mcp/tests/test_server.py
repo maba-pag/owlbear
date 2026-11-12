@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 import mcp
@@ -36,6 +37,11 @@ Reviewed memory.
 def _text(result: CallToolResult) -> str:
     """Extract the text payload from one MCP tool result."""
     return "".join(item.text for item in result.content if hasattr(item, "text"))
+
+
+def _payload(result: CallToolResult) -> dict:
+    assert not result.is_error
+    return json.loads(_text(result))
 
 
 def _recall_revision(result: CallToolResult, entry_id: str) -> str:
@@ -77,62 +83,33 @@ def _bound_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     return store
 
 
-def _create_entry(memory_dir: Path, *, title: str, state: MemoryState) -> MemoryEntry:
-    engine = MemoryEngine(memory_dir)
-    entry = engine.save(
-        title=title,
-        content=f"{title} content.",
-        categories=[MemoryCategory.PROCESS],
-        confidence=0.8,
-        source_agent="test-agent",
-        scope_agents=[],
-    )
-    if state == MemoryState.PENDING:
-        return entry
-    if state not in {MemoryState.CURATED, MemoryState.APPROVED}:
-        msg = f"unsupported fixture state: {state}"
-        raise ValueError(msg)
-
-    entry = engine.edit(
-        entry.id,
-        {"scope_agents": ["test-agent"]},
-        expected_revision=entry.revision,
-    )
-    if state == MemoryState.CURATED:
-        return entry
-    return engine.approve(entry.id, expected_revision=entry.revision)
-
-
 @pytest.mark.asyncio
 async def test_live_curator_mutations_bind_to_read_content(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    memory_entry: Callable[..., MemoryEntry],
 ) -> None:
     """Fresh curator actions follow read content across approval, sessions, edits and deletion."""
     memory_dir = tmp_path / ".owlbear/memory"
-    entry = _create_entry(memory_dir, title="Curate pending", state=MemoryState.PENDING)
-    discarded = _create_entry(memory_dir, title="Delete pending", state=MemoryState.PENDING)
+    entry = memory_entry(memory_dir, title="Curate pending", state=MemoryState.PENDING)
+    discarded = memory_entry(memory_dir, title="Delete pending", state=MemoryState.PENDING)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("OWLBEAR_MEMORY_AGENTS", "planner, builder,reviewer")
 
     async with mcp.Client(memory_mcp) as client:
-        read_result = await client.call_tool("read_memory", {"entry_id": entry.id})
-        assert not read_result.is_error
-        pending_revision = json.loads(_text(read_result))["revision"]
-        curated = await client.call_tool(
-            "curate_memory",
-            {"entry_id": entry.id, "revision": pending_revision, "scope_agents": ["builder"]},
+        pending_revision = _payload(await client.call_tool("read_memory", {"entry_id": entry.id}))["revision"]
+        curated_payload = _payload(
+            await client.call_tool(
+                "curate_memory",
+                {"entry_id": entry.id, "revision": pending_revision, "scope_agents": ["builder"]},
+            )
         )
-        assert not curated.is_error
-        curated_payload = json.loads(_text(curated))
         assert curated_payload["state"] == "curated"
         revision = curated_payload["revision"]
         assert revision != pending_revision
-        read_result = await client.call_tool("read_memory", {"entry_id": entry.id})
+        read_payload = _payload(await client.call_tool("read_memory", {"entry_id": entry.id}))
         list_result = await client.call_tool("list_memories", {"states": ["curated"]})
-        assert not read_result.is_error
         assert not list_result.is_error
-        read_payload = json.loads(_text(read_result))
         listed_payload = [json.loads(item.text) for item in list_result.content if hasattr(item, "text")]
         assert read_payload["revision"] == revision
         assert len(revision) == 16
@@ -140,28 +117,28 @@ async def test_live_curator_mutations_bind_to_read_content(
         assert len(listed_payload) == 1
         assert listed_payload[0]["revision"] == revision
 
-        approved = await client.call_tool(
-            "approve_memory",
-            {"entry_id": entry.id, "revision": revision},
+        approved = _payload(
+            await client.call_tool(
+                "approve_memory",
+                {"entry_id": entry.id, "revision": revision},
+            )
         )
-        assert not approved.is_error
-        assert json.loads(_text(approved))["state"] == "approved"
-        assert json.loads(_text(approved))["revision"] == revision
+        assert approved["state"] == "approved"
+        assert approved["revision"] == revision
 
     async with mcp.Client(memory_mcp) as client:
-        reloaded_read = await client.call_tool("read_memory", {"entry_id": entry.id})
+        reloaded_read = _payload(await client.call_tool("read_memory", {"entry_id": entry.id}))
         reloaded_list = await client.call_tool("list_memories", {"states": ["approved"]})
-        assert not reloaded_read.is_error
         assert not reloaded_list.is_error
-        assert json.loads(_text(reloaded_read))["revision"] == revision
+        assert reloaded_read["revision"] == revision
         reloaded_payload = [json.loads(item.text) for item in reloaded_list.content if hasattr(item, "text")]
         assert reloaded_payload[0]["revision"] == revision
-        edited = await client.call_tool(
-            "curate_memory",
-            {"entry_id": entry.id, "revision": revision, "content": "Updated through MCP."},
+        edited_payload = _payload(
+            await client.call_tool(
+                "curate_memory",
+                {"entry_id": entry.id, "revision": revision, "content": "Updated through MCP."},
+            )
         )
-        assert not edited.is_error
-        edited_payload = json.loads(_text(edited))
         assert edited_payload["state"] == "curated"
         assert edited_payload["revision"] != revision
         changed = MemoryEngine(memory_dir).edit(
@@ -170,23 +147,21 @@ async def test_live_curator_mutations_bind_to_read_content(
             expected_revision=edited_payload["revision"],
         )
         assert changed.revision != edited_payload["revision"]
-        changed_read = await client.call_tool("read_memory", {"entry_id": entry.id})
-        assert not changed_read.is_error
-        assert json.loads(_text(changed_read))["revision"] == changed.revision
+        changed_read = _payload(await client.call_tool("read_memory", {"entry_id": entry.id}))
+        assert changed_read["revision"] == changed.revision
 
-        soft_deleted = await client.call_tool(
-            "delete_memory", {"entry_id": entry.id, "revision": changed.revision}
+        soft_deleted = _payload(
+            await client.call_tool("delete_memory", {"entry_id": entry.id, "revision": changed.revision})
         )
-        assert not soft_deleted.is_error
-        assert json.loads(_text(soft_deleted))["state"] == "deleted"
+        assert soft_deleted["state"] == "deleted"
         assert (memory_dir / f"{entry.id}.md").exists()
-        pending_read = await client.call_tool("read_memory", {"entry_id": discarded.id})
-        assert not pending_read.is_error
-        hard_deleted = await client.call_tool(
-            "delete_memory",
-            {"entry_id": discarded.id, "revision": json.loads(_text(pending_read))["revision"]},
+        pending_read = _payload(await client.call_tool("read_memory", {"entry_id": discarded.id}))
+        _payload(
+            await client.call_tool(
+                "delete_memory",
+                {"entry_id": discarded.id, "revision": pending_read["revision"]},
+            )
         )
-        assert not hard_deleted.is_error
         assert not (memory_dir / f"{discarded.id}.md").exists()
 
 
@@ -194,13 +169,14 @@ async def test_live_curator_mutations_bind_to_read_content(
 async def test_live_server_rejects_stale_revisions_without_mutation(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    memory_entry: Callable[..., MemoryEntry],
 ) -> None:
     """Stale curator mutations name both revisions and preserve the changed entry."""
     memory_dir = tmp_path / ".owlbear/memory"
     entries = {
-        "approve_memory": _create_entry(memory_dir, title="Stale approve", state=MemoryState.CURATED),
-        "curate_memory": _create_entry(memory_dir, title="Stale curate", state=MemoryState.CURATED),
-        "delete_memory": _create_entry(memory_dir, title="Stale delete", state=MemoryState.CURATED),
+        "approve_memory": memory_entry(memory_dir, title="Stale approve", state=MemoryState.CURATED),
+        "curate_memory": memory_entry(memory_dir, title="Stale curate", state=MemoryState.CURATED),
+        "delete_memory": memory_entry(memory_dir, title="Stale delete", state=MemoryState.CURATED),
     }
     monkeypatch.chdir(tmp_path)
 
@@ -232,10 +208,11 @@ async def test_live_server_rejects_stale_revisions_without_mutation(
 async def test_live_server_rejects_missing_and_malformed_revisions_without_mutation(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    memory_entry: Callable[..., MemoryEntry],
 ) -> None:
     """Revision schema failures do not mutate entries through the live server."""
     memory_dir = tmp_path / ".owlbear/memory"
-    entry = _create_entry(memory_dir, title="Invalid revisions", state=MemoryState.CURATED)
+    entry = memory_entry(memory_dir, title="Invalid revisions", state=MemoryState.CURATED)
     path = memory_dir / f"{entry.id}.md"
     before_calls = path.read_bytes()
     monkeypatch.chdir(tmp_path)
@@ -260,11 +237,12 @@ async def test_live_server_rejects_missing_and_malformed_revisions_without_mutat
 async def test_live_assessments_reject_stale_revision_and_apply_sibling_item(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    memory_entry: Callable[..., MemoryEntry],
 ) -> None:
     """A stale recalled item is byte-stable while a current sibling is applied."""
     memory_dir = _bound_store(monkeypatch, tmp_path)
-    stale_entry = _create_entry(memory_dir, title="Stale assessment", state=MemoryState.APPROVED)
-    current_entry = _create_entry(memory_dir, title="Current assessment", state=MemoryState.APPROVED)
+    stale_entry = memory_entry(memory_dir, title="Stale assessment", state=MemoryState.APPROVED)
+    current_entry = memory_entry(memory_dir, title="Current assessment", state=MemoryState.APPROVED)
     monkeypatch.chdir(tmp_path)
 
     async with mcp.Client(memory_mcp) as client:
@@ -315,10 +293,11 @@ async def test_live_assessments_reject_stale_revision_and_apply_sibling_item(
 async def test_live_rating_replay_keeps_the_first_bucket(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    memory_entry: Callable[..., MemoryEntry],
 ) -> None:
     """Same-task retries retain the first bucket; a different task is applied."""
     memory_dir = _bound_store(monkeypatch, tmp_path)
-    entry = _create_entry(memory_dir, title="Receipt replay", state=MemoryState.APPROVED)
+    entry = memory_entry(memory_dir, title="Receipt replay", state=MemoryState.APPROVED)
     monkeypatch.chdir(tmp_path)
 
     async with mcp.Client(memory_mcp) as client:
@@ -382,10 +361,11 @@ async def test_live_rating_replay_keeps_the_first_bucket(
 async def test_live_challenge_replay_preserves_ordered_history(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    memory_entry: Callable[..., MemoryEntry],
 ) -> None:
     """Challenges and replays expose the same ordered public history in each exceptional state."""
     memory_dir = tmp_path / ".owlbear/memory"
-    entry = _create_entry(memory_dir, title="Challenge replay", state=MemoryState.APPROVED)
+    entry = memory_entry(memory_dir, title="Challenge replay", state=MemoryState.APPROVED)
     monkeypatch.chdir(tmp_path)
     task_ids = ("challenge-task-a", "challenge-task-b")
 
@@ -407,7 +387,7 @@ async def test_live_challenge_replay_preserves_ordered_history(
             challenges = result["challenges"]
             assert challenges[:-1] == history
             history = challenges
-            assert [challenge["task_id"] for challenge in history] == list(task_ids[:len(history)])
+            assert [challenge["task_id"] for challenge in history] == list(task_ids[: len(history)])
             assert all(challenge["revision"] == entry.revision for challenge in history)
             assert all(challenge["recorded_at"] for challenge in history)
             assert all(set(challenge) == {"task_id", "revision", "recorded_at"} for challenge in history)
@@ -439,11 +419,12 @@ async def test_live_challenge_replay_preserves_ordered_history(
 async def test_live_assessments_reject_malformed_batches_without_mutation(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    memory_entry: Callable[..., MemoryEntry],
 ) -> None:
     """Malformed items or task IDs reject the whole registered-tool batch."""
     memory_dir = tmp_path / ".owlbear/memory"
-    first_entry = _create_entry(memory_dir, title="Valid batch item", state=MemoryState.APPROVED)
-    second_entry = _create_entry(memory_dir, title="Malformed batch item", state=MemoryState.APPROVED)
+    first_entry = memory_entry(memory_dir, title="Valid batch item", state=MemoryState.APPROVED)
+    second_entry = memory_entry(memory_dir, title="Malformed batch item", state=MemoryState.APPROVED)
     first_path = memory_dir / f"{first_entry.id}.md"
     second_path = memory_dir / f"{second_entry.id}.md"
     before = {first_entry.id: first_path.read_bytes(), second_entry.id: second_path.read_bytes()}
@@ -489,10 +470,11 @@ async def test_live_assessments_reject_malformed_batches_without_mutation(
 async def test_live_assessment_replay_survives_transition_to_stale(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    memory_entry: Callable[..., MemoryEntry],
 ) -> None:
     """An idempotent replay is returned before the now-stale state guard."""
     memory_dir = _bound_store(monkeypatch, tmp_path)
-    entry = _create_entry(memory_dir, title="Stale replay", state=MemoryState.APPROVED)
+    entry = memory_entry(memory_dir, title="Stale replay", state=MemoryState.APPROVED)
     entry = entry.model_copy(update={"didnt_use_count": 50})
     path = memory_dir / f"{entry.id}.md"
     storage.write_entry(path, entry, memory_dir=memory_dir)
@@ -625,6 +607,7 @@ async def test_live_review_batch_reports_commit_noop_or_hook_failure(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
+    *,
     hook_refuses: bool,
 ) -> None:
     """The registered batch tool exposes real Git success, no-op or logged hook refusal."""
@@ -746,6 +729,7 @@ async def test_live_project_store_reads_late_global_memory_without_writing_it(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     discovery: str,
+    memory_entry: Callable[..., MemoryEntry],
 ) -> None:
     """Both discovery paths read late Global entries in one session but write only their project."""
     store = _bound_store(monkeypatch, tmp_path)
@@ -754,6 +738,7 @@ async def test_live_project_store_reads_late_global_memory_without_writing_it(
     title = "Shared store"
     if discovery == "claimed":
         title = "Claimed store"
+        store.parent.mkdir(parents=True, exist_ok=True)
         (data / "shop" / "repository").write_text("github.com/acme/shop\n", encoding="utf-8")
         work = tmp_path / "work"
         (work / ".owlbear").mkdir(parents=True)
@@ -762,7 +747,9 @@ async def test_live_project_store_reads_late_global_memory_without_writing_it(
         monkeypatch.delenv("OWLBEAR_MEMORY_DIR")
         monkeypatch.delenv("OWLBEAR_MEMORY_GLOBAL_DIR")
         monkeypatch.setenv("OWLBEAR_DATA", str(data))
-    own = _create_entry(store, title="Run the shop's tests", state=MemoryState.APPROVED)
+    own = memory_entry(
+        store, title="Run the shop's tests", state=MemoryState.APPROVED, scope_agents=["*"], source_agent="*"
+    )
     monkeypatch.chdir(work)
     args = {
         "title": title,
@@ -778,17 +765,23 @@ async def test_live_project_store_reads_late_global_memory_without_writing_it(
         assert not initial.is_error
         assert [json.loads(item.text)["id"] for item in initial.content if hasattr(item, "text")] == [own.id]
         shared = data / "memory"
-        common = _create_entry(shared, title="Global habit", state=MemoryState.APPROVED)
+        common = memory_entry(
+            shared, title="Global habit", state=MemoryState.APPROVED, scope_agents=["*"], source_agent="*"
+        )
         listed = await client.call_tool("list_memories", {})
         recalled = await client.call_tool("recall_memory", {"agent": "test-agent"})
+        universal = await client.call_tool("recall_memory", {"agent": "*"})
         assert not listed.is_error
-        assert {json.loads(item.text)["id"]: json.loads(item.text)["where"]
-                for item in listed.content if hasattr(item, "text")} == {own.id: "project", common.id: "global"}
+        assert {
+            json.loads(item.text)["id"]: json.loads(item.text)["where"]
+            for item in listed.content
+            if hasattr(item, "text")
+        } == {own.id: "project", common.id: "global"}
         assert "Global habit" in _text(recalled)
+        assert not universal.is_error
+        assert "Global habit" in _text(universal)
         for entry, where in ((own, "project"), (common, "global")):
-            read = await client.call_tool("read_memory", {"entry_id": entry.id})
-            assert not read.is_error
-            payload = json.loads(_text(read))
+            payload = _payload(await client.call_tool("read_memory", {"entry_id": entry.id}))
             assert (payload["where"], payload["title"]) == (where, entry.title)
         before = {path.name: path.read_bytes() for path in shared.iterdir()}
         refused = await client.call_tool(
@@ -796,16 +789,14 @@ async def test_live_project_store_reads_late_global_memory_without_writing_it(
         )
         assert refused.is_error
         assert "not found" in _text(refused)
-        saved = await client.call_tool("save_memory", args)
-        recommended = await client.call_tool(
-            "save_memory", args | {"title": "New", "content": "new", "source_agent": "*", "where": "global"}
+        saved = _payload(await client.call_tool("save_memory", args))
+        recommendation = _payload(
+            await client.call_tool(
+                "save_memory", args | {"title": "New", "content": "new", "source_agent": "*", "where": "global"}
+            )
         )
 
-    assert not saved.is_error
-    saved_payload = json.loads(_text(saved))
-    assert f"title: {title}" in (store / f"{saved_payload['id']}.md").read_text(encoding="utf-8")
-    assert not recommended.is_error
-    recommendation = json.loads(_text(recommended))
+    assert f"title: {title}" in (store / f"{saved['id']}.md").read_text(encoding="utf-8")
     assert (recommendation["recommended"], recommendation["state"]) == ("global", "pending")
     assert (store / f"{recommendation['id']}.md").is_file()
     assert {path.name: path.read_bytes() for path in shared.iterdir()} == before
@@ -856,11 +847,14 @@ async def test_unreadable_global_settings_reach_the_tool_answer_whole(
 
 @pytest.mark.asyncio
 async def test_an_unreadable_memory_file_reaches_the_batch_answer_whole(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    memory_entry: Callable[..., MemoryEntry],
 ) -> None:
     """A memory file whose read fails names the file, the validation and the read error whole in the answer (#971)."""
     store = _bound_store(monkeypatch, tmp_path)
-    entry = _create_entry(store, title="Unreadable habit", state=MemoryState.APPROVED)
+    entry = memory_entry(store, title="Unreadable habit", state=MemoryState.APPROVED)
     target = store / f"{entry.id}.md"
     error = _whole_error()
     opened = os.open

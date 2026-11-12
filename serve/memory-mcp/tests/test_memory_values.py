@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -32,8 +33,12 @@ def git(root: Path, *args: str) -> None:
 def root(tmp_path: Path) -> Path:
     data = tmp_path / "data"
     (data / "shop" / "memory").mkdir(parents=True)
-    git(data, "init", "-q")
     return data
+
+
+@pytest.fixture
+def git_repository(root: Path) -> None:
+    git(root, "init", "-q")
 
 
 @pytest.fixture
@@ -41,16 +46,9 @@ def store(root: Path) -> Path:
     return root / "shop" / "memory"
 
 
-def bound(root: Path) -> SimpleNamespace:
-    folder = root / "shop" / "memory"
-    context = SimpleNamespace(
-        engine=MemoryEngine(folder),
-        memory_dir=folder,
-        global_dir=root / "memory",
-        global_engine=None,
-        agents=frozenset(),
-    )
-    return SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context))
+@pytest.fixture
+def ctx(root: Path, memory_context: Callable[..., SimpleNamespace]) -> SimpleNamespace:
+    return memory_context(root / "shop" / "memory", global_dir=root / "memory")
 
 
 def hold(root: Path, **values: object) -> None:
@@ -89,9 +87,12 @@ def snapshot(folder: Path) -> dict[str, bytes]:
 
 
 @pytest.mark.asyncio
-async def test_recall_refuses_naming_the_values_the_settings_do_not_hold(root: Path, store: Path) -> None:
+async def test_recall_refuses_naming_the_values_the_settings_do_not_hold(
+    root: Path,
+    store: Path,
+    ctx: SimpleNamespace,
+) -> None:
     seed(store, 1, "one")
-    ctx = bound(root)
 
     with pytest.raises(ToolError, match="outstanding_boost, unremarkable_penalty, explore_slots, challenge_slots"):
         await tools.recall_memory(ctx, agent="builder", limit=5)
@@ -105,20 +106,28 @@ async def test_recall_refuses_naming_the_values_the_settings_do_not_hold(root: P
 @pytest.mark.asyncio
 @pytest.mark.parametrize("text", ["<<<<<<< ours\n{}\n=======\n{}\n>>>>>>> theirs", ""], ids=["conflict", "empty"])
 async def test_settings_that_cannot_be_read_are_refused_with_the_file_and_the_reason_not_as_unset(
-    root: Path, store: Path, text: str
+    root: Path,
+    store: Path,
+    text: str,
+    ctx: SimpleNamespace,
 ) -> None:
     seed(store, 1, "one")
     (root / "config.json").write_text(text)
 
     with pytest.raises(ToolError, match="can't be read") as refused:
-        await tools.recall_memory(bound(root), agent="builder", limit=5)
+        await tools.recall_memory(ctx, agent="builder", limit=5)
     assert str(root / "config.json") in str(refused.value)
     assert "unset" not in str(refused.value)  # a broken file is not an unset value
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("raw", ["1e309", "Infinity", "NaN", "-1"])
-async def test_a_point_value_that_is_not_a_finite_amount_is_unset(root: Path, store: Path, raw: str) -> None:
+async def test_a_point_value_that_is_not_a_finite_amount_is_unset(
+    root: Path,
+    store: Path,
+    raw: str,
+    ctx: SimpleNamespace,
+) -> None:
     """The settings page refuses these; a hand-edited file must not turn the scores into NaN or inf."""
     seed(store, 1, "one")
     held = {k: v for k, v in _VALUES.items() if k != "outstanding_boost"}
@@ -127,7 +136,7 @@ async def test_a_point_value_that_is_not_a_finite_amount_is_unset(root: Path, st
     )
 
     with pytest.raises(ToolError, match="outstanding_boost"):
-        await tools.recall_memory(bound(root), agent="builder", limit=5)
+        await tools.recall_memory(ctx, agent="builder", limit=5)
 
 
 def name_shared_repository(monkeypatch: pytest.MonkeyPatch, path: Path) -> None:
@@ -136,16 +145,17 @@ def name_shared_repository(monkeypatch: pytest.MonkeyPatch, path: Path) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("git_repository")
 async def test_a_server_keeping_its_own_store_reads_the_machines_shared_repository_settings(
-    root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    root: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    memory_context: Callable[..., SimpleNamespace],
 ) -> None:
     """An unclaimed workspace has no folder in the shared repository; saved settings must still unblock it."""
     local = tmp_path / "local"
     seed(local, 1, "one")
-    context = SimpleNamespace(
-        engine=MemoryEngine(local), memory_dir=local, global_dir=None, global_engine=None, agents=frozenset()
-    )
-    ctx = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=context))
+    ctx = memory_context(local)
     name_shared_repository(monkeypatch, root)
 
     with pytest.raises(ToolError, match="outstanding_boost"):  # the repository holds no settings yet
@@ -159,11 +169,13 @@ async def test_a_server_keeping_its_own_store_reads_the_machines_shared_reposito
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("git_repository")
 async def test_assessing_refuses_without_the_stale_factor_but_a_wrong_report_needs_none(
-    root: Path, store: Path
+    store: Path,
+    ctx: SimpleNamespace,
 ) -> None:
     entry = seed(store, 1, "one")
-    ctx, before = bound(root), snapshot(store)
+    before = snapshot(store)
     rated = [{"entry_id": entry.id, "revision": entry.revision, "bucket": "outstanding"}]
 
     with pytest.raises(ToolError, match="stale_factor"):
@@ -176,10 +188,14 @@ async def test_assessing_refuses_without_the_stale_factor_but_a_wrong_report_nee
 
 
 @pytest.mark.asyncio
-async def test_a_changed_setting_applies_to_the_next_request_of_the_same_server(root: Path, store: Path) -> None:
+@pytest.mark.usefixtures("git_repository")
+async def test_a_changed_setting_applies_to_the_next_request_of_the_same_server(
+    root: Path,
+    store: Path,
+    ctx: SimpleNamespace,
+) -> None:
     for n in (1, 2, 3):
         seed(store, n, f"entry {n}")
-    ctx = bound(root)  # one lifespan: the server never restarts between the two settings
 
     hold(root, **_VALUES | {"recall_limit": 1, "explore_slots": 0, "challenge_slots": 0, "stale_factor": 100})
     assert len(titles(await tools.recall_memory(ctx, agent="builder"))) == 1
@@ -222,22 +238,26 @@ def competing(folder: Path, kind: str) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("kind", "points", "winner"),
+    "case",
     [
-        pytest.param("boost", {"outstanding_boost": 0.1}, "regular b", id="small-boost"),
-        pytest.param("boost", {"outstanding_boost": 0.3}, "regular a", id="large-boost"),
-        pytest.param("penalty", {"unremarkable_penalty": 0.01}, "regular a", id="small-penalty"),
-        pytest.param("penalty", {"unremarkable_penalty": 0.05}, "regular b", id="large-penalty"),
+        pytest.param(("boost", {"outstanding_boost": 0.1}, "regular b"), id="small-boost"),
+        pytest.param(("boost", {"outstanding_boost": 0.3}, "regular a"), id="large-boost"),
+        pytest.param(("penalty", {"unremarkable_penalty": 0.01}, "regular a"), id="small-penalty"),
+        pytest.param(("penalty", {"unremarkable_penalty": 0.05}, "regular b"), id="large-penalty"),
     ],
 )
 async def test_recall_ranks_by_the_current_points_and_never_by_the_stored_score(
-    root: Path, store: Path, kind: str, points: dict[str, float], winner: str
+    root: Path,
+    store: Path,
+    case: tuple,
+    ctx: SimpleNamespace,
 ) -> None:
+    kind, points, winner = case
     loser = ({"regular a", "regular b"} - {winner}).pop()
     fixed(store)
     competing(store, kind)
     hold(root, **_VALUES | points)
-    ctx, before = bound(root), snapshot(store)
+    before = snapshot(store)
 
     one_regular_slot = titles(await tools.recall_memory(ctx, agent="builder", limit=5))
     assert (winner in one_regular_slot, loser in one_regular_slot) == (True, False)  # regular pool membership
@@ -248,10 +268,9 @@ async def test_recall_ranks_by_the_current_points_and_never_by_the_stored_score(
 
 
 @pytest.mark.asyncio
-async def test_the_slots_come_from_the_settings(root: Path, store: Path) -> None:
+async def test_the_slots_come_from_the_settings(root: Path, store: Path, ctx: SimpleNamespace) -> None:
     fixed(store)
     competing(store, "boost")
-    ctx = bound(root)
 
     hold(root, **_VALUES | {"explore_slots": 0, "challenge_slots": 0})
     plain = titles(await tools.recall_memory(ctx, agent="builder", limit=3))
@@ -268,10 +287,14 @@ async def test_the_slots_come_from_the_settings(root: Path, store: Path) -> None
 
 
 @pytest.mark.asyncio
-async def test_writers_need_no_points_and_leave_the_stored_score_alone(root: Path, store: Path) -> None:
+@pytest.mark.usefixtures("git_repository")
+async def test_writers_need_no_points_and_leave_the_stored_score_alone(
+    root: Path,
+    store: Path,
+    ctx: SimpleNamespace,
+) -> None:
     rated, curated = seed(store, 1, "rated", score=0.3), seed(store, 2, "curated", state="curated", score=0.3)
     hold(root, stale_factor=50)  # no points held: nothing that writes may need them
-    ctx = bound(root)
 
     await tools.assess_memories(
         ctx,
@@ -283,12 +306,5 @@ async def test_writers_need_no_points_and_leave_the_stored_score_alone(root: Pat
     engine = MemoryEngine(store)
     assert (engine.get_entry(rated.id).outstanding_count, engine.get_entry(rated.id).score) == (1, 0.3)
     assert (engine.get_entry(curated.id).confidence, engine.get_entry(curated.id).score) == (0.9, 0.3)
-
-
-@pytest.mark.asyncio
-async def test_a_projection_carries_no_stored_score(root: Path, store: Path) -> None:
-    entry = seed(store, 1, "listed", score=0.3)
-    ctx = bound(root)
-
-    assert "score" not in await tools.read_memory(ctx, entry_id=entry.id)
+    assert "score" not in await tools.read_memory(ctx, entry_id=rated.id)
     assert all("score" not in item for item in await tools.list_memories(ctx))

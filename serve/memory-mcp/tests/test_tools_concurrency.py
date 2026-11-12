@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import multiprocessing
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
-from owlbear_memory import ConcurrencyError, MemoryEngine, writer_lock
+from owlbear_memory import ConcurrencyError, MemoryEngine, MemoryState, writer_lock
 from owlbear_memory.models import MemoryEntry
 
 from owlbear_memory_mcp import tools
-from owlbear_memory_mcp.server import AppContext
 
 
 def _hold_writer_lock(
@@ -76,33 +77,15 @@ def _finish_lock_holder(process: multiprocessing.Process, release: Any) -> None:
     _finish_process(process)
 
 
-def _tool_context(engine: MemoryEngine, memory_dir: Path) -> SimpleNamespace:
-    return SimpleNamespace(
-        request_context=SimpleNamespace(
-            lifespan_context=AppContext(engine=engine, memory_dir=memory_dir),
-        ),
-    )
-
-
-def _create_entry(engine: MemoryEngine, *, title: str) -> MemoryEntry:
-    return engine.save(
-        title=title,
+@pytest.fixture
+def saved(memory_entry: Callable[..., MemoryEntry]) -> Callable[..., MemoryEntry]:
+    return partial(
+        memory_entry,
         content="Original content.",
         categories=["domain-knowledge"],
         confidence=0.9,
-        source_agent="test-agent",
-        scope_agents=[],
+        score=0.9,
     )
-
-
-def _create_approved_entry(engine: MemoryEngine, *, title: str) -> MemoryEntry:
-    entry = _create_entry(engine, title=title)
-    curated = engine.edit(
-        entry.id,
-        {"scope_agents": ["test-agent"]},
-        expected_updated_at=entry.updated_at,
-    )
-    return engine.approve(curated.id, expected_updated_at=curated.updated_at)
 
 
 def _directory_snapshot(memory_dir: Path) -> tuple[tuple[str, bytes], ...]:
@@ -114,14 +97,18 @@ def _busy_message(memory_dir: Path) -> str:
 
 
 @pytest.mark.asyncio
-async def test_mutation_tools_translate_busy_errors_from_another_process(tmp_path: Path) -> None:
+async def test_mutation_tools_translate_busy_errors_from_another_process(
+    tmp_path: Path,
+    saved: Callable[..., MemoryEntry],
+    memory_context: Callable[..., SimpleNamespace],
+) -> None:
     process_context = multiprocessing.get_context("spawn")
     timeout = 0.05
     engine = MemoryEngine(tmp_path, writer_lock_timeout=timeout)
-    ctx = _tool_context(engine, tmp_path)
-    curate_entry = _create_entry(engine, title="Curate entry")
-    delete_entry = _create_entry(engine, title="Delete entry")
-    approve_entry = _create_approved_entry(engine, title="Approve entry")
+    ctx = memory_context(tmp_path, engine=engine)
+    curate_entry = saved(tmp_path, title="Curate entry")
+    delete_entry = saved(tmp_path, title="Delete entry")
+    approve_entry = saved(tmp_path, title="Approve entry", state=MemoryState.APPROVED)
     before = _directory_snapshot(tmp_path)
     holder, release = _start_lock_holder(process_context, tmp_path)
     expected_message = _busy_message(tmp_path)
@@ -154,13 +141,17 @@ async def test_mutation_tools_translate_busy_errors_from_another_process(tmp_pat
 
 @pytest.mark.usefixtures("todays_memory_values")
 @pytest.mark.asyncio
-async def test_assess_memories_reports_busy_entry_and_continues(tmp_path: Path) -> None:
+async def test_assess_memories_reports_busy_entry_and_continues(
+    tmp_path: Path,
+    saved: Callable[..., MemoryEntry],
+    memory_context: Callable[..., SimpleNamespace],
+) -> None:
     process_context = multiprocessing.get_context("spawn")
     timeout = 0.25
     engine = MemoryEngine(tmp_path, writer_lock_timeout=timeout)
-    ctx = _tool_context(engine, tmp_path)
-    blocked_entry = _create_approved_entry(engine, title="Blocked assessment")
-    later_entry = _create_approved_entry(engine, title="Later assessment")
+    ctx = memory_context(tmp_path, engine=engine)
+    blocked_entry = saved(tmp_path, title="Blocked assessment", state=MemoryState.APPROVED)
+    later_entry = saved(tmp_path, title="Later assessment", state=MemoryState.APPROVED)
     holder, release = _start_lock_holder(
         process_context,
         tmp_path,
@@ -199,12 +190,14 @@ async def test_assess_memories_reports_busy_entry_and_continues(tmp_path: Path) 
 async def test_curate_memory_routes_cross_process_stale_edit_to_tool_error(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    saved: Callable[..., MemoryEntry],
+    memory_context: Callable[..., SimpleNamespace],
 ) -> None:
     process_context = multiprocessing.get_context("spawn")
     engine = MemoryEngine(tmp_path, writer_lock_timeout=0.2)
-    ctx = _tool_context(engine, tmp_path)
-    entry = _create_entry(engine, title="Concurrent curation")
-    _create_approved_entry(engine, title="Witness")  # vouches for test-agent, so only the stale revision refuses
+    ctx = memory_context(tmp_path, engine=engine)
+    entry = saved(tmp_path, title="Concurrent curation")
+    saved(tmp_path, title="Witness", state=MemoryState.APPROVED)  # vouches for test-agent, so only staleness refuses
     entry_read = process_context.Event()
     edit_complete = process_context.Event()
     editor = process_context.Process(
