@@ -385,6 +385,7 @@ async def test_live_challenge_replay_preserves_ordered_history(
             assert result["already_applied"] is False
             assert result["state"] == state
             challenges = result["challenges"]
+            assert len(challenges) == len(history) + 1
             assert challenges[:-1] == history
             history = challenges
             assert [challenge["task_id"] for challenge in history] == list(task_ids[: len(history)])
