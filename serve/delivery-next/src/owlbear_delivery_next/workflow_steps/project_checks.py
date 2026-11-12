@@ -135,7 +135,7 @@ def _answered(
     if latest is None:
         return None
     if latest.cause == cause and latest.answer.option == "detected":
-        return {home: _detected(prof, home) for home in missing}
+        return _proposed(prof, missing)
     first = next((q for q in change.questions if q.answer and latest.cause == f"{cause}{TYPED}{q.id}"), None)
     return _parsed(first.answer.text, prof)[0] if latest.answer.option == "save" and first else None
 
@@ -146,24 +146,31 @@ def _first(prof: Profile, missing: list[str], cause: str) -> loop.StepResult:
         "No, I'll type the commands: one `package: command` per line (`.: command` covers every package); "
         "you see them again before anything is saved"
     )
-    if not all(_detected(prof, h) for h in missing):
+    if not (proposed := _proposed(prof, missing)):
         named = ", ".join(f"`{h}`" for h in missing if not _detected(prof, h))
         text = f"No check command was detected for {named}: propose one for the project profile."
         result = engine.ask(StepKind.PLAN, text, cause)
         if result.question is not None:
             result.question.subject = "internal"  # its repair proposes a profile check, his yes or no
         return result
-    named = "; ".join(f"`{_detected(prof, h)}` for `{h}`" for h in missing)
+    named = "; ".join(f"`{c}` for {'every package' if h == ROOT else f'`{h}`'}" for h, c in proposed.items())
     text = (
-        f"Delivery will check this project's work with {named}. Every task of every Change runs them before its work "
-        "counts as done; tests they don't run are left to CI. Use them?"
+        f"Delivery will check this project's work with {named}. Every task of every Change must pass this check before "
+        "its work counts as done; tests it doesn't run are left to CI. Use it?"
     )
-    detected = "Yes, use them: a wrong or slow command fails or slows every task"
+    detected = "Yes, use it: a wrong or slow check fails or slows every task"
     options = [Option(id="detected", label=detected, next="retry"), Option(id="typed", label=typed, next="retry")]
     result = engine.ask(StepKind.PLAN, text, cause, options)
     if result.question is not None:
         result.question.subject = "reserved"
     return result
+
+
+def _proposed(prof: Profile, missing: list[str]) -> dict[str, str]:
+    """The detected commands to propose: each missing package's, else the root's alone, which covers every package."""
+    if all(_detected(prof, h) for h in missing):
+        return {h: _detected(prof, h) for h in missing}
+    return {ROOT: c} if ROOT in missing and (c := _detected(prof, ROOT)) else {}
 
 
 def _read_back(prof: Profile, missing: list[str], first: Question, cause: str) -> loop.StepResult:
