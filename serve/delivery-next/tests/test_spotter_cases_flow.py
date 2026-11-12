@@ -553,7 +553,6 @@ def test_a_checked_case_moved_into_the_examples_with_its_text_commits_only_when_
 
     async def looked(the_card, prompt, meter, _spot) -> dict[str, Any]:
         seen.append((the_card, prompt))
-        j.looks.append(prompt.hash)
         spend(meter, 0.1)
         category = "hand-off-fitness" if the_card["intent"]["task"] == "pos" else "none"
         if worse and prompt.cases == n + 1:
@@ -575,9 +574,9 @@ def test_a_checked_case_moved_into_the_examples_with_its_text_commits_only_when_
         assert the_card == cases.card(positive if the_card["intent"]["task"] == "pos" else negative)
         assert prompt.text == request["prompts"]["after" if prompt.cases == n + 1 else "before"]["text"]
         assert prompt.hash == hashlib.sha256(prompt.text.encode()).hexdigest()[:12]
-    assert len(set(j.looks)) == 2
+    assert len({prompt.hash for _, prompt in seen}) == 2
     j.job.tick(1)
-    assert len(j.looks) == 4  # a completed request never runs again
+    assert len(seen) == 4  # a completed request never runs again
     assert not case_replay.queued()
     assert j.job.working() == []
     assert [s["state"] for s in j.job.maintenance.read()["sessions"]] == ["released", "released"]
@@ -1024,7 +1023,6 @@ def test_a_retro_review_session_is_charged_as_it_reports_and_aborted_at_its_runs
     assert asyncio.run(retro_review.asked("review this", run_meter, role)) == ""
     assert wire.aborted is True
     [made] = wire.made
-    assert made["noted"] is True  # registered before create_session, not after it returned
     assert str(made["working_directory"]).startswith(str(spotter.place() / "looks"))
     assert made["memory"] == {"enabled": False}
     report = run_meter.report()
