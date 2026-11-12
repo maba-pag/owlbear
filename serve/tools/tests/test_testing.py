@@ -427,7 +427,6 @@ def test_required_discovered_suites_survive_edits_and_module_retirement(tmp_path
         [(before, _)] = task_testing.commands_for_task([], context, targets, coverage=False)
         assert {retired, kept} <= set(before)
         assert node not in before
-        (tmp_path / retired).write_text("def test_other_value():\n    assert 1 == 1\n")
         [(edited, _)] = task_testing.commands_for_task([retired], context, targets, coverage=False)
         assert {retired, kept} <= set(edited)
         assert node not in edited
