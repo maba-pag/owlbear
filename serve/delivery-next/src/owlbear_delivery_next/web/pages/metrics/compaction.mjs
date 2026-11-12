@@ -91,8 +91,11 @@ export function compactionChart(c, pick) {
   const rows = (c?.rows ?? []).filter((r) => r.compacted);
   if (!rows.length) return draw("compaction", null);
   const labels = rows.map((r) => `${named(r)} · ${place(r)}`);
-  const dots = rows.flatMap((r, i) => [...r.shares].sort((a, b) => a - b).map((s) => ({ value: [s * 100, i] })));
-  const medians = rows.flatMap((r, i) => (r.median == null ? [] : [{ value: [r.median * 100, i] }]));
+  // Each item carries its tooltip, so a refresh that changes only the counts still changes the option.
+  const dots = rows.flatMap((r, i) => [...r.shares].sort((a, b) => a - b)
+    .map((s) => ({ value: [s * 100, i], tip: tip(r, labels[i], s * 100) })));
+  const medians = rows.flatMap((r, i) => (r.median == null ? []
+    : [{ value: [r.median * 100, i], tip: tip(r, labels[i], null) }]));
   const of = (list, i) => list.flatMap((d, at) => (d.value[1] === i ? [at] : []));
   const rowOf = (p) => (p.seriesId === "row" ? p.dataIndex : p.value?.[1]);
   function build(t, mark) {
@@ -107,12 +110,13 @@ export function compactionChart(c, pick) {
       legend: { top: 0, left: 0, selectedMode: false, data: ["Session", "Median"], textStyle: { color: t.text } },
       tooltip: { trigger: "item", confine: true, backgroundColor: t.surface, borderColor: t.grid,
         textStyle: { color: t.text },
-        formatter: (p) => tip(rows[rowOf(p)], labels[rowOf(p)], p.seriesId === "dots" ? p.value[0] : null) },
+        formatter: (p) => p.data.tip },
       xAxis: value, yAxis: category,
       series: [
         // A transparent band per row: hovering or focusing it shows the row, a click picks its agent.
-        { id: "row", name: "Row", type: "bar", barWidth: "90%", z: 1, data: rows.map((_, i) => (i === mark
-          ? { value: 100, itemStyle: marked } : 100)), itemStyle: { color: "transparent" },
+        { id: "row", name: "Row", type: "bar", barWidth: "90%", z: 1, data: rows.map((r, i) => ({ value: 100,
+          tip: tip(r, labels[i], null), ...(i === mark ? { itemStyle: marked } : {}) })),
+          itemStyle: { color: "transparent" },
           emphasis: { itemStyle: { color: t.surface, borderColor: t.text, borderWidth: 2 } } },
         { id: "dots", name: "Session", type: "scatter", z: 3, symbolSize: 10, data: dots,
           itemStyle: { color: t.parts[1], borderColor: t.canvas, borderWidth: 1 },
