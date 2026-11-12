@@ -206,6 +206,13 @@ def completed(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
     return True
 
 
+def delegated(change: Change, task: Task | None, result: StepResult) -> StepResult:
+    """After approval Delivery decides the rejections its reviewer upheld and completes the review (#1062)."""
+    if result.exit == Exit.ASK and disputes.delegated(change, task):
+        return disputed(change) or result
+    return result
+
+
 def disputed(change: Change) -> StepResult | None:
     """A review whose disputed findings the owner decided: its held verdict plus the findings kept to fix (TD-176).
 
