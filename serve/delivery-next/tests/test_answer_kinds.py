@@ -30,7 +30,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import amending, answer_kinds, loop
+from owlbear_delivery_next.change_flow import amending, answer_kinds, loop, stuck
 from owlbear_delivery_next.commands import chat_client, cli, mcp_server, runner
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.processes import Termination
@@ -165,6 +165,9 @@ def test_an_admitted_continue_option_beside_retry_reaches_the_original_worker(pi
         ],
     )
     verdict = pick_tools.QuestionJudgment(
+        subject="product",
+        plain=True,
+        why="The owner chooses what this Change delivers.",
         options=[
             {
                 "index": i,
@@ -174,7 +177,7 @@ def test_an_admitted_continue_option_beside_retry_reaches_the_original_worker(pi
                 "recommends": False,
             }
             for i in range(2)
-        ]
+        ],
     )
     c = loop.apply(picking.change(), worker_questions.admitted(picking.change(), proposed, verdict, None), AT)
     picking.store.write(Lock(picking.slug), c)
@@ -455,7 +458,7 @@ def failed_check(run: Asking):
     return run.step()
 
 
-def test_a_clarification_still_unchecked_after_the_network_gate_is_checked_before_any_worker_runs(picking, monkeypatch):
+def test_a_clarification_still_unchecked_after_network_repair_is_checked_before_any_worker_runs(picking, monkeypatch):
     run = Asking(picking, monkeypatch)
     c = failed_check(run)
     assert all(x not in "\n".join(step_input.brief(c)) for x in (ASKED, WORDS, SAID))  # no role reads it unchecked
@@ -463,15 +466,18 @@ def test_a_clarification_still_unchecked_after_the_network_gate_is_checked_befor
     c.budgets.causes[cause] = c.budgets.causes[cause].model_copy(update={"since": c.outcome.at - timedelta(days=2)})
     picking.store.write(Lock(picking.slug), c)
     picking.picks.append("error")
-    gate = loop.open_question(run.step(c.outcome.wake_at))  # a day of failures asks the owner
-    assert (gate.cause, run.answer(gate.id, option="done").status_code) == (cause, 200)
+    c = run.step(c.outcome.wake_at)
+    assert (c.outcome.exit, loop.open_question(c), run.held) == (Exit.RETRY, None, [])
+    assert c.repairs.current.cause == cause
+    stuck.applied(c, "a" * 40)
+    picking.store.write(Lock(picking.slug), c)
     picking.picks.append(verdict())
 
     c = run.step()
 
     assert ([d.text for d in c.decisions], len(picking.pickers())) == ([SAID], 4)  # checked before the worker
     [(section, delivered)] = run.held
-    assert (delivered.id, any(SAID in line for line in section)) == (gate.id, True)
+    assert (delivered.id, any(SAID in line for line in section)) == (run.qid, True)
 
 
 def test_a_clarification_asked_at_one_step_is_checked_before_a_worker_of_another(picking, monkeypatch):

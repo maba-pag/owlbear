@@ -533,6 +533,9 @@ def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env, monke
             "admission",
             "result",
             pick_tools.QuestionJudgment(
+                subject="product",
+                plain=True,
+                why="The owner chooses what this Change delivers.",
                 options=[
                     {
                         "index": i,
@@ -542,7 +545,7 @@ def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env, monke
                         "recommends": False,
                     }
                     for i in range(2)
-                ]
+                ],
             ),
             termination=Termination(confirmed=True),
             usage={"credits": 2},
@@ -643,6 +646,9 @@ def test_a_returned_reviewer_question_does_not_rebuild_its_message_before_checkp
             "admission",
             "result",
             pick_tools.QuestionJudgment(
+                subject="product",
+                plain=True,
+                why="The owner chooses what this Change delivers.",
                 options=[
                     {
                         "index": i,
@@ -652,7 +658,7 @@ def test_a_returned_reviewer_question_does_not_rebuild_its_message_before_checkp
                         "recommends": False,
                     }
                     for i in range(2)
-                ]
+                ],
             ),
             termination=Termination(confirmed=True),
             usage={"credits": 2},

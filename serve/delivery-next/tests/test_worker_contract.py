@@ -84,6 +84,9 @@ def test_a_confirmed_admission_is_kept_before_its_temporary_directory_cleanup(tm
             "admission",
             "result",
             pick_tools.QuestionJudgment(
+                subject="product",
+                plain=True,
+                why="The owner chooses what this Change delivers.",
                 options=[
                     {
                         "index": i,
@@ -93,7 +96,7 @@ def test_a_confirmed_admission_is_kept_before_its_temporary_directory_cleanup(tm
                         "recommends": False,
                     }
                     for i in range(2)
-                ]
+                ],
             ),
             termination=Termination(confirmed=True),
             usage={"credits": 2},
@@ -151,6 +154,9 @@ def test_an_unconfirmed_admission_keeps_its_stop_and_accounting_before_cleanup(
             f"admission-{len(calls)}",
             "result",
             pick_tools.QuestionJudgment(
+                subject="product",
+                plain=True,
+                why="The owner chooses what this Change delivers.",
                 options=[
                     {
                         "index": i,
@@ -160,7 +166,7 @@ def test_an_unconfirmed_admission_keeps_its_stop_and_accounting_before_cleanup(
                         "recommends": False,
                     }
                     for i in range(2)
-                ]
+                ],
             ),
             termination=Termination(confirmed=False, unknown=(9,), problems=("disconnect failed: OSError: gone",)),
             usage={"credits": 2},
@@ -388,6 +394,9 @@ def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
             f"c1-admission-{len(starts)}",
             "result",
             pick_tools.QuestionJudgment(
+                subject="product",
+                plain=True,
+                why="The owner chooses what this Change delivers.",
                 options=[
                     {
                         "index": 0,
@@ -403,7 +412,7 @@ def test_c1s_impossible_options_return_to_the_author_and_reuse_a_kept_admission(
                         "check_related": False,
                         "recommends": False,
                     },
-                ]
+                ],
             ),
             termination=Termination(confirmed=True),
             usage={"credits": 2},
@@ -481,6 +490,9 @@ def test_stopped_admission_counts_its_usage_and_its_resumed_child_keeps_its_gene
             f"admission-{len(calls)}",
             "result",
             pick_tools.QuestionJudgment(
+                subject="product",
+                plain=True,
+                why="The owner chooses what this Change delivers.",
                 options=[
                     {
                         "index": 0,
@@ -496,7 +508,7 @@ def test_stopped_admission_counts_its_usage_and_its_resumed_child_keeps_its_gene
                         "check_related": False,
                         "recommends": False,
                     },
-                ]
+                ],
             ),
             termination=Termination(confirmed=len(calls) > 1),
             usage={"credits": 2},
@@ -558,6 +570,9 @@ def test_a_retried_unread_admission_returns_the_answer_to_the_proposal_author(tm
             f"admission-{len(calls)}",
             "result",
             pick_tools.QuestionJudgment(
+                subject="product",
+                plain=True,
+                why="The owner chooses what this Change delivers.",
                 options=[
                     {
                         "index": i,
@@ -567,7 +582,7 @@ def test_a_retried_unread_admission_returns_the_answer_to_the_proposal_author(tm
                         "recommends": False,
                     }
                     for i in range(2)
-                ]
+                ],
             ),
             termination=Termination(confirmed=True),
             usage={"error": "RuntimeError"} if len(calls) == 1 else {"credits": 2},
@@ -620,6 +635,9 @@ def test_admission_refuses_a_head_changed_while_its_paid_verdict_returns(tmp_pat
             "admission",
             "result",
             pick_tools.QuestionJudgment(
+                subject="product",
+                plain=True,
+                why="The owner chooses what this Change delivers.",
                 options=[
                     {
                         "index": i,
@@ -629,7 +647,7 @@ def test_admission_refuses_a_head_changed_while_its_paid_verdict_returns(tmp_pat
                         "recommends": False,
                     }
                     for i in range(2)
-                ]
+                ],
             ),
             termination=Termination(confirmed=True),
             usage={"credits": 2},
@@ -681,6 +699,9 @@ def test_kept_recommendation_cannot_publish_after_uncommitted_inputs_change(tmp_
             "admission",
             "result",
             pick_tools.QuestionJudgment(
+                subject="product",
+                plain=True,
+                why="The owner chooses what this Change delivers.",
                 options=[
                     {
                         "index": i,
@@ -690,7 +711,7 @@ def test_kept_recommendation_cannot_publish_after_uncommitted_inputs_change(tmp_
                         "recommends": i == 0,
                     }
                     for i in range(2)
-                ]
+                ],
             ),
             termination=Termination(confirmed=True),
             usage={"credits": 2},
@@ -763,6 +784,9 @@ def test_kept_trial_of_staged_content_is_refused_after_an_index_only_change(tmp_
             "admission",
             "result",
             pick_tools.QuestionJudgment(
+                subject="product",
+                plain=True,
+                why="The owner chooses what this Change delivers.",
                 options=[
                     {
                         "index": i,
@@ -772,7 +796,7 @@ def test_kept_trial_of_staged_content_is_refused_after_an_index_only_change(tmp_
                         "recommends": i == 0,
                     }
                     for i in range(2)
-                ]
+                ],
             ),
             termination=Termination(confirmed=True),
             usage={"credits": 2},
