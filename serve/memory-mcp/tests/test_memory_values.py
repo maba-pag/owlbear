@@ -34,7 +34,7 @@ def root(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def git_repository(root: Path) -> None:
-    subprocess.run(["git", "init", "-q"], cwd=root, check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True, capture_output=True)  # noqa: S607
 
 
 @pytest.fixture
