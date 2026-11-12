@@ -22,8 +22,8 @@ export const keysHint = html`<p class="chart-keys">Arrow keys move between bars 
 export function stacked({ labels, parts, totals, colours, format, horizontal, relative, average, tick }) {
   const tip = (colour) => (ps) => {
     const r = ps[0].dataIndex;
-    const lines = parts.map((p, j) => (p.values[r] ? `<span style="color:${colour[j]}">■</span> ${esc(p.name)}: ${
-      format(p.values[r])}<br>` : "")).join("");
+    const lines = parts.map((p, j) => `<span style="color:${colour[j]}">■</span> ${esc(p.name)}: ${
+      format(p.values[r])}<br>`).join("");
     return `<strong>${esc(labels[r])}</strong><br>${lines}Total: ${format(totals[r])}`;
   };
   function build(t, mark) {
@@ -68,7 +68,7 @@ export function stacked({ labels, parts, totals, colours, format, horizontal, re
     };  // fmt: skip
   }
   return {
-    rows: labels.length, horizontal, build, legend: true,
+    rows: labels.length, horizontal, build, legend: true, facts: [totals, parts.map((p) => p.values)],
     height: horizontal ? 96 + labels.length * 32 : 340,
     items: (row, inst) => {
       const option = inst.getOption();

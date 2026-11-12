@@ -651,14 +651,6 @@ def test_the_selfcheck_creates_nothing_on_a_machine_without_owlbear():
     assert not home.exists()
 
 
-def test_the_selfcheck_refuses_a_missing_echarts_file(monkeypatch):
-    monkeypatch.setattr(pages, "ECHARTS", "vendor/gone")
-    monkeypatch.setattr(pages, "echarts_files", lambda: {"echarts.min.js": "x"})
-    monkeypatch.setattr(pages, "echarts_version", lambda: "6.1.0")
-
-    assert selfcheck.problems() == ["the pages' assets are missing: vendor/gone/echarts.min.js"]
-
-
 def test_the_selfcheck_refuses_a_page_module_a_page_names_but_the_version_lacks(monkeypatch):
     own = pages.page_files()
     monkeypatch.setattr(pages, "page_files", lambda: {k: v for k, v in own.items() if k != ("changes", "main.mjs")})

@@ -57,5 +57,5 @@ export function creditsChart(rows, by, drill) {
     colours: (t) => t.parts, format: credits, horizontal: !day, relative: pick.relative, average: day,
     tick: day ? date : undefined,
   });  // fmt: skip
-  draw("split", { ...spec, key: query(), label: "Credits chart", act: (i) => drill(shown[i])?.() });
+  draw("split", { ...spec, ids: shown.map((r) => r.key), key: query(), label: "Credits chart", act: (i) => drill(shown[i])?.() });
 }

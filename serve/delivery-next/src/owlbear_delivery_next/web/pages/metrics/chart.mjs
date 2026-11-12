@@ -1,15 +1,18 @@
 // One ECharts instance per `#<name>-chart`, kept across renders: a new spec updates it with setOption, so ECharts
 // animates the change. The chart is one Tab stop; arrow keys move between its rows and their parts, each focus showing
-// its tooltip and emphasis, and Enter acts like a click. A clicked row stays marked until the spec's key changes.
+// its tooltip and emphasis, and Enter acts like a click. A clicked row stays marked, by its id, until the spec's key
+// changes.
 import { dark, theme } from "./palette.mjs";
 
-const charts = new Map();  // name: { el, inst, spec, mark, at, said, observer }
+const charts = new Map();  // name: { el, inst, spec, mark (a row id), at, said, observer }
 const still = matchMedia("(prefers-reduced-motion: reduce)");
 
 /**
  * Draws the chart `#<name>-chart` from *spec*, or removes it when the element or the spec is gone. A spec has:
  * `key` (the filters it shows: a new key clears the mark), `label` (the chart's name), `rows` (how many), `horizontal`
- * (rows on the vertical axis), `height` (CSS pixels), `build(theme, mark)` (the option), `items(row, inst)` (the row's
+ * (rows on the vertical axis), `ids` (a stable id per row, which keeps a mark on its row when rows reorder), `facts`
+ * (the data the option's formatters read, optional), `height` (CSS pixels), `build(theme, mark)` (the option, *mark*
+ * the marked row's index or null), `items(row, inst)` (the row's
  * reachable `{ seriesIndex, dataIndex }` in order), `row(params)` (the row a clicked item belongs to, or null) and
  * `act(row)` (what a click or Enter does, after marking it).
  */
@@ -61,10 +64,12 @@ function create(name, el) {
   return c;
 }
 
-// Sets the spec's option, unless it and the scheme are what the chart shows already.
+// Sets the spec's option, unless it, its facts and the scheme are what the chart shows already: JSON leaves out the
+// formatters, so the facts they read stand in for them.
 function paint(c) {
-  const option = { animation: !still.matches, backgroundColor: "transparent", ...c.spec.build(theme(), c.mark) };
-  const said = JSON.stringify([dark.matches, c.spec.height, option]);
+  const at = c.spec.ids.indexOf(c.mark), mark = at < 0 ? null : at;
+  const option = { animation: !still.matches, backgroundColor: "transparent", ...c.spec.build(theme(), mark) };
+  const said = JSON.stringify([dark.matches, c.spec.height, c.spec.facts ?? null, option]);
   if (said === c.said) return;
   c.said = said;
   c.el.setAttribute("aria-label", c.spec.label);
@@ -80,7 +85,7 @@ function paint(c) {
 }
 
 function act(c, row) {
-  c.mark = row;
+  c.mark = c.spec.ids[row];
   c.at[0] = row;
   paint(c);
   c.spec.act?.(row);

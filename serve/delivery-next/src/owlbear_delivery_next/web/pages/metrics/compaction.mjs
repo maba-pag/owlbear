@@ -127,7 +127,7 @@ export function compactionChart(c, pick) {
     };  // fmt: skip
   }
   draw("compaction", {
-    key: query(), label: "Compaction timing chart", rows: rows.length, horizontal: true, build,
+    key: query(), label: "Compaction timing chart", ids: labels, rows: rows.length, horizontal: true, build,
     height: 88 + rows.length * 36,
     items: (i, inst) => {
       const ids = (inst.getOption()?.series ?? []).map((s) => s?.id);
