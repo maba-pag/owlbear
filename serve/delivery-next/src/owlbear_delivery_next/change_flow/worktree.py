@@ -130,11 +130,14 @@ def task_checks(profile: Profile, task: Task, path: Path, target: str) -> list[s
 def build_checks(profile: Profile, change: Change, task: Task, path: Path) -> list[str]:
     """Confirmed build checks; curator measurements require their selected suites even before edits."""
     if change.tests is not None and change.step.task == curation_flow.CURATE:
-        pairs = checks(profile)
+        pairs = [pair for pair in checks(profile) if pair[0] in {".", *change.tests.packages}]
+        confirmed = {p for p, _ in pairs}
+        missing = set(change.tests.packages) - confirmed if "." not in confirmed else set()
+        if missing:
+            msg = f"Selected curator suites lack confirmed checks: {', '.join(sorted(missing))}"
+            raise ValueError(msg)
         found = []
         for package, command in pairs:
-            if package != "." and package not in change.tests.packages:
-                continue
             adapted = check_hint.qualified(package, command)
             root = check_hint.changed_runner(adapted)
             if root and owns_changed_runner(path, root[0].split()[2]):
@@ -155,7 +158,7 @@ def build_checks(profile: Profile, change: Change, task: Task, path: Path) -> li
                     targets.add(target)
                 # Every changed runner sees the entire curation diff, including other checks' suites.
                 needed = set(packages) | unsupported if unsupported else set(packages) - covered
-                missing = needed - {p for p, _ in pairs if p != "."}
+                missing = needed - (confirmed - {"."})
                 if missing:
                     msg = (
                         f"The confirmed Python runner cannot measure selected suites: {', '.join(sorted(missing))}; "

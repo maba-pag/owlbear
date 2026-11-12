@@ -131,6 +131,7 @@ def reviewed(cfg) -> Run:
 def review(repo, monkeypatch):
     """A started review of both packages, its sessions faked; ``ran`` holds each wave's shares."""
     store = Store.open(repo)
+    store.write_profile(profile.confirm(Profile(), "check:.", "uv run pytest", NOW))
     c = curation.start(store, repo, [".", "web"], NOW)
     ends, ran = {}, []
 
@@ -363,6 +364,9 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
     stuck.start(repair, "project-env:build:measurement", "the suite measurement cannot finish", NOW)
     witness = step_repair._witness  # noqa: SLF001
     assert witness(repair, prof, cfg.worktree) == cfg.checks
+    partial = profile.confirm(Profile(), "check:web", "npm test", NOW)
+    with pytest.raises(ValueError, match="lack confirmed checks"):
+        witness(repair, partial, cfg.worktree)
     follow = repair.model_copy(deep=True)
     follow.plan.tasks.append(Task(id="r1", title="Fix the review", scope=["."]))
     follow.step.task = follow.repairs.current.task = "r1"
