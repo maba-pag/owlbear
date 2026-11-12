@@ -148,9 +148,7 @@ def build_checks(profile: Profile, change: Change, task: Task, path: Path) -> li
                     owner = next((p for p in packages if p != "." and name.startswith(f"{p}/")), ".")
                     prefix = module.name.startswith("test_")
                     outside_helper = not prefix and not (
-                        name == "conftest.py"
-                        or name.startswith("tests/")
-                        or (name.startswith("serve/") and "/tests/" in name)
+                        name.startswith("tests/") or (name.startswith("serve/") and "/tests/" in name)
                     )
                     if module.suffix != ".py" or (module.name.endswith("_test.py") and not prefix) or outside_helper:
                         unsupported.add(owner)

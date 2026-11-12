@@ -135,8 +135,8 @@ Curator measurements use `-m` (`--measurement`) with that same task context and 
 The curator requires a confirmed root check or an own confirmed check for every selected suite before it starts.
 The maintained runner's directory targets expand `test_*.py` modules. Selected suffix-named Python tests
 or other languages require their package's own confirmed check, rather than being silently omitted.
-Helpers beside discovered modules outside the conventional root and `serve/*/tests/` layouts also need
-an own package check or a confirmed generic root check; the curator refuses an incompatible changed runner
+Helpers beside discovered modules outside `tests/` and `serve/*/tests/`, including root `conftest.py`, also need
+an own package check or a confirmed generic root check. The curator refuses an incompatible changed runner
 before edits rather than treating helpers as executable test modules.
 For a mixed selection the curator uses only package checks, with every selected suite covered. It refuses
 the selection before edits if any suite still needs the Python changed-path runner, since that runner sees
