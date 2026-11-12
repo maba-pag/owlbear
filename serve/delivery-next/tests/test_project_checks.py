@@ -138,7 +138,7 @@ def test_no_profile_is_detected_saved_and_asked_about(store, change_repo, monkey
     made(store, change_repo, ["src"])
     text, options = asked(step(store, change_repo))
     assert (options, fake.told) == (["detected", "typed"], [])
-    assert "`npm test` for every package" in text
+    assert "`npm test`, which covers every package" in text
     assert store.read_profile().entries[profile.REPO].value == "acme/shop-site"
 
 
@@ -153,8 +153,13 @@ def redetected(repo) -> Profile:
 @pytest.mark.parametrize(
     ("built", "scope", "named", "options"),
     [
-        (lambda _r: Profile(entries={"check:.": entry()}), ["src"], "`npm test` for every package", ["detected"]),
-        (redetected, ["src"], "`pnpm test` for every package", ["detected"]),
+        (
+            lambda _r: Profile(entries={"check:.": entry()}),
+            ["src"],
+            "`npm test`, which covers every package",
+            ["detected"],
+        ),
+        (redetected, ["src"], "`pnpm test`, which covers every package", ["detected"]),
         (
             lambda _r: confirmed(Profile(entries={f"check:{APP}": entry(), f"check:{LIB}": entry()}), APP),
             [f"{LIB}/x.ts"],
@@ -217,7 +222,7 @@ def test_one_question_settles_every_package_so_later_changes_plan_without_asking
     fake = sessions(monkeypatch)
     made(store, change_repo, [f"{APP}/x.ts"])
     text, _ = asked(step(store, change_repo))
-    named = "`npm test` for every package" if root else f"`npm test` for `{APP}`; `npm test` for `{LIB}`"
+    named = "`npm test`, which covers every package" if root else f"`npm test`, for `{APP}`; `npm test`, for `{LIB}`"
     assert named in text
     answer(store, "detected")
     step(store, change_repo)

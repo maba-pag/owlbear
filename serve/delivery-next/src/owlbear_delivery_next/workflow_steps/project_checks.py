@@ -153,10 +153,11 @@ def _first(prof: Profile, missing: list[str], cause: str) -> loop.StepResult:
         if result.question is not None:
             result.question.subject = "internal"  # its repair proposes a profile check, his yes or no
         return result
-    named = "; ".join(f"`{c}` for {'every package' if h == ROOT else f'`{h}`'}" for h, c in proposed.items())
+    said = {ROOT: "which covers every package"}
+    named = "; ".join(f"`{c}`, {said.get(h, f'for `{h}`')}" for h, c in proposed.items())
     text = (
-        f"Before a task's work counts as done, Delivery runs this project's own tests on it. It found {named} "
-        "for that. Every task of every Change then waits for these tests to pass; what they leave out is tested only "
+        f"Before a task's work counts as done, Delivery runs this project's own tests on it. It found {named}. "
+        "Every task of every Change then waits for these tests to pass; what they leave out is tested only "
         "in CI before merge. Use it?"
     )
     detected = "Yes, use it: if it is wrong or slow, every task fails or slows with it"
