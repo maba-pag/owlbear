@@ -3,8 +3,8 @@ import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { call } from "/assets/ui.mjs";
 import { PERIODS, SPLITS, filter, state, show, kept, query, preselect } from "./state.mjs";
 import { credits, count, head, runs } from "./runs.mjs";
-import { toolUse } from "./tools.mjs";
-import { compaction } from "./compaction.mjs";
+import { toolUse, toolsChart } from "./tools.mjs";
+import { compaction, compactionChart } from "./compaction.mjs";
 import { folded } from "./fold.mjs";
 import { creditsChart, creditsControls } from "./credits.mjs";
 
@@ -215,6 +215,8 @@ function coverage() {
 /** Draws the charts of what the page shows, once it is rendered. */
 export function drawn() {
   creditsChart(state.data?.rows ?? [], filter.by, drill);
+  compactionChart(state.data?.compaction, (agent) => changed(() => { filter.agent = agent; })());
+  toolsChart(state.data?.tool_use);
 }
 
 export function view() {

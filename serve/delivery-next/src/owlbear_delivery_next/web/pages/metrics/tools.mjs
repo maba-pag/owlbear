@@ -1,5 +1,9 @@
-import { html } from "/assets/lit-html/3.3.3/lit-html.js";
+import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
+import { draw } from "./chart.mjs";
 import { folded } from "./fold.mjs";
+import { count } from "./runs.mjs";
+import { keysHint, lengthSwitch, stacked } from "./stacked.mjs";
+import { query, show } from "./state.mjs";
 
 const COLUMNS = [["calls", "Calls"], ["success", "Success %"], ["invalid", "Invalid arguments"],
   ["checks", "Failed checks"], ["order", "Wrong moment"], ["unsplit", "Refused, not split"], ["lint", "Lint"],
@@ -9,11 +13,18 @@ const WRONG = [["order", "call at the wrong moment", "calls at the wrong moment"
     "turns ended without a result"], ["missing_pointless", "pointless missing-tool report",
     "pointless missing-tool reports"]];
 
+// The seven disjoint outcomes of a tool's calls, as the chart stacks them; they add up to its calls.
+const OUTCOMES = [["accepted", "accepted"], ["invalid", "invalid arguments"], ["checks", "failed checks"],
+  ["order", "wrong moment"], ["unsplit", "refused not split"], ["lint", "held by lint"], ["late", "late"]];
+const REFUSED = [0, 1, 3, 4, 5, 6];  // the Okabe-Ito parts of the six refusal kinds: bluish green is left to accepted
+const pick = { relative: false, marked: null };  // marked: the tool a click marked, under the filters it was made at
+
 const cell = (row, key) => key === "success" ? (row.success == null ? "–" : `${row.success}%`)
   : row[key].toLocaleString();
 
 function row(name, r, columns) {
-  return html`<p-table-row><p-table-cell>${name}</p-table-cell>${columns.map(([k]) =>
+  const marked = pick.marked?.key === query() && pick.marked.tool === name && name === r.tool;
+  return html`<p-table-row data-tool=${r.tool ?? nothing} class=${marked ? "marked" : nothing}><p-table-cell>${name}</p-table-cell>${columns.map(([k]) =>
     html`<p-table-cell class="num">${cell(r, k)}</p-table-cell>`)}</p-table-row>`;
 }
 
@@ -24,6 +35,10 @@ export function toolUse(t) {
   const wrong = WRONG.map(([k, one, many]) => [t.wrong[k] ?? 0, t.wrong[k] === 1 ? one : many]);
   return html`<section id="tool-use" aria-labelledby="tool-use-title">
     <p-heading size="lg"><h2 id="tool-use-title">Tool use</h2></p-heading>
+    ${t.runs && t.tools.length ? html`<div id="tools-controls" class="row">${lengthSwitch(pick.relative, (on) => {
+      pick.relative = on;
+      show();
+    })}</div>${keysHint}` : nothing}
     ${t.runs ? folded("tools", "Table: calls per tool", html`<p-table id="tools" caption="Calls of Delivery's tools">
       <p-table-head><p-table-head-row>
       <p-table-head-cell>Tool</p-table-head-cell>${columns.map(([, h]) =>
@@ -40,4 +55,24 @@ export function toolUse(t) {
       records, carry no tool use. Success counts every call that was accepted; a guard's denial of a bypass attempt is
       not a wrong choice; tool use belongs to a run's main agent, so a subagent shows none.</p-text>
   </section>`;
+}
+
+/** Draws the tool-use chart: a bar per tool, stacked by outcome; a click opens the table and marks the tool's row. */
+export function toolsChart(t) {
+  const tools = t?.runs ? t.tools : [];
+  if (!tools.length) return draw("tools", null);
+  const kept = OUTCOMES.map((o, j) => [...o, j]).filter(([k]) => tools.some((r) => r[k]));
+  const spec = stacked({
+    labels: tools.map((r) => r.tool), totals: tools.map((r) => r.calls), format: count, horizontal: true,
+    parts: kept.map(([k, name]) => ({ id: `tool:${k}`, name, values: tools.map((r) => r[k]) })),
+    colours: (th) => kept.map(([, , j]) => (j ? th.parts[REFUSED[j - 1]] : th.success)), relative: pick.relative,
+  });  // fmt: skip
+  draw("tools", { ...spec, key: query(), label: "Tool use chart", act: (i) => open(tools[i].tool) });
+}
+
+function open(tool) {
+  pick.marked = { key: query(), tool };
+  show();
+  document.getElementById("tools-fold").open = true;
+  document.querySelector(`#tools p-table-row[data-tool="${CSS.escape(tool)}"]`)?.scrollIntoView({ block: "center" });
 }

@@ -33,6 +33,7 @@ function drop(name) {
   c.listening.abort();
   c.inst.dispose();
   c.el.removeAttribute("tabindex");
+  c.el.style.height = "";  // a container the page keeps takes no room without its chart
   charts.delete(name);
   return null;
 }
