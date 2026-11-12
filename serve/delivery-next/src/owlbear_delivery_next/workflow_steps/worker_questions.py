@@ -196,16 +196,27 @@ def checked(store: Store, lock: Lock, c: Change, path: Path) -> tuple[loop.StepR
         store.write(lock, c)
     route, done = pending_child.child(store, lock, c, (LABEL, parent.session_id), start)
     if route.exit == Exit.DONE:
-        verdict, errors = judged(done, proposed, p.proof)
-        stale = _stale(p, path)
-        if verdict is not None and verdict.subject == "internal" and not stale:  # its field errors don't matter
-            result = routed(c, proposed, verdict)
-        else:
-            errors += stale
-            result = refused(c, errors) if errors or verdict is None else admitted(c, proposed, verdict, p.proof)
+        result = settled(c, proposed, judged(done, proposed, p.proof), _stale(p, path), p.proof)
     else:
         result = route
     return result, _booked(c, done, result)
+
+
+def settled(
+    c: Change,
+    proposed: tools.AskQuestion,
+    judgment: tuple[pick_tools.QuestionJudgment | None, list[str]],
+    stale: list[str],
+    proof: OptionProof | None,
+) -> loop.StepResult:
+    """The verdict's route: repair for Delivery's own problem, the field errors back to the worker, or the question."""
+    verdict, errors = judgment
+    if verdict is not None and verdict.follows and _followed(c, verdict) is None:  # #1064: never a silent bypass
+        verdict, errors = None, [f"options: admission named {verdict.follows}, which is no answered question"]
+    if verdict is not None and verdict.subject == "internal" and not stale:  # its field errors don't matter
+        return routed(c, proposed, verdict)
+    errors = [*errors, *stale]
+    return refused(c, errors) if errors or verdict is None else admitted(c, proposed, verdict, proof)
 
 
 def _stale(p: PendingQuestion, path: Path) -> list[str]:
@@ -283,7 +294,14 @@ def routed(c: Change, proposed: tools.AskQuestion, verdict: pick_tools.QuestionJ
     said = f"{proposed.question} (why: {proposed.why}) Admission: {verdict.why}"
     subject = f"question-{signature(ErrorKind.PROJECT_ENV, str(c.step.kind), proposed.question)[:8]}"
     cause = cause_key(ErrorKind.PROJECT_ENV, c.step.kind, subject)
-    return loop.StepResult(exit=Exit.RETRY, cause=cause, reason=said, setup=True)
+    prev = _followed(c, verdict)
+    root = asking.root(prev) if prev is not None else ""
+    return loop.StepResult(exit=Exit.RETRY, cause=cause, reason=said, setup=True, root=root)
+
+
+def _followed(c: Change, verdict: pick_tools.QuestionJudgment) -> Question | None:
+    """The answered question a re-ask follows, if the verdict names one."""
+    return next((q for q in c.questions if q.id == verdict.follows and q.answer is not None), None)
 
 
 def message(c: Change, proposed: tools.AskQuestion) -> str:
@@ -406,7 +424,7 @@ def admitted(
             )
         )
     text, details = proposed.question, [f"Why it is yours: {proposed.why}"]
-    prev = next((q for q in c.questions if q.id == verdict.follows and q.answer is not None), None)
+    prev = _followed(c, verdict)
     if prev is not None:  # its second question says which answer did not resolve it, and why (#1064)
         text = f"{asking.failed(prev)} {verdict.why}\n\n{text}"
     recommendation = None
