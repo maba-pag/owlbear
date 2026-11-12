@@ -125,7 +125,7 @@ def explicit_targets(root: Path, targets: Sequence[str], recorded: Sequence[str]
         )
         if (
             not modules
-            or ("::" in target and not path.is_file())
+            or ("::" in target and not path.is_file() and name.as_posix() not in recorded)
             or any(
                 not module.name.startswith("test_")
                 or module.suffix != ".py"
@@ -135,6 +135,8 @@ def explicit_targets(root: Path, targets: Sequence[str], recorded: Sequence[str]
         ):
             raise ScopeError(msg)
         selected.update([target] if path.is_file() else (str(module.relative_to(root)) for module in modules))
+    if recorded:
+        selected = {target for target in selected if "::" not in target or target.split("::", 1)[0] not in selected}
     return selected
 
 

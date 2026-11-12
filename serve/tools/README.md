@@ -134,6 +134,8 @@ still require task context rather than silently replacing branch scope.
 Curator measurements use `-m` (`--measurement`) with that same task context and pinned suite targets.
 Membership comes from both the original task commit and current tree: every surviving module still runs,
 while retired members remain inputs to consumer analysis rather than nonexistent pytest arguments.
+When a measured module is required in full, its redundant literal node selectors are subsumed by that module,
+so retiring a named test does not leave a nonexistent pytest node in the after-measurement.
 Ordinary task targets still must exist. Locally validated explicit targets may use discovered layouts outside
 the conventional test directories; this does not widen which test identities CI artifacts may supply.
 Kept tasks also compare their original `OLD..NEW` source versions, even when their bytes were

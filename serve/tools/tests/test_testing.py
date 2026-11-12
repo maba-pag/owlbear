@@ -416,7 +416,8 @@ def test_required_discovered_suites_survive_edits_and_module_retirement(tmp_path
         module.parent.mkdir(parents=True, exist_ok=True)
         module.write_text("def test_value():\n    assert True\n")
     context = task_scope.Context("base", "base", measurement=True)
-    targets = ["serve/demo/test", "tests"]
+    node = f"{retired}::test_value"
+    targets = [node, "serve/demo/test", "tests"]
     with (
         patch.object(task_testing, "_REPOSITORY_ROOT", tmp_path),
         patch.object(task_testing, "_workspace_packages", return_value=()),
@@ -427,9 +428,11 @@ def test_required_discovered_suites_survive_edits_and_module_retirement(tmp_path
     ):
         [(before, _)] = task_testing.commands_for_task([], context, targets, coverage=False)
         assert {retired, kept} <= set(before)
-        (tmp_path / retired).write_text("def test_value():\n    assert 1 == 1\n")
+        assert node not in before
+        (tmp_path / retired).write_text("def test_other_value():\n    assert 1 == 1\n")
         [(edited, _)] = task_testing.commands_for_task([retired], context, targets, coverage=False)
         assert {retired, kept} <= set(edited)
+        assert node not in edited
         (tmp_path / retired).unlink()
         [(after, _)] = task_testing.commands_for_task([retired], context, targets, coverage=False)
         assert kept in after
