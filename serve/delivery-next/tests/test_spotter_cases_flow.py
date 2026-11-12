@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import json
 import subprocess
 import threading
@@ -292,12 +293,12 @@ def _git(cwd: Path, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout  # noqa: S603, S607 - git on a test repository
 
 
-def reviewed(call: str = "hand-off-fitness", source: str = "pilot", stage: str = "test") -> str:
-    cid = cases.freeze({"intent": {"task": "raw: token ghp_" + "a" * 36}}, {"source": source, "family": "f"})
+def reviewed(call: str = "hand-off-fitness", source: str = "pilot", stage: str = "test", *, text: str = "") -> str:
+    cid = cases.freeze({"intent": {"task": text or "raw: token ghp_" + "a" * 36}}, {"source": source, "family": "f"})
     entry = {"stage": "candidate", "call": call, "why": "why", "example": "", "review": None}
-    cases.commit(cases.current()["n"], {cid: entry}, "t", "add")
     if stage == "test":
-        cases.commit(cases.current()["n"], {cid: cases.edited(cid, entry, stage="test", reviewed_by="sol")}, "t", "r")
+        entry = cases.edited(cid, entry, stage="test", reviewed_by="sol")
+    cases.commit(cases.current()["n"], {cid: entry}, "t", "add")
     return cid
 
 
@@ -320,6 +321,13 @@ def test_a_reviewed_case_is_published_with_only_its_local_id(shared_repo) -> Non
     assert "ghp_" not in path.read_text()
     assert f"{cid}.json" in _git(remote, "--git-dir=.", "ls-tree", "-r", "--name-only", "main")
     assert asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))["published"] == []  # nothing due
+    cases.commit(cases.current()["n"], {cid: None}, "t", "removed")
+    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
+    assert out["removed"] == [cid]
+    assert not path.exists()
+    assert _git(root, "ls-files", "--", str(path)) == ""
+    assert f"{cid}.json" not in _git(remote, "--git-dir=.", "ls-tree", "-r", "--name-only", "main")
+    assert len(seen) == 1
 
 
 @pytest.mark.parametrize(
@@ -362,7 +370,7 @@ def test_a_review_that_fails_validation_stays_here_owner_only(tmp_path, monkeypa
     assert kept.stat().st_mode & 0o777 == 0o600
 
 
-def test_a_case_removed_during_its_review_is_not_published_and_a_published_one_is_withdrawn(shared_repo) -> None:
+def test_a_case_removed_during_its_first_review_is_not_published(shared_repo) -> None:
     root, _ = shared_repo
     cid = reviewed()
 
@@ -372,13 +380,6 @@ def test_a_case_removed_during_its_review_is_not_published_and_a_published_one_i
     ask, _ = asker([GOOD], during=remove)
     asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
     assert not (root / "owlbear" / "improvement" / "spotter-cases" / f"{cid}.json").exists()
-    other = reviewed()
-    ask, _ = asker([GOOD])
-    asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
-    cases.commit(cases.current()["n"], {other: None}, "t", "removed")
-    out = asyncio.run(case_review.sync(DataRepo(root), ask, Meter(5, "retro-run")))
-    assert out["removed"] == [other]
-    assert not (root / "owlbear" / "improvement" / "spotter-cases" / f"{other}.json").exists()
 
 
 def test_an_unpushed_publication_is_pending_and_pushed_later_without_another_review(shared_repo) -> None:
@@ -507,67 +508,106 @@ class Job:
 
 
 def queue_regression() -> str:
-    for i in range(2):
-        cid = reviewed(call="none")
-        assert i is not None
-        assert cid
+    for _ in range(2):
+        reviewed(call="none")
     chosen = reviewed()
     cur = cases.current()
     edits = {chosen: cases.edited(chosen, cur["cases"][chosen], stage="example", example="a moment")}
     return case_replay.ask(case_replay.regression(edits, "owner", "promote"))
 
 
+def recorded_prompt(prompt: cases.Prompt) -> dict[str, Any]:
+    """Run the activated prompt through a real look/record boundary, replacing only the judge transport."""
+
+    async def judge(_card, ctx, meter) -> str:
+        assert ctx.prompt == prompt
+        spend(meter, 0.1)
+        return '{"category": "none"}'
+
+    async def looked_live() -> None:
+        ctx = spotter.Context(project="p", change="c", step="build", looks=("hand-off",), sample_rate=0,
+                              verbose=False, model="m", effort="", limit=0.75, prompt=prompt)  # fmt: skip
+        spot = spotter.Spotter(ctx, lambda: "s", judge)
+        spot.handed_off("call", {})
+        await spot.drain()
+
+    asyncio.run(looked_live())
+    assert spotter.WORK.settled(5)
+    [rec] = [
+        json.loads(line) for path in spotter.place().glob("records-*.jsonl") for line in path.read_text().splitlines()
+    ]
+    return rec
+
+
 @pytest.mark.parametrize("worse", [False, True])
 def test_a_checked_case_moved_into_the_examples_with_its_text_commits_only_when_nothing_worsens(
-    monkeypatch, worse
+    monkeypatch, capsys, worse
 ) -> None:
     j = Job(monkeypatch)
-    for _ in range(2):
-        reviewed(call="none")
+    positive = reviewed(text="pos")
+    negative = reviewed(call="none", text="neg")
     chosen = reviewed()
     n = cases.current()["n"]
     assert cases.current()["cases"][chosen]["example"] == ""  # as intake and a check leave it
-    first: list[str] = []
+    seen: list = []
 
-    async def looked(_card, prompt, meter, _spot) -> dict[str, Any]:  # the new prompt makes the "none" cases wrong
-        first.extend([] if first else [prompt.hash])
+    async def looked(the_card, prompt, meter, _spot) -> dict[str, Any]:
+        seen.append((the_card, prompt))
         spend(meter, 0.1)
-        return {"category": "none" if prompt.hash == first[0] else "hand-off-fitness", "note": ""}
+        category = "hand-off-fitness" if the_card["intent"]["task"] == "pos" else "none"
+        if worse and prompt.cases == n + 1:
+            category = "hand-off-fitness"  # the new prompt adds a false note, not a miss
+        return {"category": category, "note": ""}
 
-    if worse:
-        j.job.looked = looked
-    said = case_edits.move(chosen, "example", "owner (page)", parent=n, example="a moment")
+    j.job.looked = looked
+    assert cli.main(["cases", "move", chosen, "example", "--example", "a moment"]) == 0
+    [request] = case_replay.queued()
+    assert capsys.readouterr().out.startswith(f"queued {request['id']}")
+    assert cases.current()["n"] == request["parent"] == n  # asking has not activated it
     j.job.tick(0)
 
-    result = next(r for r in case_replay.results() if r["id"] == said["queued"])["result"]
+    kept = [r for r in case_replay.results() if r["id"] == request["id"]]
+    assert kept[0]["frozen"] == request["frozen"]
+    assert set(request["frozen"]) == {positive, negative}
+    assert len(seen) == 4
+    for the_card, prompt in seen:
+        assert the_card == cases.card(positive if the_card["intent"]["task"] == "pos" else negative)
+        assert prompt.text == request["prompts"]["after" if prompt.cases == n + 1 else "before"]["text"]
+        assert prompt.hash == hashlib.sha256(prompt.text.encode()).hexdigest()[:12]
+    assert len({prompt.hash for _, prompt in seen}) == 2
+    j.job.tick(1)
+    assert len(seen) == 4  # a completed request never runs again
+    assert not case_replay.queued()
+    assert j.job.working() == []
+    assert [s["state"] for s in j.job.maintenance.read()["sessions"]] == ["released", "released"]
+    assert j.job.slots.counts(cases_job.SLOT)[2] == 0
     if worse:
-        assert result == "refused: false notes rose"
+        assert kept[0]["result"] == "refused: false notes rose"
         assert cases.current()["n"] == n
-    else:
-        assert result == "passed"
-        assert cases.current()["cases"][chosen] | {"review": None} == {
-            "stage": "example",
-            "call": "hand-off-fitness",
-            "why": "why",
-            "example": "a moment",
-            "review": None,
-        }
+        return
+    assert (kept[0]["result"], kept[1]["applied"]) == ("passed", n + 1)
+    assert cases.current()["cases"][chosen] | {"review": None} == {
+        "stage": "example",
+        "call": "hand-off-fitness",
+        "why": "why",
+        "example": "a moment",
+        "review": None,
+    }
+    prompt = cases.snapshot(verbose=False)
+    assert (prompt.text, prompt.cases) == (request["prompts"]["after"]["text"], n + 1)
+    assert prompt.text.endswith("Moment: a moment\n\nRight call: `hand-off-fitness`\n\nWhy: why")
+
+    rec = recorded_prompt(prompt)
+    assert (rec["prompt"], rec["cases"], rec["credits"], rec["limit"]) == (prompt.hash, n + 1, pytest.approx(0.1), 0.75)
 
 
-def test_the_job_runs_a_queued_replay_once_on_a_slot_and_nothing_while_paused(monkeypatch) -> None:
+def test_the_job_leaves_a_paid_replay_queued_while_paused(monkeypatch) -> None:
     j = Job(monkeypatch)
     rid = queue_regression()
     j.paused = True
     j.job.tick(0)
     assert j.looks == []
-    assert case_replay.queued()
-    j.paused = False
-    j.job.tick(0)
-    assert len(j.looks) == 4
-    assert next(r for r in case_replay.results() if r["id"] == rid)["result"] == "passed"
-    j.job.tick(1)
-    assert len(j.looks) == 4
-    assert not case_replay.queued()
+    assert [r["id"] for r in case_replay.queued()] == [rid]
     assert j.job.slots.counts(cases_job.SLOT)[0] == 0
 
 
@@ -624,25 +664,26 @@ def test_a_stop_during_the_final_look_vetoes_activation_though_its_answer_is_val
     assert cases.current() == before
 
 
-def test_a_stop_just_before_activation_vetoes_it() -> None:
+def test_a_stop_just_before_activation_vetoes_it(monkeypatch) -> None:
     cid = reviewed(call="none")
     reviewed(call="none")
     chosen = reviewed()
     cur = cases.current()
     edits = {chosen: cases.edited(chosen, cur["cases"][chosen], stage="example", example="a moment")}
     request = case_replay.regression(edits, "owner", "promote")
-    asked: list[int] = []
-
-    def halt() -> str:  # quiet through every look and the result, set as the store's lock is taken to activate
-        asked.append(1)
-        return "OwlBear is stopping" if len(asked) == 10 else ""  # 4 looks x 2, the result, then this
+    stopped = threading.Event()
+    racing(monkeypatch, stopped.set)  # the first store lock in run is the result/activation boundary
 
     async def look(_card, _prompt, meter) -> dict[str, Any]:
         spend(meter, 0.1)
         return {"category": "none", "note": ""}
 
-    out = asyncio.run(case_replay.run(request, look, Meter(10, "replay-run"), 1.0, halt))
-    assert len(asked) == 10  # the stop came only at the read under the store's lock
+    out = asyncio.run(
+        case_replay.run(
+            request, look, Meter(10, "replay-run"), 1.0, lambda: "OwlBear is stopping" if stopped.is_set() else ""
+        )
+    )
+    assert stopped.is_set()
     assert out["result"] == "refused: stopped: OwlBear is stopping"
     assert cases.current()["cases"][chosen]["stage"] == "test"
     assert cid in cases.current()["cases"]
@@ -792,25 +833,6 @@ def test_a_publication_failed_by_a_later_export_retry_keeps_an_earlier_cases_rea
     assert kept["result"] == f"failed: RuntimeError: {later}\ncase {first}, failed: DataRepoError: {whole_error}"
 
 
-def test_the_job_counts_in_what_a_stop_waits_for(monkeypatch) -> None:
-    j = Job(monkeypatch)
-    queue_regression()
-    seen: list = []
-    original = j.job.looked
-
-    async def watching(the_card, prompt, meter, spot) -> dict[str, Any]:
-        seen.append(j.job.working())
-        return await original(the_card, prompt, meter, spot)
-
-    j.job.looked = watching
-    j.job.tick(0)
-    assert seen[0][0].startswith("Spotter cases: r-")
-    assert j.job.working() == []
-    stop = threading.Event()
-    stop.set()
-    j.job.loop(stop, lambda: 0.0)  # a stopped machine's loop ends at once
-
-
 class Stuck:
     """A look runtime that neither stops nor can be forced to."""
 
@@ -831,33 +853,25 @@ def test_a_runtime_whose_end_is_unconfirmed_keeps_the_runs_lease_and_slot_held(m
     async def stuck(the_card, prompt, meter, spot) -> dict[str, Any]:
         said = await original(the_card, prompt, meter, spot)
         await spotter_look.teardown(Stuck(), None, f"look-{len(j.looks)}")
+        j.job.stop()
         return said
 
     j.job.looked = stuck
     j.job.tick(0)
-    assert len(j.looks) == 4
+    assert len(j.looks) == 1
     [lease] = j.job.maintenance.read()["sessions"]
     assert (lease["project"], lease["kind"], lease["state"]) == (cases_job.SLOT, cases_job.KIND, "held")
     assert "look-1" in lease["reason"]
     assert j.job.slots.counts(cases_job.SLOT)[2] == 1  # the reservation stays
     assert j.job.working() == [cases_job.LINGERING]  # a stop when idle and an update wait
+    j.job.halting = ""  # the held lease, not the stop, must refuse the next request
     rid = queue_regression()
     j.job.tick(1)
-    assert len(j.looks) == 4  # nothing else of the job starts
+    assert len(j.looks) == 1  # nothing else of the job starts
     assert [r["id"] for r in case_replay.queued()] == [rid]
     again = Slots(lambda: 1)
     maintenance.Maintenance(again)  # a restarted host restores the held reservation
     assert again.counts(cases_job.SLOT)[2] == 1
-
-
-def test_a_run_whose_runtimes_ended_releases_its_lease_and_slot(monkeypatch) -> None:
-    j = Job(monkeypatch)
-    queue_regression()
-    j.job.tick(0)
-    leases = j.job.maintenance.read()["sessions"]
-    assert [s["state"] for s in leases] == ["released", "released"]  # the replay's, then the publication sync's
-    assert j.job.slots.counts(cases_job.SLOT)[2] == 0
-    assert j.job.working() == []
 
 
 def test_the_hosts_end_cancels_the_running_session_and_keeps_its_result_and_spend(monkeypatch) -> None:
@@ -879,6 +893,7 @@ def test_the_hosts_end_cancels_the_running_session_and_keeps_its_result_and_spen
     stopping = threading.Event()
     j.job.start(stopping, lambda: 0.0)
     assert started.wait(5)
+    assert j.job.working() == [f"Spotter cases: {rid}"]
     stopping.set()
     assert j.job.drain(5) is True
     assert ended == [True]  # its teardown ran
@@ -888,18 +903,15 @@ def test_the_hosts_end_cancels_the_running_session_and_keeps_its_result_and_spen
     assert not case_replay.queued()
     assert j.job.slots.counts(cases_job.SLOT)[2] == 0
     assert [s["state"] for s in j.job.maintenance.read()["sessions"]] == ["released"]
+    assert j.job.working() == []
 
 
 async def _fine() -> None:
     pass
 
 
-def test_the_commands_write_moves_and_queue_a_paid_one(capsys) -> None:
+def test_the_commands_write_unpaid_moves_and_queue_checks(capsys) -> None:
     cid = reviewed(call="none")
-    reviewed(call="none")
-    assert cli.main(["cases", "move", cid, "example", "--example", "a moment"]) == 0
-    assert "queued r-" in capsys.readouterr().out
-    assert cases.current()["cases"][cid]["stage"] == "test"
     assert cli.main(["cases", "move", cid, "candidate"]) == 0
     assert cases.current()["cases"][cid]["stage"] == "candidate"
     assert cli.main(["cases", "rollback", "999"]) == 1
@@ -907,7 +919,7 @@ def test_the_commands_write_moves_and_queue_a_paid_one(capsys) -> None:
         capsys.readouterr().out.splitlines()[-1] == "refused: CaseError: there is no version 999 of the Spotter cases"
     )
     assert cli.main(["cases", "check"]) == 0
-    assert [r["kind"] for r in case_replay.queued()] == ["regression", "check"]
+    assert [r["kind"] for r in case_replay.queued()] == ["check"]
     assert cli.main(["cases", "list"]) == 0
     assert cli.main(["improvement", "reset"]) == 0
     assert "retired:" in capsys.readouterr().out
@@ -956,56 +968,63 @@ def test_a_move_or_rollback_is_made_of_the_version_it_is_written_onto(monkeypatc
         case_edits.change({other: None}, "stale", first, "t")  # the guard against a stale parent
 
 
-def test_a_retro_review_session_is_charged_as_it_reports_and_aborted_at_its_runs_limit(  # noqa: C901 - its fakes
-    monkeypatch,
-) -> None:
-    made: dict[str, Any] = {"aborted": False}
+@pytest.fixture
+def review_client(monkeypatch):
+    """Only Retro's SDK transport; both witnesses run the real registration, metering and teardown."""
+    wire = SimpleNamespace(made=[], total=0.0, aborted=False)
 
-    def usage(nano: float) -> SimpleNamespace:
-        cost = SimpleNamespace(copilot_usage=SimpleNamespace(total_nano_aiu=nano))
-        return SimpleNamespace(type="assistant.usage", data=cost)
+    async def answered(session) -> None:
+        session.on_event({"type": "assistant.message", "data": {"content": "reviewed"}})
+
+    wire.turn = answered
 
     class Session:
-        session_id = "review-1"
-
         def __init__(self, on_event: Any) -> None:
             self.on_event = on_event
             self.rpc = SimpleNamespace(usage=SimpleNamespace(get_metrics=self.metrics))
             self.done = asyncio.Event()
 
         async def metrics(self) -> Any:
-            return SimpleNamespace(total_nano_aiu=1.2e9)
+            return SimpleNamespace(total_nano_aiu=wire.total)
 
         async def send_and_wait(self, _message: str, **_kw: Any) -> None:
-            self.on_event(usage(1.2e9))  # one billed call past the run's limit
-            await self.done.wait()  # the turn goes on until it is aborted
+            await wire.turn(self)
 
         async def abort(self) -> None:
-            made["aborted"] = True
+            wire.aborted = True
             self.done.set()
 
         async def disconnect(self) -> None:
             pass
 
-    class Client:
-        def __init__(self, **_kw: Any) -> None:
-            pass
+    async def created(**kw: Any) -> Session:
+        wire.made.append({**kw, "noted": kw.get("session_id") in (chatlogs.own() or set())})
+        return Session(kw["on_event"])
 
-        async def start(self) -> None:
-            pass
-
-        async def create_session(self, **kw: Any) -> Session:
-            return Session(kw["on_event"])
-
-        async def stop(self) -> None:
-            pass
-
-    monkeypatch.setattr(retro_review, "CopilotClient", Client)
+    monkeypatch.setattr(
+        retro_review, "CopilotClient", lambda **_kw: SimpleNamespace(start=_fine, create_session=created, stop=_fine)
+    )
     monkeypatch.setattr(retro_review, "cli_path", lambda: "/bin/false")
+    return wire
+
+
+def test_a_retro_review_session_is_charged_as_it_reports_and_aborted_at_its_runs_limit(review_client) -> None:
+    wire = review_client
+    wire.total = 1.2e9
+
+    async def metered(session) -> None:
+        cost = SimpleNamespace(copilot_usage=SimpleNamespace(total_nano_aiu=wire.total))
+        session.on_event(SimpleNamespace(type="assistant.usage", data=cost))
+        await session.done.wait()  # one billed call past the limit, then held until the real abort
+
+    wire.turn = metered
     run_meter = Meter(1.0, "retro-run")
     role = cases_job.RoleModel(model="m", effort="medium")
     assert asyncio.run(retro_review.asked("review this", run_meter, role)) == ""
-    assert made["aborted"] is True
+    assert wire.aborted is True
+    [made] = wire.made
+    assert str(made["working_directory"]).startswith(str(spotter.place() / "looks"))
+    assert made["memory"] == {"enabled": False}
     report = run_meter.report()
     assert (report["credits"], report["stopped"], report["stopped_by"]) == (pytest.approx(1.2), "reached", "retro-run")
     with pytest.raises(RuntimeError, match="no review starts"):
@@ -1022,48 +1041,16 @@ def test_a_retro_review_session_is_charged_as_it_reports_and_aborted_at_its_runs
     assert spend_metrics.reached(piece)
 
 
-def test_a_retro_review_session_is_noted_as_ours_before_it_is_created_or_never_created(monkeypatch) -> None:
-    made: list[dict[str, Any]] = []
-
-    class Session:
-        def __init__(self, on_event: Any) -> None:
-            self.on_event = on_event
-            self.rpc = SimpleNamespace(usage=SimpleNamespace(get_metrics=self.metrics))
-
-        async def metrics(self) -> Any:
-            return SimpleNamespace(total_nano_aiu=0)
-
-        async def send_and_wait(self, _message: str, **_kw: Any) -> None:
-            self.on_event({"type": "assistant.message", "data": {"content": "reviewed"}})
-
-        async def disconnect(self) -> None:
-            pass
-
-    class Client:
-        def __init__(self, **_kw: Any) -> None:
-            pass
-
-        async def start(self) -> None:
-            pass
-
-        async def create_session(self, **kw: Any) -> Session:
-            made.append({**kw, "noted": kw.get("session_id") in (chatlogs.own() or set())})
-            return Session(kw["on_event"])
-
-        async def stop(self) -> None:
-            pass
-
-    monkeypatch.setattr(retro_review, "CopilotClient", Client)
-    monkeypatch.setattr(retro_review, "cli_path", lambda: "/bin/false")
+def test_a_retro_review_session_is_noted_as_ours_before_it_is_created_or_never_created(
+    monkeypatch, review_client
+) -> None:
     role = cases_job.RoleModel(model="m", effort="medium")
     assert asyncio.run(retro_review.asked("review this", Meter(1.0, "retro-run"), role)) == "reviewed"
-    assert [m["noted"] for m in made] == [True]  # in OwlBear's manifest before the session existed
-    assert str(made[0]["working_directory"]).startswith(str(spotter.place() / "looks"))  # never an enrolled folder
-    assert made[0]["memory"] == {"enabled": False}  # Retro never has Copilot Memory, whatever the switch
+    assert [made["noted"] for made in review_client.made] == [True]
     monkeypatch.setattr(chatlogs, "note", lambda _event: False)  # the manifest cannot be written
     with pytest.raises(RuntimeError, match="could not be noted"):
         asyncio.run(retro_review.asked("another", Meter(1.0, "retro-run"), role))
-    assert len(made) == 1  # never created
+    assert len(review_client.made) == 1
 
 
 def test_a_replayed_look_is_judged_under_its_frozen_prompt_on_its_own_meter(monkeypatch) -> None:
