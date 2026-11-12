@@ -1,24 +1,33 @@
 """A FIFO at a metadata entry refuses through the real public Prepare, Finish and Store.open, without blocking.
 
 Each case runs the real ``cli.main`` Prepare and Finish across a modeled reboot, then the real ``Store.open``. A
-``os.open`` spy records and refuses any blocking open of a FIFO before the kernel can block on it, so a regression
+spy records and refuses any blocking open of a FIFO before the kernel can block on it, so a regression
 fails the assertion instead of hanging the run. Each FIFO is left in place and every other byte is unchanged, apart
 from the move lock that startup creates on purpose.
 """
 
+import builtins
 import errno
+import io
 import json
 import os
 import stat
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
 from owlbear_delivery_next.commands import cli
-from owlbear_delivery_next.state_store import database, offline_protocol, project_home, project_move
-from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, StoreError
+from owlbear_delivery_next.machine_host import selfcheck
+from owlbear_delivery_next.state_store import (
+    database,
+    offline_protocol,
+    project_home,
+    project_move,
+    registry,
+    switched_authority,
+)
+from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, Database, StoreError
 from owlbear_delivery_next.state_store.store import Store
 
 BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
@@ -38,7 +47,7 @@ def _is_fifo(path: Path) -> bool:
     return stat.S_ISFIFO(os.lstat(path).st_mode)
 
 
-def _fifo_at(path: str, dir_fd: int | None) -> bool:
+def _fifo_at(path: str | os.PathLike, dir_fd: int | None) -> bool:
     try:
         st = os.stat(path, dir_fd=dir_fd, follow_symlinks=False) if dir_fd is not None else os.lstat(path)
     except OSError:
@@ -50,15 +59,24 @@ def _fifo_at(path: str, dir_fd: int | None) -> bool:
 def blocking_opens(monkeypatch) -> list[str]:
     """Records each blocking open of a FIFO and refuses it; the real open is never reached for such a FIFO."""
     real_open = os.open
+    real_file_open = builtins.open
     attempts: list[str] = []
 
     def guarded(path, flags, mode=0o777, *, dir_fd=None):
-        if not flags & os.O_NONBLOCK and isinstance(path, str) and _fifo_at(path, dir_fd):
-            attempts.append(path)
+        if not flags & os.O_NONBLOCK and isinstance(path, (str, os.PathLike)) and _fifo_at(path, dir_fd):
+            attempts.append(os.fsdecode(path))
             raise OSError(errno.EWOULDBLOCK, "blocking open of a FIFO refused by the test")
         return real_open(path, flags, mode, dir_fd=dir_fd)
 
+    def guarded_file(file, *args, **kwargs):
+        if isinstance(file, (str, os.PathLike)) and _fifo_at(file, None):
+            attempts.append(os.fsdecode(file))
+            raise OSError(errno.EWOULDBLOCK, "blocking open of a FIFO refused by the test")
+        return real_file_open(file, *args, **kwargs)
+
     monkeypatch.setattr(os, "open", guarded)
+    monkeypatch.setattr(builtins, "open", guarded_file)
+    monkeypatch.setattr(io, "open", guarded_file)
     return attempts
 
 
@@ -245,66 +263,49 @@ def test_the_active_store_startup_does_not_read_the_machine_host_lock(repo, boot
     assert _is_fifo(target / "host.lock")
 
 
-MARKER_CHILD = r"""
-import json, os, sys
-from pathlib import Path
-from owlbear_delivery_next.machine_host import selfcheck
-from owlbear_delivery_next.state_store import project_home, registry
-from owlbear_delivery_next.state_store.database import Database, MARKER, STORE_FORMAT, StoreError
-repo, target, action = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
-_, source = registry.canonical(repo)
-pid = project_home.clone_id(source)
-assert pid is not None
-assert Database(target).marker() == STORE_FORMAT
-assert selfcheck._project(pid, repo) == []
-marker = (source if action == "registry" else target) / MARKER
-fired = []
-def plant():
-    marker.unlink()
-    os.mkfifo(marker)
-    fired.append(True)
-if action == "selfcheck":
-    assert selfcheck._receipt(pid, source) == (target, None)
-    real = selfcheck.read_regular
-    def read_marker(path):
-        if path == marker and not fired:
-            plant()
-        return real(path)
-    selfcheck.read_regular = read_marker
-    problems = selfcheck._project(pid, repo)
-    outcome, said = ("refused" if problems else "accepted"), "; ".join(problems)
-else:
-    plant()
-    try:
-        registry.canonical(repo) if action == "registry" else Database(target).marker()
-    except (registry.RegistryError, StoreError) as error:
-        outcome, said = "refused", str(error)
-    else:
-        outcome, said = "accepted", ""
-print(json.dumps({"fired": fired, "outcome": outcome, "said": said}))
-"""
-
-
 @pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("action", ["registry", "selfcheck", "database"])
-def test_marker_readers_refuse_a_fifo_without_waiting_or_treating_it_as_absent(repo, boot, action):
+def test_marker_readers_refuse_a_fifo_without_waiting_or_treating_it_as_absent(
+    repo, boot, action, monkeypatch, blocking_opens
+):
     target = _move_to_next_boot(repo, boot)
-    source = _source(repo)
+    _, source = registry.canonical(repo)
+    pid = project_home.clone_id(source)
+    assert pid is not None
+    assert registry.register(repo).id == pid
+    assert Database(target).marker() == STORE_FORMAT
+    assert selfcheck.problems() == []
     source_before, target_before = _snapshot(source), _snapshot(target)
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)}
-    done = subprocess.run(  # noqa: S603 - fixed diagnostic, this interpreter and disposable stores only
-        [sys.executable, "-c", MARKER_CHILD, str(repo), str(target), action],
-        capture_output=True,
-        text=True,
-        timeout=5,
-        env=env,
-        check=False,
-    )
-    assert done.returncode == 0, done.stderr
-    said = json.loads(done.stdout.strip().splitlines()[-1])
-    assert said["fired"] == [True]
-    assert said["outcome"] == "refused", said
-    assert "unreadable" in said["said"], said
+    marker = (source if action == "registry" else target) / MARKER
+    fired = []
+
+    def plant():
+        marker.unlink()
+        os.mkfifo(marker)
+        fired.append(True)
+
+    if action == "selfcheck":
+        assert switched_authority.retained_target(source, pid) == target
+        real = selfcheck.read_regular
+
+        def read_marker(path):
+            if path == marker and not fired:
+                plant()
+            return real(path)
+
+        monkeypatch.setattr(selfcheck, "read_regular", read_marker)
+        problems = selfcheck.problems()
+        assert problems, "selfcheck accepted a FIFO marker"
+        said = "; ".join(problems)
+    else:
+        plant()
+        with pytest.raises((registry.RegistryError, StoreError)) as caught:
+            registry.canonical(repo) if action == "registry" else Database(target).marker()
+        said = str(caught.value)
+
+    assert blocking_opens == [], "a marker reader tried to open a FIFO without O_NONBLOCK"
+    assert fired == [True]
+    assert "unreadable" in said, said
     expected_source = source_before | ({MARKER: "fifo"} if action == "registry" else {})
     expected_target = target_before | ({MARKER: "fifo"} if action != "registry" else {})
     assert _snapshot(source) == expected_source

@@ -6,11 +6,11 @@ import functools
 import http.server
 import subprocess
 import threading
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
+import psutil
 import pytest
 from pydantic import ValidationError
 
@@ -210,8 +210,28 @@ def test_a_real_capture_scans_each_state_in_its_page_and_falls_back_where_csp_re
     assert [s.errors for s in (*open_, *csp)] == [()] * 4  # the scan's own refusals are not the page's errors
 
 
+class _ScanDeadline:
+    def __init__(self, phases, deadlines):
+        self.phases = phases
+        self.ready = threading.Event()
+        self.waiting = threading.Event()
+        self.finished = False
+        self.killed = []
+        deadlines.append(self)
+
+    def wait(self, seconds):
+        self.phases.append(("wait", seconds))
+        self.waiting.set()
+        self.ready.wait()
+        return self.finished
+
+    def set(self):
+        self.finished = True
+        self.ready.set()
+
+
 @pytest.mark.browser
-@pytest.mark.timeout(90)  # a real browser starts and two pages hang; a loaded CI runner needs more than 30 s
+@pytest.mark.timeout(90)  # a real browser starts and two pages hang
 def test_a_scan_that_hangs_its_page_is_ended_and_the_screenshot_kept(tmp_path, monkeypatch):
     site = tmp_path / "site"
     site.mkdir()
@@ -220,9 +240,55 @@ def test_a_scan_that_hangs_its_page_is_ended_and_the_screenshot_kept(tmp_path, m
         ("127.0.0.1", 0), functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(site))
     )
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    hang = pack_files.Installed(Path("/nowhere"), "0" * 64, "window.impeccableDetectAsync = () => { for (;;) {} };")
+    hang = pack_files.Installed(
+        Path("/nowhere"),
+        "0" * 64,
+        'window.impeccableDetectAsync = () => { console.log("detector entered"); for (;;) {} };',
+    )
     monkeypatch.setattr(design, "PAGE_SECONDS", 2)
-    start = time.monotonic()
+    phases = []
+    deadlines = []
+    threads = []
+
+    # Expire only once the real detector hangs; browser startup and close are not watchdog evidence.
+    def watchdog(**kwargs):
+        thread = threading.Thread(**kwargs)
+        threads.append(thread)
+        return thread
+
+    monkeypatch.setattr(
+        design,
+        "threading",
+        SimpleNamespace(Event=functools.partial(_ScanDeadline, phases, deadlines), Thread=watchdog),
+    )
+    real_scan, real_kill, real_rendered = detector.scan_page, psutil.Process.kill, design.rendered
+
+    def scan(page, pack):
+        deadline = deadlines[-1]
+        deadline.waiting.wait()
+
+        def entered(message):
+            if message.text == "detector entered":
+                phases.append(("entered", None))
+                deadline.ready.set()
+
+        page.on("console", entered)
+        return real_scan(page, pack)
+
+    def rendered(*args, **kwargs):
+        result = real_rendered(*args, **kwargs)
+        assert not threads[-1].is_alive(), "the watchdog could reach into the next screenshot"
+        phases.append(("returned", None))
+        return result
+
+    def kill(process):
+        renderer = "--type=renderer" in process.cmdline()
+        real_kill(process)
+        deadlines[-1].killed.append(renderer)
+
+    monkeypatch.setattr(detector, "scan_page", scan)
+    monkeypatch.setattr(psutil.Process, "kill", kill)
+    monkeypatch.setattr(design, "rendered", rendered)
     again = VisualState(name="again", path="/", expect="e")
     try:
         shots = visual.capture(
@@ -237,11 +303,11 @@ def test_a_scan_that_hangs_its_page_is_ended_and_the_screenshot_kept(tmp_path, m
         pytest.skip(f"no Chrome, Edge or Playwright Chromium: {exc}")
     finally:
         server.shutdown()
-    # The deadline, not the 60 s in-page timer: one page on that timer alone passes 60 s. The headroom is the browser's
-    # start under a loaded CI runner, which took 35 s on 2026-10-22.
-    assert time.monotonic() - start < detector.PAGE_MS / 1000 - 5
+    assert phases == [("wait", 2), ("entered", None), ("returned", None)] * 2
+    assert all(d.killed and all(d.killed) for d in deadlines), "each hung renderer must actually be killed"
     assert [(bool(s.file), s.design.scanned, s.errors) for s in shots] == [(True, False, ())] * 2  # the next page too
     assert all("refused" in s.design.reason for s in shots)
+    assert [(tmp_path / "out" / s.file).read_bytes()[:8] for s in shots] == [b"\x89PNG\r\n\x1a\n"] * 2
 
 
 def scan_args(**fields):
