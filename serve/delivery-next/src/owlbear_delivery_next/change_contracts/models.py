@@ -238,6 +238,8 @@ class Question(Record):
     effect_observed_at: datetime | None = None
     shaping_version: int | None = None
     recommended: str | None = None
+    subject: Literal["product", "reserved", "internal"] | None = None  # after approval: #1062 (change_flow.asking)
+    follows: str = ""  # the question whose cause a worker's re-ask or a repair's proposal asks about again (#1064)
 
 
 class ItemRef(Record):

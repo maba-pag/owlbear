@@ -28,7 +28,7 @@ YES = ("Apply the fix", "Add the check to the project profile")  # the stop's ac
 REPAIRED = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})  # agent steps
 
 
-def start(c: Change, cause: str, evidence: str, now: datetime) -> None:
+def start(c: Change, cause: str, evidence: str, now: datetime, *, root: str = "") -> None:
     """Repair the step *c* is on, stopped by *cause*; *evidence* is what the step reported, whole.
 
     A cause that comes back after its repair's fix was applied stops instead of being repaired again.
@@ -38,7 +38,7 @@ def start(c: Change, cause: str, evidence: str, now: datetime) -> None:
         said = f"needs repair again: {evidence}; it came back after its repair applied {again.applied[:12]}"
         _stop(c, cause, said, now)
         return
-    c.repairs.current = Repair(cause=cause, evidence=evidence, step=s.kind, task=s.task, mode=s.mode, at=now)
+    c.repairs.current = Repair(cause=cause, evidence=evidence, step=s.kind, task=s.task, mode=s.mode, at=now, root=root)
     c.stop = None
     c.outcome = Outcome(exit=Exit.RETRY, cause=cause, reason=f"repairing: {obstruction(evidence)}", at=now)
 
@@ -68,8 +68,9 @@ def asked(c: Change, text: str, now: datetime) -> None:
         Option(id="yes", label=f"{YES[r.fix == 'profile-check']} and run the step again", next=APPLY),
         Option(id="no", label="Don't apply it; stop with what was tried", next=DECLINE),
     ]
-    ask(c, Question(step=c.step.kind, text=text, options=options, cause=r.cause), now)
-    r.phase, r.question = "asked", c.questions[-1].id
+    q = Question(step=c.step.kind, text=text, options=options, cause=r.cause, subject="reserved", follows=r.root)
+    if (asked := ask(c, q, now)) is not None:  # the gate stops a cause's third question (#1064)
+        r.phase, r.question = "asked", asked.id
 
 
 def owned(c: Change, question: str) -> bool:

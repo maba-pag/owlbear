@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import Answer, ErrorKind, Option, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.change_flow import asking, loop, worktree
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import github_writer
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 ROOT = "."
-TYPED = "-typed-"
+TYPED = asking.READ_BACK
 PREFIX = cause_key(ErrorKind.GATE, StepKind.PLAN, "checks-")
 _PAUSE = Option(id="pause", label="Pause this Change; nothing is planned until you answer", next="pause")
 
@@ -135,27 +135,44 @@ def _answered(
     if latest is None:
         return None
     if latest.cause == cause and latest.answer.option == "detected":
-        return {home: _detected(prof, home) for home in missing}
+        return _proposed(prof, missing)
     first = next((q for q in change.questions if q.answer and latest.cause == f"{cause}{TYPED}{q.id}"), None)
     return _parsed(first.answer.text, prof)[0] if latest.answer.option == "save" and first else None
 
 
 def _first(prof: Profile, missing: list[str], cause: str) -> loop.StepResult:
-    named = ", ".join(
-        f"`{h}` ({f'detected: `{c}`' if (c := _detected(prof, h)) else 'none detected'})" for h in missing
-    )
-    text = (
-        "Which commands check this project's code? Every planned task runs them before its work counts as done; "
-        f"tests no command runs are left to CI. Not confirmed yet: {named}. Nothing is planned until you answer."
-    )
+    """Once per project: yes or no on the detected commands (#1062); none detected is Delivery's to repair."""
     typed = (
-        "Use commands I type in the answer, one `package: command` per line (`.: command` covers every package); "
+        "No, I'll type the commands: one `package: command` per line (`.: command` covers every package); "
         "you see them again before anything is saved"
     )
-    detected = "Use the detected commands: every task runs them, and a wrong or slow one fails or slows every task"
-    options = [Option(id="detected", label=detected, next="retry")] if all(_detected(prof, h) for h in missing) else []
-    options += [Option(id="typed", label=typed, next="retry"), _PAUSE]
-    return engine.ask(StepKind.PLAN, text, cause, options)
+    if not (proposed := _proposed(prof, missing)):
+        named = ", ".join(f"`{h}`" for h in missing if not _detected(prof, h))
+        text = f"No check command was detected for {named}: propose one for the project profile."
+        result = engine.ask(StepKind.PLAN, text, cause)
+        if result.question is not None:
+            result.question.subject = "internal"  # its repair proposes a profile check, his yes or no
+        return result
+    said = {ROOT: "which covers every package"}
+    named = "; ".join(f"`{c}`, {said.get(h, f'for `{h}`')}" for h, c in proposed.items())
+    text = (
+        f"Before a task's work counts as done, Delivery runs this project's own tests on it. It found {named}. "
+        "Every task of every Change then waits for these tests to pass; what they leave out is tested only "
+        "in CI before merge. Use it?"
+    )
+    detected = "Yes, use it: if it is wrong or slow, every task fails or slows with it"
+    options = [Option(id="detected", label=detected, next="retry"), Option(id="typed", label=typed, next="retry")]
+    result = engine.ask(StepKind.PLAN, text, cause, options)
+    if result.question is not None:
+        result.question.subject = "reserved"
+    return result
+
+
+def _proposed(prof: Profile, missing: list[str]) -> dict[str, str]:
+    """The detected commands to propose: each missing package's, else the root's alone, which covers every package."""
+    if all(_detected(prof, h) for h in missing):
+        return {h: _detected(prof, h) for h in missing}
+    return {ROOT: c} if ROOT in missing and (c := _detected(prof, ROOT)) else {}
 
 
 def _read_back(prof: Profile, missing: list[str], first: Question, cause: str) -> loop.StepResult:

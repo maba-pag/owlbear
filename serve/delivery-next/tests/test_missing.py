@@ -126,7 +126,9 @@ def test_a_temporary_failure_retries_at_once_then_after_growing_pauses() -> None
     assert c.outcome.wake_at == NOW + 2 * budgets.PAUSE
     late = NOW + budgets.EPISODE_ASK
     c = loop.apply(c, r.model_copy(update={"wake_at": late}), late)
-    assert error in c.questions[-1].text  # the owner sees the real error, not the stable reason
+    assert (c.outcome.exit, c.questions) == (Exit.RETRY, [])
+    assert c.repairs.current.cause == r.cause
+    assert error in c.repairs.current.evidence  # repair gets the real error, not just the stable reason
 
 
 @pytest.mark.parametrize("tool", ["browser", "open_browser_page", "get_task_output"])

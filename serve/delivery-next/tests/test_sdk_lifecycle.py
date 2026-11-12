@@ -911,9 +911,11 @@ def test_a_failed_sdk_request_keeps_its_notes_and_data_and_retries_as_before(wor
     assert (result.reason, result.exit, result.cause, result.wake_at) == (want, Exit.RETRY, "tooling:build:sdk", None)
 
 
-def test_three_sdk_failures_whose_data_and_notes_say_different_words_ask_as_one_defect(world, monkeypatch, whole_error):
+def test_three_sdk_failures_whose_data_and_notes_differ_stop_one_defects_existing_repair(
+    world, monkeypatch, whole_error
+):
     """#971: a request's JSON-RPC data and notes differ each time; retries sign the error without them, so the third
-    asks, showing the last one whole."""
+    stops the existing repair without asking; the second failure remains its whole evidence."""
     c = Change(
         slug="c1",
         brief=Brief(version=1, approved_version=1),
@@ -931,11 +933,15 @@ def test_three_sdk_failures_whose_data_and_notes_say_different_words_ask_as_one_
         monkeypatch.setattr(sdk_adapter, "_open", broken)
         c = loop.apply(c, to_result(asyncio.run(sdk_adapter.run(world.cfg)), StepKind.BUILD, NOW), NOW)
         signatures.add(c.budgets.causes["tooling:build:sdk"].signature)
+        if where == "worker replaced":
+            evidence = c.repairs.current.evidence
     budget = c.budgets.causes["tooling:build:sdk"]
-    assert (len(signatures), budget.count, c.outcome.exit) == (1, 3, Exit.ASK)
-    said = f"JsonRpcError: JSON-RPC Error -32603: {whole_error}\nwhile the lease handed over"
-    said += " {'where': 'lease handed over'}"
-    assert loop.open_question(c).text == f"Delivery failed the same way 3 times (tooling:build:sdk): {said}"
+    assert (len(signatures), budget.count, c.outcome.exit) == (1, 3, Exit.STOP)
+    said = f"JsonRpcError: JSON-RPC Error -32603: {whole_error}\nwhile the worker replaced"
+    said += " {'where': 'worker replaced'}"
+    assert (c.questions, c.repairs.current, c.stop.action) == ([], None, "Run the step again")
+    assert c.repairs.done[-1].evidence == evidence == said
+    assert evidence in c.stop.reason
 
 
 @pytest.mark.parametrize(

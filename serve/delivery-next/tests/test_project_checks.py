@@ -8,7 +8,7 @@ import pytest
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.failures import cause_key
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
     Change,
@@ -137,8 +137,8 @@ def test_no_profile_is_detected_saved_and_asked_about(store, change_repo, monkey
     fake = sessions(monkeypatch)
     made(store, change_repo, ["src"])
     text, options = asked(step(store, change_repo))
-    assert (options, fake.told) == (["detected", "typed", "pause"], [])
-    assert "`.` (detected: `npm test`)" in text
+    assert (options, fake.told) == (["detected", "typed"], [])
+    assert "`npm test`, which covers every package" in text
     assert store.read_profile().entries[profile.REPO].value == "acme/shop-site"
 
 
@@ -153,12 +153,17 @@ def redetected(repo) -> Profile:
 @pytest.mark.parametrize(
     ("built", "scope", "named", "options"),
     [
-        (lambda _r: Profile(entries={"check:.": entry()}), ["src"], "`.` (detected: `npm test`)", ["detected"]),
-        (redetected, ["src"], "`.` (detected: `pnpm test`)", ["detected"]),
+        (
+            lambda _r: Profile(entries={"check:.": entry()}),
+            ["src"],
+            "`npm test`, which covers every package",
+            ["detected"],
+        ),
+        (redetected, ["src"], "`pnpm test`, which covers every package", ["detected"]),
         (
             lambda _r: confirmed(Profile(entries={f"check:{APP}": entry(), f"check:{LIB}": entry()}), APP),
             [f"{LIB}/x.ts"],
-            f"Not confirmed yet: `{LIB}` (detected: `npm test`).",
+            f"`npm test`, for `{LIB}`",
             ["detected"],
         ),
         (lambda _r: Profile(), ["src"], "`.` (none detected)", []),
@@ -171,15 +176,25 @@ def redetected(repo) -> Profile:
     ],
     ids=["detected", "re-detected", "other-package", "empty", "outside-packages"],
 )
-def test_an_unconfirmed_check_asks_the_owner_before_any_session(  # noqa: PLR0913, PLR0917 - the case's parts
+def test_an_unconfirmed_check_is_proposed_or_repaired_before_any_session(  # noqa: PLR0913, PLR0917 - the case's parts
     store, change_repo, monkeypatch, built, scope, named, options
 ):
     store.write_profile(built(change_repo))
     fake = sessions(monkeypatch)
     made(store, change_repo, scope)
-    text, ids = asked(step(store, change_repo))
-    assert (ids, fake.told) == ([*options, "typed", "pause"], [])
-    assert named in text
+    c = step(store, change_repo)
+    assert fake.told == []
+    if options:
+        text, ids = asked(c)
+        assert ids == [*options, "typed"]
+        assert c.questions[-1].subject == "reserved"
+        assert named in text
+    else:
+        assert (c.outcome.exit, c.questions, c.step.kind) == (Exit.RETRY, [], StepKind.PLAN)
+        assert c.repairs.current.cause.startswith(ASKED)
+        assert (
+            c.repairs.current.evidence == "No check command was detected for `.`: propose one for the project profile."
+        )
 
 
 def test_the_detected_commands_once_confirmed_are_the_plans_and_saved(store, change_repo, monkeypatch, tmp_path):
@@ -198,14 +213,22 @@ def test_the_detected_commands_once_confirmed_are_the_plans_and_saved(store, cha
     assert any(e.get("event") == "profile-confirmed" and e.get("key") == "check:." for e in store.events("c1"))
 
 
-def test_one_question_settles_every_package_so_later_changes_plan_without_asking(store, change_repo, monkeypatch):
-    store.write_profile(Profile(entries={f"check:{APP}": entry(), f"check:{LIB}": entry()}))
+@pytest.mark.parametrize("root", [False, True])
+def test_one_question_settles_every_package_so_later_changes_plan_without_asking(store, change_repo, monkeypatch, root):
+    entries = {f"check:{APP}": entry(), f"check:{LIB}": entry()}
+    if root:
+        entries["check:."], entries[f"check:{LIB}"] = entry(), ProfileEntry(state="unknown")
+    store.write_profile(Profile(entries=entries))
     fake = sessions(monkeypatch)
     made(store, change_repo, [f"{APP}/x.ts"])
     text, _ = asked(step(store, change_repo))
-    assert f"`{APP}` (detected: `npm test`), `{LIB}` (detected: `npm test`)" in text
+    named = "`npm test`, which covers every package" if root else f"`npm test`, for `{APP}`; `npm test`, for `{LIB}`"
+    assert named in text
     answer(store, "detected")
     step(store, change_repo)
+    saved = store.read_profile().entries
+    confirmed_keys = {k for k, v in saved.items() if k.startswith("check:") and profile.is_confirmed(v)}
+    assert confirmed_keys == ({"check:."} if root else {f"check:{APP}", f"check:{LIB}"})
     made(store, change_repo, [f"{LIB}/y.ts"], "c2")
     assert (step(store, change_repo, "c2").step.kind, len(fake.planned())) == (StepKind.BUILD, 2)
 
@@ -267,13 +290,9 @@ def test_typed_commands_are_read_back_and_saved_only_when_the_owner_saves_them(
     fake = sessions(monkeypatch, ["b"])
     made(store, change_repo, [f"{APP}/x.ts"])
     step(store, change_repo)
-    answer(store, "typed", f"{APP}: a")
+    answer(store, "typed", f"{APP}: a\npackages/typo: c")
     text, options = asked(step(store, change_repo))
-    assert (f"- `{APP}`: `a`" in text, options) == (True, ["save", "again", "pause"])
-    answer(store, "again")
-    asked(step(store, change_repo))
-    answer(store, "typed", ".: b\npackages/typo: c")
-    text, options = asked(step(store, change_repo))
+    assert f"- `{APP}`: `a`" in text
     assert ("Not understood: packages/typo: c" in text, options) == (True, ["again", "pause"])
     answer(store, "again")
     asked(step(store, change_repo))
@@ -289,13 +308,15 @@ def test_typed_commands_are_read_back_and_saved_only_when_the_owner_saves_them(
     assert step(store, change_repo, "c2").step.kind == StepKind.BUILD
 
 
-def test_a_paused_answer_plans_nothing_and_is_never_delivered(store, change_repo, monkeypatch):
+def test_pausing_a_check_proposal_plans_nothing_and_is_never_delivered(store, change_repo, monkeypatch):
     store.write_profile(Profile(entries={"check:.": entry()}))
     fake = sessions(monkeypatch)
     made(store, change_repo, ["src"])
     step(store, change_repo)
-    c = answer(store, "pause")
+    store.put_inbox("c1", IntentItem(at=datetime.now(UTC), intent="pause"))
+    c = store.fold(Lock("c1"), "c1", datetime.now(UTC))[0]
     assert (c.intent.paused_at is not None, c.questions[-1].delivered_at, fake.told) == (True, None, [])
+    assert c.questions[-1].answer is None
 
 
 def test_an_unpublished_profile_is_logged_and_the_planner_starts(store, change_repo, monkeypatch, tmp_path):
@@ -343,7 +364,10 @@ def test_the_question_is_an_engine_decision_the_changes_page_answers(store, chan
     item = answers.answer_item(store, c, answers.AnswerBody(question=q.id, option="detected"))
     assert isinstance(item, AnswerItem)
     labels = " ".join(o.label for o in q.options)
-    assert ("every task" in labels, "before anything is saved" in labels) == (True, True)
+    assert "Every task of every Change then waits for these tests to pass" in q.text
+    assert "what they leave out is tested only in CI before merge. Use it?" in q.text
+    assert q.options[0].label == "Yes, use it: if it is wrong or slow, every task fails or slows with it"
+    assert "before anything is saved" in labels
 
 
 @pytest.mark.parametrize("question", ["absent", "unrelated", "checks"])

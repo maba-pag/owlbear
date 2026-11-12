@@ -26,7 +26,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
 )
 from owlbear_delivery_next.change_contracts.round_records import PLAN, RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow import loop, plan_rounds
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.processes import Termination
@@ -380,25 +380,21 @@ def ask_store(tmp_path, change_repo, monkeypatch) -> tuple[Paid, Store]:
     return paid, store
 
 
-@pytest.mark.parametrize("then", ["pause", "abandon", "answer"])
-def test_an_upheld_rejection_asks_once_with_a_stable_question_whatever_the_owner_does_next(
-    tmp_path, change_repo, monkeypatch, then
-):
+@pytest.mark.parametrize("then", ["pause", "abandon", "continue"])
+def test_an_upheld_rejection_is_delegated_once_whatever_the_owner_does_next(tmp_path, change_repo, monkeypatch, then):
     paid, store = ask_store(tmp_path, change_repo, monkeypatch)
     fail_settlement(tmp_path, change_repo, monkeypatch)
     restart(tmp_path, change_repo)
     asked = store.read("c1")
-    q = loop.open_question(asked)
-    assert q is not None
-    assert [o.id for o in q.options] == ["fix", "reconsider", "drop"]
+    assert (asked.outcome.exit, loop.open_question(asked)) == (Exit.RETRY, None)
+    found = asked.loops[PLAN].findings[0]
+    assert (found.state, found.note) == ("owner-fix", plan_rounds.DELEGATED)
     ids = [x.id for x in asked.questions]
-    restart(tmp_path, change_repo)  # waiting on the owner: nothing runs, nothing is asked again
-    assert [x.id for x in store.read("c1").questions] == ids
+    assert all(x.answer is not None for x in asked.questions)
     assert (len(paid.parents), len(paid.children)) == (2, 2)
 
-    if then == "answer":
-        store.put_inbox("c1", AnswerItem(at=datetime.now(UTC), question=q.id, option="fix"))
-        to_next_session(tmp_path, change_repo)  # the planner's next round: the owner's progress
+    if then == "continue":
+        to_next_session(tmp_path, change_repo)  # the planner's next round needs no owner answer
         assert len(paid.next) == 1
     else:
         monkeypatch.setattr(runner, "_engine", lambda *_a: None)
@@ -414,7 +410,7 @@ def test_an_upheld_rejection_asks_once_with_a_stable_question_whatever_the_owner
     assert len(child_steps(store, plan_round.LABEL)) == 2
     if then == "pause":
         assert c.intent.paused_at is not None
-        assert loop.open_question(c).id == q.id
+        assert loop.open_question(c) is None
     if then == "abandon":
         assert c.intent.abandoned_at is not None
 

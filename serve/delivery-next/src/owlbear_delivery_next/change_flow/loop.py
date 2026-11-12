@@ -125,6 +125,7 @@ class StepResult(Record):
     challenged: bool = False  # the plan challenge's findings sent the plan back (TD-188)
     ungated: bool = False  # a task loop or the owner's Fix it governs the repair: no round gate (TD-193, TD-208)
     setup: bool = False  # a setup problem: no retry, no step back; it goes to repair (#1065)
+    root: str = ""  # the owner question's cause a setup result repairs, so its repair's question counts with it (#1064)
 
 
 def waiting_consent(c: Change) -> bool:
@@ -405,7 +406,7 @@ def apply(change: Change, result: StepResult, now: datetime) -> Change:
                         challenged=result.challenged, at=now)  # fmt: skip
     budgets.streaks(c, result)
     if result.setup:  # D-01M6RT5QHWHB0ZHBBY0BE34FBE: never retried as temporary, never back to the brief
-        stuck.start(c, result.cause or "", result.reason, now)
+        stuck.start(c, result.cause or "", result.reason, now, root=result.root)
         curation_flow.fixed(c, change.step, now)
         return c
     match result.exit:

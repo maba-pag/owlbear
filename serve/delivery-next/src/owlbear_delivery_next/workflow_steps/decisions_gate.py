@@ -1,22 +1,22 @@
 """The runner's decision gate at each step boundary (TD-419 slice 4, TD-456): the rules a step works by, or why not.
 
 A Change with an approved brief runs a step only on decisions that load (`decision_store.load`), none of those pinned
-conflicted or invalid, and the pinned ones unchanged since its baseline; a difference asks the owner, and the approved
-brief is never rewritten (TD-428). Pinned from a pick, the baseline holds the picked decisions and the Change's own:
-a decision that came into force or changed since goes, with the others new at that boundary, to the picker, joins the
-pinned set when picked and is recorded as considered when not; a failed pick waits and tries again. Pinned without a
-pick, it holds every decision in force, and a new one asks the owner. Before judging, the gate catches the checkout
-up with its remote (`decision_store.refresh`); when it cannot, steps go on with the local decisions but publication
-and merge, the irreversible ones, stop. A project without a shared data repository runs as before until one of its
-Changes holds a baseline: Changes from before this gate have no rules to compare with.
+conflicted or invalid; a difference since its baseline is adopted and logged, never asked after approval (#1062,
+D-01M6RT4ADHEEH6FFAF6HVW55QZ), and the approved brief is never rewritten (TD-428). Pinned from a pick, the baseline
+holds the picked decisions and the Change's own: a decision that came into force or changed since goes, with the others
+new at that boundary, to the picker, joins the pinned set when picked and is recorded as considered when not; a failed
+pick waits and tries again. Pinned without a pick, it holds every decision in force, and a new one is adopted with it.
+Before judging, the gate catches the checkout up with its remote (`decision_store.refresh`); when it cannot, steps go on
+with the local decisions but publication and merge, the irreversible ones, stop. A project without a shared data
+repository runs as before until one of its Changes holds a baseline: Changes from before this gate have no rules to
+compare with.
 """
 
 from __future__ import annotations
 
-import hashlib
 import logging
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -24,15 +24,14 @@ from owlbear_decisions import Scope, State
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline, Said
 from owlbear_delivery_next.change_contracts.decision_wording import problem
 from owlbear_delivery_next.change_contracts.failures import cause_key
-from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, StepKind, Stop
+from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind, Stop
 from owlbear_delivery_next.change_flow import loop, picks
-from owlbear_delivery_next.change_flow.decision_baseline import PREFIX
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.runtimes import step_decisions
 from owlbear_delivery_next.state_store import decision_store, read_backs
 from owlbear_delivery_next.state_store.decision_archive import whole
-from owlbear_delivery_next.workflow_steps import before, check, engine, pick, prepare, sessions
+from owlbear_delivery_next.workflow_steps import before, check, pick, prepare, sessions
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
@@ -47,10 +46,6 @@ if TYPE_CHECKING:
 _log = logging.getLogger(__name__)
 UNGATED = frozenset({StepKind.SHAPE, StepKind.CLEANUP})  # shaping waits for chat; an ending Change always cleans up
 IRREVERSIBLE = frozenset({StepKind.PUBLISH, StepKind.MERGE})  # never on decisions another checkout may have changed
-OPTIONS = [
-    Option(id="continue", label="Continue with the current decisions", next="accept"),
-    Option(id="pause", label="Pause", next="pause"),
-]
 FAULTY = "Resolve the decision's conflict or finding in the shared data repository"
 STALE = (
     "Let the shared data repository's checkout catch up with its remote (reach the network, commit or discard its "
@@ -76,6 +71,7 @@ class Gate:
     others: list[str] | None = None  # the complete list a challenger reads besides *lines* (TD-452)
     pinned: bool = False
     refresh_error: str = ""
+    adopted: list[str] = field(default_factory=list)  # what changed since approval, logged as adopted (#1062)
 
 
 def stem(c: Change) -> str:
@@ -229,30 +225,9 @@ def _faults(seen: Snapshot, c: Change, keys: Iterable[str], now: datetime) -> Ga
     return Gate(c, _stopped(ErrorKind.STATE, reason, FAULTY, "The decisions it follows are valid", now))
 
 
-def _asked(c: Change, now: DecisionBaseline, head: str, lines: list[str], shown: Sequence[str] = ()) -> Gate:
-    """The owner's question: Continue pins *now*, the set shown; Pause keeps what the Change holds.
-
-    The read-backs waiting (*shown*) are listed after it, never part of what Continue accepts nor of its identity.
-    """
-    digest = hashlib.sha256("\n".join([head, *lines]).encode()).hexdigest()[:12]
-    text = "\n".join([head, *lines])
-    text += "\nContinue works by the decisions now in force; the approved brief stays as it is."
-    text += "".join(f"\n{line}" for line in shown)
-    asked = engine.ask(c.step.kind, text, f"{PREFIX}{c.step.kind}:{digest}", OPTIONS)
-    return Gate(c.model_copy(update={"decisions_offered": now}), asked)
-
-
 def waiting(store: Store, view: DataView, c: Change) -> list[Queued]:
     """The read-backs waiting on decisions in force for the Change, in queue order; they never block it."""
     return [q for q in read_backs.waiting(store, view) if reaches(q.decision, c)]
-
-
-def _waiting_lines(store: Store, view: DataView, c: Change) -> list[str]:
-    found = waiting(store, view, c)
-    if not found:
-        return []
-    lines = [WAITING, *(f"- {q.kind}: {q.decision.id} {_quoted(q.decision.title)}: {q.why}" for q in found[:SHOWN])]
-    return lines + ([f"{len(found) - SHOWN} more wait on the Decisions page."] if len(found) > SHOWN else [])
 
 
 def checkpoint(store: Store, c: Change) -> dict[str, Any] | None:
@@ -378,23 +353,28 @@ def _judged(view: DataView, c: Change, now: datetime, store: Store, lock: Lock |
     pin = c.decisions_baseline or current
     if stop := _faults(seen, c, pin.said.keys() | (set() if pin.picked else current.said.keys()), now):
         return stop
-    if c.decisions_baseline is None and c.decisions_unpinned_at is not None:  # its approval could not pin them
+    adopted: list[str] = []
+    pinning = c.decisions_baseline is None  # a Change approved before this gate, or one its approval could not pin
+    if pinning and c.decisions_unpinned_at is not None:
         current = _recovered(seen, current)
-        return _asked(c, current, UNPINNED, unpinned(current), _waiting_lines(store, view, c))
-    pinning = c.decisions_baseline is None  # a Change approved before this gate
+        adopted = [UNPINNED, *unpinned(current)]
+    elif not pinning and (lines := differences(seen, c.decisions_baseline, current)):
+        adopted, pinning = [CHANGED, *lines], True  # #1062: adopted as his Continue did, never asked
     if pinning:
-        c = c.model_copy(update={"decisions_baseline": current})
-    elif lines := differences(seen, c.decisions_baseline, current):
-        return _asked(c, current, CHANGED, lines, _waiting_lines(store, view, c))
+        update = {"decisions_baseline": current, "decisions_unpinned_at": None, "decisions_offered": None}
+        c = c.model_copy(update=update)
     if lock is not None and (later := _later(seen, c)):
+        if adopted:  # its picker checkpoints the new baseline: the record goes first, so no restart loses it
+            _adopted(store, lock, c, adopted, now)
+            adopted = []
         c, result = _reassessed(store, lock, view, c, later)
         if result is not None:
-            return Gate(c, result)
+            return Gate(c, result, adopted=adopted)  # the adoption already holds: its record goes with it
         if stop := _faults(seen, c, c.decisions_baseline.said, now):
-            return stop
+            return replace(stop, adopted=adopted)
         pinning = True
     lines, others = context(seen, c)
-    return Gate(c, lines=lines, others=others, pinned=pinning)
+    return Gate(c, lines=lines, others=others, pinned=pinning, adopted=adopted)
 
 
 def _later(seen: Snapshot, c: Change) -> list[Decision]:
@@ -436,7 +416,14 @@ def _reassessed(
     return c, None
 
 
+def _adopted(store: Store, lock: Lock, c: Change, lines: list[str], now: datetime) -> None:
+    at = now.isoformat(timespec="milliseconds")
+    store.log(lock, c.slug, {"event": "decisions-adopted", "at": at, "step": c.step.kind, "lines": lines})
+
+
 def _record(store: Store, lock: Lock, gate: Gate, now: datetime) -> None:
+    if gate.adopted:
+        _adopted(store, lock, gate.change, gate.adopted, now)
     if gate.refresh_error:
         c = gate.change
         store.log(

@@ -60,6 +60,7 @@ class Repair(BaseModel):
     defect: str = ""  # the issue filed for a defect in OwlBear's code, the text held for him, or why it failed
     credits: float | None = None  # the repair session's spend; None when it could not be read
     stopped: str = ""  # why it stopped
+    root: str = ""  # the owner-question cause it repairs, so its own question counts with them (#1064)
 
 
 class Repairs(BaseModel):

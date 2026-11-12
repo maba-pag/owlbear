@@ -170,7 +170,7 @@ def _environment(c: Change, r: StepResult, now: datetime) -> None:
     if not quota and now - (b.since or now) >= EPISODE_ASK:
         last = r.detail or r.reason
         text = f"{kind} keeps failing for {c.step.kind} since {b.since:%Y-%m-%d %H:%M}; last error: {last}"
-        ask(c, Question(step=c.step.kind, text=text, options=_resolve_or_pause(c), cause=cause), now)
+        ask(c, _internal(c, text, cause), now)
         return
     if kind == ErrorKind.CAPACITY and r.wake_at and r.wake_at > now:
         wake = r.wake_at  # a quota or rate limit resets at its own time
@@ -194,7 +194,7 @@ def _defect(c: Change, r: StepResult, now: datetime) -> None:
         return
     if count >= DEFECT_LIMIT:
         text = f"Delivery failed the same way {count} times ({cause}): {r.reason}"
-        ask(c, Question(step=c.step.kind, text=text, options=_resolve_or_pause(c), cause=cause), now)
+        ask(c, _internal(c, text, cause), now)
     else:
         c.step.attempt += 1
 
@@ -207,9 +207,14 @@ def _wrong_model(c: Change, r: StepResult, now: datetime) -> None:
     c.budgets.causes[cause] = Budget(count=count, task=c.step.task, at=now)
     if count >= WRONG_MODEL_LIMIT:
         text = f"The step ran on the wrong model again after one rerun: {r.reason}"
-        ask(c, Question(step=c.step.kind, text=text, options=_resolve_or_pause(c), cause=cause), now)
+        ask(c, _internal(c, text, cause), now)
     else:
         c.step.attempt += 1
+
+
+def _internal(c: Change, text: str, cause: str) -> Question:
+    """Delivery's own problem: after approval the gate repairs or stops it, never asks (#1062)."""
+    return Question(step=c.step.kind, text=text, options=_resolve_or_pause(c), cause=cause, subject="internal")
 
 
 def _resolve_or_pause(c: Change) -> list[Option]:
@@ -232,12 +237,25 @@ def _exhausted(c: Change, r: StepResult, now: datetime) -> None:
     if c.tests is None and _alternative(c, r, now):
         return
     options = [
-        Option(id="revise", label="Revise the requirement", next=StepKind.SHAPE),
-        Option(id="narrow", label="Narrow the scope", next=StepKind.PLAN),
+        Option(id="revise", label="Change what this Change delivers", next=StepKind.SHAPE),
+        Option(id="narrow", label="Deliver less: narrow the scope", next=StepKind.PLAN),
         Option(id="pause", label="Pause this Change", next="pause"),
     ]
     options = curation_flow.options(c) if c.tests else options  # a test review is never revised or re-planned
-    ask(c, Question(step=c.step.kind, text=f"{r.reason} keeps failing ({cause})", options=options, cause=cause), now)
+    task = next((t.title for t in c.plan.tasks if t.id == c.step.task), "") if c.plan else ""
+    split = (b := c.budgets.causes.get(cause)) is not None and b.alternative
+    what = f"{task!r}" if task else f"the {c.step.kind} step"
+    text = (  # the product consequence in plain words; the worker's evidence stays in the outcome (#1062)
+        f"Delivery could not finish {what} after several tries{', and a smaller plan did not help' if split else ''}."
+        + (
+            " How should it go on?"
+            if c.tests
+            else " It goes on only with a smaller or different goal, or after a pause."
+        )
+    )
+    asked = ask(c, Question(step=c.step.kind, text=text, options=options, cause=cause, subject="product"), now)
+    if asked and c.outcome:
+        c.outcome.reason = f"{text}\n\nDetails: {r.reason} keeps failing ({cause})"
 
 
 def _alternative(c: Change, r: StepResult, now: datetime) -> bool:
@@ -268,10 +286,14 @@ def _round(c: Change, r: StepResult, now: datetime) -> None:
             Option(id="fix", label="Fix the findings", next=fix),
             Option(id="accept", label="Accept as it is", next="done"),
         ]
-        text = f"Findings remain after {ROUND_LIMIT} rounds: {r.reason}"
+        what = "the final review" if key == FINAL else (f"task {s.task}" if s.task else f"the {s.kind}")
+        text = (
+            f"Review findings remain on {what} after {ROUND_LIMIT} rounds. Accept: the work ships with them open. "
+            f"Fix: the builder works on them again.\n\nDetails: {r.reason}"
+        )
         cause = cause_key(ErrorKind.REVIEW, s.kind, key)
         held = [r.fix_task, *r.more_fixes] if s.kind == StepKind.REVIEW and r.fix_task else []
-        ask(c, Question(step=s.kind, text=text, options=options, cause=cause, repair=held), now)
+        ask(c, Question(step=s.kind, text=text, options=options, cause=cause, repair=held, subject="product"), now)
     elif s.kind == StepKind.REVIEW:
         go(c, StepKind.BUILD, fix_task(c, r, s.task or FINAL) or s.task)
     else:

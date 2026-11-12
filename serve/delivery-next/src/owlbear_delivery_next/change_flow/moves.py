@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts.evidence import cover
 from owlbear_delivery_next.change_contracts.models import Exit, Outcome, Step, StepKind
 from owlbear_delivery_next.change_contracts.round_records import FINAL, PLAN
-from owlbear_delivery_next.change_flow import repairs
+from owlbear_delivery_next.change_flow import asking, repairs
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -77,11 +77,14 @@ def open_task(c: Change) -> Task | None:
     return task
 
 
-def ask(c: Change, question: Question, now: datetime) -> None:
-    """Record *question* from the current step and wait for the owner."""
-    q = question.model_copy(update={"id": f"q{len(c.questions) + 1}", "step": c.step.kind})
+def ask(c: Change, question: Question, now: datetime) -> Question | None:
+    """Record *question* from the current step and wait for the owner; None when the gate sent it elsewhere (#1062)."""
+    q = asking.offered(c, question.model_copy(update={"id": f"q{len(c.questions) + 1}", "step": c.step.kind}), now)
+    if q is None:
+        return None
     c.questions.append(q)
     c.outcome = Outcome(exit=Exit.ASK, cause=q.cause, reason=q.text, who="you", question=q.id, at=now)
+    return q
 
 
 def resolved(c: Change, task_id: str | None) -> set[str]:

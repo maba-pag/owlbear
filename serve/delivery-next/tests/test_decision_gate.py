@@ -6,6 +6,7 @@ import asyncio
 import dataclasses
 import shutil
 import subprocess
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
@@ -15,7 +16,7 @@ from fastapi.testclient import TestClient
 
 from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, read, write
 from owlbear_delivery_next.change_contracts.curation_records import Share, TestReview
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem, BriefApproval
+from owlbear_delivery_next.change_contracts.inbox import BriefApproval, IntentItem
 from owlbear_delivery_next.change_contracts.models import (
     Answer,
     Brief,
@@ -116,14 +117,6 @@ def step(store: Store, repo: Path) -> Change:
     return store.read("c1")
 
 
-def answer(store: Store, option: str) -> Change:
-    c = store.read("c1")
-    q = loop.open_question(c)
-    c, _ = loop.schedule(c, [AnswerItem(at=AT, question=q.id, option=option)], AT)
-    store.write(Lock("c1"), c)
-    return c
-
-
 def test_a_change_approved_without_a_pick_gives_every_role_every_decision_in_force(
     tmp_path, shared, change_repo, monkeypatch
 ):
@@ -163,45 +156,48 @@ def test_a_change_approved_without_a_pick_gives_every_role_every_decision_in_for
 # MERGE takes the same gate as PUBLISH; test_a_failed_refresh_stops_before_publish_and_merge_but_not_before_build
 # still runs it
 @pytest.mark.parametrize("kind", [K.BUILD, K.PUBLISH])
-def test_an_applicable_change_after_approval_asks_before_the_next_step_and_continue_repins(tmp_path, shared, ran, kind):
+def test_an_applicable_change_after_approval_is_adopted_before_the_next_step_and_repins(tmp_path, shared, ran, kind):
     rule = put(shared, make())
     store = stored(tmp_path, shared, change(kind))
     new = replace(shared, rule, "The pages are plain HTML and CSS with no build step.")
 
     c = step(store, tmp_path)
 
-    assert ran == []
-    q = loop.open_question(c)
-    assert c.outcome.exit == Exit.ASK
-    assert q.cause.startswith(f"decisions:{kind}:")
-    assert [o.label for o in q.options] == ["Continue with the current decisions", "Pause"]
-    assert f"no longer in force: {rule.id}" in q.text
-    assert f"new: {new.id}" in q.text
-    assert "plain HTML and CSS" in q.text
-    assert (c.brief.approved_version, c.brief.scope) == (1, ["web"])  # the approved brief stays (TD-428)
-
-    c = answer(store, "continue")
-    assert set(c.decisions_baseline.revisions) == {new.id}
+    assert (ran, c.outcome, loop.open_question(c)) == ([kind], None, None)
+    assert c.questions == []
+    lines = adopted(store, kind)
+    assert f"no longer in force: {rule.id}" in lines
+    assert f"new: {new.id}" in lines
+    assert "plain HTML and CSS" in lines
+    assert (c.brief.approved_version, c.brief.scope) == (1, ["web"])
+    assert c.decisions_baseline.revisions == {new.id: new.rule_revision}
+    assert set(c.decisions_baseline.said) == {new.id}
+    assert (c.decisions_unpinned_at, c.decisions_offered) == (None, None)
     assert step(store, tmp_path).outcome is None
-    assert ran == [kind]
+    assert ran == [kind, kind]
+    assert adopted(store, kind) == lines  # the unchanged boundary records no second adoption
 
 
-def test_pause_keeps_the_baseline_and_asks_again_after_resume(tmp_path, shared, ran):
+def test_pause_keeps_the_baseline_and_resume_adopts_changed_decisions_without_asking(tmp_path, shared, ran):
     rule = put(shared, make())
     store = stored(tmp_path, shared, change())
     pinned = store.read("c1").decisions_baseline
-    replace(shared, rule, "The pages are plain HTML, served as they are.")
-    step(store, tmp_path)
+    new = replace(shared, rule, "The pages are plain HTML, served as they are.")
+    c, _ = loop.schedule(store.read("c1"), [IntentItem(at=AT, intent="pause")], AT)
+    store.write(Lock("c1"), c)
 
-    c = answer(store, "pause")
+    c = step(store, tmp_path)
 
     assert c.intent.paused_at is not None
     assert c.decisions_baseline == pinned
     assert loop.next_step(c, AT) is None
-    c.intent.paused_at = None
-    store.write(Lock("c1"), c)
-    assert loop.open_question(step(store, tmp_path)) is not None
     assert ran == []
+    c, _ = loop.schedule(c, [IntentItem(at=AT, intent="resume")], AT)
+    store.write(Lock("c1"), c)
+    c = step(store, tmp_path)
+    assert (c.outcome, c.questions, ran) == (None, [], [K.BUILD])
+    assert c.decisions_baseline.revisions == {new.id: new.rule_revision}
+    assert f"new: {new.id}" in adopted(store, K.BUILD)
 
 
 def test_an_unreadable_data_repository_stops_the_step(tmp_path, shared, ran):
@@ -257,7 +253,7 @@ def test_large_set_reaches_consumers_whole(tmp_path):
     assert all(line in message for line in lines for message in (build, planned, review))
 
 
-def test_approval_pins_the_baseline_and_an_unreadable_one_asks_before_pinning_the_set_in_force(tmp_path, shared, ran):
+def test_approval_pins_the_baseline_and_an_unreadable_one_adopts_the_recovered_set_in_force(tmp_path, shared, ran):
     rule = put(shared, make())
     c = change().model_copy(update={"brief": Brief(version=1, challenged=1, scope=["web"])})
     store = Store(tmp_path / "store", shared, PROJECT)
@@ -277,21 +273,16 @@ def test_approval_pins_the_baseline_and_an_unreadable_one_asks_before_pinning_th
 
     c = step(store, tmp_path)
 
-    q = loop.open_question(c)
-    assert ran == []
-    assert q.cause.startswith("decisions:build:")
-    assert "Decisions in force now (not pinned at approval)" in q.text
-    assert f'{rule.id} {rule.title}: "{rule.statement}"' in q.text
-    assert c.decisions_baseline is None
-    c = answer(store, "pause")
-    assert (c.decisions_baseline, c.decisions_unpinned_at) == (None, AT)  # still owed: never pinned silently
-    c.intent.paused_at = None
-    store.write(Lock("c1"), c)
-    assert loop.open_question(step(store, tmp_path)) is not None
-    c = answer(store, "continue")
+    assert (ran, c.outcome, c.questions) == ([K.BUILD], None, [])
+    lines = adopted(store, K.BUILD)
+    assert "Decisions in force now (not pinned at approval)" in lines
+    assert f'{rule.id} {rule.title}: "{rule.statement}"' in lines
     assert (c.decisions_baseline.revisions, c.decisions_unpinned_at) == ({rule.id: rule.rule_revision}, None)
+    assert set(c.decisions_baseline.said) == {rule.id}
+    assert c.decisions_offered is None
     assert step(store, tmp_path).outcome is None
-    assert ran == [K.BUILD]
+    assert ran == [K.BUILD, K.BUILD]
+    assert adopted(store, K.BUILD) == lines
 
 
 def test_queueing_and_answering_a_read_back_after_approval_never_makes_the_gate_ask(tmp_path, shared, ran):
@@ -319,8 +310,11 @@ def test_a_change_pinned_with_whole_revisions_does_not_ask_while_they_hold(tmp_p
 
     assert step(store, tmp_path).outcome is None
     assert ran == [K.BUILD]
-    replace(shared, rule, "The pages are plain HTML and CSS with no build step.")
-    assert step(store, tmp_path).outcome.exit == Exit.ASK  # an old pin still sees a real change
+    new = replace(shared, rule, "The pages are plain HTML and CSS with no build step.")
+    c = step(store, tmp_path)
+    assert (c.outcome, c.questions, ran) == (None, [], [K.BUILD, K.BUILD])
+    assert c.decisions_baseline.revisions == {new.id: new.rule_revision}
+    assert f"no longer in force: {rule.id}" in adopted(store, K.BUILD)
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -344,8 +338,9 @@ def test_another_checkouts_replacement_reaches_an_idle_checkouts_next_gated_step
 
     c = step(store, tmp_path)
 
-    assert ran == []
-    assert f"new: {new.id}" in loop.open_question(c).text
+    assert (ran, c.outcome, c.questions) == ([K.BUILD], None, [])
+    assert c.decisions_baseline.revisions == {new.id: new.rule_revision}
+    assert f"new: {new.id}" in adopted(store, K.BUILD)
 
 
 @pytest.mark.parametrize("kind", [K.PUBLISH, K.MERGE])
@@ -403,7 +398,7 @@ def checking(**fields) -> Change:
 NONE = Preparation(id="none", kind="data-only", seed="true", cleanup="true")
 
 
-def test_a_due_test_copy_waits_for_the_gate_and_a_gone_checks_end_still_runs(tmp_path, shared, ran, monkeypatch):
+def test_a_due_test_copy_adopts_changed_decisions_and_a_gone_checks_end_still_runs(tmp_path, shared, ran, monkeypatch):
     rule = put(shared, make())
     store = stored(tmp_path, shared, checking())
     prepare._write(store, "c1", prepare.Prepared(check="preview", option=NONE))  # noqa: SLF001 - not restored yet
@@ -415,37 +410,56 @@ def test_a_due_test_copy_waits_for_the_gate_and_a_gone_checks_end_still_runs(tmp
         return loop.StepResult(exit=Exit.PENDING, waiting=Waiting.CHECK_START, reason="test copy prepared")
 
     monkeypatch.setattr(prepare, "launch", launch)
-    replace(shared, rule, "The pages are plain HTML, served as they are.")
+    new = replace(shared, rule, "The pages are plain HTML, served as they are.")
 
     c = step(store, tmp_path)
 
-    assert launched == []  # no export, restore or seed before the owner answers
-    assert loop.open_question(c).cause.startswith("decisions:check:")
-    assert not prepare.read(store, "c1", "old").open  # the gone check's cleanup ran all the same
-    answer(store, "continue")
-    step(store, tmp_path)
-    assert launched == ["preview"]
+    assert (launched, c.questions, c.outcome.waiting) == (["preview"], [], Waiting.CHECK_START)
+    assert c.decisions_baseline.revisions == {new.id: new.rule_revision}
+    assert f"new: {new.id}" in adopted(store, K.CHECK)
+    assert not prepare.read(store, "c1", "old").open  # the gone check's cleanup still runs
     assert ran == []
 
 
-def test_the_hosts_launch_of_a_check_environment_waits_for_the_gate(tmp_path, shared, monkeypatch):
+def test_the_hosts_launch_adopts_changed_decisions_and_stops_when_the_gate_cannot_read_them(
+    tmp_path, shared, monkeypatch
+):
     rule = put(shared, make())
-    store = stored(tmp_path, shared, checking())
+    c = checking()
+    c.names.worktree = str(tmp_path)
+    store = stored(tmp_path, shared, c)
+    prepare._write(store, "c1", prepare.Prepared(check="preview", option=NONE, ready=True))  # noqa: SLF001
     started: list[str] = []
-    monkeypatch.setattr(check, "start", lambda e, *_a, **_k: started.append(e.command))
+
+    def start(e, *_a, **_k):
+        started.append(e.command)
+        return SimpleNamespace(pid=900, stdin=None)
+
+    monkeypatch.setattr(check, "start", start)
+    monkeypatch.setattr(check, "created", lambda _pid: 2.0)
+    monkeypatch.setattr(check, "ready", lambda e, _proc, **_kw: e.pids)
     host = SimpleNamespace(
-        store=store, env_action=lambda _c: "launch", clear=lambda _c, _e: {}, say=print, unset_said=None
+        store=store,
+        env_action=lambda _c: "launch",
+        clear=lambda _c, _e: {},
+        say=print,
+        unset_said=None,
+        launching=nullcontext(),
+        paused=lambda: False,
+        updating=lambda: False,
     )
-    replace(shared, rule, "The pages are plain HTML, served as they are.")
+    new = replace(shared, rule, "The pages are plain HTML, served as they are.")
 
     c = environment.launch(host, Lock("c1"), store.read("c1"), AT)
 
-    assert started == []
-    assert loop.open_question(c).cause.startswith("decisions:check:")
-    assert c.env.launched_at is None  # nothing started, so its disposal has nothing left to find
+    assert (started, c.questions, c.outcome.waiting) == ([c.env.command], [], Waiting.PERSON_CHECK)
+    assert c.decisions_baseline.revisions == {new.id: new.rule_revision}
+    assert f"new: {new.id}" in adopted(store, K.CHECK)
+    assert c.env.launched_at is not None
+    c.env.launched_at = None  # the next environment launch must pass the gate too
     shutil.rmtree(shared.root / PROJECT)
-    stopped = environment.launch(host, Lock("c1"), store.read("c1"), AT)
-    assert (started, stopped.stop.kind) == ([], ErrorKind.STATE)
+    stopped = environment.launch(host, Lock("c1"), c, AT)
+    assert (started, stopped.stop.kind) == ([c.env.command], ErrorKind.STATE)
     assert environment.launch(host, Lock("c1"), stopped, AT) is stopped  # one stop, not one per host pass
 
 
@@ -507,6 +521,12 @@ def test_a_test_reviewer_receives_the_decisions_in_force(tmp_path, shared, chang
     assert len(seen) == 1
     assert step_decisions.HEAD in seen[0]
     assert f"{rule.id} (project, approved): {rule.title}: {rule.statement}" in seen[0]
+
+
+def adopted(store: Store, kind: StepKind) -> str:
+    (event,) = [e for e in store.events("c1") if e.get("event") == "decisions-adopted"]
+    assert event["step"] == kind
+    return "\n".join(event["lines"])
 
 
 def gate_event(store: Store, kind: StepKind) -> dict:

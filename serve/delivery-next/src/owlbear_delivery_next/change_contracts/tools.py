@@ -338,9 +338,11 @@ SUBMIT = Spec(
 )
 ASK = Spec(
     "ask_question",
-    "Propose one owner question with exact executable actions. Delivery admits every promise before asking; "
-    "a refusal returns field errors to you. Mark the recommended index; a check recommendation names its exact "
-    "declared check for a measured trial. Your step ends; it resumes with the refusal or owner answer.",
+    "Propose one owner question with exact executable actions: a product choice (what he gets), or one proposal "
+    "a decision reserves for him (lint, CI or hook configuration, security, project setup) as yes or no, in plain "
+    "words. Delivery admits it before asking; a refusal returns field errors to you, and a question about getting a "
+    "tool or check working goes to Delivery's repair instead. Mark the recommended index; a check recommendation "
+    "names its exact declared check for a measured trial. Your step ends; it resumes with the refusal or answer.",
     AskQuestion,
     "ask",
 )
