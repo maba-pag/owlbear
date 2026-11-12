@@ -257,26 +257,27 @@ def held(c: Change, head: str, ui: Sequence[str]) -> StepResult:
         )
     shown = ", ".join(ui[:_SHOWN]) or "the brief marks it as UI"
     options = [
-        Option(id="brief", label="Revise the brief", next=StepKind.SHAPE),
-        Option(id=NOT_UI, label="Not a UI change", next=StepKind.MERGE),
-        Option(id="pause", label="Pause", next="pause"),
-    ]
-    text = f"This Change touches UI files ({shown}) but its brief has no visual check"
-    return engine.ask(StepKind.MERGE, text, _cause(c, ui), options)
+        Option(id="brief", label="Yes, or I am not sure: go back to the brief to add a look at the pages",
+               next=StepKind.SHAPE),
+        Option(id=NOT_UI, label="No, nothing a person sees changes: merge without a look", next=StepKind.MERGE),
+        Option(id="pause", label="Pause this Change", next="pause"),
+    ]  # fmt: skip
+    text = (
+        "This Change alters files that draw pages, but its brief asks for no look at the pages before merging, and "
+        "Delivery cannot tell from the files whether a person sees a difference. Does this Change alter what a "
+        f"person sees?\n\nDetails: {shown}"
+    )
+    return engine.ask(StepKind.MERGE, text, _cause(c, ui), options, subject="product")
 
 
 def missing_browser(reason: str) -> StepResult:
     """B24: the owner installs Chromium; the check never passes without it."""
-    text = f"The visual check needs Chromium for Playwright; run `{INSTALL}`, then continue ({reason[:200]})"
-    return engine.ask(
-        StepKind.CHECK,
-        text,
-        cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, VISUAL),
-        [
-            Option(id="done", label="Installed, continue", next=StepKind.CHECK),
-            Option(id="pause", label="Pause", next="pause"),
-        ],
+    said = (
+        "The visual check needs the Chromium browser on this machine. "
+        f"Install it in a terminal with `{INSTALL}`, then run the step again"
     )
+    cause = cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, VISUAL)
+    return engine.blocked(cause, said, reason[:400])
 
 
 def broken(reason: str) -> StepResult:

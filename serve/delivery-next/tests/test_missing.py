@@ -382,16 +382,13 @@ def test_planning_starts_on_a_clean_tree_whatever_step_left_edits(repo, monkeypa
     assert [e["event"] for e in events] == ["shelved"]
 
 
-def test_a_failed_shelve_asks_the_owner_before_any_planner_runs(tmp_path) -> None:
+def test_a_failed_shelve_stops_before_any_planner_runs(tmp_path) -> None:
     with pytest.raises(worktree.ShelveError, match="git stash failed") as caught:
         worktree.shelve(tmp_path, "owlbear c1")  # not a repository: Git fails
-    asked = plan_round.unshelved(failure(caught.value))
-    assert (asked.exit, asked.cause, options(asked)) == (
-        Exit.ASK,
-        "state:plan:dirty-worktree",
-        [("done", K.PLAN), ("pause", "pause")],
-    )
-    loop.apply(change(K.PLAN), asked, NOW)
+    stopped = plan_round.unshelved(failure(caught.value))
+    assert (stopped.exit, stopped.cause, stopped.question) == (Exit.STOP, "state:plan:dirty-worktree", None)
+    assert stopped.stop.action == "Run the step again"  # Delivery's own problem: never a question (#1168)
+    loop.apply(change(K.PLAN), stopped, NOW)
 
 
 def test_prompts_name_the_report() -> None:
@@ -400,7 +397,7 @@ def test_prompts_name_the_report() -> None:
 
 
 @pytest.mark.parametrize("how", ["refused", "left"])
-def test_a_shelve_failure_is_asked_and_logged_whole(  # noqa: PLR0913, PLR0917 - fixtures
+def test_a_shelve_failure_stops_and_is_logged_whole(  # noqa: PLR0913, PLR0917 - fixtures
     repo, tmp_path, whole_error, monkeypatch, how, checks_settled
 ) -> None:
     store = Store(tmp_path / "store")
@@ -428,10 +425,11 @@ def test_a_shelve_failure_is_asked_and_logged_whole(  # noqa: PLR0913, PLR0917 -
         if how == "refused"
         else f"files stay uncommitted in {repo} after git stash: " + "\n".join(f"?? {n}" for n in left)
     )
-    q = loop.open_question(store.read("c1"))
-    assert q.text == (
-        "Delivery could not set aside the uncommitted edits before planning "
-        f"(ShelveError: {why}). Commit, stash or discard them."
+    stopped = store.read("c1")
+    assert loop.open_question(stopped) is None
+    assert stopped.stop.reason == (
+        "Delivery could not set aside uncommitted edits in this Change's worktree before planning. "
+        f"Commit or discard them there, then run the step again.\n\nDetails: ShelveError: {why}"
     )
     assert [e["reason"] for e in store.events("c1") if e["event"] == "not-shelved"] == [f"ShelveError: {why}"]
 

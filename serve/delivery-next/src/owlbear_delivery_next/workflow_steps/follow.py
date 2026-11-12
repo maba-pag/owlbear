@@ -77,7 +77,9 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
     cause = failures.cause_key(ErrorKind.GATE, step, f"declared-{digest}")
     answers = [q.answer for q in c.questions if q.cause == cause and q.answer]
     names = ", ".join(n.strip() for n in answers[-1].text.split(",") if n.strip()) if answers else ""
-    value = "none" if answers and answers[-1].option == "none" else names
+    read = entry.value if entry and entry.value else "none"  # what the workflow files name, as far as they say
+    said = answers[-1].option if answers else None
+    value = "none" if said == "none" else read if said == "yes" else names
     if value and digest == bound:
         ctx.profile = profile.confirm(ctx.profile, profile.DECLARED, value, ctx.now)
         try:
@@ -89,13 +91,17 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
     if value:
         return () if value == "none" else tuple(n.strip() for n in value.split(",")), None
     options = [
-        Option(id="none", label="No checks", next=step),
-        Option(id="names", label="These checks (type their names)", next=step),
-        Option(id="pause", label="Pause", next="pause"),
+        Option(id="yes", label="Yes: merge once those pass", next=step),
+        Option(id="names", label="Wait for the checks I type instead (their names, comma-separated)", next=step),
+        engine.PAUSE,
     ]
-    changed = f" (workflows changed at {pr.head_sha[:7]})" if digest != bound else ""
-    text = f"Which checks must pass before merging{changed}? Name them, comma-separated, or choose none"
-    return (), engine.ask(step, text, cause, options)
+    changed = " (its CI files changed in this Change)" if digest != bound else ""
+    text = (
+        f"Delivery could not read the names of every check this project's CI runs before a merge{changed}. "
+        "It waits for the checks GitHub requires, for every check that starts on the pull request, and for those it "
+        f"could read: {read if read != 'none' else 'none it could read'}. Merge on that basis?"
+    )
+    return (), engine.ask(step, text, cause, options, subject="reserved")
 
 
 def ci_task(gh: Provider, repository: str, failed: Check) -> tuple[str, str]:
@@ -136,24 +142,20 @@ def episode(ctx: Ctx, c: Change, head: str, state: CiState) -> Change:
     return c
 
 
-def missing(ctx: Ctx, c: Change, pr: PullRequest, state: CiState, step: StepKind = F) -> tuple[Change, StepResult]:
-    """P10: a declared or required check that never starts is pending, then the owner's action; never passed."""
+def missing(ctx: Ctx, c: Change, pr: PullRequest, state: CiState) -> tuple[Change, StepResult]:
+    """P10: a declared or required check that never starts is pending, then stops the step; never passed."""
     names = ", ".join(state.missing)
     cause = MISSING + names
     window = timedelta(seconds=pref(ctx.store.settings(), "ci_start_window_seconds"))
     since = c.missing.since if c.missing and c.missing.head == pr.head_sha else ctx.now
     if ctx.now - since < window:
         return c, engine.pending(Waiting.CHECK_START, f"waiting for {names} to start", ctx.poll())
-    asked = next((q for q in c.questions if q.cause == cause and q.answer and not q.effect_observed_at), None)
-    if asked is None:
-        text = f"{names} never started on PR #{pr.number}: start or approve its workflow run in GitHub"
-        return c, engine.ask(step, text, cause, engine.continue_or_pause(step))
-    c, within = budgets.charge(c, cause, ctx.now)
-    if within:
-        return c, engine.pending(Waiting.OWNER_ACTION, f"waiting for {names} to start after your action", ctx.poll())
-    action = f"Start {names} for PR #{pr.number} in GitHub"
-    stop = Stop(kind=ErrorKind.GATE, reason=f"{names} never started", action=action, resume="It starts", at=ctx.now)
-    return c, StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
+    c.missing = None  # the rerun waits a new window for the run the owner started
+    said = (
+        f"{names} never started on this Change's pull request. Start or approve the run on GitHub, "
+        "then run the step again"
+    )
+    return c, engine.blocked(cause, said, f"PR #{pr.number} at {pr.head_sha[:7]}", ctx.now)
 
 
 def _published(c: Change, pr: PullRequest, writer: Writer) -> conv.Published:
@@ -220,14 +222,13 @@ def _repost(  # noqa: PLR0913 - one repost needs the PR, the item's state and th
         return c, None
     if rec.reposts >= REPOSTS:
         cause = failures.cause_key(ErrorKind.GATE, step, f"repost:{s.item.id}")
-        asked = next((q for q in c.questions if q.cause == cause and q.answer and not q.effect_observed_at), None)
-        if asked is None:
-            where = s.item.url or s.item.id
-            text = f"Delivery's reply on {where} keeps disappearing; reply manually or let Delivery post again"
-            return c, engine.ask(step, text, cause, engine.continue_or_pause(step))
-        c = budgets.effect_observed(c, asked.id, ctx.now)
-        rec = next(h for h in c.handled if h.task == task)
-        rec.reposts = 0
+        where = s.item.url or s.item.id
+        said = (
+            f"Delivery's reply on {where} was deleted {rec.reposts} times. Reply there yourself, or run the step "
+            "again and Delivery posts it once more"
+        )
+        rec.reposts = 0  # the rerun posts again
+        return c, engine.blocked(cause, said, f"PR #{pr.number}", ctx.now)
     rec.reposts += 1
     rec.reply_id = _post(ctx, c, pr, s.item, r=Response(how=rec.how, text=rec.text, commit=rec.commit), task=task)
     return c, None
@@ -254,8 +255,9 @@ def _settle(
             next(h for h in c.handled if h.task == rec.task).resolved = True
             return c, None
         return c, engine.pending(Waiting.GITHUB, f"waiting for GitHub to show {where} resolved", ctx.poll())
-    text = f"Resolving the review thread {where} did not take effect: resolve it in GitHub"
-    return c, engine.ask(step, text, cause, engine.continue_or_pause(step))
+    c.budgets.causes.pop(cause, None)  # the rerun tries again
+    said = f"Delivery could not mark the review thread {where} as resolved. Resolve it on GitHub, then run it again"
+    return c, engine.blocked(cause, said, "GitHub accepted no resolution within the tries allowed", ctx.now)
 
 
 def _open(c: Change, s: conv.State, step: StepKind) -> StepResult:
@@ -319,20 +321,22 @@ def _reopening(c: Change) -> Question | None:
 
 def reopen(ctx: Ctx, c: Change, pr: PullRequest) -> tuple[Change, PullRequest, StepResult | None]:
     """M4 reopen: reopen the closed PR when the project's account can push, else ask the owner; go on once it's open."""
-    q = _reopening(c)
+    q, refused = _reopening(c), "this project's GitHub account may not push to the repository"
     if q and pr.state != "open" and not pr.merged and can_push(ctx):
+        refused = ""
         try:
             ctx.gh.reopen_pull_request(ctx.repository, pr.number)
         except ProviderError as exc:  # GitHub refuses, e.g. a deleted branch: the owner gets the action
-            ctx.log(c.slug, "reopen", pr=pr.number, error=failure(exc))
+            refused = failure(exc)
+            ctx.log(c.slug, "reopen", pr=pr.number, error=refused)
         pr = ctx.gh.read_pull_request(ctx.repository, pr.number)
     if pr.state == "open":
         return (budgets.effect_observed(c, q.id, ctx.now) if q else c), pr, None
     if q is None or pr.merged:
         reason = f"PR #{pr.number} is {'merged' if pr.merged else 'closed'}"
         return c, pr, engine.pending(Waiting.CI, reason, ctx.poll())
-    text = f"Reopen PR #{pr.number} in GitHub ({pr.url}: Reopen pull request), then continue"
-    return c, pr, engine.ask(F, text, failures.cause_key(ErrorKind.GATE, F, "reopen"), engine.continue_or_pause(F))
+    said = f"Delivery could not reopen pull request #{pr.number}. Reopen it on GitHub, then run the step again"
+    return c, pr, engine.blocked(failures.cause_key(ErrorKind.GATE, F, "reopen"), said, refused or pr.url, ctx.now)
 
 
 def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - one exit per observation

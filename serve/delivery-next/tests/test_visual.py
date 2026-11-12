@@ -171,8 +171,9 @@ def test_a_ui_diff_without_a_visual_check_asks_once_and_not_ui_is_a_decided_deci
     assert not merge.visual_ok(c, head, ui)
     result = visual.held(c, head, ui)
     assert result.exit == Exit.ASK
-    assert result.question.text == "This Change touches UI files (web/app.css) but its brief has no visual check"
-    assert [o.label for o in result.question.options] == ["Revise the brief", "Not a UI change", "Pause"]
+    assert result.question.subject == "product"
+    assert result.question.text.endswith("Does this Change alter what a person sees?\n\nDetails: web/app.css")
+    assert [o.id for o in result.question.options] == ["brief", visual.NOT_UI, "pause"]
     c = loop.apply(c, result, NOW)
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option=visual.NOT_UI)], NOW)
     c = visual.decide(visual.decide(c, ui, NOW), ui, NOW)
@@ -1105,16 +1106,16 @@ def test_a_visual_environment_is_disposed_on_stop_or_abandon_and_its_runner_cras
     assert not host.disappeared(person, rec, NOW)
 
 
-def test_a_missing_chromium_asks_with_the_install_command(flow):
+def test_a_missing_chromium_stops_with_the_install_command(flow):
     def missing(*_a, **_k):
         raise visual.BrowserMissingError(MISSING)
 
     flow.mp.setattr(visual, "CAPTURE", missing)
     runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
     after = flow.store.read("c1")
-    question = next(q for q in after.questions if q.id == after.outcome.question)
-    assert after.outcome.exit == Exit.ASK
-    assert "uv run playwright install chromium" in question.text
+    assert (after.outcome.exit, after.questions) == (Exit.STOP, [])  # Delivery's own problem: never a question
+    assert "uv run playwright install chromium" in after.stop.reason
+    assert after.stop.action == "Run the step again"
     assert (after.visual, flow.review.calls) == (None, [])
 
 

@@ -38,10 +38,14 @@ if TYPE_CHECKING:
 UNDO = "Undo attempt {attempt} of task {task}, rejected by the owner for a fresh build (TD-210)"
 REBUILD = "Undo tasks {tasks} for their fresh build, rejected by the owner at final review attempt {attempt} (TD-210)"
 CLEAN_UNDO = "Undo the Change's work for a new plan from a clean state, the owner's choice at final review attempt {n}"
-OPTIONS = [
-    Option(id="another", label="Another round on the kept work", next="another"),
-    Option(id="pause", label="Pause this Change", next="pause"),
+OPTIONS = [  # reserved (#1168): he rejected the work; reviewing it once more instead is his yes or no
+    Option(id="another", label="Yes: review the kept work once more", next="another"),
+    Option(id="pause", label="No: pause this Change", next="pause"),
 ]
+ASKED = (
+    "Delivery could not undo the work you rejected ({what}), so it cannot build it afresh; nothing was undone. "
+    "Have the kept work reviewed once more instead?\n\nDetails: {why}"
+)
 
 
 def archive(slug: str, subject: str, attempt: int, head: str) -> str:
@@ -184,12 +188,9 @@ def _remove(path: Path, scratch: Path) -> None:
 def _question(c: Change, task: Task, lp: RoundLoop, why: str) -> Question:
     """The owner's way on when the undo fails: the last repair is reviewed again, or the Change pauses."""
     repair = open_task(c)
-    text = (
-        f"Delivery could not undo attempt {lp.attempt} of task {task.id} for its fresh build: {why}. Nothing was "
-        "undone. Another round reviews the last repair of the kept work; a pause lets you fix the branch first."
-    )
+    text = ASKED.format(what=f"attempt {lp.attempt} of task {task.id}", why=why)
     cause = f"{PREFIX}{task.id} {repair.id if repair else task.id}"
-    return Question(step=StepKind.BUILD, text=text, options=OPTIONS, cause=cause)
+    return Question(step=StepKind.BUILD, text=text, options=OPTIONS, cause=cause, subject="reserved")
 
 
 def _final(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
@@ -209,12 +210,10 @@ def _final(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
     event = {"event": "undo", "at": now.isoformat(timespec="seconds"), "task": FINAL, "attempt": lp.attempt}
     store.log(lock, change.slug, event | {"tasks": lp.rebuild, "clean": clean} | ({"error": why} if why else {}))
     if why:
-        text = (
-            f"Delivery could not undo the work you rejected at final review attempt {lp.attempt}: {why}. Nothing was "
-            "undone. Another round reviews the kept work again; a pause lets you fix the branch first."
-        )
+        text = ASKED.format(what=f"final review attempt {lp.attempt}", why=why)
         repair = next((t.id for t in reversed(change.plan.tasks) if t.fixes == FINAL), FINAL) if change.plan else FINAL
-        ask(change, Question(step=StepKind.REVIEW, text=text, options=OPTIONS, cause=f"{PREFIX}{FINAL} {repair}"), now)
+        q = Question(step=StepKind.REVIEW, text=text, options=OPTIONS, cause=f"{PREFIX}{FINAL} {repair}")
+        ask(change, q.model_copy(update={"subject": "reserved"}), now)
     elif clean:
         how = "from a clean state: Delivery undid the Change's earlier work, which stays archived on a branch"
         round_flow.replan(change, lp, round_flow.why(lp, how), now)

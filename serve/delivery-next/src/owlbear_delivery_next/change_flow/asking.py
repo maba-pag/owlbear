@@ -50,8 +50,7 @@ def offered(c: Change, q: Question, now: datetime) -> Question | None:
         routed(c, q.cause or cause_key(ErrorKind.PROJECT_ENV, c.step.kind, f"question-{key}"), said, now, key)
         return None
     if earlier and q.cause:  # a worker's re-ask says itself why (worker_questions.admitted)
-        again = f"{failed(earlier[-1])} the same problem stopped the work again."
-        return q.model_copy(update={"text": f"{again}\n\n{q.text}"})
+        return q.model_copy(update={"text": f"{_led(earlier[-1])}\n\n{q.text}"})
     return q
 
 
@@ -66,6 +65,18 @@ def failed(prev: Question) -> str:
     label = next((o.label for o in prev.options if a and o.id == a.option), "") if a else ""
     said = label or (a.text if a else "") or "no answer yet"
     return f"Your answer to {prev.id} ({said}) did not resolve this:"
+
+
+def _led(prev: Question) -> str:
+    """An engine cause's second question: what the owner's first answer led to."""
+    a = prev.answer
+    label = next((o.label for o in prev.options if a and o.id == a.option), "") if a else ""
+    said = label or (a.text if a else "")
+    if not said:
+        return f"{prev.id} asked this before and got no answer; the same problem stopped the work again."
+    if prev.effect_observed_at:
+        return f'You answered {prev.id} with "{said}". Delivery did that, and the same problem came back.'
+    return f'You answered {prev.id} with "{said}", but the same problem stopped the work again.'
 
 
 def routed(c: Change, cause: str, evidence: str, now: datetime, key: str = "") -> None:

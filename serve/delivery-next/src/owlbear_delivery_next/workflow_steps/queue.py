@@ -48,8 +48,9 @@ QUIET = 3  # passes without evidence of an enqueue before the owner is asked
 UNSEEN = QUEUE_UNSEEN
 TIMED_OUT = cause_key(ErrorKind.GATE, M, "queue-timed-out")
 REMOVED = cause_key(ErrorKind.GATE, M, "queue-removed")
-AGAIN = Option(id="again", label="Enqueue it again", next=M)
-PAUSE = Option(id="pause", label="Pause", next="pause")
+AGAIN = Option(id="again", label="Yes: put it back in the queue", next=M)
+ASK_AGAIN = Option(id="again", label="Yes: ask GitHub again", next=M)
+PAUSE = engine.PAUSE
 
 
 def _seen(c: Change, q: QueueState) -> None:
@@ -98,18 +99,23 @@ def _removed(ctx: Ctx, c: Change, pr: PullRequest, r: QueueEvent) -> StepResult:
     ctx.log(c.slug, "queue-removed", pr=pr.number, reason=r.reason, group=r.before, actor=r.actor)
     if r.reason == "failed_checks":
         result = _group_fix(ctx, c, pr, r)
-    elif r.reason == "checks_timed_out":
-        text = (
-            f"The merge queue took PR #{pr.number} out: its required checks never reported on the merge group "
-            "(usually a workflow without `merge_group:`). Fix the workflow, then enqueue it again"
+    elif r.reason == "checks_timed_out":  # Delivery's own problem: no question, a stop (#1168)
+        said = (
+            "The merge queue dropped this Change's pull request because its required checks never reported there. "
+            "Most likely this project's CI does not run for the merge queue (a workflow without `merge_group:`). "
+            "Once it does, run the step again"
         )
-        result = engine.ask(M, text, TIMED_OUT, [AGAIN, PAUSE])
+        result = engine.blocked(TIMED_OUT, said, f"PR #{pr.number}, merge group {(r.before or 'unknown')[:7]}", ctx.now)
     elif "conflict" in r.reason:
         result = engine.integrate(c, M, f"origin/{c.names.target}")
     else:
         who = f" by {r.actor}" if r.actor else ""
-        text = f"PR #{pr.number} was taken out of the merge queue ({r.reason or 'no reason given'}{who})"
-        result = engine.ask(M, f"{text}: enqueue it again or pause", REMOVED, [AGAIN, PAUSE])
+        why = "" if r.reason in {"", "manual"} else f" (GitHub's reason: {r.reason})"
+        text = (
+            f"This Change's pull request was taken out of the merge queue{who}{why}. "
+            "Put it back in the queue so it merges?"
+        )
+        result = engine.ask(M, text, REMOVED, [AGAIN, PAUSE], subject="reserved")
     c.queue, c.queue_seen = None, r.id
     return result
 
@@ -235,8 +241,12 @@ def _untraced(ctx: Ctx, c: Change, pr: PullRequest) -> StepResult:
     if claim is not None:
         claim.quiet += 1
         if claim.quiet >= QUIET:
-            text = f"GitHub shows no trace of PR #{pr.number} in the merge queue after Delivery added it"
-            return engine.ask(M, f"{text}: enqueue it again or pause", UNSEEN, [AGAIN, PAUSE])
+            text = (
+                "Delivery asked GitHub to put this Change's pull request in the merge queue, but GitHub does not "
+                "show it there. Ask GitHub again? If the first request arrived after all, GitHub refuses the second, "
+                "so nothing merges twice."
+            )
+            return engine.ask(M, text, UNSEEN, [ASK_AGAIN, PAUSE], subject="reserved")
     return engine.pending(Waiting.GITHUB, f"waiting for GitHub to show PR #{pr.number} queued", _wake(ctx))
 
 

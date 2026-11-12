@@ -357,17 +357,16 @@ def _retire_branch(ctx: Ctx, c: Change, pr: PullRequest | None) -> StepResult | 
     if any(q.cause == cause and q.answer and q.answer.option == "keep" for q in c.questions):
         return None
     text = (
-        f"origin/{branch} now points to {retired.head[:12]}, not the merged head {pr.head_sha[:12]}. "
-        "Delivery kept it rather than risk other work. Keep that branch and finish cleanup, or pause."
+        "This Change's branch changed on GitHub after its pull request was merged "
+        f"(now at {retired.head[:12]}, merged at {pr.head_sha[:12]}). Delivery kept the branch rather than delete "
+        "what it has not seen. Finish this Change and leave the branch there?"
     )
     return engine.ask(
         StepKind.CLEANUP,
         text,
         cause,
-        [
-            Option(id="keep", label="Keep the remote branch and finish cleanup", next="retry"),
-            Option(id="pause", label="Pause", next="pause"),
-        ],
+        [Option(id="keep", label="Yes: leave the branch and finish", next="retry"), engine.PAUSE],
+        subject="reserved",
     )
 
 
