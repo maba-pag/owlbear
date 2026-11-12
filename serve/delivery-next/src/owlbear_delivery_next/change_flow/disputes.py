@@ -323,6 +323,8 @@ def decided(c: Change, q: Question, target: str, at: datetime, note: str = "") -
         d.reconsidered, d.clarified = "", ""
     else:
         mark(c, task, key, "owner-fix" if d.owner == "fix" else "owner-drop", note=d.note)
+    if delegated(c, task):  # a later upheld rejection is Delivery's, as after approval it always is (#1062)
+        return
     if (later := _open(task)) is not None:
         ask(c, question(task, later), at)
     else:

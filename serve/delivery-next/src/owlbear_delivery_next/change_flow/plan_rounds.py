@@ -314,6 +314,7 @@ def proceed(c: Change, now: datetime) -> None:
     lp = current(c)
     if lp is None:
         return
+    delegated(c)  # an upheld or unsure finding left after the owner's answer is Delivery's (#1062)
     if (q := first(c)) is not None:
         ask(c, q, now)
     elif any(f.reconsider == "due" for f in lp.findings):
