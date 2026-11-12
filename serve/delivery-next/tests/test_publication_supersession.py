@@ -167,6 +167,13 @@ def test_an_automatic_config_change_waits_behind_another_clones_pending_owner_in
     assert pending_intents(fresh) == set()
     readiness.ready(fresh, tmp_path / "fresh-store", carry=True)
     assert fresh.read_config().widths == [1700]
+    local, published = fresh.config_path.read_bytes(), remote_bytes(remote, SHARED_CONFIG)
+    config_publishes.clear()
+    for cached in (widths(1300), lambda cur: cur.model_copy(update={"widths": None}), in_place):
+        assert fresh.update_config(cached, "automatic") == config_save.STALE
+        assert fresh.config_path.read_bytes() == local
+        assert remote_bytes(remote, SHARED_CONFIG) == published
+        assert config_publishes == []
 
 
 @pytest.mark.usefixtures("no_network")
