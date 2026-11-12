@@ -48,7 +48,7 @@ export function turns() {
 // the offered models once read.
 const asked = new URLSearchParams(location.search);
 export const state = {
-  loaded: null, saving: false, offered: null, modelsNote: "", error: "", status: "",
+  loaded: null, saving: false, offered: null, modelsNote: "", error: "", layerNotice: "", status: "",
   layer: ["machine", "global"].includes(asked.get("layer")) ? asked.get("layer") : "project",  // as a link names it
   group: "overview",  // the group shown; drafts of every group stay meanwhile
   folder: null,

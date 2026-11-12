@@ -697,6 +697,16 @@ def test_a_save_blocks_old_layers_before_its_across_read_finishes(store, pds) ->
         layers = hold_first(page, "**/api/next/config")
         read[0][0].fulfill(response=read[0][1])
         until(page, lambda: layers)
+        pds.group(page, "overview")
+        page.route(
+            "**/api/next/config",
+            lambda route: route.fulfill(json=layers[0][1].json() | {"notice": "an earlier layer notice"}),
+            times=1,
+        )
+        page.locator("#read-again").click()
+        expect(page.locator("#error")).to_have_text("An earlier layer notice")
+        expect(page.locator("#error")).to_be_hidden()
+        pds.group(page, "agents")
         machine = hold_first(page, "**/api/next/machine")
         save[0][0].continue_()
         until(page, lambda: machine)
@@ -707,6 +717,7 @@ def test_a_save_blocks_old_layers_before_its_across_read_finishes(store, pds) ->
         assert page.locator("#status").inner_text() == "Saving…"
         machine[0][0].fulfill(response=machine[0][1])
         expect(page.locator("#status")).to_contain_text("Saved this-project's settings")
+        expect(page.locator("#error")).to_be_hidden()
 
 
 @pytest.mark.browser
@@ -1258,6 +1269,7 @@ def _project_puts(page) -> list[dict]:
 def test_cancelled_review_preserves_previous_intent(pending, pds, prior_edit) -> None:
     """Keep editing on the review's confirmation is no review: a later unrelated save leaves the import pending."""
     with settings_page(pending, pds) as page:
+        standing = page.locator("#error").inner_text()
         sent = _project_puts(page)
         if prior_edit:
             pds.group(page, "checks")
@@ -1274,9 +1286,19 @@ def test_cancelled_review_preserves_previous_intent(pending, pds, prior_edit) ->
         expect(page.get_by_role("button", name="Confirm merge preferences reviewed")).to_have_count(
             0 if prior_edit else 1
         )
+        assert pending.read_profile().prefs_import == ("done" if prior_edit else "pending")
+        if not prior_edit:
+            pds.group(page, "overview")
+            with page.expect_request("**/api/next/config/models"):
+                page.locator("#read-again").click()
+            expect(page.locator("#error")).to_have_text(standing)
+            _, notice, _ = pending.mark_prefs_import("pending", "done")
+            assert not notice
+            with page.expect_request("**/api/next/config/models"):
+                page.locator("#read-again").click()
+            expect(page.locator("#error")).to_be_hidden()
 
     assert [body["prefs_reviewed"] for body in sent] == [prior_edit]
-    assert pending.read_profile().prefs_import == ("done" if prior_edit else "pending")
     assert pending.read_config().agents["builder"].max_rounds == 4
     if prior_edit:
         assert pending.read_config().prefs.merge_method == "squash"
@@ -1296,7 +1318,9 @@ def test_explicit_review_waits_for_publication(pending, tmp_path, monkeypatch, s
         expect(page.locator("#status")).to_have_text("Saving…")
         expect(page.locator("#error")).to_be_hidden()  # nothing offers a retry the running save would ignore
 
-        held[0][0].fallback()
+        with page.expect_response("**/api/next/config/project") as written:
+            held[0][0].fallback()
+        assert written.value.json()["write_notice"], written.value.json()
         expect(page.locator("#error")).to_be_visible()
         expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
         assert page.evaluate("() => document.querySelector('#save').loading") is False
@@ -1496,6 +1520,16 @@ def test_a_global_save_not_recorded_as_seen_says_why_whole(store, pds, monkeypat
 
     def write(path: Path, text: str) -> None:
         if path == seen and refusing:
+            store.machine_path.write_text(
+                json.dumps(
+                    {
+                        "format": CONFIG_FORMAT,
+                        "agents": {
+                            "builder": {"max_rounds": 3, "max_findings": 10, "last_round_at": 8, "ask_owner_at": 7}
+                        },
+                    }
+                )
+            )
             raise full
         real(path, text)
 
@@ -1508,10 +1542,22 @@ def test_a_global_save_not_recorded_as_seen_says_why_whole(store, pds, monkeypat
         pds.pick(page, "Layer", "global")
         pds.group(page, "agents")
         page.get_by_label("Minutes per session, builder").fill("50")
-        _saved(page, pds, "Save global defaults", "the global")
+        with page.expect_response("**/config/global") as saved:
+            _saved(page, pds, "Save global defaults", "the global")
         said = f"The saved Global values could not be recorded as seen: OSError: [Errno 28] {whole_error}\nNOTE-MARK"
+        payload = saved.value.json()
+        assert payload["write_notice"] == said[0].lower() + said[1:]
+        assert payload["notice"].startswith("The challenge-round values in use here do not fit together")
         expect(page.locator("#error")).to_be_visible()
-        assert page.locator("#error").text_content().strip() == said
+        expect(page.locator("#error")).to_have_text(f"{said}\n\n{payload['notice']}")
+        refusing.clear()
+        pds.group(page, "overview")
+        with page.expect_response("**/api/next/config") as refreshed:
+            page.locator("#read-again").click()
+        current = refreshed.value.json()["notice"]
+        expect(page.locator("#error")).to_have_text(
+            said + (f"\n\n{current[0].upper()}{current[1:]}" if current else "")
+        )
     assert '"minutes":50' in store.global_path.read_text().replace(" ", "")
 
 
@@ -2157,6 +2203,20 @@ def test_settings_say_a_failed_read_of_the_shared_repository_whole(
         assert said == []
 
 
+def _remove_old_runtime_during_save(page, pds, whole_error):
+    pds.group(page, "agents")
+    held = hold_first(page, "**/config/project", "PUT", fetch=False)
+    page.get_by_role("button", name="Save project settings").click()
+    pds.answer(page, "Save project settings")
+    until(page, lambda: held)
+    pds.group(page, "this-machine")
+    page.get_by_role("button", name="Remove the old runtime").click()
+    pds.answer(page, "Remove it")
+    expect(page.locator("#error")).to_have_text(f"VersionError: {whole_error}\na note on the failure")
+    expect(page.locator("#error")).to_be_hidden()
+    return held[0][0]
+
+
 @pytest.mark.browser
 def test_settings_say_why_the_old_runtime_stays_whole(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
     a = registry.register(clone(tmp_path / "alpha"))
@@ -2174,13 +2234,55 @@ def test_settings_say_why_the_old_runtime_stays_whole(tmp_path: Path, monkeypatc
     with browsing(monkeypatch, pds) as (page, base):
         said = errors(page)
         page.goto(f"{base}/config?project={a.id}#token=t")
+        page.evaluate("async () => { await import('/assets/page/config/main.mjs'); }")
+        held = hold_first(page, "**/api/next/config")
+        page.locator("#read-again").click()
+        until(page, lambda: held)
         pds.group(page, "this-machine")
         page.get_by_role("button", name="Remove the old runtime").click()
         pds.answer(page, "Remove it")
         notice = page.locator("#error")
         expect(notice).to_be_visible()
         assert notice.text_content().strip() == f"VersionError: {whole_error}\na note on the failure"
-        assert said == ["Failed to load resource: the server responded with a status of 409 (Conflict)"]
+        with page.expect_request("**/api/next/config/models"):
+            held[0][0].fulfill(response=held[0][1])
+        expect(notice).to_have_text(f"VersionError: {whole_error}\na note on the failure")
+        pds.group(page, "overview")
+        page.route(
+            "**/api/next/config",
+            lambda route: route.fulfill(status=503, json={"detail": "the settings layers could not be read"}),
+            times=1,
+        )
+        page.locator("#read-again").click()
+        expect(notice).to_have_text(
+            f"VersionError: {whole_error}\na note on the failure\n\nThe settings layers could not be read"
+        )
+        with page.expect_request("**/api/next/config/models"):
+            page.locator("#read-again").click()
+        expect(notice).to_have_text(f"VersionError: {whole_error}\na note on the failure")
+        assert said == [
+            "Failed to load resource: the server responded with a status of 409 (Conflict)",
+            "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+        ]
+        pds.group(page, "agents")
+        page.get_by_label("Minutes per session, builder").fill("50")
+
+        saving = _remove_old_runtime_during_save(page, pds, whole_error)
+        saving.fulfill(status=503, json={"detail": "the project settings could not be saved"})
+        expect(notice).to_be_visible()
+        expect(notice).to_have_text(
+            f"VersionError: {whole_error}\na note on the failure\n\nThe project settings could not be saved"
+        )
+        retry = _remove_old_runtime_during_save(page, pds, whole_error)
+        retry.continue_()
+        expect(page.locator("#status")).to_contain_text("Saved alpha's settings")
+        expect(notice).to_be_visible()
+        expect(notice).to_have_text(f"VersionError: {whole_error}\na note on the failure")
+        assert said[2:] == [
+            "Failed to load resource: the server responded with a status of 409 (Conflict)",
+            "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+            "Failed to load resource: the server responded with a status of 409 (Conflict)",
+        ]
     assert kept.is_dir()
 
 
