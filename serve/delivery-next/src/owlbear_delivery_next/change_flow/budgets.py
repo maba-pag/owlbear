@@ -243,9 +243,15 @@ def _exhausted(c: Change, r: StepResult, now: datetime) -> None:
     ]
     options = curation_flow.options(c) if c.tests else options  # a test review is never revised or re-planned
     task = next((t.title for t in c.plan.tasks if t.id == c.step.task), "") if c.plan else ""
+    split = (b := c.budgets.causes.get(cause)) is not None and b.alternative
+    what = f"{task!r}" if task else f"the {c.step.kind} step"
     text = (  # the product consequence in plain words; the worker's evidence stays in the outcome (#1062)
-        f"Delivery could not finish {f'{task!r}' if task else f'the {c.step.kind} step'} after several tries, and a "
-        "smaller plan did not help. It goes on only with a smaller or different goal, or after a pause."
+        f"Delivery could not finish {what} after several tries{', and a smaller plan did not help' if split else ''}."
+        + (
+            " How should it go on?"
+            if c.tests
+            else " It goes on only with a smaller or different goal, or after a pause."
+        )
     )
     asked = ask(c, Question(step=c.step.kind, text=text, options=options, cause=cause, subject="product"), now)
     if asked and c.outcome:
