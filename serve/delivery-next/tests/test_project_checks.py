@@ -163,7 +163,7 @@ def redetected(repo) -> Profile:
         (
             lambda _r: confirmed(Profile(entries={f"check:{APP}": entry(), f"check:{LIB}": entry()}), APP),
             [f"{LIB}/x.ts"],
-            f"`npm test` for `{LIB}`",
+            f"`npm test`, for `{LIB}`",
             ["detected"],
         ),
         (lambda _r: Profile(), ["src"], "`.` (none detected)", []),
