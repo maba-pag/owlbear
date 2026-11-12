@@ -17,8 +17,9 @@ def lay(tmp_path):
     owlbear = home / ".owlbear"
     own, other = owlbear / "worktrees" / "shop-1a2b3c4d" / "c1", owlbear / "worktrees" / "shop-1a2b3c4d" / "c2"
     store = owlbear / "projects" / "p1"
-    clone, tmp = tmp_path / "clone", tmp_path / "tmp"
-    for folder in (own / "src", other, store / "changes" / "c1", store / "changes" / "c2", clone / ".git", tmp):
+    tmp = tmp_path / "tmp"
+    clone = tmp / "clone"
+    for folder in (own / "src", other, store / "changes" / "c1", store / "changes" / "c2", clone / ".git"):
         folder.mkdir(parents=True)
     exempt = (tmp, home / ".cache", home / "Library" / "Caches", home / ".npm", owlbear, store)  # pytest's are in /tmp
     guarded = (owlbear / "worktrees", store / "changes", clone, clone / ".git")
@@ -65,17 +66,6 @@ def test_another_changes_worktree_or_state_and_the_main_checkout_are_reported_ev
     checkout = [lay["clone"] / "README.md", lay["clone"] / ".git" / "config"]  # pytest's tmp_path: a temp root
     for path in [*under_owlbear, *checkout]:
         assert outcome(lay, edit(str(path))).targets == (str(path.resolve()),), path
-
-
-def test_a_checkout_under_a_temporary_root_is_still_the_checkout(tmp_path) -> None:
-    tmp, home = tmp_path / "T", tmp_path / "home"
-    clone, own = tmp / "clone", tmp / "worktrees" / "c1"
-    for folder in (clone / ".git", own, home):
-        folder.mkdir(parents=True)
-    places = Places((tmp / "worktrees", clone, clone / ".git"), (), (tmp,), home, tmp).resolved()
-    assert judge(edit(str(clone / "a.py")), own.resolve(), places).targets == (str((clone / "a.py").resolve()),)
-    assert judge(edit("$TMPDIR/scratch.txt"), own.resolve(), places).inside
-    assert judge(edit("x.py"), own.resolve(), places).inside  # its own worktree, first of all
 
 
 def test_symlinks_are_resolved_for_targets_and_roots(lay) -> None:
