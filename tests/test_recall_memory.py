@@ -89,25 +89,6 @@ async def test_wildcard_agent_receives_guidance(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_exact_per_entry_format_and_other_metadata_fields_absent(tmp_path: Path) -> None:
-    entry = _seed_entry(
-        tmp_path,
-        _make_entry(
-            id=_uuid(99),
-            title="Format Pin Test",
-            content="Pinned body text.",
-            confidence=0.92,
-            scope_agents=["recall-scope-tester"],
-            source_agent="builder",
-            created_at="2026-01-15T08:30:00Z",
-            updated_at="2026-02-20T14:15:00Z",
-        ),
-    )
-    result = await recall_memory(_make_ctx(MemoryEngine(tmp_path), tmp_path), agent="recall-scope-tester")
-    assert result == f"## Format Pin Test\nEntry ID: `{entry.id}`\nRevision: `{entry.revision}`\nPinned body text."
-
-
-@pytest.mark.asyncio
 async def test_revision_refreshes_after_edit_from_second_engine(tmp_path: Path) -> None:
     entry = _seed_entry(tmp_path, _make_entry(id=_uuid(99), title="Cross-engine revision", content="Original body."))
     ctx = _make_ctx(MemoryEngine(tmp_path), tmp_path)
@@ -123,9 +104,24 @@ async def test_revision_refreshes_after_edit_from_second_engine(tmp_path: Path) 
 
 @pytest.mark.asyncio
 async def test_two_entries_keep_ids_paired_and_use_double_newline_separator(tmp_path: Path) -> None:
-    e1 = _seed_entry(tmp_path, _make_entry(id=_uuid(1), title="Alpha Entry", content="Alpha content."))
-    e2 = _seed_entry(tmp_path, _make_entry(id=_uuid(2), title="Beta Entry", content="Beta content."))
-    result = await recall_memory(_make_ctx(MemoryEngine(tmp_path), tmp_path), agent="builder")
+    e1 = _seed_entry(
+        tmp_path,
+        _make_entry(
+            id=_uuid(1),
+            title="Alpha Entry",
+            content="Alpha content.",
+            confidence=0.92,
+            scope_agents=["recall-scope-tester"],
+            source_agent="builder",
+            created_at="2026-01-15T08:30:00Z",
+            updated_at="2026-02-20T14:15:00Z",
+        ),
+    )
+    e2 = _seed_entry(
+        tmp_path,
+        _make_entry(id=_uuid(2), title="Beta Entry", content="Beta content.", scope_agents=["recall-scope-tester"]),
+    )
+    result = await recall_memory(_make_ctx(MemoryEngine(tmp_path), tmp_path), agent="recall-scope-tester")
     assert result == (
         f"## Alpha Entry\nEntry ID: `{e1.id}`\nRevision: `{e1.revision}`\nAlpha content.\n\n"
         f"## Beta Entry\nEntry ID: `{e2.id}`\nRevision: `{e2.revision}`\nBeta content."
