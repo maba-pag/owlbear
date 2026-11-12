@@ -180,10 +180,9 @@ def checked(store: Store, lock: Lock, c: Change, path: Path) -> tuple[loop.StepR
     errors += _stale(p, path)
     if errors:
         return refused(c, errors), _retired(c, "\n".join(errors))
-    errors += trial(store, lock, c, path, proposed)
-    errors += _stale(p, path)
-    if errors:
-        return refused(c, errors), _retired(c, "\n".join(errors))
+    tried = trial(store, lock, c, path, proposed)  # a failed trial still has its subject judged (#1062)
+    if stale := _stale(p, path):
+        return refused(c, [*tried, *stale]), _retired(c, "\n".join([*tried, *stale]))
 
     def start(keep: sessions.Keep) -> pending_child.Judged:
         done = session(store, lock, c, proposed, keep=keep)
@@ -196,7 +195,8 @@ def checked(store: Store, lock: Lock, c: Change, path: Path) -> tuple[loop.StepR
         store.write(lock, c)
     route, done = pending_child.child(store, lock, c, (LABEL, parent.session_id), start)
     if route.exit == Exit.DONE:
-        result = settled(c, proposed, judged(done, proposed, p.proof), _stale(p, path), p.proof)
+        verdict, errors = judged(done, proposed, p.proof)
+        result = settled(c, proposed, (verdict, [*tried, *errors]), _stale(p, path), p.proof)
     else:
         result = route
     return result, _booked(c, done, result)
