@@ -41,9 +41,11 @@ from owlbear_delivery_next.state_store import (
 )
 from owlbear_delivery_next.workflow_steps import lookup
 
-from . import test_decision_routes
+from . import test_decision_batch, test_decision_routes
+from .test_decision_batch import _seed
 
 shared = test_decision_routes.shared
+picking = test_decision_batch.picking
 PROJECT = "shop-site"
 AT = datetime(2026, 10, 21, 9, tzinfo=UTC)
 
@@ -55,19 +57,6 @@ def make(**changes) -> Decision:
         "state": State.IN_FORCE, "created_at": AT,
     }  # fmt: skip
     return Decision(**{**fields, **changes})
-
-
-@pytest.fixture
-def picking(shared):
-    """Keep K's unchanged bindings while opting storage rules out of the host/SDK fixture."""
-    return SimpleNamespace(shared=shared)
-
-
-def _seed(picking) -> None:
-    write(make(statement="Notes live in SQLite."), picking.shared.root / PROJECT)
-    picking.shared.git("add", "-A")
-    picking.shared.git("commit", "-qm", "seed")
-    picking.shared.git("push", "-q")
 
 
 def _interrupt(picking, monkeypatch, items: list[Decision]) -> None:
