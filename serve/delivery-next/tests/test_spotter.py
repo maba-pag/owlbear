@@ -1066,8 +1066,9 @@ def test_no_look_starts_once_the_drain_began_and_a_slow_write_never_holds_the_en
         assert await asyncio.to_thread(entered.wait, 5)
         draining = asyncio.ensure_future(spot.drain())
         await asyncio.sleep(0)
+        before = set(spot.tasks)
         spot.handed_off("c2", {})  # a late hand-off after the drain began
-        assert len(spot.tasks) == 1
+        assert spot.tasks == before
         await draining
 
     try:
