@@ -198,33 +198,39 @@ def machine_page(tmp_path: Path, monkeypatch, pds, *, seed: bool = True) -> Iter
     registered = _clone(tmp_path / "alpha")
     monkeypatch.setattr(targets, "units_of", lambda: {"f-1": f"chg:{registered.id}:{SLUG}"})
     ids = seeded(registered.id) if seed else {}
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    record = HostRecord(url=f"{base}/", token="t", pid=1, started_at=datetime.now(UTC), code=codebase.CURRENT)  # noqa: S106
-    machine = Machine(record)
-    machine.load_all()
-    server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning", timeout_keep_alive=60))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    try:
-        with sync_playwright() as pw:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+        record = HostRecord(url=f"{base}/", token="t", pid=1, started_at=datetime.now(UTC), code=codebase.CURRENT)  # noqa: S106
+        machine = Machine(record)
+        machine.load_all()
+        server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning", timeout_keep_alive=60))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            with sync_playwright() as pw:
+                try:
+                    browser = pw.chromium.launch()
+                except Error as exc:
+                    pytest.skip(f"no Playwright Chromium: {exc}")
+                page = browser.new_page(viewport={"width": 1280, "height": 900})
+                errors: list[str] = []
+                page.on("pageerror", lambda e: errors.append(str(e)))
+                pds.only(page, base)
+                yield SimpleNamespace(page=page, base=base, pid=registered.id, ids=ids, backlog=backlog, errors=errors,
+                                      machine=machine)  # fmt: skip
+                assert errors == []
+                browser.close()
+        finally:
+            server.should_exit = True
             try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page(viewport={"width": 1280, "height": 900})
-            errors: list[str] = []
-            page.on("pageerror", lambda e: errors.append(str(e)))
-            pds.only(page, base)
-            yield SimpleNamespace(page=page, base=base, pid=registered.id, ids=ids, backlog=backlog, errors=errors,
-                                  machine=machine)  # fmt: skip
-            assert errors == []
-            browser.close()
-    finally:
-        server.should_exit = True
-        machine.stop_all()
+                machine.stop_all()
+            finally:
+                thread.join(5)
+                assert not thread.is_alive(), "the owned page server did not stop"
 
 
 def improvement(w: SimpleNamespace, pds) -> Page:

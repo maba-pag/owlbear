@@ -65,26 +65,30 @@ def decisions_page(store: Store, pds: Any, query: str = "") -> Iterator[Any]:
     import uvicorn  # noqa: PLC0415
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            page.goto(f"{base}/decisions{query}#token=tok")
-            yield page
-            browser.close()
-    finally:
-        server.should_exit = True
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+            with sync_playwright() as pw:
+                try:
+                    browser = pw.chromium.launch()
+                except Error as exc:
+                    pytest.skip(f"no Playwright Chromium: {exc}")
+                page = browser.new_page()
+                pds.only(page, base)
+                page.goto(f"{base}/decisions{query}#token=tok")
+                yield page
+                browser.close()
+        finally:
+            server.should_exit = True
+            thread.join(5)
+            assert not thread.is_alive(), "the owned page server did not stop"
 
 
 def in_force(store: Store, project: str = PROJECT) -> dict[str, Decision]:

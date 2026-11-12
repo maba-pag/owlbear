@@ -8,6 +8,8 @@ import re
 import socket
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -111,15 +113,23 @@ def machine(tmp_path: Path, shared: Path) -> tuple[Starlette, dict[str, Launch]]
     return Starlette(routes=[*routes, Mount("/", apps[SHOP])]), launches
 
 
-def serving(app: Starlette) -> tuple[uvicorn.Server, str]:
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
-    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_keep_alive=60))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    return server, f"http://127.0.0.1:{sock.getsockname()[1]}"
+@contextmanager
+def serving(app: Starlette) -> Iterator[tuple[uvicorn.Server, str]]:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
+        server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_keep_alive=60))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            yield server, f"http://127.0.0.1:{sock.getsockname()[1]}"
+        finally:
+            server.should_exit = True
+            thread.join(5)
+            assert not thread.is_alive(), "the owned page server did not stop"
 
 
 @pytest.mark.browser
@@ -127,45 +137,41 @@ def test_changes_show_the_current_unreadable_profile_note_beside_fresh_cards(c1,
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, app = c1
-    server, base = serving(app)
-    try:
-        with page_at(base, pds, (1440, 1000)) as page:
-            errors: list[str] = []
-            page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
-            page.on("pageerror", lambda e: errors.append(str(e)))
-            page.goto(f"{base}/#token=tok")
-            expect(page.locator("#changes li.card")).to_have_count(1)
-            existing_errors = set(errors)
-            change = store.read(store.slugs()[0]).model_copy(deep=True)
-            change.brief.title = "Fresh readable card"
-            with store.lock(change.slug) as lock:
-                store.write(lock, change)
-            extra = change.model_copy(update={"slug": "fresh-change", "handle": ""}, deep=True)
-            extra.brief.title = "Another fresh card"
-            with store.lock(extra.slug) as lock:
-                store.write(lock, extra)
-            path = store.root / "profile.json"
-            path.write_text('{"format": 5, "entries":')
-            with pytest.raises(StoreError) as caught:
-                store.read_profile()
-            whole = failure(caught.value)
-            page.reload()
-            page.locator("#notes:not([hidden]), #error:not([hidden])").first.wait_for(state="visible")
-            pds.settled(page)
-            page.screenshot(path=str(tmp_path / "profile-read.png"), full_page=True)
-            notes = page.locator("#notes")
-            expect(notes).to_be_visible()
-            assert notes.text_content().strip() == f"The project profile could not be read: {whole}"
-            expect(page.locator("#changes li.card .open")).to_have_text(["Fresh readable card", "Another fresh card"])
-            expect(page.locator("#list")).not_to_have_class("stale")
-            expect(page.locator("#error")).to_be_hidden()
-            assert set(errors) == existing_errors
-            path.unlink()  # the same host reports only the current failure, not a retained probe notice
-            page.reload()
-            expect(page.locator("#notes")).to_be_hidden()
-            expect(page.locator("#changes li.card")).to_have_count(2)
-    finally:
-        server.should_exit = True
+    with serving(app) as (_server, base), page_at(base, pds, (1440, 1000)) as page:
+        errors: list[str] = []
+        page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.goto(f"{base}/#token=tok")
+        expect(page.locator("#changes li.card")).to_have_count(1)
+        existing_errors = set(errors)
+        change = store.read(store.slugs()[0]).model_copy(deep=True)
+        change.brief.title = "Fresh readable card"
+        with store.lock(change.slug) as lock:
+            store.write(lock, change)
+        extra = change.model_copy(update={"slug": "fresh-change", "handle": ""}, deep=True)
+        extra.brief.title = "Another fresh card"
+        with store.lock(extra.slug) as lock:
+            store.write(lock, extra)
+        path = store.root / "profile.json"
+        path.write_text('{"format": 5, "entries":')
+        with pytest.raises(StoreError) as caught:
+            store.read_profile()
+        whole = failure(caught.value)
+        page.reload()
+        page.locator("#notes:not([hidden]), #error:not([hidden])").first.wait_for(state="visible")
+        pds.settled(page)
+        page.screenshot(path=str(tmp_path / "profile-read.png"), full_page=True)
+        notes = page.locator("#notes")
+        expect(notes).to_be_visible()
+        assert notes.text_content().strip() == f"The project profile could not be read: {whole}"
+        expect(page.locator("#changes li.card .open")).to_have_text(["Fresh readable card", "Another fresh card"])
+        expect(page.locator("#list")).not_to_have_class("stale")
+        expect(page.locator("#error")).to_be_hidden()
+        assert set(errors) == existing_errors
+        path.unlink()  # the same host reports only the current failure, not a retained probe notice
+        page.reload()
+        expect(page.locator("#notes")).to_be_hidden()
+        expect(page.locator("#changes li.card")).to_have_count(2)
 
 
 @pytest.mark.browser
@@ -740,53 +746,48 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
         )
         == ""
     )
-    server, base = serving(machine(tmp_path, shared_repo[0])[0])
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            open_with_docs_needing_setup(page, base, f"/config?project={DOCS}#token=t")
-            across = the_overview_shows_what_projects_set_apart(page)
-            pds.group(page, "this-machine")
-            expect(page.locator("#machine-login")).to_contain_text("Start at login: off")
-            machine_settings_are_saved_and_a_stale_save_is_refused(page, pds, DataRepo(shared_repo[0]))
-            scope = pds.select(page, "Layer")
-            expect(scope.locator("p-select-option")).to_have_text(
-                ["Project docs-site (synced to shared repository)", "This machine (its projects; this Mac only)",
-                 "Global (every project; synced to shared repository)", "Project shop-site (/s)",
-                 "Project shop-site (/s2)"]
-            )  # fmt: skip
-            pds.group(page, "agents")
-            page.get_by_label("Rounds at most, builder").fill("4")
-            unsaved_edits_keep_the_page(page, f"{base}/config?project={DOCS}#agents", pds)
-            docs = Store(tmp_path / DOCS, DataRepo(shared_repo[0]), "docs-site")
-            off = {"agents": {"planner": Agent(subagents=False)}}
-            assert (
-                docs.save(docs.config_path, Layer, lambda layer: layer.model_copy(update=off), "setup", owner=True)
-                == ""
-            )  # another page saved first
-            page.locator(".bar").get_by_role("button", name="Save project settings").click()
-            pds.modal(page).get_by_role("button", name="Save project settings").click()
-            expect(page.locator("#error")).to_contain_text("changed since this page loaded them")
-            page.locator(".bar").get_by_role("button", name="Save project settings").click()
-            pds.modal(page).get_by_role("button", name="Save project settings").click()
-            expect(page.locator("#status")).to_have_text("Saved docs-site's settings. They apply to the next session.")
-            pds.group(page, "overview")
-            expect(across).to_contain_text("docs-site: no")  # the overview follows the save
-            # the builder's rounds, inherited
-            expect(across.locator("text=Agents and runs · Final review · Rounds at most")).to_have_count(1)
-            expect(across).to_contain_text("docs-site: 4")
-            a_role_s_subagents_are_switched_off_and_saved(page, docs, pds)
-            page.goto(f"{base}/config?project={DOCS}")
-            pds.pick(page, "Layer", f"go:{SHOP}")
-            expect(page).to_have_url(f"{base}/config?project={SHOP}")
-            browser.close()
-    finally:
-        server.should_exit = True
+    with serving(machine(tmp_path, shared_repo[0])[0]) as (_server, base), sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        page = browser.new_page()
+        pds.only(page, base)
+        open_with_docs_needing_setup(page, base, f"/config?project={DOCS}#token=t")
+        across = the_overview_shows_what_projects_set_apart(page)
+        pds.group(page, "this-machine")
+        expect(page.locator("#machine-login")).to_contain_text("Start at login: off")
+        machine_settings_are_saved_and_a_stale_save_is_refused(page, pds, DataRepo(shared_repo[0]))
+        scope = pds.select(page, "Layer")
+        expect(scope.locator("p-select-option")).to_have_text(
+            ["Project docs-site (synced to shared repository)", "This machine (its projects; this Mac only)",
+             "Global (every project; synced to shared repository)", "Project shop-site (/s)",
+             "Project shop-site (/s2)"]
+        )  # fmt: skip
+        pds.group(page, "agents")
+        page.get_by_label("Rounds at most, builder").fill("4")
+        unsaved_edits_keep_the_page(page, f"{base}/config?project={DOCS}#agents", pds)
+        docs = Store(tmp_path / DOCS, DataRepo(shared_repo[0]), "docs-site")
+        off = {"agents": {"planner": Agent(subagents=False)}}
+        assert (
+            docs.save(docs.config_path, Layer, lambda layer: layer.model_copy(update=off), "setup", owner=True) == ""
+        )  # another page saved first
+        page.locator(".bar").get_by_role("button", name="Save project settings").click()
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#error")).to_contain_text("changed since this page loaded them")
+        page.locator(".bar").get_by_role("button", name="Save project settings").click()
+        pds.modal(page).get_by_role("button", name="Save project settings").click()
+        expect(page.locator("#status")).to_have_text("Saved docs-site's settings. They apply to the next session.")
+        pds.group(page, "overview")
+        expect(across).to_contain_text("docs-site: no")  # the overview follows the save
+        # the builder's rounds, inherited
+        expect(across.locator("text=Agents and runs · Final review · Rounds at most")).to_have_count(1)
+        expect(across).to_contain_text("docs-site: 4")
+        a_role_s_subagents_are_switched_off_and_saved(page, docs, pds)
+        page.goto(f"{base}/config?project={DOCS}")
+        pds.pick(page, "Layer", f"go:{SHOP}")
+        expect(page).to_have_url(f"{base}/config?project={SHOP}")
+        browser.close()
 
 
 def a_machine_s_draft_never_shows_on_global(page, pds, region) -> None:
@@ -973,55 +974,51 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
                 settings_pending=(pending := f"the settings carry failed: RuntimeError: {whole_error}\na note on it")
             )
         )
-    server, base = serving(machine(tmp_path, shared_repo[0])[0])
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            page.goto(f"{base}/config?project={DOCS}#token=t")
-            listed = page.locator("#unset-this-machine")  # D-01M66B6GS0HKACV9C4R4QKFX7T: its count, its first three
-            expect(listed).to_have_text(
-                "This machine, 14 unset: Versions this machine takes, Update itself when idle, "
-                "Update itself while paused and 11 more"
-            )
-            expect(listed.get_by_role("link", name="and 11 more")).to_have_attribute("href", "#this-machine")
-            every_name_is_what_its_row_shows(page, pds)
-            pds.group(page, "this-machine")
-            region = page.get_by_role("region", name="This machine")
-            assert page.locator("#machine-pending").text_content() == (
-                "Moving this machine's settings into the global ones\n      is not done: "
-                f"{pending}. OwlBear tries again at its next start (owlbear restart); until then\n"
-                "      this machine keeps its own values."
-            )
-            red = region.locator(".field > p-text[color='error']")  # GW8RT6: each unset setting's name is red
-            expect(red).to_have_count(14)  # 3 update checks
-            expect(region.locator("p-select[disabled], p-input-text[disabled]")).to_have_count(14)  # #809: a project
-            expect(region.get_by_role("button", name="Save machine settings")).to_have_count(0)
-            pds.pick(page, "Layer", "machine")
-            expect(region).not_to_contain_text("must then set its own")
-            pds.pick(page, "Versions this machine takes", "minor")  # this machine's own: no longer unset
-            region.get_by_role("button", name="Save machine settings").click()
-            pds.answer(page, "Save machine settings")
-            expect(region).to_contain_text("in use: Every minor version (v0.1, v0.2 …), from this machine")
-            expect(red).to_have_count(13)
-            pds.pick(page, "Layer", "global")  # D-01M61SEXPFT9MXZGQHYVYFQ77C: Global sets none of them
-            warned = region.get_by_text("Unset: every machine must then set its own", exact=True)
-            expect(warned).to_have_count(14)
-            channel = "Every machine: Versions this machine takes"
-            expect(pds.select(page, channel).locator('p-select-option[value="inherit"]')).to_have_text("Unset")
-            pds.pick(page, channel, "major")  # the warning follows the edit, before any save
-            expect(warned).to_have_count(13)
-            pds.pick(page, channel, "inherit")
-            expect(warned).to_have_count(14)
-            a_machine_s_draft_never_shows_on_global(page, pds, region)
-            a_machine_s_clear_shows_global_s_saved_value_and_global_ignores_its_draft(page, pds, region)
-            browser.close()
-    finally:
-        server.should_exit = True
+    with serving(machine(tmp_path, shared_repo[0])[0]) as (_server, base), sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        page = browser.new_page()
+        pds.only(page, base)
+        page.goto(f"{base}/config?project={DOCS}#token=t")
+        listed = page.locator("#unset-this-machine")  # D-01M66B6GS0HKACV9C4R4QKFX7T: its count, its first three
+        expect(listed).to_have_text(
+            "This machine, 14 unset: Versions this machine takes, Update itself when idle, "
+            "Update itself while paused and 11 more"
+        )
+        expect(listed.get_by_role("link", name="and 11 more")).to_have_attribute("href", "#this-machine")
+        every_name_is_what_its_row_shows(page, pds)
+        pds.group(page, "this-machine")
+        region = page.get_by_role("region", name="This machine")
+        assert page.locator("#machine-pending").text_content() == (
+            "Moving this machine's settings into the global ones\n      is not done: "
+            f"{pending}. OwlBear tries again at its next start (owlbear restart); until then\n"
+            "      this machine keeps its own values."
+        )
+        red = region.locator(".field > p-text[color='error']")  # GW8RT6: each unset setting's name is red
+        expect(red).to_have_count(14)  # 3 update checks
+        expect(region.locator("p-select[disabled], p-input-text[disabled]")).to_have_count(14)  # #809: a project
+        expect(region.get_by_role("button", name="Save machine settings")).to_have_count(0)
+        pds.pick(page, "Layer", "machine")
+        expect(region).not_to_contain_text("must then set its own")
+        pds.pick(page, "Versions this machine takes", "minor")  # this machine's own: no longer unset
+        region.get_by_role("button", name="Save machine settings").click()
+        pds.answer(page, "Save machine settings")
+        expect(region).to_contain_text("in use: Every minor version (v0.1, v0.2 …), from this machine")
+        expect(red).to_have_count(13)
+        pds.pick(page, "Layer", "global")  # D-01M61SEXPFT9MXZGQHYVYFQ77C: Global sets none of them
+        warned = region.get_by_text("Unset: every machine must then set its own", exact=True)
+        expect(warned).to_have_count(14)
+        channel = "Every machine: Versions this machine takes"
+        expect(pds.select(page, channel).locator('p-select-option[value="inherit"]')).to_have_text("Unset")
+        pds.pick(page, channel, "major")  # the warning follows the edit, before any save
+        expect(warned).to_have_count(13)
+        pds.pick(page, channel, "inherit")
+        expect(warned).to_have_count(14)
+        a_machine_s_draft_never_shows_on_global(page, pds, region)
+        a_machine_s_clear_shows_global_s_saved_value_and_global_ignores_its_draft(page, pds, region)
+        browser.close()
 
 
 @pytest.mark.browser
@@ -1040,12 +1037,11 @@ def test_maintenance_curates_a_memory_folder_now_and_shows_its_report(
 
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     monkeypatch.setattr(ProjectHost, "_launch", lambda _self, _slug: False)
-    native, server, base = serve()
-    report = MemoryCurationResult(summary="1 promoted, nothing left for you", entries=[])
-    native.curation.run = lambda cfg: Run(
-        cfg.session_id, ending="result", payload=report, termination=Termination(confirmed=True)
-    )
-    try:
+    with serve() as (native, _server, base):
+        report = MemoryCurationResult(summary="1 promoted, nothing left for you", entries=[])
+        native.curation.run = lambda cfg: Run(
+            cfg.session_id, ending="result", payload=report, termination=Termination(confirmed=True)
+        )
         with page_at(base, pds) as page:
             page.goto(f"{base}/maintenance?project={shop.id}#token=t")
             folders = page.locator("#curation li")
@@ -1056,6 +1052,3 @@ def test_maintenance_curates_a_memory_folder_now_and_shows_its_report(
             expect(page.locator("#status")).to_contain_text("Curating shop-site")
             # a run still going when the page reads it shows its report on the page's next look, 5 s later
             expect(folders.first).to_contain_text("1 promoted, nothing left for you", timeout=15_000)
-    finally:
-        server.should_exit = True
-        native.stop_all()

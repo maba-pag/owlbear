@@ -69,33 +69,37 @@ def settings_page(
     """Settings ▸ Agents in a real browser, once the offered models are read unless *wait_models* is false."""
     from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
-            pds.only(page, base)
-            if before_goto:
-                before_goto(page)
-            page.goto(f"{base}/config#token=tok")
-            pds.group(page, "agents")  # the page opens on Overview and renders only the shown group
-            if wait_models:
-                page.locator("#models-note").get_by_text("as this machine's Copilot offers them").wait_for()
-            else:
-                page.locator("#agents-rows").wait_for()
-            yield page
-            browser.close()
-    finally:
-        server.should_exit = True
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+            with sync_playwright() as pw:
+                try:
+                    browser = pw.chromium.launch()
+                except Error as exc:
+                    pytest.skip(f"no Playwright Chromium: {exc}")
+                page = browser.new_page()
+                pds.only(page, base)
+                if before_goto:
+                    before_goto(page)
+                page.goto(f"{base}/config#token=tok")
+                pds.group(page, "agents")  # the page opens on Overview and renders only the shown group
+                if wait_models:
+                    page.locator("#models-note").get_by_text("as this machine's Copilot offers them").wait_for()
+                else:
+                    page.locator("#agents-rows").wait_for()
+                yield page
+                browser.close()
+        finally:
+            server.should_exit = True
+            thread.join(5)
+            assert not thread.is_alive(), "the owned page server did not stop"
 
 
 def cells(page, role: str):

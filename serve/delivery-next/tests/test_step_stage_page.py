@@ -5,6 +5,8 @@ from __future__ import annotations
 import socket
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 
 import pytest
@@ -42,16 +44,24 @@ def logged(store: Store, lock: Lock, sid: str, role: str, event: str, **more: ob
     store.log(lock, "c1", {"at": at, "session": sid, "role": role, "event": event, **more})
 
 
-def served(store: Store) -> tuple[uvicorn.Server, str]:
+@contextmanager
+def served(store: Store) -> Iterator[tuple[uvicorn.Server, str]]:
     """The project host's pages and API over *store*, on a free port."""
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host(store)), log_level="warning",
-                                           timeout_keep_alive=60))  # fmt: skip
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    return server, f"http://127.0.0.1:{sock.getsockname()[1]}"
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host(store)), log_level="warning",
+                                               timeout_keep_alive=60))  # fmt: skip
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            yield server, f"http://127.0.0.1:{sock.getsockname()[1]}"
+        finally:
+            server.should_exit = True
+            thread.join(5)
+            assert not thread.is_alive(), "the owned page server did not stop"
 
 
 @pytest.mark.browser
@@ -61,51 +71,58 @@ def test_the_shown_stage_follows_a_builders_and_a_reviewers_events(tmp_path, pds
     store = Store(tmp_path)
     store.write(Lock("c1"), Change(slug="c1", plan=PLAN, step=Step(kind=StepKind.BUILD, task="t1",
                                                                   started_at=datetime.now(UTC))))  # fmt: skip
-    server, base = served(store)
-    machine_list = f"{base}/api/next/projects"  # served by the machine host, which this project host runs without
-    errors: list[str] = []
-    with sync_playwright() as pw, store.lock("c1") as lock:  # the runner holds the Change: its step runs
-        try:
-            browser = pw.chromium.launch()
-        except Error as exc:
-            pytest.skip(f"no Playwright Chromium: {exc}")
-        page = browser.new_page()
-        page.on("console", lambda m: m.type == "error" and m.location["url"] != machine_list and errors.append(m.text))
-        page.on("pageerror", lambda e: errors.append(str(e)))
-        pds.only(page, base)
-        page.add_init_script("sessionStorage.setItem('token', 'tok');")
-        page.goto(f"{base}/?change=c1")
-        detail, card = page.locator("#detail .row.status"), page.locator("#changes .card")
+    with served(store) as (_server, base):
+        machine_list = f"{base}/api/next/projects"  # served by the machine host, which this project host runs without
+        errors: list[str] = []
+        with sync_playwright() as pw, store.lock("c1") as lock:  # the runner holds the Change: its step runs
+            try:
+                browser = pw.chromium.launch()
+            except Error as exc:
+                pytest.skip(f"no Playwright Chromium: {exc}")
+            page = browser.new_page()
+            page.on(
+                "console", lambda m: m.type == "error" and m.location["url"] != machine_list and errors.append(m.text)
+            )
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            pds.only(page, base)
+            page.add_init_script("sessionStorage.setItem('token', 'tok');")
+            page.goto(f"{base}/?change=c1")
+            detail, card = page.locator("#detail .row.status"), page.locator("#changes .card")
 
-        def shows(said: str) -> None:
-            page.evaluate("async () => (await import('/assets/page/changes/list.mjs')).refresh()")  # not the 3 s poll
-            expect(detail).to_contain_text(f"Build 1/1 \u00b7 {said}", timeout=15_000)  # the refresh above brings it
-            expect(card).to_contain_text(said, timeout=15_000)  # the card shows its step apart
+            def shows(said: str) -> None:
+                page.evaluate(
+                    "async () => (await import('/assets/page/changes/list.mjs')).refresh()"
+                )  # not the 3 s poll
+                expect(detail).to_contain_text(
+                    f"Build 1/1 \u00b7 {said}", timeout=15_000
+                )  # the refresh above brings it
+                expect(card).to_contain_text(said, timeout=15_000)  # the card shows its step apart
 
-        shows("starting: greet")
-        logged(store, lock, "b1", "builder", "session", id="b1", resumed=False)
-        shows("implementing: greet")
-        logged(store, lock, "b1", "builder", "tool", tool="submit_result", accepted=False, errors=["ruff: F401"])
-        shows("fixing its refused result: greet")
-        logged(store, lock, "b1", "builder", "tool", tool="submit_result", accepted=True, errors=[])
-        shows("handing in its result: greet")
-        logged(store, lock, "b1", "builder", "ended", ending="result")
-        shows("recording the result: greet")
+            shows("starting: greet")
+            logged(store, lock, "b1", "builder", "session", id="b1", resumed=False)
+            shows("implementing: greet")
+            logged(store, lock, "b1", "builder", "tool", tool="submit_result", accepted=False, errors=["ruff: F401"])
+            shows("fixing its refused result: greet")
+            logged(store, lock, "b1", "builder", "tool", tool="submit_result", accepted=True, errors=[])
+            shows("handing in its result: greet")
+            logged(store, lock, "b1", "builder", "ended", ending="result")
+            shows("recording the result: greet")
 
-        time.sleep(1)  # the review starts in a later second than the build's session opened
-        store.write(lock, Change(slug="c1", plan=PLAN, step=Step(kind=StepKind.REVIEW, task="t1",
-                                                                started_at=datetime.now(UTC))))  # fmt: skip
-        shows("starting: greet")
-        logged(store, lock, "r1", "reviewer", "session", id="r1", resumed=False)
-        shows("reviewing: greet")
-        logged(store, lock, "r1", "reviewer", "tool", tool="lookup_decisions", accepted=True, errors=[])
-        logged(store, lock, "p1", "picker", "session", id="p1", resumed=False)
-        shows("checking decisions: greet")
-        logged(store, lock, "p1", "picker", "tool", tool="submit_result", accepted=True, errors=[])  # the picker's own
-        logged(store, lock, "p1", "picker", "ended", ending="result")
-        shows("reviewing: greet")
-        logged(store, lock, "r1", "reviewer", "tool", tool="submit_result", accepted=True, errors=[])
-        shows("handing in its verdict: greet")
-        assert errors == []
-        browser.close()
-    server.should_exit = True
+            time.sleep(1)  # the review starts in a later second than the build's session opened
+            store.write(lock, Change(slug="c1", plan=PLAN, step=Step(kind=StepKind.REVIEW, task="t1",
+                                                                    started_at=datetime.now(UTC))))  # fmt: skip
+            shows("starting: greet")
+            logged(store, lock, "r1", "reviewer", "session", id="r1", resumed=False)
+            shows("reviewing: greet")
+            logged(store, lock, "r1", "reviewer", "tool", tool="lookup_decisions", accepted=True, errors=[])
+            logged(store, lock, "p1", "picker", "session", id="p1", resumed=False)
+            shows("checking decisions: greet")
+            logged(
+                store, lock, "p1", "picker", "tool", tool="submit_result", accepted=True, errors=[]
+            )  # the picker's own
+            logged(store, lock, "p1", "picker", "ended", ending="result")
+            shows("reviewing: greet")
+            logged(store, lock, "r1", "reviewer", "tool", tool="submit_result", accepted=True, errors=[])
+            shows("handing in its verdict: greet")
+            assert errors == []
+            browser.close()

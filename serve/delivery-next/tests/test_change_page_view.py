@@ -39,30 +39,34 @@ def opened(c1: tuple[Store, Any], pds: Any, edit: Callable[[Change], None] | Non
         c = store.read(SLUG)
         edit(c)
         store.write(Lock(SLUG), c)
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_keep_alive=60))
-    threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-    try:
-        with sync_playwright() as pw:
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page(viewport={"width": 1280, "height": 900})
-            errors: list[str] = []
-            page.on("pageerror", lambda e: errors.append(str(e)))
-            pds.only(page, base)
-            page.add_init_script("sessionStorage.setItem('token', 'tok');")
-            page.goto(f"{base}/?change={SLUG}")
-            yield page
-            assert errors == []
-            browser.close()
-    finally:
-        server.should_exit = True
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_keep_alive=60))
+        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+        thread.start()
+        try:
+            while not server.started:
+                assert thread.is_alive(), "the owned page server stopped before startup"
+                time.sleep(0.05)
+            base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+            with sync_playwright() as pw:
+                try:
+                    browser = pw.chromium.launch()
+                except Error as exc:
+                    pytest.skip(f"no Playwright Chromium: {exc}")
+                page = browser.new_page(viewport={"width": 1280, "height": 900})
+                errors: list[str] = []
+                page.on("pageerror", lambda e: errors.append(str(e)))
+                pds.only(page, base)
+                page.add_init_script("sessionStorage.setItem('token', 'tok');")
+                page.goto(f"{base}/?change={SLUG}")
+                yield page
+                assert errors == []
+                browser.close()
+        finally:
+            server.should_exit = True
+            thread.join(5)
+            assert not thread.is_alive(), "the owned page server did not stop"
 
 
 def big(control: Any) -> None:
