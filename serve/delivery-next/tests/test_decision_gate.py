@@ -247,6 +247,7 @@ def test_large_set_reaches_consumers_whole(tmp_path):
     rules = [make(title=f"Rule {n} " + "t" * 100, statement=f"{n:02} " + "s" * 236) for n in range(40)]
     lines = step_decisions.section(rules)
     assert sum(len(line) + 1 for line in lines if line.startswith("- D-")) > 12_000
+    assert all(f"- {r.id} (project, approved): {r.title}: {r.statement}" in lines for r in rules)
     c = change()
     with step_decisions.using(lines, []):
         build = step_input.build(c, c.plan.tasks[0], tmp_path, [])
