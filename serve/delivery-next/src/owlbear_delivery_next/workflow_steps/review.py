@@ -207,7 +207,7 @@ def completed(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
 
 
 def delegated(change: Change, task: Task | None, result: StepResult) -> StepResult:
-    """After approval Delivery decides the rejections its reviewer upheld and completes the review (#1062)."""
+    """After approval the rejections its reviewer upheld are left open and the review completes (#1173)."""
     if result.exit == Exit.ASK and disputes.delegated(change, task):
         return disputed(change) or result
     return result
@@ -228,7 +228,7 @@ def disputed(change: Change) -> StepResult | None:
     kept = disputes.kept(judged)
     found = [*(held.findings if held and held.verdict == "fix" else []), *kept]
     if not found:
-        return loop.StepResult(exit=Exit.DONE, reason="the owner settled each disputed finding")
+        return loop.StepResult(exit=Exit.DONE, reason="each disputed finding is settled")
     fixes = repair(change, task, found, kept)
     reason = f"{len(found)} finding(s) to fix"
     return loop.StepResult(

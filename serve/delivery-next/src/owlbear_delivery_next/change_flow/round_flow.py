@@ -13,6 +13,7 @@ from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.merge_records import QUEUE_UNSEEN
 from owlbear_delivery_next.change_contracts.models import Answer, ErrorKind, Exit, Option, Outcome, Question, StepKind
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, FINAL, PLAN, RECHECK, Completion, RoundLoop
+from owlbear_delivery_next.change_flow.disputes import DISPUTED
 from owlbear_delivery_next.change_flow.moves import ask, go, loop_of, open_task, resolved, subject_of
 from owlbear_delivery_next.change_flow.round_marks import unmet
 
@@ -42,6 +43,7 @@ HOW = {
     "standing": "rejected; the reviewer accepted that",
     "owner-fix": "you decided to fix it",
     "owner-drop": "you dropped it",
+    "left-open": "rejected; the reviewer upheld it, left open",
 }
 TASKS = (
     "Name the plan tasks each finding belongs to in its `tasks`; when no plan task fits, say why in `no_task` instead."
@@ -107,7 +109,7 @@ def passed(c: Change, now: datetime) -> bool:
     if (lp := loop_of(c, task)) is None or lp.ended:
         return False
     judged = [task.id] if task else lp.batch
-    if c.step.mode == RECHECK and lp.many() and judged:
+    if c.step.mode in {RECHECK, DISPUTED} and lp.many() and judged:  # a check whose rejections were left open too
         ask(c, question(lp, next(t for t in c.plan.tasks if t.id == judged[-1])), now)
         return True
     lp.ended = lp.ending() if judged and judged[-1] in lp.unreviewed else "clean"

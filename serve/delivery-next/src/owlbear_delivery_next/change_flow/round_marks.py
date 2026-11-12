@@ -21,6 +21,7 @@ SAID = {  # per finding state and kind: one and many
     ("open", "open"): ("fix agreed, not made", "fixes agreed, not made"),
     ("owner-fix", "open"): ("fix you decided on, not made", "fixes you decided on, not made"),
     ("escalated", "open"): ("rejection the reviewer did not accept", "rejections the reviewer did not accept"),
+    ("left-open", "open"): ("left open, rejected and upheld", "left open, rejected and upheld"),
     ("fixed", "unverified"): ("fix reported, not re-reviewed", "fixes reported, not re-reviewed"),
     ("rejected", "unverified"): ("rejection not reviewed", "rejections not reviewed"),
     ("fixed", "settled"): ("fix verified", "fixes verified"),
@@ -32,7 +33,7 @@ SAID = {  # per finding state and kind: one and many
 
 def kind(lp: RoundLoop, f: RoundFinding) -> str:
     """Open, unverified or settled: a fix counts as verified once a full round ran after its repair reported it."""
-    if f.state in {"open", "owner-fix", "escalated"}:
+    if f.state in {"open", "owner-fix", "escalated", "left-open"}:
         return "open"
     if f.state == "rejected" or (f.state == "fixed" and f.repair not in lp.reviewed):
         return "unverified"
@@ -84,6 +85,26 @@ def _finding(f: RoundFinding, k: str) -> dict[str, object]:
     }
 
 
+def left(c: Change) -> list[dict[str, str]]:
+    """Every finding left open after approval, in the order it happened, with where it was raised and both reasons.
+
+    The PR description and the Change page list the same entries (D-01M7866JPJ080C8545DH00WY1H).
+    """
+    plan = c.loops.get(PLAN)
+    out = []
+    for e in c.left:
+        if e.loop == PLAN:
+            where = "Plan challenge of an earlier plan" if plan and e.attempt != plan.attempt else "Plan challenge"
+        else:
+            where = "Final review" if e.loop == FINAL else f"Review of task {e.loop}"
+        worker, judge = ("Planner", "Challenger") if e.loop == PLAN else ("Builder", "Reviewer")
+        out.append(
+            {"where": where, "id": e.id, "text": e.text, "worker": worker, "reason": e.reason, "judge": judge}
+            | {"judgement": e.judgement}
+        )
+    return out
+
+
 def shown(c: Change) -> dict[str, object]:
     """Per plan task its task review's and the final review's markers; the final review's own; what is left open."""
     final = c.loops.get(FINAL)
@@ -117,4 +138,5 @@ def shown(c: Change) -> dict[str, object]:
         "brief": rounds(brief_loop, brief_loop.findings) if brief_loop else [],  # the brief challenge's (TD-221)
         "unreviewed": unreviewed,
         "standing": standing,
+        "left": left(c),
     }

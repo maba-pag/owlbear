@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
 type FindingState = Literal[
-    "open", "fixed", "rejected", "standing", "escalated", "owner-fix", "owner-drop", "withdrawn"
+    "open", "fixed", "rejected", "standing", "escalated", "owner-fix", "owner-drop", "withdrawn", "left-open"
 ]
 type Ended = Literal["", "clean", "count", "max", "accepted", "retried", "restarted", "replanned"]
 MAX_FINDINGS = 20  # a review result's own cap
@@ -67,6 +67,32 @@ class RoundFinding(_Record):
     def line(self) -> str:
         """The finding as one line of a repair task, carrying its ID."""
         return f"- {self.id}: {self.text}"
+
+
+class Dispute(_Record):
+    """A review finding the builder rejected (TD-124/176): the fresh reviewer's recheck and what followed it."""
+
+    key: str  # the finding's key in its repair task, e.g. F2
+    finding: str
+    reason: str  # the builder's
+    upheld: bool | None = None
+    recheck: str = ""  # the reviewer's reason
+    owner: Literal["", "fix", "drop", "reconsider"] = ""
+    note: str = Field(default="", max_length=2000)  # the owner's note with the decision (TD-193)
+    reconsidered: Literal["", "withdrawn", "clarified", "unsure"] = ""  # a fresh reviewer, after the note
+    clarified: str = ""  # the finding as that reviewer restated it
+    left: bool = False  # after approval the rejection stood although the reviewer upheld the finding (#1173)
+
+
+class LeftOpen(_Record):
+    """A finding left open after approval (#1173): rejected by its worker, upheld by the next reviewer."""
+
+    loop: str  # `plan`, `final`, or the subject whose review judged it: a plan task, or the root of added work
+    attempt: int = 0  # the plan loop's attempt for a plan finding
+    id: str
+    text: str
+    reason: str  # the worker's
+    judgement: str  # the reviewer's or challenger's
 
 
 class Verdict(_Record):

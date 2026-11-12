@@ -131,7 +131,7 @@ def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
 
 
 def judged(change: Change, verdict: Result, payload: object) -> Result:
-    """A complete verdict counts one round: the owner for an upheld rejection, the planner's revision, or the plan."""
+    """A complete verdict counts one round: the planner's revision, the last round's stop, or the plan accepted."""
     if isinstance(payload, tools.ReviewResult) and verdict.cause is None and verdict.exit in {Exit.DONE, Exit.RETRY}:
         found = [" ".join(f"{f.place}: {f.problem} - fix: {f.fix}".split()) for f in payload.findings]
         upheld = {r.finding: (bool(r.upheld), r.reason) for r in payload.rechecked}
@@ -141,8 +141,6 @@ def judged(change: Change, verdict: Result, payload: object) -> Result:
         return verdict  # the session failed or stopped: the mode stays, so the same plan is challenged again
     then = plan_rounds.counted(change, found, upheld)
     change.step.mode = None
-    if then == "ask" and plan_rounds.delegated(change):
-        then = "revise"  # #1062: the upheld rejections are Delivery's, so the planner revises for them
     if then == "ask":
         return _last(change)
     if then == "revise":
@@ -155,7 +153,7 @@ def judged(change: Change, verdict: Result, payload: object) -> Result:
 def continued(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
     """A plan step that goes on without a planner session: its challenge, a reconsideration or its acceptance."""
     s, now = change.step, datetime.now(UTC)
-    if s.kind == StepKind.PLAN and not s.mode and plan_rounds.delegated(change):  # decided before planning (#1062)
+    if s.kind == StepKind.PLAN and not s.mode and plan_rounds.delegated(change):  # left open before planning (#1173)
         plan_rounds.proceed(change, now)
         store.write(lock, change)
         return True
@@ -164,7 +162,7 @@ def continued(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
         return False
     events: list[dict[str, object]] = []
     if s.mode == plan_rounds.SETTLED:
-        result = loop.StepResult(exit=Exit.DONE, plan=change.plan, reason="the owner settled each disputed finding")
+        result = loop.StepResult(exit=Exit.DONE, plan=change.plan, reason="each disputed finding is settled")
     else:
         path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
         change.names.worktree, s.started_at = str(path), now
