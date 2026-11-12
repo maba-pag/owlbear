@@ -229,20 +229,16 @@ def test_drain_cancels_public_replay_wait_and_cleans_claims(replay_host, monkeyp
     assert session_slots.limit(host) == 0
     drained = threading.Event()
     host.draining = drained.is_set
-    calls, entries, waits = [], [], []
-    real_take = slots.take
+    calls, entries = [], []
+    waiting, turn = threading.Event(), threading.Event()
+    real_wait = turn.wait
 
-    def drain_on_second_refusal(*args, **kwargs):
-        got = real_take(*args, **kwargs)
-        if not got:
-            waits.append(args[1])
-            if len(waits) == 2:
-                drained.set()
-            elif args[4]:
-                args[4]()  # acknowledge queueing, so the real loop makes its next check without a timer
-        return got
+    def wait_for_capacity(timeout=None):
+        waiting.set()
+        return real_wait(timeout)
 
-    slots.take = drain_on_second_refusal
+    monkeypatch.setattr(turn, "wait", wait_for_capacity)
+    monkeypatch.setattr(session_slots, "threading", SimpleNamespace(Event=lambda: turn))
     monkeypatch.setattr(pack_replay, "sdk_run", entries.append)
 
     def replay(_store, _candidate, run=None, **_options):
@@ -253,12 +249,23 @@ def test_drain_cancels_public_replay_wait_and_cleans_claims(replay_host, monkeyp
     session_slots.packed(host, job)
     http = TestClient(FastAPI())
     http.app.include_router(pack_routes.router(store, job, lambda: admitted(host), host))
-    response = http.post("/impeccable/replay")
+    result = {}
+    post = threading.Thread(target=lambda: result.update(response=http.post("/impeccable/replay")))
+    post.start()
+    try:
+        assert waiting.wait(WAIT), "the replay never began waiting for capacity"
+        drained.set()  # no slot changes or slot-waker signal: the native bounded wait must observe draining
+        post.join(WAIT)
+        assert not post.is_alive(), "draining stranded a replay waiting for capacity"
+    finally:
+        drained.set()
+        turn.set()  # rescue only after the bounded completion assertion, so a failed test leaves no thread
+        post.join(WAIT)
 
+    response = result["response"]
     assert response.status_code == 422
     assert "did not get a session slot" in response.json()["detail"]
     assert drained.is_set()
-    assert len(waits) == 2
     assert calls == [True]
     assert entries == []
     assert slots.waiting == {}
