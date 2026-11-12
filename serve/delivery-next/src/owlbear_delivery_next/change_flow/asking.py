@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 READ_BACK = "-typed-"  # the cause infix of a project-check read-back (``project_checks``): never a question of its own
 LIMIT = 2  # questions one cause may put to the owner
 RERUN = "Run the step again"
+TERMINAL = frozenset({"pause", "abandon"})
 
 
 def root(q: Question) -> str:
@@ -36,7 +37,7 @@ def _counted(c: Change, key: str) -> list[Question]:
 
 def offered(c: Change, q: Question, now: datetime) -> Question | None:
     """The question to record, with its preface on a cause's second question; None when it went elsewhere."""
-    if c.brief.approved_version is None or READ_BACK in (q.cause or ""):
+    if c.brief.approved_version is None or READ_BACK in (q.cause or "") or _terminal(q):
         return q
     if q.subject == "internal":
         routed(c, q.cause or "", q.text, now, root(q))
@@ -52,6 +53,11 @@ def offered(c: Change, q: Question, now: datetime) -> Question | None:
         again = f"{failed(earlier[-1])} the same problem stopped the work again."
         return q.model_copy(update={"text": f"{again}\n\n{q.text}"})
     return q
+
+
+def _terminal(q: Question) -> bool:
+    """Only pause or abandon: how the Change ends is his alone, so no repair or stop may take the question's place."""
+    return bool(q.options) and all(o.next in TERMINAL for o in q.options)
 
 
 def failed(prev: Question) -> str:
