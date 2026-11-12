@@ -18,8 +18,7 @@ repository and its checks rather than an installed project directly.
 
 ## What belongs elsewhere
 
-- Tool configuration, including Renovate's [`renovate.json`](../renovate.json) and CodeRabbit's
-  `.coderabbit.yaml`, lives at the repository root.
+- Tool configuration, including Renovate's [`renovate.json`](../renovate.json), lives at the repository root.
 - Portable agents, skills, instructions, and prompts live in [`share/`](../share/README.md).
 - Runtime packages and MCP servers live under [`serve/`](../serve/README.md).
 - Installation and operating procedures live in the [setup guide](../setup/setup-guide.md) and
@@ -121,16 +120,10 @@ off (TD-408). pre-commit.ci is not installed, since its hook updates cannot be s
 
 ## Reviews
 
-CodeRabbit reviews a pull request once, when it gets the `coderabbit` label, whoever opened it (TD-413). Those rules and
-the balanced `chill` profile come from the `maba-pag` organisation's CodeRabbit settings, which
-[`.coderabbit.yaml`](../.coderabbit.yaml) inherits; the file adds only owlbear's excluded paths, its path instructions
-and the [review brief](instructions/code-review.instructions.md) as its guideline (D-01M5TN7BEVN9YWFEYCHH9GJZG0). Its
-free open-source allowance is about one review an hour for all of `maba-pag`'s pull requests, so agents add the label
-only to a pull request that changes runtime code or CI workflows, once its CI passed, and handle its review before
-merging; if CodeRabbit reports its limit or sends no review within 60 minutes, the pull request stops waiting for it
-(D-01M5WWSXMG291D6X2XMKJX4XYB). A pull request a chat opens by hand merges after green CI and a Copilot review of its
-latest commit, every finding fixed or answered (D-01M5WWSS2EB4SDWNWSEXWWBGH2). `@coderabbitai review` asks again;
-CodeRabbit never replies on its own (TD-412).
+A pull request a chat opens by hand merges after green CI and a Copilot review of its latest commit, every finding
+fixed or answered (D-01M5WWSS2EB4SDWNWSEXWWBGH2), guided by the
+[review brief](instructions/code-review.instructions.md). CodeRabbit is not used: no pull request requests or waits for
+its review, and the repository keeps no configuration for it (D-01M7919Z20SC94TVE353NWQ2Y5).
 
 Copilot code review prepares its runner with [Copilot setup steps](workflows/copilot-setup-steps.yml), the file GitHub
 reads for both the review and the Copilot cloud agent; the cloud agent doesn't work on this repository
