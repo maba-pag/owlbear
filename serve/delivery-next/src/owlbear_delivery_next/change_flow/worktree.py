@@ -153,14 +153,16 @@ def build_checks(profile: Profile, change: Change, task: Task, path: Path) -> li
                     covered.add(owner)
                     target = owner if owner != "." else module.parent.as_posix() if module.parent != Path() else name
                     targets.add(target)
-                missing = (set(packages) - covered | unsupported) - {p for p, _ in pairs if p != "."}
+                # Every changed runner sees the entire curation diff, including other checks' suites.
+                needed = set(packages) | unsupported if unsupported else set(packages) - covered
+                missing = needed - {p for p, _ in pairs if p != "."}
                 if missing:
                     msg = (
                         f"The confirmed Python runner cannot measure selected suites: {', '.join(sorted(missing))}; "
                         "confirm their package checks before curation"
                     )
                     raise ValueError(msg)
-                if not targets:
+                if unsupported or not targets:
                     continue
                 chosen = shlex.join(sorted(targets))
                 runner = root[0] if "-m" in shlex.split(root[0]) else f"{root[0]} -m"

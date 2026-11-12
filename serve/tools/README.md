@@ -134,6 +134,9 @@ still require task context rather than silently replacing branch scope.
 Curator measurements use `-m` (`--measurement`) with that same task context and pinned suite targets.
 The maintained runner's directory targets expand `test_*.py` modules. Selected suffix-named Python tests
 or other languages require their package's own confirmed check, rather than being silently omitted.
+For a mixed selection the curator uses only package checks, with every selected suite covered. It refuses
+the selection before edits if any suite still needs the Python changed-path runner, since that runner sees
+the whole curation diff, including edits owned by other languages' checks.
 Membership comes from both the original task commit and current tree: every surviving module still runs,
 while retired members remain inputs to consumer analysis rather than nonexistent pytest arguments.
 When a measured module is required in full, its redundant literal node selectors are subsumed by that module,

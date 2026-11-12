@@ -339,12 +339,10 @@ def curated(applied: bool):  # noqa: FBT001 - one switch per test
 
 
 def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(curating, monkeypatch, user_on):
-    prof = profile.confirm(Profile(), "check:.", "uv run test --changed", NOW)
+    prof = profile.confirm(Profile(), "check:.", "uv run pytest", NOW)
     prof = profile.confirm(prof, "check:api", "npm test", NOW)
     prof = profile.confirm(prof, "check:web", "npm test", NOW)
     curating.store.write_profile(prof)
-    owns_runner = worktree.owns_changed_runner
-    monkeypatch.setattr(worktree, "owns_changed_runner", lambda *_: True)
     curating.curate = curated(applied=True)
     base = config.BASE  # the builder's own session values unset: the curator's build never needs them
     builder = base.agents["builder"].model_copy(update={"model": None, "effort": None, "minutes": None})
@@ -357,11 +355,7 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
     )  # fmt: skip
     assert cfg.user == user_on
     assert cfg.checks == (
-        check_hint.task_command(
-            check_hint.qualified(".", "uv run test --changed -m tests"),
-            c.tests.commit,
-            c.tests.commit,
-        ),
+        check_hint.qualified(".", "uv run pytest"),
         check_hint.qualified("web", "npm test"),
     )
     assert cfg.checks[0] in cfg.message
@@ -376,19 +370,6 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
         ordinary.setattr(worktree, "owns_changed_runner", lambda *_: False)
         confirmed = profile.confirm(Profile(), "check:.", "uv run pytest", NOW)
         assert witness(follow, confirmed, cfg.worktree) == (check_hint.qualified(".", "uv run pytest"),)
-    mixed = repair.model_copy(deep=True)
-    mixed.tests.shares[0].paths.append("tests/client.test.ts")
-    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
-        witness(mixed, prof, cfg.worktree)
-    mixed.tests.shares[0].paths[-1] = "tests/client_test.py"
-    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
-        witness(mixed, prof, cfg.worktree)
-    manifest = cfg.worktree / "serve/tools/pyproject.toml"
-    manifest.parent.mkdir(parents=True, exist_ok=True)
-    manifest.write_text("[project\n")
-    monkeypatch.setattr(worktree, "owns_changed_runner", owns_runner)
-    with pytest.raises(repair_copy.RepairError, match="cannot resolve the curator's unchanged measurement"):
-        witness(repair, prof, cfg.worktree)
     assert "tests/test_a.py::old: retire" in cfg.message
     assert "share 2 (web/src/b.test.ts" not in cfg.message  # every share ended
     assert "::slow" not in cfg.message  # rewrite-lower waits (TD-312)
@@ -399,6 +380,48 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
     assert "Before: `uv run pytest -q`" in text
     assert "- tests/test_a.py::old: retire, removed" in text
     assert "Rewrite lower, for later (1):\n- tests/test_a.py::slow: b" in text
+
+
+def test_curator_measurements_refuse_a_mixed_changed_runner(curating, monkeypatch):
+    c = curating.store.read(curating.slug)
+    c.step = Step(kind=StepKind.BUILD, task=CURATE)
+    prof = profile.confirm(Profile(), "check:.", "uv run test --changed", NOW)
+    prof = profile.confirm(prof, "check:api", "uv run pytest", NOW)
+    prof = profile.confirm(prof, "check:web", "npm test", NOW)
+    owns_runner = worktree.owns_changed_runner
+    monkeypatch.setattr(worktree, "owns_changed_runner", lambda *_: True)
+    stuck.start(c, "project-env:build:measurement", "the suite measurement cannot finish", NOW)
+    witness = step_repair._witness  # noqa: SLF001
+    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
+        witness(c, prof, curating.repo)
+    python = c.model_copy(deep=True)
+    python.tests.packages = ["."]
+    python.tests.shares = python.tests.shares[:1]
+    assert witness(python, prof, curating.repo) == (
+        check_hint.task_command(
+            check_hint.qualified(".", "uv run test --changed -m tests"), c.tests.commit, c.tests.commit
+        ),
+    )
+    mixed = python.model_copy(deep=True)
+    mixed.tests.shares[0].paths.append("tests/client.test.ts")
+    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
+        witness(mixed, prof, curating.repo)
+    mixed.tests.shares[0].paths[-1] = "tests/client_test.py"
+    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
+        witness(mixed, prof, curating.repo)
+    owned = c.model_copy(deep=True)
+    owned.tests.packages = ["api", "web"]
+    owned.tests.shares[0].paths = ["api/tests/test_a.py"]
+    assert witness(owned, prof, curating.repo) == (
+        check_hint.qualified("api", "uv run pytest"),
+        check_hint.qualified("web", "npm test"),
+    )
+    manifest = curating.repo / "serve/tools/pyproject.toml"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text("[project\n")
+    monkeypatch.setattr(worktree, "owns_changed_runner", owns_runner)
+    with pytest.raises(repair_copy.RepairError, match="cannot resolve the curator's unchanged measurement"):
+        witness(python, prof, curating.repo)
 
 
 def test_a_curation_that_applies_nothing_ends_without_review_or_pr(curating):
