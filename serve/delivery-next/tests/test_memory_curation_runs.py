@@ -1010,7 +1010,6 @@ def test_snapshot_identity_respects_pid_birth_end_and_boot(root, monkeypatch, id
         expected = ["recovered" if settled else "held"] + ["held"] * (count - 1)
         assert [s["state"] for s in sessions] == expected
         assert rebuilt.maintenance.pending("curation") is (not settled or count == 2)
-        assert len(sessions) == count
         ids = [s["id"] for s in sessions]
         assert identities is None or ids == identities
         identities = ids
