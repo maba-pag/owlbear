@@ -37,7 +37,6 @@ _IDS_BULK = [f"550e8400-e29b-41d4-a716-4466554811{i:02d}" for i in range(22)]
 # Fixed UUIDs for score / counter / sort tests (200-series)
 _ID_SCORE_A = "550e8400-e29b-41d4-a716-446655482001"
 _ID_SCORE_B = "550e8400-e29b-41d4-a716-446655482002"
-_ID_SCORE_C = "550e8400-e29b-41d4-a716-446655482003"
 
 # Fixed UUIDs for AC2 state-transition tests (300-series)
 _ID_TRANS_A = "550e8400-e29b-41d4-a716-446655483001"
