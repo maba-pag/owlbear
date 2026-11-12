@@ -60,7 +60,7 @@ def blocking_opens(monkeypatch) -> list[str]:
 
 
 @pytest.mark.usefixtures("current_binding")
-def test_a_payload_edited_after_the_first_staging_check_is_refused_and_not_switched(repo, boot, capsys, monkeypatch):
+def test_a_payload_edited_after_the_first_staging_check_is_refused_and_not_switched(repo, boot, monkeypatch):
     _prepared(repo, boot)
     real_owned = project_move._owned  # noqa: SLF001 - the gap hook wraps the real staging check
     edited: list[Path] = []
@@ -78,8 +78,6 @@ def test_a_payload_edited_after_the_first_staging_check_is_refused_and_not_switc
         code = cli.main(["--repo", str(repo), "finish"])
     except StoreError:
         code = None
-    capsys.readouterr()
-
     assert edited, "the payload edit hook never ran"
     assert code in (None, 1)
     assert _record(repo)["phase"] != project_move.SWITCHED
@@ -89,7 +87,7 @@ def test_a_payload_edited_after_the_first_staging_check_is_refused_and_not_switc
 
 
 @pytest.mark.usefixtures("current_binding")
-def test_a_source_edit_during_the_retry_sync_is_refused_and_keeps_both_copies(repo, boot, capsys, monkeypatch):
+def test_a_source_edit_during_the_retry_sync_is_refused_and_keeps_both_copies(repo, boot, monkeypatch):
     _prepared(repo, boot)
     real_sync = project_move._sync_published  # noqa: SLF001 - the first attempt fails, the retry edits the source
     calls: list[int] = []
@@ -106,7 +104,6 @@ def test_a_source_edit_during_the_retry_sync_is_refused_and_keeps_both_copies(re
 
     with pytest.raises((OSError, StoreError)):
         cli.main(["--repo", str(repo), "finish"])
-    capsys.readouterr()
     assert _record(repo)["phase"] != project_move.SWITCHED
 
     try:
@@ -115,8 +112,6 @@ def test_a_source_edit_during_the_retry_sync_is_refused_and_keeps_both_copies(re
         code, err = None, str(exc)
     else:
         err = ""
-    capsys.readouterr()
-
     assert len(calls) == 2, "the retry never reached the sync"
     assert code in (None, 1), err
     assert _record(repo)["phase"] != project_move.SWITCHED, "a stale copy was switched after the source changed"
@@ -195,7 +190,7 @@ def test_a_destination_open_failure_closes_the_source_descriptor_for_partial_dir
 
 
 @pytest.mark.usefixtures("current_binding")
-def test_a_crash_between_the_marker_and_the_switch_leaves_a_durable_marker_and_resumes(repo, boot, capsys, monkeypatch):
+def test_a_crash_between_the_marker_and_the_switch_leaves_a_durable_marker_and_resumes(repo, boot, monkeypatch):
     _prepared(repo, boot)
     real_save = project_move._save  # noqa: SLF001 - the crash is injected at the SWITCHED record write
     real_sync, synced = os.fsync, []
@@ -219,8 +214,6 @@ def test_a_crash_between_the_marker_and_the_switch_leaves_a_durable_marker_and_r
     monkeypatch.setattr(os, "fsync", sync)
     with pytest.raises((OSError, StoreError)):
         cli.main(["--repo", str(repo), "finish"])
-    capsys.readouterr()
-
     record = _record(repo)
     assert record["phase"] != project_move.SWITCHED
     target = Path(record["target"])
@@ -228,7 +221,6 @@ def test_a_crash_between_the_marker_and_the_switch_leaves_a_durable_marker_and_r
 
     monkeypatch.setattr(project_move, "_save", real_save)
     assert cli.main(["--repo", str(repo), "finish"]) == 0
-    capsys.readouterr()
     assert _record(repo)["phase"] == project_move.SWITCHED
     assert Store.open(repo).root == target
     assert registry.canonical(repo) == (repo.resolve(), _source(repo).resolve())
@@ -238,8 +230,8 @@ def test_a_crash_between_the_marker_and_the_switch_leaves_a_durable_marker_and_r
 
 @pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("missing", ["corrupt-receipt", "target"])
-def test_a_missing_target_marker_with_a_corrupt_receipt_is_refused_by_registration(repo, boot, capsys, missing):
-    target = _switched_store(repo, boot, capsys)
+def test_a_missing_target_marker_with_a_corrupt_receipt_is_refused_by_registration(repo, boot, missing):
+    target = _switched_store(repo, boot)
     (target / MARKER).unlink()
     if missing == "corrupt-receipt":
         (_source(repo) / MARKER).unlink()
@@ -253,8 +245,8 @@ def test_a_missing_target_marker_with_a_corrupt_receipt_is_refused_by_registrati
 
 
 @pytest.mark.usefixtures("current_binding")
-def test_a_target_marker_fifo_is_refused_without_a_blocking_open(repo, boot, capsys, blocking_opens):
-    target = _switched_store(repo, boot, capsys)
+def test_a_target_marker_fifo_is_refused_without_a_blocking_open(repo, boot, blocking_opens):
+    target = _switched_store(repo, boot)
     (target / MARKER).unlink()
     os.mkfifo(target / MARKER)
 
@@ -267,7 +259,6 @@ def test_a_target_marker_fifo_is_refused_without_a_blocking_open(repo, boot, cap
 @pytest.mark.usefixtures("current_binding")
 def test_a_foreign_target_found_on_resume_is_refused_before_any_write(repo, boot, capsys, monkeypatch):
     _prepared(repo, boot)
-    real_sync = project_move._sync_published  # noqa: SLF001 - the first attempt fails, the resume must not write
 
     def fail_sync(_pfd, _target, _tfd):
         raise OSError(errno.EIO, "injected first-attempt sync failure")
@@ -282,8 +273,6 @@ def test_a_foreign_target_found_on_resume_is_refused_before_any_write(repo, boot
     shutil.rmtree(target)
     target.mkdir()
     (target / "foreign.txt").write_text("owner bytes\n")
-    monkeypatch.setattr(project_move, "_sync_published", real_sync)
-
     assert cli.main(["--repo", str(repo), "finish"]) == 1
     assert capsys.readouterr().err == (
         f"{target} is not the copy this move published: nothing was removed; move it away, then start again\n"
@@ -303,8 +292,8 @@ def _rewrite_prior(repo: Path, prior: str) -> None:
 
 @pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("authority", ["future-prior", "missing-preparation"])
-def test_a_missing_target_marker_with_a_prepared_prior_8_is_refused_by_every_consumer(repo, boot, capsys, authority):
-    target = _switched_store(repo, boot, capsys)
+def test_a_missing_target_marker_with_a_prepared_prior_8_is_refused_by_every_consumer(repo, boot, authority):
+    target = _switched_store(repo, boot)
     (target / MARKER).unlink()
     if authority == "future-prior":
         _rewrite_prior(repo, "8")
@@ -326,9 +315,9 @@ def test_a_missing_target_marker_with_a_prepared_prior_8_is_refused_by_every_con
 
 @pytest.mark.usefixtures("current_binding")
 @pytest.mark.parametrize("prior", [6, STORE_FORMAT])
-def test_a_prepared_prior_6_is_admitted_by_every_consumer(repo, boot, capsys, blocking_opens, prior):
+def test_a_prepared_prior_6_is_admitted_by_every_consumer(repo, boot, blocking_opens, prior):
     (_source(repo) / MARKER).write_text(str(prior))
-    target = _switched_store(repo, boot, capsys)
+    target = _switched_store(repo, boot)
     (target / MARKER).unlink()
     _rewrite_prior(repo, str(prior))
     assert Store.open(repo).root == target
@@ -341,9 +330,7 @@ def test_a_prepared_prior_6_is_admitted_by_every_consumer(repo, boot, capsys, bl
 
 
 @pytest.mark.usefixtures("current_binding")
-def test_a_target_marker_from_a_newer_store_is_refused_as_an_upgrade_and_nothing_is_written(
-    repo, boot, capsys, monkeypatch
-):
+def test_a_target_marker_from_a_newer_store_is_refused_as_an_upgrade_and_nothing_is_written(repo, boot, monkeypatch):
     _prepared(repo, boot)
     real_sync, planted = fd_tree.sync, []
 
@@ -358,7 +345,6 @@ def test_a_target_marker_from_a_newer_store_is_refused_as_an_upgrade_and_nothing
     boot["id"] = AFTER
     with pytest.raises(FormatTooNewError):
         offline_protocol.finish_clone(repo, gaps=lambda: ())
-    capsys.readouterr()
     assert planted
     assert project_home.home(planted[0]).joinpath(MARKER).read_text() == "99\n"
     assert {name: (_source(repo) / name).read_bytes() for name in before} == before

@@ -45,8 +45,7 @@ def prepare(repo: Path, boot: dict) -> None:
     boot["id"] = AFTER
 
 
-def switched_store(repo: Path, boot: dict, capsys) -> Path:
+def switched_store(repo: Path, boot: dict) -> Path:
     prepare(repo, boot)
     assert cli.main(["--repo", str(repo), "finish"]) == 0
-    capsys.readouterr()
     return Store.open(repo).root
