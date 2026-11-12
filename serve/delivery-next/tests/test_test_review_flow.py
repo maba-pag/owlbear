@@ -367,13 +367,25 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
     assert cfg.checks[0] in cfg.message
     repair = c.model_copy(update={"step": Step(kind=StepKind.BUILD, task=CURATE)}, deep=True)
     stuck.start(repair, "project-env:build:measurement", "the suite measurement cannot finish", NOW)
-    assert step_repair._witness(repair, prof, cfg.worktree) == cfg.checks  # noqa: SLF001
+    witness = step_repair._witness  # noqa: SLF001
+    assert witness(repair, prof, cfg.worktree) == cfg.checks
+    follow = repair.model_copy(deep=True)
+    follow.plan.tasks.append(Task(id="r1", title="Fix the review", scope=["."]))
+    follow.step.task = follow.repairs.current.task = "r1"
+    with monkeypatch.context() as ordinary:
+        ordinary.setattr(worktree, "owns_changed_runner", lambda *_: False)
+        confirmed = profile.confirm(Profile(), "check:.", "uv run pytest", NOW)
+        assert witness(follow, confirmed, cfg.worktree) == (check_hint.qualified(".", "uv run pytest"),)
+    mixed = repair.model_copy(deep=True)
+    mixed.tests.shares[0].paths.append("tests/client.test.ts")
+    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
+        witness(mixed, prof, cfg.worktree)
     manifest = cfg.worktree / "serve/tools/pyproject.toml"
     manifest.parent.mkdir(parents=True, exist_ok=True)
     manifest.write_text("[project\n")
     monkeypatch.setattr(worktree, "owns_changed_runner", owns_runner)
     with pytest.raises(repair_copy.RepairError, match="cannot resolve the curator's unchanged measurement"):
-        step_repair._witness(repair, prof, cfg.worktree)  # noqa: SLF001
+        witness(repair, prof, cfg.worktree)
     assert "tests/test_a.py::old: retire" in cfg.message
     assert "share 2 (web/src/b.test.ts" not in cfg.message  # every share ended
     assert "::slow" not in cfg.message  # rewrite-lower waits (TD-312)
@@ -458,12 +470,6 @@ def test_only_the_curation_task_is_the_curator_s_and_its_pr_text_fits(curating):
     step(curating)
     [cfg] = curating.seen
     assert (cfg.role, cfg.submit) == ("", tools.SUBMIT)  # a repair is an ordinary build; the report stays t1's
-    repair = c.model_copy(deep=True)
-    stuck.start(repair, "project-env:build:follow-up", "the follow-up check cannot finish", NOW)
-    prof = profile.confirm(Profile(), "check:.", "uv run pytest", NOW)
-    assert step_repair._witness(repair, prof, cfg.worktree) == (  # noqa: SLF001
-        check_hint.qualified(".", "uv run pytest"),
-    )
     many = [{"test": f"tests/test_{i}.py::" + "x" * 280, "action": "retire", "change": "y" * 480} for i in range(100)]
     head = "a" * 40
     c.tests.report = TestCurationResult.model_validate({

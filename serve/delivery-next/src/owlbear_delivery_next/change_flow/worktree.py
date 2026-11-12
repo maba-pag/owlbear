@@ -138,17 +138,20 @@ def build_checks(profile: Profile, change: Change, task: Task, path: Path) -> li
             adapted = check_hint.qualified(package, command)
             root = check_hint.changed_runner(adapted)
             if root and owns_changed_runner(path, root[0].split()[2]):
-                targets, covered = set[str](), set[str]()
+                targets, covered, unsupported = set[str](), set[str](), set[str]()
                 packages = sorted(change.tests.packages, key=len, reverse=True)
                 for name in (name for share in change.tests.shares for name in share.paths):
                     module = Path(name)
-                    if module.suffix != ".py" or not module.name.startswith("test_"):
-                        continue
                     owner = next((p for p in packages if p != "." and name.startswith(f"{p}/")), ".")
+                    if module.suffix != ".py":
+                        unsupported.add(owner)
+                        continue
+                    if not module.name.startswith("test_"):
+                        continue
                     covered.add(owner)
                     target = owner if owner != "." else module.parent.as_posix() if module.parent != Path() else name
                     targets.add(target)
-                missing = set(packages) - covered - {p for p, _ in pairs if p != "."}
+                missing = (set(packages) - covered | unsupported) - {p for p, _ in pairs if p != "."}
                 if missing:
                     msg = (
                         f"The confirmed Python runner cannot measure selected suites: {', '.join(sorted(missing))}; "
