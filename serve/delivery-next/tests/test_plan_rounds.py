@@ -325,7 +325,7 @@ def asked(store: Store) -> None:
 
 
 def test_an_already_asked_dispute_is_reconsidered_once_and_an_unsure_one_is_left_open(store, change_repo, mp):
-    mp.plans += [plan(1, scope="lib"), plan(1, {"F1": "no"}), plan(2)]
+    mp.plans += [plan(1, scope="lib"), plan(1, {"F1": "no"})]
     mp.reviews += [review("t1"), review(upheld={"F1": True})]
     mp.reconsiders += [
         ReconsiderResult(reconsidered=[{"finding": "F1", "verdict": "unsure", "reason": "only the owner knows"}])
