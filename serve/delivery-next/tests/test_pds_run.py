@@ -537,10 +537,10 @@ def test_owner_continue_covers_only_the_followups_shown(tmp_path, checkout, adde
 )
 def test_page_copy_refuses_unauthorized_changes_before_taking_any(tmp_path, edit, named):
     candidate, copy = tmp_path / "candidate", tmp_path / "copy"
-    tree.lay(candidate, {f"{REPO}{PAGE}": DEMO.encode(), f"{REPO}web/pages/other.mjs": b"original\n"})
+    tree.lay(candidate, {f"{REPO}{PAGE}": DEMO.encode(), f"{REPO}web/pages/a-valid.mjs": b"original\n"})
     before = tree.files(candidate, REPO)
     start = tree.copy(candidate, copy, lambda at, args: git(at, *args))
-    (copy / "web/pages/other.mjs").write_text("fixed\n")
+    (copy / "web/pages/a-valid.mjs").write_text("fixed\n")
     for path, text in edit.items():
         if text is None:
             (copy / path).unlink()
