@@ -108,11 +108,10 @@ def test_legacy_null_challenge_migrates_to_empty_list_and_is_removed_on_write(tm
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("todays_memory_values")
-@pytest.mark.parametrize("state", [MemoryState.APPROVED, MemoryState.CURATED])
-async def test_challenges_replay_and_dispute_without_changing_ratings(tmp_path: Path, state: MemoryState) -> None:
+async def test_challenges_replay_and_dispute_without_changing_ratings(tmp_path: Path) -> None:
     entry = _make_entry(
-        state,
-        approved_at=_TS_APPROVED if state == MemoryState.APPROVED else None,
+        MemoryState.APPROVED,
+        approved_at=_TS_APPROVED,
         outstanding_count=3,
         unremarkable_count=1,
         didnt_use_count=2,
@@ -166,6 +165,14 @@ async def test_challenges_replay_and_dispute_without_changing_ratings(tmp_path: 
             checkpoint.didnt_use_count,
             checkpoint.score,
         ) == (3, 1, 2, 0.95)
+
+
+class TestConfirmationCycle:
+    def test_curated_entry_transitions_to_contested(self, tmp_path: Path) -> None:
+        entry = _make_entry(MemoryState.CURATED)
+        _write_entry(tmp_path, entry)
+        result = MemoryEngine(tmp_path).record_factually_wrong(_ID, _TASK_A, expected_revision=entry.revision)
+        assert result.entry.state == MemoryState.CONTESTED
 
 
 def test_contested_with_no_challenges_stays_contested_and_records_first(tmp_path: Path) -> None:
