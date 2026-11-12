@@ -697,6 +697,15 @@ def test_a_save_blocks_old_layers_before_its_across_read_finishes(store, pds) ->
         layers = hold_first(page, "**/api/next/config")
         read[0][0].fulfill(response=read[0][1])
         until(page, lambda: layers)
+        pds.group(page, "overview")
+        page.route(
+            "**/api/next/config",
+            lambda route: route.fulfill(json=layers[0][1].json() | {"notice": "an earlier layer notice"}),
+            times=1,
+        )
+        page.locator("#read-again").click()
+        expect(page.locator("#error")).to_have_text("An earlier layer notice")
+        pds.group(page, "agents")
         machine = hold_first(page, "**/api/next/machine")
         save[0][0].continue_()
         until(page, lambda: machine)
@@ -707,6 +716,7 @@ def test_a_save_blocks_old_layers_before_its_across_read_finishes(store, pds) ->
         assert page.locator("#status").inner_text() == "Saving…"
         machine[0][0].fulfill(response=machine[0][1])
         expect(page.locator("#status")).to_contain_text("Saved this-project's settings")
+        expect(page.locator("#error")).to_be_hidden()
 
 
 @pytest.mark.browser
@@ -2174,13 +2184,36 @@ def test_settings_say_why_the_old_runtime_stays_whole(tmp_path: Path, monkeypatc
     with browsing(monkeypatch, pds) as (page, base):
         said = errors(page)
         page.goto(f"{base}/config?project={a.id}#token=t")
+        page.evaluate("async () => { await import('/assets/page/config/main.mjs'); }")
+        held = hold_first(page, "**/api/next/config")
+        page.locator("#read-again").click()
+        until(page, lambda: held)
         pds.group(page, "this-machine")
         page.get_by_role("button", name="Remove the old runtime").click()
         pds.answer(page, "Remove it")
         notice = page.locator("#error")
         expect(notice).to_be_visible()
         assert notice.text_content().strip() == f"VersionError: {whole_error}\na note on the failure"
-        assert said == ["Failed to load resource: the server responded with a status of 409 (Conflict)"]
+        with page.expect_request("**/api/next/config/models"):
+            held[0][0].fulfill(response=held[0][1])
+        expect(notice).to_have_text(f"VersionError: {whole_error}\na note on the failure")
+        pds.group(page, "overview")
+        page.route(
+            "**/api/next/config",
+            lambda route: route.fulfill(status=503, json={"detail": "the settings layers could not be read"}),
+            times=1,
+        )
+        page.locator("#read-again").click()
+        expect(notice).to_have_text(
+            f"VersionError: {whole_error}\na note on the failure\n\nThe settings layers could not be read"
+        )
+        with page.expect_request("**/api/next/config/models"):
+            page.locator("#read-again").click()
+        expect(notice).to_have_text(f"VersionError: {whole_error}\na note on the failure")
+        assert said == [
+            "Failed to load resource: the server responded with a status of 409 (Conflict)",
+            "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+        ]
     assert kept.is_dir()
 
 

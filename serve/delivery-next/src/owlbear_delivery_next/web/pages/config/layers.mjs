@@ -310,10 +310,13 @@ export async function reload() {
     const says = answers.says(n);
     if (!answers.take(n)) return false;
     state.loaded = loaded;
-    if (says) state.error = loaded.notice ? loaded.notice.charAt(0).toUpperCase() + loaded.notice.slice(1) : "";
+    if (says) state.layerNotice = loaded.notice ? loaded.notice.charAt(0).toUpperCase() + loaded.notice.slice(1) : "";
     return true;
   } catch (e) {
-    if (answers.says(n)) notify(e.message);  // a newer answer speaks for the layers
+    if (answers.says(n)) {
+      state.layerNotice = e.message.charAt(0).toUpperCase() + e.message.slice(1);
+      show();
+    }
     return false;
   }
 }
@@ -359,6 +362,7 @@ async function saveLayer(review) {
   let error = "", status = "";
   state.saving = true;
   state.error = "";
+  state.layerNotice = "";
   state.status = "Saving…";
   show();
   try {
@@ -366,6 +370,7 @@ async function saveLayer(review) {
       { method: "PUT", body: { rev: state.loaded[`${layer}_rev`], layer: edited(layer),
         prefs_reviewed: layer === "project" && state.prefsReview }, timeout: WRITE });
     answers.shown();
+    state.layerNotice = "";
     if (layer === "project" && !state.loaded.unpublished) state.prefsReview = false;  // kept until published
     for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
     state.kept.clear();  // what was saved is no longer an unsaved edit for the filter
@@ -407,6 +412,7 @@ export async function rename() {
   try {
     state.loaded = await call("/config/folder", { method: "PUT", body: { name }, timeout: WRITE });
     answers.shown();
+    state.layerNotice = "";
     state.folder = null;
     state.error = state.loaded.notice ? state.loaded.notice.charAt(0).toUpperCase() + state.loaded.notice.slice(1) : "";
     state.status = `This project's folder is now ${state.loaded.folder}.`;

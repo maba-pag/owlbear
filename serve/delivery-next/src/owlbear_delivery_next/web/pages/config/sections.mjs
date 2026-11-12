@@ -271,11 +271,12 @@ export function route(initial = false) {
 
 export function view() {
   const loaded = state.loaded;
+  const error = [state.error, state.layerNotice].filter(Boolean).join("\n\n");
   if (loaded && !loaded.global_location && state.layer === "global") state.layer = "project";
   // The outside reads keep one slot before and after the layers load, so their list keeps its nodes and the focus an
   // address gave it; a layer that does not read keeps Read again and why.
   return html`
-    <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error}
+    <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!error}>${error}
     </p-inline-notification>
     <p-text id="status" role="status" aria-live="polite">${state.status}</p-text>
     ${loaded ? html`${scopeSection()}${groupNav()}${filterBar()}` : nothing}
