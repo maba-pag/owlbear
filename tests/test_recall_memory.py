@@ -136,7 +136,6 @@ async def test_contested_entry_without_task_still_includes_state_marker(tmp_path
         f"## Unreferenced challenge\nEntry ID: `{entry.id}`\nRevision: `{entry.revision}`\n"
         "State: contested\nEntry body text."
     )
-    assert "Challenge task:" not in result
 
 
 @pytest.mark.asyncio
