@@ -1,7 +1,6 @@
 """#777: the PDS knowledge skill a project's session preloads, chosen from its worktree."""
 
 import subprocess
-from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -101,8 +100,6 @@ def test_pds_preload_roles_and_candidate_skill_isolation(tmp_path, fields, loads
     cfg = session(tmp_path / "app", **fields)
     role = sdk_adapter.role_of(cfg)
     assert pds_skill.wanted(role, ui=cfg.ui, skills=cfg.skills) is loads
-    if loads:
-        cfg = replace(cfg, pds=pds_skill.Choice("pds-knowledge-react", chosen))
     opts = step(cfg).options()
     assert (str(chosen) in opts["skill_directories"]) is loads
     assert ("pds-knowledge-react" in opts["custom_agents"][0]["skills"]) is loads
