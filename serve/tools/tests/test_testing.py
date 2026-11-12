@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from owlbear_tools import task_scope
+from owlbear_tools import task_scope, task_testing
 from owlbear_tools import testing as testing_module
 from owlbear_tools.task_testing import _targets
 from owlbear_tools.testing import _commands_for_paths, _require_development_checkout, _workspace_packages
@@ -407,6 +407,41 @@ def test_changed_runs_git_scope_and_accepts_explicit_base(options: list[str]) ->
         assert resources == []
 
 
+def test_required_discovered_suites_survive_edits_and_module_retirement(tmp_path: Path) -> None:
+    retired, kept = "serve/demo/test/test_old.py", "tests/test_kept.py"
+    for name in (retired, kept):
+        module = tmp_path / name
+        module.parent.mkdir(parents=True, exist_ok=True)
+        module.write_text("def test_value():\n    assert True\n")
+    context = task_scope.Context("base", "base", measurement=True)
+    node = f"{retired}::test_value"
+    targets = [node, "serve/demo/test", "tests"]
+    with (
+        patch.object(task_testing, "_REPOSITORY_ROOT", tmp_path),
+        patch.object(task_testing, "_workspace_packages", return_value=()),
+        patch.object(task_testing, "_git_paths", return_value={retired, kept}),
+        patch(
+            "owlbear_tools.test_impact.select", side_effect=lambda _root, _py, _ctx, forced, _scope: forced
+        ) as select,
+    ):
+        [(literal, _)] = task_testing.commands_for_task([retired], context, [node], coverage=False)
+        assert node in literal
+        [(before, _)] = task_testing.commands_for_task([], context, targets, coverage=False)
+        assert {retired, kept} <= set(before)
+        assert node not in before
+        [(edited, _)] = task_testing.commands_for_task([retired], context, targets, coverage=False)
+        assert {retired, kept} <= set(edited)
+        assert node not in edited
+        (tmp_path / retired).unlink()
+        [(after, _)] = task_testing.commands_for_task([retired], context, targets, coverage=False)
+        assert kept in after
+        assert retired not in after
+        assert select.call_args.args[1] == [retired]
+        assert retired not in select.call_args.args[4].tests
+        with pytest.raises(task_scope.ScopeError, match="existing checkout-relative"):
+            task_testing.commands_for_task([retired], replace(context, measurement=False), targets, coverage=False)
+
+
 def test_task_consumers_exclude_docs_but_keep_markdown_fixtures_and_runtime_resources() -> None:
     fixture = "tests/fixtures/task-note.md"
     resource = "serve/tools/src/owlbear_tools/prompt.md"
@@ -683,7 +718,7 @@ def test_commands_reject_consumer_checkouts(tmp_path: Path, monkeypatch: pytest.
 
 
 def test_dependency_artifacts_cannot_name_tests_outside_the_checkout(tmp_path: Path) -> None:
-    from owlbear_tools.test_dependencies import read_evidence  # noqa: PLC0415 - exercise the artifact boundary.
+    from owlbear_tools.test_dependencies import node_path, read_evidence  # noqa: PLC0415 - the artifact boundary.
 
     node = "serve/tools/tests/../../../outside.py::test_escape"
     artifact = tmp_path / "dependencies.json"
@@ -709,6 +744,12 @@ def test_dependency_artifacts_cannot_name_tests_outside_the_checkout(tmp_path: P
         read_evidence(artifact)
     with pytest.raises(task_scope.ScopeError, match="checkout-relative test module"):
         task_scope.explicit_targets(_ROOT, [node])
+    with pytest.raises(ValueError, match="Invalid dependency test identity"):
+        node_path(node, local=frozenset({node.split("::", 1)[0]}))
+    local = ".github/skills/session-review/tests/test_extract_transcript.py"
+    assert node_path(local, local=frozenset({local})) == local
+    with pytest.raises(ValueError, match="Invalid dependency test identity"):
+        node_path(local)
 
 
 def test_page_consumers_keep_real_indirect_http_but_not_dictionary_gets(tmp_path: Path) -> None:

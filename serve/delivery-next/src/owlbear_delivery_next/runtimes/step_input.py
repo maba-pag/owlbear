@@ -8,7 +8,13 @@ from typing import TYPE_CHECKING, NamedTuple
 from owlbear_delivery_next.change_contracts import check_hint, evidence, pick_tools, preparation, tools
 from owlbear_delivery_next.change_contracts.models import VISUAL, Exit, PersonCheck, StepKind
 from owlbear_delivery_next.change_contracts.preparation import Preparing
-from owlbear_delivery_next.change_flow import brief_rounds, disputes, plan_rounds, round_flow, shaping_capture
+from owlbear_delivery_next.change_flow import (
+    brief_rounds,
+    disputes,
+    plan_rounds,
+    round_flow,
+    shaping_capture,
+)
 from owlbear_delivery_next.change_flow import worktree as wt
 from owlbear_delivery_next.runtimes import step_answers, step_decisions
 from owlbear_delivery_next.settings import profile as project_profile
@@ -489,6 +495,6 @@ def session(
         person = next((p for p in change.checks if p.id == s.task), None) or _visual_check(change)
         message = check(change, person, path, pairs, preparing)
         return Parts(message, write=True, checks=(), submit=tools.RECIPE, task=task)
-    checks = wt.task_checks(project_profile.vouched(profile), task, path, change.names.target)
+    checks = wt.build_checks(project_profile.vouched(profile), change, task, path)
     message = build(change, task.model_copy(update={"checks": checks}), path, pairs)
     return Parts(message, write=True, checks=tuple(checks), submit=tools.SUBMIT, task=task)

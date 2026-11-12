@@ -10,6 +10,7 @@ from owlbear_tools.testing import (
     _INVARIANT_TESTS,
     _PAGES,
     _REPOSITORY_ROOT,
+    _git_paths,
     _neighbour_tests,
     _package_for_path,
     _package_tests,
@@ -25,21 +26,23 @@ from owlbear_tools.testing import (
 
 
 def _targets(
-    paths: list[str], workspace: _Packages
+    paths: list[str], workspace: _Packages, explicit: set[str] | None = None
 ) -> tuple[set[str], list[str], list[_WorkspacePackage], set[str], list[str]]:
     forced: set[str] = set()
     required = set(_INVARIANT_TESTS)
     python: list[str] = []
     packages: dict[str, _WorkspacePackage] = {}
     resources: list[str] = []
+    explicit_modules = {target.split("::", 1)[0] for target in explicit or ()}
     for path in paths:
         package = _package_for_path(path, workspace)
+        named = path in explicit_modules
         if path in _CONFIG_TESTS:
             required.update(_CONFIG_TESTS[path])
         elif package and path.startswith(_PAGES):
             forced.update(_page_scope(package, workspace))
-        elif path.endswith(".py") and (package or path.startswith("tests/")):
-            current_test = "/tests/" in path or path.startswith("tests/")
+        elif path.endswith(".py") and (package or path.startswith("tests/") or named):
+            current_test = "/tests/" in path or path.startswith("tests/") or named
             if current_test and Path(path).name.startswith("test_") and (_REPOSITORY_ROOT / path).is_file():
                 required.add(path)
             python.append(path)
@@ -66,8 +69,14 @@ def commands_for_task(
 ) -> list[tuple[list[str], Path]]:
     """Union affected consumers and required targets, never bootstrap the full suite."""
     workspace = _workspace_packages()
-    forced, python, packages, required, resources = _targets(paths, workspace)
-    required.update(task_scope.explicit_targets(_REPOSITORY_ROOT, targets))
+    recorded = (
+        _git_paths(["ls-tree", "-r", "--name-only", "-z", f"{context.base}^{{commit}}"])
+        if targets and context.measurement
+        else set()
+    )
+    explicit = task_scope.explicit_targets(_REPOSITORY_ROOT, targets, sorted(recorded))
+    forced, python, packages, required, resources = _targets(paths, workspace, explicit)
+    required.update(test for test in explicit if (_REPOSITORY_ROOT / test.split("::", 1)[0]).is_file())
     for package in packages:
         forced.update(_relative_paths(_neighbour_tests(package, workspace)))
         forced.update(
@@ -87,7 +96,7 @@ def commands_for_task(
             python,
             context,
             selected,
-            test_impact.RequiredScope(consumer_paths, sorted(required), resources),
+            test_impact.RequiredScope(consumer_paths, sorted(required), resources, sorted(explicit)),
         )
     print(f"Task paths: {', '.join(paths) or 'none'}")  # noqa: T201
     if not selected:

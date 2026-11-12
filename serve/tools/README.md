@@ -131,6 +131,22 @@ remain required even when the task has no edited paths. For example,
 `uv run test --changed serve/tools/tests/test_todo.py --task-base OLD --target TARGET`
 unions that module with the task's affected checks. Positional targets with ordinary `--changed`
 still require task context rather than silently replacing branch scope.
+Curator measurements use `-m` (`--measurement`) with that same task context and pinned suite targets.
+The curator requires a confirmed root check or an own confirmed check for every selected suite before it starts.
+The maintained runner's directory targets expand `test_*.py` modules. Selected suffix-named Python tests
+or other languages require their package's own confirmed check, rather than being silently omitted.
+Helpers beside discovered modules outside `tests/` and `serve/*/tests/`, including root `conftest.py`, also need
+an own package check or a confirmed generic root check. The curator refuses an incompatible changed runner
+before edits rather than treating helpers as executable test modules.
+For a mixed selection the curator uses only package checks, with every selected suite covered. It refuses
+the selection before edits if any suite still needs the Python changed-path runner, since that runner sees
+the whole curation diff, including edits owned by other languages' checks.
+Membership comes from both the original task commit and current tree: every surviving module still runs,
+while retired members remain inputs to consumer analysis rather than nonexistent pytest arguments.
+When a measured module is required in full, its redundant literal node selectors are subsumed by that module,
+so retiring a named test does not leave a nonexistent pytest node in the after-measurement.
+Ordinary task targets still must exist. Locally validated explicit targets may use discovered layouts outside
+the conventional test directories; this does not widen which test identities CI artifacts may supply.
 Kept tasks also compare their original `OLD..NEW` source versions, even when their bytes were
 restored before the current task began. The span's own paths use the same target-import exclusions
 as task Git scoping, and the selected consumers execute on the current tree.

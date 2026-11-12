@@ -65,7 +65,7 @@ def relative(value: str) -> bool:
     return bool(path.parts) and not path.is_absolute() and ".." not in path.parts and "\\" not in value
 
 
-def node_path(node: str) -> str:
+def node_path(node: str, *, local: frozenset[str] = frozenset()) -> str:
     """The repository test file of a node, never an option or an outside executable."""
     value = node.split("::", 1)[0]
     path = PurePosixPath(value)
@@ -74,7 +74,7 @@ def node_path(node: str) -> str:
     under_package = len(parts) >= PACKAGE_TEST_DEPTH and parts[0] == "serve" and parts[2] == "tests"
     if (
         not relative(value)
-        or not (under_tests or under_package)
+        or not (under_tests or under_package or value in local)
         or path.suffix != ".py"
         or any(character in node for character in "\0\r\n")
         or any(not part or part.startswith(("-", "/", ".")) for part in node.split("::")[1:])

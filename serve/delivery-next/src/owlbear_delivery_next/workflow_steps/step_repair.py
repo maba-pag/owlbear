@@ -24,7 +24,7 @@ from owlbear_delivery_next.change_contracts.failures import ENVIRONMENT, WRONG_M
 from owlbear_delivery_next.change_contracts.models import Exit, Outcome, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.repair_records import KEPT, Tried, Witness
-from owlbear_delivery_next.change_flow import budgets, rebuilds, stuck, worktree
+from owlbear_delivery_next.change_flow import budgets, curation_flow, rebuilds, stuck, worktree
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import sdk_adapter, session_result
 from owlbear_delivery_next.settings import profile, roles
@@ -284,6 +284,9 @@ def _witness(change: Change, prof: Profile, source: Path) -> tuple[str, ...]:
             raise
         detail = "".join(format_exception_only(error)).strip()
         r.evidence += f"\nUnchanged runner ownership in {source}/serve/tools/pyproject.toml: {detail}"
+        if change.tests is not None and r.task == curation_flow.CURATE:
+            msg = f"cannot resolve the curator's unchanged measurement in {source}: {detail}"
+            raise repair_copy.RepairError(msg) from error
         task = next((t for t in change.plan.tasks if t.id == r.task), None) if change.plan else None
         pairs = worktree.checks(profile.vouched(prof))
         selected = (
@@ -305,9 +308,9 @@ def _resolved_witness(change: Change, prof: Profile, source: Path) -> tuple[str,
     if task:
         rebuilds.refresh(change, task)
     pairs = worktree.checks(profile.vouched(prof))
-    if task and task.checks and r is not None:
+    if task and r is not None and (task.checks or (change.tests is not None and r.task == curation_flow.CURATE)):
         bound = task if task.base is not None else task.model_copy(update={"base": r.base})
-        return tuple(worktree.task_checks(profile.vouched(prof), bound, source, change.names.target))
+        return tuple(worktree.build_checks(profile.vouched(prof), change, bound, source))
     selected = [check_hint.qualified(p, c) for p, c in pairs if _in_scope(change, p)]
     if r is None or not worktree.owns_changed_runner(source):
         return tuple(selected)

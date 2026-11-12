@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import pytest
 from fastapi.testclient import TestClient
 
-from owlbear_delivery_next.change_contracts import curation_tools, tools
+from owlbear_delivery_next.change_contracts import check_hint, curation_tools, tools
 from owlbear_delivery_next.change_contracts.curation_records import TestReview
 from owlbear_delivery_next.change_contracts.curation_tools import TEST_CURATION, TestCurationResult, TestReviewResult
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
@@ -26,7 +26,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow import loop, stuck, worktree
 from owlbear_delivery_next.change_flow.brief_rounds import ready
 from owlbear_delivery_next.change_flow.curation_flow import CURATE
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
@@ -37,11 +37,18 @@ from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.state_store import identities
 from owlbear_delivery_next.state_store.briefs import new_slug
 from owlbear_delivery_next.state_store.store import Store
-from owlbear_delivery_next.workflow_steps import curation, curation_build, curation_shares, sessions
+from owlbear_delivery_next.workflow_steps import (
+    curation,
+    curation_build,
+    curation_shares,
+    repair_copy,
+    sessions,
+    step_repair,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -124,6 +131,7 @@ def reviewed(cfg) -> Run:
 def review(repo, monkeypatch):
     """A started review of both packages, its sessions faked; ``ran`` holds each wave's shares."""
     store = Store.open(repo)
+    store.write_profile(profile.confirm(Profile(), "check:.", "uv run pytest", NOW))
     c = curation.start(store, repo, [".", "web"], NOW)
     ends, ran = {}, []
 
@@ -332,20 +340,43 @@ def curated(applied: bool):  # noqa: FBT001 - one switch per test
 
 
 def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(curating, monkeypatch, user_on):
+    prof = profile.confirm(Profile(), "check:.", "uv run pytest", NOW)
+    prof = profile.confirm(prof, "check:api", "npm test", NOW)
+    prof = profile.confirm(prof, "check:web", "npm test", NOW)
+    curating.store.write_profile(prof)
     curating.curate = curated(applied=True)
     base = config.BASE  # the builder's own session values unset: the curator's build never needs them
     builder = base.agents["builder"].model_copy(update={"model": None, "effort": None, "minutes": None})
     monkeypatch.setattr(config, "BASE", base.model_copy(update={"agents": base.agents | {"builder": builder}}))
     step(curating)
     [cfg] = curating.seen
+    c = curating.store.read(curating.slug)
     assert (cfg.role, cfg.model, cfg.effort, cfg.context, cfg.submit) == (
         "test-curator", "claude-opus-5.5", "high", "long", TEST_CURATION
     )  # fmt: skip
     assert cfg.user == user_on
+    assert cfg.checks == (
+        check_hint.qualified(".", "uv run pytest"),
+        check_hint.qualified("web", "npm test"),
+    )
+    assert cfg.checks[0] in cfg.message
+    repair = c.model_copy(update={"step": Step(kind=StepKind.BUILD, task=CURATE)}, deep=True)
+    stuck.start(repair, "project-env:build:measurement", "the suite measurement cannot finish", NOW)
+    witness = step_repair._witness  # noqa: SLF001
+    assert witness(repair, prof, cfg.worktree) == cfg.checks
+    partial = profile.confirm(Profile(), "check:web", "npm test", NOW)
+    with pytest.raises(ValueError, match="lack confirmed checks"):
+        witness(repair, partial, cfg.worktree)
+    follow = repair.model_copy(deep=True)
+    follow.plan.tasks.append(Task(id="r1", title="Fix the review", scope=["."]))
+    follow.step.task = follow.repairs.current.task = "r1"
+    with monkeypatch.context() as ordinary:
+        ordinary.setattr(worktree, "owns_changed_runner", lambda *_: False)
+        confirmed = profile.confirm(Profile(), "check:.", "uv run pytest", NOW)
+        assert witness(follow, confirmed, cfg.worktree) == (check_hint.qualified(".", "uv run pytest"),)
     assert "tests/test_a.py::old: retire" in cfg.message
     assert "share 2 (web/src/b.test.ts" not in cfg.message  # every share ended
     assert "::slow" not in cfg.message  # rewrite-lower waits (TD-312)
-    c = curating.store.read(curating.slug)
     assert (c.tests.report.applied[0].test, c.tests.unchanged, c.step.kind) == (
         "tests/test_a.py::old", False, StepKind.REVIEW
     )  # fmt: skip
@@ -353,6 +384,54 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
     assert "Before: `uv run pytest -q`" in text
     assert "- tests/test_a.py::old: retire, removed" in text
     assert "Rewrite lower, for later (1):\n- tests/test_a.py::slow: b" in text
+
+
+def test_curator_measurements_refuse_a_mixed_changed_runner(curating, monkeypatch):
+    c = curating.store.read(curating.slug)
+    c.step = Step(kind=StepKind.BUILD, task=CURATE)
+    prof = profile.confirm(Profile(), "check:.", "uv run test --changed", NOW)
+    prof = profile.confirm(prof, "check:api", "uv run pytest", NOW)
+    prof = profile.confirm(prof, "check:web", "npm test", NOW)
+    owns_runner = worktree.owns_changed_runner
+    monkeypatch.setattr(worktree, "owns_changed_runner", lambda *_: True)
+    stuck.start(c, "project-env:build:measurement", "the suite measurement cannot finish", NOW)
+    witness = step_repair._witness  # noqa: SLF001
+    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
+        witness(c, prof, curating.repo)
+    python = c.model_copy(deep=True)
+    python.tests.packages = ["."]
+    python.tests.shares = python.tests.shares[:1]
+    assert witness(python, prof, curating.repo) == (
+        check_hint.task_command(
+            check_hint.qualified(".", "uv run test --changed -m tests"), c.tests.commit, c.tests.commit
+        ),
+    )
+    mixed = python.model_copy(deep=True)
+    mixed.tests.shares[0].paths.append("tests/client.test.ts")
+    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
+        witness(mixed, prof, curating.repo)
+    mixed.tests.shares[0].paths[-1] = "tests/client_test.py"
+    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
+        witness(mixed, prof, curating.repo)
+    mixed.tests.shares[0].paths[-1] = "serve/demo/test/helpers.py"
+    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
+        witness(mixed, prof, curating.repo)
+    mixed.tests.shares[0].paths[-1] = "conftest.py"
+    with pytest.raises(ValueError, match=r"cannot measure selected suites: \."):
+        witness(mixed, prof, curating.repo)
+    owned = c.model_copy(deep=True)
+    owned.tests.packages = ["api", "web"]
+    owned.tests.shares[0].paths = ["api/tests/test_a.py"]
+    assert witness(owned, prof, curating.repo) == (
+        check_hint.qualified("api", "uv run pytest"),
+        check_hint.qualified("web", "npm test"),
+    )
+    manifest = curating.repo / "serve/tools/pyproject.toml"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text("[project\n")
+    monkeypatch.setattr(worktree, "owns_changed_runner", owns_runner)
+    with pytest.raises(repair_copy.RepairError, match="cannot resolve the curator's unchanged measurement"):
+        witness(python, prof, curating.repo)
 
 
 def test_a_curation_that_applies_nothing_ends_without_review_or_pr(curating):

@@ -29,6 +29,7 @@ from owlbear_tools.test_dependencies import (
     read_evidence,
     relative,
     run_git,
+    snapshot,
 )
 from owlbear_tools.test_dependencies import (
     is_test_module as _is_test,
@@ -251,6 +252,8 @@ class _Selection:
     consumers: _Consumers
     maps: list[Evidence]
     current_hashes: dict[str, str]
+    local: frozenset[str] = frozenset()
+    measurement: bool = False
 
     def __post_init__(self) -> None:
         self.recorded = self.maps[0].inputs
@@ -259,7 +262,7 @@ class _Selection:
         self.resource_sources: set[str] = set()
 
     def add(self, node: str, reason: str) -> None:
-        module = node_path(node)
+        module = self.module(node)
         if not (self.root / module).is_file():
             return  # Historical consumers of a deleted source survive; deleted tests are not executable.
         if not reason.startswith("caller-supplied"):
@@ -267,6 +270,9 @@ class _Selection:
             if self.current_hashes.get(module) != self.recorded.get(module):
                 node = module
         self.reasons[node].add(reason)
+
+    def module(self, node: str) -> str:
+        return node_path(node, local=self.local)
 
     def fingerprints(self, touched: set[str], base: str, after: str | None = None) -> None:
         before = _revision(self.root, base, touched)
@@ -309,7 +315,7 @@ class _Selection:
         relevant_tests.update({source} & self.consumers.tests)
         footprint_tests = {node_path(row.test) for row in self.rows if row.source in relevant_callers}
         for node in {node for item in self.maps for node in item.skipped}:
-            if node_path(node) in relevant_tests | footprint_tests:
+            if self.module(node) in relevant_tests | footprint_tests:
                 self.add(node, f"recorded platform/skip consumer: {source}")
         for node in self.consumers.platform_nodes({*relevant_callers, *relevant_tests, *footprint_tests}):
             self.add(node, f"current platform branch consumer: {source}")
@@ -345,14 +351,19 @@ class _Selection:
         for node in direct:
             if not any(test == node or test.startswith((f"{node}[", f"{node}::")) for test in mapped):
                 self.add(node, f"unobserved block current named consumer: {source}")
-        if not mapped and not direct:
+        measured = self.measurement and source in self.reasons
+        if (
+            not mapped
+            and not direct
+            and not (source in self.local and (source not in self.consumers.texts or measured))
+        ):
             msg = f"Unobserved task blocks in {self.root}/{source} have no resolved current consumers"
             raise RuntimeError(msg)
 
     def reconcile(self) -> None:
         python = {path for path in self.paths if path.endswith(".py")} | self.resource_sources
         relevant = self.consumers.tests_for(self.consumers.callers(python))
-        relevant.update(node_path(node) for node in self.reasons)
+        relevant.update(self.module(node) for node in self.reasons)
         for test in relevant & self.consumers.tests:
             if self.current_hashes[test] != self.recorded.get(test):
                 self.add(test, "current test differs from map")
@@ -375,7 +386,7 @@ class _Selection:
     def helper(self, helper: str, relevant: set[str] | None = None) -> None:
         if not helper.endswith(".py"):
             for node in self.consumers.outside_nodes({helper}, self.consumers.tests, required=helper in self.paths):
-                if relevant is None or node_path(node) in relevant:
+                if relevant is None or self.module(node) in relevant:
                     self.add(node, f"current test-data reader: {helper}")
             return
         associated = {test for test in self.consumers.tests_for({helper}) if relevant is None or test in relevant}
@@ -429,6 +440,7 @@ class RequiredScope:
     paths: Sequence[str]
     tests: Sequence[str]
     resources: Sequence[str] = ()
+    targets: Sequence[str] = ()
 
 
 def select(
@@ -442,6 +454,9 @@ def select(
     root = root.resolve()
     all_paths = scope.paths
     resources = set(scope.resources)
+    recorded = git(root, "ls-tree", "-r", "--name-only", context.base).splitlines() if context.measurement else []
+    members = task_scope.explicit_targets(root, [*scope.tests, *scope.targets], recorded)
+    local = frozenset(node.split("::", 1)[0] for node in members)
     for path in {*paths, *all_paths, *resources}:
         if not relative(path):
             msg = f"Invalid task dependency path in {root}: {path!r}"
@@ -452,16 +467,23 @@ def select(
         msg = f"A tracked or current input resolves outside dependency checkout {root}"
         raise ValueError(msg)
     touched = {path for path in paths if path.endswith(".py")}
-    consumers = _Consumers(root, files | touched)
+    consumers = _Consumers(root, files | touched, local)
     callers = consumers.callers(touched)
     importing = consumers.tests_for(callers)
-    suites = _suites({*all_paths, *importing, *(node_path(node) for node in forced)})
+    suites = _suites({*all_paths, *importing, *(node_path(node, local=local) for node in forced)})
+    hashes = inputs(root, files) | {name: snapshot(root / name) for name in local if (root / name).is_file()}
     selection = _Selection(
-        root, all_paths, consumers, _load(root, context.target, context.maps_dir, suites), inputs(root, files)
+        root,
+        all_paths,
+        consumers,
+        _load(root, context.target, context.maps_dir, suites),
+        hashes,
+        local,
+        context.measurement,
     )
     for node in scope.tests:
         selection.add(node, "caller-supplied invariant/source-reading/subprocess/neighbor")
-    for node in consumers.outside_nodes(set(all_paths) - resources, {node_path(node) for node in forced}):
+    for node in consumers.outside_nodes(set(all_paths) - resources, {selection.module(node) for node in forced}):
         selection.add(node, "current named page/source-reading/subprocess consumer")
     for resource in sorted(resources):
         selection.resource(resource)

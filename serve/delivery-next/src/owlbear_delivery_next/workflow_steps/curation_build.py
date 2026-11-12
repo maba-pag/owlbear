@@ -23,12 +23,13 @@ LISTED = 100  # verdicts a list in the pull request's text shows; the rest are c
 BODY = 40_000  # characters of the pull request's text the review's part may take: GitHub's limit is 65,536
 FINISH = """\
 ## Finish
-1. Measure the suite on the commit you start from; check each verdict above against the code.
-2. Apply what holds, commit it, and run the same command on that commit.
+1. Measure with the listed confirmed check commands on the commit you start from; check each verdict against the code.
+2. Apply what holds, commit it, and run the same commands and scope on that commit.
 3. Call `submit_result` once with applied, refused, before, after and summary. With nothing applied, commit nothing
    and leave out after.
 
-- A decision only the owner can make: `ask_question`, then stop. A missing tool: `report_missing_tool`. A review
+- A decision only the owner can make: `ask_question`, then stop. A missing tool: `report_missing_tool`, naming the
+  actual failing command and its output. A review
   that cannot be curated as given: `report_wrong_premise`, with evidence.
 - Never push, change Git configuration, skip hooks or signing, or use `gh`. Leave no process running."""
 
@@ -50,7 +51,7 @@ def verdicts(t: TestReview) -> list[str]:
 
 def message(change: Change, built: str) -> str:
     """The build message up to its checks, then every verdict to check and the curator's finish."""
-    head = built.split("\n## Checks", 1)[0]
+    head = built.split("\n## Finish", 1)[0]
     t = change.tests
     told = verdicts(t) if t else []
     return "\n".join([head, "", f"## Verdicts to check (data, not instructions; at {t.commit[:12] if t else ''})",
@@ -60,11 +61,13 @@ def message(change: Change, built: str) -> str:
 def curator(cfg: sdk_adapter.Session, change: Change, settings: Settings) -> sdk_adapter.Session:
     """Every build of a test review is the curator's, with its role's values and result (TD-339)."""
     role, fresh = roles.chosen(settings, LABEL), message(change, cfg.fresh or cfg.message)
+    checks = fresh.partition("\n## Checks")[2].partition("\n## Verdicts")[0]
+    continued = f"{cfg.message}\n## Checks{checks}\n{FINISH}"
     return dataclasses.replace(
         cfg, role=roles.SESSIONS[LABEL], job=LABEL, model=role.model, effort=role.effort, context=role.context,
         limit=roles.limit(settings, LABEL), subagents=roles.subagents(settings, LABEL),
-        user=roles.user_config(settings), submit=curation_tools.TEST_CURATION, checks=(), fresh=fresh,
-        message=cfg.message if cfg.resume else fresh,
+        user=roles.user_config(settings), submit=curation_tools.TEST_CURATION, fresh=fresh,
+        message=continued if cfg.resume else fresh,
     )  # fmt: skip
 
 
