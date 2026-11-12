@@ -187,7 +187,6 @@ def test_owner_recovers_interrupted_decision_batch(picking, monkeypatch, point, 
     _refused_recovery_requests(owner_api, pending.generation)
     assert decision_batch.journal_path(shared).read_bytes() == journal
 
-    head, index = shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout
     done = (
         _finish_published(shared, owner_api, body, monkeypatch)
         if point == "after-publish"
@@ -201,7 +200,10 @@ def test_owner_recovers_interrupted_decision_batch(picking, monkeypatch, point, 
     _recovered_images(shared, pending, action)
     if action == "abandon":
         assert "abandoned" in done.json()["notice"]
-        assert (head, index) == (before_head, before_index)
+        assert (shared.git("rev-parse", "HEAD").stdout, shared.git("ls-files", "-s").stdout) == (
+            before_head,
+            before_index,
+        )
         assert "??" not in shared.git("status", "--porcelain").stdout
         assert decision_store.save(shared, unrelated, expected_revision=None, message="decisions: unrelated").committed
     elif point == "after-first":
