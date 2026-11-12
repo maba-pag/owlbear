@@ -385,20 +385,6 @@ def test_assessment_receipts_are_evicted_oldest_first_to_fit_file_limit(tmp_path
     assert len(path.read_bytes()) <= storage.MAX_ENTRY_FILE_SIZE_BYTES
 
 
-def test_content_edit_discards_receipts_for_previous_revision(tmp_path: Path) -> None:
-    """A content edit persists no receipt bound to the replaced revision."""
-    entry = MemoryEntry(**{**_valid_entry_data(), "state": "approved"})
-    receipt = AssessmentReceipt(task_id="old-task", revision=entry.revision, bucket="outstanding")
-    entry = entry.model_copy(update={"assessment_receipts": [receipt]})
-    storage.write_entry(tmp_path / f"{entry.id}.md", entry, memory_dir=tmp_path)
-    engine = MemoryEngine(tmp_path)
-    engine.load()
-    updated = engine.edit(entry.id, {"content": "Changed content."}, expected_revision=entry.revision)
-    assert updated.revision != entry.revision
-    assert updated.assessment_receipts == []
-    assert MemoryEngine(tmp_path).get_entry(entry.id).assessment_receipts == []
-
-
 @pytest.mark.parametrize(
     ("operation", "state", "didnt_use_count"),
     [

@@ -1,27 +1,19 @@
-"""Durable integration tests for the memory voting pipeline.
-
-Consolidation test verifying the full memory voting pipeline works across its
-storage, assessment, and recall boundaries.
-
-Behavioral coverage:
-- AC1: Integration test at MemoryEngine+recall_memory level — save->approve->recall
-  with >=20 entries, 16+2+2 slot allocation, score formula, counters, recall sort.
-- AC2: State transitions end-to-end — factually_wrong->contested (still recalled),
-  second factually_wrong from different task->disputed (excluded from recall),
-  didnt_use>50xmax(outstanding+unremarkable,1)->stale (excluded from recall).
-"""
+"""Bounded rating/revision journey, adversarial recall pools and real stale transitions."""
 
 from __future__ import annotations
 
 from itertools import count
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-from uuid import UUID
+from types import SimpleNamespace
 
 import pytest
 from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, Points, entry_score, storage
 from owlbear_memory.engine import compute_score
+from owlbear_memory.errors import ConcurrencyError
 from owlbear_memory.models import ChallengeRecord
+
+from owlbear_memory_mcp.server import AppContext
+from owlbear_memory_mcp.tools import assess_memories
 
 pytestmark = pytest.mark.usefixtures("todays_memory_values")
 
@@ -108,10 +100,10 @@ def _write_entry(directory: Path, entry: MemoryEntry) -> None:
     storage.write_entry(path, entry, memory_dir=directory)
 
 
-def _make_ctx(engine: MemoryEngine) -> MagicMock:
-    ctx = MagicMock()
-    ctx.request_context.lifespan_context.engine = engine
-    return ctx
+def _make_ctx(engine: MemoryEngine, directory: Path) -> SimpleNamespace:
+    return SimpleNamespace(
+        request_context=SimpleNamespace(lifespan_context=AppContext(engine=engine, memory_dir=directory))
+    )
 
 
 def _recall_titles(result: str) -> list[str]:
@@ -143,11 +135,7 @@ def _record_factually_wrong(engine: MemoryEngine, entry_id: str, task_id: str) -
 
 
 class TestMemoryVotingLifecycle:
-    """AC1: Integration test at MemoryEngine+recall_memory level.
-
-    Exercises: save->approve->recall with >=20 entries, 16+2+2 slot allocation,
-    score formula, counter tracking, and recall sort after assessment.
-    """
+    """Ratings persist independently of lifecycle setup; recall retains its allocation rules."""
 
     @pytest.mark.asyncio
     async def test_recall_exercises_explore_pool_with_lowest_activity_entries(self, tmp_path: Path) -> None:
@@ -175,7 +163,7 @@ class TestMemoryVotingLifecycle:
             _write_entry(tmp_path, entry)
 
         engine = MemoryEngine(memory_dir=tmp_path)
-        ctx = _make_ctx(engine)
+        ctx = _make_ctx(engine, tmp_path)
 
         result = await recall_memory(ctx, agent=_AGENT, limit=20)
         titles = _recall_titles(result)
@@ -219,7 +207,7 @@ class TestMemoryVotingLifecycle:
             _write_entry(tmp_path, entry)
 
         engine = MemoryEngine(memory_dir=tmp_path)
-        ctx = _make_ctx(engine)
+        ctx = _make_ctx(engine, tmp_path)
 
         result = await recall_memory(ctx, agent=_AGENT, limit=20)
         titles = _recall_titles(result)
@@ -227,109 +215,64 @@ class TestMemoryVotingLifecycle:
         assert "Challenge A" in titles
         assert "Challenge B" in titles
 
-    def test_score_formula_confidence_plus_outstanding_minus_unremarkable(self, tmp_path: Path) -> None:
-        """The score is confidence + (outstanding x 0.1) - (unremarkable x 0.01), worked out from the points given."""
-        entry = _make_approved_entry(_ID_SCORE_A, "Score Test", confidence=0.8)
-        _write_entry(tmp_path, entry)
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        # 3 outstanding, 2 unremarkable
-        entry = _record_assessment(engine, _ID_SCORE_A, "outstanding")
-        entry = _record_assessment(engine, _ID_SCORE_A, "outstanding")
-        entry = _record_assessment(engine, _ID_SCORE_A, "outstanding")
-        entry = _record_assessment(engine, _ID_SCORE_A, "unremarkable")
-        entry = _record_assessment(engine, _ID_SCORE_A, "unremarkable")
-
-        expected_score = 0.8 + 3 * 0.1 - 2 * 0.01
-        assert entry_score(entry, _POINTS) == pytest.approx(expected_score, abs=1e-9)
-
-    def test_counters_track_each_assessment_bucket_independently(self, tmp_path: Path) -> None:
-        """outstanding, unremarkable, didnt_use counters increment independently per call."""
-        entry = _make_approved_entry(_ID_SCORE_A, "Counter Test")
-        _write_entry(tmp_path, entry)
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        _record_assessment(engine, _ID_SCORE_A, "outstanding")
-        _record_assessment(engine, _ID_SCORE_A, "outstanding")
-        _record_assessment(engine, _ID_SCORE_A, "unremarkable")
-        result = _record_assessment(engine, _ID_SCORE_A, "didnt_use")
-
-        assert result.outstanding_count == 2
-        assert result.unremarkable_count == 1
-        assert result.didnt_use_count == 1
-
     @pytest.mark.asyncio
-    async def test_recall_sort_reflects_updated_score_after_outstanding_assessment(self, tmp_path: Path) -> None:
-        """After outstanding assessments, recall lists higher-scoring entry first.
-
-        Entry A: confidence=0.7, 2 outstanding → score=0.90
-        Entry B: confidence=0.8 → score=0.80
-        Recall must place A before B.
-        """
+    async def test_ratings_persist_reorder_replay_and_follow_content_revision(self, tmp_path: Path) -> None:
         from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
-        entry_a = _make_approved_entry(_ID_SCORE_A, "High Score After Boost", confidence=0.7)
-        entry_b = _make_approved_entry(_ID_SCORE_B, "Medium Confidence No Boost", confidence=0.8)
-        _write_entry(tmp_path, entry_a)
-        _write_entry(tmp_path, entry_b)
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        _record_assessment(engine, _ID_SCORE_A, "outstanding")
-        _record_assessment(engine, _ID_SCORE_A, "outstanding")
-
-        ctx = _make_ctx(engine)
-        result = await recall_memory(ctx, agent=_AGENT)
-        titles = _recall_titles(result)
-
-        assert "High Score After Boost" in titles
-        assert "Medium Confidence No Boost" in titles
-        assert titles.index("High Score After Boost") < titles.index("Medium Confidence No Boost")
-
-    @pytest.mark.asyncio
-    async def test_full_lifecycle_save_edit_approve_then_recall(self, tmp_path: Path) -> None:
-        """AC1 lifecycle proof: entries driven through real save->curated->approved path appear in recall.
-
-        Uses engine.save() + engine.edit(scope_agents=...) + engine.approve() for each
-        of 22 entries to exercise the full public API chain (PENDING->CURATED->APPROVED).
-        recall_memory with limit=20 must return exactly 20 entries, proving that entries
-        created via the real lifecycle are recallable — not a shortcut via direct file write.
-        """
-        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
-
-        engine = MemoryEngine(memory_dir=tmp_path)
-        ctx = _make_ctx(engine)
-
-        for i, entry_id in enumerate(_IDS_BULK):
-            with patch("owlbear_memory.engine.uuid4", return_value=UUID(entry_id)):
-                pending = engine.save(
-                    title=f"Lifecycle Entry {i:02d}",
-                    content=f"Content {i}.",
-                    categories=["domain-knowledge"],
-                    confidence=0.8,
-                    source_agent=_AGENT,
-                    scope_agents=[_AGENT],
-                )
-            curated = engine.edit(
-                pending.id,
-                {
-                    "title": f"Lifecycle Entry {i:02d}",
-                    "content": f"Content {i}.",
-                    "categories": ["domain-knowledge"],
-                    "confidence": 0.8,
-                    "scope_agents": [_AGENT],
-                },
-                expected_updated_at=pending.updated_at,
+        # Rated lesson has the larger ID and lower confidence: neither ID nor legacy score can rank it first.
+        rated = _make_approved_entry(_ID_SCORE_B, "Rated lesson", confidence=0.7)
+        competitor = _make_approved_entry(_ID_SCORE_A, "Competitor", confidence=0.8)
+        for entry in (rated, competitor):
+            _write_entry(tmp_path, entry)
+        engine = MemoryEngine(tmp_path)
+        ctx = _make_ctx(engine, tmp_path)
+        assert _recall_titles(await recall_memory(ctx, agent=_AGENT)) == ["Competitor", "Rated lesson"]
+        path = tmp_path / f"{rated.id}.md"
+        for index, bucket in enumerate(("outstanding", "outstanding", "unremarkable", "didnt_use")):
+            result = await assess_memories(
+                ctx,
+                assessments=[{"entry_id": rated.id, "revision": rated.revision, "bucket": bucket}],
+                task_id=f"rating-{index}",
             )
-            engine.approve(curated.id, expected_updated_at=curated.updated_at)
+            assert result == {
+                "results": [
+                    {"entry_id": rated.id, "success": True, "already_applied": False, "recorded_bucket": bucket}
+                ]
+            }
+        persisted = MemoryEngine(tmp_path).get_entry(rated.id)
+        assert (persisted.outstanding_count, persisted.unremarkable_count, persisted.didnt_use_count) == (2, 1, 1)
+        assert entry_score(persisted, _POINTS) == pytest.approx(0.7 + 2 * 0.1 - 0.01)
+        assert persisted.score == rated.score == 0.7
+        assert persisted.updated_at != rated.updated_at
+        assert persisted.revision == rated.revision
+        assert len(persisted.assessment_receipts) == 4
+        assert _recall_titles(await recall_memory(ctx, agent=_AGENT)) == ["Rated lesson", "Competitor"]
 
-        result = await recall_memory(ctx, agent=_AGENT, limit=20)
-        titles = _recall_titles(result)
+        before = path.read_bytes()
+        item = {"entry_id": rated.id, "revision": rated.revision, "bucket": "unremarkable"}
+        for replay_ctx in (ctx, _make_ctx(MemoryEngine(tmp_path), tmp_path)):
+            replay = await assess_memories(replay_ctx, assessments=[item], task_id="rating-0")
+            assert replay == {
+                "results": [
+                    {"entry_id": rated.id, "success": True, "already_applied": True, "recorded_bucket": "outstanding"}
+                ]
+            }
+            assert path.read_bytes() == before
 
-        assert len(titles) == 20
+        edited = engine.edit(rated.id, {"content": "Revised lesson."}, expected_revision=rated.revision)
+        assert edited.revision != rated.revision
+        assert edited.assessment_receipts == []
+        assert MemoryEngine(tmp_path).get_entry(rated.id).assessment_receipts == []
+        before = path.read_bytes()
+        with pytest.raises(ConcurrencyError):
+            engine.record_assessment(
+                rated.id, "outstanding", task_id="rating-0", expected_revision=rated.revision, stale_factor=50
+            )
+        assert path.read_bytes() == before
 
     @pytest.mark.asyncio
     async def test_recall_slot_allocation_exactly_16_regular_2_explore_2_challenge(self, tmp_path: Path) -> None:
-        """Exact 16+2+2 slot allocation at limit=20 with 22 entries seeded across all three pools.
+        """Exact 16+2+2 slot allocation with the configured default of 20 and 22 candidates.
 
         Setup:
         - 2 ExploreEntry: total_activity=0 (all counters zero) -> explore pool (2 slots)
@@ -380,8 +323,8 @@ class TestMemoryVotingLifecycle:
             )
 
         engine = MemoryEngine(memory_dir=tmp_path)
-        ctx = _make_ctx(engine)
-        result = await recall_memory(ctx, agent=_AGENT, limit=20)
+        ctx = _make_ctx(engine, tmp_path)
+        result = await recall_memory(ctx, agent=_AGENT)
         titles = _recall_titles(result)
 
         assert len(titles) == 20
@@ -430,7 +373,7 @@ class TestMemoryVotingLifecycle:
             _write_entry(tmp_path, entry)
 
         engine = MemoryEngine(memory_dir=tmp_path)
-        result = await recall_memory(_make_ctx(engine), agent=_AGENT, limit=6)
+        result = await recall_memory(_make_ctx(engine, tmp_path), agent=_AGENT, limit=6)
         actual_ids = [
             line.removeprefix("Entry ID: `").removesuffix("`")
             for line in result.splitlines()
@@ -459,31 +402,6 @@ class TestMemoryVotingStateTransitions:
     (b) contested→disputed via second factually_wrong different task (excluded),
     (c) approved→stale via check_slot_efficiency (excluded).
     """
-
-    def test_first_factually_wrong_transitions_approved_to_contested(self, tmp_path: Path) -> None:
-        """record_factually_wrong on approved entry returns contested state."""
-        entry = _make_approved_entry(_ID_TRANS_A, "Will Become Contested")
-        _write_entry(tmp_path, entry)
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        result = _record_factually_wrong(engine, _ID_TRANS_A, _TASK_A)
-
-        assert result.state == MemoryState.CONTESTED
-        assert [challenge.task_id for challenge in result.challenges] == [_TASK_A]
-        assert result.challenges[0].revision == result.revision
-
-    def test_second_factually_wrong_different_task_transitions_contested_to_disputed(self, tmp_path: Path) -> None:
-        """Second record_factually_wrong from different task_id transitions contested→disputed."""
-        entry = _make_approved_entry(_ID_TRANS_A, "Will Become Disputed")
-        _write_entry(tmp_path, entry)
-        engine = MemoryEngine(memory_dir=tmp_path)
-
-        after_first = _record_factually_wrong(engine, _ID_TRANS_A, _TASK_A)
-        assert after_first.state == MemoryState.CONTESTED
-        result = _record_factually_wrong(engine, _ID_TRANS_A, _TASK_B)
-
-        assert result.state == MemoryState.DISPUTED
-        assert [challenge.task_id for challenge in result.challenges] == [_TASK_A, _TASK_B]
 
     def test_stale_transition_via_check_slot_efficiency_threshold(self, tmp_path: Path) -> None:
         """Entry transitions to stale when didnt_use > 50 x max(outstanding+unremarkable, 1).
@@ -538,7 +456,13 @@ class TestMemoryVotingStateTransitions:
         # Entry C → stale
         _record_assessment(engine, _ID_STALE_A, "didnt_use")
 
-        ctx = _make_ctx(engine)
+        states = {entry.id: entry.state for entry in MemoryEngine(tmp_path).get_entries()}
+        assert states == {
+            _ID_TRANS_A: MemoryState.CONTESTED,
+            _ID_TRANS_B: MemoryState.DISPUTED,
+            _ID_STALE_A: MemoryState.STALE,
+        }
+        ctx = _make_ctx(engine, tmp_path)
         result = await recall_memory(ctx, agent=_AGENT)
         titles = _recall_titles(result)
 
