@@ -67,13 +67,15 @@ def names(issue) -> list[str]:
     return [label["name"] for label in issue["labels"]]
 
 
-def test_a_finding_is_one_issue_with_a_readable_body_and_labels_and_nothing_is_written_locally(shared, github):
+def test_a_finding_seen_again_counts_up_its_issue_and_comments_only_new_evidence(shared, github):
     root, _ = shared
+    clock = Clock()
+    backlog = view(root, clock)
     refs = ["c3 build", "https://ci.example.com/1"]
 
-    entry, new = view(root).add("Status line hides the step", "the line cuts at 80", "watcher", refs)
+    first, new = backlog.add("Status line hides the step", "the line cuts at 80", "watcher", refs)
 
-    assert (new, entry.id, entry.projects, entry.origin, entry.status) == (True, "1", None, "shop-site", "inbox")
+    assert (new, first.id, first.projects, first.origin, first.status) == (True, "1", None, "shop-site", "inbox")
     [issue] = github.issues.values()
     assert (issue["title"], names(issue)) == ("Status line hides the step", ["scope:untriaged", "class:untriaged"])
     body = issue["body"]
@@ -85,34 +87,30 @@ def test_a_finding_is_one_issue_with_a_readable_body_and_labels_and_nothing_is_w
         "scope:untriaged": "A67C52",
         "class:untriaged": "A67C52",
     }
-    assert view(root).read(fresh=True) == ({"1": entry}, [])
+    assert view(root).read(fresh=True) == ({"1": first}, [])
     assert (git(root, "status", "--porcelain"), sorted(p.name for p in root.iterdir())) == ("", [".git"])
 
-
-def test_a_finding_seen_again_counts_up_its_issue_and_comments_only_new_evidence(shared, github):
-    clock = Clock()
-    backlog = view(shared[0], clock)
-    first, _ = backlog.add("Status line hides the step", source="watcher", evidence=["c3 build"])
     clock.later(30)
-
     again, new = backlog.add("status line  hides the step!", source="watcher", evidence=["c3 build", "c4 check"])
-    clock.later(30)
-    third, _ = backlog.add("Status line hides the step", source="watcher", evidence=["c4 check"])
-    other, other_new = backlog.add("Status line hides the step", source="review")
-
     assert (new, again.id, again.count, again.first_seen, again.last_seen) == (
         False,
         first.id,
         2,
         T0,
-        clock.now - timedelta(minutes=30),
+        T0 + timedelta(minutes=30),
     )
-    assert (third.count, third.evidence) == (3, ["c3 build", "c4 check"])
-    assert (other_new, other.id, len(github.issues)) == (True, "2", 2)
+
+    clock.later(30)
+    third, _ = backlog.add("Status line hides the step", source="watcher", evidence=["c4 check"])
+    assert (third.count, third.evidence) == (3, [*refs, "c4 check"])
     assert github.comments == [(1, "New evidence:\n\n- c4 check")]
     body = github.issues[1]["body"]
     assert "**Repeats:** seen 3 times · first 2026-10-14 08:00 UTC · last 2026-10-14 09:00 UTC" in body
     assert (body.count("**Repeats:**"), github.issues[1]["title"]) == (1, "Status line hides the step")
+
+    other, other_new = backlog.add("Status line hides the step", source="review")
+    assert (other_new, other.id, len(github.issues)) == (True, "2", 2)
+    assert (git(root, "status", "--porcelain"), sorted(p.name for p in root.iterdir())) == ("", [".git"])
 
 
 def test_a_repeat_merges_only_with_an_entry_naming_the_same_projects_and_is_linked_to_the_others(shared, github):
@@ -261,6 +259,7 @@ def test_github_holds_the_title_class_scope_and_state_and_an_issue_without_a_rea
     backlog = view(shared[0])
     backlog.add("a")
     backlog.add("b")
+    backlog.update("1", {"status": "done"})
     github.issues[1] |= {"title": "renamed", "state": "closed", "state_reason": "not_planned"}
     github.issues[1] |= {"labels": [{"name": "scope:global"}, {"name": "class:idea"}], "updated_at": "2099-01-01"}
     github.issues[2]["body"] = github.issues[2]["body"].replace('"count": 1', '"count": 0')
@@ -277,16 +276,8 @@ def test_github_holds_the_title_class_scope_and_state_and_an_issue_without_a_rea
     )
     assert (list(found), bad) == (["1"], ["#2"])
 
-
-def test_a_closed_issue_takes_its_status_from_githubs_current_closing_reason(shared, github):
-    backlog = view(shared[0])
-    a = backlog.add("a")[0].id
-    backlog.update(a, {"status": "done"})
-    github.issues[1] |= {"state_reason": "not_planned", "updated_at": "2099-01-01"}  # reopened, closed as not planned
-
-    assert backlog.read(fresh=True)[0][a].status == "dropped"
     github.issues[1] |= {"state_reason": "completed", "updated_at": "2099-01-02"}
-    assert backlog.read(fresh=True)[0][a].status == "done"
+    assert backlog.read(fresh=True)[0]["1"].status == "done"
 
 
 def test_a_backlog_marker_pasted_into_the_text_or_notes_leaves_the_entry_readable(shared, github):
@@ -410,36 +401,11 @@ def test_a_private_repository_is_checked_once_for_a_while_before_the_first_write
     assert github.calls[first_write - 1][1] == "repos/acme/owlbear-data"
 
 
-def test_an_issue_github_does_not_list_yet_is_read_from_the_write_and_a_repeat_still_counts_up(shared, github):
-    root, _ = shared
-    a = view(root).add("Flaky check", source="run")[0]
-    github.hidden = {1}
-
-    again, new = view(root).add("Flaky check", source="run")
-    triaged = view(root).update(a.id, {"kind": "defect"})
-
-    assert (new, again.id, again.count, triaged.status, len(github.issues)) == (False, "1", 2, "open", 1)
-    assert [(e.id, e.count, e.kind) for e in view(root).entries()] == [("1", 2, "defect")]
-
-
 def test_an_edit_on_github_wins_over_this_process_s_own_write_and_every_change_starts_from_the_issue_as_it_is(
     shared, github
 ):
     root, _ = shared
-    a = view(root).add("a")[0].id
-    github.issues[1]["title"] = "renamed on GitHub"  # in the same second as the write: an equal updated_at
-
-    assert view(root).read(fresh=True)[0][a].title == "renamed on GitHub"
-    github.hidden = {1}  # the listing lags behind a later edit; the cached write would be older still
-    github.issues[1] |= {"title": "renamed again", "labels": [{"name": "help wanted"}], "updated_at": "2099-01-01"}
-    view(root).update(a, {"notes": "kept"})
-    assert (github.issues[1]["title"], names(github.issues[1])[0]) == ("renamed again", "help wanted")
-    assert view(root).read(fresh=True)[0][a].notes == "kept"
-
-
-def test_reads_are_reused_briefly_and_every_write_reads_github_afresh(shared, github):
-    root, _ = shared
-    view(root).add("a")
+    a = view(root).add("Flaky check", source="run")[0]
 
     def lists() -> int:
         return sum(method == "GET" and "/issues?" in endpoint for method, endpoint, _ in github.calls)
@@ -452,6 +418,23 @@ def test_reads_are_reused_briefly_and_every_write_reads_github_afresh(shared, gi
     assert lists() == before + 2
     view(root).read()
     assert lists() == before + 3
+
+    github.hidden = {1}
+    again, new = view(root).add("Flaky check", source="run")
+    triaged = view(root).update(a.id, {"kind": "defect"})
+    assert (new, again.id, again.count, triaged.status, len(github.issues)) == (False, "1", 2, "open", 2)
+    found = view(root).read()[0]
+    assert (found[a.id].count, found[a.id].kind) == (2, "defect")
+
+    github.hidden.clear()
+    github.issues[1]["title"] = "renamed on GitHub"  # in the same second as the write: an equal updated_at
+
+    assert view(root).read(fresh=True)[0][a.id].title == "renamed on GitHub"
+    github.hidden = {1}  # the listing lags behind a later edit; the cached write would be older still
+    github.issues[1] |= {"title": "renamed again", "labels": [{"name": "help wanted"}], "updated_at": "2099-01-01"}
+    view(root).update(a.id, {"notes": "kept"})
+    assert (github.issues[1]["title"], names(github.issues[1])[0]) == ("renamed again", "help wanted")
+    assert view(root).read(fresh=True)[0][a.id].notes == "kept"
 
 
 @pytest.mark.usefixtures("shared", "github")

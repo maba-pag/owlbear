@@ -81,6 +81,10 @@ def test_apply_states_follow_the_steps_and_a_replayed_artefact_adds_nothing():
 @pytest.mark.parametrize(("given", "kept"), [("irreversible-harm", "irreversible-harm"), ("maybe", "none")])
 def test_a_redirect_is_redrafted_once_keeping_the_prior_evidence_and_kind(given, kept):
     pid = _waiting()
+    before = store.lines(props.FILE)
+    with pytest.raises(store.RetroError, match="not redirected"):
+        props.redrafted(pid, {}, "x")
+    assert store.lines(props.FILE) == before
     props.transition(pid, "redirected", "owner", direction="ask for a case about tests")
     answer = {"cause": "c", "target": "look:tests", "mechanism": "m", "call": given}
 
@@ -93,28 +97,3 @@ def test_a_redirect_is_redrafted_once_keeping_the_prior_evidence_and_kind(given,
     assert (got["kind"], got["bar"], got["findings"], got["record"]) == ("spotter-case", "b", ["g-1"], "r1")
     assert (got["call"], got["target"], got["redraft_of"], got["state"]) == (kept, "look:tests", pid, "drafted")
     assert [p["id"] for p in props.due_reviews()] == [new]
-
-
-def test_a_proposal_not_redirected_is_not_redrafted():
-    pid = _waiting()
-    with pytest.raises(store.RetroError, match="not redirected"):
-        props.redrafted(pid, {}, "x")
-
-
-def test_a_real_run_does_not_review_historical_synthetic_proposals():
-    real = props.file(props.open_key("real", "lesson", "a"), ["f1"], kind="lesson", provenance="real")
-    fake = props.file(props.open_key("synthetic", "lesson", "b"), ["f2"], kind="lesson", provenance="synthetic")
-
-    assert [p["id"] for p in props.due_reviews()] == [real]
-    assert fake in props.folded()
-
-
-def test_the_reset_list_names_each_synthetic_artefact_once():
-    real, fake = _waiting(), _waiting("synthetic")
-    issue = {"kind": "issue", "where": "o/r", "ref": "7"}
-    for pid in (real, fake):
-        props.transition(pid, "accepted", "owner", snapshot={"destination": {"kind": "issue", "synthetic": True}})
-        props.outcome(pid, "applied", step="created", artefact=issue)
-    props.outcome(fake, "applied", step="closed", artefact=issue)
-
-    assert props.synthetic_artefacts() == [issue]

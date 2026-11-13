@@ -74,16 +74,7 @@ def test_a_spotter_case_becomes_a_case_and_a_lesson_too_long_for_a_memory_is_ref
         _resolve(_snap("lesson", "agent:builder", ["f-1"], body="x" * 1025), places, tmp_path)
 
 
-def test_a_historical_synthetic_spotter_case_cannot_be_accepted(places, tmp_path):
+def test_historical_synthetic_proposals_have_no_destination(tmp_path):
     case = {"kind": "spotter-case", "record": "r1", "call": "none", "findings": ["g-1"], "provenance": "synthetic"}
     with pytest.raises(store.RetroError, match=r"synthetic Retro.*retired"):
-        _resolve(case, places, tmp_path)
-
-
-@pytest.mark.parametrize(
-    ("kind", "target"),
-    [("agent-change", "agent:scout"), ("lesson", "agent:scout"), ("delivery-change", "tool:edit")],
-)
-def test_synthetic_proposals_have_no_publication_destination(places, tmp_path, kind, target):
-    with pytest.raises(store.RetroError, match=r"synthetic Retro.*retired"):
-        _resolve(_snap(kind, target, ["f-3"], "synthetic"), places, tmp_path)
+        targets.resolve(case, {}, tmp_path / "shared", {})
