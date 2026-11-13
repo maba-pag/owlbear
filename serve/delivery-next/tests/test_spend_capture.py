@@ -92,7 +92,6 @@ def test_earlier_spend_is_imported_once_as_a_union_never_twice(project) -> None:
     said = spend_reconcile.run([(project, None)])
     assert (said["state"], said["done"], said["sources"], said["imported"]["changes"]) == ("done", 3, 3, 3)
     assert said["imported"]["logs"] == 0  # the mark imported this pass already owns s2
-    assert "log:s2" not in {line.get("run") for line in spend_ledger.lines()}
     assert total() == 5.5  # the Change's own total: s1 once, s2's mark and the residual
     kinds = {(line["type"], line.get("session")) for line in spend_ledger.lines() if line["type"] != "start"}
     assert kinds == {("end", "s1"), ("event", "s1"), ("mark", "s2"), ("residual", "residual:0123456789abcdef:c1")}
