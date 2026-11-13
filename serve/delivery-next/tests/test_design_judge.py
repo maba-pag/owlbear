@@ -67,12 +67,21 @@ def test_the_designer_is_its_own_role_with_its_skills_and_first_look() -> None:
 
 
 def test_a_first_look_comes_once_before_the_final_verdict_and_releases_the_detectors_findings() -> None:
-    run, cfg = Run("s1"), session()
-    gate = Gate(cfg, run, lambda **_e: None, lambda: None)
+    cfg = session(targets=("home", "AC-2"))
+    st = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
+    gate, run = st.gate, st.run
+    assert {t.name: t.is_terminal for t in st.tools()} == {
+        "submit_result": True,
+        tools.FIRST_LOOK: False,
+        "report_wrong_premise": True,
+        "report_missing_tool": True,
+    }
+    plain = sdk_adapter._Step(session(role="", first_look=None, submit=tools.VISUAL_REVIEW), asyncio.new_event_loop())  # noqa: SLF001
+    assert all(t.is_terminal for t in plain.tools())
     assert design_tools.FIRST in gate.specs
     text, ok = gate.call(design_tools.FINAL, look())
     assert (ok, "first submit your own verdict with submit_first_look" in text) == (False, True)
-    text, ok = gate.call(design_tools.FIRST, look("fail", findings=[finding()]))
+    text, ok = gate.call(design_tools.FIRST, look("fail", findings=[finding()], conflicts=[conflict()]))
     assert (ok, text, gate.done) == (True, f"Recorded. {cfg.reveal}", False)
     assert run.first.verdict == "fail"
     text, ok = gate.call(design_tools.FIRST, look())
@@ -107,19 +116,6 @@ def test_a_design_verdict_must_match_its_findings_and_judge_every_image_and_pair
     gate = Gate(session(targets=("home", "AC-2")), Run("s1"), lambda **_e: None, lambda: None)
     text, ok = gate.call(design_tools.FIRST, args)
     assert (ok, error in text) == (False, True), text
-    assert gate.call(design_tools.FIRST, look(conflicts=[conflict()]))[1]  # a real brief criterion is accepted
-
-
-def test_only_the_first_look_lets_the_sdk_turn_go_on() -> None:
-    st = sdk_adapter._Step(session(), SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
-    assert {t.name: t.is_terminal for t in st.tools()} == {
-        "submit_result": True,
-        tools.FIRST_LOOK: False,
-        "report_wrong_premise": True,
-        "report_missing_tool": True,
-    }
-    plain = sdk_adapter._Step(session(role="", first_look=None, submit=tools.VISUAL_REVIEW), asyncio.new_event_loop())  # noqa: SLF001
-    assert all(t.is_terminal for t in plain.tools())
 
 
 def test_images_over_the_budget_are_judged_in_batches_by_state_and_none_is_dropped(tmp_path) -> None:

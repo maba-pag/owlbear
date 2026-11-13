@@ -150,37 +150,38 @@ def test_a_broken_linter_is_reported_once_then_skipped(change_repo: Path, tmp_pa
     ]
 
 
-def test_node_linters_run_from_their_configuration_on_its_files(change_repo: Path) -> None:
+def test_node_linters_check_their_configured_file_types_and_a_fix_passes(change_repo: Path) -> None:
     web = change_repo / "web"
     tool(web / "node_modules" / ".bin", "biome", 'echo "biome $*"; exit 1')
     tool(change_repo / "node_modules" / ".bin", "eslint", 'echo "eslint $*"; exit 0')
     commit(change_repo, {"web/biome.json": "{}", "eslint.config.js": "export default [];\n", ".gitignore": "node_*\n"})
     since, log = head(change_repo), []
-    commit(change_repo, {"web/src/a.ts": "let a = 1\n", "tool.js": "x\n"})
-    text, ok = submit(gate(change_repo, since, log))
+    commit(
+        change_repo,
+        {
+            "web/src/a.ts": "let a = 1\n",
+            "web/app.css": "a {}\n",
+            "web/data.json": "{}\n",
+            "web/n.md": "x\n",
+            "tool.js": "x\n",
+        },
+    )
+    g = gate(change_repo, since, log)
+    text, ok = submit(g)
     assert not ok
-    assert "- lint: biome found problems in web/src/a.ts - fix them, commit, then submit again:\n" in text
-    assert "biome check --colors=off --no-errors-on-unmatched src/a.ts" in text
+    assert (
+        "- lint: biome found problems in web/app.css, web/data.json, web/src/a.ts"
+        " - fix them, commit, then submit again:\n"
+    ) in text
+    assert "biome check --colors=off --no-errors-on-unmatched app.css data.json src/a.ts" in text
     ran = next(e for e in log if e["event"] == "lint")["ran"]
     assert ran == [
-        {"tool": "biome", "files": ["web/src/a.ts"], "state": "failed"},
+        {"tool": "biome", "files": ["web/app.css", "web/data.json", "web/src/a.ts"], "state": "failed"},
         {"tool": "eslint", "files": ["tool.js", "web/src/a.ts"], "state": "passed"},
     ]
-
-
-def test_biome_lints_changed_json_and_css_and_eslint_only_scripts(change_repo: Path) -> None:
-    web = change_repo / "web"
     tool(web / "node_modules" / ".bin", "biome", 'echo "biome $*"; exit 0')
-    tool(change_repo / "node_modules" / ".bin", "eslint", 'echo "eslint $*"; exit 0')
-    commit(change_repo, {"web/biome.json": "{}", "eslint.config.js": "export default [];\n", ".gitignore": "node_*\n"})
-    since, log = head(change_repo), []
-    commit(change_repo, {"web/app.css": "a {}\n", "web/data.json": "{}\n", "web/a.ts": "x\n", "web/n.md": "x\n"})
-    assert submit(gate(change_repo, since, log))[1]
-    ran = next(e for e in log if e["event"] == "lint")["ran"]
-    assert ran == [
-        {"tool": "biome", "files": ["web/a.ts", "web/app.css", "web/data.json"], "state": "passed"},
-        {"tool": "eslint", "files": ["web/a.ts"], "state": "passed"},
-    ]
+    assert submit(g) == (ACCEPTED, True)
+    assert [e["passed"] for e in log if e["event"] == "lint"] == [False, True]
 
 
 def outside_binary(root: Path, outside: Path) -> None:
