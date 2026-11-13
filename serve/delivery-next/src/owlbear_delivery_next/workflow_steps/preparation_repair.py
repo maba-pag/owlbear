@@ -85,16 +85,22 @@ def prove(store: Store, lock: Lock, change: Change, root: Path, trial: tuple[flo
         raise repair_copy.RepairError(msg)
     p = r.preparation
     _permitted(p, store.settings())
-    if not (root / p.option.isolation["HOME"]).resolve().is_relative_to(root.resolve()):
-        msg = "the preparation HOME resolves outside its execution worktree"
-        raise repair_copy.RepairError(msg)
-    r.witness = _trial(store, lock, change, root, trial)
+    clean = root.with_name(f"{root.name}-preparation-proof")
+    repair_copy.drop(root, clean)
+    repair_copy.git(root, ["worktree", "add", "--quiet", "--detach", str(clean), r.base])
+    try:
+        if not (clean / p.option.isolation["HOME"]).resolve().is_relative_to(clean.resolve()):
+            msg = "the preparation HOME resolves outside its execution worktree"
+            raise repair_copy.RepairError(msg)
+        r.witness = _trial(store, lock, change, clean, trial)
+        if repair_copy.changed(clean, r.base):
+            msg = "the preparation trial left source edits; a settings-only proposal must use unchanged project code"
+            raise repair_copy.RepairError(msg)
+    finally:
+        repair_copy.drop(root, clean)
     store.write(lock, change)
     if r.witness.exit != 0:
-        msg = f"the preparation trial failed in {root}:\n{r.witness.output}"
-        raise repair_copy.RepairError(msg)
-    if repair_copy.changed(root, r.base):
-        msg = "the preparation trial left source edits; a settings-only proposal must use unchanged project code"
+        msg = f"the preparation trial failed in {clean}:\n{r.witness.output}"
         raise repair_copy.RepairError(msg)
     r.diff = shown(r)
 

@@ -311,7 +311,8 @@ def _ask_missing_preparation(repo, store, proposal, monkeypatch):
     )
     proof = [json.loads(line) for line in r.witness.output.splitlines() if line.startswith("{")]
     assert [p["action"] for p in proof] == ["restore", "seed", "verify", "cleanup"]
-    assert {p["home"] for p in proof} == {str(calls[0].worktree / ".fixture-home")}
+    clean = calls[0].worktree.with_name(f"{calls[0].worktree.name}-preparation-proof")
+    assert {p["home"] for p in proof} == {str(clean / ".fixture-home")}
     assert all(p["data"]["runs"][0]["cost"] == 1.25 for p in proof)
     assert not calls[0].worktree.exists()
     assert (store.config_path.read_bytes(), worktree.git(store.shared.root, "rev-parse", "HEAD")) == (before, head)
@@ -435,7 +436,8 @@ def test_missing_visual_preparation_requires_owner_approval_before_project_setti
     monkeypatch.setenv("LIVE_SECRET", "must-not-reach-synthetic-processes")
     (repo / "app").mkdir()
     (repo / "app/fixture.py").write_text(SYNTHETIC_METRICS)
-    worktree.git(repo, "add", "app/fixture.py")
+    (repo / ".gitignore").write_text(".owlbear/\n")
+    worktree.git(repo, "add", "app/fixture.py", ".gitignore")
     worktree.git(repo, "commit", "-qm", "synthetic metrics fixture")
     store = Store(tmp_path / "store", DataRepo(shared_repo[0]), "synthetic-project")
     initial = Layer(preparations=None, data=DataPermissions(isolation=["HOME"]), widths=[1280], pr_labels=["keep"])
@@ -496,6 +498,50 @@ def test_missing_visual_preparation_requires_owner_approval_before_project_setti
     assert (store.config_path.read_bytes(), worktree.git(store.shared.root, "rev-parse", "HEAD")) == (current, head)
     assert store.read_config().preparations == [proposal.option, other]
     assert len(calls) == 1
+    dirty = asked.model_copy(deep=True)
+    dirty.questions = []
+    dirty.repairs.current.phase = "running"
+    assert (
+        store.save(
+            store.config_path,
+            Layer,
+            lambda cur: cur.model_copy(update={"preparations": None}),
+            "reset the isolated fixture",
+            owner=True,
+        )
+        == ""
+    )
+
+    def ignored_model_result(_store, cfg):
+        helper = cfg.worktree / ".owlbear/scratch/verify.py"
+        helper.parent.mkdir(parents=True)
+        helper.write_text("print('only the model copy has this helper')\n")
+        contaminated = proposal.model_copy(
+            update={"verify": shlex.join([sys.executable, ".owlbear/scratch/verify.py"])}
+        )
+        return Run(
+            cfg.session_id,
+            "result",
+            repair_tools.PreparationResult(
+                cause="The model left an ignored helper outside its source diff.",
+                tried=[repair_tools.Try(fix="Use an ignored verification helper", outcome="Exists in the model copy")],
+                fix="preparation",
+                preparation=contaminated,
+            ),
+            model_check="verified",
+            usage={"credits": 0.0, "models": {}},
+            termination=Termination(confirmed=True),
+        )
+
+    monkeypatch.setattr(sessions, "run", ignored_model_result)
+    step_repair.run(store, Lock(dirty.slug), dirty, repo)
+    rejected = store.read(dirty.slug)
+    assert loop.open_question(rejected) is None
+    assert rejected.repairs.current is None
+    assert rejected.repairs.done[-1].witness.exit != 0
+    assert "verify.py" in rejected.stop.reason
+    assert "No such file" in rejected.stop.reason
+    assert store.read_config().preparations is None
     assert (store.shared.global_path.read_bytes() if store.shared.global_path.exists() else None) == global_before
     assert not store.machine_path.exists()
     assert sentinel.read_bytes() == b'{"private": "owner ledger must stay unchanged"}\n'
