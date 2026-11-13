@@ -263,7 +263,11 @@ class Step:
         defaults = {key: properties[key]["default"] for key in chat_values if "default" in properties[key]}
         if why := self._apply_config(session, "session", session_values, {}):
             return why
-        return self._apply_config(chat, "chat", chat_values, defaults)
+        if why := self._apply_config(chat, "chat", chat_values, defaults):
+            if session_values:
+                why += "; confirmed session settings: " + json.dumps(session_values, sort_keys=True)
+            return why
+        return ""
 
     def _apply_config(self, channel: str, scope: str, wanted: Json, defaults: Json) -> str:
         """Apply one scope's settings; omitted chat values take schema defaults, never session values."""

@@ -1033,7 +1033,10 @@ def test_a_settings_rejection_fails_the_shaping_chat_at_once_whole_and_logged(pl
     asked = json.dumps({"autoApprove": "autoApprove"}, sort_keys=True)
     assert (out.end, out.detail) == (
         "config-refused",
-        f'the host refused the settings {asked}: {reason}; applied: {{"autoApprove": "prompt"}}',
+        (
+            f'the host refused the settings {asked}: {reason}; applied: {{"autoApprove": "prompt"}}; '
+            'confirmed session settings: {"mode": "interactive", "sandboxEnabled": "off"}'
+        ),
     )
     warned = [r.getMessage() for r in caplog.records if r.name == vscode_adapter.__name__]
     assert len(warned) == 1
