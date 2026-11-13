@@ -292,16 +292,6 @@ def test_an_agent_the_session_does_not_list_starts_no_turn(tmp_path: Path) -> No
     assert host.actions("chat/turnStarted") == []
 
 
-def test_the_turn_waits_until_the_session_lists_the_agent(tmp_path: Path) -> None:
-    host = FakeHost(tmp_path, [{}], [DONE])
-    host.listed_at = 3.0
-    out = step(host, spec(tmp_path)).open()
-
-    assert out.end == "started"
-    ((_, started),) = host.actions("chat/turnStarted")
-    assert started["message"]["agent"] == {"uri": (tmp_path / AGENT).resolve().as_uri()}
-
-
 def test_step_fails_closed_when_host_ignores_the_config(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [{}], [DONE])
     host.accept_config = False
@@ -904,6 +894,7 @@ def test_a_symlinked_shaper_is_selected_by_the_link_path_the_session_lists(plain
     agent.symlink_to(target)  # TD-165: ~/.copilot/agents links into the runtime checkout
     host = shaping_host(plain)
     host.listed = [agent.as_uri()]  # the host lists the link, not its target
+    host.listed_at = 3.0
 
     out, warning = shape(plain, shaping_env(host, shaper=agent))
 

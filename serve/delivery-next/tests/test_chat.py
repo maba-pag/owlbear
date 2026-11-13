@@ -547,6 +547,7 @@ SHAPER = carried.layer().agents["shaper"]  # module level runs before the carrie
         (Outcome_("started", session="copilotcli:/s0"), "", {"state": "open"}),
         (Outcome_("started"), "could not remove it", {"state": "open", "warning": "could not remove it"}),
         (Outcome_("model-unavailable", "the agent host does not list m"), "", {"state": "failed"}),
+        (Outcome_("unbound", "no single session matched nonce and folder"), "", {"state": "failed"}),
     ],
 )
 def test_new_chat_opens_the_shaping_chat_on_the_shaper_role_and_reports_how_it_went(tmp_path, ending, warning, state):
@@ -556,17 +557,14 @@ def test_new_chat_opens_the_shaping_chat_on_the_shaper_role_and_reports_how_it_w
     assert "owlbear-change-shaping skill" in api.START_PROMPT
     assert (SHAPER.model, SHAPER.effort, SHAPER.context) == ("claude-opus-5.5", "medium", "default")
     assert {k: v for k, v in out.items() if k != "reason"} == state
-    if state["state"] == "failed":
+    if ending.end == "model-unavailable":
         why = f"the Copilot chat did not start (model-unavailable: {ending.detail})"
         assert out["reason"] == f"{why}; run this in {tmp_path}"
-
-
-def test_a_chat_that_opened_local_tells_the_owner_to_reload_the_window(tmp_path):
-    unbound = Outcome_("unbound", "no single session matched nonce and folder")
-    out = api.new_chat(tmp_path, SHAPER, start=lambda *_a: (unbound, ""))
-    assert out["state"] == "failed"
-    hint = "set chat.defaultToCopilotHarness to true in .vscode/settings.json (`owlbear-next setup` offers it), "
-    assert f"if a Local chat opened, {hint}reload the window (Developer: Reload Window) and try again" in out["reason"]
+    elif ending.end == "unbound":
+        hint = "set chat.defaultToCopilotHarness to true in .vscode/settings.json (`owlbear-next setup` offers it), "
+        assert (
+            f"if a Local chat opened, {hint}reload the window (Developer: Reload Window) and try again" in out["reason"]
+        )
 
 
 class Opening:
