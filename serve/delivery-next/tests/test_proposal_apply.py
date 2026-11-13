@@ -42,7 +42,7 @@ class FakeGitHub:
     """The issues of one repository behind ``gh api``; every payload sent is kept."""
 
     def __init__(self):
-        self.issues, self.sent, self.close_fails = [{"number": 1, "pull_request": {}, "body": "x"}], [], 0
+        self.issues, self.sent = [{"number": 1, "pull_request": {}, "body": "x"}], []
 
     def __call__(self, argv, data, _timeout, _cwd, _env):
         method, endpoint = argv[argv.index("--method") + 1], next(a for a in argv if a.startswith("repos/"))
@@ -56,12 +56,7 @@ class FakeGitHub:
             n = len(self.issues) + 1
             self.issues.append(body | {"number": n, "html_url": f"https://github.com/o/r/issues/{n}", "state": "open"})
             return self._done(self.issues[-1])
-        if self.close_fails:
-            self.close_fails -= 1
-            return subprocess.CompletedProcess((), 1, b"", b"HTTP 502: bad gateway (token ghp_" + b"a" * 36 + b")")
-        issue = next(i for i in self.issues if endpoint.endswith(f"/issues/{i['number']}"))
-        issue["state"] = "closed"
-        return self._done(issue)
+        pytest.fail(f"unexpected issue method {method}")
 
     @staticmethod
     def _done(value):
@@ -173,7 +168,9 @@ def test_a_lesson_is_a_pending_memory_in_its_projects_folder_scoped_to_its_agent
     world.shared, remote = shared_repo
 
     def git(root, *args):
-        return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()  # noqa: S603, S607
+        out = DataRepo(root).git(*args)
+        out.check_returncode()
+        return out.stdout.strip()
 
     heads = (git(world.shared, "rev-parse", "HEAD"), git(remote, "--git-dir=.", "rev-parse", "refs/heads/main"))
     pid = _waiting("lesson", "agent:owlbear-builder", ["f-1"])
