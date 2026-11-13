@@ -2097,7 +2097,10 @@ def test_an_integration_build_collision_asks_the_owner_once_across_a_restart_the
         ("pause", "pause"),
     ]
     assert q.subject == "product"
-    assert "This Change: The page shows an empty chart.\nThe latest work on main: The page hides the chart." in q.text
+    assert [o.label for o in q.options[:2]] == [
+        "Yes: The page shows an empty chart.",
+        "No, the merged-in work's: The page hides the chart.",
+    ]
     answered, step = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="keep")], NOW)
     assert (step.kind, step.task) == (StepKind.BUILD, tid)
     restarted.write(Lock("c1"), answered)

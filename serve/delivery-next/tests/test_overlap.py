@@ -187,15 +187,12 @@ def test_a_reported_difference_asks_which_behaviour_to_keep_and_no_difference_as
     (repo / "uv.lock").write_text("both")
     git(repo, "commit", "-qam", "merge main")
     store, c, done = Store(tmp_path / "store"), building(), StepResult(exit=Exit.DONE)
-    c.names.target = "main"
     asked = overlap.integrated(store, C1, c, repo, start, done, told())
     q = asked.question
     assert (asked.exit, q.step, q.subject) == (Exit.ASK, K.BUILD, "product")
     assert [(o.id, o.next) for o in q.options] == [("keep", K.BUILD), ("adopt", K.BUILD), ("pause", "pause")]
-    assert q.text == (
-        "The combined work cannot keep both behaviours in one situation.\n\n"
-        f"This Change: {SHOWS}\nThe latest work on main: {HIDES}\n\nKeep this Change's behaviour there?"
-    )
+    assert q.text.endswith("in one situation. Keep this Change's behaviour there?")
+    assert [o.label for o in q.options[:2]] == [f"Yes: {SHOWS}", f"No, the merged-in work's: {HIDES}"]
     assert overlap.integrated(store, C1, c, repo, start, done, told("", "")) is done  # nothing is left for him
     kept = answered(c, asked)
     assert overlap.integrated(store, C1, kept, repo, start, done, told()) is done  # answered: not asked again
@@ -287,7 +284,7 @@ def test_a_report_in_other_words_is_asked_again_but_reaches_the_owner_at_most_tw
     second = overlap.collision(c, told("The page keeps an empty chart on such days.").merge, SIDES)
     assert (second.cause != first.cause, second.question.follows == first.question.follows) == (True, True)
     c = answered(c, second)
-    assert c.questions[-1].text.startswith(f'You answered {c.questions[0].id} with "Yes: keep this Change')
+    assert c.questions[-1].text.startswith(f'You answered {c.questions[0].id} with "Yes: {SHOWS}"')
     third = overlap.collision(c, told("An empty chart stays visible then.").merge, SIDES)
     c = loop.apply(c, third, NOW)
     assert (len(c.questions), c.repairs.current is not None) == (2, True)  # Delivery handles it now

@@ -171,14 +171,13 @@ def collision(c: Change, told: MergeReport, sides: list[tuple[str, str]]) -> Ste
     cause = _cause(c, sides, (told.this, told.other))
     if any(q.cause == cause and q.answer and q.answer.option in {"keep", "adopt"} for q in c.questions):
         return None
-    latest = f"The latest work on {c.names.target or 'the target branch'}"
     text = (
-        "The combined work cannot keep both behaviours in one situation.\n\n"
-        f"This Change: {told.this}\n{latest}: {told.other}\n\nKeep this Change's behaviour there?"
+        "This Change and the work merged into it need the product to behave differently in one situation. "
+        "Keep this Change's behaviour there?"
     )
-    options = [
-        Option(id="keep", label="Yes: keep this Change's behaviour there", next=c.step.kind),
-        Option(id="adopt", label="No: use the latest work's behaviour there", next=c.step.kind),
+    options = [  # each label carries its behaviour whole: the answer's label is what the next builder is told
+        Option(id="keep", label=f"Yes: {told.this}", next=c.step.kind),
+        Option(id="adopt", label=f"No, the merged-in work's: {told.other}", next=c.step.kind),
         Option(id="pause", label="Pause this Change", next="pause"),
     ]
     q = Question(step=c.step.kind, text=text, cause=cause, options=options, subject="product", follows=_cause(c, sides))
