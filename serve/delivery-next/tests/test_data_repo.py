@@ -101,18 +101,6 @@ def test_a_projects_identity_drops_only_the_user_before_its_host(repo: Path) -> 
     assert data_repo.identity(repo) == "example.org/a@acme/shop"
 
 
-def test_agents_remember_in_the_projects_folder_of_the_shared_repository(shared, repo) -> None:
-    root, _ = shared
-    store = Store.open(repo)
-    folder = sessions.memory(store)
-
-    assert folder == root / "shop-site" / "memory"
-    assert folder.is_dir()
-    (folder / "pending.md").write_text("---\ntitle: x\n---\n")  # curation commits entries, not settings saves
-    assert store.shared.pending() == ""
-    assert git(repo, "status", "--porcelain") == ""
-
-
 def test_without_a_shared_repository_agents_have_no_memory_and_the_clone_gets_none(repo) -> None:
     store = Store.open(repo)
     assert sessions.memory(store) is None
@@ -136,20 +124,14 @@ def test_settings_live_in_the_shared_repository_and_each_save_is_committed_and_p
     assert pushed(remote, "config.json")
     assert git(root, "status", "--porcelain") == ""
     assert Store.open(repo).settings().widths == [1440]
+    folder = sessions.memory(store)
+    assert folder == root / "shop-site" / "memory"
+    assert folder.is_dir()
+    (folder / "pending.md").write_text("---\ntitle: x\n---\n")  # curation commits entries, not settings saves
+    assert store.shared.pending() == ""
+    assert git(repo, "status", "--porcelain") == ""
     git(repo, "remote", "set-url", "origin", "https://github.com/acme/blog.git")
     assert Store.open(repo).settings().widths == [1366]  # another project sees the global layer
-
-
-def test_a_failed_push_keeps_the_commit_and_says_so(shared, repo) -> None:
-    root, _ = shared
-    git(root, "remote", "remove", "origin")
-    c = client(Store.open(repo))
-    got = c.put("/api/next/config/project", json={"rev": EMPTY, "layer": {"widths": [1440]}})
-
-    assert got.status_code == 200
-    assert "push" in got.json()["notice"]
-    assert git(root, "log", "--format=%s", "-1", "--", "shop-site/config.json")
-    assert "not pushed" in c.get("/api/next/config").json()["notice"]  # stays visible after reload
 
 
 @pytest.mark.usefixtures("current_binding")
@@ -184,14 +166,24 @@ def test_another_repository_of_the_same_name_is_refused(repo) -> None:
     assert Store.open(repo).name == "shop-site"
 
 
-def test_an_unchanged_save_pushes_what_an_earlier_save_could_not(shared, repo) -> None:
+@pytest.mark.parametrize("missing", [False, True], ids=["unreachable-origin", "missing-origin"])
+def test_an_unchanged_save_pushes_what_an_earlier_save_could_not(shared, repo, missing) -> None:
     root, remote = shared
     url = git(root, "remote", "get-url", "origin")
-    git(root, "remote", "set-url", "origin", str(root.parent / "gone.git"))
+    if missing:
+        git(root, "remote", "remove", "origin")
+    else:
+        git(root, "remote", "set-url", "origin", str(root.parent / "gone.git"))
     c = client(Store.open(repo))
     first = c.put("/api/next/config/project", json={"rev": EMPTY, "layer": {"widths": [1440]}})
+    assert first.status_code == 200
     assert "push" in first.json()["notice"]
-    git(root, "remote", "set-url", "origin", url)
+    assert git(root, "log", "--format=%s", "-1", "--", "shop-site/config.json")
+    assert "not pushed" in c.get("/api/next/config").json()["notice"]
+    git(root, "remote", "add" if missing else "set-url", "origin", url)
+    if missing:
+        git(root, "fetch", "-q", "origin")
+        git(root, "branch", "--set-upstream-to=origin/main")
     again = c.put("/api/next/config/project", json={"rev": first.json()["project_rev"], "layer": {"widths": [1440]}})
     assert again.json()["notice"] == ""
     assert pushed(remote, "shop-site/config.json")
@@ -492,15 +484,6 @@ def test_the_old_common_pointer_is_read_while_another_writer_holds_the_lock(shar
     assert (home / "common.json").exists()
 
 
-def test_recording_a_repository_moves_the_old_pointer_away(tmp_path: Path) -> None:
-    home, local = data_place.pointer().parent, tmp_path / "local-data"
-    git(tmp_path, "init", "-q", "-b", "main", str(local))
-    (home / "common.json").write_text(json.dumps({"repository": str(tmp_path / "gone")}))
-    assert str(local) in cli.show_data(local)[1]
-    assert sorted(p.name for p in home.iterdir()) == ["data.json", "data.lock"]
-    assert data_repo.locate() == data_repo.DataRepo(local.resolve())
-
-
 def test_the_cli_records_the_shared_repository_and_refuses_a_plain_folder(tmp_path: Path, repo) -> None:
     plain, local = tmp_path / "plain", tmp_path / "local-data"
     plain.mkdir()
@@ -509,7 +492,11 @@ def test_the_cli_records_the_shared_repository_and_refuses_a_plain_folder(tmp_pa
     assert "No shared settings repository" in cli.show_data(None)[1]
     refused = f"Not set: DataRepoError: {plain.resolve()} is not a git repository's top folder"
     assert cli.show_data(plain) == (1, refused)
+    home = data_place.pointer().parent
+    (home / "common.json").write_text(json.dumps({"repository": str(tmp_path / "gone")}))
     assert str(local) in cli.show_data(local)[1]
+    assert sorted(p.name for p in home.iterdir()) == ["data.json", "data.lock"]
+    assert data_repo.locate() == data_repo.DataRepo(local.resolve())
     assert Store.open(repo).global_path == local / "config.json"
     assert (local / "shop-site" / "repository").read_text() == "github.com/acme/shop-site\n"
 
@@ -617,7 +604,8 @@ def test_renaming_moves_the_whole_folder_commits_pushes_and_is_used_from_then_on
     git(root, "commit", "-qm", "memory")
     (memory / "pending.md").write_text("not curated\n")
 
-    got = renamer(store, repo).put("/api/next/config/folder", json={"name": "acme-shop"})
+    c = renamer(store, repo)
+    got = c.put("/api/next/config/folder", json={"name": "acme-shop"})
 
     assert (got.status_code, got.json()["folder"], got.json()["notice"]) == (200, "acme-shop", "")
     assert not (root / "shop-site").exists()
@@ -632,24 +620,17 @@ def test_renaming_moves_the_whole_folder_commits_pushes_and_is_used_from_then_on
     reopened = Store.open(repo)
     assert (reopened.name, reopened.settings().widths) == ("acme-shop", [1440])
 
-
-def test_after_a_rename_decisions_are_recorded_and_found_in_the_new_folder(shared, repo) -> None:
-    root, _ = shared
-    store = Store.open(repo)
-    app = api.create_app(store, "t", host_module.Host(store, repo))  # its routes made before the rename
-    renamed = TestClient(app, base_url="http://127.0.0.1", headers=AUTH).put(
-        "/api/next/config/folder", json={"name": "acme-shop"}
-    )
-    assert renamed.status_code == 200
-    chat = TestClient(app, base_url="http://127.0.0.1", headers=AUTH | {"x-owlbear-use": "chat"})
-
-    got = chat.post("/api/next/decisions/propose", json={"title": "Tags", "statement": "Tags are free text."}).json()
+    got = c.post(
+        "/api/next/decisions/propose",
+        headers={"x-owlbear-use": "chat"},
+        json={"title": "Tags", "statement": "Tags are free text."},
+    ).json()
 
     made = got["receipts"][0]["id"]
     assert got["saved"] is True
     assert (root / "acme-shop" / "decisions" / f"{made}.md").is_file()
     assert not (root / "shop-site").exists()
-    assert chat.get(f"/api/next/decisions/{made}").json()["project"] == "acme-shop"
+    assert c.get(f"/api/next/decisions/{made}").json()["project"] == "acme-shop"
 
 
 def test_after_a_rename_a_global_entry_still_moves_back_to_its_project(shared, repo) -> None:

@@ -24,8 +24,8 @@ def git(cwd: Path, *args: str) -> str:
 
 
 @pytest.fixture
-def source(tmp_path: Path, monkeypatch) -> Path:
-    """The owner's checkout outside OwlBear's folder, holding something of every kind only it has."""
+def data_checkout(tmp_path: Path, monkeypatch) -> Path:
+    """A local checkout outside OwlBear's folder, selected by its pointer."""
     remote, root = tmp_path / "remote.git", tmp_path / "Projects" / "owlbear-data"
     git(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
     git(tmp_path, "clone", "-q", str(remote), str(root))
@@ -33,6 +33,16 @@ def source(tmp_path: Path, monkeypatch) -> Path:
     git(root, "add", "config.json")
     git(root, "commit", "-qm", "start")
     git(root, "push", "-q", "origin", "HEAD")
+    local_home.root().mkdir(parents=True, exist_ok=True)
+    data_place.pointer().write_text(json.dumps({"repository": str(root)}))
+    monkeypatch.setattr(data_move, "_processes", list)  # this machine's own OwlBear runs beside the tests
+    return root
+
+
+@pytest.fixture
+def source(tmp_path: Path, data_checkout: Path) -> Path:
+    """The owner's checkout, holding something of every kind only it has."""
+    root = data_checkout
     git(root, "switch", "-qc", "side")
     git(root, "commit", "-q", "--allow-empty", "-m", "unpushed")
     git(root, "switch", "-q", "main")
@@ -42,28 +52,16 @@ def source(tmp_path: Path, monkeypatch) -> Path:
     (root / "memory" / "note.md").write_text("kept\n")
     (root / "config.json").write_text('{"b": 2}\n')
     git(root, "worktree", "add", "-q", str(tmp_path / "linked"), "side")
-    local_home.root().mkdir(parents=True, exist_ok=True)
-    data_place.pointer().write_text(json.dumps({"repository": str(root)}))
-    monkeypatch.setattr(data_move, "_processes", list)  # this machine's own OwlBear runs beside the tests
     return root
 
 
 @pytest.fixture
-def dirty(tmp_path: Path, monkeypatch) -> Path:
+def dirty(data_checkout: Path) -> Path:
     """The owner's checkout outside OwlBear's folder with a tracked edit and an untracked note, nothing more."""
-    remote, root = tmp_path / "remote.git", tmp_path / "Projects" / "owlbear-data"
-    git(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
-    git(tmp_path, "clone", "-q", str(remote), str(root))
-    (root / "config.json").write_text("{}\n")
-    git(root, "add", "config.json")
-    git(root, "commit", "-qm", "start")
-    git(root, "push", "-q", "origin", "HEAD")
+    root = data_checkout
     (root / "memory").mkdir()
     (root / "memory" / "note.md").write_text("kept\n")
     (root / "config.json").write_text('{"b": 2}\n')
-    local_home.root().mkdir(parents=True, exist_ok=True)
-    data_place.pointer().write_text(json.dumps({"repository": str(root)}))
-    monkeypatch.setattr(data_move, "_processes", list)  # this machine's own OwlBear runs beside the tests
     return root
 
 
