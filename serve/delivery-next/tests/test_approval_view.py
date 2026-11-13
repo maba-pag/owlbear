@@ -33,9 +33,13 @@ from owlbear_delivery_next.state_store import decision_store, machine_settings, 
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import decision_publication
 
+from .test_machine_pages import page_at
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
+
+    from fastapi import FastAPI
 
 NOW = datetime(2026, 10, 16, 2, tzinfo=UTC)
 MINE, LEFT_TO_SHAPER = "Turns the hero 180 degrees in under 300 ms", "A second press returns the hero"
@@ -72,14 +76,12 @@ def change() -> m.Change:
 
 
 @contextlib.contextmanager
-def served(store: Store) -> Iterator[str]:
-    """The project app over *store* on a free local port, with token ``tok``."""
+def served(app: FastAPI, *, keep_alive: int = 60) -> Iterator[str]:
+    """The caller's project app on a free local port."""
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
-        server = uvicorn.Server(
-            uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning", timeout_keep_alive=60)
-        )
+        server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_keep_alive=keep_alive))
         thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
         thread.start()
         try:
@@ -97,7 +99,7 @@ def served(store: Store) -> Iterator[str]:
 def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
     store = Store(tmp_path)
     store.write(Lock("flip"), change())
-    with served(store) as base:
+    with served(api.create_app(store, "tok", Host())) as base:
         yield store, base
 
 
@@ -105,21 +107,10 @@ def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
 def opened(base: str, slug: str, pds: Any, *, details: bool = False) -> Iterator[Any]:
     """The Changes page on *slug* in a real browser, its details shown or not: only the test host and the PDS CDN
     answer."""
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
-    with sync_playwright() as pw:
-        try:
-            browser = pw.chromium.launch()
-        except Error as exc:
-            pytest.skip(f"no Playwright Chromium: {exc}")
-        page = browser.new_page()
-        pds.only(page, base)
+    with page_at(base, pds, details=details) as page:
         page.add_init_script("sessionStorage.setItem('token', 'tok');")
-        if details:
-            page.add_init_script("localStorage.setItem('owlbear-improvement-detail', 'on');")
         page.goto(f"{base}/?change={slug}")
         yield page
-        browser.close()
 
 
 def big(control: Any) -> None:
@@ -236,7 +227,7 @@ def shared_url(tmp_path: Path, shared_repo) -> Iterator[tuple[str, dict[str, Dec
     gone = PickedDecision(id=new_id(), revision="r0", title="An old rule since moved away", statement="Gone.")
     c.brief.picked = Pick(version=2, status="ok", decisions=[*said, gone])
     store.write(Lock("flip"), c)
-    with served(store) as base:
+    with served(api.create_app(store, "tok", Host())) as base:
         yield base, rules
 
 
@@ -761,11 +752,7 @@ def stopped(case: str, stop: m.Stop = BROKEN) -> m.Change:
 @contextlib.contextmanager
 def launched(base: str, pds: Any) -> Iterator[Any]:
     """The Changes page on the flip Change in Chromium; a missing browser fails rather than skips."""
-    from playwright.sync_api import sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
-    with sync_playwright() as pw, contextlib.closing(pw.chromium.launch()) as browser:
-        page = browser.new_page(viewport={"width": 1280, "height": 900})
-        pds.only(page, base)
+    with page_at(base, pds, (1280, 900), required=True) as page:
         page.add_init_script("sessionStorage.setItem('token', 'tok');")
         page.goto(f"{base}/?change=flip")
         yield page

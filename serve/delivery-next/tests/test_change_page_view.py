@@ -4,20 +4,19 @@ from __future__ import annotations
 
 import contextlib
 import re
-import socket
-import threading
-import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import pytest
-import uvicorn
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.decision_records import Pick
 from owlbear_delivery_next.change_contracts.round_records import BRIEF
 from owlbear_delivery_next.project_host import brief_timer
 from owlbear_delivery_next.state_store.store import Lock
+
+from .test_approval_view import big, served
+from .test_machine_pages import page_at
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -32,48 +31,18 @@ UNREVIEWED = "v4 changed after its last challenge and no challenger read it: app
 @contextlib.contextmanager
 def opened(c1: tuple[Store, Any], pds: Any, edit: Callable[[Change], None] | None = None) -> Iterator[Any]:
     """The Changes page on c1, changed by *edit* first, in a real browser: only the test host and the PDS CDN answer."""
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     store, app = c1
     if edit:
         c = store.read(SLUG)
         edit(c)
         store.write(Lock(SLUG), c)
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        server = uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_keep_alive=60))
-        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
-        thread.start()
-        try:
-            while not server.started:
-                assert thread.is_alive(), "the owned page server stopped before startup"
-                time.sleep(0.05)
-            base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-            with sync_playwright() as pw:
-                try:
-                    browser = pw.chromium.launch()
-                except Error as exc:
-                    pytest.skip(f"no Playwright Chromium: {exc}")
-                page = browser.new_page(viewport={"width": 1280, "height": 900})
-                errors: list[str] = []
-                page.on("pageerror", lambda e: errors.append(str(e)))
-                pds.only(page, base)
-                page.add_init_script("sessionStorage.setItem('token', 'tok');")
-                page.goto(f"{base}/?change={SLUG}")
-                yield page
-                assert errors == []
-                browser.close()
-        finally:
-            server.should_exit = True
-            thread.join(5)
-            assert not thread.is_alive(), "the owned page server did not stop"
-
-
-def big(control: Any) -> None:
-    """WCAG 2.5.8: *control*, laid out, takes at least 24 by 24 CSS pixels."""
-    box = control.bounding_box()
-    assert box is not None
-    assert (box["width"] >= 24, box["height"] >= 24) == (True, True), box
+    with served(app) as base, page_at(base, pds, (1280, 900)) as page:
+        errors: list[str] = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.add_init_script("sessionStorage.setItem('token', 'tok');")
+        page.goto(f"{base}/?change={SLUG}")
+        yield page
+        assert errors == []
 
 
 def revising(c: Change) -> None:
