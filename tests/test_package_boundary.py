@@ -42,15 +42,12 @@ def _imported_namespaces(source_file: Path) -> tuple[str, ...]:
     return tuple(sorted(namespaces))
 
 
-def test_allowlist_covers_current_serve_packages(project_root: Path) -> None:
-    """Every discovered package must have an explicit boundary entry, and vice versa."""
-    assert set(_package_sources(project_root)) == set(ALLOWED_IMPORTS)
-
-
 def test_serve_package_imports_follow_allowlist(project_root: Path) -> None:
     """Runtime and TYPE_CHECKING imports must follow the declared package direction."""
+    sources = _package_sources(project_root)
+    assert set(sources) == set(ALLOWED_IMPORTS)
     violations: list[tuple[str, str, str]] = []
-    for package_name, source_root in _package_sources(project_root).items():
+    for package_name, source_root in sources.items():
         allowed = ALLOWED_IMPORTS[package_name]
         for source_file in sorted(source_root.rglob("*.py")):
             violations.extend(
