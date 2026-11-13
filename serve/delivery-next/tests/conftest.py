@@ -39,7 +39,15 @@ from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices, sdk_adapter, spotter_look
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import profile
-from owlbear_delivery_next.state_store import backlog, backlog_issues, decision_cache, decision_store, legacy_family
+from owlbear_delivery_next.state_store import (
+    backlog,
+    backlog_issues,
+    decision_cache,
+    decision_store,
+    legacy_family,
+    offline_protocol,
+    project_home,
+)
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 MACHINE_HOME = Path.home()  # read before any test replaces HOME
@@ -109,6 +117,47 @@ def chat_replied() -> Callable[[str, str, object], None]:
 def machine_home() -> Path:
     """This machine's real home, for a test that reads what is installed there and never writes."""
     return MACHINE_HOME
+
+
+@pytest.fixture
+def legacy_project_clone(tmp_path):
+    """A local legacy clone with one run log and its fixed clone identity."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    folder = repo / ".git" / "owlbear-delivery"
+    (folder / "changes" / "c1").mkdir(parents=True)
+    (folder / "changes" / "c1" / "runner.log").write_text("ran\n")
+    (folder / "clone-id").write_text("abc123\n")
+    return repo, folder
+
+
+@pytest.fixture
+def offline_move_steps(monkeypatch):
+    """Production Prepare/Finish with synthetic boot sessions and an empty legacy-gap witness."""
+
+    def prepare(repo):
+        monkeypatch.setattr(offline_protocol, "boot_session", lambda: "AAAAAAAA-0000-4000-8000-000000000001")
+        offline_protocol.prepare_clone(repo, gaps=lambda: ())
+
+    def finish(repo):
+        monkeypatch.setattr(offline_protocol, "boot_session", lambda: "BBBBBBBB-0000-4000-8000-000000000002")
+        return offline_protocol.finish_clone(repo, gaps=lambda: ())
+
+    return prepare, finish
+
+
+@pytest.fixture
+def offline_move(offline_move_steps):
+    """Prepare only once, then finish through the production offline entry point."""
+    prepare, finish = offline_move_steps
+
+    def move(repo):
+        if not (project_home.clone_dir(repo) / offline_protocol.PREPARED).exists():
+            prepare(repo)
+        return finish(repo)
+
+    return move
 
 
 @pytest.fixture
