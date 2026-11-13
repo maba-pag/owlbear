@@ -108,10 +108,12 @@ class OwlbearIssues(GhClient):
     def create(self, title: str, body: str, *, marker: str) -> Issue:
         """Record a pending filing before POST; an unknown outcome can only be recovered by finding its marker."""
         pending = self._intent(marker, "pending")
-        if not _claim(pending, "create_issue") or _present(self._intent(marker, "known"), "create_issue"):
+        if not _claim(pending, "create_issue"):
             self._unconfirmed("create_issue", marker)
         payload = {"title": title, "body": body}
         try:
+            if _present(self._intent(marker, "known"), "create_issue"):
+                self._unconfirmed("create_issue", marker)
             made = self._api("create_issue", "POST", f"{repo(self.repository)}/issues", body=payload, write=True)
         except (ProviderError, AccountMissing) as exc:
             if isinstance(exc, AccountMissing) or exc.code != FailureCode.RESPONSE_UNKNOWN:
