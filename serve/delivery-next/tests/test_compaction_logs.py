@@ -22,28 +22,22 @@ def compacted(attempt: str) -> list[str]:
     ]
 
 
-def test_the_live_log_wins_over_retros_copy() -> None:
+def test_the_live_log_wins_over_retros_copy_and_caches_whole_events(monkeypatch) -> None:
     live = chatlogs.state() / "s1" / "events.jsonl"
     live.parent.mkdir(parents=True)
-    live.write_text("".join([line("assistant.turn_start"), *compacted("a"), line("assistant.turn_start")]))
+    live.write_text("".join([line("assistant.turn_start"), *compacted("a"), line("assistant.turn_start"),
+                             '{"type":"assistant.turn_start","da']))  # fmt: skip
     copy = chatlogs.root() / "chatlogs" / "s1" / "log.jsonl.gz"
     copy.parent.mkdir(parents=True)
     with gzip.open(copy, "wt") as f:
         f.write(line("assistant.turn_start") * 5)
-    assert compaction_logs.read("s1") == Log("found", Actor(calls=2, compactions=1, before=1))
-
-
-def test_a_line_still_being_written_is_skipped_and_an_unchanged_log_is_not_read_again(monkeypatch) -> None:
-    log = chatlogs.state() / "s2" / "events.jsonl"
-    log.parent.mkdir(parents=True)
-    log.write_text("".join([line("assistant.turn_start"), *compacted("a"), '{"type":"assistant.turn_start","da']))
     opened = []
     real = Path.open
     with monkeypatch.context() as m:
         m.setattr(Path, "open", lambda self, *a, **k: opened.append(self) or real(self, *a, **k))
-        first, again = compaction_logs.read("s2"), compaction_logs.read("s2")
-    assert first == again == Log("found", Actor(calls=1, compactions=1, before=1))
-    assert opened == [log]
+        first, again = compaction_logs.read("s1"), compaction_logs.read("s1")
+    assert first == again == Log("found", Actor(calls=2, compactions=1, before=1))
+    assert opened == [live]
 
 
 def test_a_log_that_cannot_be_reached_is_unreadable_not_missing() -> None:

@@ -80,8 +80,9 @@ def test_a_billed_amount_that_is_not_finite_or_is_negative_is_unknown(value: obj
     assert credit_meter.amount(value) == got
 
 
-def test_sessions_of_a_look_add_up_and_each_reconciles_only_its_own_share_idempotently() -> None:
-    look = Meter(1.0)
+def test_session_shares_reconcile_once_and_resolve_only_their_own_unknown() -> None:
+    run = Meter(10.0, "replay-run")
+    look = Meter(1.0, parent=run)
     first = look.part()
     first.call(0.15)
     first.ended(0.2, confirmed=True)  # the session's total corrects its calls' sum
@@ -91,6 +92,12 @@ def test_sessions_of_a_look_add_up_and_each_reconciles_only_its_own_share_idempo
     second.ended(0.1, confirmed=True)
     assert look.report()["credits"] == pytest.approx(0.3)
     assert (look.report()["credits_known"], look.admit()) == (True, True)
+    unsure = look.part()
+    unsure.call(None)
+    first.ended(0.2, confirmed=True)
+    assert (look.report()["credits_known"], run.report()["credits_known"]) == (False, False)
+    unsure.ended(0.2, confirmed=True)
+    assert (look.report()["credits_known"], run.report()["credits_known"], run.report()["credits"]) == (True, True, 0.5)
 
 
 def test_many_small_amounts_reach_a_limit_exactly_across_sessions_and_looks() -> None:
@@ -145,17 +152,6 @@ def test_an_unknown_spend_closes_its_meter_and_its_run_and_stays_latched_once_kn
     known = (look.report()["credits_known"], run.report()["credits_known"], run.report()["credits"])
     assert known == (True, True, 0.1)
     assert (look.admit(), run.admit(), look.report()["stopped"]) == (False, False, "unknown")  # still stopped
-
-
-def test_an_unknown_share_counts_only_until_its_own_session_resolves() -> None:
-    run = Meter(10.0, "replay-run")
-    known, unsure = run.part(), run.part()
-    known.call(0.1)
-    unsure.call(None)
-    known.ended(0.1, confirmed=True)  # one known child never erases another's unknown
-    assert run.report()["credits_known"] is False
-    unsure.ended(0.2, confirmed=True)
-    assert run.report()["credits_known"] is True
 
 
 def test_a_downward_correction_never_reopens_a_reached_meter() -> None:
@@ -236,7 +232,7 @@ class Session:
         self.made["disconnected"] = True
 
 
-def run_look(monkeypatch, session: Session, meter: Meter, made: dict[str, Any]) -> tuple[str, float]:
+def client(monkeypatch, session: Session, made: dict[str, Any]) -> None:
     class Client:
         def __init__(self, **_kw: Any) -> None:
             made["clients"] = made.get("clients", 0) + 1
@@ -254,6 +250,10 @@ def run_look(monkeypatch, session: Session, meter: Meter, made: dict[str, Any]) 
     monkeypatch.setattr(spotter_look, "CopilotClient", Client)
     monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
     monkeypatch.setattr(spotter, "TEARDOWN", 0.1)
+
+
+def run_look(monkeypatch, session: Session, meter: Meter, made: dict[str, Any]) -> tuple[str, float]:
+    client(monkeypatch, session, made)
 
     async def main() -> tuple[str, float]:
         loop = asyncio.get_running_loop()
@@ -276,6 +276,9 @@ def test_a_turn_that_reaches_its_limit_is_aborted_and_its_total_settles_it(monke
     assert look.report()["sdk_sessions"] == [sid]  # the look's own SDK session, recorded with its id
     started = [json.loads(x) for x in (chatlogs.root() / "manifest.jsonl").read_text().splitlines()]
     assert [(x["session"], x["look"]) for x in started if x["event"] == "started"] == [(sid, look.id)]
+    again = Session(made, [said('{"category": "none"}')])
+    assert run_look(monkeypatch, again, look, made)[0] == ""
+    assert (made["clients"], look.report()["credits"]) == (1, 0.95)  # no retry/extension on the closed meter
 
 
 def test_an_answer_completed_as_the_limit_is_reached_is_kept(monkeypatch) -> None:
@@ -330,40 +333,12 @@ def test_a_cost_the_runtime_reports_as_not_finite_stops_the_turn_as_unknown(monk
     assert (look.report()["stopped"], look.report()["credits_known"]) == ("unknown", False)
 
 
-def test_a_retry_or_extension_on_a_closed_meter_starts_no_session(monkeypatch) -> None:
-    made: dict[str, Any] = {}
-    look = Meter(0.75)
-    first = Session(made, [usage(0.8), "wait-abort"], metrics=0.8)
-    run_look(monkeypatch, first, look, made)
-    assert made["clients"] == 1
-    again = Session(made, [said('{"category": "none"}')])
-    assert run_look(monkeypatch, again, look, made)[0] == ""  # the same look's meter: nothing left
-    assert made["clients"] == 1  # no runtime was started for it
-    assert look.report()["credits"] == 0.8
-
-
 def test_a_cancelled_turn_reads_its_total_as_provisional(monkeypatch) -> None:
     made: dict[str, Any] = {}
     look = Meter(0.75)
     session = Session(made, [usage(0.1), "hang"], metrics=0.3)
 
-    class Client:
-        def __init__(self, **_kw: Any) -> None:
-            pass
-
-        async def start(self) -> None:
-            pass
-
-        async def create_session(self, **kw: Any) -> Session:
-            made.update(kw)
-            return session
-
-        async def stop(self) -> None:
-            pass
-
-    monkeypatch.setattr(spotter_look, "CopilotClient", Client)
-    monkeypatch.setattr(spotter_look, "cli_path", lambda: "/bin/false")
-    monkeypatch.setattr(spotter, "TEARDOWN", 0.1)
+    client(monkeypatch, session, made)
 
     async def main() -> None:
         task = asyncio.ensure_future(REAL_LOOK({}, ctx(), look))
