@@ -23,8 +23,13 @@ from owlbear_delivery_next.state_store import registry
 
 def test_help_and_completion_load_no_command_module() -> None:
     code = (
-        "import sys; from owlbear_delivery_next.machine_host import command; command.app(['--help']); "
-        "command.app.generate_completion(shell='zsh'); "
+        "import io, sys; from contextlib import redirect_stdout; "
+        "from owlbear_delivery_next.machine_host import command; command.app(['--help']); "
+        "help_text = io.StringIO(); "
+        "\nwith redirect_stdout(help_text): command.app(['setup', '--help'])\n"
+        "assert '--local-files' in help_text.getvalue(); "
+        "script = command.app.generate_completion(shell='zsh'); "
+        "assert '--local-files' in script and '--person-check' in script; "
         "print(sorted(m for m in sys.modules if m.startswith('owlbear_delivery_next.')))"
     )
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)  # noqa: S603
@@ -34,13 +39,6 @@ def test_help_and_completion_load_no_command_module() -> None:
         "'owlbear_delivery_next.commands.improvement_commands', 'owlbear_delivery_next.commands.project_commands', "
         "'owlbear_delivery_next.machine_host', 'owlbear_delivery_next.machine_host.command']"
     )
-
-
-def test_owlbear_help_and_completion_show_the_project_commands_options(capsys) -> None:
-    command.app(["setup", "--help"])
-    assert "--local-files" in capsys.readouterr().out
-    script = command.app.generate_completion(shell="zsh")  # noqa: S604 - the script's shell; it is static
-    assert ("--local-files" in script, "--person-check" in script) == (True, True)
 
 
 def test_owlbear_next_refuses_a_usage_error_and_takes_the_repo_before_the_command(monkeypatch, capsys) -> None:

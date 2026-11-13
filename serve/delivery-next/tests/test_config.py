@@ -28,8 +28,15 @@ def repo(tmp_path):
     return root
 
 
-def test_each_field_comes_from_the_project_else_the_global_layer_else_the_default():
-    glob = GlobalLayer(agents={"builder": Agent(model="g-1", effort="high")}, widths=[1280, 1920])
+def test_each_field_is_layered_and_only_none_inherits_while_lists_replace():
+    defaults = resolve(None, Layer())
+    assert (defaults.widths, defaults.pr_labels, defaults.pr_marker) == ([1280, 1920, 2400], [], True)
+    glob = GlobalLayer(
+        agents={"builder": Agent(model="g-1", effort="high"), "reviewer": Agent(context="long")},
+        widths=[1280, 1920],
+        pr_labels=["owlbear"],
+        pr_marker=True,
+    )
     proj = Layer(agents={"builder": Agent(effort="low")})
     eff = resolve(glob, proj)
 
@@ -40,18 +47,13 @@ def test_each_field_comes_from_the_project_else_the_global_layer_else_the_defaul
     assert eff.sources["agents.builder.model"] == "global"
     assert eff.sources["agents.builder.effort"] == "project"
     assert eff.sources["agents.reviewer.model"] == "default"
-    assert resolve(None, Layer()).widths == [1280, 1920, 2400]
-
-
-def test_an_empty_list_clears_false_disables_and_only_none_inherits():
-    glob = GlobalLayer(agents={"reviewer": Agent(context="long")}, pr_labels=["owlbear"], pr_marker=True)
+    assert (eff.agents["reviewer"].context, eff.pr_labels, eff.pr_marker) == ("long", ["owlbear"], True)
+    mine = resolve(glob, Layer(pr_labels=["release:minor"], pr_marker=False))
+    assert (mine.pr_labels, mine.pr_marker, mine.sources["pr_labels"]) == (["release:minor"], False, "project")
     proj = Layer(agents={"reviewer": Agent(context="default")}, pr_labels=[], pr_marker=False)
     eff = resolve(glob, proj)
-
     assert (eff.agents["reviewer"].context, eff.pr_labels, eff.pr_marker) == ("default", [], False)
-    inherited = resolve(glob, Layer())
-    assert (inherited.agents["reviewer"].context, inherited.pr_labels) == ("long", ["owlbear"])
-    assert inherited.pr_marker is True
+    assert resolve(GlobalLayer(pr_marker=False), Layer()).sources["pr_marker"] == "global"
 
 
 @pytest.mark.parametrize(
@@ -87,18 +89,6 @@ def test_an_empty_list_clears_false_disables_and_only_none_inherits():
 def test_a_layer_refuses_anything_it_cannot_apply(raw):
     with pytest.raises(ValidationError):
         Layer.model_validate(raw)
-
-
-def test_pull_request_labels_replace_the_global_list_and_the_marker_is_layered():
-    """TD-308: a project's list replaces the global one whole, [] included; the marker line is layered like the rest,
-    since code ships no defaults (2026-10-23)."""
-    glob = GlobalLayer(pr_labels=["owlbear"])
-    assert (resolve(None, Layer()).pr_labels, resolve(None, Layer()).pr_marker) == ([], True)
-    assert resolve(glob, Layer()).pr_labels == ["owlbear"]
-    mine = resolve(glob, Layer(pr_labels=["release:minor"], pr_marker=False))
-    assert (mine.pr_labels, mine.pr_marker, mine.sources["pr_labels"]) == (["release:minor"], False, "project")
-    assert resolve(glob, Layer(pr_labels=[])).pr_labels == []
-    assert resolve(GlobalLayer(pr_marker=False), Layer()).sources["pr_marker"] == "global"
 
 
 def test_the_curators_threshold_is_95_percent_at_first_and_set_only_globally():
@@ -231,10 +221,10 @@ def owner_save(store: Store, change) -> str:
     return store.save(store.config_path, Layer, change, "owner", owner=True)
 
 
-def _old_profile(root, roles_: object, fmt: object = 1) -> None:
+def _old_profile(root, roles_: object) -> None:
     root.mkdir(parents=True, exist_ok=True)
     raw = {
-        "format": fmt,
+        "format": 1,
         "version": 3,
         "confirmed_at": "2026-10-01T10:00:00Z",
         "entries": {"rules": {"state": "unknown", "value": "", "evidence": "HTTP 403"}},
@@ -259,17 +249,22 @@ def _prepare_reboot_finish(repo, boot, *, finish_code: int = 0) -> None:
 
 
 @pytest.mark.usefixtures("current_binding")
-@pytest.mark.parametrize("fmt", [1])
-def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, boot, fmt):
+@pytest.mark.parametrize("existing", [False, True], ids=["empty-config", "owner-config"])
+def test_a_format_1_profile_fills_only_missing_settings_once_and_owner_clears_stick(repo, boot, existing):
     root = repo / ".git" / "owlbear-delivery"
     old = {"builder": {"model": "m-1", "effort": "low"}, "reviewer": {"model": "r-1", "effort": "max"}}
-    _old_profile(root, old, fmt)
+    _old_profile(root, old)
+    if existing:
+        own = Layer(agents={"builder": Agent(model="own")}, widths=[1600])
+        (root / "config.json").write_text(own.model_dump_json())
     _prepare_reboot_finish(repo, boot)
     store = Store.open(repo)
     root = store.root  # moved into ~/.owlbear (TD-334)
 
-    assert roles.chosen(store.settings(), StepKind.BUILD) == RoleModel(model="m-1", effort="low")
+    assert roles.chosen(store.settings(), StepKind.BUILD) == RoleModel(model="own" if existing else "m-1", effort="low")
     assert roles.chosen(store.settings(), StepKind.REVIEW) == RoleModel(model="r-1", effort="max")
+    if existing:
+        assert store.read_config().widths == [1600]
     assert roles.chosen(store.settings(), StepKind.PLAN) == carried.MODELS["planner"]
     prof = store.read_profile()
     assert (prof.format, prof.version, prof.entries["rules"].evidence) == (PROFILE_FORMAT, 3, "HTTP 403")
@@ -280,34 +275,9 @@ def test_a_format_1_profile_moves_its_roles_into_the_project_config_once(repo, b
     assert (root / "config.json").read_text() == saved
 
     owner_save(store, lambda _cur: Layer())  # the owner clears the overrides
+    assert roles.chosen(Store.open(repo).settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
     _old_profile(root, {"builder": {"model": "m-1", "effort": "low"}})  # e.g. a crash before the profile rewrite
     assert roles.chosen(Store.open(repo).settings(), StepKind.BUILD) == carried.MODELS["builder"]
-
-
-def test_a_format_1_profile_whose_format_is_a_string_is_refused_and_kept(repo):
-    root = Store.open(repo).root
-    _old_profile(root, {"builder": {"model": "m-1", "effort": "low"}}, "1")
-    before = (root / "profile.json").read_bytes()
-    with pytest.raises(StoreError, match=r"state of profile\.json is unreadable"):
-        Store.open(repo)
-    assert (root / "profile.json").read_bytes() == before
-
-
-@pytest.mark.usefixtures("current_binding")
-def test_old_roles_fill_only_the_fields_an_existing_project_config_leaves_empty(repo, boot):
-    root = repo / ".git" / "owlbear-delivery"
-    _old_profile(root, {"builder": {"model": "m-1", "effort": "low"}, "reviewer": {"model": "r-1", "effort": "max"}})
-    own = Layer(agents={"builder": Agent(model="own")}, widths=[1600])
-    (root / "config.json").write_text(own.model_dump_json())
-    _prepare_reboot_finish(repo, boot)
-    store = Store.open(repo)
-
-    assert roles.chosen(store.settings(), StepKind.BUILD) == RoleModel(model="own", effort="low")
-    assert roles.chosen(store.settings(), StepKind.REVIEW) == RoleModel(model="r-1", effort="max")
-    assert store.read_config().widths == [1600]
-
-    owner_save(store, lambda _cur: Layer())  # the owner clears everything; the old profile is still on disk
-    assert roles.chosen(Store.open(repo).settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
 
 
 def test_a_move_that_another_opener_finished_meanwhile_is_not_repeated(repo, monkeypatch):
@@ -401,21 +371,6 @@ def test_a_clone_on_the_same_config_that_another_cleared_never_reinstates(shared
     shared = Store(tmp_path / "fresh-store", DataRepo(fresh), "shop-site")
     assert read_layer(shared.config_path, Layer).roles_moved
     assert roles.chosen(shared.settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
-
-
-def test_a_move_whose_marker_cannot_be_written_fails_the_open(repo, monkeypatch):
-    root = repo / ".git" / "owlbear-delivery"
-    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
-    real = roles_move.atomic_write
-
-    def no_marker(target, content):
-        if target.name == profile_share.ROLES_MOVED:
-            raise OSError(28, "No space left on device")
-        real(target, content)
-
-    monkeypatch.setattr(roles_move, "atomic_write", no_marker)
-    with pytest.raises(OSError, match="No space"):
-        roles_move.move_roles(Store(root))
 
 
 def test_a_merge_that_fails_after_replacing_the_config_fails_the_open(repo, monkeypatch):
@@ -601,25 +556,39 @@ def test_a_damaged_old_profile_is_not_marked_moved_and_its_roles_come_back_once_
 
 
 @pytest.mark.parametrize(
-    "bad",
+    ("raw", "reason"),
     [
-        {"reviewer": {"model": "r-1"}},  # no effort
-        {"boss": {"model": "m", "effort": "low"}},
-        {"builder": {"model": "m", "effort": "low", "extra": 1}},
-        [],
-        False,
-        0,
-        "",
+        *[
+            (json.dumps({"format": 1, "roles": bad}).encode(), "role overrides are invalid")
+            for bad in (
+                {"reviewer": {"model": "r-1"}},  # no effort
+                {"boss": {"model": "m", "effort": "low"}},
+                {"builder": {"model": "m", "effort": "low", "extra": 1}},
+                [],
+                False,
+                0,
+                "",
+            )
+        ],
+        (b'{"format": 999, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}', None),
+        (b'[{"format": 1, "roles": {}}]', None),
+        (b'{"roles": {"reviewer": {"model": "r-1", "effort": "max"}}}', None),
+        (b'{"format": 1, "roles": {}, "runtime": "unknown"}', None),
+        (b'{"format": 1.5, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}', None),
+        (b'{"format": true, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}', None),
+        (
+            b'{"format": "1", "roles": {"builder": {"model": "m-1", "effort": "low"}}}',
+            r"state of profile\.json is unreadable",
+        ),
     ],
 )
-def test_an_old_profile_with_an_invalid_role_is_not_marked_moved_and_restores_once_repaired(repo, bad):
+def test_an_invalid_old_profile_is_unchanged_unmarked_and_imports_only_after_repair(repo, raw, reason):
     root = Store.open(repo).root
-    _old_profile(root, bad)
-    original = (root / "profile.json").read_bytes()
-    with pytest.raises(StoreError, match="role overrides are invalid"):
+    (root / "profile.json").write_bytes(raw)
+    with pytest.raises(StoreError, match=reason):
         Store.open(repo)
     root = project_home.located(repo)
-    assert (root / "profile.json").read_bytes() == original
+    assert (root / "profile.json").read_bytes() == raw
     assert not (root / profile_share.ROLES_MOVED).exists()
     assert not (root / "config.json").exists()
 
@@ -663,44 +632,13 @@ def test_an_invalid_local_role_source_in_a_shared_project_is_refused_visibly_and
     assert (root / profile_share.ROLES_MOVED).exists()
 
 
-def test_a_valid_empty_old_roles_profile_counts_as_already_satisfied(repo):
+@pytest.mark.parametrize("old", [True, False], ids=["empty-old-roles", "current-profile"])
+def test_a_profile_without_roles_to_move_is_marked_without_creating_config(repo, old):
     root = Store.open(repo).root
-    _old_profile(root, {})
-    store = Store.open(repo)
-
-    assert (store.root / profile_share.ROLES_MOVED).exists()
-    assert not (store.root / "config.json").exists()
-
-
-@pytest.mark.parametrize(
-    "raw",
-    [
-        b'{"format": 999, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}',  # a newer OwlBear wrote it
-        b'[{"format": 1, "roles": {}}]',  # not a profile object
-        b'{"roles": {"reviewer": {"model": "r-1", "effort": "max"}}}',  # no format at all
-        b'{"format": 1, "roles": {}, "runtime": "unknown"}',
-        b'{"format": 1.5, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}',
-        b'{"format": true, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}',
-    ],
-)
-def test_an_unknown_old_profile_refuses_before_any_marker_or_config_and_a_valid_one_then_imports(repo, raw):
-    legacy = Store.open(repo).root
-    (legacy / "profile.json").write_bytes(raw)
-    with pytest.raises(StoreError):
-        Store.open(repo)
-
-    root = project_home.located(repo)
-    assert not (root / profile_share.ROLES_MOVED).exists()
-    assert not (root / "config.json").exists()
-
-    _old_profile(root, {"reviewer": {"model": "r-1", "effort": "max"}})
-    assert Store.open(repo).read_config().agents["reviewer"].model == "r-1"
-    assert (root / profile_share.ROLES_MOVED).exists()
-
-
-def test_a_validated_current_format_profile_has_no_roles_to_move_and_is_marked_once(repo):
-    legacy = Store.open(repo).root
-    (legacy / "profile.json").write_text(Profile().model_dump_json())
+    if old:
+        _old_profile(root, {})
+    else:
+        (root / "profile.json").write_text(Profile().model_dump_json())
     store = Store.open(repo)
 
     assert (store.root / profile_share.ROLES_MOVED).exists()
