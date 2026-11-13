@@ -189,18 +189,19 @@ def test_without_the_switch_the_run_only_reports_and_with_it_tags(repo: Path, re
 
 
 def test_the_api_reads_the_pr_merged_into_main_at_the_exact_commit(monkeypatch):
-    answers = {
-        "https://api.test/repos/o/r/commits/s/pulls": [
-            {"number": 6, "merge_commit_sha": "other", "base": {"ref": "main"}},
-            {"number": 8, "merge_commit_sha": "s", "base": {"ref": "release"}},
-            {"number": 7, "merge_commit_sha": "s", "base": {"ref": "main"}},
-        ],
-    }
     asked = []
 
     def urlopen(request, timeout):
         asked.append((request.full_url, request.get_header("Authorization"), timeout))
-        return io.BytesIO(json.dumps(answers[request.full_url]).encode())
+        return io.BytesIO(
+            json.dumps(
+                [
+                    {"number": 6, "merge_commit_sha": "other", "base": {"ref": "main"}},
+                    {"number": 8, "merge_commit_sha": "s", "base": {"ref": "release"}},
+                    {"number": 7, "merge_commit_sha": "s", "base": {"ref": "main"}},
+                ]
+            ).encode()
+        )
 
     monkeypatch.setattr(release.urllib.request, "urlopen", urlopen)
     assert release.Api("o/r", "tok", "https://api.test").pull("s")["number"] == 7
@@ -220,16 +221,14 @@ def test_the_api_reads_the_pr_merged_into_main_at_the_exact_commit(monkeypatch):
        {"id": 8, "path": release.CI, "status": "queued", "conclusion": None}], "pending")],
 )  # fmt: skip
 def test_the_api_reads_the_newest_own_push_ci(monkeypatch, runs, said):
-    answers = {
-        "https://api.test/repos/o/r/actions/runs?head_sha=s&event=push&branch=main&per_page=100": {
-            "workflow_runs": runs
-        },
-    }
     asked = []
 
     def urlopen(request, timeout):
+        assert request.full_url == (
+            "https://api.test/repos/o/r/actions/runs?head_sha=s&event=push&branch=main&per_page=100"
+        )
         asked.append((request.full_url, request.get_header("Authorization"), timeout))
-        return io.BytesIO(json.dumps(answers[request.full_url]).encode())
+        return io.BytesIO(json.dumps({"workflow_runs": runs}).encode())
 
     monkeypatch.setattr(release.urllib.request, "urlopen", urlopen)
     assert release.Api("o/r", "tok", "https://api.test").ci("s") == said
