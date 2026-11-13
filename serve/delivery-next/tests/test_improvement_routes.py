@@ -451,7 +451,8 @@ def test_case_replay_keeps_whole_failure_note(monkeypatch, whole_error) -> None:
     job.tick(0.0)
     [run] = [r for r in case_replay.results() if r["id"] == rid and "answers" in r]
     note = f"RuntimeError: {whole_error}\nthe runtime said more after the error"
-    assert (run["answers"][failing]["before"]["note"], answers) == (note, [])
+    before = run["answers"][failing]["before"]
+    assert (before["category"], before["note"], answers) == ("failed", note, [])
 
 
 def _one_pass() -> SimpleNamespace:
