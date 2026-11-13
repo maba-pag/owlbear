@@ -536,15 +536,6 @@ class DigestReader:
         return data
 
 
-def retained_payload(source, nested):
-    entry = source / "config.json"
-    if nested:
-        entry = source / "payload" / "nested" / "a"
-        entry.parent.mkdir(parents=True)
-        entry.write_text("old\n")
-    return entry, entry.relative_to(source), entry.read_bytes()
-
-
 @pytest.mark.parametrize(
     ("side", "boundary", "nested"),
     [
@@ -566,7 +557,12 @@ def retained_payload(source, nested):
 )
 def test_terminal_validation_retains_payload_images(prepared, monkeypatch, side, boundary, nested):
     repo, source = prepared
-    entry, relative, old = retained_payload(source, nested)
+    entry = source / "config.json"
+    if nested:
+        entry = source / "payload" / "nested" / "a"
+        entry.parent.mkdir(parents=True)
+        entry.write_text("old\n")
+    relative, old = entry.relative_to(source), entry.read_bytes()
     owner = b'{"format":1,"widths":[987]}\n'
     checks, changed, owners = [], [], {}
 
