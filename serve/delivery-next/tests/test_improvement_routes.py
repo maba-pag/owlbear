@@ -486,12 +486,6 @@ def test_job_pass_failures_keep_separate_whole_errors(monkeypatch, whole_error) 
 
 
 def test_case_publication_keeps_failed_and_pending_reasons(monkeypatch, shared_repo, whole_error) -> None:
-    async def asked(_text, _meter, _role):
-        return (
-            '{"situation": "An agent stopped with half the task done.", '
-            '"call": "hand-off-fitness", "why": "Unfinished."}'
-        )
-
     ids = []
     for task in ("t one", "t two"):
         cid = cases.freeze({"intent": {"task": task}}, {"source": "pilot", "family": "f"})
@@ -510,7 +504,7 @@ def test_case_publication_keeps_failed_and_pending_reasons(monkeypatch, shared_r
 
     monkeypatch.setattr(DataRepo, "publish", publish)
     job = _job(monkeypatch)
-    job.asked, job.shared = asked, lambda: DataRepo(shared_repo[0])
+    job.shared = lambda: DataRepo(shared_repo[0])
     job._publish()  # noqa: SLF001 - one publication sync, as the job's loop runs it
     [run] = [r for r in case_replay.results() if r["kind"] == "publication"]
     reasons = {
