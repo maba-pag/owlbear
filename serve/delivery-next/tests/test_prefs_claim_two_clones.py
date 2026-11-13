@@ -1,37 +1,14 @@
 """Two real checkouts of one bare remote: a stale clone's ordinary fact save never takes over a published claim."""
 
-import subprocess
-from pathlib import Path
-
 import pytest
 
-from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import prefs_import
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
-
-def confirmed(value: str) -> ProfileEntry:
-    return ProfileEntry(state="known", value=value, evidence=f"{profile.CONFIRMED}; owner")
-
-
-def clone_as(remote: Path, tmp_path: Path, name: str) -> tuple[Store, Profile]:
-    second = tmp_path / name
-    subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
-    for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
-        subprocess.run(["git", "-C", str(second), "config", key, value], check=True)  # noqa: S603, S607
-    fresh = Store(tmp_path / f"{name}-store", DataRepo(second), "shop-site")
-    return fresh, fresh.read_profile()
-
-
-def crash_before_fill(monkeypatch) -> None:
-    msg = "crash before the fill"
-
-    def boom(*_args, **_kwargs):
-        raise RuntimeError(msg)
-
-    monkeypatch.setattr(prefs_import, "_fill", boom)
+from .test_prefs_recovery import clone_as, confirmed, crash_before_fill
 
 
 def test_absent_basis_owner_retry_stays_pending_after_a_stale_save(shared_repo, tmp_path, monkeypatch):
