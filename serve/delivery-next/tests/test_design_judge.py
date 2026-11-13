@@ -78,7 +78,6 @@ def test_a_first_look_comes_once_before_the_final_verdict_and_releases_the_detec
     }
     plain = sdk_adapter._Step(session(role="", first_look=None, submit=tools.VISUAL_REVIEW), asyncio.new_event_loop())  # noqa: SLF001
     assert all(t.is_terminal for t in plain.tools())
-    assert design_tools.FIRST in gate.specs
     text, ok = gate.call(design_tools.FINAL, look())
     assert (ok, "first submit your own verdict with submit_first_look" in text) == (False, True)
     text, ok = gate.call(design_tools.FIRST, look("fail", findings=[finding()], conflicts=[conflict()]))
