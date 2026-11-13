@@ -113,11 +113,11 @@ def _trial(store: Store, lock: Lock, change: Change, root: Path, trial: tuple[fl
         raise repair_copy.RepairError(msg)
     p = r.preparation
     env = prepare.isolated(prepare.Prepared(check=change.step.task or "", option=p.option), root)
-    commands, output, seconds, failed = [], [], 0.0, False
+    commands, output, seconds = [], [], 0.0
     exit_code: int | None = 0
 
     def run(command: str, *, install: bool = False, cleanup: bool = False) -> None:
-        nonlocal seconds, failed, exit_code
+        nonlocal seconds, exit_code
         commands.append(command)
         done = check.execute(
             ["/bin/sh", "-c", command] if install else shlex.split(command),
@@ -129,15 +129,15 @@ def _trial(store: Store, lock: Lock, change: Change, root: Path, trial: tuple[fl
         seconds += done.seconds
         output.append(f"$ {command}\n{done.output}{done.why}")
         if done.exit != 0:
-            failed, exit_code = True, done.exit
+            exit_code = done.exit
 
     try:
         for command in installs:
             run(command, install=True)
-            if failed:
+            if exit_code != 0:
                 break
         for command in filter(None, (p.option.restore, p.option.seed, p.verify)):
-            if failed:
+            if exit_code != 0:
                 break
             run(command)
     finally:
