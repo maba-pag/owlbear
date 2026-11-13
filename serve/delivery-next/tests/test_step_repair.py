@@ -58,7 +58,8 @@ elif action in {"verify", "preview"}:
 elif action == "cleanup":
     if os.environ.get("CLEANUP_CONTROL") and Path(os.environ["CLEANUP_CONTROL"]).exists():
         raise RuntimeError("synthetic cleanup temporarily unavailable")
-    shutil.rmtree(home)
+    if home.exists():
+        shutil.rmtree(home)
 else:
     raise ValueError(action)
 print(json.dumps({"action": action, "home": str(home), "cwd": str(Path.cwd()), "data": data}))
@@ -598,6 +599,34 @@ def _reject_stuck_helper(store, asked, proposal, repo, monkeypatch):
         helper.unlink()
 
 
+def _retain_interrupted_trial(repo, store, proposal, monkeypatch):
+    write = prepared.write
+    retained = []
+
+    def interrupted_write(state, slug, rec, patch=None):
+        if rec.trial and not rec.open:
+            if rec.home:
+                retained.append(Path(rec.home))
+            msg = "interrupted before durable trial cleanup completion"
+            raise KeyboardInterrupt(msg)
+        write(state, slug, rec, patch)
+
+    with monkeypatch.context() as interrupted:
+        interrupted.setattr(prepared, "write", interrupted_write)
+        with pytest.raises(KeyboardInterrupt, match="interrupted before durable trial cleanup completion"):
+            _ask_missing_preparation(repo, store, proposal, monkeypatch)
+    assert len(retained) == 1
+    clean = retained[0]
+    assert clean.is_dir()
+    assert not (clean / ".fixture-home").exists()
+    held = store.read("c1")
+    assert prepare.left(store, held)[0].open
+    assert not prepare.ran(store, Lock("c1"), held, repo, runnable=False)
+    assert not clean.exists()
+    assert prepare.left(store, held) == []
+    assert store.read_config().preparations is None
+
+
 def _retain_failed_trial(store, asked, proposal, repo, monkeypatch):
     control = store.root / "cleanup-held"
     control.write_text("simulate a temporarily unavailable cleanup")
@@ -747,6 +776,7 @@ def test_missing_visual_preparation_requires_owner_approval_before_project_setti
     _reject_ignored_preparation(store, asked, proposal, repo, monkeypatch)
     _reject_stuck_helper(store, asked, proposal, repo, monkeypatch)
     _retain_failed_trial(store, asked, proposal, repo, monkeypatch)
+    _retain_interrupted_trial(repo, store, proposal, monkeypatch)
     _reject_remote_preparation(store, asked.model_copy(deep=True), repo, shared_repo[1], tmp_path / "other-settings")
     assert (store.shared.global_path.read_bytes() if store.shared.global_path.exists() else None) == global_before
     assert not store.machine_path.exists()

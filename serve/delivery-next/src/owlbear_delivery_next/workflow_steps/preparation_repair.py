@@ -116,7 +116,7 @@ def prove(
     repair_copy.drop(source, clean)
     repair_copy.git(source, ["worktree", "add", "--quiet", "--detach", str(clean), baseline])
     repair_copy.drop(source, root)
-    rec = None
+    rec, cleanup_recorded = None, False
     try:
         home = clean.resolve() / p.option.isolation["HOME"]
         if home.resolve() != home:
@@ -133,6 +133,7 @@ def prove(
         r.witness, cleaned = _trial(store, lock, change, clean, trial)
         rec.open = not cleaned
         prepared.write(store, change.slug, rec)
+        cleanup_recorded = cleaned
         store.write(lock, change)
         if not cleaned:
             msg = f"the preparation trial cleanup is outstanding in {clean}:\n{r.witness.output}"
@@ -141,7 +142,7 @@ def prove(
             msg = "the preparation trial left source edits; a settings-only proposal must use unchanged project code"
             raise repair_copy.RepairError(msg)
     finally:
-        if rec is None or not rec.open:
+        if rec is None or cleanup_recorded:
             repair_copy.drop(source, clean)
             if rec is not None and not clean.exists():
                 prepared.write(store, change.slug, rec.model_copy(update={"home": ""}))
