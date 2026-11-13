@@ -14,6 +14,7 @@ from owlbear_delivery_next.change_contracts import evidence
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, Overlap, Question, StepKind, Stop
 from owlbear_delivery_next.change_flow.loop import StepResult
+from owlbear_delivery_next.change_flow.moves import integration_of
 from owlbear_delivery_next.change_flow.worktree import GIT, failure
 from owlbear_delivery_next.state_store.store import StoreError
 
@@ -154,11 +155,12 @@ def collision(c: Change, told: MergeReport, sides: list[tuple[str, str]]) -> Ste
 
 
 def integrates(c: Change) -> bool:
-    """Recognize the supported integration BUILD as well as the legacy INTEGRATE step."""
+    """Recognize integration builds and their review repairs, as well as legacy INTEGRATE."""
     if c.step.kind == StepKind.INTEGRATE:
         return True
     tasks = c.plan.tasks if c.plan and c.step.kind == StepKind.BUILD else []
-    return any(task.id == c.step.task and task.origin == "integration" for task in tasks)
+    task = next((t for t in tasks if t.id == c.step.task), None)
+    return integration_of(c, task) is not None
 
 
 def _unverified(reason: str) -> StepResult:
@@ -176,7 +178,8 @@ def starting(c: Change, task: Task | None) -> StepResult | None:
         or c.step.started_at is not None
         or bool(task and (task.spans or task.built_by or task.done))
     )
-    if c.step.kind == StepKind.BUILD and task and task.origin == "integration" and task.base is None and resumed:
+    root = integration_of(c, task)
+    if c.step.kind == StepKind.BUILD and root and root.base is None and (resumed or root is not task):
         return _unverified("The resumed integration start head is missing, so collisions cannot be checked")
     return None
 
@@ -186,11 +189,15 @@ def integrated(  # noqa: PLR0913, PLR0917 - the runner's writer and lock, the Ch
 ) -> StepResult:
     """A finished integration's result, or the question when its builder reports a behaviour only one side can have.
 
-    *start* is the durable integration base. An integration that asked or stepped back passes through: it reaches
-    this gate when it completes.
+    *start* is the durable integration base; a repair uses its ancestor's base instead. An integration that asked
+    or stepped back passes through: its unfinished family follows any replacement plan until this gate completes.
     """
     if result.exit != Exit.DONE or not integrates(c):
         return result
+    task = next((t for t in c.plan.tasks if t.id == c.step.task), None) if c.plan else None
+    root = integration_of(c, task)
+    if root and root is not task:
+        start = root.base
     if start is None:
         return _unverified("The integration start head is missing, so collisions cannot be checked")
     try:

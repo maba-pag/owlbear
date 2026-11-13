@@ -11,13 +11,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts import check_hint, curation_tools, tools
-from owlbear_delivery_next.change_contracts.curation_records import TestReview
+from owlbear_delivery_next.change_contracts.curation_records import Share, TestReview
 from owlbear_delivery_next.change_contracts.curation_tools import TEST_CURATION, TestCurationResult, TestReviewResult
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
     Change,
-    Criterion,
     Exit,
     Names,
     Plan,
@@ -34,12 +33,10 @@ from owlbear_delivery_next.change_flow.status import Activity, status
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.project_host import api, session_slots
+from owlbear_delivery_next.project_host import api, curation_routes, session_slots
 from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config, profile
-from owlbear_delivery_next.state_store import identities
-from owlbear_delivery_next.state_store.briefs import new_slug
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import (
     curation,
@@ -91,34 +88,39 @@ def test_a_project_s_tests_are_found_by_package_and_split_into_whole_file_shares
     assert curation_shares.split(found) == shares  # deterministic
 
 
-def test_the_start_approves_the_fixed_brief_and_plan_and_pins_the_commit(repo):
+@pytest.mark.parametrize(
+    ("packages", "paths"),
+    [
+        (["web"], [["web/src/b.test.ts"]]),
+        ([".", "web"], [["tests/helpers.py", "tests/test_a.py"], ["web/src/b.test.ts"]]),
+    ],
+)
+def test_maintenance_starts_one_pinned_fixed_test_review(repo, monkeypatch, packages, paths):
+    monkeypatch.setattr(curation_routes, "datetime", SimpleNamespace(now=lambda _tz: NOW))
     store = Store.open(repo)
     with pytest.raises(curation.StartError, match="at least one package"):
         curation.start(store, repo, ["nowhere"], NOW)
-    c = curation.start(store, repo, ["web"], NOW)
-    assert (c.step.kind, c.tests.packages, c.brief.scope, [t.id for t in c.plan.tasks]) == (
-        StepKind.TESTS, ["web"], ["web"], ["t1"]
-    )  # fmt: skip
-    assert ready(c)
-    assert (c.brief.approved_at, len(c.brief.criteria)) == (NOW, 4)
-    assert c.tests.commit == git(repo, "rev-parse", "main") == git(c.names.worktree, "rev-parse", "HEAD")
-    assert [s.paths for s in c.tests.shares] == [["web/src/b.test.ts"]]
-    assert session_slots.wanted(c, c.step) == session_slots.ALL  # its shares run together
-    with pytest.raises(curation.StartError, match="has not finished"):
-        curation.start(store, repo, ["."], NOW)
-
-
-def test_the_maintenance_routes_offer_the_packages_and_start_once(repo):
-    store = Store.open(repo)
     host = Host(store, repo)
     client = TestClient(api.create_app(store, "tok", host), base_url="http://127.0.0.1", headers=AUTH)
     offer = client.get("/api/next/maintenance/test-review").json()
     assert ([p["path"] for p in offer["packages"]], offer["open"], offer["sessions"]) == ([".", "web"], None, 2)
     assert offer["roles"]["test-curator"] == {"model": "claude-opus-5.5", "effort": "high", "context": "long"}
     assert client.post("/api/next/maintenance/test-review", json={"packages": []}).status_code == 422
-    started = client.post("/api/next/maintenance/test-review", json={"packages": [".", "web"]}).json()
-    assert client.get("/api/next/maintenance/test-review").json()["open"]["handle"] == started["handle"]
+    started = client.post("/api/next/maintenance/test-review", json={"packages": packages}).json()
+    [slug] = store.slugs()
+    c = store.read(slug)
+    assert (c.step.kind, c.tests.packages, c.brief.scope, [t.id for t in c.plan.tasks]) == (
+        StepKind.TESTS, packages, packages, ["t1"]
+    )  # fmt: skip
+    assert ready(c)
+    assert (c.brief.approved_at, len(c.brief.criteria)) == (NOW, 4)
+    assert c.tests.commit == git(repo, "rev-parse", "main") == git(c.names.worktree, "rev-parse", "HEAD")
+    assert [s.paths for s in c.tests.shares] == paths
+    assert session_slots.wanted(c, c.step) == session_slots.ALL  # its shares run together
+    assert client.get("/api/next/maintenance/test-review").json()["open"]["handle"] == started["handle"] == c.handle
     assert client.post("/api/next/maintenance/test-review", json={"packages": ["web"]}).status_code == 409
+    with pytest.raises(curation.StartError, match="has not finished"):
+        curation.start(store, repo, ["."], NOW)
 
 
 def reviewed(cfg) -> Run:
@@ -146,48 +148,33 @@ def review(repo, monkeypatch):
 
 @pytest.fixture
 def started(tmp_path: Path) -> SimpleNamespace:
-    """The Change ``review``'s start writes, built as the start builds it but without Git: its commit is a fixed one."""
+    """Only the fixed-review state needed by routing, recovery and slot rules."""
     store = Store(tmp_path / "store")
-    number, slug = identities.reserve(store, lambda n, taken: new_slug(f"{curation.TITLE} {n}", taken))
-    found = [
-        curation_shares.Package(".", {"tests/helpers.py": 1, "tests/test_a.py": 3}),
-        curation_shares.Package("web", {"web/src/b.test.ts": 2}),
-    ]
-    scope = [p.path for p in found]
-    criteria = [Criterion(id=f"AC-{i}", text=t) for i, t in enumerate(curation.CRITERIA, 1)]
-    brief = Brief(
-        version=1, title=curation.TITLE, outcome=curation.OUTCOME, scope=scope, criteria=criteria, challenged=1
-    )
-    brief.approved_version, brief.approved_at = 1, NOW
-    brief.approved = [brief.model_copy(deep=True)]
-    branch = f"owlbear/{slug}"
     c = Change(
-        slug=slug,
-        handle=f"c{number}",
-        profile_version=(store.read_profile() or Profile()).version,
-        brief=brief,
-        plan=Plan(tasks=[Task(id=CURATE, title="Curate the tests", scope=scope, detail=curation.RULES)]),
+        slug="test-review",
+        handle="c1",
+        brief=Brief(title=curation.TITLE),
+        plan=Plan(tasks=[Task(id=CURATE, title="Curate the tests", scope=[".", "web"])]),
         step=Step(kind=StepKind.TESTS),
-        names=Names(branch=branch, target="main", worktree=str(tmp_path / slug)),
-        tests=TestReview(commit="c" * 40, packages=scope, shares=curation_shares.split(found)),
+        names=Names(target="main", worktree=str(tmp_path / "work")),
+        tests=TestReview(
+            commit="c" * 40,
+            packages=[".", "web"],
+            shares=[
+                Share(paths=["tests/test_a.py"], lines=3),
+                Share(paths=["web/src/b.test.ts"], lines=2),
+            ],
+        ),
     )
-    with store.lock(slug) as lock:
-        identities.publish_reserved(store, lock, c)
-    return SimpleNamespace(store=store, slug=slug, repo=tmp_path)
+    with store.lock(c.slug) as lock:
+        store.write(lock, c)
+    return SimpleNamespace(store=store, slug=c.slug, repo=tmp_path)
 
 
 def step(r) -> None:
     c = r.store.read(r.slug)
     with r.store.lock(r.slug) as lock:
         runner._step(r.store, lock, c, c.step, r.repo)  # noqa: SLF001
-
-
-def test_every_share_s_reviewer_runs_in_waves_and_the_curator_builds_next(review):
-    step(review)
-    c = review.store.read(review.slug)
-    assert review.ran == ["# Test review: share 1 of 2", "# Test review: share 2 of 2"]  # one at a time: grant 1
-    assert [s.ended for s in c.tests.shares] == ["reviewed", "reviewed"]
-    assert (c.step.kind, c.step.task, c.tests.shares[0].review.kept) == (StepKind.BUILD, "t1", 1)
 
 
 def test_a_failed_share_retries_alone_and_the_owner_may_go_on_without_it(review):
@@ -274,15 +261,6 @@ def test_a_test_review_never_shapes_or_plans_and_its_status_counts_shares_and_th
     assert (after.stop, loop.next_step(after, NOW), after.brief, after.plan) == (None, c.step, c.brief, c.plan)
 
 
-def test_an_unchanged_curation_goes_straight_to_cleanup_and_a_changed_one_to_its_review(started):
-    c = started.store.read(started.slug)
-    c = c.model_copy(update={"step": Step(kind=StepKind.BUILD, task="t1")})
-    changed = apply(c, StepResult(exit=Exit.DONE, reason="applied 3"), NOW)
-    assert (changed.step.kind, changed.step.task) == (StepKind.REVIEW, "t1")
-    c.tests.unchanged = True
-    assert apply(c, StepResult(exit=Exit.DONE, reason="nothing held"), NOW).step.kind == StepKind.CLEANUP
-
-
 def test_shares_wait_for_the_project_s_slots_like_any_step(started):
     c = started.store.read(started.slug)
     host = SimpleNamespace(
@@ -340,6 +318,10 @@ def curated(applied: bool):  # noqa: FBT001 - one switch per test
 
 
 def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(curating, monkeypatch, user_on):
+    before = curating.store.read(curating.slug)
+    assert curating.ran == ["# Test review: share 1 of 2", "# Test review: share 2 of 2"]
+    assert [s.ended for s in before.tests.shares] == ["reviewed", "reviewed"]
+    assert (before.step.kind, before.step.task, before.tests.shares[0].review.kept) == (StepKind.BUILD, "t1", 1)
     prof = profile.confirm(Profile(), "check:.", "uv run pytest", NOW)
     prof = profile.confirm(prof, "check:api", "npm test", NOW)
     prof = profile.confirm(prof, "check:web", "npm test", NOW)
@@ -377,8 +359,8 @@ def test_the_curator_builds_with_its_role_and_every_retire_or_merge_verdict(cura
     assert "tests/test_a.py::old: retire" in cfg.message
     assert "share 2 (web/src/b.test.ts" not in cfg.message  # every share ended
     assert "::slow" not in cfg.message  # rewrite-lower waits (TD-312)
-    assert (c.tests.report.applied[0].test, c.tests.unchanged, c.step.kind) == (
-        "tests/test_a.py::old", False, StepKind.REVIEW
+    assert (c.tests.report.applied[0].test, c.tests.unchanged, c.step.kind, c.step.task) == (
+        "tests/test_a.py::old", False, StepKind.REVIEW, "t1"
     )  # fmt: skip
     text = curation_build.body(c)
     assert "Before: `uv run pytest -q`" in text

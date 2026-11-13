@@ -6,38 +6,21 @@ The served forms module renders a person check with the status payload the API s
 
 from __future__ import annotations
 
-import contextlib
-import socket
-import threading
-import time
-from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
-import uvicorn
 
 from owlbear_delivery_next.change_contracts import models as m
-from owlbear_delivery_next.change_flow.status import Activity
-from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
-from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.state_store.store import Lock, Store
+
+from .test_approval_view import Host, opened, served
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-NOW = datetime(2026, 10, 16, 2, tzinfo=UTC)
 SETTINGS = (True, False, None)  # ask before merging, merge by itself, not set yet
-
-
-class Host:
-    wake = type("W", (), {"set": staticmethod(lambda: None)})()
-    maintenance = None
-    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
-
-    def activity(self, _slug: str) -> Activity:
-        return Activity(host_up=True)
 
 
 def change() -> m.Change:
@@ -61,38 +44,8 @@ def page_url(tmp_path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureR
     monkeypatch.setattr(config, "BASE", base.model_copy(update={"prefs": prefs}))
     store = Store(tmp_path)
     store.write(Lock("flip"), change())
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
-        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
-        thread.start()
-        try:
-            while not server.started:
-                assert thread.is_alive(), "the owned page server stopped before startup"
-                time.sleep(0.05)
-            yield store, f"http://127.0.0.1:{sock.getsockname()[1]}"
-        finally:
-            server.should_exit = True
-            thread.join(5)
-            assert not thread.is_alive(), "the owned page server did not stop"
-
-
-@contextlib.contextmanager
-def opened(base: str, slug: str, pds: Any) -> Iterator[Any]:
-    """The Changes page on *slug* in a real browser: only the test host and the PDS CDN answer."""
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
-    with sync_playwright() as pw:
-        try:
-            browser = pw.chromium.launch()
-        except Error as exc:
-            pytest.skip(f"no Playwright Chromium: {exc}")
-        page = browser.new_page()
-        pds.only(page, base)
-        page.add_init_script("sessionStorage.setItem('token', 'tok');")
-        page.goto(f"{base}/?change={slug}")
-        yield page
-        browser.close()
+    with served(api.create_app(store, "tok", Host()), keep_alive=5) as base:
+        yield store, base
 
 
 # The served forms module renders the person check beside the real settings; the rendered buttons show whether a

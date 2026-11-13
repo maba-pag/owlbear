@@ -46,7 +46,7 @@ def test_a_finding_is_open_unverified_or_settled():
     }
 
 
-def test_a_rounds_marker_takes_its_most_urgent_kind_with_a_count_and_the_latest_is_marked():
+def test_round_projection_keeps_task_boundaries_urgency_and_details(tmp_path):
     lp = RoundLoop(subject="t1", policy=RoundPolicy(), round=3, unreviewed=["t6"], reviewed=["t3"])
     lp.findings = [
         found(1, 1, "fixed", repair="t3"),
@@ -75,9 +75,6 @@ def test_a_rounds_marker_takes_its_most_urgent_kind_with_a_count_and_the_latest_
         "judgement": "j",
         "note": "",
     }
-
-
-def test_the_page_gets_each_tasks_markers_apart_and_what_is_left(tmp_path):
     tasks = [
         Task(id="t1", title="one", done=True),
         Task(id="t2", title="two", done=True),

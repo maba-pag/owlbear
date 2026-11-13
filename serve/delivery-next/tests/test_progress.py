@@ -49,11 +49,12 @@ def reviewing(fix_rounds: int) -> Change:
     return c
 
 
-def test_a_new_change_is_shaping_with_no_round():
-    p = progress(Change(slug="c1"))
+def test_shaping_keeps_its_stage_round_while_the_briefs_versions_track_challenges():
+    c = Change(slug="c1")
+    p = progress(c)
 
     assert (p.current, p.line, p.round, p.task) == ("shape", "Shape", 1, None)
-    assert states(Change(slug="c1")) == {
+    assert states(c) == {
         "shape": "current",
         "plan": "upcoming",
         "build": "upcoming",
@@ -63,11 +64,7 @@ def test_a_new_change_is_shaping_with_no_round():
         "checks": "skipped",
         "merge": "upcoming",
     }
-
-
-def test_shaping_shows_no_round_count():
-    """The brief's versions say which challenge read which version, so the Shape stage counts no rounds."""
-    c = Change(slug="c1", step=Step(kind=StepKind.SHAPE, mode="challenge"))
+    c.step = Step(kind=StepKind.SHAPE, mode="challenge")
     c.loops[BRIEF] = RoundLoop(subject=BRIEF, round=2, policy=RoundPolicy())
 
     p = progress(c)
@@ -91,6 +88,8 @@ def test_one_plan_challenge_makes_planning_round_two():
 
 
 def test_build_task_two_of_four_in_its_fourth_review_round():
+    c = Change(slug="c1", plan=Plan(tasks=FOUR), step=Step(kind=StepKind.BUILD, task="t2"))
+    assert progress(c).line == "Build · Task 2 of 4"
     c = reviewing(3)
     p = progress(c)
 
@@ -99,11 +98,6 @@ def test_build_task_two_of_four_in_its_fourth_review_round():
     assert next(s for s in p.stages if s.key == "build").rounds == 4
     c.step = Step(kind=StepKind.BUILD, task="t7")
     assert progress(c).line == "Build · Task 2 of 4 · Fixing review findings · round 4"
-
-
-def test_a_first_build_names_only_its_task():
-    c = Change(slug="c1", plan=Plan(tasks=FOUR), step=Step(kind=StepKind.BUILD, task="t2"))
-    assert progress(c).line == "Build · Task 2 of 4"
 
 
 def test_an_integration_inside_a_loop_shows_that_loops_round():

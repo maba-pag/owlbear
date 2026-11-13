@@ -36,9 +36,11 @@ def store(tmp_path, change_repo, monkeypatch, checks_settled) -> Store:
     return store
 
 
-def planned(store: Store, repo, monkeypatch, verdict: str) -> Change:
-    """Run c1's plan step with a challenge that gives *verdict*."""
-
+@pytest.mark.parametrize(
+    ("verdict", "expected"),
+    [("pass", (Exit.DONE, StepKind.BUILD, SHARED)), ("fix", (Exit.RETRY, StepKind.PLAN, SHARED))],
+)
+def test_a_kept_plan_records_overlaps_after_its_challenge(store, change_repo, monkeypatch, verdict, expected):
     async def fake(cfg):
         if cfg.submit is tools.PLAN:
             payload = tools.PlanResult(
@@ -52,17 +54,9 @@ def planned(store: Store, repo, monkeypatch, verdict: str) -> Change:
         return Run(cfg.session_id, "result", payload, termination=Termination(confirmed=True))
 
     monkeypatch.setattr(runner.sdk_adapter, "run", fake)
-    change = store.read("c1")
-    runner._step(store, Lock("c1"), change, change.step, repo)  # noqa: SLF001
-    return store.read("c1")
-
-
-def test_a_plan_whose_challenge_passes_records_its_overlaps(store, change_repo, monkeypatch):
-    c = planned(store, change_repo, monkeypatch, "pass")
-    assert (c.outcome.exit, c.step.kind, c.overlaps) == (Exit.DONE, StepKind.BUILD, SHARED)
-
-
-def test_a_plan_its_challenge_sends_back_keeps_its_overlaps_recorded(store, change_repo, monkeypatch):
-    c = planned(store, change_repo, monkeypatch, "fix")
-    assert (c.outcome.exit, c.step.kind, c.overlaps) == (Exit.RETRY, StepKind.PLAN, SHARED)
-    assert [f.id for f in c.loops["plan"].findings] == ["F1"]  # the planner answers it by its ID (TD-190)
+    c = store.read("c1")
+    runner._step(store, Lock("c1"), c, c.step, change_repo)  # noqa: SLF001
+    c = store.read("c1")
+    assert (c.outcome.exit, c.step.kind, c.overlaps) == expected
+    if verdict == "fix":
+        assert [f.id for f in c.loops["plan"].findings] == ["F1"]  # the planner answers it by its ID (TD-190)

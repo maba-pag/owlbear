@@ -34,6 +34,10 @@ class FakeHost:
         self.items: list[dict] = []
         self.chats: dict[str, dict] = {}
         self.config: dict[str, dict] = {}
+        self.config_schema = {
+            "type": "object",
+            "properties": {"autoApprove": {"chatMutable": True, "default": "prompt"}},
+        }
         self.on_launch, self.scripts = sessions_on_launch, scripts
         self.accept_config = True
         self.ignore_cancel = False
@@ -92,7 +96,7 @@ class FakeHost:
                 "workingDirectories": [(folder or self.folder).resolve().as_uri()],
             }
         )
-        self.chats[chat] = {"activeTurn": turn if self.boot_active else None, "turns": [turn]}
+        self.chats[chat] = {"activeTurn": turn if self.boot_active else None, "turns": [turn], "config": {"values": {}}}
         self.config[resource] = {}
         return resource
 
@@ -110,7 +114,7 @@ class FakeHost:
             return {"snapshot": {"state": self.chats[channel]}}
         agents = [{"type": "agent", "uri": u} for u in self.listed] if self.t >= self.listed_at else []
         state = {
-            "config": {"values": self.config[channel]},
+            "config": {"schema": self.config_schema, "values": self.config[channel]},
             "customizations": [{"type": "directory", "children": agents}],
         }
         return {"snapshot": {"state": state}}
@@ -127,6 +131,8 @@ class FakeHost:
                 self.events.append({"method": "action", "params": params})
         elif kind == "session/configChanged" and self.accept_config:
             self.config[channel] |= action["config"]
+        elif kind == "chat/configChanged" and self.accept_config:
+            self.chats[channel]["config"]["values"] |= action["config"]
         elif kind == "chat/turnCancelled" and not self.ignore_cancel:
             if (self.chats[channel].get("activeTurn") or {}).get("id") == action["turnId"]:
                 self.chats[channel]["activeTurn"] = None
@@ -432,7 +438,7 @@ def test_connect_initializes_and_never_signs_in() -> None:
     path, server = _host(lambda conn: ended.put(_answer(conn, seen=seen)))
     try:
         conn = ahp.connect(_entry(path), "c1")
-        assert conn.protocol == "1.0.0"
+        assert conn.protocol == "1.1.0"
         conn.close()
         assert ended.get(timeout=5) == b"\x03\xe8"
     finally:
@@ -467,7 +473,7 @@ def test_a_version_the_client_did_not_offer_ends_the_connection() -> None:
     path, server = _host(lambda conn: ended.put(_answer(conn, seen=seen, version="0.9.0")))
     try:
         with pytest.raises(
-            ahp.HostRefusedError, match=r"chose protocol '0\.9\.0', which OwlBear did not offer \(1\.0\.0\)"
+            ahp.HostRefusedError, match=r"chose protocol '0\.9\.0', which OwlBear did not offer \(1\.1\.0\)"
         ):
             ahp.connect(_entry(path), "c1")
         assert ended.get(timeout=5) == b"\x03\xe8"
@@ -714,7 +720,7 @@ def test_a_stale_endpoint_still_starts_vscode_and_connects_to_the_fresh_one(
         for each in [server, *servers]:
             each.close()
 
-    assert (conn.protocol, launched) == ("1.0.0", [["code", str(tmp_path)]])
+    assert (conn.protocol, launched) == ("1.1.0", [["code", str(tmp_path)]])
     warned = [r.getMessage() for r in caplog.records if r.name == vscode_adapter.__name__ and r.levelname == "WARNING"]
     assert len(warned) == 1
     assert "the published agent host failed: " in warned[0]
@@ -870,11 +876,8 @@ def test_the_shaping_chat_runs_on_the_shaper_role_and_is_left_to_the_owner(wt: P
     [launched] = host.launched
     assert launched[:4] == ["code", "chat", "-m", "agent"]
     assert re.fullmatch(r"!echo OWLBEAR-\w{12}", launched[4])
-    assert host.config["copilotcli:/s1"] == {
-        "autoApprove": "autoApprove",
-        "sandboxEnabled": "off",
-        "mode": "interactive",
-    }
+    assert host.config["copilotcli:/s1"] == {"sandboxEnabled": "off", "mode": "interactive"}
+    assert host.chats["ahp-chat://default/c1"]["config"]["values"] == {"autoApprove": "autoApprove"}
     ((chat, started),) = host.actions("chat/turnStarted")
     message = started["message"]
     assert (chat, message["text"], "agent" in message) == ("ahp-chat://default/c1", "Shape a brief with me.", False)
@@ -980,7 +983,7 @@ def test_a_cleanup_failure_is_a_warning_and_the_chat_still_started(plain: Path) 
 
 def test_settings_the_session_already_holds_are_not_sent_again(tmp_path: Path) -> None:
     host = FakeHost(tmp_path, [{}], [DONE])
-    host.reject = {"session/configChanged": "nothing to change"}
+    host.reject = {"session/configChanged": "nothing to change", "chat/configChanged": "nothing to change"}
     original = host.add
 
     def add(**kw: object) -> str:
@@ -989,31 +992,61 @@ def test_settings_the_session_already_holds_are_not_sent_again(tmp_path: Path) -
         return resource
 
     host.add = add
-    out = step(host, spec(tmp_path, config={"sandboxEnabled": "on"})).open()
+    out = step(host, spec(tmp_path, config={"sandboxEnabled": "on", "autoApprove": "prompt"})).open()
 
     assert out.end == "started"
     assert host.actions("session/configChanged") == []
+    assert host.actions("chat/configChanged") == []
+
+
+def test_chat_schema_overrides_session_scope_without_inheriting_session_values(tmp_path: Path) -> None:
+    host = FakeHost(tmp_path, [{}], [DONE])
+    host.config_schema = {"type": "object", "properties": {"autoApprove": {"sessionMutable": True}}}
+    original = host.add
+
+    def add(**kw: object) -> str:
+        resource = original(**kw)
+        host.config[resource] = {"autoApprove": "autoApprove"}
+        host.chats[host.items[-1]["defaultChat"]]["config"]["schema"] = {
+            "type": "object",
+            "properties": {"autoApprove": {"chatMutable": True, "default": "prompt"}},
+        }
+        return resource
+
+    host.add = add
+    out = step(host, spec(tmp_path, config={"autoApprove": "autoApprove"})).open()
+
+    assert out.end == "started"
+    assert host.actions("session/configChanged") == []
+    assert host.actions("chat/configChanged") == [
+        (out.chat, {"type": "chat/configChanged", "config": {"autoApprove": "autoApprove"}})
+    ]
+    assert host.chats[out.chat]["config"]["values"] == {"autoApprove": "autoApprove"}
 
 
 def test_a_settings_rejection_fails_the_shaping_chat_at_once_whole_and_logged(plain: Path, caplog) -> None:
     host = shaping_host(plain)
     reason = "managed policy: Allow All is blocked; " + "p" * 300
-    host.reject = {"session/configChanged": reason}
+    host.reject = {"chat/configChanged": reason}
     out, _ = shape(plain, shaping_env(host))
 
-    asked = json.dumps(vscode_adapter.SHAPING, sort_keys=True)
+    asked = json.dumps({"autoApprove": "autoApprove"}, sort_keys=True)
     assert (out.end, out.detail) == (
         "config-refused",
-        f"the host refused the settings {asked}: {reason}; applied: {{}}",
+        (
+            f'the host refused the settings {asked}: {reason}; applied: {{"autoApprove": "prompt"}}; '
+            'confirmed session settings: {"mode": "interactive", "sandboxEnabled": "off"}'
+        ),
     )
     warned = [r.getMessage() for r in caplog.records if r.name == vscode_adapter.__name__]
     assert len(warned) == 1
     assert out.detail in warned[0]
     assert host.actions("chat/turnStarted") == []
     assert host.t < 1  # at once, not after the wait for the settings
-    session = out.session or ""
-    subscribed = host.log.index(("subscribe", "fake", session))
-    assert subscribed < host.log.index(("dispatch:session/configChanged", "fake", session))
+    assert host.config[out.session] == {"sandboxEnabled": "off", "mode": "interactive"}
+    chat = out.chat or ""
+    subscribed = host.log.index(("subscribe", "fake", chat))
+    assert subscribed < host.log.index(("dispatch:chat/configChanged", "fake", chat))
 
 
 def test_settings_that_are_not_an_object_refuse_the_shaping_chat_before_launch(plain: Path) -> None:
