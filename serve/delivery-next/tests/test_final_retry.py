@@ -656,7 +656,7 @@ def test_emitted_checks_run_in_confirmed_folders(change_repo, monkeypatch):
     elsewhere = change_repo.parent / "elsewhere"
     other = elsewhere / "packages/app"
     other.mkdir(parents=True)
-    for home in (change_repo, package, other):
+    for home in (change_repo, package):
         (home / "Makefile").write_text("check:\n\t@pwd\n")
     git(change_repo, "add", "Makefile", "packages/app")
     git(change_repo, "commit", "-qm", "root and package check targets")
