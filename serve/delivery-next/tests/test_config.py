@@ -221,10 +221,10 @@ def owner_save(store: Store, change) -> str:
     return store.save(store.config_path, Layer, change, "owner", owner=True)
 
 
-def _old_profile(root, roles_: object, fmt: object = 1) -> None:
+def _old_profile(root, roles_: object) -> None:
     root.mkdir(parents=True, exist_ok=True)
     raw = {
-        "format": fmt,
+        "format": 1,
         "version": 3,
         "confirmed_at": "2026-10-01T10:00:00Z",
         "entries": {"rules": {"state": "unknown", "value": "", "evidence": "HTTP 403"}},
@@ -278,15 +278,6 @@ def test_a_format_1_profile_fills_only_missing_settings_once_and_owner_clears_st
     assert roles.chosen(Store.open(repo).settings(), StepKind.REVIEW) == carried.MODELS["reviewer"]
     _old_profile(root, {"builder": {"model": "m-1", "effort": "low"}})  # e.g. a crash before the profile rewrite
     assert roles.chosen(Store.open(repo).settings(), StepKind.BUILD) == carried.MODELS["builder"]
-
-
-def test_a_format_1_profile_whose_format_is_a_string_is_refused_and_kept(repo):
-    root = Store.open(repo).root
-    _old_profile(root, {"builder": {"model": "m-1", "effort": "low"}}, "1")
-    before = (root / "profile.json").read_bytes()
-    with pytest.raises(StoreError, match=r"state of profile\.json is unreadable"):
-        Store.open(repo)
-    assert (root / "profile.json").read_bytes() == before
 
 
 def test_a_move_that_another_opener_finished_meanwhile_is_not_repeated(repo, monkeypatch):
@@ -585,6 +576,10 @@ def test_a_damaged_old_profile_is_not_marked_moved_and_its_roles_come_back_once_
         (b'{"format": 1, "roles": {}, "runtime": "unknown"}', None),
         (b'{"format": 1.5, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}', None),
         (b'{"format": true, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}', None),
+        (
+            b'{"format": "1", "roles": {"builder": {"model": "m-1", "effort": "low"}}}',
+            r"state of profile\.json is unreadable",
+        ),
     ],
 )
 def test_an_invalid_old_profile_is_unchanged_unmarked_and_imports_only_after_repair(repo, raw, reason):
