@@ -152,11 +152,9 @@ def test_a_challenged_plan_comes_back_with_the_flag_and_a_display_reason():
     )
 
 
-def built_run(cfg, head: str) -> Run:
+def built_run(session: str, head: str) -> Run:
     payload = tools.BuildResult(summary="Fixed b.", checks=[])
-    run = Run(cfg.session_id, "result", payload, head=head, termination=Termination(confirmed=True))
-    run.usage = {"models": {}}
-    return run
+    return Run(session, "result", payload, head=head, termination=Termination(confirmed=True), usage={"models": {}})
 
 
 def gated_run(cfg) -> Run:
@@ -185,30 +183,13 @@ def repairing(tmp_path) -> tuple[Store, Change]:
     return store, c
 
 
-def test_the_repair_build_resumes_the_producer_and_binds_the_accepted_result(tmp_path, clone, monkeypatch):
+def test_the_repair_build_resumes_the_producer_and_records_only_accepted_task_paths(tmp_path, clone, monkeypatch):
     store, c = repairing(tmp_path)
     seen = []
-
     git(clone, "branch", "main")
 
     async def build(cfg):
         seen.append((cfg.session_id, cfg.resume, cfg.fresh))
-        save(clone, "b.txt", "b\n")
-        return gated_run(cfg)
-
-    monkeypatch.setattr(runner.sdk_adapter, "run", build)
-    runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
-    assert seen[0][:2] == ("s-build", True)
-    assert seen[0][2].endswith(repairs.EARLIER.format("Added b."))  # what a fresh fallback would be told
-    after = task(store.read("c1"), "f1")
-    assert (after.built_by, after.earlier) == ("s-build", "Fixed b. Changed: b.txt")
-
-
-def test_a_repair_is_told_the_paths_delivery_read_at_the_accepted_head(tmp_path, clone, monkeypatch):
-    store, c = repairing(tmp_path)
-    git(clone, "branch", "main")
-
-    async def build(cfg):
         git(clone, "mv", "a.txt", "moved.txt")
         git(clone, "commit", "-qm", "move")
         git(clone, "checkout", "-q", "main")
@@ -220,41 +201,32 @@ def test_a_repair_is_told_the_paths_delivery_read_at_the_accepted_head(tmp_path,
 
     monkeypatch.setattr(runner.sdk_adapter, "run", build)
     runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
+    assert seen[0][:2] == ("s-build", True)
+    assert seen[0][2].endswith(repairs.EARLIER.format("Added b."))  # what a fresh fallback would be told
     after = task(store.read("c1"), "f1")
-    assert after.earlier == "Fixed b. Changed: a.txt, moved.txt, new.txt"  # both ends of the rename
+    assert (after.built_by, after.earlier) == ("s-build", "Fixed b. Changed: a.txt, moved.txt, new.txt")
     assert after.earlier in repairs.fallback(after)
 
 
-def test_a_missing_producer_falls_back_to_a_fresh_session_without_charging_a_budget(tmp_path, clone, monkeypatch):
+@pytest.mark.parametrize("answered", [False, True])
+def test_a_missing_repair_producer_falls_back_free_even_after_an_answer(tmp_path, clone, monkeypatch, answered):
     store, c = repairing(tmp_path)
-
-    async def build(cfg):
-        fresh = cfg.journal.replaced()  # the runtime found no producing session to resume
-        return built_run(type("C", (), {"session_id": fresh})(), git(clone, "rev-parse", "HEAD"))
-
-    monkeypatch.setattr(runner.sdk_adapter, "run", build)
-    runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
-    after = store.read("c1")
-    fell = [e for e in store.events("c1") if e.get("event") == "repair-fallback"]
-    assert [e["session"] for e in fell] == ["s-build"]
-    assert task(after, "f1").built_by == fell[0]["fresh"] != "s-build"
-    assert session_result.missing_cause(K.BUILD) not in after.budgets.causes
-
-
-def test_an_answered_repair_session_keeps_its_free_fallback(tmp_path, clone, monkeypatch):
-    store, c = repairing(tmp_path)
-    c.step.session = "s-build"  # the resumed producer asked the owner during its repair
-    c.questions = [Question(id="q1", step=K.BUILD, text="Which?", answer=Answer(text="This one.", at=NOW))]
-    store.write(Lock("c1"), c)
+    if answered:
+        c.step.session = "s-build"  # the resumed producer asked the owner during its repair
+        c.questions = [Question(id="q1", step=K.BUILD, text="Which?", answer=Answer(text="This one.", at=NOW))]
+        store.write(Lock("c1"), c)
     seen = []
 
     async def build(cfg):
         seen.append(cfg)
         fresh = cfg.journal.replaced()
-        return built_run(type("C", (), {"session_id": fresh})(), git(clone, "rev-parse", "HEAD"))
+        return built_run(fresh, git(clone, "rev-parse", "HEAD"))
 
     monkeypatch.setattr(runner.sdk_adapter, "run", build)
     runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
     assert (seen[0].session_id, seen[0].resume) == ("s-build", True)
-    assert [e["session"] for e in store.events("c1") if e.get("event") == "repair-fallback"] == ["s-build"]
-    assert session_result.missing_cause(K.BUILD) not in store.read("c1").budgets.causes
+    after = store.read("c1")
+    fell = [e for e in store.events("c1") if e.get("event") == "repair-fallback"]
+    assert [e["session"] for e in fell] == ["s-build"]
+    assert task(after, "f1").built_by == fell[0]["fresh"] != "s-build"
+    assert session_result.missing_cause(K.BUILD) not in after.budgets.causes
