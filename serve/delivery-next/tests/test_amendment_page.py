@@ -3,14 +3,10 @@
 from __future__ import annotations
 
 import contextlib
-import socket
-import threading
-import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import pytest
-import uvicorn
 
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_contracts.amend_tools import CandidateItem, CandidateResult, VerdictResult
@@ -18,11 +14,13 @@ from owlbear_delivery_next.change_contracts.amendment_records import AmendedItem
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
 from owlbear_delivery_next.change_flow import amending, loop
-from owlbear_delivery_next.change_flow.status import Activity
-from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
-from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.state_store.store import Lock, Store
+
+from .test_approval_view import Host, served
+from .test_approval_view import big as big_enough
+from .test_approval_view import opened as approval_opened
+from .test_approval_view import replied as posted
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -30,16 +28,6 @@ if TYPE_CHECKING:
 NOW = datetime(2026, 11, 4, 9, tzinfo=UTC)
 SLUG = "greet"
 DECLINED = "Newlines must stay trimmed too"
-
-
-class Host:
-    maintenance = None
-    failed = ""
-    wake = type("W", (), {"set": staticmethod(lambda: None)})()
-    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
-
-    def activity(self, _slug: str) -> Activity:
-        return Activity(host_up=True)
 
 
 def approved() -> m.Change:
@@ -91,52 +79,14 @@ def tightening_asked() -> m.Change:
 def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
     store = Store(tmp_path)
     store.write(Lock(SLUG), approved())
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        # longer than the pages' polls: route.fetch() reuses a pooled socket, which uvicorn's 5 s default closes
-        server = uvicorn.Server(
-            uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning", timeout_keep_alive=60)
-        )
-        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
-        thread.start()
-        try:
-            while not server.started:
-                assert thread.is_alive(), "the owned page server stopped before startup"
-                time.sleep(0.05)
-            yield store, f"http://127.0.0.1:{sock.getsockname()[1]}"
-        finally:
-            server.should_exit = True
-            thread.join(5)
-            assert not thread.is_alive(), "the owned page server did not stop"
+    with served(api.create_app(store, "tok", Host())) as base:
+        yield store, base
 
 
 @contextlib.contextmanager
 def opened(base: str, pds: Any, details: str = "on") -> Iterator[Any]:
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
-    with sync_playwright() as pw:
-        try:
-            browser = pw.chromium.launch()
-        except Error as exc:
-            pytest.skip(f"no Playwright Chromium: {exc}")
-        page = browser.new_page()
-        pds.only(page, base)
-        page.add_init_script("sessionStorage.setItem('token', 'tok');")
-        page.add_init_script(f"localStorage.setItem('owlbear-improvement-detail', '{details}');")  # the record behind
-        page.goto(f"{base}/?change={SLUG}")
+    with approval_opened(base, SLUG, pds, details=details == "on") as page:
         yield page
-        browser.close()
-
-
-def big_enough(target: Any) -> None:
-    """WCAG 2.5.8: a control at least 24 by 24 CSS pixels."""
-    box = target.bounding_box()
-    assert box is not None
-    assert (box["width"] >= 24, box["height"] >= 24) == (True, True), box
-
-
-def posted(page: Any, path: str) -> Any:
-    return page.expect_response(lambda r: r.request.method == "POST" and r.url.split("?")[0].endswith(path))
 
 
 @pytest.mark.browser

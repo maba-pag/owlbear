@@ -3,43 +3,27 @@
 from __future__ import annotations
 
 import contextlib
-import socket
 import sqlite3
-import threading
-import time
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import pytest
-import uvicorn
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts import models as m
-from owlbear_delivery_next.change_flow.status import Activity
-from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api
-from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.settings.improvement import Spotter
 from owlbear_delivery_next.state_store import database, watch_reports
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.state_store.watch_reports import Report
 
+from .test_approval_view import Host, served
+from .test_approval_view import opened as approval_opened
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-NOW = datetime(2026, 10, 24, 10, tzinfo=UTC)
 SECRET = "/Users/me/.ssh/config"  # noqa: S105 - a path, not a password
-
-
-class Host:
-    maintenance = None
-    failed = ""
-    wake = type("W", (), {"set": staticmethod(lambda: None)})()
-    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
-
-    def activity(self, _slug: str) -> Activity:
-        return Activity(host_up=True)
 
 
 def reported(store: Store) -> None:
@@ -113,38 +97,14 @@ def test_a_change_without_reports_counts_none(tmp_path) -> None:
 
 @pytest.fixture
 def page_url(store) -> Iterator[str]:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
-        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
-        thread.start()
-        try:
-            while not server.started:
-                assert thread.is_alive(), "the owned page server stopped before startup"
-                time.sleep(0.05)
-            yield f"http://127.0.0.1:{sock.getsockname()[1]}"
-        finally:
-            server.should_exit = True
-            thread.join(5)
-            assert not thread.is_alive(), "the owned page server did not stop"
+    with served(api.create_app(store, "tok", Host()), keep_alive=5) as base:
+        yield base
 
 
 @contextlib.contextmanager
 def opened(base: str, slug: str, pds: Any) -> Iterator[Any]:
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
-    with sync_playwright() as pw:
-        try:
-            browser = pw.chromium.launch()
-        except Error as exc:
-            pytest.skip(f"no Playwright Chromium: {exc}")
-        page = browser.new_page()
-        pds.only(page, base)
-        page.add_init_script("sessionStorage.setItem('token', 'tok');")
-        page.add_init_script("localStorage.setItem('owlbear-improvement-detail', 'on');")  # the record behind the work
-        page.goto(f"{base}/?change={slug}")
+    with approval_opened(base, slug, pds, details=True) as page:
         yield page
-        browser.close()
 
 
 @pytest.mark.browser

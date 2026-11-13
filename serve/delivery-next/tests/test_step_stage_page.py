@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
-import socket
-import threading
 import time
-from collections.abc import Iterator
-from contextlib import contextmanager
 from datetime import UTC, datetime
 
 import pytest
-import uvicorn
 
 from owlbear_delivery_next.change_contracts.models import Change, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_flow.status import Activity
@@ -18,6 +13,9 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api, host
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.state_store.store import Lock, Store
+
+from .test_approval_view import served
+from .test_machine_pages import page_at
 
 PLAN = Plan(tasks=[Task(id="t1", title="greet")])
 
@@ -44,47 +42,21 @@ def logged(store: Store, lock: Lock, sid: str, role: str, event: str, **more: ob
     store.log(lock, "c1", {"at": at, "session": sid, "role": role, "event": event, **more})
 
 
-@contextmanager
-def served(store: Store) -> Iterator[tuple[uvicorn.Server, str]]:
-    """The project host's pages and API over *store*, on a free port."""
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host(store)), log_level="warning",
-                                               timeout_keep_alive=60))  # fmt: skip
-        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
-        thread.start()
-        try:
-            while not server.started:
-                assert thread.is_alive(), "the owned page server stopped before startup"
-                time.sleep(0.05)
-            yield server, f"http://127.0.0.1:{sock.getsockname()[1]}"
-        finally:
-            server.should_exit = True
-            thread.join(5)
-            assert not thread.is_alive(), "the owned page server did not stop"
-
-
 @pytest.mark.browser
 def test_the_shown_stage_follows_a_builders_and_a_reviewers_events(tmp_path, pds) -> None:
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store = Store(tmp_path)
     store.write(Lock("c1"), Change(slug="c1", plan=PLAN, step=Step(kind=StepKind.BUILD, task="t1",
                                                                   started_at=datetime.now(UTC))))  # fmt: skip
-    with served(store) as (_server, base):
+    with served(api.create_app(store, "tok", Host(store))) as base:
         machine_list = f"{base}/api/next/projects"  # served by the machine host, which this project host runs without
         errors: list[str] = []
-        with sync_playwright() as pw, store.lock("c1") as lock:  # the runner holds the Change: its step runs
-            try:
-                browser = pw.chromium.launch()
-            except Error as exc:
-                pytest.skip(f"no Playwright Chromium: {exc}")
-            page = browser.new_page()
+        with store.lock("c1") as lock, page_at(base, pds) as page:  # the runner holds the Change: its step runs
             page.on(
                 "console", lambda m: m.type == "error" and m.location["url"] != machine_list and errors.append(m.text)
             )
             page.on("pageerror", lambda e: errors.append(str(e)))
-            pds.only(page, base)
             page.add_init_script("sessionStorage.setItem('token', 'tok');")
             page.goto(f"{base}/?change=c1")
             detail, card = page.locator("#detail .row.status"), page.locator("#changes .card")
@@ -125,4 +97,3 @@ def test_the_shown_stage_follows_a_builders_and_a_reviewers_events(tmp_path, pds
             logged(store, lock, "r1", "reviewer", "tool", tool="submit_result", accepted=True, errors=[])
             shows("handing in its verdict: greet")
             assert errors == []
-            browser.close()
