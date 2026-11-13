@@ -33,21 +33,11 @@ from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import before, captures, check, prepare, visual
 
+from .test_visual import commit, git, with_origin
+
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 HOME = VisualState(name="home", path="/", expect="The greeting is centred")
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-
-
-def git(cwd, *args):
-    done = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
-    return done.stdout.strip()
-
-
-def commit(work, name, text):
-    (work / name).parent.mkdir(parents=True, exist_ok=True)
-    (work / name).write_text(text)
-    git(work, "add", name)
-    git(work, "commit", "-q", "-m", f"edit {name}")
 
 
 def free_port():
@@ -56,25 +46,12 @@ def free_port():
         return s.getsockname()[1]
 
 
-@pytest.fixture(autouse=True)
-def git_env(tmp_path, monkeypatch):
-    (tmp_path / "gitconfig").write_text("")
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    for who in ("AUTHOR", "COMMITTER"):
-        monkeypatch.setenv(f"GIT_{who}_NAME", "t")
-        monkeypatch.setenv(f"GIT_{who}_EMAIL", "t@t")
-
-
 @pytest.fixture
-def ui(tmp_path, monkeypatch):
+def ui(tmp_path, change_repo, monkeypatch):
     """A Change whose page says "before" at the merge-base and "after" at its head, at the visual check."""
-    origin, work = tmp_path / "origin.git", tmp_path / "work"
-    git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
-    git(tmp_path, "clone", "-q", str(origin), str(work))
+    work = with_origin(change_repo, tmp_path)
     commit(work, "site/index.html", "before")
     git(work, "push", "-q", "origin", "HEAD:refs/heads/main")
-    git(work, "switch", "-q", "-c", "owlbear/c1")
     commit(work, "site/index.html", "after")
     port = free_port()
     monkeypatch.setattr(check, "free_port", lambda: port)  # the port Delivery picks, known to the test
