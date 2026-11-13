@@ -71,9 +71,15 @@ def test_a_capture_keeps_the_log_gzipped_and_the_runtime_s_own_saved_outputs_onl
 
 
 def test_a_capture_is_a_snapshot_refreshed_when_the_log_grows_or_was_provisional(tmp_path):
-    records = _records(tmp_path, "s2", [{"type": "session.start"}])
+    own = Path(tempfile.gettempdir()) / f"{os.getpid()}-copilot-tool-output-carried.txt"
+    own.write_text("only copy")
+    records = _records(tmp_path, "s2", [{"type": "session.start"}, _saved(str(own))])
     first = chatlogs.capture("s2", provisional=True, records=records)
+    own.unlink()  # the runtime's temporary file is gone
     again = chatlogs.capture("s2", provisional=False, records=records)  # provisional before: copied again
+    assert [(o["state"], o["bytes"]) for o in again["outputs"]] == [("kept", 9)]  # its bytes still count
+    with gzip.open(chatlogs.root() / "chatlogs" / "s2" / "outputs" / f"{own.name}.gz", "rt") as out:
+        assert out.read() == "only copy"
     assert (first["provisional"], again["provisional"]) == (True, False)
     assert chatlogs.capture("s2", provisional=False, records=records) == again  # final and unchanged: kept
     assert chatlogs.capture("s2", provisional=True, records=records)["provisional"]  # asked provisional: taken again
@@ -100,25 +106,18 @@ def test_a_stopped_capture_leaves_no_partial_copy_and_a_later_one_takes_it_again
     assert chatlogs.capture("s6", provisional=False, records=records)["size"] > 0
 
 
-def test_a_saved_output_that_is_a_fifo_is_refused_without_blocking(tmp_path):
-    fifo = Path(tempfile.gettempdir()) / f"{os.getpid()}-copilot-tool-output-fifo.txt"
-    fifo.unlink(missing_ok=True)
-    os.mkfifo(fifo)
+@pytest.mark.parametrize(
+    ("create", "remove"), [(os.mkfifo, Path.unlink), (Path.mkdir, Path.rmdir)], ids=["fifo", "directory"]
+)
+def test_nonregular_saved_outputs_are_refused_without_blocking(tmp_path, create, remove):
+    path = Path(tempfile.gettempdir()) / f"{os.getpid()}-copilot-tool-output-nonregular.txt"
+    create(path)
     try:
-        said = chatlogs.capture("s7", provisional=False, records=_records(tmp_path, "s7", [_saved(str(fifo))]))
+        said = chatlogs.capture("s7", provisional=False, records=_records(tmp_path, "s7", [_saved(str(path))]))
     finally:
-        fifo.unlink()
+        remove(path)
     assert [o["state"] for o in said["outputs"]] == ["refused"]
-
-
-def test_a_saved_output_that_is_a_folder_is_refused(tmp_path):
-    folder = Path(tempfile.gettempdir()) / f"{os.getpid()}-copilot-tool-output-dir.txt"
-    folder.mkdir(exist_ok=True)
-    try:
-        said = chatlogs.capture("s14", provisional=False, records=_records(tmp_path, "s14", [_saved(str(folder))]))
-    finally:
-        folder.rmdir()
-    assert [o["state"] for o in said["outputs"]] == ["refused"]
+    assert [o["bytes"] for o in said["outputs"]] == [0]
 
 
 def test_a_capture_stopped_while_copying_outputs_publishes_nothing(tmp_path, monkeypatch):
@@ -169,18 +168,6 @@ def test_a_stopped_refresh_keeps_the_previous_snapshot_whole(tmp_path, monkeypat
         assert "session.resume" not in log.read()  # the log, too, as the sidecar says
     with gzip.open(folder / "s9" / "outputs" / f"{own.name}.gz", "rt") as out:
         assert out.read() == "first"
-
-
-def test_an_output_whose_temporary_file_is_gone_is_carried_over_on_refresh(tmp_path):
-    own = Path(tempfile.gettempdir()) / f"{os.getpid()}-copilot-tool-output-carried.txt"
-    own.write_text("only copy")
-    records = _records(tmp_path, "s10", [_saved(str(own))])
-    chatlogs.capture("s10", provisional=True, records=records)
-    own.unlink()  # the runtime's temporary file is gone
-    said = chatlogs.capture("s10", provisional=False, records=records)
-    assert [(o["state"], o["bytes"]) for o in said["outputs"]] == [("kept", 9)]  # its bytes still count
-    with gzip.open(chatlogs.root() / "chatlogs" / "s10" / "outputs" / f"{own.name}.gz", "rt") as out:
-        assert out.read() == "only copy"
 
 
 def test_a_failed_switch_keeps_the_old_snapshot(tmp_path, monkeypatch):
