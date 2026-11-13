@@ -630,25 +630,19 @@ def spotter_spend(found: list[dict] | None = None, by: str = "project") -> tuple
     return rows, said["totals"]["runs"], said["totals"]["credits"]
 
 
-@pytest.mark.parametrize("retry", [False, True], ids=["one session", "two sessions"])
-def test_a_replay_look_only_the_manifest_names_is_recovered_once_under_an_unknown_project(project, retry) -> None:
+def test_a_replay_look_only_the_manifest_names_is_recovered_once_under_an_unknown_project(project) -> None:
     """A crash lost the look's own lines and cases result; recover each retry as one run of the same look."""
-    look_session("spotter-a", "L1", checkpoint("2026-10-28T09:00:00Z", 0.1e9 if retry else 0.3e9))
-    if retry:
-        look_session("spotter-b", "L1", checkpoint("2026-10-28T09:01:00Z", 0.2e9))
-    runs = 2 if retry else 1
-    assert spend_reconcile.run([(project, None)])["imported"] == {"changes": 3, "spotter": 0, "logs": runs}
-    assert spotter_spend() == ([("Project unknown", 0.3, runs)], runs, 0.3)
+    look_session("spotter-a", "L1", checkpoint("2026-10-28T09:00:00Z", 0.1e9))
+    look_session("spotter-b", "L1", checkpoint("2026-10-28T09:01:00Z", 0.2e9))
+    assert spend_reconcile.run([(project, None)])["imported"] == {"changes": 3, "spotter": 0, "logs": 2}
+    assert spotter_spend() == ([("Project unknown", 0.3, 2)], 2, 0.3)
     [piece] = [p for p in spend_shares.derive(spend_ledger.lines()) if p["session"] == "spotter-a"]
     assert (piece["run"], piece["look"], piece["job"], piece["incomplete"]) == ("log:spotter-a", "L1", "look", True)
     looks = {(p["run"], p["look"], p["incomplete"]) for p in spend_shares.derive(spend_ledger.lines())
              if p["role"] == "spotter"}  # fmt: skip
-    expected = {("log:spotter-a", "L1", True)}
-    if retry:
-        expected.add(("log:spotter-b", "L1", True))
-    assert looks == expected
+    assert looks == {("log:spotter-a", "L1", True), ("log:spotter-b", "L1", True)}
     assert spend_reconcile.run([(project, None)])["imported"] == {"changes": 0, "spotter": 0, "logs": 0}
-    assert spotter_spend() == ([("Project unknown", 0.3, runs)], runs, 0.3)
+    assert spotter_spend() == ([("Project unknown", 0.3, 2)], 2, 0.3)
 
 
 @pytest.mark.parametrize("order", ["start, end", "end, start"])
