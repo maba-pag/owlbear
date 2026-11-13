@@ -115,9 +115,7 @@ class Amending:
 AC1 = {"field": "criterion", "key": "AC-1", "text": TRIMS, "why": "spaces around a name are no part of it"}
 
 
-def test_a_premise_runs_its_amendment_on_the_shaper_and_a_separate_challenger_without_a_brief_draft(
-    picking, monkeypatch
-):
+def test_premise_sessions_keep_authority_across_successive_amendments(picking, monkeypatch):
     run = Amending(picking, monkeypatch)
     c = picking.change()
     c.amendments = [Amendment(id=f"A{i}", at=NOW, source="worker", step="build", session="s", base=1, items=[],
@@ -155,18 +153,14 @@ def test_a_premise_runs_its_amendment_on_the_shaper_and_a_separate_challenger_wi
     assert [k.text for k in c.brief.criteria] == [TRIMS]
     assert (c.amending, c.step.kind, c.step.task) == (None, K.BUILD, "t1")  # the stopped task reruns on v2
 
-
-def test_each_amendment_s_sessions_hold_the_decisions_the_stopped_step_works_by(picking, monkeypatch):
-    run = Amending(picking, monkeypatch)
-    told = len(picking.told)
-    for text in (TRIMS, f"{TRIMS} and 'Ada' alone returns 'Bye, Ada!'"):  # the second amends v2, which no pick chose
-        run.premised(AC1 | {"text": text})
-        picking.verdicts += [candidate(text), verdict(qualifies=True)]
-        run.step()
-        c = run.step()
-
+    text = f"{TRIMS} and 'Ada' alone returns 'Bye, Ada!'"
+    run.premised(AC1 | {"text": text})  # v2 was not independently picked
+    picking.verdicts += [candidate(text), verdict(qualifies=True)]
+    run.step()
+    c = run.step()
     assert (c.brief.version, run.roles(told)) == (3, ["build", "shaper", "challenger"] * 2)
     assert all("Pages are plain HTML" in cfg.message for cfg in picking.told[told:] if cfg.role != tools.PICKER)
+    assert [k.text for k in c.brief.criteria] == [text]
 
 
 def test_a_pinned_brief_loop_setting_is_honoured_and_the_verdict_binds_the_revised_wording(picking, monkeypatch):
@@ -222,26 +216,6 @@ def test_a_loop_that_ends_on_a_revision_no_round_judged_applies_only_on_his_acce
     )
 
 
-def test_the_last_rounds_rejection_is_rechecked_and_an_upheld_one_reaches_him(picking, monkeypatch):
-    run = Amending(picking, monkeypatch)
-    run.premised(AC1)
-    rejected = candidate(rejected=[{"finding": "F1", "reason": "AC-2 keeps the plain case"}])
-    upheld = verdict(rechecked=[{"finding": "F1", "upheld": True, "reason": "there is no AC-2"}])
-    picking.verdicts += [candidate(), verdict(qualifies=True, findings=[finding()]), rejected, upheld]
-
-    c = [run.step() for _ in range(4)][-1]
-
-    recheck = picking.told[-1]
-    assert (recheck.role, recheck.rechecks, recheck.cap) == ("challenger", ("F1",), 0)  # rejections only
-    q, (*_, a) = loop.open_question(c), c.amendments
-    assert (amending.owned(q), [o.id for o in q.options], c.brief.version) == (
-        (a.id, "finding F1"),
-        ["fix", "reconsider", "drop"],
-        1,
-    )
-    assert "there is no AC-2" in q.text
-
-
 @pytest.mark.parametrize(
     ("said", "then"),
     [
@@ -250,7 +224,7 @@ def test_the_last_rounds_rejection_is_rechecked_and_an_upheld_one_reaches_him(pi
         ("unsure", ("escalated", "ask", 1)),
     ],
 )
-def test_an_upheld_finding_he_sends_back_with_a_note_is_reconsidered_once(picking, monkeypatch, said, then):
+def test_rejected_finding_is_rechecked_then_reconsidered_once(picking, monkeypatch, said, then):
     run = Amending(picking, monkeypatch)
     run.premised(AC1)
     rejected = candidate(rejected=[{"finding": "F1", "reason": "AC-2 keeps the plain case"}])
@@ -258,7 +232,16 @@ def test_an_upheld_finding_he_sends_back_with_a_note_is_reconsidered_once(pickin
     picking.verdicts += [candidate(), verdict(qualifies=True, findings=[finding()]), rejected, upheld]
     for _ in range(4):
         run.step()
-    q, url = loop.open_question(picking.change()), f"/api/next/changes/{picking.slug}/answers"
+    c, recheck = picking.change(), picking.told[-1]
+    assert (recheck.role, recheck.rechecks, recheck.cap) == ("challenger", ("F1",), 0)
+    q, (*_, a) = loop.open_question(c), c.amendments
+    assert (amending.owned(q), [o.id for o in q.options], c.brief.version) == (
+        (a.id, "finding F1"),
+        ["fix", "reconsider", "drop"],
+        1,
+    )
+    assert "there is no AC-2" in q.text
+    url = f"/api/next/changes/{picking.slug}/answers"
     assert picking.http.post(url, json={"question": q.id, "option": "reconsider"}).status_code == 422  # no note
     note = {"question": q.id, "option": "reconsider", "text": "AC-1 itself keeps 'Ada' alone"}
     assert picking.http.post(url, json=note).status_code == 200
