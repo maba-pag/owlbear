@@ -83,17 +83,34 @@ def _permitted(proposal: PreparationProposal, settings: Settings) -> None:
         raise repair_copy.RepairError(msg)
 
 
-def prove(store: Store, lock: Lock, change: Change, root: Path, trial: tuple[float, tuple[str, ...]]) -> None:
+def _independent(proposal: PreparationProposal, root: Path) -> None:
+    commands = (proposal.option.restore, proposal.option.seed, proposal.verify, proposal.option.cleanup)
+    values = [word for command in commands for word in shlex.split(command)] + list(proposal.option.isolation.values())
+    if any(str(at) in value for at in (root, root.resolve()) for value in values):
+        msg = f"the preparation depends on its throwaway Repairer checkout {root}; use baseline project files"
+        raise repair_copy.RepairError(msg)
+
+
+def prove(
+    store: Store, lock: Lock, change: Change, trees: tuple[Path, Path, bool], trial: tuple[float, tuple[str, ...]]
+) -> None:
     """Run the exact option and seeded-state check, always clean it, and keep the host's whole trial."""
     r = change.repairs.current
     if r is None or r.preparation is None:
         msg = "the repair supplied no preparation proposal"
         raise repair_copy.RepairError(msg)
+    source, root, ended = trees
+    if not ended:
+        msg = "the Repairer's processes are not confirmed gone; its checkout cannot be removed for proof"
+        raise repair_copy.RepairError(msg)
+    r.witness, r.diff = None, ""
     p = r.preparation
     _permitted(p, store.settings())
+    _independent(p, root)
     clean = root.with_name(f"{root.name}-preparation-proof")
-    repair_copy.drop(root, clean)
-    repair_copy.git(root, ["worktree", "add", "--quiet", "--detach", str(clean), r.base])
+    repair_copy.drop(source, clean)
+    repair_copy.git(source, ["worktree", "add", "--quiet", "--detach", str(clean), r.base])
+    repair_copy.drop(source, root)
     rec = None
     try:
         if not (clean / p.option.isolation["HOME"]).resolve().is_relative_to(clean.resolve()):
@@ -119,7 +136,7 @@ def prove(store: Store, lock: Lock, change: Change, root: Path, trial: tuple[flo
             raise repair_copy.RepairError(msg)
     finally:
         if rec is None or not rec.open:
-            repair_copy.drop(root, clean)
+            repair_copy.drop(source, clean)
             if rec is not None and not clean.exists():
                 prepared.write(store, change.slug, rec.model_copy(update={"home": ""}))
     store.write(lock, change)

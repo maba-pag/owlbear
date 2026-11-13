@@ -1,22 +1,76 @@
-"""The stuck-step repair's agent context and owner question."""
+"""The stuck-step repair's agent session, context and owner question."""
 
 from __future__ import annotations
 
+import uuid
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.change_contracts import permissions, repair_tools, tools
+from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_flow import stuck
-from owlbear_delivery_next.workflow_steps import engine, preparation_repair
+from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.settings import roles
+from owlbear_delivery_next.workflow_steps import engine, preparation_repair, sessions, watched
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.change_contracts.repair_records import Repair
+    from owlbear_delivery_next.settings.config import Settings
+    from owlbear_delivery_next.state_store.store import Lock, Store
+    from owlbear_delivery_next.workflow_steps import lookup
 
+LABEL = "step-repair"
 ASKED = {
     "patch": "Apply it to this Change and run the step again?",
     "profile-check": "Add this check to the project profile and run the step again?",
 }
+
+
+def session(
+    store: Store,
+    lock: Lock,
+    change: Change,
+    given: tuple[Path, lookup.Asked],
+    configuration: tuple[Settings, tuple[str, ...]],
+) -> sdk_adapter.Session:
+    """Bind the existing Repairer session to its source copy, lookup, settings and exact result contract."""
+    settings, witness = configuration
+    (at, asked), role = given, roles.chosen(settings, LABEL)
+    prompt = message(change, witness, at)
+    preparing = change.repairs.current is not None and change.repairs.current.cause in preparation_repair.CAUSES
+    if preparing:
+        prompt += f"\n\n{preparation_repair.context(change, settings)}"
+    submit = (
+        repair_tools.PREPARATION
+        if preparing
+        else (repair_tools.ATTEMPT if stuck.diagnostic(change) else repair_tools.SUBMIT)
+    )
+    return sdk_adapter.Session(
+        kind=StepKind(change.repairs.current.step if change.repairs.current else change.step.kind),
+        worktree=at,
+        session_id=f"{change.slug}-{LABEL}-{uuid.uuid4().hex[:8]}",
+        message=prompt,
+        resume=False,
+        policy=permissions.Policy(at, write=True),
+        observe=lambda: tools.Worktree("", ""),
+        checks=(),
+        submit=submit,
+        scope=tuple(change.brief.scope),
+        model=role.model,
+        effort=role.effort,
+        context=role.context,
+        limit=roles.limit(settings, LABEL),
+        fresh=prompt,
+        role=roles.SESSIONS[LABEL],
+        journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
+        subagents=roles.subagents(settings, LABEL),
+        user=roles.user_config(settings),
+        memory=sessions.memory(store),
+        helpers=(asked.helper(),),
+        watch=watched.watching(store, lock, LABEL, settings, at, sessions.out, watched.needed(settings), asked),
+    )
 
 
 def defect(r: Repair | None) -> str:

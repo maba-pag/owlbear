@@ -432,6 +432,7 @@ def _exercise_saved_preparation(store, c, repo, proposal):
 
 
 def _reject_ignored_preparation(store, asked, proposal, repo, monkeypatch):
+    absolute = False
     dirty = asked.model_copy(deep=True)
     dirty.questions = []
     dirty.repairs.current.phase = "running"
@@ -450,9 +451,8 @@ def _reject_ignored_preparation(store, asked, proposal, repo, monkeypatch):
         helper = cfg.worktree / ".owlbear/scratch/verify.py"
         helper.parent.mkdir(parents=True)
         helper.write_text("print('only the model copy has this helper')\n")
-        contaminated = proposal.model_copy(
-            update={"verify": shlex.join([sys.executable, ".owlbear/scratch/verify.py"])}
-        )
+        command = str(helper) if absolute else ".owlbear/scratch/verify.py"
+        contaminated = proposal.model_copy(update={"verify": shlex.join([sys.executable, command])})
         return Run(
             cfg.session_id,
             "result",
@@ -475,6 +475,16 @@ def _reject_ignored_preparation(store, asked, proposal, repo, monkeypatch):
     assert rejected.repairs.done[-1].witness.exit != 0
     assert "verify.py" in rejected.stop.reason
     assert "No such file" in rejected.stop.reason
+    assert store.read_config().preparations is None
+    absolute = True
+    dirty = asked.model_copy(deep=True)
+    dirty.questions = []
+    dirty.repairs.current.phase = "running"
+    step_repair.run(store, Lock(dirty.slug), dirty, repo)
+    rejected = store.read(dirty.slug)
+    assert loop.open_question(rejected) is None
+    assert rejected.repairs.done[-1].witness is None
+    assert "depends on its throwaway Repairer checkout" in rejected.stop.reason
     assert store.read_config().preparations is None
 
 

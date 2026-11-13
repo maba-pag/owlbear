@@ -14,20 +14,19 @@ from __future__ import annotations
 import os
 import shlex
 import tomllib
-import uuid
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from traceback import format_exception_only
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts import check_hint, evidence, permissions, repair_tools, tools
+from owlbear_delivery_next.change_contracts import check_hint, evidence, repair_tools
 from owlbear_delivery_next.change_contracts.failures import ENVIRONMENT, WRONG_MODEL, kind_of
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Outcome, StepKind, Stop
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.repair_records import KEPT, Tried, Witness
 from owlbear_delivery_next.change_flow import budgets, curation_flow, loop, rebuilds, stuck, worktree
 from owlbear_delivery_next.local_system.git_files import git_common_dir
-from owlbear_delivery_next.runtimes import sdk_adapter, session_result
+from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.workflow_steps import (
     check,
@@ -39,7 +38,6 @@ from owlbear_delivery_next.workflow_steps import (
     repair_copy,
     repair_messages,
     sessions,
-    watched,
 )
 from owlbear_delivery_next.workflow_steps.check_sources import console_script as _console_script
 
@@ -50,7 +48,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.settings.config import Settings
     from owlbear_delivery_next.state_store.store import Lock, Store
 
-LABEL = "step-repair"
+LABEL = repair_messages.LABEL
 
 
 def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -100,7 +98,7 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
         witness = () if preparing else _witness(change, prof, path)
         asked = lookup.Asked(store, lock, lambda: change)  # the repairer's and its Spotter's lookups (TD-456)
         try:
-            cfg = _session(store, lock, change, (at, asked), settings, witness)
+            cfg = repair_messages.session(store, lock, change, (at, asked), (settings, witness))
             done = asked.settled(lambda: sessions.run(store, cfg))
         except sessions.UsageUnreadError as exc:  # the owner's gate decides its result; its spend is the repair's
             done = exc.run
@@ -124,7 +122,13 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
             _stopped(store, lock, change, "nothing it tried worked")
             return
         if preparing or p.fix == "preparation":
-            _preparation(store, lock, change, at, (roles.limit(settings, LABEL), _installs(change, prof)))
+            _preparation(
+                store,
+                lock,
+                change,
+                (path, at, bool(done.termination and done.termination.confirmed)),
+                (roles.limit(settings, LABEL), _installs(change, prof)),
+            )
             return
         if p.fix == "retry":
             _unchanged(store, lock, change, (path, at), (witness, roles.limit(settings, LABEL), prof))
@@ -138,7 +142,10 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
             _log(store, lock, change, f"kept its copy {at}: its session's processes are not confirmed gone")
 
 
-def _preparation(store: Store, lock: Lock, change: Change, at: Path, trial: tuple[float, tuple[str, ...]]) -> None:
+def _preparation(
+    store: Store, lock: Lock, change: Change, trees: tuple[Path, Path, bool], trial: tuple[float, tuple[str, ...]]
+) -> None:
+    _, at, _ = trees
     r = change.repairs.current
     if r is None or r.fix != "preparation" or r.cause not in preparation_repair.CAUSES:
         _stopped(store, lock, change, "missing or unsafe preparation needs a concrete setup proposal")
@@ -146,7 +153,7 @@ def _preparation(store: Store, lock: Lock, change: Change, at: Path, trial: tupl
     if repair_copy.changed(at, r.base):
         _stopped(store, lock, change, "a preparation proposal must repair setup without source edits")
         return
-    preparation_repair.prove(store, lock, change, at, trial)
+    preparation_repair.prove(store, lock, change, trees, trial)
     stuck.asked(change, repair_messages.question(r), datetime.now(UTC))
     store.write(lock, change)
 
@@ -294,38 +301,6 @@ def _stopped(store: Store, lock: Lock, change: Change, why: str) -> None:
     _log(store, lock, change, f"stopped: {said}")
     stuck.stopped(change, said, datetime.now(UTC))
     store.write(lock, change)
-
-
-def _session(  # noqa: PLR0913, PLR0917 - the Change, its copy and lookup, the settings and the witness
-    store: Store,
-    lock: Lock,
-    change: Change,
-    given: tuple[Path, lookup.Asked],
-    settings: Settings,
-    witness: tuple[str, ...],
-) -> sdk_adapter.Session:
-    (at, asked), role = given, roles.chosen(settings, LABEL)
-    message = repair_messages.message(change, witness, at)
-    preparing = change.repairs.current is not None and change.repairs.current.cause in preparation_repair.CAUSES
-    if preparing:
-        message += f"\n\n{preparation_repair.context(change, settings)}"
-    submit = (
-        repair_tools.PREPARATION
-        if preparing
-        else (repair_tools.ATTEMPT if stuck.diagnostic(change) else repair_tools.SUBMIT)
-    )
-    return sdk_adapter.Session(
-        kind=StepKind(change.repairs.current.step if change.repairs.current else change.step.kind), worktree=at,
-        session_id=f"{change.slug}-{LABEL}-{uuid.uuid4().hex[:8]}", message=message, resume=False,
-        policy=permissions.Policy(at, write=True), observe=lambda: tools.Worktree("", ""), checks=(),
-        submit=submit,
-        scope=tuple(change.brief.scope), model=role.model, effort=role.effort,
-        context=role.context, limit=roles.limit(settings, LABEL), fresh=message, role=roles.SESSIONS[LABEL],
-        journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
-        subagents=roles.subagents(settings, LABEL), user=roles.user_config(settings), memory=sessions.memory(store),
-        helpers=(asked.helper(),),
-        watch=watched.watching(store, lock, LABEL, settings, at, sessions.out, watched.needed(settings), asked),
-    )  # fmt: skip
 
 
 def _witness(change: Change, prof: Profile, source: Path) -> tuple[str, ...]:
