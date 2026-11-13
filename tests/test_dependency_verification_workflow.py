@@ -217,9 +217,6 @@ def test_copilot_setup_keeps_task_checkout_and_bounds_installation() -> None:
     assert "ref" not in checkout.get("with", {})
     assert checkout["with"]["persist-credentials"] is False
     runs = [step["run"] for step in steps if "run" in step]
-    assert "uv python install" in runs
-    assert COPILOT_UV_SYNC in runs
-    assert "npm ci --engine-strict --no-audit --no-fund" in runs
     install_commands = {
         "uv python install",
         COPILOT_UV_SYNC,
