@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -130,6 +131,24 @@ def lines(log: Path) -> list[str]:
     return [line.split()[0] for line in log.read_text().splitlines()] if log.exists() else []
 
 
+def assert_setup_repair(c, result, cause):
+    assert (result.exit, result.cause, result.setup, result.operational, result.question, result.stop) == (
+        Exit.RETRY,
+        cause,
+        True,
+        True,
+        None,
+        None,
+    )
+    repaired = loop.apply(c, result, datetime.now(UTC))
+    assert (repaired.step, repaired.brief, repaired.stop) == (c.step, c.brief, None)
+    assert (repaired.repairs.current.phase, repaired.repairs.current.cause, repaired.repairs.current.evidence) == (
+        "running",
+        cause,
+        result.reason,
+    )
+
+
 @pytest.mark.parametrize(
     ("change_", "rules", "errors"),
     [
@@ -198,7 +217,9 @@ def test_a_live_copy_must_point_every_declared_live_resource_elsewhere(env):
     assert preparation.refusals(copy, rules, {}) == ["its isolation TEST_DB points at the live TEST_DB"]
     prepare._write(store, "c1", prepare.Prepared(check="visual", option=copy))  # noqa: SLF001 - as accepted
     result = prepare.launch(store, change(repo), settings(copy, isolation=[]), lambda _e: None)
-    assert (result.exit, result.question, lines(log)) == (Exit.STOP, None, [])  # nothing exported
+    assert_setup_repair(change(repo), result, "project-env:check:preparation-unsafe")
+    assert "copy: its isolation TEST_DB points at the live TEST_DB" in result.reason
+    assert lines(log) == []  # nothing exported
 
 
 def test_restore_seed_cleanup_and_the_launch_never_inherit_delivery_s_environment(env, monkeypatch):
@@ -295,24 +316,22 @@ def test_a_recipe_names_a_declared_permitted_option_and_edits_only_its_setup_fil
     ]
 
 
-def test_with_no_safe_option_delivery_stops_and_starts_no_preparer(tmp_path):
+def test_with_no_safe_option_delivery_repairs_and_starts_no_preparer(tmp_path):
     unsafe = settings(option(tmp_path), data_classes=[])
     asked = prepare.unsafe(unsafe, LIVE)
-    assert (asked.exit, asked.cause, asked.question, asked.stop.action) == (
-        Exit.STOP, "project-env:check:preparation-unsafe", None, "Run the step again"
-    )  # fmt: skip
+    assert_setup_repair(change(tmp_path), asked, "project-env:check:preparation-unsafe")
     assert "copy: data classes customers are not permitted" in asked.reason
     assert prepare.unsafe(settings(option(tmp_path)), LIVE) is None
 
 
-def test_without_a_declared_option_no_check_launches_and_the_stop_says_to_declare_one(env):
+def test_without_a_declared_option_no_check_launches_and_repair_proposes_one(env):
     repo, store, _log, tmp = env
     asked = prepare.unsafe(settings(), LIVE)
-    assert (asked.exit, asked.cause, asked.question, asked.stop.action) == (
-        Exit.STOP, "project-env:check:preparation-missing", None, "Run the step again"
-    )  # fmt: skip
-    assert "under `preparations` in the project's settings file (`<project folder>/config.json`" in asked.reason
-    assert "data-only option whose seed and cleanup are `true`" in asked.reason
+    assert_setup_repair(change(repo), asked, "project-env:check:preparation-missing")
+    assert asked.reason == (
+        "Checks cannot run: this project has no safe test copy set up, and Delivery never runs a check on live data. "
+        "No test preparation option is declared (TD-96). Delivery will propose one for your approval"
+    )
     c = change(repo)
     assert not prepare.reusable(store, c, settings(), LIVE)  # a last recipe without a preparation never relaunches
     with pytest.raises(prepare.PrepareError, match="the check has no test preparation"):
@@ -409,11 +428,14 @@ def test_a_snapshot_changed_after_it_was_frozen_is_never_restored(env):
     )
 
 
-def test_a_revoked_permission_stops_and_a_changed_option_prepares_again(env):
-    repo, store, _log, tmp = env
+def test_a_revoked_permission_repairs_and_a_changed_option_prepares_again(env):
+    repo, store, log, tmp = env
     c = change(repo)
     prepare._write(store, "c1", prepare.Prepared(check="visual", option=option(tmp)))  # noqa: SLF001 - as accepted
-    assert prepare.launch(store, c, settings(option(tmp), data_classes=[]), lambda _e: None).exit == Exit.STOP
+    revoked = prepare.launch(store, c, settings(option(tmp), data_classes=[]), lambda _e: None)
+    assert_setup_repair(c, revoked, "project-env:check:preparation-unsafe")
+    assert "copy: data classes customers are not permitted" in revoked.reason
+    assert lines(log) == []
     changed = prepare.launch(store, c, settings(option(tmp, seed=run(tmp, "other"))), lambda _e: None)
     assert (changed.exit, changed.reason) == (Exit.RETRY, "the preparation option copy changed since it was chosen")
     assert not prepare.reusable(store, c, settings(option(tmp, seed=run(tmp, "other"))), LIVE)
@@ -820,7 +842,9 @@ def test_a_live_copy_pointing_at_live_is_refused_and_never_exported(env):
     assert preparation.check(recipe("fixtures"), tools.Worktree(head, head), repo, ctx) == []
 
     prepare._write(store, "c1", prepare.Prepared(check="visual", option=copy))  # noqa: SLF001 - as accepted
-    assert prepare.launch(store, change(repo), settings(copy), lambda _e: None).exit == Exit.STOP
+    unsafe = prepare.launch(store, change(repo), settings(copy), lambda _e: None)
+    assert_setup_repair(change(repo), unsafe, "project-env:check:preparation-unsafe")
+    assert f"copy: {why[0]}" in unsafe.reason
     alongside = prepare.launch(store, change(repo), settings(copy, data), lambda _e: None)
     assert (alongside.exit, alongside.reason) == (Exit.RETRY, "the preparation option copy is no longer permitted")
     assert lines(log) == []  # nothing exported
