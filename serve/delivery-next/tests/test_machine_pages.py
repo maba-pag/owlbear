@@ -2298,8 +2298,6 @@ def test_a_discard_confirmed_after_its_project_unloaded_never_goes_to_the_shown_
 ) -> None:
     """Discard's destination is fixed before its dialog: alpha unloading while it is open sends the confirmed discard
     to alpha, which answers for itself, never to beta, the project the page shows, whose run it is not."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     from owlbear_delivery_next.impeccable_runs import pack_job, pack_rounds  # noqa: PLC0415
 
     alpha = registry.register(clone(tmp_path / "alpha"))
@@ -2320,7 +2318,7 @@ def test_a_discard_confirmed_after_its_project_unloaded_never_goes_to_the_shown_
         page.route(re.compile(r".*/impeccable/update/(answer|discard)$"), sending)
         page.goto(f"{base}/updates/impeccable?project={beta.id}#token=t")
         discard = page.locator("#pack-discard")
-        expect(discard).to_have_text(re.compile(r"\S"), use_inner_text=True)
+        page.wait_for_function("() => document.querySelector('#pack-discard')?.innerText.trim()")
         label = discard.inner_text()
         discard.click()
         pds.modal(page).wait_for()
