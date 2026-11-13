@@ -60,12 +60,8 @@ def test_a_finished_move_source_is_canonical_only_while_its_switched_receipt_hol
 
 
 @pytest.mark.usefixtures("current_binding", "boot")
-@pytest.mark.parametrize(
-    "backup",
-    [b"{not json"],
-    ids=["malformed"],
-)
-def test_the_selfcheck_ignores_the_backup_config_of_a_validated_move(repo, boot, backup) -> None:
+def test_the_selfcheck_ignores_the_backup_config_of_a_validated_move(repo, boot) -> None:
+    backup = b"{not json"
     target = move_to_next_boot(repo, boot)
     registry.register(repo)
     (source(repo) / "config.json").write_bytes(backup)  # the retained copy; the target's config is what counts
