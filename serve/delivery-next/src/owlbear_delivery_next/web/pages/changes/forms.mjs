@@ -3,7 +3,7 @@ import { settingsWait } from "/assets/ui.mjs";
 import { questionText } from "/assets/page/config/unset.mjs";
 import { DIALOG, REVERT, state, show, draft, notify, send, starts } from "./state.mjs";
 import {
-  button, external, field, choice, tick, hd, text, list, row, panel, info, notice, refusal,
+  button, external, field, choice, tick, hd, text, list, row, panel, info, refusal,
 } from "./widgets.mjs";
 import { taskRounds } from "./progress.mjs";
 
@@ -341,9 +341,10 @@ export function stopNotice(d) {
   const r = d.recovery, reason = r ? r.reason : d.line.replace(/^.*?stopped: /, ""), action = r ? r.action : d.action;
   // what keeps the rerun from starting: the unreadable settings in full, else how many are unset (never their keys)
   const wait = !r?.unset ? "" : r.settings.reason ? r.unset : `${settingsWait(r.settings.count)} to run the step again`;
-  if (!r || wait) {
-    return notice("error", "Stopped", `${reason}.`, action ? `What to do: ${action}.` : "", r ? `${wait}.` : "");
-  }
+  const held = !r || wait;  // no stop he may clear, or its rerun waits on the settings: no action
+  // a reason in paragraphs (#1220) keeps what to do apart from its details
+  const said = [`${reason}.`, action ? `What to do: ${action}.` : "", held && r ? `${wait}.` : ""].filter(Boolean)
+    .join(reason.includes("\n\n") ? "\n\n" : " ");
   const clear = async () => {
     const again = "If the cause is still there, it stops again with the same message.";
     const sure = await ask({
@@ -362,7 +363,7 @@ export function stopNotice(d) {
     state.started = { text: "Recovery accepted: Delivery reruns the step when it can run. Existing pauses are kept." };
     show();
   };
-  return html`<p-inline-notification state="error" heading="Stopped" heading-tag="h3" dismiss-button="false"
-    action-label="Done: run the step again" action-icon="refresh" @action=${clear}>${reason}. What to do: ${action}.
-    </p-inline-notification>`;
+  return html`<p-inline-notification class="recorded" state="error" heading="Stopped" heading-tag="h3"
+    dismiss-button="false" action-label=${held ? nothing : "Done: run the step again"}
+    action-icon=${held ? nothing : "refresh"} @action=${held ? nothing : clear}>${said}</p-inline-notification>`;
 }
